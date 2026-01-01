@@ -120,6 +120,20 @@ func (d *Database) initialize() error {
 		CREATE INDEX IF NOT EXISTS idx_refs_source ON refs(source_id);
 		CREATE INDEX IF NOT EXISTS idx_refs_target ON refs(target_id);
 		CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file_path);
+		
+		-- Date index for temporal queries
+		-- Links dates to objects/traits that have date fields
+		CREATE TABLE IF NOT EXISTS date_index (
+			date TEXT NOT NULL,              -- YYYY-MM-DD
+			source_type TEXT NOT NULL,       -- 'object' or 'trait'
+			source_id TEXT NOT NULL,         -- Object or trait ID
+			field_name TEXT NOT NULL,        -- Which field (due, date, start, etc.)
+			file_path TEXT NOT NULL,
+			PRIMARY KEY (date, source_type, source_id, field_name)
+		);
+		
+		CREATE INDEX IF NOT EXISTS idx_date_index_date ON date_index(date);
+		CREATE INDEX IF NOT EXISTS idx_date_index_file ON date_index(file_path);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -146,6 +160,9 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM refs WHERE file_path = ?", doc.FilePath); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM date_index WHERE file_path = ?", doc.FilePath); err != nil {
 		return err
 	}
 
@@ -243,7 +260,52 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 		}
 	}
 
+	// Index dates from object fields
+	dateStmt, err := tx.Prepare(`
+		INSERT OR REPLACE INTO date_index (date, source_type, source_id, field_name, file_path)
+		VALUES (?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer dateStmt.Close()
+
+	for _, obj := range doc.Objects {
+		for fieldName, fieldValue := range obj.Fields {
+			if dateStr := extractDateString(fieldValue); dateStr != "" {
+				_, err = dateStmt.Exec(dateStr, "object", obj.ID, fieldName, doc.FilePath)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	for idx, trait := range doc.Traits {
+		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, idx)
+		for fieldName, fieldValue := range trait.Fields {
+			if dateStr := extractDateString(fieldValue); dateStr != "" {
+				_, err = dateStmt.Exec(dateStr, "trait", traitID, fieldName, doc.FilePath)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return tx.Commit()
+}
+
+// extractDateString extracts a date string from a field value if it's a date type.
+// Returns empty string if not a date.
+func extractDateString(fv schema.FieldValue) string {
+	if s, ok := fv.AsString(); ok {
+		// Check if it looks like a date (YYYY-MM-DD)
+		if len(s) >= 10 && s[4] == '-' && s[7] == '-' {
+			return s[:10] // Return just the date part (in case of datetime)
+		}
+	}
+	return ""
 }
 
 // RemoveFile removes all data for a file.
@@ -255,6 +317,9 @@ func (d *Database) RemoveFile(filePath string) error {
 		return err
 	}
 	if _, err := d.db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
 	return nil

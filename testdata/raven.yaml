@@ -1,0 +1,5 @@
+# Raven Vault Configuration
+# These settings control vault-level behavior.
+
+# Where daily notes are stored
+daily_directory: daily

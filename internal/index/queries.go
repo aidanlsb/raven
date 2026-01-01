@@ -272,23 +272,44 @@ func (d *Database) QueryTraitsByType(traitType string, statusFilter, dueFilter *
 
 	if statusFilter != nil && *statusFilter != "" {
 		statuses := strings.Split(*statusFilter, ",")
-		if len(statuses) == 1 {
-			query += " AND json_extract(fields, '$.status') = ?"
-			args = append(args, statuses[0])
-		} else {
-			placeholders := make([]string, len(statuses))
-			for i, s := range statuses {
-				placeholders[i] = "?"
-				args = append(args, strings.TrimSpace(s))
+		var hasEmpty bool
+		var nonEmptyStatuses []string
+		for _, s := range statuses {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				hasEmpty = true
+			} else {
+				nonEmptyStatuses = append(nonEmptyStatuses, s)
 			}
-			query += " AND json_extract(fields, '$.status') IN (" + strings.Join(placeholders, ", ") + ")"
+		}
+
+		if len(nonEmptyStatuses) == 0 && hasEmpty {
+			// Only empty filter - match NULL or empty status
+			query += " AND (json_extract(fields, '$.status') IS NULL OR json_extract(fields, '$.status') = '')"
+		} else if len(nonEmptyStatuses) == 1 && !hasEmpty {
+			query += " AND json_extract(fields, '$.status') = ?"
+			args = append(args, nonEmptyStatuses[0])
+		} else if len(nonEmptyStatuses) > 0 {
+			placeholders := make([]string, len(nonEmptyStatuses))
+			for i, s := range nonEmptyStatuses {
+				placeholders[i] = "?"
+				args = append(args, s)
+			}
+			inClause := "json_extract(fields, '$.status') IN (" + strings.Join(placeholders, ", ") + ")"
+			if hasEmpty {
+				// Include NULL/empty status as well (for tasks without explicit status)
+				query += " AND (" + inClause + " OR json_extract(fields, '$.status') IS NULL OR json_extract(fields, '$.status') = '')"
+			} else {
+				query += " AND " + inClause
+			}
 		}
 	}
 
 	if dueFilter != nil && *dueFilter != "" {
-		// TODO: Handle relative dates like "today", "this-week"
-		query += " AND json_extract(fields, '$.due') = ?"
-		args = append(args, *dueFilter)
+		// Support relative dates like "today", "this-week", "overdue"
+		dateCondition, dateArgs, _ := ParseDateFilter(*dueFilter, "json_extract(fields, '$.due')")
+		query += " AND " + dateCondition
+		args = append(args, dateArgs...)
 	}
 
 	query += " ORDER BY json_extract(fields, '$.due') ASC"
@@ -327,4 +348,54 @@ func (d *Database) GetObject(id string) (*ObjectResult, error) {
 	}
 
 	return &result, nil
+}
+
+// GetTrait retrieves a single trait by ID.
+func (d *Database) GetTrait(id string) (*TraitResult, error) {
+	var result TraitResult
+	err := d.db.QueryRow(
+		"SELECT id, trait_type, content, fields, file_path, line_number, parent_object_id FROM traits WHERE id = ?",
+		id,
+	).Scan(&result.ID, &result.TraitType, &result.Content, &result.Fields, &result.FilePath, &result.Line, &result.ParentID)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// DateIndexResult represents a result from the date index.
+type DateIndexResult struct {
+	Date       string
+	SourceType string // "object" or "trait"
+	SourceID   string
+	FieldName  string
+	FilePath   string
+}
+
+// QueryDateIndex returns all objects/traits associated with a specific date.
+func (d *Database) QueryDateIndex(date string) ([]DateIndexResult, error) {
+	rows, err := d.db.Query(
+		"SELECT date, source_type, source_id, field_name, file_path FROM date_index WHERE date = ?",
+		date,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []DateIndexResult
+	for rows.Next() {
+		var result DateIndexResult
+		if err := rows.Scan(&result.Date, &result.SourceType, &result.SourceID, &result.FieldName, &result.FilePath); err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+
+	return results, rows.Err()
 }

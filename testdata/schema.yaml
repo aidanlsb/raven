@@ -21,11 +21,13 @@ types:
         type: ref
         target: person
 
-  daily:
-    default_path: daily/
-    fields:
-      date:
-        type: date
+  # Note: 'date' type is built-in for daily notes (YYYY-MM-DD.md files)
+  # You can extend it with custom fields:
+  # date:
+  #   fields:
+  #     mood:
+  #       type: enum
+  #       values: [great, good, okay, rough]
 
   meeting:
     fields:

@@ -75,7 +75,8 @@ traits:
 			statusFilter = &tasksStatus
 		} else if !tasksAll && traitDef.CLI != nil && traitDef.CLI.DefaultQuery != "" {
 			// Apply schema's default query behavior (filter to non-done)
-			defaultStatus := "todo,in_progress"
+			// Include NULL/empty status since schema default is typically 'todo'
+			defaultStatus := "todo,in_progress,"
 			statusFilter = &defaultStatus
 		}
 		if tasksDue != "" {
