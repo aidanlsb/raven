@@ -27,19 +27,29 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 
 ## Core Concepts
 
-### The Three Primitives
+### The Four Primitives
 
 | Concept | Purpose | Syntax | Can be Referenced? | Example |
 |---------|---------|--------|-------------------|---------|
 | **Types** | Define what something *is* | Frontmatter `type:` | Yes, via `[[path/file]]` | person, project, meeting, book |
 | **Embedded Types** | A typed section within a file | `::type(id=..., ...)` | Yes, via `[[path/file#id]]` | A meeting inside a daily note |
+| **Sections** | Auto-created for every heading | Markdown headings (`#`, `##`, etc.) | Yes, via `[[path/file#slug]]` | Any heading without explicit type |
 | **Traits** | Add behavior/metadata to content | `@trait(...)` | No (queryable, not referenceable) | @task, @remind, @highlight |
 
-### Types vs Traits Mental Model
+### Types vs Sections vs Traits Mental Model
 
 - **Types are nouns** (declared with `::` or frontmatter): A `person` is a thing. A `meeting` is a thing. They exist, have identity, can be linked to.
+- **Sections are structural nouns** (auto-created from headings): Every markdown heading becomes a `section` object automatically. This ensures the entire document structure is captured in the object model.
 - **Traits are adjectives/verbs** (declared with `@`): `@task` marks content as having task-like behavior. `@highlight` marks something as important. They modify content, don't create new entities.
-- **Fallback type**: Files without an explicit type (and not matching any detection rule) are assigned the `page` type.
+
+### Built-in Types
+
+| Type | Purpose | Auto-created? |
+|------|---------|---------------|
+| `page` | Fallback for files without explicit type | Yes, when no type declared |
+| `section` | Fallback for headings without explicit type | Yes, for every heading |
+
+These built-in types ensure every structural element is represented in the object model.
 
 ### Files as Source of Truth
 
@@ -66,8 +76,8 @@ people/alice.md  →  Object(id="people/alice", type="person", ...)
 
 **Object ID**: The file path without extension (e.g., `people/alice`).
 
-#### Embedded Objects
-A section within a file represents an object. Type declared with `::type()` on a heading.
+#### Embedded Objects (Explicit Types)
+A section within a file can be explicitly typed with `::type()` on the line after a heading.
 
 ```
 daily/2025-02-01.md
@@ -75,11 +85,36 @@ daily/2025-02-01.md
         ::meeting(id=standup, ...)
 ```
 
-**Object ID**: The file path + `#` + explicit ID (e.g., `daily/2025-02-01#standup`). The `id` field is **required** for embedded objects.
+**Object ID**: The file path + `#` + explicit ID (e.g., `daily/2025-02-01#standup`). The `id` field is **required** for explicitly typed embedded objects.
+
+#### Sections (Auto-Created from Headings)
+Every markdown heading automatically becomes a `section` object, even without an explicit `::type()` declaration.
+
+```
+daily/2025-02-01.md
+  └── ## Morning            →  Object(id="daily/2025-02-01#morning", type="section", ...)
+  └── ## Weekly Standup     →  Object(id="daily/2025-02-01#standup", type="meeting", ...)  # explicit type
+  └── ## Afternoon          →  Object(id="daily/2025-02-01#afternoon", type="section", ...)
+```
+
+**Section Object ID**: The file path + `#` + slugified heading text (e.g., `daily/2025-02-01#morning`).
+
+**ID Generation Rules**:
+1. Heading text is slugified (lowercased, spaces become hyphens, special chars removed)
+2. If multiple headings have the same slug, numbers are appended: `#ideas`, `#ideas-2`, `#ideas-3`
+3. If heading text is empty, fallback to `#section-{line_number}`
+
+**Section Fields**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | The heading text |
+| `level` | number | Heading level (1-6) |
+
+**Why sections?** This ensures every structural element in a document is queryable and can have traits attached to it. Traits and references are always parented to the nearest section or explicit type.
 
 ### Object Hierarchy
 
-Embedded objects form a tree based on heading levels:
+All headings form a tree based on heading levels. Every heading becomes an object (either an explicit type or a section):
 
 ```markdown
 # Daily Note (file root, type: daily)
@@ -93,12 +128,18 @@ Embedded objects form a tree based on heading levels:
 ### Mobile App Discussion (type: topic, parent: meeting)
 ::topic(id=mobile-discussion, project=[[projects/mobile]])
 
-## Random Notes (no type, just content under daily)
+## Random Notes (type: section, parent: daily, auto-created)
 ```
 
-**Rule**: A heading with `::type()` becomes a child of the nearest ancestor heading with a lower level. If no typed ancestor exists, parent is the file root.
+**Hierarchy Rules**:
+- A heading becomes a child of the nearest ancestor heading with a lower level
+- If no ancestor exists, parent is the file root
+- Explicit types (`::type()`) take precedence over auto-created sections
+- The `::type()` must appear on the line immediately after the heading
 
 **Nesting limit**: Standard markdown heading depth (H1-H6). The `rvn check` command validates nesting doesn't exceed limits.
+
+**Parent Resolution for Traits/Refs**: Traits and references are assigned to the object (section or explicit type) that contains them based on line numbers.
 
 ### Traits
 
@@ -299,9 +340,12 @@ CREATE INDEX idx_objects_tags ON objects(json_extract(fields, '$.tags'));
 | `#productivity` | ✓ | Simple tag |
 | `#my-tag` | ✓ | Hyphens allowed |
 | `#tag_name` | ✓ | Underscores allowed |
-| `#123` | ✓ | Numbers allowed |
+| `#123` | ✗ | Numbers-only tags are skipped (avoids issue refs like #123) |
+| `#tag123` | ✓ | Tags can contain numbers, just not start with them |
 | `#my tag` | ✗ | No spaces (would be `#my` only) |
 | `#über` | ✓ | Unicode letters allowed |
+| `` `#code` `` | ✗ | Tags inside inline code are ignored |
+| Code blocks | ✗ | Tags inside code blocks are ignored |
 
 ### Tags vs Traits
 
@@ -330,9 +374,19 @@ Located at vault root. Defines all types and traits.
 
 ```yaml
 types:
-  # Fallback type for files without explicit type or detection match
+  # Built-in: Fallback type for files without explicit type or detection match
   page:
     fields: {}
+
+  # Built-in: Auto-created for every heading without explicit ::type()
+  section:
+    fields:
+      title:
+        type: string
+      level:
+        type: number
+        min: 1
+        max: 6
 
   person:
     fields:
@@ -615,12 +669,12 @@ Started [[books/atomic-habits]] by [[people/james-clear]].
 
 ```
 ~/.config/raven/
-└── config.toml              # App configuration
+└── config.toml              # Global app configuration
 
 ~/vault/                      # Your notes (synced to cloud)
 ├── schema.yaml              # Type/trait definitions
 ├── .raven/
-│   └── index.db             # SQLite index (NOT synced)
+│   └── index.db             # SQLite index (NOT synced, .gitignore it)
 ├── daily/
 │   └── 2025-02-01.md
 ├── people/
@@ -631,12 +685,48 @@ Started [[books/atomic-habits]] by [[people/james-clear]].
     └── atomic-habits.md
 ```
 
-### App Configuration: `config.toml`
+### App Configuration: `~/.config/raven/config.toml`
+
+The global config file specifies the default vault and preferences:
 
 ```toml
-vault_path = "/Users/you/Dropbox/vault"
-timezone = "America/New_York"
-editor = "code"  # For opening files
+# Default vault path (required for commands without --vault)
+vault = "/Users/you/Dropbox/vault"
+
+# Editor for opening files (defaults to $EDITOR)
+editor = "code"
+```
+
+**Config Resolution**:
+1. Check `~/.config/raven/config.toml` (XDG-style, preferred)
+2. Fall back to OS-specific config dir (`~/Library/Application Support/raven/` on macOS)
+
+**Vault Resolution** (in order):
+1. `--vault` CLI flag (always wins)
+2. `vault` in config file
+3. Error if neither specified (no fallback to current directory for safety)
+
+### Security: Vault Scoping
+
+**All operations are strictly scoped to the vault directory**. The CLI will never read, write, or traverse files outside the configured vault.
+
+**Protections**:
+- Symlinks are not followed during directory traversal
+- Canonical path validation ensures files are within the vault
+- Path traversal attacks (e.g., `../../../etc/passwd`) are blocked
+- The `rvn init` command is the only operation that can create files at an arbitrary path (user-specified)
+
+**Implementation**:
+```rust
+// WalkDir configured to stay within vault
+WalkDir::new(vault_path)
+    .follow_links(false)  // Don't follow symlinks
+
+// Canonical path validation
+let canonical_file = file_path.canonicalize()?;
+if !canonical_file.starts_with(&canonical_vault) {
+    continue;  // Skip files outside vault
+}
 ```
 
 ### Code Structure
@@ -923,39 +1013,52 @@ rvn --config /path/to/config.toml <command>
    - Parse `schema.yaml`
    - Define TypeDefinition and TraitDefinition structs
    - Validate schema structure
-   - Include built-in `page` type as fallback
+   - Include built-in `page` and `section` types
 
-2. **Frontmatter Parser**
+2. **Global Config Loader**
+   - Load from `~/.config/raven/config.toml`
+   - Support vault path and editor settings
+   - Require explicit vault (no fallback to cwd for safety)
+
+3. **Frontmatter Parser**
    - Extract YAML between `---` markers
    - Convert to HashMap<String, Value>
    - Support `tags:` array in frontmatter
 
-3. **Markdown Parser**
-   - Extract heading hierarchy
-   - Track line numbers for source mapping
+4. **Markdown Parser** (using pulldown-cmark)
+   - Use AST-based parsing, NOT string manipulation
+   - Extract heading hierarchy with proper code block handling
+   - Track line numbers via offset iterator
    - Validate nesting depth (H1-H6)
+   - Ignore headings inside code blocks
 
-4. **Type Declaration Parser**
-   - Parse `::type(name, id=..., key=value, ...)` syntax
+5. **Type Declaration Parser**
+   - Parse `::type(id=..., key=value, ...)` syntax
    - Require `id` field for embedded types
    - Handle various value types (strings, refs, arrays)
    - Generate full object ID: `file-path#id`
 
-5. **Trait Annotation Parser**
+6. **Trait Annotation Parser**
    - Parse `@trait(key=value, ...)` syntax
    - Support positional arguments (must precede named)
    - Extract content between carriage returns as trait content
 
-6. **Reference Extractor**
+7. **Reference & Tag Extractor**
    - Find all `[[ref]]` and `[[ref|display]]` patterns
-   - Extract `#tags` (aggregate to parent object, inherit to ancestors)
+   - Handle array syntax `[[[ref1]], [[ref2]]]` correctly
+   - Extract `#tags` using AST (ignore tags in code blocks)
+   - Skip number-only tags like `#123`
    - Track positions for source mapping
 
-7. **Document Parser**
+8. **Document Parser**
    - Combine all parsers into ParsedDocument
-   - Build object tree from headings
-   - Assign parents to traits
-   - Generate IDs: file path for files, path#id for embedded
+   - **Create section objects for every heading**
+   - If heading has `::type()` on next line, use that type instead of section
+   - Auto-generate section IDs from slugified heading text
+   - Handle duplicate slugs: `#ideas`, `#ideas-2`, `#ideas-3`
+   - Build object tree from heading hierarchy
+   - Assign parents to traits based on line numbers
+   - Compute line_end for each object
 
 8. **Reference Resolver**
    - Resolve short refs to full paths
@@ -1127,11 +1230,32 @@ This section documents key design decisions made during planning.
 | Object Type | ID Format | Example |
 |-------------|-----------|---------|
 | File-level | Path without extension | `people/alice` |
-| Embedded | Path + `#` + explicit ID | `daily/2025-02-01#standup` |
+| Embedded (explicit) | Path + `#` + explicit ID | `daily/2025-02-01#standup` |
+| Section (auto) | Path + `#` + slugified heading | `daily/2025-02-01#morning` |
 
-- **Explicit IDs required**: Embedded objects must have an `id` field (no auto-generation)
+- **Explicit IDs required**: Explicitly typed embedded objects must have an `id` field
+- **Section IDs auto-generated**: Slugified from heading text, with duplicate handling (`#ideas`, `#ideas-2`)
 - **Path uniqueness**: File paths must be unique across the vault
 - **Short references**: Allowed if unambiguous, warned otherwise
+
+### Section Objects
+
+Every markdown heading creates an object in the model. This ensures:
+- Complete document structure is queryable
+- Traits and refs have a parent context
+- Backlinks can point to specific sections
+
+**Explicit types override sections**: If a heading has `::type()` on the next line, that type is used instead of `section`.
+
+**Hierarchy**: Sections nest based on heading levels. H2 is child of H1, H3 is child of H2, etc.
+
+### Vault Scoping (Security)
+
+All CLI operations are strictly scoped to the configured vault:
+- No fallback to current directory (prevents accidental scanning of wrong folders)
+- Symlinks are not followed during directory traversal
+- Canonical path validation blocks path traversal attacks
+- Only `rvn init <path>` can create files at an arbitrary location
 
 ### Trait Metadata Storage
 
@@ -1185,13 +1309,68 @@ This keeps the CLI extensible while providing ergonomic defaults for common case
 | `serde`, `serde_yaml`, `serde_json` | Serialization |
 | `toml` | Config file parsing |
 | `rusqlite` | SQLite database |
-| `pulldown-cmark` | Markdown parsing |
+| `pulldown-cmark` | Markdown parsing (AST-based) |
 | `regex` | Pattern matching |
+| `lazy_static` | Static regex compilation |
 | `notify` | File system watching |
 | `walkdir` | Directory traversal |
+| `dirs` | Platform-specific directories |
+| `slug` | Slugifying heading text for IDs |
 | `anyhow`, `thiserror` | Error handling |
 | `chrono` | Date/time handling |
-| `blake3` | Fast hashing for ID generation |
+
+### Markdown Parsing with pulldown-cmark
+
+**Critical**: Use `pulldown-cmark` for proper markdown AST parsing. Manual string parsing leads to bugs.
+
+**Why AST parsing matters**:
+- Headings inside code blocks are correctly ignored
+- Tags (`#tag`) inside code blocks or inline code are correctly ignored
+- Edge cases in markdown syntax are handled correctly
+
+**Implementation pattern**:
+```rust
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+
+pub fn extract_headings(content: &str) -> Vec<Heading> {
+    let parser = Parser::new(content);
+    
+    for (event, range) in parser.into_offset_iter() {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                // Start of heading
+            }
+            Event::Text(text) if in_heading => {
+                // Heading text content
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                // End of heading - emit the heading
+            }
+            _ => {}
+        }
+    }
+}
+```
+
+**Tag extraction** must also use the AST to avoid false positives:
+```rust
+for event in parser {
+    match event {
+        Event::Start(Tag::CodeBlock(_)) => in_code = true,
+        Event::End(TagEnd::CodeBlock) => in_code = false,
+        Event::Code(_) => {} // Skip inline code
+        Event::Text(text) if !in_code => {
+            // Only extract #tags from regular text
+            tags.extend(extract_tags_from_text(&text));
+        }
+        _ => {}
+    }
+}
+```
+
+**Additional tag rules**:
+- Tags must not start with a digit (avoid `#123` issue references)
+- Tags must be preceded by whitespace or punctuation
 
 ### Performance Considerations
 
@@ -1255,7 +1434,13 @@ Senior engineer on the platform team.
 - Team dynamics
 ```
 
-**Object ID**: `people/alice`
+**Object IDs generated from this file**:
+| ID | Type | Heading |
+|----|------|---------|
+| `people/alice` | `person` | (file-level) |
+| `people/alice#alice-chen` | `section` | Alice Chen |
+| `people/alice#notes` | `section` | Notes |
+| `people/alice#1-1-topics` | `section` | 1:1 Topics |
 
 ### Sample: `daily/2025-02-01.md`
 
@@ -1292,6 +1477,12 @@ Chapter 2 of [[books/atomic-habits]].
 - @highlight Small habits compound over time
 ```
 
-**Object IDs**:
-- File: `daily/2025-02-01`
-- Embedded: `daily/2025-02-01#standup`
+**Object IDs generated from this file**:
+| ID | Type | Heading |
+|----|------|---------|
+| `daily/2025-02-01` | `daily` | (file-level) |
+| `daily/2025-02-01#saturday-february-1-2025` | `section` | Saturday, February 1, 2025 |
+| `daily/2025-02-01#morning` | `section` | Morning |
+| `daily/2025-02-01#standup` | `meeting` | Weekly Standup (explicit type) |
+| `daily/2025-02-01#afternoon` | `section` | Afternoon |
+| `daily/2025-02-01#reading` | `section` | Reading |

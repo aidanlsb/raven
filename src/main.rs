@@ -1,11 +1,14 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod cli;
+mod config;
 mod schema;
 mod parser;
 mod index;
+
+use config::Config;
 
 #[derive(Parser)]
 #[command(name = "rvn")]
@@ -101,13 +104,32 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Resolve vault path
+    // Load config
+    let config = if let Some(config_path) = &cli.config {
+        Config::load_from(config_path)?
+    } else {
+        Config::load().unwrap_or_default()
+    };
+
+    // Resolve vault path: CLI flag > config file (no fallback to cwd)
     let vault_path = cli.vault
-        .or_else(|| {
-            // Try to find vault from config or current directory
-            std::env::current_dir().ok()
-        })
-        .expect("Could not determine vault path");
+        .or(config.vault)
+        .ok_or_else(|| anyhow::anyhow!(
+            "No vault specified.\n\n\
+            Either:\n  \
+            1. Use --vault /path/to/vault\n  \
+            2. Set 'vault = \"/path/to/vault\"' in ~/.config/raven/config.toml\n  \
+            3. Run 'rvn init /path/to/new/vault' to create one"
+        ))?;
+    
+    // Verify the vault path exists (except for init command)
+    if !matches!(cli.command, Commands::Init { .. }) && !vault_path.exists() {
+        anyhow::bail!(
+            "Vault not found: {}\n\nRun 'rvn init {}' to create it.",
+            vault_path.display(),
+            vault_path.display()
+        );
+    }
 
     match cli.command {
         Commands::Init { path } => cli::commands::init(&path),
