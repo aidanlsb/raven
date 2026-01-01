@@ -29,24 +29,29 @@ Configuration should be discoverable and documented. A user reading `schema.yaml
 
 The type/object/trait syntax must be:
 
-- **Visually distinct**: `::type()` for objects, `@trait()` for traits, `[[ref]]` for links
+- **Visually distinct**: `::type()` for objects, `@trait` or `@trait(value)` for traits, `[[ref]]` for links
 - **Predictable**: Same syntax always means the same thing
 - **Non-conflicting**: Syntax should not collide with common markdown patterns
 - **Parseable**: Regular expressions or simple parsers can extract elements reliably
+
+**Traits are single-valued**: Each trait takes at most one value. Use multiple traits instead of one trait with multiple fields: `@due(2025-02-01) @priority(high)` not `@task(due=..., priority=...)`.
 
 Avoid syntax that requires context to interpret or that could be confused with other markdown conventions.
 
 ### User-Controlled Schema
 
-The schema defines everything—nothing is hidden:
+Configuration defines everything—nothing is hidden:
 
-- All available types come from `schema.yaml` (plus built-in `page` and `section`)
+- All available types come from `schema.yaml` (plus built-in `page`, `section`, `date`)
 - All available traits come from `schema.yaml`
-- Built-in types (`page`, `section`) can be customized or extended by the user
-- CLI behavior (like `rvn tasks`) derives from schema configuration
-- Detection rules, field validation, defaults—all in the schema
+- All saved queries come from `raven.yaml`
+- Built-in types:
+  - `page` and `section`: Can be customized or extended by the user
+  - `date`: Locked (cannot be modified). Used for daily notes (YYYY-MM-DD.md files). Use traits for daily note metadata.
+- Vault behavior (daily directory, queries) configured in `raven.yaml`
+- Field validation, defaults—all in the schema
 
-**No hidden behavior**: If the system does something, it should be traceable to schema configuration or documented built-in behavior.
+**No hidden behavior**: If the system does something, it should be traceable to configuration or documented built-in behavior.
 
 ### General System, User Workflow
 
@@ -57,9 +62,11 @@ Raven is a **general system** for adding typed structure to markdown:
 
 Avoid building opinionated workflows into the core:
 
-- **Good**: `@task` trait with configurable fields, `rvn trait task` to query
-- **Bad**: Hard-coded "task management" features with specific status flows
-- **Good**: `rvn query` with flexible filters
+- **Good**: Atomic traits like `@due`, `@status`, `@priority` that users combine
+- **Bad**: Composite `@task` trait that assumes a specific task model
+- **Good**: Saved queries in `raven.yaml` that users define for their workflows
+- **Bad**: Built-in "task management" with hard-coded status flows
+- **Good**: `rvn trait due --value past` for ad-hoc queries
 - **Bad**: Built-in "project dashboard" that assumes specific type structures
 
 The tool should be a foundation that users build their workflows on top of.

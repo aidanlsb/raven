@@ -83,14 +83,14 @@ func (d *Database) initialize() error {
 			updated_at INTEGER
 		);
 		
-		-- All trait annotations
+		-- All trait annotations (single-valued)
 		CREATE TABLE IF NOT EXISTS traits (
 			id TEXT PRIMARY KEY,
 			file_path TEXT NOT NULL,
 			parent_object_id TEXT NOT NULL,
 			trait_type TEXT NOT NULL,
+			value TEXT,                          -- Single trait value (NULL for boolean traits)
 			content TEXT NOT NULL,
-			fields TEXT NOT NULL DEFAULT '{}',
 			line_number INTEGER NOT NULL,
 			created_at INTEGER
 		);
@@ -204,7 +204,7 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 
 	// Insert traits
 	traitStmt, err := tx.Prepare(`
-		INSERT INTO traits (id, file_path, parent_object_id, trait_type, content, fields, line_number, created_at)
+		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
@@ -214,9 +214,13 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 
 	for idx, trait := range doc.Traits {
 		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, idx)
-		fieldsJSON, err := json.Marshal(fieldsToMap(trait.Fields))
-		if err != nil {
-			return err
+
+		// Get value as string (or nil for boolean traits)
+		var valueStr interface{}
+		if trait.Value != nil {
+			if s, ok := trait.Value.AsString(); ok {
+				valueStr = s
+			}
 		}
 
 		_, err = traitStmt.Exec(
@@ -224,8 +228,8 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 			doc.FilePath,
 			trait.ParentObjectID,
 			trait.TraitType,
+			valueStr,
 			trait.Content,
-			string(fieldsJSON),
 			trait.Line,
 			now,
 		)
@@ -283,9 +287,10 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 
 	for idx, trait := range doc.Traits {
 		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, idx)
-		for fieldName, fieldValue := range trait.Fields {
-			if dateStr := extractDateString(fieldValue); dateStr != "" {
-				_, err = dateStmt.Exec(dateStr, "trait", traitID, fieldName, doc.FilePath)
+		// For single-value traits, check if the value is a date
+		if trait.Value != nil {
+			if dateStr := extractDateString(*trait.Value); dateStr != "" {
+				_, err = dateStmt.Exec(dateStr, "trait", traitID, trait.TraitType, doc.FilePath)
 				if err != nil {
 					return err
 				}

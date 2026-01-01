@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -10,15 +9,32 @@ import (
 
 // TraitAnnotation represents a parsed @trait() annotation.
 type TraitAnnotation struct {
-	TraitName   string
-	Fields      map[string]schema.FieldValue
+	TraitName string
+	// Value is the single trait value (nil for boolean traits like @highlight)
+	Value       *schema.FieldValue
 	Content     string // Content after the trait on the same line
 	Line        int
 	StartOffset int
 	EndOffset   int
 }
 
-// traitRegex matches @trait_name or @trait_name(args...)
+// HasValue returns true if this trait has a value.
+func (t *TraitAnnotation) HasValue() bool {
+	return t.Value != nil && !t.Value.IsNull()
+}
+
+// ValueString returns the value as a string, or empty string if no value.
+func (t *TraitAnnotation) ValueString() string {
+	if t.Value == nil {
+		return ""
+	}
+	if s, ok := t.Value.AsString(); ok {
+		return s
+	}
+	return ""
+}
+
+// traitRegex matches @trait_name or @trait_name(value)
 // The (?:^|[\s\-\*]) ensures @ is at start of line or after whitespace/list markers
 var traitRegex = regexp.MustCompile(`(?:^|[\s\-\*])@(\w+)(?:\s*\(([^)]*)\))?`)
 
@@ -36,14 +52,15 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 		// match[2:4] is the trait name capture group
 		traitName := line[match[2]:match[3]]
 
-		// match[4:6] is the args capture group (may be -1 if not present)
-		var argsStr string
+		// match[4:6] is the value capture group (may be -1 if not present)
+		var value *schema.FieldValue
 		if match[4] >= 0 && match[5] >= 0 {
-			argsStr = line[match[4]:match[5]]
+			valueStr := strings.TrimSpace(line[match[4]:match[5]])
+			if valueStr != "" {
+				fv := parseTraitValue(valueStr)
+				value = &fv
+			}
 		}
-
-		// Parse arguments
-		fields, _ := parseTraitArguments(argsStr)
 
 		// Extract content (everything after the trait annotation on the same line)
 		afterTrait := ""
@@ -53,7 +70,7 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 
 		traits = append(traits, TraitAnnotation{
 			TraitName:   traitName,
-			Fields:      fields,
+			Value:       value,
 			Content:     afterTrait,
 			Line:        lineNumber,
 			StartOffset: match[0],
@@ -73,22 +90,33 @@ func ParseTrait(line string, lineNumber int) *TraitAnnotation {
 	return &traits[0]
 }
 
-// parseTraitArguments parses trait arguments, reusing the type decl parser.
-func parseTraitArguments(args string) (map[string]schema.FieldValue, error) {
-	if strings.TrimSpace(args) == "" {
-		return make(map[string]schema.FieldValue), nil
+// parseTraitValue parses a single trait value.
+// Values can be: date, datetime, string, reference, or enum value.
+func parseTraitValue(valueStr string) schema.FieldValue {
+	valueStr = strings.TrimSpace(valueStr)
+
+	// Check for reference syntax [[...]]
+	if strings.HasPrefix(valueStr, "[[") && strings.HasSuffix(valueStr, "]]") {
+		ref := valueStr[2 : len(valueStr)-2]
+		return schema.Ref(ref)
 	}
 
-	// Reuse the argument parsing logic from type declarations
-	decl, err := ParseTypeDeclaration(fmt.Sprintf("::dummy(%s)", args), 0)
-	if err != nil || decl == nil {
-		return make(map[string]schema.FieldValue), nil
+	// Check for datetime (contains 'T')
+	if strings.Contains(valueStr, "T") && len(valueStr) >= 16 {
+		return schema.Datetime(valueStr)
 	}
-	return decl.Fields, nil
+
+	// Check for date (YYYY-MM-DD pattern)
+	if len(valueStr) == 10 && valueStr[4] == '-' && valueStr[7] == '-' {
+		return schema.Date(valueStr)
+	}
+
+	// Everything else is a string (enum values, plain strings, etc.)
+	return schema.String(valueStr)
 }
 
 // ExtractTraitContent extracts the full content for a trait.
-// For now, returns the content after the trait on the same line.
+// Returns the content after removing all trait annotations from the line.
 func ExtractTraitContent(lines []string, lineIdx int) string {
 	if lineIdx >= len(lines) {
 		return ""

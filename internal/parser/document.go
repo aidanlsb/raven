@@ -32,11 +32,27 @@ type ParsedObject struct {
 
 // ParsedTrait represents a parsed trait annotation.
 type ParsedTrait struct {
-	TraitType      string                       // Trait type name (e.g., "task", "remind")
-	Content        string                       // The content the trait annotates
-	Fields         map[string]schema.FieldValue // Trait fields
-	ParentObjectID string                       // Parent object ID
-	Line           int                          // Line number
+	TraitType      string              // Trait type name (e.g., "due", "priority", "highlight")
+	Value          *schema.FieldValue  // Trait value (nil for boolean traits)
+	Content        string              // The content the trait annotates
+	ParentObjectID string              // Parent object ID
+	Line           int                 // Line number
+}
+
+// HasValue returns true if this trait has a value.
+func (t *ParsedTrait) HasValue() bool {
+	return t.Value != nil && !t.Value.IsNull()
+}
+
+// ValueString returns the value as a string, or empty string if no value.
+func (t *ParsedTrait) ValueString() string {
+	if t.Value == nil {
+		return ""
+	}
+	if s, ok := t.Value.AsString(); ok {
+		return s
+	}
+	return ""
 }
 
 // ParsedRef represents a parsed reference.
@@ -232,16 +248,24 @@ func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDo
 	for lineOffset, line := range bodyLines {
 		lineNum := contentStartLine + lineOffset
 
-		if parsedTrait := ParseTrait(line, lineNum); parsedTrait != nil {
+		// Parse ALL traits on this line
+		parsedTraits := ParseTraitAnnotations(line, lineNum)
+		if len(parsedTraits) > 0 {
 			parentID := findParentForLine(objects, lineNum)
 
-			traits = append(traits, &ParsedTrait{
-				TraitType:      parsedTrait.TraitName,
-				Content:        parsedTrait.Content,
-				Fields:         parsedTrait.Fields,
-				ParentObjectID: parentID,
-				Line:           lineNum,
-			})
+			// Get the shared content (text after all traits)
+			// Use the content from the last trait (everything after the last @)
+			sharedContent := ExtractTraitContent(bodyLines, lineOffset)
+
+			for _, parsedTrait := range parsedTraits {
+				traits = append(traits, &ParsedTrait{
+					TraitType:      parsedTrait.TraitName,
+					Value:          parsedTrait.Value,
+					Content:        sharedContent,
+					ParentObjectID: parentID,
+					Line:           lineNum,
+				})
+			}
 		}
 	}
 

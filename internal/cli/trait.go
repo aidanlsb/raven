@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,30 +9,21 @@ import (
 )
 
 var traitCmd = &cobra.Command{
-	Use:   "trait <name> [--field=value ...]",
-	Short: "Query traits",
-	Long:  `Query traits of a specific type with optional field filters.`,
-	Args:  cobra.MinimumNArgs(1),
+	Use:   "trait <name> [--value <filter>]",
+	Short: "Query traits by type",
+	Long: `Query traits of a specific type with optional value filter.
+
+Examples:
+  rvn trait due                    # All items with @due
+  rvn trait due --value past       # Overdue items
+  rvn trait status --value todo    # Items with @status(todo)
+  rvn trait highlight              # All highlighted items`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		traitName := args[0]
 
-		// Parse field filters from remaining args
-		fieldFilters := make(map[string]string)
-		for _, arg := range args[1:] {
-			// Support both --field=value and field=value
-			arg = strings.TrimPrefix(arg, "--")
-			if idx := strings.Index(arg, "="); idx > 0 {
-				key := arg[:idx]
-				value := arg[idx+1:]
-				fieldFilters[key] = value
-			}
-		}
-
-		// Special handling for tasks (built-in alias)
-		if traitName == "task" {
-			return runTaskQuery(vaultPath, fieldFilters)
-		}
+		valueFilter, _ := cmd.Flags().GetString("value")
 
 		db, err := index.Open(vaultPath)
 		if err != nil {
@@ -41,85 +31,76 @@ var traitCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		results, err := db.QueryTraits(traitName, fieldFilters)
+		var filter *string
+		if valueFilter != "" {
+			filter = &valueFilter
+		}
+
+		results, err := db.QueryTraits(traitName, filter)
 		if err != nil {
 			return fmt.Errorf("failed to query traits: %w", err)
 		}
 
 		if len(results) == 0 {
-			fmt.Printf("No '%s' traits found.\n", traitName)
+			fmt.Printf("No @%s traits found.\n", traitName)
 			return nil
 		}
 
-		for _, result := range results {
-			var fields map[string]interface{}
-			json.Unmarshal([]byte(result.Fields), &fields)
-
-			fmt.Printf("• %s\n", result.Content)
-			fmt.Printf("  %s:%d\n", result.FilePath, result.Line)
-
-			// Print key fields
-			for k, v := range fields {
-				fmt.Printf("  %s: %v\n", k, v)
-			}
-			fmt.Println()
-		}
-
+		printResults(results)
 		return nil
 	},
 }
 
-func runTaskQuery(vaultPath string, filters map[string]string) error {
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
-	var statusPtr *string
-	if status, ok := filters["status"]; ok {
-		statusPtr = &status
-	}
-
-	includeDone := false
-	if _, ok := filters["all"]; ok {
-		includeDone = true
-	}
-
-	tasks, err := db.QueryTasks(statusPtr, nil, includeDone)
-	if err != nil {
-		return fmt.Errorf("failed to query tasks: %w", err)
-	}
-
-	if len(tasks) == 0 {
-		fmt.Println("No tasks found.")
-		return nil
-	}
-
-	for _, task := range tasks {
-		var fields map[string]interface{}
-		json.Unmarshal([]byte(task.Fields), &fields)
-
-		status := getStringField(fields, "status", "todo")
-		due := getStringField(fields, "due", "-")
-
-		statusIcon := "○"
-		switch status {
-		case "todo":
-			statusIcon = "○"
-		case "in_progress":
-			statusIcon = "◐"
-		case "done":
-			statusIcon = "●"
+func printResults(results []index.TraitResult) {
+	for _, result := range results {
+		// Format value display
+		valueStr := ""
+		if result.Value != nil && *result.Value != "" {
+			valueStr = fmt.Sprintf("(%s)", *result.Value)
 		}
 
-		fmt.Printf("%s %s\n", statusIcon, task.Content)
-		fmt.Printf("  due: %s | %s\n", due, task.FilePath)
+		fmt.Printf("• %s\n", result.Content)
+		fmt.Printf("  @%s%s  %s:%d\n", result.TraitType, valueStr, result.FilePath, result.Line)
+	}
+}
+
+// Helper to display traits grouped by content
+func printGroupedResults(results []index.TraitResult) {
+	type contentKey struct {
+		filePath string
+		line     int
 	}
 
-	return nil
+	grouped := make(map[contentKey][]index.TraitResult)
+	var order []contentKey
+
+	for _, r := range results {
+		key := contentKey{r.FilePath, r.Line}
+		if _, exists := grouped[key]; !exists {
+			order = append(order, key)
+		}
+		grouped[key] = append(grouped[key], r)
+	}
+
+	for _, key := range order {
+		traits := grouped[key]
+		content := traits[0].Content
+
+		var traitStrs []string
+		for _, t := range traits {
+			if t.Value != nil && *t.Value != "" {
+				traitStrs = append(traitStrs, fmt.Sprintf("@%s(%s)", t.TraitType, *t.Value))
+			} else {
+				traitStrs = append(traitStrs, fmt.Sprintf("@%s", t.TraitType))
+			}
+		}
+
+		fmt.Printf("• %s\n", content)
+		fmt.Printf("  %s  %s:%d\n", strings.Join(traitStrs, " "), key.filePath, key.line)
+	}
 }
 
 func init() {
+	traitCmd.Flags().String("value", "", "Filter by trait value (supports: today, past, this-week, or specific values)")
 	rootCmd.AddCommand(traitCmd)
 }

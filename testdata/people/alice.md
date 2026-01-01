@@ -12,7 +12,7 @@ Senior engineer on the platform team.
 
 - Met at 2024 company offsite
 - Leading the [[projects/website]] project
-- @task(due=2025-02-01) Send her the API docs
+- @due(2025-02-01) Send her the API docs
 
 ## 1:1 Topics
 

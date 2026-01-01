@@ -1,5 +1,17 @@
 # Raven Vault Configuration
-# These settings control vault-level behavior.
 
-# Where daily notes are stored
 daily_directory: daily
+
+# Saved queries
+queries:
+  tasks:
+    traits: [due, status]
+    filters:
+      status: "todo,in_progress,"
+    description: "Open tasks"
+
+  overdue:
+    traits: [due]
+    filters:
+      due: past
+    description: "Overdue items"

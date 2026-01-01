@@ -41,19 +41,23 @@ type TypeDefinition struct {
 	DefaultPath string                      `yaml:"default_path,omitempty"`
 }
 
-// TraitDefinition defines a trait (@task, @remind, @highlight, etc.).
+// TraitDefinition defines a trait (@due, @priority, @highlight, etc.).
+// Traits are single-valued annotations applied to content.
 type TraitDefinition struct {
-	Fields map[string]*FieldDefinition `yaml:"fields"`
-	CLI    *TraitCLIConfig             `yaml:"cli,omitempty"`
+	// Type is the value type (date, enum, string, boolean, etc.)
+	// If empty or "boolean", the trait is a marker with no value.
+	Type FieldType `yaml:"type,omitempty"`
+
+	// Values lists valid values for enum types.
+	Values []string `yaml:"values,omitempty"`
+
+	// Default is the default value if none provided.
+	Default interface{} `yaml:"default,omitempty"`
 }
 
-// TraitCLIConfig contains CLI configuration for a trait.
-type TraitCLIConfig struct {
-	// Alias is the command name (e.g., "tasks" creates `rvn tasks`).
-	Alias string `yaml:"alias,omitempty"`
-
-	// DefaultQuery is the default filter when using the alias.
-	DefaultQuery string `yaml:"default_query,omitempty"`
+// IsBoolean returns true if this trait is a boolean/marker trait.
+func (td *TraitDefinition) IsBoolean() bool {
+	return td.Type == "" || td.Type == FieldTypeBool || td.Type == "boolean"
 }
 
 // FieldDefinition defines a field within a type or trait.

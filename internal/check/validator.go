@@ -153,15 +153,47 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 		return issues
 	}
 
-	// Validate fields
-	fieldErrors := schema.ValidateFields(trait.Fields, traitDef.Fields, v.schema)
-	for _, err := range fieldErrors {
-		issues = append(issues, Issue{
-			Level:    LevelError,
-			FilePath: filePath,
-			Line:     trait.Line,
-			Message:  err.Error(),
-		})
+	// Validate value based on trait type
+	if traitDef.IsBoolean() {
+		// Boolean traits should have no value
+		if trait.HasValue() {
+			issues = append(issues, Issue{
+				Level:    LevelWarning,
+				FilePath: filePath,
+				Line:     trait.Line,
+				Message:  fmt.Sprintf("Trait '@%s' is a marker trait and should not have a value", trait.TraitType),
+			})
+		}
+	} else {
+		// Non-boolean traits should have a value
+		if !trait.HasValue() {
+			if traitDef.Default == nil {
+				issues = append(issues, Issue{
+					Level:    LevelWarning,
+					FilePath: filePath,
+					Line:     trait.Line,
+					Message:  fmt.Sprintf("Trait '@%s' expects a value", trait.TraitType),
+				})
+			}
+		} else if traitDef.Type == schema.FieldTypeEnum {
+			// Validate enum value
+			valueStr := trait.ValueString()
+			validValue := false
+			for _, allowed := range traitDef.Values {
+				if allowed == valueStr {
+					validValue = true
+					break
+				}
+			}
+			if !validValue {
+				issues = append(issues, Issue{
+					Level:    LevelError,
+					FilePath: filePath,
+					Line:     trait.Line,
+					Message:  fmt.Sprintf("Invalid value '%s' for trait '@%s' (allowed: %v)", valueStr, trait.TraitType, traitDef.Values),
+				})
+			}
+		}
 	}
 
 	return issues

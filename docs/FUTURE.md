@@ -42,11 +42,11 @@ rvn search "compound interest"
 Support relative date queries in filters:
 ```bash
 rvn tasks --due this-week
-rvn tasks --due overdue
+rvn tasks --due past      # overdue tasks
 rvn trait remind --at today
 ```
 
-**Status**: ✅ Implemented with support for: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `overdue`, and specific `YYYY-MM-DD` dates.
+**Status**: ✅ Implemented with support for: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`, and specific `YYYY-MM-DD` dates.
 
 ---
 
@@ -145,6 +145,47 @@ rvn promote daily/2025-02-01#standup --to meetings/standup-2025-02-01.md
 ```
 
 **Status**: Mentioned in Phase 4 of spec.
+
+---
+
+## Task Workflow Enhancements
+
+✅ **IMPLEMENTED**: Atomic traits model. Tasks are now emergent from atomic traits like `@due`, `@priority`, `@status`. Saved queries in `raven.yaml` define what "tasks" means.
+
+```markdown
+- @due(2025-02-01) @priority(high) @status(todo) Send proposal
+```
+
+### CLI Task Mutation Commands
+Commands to modify trait values without manually editing files:
+```bash
+rvn set "Send proposal" status done      # Updates @status value
+rvn set "Send proposal" due 2025-02-05   # Updates @due value
+rvn set "Send proposal" priority high    # Updates @priority value
+```
+
+**Why postponed**: Requires file editing infrastructure. Users can edit files directly.
+
+---
+
+### Trait Instance IDs
+Allow referencing specific trait instances:
+```markdown
+See [[daily/2025-02-01#due:1]] for the original due date.
+```
+
+**Why postponed**: Adds complexity. Most use cases don't need to reference individual traits.
+
+---
+
+### Checkbox Syntax Sync (Editor Integration)
+Sync markdown checkboxes with status trait:
+```markdown
+- [ ] @due(2025-02-01) Send proposal  → infers @status(todo)
+- [x] @due(2025-02-01) Send proposal  → infers @status(done)
+```
+
+**Why postponed**: Creates two sources of truth. Better solved via editor plugins that understand Raven syntax.
 
 ---
 
