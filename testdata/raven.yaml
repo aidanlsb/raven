@@ -15,3 +15,12 @@ queries:
     filters:
       due: past
     description: "Overdue items"
+
+  people:
+    types: [person]
+    description: "All people"
+
+  all-meetings:
+    types: [meeting]
+    traits: [due]
+    description: "All meetings with due dates"

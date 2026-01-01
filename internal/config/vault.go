@@ -19,6 +19,9 @@ type VaultConfig struct {
 
 // SavedQuery defines a saved query.
 type SavedQuery struct {
+	// Types to query (e.g., ["person", "project"])
+	Types []string `yaml:"types,omitempty"`
+
 	// Traits to query (e.g., ["due", "status"])
 	Traits []string `yaml:"traits,omitempty"`
 
