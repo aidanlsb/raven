@@ -1,0 +1,67 @@
+# Raven Schema Configuration
+
+types:
+  person:
+    fields:
+      name:
+        type: string
+        required: true
+      email:
+        type: string
+    detect:
+      path_pattern: "^people/"
+
+  project:
+    fields:
+      status:
+        type: enum
+        values: [active, paused, completed, abandoned]
+        default: active
+      lead:
+        type: ref
+        target: person
+
+  daily:
+    fields:
+      date:
+        type: date
+    detect:
+      path_pattern: "^daily/"
+
+  meeting:
+    fields:
+      time:
+        type: string
+      attendees:
+        type: ref[]
+        target: person
+
+traits:
+  task:
+    fields:
+      due:
+        type: date
+      priority:
+        type: enum
+        values: [low, medium, high]
+        default: medium
+      status:
+        type: enum
+        values: [todo, in_progress, done]
+        default: todo
+    cli:
+      alias: tasks
+      default_query: "status:todo OR status:in_progress"
+
+  remind:
+    fields:
+      at:
+        type: datetime
+        positional: true
+
+  highlight:
+    fields:
+      color:
+        type: enum
+        values: [yellow, red, green, blue]
+        default: yellow
