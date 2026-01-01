@@ -5,9 +5,10 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 ## Features
 
 - **Typed Objects**: Define what things *are* (person, project, meeting, book)
-- **Traits**: Add behavior/metadata to content (`@task`, `@remind`, `@highlight`)
+- **Traits**: Single-valued annotations on content (`@due`, `@priority`, `@highlight`)
 - **References**: Wiki-style links between notes (`[[people/alice]]`)
 - **Tags**: Lightweight categorization (`#productivity`)
+- **Saved Queries**: Define reusable queries for common workflows
 - **SQLite Index**: Fast querying while keeping markdown as source of truth
 
 ## Installation
@@ -40,11 +41,15 @@ rvn reindex
 # Validate your vault
 rvn check
 
-# List all tasks
-rvn tasks
+# Query traits
+rvn trait due --value today        # Items due today
+rvn trait due --value past         # Overdue items
+rvn trait highlight                # All highlights
 
-# Query objects
-rvn query "type:person"
+# Saved queries (defined in raven.yaml)
+rvn query --list                   # List available queries
+rvn query tasks                    # Run 'tasks' query
+rvn query overdue                  # Run 'overdue' query
 
 # Show backlinks to a note
 rvn backlinks people/alice
@@ -57,11 +62,6 @@ rvn daily 2025-02-01         # Specific date
 # Date hub - see everything related to a date
 rvn date                     # Today's date hub
 rvn date yesterday           # Yesterday's date hub
-
-# Query with relative dates
-rvn tasks --due today
-rvn tasks --due this-week
-rvn tasks --due overdue
 ```
 
 ## File Format
@@ -91,11 +91,15 @@ Discussed Q2 priorities.
 
 ### Traits
 
+Traits are **single-valued annotations** on content. Use multiple traits for multiple properties:
+
 ```markdown
-- @task(due=2025-02-03, priority=high) Send revised estimate
+- @due(2025-02-03) @priority(high) Send revised estimate
 - @remind(2025-02-05T09:00) Follow up on this
 - @highlight Key insight worth remembering
 ```
+
+**"Tasks" are emergent**: Anything with `@due` or `@status` is effectively a task. Use saved queries to define what "tasks" means in your workflow.
 
 ### References & Tags
 
@@ -112,9 +116,9 @@ Some thoughts about #productivity today.
 | `rvn init <path>` | Initialize a new vault |
 | `rvn check` | Validate vault (broken refs, schema errors) |
 | `rvn reindex` | Rebuild the SQLite index |
-| `rvn tasks` | List tasks (alias for `rvn trait task`) |
 | `rvn trait <name>` | Query any trait type |
-| `rvn query "<query>"` | Query objects by type, tags, fields |
+| `rvn query <name>` | Run a saved query |
+| `rvn query --list` | List saved queries |
 | `rvn backlinks <target>` | Show incoming references |
 | `rvn stats` | Index statistics |
 | `rvn untyped` | List files using fallback 'page' type |
@@ -122,9 +126,11 @@ Some thoughts about #productivity today.
 | `rvn date [date]` | Show everything related to a date |
 | `rvn new --type <t> <title>` | Create a new typed note |
 
-## Schema Configuration
+## Configuration
 
-Define types and traits in `schema.yaml` at your vault root:
+### Schema (`schema.yaml`)
+
+Define types and traits:
 
 ```yaml
 types:
@@ -145,17 +151,44 @@ types:
         values: [active, paused, completed]
         default: active
 
+# Traits are single-valued annotations
 traits:
-  task:
-    fields:
-      due:
-        type: date
-      status:
-        type: enum
-        values: [todo, in_progress, done]
-        default: todo
-    cli:
-      alias: tasks
+  due:
+    type: date
+
+  priority:
+    type: enum
+    values: [low, medium, high]
+    default: medium
+
+  status:
+    type: enum
+    values: [todo, in_progress, done]
+    default: todo
+
+  highlight:
+    type: boolean
+```
+
+### Vault Config (`raven.yaml`)
+
+Configure vault behavior and saved queries:
+
+```yaml
+daily_directory: daily
+
+queries:
+  tasks:
+    traits: [due, status]
+    filters:
+      status: "todo,in_progress,"
+    description: "Open tasks"
+
+  overdue:
+    traits: [due]
+    filters:
+      due: past
+    description: "Overdue items"
 ```
 
 ## Documentation
@@ -173,6 +206,7 @@ See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the complete specificatio
 - **Plain-text first**: Markdown files are the source of truth, not the database
 - **Portable**: Files sync via Dropbox/iCloud/git; index is local-only
 - **Schema-driven**: Types and traits are user-defined, not hard-coded
+- **Explicit over magic**: Frontmatter is the source of truth for types
 - **Query-friendly**: SQLite index enables fast structured queries
 
 ## License

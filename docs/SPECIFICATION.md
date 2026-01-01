@@ -34,13 +34,13 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 | **Types** | Define what something *is* | Frontmatter `type:` | Yes, via `[[path/file]]` | person, project, meeting, book |
 | **Embedded Types** | A typed section within a file | `::type(id=..., ...)` | Yes, via `[[path/file#id]]` | A meeting inside a daily note |
 | **Sections** | Auto-created for every heading | Markdown headings (`#`, `##`, etc.) | Yes, via `[[path/file#slug]]` | Any heading without explicit type |
-| **Traits** | Add behavior/metadata to content | `@trait(...)` | No (queryable, not referenceable) | @task, @remind, @highlight |
+| **Traits** | Add behavior/metadata to content | `@name` or `@name(value)` | No (queryable, not referenceable) | @due, @priority, @highlight |
 
 ### Types vs Sections vs Traits Mental Model
 
 - **Types are nouns** (declared with `::` or frontmatter): A `person` is a thing. A `meeting` is a thing. They exist, have identity, can be linked to.
 - **Sections are structural nouns** (auto-created from headings): Every markdown heading becomes a `section` object automatically. This ensures the entire document structure is captured in the object model.
-- **Traits are adjectives/verbs** (declared with `@`): `@task` marks content as having task-like behavior. `@highlight` marks something as important. They modify content, don't create new entities.
+- **Traits are single-valued annotations** (declared with `@`): `@due(2025-02-01)` marks content as having a due date. `@highlight` marks something as important. They modify content, don't create new entities. Multiple traits can be combined: `@due(2025-02-01) @priority(high)`.
 
 ### Built-in Types
 
@@ -59,9 +59,9 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 - All date-typed fields are indexed for temporal queries (`today`, `this-week`, `overdue`)
 - The daily directory is configured in `raven.yaml` (default: `daily/`)
 
-**Not in schema.yaml**: These types are added programmatically and don't need to appear in your `schema.yaml`. They have no special behavior beyond being fallback types—they simply provide a type label so the system works consistently.
+**Not in schema.yaml**: These types are added programmatically and don't need to appear in your `schema.yaml`.
 
-**Customizable**: If you add `page`, `section`, or `date` definitions to your `schema.yaml`, your definitions will extend the built-in (allowing you to add custom fields).
+**Customizable**: You can add `page` or `section` definitions to your `schema.yaml` to extend them with custom fields. The `date` type is locked and cannot be modified—use traits for additional daily note metadata (e.g., `@mood(great)`).
 
 ### Files as Source of Truth
 
@@ -164,12 +164,12 @@ Traits are annotations that attach metadata to content. They are:
 ## Weekly Standup
 ::meeting(id=standup, time=09:00)
 
-- @task(due=2025-02-03) Send estimate    ← trait, parent is the meeting
+- @due(2025-02-03) Send estimate         ← trait, parent is the meeting
 - Regular bullet point                    ← just content, not a trait
 
 ## Random Notes
 
-- @task(due=2025-02-05) Unrelated task   ← trait, parent is the file root
+- @due(2025-02-05) @priority(high) Task  ← two traits, parent is the file root
 ```
 
 **Trait content**: The content associated with a trait is everything on the same line(s) between carriage returns (i.e., the line or paragraph containing the trait annotation).
@@ -241,26 +241,24 @@ Content of the meeting...
 
 ### Traits
 
-Inline annotations using `@name(...)` syntax:
+**Traits are single-valued annotations** using `@name` or `@name(value)` syntax:
 
 ```markdown
-- @task(due=2025-02-01, priority=high) Complete the report
+- @due(2025-02-01) @priority(high) Complete the report
 - @remind(2025-02-05T09:00) Follow up on this
 - @highlight This is an important insight
 ```
 
 **Rules**:
+- Each trait has at most one value (or no value for boolean traits)
 - Traits can appear anywhere in content
-- The annotated content is the text between surrounding carriage returns (the line or paragraph)
-- Traits without parentheses are boolean: `@highlight` is equivalent to `@highlight()`
-- Multiple traits can appear on one line: `@task(due=2025-02-01) @highlight Fix the bug`
-- Undefined traits (not in `schema.yaml`) trigger a warning during `rvn check` and are skipped
+- The annotated content is the text on the same line (after all traits)
+- Boolean traits have no value: `@highlight`, `@pinned`, `@archived`
+- Valued traits take a single argument: `@due(2025-02-01)`, `@priority(high)`
+- Multiple traits can be combined: `@due(2025-02-01) @priority(high) @status(todo)`
+- Undefined traits (not in `schema.yaml`) trigger a warning during `rvn check`
 
-**Positional arguments**: Traits can define positional fields. Positional args must come before named args:
-```markdown
-@remind(2025-02-05T09:00)                    # positional: 'at' field
-@remind(2025-02-05T09:00, recurring=true)    # positional + named
-```
+**"Tasks" are emergent**: Instead of a composite `@task` trait, use atomic traits. Anything with `@due` or `@status` is effectively a "task". Use saved queries to define what "tasks" means in your workflow.
 
 ### References
 
@@ -363,11 +361,11 @@ CREATE INDEX idx_objects_tags ON objects(json_extract(fields, '$.tags'));
 
 | Aspect | Tags | Traits |
 |--------|------|--------|
-| Syntax | `#name` | `@name(...)` |
+| Syntax | `#name` | `@name` or `@name(value)` |
 | Attaches to | Object (aggregated) | Specific line/content |
-| Has fields | No | Yes |
+| Has value | No | Optional (single value) |
 | Use case | Categorization | Behavior/metadata |
-| Example | `#productivity` | `@task(due=2025-02-01)` |
+| Example | `#productivity` | `@due(2025-02-01)`, `@highlight` |
 
 ### Implementation Notes
 
@@ -391,16 +389,47 @@ Located at vault root. Controls vault-level settings.
 # Where daily notes are stored (default: daily)
 daily_directory: daily
 
-# Future settings:
-# timezone: America/New_York
-# archive_directory: archive
+# Saved queries - run with 'rvn query <name>'
+queries:
+  tasks:
+    traits: [due, status]
+    filters:
+      status: "todo,in_progress,"   # Include items without explicit status
+    description: "Open tasks"
+
+  overdue:
+    traits: [due]
+    filters:
+      due: past
+    description: "Items past due date"
+
+  this-week:
+    traits: [due]
+    filters:
+      due: this-week
+    description: "Items due this week"
 ```
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `daily_directory` | string | `daily` | Directory for daily notes (files named `YYYY-MM-DD.md`) |
+| `queries` | map | `{}` | Saved queries (see below) |
 
-**Why separate from schema.yaml?** Vault configuration controls *behavior* (where things go, how dates work), while schema defines *structure* (what types and fields exist). Separation keeps each file focused.
+### Saved Queries
+
+Saved queries define reusable trait queries. Run with `rvn query <name>`.
+
+```yaml
+queries:
+  <name>:
+    traits: [trait1, trait2, ...]    # Which traits to query
+    filters:                          # Optional value filters per trait
+      trait1: "value"
+      trait2: "today"                 # Supports date filters
+    description: "Human-readable description"
+```
+
+**Why separate from schema.yaml?** Vault configuration controls *behavior* (where things go, how dates work, what queries exist), while schema defines *structure* (what types and traits exist). Separation keeps each file focused.
 
 ---
 
@@ -453,11 +482,7 @@ types:
       technologies:
         type: string[]      # Array of strings
 
-  daily:
-    default_path: daily/
-    fields:
-      date:
-        type: date
+  # Note: 'date' type is built-in for daily notes
 
   meeting:
     fields:
@@ -485,42 +510,40 @@ types:
         min: 1
         max: 5
 
+# Traits are single-valued annotations.
+# Each trait has a name, a type, and optionally allowed values.
 traits:
-  task:
-    fields:
-      due:
-        type: date
-      priority:
-        type: enum
-        values: [low, medium, high]
-        default: medium
-      assignee:
-        type: ref
-        target: person
-      status:
-        type: enum
-        values: [todo, in_progress, done]
-        default: todo
-    cli:
-      alias: tasks                              # Creates `rvn tasks` command
-      default_query: "status:todo OR status:in_progress"
+  # Date-related traits
+  due:
+    type: date
 
   remind:
-    fields:
-      at:
-        type: datetime
-        positional: true  # First arg without key: @remind(2025-02-01T09:00)
-    cli:
-      alias: reminders                          # Creates `rvn reminders` command
-      default_query: "at:>=now"
+    type: datetime
 
+  # Priority/status traits
+  priority:
+    type: enum
+    values: [low, medium, high]
+    default: medium
+
+  status:
+    type: enum
+    values: [todo, in_progress, done, blocked]
+    default: todo
+
+  # Boolean/marker traits (no value needed)
   highlight:
-    fields:
-      color:
-        type: enum
-        values: [yellow, red, green, blue]
-        default: yellow
-    # No cli alias - use `rvn trait highlight`
+    type: boolean
+
+  pinned:
+    type: boolean
+
+  archived:
+    type: boolean
+
+  # Reference traits
+  assignee:
+    type: ref
 ```
 
 ### Field Types
@@ -622,13 +645,16 @@ attendees:
 ### Trait Annotation Syntax: `@name(key=value, ...)`
 
 ```
-@task(due=2025-02-01, priority=high) Complete the report
-  │    │               └── named argument
-  │    └── positional argument (if schema defines positional field)
+@due(2025-02-01) @priority(high) Complete the report
+  │    │              │     └── trait value
+  │    │              └── second trait
+  │    └── trait value
   └── trait name
 ```
 
-### Value Syntax
+### Type Declaration Value Syntax
+
+For embedded type declarations (`::type(...)`), values use key=value pairs:
 
 | Value Type | Syntax | Example |
 |------------|--------|---------|
@@ -640,24 +666,26 @@ attendees:
 | Quoted string array | `key=["a b", "c d"]` | `topics=["Q2 planning", "budget"]` |
 | Date | `key=2025-02-01` | `due=2025-02-01` |
 | Datetime | `key=2025-02-01T09:00` | `time=2025-02-01T09:00` |
-| Boolean (implicit) | `@name` | `@highlight` (means highlight=true) |
 
-### Argument Order
+### Trait Value Syntax
 
-Positional arguments must come before named arguments (Python-style):
+Traits use a simpler single-value syntax:
 
-```markdown
-@remind(2025-02-05T09:00)                    # positional only
-@remind(2025-02-05T09:00, recurring=true)    # positional + named
-@remind(at=2025-02-05T09:00, recurring=true) # all named (also valid)
-```
+| Trait Type | Syntax | Example |
+|------------|--------|---------|
+| Boolean | `@name` | `@highlight`, `@pinned` |
+| Date | `@name(YYYY-MM-DD)` | `@due(2025-02-01)` |
+| Datetime | `@name(YYYY-MM-DDTHH:MM)` | `@remind(2025-02-01T09:00)` |
+| Enum/String | `@name(value)` | `@priority(high)`, `@status(todo)` |
+| Reference | `@name([[path]])` | `@assignee([[people/alice]])` |
+
+**Note:** Unlike type declarations, traits take a single positional value only. Use multiple traits instead of multiple fields: `@due(2025-02-01) @priority(high)`
 
 ### Complete Example
 
 ```markdown
 ---
-type: daily
-date: 2025-02-01
+type: date
 tags: [work]
 ---
 
@@ -670,7 +698,7 @@ Morning coffee, reviewed [[projects/website-redesign]].
 
 Discussed Q2 roadmap. [[people/alice]] raised concerns about timeline.
 
-- @task(due=2025-02-03, assignee=[[people/alice]]) Send revised estimate
+- @due(2025-02-03) @assignee([[people/alice]]) Send revised estimate
 - Agreed to revisit next week
 - @highlight Key insight: we need more buffer time
 
@@ -679,7 +707,7 @@ Discussed Q2 roadmap. [[people/alice]] raised concerns about timeline.
 
 Talked about his career growth.
 
-- @task(due=2025-02-10) Write up promotion case
+- @due(2025-02-10) Write up promotion case
 - He's interested in the tech lead role on [[projects/mobile-app]]
 
 ## Reading
@@ -687,7 +715,7 @@ Talked about his career growth.
 Started [[books/atomic-habits]] by [[people/james-clear]].
 
 - @highlight Habits are compound interest for self-improvement #productivity
-- @task(due=2025-02-15) Finish chapter 3
+- @due(2025-02-15) Finish chapter 3
 
 ## Random Thoughts
 
@@ -807,12 +835,14 @@ internal/
     ├── init.go              # rvn init
     ├── reindex.go           # rvn reindex
     ├── check.go             # rvn check
-    ├── tasks.go             # rvn tasks
     ├── trait.go             # rvn trait
-    ├── query.go             # rvn query
+    ├── query.go             # rvn query (including saved queries)
     ├── backlinks.go         # rvn backlinks
     ├── stats.go             # rvn stats
     ├── untyped.go           # rvn untyped
+    ├── daily.go             # rvn daily
+    ├── date.go              # rvn date
+    ├── new.go               # rvn new
     ├── daily.go             # rvn daily
     ├── date.go              # rvn date
     └── new.go               # rvn new
@@ -924,18 +954,18 @@ rvn reindex
 rvn trait <name> [filters]
 rvn trait task                           # All tasks
 rvn trait task --status todo             # Filter by field
-rvn trait task --due this-week           # Date range filter
-rvn trait remind --at today              # Reminders due today
-rvn trait highlight --color red          # Highlights by color
+# Query traits by type
+rvn trait due                            # All items with @due
+rvn trait due --value today              # Items due today
+rvn trait due --value past               # Overdue items
+rvn trait priority --value high          # High priority items
+rvn trait status --value todo            # Items with @status(todo)
+rvn trait highlight                      # All highlighted items
 
-# Schema-defined alias for tasks (defined via cli.alias in schema.yaml)
-rvn tasks                                # Alias: rvn trait task (with schema's default_query)
-rvn tasks --all                          # Include completed tasks
-rvn tasks --due today
-rvn tasks --assignee [[people/alice]]
-
-# User-defined aliases (via schema.yaml cli.alias)
-rvn reminders                            # If configured in schema
+# Saved queries (defined in raven.yaml)
+rvn query --list                         # List available saved queries
+rvn query tasks                          # Run 'tasks' saved query
+rvn query overdue                        # Run 'overdue' saved query
 
 # Query objects
 rvn query "type:person"
@@ -986,15 +1016,17 @@ Date fields support relative date expressions in queries:
 | `tomorrow` | Next day |
 | `this-week` | Monday-Sunday of current week |
 | `next-week` | Monday-Sunday of next week |
-| `overdue` | Before today |
+| `past` | Before today |
+| `future` | After today |
 | `YYYY-MM-DD` | Specific date |
 
 **Examples:**
 ```bash
-rvn trait task --due today           # Tasks due today
-rvn trait task --due this-week       # Tasks due this week
-rvn trait task --due overdue         # Overdue tasks
-rvn trait remind --at tomorrow       # Reminders for tomorrow
+rvn trait due --value today           # Items due today
+rvn trait due --value this-week       # Items due this week
+rvn trait due --value past            # Overdue items
+rvn trait remind --value tomorrow     # Reminders for tomorrow
+rvn query overdue                     # Run saved 'overdue' query
 ```
 
 ### Date References
@@ -1057,35 +1089,58 @@ rvn trait task --format json             # Machine-readable
 rvn trait task --format compact          # One-line per item
 ```
 
-### Trait CLI Aliases
+### Saved Queries
 
-Aliases provide ergonomic shortcuts for common trait queries. The `task` trait has a built-in alias:
+Saved queries provide ergonomic shortcuts for common trait combinations. Define them in `raven.yaml`:
 
-```bash
-rvn tasks                    # Built-in alias
+```yaml
+queries:
+  tasks:
+    traits: [due, status]
+    filters:
+      status: "todo,in_progress,"
+    description: "Open tasks"
 ```
 
-Additional aliases can be defined in `schema.yaml` (see Schema Configuration).
+Then run them:
 
-### Trait CLI Configuration
+```bash
+rvn query tasks              # Run saved query
+rvn query --list             # List all saved queries
+```
 
-Traits can define CLI shortcuts via the `cli` key:
+For single-trait queries, use `rvn trait` directly:
+
+```bash
+rvn trait due --value past   # All overdue items
+rvn trait highlight          # All highlights
+```
+
+### Trait Definition
+
+Traits are single-valued annotations defined in `schema.yaml`:
 
 ```yaml
 traits:
-  my_trait:
-    fields: { ... }
-    cli:
-      alias: mytraits              # Creates `rvn mytraits` command
-      default_query: "field:value" # Default filter (can be overridden)
+  due:
+    type: date
+
+  priority:
+    type: enum
+    values: [low, medium, high]
+    default: medium
+
+  highlight:
+    type: boolean
 ```
 
 | Property | Description |
 |----------|-------------|
-| `alias` | Creates a top-level command `rvn <alias>` |
-| `default_query` | Default filter applied when using the alias |
+| `type` | Value type: `date`, `datetime`, `enum`, `string`, `boolean`, `ref` |
+| `values` | For enum types: list of allowed values |
+| `default` | Default value if none provided |
 
-**Note**: CLI aliases are defined in the schema. The default `schema.yaml` created by `rvn init` includes `task` with `cli.alias: tasks`.
+**Note**: To create "task-like" shortcuts, use saved queries in `raven.yaml` rather than trait configuration.
 
 ### The `rvn check` Command
 
@@ -1201,11 +1256,14 @@ rvn --config /path/to/config.toml <command>
     - `rvn init`
     - `rvn reindex`
     - `rvn check` (validation)
-    - `rvn tasks`
+    - `rvn trait` (query by trait type)
+    - `rvn query` (saved queries)
     - `rvn backlinks`
-    - `rvn query`
     - `rvn stats`
     - `rvn untyped`
+    - `rvn daily`
+    - `rvn date`
+    - `rvn new`
 
 ### Phase 2: Enhanced Querying
 
@@ -1561,7 +1619,7 @@ Senior engineer on the platform team.
 
 - Met at 2024 company offsite
 - Leading the [[projects/website-redesign]] project
-- @task(due=2025-02-01) Send her the API docs
+- @due(2025-02-01) Send her the API docs
 
 ## 1:1 Topics
 
@@ -1597,12 +1655,12 @@ Reviewed [[projects/website-redesign]] progress. Looking good.
 
 Discussed Q2 priorities.
 
-- @task(due=2025-02-03) Follow up on timeline
+- @due(2025-02-03) Follow up on timeline
 - [[people/alice]] will send updated estimates
 
 ## Afternoon
 
-- @task(due=2025-02-02) Review PR #1234
+- @due(2025-02-02) @priority(high) Review PR #1234
 - @remind(2025-02-02T14:00) Call with vendor
 
 ## Reading

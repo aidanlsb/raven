@@ -6,43 +6,58 @@ import (
 	"strings"
 )
 
-// TaskResult represents a task query result.
-type TaskResult struct {
-	ID       string
-	Content  string
-	Fields   string // JSON
-	Line     int
-	FilePath string
-	ParentID string
+// TraitResult represents a trait query result.
+type TraitResult struct {
+	ID        string
+	TraitType string
+	Value     *string // Single value (NULL for boolean traits)
+	Content   string
+	FilePath  string
+	Line      int
+	ParentID  string
 }
 
-// QueryTasks queries tasks with optional filters.
-func (d *Database) QueryTasks(statusFilter, dueFilter *string, includeDone bool) ([]TaskResult, error) {
+// ObjectResult represents an object query result.
+type ObjectResult struct {
+	ID        string
+	Type      string
+	Fields    string // JSON
+	FilePath  string
+	LineStart int
+}
+
+// BacklinkResult represents a backlink query result.
+type BacklinkResult struct {
+	SourceID    string
+	SourceType  string
+	FilePath    string
+	Line        *int
+	DisplayText *string
+}
+
+// QueryTraits queries traits by type with optional value filter.
+func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitResult, error) {
 	query := `
-		SELECT t.id, t.content, t.fields, t.line_number, t.file_path, t.parent_object_id
-		FROM traits t
-		WHERE t.trait_type = 'task'
+		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
+		FROM traits
+		WHERE trait_type = ?
 	`
+	args := []interface{}{traitType}
 
-	var conditions []string
-	var args []interface{}
-
-	if !includeDone {
-		conditions = append(conditions, "(json_extract(t.fields, '$.status') IS NULL OR json_extract(t.fields, '$.status') != 'done')")
+	if valueFilter != nil && *valueFilter != "" {
+		// Support relative dates for date-typed traits
+		if isDateFilter(*valueFilter) {
+			condition, dateArgs, _ := ParseDateFilter(*valueFilter, "value")
+			query += " AND " + condition
+			args = append(args, dateArgs...)
+		} else {
+			// Simple value match
+			query += " AND value = ?"
+			args = append(args, *valueFilter)
+		}
 	}
 
-	if statusFilter != nil && *statusFilter != "" {
-		conditions = append(conditions, "json_extract(t.fields, '$.status') = ?")
-		args = append(args, *statusFilter)
-	}
-
-	// TODO: Add due date filtering with date comparison
-
-	if len(conditions) > 0 {
-		query += " AND " + strings.Join(conditions, " AND ")
-	}
-
-	query += " ORDER BY json_extract(t.fields, '$.due') ASC"
+	query += " ORDER BY value ASC NULLS LAST"
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
@@ -50,45 +65,10 @@ func (d *Database) QueryTasks(statusFilter, dueFilter *string, includeDone bool)
 	}
 	defer rows.Close()
 
-	var tasks []TaskResult
+	var results []TraitResult
 	for rows.Next() {
-		var task TaskResult
-		if err := rows.Scan(&task.ID, &task.Content, &task.Fields, &task.Line, &task.FilePath, &task.ParentID); err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-
-	return tasks, rows.Err()
-}
-
-// BacklinkResult represents a backlink query result.
-type BacklinkResult struct {
-	SourceID    string
-	FilePath    string
-	Line        *int
-	DisplayText *string
-}
-
-// Backlinks returns backlinks to a target.
-func (d *Database) Backlinks(target string) ([]BacklinkResult, error) {
-	// Match both exact and partial paths
-	partial := "%/" + target
-
-	rows, err := d.db.Query(`
-		SELECT r.source_id, r.file_path, r.line_number, r.display_text
-		FROM refs r
-		WHERE r.target_raw = ? OR r.target_raw LIKE ?
-	`, target, partial)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []BacklinkResult
-	for rows.Next() {
-		var result BacklinkResult
-		if err := rows.Scan(&result.SourceID, &result.FilePath, &result.Line, &result.DisplayText); err != nil {
+		var result TraitResult
+		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID); err != nil {
 			return nil, err
 		}
 		results = append(results, result)
@@ -97,104 +77,90 @@ func (d *Database) Backlinks(target string) ([]BacklinkResult, error) {
 	return results, rows.Err()
 }
 
-// UntypedPages returns pages with type='page' (the fallback type).
-func (d *Database) UntypedPages() ([]string, error) {
-	rows, err := d.db.Query("SELECT id FROM objects WHERE type = 'page' AND parent_id IS NULL")
+// isDateFilter checks if a filter string is a date filter.
+func isDateFilter(filter string) bool {
+	lower := strings.ToLower(filter)
+	switch lower {
+	case "today", "yesterday", "tomorrow", "this-week", "next-week", "past", "future":
+		return true
+	}
+	// Check for YYYY-MM-DD pattern
+	if len(filter) == 10 && filter[4] == '-' && filter[7] == '-' {
+		return true
+	}
+	return false
+}
+
+// QueryTraitsMultiple queries multiple trait types at once.
+// Useful for compound queries like "items with @due AND @status".
+func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]TraitResult, error) {
+	if len(traitTypes) == 0 {
+		return nil, nil
+	}
+
+	placeholders := make([]string, len(traitTypes))
+	args := make([]interface{}, len(traitTypes))
+	for i, t := range traitTypes {
+		placeholders[i] = "?"
+		args[i] = t
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
+		FROM traits
+		WHERE trait_type IN (%s)
+	`, strings.Join(placeholders, ", "))
+
+	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var pages []string
+	results := make(map[string][]TraitResult)
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var result TraitResult
+		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID); err != nil {
 			return nil, err
 		}
-		pages = append(pages, id)
+		results[result.TraitType] = append(results[result.TraitType], result)
 	}
 
-	return pages, rows.Err()
+	return results, rows.Err()
 }
 
-// QueryBuilder helps build complex queries.
-type QueryBuilder struct {
-	ObjectType   *string
-	TraitType    *string
-	FieldFilters map[string]string
-	ParentType   *string
-	Tag          *string
-}
+// QueryTraitsOnContent finds all traits on the same content (by file and line).
+func (d *Database) QueryTraitsOnContent(filePath string, line int) ([]TraitResult, error) {
+	query := `
+		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
+		FROM traits
+		WHERE file_path = ? AND line_number = ?
+	`
 
-// NewQueryBuilder creates a new QueryBuilder.
-func NewQueryBuilder() *QueryBuilder {
-	return &QueryBuilder{
-		FieldFilters: make(map[string]string),
+	rows, err := d.db.Query(query, filePath, line)
+	if err != nil {
+		return nil, err
 	}
-}
+	defer rows.Close()
 
-// Parse parses a query string like "type:meeting attendees:[[alice]]".
-func (qb *QueryBuilder) Parse(query string) *QueryBuilder {
-	for _, part := range strings.Fields(query) {
-		if idx := strings.Index(part, ":"); idx > 0 {
-			key := part[:idx]
-			value := part[idx+1:]
-
-			switch key {
-			case "type":
-				qb.ObjectType = &value
-			case "trait":
-				qb.TraitType = &value
-			case "tags":
-				qb.Tag = &value
-			case "parent.type":
-				qb.ParentType = &value
-			default:
-				qb.FieldFilters[key] = value
-			}
+	var results []TraitResult
+	for rows.Next() {
+		var result TraitResult
+		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID); err != nil {
+			return nil, err
 		}
+		results = append(results, result)
 	}
 
-	return qb
+	return results, rows.Err()
 }
 
-// BuildWhereClause builds a SQL WHERE clause.
-func (qb *QueryBuilder) BuildWhereClause() (string, []interface{}) {
-	var conditions []string
-	var args []interface{}
-
-	if qb.ObjectType != nil {
-		conditions = append(conditions, "type = ?")
-		args = append(args, *qb.ObjectType)
-	}
-
-	if qb.Tag != nil {
-		conditions = append(conditions, "json_extract(fields, '$.tags') LIKE ?")
-		args = append(args, fmt.Sprintf("%%\"%s%%", *qb.Tag))
-	}
-
-	for field, value := range qb.FieldFilters {
-		conditions = append(conditions, fmt.Sprintf("json_extract(fields, '$.%s') = ?", field))
-		args = append(args, value)
-	}
-
-	if len(conditions) == 0 {
-		return "", nil
-	}
-
-	return "WHERE " + strings.Join(conditions, " AND "), args
-}
-
-// QueryObjects queries objects with the current filters.
-func (d *Database) QueryObjects(qb *QueryBuilder) ([]ObjectResult, error) {
-	whereClause, args := qb.BuildWhereClause()
-
-	query := "SELECT id, type, fields, file_path, line_start FROM objects"
-	if whereClause != "" {
-		query += " " + whereClause
-	}
-
-	rows, err := d.db.Query(query, args...)
+// QueryObjects queries objects by type.
+func (d *Database) QueryObjects(objectType string) ([]ObjectResult, error) {
+	rows, err := d.db.Query(
+		"SELECT id, type, fields, file_path, line_start FROM objects WHERE type = ?",
+		objectType,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -212,119 +178,31 @@ func (d *Database) QueryObjects(qb *QueryBuilder) ([]ObjectResult, error) {
 	return results, rows.Err()
 }
 
-// ObjectResult represents an object query result.
-type ObjectResult struct {
-	ID        string
-	Type      string
-	Fields    string // JSON
-	FilePath  string
-	LineStart int
-}
-
-// QueryTraits queries traits with the given filters.
-func (d *Database) QueryTraits(traitType string, fieldFilters map[string]string) ([]TraitResult, error) {
-	query := "SELECT id, trait_type, content, fields, file_path, line_number, parent_object_id FROM traits WHERE trait_type = ?"
-	args := []interface{}{traitType}
-
-	for field, value := range fieldFilters {
-		query += fmt.Sprintf(" AND json_extract(fields, '$.%s') = ?", field)
-		args = append(args, value)
-	}
-
-	rows, err := d.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []TraitResult
-	for rows.Next() {
-		var result TraitResult
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Content, &result.Fields, &result.FilePath, &result.Line, &result.ParentID); err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-
-	return results, rows.Err()
-}
-
-// TraitResult represents a trait query result.
-type TraitResult struct {
-	ID        string
-	TraitType string
-	Content   string
-	Fields    string // JSON
-	FilePath  string
-	Line      int
-	ParentID  string
-}
-
-// QueryTraitsByType queries traits of a given type with optional status and due filters.
-// statusFilter can be a single status or comma-separated list (e.g., "todo,in_progress").
-func (d *Database) QueryTraitsByType(traitType string, statusFilter, dueFilter *string) ([]TraitResult, error) {
+// Backlinks returns all objects that reference the given target.
+func (d *Database) Backlinks(targetID string) ([]BacklinkResult, error) {
+	// Support both exact match and date shorthand
 	query := `
-		SELECT id, trait_type, content, fields, file_path, line_number, parent_object_id
-		FROM traits
-		WHERE trait_type = ?
+		SELECT r.source_id, o.type, r.file_path, r.line_number, r.display_text
+		FROM refs r
+		LEFT JOIN objects o ON r.source_id = o.id
+		WHERE r.target_raw = ? OR r.target_id = ?
 	`
-	args := []interface{}{traitType}
 
-	if statusFilter != nil && *statusFilter != "" {
-		statuses := strings.Split(*statusFilter, ",")
-		var hasEmpty bool
-		var nonEmptyStatuses []string
-		for _, s := range statuses {
-			s = strings.TrimSpace(s)
-			if s == "" {
-				hasEmpty = true
-			} else {
-				nonEmptyStatuses = append(nonEmptyStatuses, s)
-			}
-		}
-
-		if len(nonEmptyStatuses) == 0 && hasEmpty {
-			// Only empty filter - match NULL or empty status
-			query += " AND (json_extract(fields, '$.status') IS NULL OR json_extract(fields, '$.status') = '')"
-		} else if len(nonEmptyStatuses) == 1 && !hasEmpty {
-			query += " AND json_extract(fields, '$.status') = ?"
-			args = append(args, nonEmptyStatuses[0])
-		} else if len(nonEmptyStatuses) > 0 {
-			placeholders := make([]string, len(nonEmptyStatuses))
-			for i, s := range nonEmptyStatuses {
-				placeholders[i] = "?"
-				args = append(args, s)
-			}
-			inClause := "json_extract(fields, '$.status') IN (" + strings.Join(placeholders, ", ") + ")"
-			if hasEmpty {
-				// Include NULL/empty status as well (for tasks without explicit status)
-				query += " AND (" + inClause + " OR json_extract(fields, '$.status') IS NULL OR json_extract(fields, '$.status') = '')"
-			} else {
-				query += " AND " + inClause
-			}
-		}
-	}
-
-	if dueFilter != nil && *dueFilter != "" {
-		// Support relative dates like "today", "this-week", "overdue"
-		dateCondition, dateArgs, _ := ParseDateFilter(*dueFilter, "json_extract(fields, '$.due')")
-		query += " AND " + dateCondition
-		args = append(args, dateArgs...)
-	}
-
-	query += " ORDER BY json_extract(fields, '$.due') ASC"
-
-	rows, err := d.db.Query(query, args...)
+	rows, err := d.db.Query(query, targetID, targetID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var results []TraitResult
+	var results []BacklinkResult
 	for rows.Next() {
-		var result TraitResult
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Content, &result.Fields, &result.FilePath, &result.Line, &result.ParentID); err != nil {
+		var result BacklinkResult
+		var sourceType sql.NullString
+		if err := rows.Scan(&result.SourceID, &sourceType, &result.FilePath, &result.Line, &result.DisplayText); err != nil {
 			return nil, err
+		}
+		if sourceType.Valid {
+			result.SourceType = sourceType.String
 		}
 		results = append(results, result)
 	}
@@ -354,9 +232,9 @@ func (d *Database) GetObject(id string) (*ObjectResult, error) {
 func (d *Database) GetTrait(id string) (*TraitResult, error) {
 	var result TraitResult
 	err := d.db.QueryRow(
-		"SELECT id, trait_type, content, fields, file_path, line_number, parent_object_id FROM traits WHERE id = ?",
+		"SELECT id, trait_type, value, content, file_path, line_number, parent_object_id FROM traits WHERE id = ?",
 		id,
-	).Scan(&result.ID, &result.TraitType, &result.Content, &result.Fields, &result.FilePath, &result.Line, &result.ParentID)
+	).Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -395,6 +273,28 @@ func (d *Database) QueryDateIndex(date string) ([]DateIndexResult, error) {
 			return nil, err
 		}
 		results = append(results, result)
+	}
+
+	return results, rows.Err()
+}
+
+// UntypedPages returns file paths of all objects using the fallback 'page' type.
+func (d *Database) UntypedPages() ([]string, error) {
+	rows, err := d.db.Query(
+		"SELECT DISTINCT file_path FROM objects WHERE type = 'page' AND parent_id IS NULL ORDER BY file_path",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		results = append(results, path)
 	}
 
 	return results, rows.Err()

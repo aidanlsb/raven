@@ -12,7 +12,8 @@ import (
 //   - "tomorrow"
 //   - "this-week"
 //   - "next-week"
-//   - "overdue"
+//   - "past" (before today)
+//   - "future" (after today)
 //   - "YYYY-MM-DD" (exact date)
 func ParseDateFilter(filter string, fieldExpr string) (condition string, args []interface{}, err error) {
 	filter = strings.ToLower(strings.TrimSpace(filter))
@@ -53,8 +54,12 @@ func ParseDateFilter(filter string, fieldExpr string) (condition string, args []
 		return fieldExpr + " >= ? AND " + fieldExpr + " <= ?",
 			[]interface{}{startOfNextWeek, endOfNextWeek}, nil
 
-	case "overdue":
+	case "past":
 		return fieldExpr + " < ? AND " + fieldExpr + " IS NOT NULL",
+			[]interface{}{today}, nil
+
+	case "future":
+		return fieldExpr + " > ? AND " + fieldExpr + " IS NOT NULL",
 			[]interface{}{today}, nil
 
 	default:

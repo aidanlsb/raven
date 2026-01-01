@@ -74,3 +74,42 @@ func TestResolverAmbiguous(t *testing.T) {
 		t.Errorf("expected 2 matches, got %d", len(result.Matches))
 	}
 }
+
+func TestResolverDateShorthand(t *testing.T) {
+	objectIDs := []string{
+		"daily/2025-02-01",
+		"people/alice",
+	}
+
+	r := NewWithDailyDir(objectIDs, "daily")
+
+	t.Run("date reference to existing daily note", func(t *testing.T) {
+		result := r.Resolve("2025-02-01")
+		if result.TargetID != "daily/2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-02-01")
+		}
+	})
+
+	t.Run("date reference to non-existent daily note", func(t *testing.T) {
+		// Date references should resolve even if the daily note doesn't exist
+		result := r.Resolve("2025-03-15")
+		if result.TargetID != "daily/2025-03-15" {
+			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-03-15")
+		}
+	})
+
+	t.Run("custom daily directory", func(t *testing.T) {
+		r2 := NewWithDailyDir([]string{"journal/2025-02-01"}, "journal")
+		result := r2.Resolve("2025-02-01")
+		if result.TargetID != "journal/2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "journal/2025-02-01")
+		}
+	})
+
+	t.Run("non-date string not treated as date", func(t *testing.T) {
+		result := r.Resolve("alice")
+		if result.TargetID != "people/alice" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/alice")
+		}
+	})
+}

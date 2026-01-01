@@ -49,27 +49,16 @@ func Load(vaultPath string) (*Schema, error) {
 			},
 		}
 	}
-	// Built-in 'date' type for daily notes - user can extend but not remove
-	if existing, ok := schema.Types["date"]; !ok {
-		schema.Types["date"] = &TypeDefinition{
-			Fields: make(map[string]*FieldDefinition),
-		}
-	} else {
-		// User can add fields but we ensure the type exists
-		if existing.Fields == nil {
-			existing.Fields = make(map[string]*FieldDefinition)
-		}
+	// Built-in 'date' type for daily notes - locked, cannot be modified
+	// Users should use traits for additional daily note metadata
+	schema.Types["date"] = &TypeDefinition{
+		Fields: make(map[string]*FieldDefinition),
 	}
 
-	// Initialize nil field maps
+	// Initialize nil field maps for types
 	for _, typeDef := range schema.Types {
 		if typeDef.Fields == nil {
 			typeDef.Fields = make(map[string]*FieldDefinition)
-		}
-	}
-	for _, traitDef := range schema.Traits {
-		if traitDef.Fields == nil {
-			traitDef.Fields = make(map[string]*FieldDefinition)
 		}
 	}
 
@@ -83,8 +72,8 @@ func CreateDefault(vaultPath string) error {
 	defaultSchema := `# Raven Schema Configuration
 # Define your types and traits here.
 #
-# Type = frontmatter 'type:' field (or 'page' if not specified)
-# default_path = where 'rvn new --type X' creates files
+# Types: Define what objects ARE (frontmatter 'type:' field)
+# Traits: Single-valued annotations on content (@name or @name(value))
 #
 # Built-in types (always available):
 #   - page: fallback for files without explicit type
@@ -92,7 +81,6 @@ func CreateDefault(vaultPath string) error {
 #   - date: daily notes (files named YYYY-MM-DD.md in daily_directory)
 
 types:
-  # Example: person type
   person:
     default_path: people/
     fields:
@@ -102,7 +90,6 @@ types:
       email:
         type: string
 
-  # Example: project type
   project:
     default_path: projects/
     fields:
@@ -111,42 +98,37 @@ types:
         values: [active, paused, completed]
         default: active
 
-  # You can extend the built-in 'date' type with custom fields:
-  # date:
-  #   fields:
-  #     mood:
-  #       type: enum
-  #       values: [great, good, okay, rough]
-
+# Traits are single-valued annotations.
+# Boolean traits: @highlight (no value)
+# Valued traits: @due(2025-02-01), @priority(high)
 traits:
-  task:
-    fields:
-      due:
-        type: date
-      priority:
-        type: enum
-        values: [low, medium, high]
-        default: medium
-      status:
-        type: enum
-        values: [todo, in_progress, done]
-        default: todo
-    cli:
-      alias: tasks
-      default_query: "status:todo OR status:in_progress"
+  # Date-related
+  due:
+    type: date
 
   remind:
-    fields:
-      at:
-        type: datetime
-        positional: true
+    type: datetime
 
+  # Priority/status
+  priority:
+    type: enum
+    values: [low, medium, high]
+    default: medium
+
+  status:
+    type: enum
+    values: [todo, in_progress, done, blocked]
+    default: todo
+
+  # Markers (boolean traits)
   highlight:
-    fields:
-      color:
-        type: enum
-        values: [yellow, red, green, blue]
-        default: yellow
+    type: boolean
+
+  pinned:
+    type: boolean
+
+  archived:
+    type: boolean
 `
 
 	if err := os.WriteFile(schemaPath, []byte(defaultSchema), 0644); err != nil {

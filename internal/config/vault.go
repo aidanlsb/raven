@@ -12,6 +12,21 @@ import (
 type VaultConfig struct {
 	// DailyDirectory is where daily notes are stored (default: "daily/")
 	DailyDirectory string `yaml:"daily_directory"`
+
+	// Queries defines saved queries that can be run with `rvn query <name>`
+	Queries map[string]*SavedQuery `yaml:"queries,omitempty"`
+}
+
+// SavedQuery defines a saved query.
+type SavedQuery struct {
+	// Traits to query (e.g., ["due", "status"])
+	Traits []string `yaml:"traits,omitempty"`
+
+	// Filters for each trait (e.g., {"status": "todo,in_progress", "due": "past"})
+	Filters map[string]string `yaml:"filters,omitempty"`
+
+	// Description for help text
+	Description string `yaml:"description,omitempty"`
 }
 
 // DefaultVaultConfig returns the default vault configuration.
@@ -58,9 +73,28 @@ func CreateDefaultVaultConfig(vaultPath string) error {
 # Where daily notes are stored
 daily_directory: daily
 
-# Future settings:
-# timezone: America/New_York
-# archive_directory: archive
+# Saved queries - run with 'rvn query <name>'
+queries:
+  # All items with @due or @status traits (i.e., "tasks")
+  tasks:
+    traits: [due, status]
+    filters:
+      status: "todo,in_progress,"   # Include items without explicit status
+    description: "Open tasks"
+
+  # Overdue items
+  overdue:
+    traits: [due]
+    filters:
+      due: past
+    description: "Items past their due date"
+
+  # Items due this week
+  this-week:
+    traits: [due]
+    filters:
+      due: this-week
+    description: "Items due this week"
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {

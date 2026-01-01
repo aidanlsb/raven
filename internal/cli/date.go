@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -102,27 +101,18 @@ Examples:
 		for fieldName, fieldItems := range byField {
 			fmt.Printf("## %s: %s (%d)\n", strings.Title(fieldName), dateStr, len(fieldItems))
 			for _, item := range fieldItems {
-				if item.SourceType == "trait" {
-					// Get trait content
-					trait, err := db.GetTrait(item.SourceID)
-					if err == nil && trait != nil {
-						var fields map[string]interface{}
-						json.Unmarshal([]byte(trait.Fields), &fields)
-						status := ""
-						if s, ok := fields["status"].(string); ok {
-							switch s {
-							case "todo":
-								status = "○ "
-							case "in_progress":
-								status = "◐ "
-							case "done":
-								status = "● "
-							}
-						}
-						fmt.Printf("  %s%s\n", status, trait.Content)
-						fmt.Printf("    %s\n", trait.FilePath)
+			if item.SourceType == "trait" {
+				// Get trait content
+				trait, err := db.GetTrait(item.SourceID)
+				if err == nil && trait != nil {
+					valueStr := ""
+					if trait.Value != nil && *trait.Value != "" {
+						valueStr = fmt.Sprintf(" (%s)", *trait.Value)
 					}
-				} else {
+					fmt.Printf("  @%s%s %s\n", trait.TraitType, valueStr, trait.Content)
+					fmt.Printf("    %s\n", trait.FilePath)
+				}
+			} else {
 					// Object
 					obj, err := db.GetObject(item.SourceID)
 					if err == nil && obj != nil {
