@@ -1,0 +1,318 @@
+// Package index handles SQLite database operations.
+package index
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/ravenscroftj/raven/internal/parser"
+	"github.com/ravenscroftj/raven/internal/schema"
+	_ "modernc.org/sqlite"
+)
+
+// Database is the SQLite database handle.
+type Database struct {
+	db *sql.DB
+}
+
+// Open opens or creates the database.
+func Open(vaultPath string) (*Database, error) {
+	dbDir := filepath.Join(vaultPath, ".raven")
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .raven directory: %w", err)
+	}
+
+	dbPath := filepath.Join(dbDir, "index.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	d := &Database{db: db}
+	if err := d.initialize(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return d, nil
+}
+
+// OpenInMemory opens an in-memory database (for testing).
+func OpenInMemory() (*Database, error) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return nil, err
+	}
+
+	d := &Database{db: db}
+	if err := d.initialize(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return d, nil
+}
+
+// Close closes the database.
+func (d *Database) Close() error {
+	return d.db.Close()
+}
+
+// initialize creates the database schema.
+func (d *Database) initialize() error {
+	schema := `
+		-- Enable WAL mode for better concurrency
+		PRAGMA journal_mode = WAL;
+		
+		-- All referenceable objects (files + embedded types)
+		CREATE TABLE IF NOT EXISTS objects (
+			id TEXT PRIMARY KEY,
+			file_path TEXT NOT NULL,
+			type TEXT NOT NULL,
+			heading TEXT,
+			heading_level INTEGER,
+			fields TEXT NOT NULL DEFAULT '{}',
+			line_start INTEGER NOT NULL,
+			line_end INTEGER,
+			parent_id TEXT,
+			created_at INTEGER,
+			updated_at INTEGER
+		);
+		
+		-- All trait annotations
+		CREATE TABLE IF NOT EXISTS traits (
+			id TEXT PRIMARY KEY,
+			file_path TEXT NOT NULL,
+			parent_object_id TEXT NOT NULL,
+			trait_type TEXT NOT NULL,
+			content TEXT NOT NULL,
+			fields TEXT NOT NULL DEFAULT '{}',
+			line_number INTEGER NOT NULL,
+			created_at INTEGER
+		);
+		
+		-- References between objects
+		CREATE TABLE IF NOT EXISTS refs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source_id TEXT NOT NULL,
+			target_id TEXT,
+			target_raw TEXT NOT NULL,
+			display_text TEXT,
+			file_path TEXT NOT NULL,
+			line_number INTEGER,
+			position_start INTEGER,
+			position_end INTEGER
+		);
+		
+		-- Indexes for fast queries
+		CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);
+		CREATE INDEX IF NOT EXISTS idx_objects_type ON objects(type);
+		CREATE INDEX IF NOT EXISTS idx_objects_parent ON objects(parent_id);
+		
+		CREATE INDEX IF NOT EXISTS idx_traits_file ON traits(file_path);
+		CREATE INDEX IF NOT EXISTS idx_traits_type ON traits(trait_type);
+		CREATE INDEX IF NOT EXISTS idx_traits_parent ON traits(parent_object_id);
+		
+		CREATE INDEX IF NOT EXISTS idx_refs_source ON refs(source_id);
+		CREATE INDEX IF NOT EXISTS idx_refs_target ON refs(target_id);
+		CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file_path);
+	`
+
+	_, err := d.db.Exec(schema)
+	if err != nil {
+		return fmt.Errorf("failed to initialize database schema: %w", err)
+	}
+
+	return nil
+}
+
+// IndexDocument indexes a parsed document (replaces existing data for the file).
+func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete existing data for this file
+	if _, err := tx.Exec("DELETE FROM objects WHERE file_path = ?", doc.FilePath); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM traits WHERE file_path = ?", doc.FilePath); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM refs WHERE file_path = ?", doc.FilePath); err != nil {
+		return err
+	}
+
+	now := time.Now().Unix()
+
+	// Insert objects
+	objStmt, err := tx.Prepare(`
+		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer objStmt.Close()
+
+	for _, obj := range doc.Objects {
+		fieldsJSON, err := json.Marshal(fieldsToMap(obj.Fields))
+		if err != nil {
+			return err
+		}
+
+		_, err = objStmt.Exec(
+			obj.ID,
+			doc.FilePath,
+			obj.ObjectType,
+			obj.Heading,
+			obj.HeadingLevel,
+			string(fieldsJSON),
+			obj.LineStart,
+			obj.LineEnd,
+			obj.ParentID,
+			now,
+			now,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Insert traits
+	traitStmt, err := tx.Prepare(`
+		INSERT INTO traits (id, file_path, parent_object_id, trait_type, content, fields, line_number, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer traitStmt.Close()
+
+	for idx, trait := range doc.Traits {
+		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, idx)
+		fieldsJSON, err := json.Marshal(fieldsToMap(trait.Fields))
+		if err != nil {
+			return err
+		}
+
+		_, err = traitStmt.Exec(
+			traitID,
+			doc.FilePath,
+			trait.ParentObjectID,
+			trait.TraitType,
+			trait.Content,
+			string(fieldsJSON),
+			trait.Line,
+			now,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Insert refs
+	refStmt, err := tx.Prepare(`
+		INSERT INTO refs (source_id, target_id, target_raw, display_text, file_path, line_number, position_start, position_end)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer refStmt.Close()
+
+	for _, ref := range doc.Refs {
+		_, err = refStmt.Exec(
+			ref.SourceID,
+			nil, // target_id resolved later
+			ref.TargetRaw,
+			ref.DisplayText,
+			doc.FilePath,
+			ref.Line,
+			ref.Start,
+			ref.End,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// RemoveFile removes all data for a file.
+func (d *Database) RemoveFile(filePath string) error {
+	if _, err := d.db.Exec("DELETE FROM objects WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM traits WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Stats returns statistics about the index.
+func (d *Database) Stats() (*IndexStats, error) {
+	var stats IndexStats
+
+	if err := d.db.QueryRow("SELECT COUNT(*) FROM objects").Scan(&stats.ObjectCount); err != nil {
+		return nil, err
+	}
+	if err := d.db.QueryRow("SELECT COUNT(*) FROM traits").Scan(&stats.TraitCount); err != nil {
+		return nil, err
+	}
+	if err := d.db.QueryRow("SELECT COUNT(*) FROM refs").Scan(&stats.RefCount); err != nil {
+		return nil, err
+	}
+	if err := d.db.QueryRow("SELECT COUNT(DISTINCT file_path) FROM objects").Scan(&stats.FileCount); err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
+}
+
+// IndexStats contains index statistics.
+type IndexStats struct {
+	ObjectCount int
+	TraitCount  int
+	RefCount    int
+	FileCount   int
+}
+
+// AllObjectIDs returns all object IDs (for reference resolution).
+func (d *Database) AllObjectIDs() ([]string, error) {
+	rows, err := d.db.Query("SELECT id FROM objects")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
+// Helper to convert FieldValue map to interface map for JSON serialization.
+func fieldsToMap(fields map[string]schema.FieldValue) map[string]interface{} {
+	result := make(map[string]interface{}, len(fields))
+	for k, v := range fields {
+		result[k] = v.Raw()
+	}
+	return result
+}

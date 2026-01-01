@@ -1,0 +1,105 @@
+# Raven Development Rules
+
+## Source of Truth
+
+**`docs/SPECIFICATION.md` is the authoritative specification for all Raven behavior.**
+
+- Before implementing any feature, verify it matches the specification
+- After implementing a feature, update the specification if behavior changed
+- If the spec and code diverge, the spec is correct—fix the code
+- When proposing new features, update the spec first, then implement
+- The spec documents both "what" and "why" for design decisions
+- You should be able to read the spec and fully understand how the system works
+
+## Design Philosophy
+
+### Explicit Over Magic
+
+Prefer explicit configuration and behavior over implicit "magic":
+
+- **Good**: User defines types in `schema.yaml`, those are the available types
+- **Bad**: Auto-detecting types based on content patterns without user configuration
+- **Good**: Requiring `id=` for explicit `::type()` declarations so IDs are predictable
+- **Acceptable**: Section IDs auto-generated from slugified heading text (documented, predictable, overridable with `::type(id=...)`)
+- **Bad**: Undocumented auto-generation that users can't predict or override
+
+Configuration should be discoverable and documented. A user reading `schema.yaml` should understand exactly what types and traits are available.
+
+### Simple, Unambiguous Syntax
+
+The type/object/trait syntax must be:
+
+- **Visually distinct**: `::type()` for objects, `@trait()` for traits, `[[ref]]` for links
+- **Predictable**: Same syntax always means the same thing
+- **Non-conflicting**: Syntax should not collide with common markdown patterns
+- **Parseable**: Regular expressions or simple parsers can extract elements reliably
+
+Avoid syntax that requires context to interpret or that could be confused with other markdown conventions.
+
+### User-Controlled Schema
+
+The schema defines everything—nothing is hidden:
+
+- All available types come from `schema.yaml` (plus built-in `page` and `section`)
+- All available traits come from `schema.yaml`
+- Built-in types (`page`, `section`) can be customized or extended by the user
+- CLI behavior (like `rvn tasks`) derives from schema configuration
+- Detection rules, field validation, defaults—all in the schema
+
+**No hidden behavior**: If the system does something, it should be traceable to schema configuration or documented built-in behavior.
+
+### General System, User Workflow
+
+Raven is a **general system** for adding typed structure to markdown:
+
+- **We provide**: Types, traits, references, tags, querying, indexing
+- **User decides**: What types to create, what traits to use, folder structure, workflows
+
+Avoid building opinionated workflows into the core:
+
+- **Good**: `@task` trait with configurable fields, `rvn trait task` to query
+- **Bad**: Hard-coded "task management" features with specific status flows
+- **Good**: `rvn query` with flexible filters
+- **Bad**: Built-in "project dashboard" that assumes specific type structures
+
+The tool should be a foundation that users build their workflows on top of.
+
+## Code Standards
+
+### Go Conventions
+
+- Follow standard Go project layout (`cmd/`, `internal/`)
+- Use `go fmt` and `go vet`
+- Prefer stdlib where sufficient (e.g., `encoding/json`, `path/filepath`)
+- Error messages should be actionable and include context
+
+### Testing
+
+- Unit tests for parser components (frontmatter, markdown, traits, refs)
+- Integration tests using `testdata/` vault
+- Test edge cases: empty files, malformed syntax, unicode, code blocks
+
+### CLI Design
+
+- Commands should be discoverable via `--help`
+- Error messages should suggest fixes
+- Output should be human-readable by default, with `--json` for scripting
+- Respect the vault boundary—never operate outside configured vault
+
+## Implementation Checklist
+
+When adding a feature:
+
+1. [ ] Verify feature is documented in `docs/SPECIFICATION.md`
+2. [ ] If new, add to spec with rationale in Design Decisions section
+3. [ ] Implement with explicit configuration (no magic)
+4. [ ] Add tests covering normal and edge cases
+5. [ ] Update README.md if user-facing behavior changes
+6. [ ] Ensure CLI help text is accurate
+
+When fixing a bug:
+
+1. [ ] Check if spec describes expected behavior
+2. [ ] If spec is unclear, clarify it first
+3. [ ] Fix code to match spec
+4. [ ] Add regression test
