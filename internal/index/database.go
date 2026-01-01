@@ -41,6 +41,63 @@ func Open(vaultPath string) (*Database, error) {
 	return d, nil
 }
 
+// OpenWithRebuild opens the database, rebuilding if schema is incompatible.
+// Returns (database, wasRebuilt, error).
+func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
+	dbDir := filepath.Join(vaultPath, ".raven")
+	dbPath := filepath.Join(dbDir, "index.db")
+
+	// Try to open and check schema compatibility
+	if _, err := os.Stat(dbPath); err == nil {
+		db, err := sql.Open("sqlite", dbPath)
+		if err == nil {
+			if !isSchemaCompatible(db) {
+				db.Close()
+				// Schema incompatible - delete and recreate
+				os.Remove(dbPath)
+				os.Remove(dbPath + "-wal")
+				os.Remove(dbPath + "-shm")
+				// Open fresh
+				freshDB, err := Open(vaultPath)
+				return freshDB, true, err
+			}
+			db.Close()
+		}
+	}
+
+	// Open normally
+	db, err := Open(vaultPath)
+	return db, false, err
+}
+
+// isSchemaCompatible checks if the database schema matches expected structure.
+func isSchemaCompatible(db *sql.DB) bool {
+	// Check if traits table has 'value' column (new schema)
+	// Old schema had 'fields' column instead
+	rows, err := db.Query("PRAGMA table_info(traits)")
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	hasValueColumn := false
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue interface{}
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return false
+		}
+		if name == "value" {
+			hasValueColumn = true
+			break
+		}
+	}
+
+	return hasValueColumn
+}
+
 // OpenInMemory opens an in-memory database (for testing).
 func OpenInMemory() (*Database, error) {
 	db, err := sql.Open("sqlite", ":memory:")

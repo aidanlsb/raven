@@ -27,12 +27,16 @@ var reindexCmd = &cobra.Command{
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
 
-		// Open database
-		db, err := index.Open(vaultPath)
+		// Open database (rebuild if schema incompatible)
+		db, wasRebuilt, err := index.OpenWithRebuild(vaultPath)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
 		defer db.Close()
+
+		if wasRebuilt {
+			fmt.Println("Database schema was outdated - rebuilt from scratch.")
+		}
 
 		var fileCount, errorCount int
 
