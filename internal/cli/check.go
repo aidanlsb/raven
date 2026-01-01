@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ravenscroftj/raven/internal/check"
@@ -14,7 +16,8 @@ import (
 )
 
 var (
-	checkStrict bool
+	checkStrict        bool
+	checkCreateMissing bool
 )
 
 var checkCmd = &cobra.Command{
@@ -123,6 +126,17 @@ var checkCmd = &cobra.Command{
 			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
 		}
 
+		// Handle --create-missing
+		if checkCreateMissing {
+			missingRefs := validator.MissingRefs()
+			if len(missingRefs) > 0 {
+				created := handleMissingRefs(vaultPath, s, missingRefs)
+				if created > 0 {
+					fmt.Printf("\n✓ Created %d missing page(s).\n", created)
+				}
+			}
+		}
+
 		if errorCount > 0 || (checkStrict && warningCount > 0) {
 			os.Exit(1)
 		}
@@ -131,7 +145,180 @@ var checkCmd = &cobra.Command{
 	},
 }
 
+func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef) int {
+	// Categorize refs by confidence
+	var certain, inferred, unknown []*check.MissingRef
+	for _, ref := range refs {
+		switch ref.Confidence {
+		case check.ConfidenceCertain:
+			certain = append(certain, ref)
+		case check.ConfidenceInferred:
+			inferred = append(inferred, ref)
+		default:
+			unknown = append(unknown, ref)
+		}
+	}
+
+	// Sort each category by path for consistent output
+	sortRefs := func(refs []*check.MissingRef) {
+		sort.Slice(refs, func(i, j int) bool {
+			return refs[i].TargetPath < refs[j].TargetPath
+		})
+	}
+	sortRefs(certain)
+	sortRefs(inferred)
+	sortRefs(unknown)
+
+	fmt.Println("\n--- Missing References ---")
+	reader := bufio.NewReader(os.Stdin)
+	created := 0
+
+	// Handle certain refs (from typed fields)
+	if len(certain) > 0 {
+		fmt.Println("\nCertain (from typed fields):")
+		for _, ref := range certain {
+			source := ref.SourceObjectID
+			if source == "" {
+				source = ref.SourceFile
+			}
+			fmt.Printf("  • %s → %s (from %s.%s)\n", ref.TargetPath, ref.InferredType, source, ref.FieldSource)
+		}
+
+		fmt.Print("\nCreate these pages? [Y/n] ")
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response == "" || response == "y" || response == "yes" {
+			for _, ref := range certain {
+				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
+					fmt.Printf("  ✗ Failed to create %s: %v\n", ref.TargetPath, err)
+				} else {
+					fmt.Printf("  ✓ Created %s.md (type: %s)\n", ref.TargetPath, ref.InferredType)
+					created++
+				}
+			}
+		}
+	}
+
+	// Handle inferred refs (from path matching)
+	if len(inferred) > 0 {
+		fmt.Println("\nInferred (from path matching default_path):")
+		for _, ref := range inferred {
+			fmt.Printf("  ? %s → %s (inferred from path)\n", ref.TargetPath, ref.InferredType)
+		}
+
+		for _, ref := range inferred {
+			fmt.Printf("\nCreate %s as '%s'? [y/N] ", ref.TargetPath, ref.InferredType)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response == "y" || response == "yes" {
+				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
+					fmt.Printf("  ✗ Failed to create %s: %v\n", ref.TargetPath, err)
+				} else {
+					fmt.Printf("  ✓ Created %s.md (type: %s)\n", ref.TargetPath, ref.InferredType)
+					created++
+				}
+			}
+		}
+	}
+
+	// Handle unknown refs
+	if len(unknown) > 0 {
+		fmt.Println("\nUnknown type (please specify):")
+		for _, ref := range unknown {
+			fmt.Printf("  ? %s (referenced in %s:%d)\n", ref.TargetPath, ref.SourceFile, ref.Line)
+		}
+
+		// List available types
+		var typeNames []string
+		for name := range s.Types {
+			typeNames = append(typeNames, name)
+		}
+		sort.Strings(typeNames)
+		fmt.Printf("\nAvailable types: %s\n", strings.Join(typeNames, ", "))
+
+		for _, ref := range unknown {
+			fmt.Printf("\nType for %s (or 'skip'): ", ref.TargetPath)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(response)
+
+			if response == "" || response == "skip" || response == "s" {
+				fmt.Printf("  Skipped %s\n", ref.TargetPath)
+				continue
+			}
+
+			// Validate type exists
+			if _, exists := s.Types[response]; !exists {
+				fmt.Printf("  ✗ Unknown type '%s', skipping %s\n", response, ref.TargetPath)
+				continue
+			}
+
+			if err := createMissingPage(vaultPath, s, ref.TargetPath, response); err != nil {
+				fmt.Printf("  ✗ Failed to create %s: %v\n", ref.TargetPath, err)
+			} else {
+				fmt.Printf("  ✓ Created %s.md (type: %s)\n", ref.TargetPath, response)
+				created++
+			}
+		}
+	}
+
+	return created
+}
+
+func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName string) error {
+	// Build the file path
+	filePath := filepath.Join(vaultPath, targetPath)
+	if !strings.HasSuffix(filePath, ".md") {
+		filePath += ".md"
+	}
+
+	// Create parent directories
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Build frontmatter
+	var content strings.Builder
+	content.WriteString("---\n")
+	content.WriteString(fmt.Sprintf("type: %s\n", typeName))
+
+	// Add required fields with placeholder values
+	if typeDef, ok := s.Types[typeName]; ok && typeDef != nil {
+		for fieldName, fieldDef := range typeDef.Fields {
+			if fieldDef != nil && fieldDef.Required {
+				// Add placeholder for required fields
+				content.WriteString(fmt.Sprintf("%s: \n", fieldName))
+			}
+		}
+
+		// Add required traits with placeholder values
+		for _, traitName := range typeDef.Traits.List() {
+			if typeDef.Traits.IsRequired(traitName) {
+				content.WriteString(fmt.Sprintf("%s: \n", traitName))
+			}
+		}
+	}
+
+	content.WriteString("---\n\n")
+
+	// Add a heading based on the filename
+	baseName := filepath.Base(targetPath)
+	baseName = strings.TrimSuffix(baseName, ".md")
+	// Convert slug to title case
+	title := strings.ReplaceAll(baseName, "-", " ")
+	title = strings.Title(title)
+	content.WriteString(fmt.Sprintf("# %s\n\n", title))
+
+	// Write the file
+	if err := os.WriteFile(filePath, []byte(content.String()), 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
+}
+
 func init() {
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
+	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Interactively create missing referenced pages")
 	rootCmd.AddCommand(checkCmd)
 }
