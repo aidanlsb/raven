@@ -49,8 +49,19 @@ rvn query "type:person"
 # Show backlinks to a note
 rvn backlinks people/alice
 
-# Open today's daily note
-rvn daily
+# Daily notes
+rvn daily                    # Today
+rvn daily yesterday          # Yesterday
+rvn daily 2025-02-01         # Specific date
+
+# Date hub - see everything related to a date
+rvn date                     # Today's date hub
+rvn date yesterday           # Yesterday's date hub
+
+# Query with relative dates
+rvn tasks --due today
+rvn tasks --due this-week
+rvn tasks --due overdue
 ```
 
 ## File Format
@@ -107,7 +118,8 @@ Some thoughts about #productivity today.
 | `rvn backlinks <target>` | Show incoming references |
 | `rvn stats` | Index statistics |
 | `rvn untyped` | List files using fallback 'page' type |
-| `rvn daily` | Open/create today's daily note |
+| `rvn daily [date]` | Open/create a daily note |
+| `rvn date [date]` | Show everything related to a date |
 | `rvn new --type <t> <title>` | Create a new typed note |
 
 ## Schema Configuration
@@ -117,16 +129,16 @@ Define types and traits in `schema.yaml` at your vault root:
 ```yaml
 types:
   person:
+    default_path: people/
     fields:
       name:
         type: string
         required: true
       email:
         type: string
-    detect:
-      path_pattern: "^people/"
 
   project:
+    default_path: projects/
     fields:
       status:
         type: enum
@@ -142,6 +154,8 @@ traits:
         type: enum
         values: [todo, in_progress, done]
         default: todo
+    cli:
+      alias: tasks
 ```
 
 ## Documentation

@@ -49,6 +49,17 @@ func Load(vaultPath string) (*Schema, error) {
 			},
 		}
 	}
+	// Built-in 'date' type for daily notes - user can extend but not remove
+	if existing, ok := schema.Types["date"]; !ok {
+		schema.Types["date"] = &TypeDefinition{
+			Fields: make(map[string]*FieldDefinition),
+		}
+	} else {
+		// User can add fields but we ensure the type exists
+		if existing.Fields == nil {
+			existing.Fields = make(map[string]*FieldDefinition)
+		}
+	}
 
 	// Initialize nil field maps
 	for _, typeDef := range schema.Types {
@@ -74,6 +85,11 @@ func CreateDefault(vaultPath string) error {
 #
 # Type = frontmatter 'type:' field (or 'page' if not specified)
 # default_path = where 'rvn new --type X' creates files
+#
+# Built-in types (always available):
+#   - page: fallback for files without explicit type
+#   - section: auto-created for headings
+#   - date: daily notes (files named YYYY-MM-DD.md in daily_directory)
 
 types:
   # Example: person type
@@ -86,13 +102,6 @@ types:
       email:
         type: string
 
-  # Example: daily note type
-  daily:
-    default_path: daily/
-    fields:
-      date:
-        type: date
-
   # Example: project type
   project:
     default_path: projects/
@@ -101,6 +110,13 @@ types:
         type: enum
         values: [active, paused, completed]
         default: active
+
+  # You can extend the built-in 'date' type with custom fields:
+  # date:
+  #   fields:
+  #     mood:
+  #       type: enum
+  #       values: [great, good, okay, rough]
 
 traits:
   task:

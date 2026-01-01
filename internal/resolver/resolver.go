@@ -3,20 +3,31 @@ package resolver
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
+// datePattern matches YYYY-MM-DD date format
+var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
 // Resolver resolves short references to full object IDs.
 type Resolver struct {
-	objectIDs map[string]struct{}      // Set of all known object IDs
-	shortMap  map[string][]string      // Map from short name to full IDs
+	objectIDs      map[string]struct{} // Set of all known object IDs
+	shortMap       map[string][]string // Map from short name to full IDs
+	dailyDirectory string              // Directory for daily notes (e.g., "daily")
 }
 
 // New creates a new Resolver with the given object IDs.
 func New(objectIDs []string) *Resolver {
+	return NewWithDailyDir(objectIDs, "daily")
+}
+
+// NewWithDailyDir creates a new Resolver with the given object IDs and daily directory.
+func NewWithDailyDir(objectIDs []string, dailyDirectory string) *Resolver {
 	r := &Resolver{
-		objectIDs: make(map[string]struct{}),
-		shortMap:  make(map[string][]string),
+		objectIDs:      make(map[string]struct{}),
+		shortMap:       make(map[string][]string),
+		dailyDirectory: dailyDirectory,
 	}
 
 	for _, id := range objectIDs {
@@ -48,6 +59,22 @@ type ResolveResult struct {
 // Resolve resolves a reference to its target object ID.
 func (r *Resolver) Resolve(ref string) ResolveResult {
 	ref = strings.TrimSpace(ref)
+
+	// Check if this is a date reference (YYYY-MM-DD)
+	if datePattern.MatchString(ref) {
+		// Convert date reference to daily note path
+		dateID := filepath.Join(r.dailyDirectory, ref)
+		if _, ok := r.objectIDs[dateID]; ok {
+			return ResolveResult{TargetID: dateID}
+		}
+		// Date note doesn't exist yet, but it's a valid date reference
+		// Return the expected ID (caller can decide whether to create it)
+		return ResolveResult{
+			TargetID: dateID,
+			// Note: This returns a valid target even if the file doesn't exist.
+			// The date object is considered to "exist" conceptually.
+		}
+	}
 
 	// If the ref contains a path separator, treat as full path
 	if strings.Contains(ref, "/") || strings.HasPrefix(ref, "#") {

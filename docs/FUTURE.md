@@ -38,7 +38,7 @@ rvn search "compound interest"
 
 ---
 
-### Date Range Queries
+### ~~Date Range Queries~~ ✅ IMPLEMENTED
 Support relative date queries in filters:
 ```bash
 rvn tasks --due this-week
@@ -46,7 +46,29 @@ rvn tasks --due overdue
 rvn trait remind --at today
 ```
 
-**Status**: Partially supported, needs robust implementation.
+**Status**: ✅ Implemented with support for: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `overdue`, and specific `YYYY-MM-DD` dates.
+
+---
+
+### ~~Date Hub~~ ✅ IMPLEMENTED
+Show everything related to a specific date:
+```bash
+rvn date              # Today's date hub
+rvn date yesterday
+rvn date 2025-02-01
+```
+
+**Status**: ✅ Implemented. Shows daily note, tasks due, and all objects/traits with matching date fields.
+
+---
+
+### ~~Date Shorthand References~~ ✅ IMPLEMENTED
+Allow `[[2025-02-01]]` syntax to reference daily notes:
+```markdown
+See [[2025-02-01]] for the meeting notes.
+```
+
+**Status**: ✅ Implemented. Resolves to configured daily directory (e.g., `daily/2025-02-01`).
 
 ---
 

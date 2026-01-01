@@ -46,14 +46,22 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 
 | Type | Purpose | Auto-created? |
 |------|---------|---------------|
-| `page` | Fallback for files without explicit type | Yes, when no type declared and no detection rule matches |
+| `page` | Fallback for files without explicit type | Yes, when no type declared |
 | `section` | Fallback for headings without explicit type | Yes, for every heading without `::type()` |
+| `date` | Daily notes (files named `YYYY-MM-DD.md` in daily directory) | Yes, when filename matches date pattern |
 
 **Why built-in?** These types ensure every structural element is represented in the object model. Without them, files and headings without explicit types would have no type, breaking queries and parent resolution.
 
+**The `date` type is special**:
+- Files named `YYYY-MM-DD.md` (e.g., `2025-02-01.md`) in the configured `daily_directory` are automatically type `date`
+- This is a controlled exception to "frontmatter is the only source of truth" because dates are a foundational concept
+- Date references use shorthand syntax: `[[2025-02-01]]` resolves to the daily note for that date
+- All date-typed fields are indexed for temporal queries (`today`, `this-week`, `overdue`)
+- The daily directory is configured in `raven.yaml` (default: `daily/`)
+
 **Not in schema.yaml**: These types are added programmatically and don't need to appear in your `schema.yaml`. They have no special behavior beyond being fallback types—they simply provide a type label so the system works consistently.
 
-**Customizable**: If you add `page` or `section` definitions to your `schema.yaml`, your definitions will be used, allowing you to add custom fields or detection rules.
+**Customizable**: If you add `page`, `section`, or `date` definitions to your `schema.yaml`, your definitions will extend the built-in (allowing you to add custom fields).
 
 ### Files as Source of Truth
 
@@ -367,6 +375,32 @@ CREATE INDEX idx_objects_tags ON objects(json_extract(fields, '$.tags'));
 2. **Aggregation**: Collect all tags within an object's scope, plus inherited tags from children
 3. **Deduplication**: Store unique tags only
 4. **Storage**: Add to object's `fields.tags` as JSON array during indexing
+
+---
+
+## Vault Configuration
+
+### File: `raven.yaml`
+
+Located at vault root. Controls vault-level settings.
+
+```yaml
+# Raven Vault Configuration
+# These settings control vault-level behavior.
+
+# Where daily notes are stored (default: daily)
+daily_directory: daily
+
+# Future settings:
+# timezone: America/New_York
+# archive_directory: archive
+```
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `daily_directory` | string | `daily` | Directory for daily notes (files named `YYYY-MM-DD.md`) |
+
+**Why separate from schema.yaml?** Vault configuration controls *behavior* (where things go, how dates work), while schema defines *structure* (what types and fields exist). Separation keeps each file focused.
 
 ---
 
@@ -747,7 +781,8 @@ cmd/
 
 internal/
 ├── config/
-│   └── config.go            # Load ~/.config/raven/config.toml
+│   ├── config.go            # Load ~/.config/raven/config.toml (global config)
+│   └── vault.go             # Load raven.yaml (vault config)
 ├── schema/
 │   ├── types.go             # Schema type definitions
 │   ├── loader.go            # Load schema.yaml
@@ -763,7 +798,8 @@ internal/
 │   └── resolver.go          # Resolve short refs to full paths
 ├── index/
 │   ├── database.go          # SQLite operations
-│   └── queries.go           # Query builder
+│   ├── queries.go           # Query builder
+│   └── dates.go             # Date filter parsing
 ├── check/
 │   └── validator.go         # Vault-wide validation (rvn check)
 └── cli/
@@ -778,6 +814,7 @@ internal/
     ├── stats.go             # rvn stats
     ├── untyped.go           # rvn untyped
     ├── daily.go             # rvn daily
+    ├── date.go              # rvn date
     └── new.go               # rvn new
 ```
 
@@ -828,6 +865,16 @@ CREATE TABLE refs (
     position_end INTEGER
 );
 
+-- Date index for temporal queries
+CREATE TABLE date_index (
+    date TEXT NOT NULL,               -- YYYY-MM-DD
+    source_type TEXT NOT NULL,        -- 'object' or 'trait'
+    source_id TEXT NOT NULL,          -- Object or trait ID
+    field_name TEXT NOT NULL,         -- Which field (due, date, start, etc.)
+    file_path TEXT NOT NULL,
+    PRIMARY KEY (date, source_type, source_id, field_name)
+);
+
 -- Indexes for fast queries
 CREATE INDEX idx_objects_file ON objects(file_path);
 CREATE INDEX idx_objects_type ON objects(type);
@@ -845,6 +892,9 @@ CREATE INDEX idx_objects_tags ON objects(json_extract(fields, '$.tags'));
 CREATE INDEX idx_refs_source ON refs(source_id);
 CREATE INDEX idx_refs_target ON refs(target_id);
 CREATE INDEX idx_refs_file ON refs(file_path);
+
+CREATE INDEX idx_date_index_date ON date_index(date);
+CREATE INDEX idx_date_index_file ON date_index(file_path);
 ```
 
 **Design notes**:
@@ -903,8 +953,16 @@ rvn stats
 # List untyped pages (missing explicit type)
 rvn untyped
 
-# Open/create today's daily note
-rvn daily
+# Open/create daily notes
+rvn daily                        # Today's note
+rvn daily yesterday              # Yesterday's note
+rvn daily tomorrow               # Tomorrow's note
+rvn daily 2025-02-01             # Specific date
+
+# Date hub - show everything related to a date
+rvn date                         # Today
+rvn date yesterday
+rvn date 2025-02-01
 
 # Create a new typed note
 rvn new --type person "Alice Chen"
@@ -915,6 +973,56 @@ rvn watch
 
 # Start local web UI (future)
 rvn serve
+```
+
+### Date Filters
+
+Date fields support relative date expressions in queries:
+
+| Filter | Meaning |
+|--------|---------|
+| `today` | Current day |
+| `yesterday` | Previous day |
+| `tomorrow` | Next day |
+| `this-week` | Monday-Sunday of current week |
+| `next-week` | Monday-Sunday of next week |
+| `overdue` | Before today |
+| `YYYY-MM-DD` | Specific date |
+
+**Examples:**
+```bash
+rvn trait task --due today           # Tasks due today
+rvn trait task --due this-week       # Tasks due this week
+rvn trait task --due overdue         # Overdue tasks
+rvn trait remind --at tomorrow       # Reminders for tomorrow
+```
+
+### Date References
+
+Date references use shorthand syntax:
+
+| Syntax | Resolves To |
+|--------|-------------|
+| `[[2025-02-01]]` | `daily/2025-02-01` (or configured daily directory) |
+
+This allows natural linking to dates without knowing the directory structure:
+```markdown
+See [[2025-02-01]] for the kickoff meeting notes.
+```
+
+### The `rvn date` Command
+
+Shows everything related to a specific date (the "date hub"):
+- The daily note for that date
+- Tasks due on that date
+- Events on that date  
+- Any object with a date field matching that date
+- References to that date
+
+```bash
+rvn date                  # Today's date hub
+rvn date yesterday        # Yesterday
+rvn date 2025-02-01       # Specific date
 ```
 
 ### The `rvn trait` Command

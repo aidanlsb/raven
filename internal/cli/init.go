@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/schema"
 	"github.com/spf13/cobra"
 )
@@ -12,8 +13,13 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init <path>",
 	Short: "Initialize a new vault",
-	Long:  `Creates a new vault at the specified path with a default schema.yaml.`,
-	Args:  cobra.ExactArgs(1),
+	Long: `Creates a new vault at the specified path with default configuration files.
+
+Creates:
+  - raven.yaml   (vault configuration)
+  - schema.yaml  (types and traits)
+  - .raven/      (index directory, gitignored)`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[0]
 
@@ -36,13 +42,19 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("failed to create .gitignore: %w", err)
 		}
 
+		// Create default raven.yaml (vault config)
+		if err := config.CreateDefaultVaultConfig(path); err != nil {
+			return fmt.Errorf("failed to create raven.yaml: %w", err)
+		}
+
 		// Create default schema.yaml
 		if err := schema.CreateDefault(path); err != nil {
 			return fmt.Errorf("failed to create schema.yaml: %w", err)
 		}
 
-		fmt.Println("✓ Created schema.yaml")
-		fmt.Println("✓ Created .raven/ directory")
+		fmt.Println("✓ Created raven.yaml (vault configuration)")
+		fmt.Println("✓ Created schema.yaml (types and traits)")
+		fmt.Println("✓ Created .raven/ directory (index)")
 		fmt.Println("\nVault initialized! Start adding markdown files.")
 
 		return nil
