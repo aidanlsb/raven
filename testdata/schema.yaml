@@ -1,5 +1,7 @@
 # Raven Schema Configuration
 
+version: 2
+
 types:
   person:
     default_path: people/

@@ -8,13 +8,35 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SchemaWarning represents a non-fatal schema issue.
+type SchemaWarning struct {
+	Message string
+}
+
+// LoadResult contains the loaded schema and any warnings.
+type LoadResult struct {
+	Schema   *Schema
+	Warnings []SchemaWarning
+}
+
 // Load loads the schema from a vault's schema.yaml file.
 // Returns a default schema if the file doesn't exist.
 func Load(vaultPath string) (*Schema, error) {
+	result, err := LoadWithWarnings(vaultPath)
+	if err != nil {
+		return nil, err
+	}
+	return result.Schema, nil
+}
+
+// LoadWithWarnings loads the schema and returns any migration warnings.
+func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	result := &LoadResult{Warnings: []SchemaWarning{}}
 
 	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
-		return NewSchema(), nil
+		result.Schema = NewSchema()
+		return result, nil
 	}
 
 	data, err := os.ReadFile(schemaPath)
@@ -25,6 +47,19 @@ func Load(vaultPath string) (*Schema, error) {
 	var schema Schema
 	if err := yaml.Unmarshal(data, &schema); err != nil {
 		return nil, fmt.Errorf("failed to parse schema file %s: %w", schemaPath, err)
+	}
+
+	// Check schema version
+	if schema.Version == 0 {
+		// No version specified - assume v1 (old format)
+		result.Warnings = append(result.Warnings, SchemaWarning{
+			Message: "schema.yaml has no version field. Run 'rvn migrate --schema' to upgrade.",
+		})
+		schema.Version = 1
+	} else if schema.Version < CurrentSchemaVersion {
+		result.Warnings = append(result.Warnings, SchemaWarning{
+			Message: fmt.Sprintf("schema.yaml is version %d, current is %d. Run 'rvn migrate --schema' to upgrade.", schema.Version, CurrentSchemaVersion),
+		})
 	}
 
 	// Initialize maps if nil
@@ -62,7 +97,8 @@ func Load(vaultPath string) (*Schema, error) {
 		}
 	}
 
-	return &schema, nil
+	result.Schema = &schema
+	return result, nil
 }
 
 // CreateDefault creates a default schema.yaml file in the vault.
@@ -71,7 +107,9 @@ func CreateDefault(vaultPath string) error {
 
 	defaultSchema := `# Raven Schema Configuration
 # Define your types and traits here.
-#
+
+version: 2  # Schema format version (do not change manually)
+
 # Types: Define what objects ARE (frontmatter 'type:' field)
 # Traits: Single-valued annotations on content (@name or @name(value))
 #

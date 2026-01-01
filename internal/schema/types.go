@@ -3,10 +3,14 @@ package schema
 
 import "encoding/json"
 
+// CurrentSchemaVersion is the latest schema format version.
+const CurrentSchemaVersion = 2
+
 // Schema represents the complete schema definition loaded from schema.yaml.
 type Schema struct {
-	Types  map[string]*TypeDefinition  `yaml:"types"`
-	Traits map[string]*TraitDefinition `yaml:"traits"`
+	Version int                         `yaml:"version,omitempty"` // Schema format version
+	Types   map[string]*TypeDefinition  `yaml:"types"`
+	Traits  map[string]*TraitDefinition `yaml:"traits"`
 }
 
 // NewSchema creates a new schema with built-in types.
