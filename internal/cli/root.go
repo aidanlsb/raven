@@ -30,8 +30,13 @@ Built for speed, with plain-text markdown files as the source of truth.
 Named for Odin's ravens Huginn (thought) and Muninn (memory), 
 who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip vault resolution for init and vaults commands
-		if cmd.Name() == "init" || cmd.Name() == "vaults" {
+		// Skip vault resolution for commands that don't need it
+		switch cmd.Name() {
+		case "init", "vaults", "completion", "help":
+			return nil
+		}
+		// Also skip for completion subcommands (bash, zsh, fish, powershell)
+		if cmd.Parent() != nil && cmd.Parent().Name() == "completion" {
 			return nil
 		}
 

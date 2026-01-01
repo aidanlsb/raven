@@ -190,6 +190,8 @@ Both outgoing refs (what this note links to) and backlinks (what links to this n
 - Embedded objects: `[[daily/2025-02-01#standup]]`
 - The `rvn check` command warns about ambiguous short references
 
+**Slugified matching**: References are matched using slugification, so `[[people/Emily Jia]]` will resolve to `people/emily-jia.md`. This allows natural inline references while maintaining clean, URL-safe filenames.
+
 **Validation**: All references must resolve to existing objects. The `rvn check` command errors on broken references.
 
 ---
@@ -640,16 +642,19 @@ Types can specify a `default_path` for file creation convenience:
 ```yaml
 types:
   person:
-    default_path: people/    # rvn new --type person creates files here
+    default_path: people/    # rvn new person creates files here
     fields:
       name:
         type: string
 ```
 
 **Behavior:**
-- `rvn new --type person "Alice"` creates `people/alice.md`
+- `rvn new person "Alice"` creates `people/alice.md`
+- `rvn new person "Emily Jia"` creates `people/emily-jia.md` (slugified)
 - The directory is created if it doesn't exist
 - If no `default_path` is set, files are created in the vault root
+- Filenames are always slugified (lowercase, spaces become hyphens)
+- The original title is preserved in the file's heading (e.g., `# Emily Jia`)
 
 **Important:** File location has **no effect on type**. A file's type is determined **solely** by its frontmatter `type:` field (or defaults to `page` if not specified). You can have a `person` file anywhere in your vault—Raven doesn't care about directory structure.
 
@@ -995,6 +1000,7 @@ rvn init <path>
 # Validate vault (compile step)
 rvn check
 rvn check --strict              # Treat warnings as errors
+rvn check --create-missing      # Interactively create missing referenced pages
 
 # Reindex all files
 rvn reindex
@@ -1044,8 +1050,9 @@ rvn date yesterday
 rvn date 2025-02-01
 
 # Create a new typed note
-rvn new --type person "Alice Chen"
-rvn new --type project "Website Redesign"
+rvn new person "Alice Chen"       # Creates people/alice-chen.md
+rvn new project "Website"         # Creates projects/website.md, prompts for required fields
+rvn new person                    # Prompts for title interactively
 
 # Watch for changes and auto-reindex (future)
 rvn watch
@@ -1223,6 +1230,39 @@ WARN:  books/old-book.md - No incoming references (orphan)
 
 Found 2 errors, 2 warnings in 847 files.
 ```
+
+**Create missing references** (`--create-missing`):
+
+When references point to non-existent files, `rvn check --create-missing` offers to create them interactively:
+
+```bash
+$ rvn check --create-missing
+
+--- Missing References ---
+
+Certain (from typed fields):
+  • people/carol → person (from daily/2025-01-01#team-sync.attendees)
+  • people/dan → person (from daily/2025-01-01#team-sync.attendees)
+
+Create these pages? [Y/n] y
+  ✓ Created people/carol.md (type: person)
+  ✓ Created people/dan.md (type: person)
+
+Unknown type (please specify):
+  ? notes/random-idea (referenced in projects/website.md:15)
+
+Available types: meeting, person, project
+
+Type for notes/random-idea (or 'skip'): skip
+  Skipped notes/random-idea
+
+✓ Created 2 missing page(s).
+```
+
+Type inference:
+- **Certain**: Reference is from a typed field (e.g., `attendees: ref[], target: person`) → type is known
+- **Inferred**: Reference path matches a type's `default_path` → type is suggested
+- **Unknown**: No inference possible → user must specify or skip
 
 ### Global Options
 

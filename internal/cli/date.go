@@ -3,10 +3,10 @@ package cli
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/index"
+	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -36,30 +36,17 @@ Examples:
 			return fmt.Errorf("failed to load vault config: %w", err)
 		}
 
-		// Determine which date to use
-		var targetDate time.Time
+		// Parse date argument
+		var dateArg string
 		if len(args) > 0 {
-			dateArg := strings.ToLower(strings.TrimSpace(args[0]))
-			switch dateArg {
-			case "today":
-				targetDate = time.Now()
-			case "yesterday":
-				targetDate = time.Now().AddDate(0, 0, -1)
-			case "tomorrow":
-				targetDate = time.Now().AddDate(0, 0, 1)
-			default:
-				// Try to parse as YYYY-MM-DD
-				parsed, err := time.Parse("2006-01-02", dateArg)
-				if err != nil {
-					return fmt.Errorf("invalid date format '%s', use YYYY-MM-DD", dateArg)
-				}
-				targetDate = parsed
-			}
-		} else {
-			targetDate = time.Now()
+			dateArg = args[0]
+		}
+		targetDate, err := vault.ParseDateArg(dateArg)
+		if err != nil {
+			return err
 		}
 
-		dateStr := targetDate.Format("2006-01-02")
+		dateStr := vault.FormatDateISO(targetDate)
 		dayOfWeek := targetDate.Format("Monday")
 
 		db, err := index.Open(vaultPath)

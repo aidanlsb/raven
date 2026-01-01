@@ -4,36 +4,34 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
-	"unicode"
 
-	"github.com/ravenscroftj/raven/internal/parser"
+	"github.com/ravenscroftj/raven/internal/pages"
 	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 
-var newType string
-
 var newCmd = &cobra.Command{
-	Use:   "new <title>",
+	Use:   "new <type> [title]",
 	Short: "Create a new typed note",
-	Long: `Creates a new note with the specified type and title.
+	Long: `Creates a new note with the specified type.
 
+The type is required. If title is not provided, you will be prompted for it.
 The file location is determined by the type's default_path setting in schema.yaml.
-If no default_path is set, the file is created in the vault root.
-
 Required fields (as defined in schema.yaml) will be prompted for interactively.
 
 Examples:
-  rvn new --type person "Alice Chen"    # Creates people/alice-chen.md, prompts for required fields
-  rvn new --type project "Website"      # Creates projects/website.md
-  rvn new "Quick Note"                  # Creates quick-note.md in vault root (type: page)`,
-	Args: cobra.ExactArgs(1),
+  rvn new person                       # Prompts for title, creates in people/
+  rvn new person "Alice Chen"          # Creates people/alice-chen.md
+  rvn new project "Website Redesign"   # Creates projects/website-redesign.md
+  rvn new page "Quick Note"            # Creates quick-note.md in vault root`,
+	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		title := args[0]
+		typeName := args[0]
 
 		// Load schema
 		s, err := schema.Load(vaultPath)
@@ -41,10 +39,34 @@ Examples:
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
 
-		// Check if type exists and get definition
-		typeDef, typeExists := s.Types[newType]
-		if !typeExists && newType != "page" && newType != "section" {
-			return fmt.Errorf("type '%s' is not defined in schema.yaml", newType)
+		// Check if type exists
+		typeDef, typeExists := s.Types[typeName]
+		if !typeExists && typeName != "page" && typeName != "section" && typeName != "date" {
+			// List available types
+			var typeNames []string
+			for name := range s.Types {
+				typeNames = append(typeNames, name)
+			}
+			sort.Strings(typeNames)
+			return fmt.Errorf("type '%s' not defined in schema.yaml\nAvailable types: %s", typeName, strings.Join(typeNames, ", "))
+		}
+
+		// Get title from args or prompt
+		var title string
+		reader := bufio.NewReader(os.Stdin)
+
+		if len(args) >= 2 {
+			title = args[1]
+		} else {
+			fmt.Printf("Title: ")
+			title, err = reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read input: %w", err)
+			}
+			title = strings.TrimSpace(title)
+			if title == "" {
+				return fmt.Errorf("title cannot be empty")
+			}
 		}
 
 		// Get default_path
@@ -56,9 +78,16 @@ Examples:
 		// Collect required field values
 		fieldValues := make(map[string]string)
 		if typeDef != nil {
-			reader := bufio.NewReader(os.Stdin)
-			for fieldName, fieldDef := range typeDef.Fields {
-				if fieldDef.Required {
+			// Sort field names for consistent prompting order
+			var fieldNames []string
+			for name := range typeDef.Fields {
+				fieldNames = append(fieldNames, name)
+			}
+			sort.Strings(fieldNames)
+
+			for _, fieldName := range fieldNames {
+				fieldDef := typeDef.Fields[fieldName]
+				if fieldDef != nil && fieldDef.Required {
 					fmt.Printf("%s (required): ", fieldName)
 					value, err := reader.ReadString('\n')
 					if err != nil {
@@ -71,88 +100,111 @@ Examples:
 					fieldValues[fieldName] = value
 				}
 			}
-		}
 
-		// Generate filename from title
-		filename := parser.Slugify(title)
-
-		// Validate filename
-		if filename == "" {
-			return fmt.Errorf("invalid title: cannot generate safe filename")
-		}
-		for _, r := range filename {
-			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_' {
-				return fmt.Errorf("invalid title: cannot generate safe filename")
+			// Collect required traits
+			for _, traitName := range typeDef.Traits.List() {
+				if typeDef.Traits.IsRequired(traitName) {
+					traitDef := s.Traits[traitName]
+					hint := ""
+					if traitDef != nil {
+						switch traitDef.Type {
+						case schema.FieldTypeDate:
+							hint = " (YYYY-MM-DD)"
+						case schema.FieldTypeEnum:
+							hint = fmt.Sprintf(" (%s)", strings.Join(traitDef.Values, "/"))
+						}
+					}
+					fmt.Printf("%s (required)%s: ", traitName, hint)
+					value, err := reader.ReadString('\n')
+					if err != nil {
+						return fmt.Errorf("failed to read input: %w", err)
+					}
+					value = strings.TrimSpace(value)
+					if value == "" {
+						return fmt.Errorf("required trait '%s' cannot be empty", traitName)
+					}
+					fieldValues[traitName] = value
+				}
 			}
 		}
 
-		// Build file path
-		var filePath string
+		// Build target path from default_path + slugified title
+		filename := pages.Slugify(title)
+		if filename == "" {
+			return fmt.Errorf("invalid title: cannot generate safe filename")
+		}
+
+		var targetPath string
 		if defaultPath != "" {
 			// Validate default_path doesn't escape vault
 			cleanPath := filepath.Clean(defaultPath)
 			if strings.Contains(cleanPath, "..") || filepath.IsAbs(cleanPath) {
 				return fmt.Errorf("invalid default_path in schema: %s", defaultPath)
 			}
-			dirPath := filepath.Join(vaultPath, cleanPath)
-			filePath = filepath.Join(dirPath, filename+".md")
-
-			// Create directory if it doesn't exist
-			if err := os.MkdirAll(dirPath, 0755); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", cleanPath, err)
-			}
+			targetPath = filepath.Join(cleanPath, filename)
 		} else {
-			filePath = filepath.Join(vaultPath, filename+".md")
-		}
-
-		// Security: verify path is within vault
-		absVault, _ := filepath.Abs(vaultPath)
-		absFile, _ := filepath.Abs(filePath)
-		if !strings.HasPrefix(absFile, absVault+string(filepath.Separator)) && absFile != absVault {
-			return fmt.Errorf("cannot create file outside vault")
+			targetPath = filename
 		}
 
 		// Check if file exists
-		if _, err := os.Stat(filePath); err == nil {
-			return fmt.Errorf("file already exists: %s", filePath)
+		if pages.Exists(vaultPath, targetPath) {
+			return fmt.Errorf("file already exists: %s.md", pages.SlugifyPath(targetPath))
 		}
 
-		// Build frontmatter
-		var frontmatter strings.Builder
-		frontmatter.WriteString("---\n")
-		frontmatter.WriteString(fmt.Sprintf("type: %s\n", newType))
-		for fieldName, value := range fieldValues {
-			// Handle different value types appropriately
-			if strings.ContainsAny(value, ":\n\"'") {
-				// Quote values that need it
-				frontmatter.WriteString(fmt.Sprintf("%s: \"%s\"\n", fieldName, strings.ReplaceAll(value, "\"", "\\\"")))
-			} else {
-				frontmatter.WriteString(fmt.Sprintf("%s: %s\n", fieldName, value))
-			}
-		}
-		frontmatter.WriteString("---\n\n")
-		frontmatter.WriteString(fmt.Sprintf("# %s\n\n", title))
-
-		if err := os.WriteFile(filePath, []byte(frontmatter.String()), 0644); err != nil {
-			return fmt.Errorf("failed to create file: %w", err)
+		// Create the page
+		result, err := pages.Create(pages.CreateOptions{
+			VaultPath:  vaultPath,
+			TypeName:   typeName,
+			Title:      title,
+			TargetPath: targetPath,
+			Fields:     fieldValues,
+			Schema:     s,
+		})
+		if err != nil {
+			return err
 		}
 
-		// Show relative path from vault
-		relPath, _ := filepath.Rel(vaultPath, filePath)
-		fmt.Printf("Created: %s\n", relPath)
+		fmt.Printf("Created: %s\n", result.RelativePath)
 
-		// Try to open in editor
-		editor := getConfig().GetEditor()
-		if editor != "" {
-			execCmd := exec.Command(editor, filePath)
-			execCmd.Start()
-		}
+		// Open in editor
+		vault.OpenInEditor(getConfig(), result.FilePath)
 
 		return nil
 	},
+	ValidArgsFunction: completeTypes,
+}
+
+// completeTypes provides shell completion for type names
+func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// Only complete the first argument (type)
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	// Try to load schema for dynamic completion
+	vaultPath := getVaultPath()
+	if vaultPath == "" {
+		// Fall back to built-in types only
+		return []string{"page", "section", "date"}, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	s, err := schema.Load(vaultPath)
+	if err != nil {
+		return []string{"page", "section", "date"}, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	// Collect all type names
+	var types []string
+	for name := range s.Types {
+		types = append(types, name)
+	}
+	// Add built-in types
+	types = append(types, "page", "date")
+
+	sort.Strings(types)
+	return types, cobra.ShellCompDirectiveNoFileComp
 }
 
 func init() {
-	newCmd.Flags().StringVarP(&newType, "type", "t", "page", "Type of note to create")
 	rootCmd.AddCommand(newCmd)
 }
