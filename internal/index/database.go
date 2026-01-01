@@ -62,11 +62,20 @@ func (d *Database) Close() error {
 	return d.db.Close()
 }
 
+// CurrentDBVersion is the current database schema version.
+const CurrentDBVersion = 2
+
 // initialize creates the database schema.
 func (d *Database) initialize() error {
 	schema := `
 		-- Enable WAL mode for better concurrency
 		PRAGMA journal_mode = WAL;
+		
+		-- Metadata table for version tracking
+		CREATE TABLE IF NOT EXISTS meta (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		);
 		
 		-- All referenceable objects (files + embedded types)
 		CREATE TABLE IF NOT EXISTS objects (
@@ -139,6 +148,13 @@ func (d *Database) initialize() error {
 	_, err := d.db.Exec(schema)
 	if err != nil {
 		return fmt.Errorf("failed to initialize database schema: %w", err)
+	}
+
+	// Set database version
+	_, err = d.db.Exec(`INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)`,
+		fmt.Sprintf("%d", CurrentDBVersion))
+	if err != nil {
+		return fmt.Errorf("failed to set database version: %w", err)
 	}
 
 	return nil

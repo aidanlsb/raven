@@ -4,6 +4,23 @@ This document tracks potential future enhancements and ideas. These are not curr
 
 ---
 
+## Migrations
+
+### Automatic Syntax Migration
+Implement `rvn migrate --syntax` to automatically convert deprecated trait syntax:
+```bash
+rvn migrate --syntax --dry-run  # Preview
+rvn migrate --syntax            # Apply
+
+# Transforms:
+# @task(due=2025-02-01, priority=high) → @due(2025-02-01) @priority(high)
+# @remind(at=2025-02-01T09:00) → @remind(2025-02-01T09:00)
+```
+
+**Current status**: Framework exists (`rvn migrate`), but automatic file transformation not yet implemented.
+
+---
+
 ## CLI Improvements
 
 ### Interactive Type Creation
