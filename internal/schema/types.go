@@ -37,8 +37,8 @@ func NewSchema() *Schema {
 
 // TypeDefinition defines a type (person, meeting, project, etc.).
 type TypeDefinition struct {
-	Fields map[string]*FieldDefinition `yaml:"fields"`
-	Detect *DetectionRules             `yaml:"detect,omitempty"`
+	Fields      map[string]*FieldDefinition `yaml:"fields"`
+	DefaultPath string                      `yaml:"default_path,omitempty"`
 }
 
 // TraitDefinition defines a trait (@task, @remind, @highlight, etc.).
@@ -85,15 +85,6 @@ const (
 	FieldTypeRef         FieldType = "ref"
 	FieldTypeRefArray    FieldType = "ref[]"
 )
-
-// DetectionRules for auto-detecting type from file.
-type DetectionRules struct {
-	// PathPattern is a regex pattern to match against file path.
-	PathPattern string `yaml:"path_pattern,omitempty"`
-
-	// Attribute matches specific frontmatter fields/values.
-	Attribute map[string]interface{} `yaml:"attribute,omitempty"`
-}
 
 // FieldValue represents a parsed field value.
 type FieldValue struct {

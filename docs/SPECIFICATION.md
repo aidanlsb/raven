@@ -393,6 +393,7 @@ types:
         max: 6
 
   person:
+    default_path: people/
     fields:
       name:
         type: string
@@ -402,10 +403,9 @@ types:
       company:
         type: ref
         target: company
-    detect:
-      path_pattern: "^people/"
 
   project:
+    default_path: projects/
     fields:
       status:
         type: enum
@@ -420,12 +420,10 @@ types:
         type: string[]      # Array of strings
 
   daily:
+    default_path: daily/
     fields:
       date:
         type: date
-        derived: from_filename
-    detect:
-      path_pattern: "^daily/\\d{4}-\\d{2}-\\d{2}\\.md$"
 
   meeting:
     fields:
@@ -529,25 +527,27 @@ The following field names are reserved and cannot be used in type/trait definiti
 | `type` | Object type name |
 | `tags` | Aggregated tags (auto-populated) |
 
-### Detection Rules
+### File Location (default_path)
 
-Auto-detect type without explicit `type:` field:
+Types can specify a `default_path` for file creation convenience:
 
 ```yaml
-detect:
-  path_pattern: "^daily/\\d{4}-\\d{2}-\\d{2}\\.md$"  # Regex on file path
-  attribute: { status: active }                       # Match frontmatter attributes
+types:
+  person:
+    default_path: people/    # rvn new --type person creates files here
+    fields:
+      name:
+        type: string
 ```
 
-**Detection methods** (only these two are supported):
-- `path_pattern`: Regex matched against file path from vault root
-- `attribute`: Match specific frontmatter fields/values
+**Behavior:**
+- `rvn new --type person "Alice"` creates `people/alice.md`
+- The directory is created if it doesn't exist
+- If no `default_path` is set, files are created in the vault root
 
-**Priority**: Explicit `type:` in frontmatter always takes precedence over detection rules. Detection is a convenience fallback.
+**Important:** File location has **no effect on type**. A file's type is determined **solely** by its frontmatter `type:` field (or defaults to `page` if not specified). You can have a `person` file anywhere in your vault—Raven doesn't care about directory structure.
 
-**Conflict handling**: If a file has explicit `type:` that differs from what detection would infer, `rvn check` emits a warning (in case it's a mistake).
-
-**Fallback**: Files that don't match any detection rule and have no explicit type are assigned the `page` type.
+**Fallback**: Files without an explicit `type:` field are assigned the `page` type.
 
 ---
 
@@ -996,7 +996,6 @@ The check command validates the entire vault and surfaces errors and warnings:
 
 **Warnings** (informational):
 - Undefined trait (not in schema, will be skipped)
-- Detection rule would infer different type than explicit `type:`
 - Orphan files (not referenced by anything)
 - Heading nesting approaching limit
 
@@ -1295,12 +1294,14 @@ When a file changes:
 
 **Rationale**: Simple implementation, trait IDs are internal. Object IDs (path-based) remain stable.
 
-### Detection Priority
+### Type Resolution
 
-1. Explicit `type:` in frontmatter (always wins)
-2. `path_pattern` detection rules
-3. `attribute` detection rules
-4. Fallback to `page` type
+Type is determined by a simple rule:
+
+1. If frontmatter has `type:` field → use that type
+2. Otherwise → `page` (fallback)
+
+**No detection or inference.** File location, content, or other fields never affect the type. This is explicit and predictable.
 
 ### Tag Inheritance
 

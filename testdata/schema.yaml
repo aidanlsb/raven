@@ -2,16 +2,16 @@
 
 types:
   person:
+    default_path: people/
     fields:
       name:
         type: string
         required: true
       email:
         type: string
-    detect:
-      path_pattern: "^people/"
 
   project:
+    default_path: projects/
     fields:
       status:
         type: enum
@@ -22,11 +22,10 @@ types:
         target: person
 
   daily:
+    default_path: daily/
     fields:
       date:
         type: date
-    detect:
-      path_pattern: "^daily/"
 
   meeting:
     fields:
