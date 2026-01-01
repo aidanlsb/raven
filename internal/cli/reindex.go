@@ -22,7 +22,7 @@ var reindexCmd = &cobra.Command{
 		fmt.Printf("Reindexing vault: %s\n", vaultPath)
 
 		// Load schema
-		_, err := schema.Load(vaultPath)
+		sch, err := schema.Load(vaultPath)
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
@@ -88,7 +88,7 @@ var reindexCmd = &cobra.Command{
 			}
 
 			// Index document
-			if err := db.IndexDocument(doc); err != nil {
+			if err := db.IndexDocument(doc, sch); err != nil {
 				fmt.Fprintf(os.Stderr, "Error indexing %s: %v\n", path, err)
 				errorCount++
 				return nil

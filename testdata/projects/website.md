@@ -2,6 +2,8 @@
 type: project
 status: active
 lead: "[[people/alice]]"
+due: 2025-06-30
+priority: high
 ---
 
 # Website Redesign
@@ -19,3 +21,4 @@ A complete overhaul of the company website.
 - Q1: Design phase
 - Q2: Development
 - Q3: Launch
+unknown_field: oops

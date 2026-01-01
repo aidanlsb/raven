@@ -4,6 +4,7 @@ package parser
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ravenscroftj/raven/internal/schema"
 	"gopkg.in/yaml.v3"
@@ -131,6 +132,9 @@ func yamlToFieldValue(value interface{}) schema.FieldValue {
 		return schema.Number(v)
 	case bool:
 		return schema.Bool(v)
+	case time.Time:
+		// YAML parses dates as time.Time - convert to date string
+		return schema.Date(v.Format("2006-01-02"))
 	case []interface{}:
 		items := make([]schema.FieldValue, 0, len(v))
 		for _, item := range v {

@@ -11,6 +11,7 @@ types:
         required: true
       email:
         type: string
+    traits: [due, priority]  # People can have due dates and priorities
 
   project:
     default_path: projects/
@@ -22,6 +23,10 @@ types:
       lead:
         type: ref
         target: person
+    traits:
+      due:
+        required: true  # Projects must have a due date
+      priority: {}
 
   # Note: 'date' type is built-in for daily notes (YYYY-MM-DD.md files)
 
@@ -32,6 +37,7 @@ types:
       attendees:
         type: ref[]
         target: person
+    traits: [remind]  # Meetings can have reminders
 
 # Traits are single-valued annotations
 traits:

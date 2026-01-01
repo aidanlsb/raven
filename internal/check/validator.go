@@ -133,6 +133,89 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 				Message:  err.Error(),
 			})
 		}
+
+		// Validate required traits
+		for _, traitName := range typeDef.Traits.List() {
+			if typeDef.Traits.IsRequired(traitName) {
+				// Check if this trait is present in frontmatter
+				if _, hasField := obj.Fields[traitName]; !hasField {
+					issues = append(issues, Issue{
+						Level:    LevelError,
+						FilePath: filePath,
+						Line:     obj.LineStart,
+						Message:  fmt.Sprintf("Required trait '%s' missing for type '%s'", traitName, obj.ObjectType),
+					})
+				}
+			}
+		}
+
+		// Validate trait values against trait definitions
+		for _, traitName := range typeDef.Traits.List() {
+			if fieldValue, hasField := obj.Fields[traitName]; hasField {
+				traitDef, traitExists := v.schema.Traits[traitName]
+				if !traitExists {
+					issues = append(issues, Issue{
+						Level:    LevelWarning,
+						FilePath: filePath,
+						Line:     obj.LineStart,
+						Message:  fmt.Sprintf("Trait '%s' used in type but not defined in schema", traitName),
+					})
+					continue
+				}
+
+				// Validate enum values
+				if traitDef.Type == schema.FieldTypeEnum {
+					valueStr, ok := fieldValue.AsString()
+					if ok {
+						validValue := false
+						for _, allowed := range traitDef.Values {
+							if allowed == valueStr {
+								validValue = true
+								break
+							}
+						}
+						if !validValue {
+							issues = append(issues, Issue{
+								Level:    LevelError,
+								FilePath: filePath,
+								Line:     obj.LineStart,
+								Message:  fmt.Sprintf("Invalid value '%s' for trait '%s' (allowed: %v)", valueStr, traitName, traitDef.Values),
+							})
+						}
+					}
+				}
+			}
+		}
+
+		// Check for unknown frontmatter keys (not a field, not a trait)
+		// Reserved keys that are always allowed
+		reservedKeys := map[string]bool{
+			"type": true, // Object type declaration
+			"tags": true, // Tags are always allowed
+			"id":   true, // ID for embedded objects
+		}
+
+		for fieldName := range obj.Fields {
+			// Skip reserved keys
+			if reservedKeys[fieldName] {
+				continue
+			}
+			// Skip if it's a defined field
+			if _, isField := typeDef.Fields[fieldName]; isField {
+				continue
+			}
+			// Skip if it's a declared trait for this type
+			if typeDef.Traits.HasTrait(fieldName) {
+				continue
+			}
+			// Unknown key - error
+			issues = append(issues, Issue{
+				Level:    LevelError,
+				FilePath: filePath,
+				Line:     obj.LineStart,
+				Message:  fmt.Sprintf("Unknown frontmatter key '%s' for type '%s' (not a field or declared trait)", fieldName, obj.ObjectType),
+			})
+		}
 	}
 
 	return issues

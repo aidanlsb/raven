@@ -8,6 +8,9 @@ import (
 )
 
 func TestDatabase(t *testing.T) {
+	// Create a minimal schema for testing
+	sch := schema.NewSchema()
+
 	t.Run("initialization", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {
@@ -47,7 +50,7 @@ func TestDatabase(t *testing.T) {
 			Refs:   []*parser.ParsedRef{},
 		}
 
-		if err := db.IndexDocument(doc); err != nil {
+		if err := db.IndexDocument(doc, sch); err != nil {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
@@ -86,8 +89,8 @@ func TestDatabase(t *testing.T) {
 		}
 
 		// Index twice
-		db.IndexDocument(doc)
-		db.IndexDocument(doc)
+		db.IndexDocument(doc, sch)
+		db.IndexDocument(doc, sch)
 
 		stats, _ := db.Stats()
 		if stats.ObjectCount != 1 {

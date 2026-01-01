@@ -127,16 +127,22 @@ types:
         required: true
       email:
         type: string
+    traits: [due, priority]  # Optional traits this type can have
 
   project:
     default_path: projects/
     fields:
-      status:
-        type: enum
-        values: [active, paused, completed]
-        default: active
+      name:
+        type: string
+        required: true
+    traits:
+      due:
+        required: true       # Projects must have a due date
+      priority: {}           # Optional, uses trait default
+      status: {}
 
 # Traits are single-valued annotations.
+# Can appear inline (@trait) or in frontmatter for types that list them.
 # Boolean traits: @highlight (no value)
 # Valued traits: @due(2025-02-01), @priority(high)
 traits:

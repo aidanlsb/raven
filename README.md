@@ -70,14 +70,15 @@ rvn date yesterday           # Yesterday's date hub
 
 ```markdown
 ---
-type: person
-name: Alice Chen
-email: alice@example.com
+type: project
+due: 2025-06-30        # Traits can appear in frontmatter
+priority: high
+lead: "[[people/alice]]"
 ---
 
-# Alice Chen
+# Website Redesign
 
-Senior engineer on the platform team.
+A complete overhaul of the company website.
 ```
 
 ### Embedded Types
@@ -91,13 +92,17 @@ Discussed Q2 priorities.
 
 ### Traits
 
-Traits are **single-valued annotations** on content. Use multiple traits for multiple properties:
+Traits are **single-valued annotations**. They can appear:
+- **In frontmatter** (if the type declares them): `due: 2025-06-30`
+- **Inline in content**: `@due(2025-02-03) Send the estimate`
 
 ```markdown
 - @due(2025-02-03) @priority(high) Send revised estimate
 - @remind(2025-02-05T09:00) Follow up on this
 - @highlight Key insight worth remembering
 ```
+
+Both frontmatter and inline traits are indexed and queryable with `rvn trait`.
 
 **"Tasks" are emergent**: Anything with `@due` or `@status` is effectively a task. Use saved queries to define what "tasks" means in your workflow.
 

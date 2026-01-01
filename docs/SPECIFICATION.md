@@ -440,78 +440,10 @@ queries:
 Located at vault root. Defines all types and traits.
 
 ```yaml
-types:
-  # Built-in: Fallback type for files without explicit type or detection match
-  page:
-    fields: {}
+version: 2  # Schema format version
 
-  # Built-in: Auto-created for every heading without explicit ::type()
-  section:
-    fields:
-      title:
-        type: string
-      level:
-        type: number
-        min: 1
-        max: 6
-
-  person:
-    default_path: people/
-    fields:
-      name:
-        type: string
-        required: true
-      email:
-        type: string
-      company:
-        type: ref
-        target: company
-
-  project:
-    default_path: projects/
-    fields:
-      status:
-        type: enum
-        values: [active, paused, completed, abandoned]
-        default: active
-      lead:
-        type: ref
-        target: person
-      due:
-        type: date
-      technologies:
-        type: string[]      # Array of strings
-
-  # Note: 'date' type is built-in for daily notes
-
-  meeting:
-    fields:
-      time:
-        type: datetime
-      attendees:
-        type: ref[]
-        target: person
-      recurring:
-        type: ref
-        target: meeting_series
-      
-  book:
-    fields:
-      title:
-        type: string
-      author:
-        type: ref
-        target: person
-      status:
-        type: enum
-        values: [to_read, reading, finished, abandoned]
-      rating:
-        type: number
-        min: 1
-        max: 5
-
-# Traits are single-valued annotations.
-# Each trait has a name, a type, and optionally allowed values.
+# Global trait definitions
+# Traits can be used inline (@trait) OR in frontmatter (if type declares them)
 traits:
   # Date-related traits
   due:
@@ -544,7 +476,124 @@ traits:
   # Reference traits
   assignee:
     type: ref
+
+# Type definitions
+types:
+  # Built-in: Fallback type for files without explicit type
+  # page:
+  #   fields: {}
+
+  # Built-in: Auto-created for every heading without explicit ::type()
+  # section:
+  #   fields: { title: string, level: number }
+
+  person:
+    default_path: people/
+    fields:
+      name:
+        type: string
+        required: true
+      email:
+        type: string
+      company:
+        type: ref
+        target: company
+    traits: [due, priority]  # Optional: person can have these in frontmatter
+
+  project:
+    default_path: projects/
+    fields:
+      lead:
+        type: ref
+        target: person
+      technologies:
+        type: string[]
+    traits:
+      due:
+        required: true       # Projects MUST have a due date
+      priority:
+        default: high        # Override trait default for projects
+      status: {}             # Optional, uses trait default
+
+  # Note: 'date' type is built-in for daily notes (YYYY-MM-DD.md)
+
+  meeting:
+    fields:
+      time:
+        type: datetime
+      attendees:
+        type: ref[]
+        target: person
+    traits: [remind]  # Meetings can have reminders
+      
+  book:
+    fields:
+      title:
+        type: string
+      author:
+        type: ref
+        target: person
+      rating:
+        type: number
+        min: 1
+        max: 5
+    traits:
+      status:
+        required: true
 ```
+
+### Traits on Types
+
+Types can declare which traits are valid in their frontmatter using the `traits` field.
+
+**Simple list (all optional):**
+```yaml
+person:
+  fields:
+    name: { type: string, required: true }
+  traits: [due, priority]  # Person can have @due and @priority in frontmatter
+```
+
+**Map with configuration:**
+```yaml
+project:
+  fields:
+    lead: { type: ref, target: person }
+  traits:
+    due:
+      required: true    # Project MUST have a due date
+    priority:
+      default: high     # Override trait default for this type
+    status: {}          # Optional, uses trait default
+```
+
+**Key rules:**
+- Frontmatter can ONLY contain: `type`, `tags`, `id`, declared fields, and declared traits
+- Unknown frontmatter keys trigger validation errors
+- Inline `@trait` annotations can appear anywhere regardless of type
+- Traits in frontmatter apply to the whole object; inline traits apply to specific content
+- Both frontmatter traits and inline traits are indexed and queryable
+
+**Example: Frontmatter traits vs inline traits**
+
+```markdown
+---
+type: project
+due: 2025-06-30       # The project itself is due June 30
+priority: high
+---
+
+# Website Redesign
+
+## Tasks
+
+- @due(2025-03-01) Send proposal       # This specific task is due March 1
+- @due(2025-03-15) Review feedback
+```
+
+Both dates appear in `rvn trait due`:
+- The project's `due: 2025-06-30` (frontmatter trait on the object)
+- The tasks' `@due(2025-03-01)` and `@due(2025-03-15)` (inline traits on content)
 
 ### Field Types
 
