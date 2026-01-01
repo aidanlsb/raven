@@ -3,15 +3,15 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/ravenscroftj/raven/internal/check"
+	"github.com/ravenscroftj/raven/internal/pages"
 	"github.com/ravenscroftj/raven/internal/parser"
 	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -38,58 +38,18 @@ var checkCmd = &cobra.Command{
 		var allDocs []*parser.ParsedDocument
 		var allObjectIDs []string
 
-		// Get canonical vault path
-		canonicalVault, err := filepath.Abs(vaultPath)
-		if err != nil {
-			canonicalVault = vaultPath
-		}
-
 		// First pass: parse all documents and collect object IDs
-		err = filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-
-			if d.IsDir() {
-				if d.Name() == ".raven" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			if !strings.HasSuffix(path, ".md") {
-				return nil
-			}
-
-			// Security check
-			canonicalFile, err := filepath.Abs(path)
-			if err != nil {
-				return nil
-			}
-			if !strings.HasPrefix(canonicalFile, canonicalVault) {
-				return nil
-			}
-
+		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 			fileCount++
 
-			content, err := os.ReadFile(path)
-			if err != nil {
-				relativePath, _ := filepath.Rel(vaultPath, path)
-				fmt.Printf("ERROR: %s - Failed to read: %v\n", relativePath, err)
+			if result.Error != nil {
+				fmt.Printf("ERROR: %s - %v\n", result.RelativePath, result.Error)
 				errorCount++
 				return nil
 			}
 
-			doc, err := parser.ParseDocument(string(content), path, vaultPath)
-			if err != nil {
-				relativePath, _ := filepath.Rel(vaultPath, path)
-				fmt.Printf("ERROR: %s - Parse error: %v\n", relativePath, err)
-				errorCount++
-				return nil
-			}
-
-			allDocs = append(allDocs, doc)
-			for _, obj := range doc.Objects {
+			allDocs = append(allDocs, result.Document)
+			for _, obj := range result.Document.Objects {
 				allObjectIDs = append(allObjectIDs, obj.ID)
 			}
 
@@ -189,10 +149,11 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range certain {
+				sluggedPath := pages.SlugifyPath(ref.TargetPath)
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
-					fmt.Printf("  ✗ Failed to create %s: %v\n", ref.TargetPath, err)
+					fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
 				} else {
-					fmt.Printf("  ✓ Created %s.md (type: %s)\n", ref.TargetPath, ref.InferredType)
+					fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, ref.InferredType)
 					created++
 				}
 			}
@@ -207,14 +168,15 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		}
 
 		for _, ref := range inferred {
-			fmt.Printf("\nCreate %s as '%s'? [y/N] ", ref.TargetPath, ref.InferredType)
+			sluggedPath := pages.SlugifyPath(ref.TargetPath)
+			fmt.Printf("\nCreate %s as '%s'? [y/N] ", sluggedPath, ref.InferredType)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
-					fmt.Printf("  ✗ Failed to create %s: %v\n", ref.TargetPath, err)
+					fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
 				} else {
-					fmt.Printf("  ✓ Created %s.md (type: %s)\n", ref.TargetPath, ref.InferredType)
+					fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, ref.InferredType)
 					created++
 				}
 			}
@@ -237,6 +199,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		fmt.Printf("\nAvailable types: %s\n", strings.Join(typeNames, ", "))
 
 		for _, ref := range unknown {
+			sluggedPath := pages.SlugifyPath(ref.TargetPath)
 			fmt.Printf("\nType for %s (or 'skip'): ", ref.TargetPath)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
@@ -253,9 +216,9 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			}
 
 			if err := createMissingPage(vaultPath, s, ref.TargetPath, response); err != nil {
-				fmt.Printf("  ✗ Failed to create %s: %v\n", ref.TargetPath, err)
+				fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
 			} else {
-				fmt.Printf("  ✓ Created %s.md (type: %s)\n", ref.TargetPath, response)
+				fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, response)
 				created++
 			}
 		}
@@ -264,57 +227,16 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	return created
 }
 
+// createMissingPage creates a new page file using the pages package.
 func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName string) error {
-	// Build the file path
-	filePath := filepath.Join(vaultPath, targetPath)
-	if !strings.HasSuffix(filePath, ".md") {
-		filePath += ".md"
-	}
-
-	// Create parent directories
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// Build frontmatter
-	var content strings.Builder
-	content.WriteString("---\n")
-	content.WriteString(fmt.Sprintf("type: %s\n", typeName))
-
-	// Add required fields with placeholder values
-	if typeDef, ok := s.Types[typeName]; ok && typeDef != nil {
-		for fieldName, fieldDef := range typeDef.Fields {
-			if fieldDef != nil && fieldDef.Required {
-				// Add placeholder for required fields
-				content.WriteString(fmt.Sprintf("%s: \n", fieldName))
-			}
-		}
-
-		// Add required traits with placeholder values
-		for _, traitName := range typeDef.Traits.List() {
-			if typeDef.Traits.IsRequired(traitName) {
-				content.WriteString(fmt.Sprintf("%s: \n", traitName))
-			}
-		}
-	}
-
-	content.WriteString("---\n\n")
-
-	// Add a heading based on the filename
-	baseName := filepath.Base(targetPath)
-	baseName = strings.TrimSuffix(baseName, ".md")
-	// Convert slug to title case
-	title := strings.ReplaceAll(baseName, "-", " ")
-	title = strings.Title(title)
-	content.WriteString(fmt.Sprintf("# %s\n\n", title))
-
-	// Write the file
-	if err := os.WriteFile(filePath, []byte(content.String()), 0644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	return nil
+	_, err := pages.Create(pages.CreateOptions{
+		VaultPath:                   vaultPath,
+		TypeName:                    typeName,
+		TargetPath:                  targetPath,
+		Schema:                      s,
+		IncludeRequiredPlaceholders: true,
+	})
+	return err
 }
 
 func init() {

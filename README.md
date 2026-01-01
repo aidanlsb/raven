@@ -114,12 +114,15 @@ Met with [[people/alice]] about [[projects/website]].
 Some thoughts about #productivity today.
 ```
 
+**Smart resolution**: References like `[[people/Emily Jia]]` automatically resolve to `people/emily-jia.md`. Write naturally—Raven handles the slugification.
+
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
 | `rvn init <path>` | Initialize a new vault |
 | `rvn check` | Validate vault (broken refs, schema errors) |
+| `rvn check --create-missing` | Interactively create missing referenced pages |
 | `rvn reindex` | Rebuild the SQLite index |
 | `rvn trait <name>` | Query any trait type |
 | `rvn query <name>` | Run a saved query |
@@ -129,7 +132,21 @@ Some thoughts about #productivity today.
 | `rvn untyped` | List files using fallback 'page' type |
 | `rvn daily [date]` | Open/create a daily note |
 | `rvn date [date]` | Show everything related to a date |
-| `rvn new --type <t> <title>` | Create a new typed note |
+| `rvn new <type> [title]` | Create a new typed note (prompts for title/fields) |
+
+### Shell Completion
+
+Enable tab-completion for types and commands:
+
+```bash
+# Zsh (~/.zshrc)
+source <(rvn completion zsh)
+
+# Bash (~/.bashrc)
+source <(rvn completion bash)
+```
+
+Then `rvn new per<TAB>` completes to `rvn new person`.
 
 ## Configuration
 

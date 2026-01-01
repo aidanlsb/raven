@@ -113,3 +113,50 @@ func TestResolverDateShorthand(t *testing.T) {
 		}
 	})
 }
+
+func TestResolverSlugifiedMatching(t *testing.T) {
+	// Files are stored with slugified names
+	objectIDs := []string{
+		"people/emily-jia",
+		"people/alice",
+		"projects/my-awesome-project",
+	}
+
+	r := New(objectIDs)
+
+	t.Run("proper noun resolves to slugified file", func(t *testing.T) {
+		// User writes [[people/Emily Jia]] but file is emily-jia.md
+		result := r.Resolve("people/Emily Jia")
+		if result.TargetID != "people/emily-jia" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/emily-jia")
+		}
+	})
+
+	t.Run("mixed case resolves to slugified file", func(t *testing.T) {
+		result := r.Resolve("people/EMILY JIA")
+		if result.TargetID != "people/emily-jia" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/emily-jia")
+		}
+	})
+
+	t.Run("spaces and caps in project name", func(t *testing.T) {
+		result := r.Resolve("projects/My Awesome Project")
+		if result.TargetID != "projects/my-awesome-project" {
+			t.Errorf("got %q, want %q", result.TargetID, "projects/my-awesome-project")
+		}
+	})
+
+	t.Run("short name with spaces resolves", func(t *testing.T) {
+		result := r.Resolve("Emily Jia")
+		if result.TargetID != "people/emily-jia" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/emily-jia")
+		}
+	})
+
+	t.Run("exact match still works", func(t *testing.T) {
+		result := r.Resolve("people/alice")
+		if result.TargetID != "people/alice" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/alice")
+		}
+	})
+}

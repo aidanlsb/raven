@@ -2,13 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/ravenscroftj/raven/internal/config"
+	"github.com/ravenscroftj/raven/internal/pages"
+	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -34,67 +32,43 @@ Examples:
 			return fmt.Errorf("failed to load vault config: %w", err)
 		}
 
-		// Determine which date to use
-		var targetDate time.Time
+		// Parse date argument
+		var dateArg string
 		if len(args) > 0 {
-			dateArg := strings.ToLower(strings.TrimSpace(args[0]))
-			switch dateArg {
-			case "today":
-				targetDate = time.Now()
-			case "yesterday":
-				targetDate = time.Now().AddDate(0, 0, -1)
-			case "tomorrow":
-				targetDate = time.Now().AddDate(0, 0, 1)
-			default:
-				// Try to parse as YYYY-MM-DD
-				parsed, err := time.Parse("2006-01-02", dateArg)
-				if err != nil {
-					return fmt.Errorf("invalid date format '%s', use YYYY-MM-DD", dateArg)
-				}
-				targetDate = parsed
-			}
-		} else {
-			targetDate = time.Now()
+			dateArg = args[0]
+		}
+		targetDate, err := vault.ParseDateArg(dateArg)
+		if err != nil {
+			return err
 		}
 
-		dateStr := targetDate.Format("2006-01-02")
-		dailyDir := filepath.Join(vaultPath, vaultCfg.DailyDirectory)
-		dailyPath := filepath.Join(dailyDir, dateStr+".md")
+		dateStr := vault.FormatDateISO(targetDate)
+		targetPath := filepath.Join(vaultCfg.DailyDirectory, dateStr)
+		dailyPath := filepath.Join(vaultPath, vaultCfg.DailyDirectory, dateStr+".md")
 
-		if _, err := os.Stat(dailyPath); os.IsNotExist(err) {
-			// Create the daily note
-			if err := os.MkdirAll(dailyDir, 0755); err != nil {
-				return fmt.Errorf("failed to create daily directory: %w", err)
-			}
+		// Check if daily note already exists
+		if !pages.Exists(vaultPath, targetPath) {
+			friendlyDate := vault.FormatDateFriendly(targetDate)
 
-			// Format: "Monday, January 02, 2006"
-			friendlyDate := targetDate.Format("Monday, January 2, 2006")
-
-			content := fmt.Sprintf(`---
-type: date
----
-
-# %s
-
-`, friendlyDate)
-
-			if err := os.WriteFile(dailyPath, []byte(content), 0644); err != nil {
+			result, err := pages.Create(pages.CreateOptions{
+				VaultPath:  vaultPath,
+				TypeName:   "date",
+				Title:      friendlyDate,
+				TargetPath: targetPath,
+			})
+			if err != nil {
 				return fmt.Errorf("failed to create daily note: %w", err)
 			}
 
-			relPath, _ := filepath.Rel(vaultPath, dailyPath)
-			fmt.Printf("Created: %s\n", relPath)
+			fmt.Printf("Created: %s\n", result.RelativePath)
+			dailyPath = result.FilePath
 		} else {
 			relPath, _ := filepath.Rel(vaultPath, dailyPath)
 			fmt.Printf("Daily note: %s\n", relPath)
 		}
 
-		// Try to open in editor
-		editor := getConfig().GetEditor()
-		if editor != "" {
-			execCmd := exec.Command(editor, dailyPath)
-			execCmd.Start()
-		}
+		// Open in editor
+		vault.OpenInEditor(getConfig(), dailyPath)
 
 		return nil
 	},

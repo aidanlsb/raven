@@ -2,14 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/ravenscroftj/raven/internal/index"
-	"github.com/ravenscroftj/raven/internal/parser"
 	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -40,60 +37,17 @@ var reindexCmd = &cobra.Command{
 
 		var fileCount, errorCount int
 
-		// Get canonical vault path for security check
-		canonicalVault, err := filepath.Abs(vaultPath)
-		if err != nil {
-			canonicalVault = vaultPath
-		}
-
 		// Walk all markdown files
-		err = filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil // Skip errors
-			}
-
-			// Skip directories
-			if d.IsDir() {
-				// Skip .raven directory
-				if d.Name() == ".raven" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			// Only process .md files
-			if !strings.HasSuffix(path, ".md") {
-				return nil
-			}
-
-			// Security: verify file is within vault
-			canonicalFile, err := filepath.Abs(path)
-			if err != nil {
-				return nil
-			}
-			if !strings.HasPrefix(canonicalFile, canonicalVault) {
-				return nil // Skip files outside vault
-			}
-
-			// Read file
-			content, err := os.ReadFile(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading %s: %v\n", path, err)
-				errorCount++
-				return nil
-			}
-
-			// Parse document
-			doc, err := parser.ParseDocument(string(content), path, vaultPath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing %s: %v\n", path, err)
+		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+			if result.Error != nil {
+				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.RelativePath, result.Error)
 				errorCount++
 				return nil
 			}
 
 			// Index document
-			if err := db.IndexDocument(doc, sch); err != nil {
-				fmt.Fprintf(os.Stderr, "Error indexing %s: %v\n", path, err)
+			if err := db.IndexDocument(result.Document, sch); err != nil {
+				fmt.Fprintf(os.Stderr, "Error indexing %s: %v\n", result.RelativePath, err)
 				errorCount++
 				return nil
 			}

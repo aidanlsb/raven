@@ -79,6 +79,9 @@ The tool should be a foundation that users build their workflows on top of.
 
 ## Code Standards
 
+### General Best Practices
+- Make sure that core functionality is implemented once, not duplicated. And then reused throughout the app as needed. For example, in an earlier version we had a few different implementations of new page creation -- this should always be a single implementation that is called from different entrypoints as needed
+
 ### Go Conventions
 
 - Follow standard Go project layout (`cmd/`, `internal/`)
