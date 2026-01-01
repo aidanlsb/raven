@@ -1,0 +1,131 @@
+// Package resolver handles reference resolution.
+package resolver
+
+import (
+	"path/filepath"
+	"strings"
+)
+
+// Resolver resolves short references to full object IDs.
+type Resolver struct {
+	objectIDs map[string]struct{}      // Set of all known object IDs
+	shortMap  map[string][]string      // Map from short name to full IDs
+}
+
+// New creates a new Resolver with the given object IDs.
+func New(objectIDs []string) *Resolver {
+	r := &Resolver{
+		objectIDs: make(map[string]struct{}),
+		shortMap:  make(map[string][]string),
+	}
+
+	for _, id := range objectIDs {
+		r.objectIDs[id] = struct{}{}
+
+		// Build short name map
+		shortName := shortNameFromID(id)
+		r.shortMap[shortName] = append(r.shortMap[shortName], id)
+	}
+
+	return r
+}
+
+// ResolveResult represents the result of a reference resolution.
+type ResolveResult struct {
+	// TargetID is the resolved target object ID (empty if unresolved).
+	TargetID string
+
+	// Ambiguous is true if the reference matches multiple objects.
+	Ambiguous bool
+
+	// Matches contains all matching IDs (for ambiguous refs).
+	Matches []string
+
+	// Error message if resolution failed.
+	Error string
+}
+
+// Resolve resolves a reference to its target object ID.
+func (r *Resolver) Resolve(ref string) ResolveResult {
+	ref = strings.TrimSpace(ref)
+
+	// If the ref contains a path separator, treat as full path
+	if strings.Contains(ref, "/") || strings.HasPrefix(ref, "#") {
+		// Check if it exists
+		if _, ok := r.objectIDs[ref]; ok {
+			return ResolveResult{TargetID: ref}
+		}
+
+		// For embedded refs like "file#id", try without extension
+		if strings.Contains(ref, "#") {
+			parts := strings.SplitN(ref, "#", 2)
+			baseID := strings.TrimSuffix(parts[0], ".md")
+			fullID := baseID + "#" + parts[1]
+			if _, ok := r.objectIDs[fullID]; ok {
+				return ResolveResult{TargetID: fullID}
+			}
+		}
+
+		return ResolveResult{
+			Error: "reference not found",
+		}
+	}
+
+	// Short reference - search for unique match
+	matches := r.shortMap[ref]
+
+	if len(matches) == 0 {
+		// Try to find partial matches
+		var partialMatches []string
+		for id := range r.objectIDs {
+			if strings.HasSuffix(id, "/"+ref) || id == ref {
+				partialMatches = append(partialMatches, id)
+			}
+		}
+		matches = partialMatches
+	}
+
+	switch len(matches) {
+	case 0:
+		return ResolveResult{
+			Error: "reference not found",
+		}
+	case 1:
+		return ResolveResult{TargetID: matches[0]}
+	default:
+		return ResolveResult{
+			Ambiguous: true,
+			Matches:   matches,
+			Error:     "ambiguous reference, multiple matches found",
+		}
+	}
+}
+
+// Exists checks if an object ID exists.
+func (r *Resolver) Exists(id string) bool {
+	_, ok := r.objectIDs[id]
+	return ok
+}
+
+// shortNameFromID extracts the short name from an object ID.
+// For "people/alice" -> "alice"
+// For "daily/2025-02-01#standup" -> "standup"
+func shortNameFromID(id string) string {
+	// Handle embedded IDs
+	if idx := strings.LastIndex(id, "#"); idx >= 0 {
+		return id[idx+1:]
+	}
+
+	// Get filename without path
+	base := filepath.Base(id)
+	return strings.TrimSuffix(base, ".md")
+}
+
+// ResolveAll resolves all references and returns a map from raw ref to result.
+func (r *Resolver) ResolveAll(refs []string) map[string]ResolveResult {
+	results := make(map[string]ResolveResult, len(refs))
+	for _, ref := range refs {
+		results[ref] = r.Resolve(ref)
+	}
+	return results
+}
