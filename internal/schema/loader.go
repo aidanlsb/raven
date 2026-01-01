@@ -70,28 +70,37 @@ func CreateDefault(vaultPath string) error {
 	schemaPath := filepath.Join(vaultPath, "schema.yaml")
 
 	defaultSchema := `# Raven Schema Configuration
-# Define your types and traits here
+# Define your types and traits here.
+#
+# Type = frontmatter 'type:' field (or 'page' if not specified)
+# default_path = where 'rvn new --type X' creates files
 
 types:
   # Example: person type
-  # person:
-  #   fields:
-  #     name:
-  #       type: string
-  #       required: true
-  #     email:
-  #       type: string
-  #   detect:
-  #     path_pattern: "^people/"
+  person:
+    default_path: people/
+    fields:
+      name:
+        type: string
+        required: true
+      email:
+        type: string
 
   # Example: daily note type
-  # daily:
-  #   fields:
-  #     date:
-  #       type: date
-  #       derived: from_filename
-  #   detect:
-  #     path_pattern: "^daily/\\d{4}-\\d{2}-\\d{2}\\.md$"
+  daily:
+    default_path: daily/
+    fields:
+      date:
+        type: date
+
+  # Example: project type
+  project:
+    default_path: projects/
+    fields:
+      status:
+        type: enum
+        values: [active, paused, completed]
+        default: active
 
 traits:
   task:

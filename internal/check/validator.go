@@ -3,7 +3,6 @@ package check
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/ravenscroftj/raven/internal/parser"
 	"github.com/ravenscroftj/raven/internal/resolver"
@@ -134,19 +133,6 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 				Message:  err.Error(),
 			})
 		}
-
-		// Check for type detection mismatch
-		if obj.ObjectType != "" && obj.Heading == nil && typeDef.Detect != nil {
-			detectedType := v.detectType(filePath, obj.Fields)
-			if detectedType != "" && detectedType != obj.ObjectType {
-				issues = append(issues, Issue{
-					Level:    LevelWarning,
-					FilePath: filePath,
-					Line:     obj.LineStart,
-					Message:  fmt.Sprintf("Detection rule would infer type '%s', but explicit type is '%s'", detectedType, obj.ObjectType),
-				})
-			}
-		}
 	}
 
 	return issues
@@ -203,48 +189,6 @@ func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue 
 	}
 
 	return issues
-}
-
-func (v *Validator) detectType(filePath string, fields map[string]schema.FieldValue) string {
-	for typeName, typeDef := range v.schema.Types {
-		if typeDef.Detect == nil {
-			continue
-		}
-
-		// Check path pattern
-		if typeDef.Detect.PathPattern != "" {
-			re, err := regexp.Compile(typeDef.Detect.PathPattern)
-			if err == nil && re.MatchString(filePath) {
-				return typeName
-			}
-		}
-
-		// Check attribute matches
-		if typeDef.Detect.Attribute != nil {
-			match := true
-			for key, expected := range typeDef.Detect.Attribute {
-				if val, ok := fields[key]; ok {
-					if s, ok := val.AsString(); ok {
-						if s != fmt.Sprintf("%v", expected) {
-							match = false
-							break
-						}
-					} else {
-						match = false
-						break
-					}
-				} else {
-					match = false
-					break
-				}
-			}
-			if match {
-				return typeName
-			}
-		}
-	}
-
-	return ""
 }
 
 func containsHash(s string) bool {

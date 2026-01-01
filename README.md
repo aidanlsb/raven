@@ -2,8 +2,6 @@
 
 A personal knowledge system with typed blocks, traits, and powerful querying. Built in Go for speed, with plain-text markdown files as the source of truth.
 
-*Named for Odin's ravens Huginn (thought) and Muninn (memory), who gathered knowledge from across the world.*
-
 ## Features
 
 - **Typed Objects**: Define what things *are* (person, project, meeting, book)
