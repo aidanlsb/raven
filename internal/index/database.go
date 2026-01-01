@@ -161,7 +161,9 @@ func (d *Database) initialize() error {
 }
 
 // IndexDocument indexes a parsed document (replaces existing data for the file).
-func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
+// IndexDocument indexes a parsed document into the database.
+// The schema is needed to determine which frontmatter fields are traits.
+func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema) error {
 	tx, err := d.db.Begin()
 	if err != nil {
 		return err
@@ -218,7 +220,7 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 		}
 	}
 
-	// Insert traits
+	// Insert traits (both inline and frontmatter-based)
 	traitStmt, err := tx.Prepare(`
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -228,8 +230,57 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 	}
 	defer traitStmt.Close()
 
-	for idx, trait := range doc.Traits {
-		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, idx)
+	traitIdx := 0
+
+	// First, index frontmatter traits from objects
+	for _, obj := range doc.Objects {
+		// Only file-level objects (no parent) have frontmatter traits
+		if obj.ParentID != nil {
+			continue
+		}
+
+		typeDef, typeExists := sch.Types[obj.ObjectType]
+		if !typeExists || typeDef == nil {
+			continue
+		}
+
+		// Check each trait the type declares
+		for _, traitName := range typeDef.Traits.List() {
+			fieldValue, hasField := obj.Fields[traitName]
+			if !hasField {
+				continue
+			}
+
+			traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, traitIdx)
+			traitIdx++
+
+			// Get value as string
+			var valueStr interface{}
+			if s, ok := fieldValue.AsString(); ok {
+				valueStr = s
+			}
+
+			// Use object ID as content for frontmatter traits
+			_, err = traitStmt.Exec(
+				traitID,
+				doc.FilePath,
+				obj.ID,
+				traitName,
+				valueStr,
+				obj.ID, // Content is the object itself
+				obj.LineStart,
+				now,
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Then, index inline traits
+	for _, trait := range doc.Traits {
+		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, traitIdx)
+		traitIdx++
 
 		// Get value as string (or nil for boolean traits)
 		var valueStr interface{}
@@ -239,7 +290,7 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 			}
 		}
 
-		_, err = traitStmt.Exec(
+		_, execErr := traitStmt.Exec(
 			traitID,
 			doc.FilePath,
 			trait.ParentObjectID,
@@ -249,8 +300,8 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument) error {
 			trait.Line,
 			now,
 		)
-		if err != nil {
-			return err
+		if execErr != nil {
+			return execErr
 		}
 	}
 
