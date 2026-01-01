@@ -17,6 +17,37 @@ type Issue struct {
 	Message  string
 }
 
+// MissingRef represents a reference to a non-existent object.
+type MissingRef struct {
+	TargetPath     string          // The reference path (e.g., "people/carol")
+	SourceFile     string          // File containing the reference
+	SourceObjectID string          // Full object ID where ref was found (e.g., "daily/2026-01-01#team-sync")
+	Line           int             // Line number
+	InferredType   string          // Type inferred from context (empty if unknown)
+	Confidence     InferConfidence // How confident we are about the type
+	FieldSource    string          // If from a typed field, the field name (e.g., "attendees")
+}
+
+// InferConfidence indicates how confident we are about type inference.
+type InferConfidence int
+
+const (
+	ConfidenceUnknown  InferConfidence = iota // No type inference possible
+	ConfidenceInferred                        // Inferred from path matching default_path
+	ConfidenceCertain                         // Certain from typed field
+)
+
+func (c InferConfidence) String() string {
+	switch c {
+	case ConfidenceCertain:
+		return "certain"
+	case ConfidenceInferred:
+		return "inferred"
+	default:
+		return "unknown"
+	}
+}
+
 // IssueLevel indicates the severity of an issue.
 type IssueLevel int
 
@@ -38,9 +69,10 @@ func (l IssueLevel) String() string {
 
 // Validator validates documents against a schema.
 type Validator struct {
-	schema   *schema.Schema
-	resolver *resolver.Resolver
-	allIDs   map[string]struct{}
+	schema      *schema.Schema
+	resolver    *resolver.Resolver
+	allIDs      map[string]struct{}
+	missingRefs map[string]*MissingRef // Keyed by target path to dedupe
 }
 
 // NewValidator creates a new validator.
@@ -51,10 +83,34 @@ func NewValidator(s *schema.Schema, objectIDs []string) *Validator {
 	}
 
 	return &Validator{
-		schema:   s,
-		resolver: resolver.New(objectIDs),
-		allIDs:   allIDs,
+		schema:      s,
+		resolver:    resolver.New(objectIDs),
+		allIDs:      allIDs,
+		missingRefs: make(map[string]*MissingRef),
 	}
+}
+
+// MissingRefs returns all missing references collected during validation.
+func (v *Validator) MissingRefs() []*MissingRef {
+	refs := make([]*MissingRef, 0, len(v.missingRefs))
+	for _, ref := range v.missingRefs {
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
+// inferTypeFromPath tries to match a path to a type's default_path.
+func (v *Validator) inferTypeFromPath(targetPath string) (typeName string, confidence InferConfidence) {
+	for name, typeDef := range v.schema.Types {
+		if typeDef.DefaultPath != "" {
+			// Check if path starts with default_path
+			if len(targetPath) > len(typeDef.DefaultPath) &&
+				targetPath[:len(typeDef.DefaultPath)] == typeDef.DefaultPath {
+				return name, ConfidenceInferred
+			}
+		}
+	}
+	return "", ConfidenceUnknown
 }
 
 // ValidateDocument validates a parsed document.
@@ -132,6 +188,47 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 				Line:     obj.LineStart,
 				Message:  err.Error(),
 			})
+		}
+
+		// Validate ref fields with type context for missing ref tracking
+		for fieldName, fieldDef := range typeDef.Fields {
+			if fieldDef == nil {
+				continue
+			}
+
+			fieldValue, hasField := obj.Fields[fieldName]
+			if !hasField {
+				continue
+			}
+
+			// Handle ref fields
+			if fieldDef.Type == schema.FieldTypeRef {
+				if refStr, ok := fieldValue.AsString(); ok {
+					// Create a synthetic ParsedRef to validate
+					syntheticRef := &parser.ParsedRef{
+						TargetRaw: refStr,
+						Line:      obj.LineStart,
+					}
+					refIssues := v.validateRefWithContext(filePath, obj.ID, syntheticRef, fieldDef.Target, fieldName)
+					issues = append(issues, refIssues...)
+				}
+			}
+
+			// Handle ref[] (array) fields
+			if fieldDef.Type == schema.FieldTypeRefArray {
+				if arr, ok := fieldValue.AsArray(); ok {
+					for _, item := range arr {
+						if refStr, ok := item.AsString(); ok {
+							syntheticRef := &parser.ParsedRef{
+								TargetRaw: refStr,
+								Line:      obj.LineStart,
+							}
+							refIssues := v.validateRefWithContext(filePath, obj.ID, syntheticRef, fieldDef.Target, fieldName)
+							issues = append(issues, refIssues...)
+						}
+					}
+				}
+			}
 		}
 
 		// Validate required traits
@@ -283,6 +380,12 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 }
 
 func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {
+	return v.validateRefWithContext(filePath, "", ref, "", "")
+}
+
+// validateRefWithContext validates a reference with optional type context.
+// If targetType is provided (from a typed field), we have certain confidence about the type.
+func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref *parser.ParsedRef, targetType, fieldName string) []Issue {
 	var issues []Issue
 
 	result := v.resolver.Resolve(ref.TargetRaw)
@@ -301,9 +404,55 @@ func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue 
 			Line:     ref.Line,
 			Message:  fmt.Sprintf("Reference [[%s]] not found", ref.TargetRaw),
 		})
+
+		// Track this missing reference with type inference
+		v.trackMissingRef(ref.TargetRaw, filePath, sourceObjectID, ref.Line, targetType, fieldName)
 	}
 
 	return issues
+}
+
+// trackMissingRef records a missing reference with type inference.
+func (v *Validator) trackMissingRef(targetPath, sourceFile, sourceObjectID string, line int, targetType, fieldName string) {
+	// Normalize path (remove .md extension if present, treat as file path)
+	normalizedPath := targetPath
+
+	// If we already have this ref with higher confidence, don't downgrade
+	if existing, ok := v.missingRefs[normalizedPath]; ok {
+		if existing.Confidence >= ConfidenceCertain {
+			return // Already have certain confidence
+		}
+		if targetType != "" {
+			// Upgrade to certain confidence
+			existing.InferredType = targetType
+			existing.Confidence = ConfidenceCertain
+			existing.FieldSource = fieldName
+			existing.SourceObjectID = sourceObjectID
+			return
+		}
+	}
+
+	missing := &MissingRef{
+		TargetPath:     normalizedPath,
+		SourceFile:     sourceFile,
+		SourceObjectID: sourceObjectID,
+		Line:           line,
+	}
+
+	// Determine confidence and type
+	if targetType != "" {
+		// From a typed field - certain
+		missing.InferredType = targetType
+		missing.Confidence = ConfidenceCertain
+		missing.FieldSource = fieldName
+	} else {
+		// Try to infer from path
+		inferredType, confidence := v.inferTypeFromPath(normalizedPath)
+		missing.InferredType = inferredType
+		missing.Confidence = confidence
+	}
+
+	v.missingRefs[normalizedPath] = missing
 }
 
 func containsHash(s string) bool {
