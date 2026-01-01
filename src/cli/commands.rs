@@ -39,8 +39,9 @@ pub fn check(vault_path: &Path, strict: bool) -> Result<()> {
     let mut warnings = 0;
     let mut file_count = 0;
     
-    // Walk all markdown files
+    // Walk all markdown files (don't follow symlinks to stay within vault)
     for entry in WalkDir::new(vault_path)
+        .follow_links(false)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
@@ -50,6 +51,14 @@ pub fn check(vault_path: &Path, strict: bool) -> Result<()> {
     {
         file_count += 1;
         let file_path = entry.path();
+        
+        // Verify file is actually within vault (defense in depth)
+        let canonical_vault = vault_path.canonicalize().unwrap_or_else(|_| vault_path.to_path_buf());
+        let canonical_file = file_path.canonicalize().unwrap_or_else(|_| file_path.to_path_buf());
+        if !canonical_file.starts_with(&canonical_vault) {
+            continue; // Skip files outside vault
+        }
+        
         let relative_path = file_path.strip_prefix(vault_path).unwrap_or(file_path);
         
         // Read and parse the file
@@ -131,8 +140,11 @@ pub fn reindex(vault_path: &Path) -> Result<()> {
     let mut file_count = 0;
     let mut error_count = 0;
     
-    // Walk all markdown files
+    // Walk all markdown files (don't follow symlinks to stay within vault)
+    let canonical_vault = vault_path.canonicalize().unwrap_or_else(|_| vault_path.to_path_buf());
+    
     for entry in WalkDir::new(vault_path)
+        .follow_links(false)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
@@ -141,6 +153,13 @@ pub fn reindex(vault_path: &Path) -> Result<()> {
         })
     {
         let file_path = entry.path();
+        
+        // Verify file is actually within vault (defense in depth)
+        let canonical_file = file_path.canonicalize().unwrap_or_else(|_| file_path.to_path_buf());
+        if !canonical_file.starts_with(&canonical_vault) {
+            continue; // Skip files outside vault
+        }
+        
         let relative_path = file_path.strip_prefix(vault_path).unwrap_or(file_path);
         
         // Read and parse
@@ -367,9 +386,25 @@ pub fn new_note(vault_path: &Path, type_name: &str, title: &str) -> Result<()> {
         println!("Warning: Type '{}' is not defined in schema.yaml", type_name);
     }
     
-    // Generate filename from title
+    // Generate filename from title (slug::slugify removes special chars)
     let filename = slug::slugify(title);
+    
+    // Validate filename doesn't contain path traversal
+    if filename.is_empty() || filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        anyhow::bail!("Invalid title: cannot generate safe filename");
+    }
+    
     let file_path = vault_path.join(format!("{}.md", filename));
+    
+    // Verify the resulting path is within the vault
+    let canonical_vault = vault_path.canonicalize().unwrap_or_else(|_| vault_path.to_path_buf());
+    let canonical_parent = file_path.parent()
+        .and_then(|p| p.canonicalize().ok())
+        .unwrap_or_else(|| vault_path.to_path_buf());
+    
+    if !canonical_parent.starts_with(&canonical_vault) {
+        anyhow::bail!("Cannot create file outside vault");
+    }
     
     if file_path.exists() {
         println!("Error: File already exists: {}", file_path.display());

@@ -81,11 +81,27 @@ pub fn extract_trait_content(lines: &[&str], line_idx: usize) -> String {
     if line_idx < lines.len() {
         let line = lines[line_idx];
         // Remove the trait annotation itself, return remaining content
-        if let Some(result) = TRAIT_REGEX.replace_all(line, "").into_owned().trim().to_string().into() {
-            return result;
-        }
+        return TRAIT_REGEX.replace_all(line, "").trim().to_string();
     }
     String::new()
+}
+
+/// Simplified parsed trait for use by document parser
+#[derive(Debug, Clone)]
+pub struct ParsedTraitInfo {
+    pub name: String,
+    pub fields: HashMap<String, FieldValue>,
+    pub content: String,
+}
+
+/// Parse a single trait from a line (returns first match)
+pub fn parse_trait(line: &str, _line_number: usize) -> Option<ParsedTraitInfo> {
+    let annotations = parse_trait_annotation(line, _line_number);
+    annotations.into_iter().next().map(|a| ParsedTraitInfo {
+        name: a.trait_name,
+        fields: a.fields,
+        content: a.content,
+    })
 }
 
 #[cfg(test)]

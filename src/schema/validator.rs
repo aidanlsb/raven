@@ -109,7 +109,6 @@ fn validate_field_value(
         // Date types
         (FieldType::Date, FieldValue::Date(_)) => Ok(()),
         (FieldType::Date, FieldValue::String(s)) => {
-            // Try to parse as date
             if chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok() {
                 Ok(())
             } else {
@@ -132,7 +131,6 @@ fn validate_field_value(
         // Datetime
         (FieldType::Datetime, FieldValue::Datetime(_)) => Ok(()),
         (FieldType::Datetime, FieldValue::String(s)) => {
-            // Try to parse as datetime
             if chrono::DateTime::parse_from_rfc3339(s).is_ok() 
                 || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M").is_ok()
                 || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").is_ok()

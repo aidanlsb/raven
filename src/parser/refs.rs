@@ -1,29 +1,18 @@
-//! Reference and tag extractor
+//! Reference parsing ([[wikilinks]])
 
 use regex::Regex;
+use lazy_static::lazy_static;
 
-lazy_static::lazy_static! {
-    // Matches [[ref]] or [[ref|display text]]
-    static ref REF_REGEX: Regex = Regex::new(
-        r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]"
-    ).unwrap();
-    
-    // Matches #tag (word characters and hyphens)
-    static ref TAG_REGEX: Regex = Regex::new(
-        r"#([\w\-]+)"
-    ).unwrap();
-}
-
-/// A reference to another object
+/// A parsed reference
 #[derive(Debug, Clone)]
 pub struct Reference {
-    /// The target (path or short name)
-    pub target: String,
+    /// The raw target (as written)
+    pub target_raw: String,
     
-    /// Optional display text
+    /// Display text (if different from target)
     pub display_text: Option<String>,
     
-    /// Line number
+    /// Line number where found
     pub line: usize,
     
     /// Start position in line
@@ -33,31 +22,36 @@ pub struct Reference {
     pub end: usize,
 }
 
-/// A tag found in content
-#[derive(Debug, Clone)]
-pub struct Tag {
-    /// The tag name (without #)
-    pub name: String,
-    
-    /// Line number
-    pub line: usize,
+lazy_static! {
+    // Match [[target]] or [[target|display]]
+    // The target cannot contain [ or ] to avoid matching array syntax like [[[ref]]]
+    static ref WIKILINK_RE: Regex = Regex::new(r"\[\[([^\]\[|]+)(?:\|([^\]]+))?\]\]").unwrap();
 }
 
-/// Extract all references from content
-pub fn extract_references(content: &str, start_line: usize) -> Vec<Reference> {
+/// Extract references from content
+pub fn extract_refs(content: &str, start_line: usize) -> Vec<Reference> {
     let mut refs = Vec::new();
     
-    for (line_idx, line) in content.lines().enumerate() {
-        let line_num = start_line + line_idx;
+    for (line_offset, line) in content.lines().enumerate() {
+        let line_num = start_line + line_offset;
         
-        for caps in REF_REGEX.captures_iter(line) {
-            let full_match = caps.get(0).unwrap();
-            let target = caps.get(1).unwrap().as_str().to_string();
-            let display_text = caps.get(2).map(|m| m.as_str().to_string());
+        for cap in WIKILINK_RE.captures_iter(line) {
+            let full_match = cap.get(0).unwrap();
+            
+            // Skip if preceded by [ (array syntax like [[[ref]]])
+            if full_match.start() > 0 {
+                let prev_char = line.chars().nth(full_match.start() - 1);
+                if prev_char == Some('[') {
+                    continue;
+                }
+            }
+            
+            let target = cap.get(1).unwrap().as_str().trim();
+            let display = cap.get(2).map(|m| m.as_str().trim().to_string());
             
             refs.push(Reference {
-                target,
-                display_text,
+                target_raw: target.to_string(),
+                display_text: display,
                 line: line_num,
                 start: full_match.start(),
                 end: full_match.end(),
@@ -68,40 +62,23 @@ pub fn extract_references(content: &str, start_line: usize) -> Vec<Reference> {
     refs
 }
 
-/// Extract all tags from content
-pub fn extract_tags(content: &str, start_line: usize) -> Vec<Tag> {
-    let mut tags = Vec::new();
+/// Parse embedded refs in trait values like [[[path/to/file]], [[other]]]
+/// Handles array syntax where refs are wrapped in extra brackets
+pub fn extract_embedded_refs(value: &str) -> Vec<String> {
+    let mut refs = Vec::new();
     
-    for (line_idx, line) in content.lines().enumerate() {
-        let line_num = start_line + line_idx;
+    for cap in WIKILINK_RE.captures_iter(value) {
+        let full_match = cap.get(0).unwrap();
+        let target = cap.get(1).unwrap().as_str().trim().to_string();
         
-        for caps in TAG_REGEX.captures_iter(line) {
-            let name = caps.get(1).unwrap().as_str().to_string();
-            tags.push(Tag { name, line: line_num });
+        // For embedded refs, we DO want to match inside arrays
+        // Just make sure the target doesn't start with [
+        if !target.starts_with('[') {
+            refs.push(target);
         }
     }
     
-    tags
-}
-
-/// Check if a target looks like a full path (contains /)
-pub fn is_full_path(target: &str) -> bool {
-    target.contains('/')
-}
-
-/// Extract the short name from a path
-pub fn short_name(target: &str) -> &str {
-    target.rsplit('/').next().unwrap_or(target)
-}
-
-/// Check if a target references an embedded object (contains #)
-pub fn is_embedded_ref(target: &str) -> bool {
-    target.contains('#')
-}
-
-/// Split an embedded reference into (file_path, embedded_id)
-pub fn split_embedded_ref(target: &str) -> Option<(&str, &str)> {
-    target.split_once('#')
+    refs
 }
 
 #[cfg(test)]
@@ -109,44 +86,22 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_extract_references() {
-        let content = "Met with [[people/alice]] about [[projects/website]].";
-        let refs = extract_references(content, 1);
+    fn test_extract_refs() {
+        let content = "Check out [[some/file]] and [[another|Display Text]]";
+        let refs = extract_refs(content, 1);
         
         assert_eq!(refs.len(), 2);
-        assert_eq!(refs[0].target, "people/alice");
-        assert_eq!(refs[1].target, "projects/website");
+        assert_eq!(refs[0].target_raw, "some/file");
+        assert_eq!(refs[0].display_text, None);
+        assert_eq!(refs[1].target_raw, "another");
+        assert_eq!(refs[1].display_text, Some("Display Text".to_string()));
     }
     
     #[test]
-    fn test_extract_reference_with_display() {
-        let content = "See [[people/alice|Alice Chen]] for details.";
-        let refs = extract_references(content, 1);
+    fn test_extract_embedded_refs() {
+        let value = "attendees=[[[alice]], [[bob]]]";
+        let refs = extract_embedded_refs(value);
         
-        assert_eq!(refs.len(), 1);
-        assert_eq!(refs[0].target, "people/alice");
-        assert_eq!(refs[0].display_text, Some("Alice Chen".to_string()));
-    }
-    
-    #[test]
-    fn test_extract_embedded_ref() {
-        let content = "See [[daily/2025-02-01#standup]] for notes.";
-        let refs = extract_references(content, 1);
-        
-        assert_eq!(refs.len(), 1);
-        assert!(is_embedded_ref(&refs[0].target));
-        let (path, id) = split_embedded_ref(&refs[0].target).unwrap();
-        assert_eq!(path, "daily/2025-02-01");
-        assert_eq!(id, "standup");
-    }
-    
-    #[test]
-    fn test_extract_tags() {
-        let content = "Some thoughts about #productivity and #habits today.";
-        let tags = extract_tags(content, 1);
-        
-        assert_eq!(tags.len(), 2);
-        assert_eq!(tags[0].name, "productivity");
-        assert_eq!(tags[1].name, "habits");
+        assert_eq!(refs, vec!["alice", "bob"]);
     }
 }

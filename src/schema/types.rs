@@ -16,8 +16,38 @@ pub struct Schema {
 impl Default for Schema {
     fn default() -> Self {
         let mut types = HashMap::new();
-        // Built-in 'page' type as fallback
+        
+        // Built-in 'page' type as fallback for untyped files
         types.insert("page".to_string(), TypeDefinition::default());
+        
+        // Built-in 'section' type for headings without explicit types
+        let mut section_fields = HashMap::new();
+        section_fields.insert("title".to_string(), FieldDefinition {
+            field_type: FieldType::String,
+            required: false,
+            default: None,
+            values: None,
+            target: None,
+            min: None,
+            max: None,
+            derived: None,
+            positional: false,
+        });
+        section_fields.insert("level".to_string(), FieldDefinition {
+            field_type: FieldType::Number,
+            required: false,
+            default: None,
+            values: None,
+            target: None,
+            min: Some(1.0),
+            max: Some(6.0),
+            derived: None,
+            positional: false,
+        });
+        types.insert("section".to_string(), TypeDefinition {
+            fields: section_fields,
+            detect: None,
+        });
         
         Schema {
             types,
@@ -133,9 +163,9 @@ pub enum FieldValue {
     String(String),
     Number(f64),
     Bool(bool),
-    Date(String),          // ISO 8601 date string
-    Datetime(String),      // ISO 8601 datetime string
-    Ref(String),           // Reference target ID
+    Date(String),
+    Datetime(String),
+    Ref(String),
     Array(Vec<FieldValue>),
     Null,
 }
@@ -147,20 +177,6 @@ impl FieldValue {
             FieldValue::Date(s) => Some(s),
             FieldValue::Datetime(s) => Some(s),
             FieldValue::Ref(s) => Some(s),
-            _ => None,
-        }
-    }
-    
-    pub fn as_f64(&self) -> Option<f64> {
-        match self {
-            FieldValue::Number(n) => Some(*n),
-            _ => None,
-        }
-    }
-    
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            FieldValue::Bool(b) => Some(*b),
             _ => None,
         }
     }

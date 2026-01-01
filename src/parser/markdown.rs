@@ -1,105 +1,128 @@
-//! Markdown parser - extracts document structure (headings, etc.)
+//! Markdown parsing utilities using pulldown-cmark
 
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
-/// A heading in the document
+/// A parsed heading
 #[derive(Debug, Clone)]
 pub struct Heading {
-    /// Heading level (1-6)
-    pub level: u8,
-    
-    /// Heading text content
+    pub level: u32,
     pub text: String,
-    
-    /// Line number (1-indexed)
     pub line: usize,
 }
 
-/// Parsed markdown structure
-#[derive(Debug, Clone)]
-pub struct MarkdownStructure {
-    /// All headings in the document
-    pub headings: Vec<Heading>,
-}
-
-/// Parse markdown structure from content
-pub fn parse_markdown_structure(content: &str, start_line: usize) -> MarkdownStructure {
+/// Extract headings from markdown content using pulldown-cmark
+pub fn extract_headings(content: &str, start_line: usize) -> Vec<Heading> {
     let mut headings = Vec::new();
-    let mut current_heading_level: Option<u8> = None;
-    let mut current_heading_text = String::new();
-    let mut current_line = start_line;
-    
-    // Track line numbers by counting newlines
-    let mut char_to_line: Vec<usize> = Vec::with_capacity(content.len());
-    let mut line = start_line;
-    for c in content.chars() {
-        char_to_line.push(line);
-        if c == '\n' {
-            line += 1;
-        }
-    }
-    
     let parser = Parser::new(content);
-    let mut offset = 0;
+    
+    let mut current_heading: Option<(u32, usize)> = None;
+    let mut heading_text = String::new();
+    
+    // Pre-compute line number for each byte offset
+    let line_numbers: Vec<usize> = {
+        let mut lines = vec![start_line; content.len() + 1];
+        let mut current = start_line;
+        for (i, c) in content.char_indices() {
+            lines[i] = current;
+            if c == '\n' {
+                current += 1;
+            }
+        }
+        if content.len() < lines.len() {
+            lines[content.len()] = current;
+        }
+        lines
+    };
     
     for (event, range) in parser.into_offset_iter() {
-        offset = range.start;
-        current_line = char_to_line.get(offset).copied().unwrap_or(start_line);
+        let line = *line_numbers.get(range.start).unwrap_or(&start_line);
         
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
-                current_heading_level = Some(heading_level_to_u8(level));
-                current_heading_text.clear();
+                let level_num = match level {
+                    HeadingLevel::H1 => 1,
+                    HeadingLevel::H2 => 2,
+                    HeadingLevel::H3 => 3,
+                    HeadingLevel::H4 => 4,
+                    HeadingLevel::H5 => 5,
+                    HeadingLevel::H6 => 6,
+                };
+                current_heading = Some((level_num, line));
+                heading_text.clear();
             }
-            Event::Text(text) if current_heading_level.is_some() => {
-                current_heading_text.push_str(&text);
+            Event::Text(text) if current_heading.is_some() => {
+                heading_text.push_str(&text);
             }
             Event::End(TagEnd::Heading(_)) => {
-                if let Some(level) = current_heading_level.take() {
-                    headings.push(Heading {
-                        level,
-                        text: current_heading_text.clone(),
-                        line: current_line,
-                    });
+                if let Some((level, heading_line)) = current_heading.take() {
+                    if !heading_text.trim().is_empty() {
+                        headings.push(Heading {
+                            level,
+                            text: heading_text.trim().to_string(),
+                            line: heading_line,
+                        });
+                    }
                 }
+                heading_text.clear();
             }
             _ => {}
         }
     }
     
-    MarkdownStructure { headings }
+    headings
 }
 
-fn heading_level_to_u8(level: HeadingLevel) -> u8 {
-    match level {
-        HeadingLevel::H1 => 1,
-        HeadingLevel::H2 => 2,
-        HeadingLevel::H3 => 3,
-        HeadingLevel::H4 => 4,
-        HeadingLevel::H5 => 5,
-        HeadingLevel::H6 => 6,
+/// Extract inline tags from content (#tag format)
+/// Only extracts tags from text content, not from code blocks or inline code
+pub fn extract_inline_tags(content: &str) -> Vec<String> {
+    let parser = Parser::new(content);
+    let mut tags = Vec::new();
+    let mut in_code = false;
+    
+    for event in parser {
+        match event {
+            Event::Start(Tag::CodeBlock(_)) => in_code = true,
+            Event::End(TagEnd::CodeBlock) => in_code = false,
+            Event::Code(_) => {} // Skip inline code
+            Event::Text(text) if !in_code => {
+                // Extract #tags from regular text
+                tags.extend(extract_tags_from_text(&text));
+            }
+            _ => {}
+        }
     }
+    
+    tags.sort();
+    tags.dedup();
+    tags
 }
 
-/// Find the line range for a heading's content
-/// Returns (start_line, end_line) where end_line is exclusive
-pub fn find_heading_scope(
-    headings: &[Heading],
-    heading_idx: usize,
-    total_lines: usize,
-) -> (usize, usize) {
-    let heading = &headings[heading_idx];
-    let start = heading.line;
+/// Extract #tag patterns from a text string
+fn extract_tags_from_text(text: &str) -> Vec<String> {
+    let mut tags = Vec::new();
+    let mut chars = text.chars().peekable();
+    let mut prev_char = ' ';
     
-    // Find next heading at same or higher level
-    let end = headings
-        .iter()
-        .skip(heading_idx + 1)
-        .find(|h| h.level <= heading.level)
-        .map(|h| h.line)
-        .unwrap_or(total_lines + 1);
+    while let Some(c) = chars.next() {
+        // # must be preceded by whitespace or start of string or punctuation
+        if c == '#' && (prev_char.is_whitespace() || prev_char == '(' || prev_char == '[' || prev_char == '\0') {
+            let mut tag = String::new();
+            while let Some(&next) = chars.peek() {
+                if next.is_alphanumeric() || next == '_' || next == '-' {
+                    tag.push(chars.next().unwrap());
+                } else {
+                    break;
+                }
+            }
+            // Tags must be at least 1 char and not start with a number (avoid #123 issue refs)
+            if !tag.is_empty() && !tag.chars().next().unwrap().is_ascii_digit() {
+                tags.push(tag);
+            }
+        }
+        prev_char = c;
+    }
     
-    (start, end)
+    tags
 }
 
 #[cfg(test)]
@@ -107,47 +130,53 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_parse_headings() {
-        let content = r#"# Main Title
-
-Some content here.
-
-## Section One
-
-Content for section one.
-
-## Section Two
-
-### Subsection
-
-More content.
-"#;
+    fn test_extract_headings() {
+        let content = "# Heading 1\n\nSome text\n\n## Heading 2\n\n### Heading 3";
+        let headings = extract_headings(content, 1);
         
-        let structure = parse_markdown_structure(content, 1);
-        
-        assert_eq!(structure.headings.len(), 4);
-        assert_eq!(structure.headings[0].level, 1);
-        assert_eq!(structure.headings[0].text, "Main Title");
-        assert_eq!(structure.headings[1].level, 2);
-        assert_eq!(structure.headings[1].text, "Section One");
+        assert_eq!(headings.len(), 3);
+        assert_eq!(headings[0].level, 1);
+        assert_eq!(headings[0].text, "Heading 1");
+        assert_eq!(headings[1].level, 2);
+        assert_eq!(headings[2].level, 3);
     }
     
     #[test]
-    fn test_heading_scope() {
-        let headings = vec![
-            Heading { level: 1, text: "Main".to_string(), line: 1 },
-            Heading { level: 2, text: "Section 1".to_string(), line: 5 },
-            Heading { level: 2, text: "Section 2".to_string(), line: 10 },
-        ];
+    fn test_heading_in_code_block_ignored() {
+        let content = "# Real Heading\n\n```\n# Not a heading\n```\n\n## Another Real";
+        let headings = extract_headings(content, 1);
         
-        // Section 1 scope is lines 5-9
-        let (start, end) = find_heading_scope(&headings, 1, 15);
-        assert_eq!(start, 5);
-        assert_eq!(end, 10);
+        assert_eq!(headings.len(), 2);
+        assert_eq!(headings[0].text, "Real Heading");
+        assert_eq!(headings[1].text, "Another Real");
+    }
+    
+    #[test]
+    fn test_extract_inline_tags() {
+        let content = "Some text with #tag1 and #tag2, also (#tag3)";
+        let tags = extract_inline_tags(content);
         
-        // Section 2 scope is lines 10-end
-        let (start, end) = find_heading_scope(&headings, 2, 15);
-        assert_eq!(start, 10);
-        assert_eq!(end, 16);
+        assert!(tags.contains(&"tag1".to_string()));
+        assert!(tags.contains(&"tag2".to_string()));
+        assert!(tags.contains(&"tag3".to_string()));
+    }
+    
+    #[test]
+    fn test_tags_in_code_block_ignored() {
+        let content = "Real #tag here\n\n```\n#not-a-tag\n```\n\nAnd `#also-not-tag` inline";
+        let tags = extract_inline_tags(content);
+        
+        assert_eq!(tags.len(), 1);
+        assert!(tags.contains(&"tag".to_string()));
+    }
+    
+    #[test]
+    fn test_issue_numbers_not_tags() {
+        let content = "Fix #123 and add #feature";
+        let tags = extract_inline_tags(content);
+        
+        assert_eq!(tags.len(), 1);
+        assert!(tags.contains(&"feature".to_string()));
+        assert!(!tags.contains(&"123".to_string()));
     }
 }

@@ -25,8 +25,36 @@ pub struct TypeDeclaration {
     /// Other field values
     pub fields: HashMap<String, FieldValue>,
     
+    /// Tags from inline #tag in the declaration line
+    pub tags: Vec<String>,
+    
     /// Line number where the declaration appears
     pub line: usize,
+}
+
+/// Simplified embedded type info for document parser
+#[derive(Debug, Clone)]
+pub struct EmbeddedTypeInfo {
+    pub type_name: String,
+    pub id: String,
+    pub fields: HashMap<String, FieldValue>,
+    pub tags: Vec<String>,
+}
+
+/// Parse an embedded type declaration from a line
+pub fn parse_embedded_type(line: &str, line_number: usize) -> Option<EmbeddedTypeInfo> {
+    parse_type_declaration(line, line_number)
+        .ok()
+        .flatten()
+        .and_then(|decl| {
+            // Embedded types must have an ID
+            decl.id.map(|id| EmbeddedTypeInfo {
+                type_name: decl.type_name,
+                id,
+                fields: decl.fields,
+                tags: decl.tags,
+            })
+        })
 }
 
 /// Parse a type declaration from a line
@@ -52,6 +80,7 @@ pub fn parse_type_declaration(line: &str, line_number: usize) -> Result<Option<T
         type_name,
         id,
         fields,
+        tags: vec![], // TODO: extract inline tags
         line: line_number,
     }))
 }
