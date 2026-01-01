@@ -46,7 +46,14 @@ List saved queries:
 			for name, q := range vaultCfg.Queries {
 				desc := q.Description
 				if desc == "" {
-					desc = fmt.Sprintf("traits: %v", q.Traits)
+					var parts []string
+					if len(q.Types) > 0 {
+						parts = append(parts, fmt.Sprintf("types: %v", q.Types))
+					}
+					if len(q.Traits) > 0 {
+						parts = append(parts, fmt.Sprintf("traits: %v", q.Traits))
+					}
+					desc = strings.Join(parts, ", ")
 				}
 				fmt.Printf("  %-12s %s\n", name, desc)
 			}
@@ -77,36 +84,61 @@ List saved queries:
 }
 
 func runSavedQuery(db *index.Database, q *config.SavedQuery, name string) error {
-	if len(q.Traits) == 0 {
-		return fmt.Errorf("saved query '%s' has no traits defined", name)
+	if len(q.Traits) == 0 && len(q.Types) == 0 {
+		return fmt.Errorf("saved query '%s' has no traits or types defined", name)
 	}
 
-	// For now, query each trait separately and combine results
-	// A more sophisticated implementation would do a SQL JOIN
-	var allResults []index.TraitResult
+	hasResults := false
 
-	for _, traitType := range q.Traits {
-		var filter *string
-		if q.Filters != nil {
-			if f, ok := q.Filters[traitType]; ok {
-				filter = &f
+	// Query types if specified
+	if len(q.Types) > 0 {
+		for _, typeName := range q.Types {
+			results, err := db.QueryObjects(typeName)
+			if err != nil {
+				return fmt.Errorf("failed to query type %s: %w", typeName, err)
+			}
+
+			if len(results) > 0 {
+				hasResults = true
+				fmt.Printf("## %s (%d)\n\n", typeName, len(results))
+				for _, obj := range results {
+					fmt.Printf("• %s\n", obj.ID)
+					fmt.Printf("  %s:%d\n", obj.FilePath, obj.LineStart)
+				}
+				fmt.Println()
 			}
 		}
+	}
 
-		results, err := db.QueryTraits(traitType, filter)
-		if err != nil {
-			return fmt.Errorf("failed to query %s: %w", traitType, err)
+	// Query traits if specified
+	if len(q.Traits) > 0 {
+		var allResults []index.TraitResult
+
+		for _, traitType := range q.Traits {
+			var filter *string
+			if q.Filters != nil {
+				if f, ok := q.Filters[traitType]; ok {
+					filter = &f
+				}
+			}
+
+			results, err := db.QueryTraits(traitType, filter)
+			if err != nil {
+				return fmt.Errorf("failed to query %s: %w", traitType, err)
+			}
+			allResults = append(allResults, results...)
 		}
-		allResults = append(allResults, results...)
+
+		if len(allResults) > 0 {
+			hasResults = true
+			printTraitResults(allResults)
+		}
 	}
 
-	if len(allResults) == 0 {
+	if !hasResults {
 		fmt.Printf("No results for query '%s'.\n", name)
-		return nil
 	}
 
-	// Group by file and line to deduplicate and show combined traits
-	printTraitResults(allResults)
 	return nil
 }
 

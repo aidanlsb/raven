@@ -125,6 +125,8 @@ Some thoughts about #productivity today.
 | `rvn check --create-missing` | Interactively create missing referenced pages |
 | `rvn reindex` | Rebuild the SQLite index |
 | `rvn trait <name>` | Query any trait type |
+| `rvn type <name>` | List objects of a specific type |
+| `rvn type --list` | List available types with counts |
 | `rvn query <name>` | Run a saved query |
 | `rvn query --list` | List saved queries |
 | `rvn backlinks <target>` | Show incoming references |

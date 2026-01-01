@@ -424,11 +424,35 @@ Saved queries define reusable trait queries. Run with `rvn query <name>`.
 ```yaml
 queries:
   <name>:
-    traits: [trait1, trait2, ...]    # Which traits to query
+    types: [type1, type2, ...]        # Object types to query (optional)
+    traits: [trait1, trait2, ...]     # Traits to query (optional)
     filters:                          # Optional value filters per trait
       trait1: "value"
       trait2: "today"                 # Supports date filters
     description: "Human-readable description"
+```
+
+Queries can include types, traits, or both:
+
+```yaml
+queries:
+  # Query by types only
+  people:
+    types: [person]
+    description: "All people"
+
+  # Query by traits only  
+  overdue:
+    traits: [due]
+    filters:
+      due: past
+    description: "Overdue items"
+
+  # Mixed: types AND traits
+  project-tasks:
+    types: [project]
+    traits: [due, status]
+    description: "Projects with tasks"
 ```
 
 **Why separate from schema.yaml?** Vault configuration controls *behavior* (where things go, how dates work, what queries exist), while schema defines *structure* (what types and traits exist). Separation keeps each file focused.
@@ -1145,9 +1169,48 @@ rvn trait task --format json             # Machine-readable
 rvn trait task --format compact          # One-line per item
 ```
 
+### The `rvn type` Command
+
+List all objects of a specific type:
+
+```bash
+rvn type <type-name>
+```
+
+**Examples**:
+```bash
+rvn type person                          # List all people
+rvn type project                         # List all projects
+rvn type meeting                         # List all meetings
+rvn type --list                          # Show all types with object counts
+```
+
+**Output**:
+```
+# person (2)
+
+• people/alice
+  email: alice@example.com, name: Alice Chen
+  people/alice.md:1
+• people/bob
+  email: bob@example.com, name: Bob Smith
+  people/bob.md:1
+```
+
+Use `rvn type --list` to see all available types:
+```
+Types:
+  date            1 objects (built-in)
+  meeting         1 objects
+  page            - (built-in)
+  person          2 objects
+  project         1 objects
+  section         12 objects (built-in)
+```
+
 ### Saved Queries
 
-Saved queries provide ergonomic shortcuts for common trait combinations. Define them in `raven.yaml`:
+Saved queries provide ergonomic shortcuts for common queries. Define them in `raven.yaml`:
 
 ```yaml
 queries:
@@ -1156,20 +1219,35 @@ queries:
     filters:
       status: "todo,in_progress,"
     description: "Open tasks"
+
+  people:
+    types: [person]
+    description: "All people"
+
+  project-summary:
+    types: [project]
+    traits: [due]
+    description: "Projects with due dates"
 ```
+
+Queries can include `types`, `traits`, or both.
 
 Then run them:
 
 ```bash
-rvn query tasks              # Run saved query
+rvn query tasks              # Run saved query (traits)
+rvn query people             # Run saved query (types)
+rvn query project-summary    # Run saved query (mixed)
 rvn query --list             # List all saved queries
 ```
 
-For single-trait queries, use `rvn trait` directly:
+For direct queries, use `rvn trait` or `rvn type`:
 
 ```bash
 rvn trait due --value past   # All overdue items
 rvn trait highlight          # All highlights
+rvn type person              # All people
+rvn type project             # All projects
 ```
 
 ### Trait Definition
@@ -1346,6 +1424,7 @@ rvn --config /path/to/config.toml <command>
     - `rvn reindex`
     - `rvn check` (validation)
     - `rvn trait` (query by trait type)
+    - `rvn type` (query by object type)
     - `rvn query` (saved queries)
     - `rvn backlinks`
     - `rvn stats`
