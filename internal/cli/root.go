@@ -11,8 +11,9 @@ import (
 
 var (
 	// Global flags
-	vaultPath  string
-	configPath string
+	vaultName     string // Named vault from config
+	vaultPathFlag string // Explicit path (rare)
+	configPath    string
 
 	// Resolved values
 	resolvedVaultPath string
@@ -29,8 +30,8 @@ Built for speed, with plain-text markdown files as the source of truth.
 Named for Odin's ravens Huginn (thought) and Muninn (memory), 
 who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip vault resolution for init command
-		if cmd.Name() == "init" {
+		// Skip vault resolution for init and vaults commands
+		if cmd.Name() == "init" || cmd.Name() == "vaults" {
 			return nil
 		}
 
@@ -48,18 +49,28 @@ who gathered knowledge from across the world.`,
 			cfg = &config.Config{}
 		}
 
-		// Resolve vault path: CLI flag > config file
-		if vaultPath != "" {
-			resolvedVaultPath = vaultPath
-		} else if cfg.Vault != "" {
-			resolvedVaultPath = cfg.Vault
+		// Resolve vault path: explicit path > named vault > default
+		if vaultPathFlag != "" {
+			// Explicit path takes priority
+			resolvedVaultPath = vaultPathFlag
+		} else if vaultName != "" {
+			// Named vault from --vault flag
+			resolvedVaultPath, err = cfg.GetVaultPath(vaultName)
+			if err != nil {
+				return fmt.Errorf("vault '%s' not found\n\nRun 'rvn vaults' to see configured vaults", vaultName)
+			}
 		} else {
-			return fmt.Errorf(`no vault specified
+			// Default vault
+			resolvedVaultPath, err = cfg.GetDefaultVaultPath()
+			if err != nil {
+				return fmt.Errorf(`no vault specified
 
 Either:
-  1. Use --vault /path/to/vault
-  2. Set 'vault = "/path/to/vault"' in ~/.config/raven/config.toml
-  3. Run 'rvn init /path/to/new/vault' to create one`)
+  1. Use --vault <name> (from config)
+  2. Use --vault-path /path/to/vault
+  3. Set default_vault in ~/.config/raven/config.toml
+  4. Run 'rvn init /path/to/new/vault' to create one`)
+			}
 		}
 
 		// Verify vault exists
@@ -77,7 +88,8 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "Path to the vault directory")
+	rootCmd.PersistentFlags().StringVarP(&vaultName, "vault", "v", "", "Named vault from config")
+	rootCmd.PersistentFlags().StringVar(&vaultPathFlag, "vault-path", "", "Explicit path to vault directory")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to config file")
 }
 
