@@ -4,6 +4,27 @@ This document details specific improvements to make Raven an excellent tool for 
 
 ---
 
+## Implementation Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `--json` flag on all commands | ✅ Implemented | Standard envelope for all responses |
+| Standard response envelope | ✅ Implemented | `ok`, `data`, `error`, `meta`, `warnings` |
+| Structured error codes | ✅ Implemented | See `internal/cli/errors.go` |
+| Schema introspection (`rvn schema`) | ✅ Implemented | Types, traits, commands discovery |
+| MCP Server (`rvn serve`) | ✅ Implemented | Full JSON-RPC 2.0 over stdin/stdout |
+| Object creation (`rvn new`) | ✅ Implemented | With `--field` flags for required fields |
+| Object deletion (`rvn delete`) | ✅ Implemented | Trash by default, backlink warnings |
+| Schema editing (`rvn schema add`) | ✅ Implemented | Add types, traits, fields |
+| Read raw content (`rvn read`) | ✅ Implemented | For agent file access |
+| Quick capture (`rvn add`) | ✅ Implemented | With reference validation |
+| Audit log | ✅ Implemented | Configurable in `raven.yaml` |
+| Batch operations | 🔮 Future | See docs/FUTURE.md |
+| Full-text search | 🔮 Future | See docs/FUTURE.md |
+| File watching | 🔮 Future | See docs/FUTURE.md |
+
+---
+
 ## Table of Contents
 
 1. [Design Principles](#design-principles)

@@ -144,7 +144,7 @@ func CreateDefault() (string, error) {
 	}
 
 	defaultConfig := `# Raven Configuration
-# See: https://github.com/yourusername/raven
+# See: https://github.com/aidanlsb/raven
 
 # Default vault name (must exist in [vaults] below)
 # default_vault = "personal"
