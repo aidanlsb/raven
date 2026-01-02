@@ -1,6 +1,6 @@
 # Raven Development Rules
 
-## ⚠️ FUNDAMENTAL PRINCIPLE: Plain Text is the Source of Truth
+## FUNDAMENTAL PRINCIPLE: Plain Text is the Source of Truth
 
 **Raven is a plain-text-first system. The user's markdown files and `schema.yaml` are the ONLY source of truth.**
 

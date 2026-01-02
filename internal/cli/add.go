@@ -67,16 +67,32 @@ Configuration (raven.yaml):
 
 		// Determine destination file
 		var destPath string
+		var isDailyNote bool
 		if addToFlag != "" {
 			// Override with --to flag
 			destPath = filepath.Join(vaultPath, addToFlag)
+			
+			// Check if file exists - add only works on existing files
+			if _, err := os.Stat(destPath); os.IsNotExist(err) {
+				return handleErrorMsg(ErrFileNotFound, 
+					fmt.Sprintf("File '%s' does not exist", addToFlag),
+					"Use 'rvn new <type> <title>' to create new files, or omit --to to append to daily note")
+			}
 		} else if captureCfg.Destination == "daily" {
-			// Use today's daily note
+			// Use today's daily note (auto-created if needed)
 			today := vault.FormatDateISO(time.Now())
 			destPath = vaultCfg.DailyNotePath(vaultPath, today)
+			isDailyNote = true
 		} else {
 			// Use configured destination
 			destPath = filepath.Join(vaultPath, captureCfg.Destination)
+			
+			// Check if configured destination exists
+			if _, err := os.Stat(destPath); os.IsNotExist(err) {
+				return handleErrorMsg(ErrFileNotFound,
+					fmt.Sprintf("Configured capture destination '%s' does not exist", captureCfg.Destination),
+					"Create the file first or change capture.destination in raven.yaml")
+			}
 		}
 
 		// Security: verify path is within vault
@@ -100,8 +116,8 @@ Configuration (raven.yaml):
 		// Format the capture line
 		line := formatCaptureLine(text, captureCfg)
 
-		// Append to file
-		if err := appendToFile(destPath, line, captureCfg, vaultCfg); err != nil {
+		// Append to file (create if daily note)
+		if err := appendToFile(destPath, line, captureCfg, vaultCfg, isDailyNote); err != nil {
 			return handleError(ErrFileWriteError, err, "")
 		}
 
@@ -118,7 +134,7 @@ Configuration (raven.yaml):
 		var warnings []Warning
 		refs := parser.ExtractRefs(text, 1)
 		if len(refs) > 0 {
-			warnings = validateRefs(vaultPath, refs)
+			warnings = append(warnings, validateRefs(vaultPath, refs)...)
 		}
 
 		// Reindex if configured
@@ -167,28 +183,24 @@ func formatCaptureLine(text string, cfg *config.CaptureConfig) string {
 	return "- " + strings.Join(parts, " ")
 }
 
-func appendToFile(destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig) error {
+func appendToFile(destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool) error {
 	// Check if file exists
 	fileExists := true
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
 		fileExists = false
 	}
 
-	// If file doesn't exist, create it appropriately
+	// If file doesn't exist and it's a daily note, create it
 	if !fileExists {
-		// Determine if this is a daily note (destination is "daily" and no --to override)
-		isDailyNote := cfg.Destination == "daily" && addToFlag == ""
 		if isDailyNote {
 			if err := createDailyNote(destPath, vaultCfg); err != nil {
 				return err
 			}
+			fileExists = true
 		} else {
-			// Create simple file for non-daily destinations
-			if err := os.WriteFile(destPath, []byte(""), 0644); err != nil {
-				return fmt.Errorf("failed to create file: %w", err)
-			}
+			// This shouldn't happen - we check earlier, but just in case
+			return fmt.Errorf("file does not exist: %s", destPath)
 		}
-		fileExists = true
 	}
 
 	// If heading is configured, find or create it
