@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ravenscroftj/raven/internal/index"
@@ -89,42 +88,6 @@ func printResults(results []index.TraitResult) {
 
 		fmt.Printf("• %s\n", result.Content)
 		fmt.Printf("  @%s%s  %s:%d\n", result.TraitType, valueStr, result.FilePath, result.Line)
-	}
-}
-
-// Helper to display traits grouped by content
-func printGroupedResults(results []index.TraitResult) {
-	type contentKey struct {
-		filePath string
-		line     int
-	}
-
-	grouped := make(map[contentKey][]index.TraitResult)
-	var order []contentKey
-
-	for _, r := range results {
-		key := contentKey{r.FilePath, r.Line}
-		if _, exists := grouped[key]; !exists {
-			order = append(order, key)
-		}
-		grouped[key] = append(grouped[key], r)
-	}
-
-	for _, key := range order {
-		traits := grouped[key]
-		content := traits[0].Content
-
-		var traitStrs []string
-		for _, t := range traits {
-			if t.Value != nil && *t.Value != "" {
-				traitStrs = append(traitStrs, fmt.Sprintf("@%s(%s)", t.TraitType, *t.Value))
-			} else {
-				traitStrs = append(traitStrs, fmt.Sprintf("@%s", t.TraitType))
-			}
-		}
-
-		fmt.Printf("• %s\n", content)
-		fmt.Printf("  %s  %s:%d\n", strings.Join(traitStrs, " "), key.filePath, key.line)
 	}
 }
 

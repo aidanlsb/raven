@@ -161,6 +161,25 @@ This protects users from:
 ### General Best Practices
 - Make sure that core functionality is implemented once, not duplicated. And then reused throughout the app as needed. For example, in an earlier version we had a few different implementations of new page creation -- this should always be a single implementation that is called from different entrypoints as needed
 
+### No Dead Code
+- Delete unused functions immediately—don't leave "wrapper" functions that just call another function
+- If you add a `*WithJSON` variant, remove the original if it's no longer called
+- Run `go build` after deletions to catch unused imports
+- If a function is only used in one place and is trivial, consider inlining it
+
+### Package Boundaries
+Keep functionality in the right package:
+- **`internal/config/`**: All config loading AND saving (e.g., `SaveVaultConfig`)
+- **`internal/cli/`**: Command handlers only—no business logic that could be reused
+- **`internal/pages/`**: Page creation, slugification, path handling
+- **`internal/vault/`**: Vault-level utilities (walking files, date parsing, editor)
+- **`internal/index/`**: Database operations
+
+**Signs of misplaced code:**
+- A function in `cli/` that doesn't use Cobra or command context
+- A function in one CLI file used by another CLI file → move to shared package
+- Config writing in `cli/` instead of `config/`
+
 ### Command Registry Pattern
 The **command registry** (`internal/commands/registry.go`) is the single source of truth for all CLI commands:
 - Add new commands by adding an entry to the registry
@@ -172,6 +191,29 @@ When adding a new command:
 1. Add the command metadata to `internal/commands/registry.go`
 2. Create the Cobra command handler in `internal/cli/`
 3. The MCP tool will be automatically available
+
+### MCP → CLI Argument Passing Standard
+
+The MCP server calls CLI commands via `exec.Command`. **Argument ordering is strictly enforced** to prevent parsing issues:
+
+```
+[command] [subcommand] [--flags] [--json] [--] [positional args] [key=value pairs]
+```
+
+**Rules:**
+1. **Command/subcommand first**: e.g., `edit`, `schema add type`
+2. **All flags next**: `--confirm`, `--filter today`, etc.
+3. **`--json` always added**: MCP responses must be JSON
+4. **`--` separator always added**: Prevents positional args starting with `-` from being parsed as flags
+5. **Positional args after `--`**: In registry-defined order
+6. **Key-value pairs last**: For commands like `set` that take `field=value` args
+
+**Why this matters:**
+- User content can contain `-` characters (e.g., `- list item`, `--heading--`)
+- Without `--`, Cobra interprets these as flags
+- This standard applies to ALL commands, no exceptions
+
+**No special cases allowed.** If a command doesn't fit this pattern, refactor the command to fit—don't add edge case handling in the MCP layer.
 
 ### Go Conventions
 

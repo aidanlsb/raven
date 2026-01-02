@@ -220,6 +220,22 @@ queries:
 	return nil
 }
 
+// SaveVaultConfig writes the vault config back to raven.yaml.
+func SaveVaultConfig(vaultPath string, cfg *VaultConfig) error {
+	configPath := filepath.Join(vaultPath, "raven.yaml")
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write raven.yaml: %w", err)
+	}
+
+	return nil
+}
+
 // DailyNotePath returns the full path for a daily note given a date string (YYYY-MM-DD).
 func (vc *VaultConfig) DailyNotePath(vaultPath, date string) string {
 	return filepath.Join(vaultPath, vc.DailyDirectory, date+".md")
