@@ -1,1 +1,15 @@
-/target
+# Build output
+/rvn
+
+# OS files
+.DS_Store
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test artifacts
+*.test
+coverage.out
