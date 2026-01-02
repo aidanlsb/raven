@@ -455,4 +455,37 @@ Use this to update existing objects' metadata without manually editing files.`,
 			"Modify any frontmatter field on an object",
 		},
 	},
+	"search": {
+		Name:        "search",
+		Description: "Full-text search across all vault content",
+		LongDesc: `Search for content across all files in the vault.
+
+Uses full-text search with relevance ranking. Supports:
+  - Simple words: "meeting notes" (finds pages containing both words)
+  - Phrases: '"team meeting"' (exact phrase match)
+  - Prefix matching: "meet*" (matches meeting, meetings, etc.)
+  - Boolean: "meeting AND notes", "meeting OR notes", "meeting NOT private"
+
+Results are ranked by relevance with snippets showing matched content.
+Use --type to filter results to specific object types.`,
+		Args: []ArgMeta{
+			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "limit", Short: "n", Description: "Maximum number of results (default: 20)", Type: FlagTypeInt, Default: "20"},
+			{Name: "type", Short: "t", Description: "Filter by object type", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn search \"meeting notes\" --json",
+			"rvn search \"project*\" --type project --json",
+			"rvn search '\"atomic bomb\"' --limit 5 --json",
+			"rvn search \"alice OR bob\" --json",
+		},
+		UseCases: []string{
+			"Find pages mentioning specific topics",
+			"Search for content across the entire vault",
+			"Locate pages by partial matches",
+			"Find all mentions of a person or concept",
+		},
+	},
 }

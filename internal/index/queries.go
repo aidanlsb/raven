@@ -405,3 +405,92 @@ func (d *Database) QueryTagsMultiple(tags []string) ([]string, error) {
 
 	return results, rows.Err()
 }
+
+// SearchResult represents a full-text search result.
+type SearchResult struct {
+	ObjectID string
+	Title    string
+	FilePath string
+	Snippet  string  // Matched snippet with context
+	Rank     float64 // FTS5 ranking score (lower is better match)
+}
+
+// Search performs a full-text search across all content in the vault.
+// The query supports FTS5 query syntax:
+//   - Simple words: "meeting notes"
+//   - Phrases: '"team meeting"'
+//   - Boolean: "meeting AND notes", "meeting OR notes", "meeting NOT private"
+//   - Prefix: "meet*"
+//
+// Results are ranked by relevance (best matches first).
+func (d *Database) Search(query string, limit int) ([]SearchResult, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	// Use FTS5 match query with BM25 ranking
+	// The snippet function extracts matching content with context
+	rows, err := d.db.Query(`
+		SELECT 
+			object_id,
+			title,
+			file_path,
+			snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
+			bm25(fts_content) as rank
+		FROM fts_content
+		WHERE fts_content MATCH ?
+		ORDER BY rank
+		LIMIT ?
+	`, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SearchResult
+	for rows.Next() {
+		var result SearchResult
+		if err := rows.Scan(&result.ObjectID, &result.Title, &result.FilePath, &result.Snippet, &result.Rank); err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+
+	return results, rows.Err()
+}
+
+// SearchWithType performs a full-text search filtered by object type.
+func (d *Database) SearchWithType(query string, objectType string, limit int) ([]SearchResult, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	rows, err := d.db.Query(`
+		SELECT 
+			f.object_id,
+			f.title,
+			f.file_path,
+			snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
+			bm25(fts_content) as rank
+		FROM fts_content f
+		JOIN objects o ON f.object_id = o.id
+		WHERE fts_content MATCH ? AND o.type = ?
+		ORDER BY rank
+		LIMIT ?
+	`, query, objectType, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SearchResult
+	for rows.Next() {
+		var result SearchResult
+		if err := rows.Scan(&result.ObjectID, &result.Title, &result.FilePath, &result.Snippet, &result.Rank); err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+
+	return results, rows.Err()
+}
