@@ -1,6 +1,32 @@
 # Raven Development Rules
 
-## Source of Truth
+## ⚠️ FUNDAMENTAL PRINCIPLE: Plain Text is the Source of Truth
+
+**Raven is a plain-text-first system. The user's markdown files and `schema.yaml` are the ONLY source of truth.**
+
+The SQLite database (`.raven/index.sqlite`) is a **derived, disposable cache**:
+
+- It can be deleted at any time without data loss
+- It is fully recreated by `rvn reindex` from the markdown files
+- It should NEVER contain data that doesn't exist in the text files
+- It exists solely for fast querying—not for storage
+
+**This means:**
+- All mutations to user data must write to markdown files, not just the database
+- The database is rebuilt, never migrated with user data
+- Users can sync their vault via git/Dropbox/iCloud without syncing `.raven/`
+- If the database is corrupted or outdated, delete it and reindex
+
+**Never:**
+- Store user-created content only in the database
+- Require the database to recover user data
+- Treat the database as authoritative over the text files
+
+This principle is NON-NEGOTIABLE. It's what makes Raven portable, trustworthy, and future-proof.
+
+---
+
+## Specification Source of Truth
 
 **`docs/SPECIFICATION.md` is the authoritative specification for all Raven behavior.**
 
@@ -77,6 +103,32 @@ Avoid building opinionated workflows into the core:
 
 The tool should be a foundation that users build their workflows on top of.
 
+### Vault-Scoped Operations
+
+**All Raven functionality must operate exclusively within the explicitly identified vault.**
+
+This is a security and integrity principle:
+
+- **File operations**: Read, write, create, delete—only within the vault directory
+- **Path validation**: Always verify resolved paths remain within vault boundaries before any operation
+- **No escape**: Symlinks, `../` paths, or any mechanism that could reach outside the vault must be blocked
+- **Explicit boundaries**: The vault path is set via config or CLI flag—never inferred from current directory alone
+
+Implementation pattern:
+```go
+// Always validate paths before operations
+absVault, _ := filepath.Abs(vaultPath)
+absTarget, _ := filepath.Abs(targetPath)
+if !strings.HasPrefix(absTarget, absVault+string(filepath.Separator)) {
+    return fmt.Errorf("cannot operate outside vault: %s", targetPath)
+}
+```
+
+This protects users from:
+- Accidental writes to system files
+- Malicious references escaping the vault
+- Unintended side effects from misconfigured paths
+
 ## Code Standards
 
 ### General Best Practices
@@ -100,7 +152,7 @@ The tool should be a foundation that users build their workflows on top of.
 - Commands should be discoverable via `--help`
 - Error messages should suggest fixes
 - Output should be human-readable by default, with `--json` for scripting
-- Respect the vault boundary—never operate outside configured vault
+- Enforce vault-scoped operations (see "Vault-Scoped Operations" above)
 
 ## Implementation Checklist
 

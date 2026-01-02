@@ -63,13 +63,25 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 
 **Customizable**: You can add `page` or `section` definitions to your `schema.yaml` to extend them with custom fields. The `date` type is locked and cannot be modified—use traits for additional daily note metadata (e.g., `@mood(great)`).
 
-### Files as Source of Truth
+### ⚠️ Files as Source of Truth (Critical Design Principle)
 
-- All data lives in plain markdown files
-- The SQLite index is a derived, disposable cache
-- Delete the index, run reindex, everything is restored
+**Plain-text markdown files are the ONLY source of truth. The database is disposable.**
+
+| Component | Role | Can be deleted? |
+|-----------|------|-----------------|
+| `*.md` files | **Source of truth** - all user data | NO - this IS your data |
+| `schema.yaml` | **Source of truth** - type/trait definitions | NO - defines your structure |
+| `raven.yaml` | **Source of truth** - vault configuration | NO - defines your settings |
+| `.raven/index.sqlite` | **Derived cache** - for fast queries only | YES - rebuilt by `rvn reindex` |
+
+**What this means:**
+- Delete `.raven/`, run `rvn reindex`, everything is restored
 - Files can be edited with any text editor
-- Files sync via Dropbox/iCloud/git without conflicts (index is local-only)
+- Files sync via Dropbox/iCloud/git without conflicts (`.raven/` is local-only, gitignore it)
+- The database NEVER contains data that doesn't exist in your text files
+- If anything goes wrong with the database, delete it and reindex
+
+**This is non-negotiable.** It's what makes Raven portable, trustworthy, and future-proof. Your notes will outlive this tool.
 
 ---
 
@@ -390,6 +402,13 @@ Located at vault root. Controls vault-level settings.
 
 # Where daily notes are stored (default: daily)
 daily_directory: daily
+
+# Quick capture settings for 'rvn add'
+capture:
+  destination: daily      # "daily" (default) or a file path like "inbox.md"
+  heading: "## Captured"  # Optional - append under this heading
+  timestamp: true         # Prefix with time (default: true)
+  reindex: true           # Reindex file after capture (default: true)
 
 # Saved queries - run with 'rvn query <name>'
 queries:
@@ -1078,6 +1097,11 @@ rvn new person "Alice Chen"       # Creates people/alice-chen.md
 rvn new project "Website"         # Creates projects/website.md, prompts for required fields
 rvn new person                    # Prompts for title interactively
 
+# Quick capture
+rvn add "Call Alice about the project"
+rvn add "@due(tomorrow) Send estimate"
+rvn add "Idea" --to inbox.md      # Override destination
+
 # Watch for changes and auto-reindex (future)
 rvn watch
 
@@ -1208,6 +1232,84 @@ Types:
   section         12 objects (built-in)
 ```
 
+### The `rvn tag` Command
+
+Query objects by tag:
+
+```bash
+rvn tag <tag-name>
+```
+
+**Examples**:
+```bash
+rvn tag project                          # Find all objects tagged #project
+rvn tag important                        # Find all objects tagged #important
+rvn tag --list                           # Show all tags with usage counts
+```
+
+**Output**:
+```
+# #project (3)
+
+• projects/website.md
+    projects/website (line 1)
+• daily/2025-02-01.md
+    daily/2025-02-01 (line 15)
+• people/alice.md
+    people/alice#current-work (line 20)
+```
+
+Use `rvn tag --list` to see all tags in your vault:
+```
+Tags (8 total):
+
+  #project              3 objects
+  #important            2 objects
+  #work                 2 objects
+  #personal             1 object
+  #reading              1 object
+```
+
+### The `rvn add` Command
+
+Quick capture for low-friction note-taking:
+
+```bash
+rvn add <text>
+rvn add <text> --to <file>
+```
+
+**Examples**:
+```bash
+rvn add "Call Alice about the project"
+rvn add "@due(tomorrow) @priority(high) Send estimate"
+rvn add "Project idea" --to inbox.md
+```
+
+**Behavior**:
+- By default, appends to today's daily note (creates if needed)
+- Traits in the text are preserved and indexed
+- Timestamps are added by default
+
+**Configuration** (in `raven.yaml`):
+```yaml
+capture:
+  destination: daily      # "daily" or a file path
+  heading: "## Captured"  # Append under this heading (optional)
+  timestamp: true         # Prefix with time
+  reindex: true           # Auto-reindex after capture
+```
+
+**Output**:
+```
+✓ Added to daily/2026-01-01.md
+```
+
+The captured line in the file:
+```markdown
+- 15:30 @due(tomorrow) @priority(high) Send estimate
+```
+
 ### Saved Queries
 
 Saved queries provide ergonomic shortcuts for common queries. Define them in `raven.yaml`:
@@ -1228,26 +1330,37 @@ queries:
     types: [project]
     traits: [due]
     description: "Projects with due dates"
+
+  important:
+    tags: [important]
+    description: "Items tagged #important"
+
+  work-projects:
+    tags: [work, project]
+    description: "Items with both #work AND #project tags"
 ```
 
-Queries can include `types`, `traits`, or both.
+Queries can include `types`, `traits`, `tags`, or any combination. When multiple tags are specified, objects must have ALL tags (AND logic).
 
 Then run them:
 
 ```bash
 rvn query tasks              # Run saved query (traits)
 rvn query people             # Run saved query (types)
+rvn query important          # Run saved query (tags)
 rvn query project-summary    # Run saved query (mixed)
 rvn query --list             # List all saved queries
 ```
 
-For direct queries, use `rvn trait` or `rvn type`:
+For direct queries, use `rvn trait`, `rvn type`, or `rvn tag`:
 
 ```bash
 rvn trait due --value past   # All overdue items
 rvn trait highlight          # All highlights
 rvn type person              # All people
 rvn type project             # All projects
+rvn tag important            # All items tagged #important
+rvn tag --list               # List all tags
 ```
 
 ### Trait Definition
@@ -1425,6 +1538,7 @@ rvn --config /path/to/config.toml <command>
     - `rvn check` (validation)
     - `rvn trait` (query by trait type)
     - `rvn type` (query by object type)
+    - `rvn tag` (query by tag)
     - `rvn query` (saved queries)
     - `rvn backlinks`
     - `rvn stats`
@@ -1432,6 +1546,7 @@ rvn --config /path/to/config.toml <command>
     - `rvn daily`
     - `rvn date`
     - `rvn new`
+    - `rvn add` (quick capture)
 
 ### Phase 2: Enhanced Querying
 

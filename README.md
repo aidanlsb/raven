@@ -46,6 +46,15 @@ rvn trait due --value today        # Items due today
 rvn trait due --value past         # Overdue items
 rvn trait highlight                # All highlights
 
+# Query tags
+rvn tag --list                     # List all tags
+rvn tag project                    # Find all #project items
+
+# Quick capture
+rvn add "Call Alice about the project"
+rvn add "@due(tomorrow) Send estimate"
+rvn add "Idea" --to inbox.md       # Override destination
+
 # Saved queries (defined in raven.yaml)
 rvn query --list                   # List available queries
 rvn query tasks                    # Run 'tasks' query
@@ -127,6 +136,8 @@ Some thoughts about #productivity today.
 | `rvn trait <name>` | Query any trait type |
 | `rvn type <name>` | List objects of a specific type |
 | `rvn type --list` | List available types with counts |
+| `rvn tag <name>` | Find objects by tag |
+| `rvn tag --list` | List all tags with usage counts |
 | `rvn query <name>` | Run a saved query |
 | `rvn query --list` | List saved queries |
 | `rvn backlinks <target>` | Show incoming references |
@@ -135,6 +146,8 @@ Some thoughts about #productivity today.
 | `rvn daily [date]` | Open/create a daily note |
 | `rvn date [date]` | Show everything related to a date |
 | `rvn new <type> [title]` | Create a new typed note (prompts for title/fields) |
+| `rvn add <text>` | Quick capture to daily note (or configured destination) |
+| `rvn add <text> --to <file>` | Quick capture to specific file |
 
 ### Shell Completion
 
@@ -213,6 +226,11 @@ queries:
     filters:
       due: past
     description: "Overdue items"
+
+  # Tag-based queries
+  important:
+    tags: [important]
+    description: "Items tagged #important"
 ```
 
 ## Documentation
