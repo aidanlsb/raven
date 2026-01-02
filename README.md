@@ -1,54 +1,74 @@
 # Raven
 
-Structured notes in plain text. Define types (person, project, meeting), annotate with traits (`@due`, `@priority`), and query across your vault—all while keeping files as readable markdown. First-class AI agent support via MCP.
+Structured notes in plain text. Define your own types (person, project, client), annotate with traits (`@due`, `@priority`), and query across your vault—all while keeping files as readable markdown. First-class AI agent support via MCP.
 
 ---
 
 ## Quick Example
 
-**1. Define your schema** (`schema.yaml`):
-```yaml
-types:
-  person:
-    default_path: people/
-    fields:
-      name: { type: string, required: true }
+You're a freelance consultant juggling clients, projects, and tasks. Here's a morning with Raven:
 
-traits:
-  due: { type: date }
-  priority: { type: enum, values: [low, medium, high] }
-```
-
-**2. Write notes** (`projects/website.md`):
+**Your daily note** (`daily/2026-01-02.md`):
 ```markdown
 ---
-type: project
+type: date
 ---
-# Website Redesign
+# Thursday, January 2, 2026
 
-- @due(yesterday) @priority(high) Finalize mockups with [[people/alice]]
-- @due(next-week) Review copy
+Quick morning capture before the day starts.
+
+- @due(today) @priority(high) Send [[clients/acme]] proposal
+- Review notes from [[projects/mobile-app]] meeting
+- @highlight The key to good estimates: buffer time for unknowns
+
+## 10am Standup
+::meeting(id=standup, attendees=[[[people/sarah]], [[people/mike]]])
+
+Discussed blockers on the API integration. [[people/mike]] needs access to staging.
+
+- @due(tomorrow) Get Mike staging credentials
+- @due(next-week) Demo ready for [[clients/acme]]
 ```
 
-**3. Query from CLI**:
+**Querying your knowledge**:
 ```bash
-$ rvn trait due --value past
-projects/website.md:6  @due(yesterday)  Finalize mockups with [[people/alice]]
+$ rvn trait due --value today
+daily/2026-01-02.md:8   @due(today)    Send [[clients/acme]] proposal
 
-$ rvn backlinks people/alice
-projects/website.md:6  "Finalize mockups with [[people/alice]]"
+$ rvn date today
+# Daily Note: daily/2026-01-02.md
+
+# Due Today:
+  • Send [[clients/acme]] proposal (line 8)
+
+# Meetings:
+  • standup (10am) with sarah, mike
+
+$ rvn backlinks clients/acme
+daily/2026-01-02.md:8   "Send [[clients/acme]] proposal"
+daily/2026-01-02.md:14  "Demo ready for [[clients/acme]]"
+projects/mobile-app.md  "Client: [[clients/acme]]"
 ```
 
-**4. Or let an AI agent help**:
+**Or ask your AI assistant**:
 ```
-You: "What's overdue?"
-Claude: [calls raven_trait with due=past] 
-        "You have one overdue task: finalize mockups with Alice."
+You: "What do I owe Acme?"
 
-You: "Add a task to follow up with Alice tomorrow"
-Claude: [calls raven_add] 
-        "Done—added to your daily note."
+Claude: You have 2 things mentioning Acme:
+        • Send proposal (due today, high priority)
+        • Demo ready (due next week, for the mobile app project)
+
+You: "I just sent the proposal. Mark it done and add a follow-up for Monday."
+
+Claude: Done! Marked the proposal complete and added a follow-up for Monday to 
+        your daily note.
+
+You: "Create a new client for that lead I met yesterday - Beta Corp, Sarah's referral"
+
+Claude: Created clients/beta-corp.md. Want me to add any notes about them?
 ```
+
+**The power**: Your notes stay readable markdown. Types give structure. Traits make things queryable. References connect everything. And AI agents understand it all.
 
 ---
 
@@ -403,15 +423,19 @@ types:
   person:
     default_path: people/
     fields:
-      name:
-        type: string
-        required: true
-      email:
-        type: string
+      name: { type: string, required: true }
+      email: { type: string }
+
+  client:
+    default_path: clients/
+    fields:
+      name: { type: string, required: true }
+      contact: { type: ref, target: person }
 
   project:
     default_path: projects/
     fields:
+      client: { type: ref, target: client }
       status:
         type: enum
         values: [active, paused, completed]
