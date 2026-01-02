@@ -9,12 +9,34 @@ import (
 	"github.com/ravenscroftj/raven/internal/schema"
 )
 
+// IssueType categorizes validation issues for programmatic handling.
+type IssueType string
+
+const (
+	IssueUnknownType         IssueType = "unknown_type"
+	IssueMissingReference    IssueType = "missing_reference"
+	IssueUndefinedTrait      IssueType = "undefined_trait"
+	IssueUnknownFrontmatter  IssueType = "unknown_frontmatter_key"
+	IssueDuplicateID         IssueType = "duplicate_object_id"
+	IssueMissingRequiredField IssueType = "missing_required_field"
+	IssueMissingRequiredTrait IssueType = "missing_required_trait"
+	IssueInvalidEnumValue    IssueType = "invalid_enum_value"
+	IssueAmbiguousReference  IssueType = "ambiguous_reference"
+	IssueInvalidTraitValue   IssueType = "invalid_trait_value"
+	IssueParseError          IssueType = "parse_error"
+	IssueMissingEmbeddedID   IssueType = "missing_embedded_id"
+)
+
 // Issue represents a validation issue.
 type Issue struct {
-	Level    IssueLevel
-	FilePath string
-	Line     int
-	Message  string
+	Level      IssueLevel
+	Type       IssueType
+	FilePath   string
+	Line       int
+	Message    string
+	Value      string   // The problematic value (type name, trait name, ref, etc.)
+	FixCommand string   // Suggested command to fix the issue
+	FixHint    string   // Human-readable fix hint
 }
 
 // MissingRef represents a reference to a non-existent object.
@@ -143,10 +165,13 @@ func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 	for _, obj := range doc.Objects {
 		if _, exists := seenIDs[obj.ID]; exists {
 			issues = append(issues, Issue{
-				Level:    LevelError,
-				FilePath: doc.FilePath,
-				Line:     obj.LineStart,
-				Message:  fmt.Sprintf("Duplicate object ID '%s'", obj.ID),
+				Level:      LevelError,
+				Type:       IssueDuplicateID,
+				FilePath:   doc.FilePath,
+				Line:       obj.LineStart,
+				Message:    fmt.Sprintf("Duplicate object ID '%s'", obj.ID),
+				Value:      obj.ID,
+				FixHint:    "Rename one of the duplicate objects",
 			})
 		}
 		seenIDs[obj.ID] = struct{}{}
@@ -177,10 +202,14 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 	typeDef, typeExists := v.schema.Types[obj.ObjectType]
 	if !typeExists && obj.ObjectType != "page" && obj.ObjectType != "section" {
 		issues = append(issues, Issue{
-			Level:    LevelError,
-			FilePath: filePath,
-			Line:     obj.LineStart,
-			Message:  fmt.Sprintf("Unknown type '%s'", obj.ObjectType),
+			Level:      LevelError,
+			Type:       IssueUnknownType,
+			FilePath:   filePath,
+			Line:       obj.LineStart,
+			Message:    fmt.Sprintf("Unknown type '%s'", obj.ObjectType),
+			Value:      obj.ObjectType,
+			FixCommand: fmt.Sprintf("rvn schema add type %s", obj.ObjectType),
+			FixHint:    fmt.Sprintf("Add type '%s' to schema", obj.ObjectType),
 		})
 		return issues
 	}
@@ -192,9 +221,11 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 		if !containsHash(obj.ID) {
 			issues = append(issues, Issue{
 				Level:    LevelError,
+				Type:     IssueMissingEmbeddedID,
 				FilePath: filePath,
 				Line:     obj.LineStart,
 				Message:  "Embedded object missing 'id' field",
+				FixHint:  "Add 'id' parameter to the embedded object declaration",
 			})
 		}
 	}
@@ -205,9 +236,11 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 		for _, err := range fieldErrors {
 			issues = append(issues, Issue{
 				Level:    LevelError,
+				Type:     IssueMissingRequiredField,
 				FilePath: filePath,
 				Line:     obj.LineStart,
 				Message:  err.Error(),
+				FixHint:  "Add the required field to the file's frontmatter",
 			})
 		}
 
@@ -258,10 +291,14 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 				// Check if this trait is present in frontmatter
 				if _, hasField := obj.Fields[traitName]; !hasField {
 					issues = append(issues, Issue{
-						Level:    LevelError,
-						FilePath: filePath,
-						Line:     obj.LineStart,
-						Message:  fmt.Sprintf("Required trait '%s' missing for type '%s'", traitName, obj.ObjectType),
+						Level:      LevelError,
+						Type:       IssueMissingRequiredTrait,
+						FilePath:   filePath,
+						Line:       obj.LineStart,
+						Message:    fmt.Sprintf("Required trait '%s' missing for type '%s'", traitName, obj.ObjectType),
+						Value:      traitName,
+						FixCommand: fmt.Sprintf("rvn set %s %s=<value>", obj.ID, traitName),
+						FixHint:    fmt.Sprintf("Add '%s' to the file's frontmatter", traitName),
 					})
 				}
 			}
@@ -273,10 +310,14 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 				traitDef, traitExists := v.schema.Traits[traitName]
 				if !traitExists {
 					issues = append(issues, Issue{
-						Level:    LevelWarning,
-						FilePath: filePath,
-						Line:     obj.LineStart,
-						Message:  fmt.Sprintf("Trait '%s' used in type but not defined in schema", traitName),
+						Level:      LevelWarning,
+						Type:       IssueUndefinedTrait,
+						FilePath:   filePath,
+						Line:       obj.LineStart,
+						Message:    fmt.Sprintf("Trait '%s' used in type but not defined in schema", traitName),
+						Value:      traitName,
+						FixCommand: fmt.Sprintf("rvn schema add trait %s", traitName),
+						FixHint:    fmt.Sprintf("Add trait '%s' to schema", traitName),
 					})
 					continue
 				}
@@ -294,10 +335,14 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 						}
 						if !validValue {
 							issues = append(issues, Issue{
-								Level:    LevelError,
-								FilePath: filePath,
-								Line:     obj.LineStart,
-								Message:  fmt.Sprintf("Invalid value '%s' for trait '%s' (allowed: %v)", valueStr, traitName, traitDef.Values),
+								Level:      LevelError,
+								Type:       IssueInvalidEnumValue,
+								FilePath:   filePath,
+								Line:       obj.LineStart,
+								Message:    fmt.Sprintf("Invalid value '%s' for trait '%s' (allowed: %v)", valueStr, traitName, traitDef.Values),
+								Value:      valueStr,
+								FixCommand: fmt.Sprintf("rvn set %s %s=<valid_value>", obj.ID, traitName),
+								FixHint:    fmt.Sprintf("Change to one of: %v", traitDef.Values),
 							})
 						}
 					}
@@ -328,10 +373,14 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 			}
 			// Unknown key - error
 			issues = append(issues, Issue{
-				Level:    LevelError,
-				FilePath: filePath,
-				Line:     obj.LineStart,
-				Message:  fmt.Sprintf("Unknown frontmatter key '%s' for type '%s' (not a field or declared trait)", fieldName, obj.ObjectType),
+				Level:      LevelError,
+				Type:       IssueUnknownFrontmatter,
+				FilePath:   filePath,
+				Line:       obj.LineStart,
+				Message:    fmt.Sprintf("Unknown frontmatter key '%s' for type '%s' (not a field or declared trait)", fieldName, obj.ObjectType),
+				Value:      fieldName,
+				FixCommand: fmt.Sprintf("rvn schema add field %s %s", obj.ObjectType, fieldName),
+				FixHint:    fmt.Sprintf("Add field '%s' to type '%s', or remove it from the file", fieldName, obj.ObjectType),
 			})
 		}
 	}
@@ -346,10 +395,14 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 	traitDef, exists := v.schema.Traits[trait.TraitType]
 	if !exists {
 		issues = append(issues, Issue{
-			Level:    LevelWarning,
-			FilePath: filePath,
-			Line:     trait.Line,
-			Message:  fmt.Sprintf("Undefined trait '@%s' - add to schema with 'rvn schema add trait %s'", trait.TraitType, trait.TraitType),
+			Level:      LevelWarning,
+			Type:       IssueUndefinedTrait,
+			FilePath:   filePath,
+			Line:       trait.Line,
+			Message:    fmt.Sprintf("Undefined trait '@%s'", trait.TraitType),
+			Value:      trait.TraitType,
+			FixCommand: fmt.Sprintf("rvn schema add trait %s", trait.TraitType),
+			FixHint:    fmt.Sprintf("Add trait '%s' to schema", trait.TraitType),
 		})
 		// Track this undefined trait
 		v.trackUndefinedTrait(trait.TraitType, filePath, trait.Line, trait.HasValue())
@@ -362,9 +415,12 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 		if trait.HasValue() {
 			issues = append(issues, Issue{
 				Level:    LevelWarning,
+				Type:     IssueInvalidTraitValue,
 				FilePath: filePath,
 				Line:     trait.Line,
 				Message:  fmt.Sprintf("Trait '@%s' is a marker trait and should not have a value", trait.TraitType),
+				Value:    trait.TraitType,
+				FixHint:  fmt.Sprintf("Remove the value: use @%s instead of @%s(...)", trait.TraitType, trait.TraitType),
 			})
 		}
 	} else {
@@ -373,9 +429,12 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 			if traitDef.Default == nil {
 				issues = append(issues, Issue{
 					Level:    LevelWarning,
+					Type:     IssueInvalidTraitValue,
 					FilePath: filePath,
 					Line:     trait.Line,
 					Message:  fmt.Sprintf("Trait '@%s' expects a value", trait.TraitType),
+					Value:    trait.TraitType,
+					FixHint:  fmt.Sprintf("Add a value: @%s(<value>)", trait.TraitType),
 				})
 			}
 		} else if traitDef.Type == schema.FieldTypeEnum {
@@ -391,9 +450,12 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 			if !validValue {
 				issues = append(issues, Issue{
 					Level:    LevelError,
+					Type:     IssueInvalidEnumValue,
 					FilePath: filePath,
 					Line:     trait.Line,
 					Message:  fmt.Sprintf("Invalid value '%s' for trait '@%s' (allowed: %v)", valueStr, trait.TraitType, traitDef.Values),
+					Value:    valueStr,
+					FixHint:  fmt.Sprintf("Change to one of: %v", traitDef.Values),
 				})
 			}
 		}
@@ -416,16 +478,40 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 	if result.Ambiguous {
 		issues = append(issues, Issue{
 			Level:    LevelError,
+			Type:     IssueAmbiguousReference,
 			FilePath: filePath,
 			Line:     ref.Line,
 			Message:  fmt.Sprintf("Reference [[%s]] is ambiguous (matches: %v)", ref.TargetRaw, result.Matches),
+			Value:    ref.TargetRaw,
+			FixHint:  "Use a more specific path to disambiguate",
 		})
 	} else if result.TargetID == "" {
+		// Determine the fix command based on type inference
+		fixCmd := ""
+		fixHint := ""
+		if targetType != "" {
+			fixCmd = fmt.Sprintf("rvn new %s \"%s\"", targetType, ref.TargetRaw)
+			fixHint = fmt.Sprintf("Create the missing %s", targetType)
+		} else {
+			// Try to infer from path
+			inferredType, conf := v.inferTypeFromPath(ref.TargetRaw)
+			if conf == ConfidenceInferred {
+				fixCmd = fmt.Sprintf("rvn new %s \"%s\"", inferredType, ref.TargetRaw)
+				fixHint = fmt.Sprintf("Create the missing %s (inferred from path)", inferredType)
+			} else {
+				fixHint = "Create the missing page with 'rvn new <type> <title>'"
+			}
+		}
+
 		issues = append(issues, Issue{
-			Level:    LevelError,
-			FilePath: filePath,
-			Line:     ref.Line,
-			Message:  fmt.Sprintf("Reference [[%s]] not found", ref.TargetRaw),
+			Level:      LevelError,
+			Type:       IssueMissingReference,
+			FilePath:   filePath,
+			Line:       ref.Line,
+			Message:    fmt.Sprintf("Reference [[%s]] not found", ref.TargetRaw),
+			Value:      ref.TargetRaw,
+			FixCommand: fixCmd,
+			FixHint:    fixHint,
 		})
 
 		// Track this missing reference with type inference

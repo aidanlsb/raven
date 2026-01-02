@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,13 +23,48 @@ var (
 	checkCreateMissing bool
 )
 
+// CheckIssueJSON represents an issue in JSON output
+type CheckIssueJSON struct {
+	Type       string `json:"type"`
+	Level      string `json:"level"`
+	FilePath   string `json:"file_path"`
+	Line       int    `json:"line"`
+	Message    string `json:"message"`
+	Value      string `json:"value,omitempty"`
+	FixCommand string `json:"fix_command,omitempty"`
+	FixHint    string `json:"fix_hint,omitempty"`
+}
+
+// CheckSummaryJSON groups issues by type for easier agent processing
+type CheckSummaryJSON struct {
+	IssueType    string   `json:"issue_type"`
+	Count        int      `json:"count"`
+	UniqueValues int      `json:"unique_values,omitempty"` // Number of unique values (e.g., 5 different types)
+	FixCommand   string   `json:"fix_command,omitempty"`
+	FixHint      string   `json:"fix_hint,omitempty"`
+	TopValues    []string `json:"top_values,omitempty"` // Top 10 unique values (most common first)
+}
+
+// CheckResultJSON is the top-level JSON output
+type CheckResultJSON struct {
+	VaultPath  string             `json:"vault_path"`
+	FileCount  int                `json:"file_count"`
+	ErrorCount int                `json:"error_count"`
+	WarnCount  int                `json:"warning_count"`
+	Issues     []CheckIssueJSON   `json:"issues"`
+	Summary    []CheckSummaryJSON `json:"summary"`
+}
+
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Validate the vault",
 	Long:  `Checks all files for errors and warnings (type mismatches, broken references, etc.)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		fmt.Printf("Checking vault: %s\n", vaultPath)
+
+		if !jsonOutput {
+			fmt.Printf("Checking vault: %s\n", vaultPath)
+		}
 
 		// Load schema
 		s, err := schema.Load(vaultPath)
@@ -39,13 +75,25 @@ var checkCmd = &cobra.Command{
 		var errorCount, warningCount, fileCount int
 		var allDocs []*parser.ParsedDocument
 		var allObjectIDs []string
+		var allIssues []check.Issue
+		var parseErrors []check.Issue
 
 		// First pass: parse all documents and collect object IDs
 		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 			fileCount++
 
 			if result.Error != nil {
-				fmt.Printf("ERROR: %s - %v\n", result.RelativePath, result.Error)
+				if !jsonOutput {
+					fmt.Printf("ERROR: %s - %v\n", result.RelativePath, result.Error)
+				}
+				parseErrors = append(parseErrors, check.Issue{
+					Level:    check.LevelError,
+					Type:     check.IssueParseError,
+					FilePath: result.RelativePath,
+					Line:     1,
+					Message:  result.Error.Error(),
+					FixHint:  "Fix the YAML frontmatter or markdown syntax",
+				})
 				errorCount++
 				return nil
 			}
@@ -69,40 +117,56 @@ var checkCmd = &cobra.Command{
 			issues := validator.ValidateDocument(doc)
 
 			for _, issue := range issues {
-				prefix := "ERROR"
+				allIssues = append(allIssues, issue)
+
 				if issue.Level == check.LevelWarning {
-					prefix = "WARN"
 					warningCount++
 				} else {
 					errorCount++
 				}
 
-				fmt.Printf("%s:  %s:%d - %s\n", prefix, issue.FilePath, issue.Line, issue.Message)
-			}
-		}
-
-		fmt.Println()
-		if errorCount == 0 && warningCount == 0 {
-			fmt.Printf("✓ No issues found in %d files.\n", fileCount)
-		} else {
-			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
-		}
-
-		// Handle --create-missing
-		if checkCreateMissing {
-			missingRefs := validator.MissingRefs()
-			if len(missingRefs) > 0 {
-				created := handleMissingRefs(vaultPath, s, missingRefs)
-				if created > 0 {
-					fmt.Printf("\n✓ Created %d missing page(s).\n", created)
+				if !jsonOutput {
+					prefix := "ERROR"
+					if issue.Level == check.LevelWarning {
+						prefix = "WARN"
+					}
+					fmt.Printf("%s:  %s:%d - %s\n", prefix, issue.FilePath, issue.Line, issue.Message)
 				}
 			}
+		}
 
-			undefinedTraits := validator.UndefinedTraits()
-			if len(undefinedTraits) > 0 {
-				added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
-				if added > 0 {
-					fmt.Printf("\n✓ Added %d trait(s) to schema.\n", added)
+		// Add parse errors to all issues
+		allIssues = append(parseErrors, allIssues...)
+
+		// JSON output mode
+		if jsonOutput {
+			result := buildCheckJSON(vaultPath, fileCount, errorCount, warningCount, allIssues)
+			out, _ := json.MarshalIndent(result, "", "  ")
+			fmt.Println(string(out))
+		} else {
+			fmt.Println()
+			if errorCount == 0 && warningCount == 0 {
+				fmt.Printf("✓ No issues found in %d files.\n", fileCount)
+			} else {
+				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
+			}
+
+			// Handle --create-missing (interactive mode only)
+			if checkCreateMissing {
+				missingRefs := validator.MissingRefs()
+				if len(missingRefs) > 0 {
+					created := handleMissingRefs(vaultPath, s, missingRefs)
+					if created > 0 {
+						fmt.Printf("\n✓ Created %d missing page(s).\n", created)
+					}
+				}
+
+				undefinedTraits := validator.UndefinedTraits()
+				if len(undefinedTraits) > 0 {
+					added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
+					if added > 0 {
+						fmt.Printf("\n✓ Added %d trait(s) to schema.\n", added)
+					}
 				}
 			}
 		}
@@ -113,6 +177,96 @@ var checkCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// buildCheckJSON creates the structured JSON output for check command
+func buildCheckJSON(vaultPath string, fileCount, errorCount, warnCount int, issues []check.Issue) CheckResultJSON {
+	result := CheckResultJSON{
+		VaultPath:  vaultPath,
+		FileCount:  fileCount,
+		ErrorCount: errorCount,
+		WarnCount:  warnCount,
+		Issues:     make([]CheckIssueJSON, 0, len(issues)),
+	}
+
+	// Convert issues to JSON format
+	for _, issue := range issues {
+		result.Issues = append(result.Issues, CheckIssueJSON{
+			Type:       string(issue.Type),
+			Level:      issue.Level.String(),
+			FilePath:   issue.FilePath,
+			Line:       issue.Line,
+			Message:    issue.Message,
+			Value:      issue.Value,
+			FixCommand: issue.FixCommand,
+			FixHint:    issue.FixHint,
+		})
+	}
+
+	// Build summary - group by issue type, count unique values
+	typeCountMap := make(map[string]int)
+	typeValueCountMap := make(map[string]map[string]int) // issueType -> value -> count
+
+	for _, issue := range issues {
+		typeCountMap[string(issue.Type)]++
+		if typeValueCountMap[string(issue.Type)] == nil {
+			typeValueCountMap[string(issue.Type)] = make(map[string]int)
+		}
+		if issue.Value != "" {
+			typeValueCountMap[string(issue.Type)][issue.Value]++
+		}
+	}
+
+	// Convert to slice sorted by count
+	for issueType, count := range typeCountMap {
+		valueCounts := typeValueCountMap[issueType]
+
+		// Sort values by frequency (most common first)
+		type valueCount struct {
+			value string
+			count int
+		}
+		var sortedValues []valueCount
+		for v, c := range valueCounts {
+			sortedValues = append(sortedValues, valueCount{v, c})
+		}
+		sort.Slice(sortedValues, func(i, j int) bool {
+			return sortedValues[i].count > sortedValues[j].count
+		})
+
+		// Take top 10 values
+		topValues := make([]string, 0, 10)
+		for i := 0; i < len(sortedValues) && i < 10; i++ {
+			topValues = append(topValues, sortedValues[i].value)
+		}
+
+		// Find a representative fix command
+		fixCmd := ""
+		fixHint := ""
+		for _, issue := range issues {
+			if string(issue.Type) == issueType && issue.FixCommand != "" {
+				fixCmd = issue.FixCommand
+				fixHint = issue.FixHint
+				break
+			}
+		}
+
+		result.Summary = append(result.Summary, CheckSummaryJSON{
+			IssueType:    issueType,
+			Count:        count,
+			UniqueValues: len(valueCounts),
+			FixCommand:   fixCmd,
+			FixHint:      fixHint,
+			TopValues:    topValues,
+		})
+	}
+
+	// Sort summary by count descending
+	sort.Slice(result.Summary, func(i, j int) bool {
+		return result.Summary[i].Count > result.Summary[j].Count
+	})
+
+	return result
 }
 
 func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef) int {
