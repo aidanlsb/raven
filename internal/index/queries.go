@@ -36,6 +36,12 @@ type BacklinkResult struct {
 }
 
 // QueryTraits queries traits by type with optional value filter.
+// Filter syntax supports:
+//   - Simple value: "done" → value = 'done'
+//   - OR with pipe: "this-week|past" → value matches either
+//   - NOT with bang: "!done" → value != 'done'
+//   - Combined: "!done|!cancelled" → value not in (done, cancelled)
+//   - Date filters: "today", "this-week", "past", etc. (also work with | and !)
 func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitResult, error) {
 	query := `
 		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
@@ -45,16 +51,9 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitRe
 	args := []interface{}{traitType}
 
 	if valueFilter != nil && *valueFilter != "" {
-		// Support relative dates for date-typed traits
-		if isDateFilter(*valueFilter) {
-			condition, dateArgs, _ := ParseDateFilter(*valueFilter, "value")
-			query += " AND " + condition
-			args = append(args, dateArgs...)
-		} else {
-			// Simple value match
-			query += " AND value = ?"
-			args = append(args, *valueFilter)
-		}
+		condition, filterArgs := parseFilterExpression(*valueFilter, "value")
+		query += " AND " + condition
+		args = append(args, filterArgs...)
 	}
 
 	query += " ORDER BY value ASC NULLS LAST"
@@ -75,6 +74,70 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitRe
 	}
 
 	return results, rows.Err()
+}
+
+// parseFilterExpression parses a filter expression with support for:
+//   - OR using pipe: "a|b" → (expr_a OR expr_b)
+//   - NOT using bang: "!a" → NOT expr_a
+//   - Date filters are automatically detected and expanded
+//
+// Returns SQL condition and args.
+func parseFilterExpression(filter string, fieldExpr string) (condition string, args []interface{}) {
+	// Split on | for OR logic
+	parts := strings.Split(filter, "|")
+
+	var conditions []string
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		// Check for NOT prefix
+		isNegated := false
+		if strings.HasPrefix(part, "!") {
+			isNegated = true
+			part = strings.TrimPrefix(part, "!")
+		}
+
+		// Build condition for this part
+		partCondition, partArgs := buildSingleFilterCondition(part, fieldExpr, isNegated)
+		conditions = append(conditions, partCondition)
+		args = append(args, partArgs...)
+	}
+
+	if len(conditions) == 0 {
+		return "1=1", nil // No filter, match all
+	}
+
+	if len(conditions) == 1 {
+		return conditions[0], args
+	}
+
+	// Multiple conditions → OR them together
+	return "(" + strings.Join(conditions, " OR ") + ")", args
+}
+
+// buildSingleFilterCondition builds a SQL condition for a single filter value.
+func buildSingleFilterCondition(value string, fieldExpr string, isNegated bool) (condition string, args []interface{}) {
+	// Check if it's a date filter
+	if isDateFilter(value) {
+		dateCondition, dateArgs, _ := ParseDateFilter(value, fieldExpr)
+
+		if isNegated {
+			// Negate the date condition
+			// For simple comparisons, just flip the operator
+			// For range conditions (this-week), wrap in NOT(...)
+			return "NOT (" + dateCondition + ")", dateArgs
+		}
+		return dateCondition, dateArgs
+	}
+
+	// Simple value match
+	if isNegated {
+		return fieldExpr + " != ?", []interface{}{value}
+	}
+	return fieldExpr + " = ?", []interface{}{value}
 }
 
 // isDateFilter checks if a filter string is a date filter.

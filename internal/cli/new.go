@@ -262,8 +262,8 @@ Examples:
 
 		fmt.Printf("Created: %s\n", result.RelativePath)
 
-		// Open in editor (only in interactive mode)
-		vault.OpenInEditor(getConfig(), result.FilePath)
+		// Open in editor (or print path if no editor configured)
+		vault.OpenInEditorOrPrintPath(getConfig(), result.FilePath)
 
 		return nil
 	},
