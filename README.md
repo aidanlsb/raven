@@ -6,8 +6,8 @@
 
 <p align="center">
   <strong>
-    Plain markdown notes with user-defined schemas and queryable annotations.<br>
-    CLI-first. Agent-native.
+    Plain markdown notes with custom schemas and annotations for querying.<br>
+    Built around a CLI that enables agent-driven workflows.
   </strong>
 </p>
 
