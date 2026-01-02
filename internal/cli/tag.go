@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ravenscroftj/raven/internal/index"
-	"github.com/ravenscroftj/raven/internal/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -50,31 +49,6 @@ Examples:
 	},
 }
 
-func listAllTags(db *index.Database) error {
-	tags, err := db.QueryAllTags()
-	if err != nil {
-		return fmt.Errorf("failed to query tags: %w", err)
-	}
-
-	if len(tags) == 0 {
-		fmt.Println("No tags found in the vault.")
-		return nil
-	}
-
-	fmt.Printf("Tags (%d total):\n\n", len(tags))
-	for _, t := range tags {
-		countStr := fmt.Sprintf("%d", t.Count)
-		if t.Count == 1 {
-			countStr = "1 object"
-		} else {
-			countStr = fmt.Sprintf("%d objects", t.Count)
-		}
-		fmt.Printf("  #%-20s %s\n", t.Tag, countStr)
-	}
-
-	return nil
-}
-
 func listAllTagsWithJSON(db *index.Database, start time.Time) error {
 	tags, err := db.QueryAllTags()
 	if err != nil {
@@ -112,45 +86,6 @@ func listAllTagsWithJSON(db *index.Database, start time.Time) error {
 			countStr = fmt.Sprintf("%d objects", t.Count)
 		}
 		fmt.Printf("  #%-20s %s\n", t.Tag, countStr)
-	}
-
-	return nil
-}
-
-func queryTag(db *index.Database, vaultPath string, tagName string) error {
-	results, err := db.QueryTags(tagName)
-	if err != nil {
-		return fmt.Errorf("failed to query tag '%s': %w", tagName, err)
-	}
-
-	fmt.Printf("# #%s (%d)\n\n", tagName, len(results))
-
-	if len(results) == 0 {
-		fmt.Printf("No objects found with tag #%s.\n", tagName)
-		return nil
-	}
-
-	// Group by file path for cleaner output
-	byFile := make(map[string][]index.TagResult)
-	var files []string
-	for _, r := range results {
-		if _, exists := byFile[r.FilePath]; !exists {
-			files = append(files, r.FilePath)
-		}
-		byFile[r.FilePath] = append(byFile[r.FilePath], r)
-	}
-	sort.Strings(files)
-
-	for _, file := range files {
-		tags := byFile[file]
-		fmt.Printf("• %s\n", file)
-		for _, t := range tags {
-			if t.Line != nil {
-				fmt.Printf("    %s (line %d)\n", t.ObjectID, *t.Line)
-			} else {
-				fmt.Printf("    %s\n", t.ObjectID)
-			}
-		}
 	}
 
 	return nil
@@ -253,11 +188,3 @@ func init() {
 	rootCmd.AddCommand(tagCmd)
 }
 
-// Helper to load schema for completion (used by tag command)
-func loadSchemaForCompletion(vaultPath string) *schema.Schema {
-	s, err := schema.Load(vaultPath)
-	if err != nil {
-		return nil
-	}
-	return s
-}

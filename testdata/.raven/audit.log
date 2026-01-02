@@ -8,3 +8,4 @@
 {"ts":"2026-01-02T06:36:44.588361Z","op":"update","entity":"people/alice.md","id":"people/alice","changes":{"email":"alice@newdomain.com","role":"architect"}}
 {"ts":"2026-01-02T06:56:54.869114Z","op":"capture","entity":"file","id":"daily/2026-01-01.md","content":"- Test without timestamp"}
 {"ts":"2026-01-02T06:56:58.91577Z","op":"capture","entity":"file","id":"daily/2026-01-01.md","content":"- 22:56 Test with timestamp"}
+{"ts":"2026-01-02T09:21:46.813343Z","op":"capture","entity":"file","id":"daily/2026-01-02.md","content":"- - Test item with --double-dash--"}

@@ -124,34 +124,38 @@ func CLICommandName(toolName string) string {
 }
 
 // BuildCLIArgs builds CLI arguments from MCP tool arguments using the registry.
+//
+// ARGUMENT ORDERING STANDARD (strictly enforced):
+//  1. Command name (e.g., "edit", "schema add type")
+//  2. All flags with their values (--flag value)
+//  3. "--json" flag (always added for MCP)
+//  4. "--" separator (always added to prevent args starting with "-" from being parsed as flags)
+//  5. Positional arguments in registry-defined order
+//
+// This standard ensures consistent, predictable parsing regardless of argument content.
+// No special cases allowed - all commands must follow this pattern.
 func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	cmdName := CLICommandName(toolName)
 	meta, ok := commands.Registry[cmdName]
 	if !ok {
-		// Try with underscore version for subcommands
+		// Registry uses underscores (e.g., "schema_add_type"), 
+		// but CLICommandName returns spaces (e.g., "schema add type").
+		// Try with underscores.
 		underscoreName := strings.ReplaceAll(cmdName, " ", "_")
 		meta, ok = commands.Registry[underscoreName]
 		if !ok {
-			// Fall back to simple command name
-			return buildArgsSimple(cmdName, args)
+			// Commands MUST be in the registry. No fallback behavior.
+			// Return empty to trigger "unknown tool" error upstream.
+			return nil
 		}
 	}
 
 	var cliArgs []string
 
-	// Start with command name parts
+	// Step 1: Command name
 	cliArgs = strings.Fields(meta.Name)
 
-	// Add positional arguments in order
-	for _, arg := range meta.Args {
-		if val, ok := args[arg.Name]; ok {
-			if strVal, ok := val.(string); ok && strVal != "" {
-				cliArgs = append(cliArgs, strVal)
-			}
-		}
-	}
-
-	// Add flags
+	// Step 2: Collect all flags
 	for _, flag := range meta.Flags {
 		val, ok := args[flag.Name]
 		if !ok {
@@ -163,50 +167,58 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 			if boolVal, ok := val.(bool); ok && boolVal {
 				cliArgs = append(cliArgs, "--"+flag.Name)
 			}
-		case commands.FlagTypeKeyValue:
-			// Handle map of key-value pairs
-			if mapVal, ok := val.(map[string]interface{}); ok {
-				// Special case for 'set' command: fields are positional args
-				if cmdName == "set" && flag.Name == "fields" {
-					for k, v := range mapVal {
-						cliArgs = append(cliArgs, fmt.Sprintf("%s=%v", k, v))
-					}
-				} else {
-					// Default: use --flag key=value format
-					for k, v := range mapVal {
-						cliArgs = append(cliArgs, "--"+flag.Name, fmt.Sprintf("%s=%v", k, v))
+		case commands.FlagTypeInt:
+			if numVal, ok := val.(float64); ok {
+				cliArgs = append(cliArgs, "--"+flag.Name, fmt.Sprintf("%d", int(numVal)))
+			}
+		case commands.FlagTypeStringSlice:
+			// Comma-separated list becomes multiple flag invocations
+			if strVal, ok := val.(string); ok && strVal != "" {
+				for _, item := range strings.Split(strVal, ",") {
+					item = strings.TrimSpace(item)
+					if item != "" {
+						cliArgs = append(cliArgs, "--"+flag.Name, item)
 					}
 				}
 			}
-		default:
+		case commands.FlagTypeKeyValue:
+			// Key-value maps become key=value positional args AFTER the separator
+			// Handled in step 5 below
+			continue
+		default: // FlagTypeString
 			if strVal := toString(val); strVal != "" {
 				cliArgs = append(cliArgs, "--"+flag.Name, strVal)
 			}
 		}
 	}
 
-	// Always add --json for MCP
+	// Step 3: Always add --json for MCP
 	cliArgs = append(cliArgs, "--json")
 
-	return cliArgs
-}
+	// Step 4: ALWAYS add "--" separator before positional arguments
+	// This prevents ANY argument starting with "-" from being interpreted as a flag
+	cliArgs = append(cliArgs, "--")
 
-// buildArgsSimple is a fallback for commands not in the registry.
-func buildArgsSimple(cmdName string, args map[string]interface{}) []string {
-	cliArgs := strings.Fields(cmdName)
-
-	// Add all string args
-	for key, val := range args {
-		if strVal := toString(val); strVal != "" {
-			if len(key) == 1 {
-				cliArgs = append(cliArgs, "-"+key, strVal)
-			} else {
-				cliArgs = append(cliArgs, "--"+key, strVal)
+	// Step 5: Add positional arguments in registry-defined order
+	for _, arg := range meta.Args {
+		if val, ok := args[arg.Name]; ok {
+			if strVal, ok := val.(string); ok && strVal != "" {
+				cliArgs = append(cliArgs, strVal)
 			}
 		}
 	}
 
-	cliArgs = append(cliArgs, "--json")
+	// Step 5b: Add key-value pairs as positional args (e.g., "set" command's fields)
+	for _, flag := range meta.Flags {
+		if flag.Type == commands.FlagTypeKeyValue {
+			if mapVal, ok := args[flag.Name].(map[string]interface{}); ok {
+				for k, v := range mapVal {
+					cliArgs = append(cliArgs, fmt.Sprintf("%s=%v", k, v))
+				}
+			}
+		}
+	}
+
 	return cliArgs
 }
 

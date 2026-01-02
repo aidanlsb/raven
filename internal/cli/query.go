@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/index"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var queryCmd = &cobra.Command{
@@ -115,10 +113,6 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 		fmt.Printf("  %-12s %s\n", name, desc)
 	}
 	return nil
-}
-
-func runSavedQuery(db *index.Database, q *config.SavedQuery, name string) error {
-	return runSavedQueryWithJSON(db, q, name, time.Now())
 }
 
 func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time) error {
@@ -272,10 +266,6 @@ func formatTagList(tags []string) string {
 		formatted = append(formatted, "#"+t)
 	}
 	return strings.Join(formatted, " + ")
-}
-
-func runTraitQuery(db *index.Database, traitType string, valueFilter string) error {
-	return runTraitQueryWithJSON(db, traitType, valueFilter, time.Now())
 }
 
 func runTraitQueryWithJSON(db *index.Database, traitType string, valueFilter string, start time.Time) error {
@@ -433,7 +423,7 @@ Examples:
 		vaultCfg.Queries[queryName] = &newQuery
 
 		// Write back to raven.yaml
-		if err := writeVaultConfig(vaultPath, vaultCfg); err != nil {
+		if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
@@ -492,7 +482,7 @@ Examples:
 		delete(vaultCfg.Queries, queryName)
 
 		// Write back to raven.yaml
-		if err := writeVaultConfig(vaultPath, vaultCfg); err != nil {
+		if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
@@ -511,24 +501,6 @@ Examples:
 
 		return nil
 	},
-}
-
-// writeVaultConfig writes the vault config back to raven.yaml
-func writeVaultConfig(vaultPath string, cfg *config.VaultConfig) error {
-	configPath := vaultPath + "/raven.yaml"
-
-	// Marshal to YAML
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	// Write file
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write raven.yaml: %w", err)
-	}
-
-	return nil
 }
 
 func init() {
