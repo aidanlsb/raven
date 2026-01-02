@@ -1,12 +1,46 @@
-# Raven
+<p align="center">
+  <img src="assets/logo.svg" width="120" alt="Raven logo">
+</p>
 
-Structured notes in plain text. Define your own types (person, project, client), annotate with traits (`@due`, `@priority`), and query across your vault—all while keeping files as readable markdown. First-class AI agent support via MCP.
+<h1 align="center">Raven</h1>
+
+<p align="center">
+  <strong>Your notes, structured. Your AI, connected.</strong>
+</p>
+
+<p align="center">
+  Plain markdown files. Types, traits, and queries. First-class AI agent support.<br>
+  No lock-in. No proprietary formats. Just text files that happen to be <em>queryable</em>.
+</p>
+
+---
+
+**The pitch in 30 seconds:**
+
+```bash
+# Tag something as due today in your notes
+$ grep -r "@due(today)" ~/notes/
+# ...good luck.
+
+# Or with Raven:
+$ rvn trait due --value today
+daily/2026-01-02.md:8   "Send Acme proposal"    @due(today) @priority(high)
+projects/api.md:42      "Fix auth bug"          @due(today)
+
+# Even better—ask your AI:
+You: "What's due today?"
+Claude: You have 2 items due today:
+        • Send Acme proposal (high priority)
+        • Fix auth bug (from your API project)
+```
+
+Your notes stay **readable markdown**. Raven adds **structure** (types, traits, references) and **queryability** (CLI, SQLite index, AI agents via MCP).
 
 ---
 
 ## Quick Example
 
-You're a freelance consultant juggling clients, projects, and tasks. Here's a morning with Raven:
+You're a consultant juggling clients, projects, and tasks. Here's a morning with Raven:
 
 **Your daily note** (`daily/2026-01-02.md`):
 ```markdown
@@ -68,7 +102,7 @@ You: "Create a new client for that lead I met yesterday - Beta Corp, Sarah's ref
 Claude: Created clients/beta-corp.md. Want me to add any notes about them?
 ```
 
-**The power**: Your notes stay readable markdown. Types give structure. Traits make things queryable. References connect everything. And AI agents understand it all.
+**That's it.** Plain files. Structured data. AI that actually understands your notes.
 
 ---
 
