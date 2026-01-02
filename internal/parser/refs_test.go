@@ -53,13 +53,13 @@ func TestExtractEmbeddedRefs(t *testing.T) {
 	}{
 		{
 			name:  "array of refs",
-			value: "attendees=[[[alice]], [[bob]]]",
-			want:  []string{"alice", "bob"},
+			value: "attendees=[[[freya]], [[thor]]]",
+			want:  []string{"freya", "thor"},
 		},
 		{
 			name:  "single ref",
-			value: "[[people/alice]]",
-			want:  []string{"people/alice"},
+			value: "[[people/freya]]",
+			want:  []string{"people/freya"},
 		},
 	}
 

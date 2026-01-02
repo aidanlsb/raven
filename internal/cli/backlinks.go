@@ -14,9 +14,9 @@ var backlinksCmd = &cobra.Command{
 	Long: `Shows all references pointing to the specified object.
 
 Examples:
-  rvn backlinks people/alice
+  rvn backlinks people/freya
   rvn backlinks daily/2025-02-01#standup
-  rvn backlinks people/alice --json`,
+  rvn backlinks people/freya --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()

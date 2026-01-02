@@ -28,18 +28,18 @@ func TestValidatorBasic(t *testing.T) {
 		},
 	}
 
-	objectIDs := []string{"people/alice", "projects/website"}
+	objectIDs := []string{"people/freya", "projects/bifrost"}
 	v := NewValidator(s, objectIDs)
 
 	t.Run("valid document", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
-			FilePath: "people/alice.md",
+			FilePath: "people/freya.md",
 			Objects: []*parser.ParsedObject{
 				{
-					ID:         "people/alice",
+					ID:         "people/freya",
 					ObjectType: "person",
 					Fields: map[string]schema.FieldValue{
-						"name": schema.String("Alice"),
+						"name": schema.String("Freya"),
 					},
 				},
 			},
@@ -53,10 +53,10 @@ func TestValidatorBasic(t *testing.T) {
 
 	t.Run("missing required field", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
-			FilePath: "people/bob.md",
+			FilePath: "people/thor.md",
 			Objects: []*parser.ParsedObject{
 				{
-					ID:         "people/bob",
+					ID:         "people/thor",
 					ObjectType: "person",
 					Fields:     map[string]schema.FieldValue{}, // Missing 'name'
 				},
@@ -113,13 +113,13 @@ func TestValidatorBasic(t *testing.T) {
 				},
 			},
 			Refs: []*parser.ParsedRef{
-				{SourceID: "projects/website", TargetRaw: "people/alice", Line: 10},
+				{SourceID: "projects/bifrost", TargetRaw: "people/freya", Line: 10},
 			},
 		}
 
 		issues := v.ValidateDocument(doc)
 		for _, issue := range issues {
-			if strings.Contains(issue.Message, "not found") && strings.Contains(issue.Message, "alice") {
+			if strings.Contains(issue.Message, "not found") && strings.Contains(issue.Message, "freya") {
 				t.Errorf("Should not have error for valid reference: %v", issue)
 			}
 		}
@@ -138,17 +138,17 @@ func TestValidatorUnknownFrontmatterKey(t *testing.T) {
 		Traits: map[string]*schema.TraitDefinition{},
 	}
 
-	objectIDs := []string{"people/alice"}
+	objectIDs := []string{"people/freya"}
 	v := NewValidator(s, objectIDs)
 
 	doc := &parser.ParsedDocument{
-		FilePath: "people/alice.md",
+		FilePath: "people/freya.md",
 		Objects: []*parser.ParsedObject{
 			{
-				ID:         "people/alice",
+				ID:         "people/freya",
 				ObjectType: "person",
 				Fields: map[string]schema.FieldValue{
-					"name":          schema.String("Alice"),
+					"name":          schema.String("Freya"),
 					"unknown_field": schema.String("should trigger error"),
 				},
 			},

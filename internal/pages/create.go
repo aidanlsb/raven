@@ -24,7 +24,7 @@ type CreateOptions struct {
 	// If empty, derived from the target path.
 	Title string
 
-	// TargetPath is the relative path within the vault (e.g., "people/alice").
+	// TargetPath is the relative path within the vault (e.g., "people/freya").
 	// Will be slugified automatically.
 	TargetPath string
 
@@ -186,7 +186,7 @@ func Exists(vaultPath, targetPath string) bool {
 }
 
 // SlugifyPath slugifies each component of a path.
-// "people/Emily Jia" -> "people/emily-jia"
+// "people/Sif" -> "people/sif"
 // Also handles embedded object IDs: "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
 func SlugifyPath(path string) string {
 	// Remove .md extension if present

@@ -8,29 +8,29 @@ func TestParseDocument(t *testing.T) {
 	t.Run("simple document", func(t *testing.T) {
 		content := `---
 type: person
-name: Alice
+name: Freya
 ---
 
-# Alice
+# Freya
 
-Some content about Alice.
+Some content about Freya.
 `
-		doc, err := ParseDocument(content, "/vault/people/alice.md", "/vault")
+		doc, err := ParseDocument(content, "/vault/people/freya.md", "/vault")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if doc.FilePath != "people/alice.md" {
-			t.Errorf("FilePath = %q, want %q", doc.FilePath, "people/alice.md")
+		if doc.FilePath != "people/freya.md" {
+			t.Errorf("FilePath = %q, want %q", doc.FilePath, "people/freya.md")
 		}
 
-		// Should have file-level object + section for "# Alice"
+		// Should have file-level object + section for "# Freya"
 		if len(doc.Objects) != 2 {
 			t.Errorf("got %d objects, want 2", len(doc.Objects))
 		}
 
-		if doc.Objects[0].ID != "people/alice" {
-			t.Errorf("first object ID = %q, want %q", doc.Objects[0].ID, "people/alice")
+		if doc.Objects[0].ID != "people/freya" {
+			t.Errorf("first object ID = %q, want %q", doc.Objects[0].ID, "people/freya")
 		}
 
 		if doc.Objects[0].ObjectType != "person" {

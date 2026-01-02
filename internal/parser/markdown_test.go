@@ -109,7 +109,7 @@ func TestSlugify(t *testing.T) {
 	}{
 		{"Hello World", "hello-world"},
 		{"1:1 Topics", "1-1-topics"},
-		{"Alice Chen", "alice-chen"},
+		{"Thor Odinson", "thor-odinson"},
 		{"UPPERCASE", "uppercase"},
 		{"multiple   spaces", "multiple-spaces"},
 		{"special!@#chars", "specialchars"},

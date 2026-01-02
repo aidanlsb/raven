@@ -95,10 +95,10 @@ Objects are referenceable entities. They come in two forms:
 The file itself represents the object. Type declared in frontmatter.
 
 ```
-people/alice.md  →  Object(id="people/alice", type="person", ...)
+people/freya.md  →  Object(id="people/freya", type="person", ...)
 ```
 
-**Object ID**: The file path without extension (e.g., `people/alice`).
+**Object ID**: The file path without extension (e.g., `people/freya`).
 
 #### Embedded Objects (Explicit Types)
 A section within a file can be explicitly typed with `::type()` on the line after a heading.
@@ -191,18 +191,18 @@ Traits are annotations that attach metadata to content. They are:
 References create links between objects:
 
 ```markdown
-Met with [[people/alice]] about [[projects/website]].
+Met with [[people/freya]] about [[projects/website]].
 ```
 
 Both outgoing refs (what this note links to) and backlinks (what links to this note) are indexed.
 
 **Reference resolution**:
-- Use full path for clarity: `[[people/alice]]`
-- Short names allowed if unambiguous: `[[alice]]` works if only one `alice` exists
+- Use full path for clarity: `[[people/freya]]`
+- Short names allowed if unambiguous: `[[freya]]` works if only one `freya` exists
 - Embedded objects: `[[daily/2025-02-01#standup]]`
 - The `rvn check` command warns about ambiguous short references
 
-**Slugified matching**: References are matched using slugification, so `[[people/Emily Jia]]` will resolve to `people/emily-jia.md`. This allows natural inline references while maintaining clean, URL-safe filenames.
+**Slugified matching**: References are matched using slugification, so `[[people/Sif]]` will resolve to `people/sif.md`. This allows natural inline references while maintaining clean, URL-safe filenames.
 
 **Validation**: All references must resolve to existing objects. The `rvn check` command errors on broken references.
 
@@ -217,11 +217,11 @@ YAML frontmatter defines the file's type and fields:
 ```markdown
 ---
 type: person
-name: Alice Chen
-email: alice@example.com
+name: Freya
+email: freya@asgard.realm
 ---
 
-# Alice Chen
+# Freya
 
 Content here...
 ```
@@ -238,7 +238,7 @@ Declared with `::type()` on a heading:
 
 ```markdown
 ## Meeting Title
-::meeting(id=team-sync, time=2025-02-01T09:00, attendees=[[[people/alice]], [[people/bob]]])
+::meeting(id=team-sync, time=2025-02-01T09:00, attendees=[[[people/freya]], [[people/thor]]])
 
 Content of the meeting...
 ```
@@ -291,9 +291,9 @@ Only traits defined in `schema.yaml` are indexed and queryable. Undefined traits
 Wiki-style links:
 
 ```markdown
-[[people/alice]]               # Full path reference (preferred)
-[[alice]]                      # Short reference (if unambiguous)
-[[alice|Alice Chen]]           # Reference with display text
+[[people/freya]]               # Full path reference (preferred)
+[[freya]]                      # Short reference (if unambiguous)
+[[freya|Lady Freya]]           # Reference with display text
 [[daily/2025-02-01#standup]]   # Reference to embedded object
 ```
 
@@ -678,7 +678,7 @@ Both dates appear in `rvn trait due`:
 
 | Type | Description | Example |
 |------|-------------|---------|
-| `string` | Plain text | `name: "Alice"` |
+| `string` | Plain text | `name: "Freya"` |
 | `string[]` | Array of strings | `technologies: [rust, typescript]` |
 | `number` | Numeric value | `rating: 4.5` |
 | `number[]` | Array of numbers | `scores: [85, 92, 78]` |
@@ -687,8 +687,8 @@ Both dates appear in `rvn trait due`:
 | `datetime` | ISO 8601 datetime | `time: 2025-02-01T09:00` |
 | `enum` | One of specified values | `status: active` |
 | `bool` | Boolean | `archived: true` |
-| `ref` | Reference to another object | `author: [[people/alice]]` |
-| `ref[]` | Array of references | `attendees: [[[people/alice]], [[people/bob]]]` |
+| `ref` | Reference to another object | `author: [[people/freya]]` |
+| `ref[]` | Array of references | `attendees: [[[people/freya]], [[people/thor]]]` |
 
 ### Field Properties
 
@@ -726,12 +726,12 @@ types:
 ```
 
 **Behavior:**
-- `rvn new person "Alice"` creates `people/alice.md`
-- `rvn new person "Emily Jia"` creates `people/emily-jia.md` (slugified)
+- `rvn new person "Freya"` creates `people/freya.md`
+- `rvn new person "Sif"` creates `people/sif.md` (slugified)
 - The directory is created if it doesn't exist
 - If no `default_path` is set, files are created in the vault root
 - Filenames are always slugified (lowercase, spaces become hyphens)
-- The original title is preserved in the file's heading (e.g., `# Emily Jia`)
+- The original title is preserved in the file's heading (e.g., `# Sif`)
 
 **Important:** File location has **no effect on type**. A file's type is determined **solely** by its frontmatter `type:` field (or defaults to `page` if not specified). You can have a `person` file anywhere in your vault—Raven doesn't care about directory structure.
 
@@ -760,14 +760,14 @@ types:
 type: meeting
 time: 2025-02-01T09:00
 attendees:
-  - [[people/alice]]
-  - [[people/bob]]
+  - [[people/freya]]
+  - [[people/thor]]
 ---
 ```
 
 **Embedded** (inline with `::`):
 ```
-::meeting(id=standup, time=2025-02-01T09:00, attendees=[[[people/alice]], [[people/bob]]])
+::meeting(id=standup, time=2025-02-01T09:00, attendees=[[[people/freya]], [[people/thor]]])
    │       │           └── key=value field assignments
    │       └── required ID (unique within file)
    └── type name
@@ -791,8 +791,8 @@ For embedded type declarations (`::type(...)`), values use key=value pairs:
 |------------|--------|---------|
 | Simple value | `key=value` | `priority=high` |
 | Quoted string | `key="value"` | `title="My Project"` |
-| Single ref | `key=[[path]]` | `author=[[people/alice]]` |
-| Ref array | `key=[[[a]], [[b]]]` | `attendees=[[[people/alice]], [[people/bob]]]` |
+| Single ref | `key=[[path]]` | `author=[[people/freya]]` |
+| Ref array | `key=[[[a]], [[b]]]` | `attendees=[[[people/freya]], [[people/thor]]]` |
 | String array | `key=[a, b, c]` | `technologies=[rust, typescript]` |
 | Quoted string array | `key=["a b", "c d"]` | `topics=["Q2 planning", "budget"]` |
 | Date | `key=2025-02-01` | `due=2025-02-01` |
@@ -808,7 +808,7 @@ Traits use a simpler single-value syntax:
 | Date | `@name(YYYY-MM-DD)` | `@due(2025-02-01)` |
 | Datetime | `@name(YYYY-MM-DDTHH:MM)` | `@remind(2025-02-01T09:00)` |
 | Enum/String | `@name(value)` | `@priority(high)`, `@status(todo)` |
-| Reference | `@name([[path]])` | `@assignee([[people/alice]])` |
+| Reference | `@name([[path]])` | `@assignee([[people/freya]])` |
 
 **Note:** Unlike type declarations, traits take a single positional value only. Use multiple traits instead of multiple fields: `@due(2025-02-01) @priority(high)`
 
@@ -825,16 +825,16 @@ tags: [work]
 Morning coffee, reviewed [[projects/website-redesign]].
 
 ## Weekly Standup
-::meeting(id=standup, time=09:00, attendees=[[[people/alice]], [[people/bob]]], recurring=[[meetings/weekly-standup]])
+::meeting(id=standup, time=09:00, attendees=[[[people/freya]], [[people/thor]]], recurring=[[meetings/weekly-standup]])
 
-Discussed Q2 roadmap. [[people/alice]] raised concerns about timeline.
+Discussed Q2 roadmap. [[people/freya]] raised concerns about timeline.
 
-- @due(2025-02-03) @assignee([[people/alice]]) Send revised estimate
+- @due(2025-02-03) @assignee([[people/freya]]) Send revised estimate
 - Agreed to revisit next week
 - @highlight Key insight: we need more buffer time
 
-## 1:1 with Bob
-::meeting(id=one-on-one-bob, time=14:00, attendees=[[[people/bob]]])
+## 1:1 with Thor
+::meeting(id=one-on-one-thor, time=14:00, attendees=[[[people/thor]]])
 
 Talked about his career growth.
 
@@ -856,7 +856,7 @@ Started [[books/atomic-habits]] by [[people/james-clear]].
 
 **Object IDs in this example**:
 - File: `daily/2025-02-01`
-- Embedded: `daily/2025-02-01#standup`, `daily/2025-02-01#one-on-one-bob`
+- Embedded: `daily/2025-02-01#standup`, `daily/2025-02-01#one-on-one-thor`
 
 ---
 
@@ -875,7 +875,7 @@ Started [[books/atomic-habits]] by [[people/james-clear]].
 ├── daily/
 │   └── 2025-02-01.md
 ├── people/
-│   └── alice.md
+│   └── freya.md
 ├── projects/
 │   └── website.md
 └── books/
@@ -1141,12 +1141,12 @@ rvn query remove my-tasks                # Remove saved query
 
 # Query objects
 rvn query "type:person"
-rvn query "type:meeting attendees:[[people/alice]]"
+rvn query "type:meeting attendees:[[people/freya]]"
 rvn query "type:project status:active"
 
 # Show backlinks to a note
 rvn backlinks <target>
-rvn backlinks people/alice
+rvn backlinks people/freya
 rvn backlinks daily/2025-02-01#standup
 
 # Show index statistics
@@ -1167,12 +1167,12 @@ rvn date yesterday
 rvn date 2025-02-01
 
 # Create a new typed note
-rvn new person "Alice Chen"       # Creates people/alice-chen.md
+rvn new person "Freya"       # Creates people/freya-chen.md
 rvn new project "Website"         # Creates projects/website.md, prompts for required fields
 rvn new person                    # Prompts for title interactively
 
 # Quick capture
-rvn add "Call Alice about the project"
+rvn add "Call Odin about the Bifrost"
 rvn add "@due(tomorrow) Send estimate"
 rvn add "Idea" --to inbox.md      # Override destination
 
@@ -1266,7 +1266,7 @@ rvn trait task --status todo             # Tasks with status=todo
 rvn trait task --due today               # Due today
 rvn trait task --due this-week           # Due this week  
 rvn trait task --due overdue             # Past due
-rvn trait task --assignee [[people/bob]] # Assigned to Bob
+rvn trait task --assignee [[people/thor]] # Assigned to Thor
 rvn trait task --parent.type meeting     # Tasks inside meetings
 
 rvn trait remind --at today              # Reminders for today
@@ -1303,12 +1303,12 @@ rvn type --list                          # Show all types with object counts
 ```
 # person (2)
 
-• people/alice
-  email: alice@example.com, name: Alice Chen
-  people/alice.md:1
-• people/bob
-  email: bob@example.com, name: Bob Smith
-  people/bob.md:1
+• people/freya
+  email: freya@asgard.realm, name: Freya
+  people/freya.md:1
+• people/thor
+  email: thor@asgard.realm, name: Thor Odinson
+  people/thor.md:1
 ```
 
 Use `rvn type --list` to see all available types:
@@ -1345,8 +1345,8 @@ rvn tag --list                           # Show all tags with usage counts
     projects/website (line 1)
 • daily/2025-02-01.md
     daily/2025-02-01 (line 15)
-• people/alice.md
-    people/alice#current-work (line 20)
+• people/freya.md
+    people/freya#current-work (line 20)
 ```
 
 Use `rvn tag --list` to see all tags in your vault:
@@ -1371,7 +1371,7 @@ rvn add <text> --to <file>
 
 **Examples**:
 ```bash
-rvn add "Call Alice about the project"
+rvn add "Call Odin about the Bifrost"
 rvn add "@due(tomorrow) @priority(high) Send estimate"
 rvn add "Project idea" --to inbox.md
 ```
@@ -1415,8 +1415,8 @@ rvn set <object_id> <field=value>...
 
 **Examples**:
 ```bash
-rvn set people/alice email=alice@example.com
-rvn set people/alice name="Alice Chen" status=active
+rvn set people/freya email=freya@asgard.realm
+rvn set people/freya name="Freya" status=active
 rvn set projects/website priority=high
 ```
 
@@ -1431,10 +1431,10 @@ rvn set projects/website priority=high
 {
   "ok": true,
   "data": {
-    "file": "people/alice.md",
-    "object_id": "people/alice",
+    "file": "people/freya.md",
+    "object_id": "people/freya",
     "type": "person",
-    "updated_fields": {"email": "alice@example.com"}
+    "updated_fields": {"email": "freya@asgard.realm"}
   }
 }
 ```
@@ -1504,7 +1504,7 @@ rvn search "meeting AND notes"          # Boolean AND
 rvn search "meeting OR notes"           # Boolean OR
 rvn search "meeting NOT private"        # Boolean NOT
 rvn search "api" --type project         # Filter by type
-rvn search "alice" --limit 5            # Limit results
+rvn search "freya" --limit 5            # Limit results
 ```
 
 **Behavior**:
@@ -1639,7 +1639,7 @@ $ rvn check
 Checking 847 files...
 
 ERROR: daily/2025-02-01.md:15 - Missing required field 'id' in embedded type 'meeting'
-ERROR: projects/website.md:8 - Reference [[alice]] is ambiguous (matches: people/alice, clients/alice)
+ERROR: projects/bifrost.md:8 - Reference [[freya]] is ambiguous (matches: people/freya, clients/freya)
 WARN:  notes/random.md:23 - Undefined trait '@custom' will be skipped
 WARN:  books/old-book.md - No incoming references (orphan)
 
@@ -1656,11 +1656,11 @@ $ rvn check --create-missing
 --- Missing References ---
 
 Certain (from typed fields):
-  • people/carol → person (from daily/2025-01-01#team-sync.attendees)
-  • people/dan → person (from daily/2025-01-01#team-sync.attendees)
+  • people/baldur → person (from daily/2025-01-01#team-sync.attendees)
+  • people/heimdall → person (from daily/2025-01-01#team-sync.attendees)
 
 Create these pages? [Y/n] y
-  ✓ Created people/carol.md (type: person)
+  ✓ Created people/baldur.md (type: person)
   ✓ Created people/dan.md (type: person)
 
 Unknown type (please specify):
@@ -1811,7 +1811,7 @@ rvn --config /path/to/config.toml <command>
 ### Phase 2: Enhanced Querying
 
 1. **Query Language**
-   - Parse query strings like `type:meeting attendees:[[alice]]`
+   - Parse query strings like `type:meeting attendees:[[freya]]`
    - Support field filters with JSON extraction
    - Support date ranges (`due:this-week`)
    - Support parent filters (`parent.type:meeting`)
@@ -1956,7 +1956,7 @@ This section documents key design decisions made during planning.
 
 | Object Type | ID Format | Example |
 |-------------|-----------|---------|
-| File-level | Path without extension | `people/alice` |
+| File-level | Path without extension | `people/freya` |
 | Embedded (explicit) | Path + `#` + explicit ID | `daily/2025-02-01#standup` |
 | Section (auto) | Path + `#` + slugified heading | `daily/2025-02-01#morning` |
 
@@ -2219,8 +2219,8 @@ vault/
 │   ├── 2025-02-01.md
 │   └── 2025-02-02.md
 ├── people/
-│   ├── alice.md
-│   └── bob.md
+│   ├── freya.md
+│   └── thor.md
 ├── projects/
 │   ├── website-redesign.md
 │   └── mobile-app.md
@@ -2230,16 +2230,16 @@ vault/
     └── weekly-standup.md    # Recurring meeting series
 ```
 
-### Sample: `people/alice.md`
+### Sample: `people/freya.md`
 
 ```markdown
 ---
 type: person
-name: Alice Chen
-email: alice@example.com
+name: Freya
+email: freya@asgard.realm
 ---
 
-# Alice Chen
+# Freya
 
 Senior engineer on the platform team.
 
@@ -2258,10 +2258,10 @@ Senior engineer on the platform team.
 **Object IDs generated from this file**:
 | ID | Type | Heading |
 |----|------|---------|
-| `people/alice` | `person` | (file-level) |
-| `people/alice#alice-chen` | `section` | Alice Chen |
-| `people/alice#notes` | `section` | Notes |
-| `people/alice#1-1-topics` | `section` | 1:1 Topics |
+| `people/freya` | `person` | (file-level) |
+| `people/freya#early-life` | `section` | Early Life |
+| `people/freya#notes` | `section` | Notes |
+| `people/freya#1-1-topics` | `section` | 1:1 Topics |
 
 ### Sample: `daily/2025-02-01.md`
 
@@ -2279,12 +2279,12 @@ tags: [work]
 Reviewed [[projects/website-redesign]] progress. Looking good.
 
 ## Weekly Standup
-::meeting(id=standup, time=09:00, attendees=[[[people/alice]], [[people/bob]]])
+::meeting(id=standup, time=09:00, attendees=[[[people/freya]], [[people/thor]]])
 
 Discussed Q2 priorities.
 
 - @due(2025-02-03) Follow up on timeline
-- [[people/alice]] will send updated estimates
+- [[people/freya]] will send updated estimates
 
 ## Afternoon
 

@@ -41,7 +41,7 @@ type Issue struct {
 
 // MissingRef represents a reference to a non-existent object.
 type MissingRef struct {
-	TargetPath     string          // The reference path (e.g., "people/carol")
+	TargetPath     string          // The reference path (e.g., "people/baldur")
 	SourceFile     string          // File containing the reference
 	SourceObjectID string          // Full object ID where ref was found (e.g., "daily/2026-01-01#team-sync")
 	Line           int             // Line number

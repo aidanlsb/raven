@@ -32,11 +32,11 @@ By default, appends to today's daily note. Configure destination in raven.yaml.
 Timestamps are OFF by default; use --timestamp to include the current time.
 
 Examples:
-  rvn add "Call Alice about the project"
+  rvn add "Call Odin about the Bifrost"
   rvn add "@due(tomorrow) Send the estimate"
   rvn add "Project idea" --to inbox.md
-  rvn add "Called Tyler" --timestamp           # Includes time prefix
-  rvn add "Met with [[people/alice]]" --json
+  rvn add "Call Odin" --timestamp           # Includes time prefix
+  rvn add "Met with [[people/freya]]" --json
 
 Configuration (raven.yaml):
   capture:

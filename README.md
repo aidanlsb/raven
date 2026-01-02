@@ -18,8 +18,8 @@
 ```markdown
 # Thursday, January 2, 2026
 
-- @due(today) Send [[clients/acme]] proposal
-- @due(tomorrow) Get staging credentials for [[people/mike]]
+- @due(today) Send [[clients/midgard]] proposal
+- @due(tomorrow) Get Bifrost access for [[people/heimdall]]
 - @highlight Buffer time is the key to good estimates
 ```
 
@@ -27,21 +27,21 @@
 
 ```bash
 $ rvn trait due --value today
-daily/2026-01-02.md:3   "Send [[clients/acme]] proposal"   @due(today)
+daily/2026-01-02.md:3   "Send [[clients/midgard]] proposal"   @due(today)
 
-$ rvn backlinks clients/acme
-daily/2026-01-02.md     "Send [[clients/acme]] proposal"
-projects/mobile.md      "Client: [[clients/acme]]"
+$ rvn backlinks clients/midgard
+daily/2026-01-02.md     "Send [[clients/midgard]] proposal"
+projects/bifrost.md     "Client: [[clients/midgard]]"
 ```
 
 **Or ask an agent:**
 
 ```
-You: "What clients do I have meetings with this week?"
-Agent: Acme Corp - you're demoing the mobile app Friday.
+You: "What's due this week?"
+Agent: You have 3 items due - the Bifrost proposal for Midgard Corp is highest priority.
 
-You: "Create a project for their website redesign"
-Agent: Created projects/acme-website.md with Acme as the client.
+You: "Create a project for the Asgard security audit"
+Agent: Created projects/asgard-security-audit.md with due date next Friday.
 ```
 
 Plain markdown. Queryable structure. AI-native.
@@ -120,7 +120,7 @@ This creates:
 rvn daily
 
 # Quick capture a thought
-rvn add "Remember to call Alice about the project"
+rvn add "Call Odin about the Bifrost ceremony"
 
 # Build the index
 rvn reindex
@@ -142,16 +142,16 @@ A Raven file is just markdown with optional YAML frontmatter:
 ---
 type: project
 status: active
-client: "[[clients/acme]]"
+client: "[[clients/midgard]]"
 ---
 
-# Website Redesign
+# Bifrost Reconstruction
 
-Overhaul of the Acme Corp marketing site.
+Rebuilding the rainbow bridge between realms.
 
-- @due(2025-02-15) Finalize wireframes
-- @due(2025-03-01) Design review with [[people/alice]]
-- @highlight The mobile-first approach is working well
+- @due(2025-02-15) Finalize rune designs
+- @due(2025-03-01) Design review with [[people/freya]]
+- @highlight The crystalline approach is working well
 ```
 
 **What's happening here:**
@@ -207,11 +207,11 @@ Types define what objects **are**. They live in frontmatter:
 ```markdown
 ---
 type: person
-name: Alice Chen
-email: alice@example.com
+name: Freya
+email: freya@asgard.realm
 ---
 
-# Alice Chen
+# Freya
 
 Senior engineer on the platform team.
 ```
@@ -223,8 +223,8 @@ Senior engineer on the platform team.
 Create typed objects with the CLI:
 
 ```bash
-rvn new person "Alice Chen"        # → people/alice-chen.md
-rvn new project "Website Redesign" # → projects/website-redesign.md
+rvn new person "Freya"        # → people/freya.md
+rvn new project "Bifrost Rebuild"  # → projects/bifrost-rebuild.md
 ```
 
 ### Traits
@@ -263,10 +263,10 @@ rvn trait highlight              # All highlights
 **References** link notes together using wiki-style syntax:
 
 ```markdown
-Met with [[people/alice]] about [[projects/website]].
+Met with [[people/freya]] about [[projects/bifrost]].
 ```
 
-References auto-slugify: `[[people/Mr. Whatsit]]` resolves to `people/mr-whatsit.md`.
+References auto-slugify: `[[people/Thor Odinson]]` resolves to `people/thor-odinson.md`.
 
 **Tags** provide lightweight categorization:
 
@@ -277,7 +277,7 @@ Some thoughts about #productivity today.
 **Query them:**
 
 ```bash
-rvn backlinks people/alice       # What references Alice?
+rvn backlinks people/freya       # What references Freya?
 rvn tag productivity             # All #productivity items
 ```
 
@@ -540,17 +540,17 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 ### Example Agent Interactions
 
-> "Add Tyler as a person, she's my wife"
+> "Add Loki as a person, he's the trickster god"
 
-Agent uses `raven_new` → gets "missing required field: name" → asks you → retries with the field value → creates `people/tyler.md`
+Agent uses `raven_new` → gets "missing required field: name" → asks you → retries with the field value → creates `people/loki.md`
 
 > "What tasks do I have due this week?"
 
 Agent uses `raven_query` with `this-week` filter → returns structured results
 
-> "Add a note to the website project about the new design feedback"
+> "Add a note to the Bifrost project about the new rune designs"
 
-Agent uses `raven_add` with `--to projects/website.md` → appends to existing file
+Agent uses `raven_add` with `--to projects/bifrost.md` → appends to existing file
 
 ### Structured JSON Output
 
@@ -569,7 +569,7 @@ rvn trait due --value today --json
         "id": "...",
         "trait_type": "due",
         "value": "2025-01-01",
-        "file_path": "projects/website.md",
+        "file_path": "projects/bifrost.md",
         "line": 12
       }
     ]

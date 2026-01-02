@@ -7,7 +7,7 @@ This guide helps AI agents effectively use Raven to manage a user's knowledge ba
 **Raven** is a plain-markdown knowledge system with:
 - **Types**: Define what objects ARE (person, project, book) — declared in frontmatter
 - **Traits**: Annotations on content (@due, @priority, @highlight) — inline or frontmatter
-- **References**: Wiki-style links between notes ([[people/alice]])
+- **References**: Wiki-style links between notes ([[people/freya]])
 - **Schema**: User-defined in `schema.yaml` — types and traits must be defined here to be queryable
 
 ## Key Workflows
@@ -34,10 +34,10 @@ When users want to create notes:
 
 ```
 1. Use raven_new for typed objects:
-   raven_new(type="person", title="Alice Chen", field={"email": "alice@example.com"})
+   raven_new(type="person", title="Freya", field={"email": "freya@asgard.realm"})
    
 2. Use raven_add for quick capture:
-   raven_add(text="@due(tomorrow) Follow up with Alice")
+   raven_add(text="@due(tomorrow) Follow up with Odin")
    
 3. If a required field is missing, ask the user for the value
 ```
@@ -58,7 +58,7 @@ When users ask about their data:
    raven_search(query="meeting notes")
 
 4. Use raven_backlinks to find what references something:
-   raven_backlinks(target="people/alice")
+   raven_backlinks(target="people/freya")
 ```
 
 ### 4. Schema Discovery
@@ -80,7 +80,7 @@ When users want to modify existing notes:
 
 ```
 1. Use raven_set for frontmatter changes:
-   raven_set(object_id="people/alice", fields={"email": "new@example.com"})
+   raven_set(object_id="people/freya", fields={"email": "freya@asgard.realm"})
 
 2. Use raven_edit for content changes (requires unique string match):
    raven_edit(path="projects/website.md", old_str="Status: active", new_str="Status: completed", confirm=true)
@@ -95,7 +95,7 @@ When `raven_check` returns issues, here's how to fix them:
 | Issue Type | Meaning | Fix Command |
 |------------|---------|-------------|
 | `unknown_type` | File uses a type not in schema | `raven_schema_add_type(name="book")` |
-| `missing_reference` | Link to non-existent page | `raven_new(type="person", title="Alice")` |
+| `missing_reference` | Link to non-existent page | `raven_new(type="person", title="Freya")` |
 | `undefined_trait` | Trait not in schema | `raven_schema_add_trait(name="toread", type="boolean")` |
 | `unknown_frontmatter_key` | Field not defined for type | `raven_schema_add_field(type_name="person", field_name="company")` |
 | `missing_required_field` | Required field not set | `raven_set(object_id="...", fields={"name": "..."})` |
@@ -138,10 +138,10 @@ After bulk operations or schema changes:
 → Summarize results for user
 ```
 
-**User**: "Add a new person for my colleague Bob Smith"
+**User**: "Add a new person for my colleague Thor Odinson"
 ```
 → raven_schema(subcommand="type person")  # Check required fields
-→ raven_new(type="person", title="Bob Smith", field={"name": "Bob Smith"})
+→ raven_new(type="person", title="Thor Odinson", field={"name": "Thor Odinson"})
 ```
 
 **User**: "My vault has a lot of broken links, can you help fix them?"
@@ -149,8 +149,8 @@ After bulk operations or schema changes:
 → raven_check()
 → Review summary, explain to user
 → "I see 2798 missing references. The most-referenced missing pages are:
-    - 'consumer subs' (referenced 15 times)
-    - 'Daniel Sternberg' (referenced 12 times)
+    - 'bifrost-bridge' (referenced 15 times)
+    - 'Baldur' (referenced 12 times)
    Would you like me to create pages for the most common ones? What type should they be?"
 → Create pages based on user input
 ```

@@ -12,8 +12,8 @@ func TestSlugify(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"Alice", "alice"},
-		{"Emily Jia", "emily-jia"},
+		{"Freya", "freya"},
+		{"Sif", "sif"},
 		{"My Awesome Project", "my-awesome-project"},
 		{"UPPER CASE", "upper-case"},
 		{"test.md", "test"},
@@ -36,8 +36,8 @@ func TestSlugifyPath(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"people/Alice", "people/alice"},
-		{"people/Emily Jia", "people/emily-jia"},
+		{"people/Freya", "people/freya"},
+		{"people/Sif", "people/sif"},
 		{"projects/My Project/docs", "projects/my-project/docs"},
 		{"file.md", "file"},
 		{"path/to/file.md", "path/to/file"},
@@ -65,15 +65,15 @@ func TestCreate(t *testing.T) {
 		result, err := Create(CreateOptions{
 			VaultPath:  tmpDir,
 			TypeName:   "person",
-			Title:      "Alice Chen",
-			TargetPath: "people/alice-chen",
+			Title:      "Freya",
+			TargetPath: "people/freya",
 		})
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
 
-		if result.RelativePath != "people/alice-chen.md" {
-			t.Errorf("RelativePath = %q, want %q", result.RelativePath, "people/alice-chen.md")
+		if result.RelativePath != "people/freya.md" {
+			t.Errorf("RelativePath = %q, want %q", result.RelativePath, "people/freya.md")
 		}
 
 		// Verify file exists
@@ -91,8 +91,8 @@ func TestCreate(t *testing.T) {
 		if !strings.Contains(contentStr, "type: person") {
 			t.Error("File missing 'type: person' in frontmatter")
 		}
-		if !strings.Contains(contentStr, "# Alice Chen") {
-			t.Error("File missing '# Alice Chen' heading")
+		if !strings.Contains(contentStr, "# Freya") {
+			t.Error("File missing '# Freya' heading")
 		}
 	})
 
@@ -100,21 +100,21 @@ func TestCreate(t *testing.T) {
 		result, err := Create(CreateOptions{
 			VaultPath:  tmpDir,
 			TypeName:   "person",
-			Title:      "Emily Jia",
-			TargetPath: "people/Emily Jia", // Not pre-slugified
+			Title:      "Sif",
+			TargetPath: "people/Sif", // Not pre-slugified
 		})
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
 
 		// Path should be slugified
-		if result.SlugifiedPath != "people/emily-jia" {
-			t.Errorf("SlugifiedPath = %q, want %q", result.SlugifiedPath, "people/emily-jia")
+		if result.SlugifiedPath != "people/sif" {
+			t.Errorf("SlugifiedPath = %q, want %q", result.SlugifiedPath, "people/sif")
 		}
 
 		// But heading should preserve original
 		content, _ := os.ReadFile(result.FilePath)
-		if !strings.Contains(string(content), "# Emily Jia") {
+		if !strings.Contains(string(content), "# Sif") {
 			t.Error("File should preserve original title in heading")
 		}
 	})
@@ -127,7 +127,7 @@ func TestCreate(t *testing.T) {
 			TargetPath: "projects/website",
 			Fields: map[string]string{
 				"status": "active",
-				"owner":  "alice",
+				"owner":  "freya",
 			},
 		})
 		if err != nil {
@@ -140,8 +140,8 @@ func TestCreate(t *testing.T) {
 		if !strings.Contains(contentStr, "status: active") {
 			t.Error("File missing 'status: active' field")
 		}
-		if !strings.Contains(contentStr, "owner: alice") {
-			t.Error("File missing 'owner: alice' field")
+		if !strings.Contains(contentStr, "owner: freya") {
+			t.Error("File missing 'owner: freya' field")
 		}
 	})
 
@@ -169,28 +169,28 @@ func TestExists(t *testing.T) {
 	// Create a test file
 	testDir := filepath.Join(tmpDir, "people")
 	os.MkdirAll(testDir, 0755)
-	testFile := filepath.Join(testDir, "alice.md")
+	testFile := filepath.Join(testDir, "freya.md")
 	os.WriteFile(testFile, []byte("test"), 0644)
 
 	t.Run("file exists", func(t *testing.T) {
-		if !Exists(tmpDir, "people/alice") {
+		if !Exists(tmpDir, "people/freya") {
 			t.Error("Exists should return true for existing file")
 		}
 	})
 
 	t.Run("file does not exist", func(t *testing.T) {
-		if Exists(tmpDir, "people/bob") {
+		if Exists(tmpDir, "people/thor") {
 			t.Error("Exists should return false for non-existing file")
 		}
 	})
 
 	t.Run("slugified path exists", func(t *testing.T) {
-		// Create emily-jia.md
-		os.WriteFile(filepath.Join(testDir, "emily-jia.md"), []byte("test"), 0644)
+		// Create sif.md
+		os.WriteFile(filepath.Join(testDir, "sif.md"), []byte("test"), 0644)
 
 		// Should find it via non-slugified path
-		if !Exists(tmpDir, "people/Emily Jia") {
-			t.Error("Exists should find emily-jia.md via 'Emily Jia' path")
+		if !Exists(tmpDir, "people/Sif") {
+			t.Error("Exists should find sif.md via 'Sif' path")
 		}
 	})
 }

@@ -16,11 +16,11 @@ func TestParseFrontmatter(t *testing.T) {
 			name: "basic frontmatter",
 			content: `---
 type: person
-name: Alice
+name: Freya
 tags: [friend, colleague]
 ---
 
-# Alice
+# Freya
 
 Some content`,
 			wantType: "person",
@@ -34,8 +34,8 @@ Some content`,
 		{
 			name: "frontmatter without type",
 			content: `---
-name: Alice
-email: alice@example.com
+name: Freya
+email: freya@asgard.realm
 ---
 
 Content here`,
