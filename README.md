@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/logo.svg" alt="Raven" width="200">
-</p>
-
 # Raven
 
 Structured notes in plain text. Define types (person, project, meeting), annotate with traits (`@due`, `@priority`), and query across your vault—all while keeping files as readable markdown. First-class AI agent support via MCP.
