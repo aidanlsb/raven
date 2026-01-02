@@ -374,17 +374,27 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 		}
 	}
 
-	// Then, index inline traits
+	// Then, index inline traits (only if defined in schema)
 	for _, trait := range doc.Traits {
+		// Skip undefined traits - schema is source of truth
+		if sch != nil {
+			if _, defined := sch.Traits[trait.TraitType]; !defined {
+				continue // Skip indexing undefined traits
+			}
+		}
+
 		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, traitIdx)
 		traitIdx++
 
-		// Get value as string (or nil for boolean traits)
+		// Get value as string, applying schema defaults for bare traits
 		var valueStr interface{}
 		if trait.Value != nil {
 			if s, ok := trait.Value.AsString(); ok {
 				valueStr = s
 			}
+		} else {
+			// Bare trait with no value - check schema for default
+			valueStr = getTraitDefault(sch, trait.TraitType)
 		}
 
 		_, execErr := traitStmt.Exec(
@@ -450,6 +460,13 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 	}
 
 	for idx, trait := range doc.Traits {
+		// Skip undefined traits - schema is source of truth
+		if sch != nil {
+			if _, defined := sch.Traits[trait.TraitType]; !defined {
+				continue
+			}
+		}
+
 		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, idx)
 		// For single-value traits, check if the value is a date
 		if trait.Value != nil {
@@ -642,4 +659,43 @@ func fieldsToMap(fields map[string]schema.FieldValue) map[string]interface{} {
 		result[k] = v.Raw()
 	}
 	return result
+}
+
+// getTraitDefault returns the default value for a trait from the schema.
+// For boolean traits with default: true, returns "true".
+// For other traits, returns the default value as a string, or nil if no default.
+func getTraitDefault(sch *schema.Schema, traitType string) interface{} {
+	if sch == nil {
+		return nil
+	}
+
+	traitDef, exists := sch.Traits[traitType]
+	if !exists || traitDef == nil {
+		return nil
+	}
+
+	// If no default is defined, return nil
+	if traitDef.Default == nil {
+		// For boolean traits without explicit default, the presence of the trait
+		// implies "true" - this is the expected UX for bare boolean traits
+		if traitDef.IsBoolean() {
+			return "true"
+		}
+		return nil
+	}
+
+	// Convert default value to string for storage
+	switch v := traitDef.Default.(type) {
+	case string:
+		return v
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case int, int64, float64:
+		return fmt.Sprintf("%v", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }

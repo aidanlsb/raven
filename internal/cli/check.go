@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/ravenscroftj/raven/internal/schema"
 	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -93,6 +95,14 @@ var checkCmd = &cobra.Command{
 				created := handleMissingRefs(vaultPath, s, missingRefs)
 				if created > 0 {
 					fmt.Printf("\n✓ Created %d missing page(s).\n", created)
+				}
+			}
+
+			undefinedTraits := validator.UndefinedTraits()
+			if len(undefinedTraits) > 0 {
+				added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
+				if added > 0 {
+					fmt.Printf("\n✓ Added %d trait(s) to schema.\n", added)
 				}
 			}
 		}
@@ -209,9 +219,9 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 				continue
 			}
 
-			// Validate type exists
+			// Validate type exists, offer to create if not
 			if _, exists := s.Types[response]; !exists {
-				fmt.Printf("  ✗ Unknown type '%s', skipping %s\n", response, ref.TargetPath)
+				created += handleNewTypeCreation(vaultPath, s, ref, response, sluggedPath, reader)
 				continue
 			}
 
@@ -225,6 +235,288 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	}
 
 	return created
+}
+
+// handleUndefinedTraits prompts the user to add undefined traits to the schema.
+// Returns the number of traits added.
+func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.UndefinedTrait) int {
+	if len(traits) == 0 {
+		return 0
+	}
+
+	// Sort by usage count (most used first)
+	sort.Slice(traits, func(i, j int) bool {
+		return traits[i].UsageCount > traits[j].UsageCount
+	})
+
+	fmt.Println("\n--- Undefined Traits ---")
+	fmt.Println("\nThe following traits are used but not defined in schema.yaml:")
+	for _, trait := range traits {
+		valueInfo := "no value"
+		if trait.HasValue {
+			valueInfo = "with value"
+		}
+		fmt.Printf("  • @%s (%d usages, %s)\n", trait.TraitName, trait.UsageCount, valueInfo)
+		for _, loc := range trait.Locations {
+			fmt.Printf("      %s\n", loc)
+		}
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	added := 0
+
+	fmt.Println("\nWould you like to add these traits to the schema?")
+
+	for _, trait := range traits {
+		fmt.Printf("\nAdd '@%s' to schema? [y/N] ", trait.TraitName)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		if response != "y" && response != "yes" {
+			fmt.Printf("  Skipped @%s\n", trait.TraitName)
+			continue
+		}
+
+		// Determine trait type
+		traitType := promptTraitType(trait, reader)
+		if traitType == "" {
+			fmt.Printf("  Skipped @%s\n", trait.TraitName)
+			continue
+		}
+
+		// Get additional options based on type
+		var enumValues []string
+		var defaultValue string
+
+		if traitType == "enum" {
+			fmt.Printf("  Enum values (comma-separated, e.g., 'low,medium,high'): ")
+			valuesStr, _ := reader.ReadString('\n')
+			valuesStr = strings.TrimSpace(valuesStr)
+			if valuesStr != "" {
+				enumValues = strings.Split(valuesStr, ",")
+				for i := range enumValues {
+					enumValues[i] = strings.TrimSpace(enumValues[i])
+				}
+			}
+		}
+
+		if traitType == "boolean" || traitType == "enum" {
+			fmt.Printf("  Default value (or leave empty): ")
+			defaultValue, _ = reader.ReadString('\n')
+			defaultValue = strings.TrimSpace(defaultValue)
+		}
+
+		// Create the trait
+		if err := createNewTrait(vaultPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
+			fmt.Printf("  ✗ Failed to add @%s: %v\n", trait.TraitName, err)
+			continue
+		}
+
+		fmt.Printf("  ✓ Added trait '@%s' (type: %s) to schema.yaml\n", trait.TraitName, traitType)
+		added++
+	}
+
+	return added
+}
+
+// promptTraitType asks the user what type a trait should be.
+func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
+	// Suggest a type based on usage
+	suggested := "boolean"
+	if trait.HasValue {
+		suggested = "string"
+	}
+
+	fmt.Printf("  Type for @%s? [boolean/string/date/enum] (default: %s): ", trait.TraitName, suggested)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+
+	if response == "" {
+		return suggested
+	}
+
+	validTypes := map[string]bool{
+		"boolean": true, "bool": true,
+		"string": true,
+		"date": true,
+		"datetime": true,
+		"enum": true,
+		"ref": true,
+	}
+
+	// Normalize bool -> boolean
+	if response == "bool" {
+		response = "boolean"
+	}
+
+	if !validTypes[response] {
+		fmt.Printf("  Invalid type '%s'\n", response)
+		return ""
+	}
+
+	return response
+}
+
+// createNewTrait adds a new trait to schema.yaml.
+func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType string, enumValues []string, defaultValue string) error {
+	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+
+	// Read current schema file
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to read schema: %w", err)
+	}
+
+	// Parse as YAML to modify
+	var schemaDoc map[string]interface{}
+	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
+		return fmt.Errorf("failed to parse schema: %w", err)
+	}
+
+	// Ensure traits map exists
+	traits, ok := schemaDoc["traits"].(map[string]interface{})
+	if !ok {
+		traits = make(map[string]interface{})
+		schemaDoc["traits"] = traits
+	}
+
+	// Build new trait definition
+	newTrait := make(map[string]interface{})
+	newTrait["type"] = traitType
+
+	if len(enumValues) > 0 {
+		newTrait["values"] = enumValues
+	}
+
+	if defaultValue != "" {
+		// Convert "true"/"false" to boolean for boolean traits
+		if traitType == "boolean" {
+			if defaultValue == "true" {
+				newTrait["default"] = true
+			} else if defaultValue == "false" {
+				newTrait["default"] = false
+			}
+		} else {
+			newTrait["default"] = defaultValue
+		}
+	}
+
+	traits[traitName] = newTrait
+
+	// Write back
+	output, err := yaml.Marshal(schemaDoc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal schema: %w", err)
+	}
+
+	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+		return fmt.Errorf("failed to write schema: %w", err)
+	}
+
+	// Update the in-memory schema
+	s.Traits[traitName] = &schema.TraitDefinition{
+		Type:   schema.FieldType(traitType),
+		Values: enumValues,
+	}
+	if defaultValue != "" {
+		if traitType == "boolean" {
+			s.Traits[traitName].Default = defaultValue == "true"
+		} else {
+			s.Traits[traitName].Default = defaultValue
+		}
+	}
+
+	return nil
+}
+
+// handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
+// Returns the number of pages created (0 or 1).
+func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName, sluggedPath string, reader *bufio.Reader) int {
+	fmt.Printf("\n  Type '%s' doesn't exist. Would you like to create it? [y/N] ", typeName)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+
+	if response != "y" && response != "yes" {
+		fmt.Printf("  Skipped %s\n", ref.TargetPath)
+		return 0
+	}
+
+	// Prompt for default_path (optional)
+	fmt.Printf("  Default path for '%s' files (e.g., '%s/', or leave empty): ", typeName, typeName+"s")
+	defaultPath, _ := reader.ReadString('\n')
+	defaultPath = strings.TrimSpace(defaultPath)
+
+	// Create the type
+	if err := createNewType(vaultPath, s, typeName, defaultPath); err != nil {
+		fmt.Printf("  ✗ Failed to create type '%s': %v\n", typeName, err)
+		return 0
+	}
+	fmt.Printf("  ✓ Created type '%s' in schema.yaml\n", typeName)
+	if defaultPath != "" {
+		fmt.Printf("    default_path: %s\n", defaultPath)
+	}
+
+	// Now create the page with the new type
+	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName); err != nil {
+		fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
+		return 0
+	}
+	fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, typeName)
+	return 1
+}
+
+// createNewType adds a new type to schema.yaml.
+func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath string) error {
+	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+
+	// Check built-in types
+	if typeName == "page" || typeName == "section" || typeName == "date" {
+		return fmt.Errorf("'%s' is a built-in type", typeName)
+	}
+
+	// Read current schema file
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to read schema: %w", err)
+	}
+
+	// Parse as YAML to modify
+	var schemaDoc map[string]interface{}
+	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
+		return fmt.Errorf("failed to parse schema: %w", err)
+	}
+
+	// Ensure types map exists
+	types, ok := schemaDoc["types"].(map[string]interface{})
+	if !ok {
+		types = make(map[string]interface{})
+		schemaDoc["types"] = types
+	}
+
+	// Build new type definition
+	newType := make(map[string]interface{})
+	if defaultPath != "" {
+		newType["default_path"] = defaultPath
+	}
+
+	types[typeName] = newType
+
+	// Write back
+	output, err := yaml.Marshal(schemaDoc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal schema: %w", err)
+	}
+
+	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+		return fmt.Errorf("failed to write schema: %w", err)
+	}
+
+	// Update the in-memory schema so subsequent page creation works
+	s.Types[typeName] = &schema.TypeDefinition{
+		DefaultPath: defaultPath,
+	}
+
+	return nil
 }
 
 // createMissingPage creates a new page file using the pages package.

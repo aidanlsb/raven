@@ -28,6 +28,16 @@ type MissingRef struct {
 	FieldSource    string          // If from a typed field, the field name (e.g., "attendees")
 }
 
+// UndefinedTrait represents a trait used but not defined in schema.
+type UndefinedTrait struct {
+	TraitName  string   // The trait name (without @)
+	SourceFile string   // First file where it was found
+	Line       int      // First line where it was found
+	HasValue   bool     // Whether it was used with a value
+	UsageCount int      // Number of times it appears
+	Locations  []string // File:line locations (up to 5)
+}
+
 // InferConfidence indicates how confident we are about type inference.
 type InferConfidence int
 
@@ -69,10 +79,11 @@ func (l IssueLevel) String() string {
 
 // Validator validates documents against a schema.
 type Validator struct {
-	schema      *schema.Schema
-	resolver    *resolver.Resolver
-	allIDs      map[string]struct{}
-	missingRefs map[string]*MissingRef // Keyed by target path to dedupe
+	schema           *schema.Schema
+	resolver         *resolver.Resolver
+	allIDs           map[string]struct{}
+	missingRefs      map[string]*MissingRef      // Keyed by target path to dedupe
+	undefinedTraits  map[string]*UndefinedTrait  // Keyed by trait name to dedupe
 }
 
 // NewValidator creates a new validator.
@@ -83,10 +94,11 @@ func NewValidator(s *schema.Schema, objectIDs []string) *Validator {
 	}
 
 	return &Validator{
-		schema:      s,
-		resolver:    resolver.New(objectIDs),
-		allIDs:      allIDs,
-		missingRefs: make(map[string]*MissingRef),
+		schema:          s,
+		resolver:        resolver.New(objectIDs),
+		allIDs:          allIDs,
+		missingRefs:     make(map[string]*MissingRef),
+		undefinedTraits: make(map[string]*UndefinedTrait),
 	}
 }
 
@@ -97,6 +109,15 @@ func (v *Validator) MissingRefs() []*MissingRef {
 		refs = append(refs, ref)
 	}
 	return refs
+}
+
+// UndefinedTraits returns all undefined traits collected during validation.
+func (v *Validator) UndefinedTraits() []*UndefinedTrait {
+	traits := make([]*UndefinedTrait, 0, len(v.undefinedTraits))
+	for _, trait := range v.undefinedTraits {
+		traits = append(traits, trait)
+	}
+	return traits
 }
 
 // inferTypeFromPath tries to match a path to a type's default_path.
@@ -328,8 +349,10 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 			Level:    LevelWarning,
 			FilePath: filePath,
 			Line:     trait.Line,
-			Message:  fmt.Sprintf("Undefined trait '@%s' will be skipped", trait.TraitType),
+			Message:  fmt.Sprintf("Undefined trait '@%s' - add to schema with 'rvn schema add trait %s'", trait.TraitType, trait.TraitType),
 		})
+		// Track this undefined trait
+		v.trackUndefinedTrait(trait.TraitType, filePath, trait.Line, trait.HasValue())
 		return issues
 	}
 
@@ -453,6 +476,33 @@ func (v *Validator) trackMissingRef(targetPath, sourceFile, sourceObjectID strin
 	}
 
 	v.missingRefs[normalizedPath] = missing
+}
+
+// trackUndefinedTrait records an undefined trait for later reporting.
+func (v *Validator) trackUndefinedTrait(traitName, sourceFile string, line int, hasValue bool) {
+	location := fmt.Sprintf("%s:%d", sourceFile, line)
+
+	if existing, ok := v.undefinedTraits[traitName]; ok {
+		existing.UsageCount++
+		// Track if any usage has a value
+		if hasValue {
+			existing.HasValue = true
+		}
+		// Keep up to 5 example locations
+		if len(existing.Locations) < 5 {
+			existing.Locations = append(existing.Locations, location)
+		}
+		return
+	}
+
+	v.undefinedTraits[traitName] = &UndefinedTrait{
+		TraitName:  traitName,
+		SourceFile: sourceFile,
+		Line:       line,
+		HasValue:   hasValue,
+		UsageCount: 1,
+		Locations:  []string{location},
+	}
 }
 
 func containsHash(s string) bool {
