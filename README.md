@@ -97,12 +97,7 @@ go install ./cmd/rvn  # Install to $GOPATH/bin
 ### Initialize a Vault
 
 ```bash
-# Create a new vault
 rvn init ~/notes
-
-# Set as your default vault
-mkdir -p ~/.config/raven
-echo 'default_vault = "/Users/you/notes"' > ~/.config/raven/config.toml
 ```
 
 This creates:
@@ -110,6 +105,23 @@ This creates:
 - `schema.yaml` — your types and traits definitions
 - `.raven/` — index directory (gitignored)
 - `.gitignore` — ignores derived files
+
+### Configure Your Default Vault
+
+Create a global config file so `rvn` knows where your vault is:
+
+```bash
+mkdir -p ~/.config/raven
+```
+
+Then create `~/.config/raven/config.toml`:
+
+```toml
+default_vault = "/Users/you/notes"
+editor = "cursor"  # or "code", "vim", etc.
+```
+
+Now you can run `rvn` commands from anywhere without specifying `--vault`.
 
 ### Start Writing
 
