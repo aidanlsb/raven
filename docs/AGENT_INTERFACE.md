@@ -2,6 +2,8 @@
 
 This document details specific improvements to make Raven an excellent tool for LLM agents to interact with. The goal is to make Raven a first-class "memory layer" that agents can read, write, and query reliably.
 
+> **Note**: This document contains both implemented features and design proposals. See the Implementation Status table below for current state. Some sections describe proposed `rvn object` commands that were implemented with different names (`rvn new`, `rvn set`, `rvn delete`, `rvn read`). See `README.md` and `docs/SPECIFICATION.md` for the authoritative command reference.
+
 ---
 
 ## Implementation Status
@@ -14,10 +16,11 @@ This document details specific improvements to make Raven an excellent tool for 
 | Schema introspection (`rvn schema`) | ✅ Implemented | Types, traits, commands discovery |
 | MCP Server (`rvn serve`) | ✅ Implemented | Full JSON-RPC 2.0 over stdin/stdout |
 | Object creation (`rvn new`) | ✅ Implemented | With `--field` flags for required fields |
+| Object update (`rvn set`) | ✅ Implemented | Update frontmatter fields |
 | Object deletion (`rvn delete`) | ✅ Implemented | Trash by default, backlink warnings |
-| Schema editing (`rvn schema add`) | ✅ Implemented | Add types, traits, fields |
+| Schema editing (`rvn schema add/update/remove`) | ✅ Implemented | Full schema modification with integrity checks |
 | Read raw content (`rvn read`) | ✅ Implemented | For agent file access |
-| Quick capture (`rvn add`) | ✅ Implemented | With reference validation |
+| Quick capture (`rvn add`) | ✅ Implemented | With reference validation, timestamps opt-in |
 | Audit log | ✅ Implemented | Configurable in `raven.yaml` |
 | Batch operations | 🔮 Future | See docs/FUTURE.md |
 | Full-text search | 🔮 Future | See docs/FUTURE.md |
@@ -657,9 +660,8 @@ rvn object create --input '{"type": "person", ...}' --json
 rvn object get people/alice --json
 rvn object get daily/2025-02-01#standup --json
 
-# Update
-rvn object update people/alice --set email="new@email.com" --json
-rvn object update people/alice --input '{"set": {"email": "..."}}' --json
+# Update (using rvn set)
+rvn set people/alice email="new@email.com" --json
 
 # Delete
 rvn object delete people/old-contact --json
@@ -1545,10 +1547,10 @@ Each CLI command becomes an MCP tool:
 | `raven_schema_type` | Get type details |
 | `raven_schema_trait` | Get trait details |
 | `raven_object_list` | List objects with filters |
-| `raven_object_get` | Get single object |
-| `raven_object_create` | Create new object |
-| `raven_object_update` | Update object fields |
-| `raven_object_delete` | Delete object |
+| `raven_read` | Read raw file content |
+| `raven_new` | Create new typed object |
+| `raven_set` | Update frontmatter fields |
+| `raven_delete` | Delete object |
 | `raven_trait_list` | List traits with filters |
 | `raven_trait_get` | Get single trait |
 | `raven_trait_create` | Create new trait |
@@ -1594,10 +1596,10 @@ rvn schema trait <name> --json       # Trait details
 
 # Object CRUD
 rvn object list [--type TYPE] [--json]
-rvn object get <id> [--json]
-rvn object create --type TYPE [--field KEY=VAL]... [--json]
-rvn object update <id> --set KEY=VAL [--json]
-rvn object delete <id> [--json]
+rvn read <path> [--json]
+rvn new <type> [title] [--field KEY=VAL]... [--json]
+rvn set <id> KEY=VAL... [--json]
+rvn delete <id> [--force] [--json]
 
 # Trait CRUD
 rvn trait <name> [filters] [--json]  # List (existing)
@@ -1659,8 +1661,8 @@ rvn serve --mcp [--port PORT]
 
 ### Phase 3: Mutations
 
-1. `rvn object create/update/delete`
-2. `rvn trait create/update/delete`
+1. `rvn new`, `rvn set`, `rvn delete` — object CRUD
+2. `rvn add` — quick capture with reference validation
 3. All mutations write to audit log
 
 > **Note**: `rvn file write/append` are deferred. See `docs/FUTURE.md`.
