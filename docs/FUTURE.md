@@ -185,8 +185,26 @@ rvn set "Send proposal" priority high    # Updates @priority value
 
 ---
 
-### Trait Instance IDs
-Allow referencing specific trait instances:
+### Stable Trait IDs for Cross-Session References
+Allow agents/users to assign stable IDs to traits for persistent references:
+```markdown
+- @due(2025-02-01) @id(review-contract) Review the contract
+```
+
+Then reference or update by ID:
+```bash
+rvn trait get review-contract
+rvn trait update review-contract --set status=done
+```
+
+**Why postponed**: Most agent workflows are synchronous within a single session. The agent queries, gets file:line coordinates, and mutates immediately. Cross-session persistence can use content-based re-querying. Add this if external system integration or user-named traits become a real need.
+
+**Alternative considered**: Content-hashing to auto-generate stable IDs. Rejected as "magic" that's complex to implement and debug.
+
+---
+
+### Trait Instance IDs (Referencing)
+Allow referencing specific trait instances in links:
 ```markdown
 See [[daily/2025-02-01#due:1]] for the original due date.
 ```
@@ -222,6 +240,27 @@ types:
       
       ## Action Items
 ```
+
+---
+
+## Agent Integration
+
+### Raw File Commands
+Low-level file access for edge cases the structured commands can't handle:
+```bash
+rvn file read daily/2025-02-01.md --json    # Get raw markdown content
+rvn file write daily/2025-02-01.md --content "..."  # Overwrite file
+rvn file append daily/2025-02-01.md --content "..."  # Append to file
+rvn file append daily/2025-02-01.md --section "## Notes" --content "..."  # Append under heading
+```
+
+**Why postponed**: Structured commands (`rvn object get/update`, `rvn trait create/update/delete`, `rvn add`) should cover most use cases. Add raw file access only if we hit cases the abstraction can't handle.
+
+**Existing coverage**:
+- `rvn add` — append content to files
+- `rvn object get --json` — includes content in response
+- `rvn object update` — modify frontmatter fields
+- `rvn trait create/update/delete` — manage inline traits
 
 ---
 

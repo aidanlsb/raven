@@ -96,6 +96,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&vaultName, "vault", "v", "", "Named vault from config")
 	rootCmd.PersistentFlags().StringVar(&vaultPathFlag, "vault-path", "", "Explicit path to vault directory")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to config file")
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format (for agent/script use)")
 }
 
 // getVaultPath returns the resolved vault path.

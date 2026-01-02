@@ -120,7 +120,7 @@ func (d *Database) Close() error {
 }
 
 // CurrentDBVersion is the current database schema version.
-const CurrentDBVersion = 2
+const CurrentDBVersion = 3
 
 // initialize creates the database schema.
 func (d *Database) initialize() error {
@@ -200,6 +200,20 @@ func (d *Database) initialize() error {
 		
 		CREATE INDEX IF NOT EXISTS idx_date_index_date ON date_index(date);
 		CREATE INDEX IF NOT EXISTS idx_date_index_file ON date_index(file_path);
+
+		-- Tags table for efficient tag queries
+		CREATE TABLE IF NOT EXISTS tags (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			tag TEXT NOT NULL,               -- Tag name (without #)
+			object_id TEXT NOT NULL,         -- Object this tag belongs to
+			file_path TEXT NOT NULL,
+			line_number INTEGER,
+			UNIQUE(tag, object_id)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag);
+		CREATE INDEX IF NOT EXISTS idx_tags_object ON tags(object_id);
+		CREATE INDEX IF NOT EXISTS idx_tags_file ON tags(file_path);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -238,6 +252,9 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM date_index WHERE file_path = ?", doc.FilePath); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM tags WHERE file_path = ?", doc.FilePath); err != nil {
 		return err
 	}
 
@@ -422,6 +439,25 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 		}
 	}
 
+	// Index tags from all objects
+	tagStmt, err := tx.Prepare(`
+		INSERT OR IGNORE INTO tags (tag, object_id, file_path, line_number)
+		VALUES (?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer tagStmt.Close()
+
+	for _, obj := range doc.Objects {
+		for _, tag := range obj.Tags {
+			_, err = tagStmt.Exec(tag, obj.ID, doc.FilePath, obj.LineStart)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return tx.Commit()
 }
 
@@ -449,6 +485,9 @@ func (d *Database) RemoveFile(filePath string) error {
 		return err
 	}
 	if _, err := d.db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM tags WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
 	return nil

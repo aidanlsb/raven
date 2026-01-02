@@ -5,11 +5,28 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ravenscroftj/raven/internal/index"
 	"github.com/ravenscroftj/raven/internal/schema"
 	"github.com/spf13/cobra"
 )
+
+// ObjectJSON is the JSON representation of an object query result.
+type ObjectJSON struct {
+	ID        string                 `json:"id"`
+	Type      string                 `json:"type"`
+	FilePath  string                 `json:"file_path"`
+	LineStart int                    `json:"line_start"`
+	Fields    map[string]interface{} `json:"fields,omitempty"`
+}
+
+// TypeSummaryJSON is the JSON representation of a type in --list mode.
+type TypeSummaryJSON struct {
+	Name    string `json:"name"`
+	Count   int    `json:"count"`
+	Builtin bool   `json:"builtin"`
+}
 
 var typeCmd = &cobra.Command{
 	Use:   "type <name>",
@@ -20,45 +37,72 @@ Examples:
   rvn type person          # List all people
   rvn type project         # List all projects
   rvn type meeting         # List all meetings
-  rvn type --list          # List available types`,
+  rvn type --list          # List available types
+  rvn type person --json   # JSON output for agents`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
+		start := time.Now()
 
 		// Handle --list flag
 		listFlag, _ := cmd.Flags().GetBool("list")
 		if listFlag {
-			return listTypes(vaultPath)
+			return listTypesWithJSON(vaultPath, start)
 		}
 
 		if len(args) == 0 {
-			return fmt.Errorf("specify a type name\n\nRun 'rvn type --list' to see available types")
+			return handleErrorMsg(ErrMissingArgument, "specify a type name", "Run 'rvn type --list' to see available types")
 		}
 
 		typeName := args[0]
 
 		db, err := index.Open(vaultPath)
 		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
+			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 		}
 		defer db.Close()
 
 		results, err := db.QueryObjects(typeName)
 		if err != nil {
-			return fmt.Errorf("failed to query: %w", err)
+			return handleError(ErrDatabaseError, err, "")
 		}
 
+		elapsed := time.Since(start).Milliseconds()
+
+		// Sort by ID for consistent output
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].ID < results[j].ID
+		})
+
+		if isJSONOutput() {
+			items := make([]ObjectJSON, len(results))
+			for i, obj := range results {
+				var fields map[string]interface{}
+				if obj.Fields != "" && obj.Fields != "{}" {
+					json.Unmarshal([]byte(obj.Fields), &fields)
+				}
+				items[i] = ObjectJSON{
+					ID:        obj.ID,
+					Type:      typeName,
+					FilePath:  obj.FilePath,
+					LineStart: obj.LineStart,
+					Fields:    fields,
+				}
+			}
+			outputSuccess(map[string]interface{}{
+				"type":  typeName,
+				"items": items,
+			}, &Meta{Count: len(items), QueryTimeMs: elapsed})
+			return nil
+		}
+
+		// Human-readable output
 		if len(results) == 0 {
 			fmt.Printf("No objects of type '%s' found.\n", typeName)
 			return nil
 		}
 
 		fmt.Printf("# %s (%d)\n\n", typeName, len(results))
-
-		// Sort by ID for consistent output
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].ID < results[j].ID
-		})
 
 		for _, obj := range results {
 			printObject(obj)
@@ -70,20 +114,22 @@ Examples:
 }
 
 func listTypes(vaultPath string) error {
+	return listTypesWithJSON(vaultPath, time.Now())
+}
+
+func listTypesWithJSON(vaultPath string, start time.Time) error {
 	// Load schema to get defined types
 	s, err := schema.Load(vaultPath)
 	if err != nil {
-		return fmt.Errorf("failed to load schema: %w", err)
+		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
 
 	// Open database to get counts
 	db, err := index.Open(vaultPath)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
 	defer db.Close()
-
-	fmt.Println("Types:")
 
 	// Collect type names (using map for deduplication)
 	typeSet := make(map[string]bool)
@@ -91,7 +137,7 @@ func listTypes(vaultPath string) error {
 		typeSet[name] = false // false = user-defined
 	}
 	// Add built-in types
-	typeSet["page"] = true  // true = built-in
+	typeSet["page"] = true // true = built-in
 	typeSet["section"] = true
 	typeSet["date"] = true
 
@@ -102,22 +148,43 @@ func listTypes(vaultPath string) error {
 	}
 	sort.Strings(typeNames)
 
+	// Gather data
+	var summaries []TypeSummaryJSON
 	for _, typeName := range typeNames {
 		results, err := db.QueryObjects(typeName)
-		if err != nil {
-			continue
+		count := 0
+		if err == nil {
+			count = len(results)
 		}
-		count := len(results)
+		summaries = append(summaries, TypeSummaryJSON{
+			Name:    typeName,
+			Count:   count,
+			Builtin: typeSet[typeName],
+		})
+	}
 
+	elapsed := time.Since(start).Milliseconds()
+
+	if isJSONOutput() {
+		outputSuccess(map[string]interface{}{
+			"types": summaries,
+		}, &Meta{Count: len(summaries), QueryTimeMs: elapsed})
+		return nil
+	}
+
+	// Human-readable output
+	fmt.Println("Types:")
+
+	for _, ts := range summaries {
 		marker := ""
-		if isBuiltin := typeSet[typeName]; isBuiltin {
+		if ts.Builtin {
 			marker = " (built-in)"
 		}
 
-		if count > 0 {
-			fmt.Printf("  %-15s %d objects%s\n", typeName, count, marker)
+		if ts.Count > 0 {
+			fmt.Printf("  %-15s %d objects%s\n", ts.Name, ts.Count, marker)
 		} else {
-			fmt.Printf("  %-15s -%s\n", typeName, marker)
+			fmt.Printf("  %-15s -%s\n", ts.Name, marker)
 		}
 	}
 
