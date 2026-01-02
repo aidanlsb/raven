@@ -6,8 +6,8 @@
 
 <p align="center">
   <strong>
-    Plain markdown notes—searchable, structured, and AI-native.<br>
-    No lock-in, no proprietary formats. Just text files that are <em>queryable</em>.
+    Plain markdown with user-defined schemas and queryable annotations.<br>
+    CLI-first. Agent-native.
   </strong>
 </p>
 
