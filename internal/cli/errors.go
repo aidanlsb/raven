@@ -45,6 +45,7 @@ const (
 	// Query errors
 	ErrQueryNotFound    = "QUERY_NOT_FOUND"
 	ErrQueryInvalid     = "QUERY_INVALID"
+	ErrDuplicateName    = "DUPLICATE_NAME"
 
 	// Input errors
 	ErrInvalidInput     = "INVALID_INPUT"

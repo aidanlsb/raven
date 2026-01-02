@@ -1,11 +1,13 @@
 package vault
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/ravenscroftj/raven/internal/pages"
 	"github.com/ravenscroftj/raven/internal/parser"
 )
 
@@ -102,4 +104,63 @@ func CollectDocuments(vaultPath string) ([]*parser.ParsedDocument, []WalkResult,
 	})
 
 	return docs, errors, err
+}
+
+// ResolveObjectToFile resolves an object ID to an absolute file path.
+// Supports exact matches and slugified matching (e.g., "people/Emily Jia" -> "people/emily-jia.md").
+func ResolveObjectToFile(vaultPath, objectID string) (string, error) {
+	// Normalize the object ID
+	objectID = strings.TrimSuffix(objectID, ".md")
+
+	// Try direct path first
+	filePath := filepath.Join(vaultPath, objectID+".md")
+	if _, err := os.Stat(filePath); err == nil {
+		return filePath, nil
+	}
+
+	// Try with different casing/slugification by walking the vault
+	var foundPath string
+	err := filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+		if d.IsDir() {
+			// Skip hidden directories
+			if strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+
+		// Get relative path and compare
+		relPath, _ := filepath.Rel(vaultPath, path)
+		relID := strings.TrimSuffix(relPath, ".md")
+
+		// Exact match
+		if relID == objectID {
+			foundPath = path
+			return filepath.SkipAll
+		}
+
+		// Slugified match
+		if pages.SlugifyPath(relID) == pages.SlugifyPath(objectID) {
+			foundPath = path
+			return filepath.SkipAll
+		}
+
+		return nil
+	})
+
+	if err != nil && err != filepath.SkipAll {
+		return "", err
+	}
+
+	if foundPath != "" {
+		return foundPath, nil
+	}
+
+	return "", fmt.Errorf("object not found: %s", objectID)
 }

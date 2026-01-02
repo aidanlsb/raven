@@ -2,12 +2,15 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/ravenscroftj/raven/internal/audit"
 	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/index"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var queryCmd = &cobra.Command{
@@ -357,8 +360,189 @@ func printTraitResults(results []index.TraitResult) {
 	}
 }
 
+var queryAddCmd = &cobra.Command{
+	Use:   "add <name>",
+	Short: "Add a saved query to raven.yaml",
+	Long: `Add a new saved query to raven.yaml.
+
+Examples:
+  rvn query add overdue --traits due --filter due=past
+  rvn query add my-tasks --traits due,status --filter status=todo
+  rvn query add people --types person
+  rvn query add work-items --tags work,important
+  rvn query add mixed --types project --traits due --description "Projects with due dates"`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		queryName := args[0]
+
+		// Get flags
+		traits, _ := cmd.Flags().GetStringSlice("traits")
+		types, _ := cmd.Flags().GetStringSlice("types")
+		tags, _ := cmd.Flags().GetStringSlice("tags")
+		filters, _ := cmd.Flags().GetStringSlice("filter")
+		description, _ := cmd.Flags().GetString("description")
+
+		// Validate - must have at least one of traits, types, or tags
+		if len(traits) == 0 && len(types) == 0 && len(tags) == 0 {
+			return handleErrorMsg(ErrInvalidInput, "must specify at least one of --traits, --types, or --tags", "")
+		}
+
+		// Parse filters into map
+		filterMap := make(map[string]string)
+		for _, f := range filters {
+			parts := strings.SplitN(f, "=", 2)
+			if len(parts) != 2 {
+				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("invalid filter format: %s (expected key=value)", f), "")
+			}
+			filterMap[parts[0]] = parts[1]
+		}
+
+		// Load existing config
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		// Check if query already exists
+		if _, exists := vaultCfg.Queries[queryName]; exists {
+			return handleErrorMsg(ErrDuplicateName, fmt.Sprintf("query '%s' already exists", queryName), "Use 'rvn query remove' first to replace it")
+		}
+
+		// Build new query
+		newQuery := config.SavedQuery{
+			Description: description,
+		}
+		if len(traits) > 0 {
+			newQuery.Traits = traits
+		}
+		if len(types) > 0 {
+			newQuery.Types = types
+		}
+		if len(tags) > 0 {
+			newQuery.Tags = tags
+		}
+		if len(filterMap) > 0 {
+			newQuery.Filters = filterMap
+		}
+
+		// Update config
+		if vaultCfg.Queries == nil {
+			vaultCfg.Queries = make(map[string]*config.SavedQuery)
+		}
+		vaultCfg.Queries[queryName] = &newQuery
+
+		// Write back to raven.yaml
+		if err := writeVaultConfig(vaultPath, vaultCfg); err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		// Audit log
+		logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
+		logger.LogCreate("query", queryName, "saved_query", map[string]interface{}{
+			"traits":  traits,
+			"types":   types,
+			"tags":    tags,
+			"filters": filterMap,
+		})
+
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"name":        queryName,
+				"traits":      traits,
+				"types":       types,
+				"tags":        tags,
+				"filters":     filterMap,
+				"description": description,
+			}, nil)
+		} else {
+			fmt.Printf("✓ Added query '%s'\n", queryName)
+			fmt.Printf("  Run with: rvn query %s\n", queryName)
+		}
+
+		return nil
+	},
+}
+
+var queryRemoveCmd = &cobra.Command{
+	Use:   "remove <name>",
+	Short: "Remove a saved query from raven.yaml",
+	Long: `Remove a saved query from raven.yaml.
+
+Examples:
+  rvn query remove overdue
+  rvn query remove my-tasks`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		queryName := args[0]
+
+		// Load existing config
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		// Check if query exists
+		if _, exists := vaultCfg.Queries[queryName]; !exists {
+			return handleErrorMsg(ErrQueryNotFound, fmt.Sprintf("query '%s' not found", queryName), "Run 'rvn query --list' to see available queries")
+		}
+
+		// Remove query
+		delete(vaultCfg.Queries, queryName)
+
+		// Write back to raven.yaml
+		if err := writeVaultConfig(vaultPath, vaultCfg); err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		// Audit log
+		logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
+		logger.LogDelete("query", queryName)
+
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"name":    queryName,
+				"removed": true,
+			}, nil)
+		} else {
+			fmt.Printf("✓ Removed query '%s'\n", queryName)
+		}
+
+		return nil
+	},
+}
+
+// writeVaultConfig writes the vault config back to raven.yaml
+func writeVaultConfig(vaultPath string, cfg *config.VaultConfig) error {
+	configPath := vaultPath + "/raven.yaml"
+
+	// Marshal to YAML
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write file
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write raven.yaml: %w", err)
+	}
+
+	return nil
+}
+
 func init() {
 	queryCmd.Flags().BoolP("list", "l", false, "List saved queries")
 	queryCmd.Flags().String("value", "", "Filter by trait value")
+
+	// query add flags
+	queryAddCmd.Flags().StringSlice("traits", nil, "Traits to query (comma-separated)")
+	queryAddCmd.Flags().StringSlice("types", nil, "Types to query (comma-separated)")
+	queryAddCmd.Flags().StringSlice("tags", nil, "Tags to query (comma-separated)")
+	queryAddCmd.Flags().StringSlice("filter", nil, "Filter in key=value format (repeatable)")
+	queryAddCmd.Flags().String("description", "", "Human-readable description")
+
+	queryCmd.AddCommand(queryAddCmd)
+	queryCmd.AddCommand(queryRemoveCmd)
 	rootCmd.AddCommand(queryCmd)
 }

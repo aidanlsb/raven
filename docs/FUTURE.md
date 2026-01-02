@@ -82,6 +82,41 @@ See [[2025-02-01]] for the meeting notes.
 
 ---
 
+## Import from Other Tools
+
+### Logseq Import
+Import a Logseq graph into Raven:
+```bash
+rvn import logseq ~/path/to/logseq-graph
+```
+
+**What it would handle:**
+- `journals/YYYY_MM_DD.md` → `daily/YYYY-MM-DD.md`
+- `pages/*.md` → organized by type or flat
+- `TODO`/`DONE`/`LATER`/`NOW` → `@status(todo/done/later/in_progress)`
+- `property:: value` → YAML frontmatter
+- Fix `[[references]]` in frontmatter (not valid YAML)
+- Preserve wiki-links and tags
+
+**Status**: Successfully migrated manually. Could be polished into a built-in command.
+
+---
+
+### Obsidian Import
+Import an Obsidian vault:
+```bash
+rvn import obsidian ~/path/to/obsidian-vault
+```
+
+**Considerations:**
+- Obsidian uses standard YAML frontmatter (mostly compatible)
+- Daily notes format may differ
+- Dataview-style inline fields need conversion
+
+**Status**: Not implemented. Obsidian vaults may work with minimal changes.
+
+---
+
 ## File Watching
 
 ### Auto-Reindex on Change
@@ -99,8 +134,10 @@ rvn watch
 ### Local Web Server
 Serve a read-only web interface for browsing notes:
 ```bash
-rvn serve
+rvn web    # (proposed command name)
 ```
+
+**Note**: `rvn serve` is now used for the MCP server (agent integration). A future web UI would use a different command like `rvn web` or `rvn ui`.
 
 **Status**: Mentioned in Phase 5 of spec.
 

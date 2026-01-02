@@ -11,6 +11,7 @@ import (
 	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/parser"
 	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -55,7 +56,7 @@ func runSet(cmd *cobra.Command, args []string) error {
 	}
 
 	// Resolve object ID to file path
-	filePath, err := resolveObjectToFile(vaultPath, objectID)
+	filePath, err := vault.ResolveObjectToFile(vaultPath, objectID)
 	if err != nil {
 		return handleError(ErrFileDoesNotExist, err, "")
 	}
@@ -186,74 +187,6 @@ func runSet(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-// resolveObjectToFile resolves an object ID to an absolute file path.
-func resolveObjectToFile(vaultPath, objectID string) (string, error) {
-	// Normalize the object ID
-	objectID = strings.TrimSuffix(objectID, ".md")
-
-	// Try direct path first
-	filePath := filepath.Join(vaultPath, objectID+".md")
-	if _, err := os.Stat(filePath); err == nil {
-		return filePath, nil
-	}
-
-	// Try with different casing/slugification
-	// Walk the vault to find matching file
-	var foundPath string
-	err := filepath.WalkDir(vaultPath, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil // Skip errors
-		}
-		if d.IsDir() {
-			// Skip hidden directories
-			if strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".md") {
-			return nil
-		}
-
-		// Get relative path and compare
-		relPath, _ := filepath.Rel(vaultPath, path)
-		relID := strings.TrimSuffix(relPath, ".md")
-
-		// Exact match
-		if relID == objectID {
-			foundPath = path
-			return filepath.SkipAll
-		}
-
-		// Slugified match
-		if slugifyPath(relID) == slugifyPath(objectID) {
-			foundPath = path
-			return filepath.SkipAll
-		}
-
-		return nil
-	})
-
-	if err != nil && err != filepath.SkipAll {
-		return "", err
-	}
-
-	if foundPath != "" {
-		return foundPath, nil
-	}
-
-	return "", fmt.Errorf("object not found: %s", objectID)
-}
-
-// slugifyPath slugifies each component of a path for matching.
-func slugifyPath(path string) string {
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		parts[i] = strings.ToLower(strings.ReplaceAll(part, " ", "-"))
-	}
-	return strings.Join(parts, "/")
 }
 
 // updateFrontmatter updates the frontmatter in the content with new field values.

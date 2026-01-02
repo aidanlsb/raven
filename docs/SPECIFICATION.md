@@ -1100,6 +1100,8 @@ rvn trait highlight                      # All highlighted items
 rvn query --list                         # List available saved queries
 rvn query tasks                          # Run 'tasks' saved query
 rvn query overdue                        # Run 'overdue' saved query
+rvn query add my-tasks --traits due,status --filter status=todo  # Create saved query
+rvn query remove my-tasks                # Remove saved query
 
 # Query objects
 rvn query "type:person"
@@ -1141,8 +1143,8 @@ rvn add "Idea" --to inbox.md      # Override destination
 # Watch for changes and auto-reindex (future)
 rvn watch
 
-# Start local web UI (future)
-rvn serve
+# Start MCP server for AI agents
+rvn serve --vault-path /path/to/vault
 ```
 
 ### Date Filters
@@ -1425,6 +1427,8 @@ rvn query people             # Run saved query (types)
 rvn query important          # Run saved query (tags)
 rvn query project-summary    # Run saved query (mixed)
 rvn query --list             # List all saved queries
+rvn query add my-tasks --traits due,status --filter status=todo  # Create
+rvn query remove my-tasks    # Remove
 ```
 
 For direct queries, use `rvn trait`, `rvn type`, or `rvn tag`:
@@ -1629,7 +1633,9 @@ rvn --config /path/to/config.toml <command>
     - `rvn path` (print vault path)
     - `rvn vaults` (list configured vaults)
     - `rvn schema` (introspect schema)
-    - `rvn schema add type/trait/field` (modify schema)
+    - `rvn schema add type/trait/field` (add to schema)
+    - `rvn schema update type/trait/field` (modify schema)
+    - `rvn schema remove type/trait/field` (remove from schema)
     - `rvn schema validate` (validate schema)
     - `rvn serve` (MCP server for AI agents)
 
@@ -1973,6 +1979,8 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_delete` | Delete object (trash by default) | `object_id` |
 | `raven_trait` | Query by trait | `trait_type`, optional `value` |
 | `raven_query` | Run saved query | `query_name` |
+| `raven_query_add` | Create saved query | `name`, optional `traits`, `types`, `tags`, `filter`, `description` |
+| `raven_query_remove` | Remove saved query | `name` |
 | `raven_type` | List objects by type | `type_name` |
 | `raven_tag` | Query by tag | `tag` |
 | `raven_backlinks` | Find references to object | `target` |

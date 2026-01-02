@@ -114,6 +114,10 @@ func CLICommandName(toolName string) string {
 		return "schema remove trait"
 	case "schema_remove_field":
 		return "schema remove field"
+	case "query_add":
+		return "query add"
+	case "query_remove":
+		return "query remove"
 	}
 
 	return toolName
