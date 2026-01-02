@@ -5,12 +5,10 @@
 <h1 align="center">Raven</h1>
 
 <p align="center">
-  <strong>Markdown notes you can search, structure, and connect to AI tools.</strong>
-</p>
-
-<p align="center">
-  Plain markdown files. Types, traits, and queries. First-class AI agent support.<br>
-  No lock-in. No proprietary formats. Just text files that happen to be <em>queryable</em>.
+  <strong>
+    Plain markdown notes—searchable, structured, and AI-native.<br>
+    No lock-in, no proprietary formats. Just text files that are <em>queryable</em>.
+  </strong>
 </p>
 
 ---
