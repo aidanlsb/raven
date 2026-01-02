@@ -117,15 +117,192 @@ rvn import obsidian ~/path/to/obsidian-vault
 
 ---
 
-## File Watching
+## Indexing Improvements
 
-### Auto-Reindex on Change
+The goal is to make manual `rvn reindex` rare or unnecessary. Currently users must remember to reindex after external edits.
+
+### Auto-Reindex on Change (File Watching)
 Watch vault for file changes and update index automatically:
 ```bash
 rvn watch
 ```
 
+**Implementation notes:**
+- Use `fsnotify` for cross-platform file watching
+- Debounce rapid changes (e.g., 100ms delay)
+- Incremental update: only reindex changed files
+- Could run as background daemon or integrate with editors
+
 **Status**: Mentioned in Phase 3 of spec.
+
+---
+
+### Incremental Reindexing
+Only reindex files that have changed since last index:
+```bash
+rvn reindex           # Smart: only changed files
+rvn reindex --full    # Force full reindex
+```
+
+**Implementation:**
+- Store file mtime in database during indexing
+- On reindex, compare current mtime to stored mtime
+- Only parse and re-index files with newer mtime
+- Much faster for large vaults with few changes
+
+**Status**: Not implemented. Currently `rvn reindex` always does a full rebuild.
+
+---
+
+### Auto-Reindex After Mutations
+Commands that modify files should automatically reindex the affected file:
+```bash
+rvn add "New note"              # → auto reindex daily note
+rvn new person "Alice"          # → auto reindex new file
+rvn set people/alice email=...  # → auto reindex people/alice.md
+rvn edit path "old" "new"       # → auto reindex path
+```
+
+**Status**: Partially implemented. Some commands (`rvn add`, `rvn edit`) do trigger reindex. Should audit all mutation commands.
+
+---
+
+### Stale Index Detection
+Warn users when index may be out of date:
+```bash
+$ rvn trait due
+⚠ Index may be stale (5 files modified since last reindex)
+Run 'rvn reindex' to update.
+
+• @due(2025-02-01) Send proposal
+  ...
+```
+
+**Implementation:**
+- On query, quick-scan vault for files with mtime > last index time
+- Show warning if stale files detected
+- Optional: auto-reindex stale files before query
+
+**Status**: Not implemented.
+
+---
+
+### Background Index Service
+Long-running process that keeps index always fresh:
+```bash
+rvn daemon start    # Start background indexer
+rvn daemon stop     # Stop it
+rvn daemon status   # Check if running
+```
+
+**Why useful:**
+- Index always up-to-date without manual intervention
+- Could integrate with system services (launchd, systemd)
+- MCP server could start this automatically
+
+**Status**: Not implemented. `rvn watch` would be a simpler first step.
+
+---
+
+## Concurrency & Multi-Agent Support
+
+As agents use Raven more heavily, concurrent access becomes a concern. Currently designed for single-user, sequential access.
+
+### Problem Scenarios
+
+1. **File conflicts**: Two agents try to edit the same file simultaneously
+2. **Index staleness**: Agent A edits file, Agent B queries stale index
+3. **Lost updates**: Both read → both modify → last write wins, first changes lost
+4. **Race conditions**: Reading a file while another process is writing
+
+### Potential Approaches
+
+#### Option A: Optimistic Locking (Simplest)
+Check file hasn't changed before writing:
+```go
+// Before writing:
+// 1. Store original mtime/hash when reading
+// 2. Before write, check current mtime/hash matches
+// 3. If changed, return error: "file modified externally, please retry"
+```
+
+**Pros**: Simple, no infrastructure needed
+**Cons**: Requires caller to handle retry logic
+
+---
+
+#### Option B: File Locking
+Lock files during read-modify-write operations:
+```go
+// flock() or similar
+lock := acquireLock(filePath)
+defer lock.Release()
+// ... read, modify, write ...
+```
+
+**Pros**: Prevents concurrent writes
+**Cons**: Cross-platform complexity, potential deadlocks, doesn't help with index staleness
+
+---
+
+#### Option C: Central Mutation Daemon
+Route ALL mutations through a single long-running process:
+```
+┌─────────┐     ┌─────────┐     ┌──────────────┐
+│ Agent 1 │────▶│         │     │              │
+└─────────┘     │  Raven  │────▶│  Vault Files │
+┌─────────┐     │  Daemon │     │  + Index     │
+│ Agent 2 │────▶│         │     │              │
+└─────────┘     └─────────┘     └──────────────┘
+```
+
+**How it works:**
+- Single `rvn daemon` process handles all mutations
+- Agents connect via socket/IPC (or MCP)
+- Daemon serializes writes, keeps index always fresh
+- Queries can still be concurrent (SQLite handles this)
+
+**Pros**: 
+- Eliminates all race conditions
+- Index always up-to-date
+- Single source of truth for file operations
+
+**Cons**:
+- More infrastructure
+- Daemon must be running
+- Need graceful fallback when daemon not available
+
+---
+
+#### Option D: Database as Write-Ahead Log
+Log intended mutations to SQLite, apply to files asynchronously:
+```
+Agent writes → mutation queue (SQLite) → background worker → file system
+```
+
+**Pros**: Very robust, supports offline
+**Cons**: Complex, eventual consistency for file reads
+
+---
+
+### Recommended Path
+
+**Phase 1 (Low effort):**
+- Add optimistic locking to mutation commands
+- Return clear error when file was modified externally
+- Agents retry with fresh read
+
+**Phase 2 (Medium effort):**
+- Implement `rvn daemon` for file watching + indexing
+- Mutations still go direct to files (optimistic locking)
+- Daemon keeps index fresh automatically
+
+**Phase 3 (If needed):**
+- Route mutations through daemon
+- Full serialization of writes
+- Only pursue if Phase 1-2 insufficient
+
+**Status**: Not implemented. Current design assumes single-writer.
 
 ---
 
