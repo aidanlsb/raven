@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schema"
 	"gopkg.in/yaml.v3"
 )
 

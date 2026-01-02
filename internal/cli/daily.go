@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/ravenscroftj/raven/internal/config"
-	"github.com/ravenscroftj/raven/internal/pages"
-	"github.com/ravenscroftj/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 

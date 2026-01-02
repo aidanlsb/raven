@@ -148,9 +148,9 @@ Raven extends plain markdown with four ideas:
 - **Types** — what things are (person, project, meeting)
 - **Traits** — queryable structured annotations on content (`@due`, `@priority`)
 - **References** — wiki-style links between notes (`[[people/freya]]`)
-- **Tags** — lightweight categorization of pages (`#productivity`)
+- **Tags** — lightweight categorization of pages (`#mythology`)
 
-Types and traits are defined in your `schema.yaml`. References and tags work automatically.
+Types and traits are defined in your `schema.yaml`. Tags are created as they're used. 
 
 ### File Format
 

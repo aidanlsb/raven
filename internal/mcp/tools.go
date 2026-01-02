@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ravenscroftj/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 // GenerateToolSchemas generates MCP tool schemas from the command registry.

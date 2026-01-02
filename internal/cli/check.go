@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ravenscroftj/raven/internal/check"
-	"github.com/ravenscroftj/raven/internal/pages"
-	"github.com/ravenscroftj/raven/internal/parser"
-	"github.com/ravenscroftj/raven/internal/schema"
-	"github.com/ravenscroftj/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

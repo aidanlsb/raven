@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ravenscroftj/raven/internal/index"
-	"github.com/ravenscroftj/raven/internal/schema"
-	"github.com/ravenscroftj/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ravenscroftj/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/spf13/cobra"
 )
 

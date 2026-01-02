@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ravenscroftj/raven/internal/pages"
-	"github.com/ravenscroftj/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/parser"
 )
 
 // WalkResult contains the result of processing a markdown file.

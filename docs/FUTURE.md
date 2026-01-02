@@ -563,25 +563,29 @@ rvn graph --type person,project       # Subset
 Provide IDE features for editing Raven markdown files.
 
 **Features:**
-| Feature | Description |
-|---------|-------------|
-| `[[` autocomplete | Suggest refs from all object IDs |
-| `@` autocomplete | Suggest traits from schema |
-| Diagnostics | Broken refs, undefined traits, schema violations |
-| Go-to-definition | Jump to referenced file |
-| Hover | Show backlinks, field values, type info |
-| Code actions | "Add to schema", "Create missing page" |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| `[[` autocomplete | Suggest refs from all object IDs | ✅ Skeleton |
+| `@` autocomplete | Suggest traits from schema | ✅ Skeleton |
+| Go-to-definition | Jump to referenced file | ✅ Skeleton |
+| Hover | Show type info and fields | ✅ Skeleton |
+| Diagnostics | Broken refs, undefined traits, schema violations | ✅ Skeleton |
+| Auto-reindex on save | Keep index fresh | ✅ Skeleton |
+| Code actions | "Add to schema", "Create missing page" | 🔲 Planned |
+| Rename support | Rename and update all refs | 🔲 Planned |
 
-**Implementation approach:**
-- Implement LSP server in Go (reuse existing parser/index)
-- VS Code extension as primary client
-- Could also work with Neovim, other LSP-aware editors
+**Usage:**
+```bash
+# Start LSP server (for editor integration)
+rvn lsp
+
+# Start with debug logging
+rvn lsp --debug --vault-path /path/to/vault
+```
 
 **Why aligned:** Keeps files as source of truth, just better editing UX. Technical users (target audience) use IDEs.
 
-**Effort estimate:** ~2 weeks for solid MVP (autocomplete + diagnostics + go-to-definition)
-
-**Status**: Not implemented.
+**Status**: Foundation implemented (`internal/lsp/`). Needs editor extension and real-world testing. See [docs/LSP_DESIGN.md](LSP_DESIGN.md) for architecture.
 
 ---
 

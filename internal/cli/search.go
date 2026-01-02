@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ravenscroftj/raven/internal/commands"
-	"github.com/ravenscroftj/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/spf13/cobra"
 )
 

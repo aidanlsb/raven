@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/gosimple/slug"
-	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // CreateOptions configures page creation behavior.
