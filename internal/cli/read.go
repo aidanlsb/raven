@@ -20,7 +20,7 @@ summarization or understanding structure.
 
 Examples:
   rvn read daily/2025-02-01.md
-  rvn read people/alice.md
+  rvn read people/freya.md
   rvn read daily/2025-02-01.md --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

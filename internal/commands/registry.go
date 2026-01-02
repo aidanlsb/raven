@@ -63,11 +63,11 @@ Ask user for values, then retry with --field flags.`,
 			{Name: "title", Description: "Title/name for the object", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Set field value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"name=Alice", "email=a@b.com"}},
+			{Name: "field", Description: "Set field value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"name=Freya", "email=a@b.com"}},
 		},
 		Examples: []string{
-			"rvn new person \"Alice Chen\" --json",
-			"rvn new person \"Alice\" --field name=\"Alice Chen\" --json",
+			"rvn new person \"Freya\" --json",
+			"rvn new person \"Freya\" --field name=\"Freya\" --json",
 			"rvn new project \"Website Redesign\" --json",
 		},
 		UseCases: []string{
@@ -96,7 +96,7 @@ For creating NEW typed objects, use 'rvn new' instead.`,
 			"rvn add \"Quick thought\" --json",
 			"rvn add \"@priority(high) Urgent task\" --json",
 			"rvn add \"Note\" --to projects/website.md --json",
-			"rvn add \"Called Tyler\" --timestamp --json",
+			"rvn add \"Call Odin\" --timestamp --json",
 		},
 		UseCases: []string{
 			"Quick capture to daily note",
@@ -113,13 +113,13 @@ For creating NEW typed objects, use 'rvn new' instead.`,
 By default, files are moved to a trash directory (.trash/).
 Warns about backlinks (objects that reference the deleted item).`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object ID to delete (e.g., people/alice)", Required: true},
+			{Name: "object_id", Description: "Object ID to delete (e.g., people/freya)", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn delete people/alice --json",
+			"rvn delete people/freya --json",
 			"rvn delete projects/old --force --json",
 		},
 	},
@@ -214,10 +214,10 @@ Warns about backlinks (objects that reference the deleted item).`,
 		Name:        "backlinks",
 		Description: "Find objects that reference a target",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Target object ID (e.g., people/alice)", Required: true},
+			{Name: "target", Description: "Target object ID (e.g., people/freya)", Required: true},
 		},
 		Examples: []string{
-			"rvn backlinks people/alice --json",
+			"rvn backlinks people/freya --json",
 		},
 	},
 	"date": {
@@ -242,7 +242,7 @@ Warns about backlinks (objects that reference the deleted item).`,
 		},
 		Examples: []string{
 			"rvn read daily/2025-02-01.md --json",
-			"rvn read people/alice.md --json",
+			"rvn read people/freya.md --json",
 		},
 	},
 	"stats": {
@@ -458,20 +458,20 @@ Existing field values will remain in files but no longer be validated.`,
 		Description: "Set frontmatter fields on an object",
 		LongDesc: `Set one or more frontmatter fields on an existing object.
 
-The object ID can be a full path (e.g., "people/alice") or a short reference
+The object ID can be a full path (e.g., "people/freya") or a short reference
 that uniquely identifies an object. Field values are validated against the
 schema if the object has a known type.
 
 Use this to update existing objects' metadata without manually editing files.`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object to update (e.g., people/alice)", Required: true},
+			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypeKeyValue, Examples: []string{`{"email": "alice@example.com"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypeKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
 		},
 		Examples: []string{
-			"rvn set people/alice email=alice@example.com --json",
-			"rvn set people/alice name=\"Alice Chen\" status=active --json",
+			"rvn set people/freya email=freya@asgard.realm --json",
+			"rvn set people/freya name=\"Freya\" status=active --json",
 			"rvn set projects/website priority=high --json",
 		},
 		UseCases: []string{
@@ -537,7 +537,7 @@ Use --type to filter results to specific object types.`,
 			"rvn search \"meeting notes\" --json",
 			"rvn search \"project*\" --type project --json",
 			"rvn search '\"atomic bomb\"' --limit 5 --json",
-			"rvn search \"alice OR bob\" --json",
+			"rvn search \"freya OR thor\" --json",
 		},
 		UseCases: []string{
 			"Find pages mentioning specific topics",

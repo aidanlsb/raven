@@ -21,13 +21,13 @@ var setCmd = &cobra.Command{
 	Short: "Set frontmatter fields on an object",
 	Long: `Set one or more frontmatter fields on an existing object.
 
-The object ID can be a full path (e.g., "people/alice") or a short reference
+The object ID can be a full path (e.g., "people/freya") or a short reference
 that uniquely identifies an object. Field values are validated against the
 schema if the object has a known type.
 
 Examples:
-  rvn set people/alice email=alice@example.com
-  rvn set people/alice name="Alice Chen" email=alice@new.com
+  rvn set people/freya email=freya@asgard.realm
+  rvn set people/freya name="Freya" email=freya@vanaheim.realm
   rvn set projects/website status=active priority=high
   rvn set projects/website --json    # Machine-readable output`,
 	Args: cobra.MinimumNArgs(2),

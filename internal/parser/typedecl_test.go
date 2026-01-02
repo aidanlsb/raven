@@ -25,7 +25,7 @@ func TestParseTypeDeclaration(t *testing.T) {
 		},
 		{
 			name:     "type with refs",
-			line:     "::meeting(id=standup, attendees=[[[people/alice]], [[people/bob]]])",
+			line:     "::meeting(id=standup, attendees=[[[people/freya]], [[people/thor]]])",
 			wantType: "meeting",
 			wantID:   "standup",
 		},

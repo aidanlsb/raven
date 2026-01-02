@@ -85,9 +85,9 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 		},
 		{
 			toolName: "raven_new",
-			args:     map[string]interface{}{"type": "person", "title": "Alice"},
+			args:     map[string]interface{}{"type": "person", "title": "Freya"},
 			wantCmd:  "new",
-			wantArgs: []string{"person", "Alice", "--json"},
+			wantArgs: []string{"person", "Freya", "--json"},
 		},
 		{
 			toolName: "raven_add",
@@ -97,9 +97,9 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 		},
 		{
 			toolName: "raven_delete",
-			args:     map[string]interface{}{"object_id": "people/alice", "force": true},
+			args:     map[string]interface{}{"object_id": "people/loki", "force": true},
 			wantCmd:  "delete",
-			wantArgs: []string{"people/alice", "--force", "--json"},
+			wantArgs: []string{"people/loki", "--force", "--json"},
 		},
 		{
 			toolName: "raven_schema_add_type",

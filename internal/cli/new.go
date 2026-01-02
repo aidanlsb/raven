@@ -28,8 +28,8 @@ or can be provided via --field flags.
 
 Examples:
   rvn new person                       # Prompts for title, creates in people/
-  rvn new person "Alice Chen"          # Creates people/alice-chen.md
-  rvn new person "Alice" --field name="Alice Chen"  # With required field
+  rvn new person "Freya"               # Creates people/freya.md
+  rvn new person "Freya" --field name="Freya"  # With required field
   rvn new project "Website Redesign"   # Creates projects/website-redesign.md
   rvn new page "Quick Note"            # Creates quick-note.md in vault root`,
 	Args: cobra.RangeArgs(1, 2),

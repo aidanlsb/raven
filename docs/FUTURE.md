@@ -191,8 +191,8 @@ rvn reindex --full    # Force full reindex
 Commands that modify files should automatically reindex the affected file:
 ```bash
 rvn add "New note"              # → auto reindex daily note
-rvn new person "Alice"          # → auto reindex new file
-rvn set people/alice email=...  # → auto reindex people/alice.md
+rvn new person "Freya"          # → auto reindex new file
+rvn set people/freya email=...  # → auto reindex people/freya.md
 rvn edit path "old" "new"       # → auto reindex path
 ```
 
@@ -388,7 +388,7 @@ rvn export-calendar --type meeting > meetings.ics
 ### Move/Rename with Reference Updates
 Move files and automatically update all references:
 ```bash
-rvn mv people/alice.md people/alice-chen.md
+rvn mv people/freya.md people/freya-chen.md
 ```
 
 **Status**: Mentioned in Phase 4 of spec.
@@ -416,7 +416,7 @@ rvn promote daily/2025-02-01#standup --to meetings/standup-2025-02-01.md
 ### ~~CLI Task Mutation Commands~~ ✅ PARTIALLY IMPLEMENTED
 Commands to modify trait values without manually editing files:
 ```bash
-rvn set people/alice email=alice@example.com   # Updates frontmatter field
+rvn set people/freya email=freya@asgard.realm   # Updates frontmatter field
 rvn set projects/website status=active         # Updates frontmatter field
 ```
 
@@ -512,7 +512,7 @@ Find mentions that could be links:
 ```bash
 rvn suggest-links
 # Output:
-#   daily/2026-01-02.md:15 - "talked to Alice" → [[people/alice]]?
+#   daily/2026-01-02.md:15 - "talked to Freya" → [[people/freya]]?
 #   projects/website.md:8 - "the API project" → [[projects/api]]?
 ```
 
@@ -528,11 +528,11 @@ rvn suggest-links
 ### Related Notes
 Find notes related to a given note:
 ```bash
-rvn related people/alice
+rvn related people/freya
 # Output:
-#   projects/website (alice is lead)
+#   projects/bifrost (freya is lead)
 #   daily/2026-01-02 (3 references)
-#   people/bob (both attend same meetings)
+#   people/thor (both attend same meetings)
 ```
 
 **Implementation:**
@@ -634,8 +634,8 @@ rvn trait due --json --depth 2       # Include parent + parent's parent + resolv
 ### Dry Run Mode
 Preview changes without committing:
 ```bash
-rvn new person "Bob" --dry-run --json
-rvn set people/alice email=new@email.com --dry-run --json
+rvn new person "Thor" --dry-run --json
+rvn set people/freya email=freya@vanaheim.realm --dry-run --json
 ```
 
 **Why postponed**: Not critical for MVP. Useful for cautious agents.
@@ -646,7 +646,7 @@ rvn set people/alice email=new@email.com --dry-run --json
 Query the audit log directly:
 ```bash
 rvn log --since yesterday --json
-rvn log --id people/alice --json
+rvn log --id people/freya --json
 rvn log --op create --entity trait --json
 ```
 
@@ -657,7 +657,7 @@ rvn log --op create --entity trait --json
 ### `rvn validate` Command
 Pre-flight validation for inputs:
 ```bash
-rvn validate --type object --input '{"type": "person", "fields": {"name": "Bob"}}' --json
+rvn validate --type object --input '{"type": "person", "fields": {"name": "Thor"}}' --json
 ```
 
 **Why postponed**: Error messages from actual commands are clear enough. Add if agents need to check before attempting.

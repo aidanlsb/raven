@@ -107,7 +107,7 @@ func CollectDocuments(vaultPath string) ([]*parser.ParsedDocument, []WalkResult,
 }
 
 // ResolveObjectToFile resolves an object ID to an absolute file path.
-// Supports exact matches and slugified matching (e.g., "people/Emily Jia" -> "people/emily-jia.md").
+// Supports exact matches and slugified matching (e.g., "people/Sif" -> "people/sif.md").
 func ResolveObjectToFile(vaultPath, objectID string) (string, error) {
 	// Normalize the object ID
 	objectID = strings.TrimSuffix(objectID, ".md")

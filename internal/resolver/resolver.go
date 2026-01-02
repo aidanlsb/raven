@@ -101,7 +101,7 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 			}
 		}
 
-		// Try slugified match: "people/Emily Jia" -> "people/emily-jia"
+		// Try slugified match: "people/Sif" -> "people/sif"
 		sluggedRef := pages.SlugifyPath(ref)
 		if originalID, ok := r.slugMap[sluggedRef]; ok {
 			return ResolveResult{TargetID: originalID}
@@ -159,7 +159,7 @@ func (r *Resolver) Exists(id string) bool {
 }
 
 // shortNameFromID extracts the short name from an object ID.
-// For "people/alice" -> "alice"
+// For "people/freya" -> "freya"
 // For "daily/2025-02-01#standup" -> "standup"
 func shortNameFromID(id string) string {
 	// Handle embedded IDs

@@ -42,7 +42,7 @@ type: page
 type: person
 ---
 
-# Alice
+# Freya
 `
 	if err := os.WriteFile(filepath.Join(tmpDir, "subdir", "page2.md"), []byte(page2Content), 0644); err != nil {
 		t.Fatalf("Failed to write page2.md: %v", err)

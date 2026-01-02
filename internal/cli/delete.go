@@ -29,8 +29,8 @@ The command will warn about any backlinks (objects that reference the deleted it
 and require confirmation unless --force is used.
 
 Examples:
-  rvn delete people/alice           # Move people/alice.md to trash
-  rvn delete people/alice --force   # Skip confirmation
+  rvn delete people/loki           # Move people/loki.md to trash
+  rvn delete people/loki --force   # Skip confirmation
   rvn delete projects/old-project --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

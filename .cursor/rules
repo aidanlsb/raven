@@ -102,9 +102,9 @@ This means:
 ```bash
 $ rvn schema update field person email --required
 Error: 3 person objects lack 'email' field:
-  - people/alice.md
-  - people/bob.md
-  - people/carol.md
+  - people/freya.md
+  - people/thor.md
+  - people/loki.md
 
 Add the field to these files, then retry.
 Hint: Use 'rvn type person --json' to list all person objects.
@@ -252,3 +252,63 @@ When fixing a bug:
 2. [ ] If spec is unclear, clarify it first
 3. [ ] Fix code to match spec
 4. [ ] Add regression test
+
+---
+
+## Documentation & Examples: Norse Mythology Theme
+
+**All examples in documentation, tests, and code should use Norse mythology characters and concepts.**
+
+This provides a consistent, memorable, and clearly fictional naming convention throughout the codebase.
+
+### Character Reference
+
+Use these names when examples need people:
+
+| Name | Role | Use For |
+|------|------|---------|
+| **Freya** | Goddess of love/beauty | Primary person example |
+| **Thor** | God of thunder | Secondary person |
+| **Odin** | All-father | Authority figure, someone to call/meet |
+| **Loki** | Trickster god | Person in agent interactions |
+| **Sif** | Thor's wife | Example for slugification (simple name) |
+| **Baldur** | God of light | Missing reference examples |
+| **Heimdall** | Guardian of Bifrost | Security/gatekeeper examples |
+
+### Realm & Place Reference
+
+| Name | Description | Use For |
+|------|-------------|---------|
+| **Asgard** | Home of the gods | Main realm, like a company |
+| **Midgard** | Earth/human realm | Secondary context |
+| **Bifrost** | Rainbow bridge | Project names, connections |
+| **Vanaheim** | Home of the Vanir | Alternative realm |
+| **Yggdrasil** | World tree | System/infrastructure names |
+
+### Email Domain
+
+Use `@asgard.realm` for email examples:
+- `freya@asgard.realm`
+- `thor@asgard.realm`
+
+### Example Patterns
+
+```markdown
+# Good examples
+rvn new person "Freya"
+rvn add "Call Odin about the Bifrost"
+rvn backlinks people/freya
+
+# In documentation
+Met with [[people/thor]] about [[projects/bifrost]].
+
+# In tests
+{"name": "Freya", "email": "freya@asgard.realm"}
+```
+
+### Why Norse Mythology?
+
+1. **Clearly fictional**: No confusion with real people
+2. **Memorable**: Rich characters people recognize
+3. **Consistent theme**: Easy to extend with more names
+4. **Fun**: Makes docs more engaging than "Alice and Bob"

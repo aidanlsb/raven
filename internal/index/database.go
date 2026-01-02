@@ -576,7 +576,7 @@ func (d *Database) RemoveFile(filePath string) error {
 
 // RemoveDocument removes a document and all related data by its object ID.
 func (d *Database) RemoveDocument(objectID string) error {
-	// Objects can have IDs like "people/alice" or "daily/2025-02-01#meeting"
+	// Objects can have IDs like "people/freya" or "daily/2025-02-01#meeting"
 	// For the file-level ID, we need to delete by the root object or file path
 	filePath := objectID + ".md"
 

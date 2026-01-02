@@ -6,9 +6,9 @@ import (
 
 func TestResolver(t *testing.T) {
 	objectIDs := []string{
-		"people/alice",
-		"people/bob",
-		"projects/website",
+		"people/freya",
+		"people/thor",
+		"projects/bifrost",
 		"daily/2025-02-01",
 		"daily/2025-02-01#standup",
 	}
@@ -16,9 +16,9 @@ func TestResolver(t *testing.T) {
 	r := New(objectIDs)
 
 	t.Run("resolve full path", func(t *testing.T) {
-		result := r.Resolve("people/alice")
-		if result.TargetID != "people/alice" {
-			t.Errorf("got %q, want %q", result.TargetID, "people/alice")
+		result := r.Resolve("people/freya")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
 		}
 		if result.Ambiguous {
 			t.Error("expected not ambiguous")
@@ -26,9 +26,9 @@ func TestResolver(t *testing.T) {
 	})
 
 	t.Run("resolve short name", func(t *testing.T) {
-		result := r.Resolve("website")
-		if result.TargetID != "projects/website" {
-			t.Errorf("got %q, want %q", result.TargetID, "projects/website")
+		result := r.Resolve("bifrost")
+		if result.TargetID != "projects/bifrost" {
+			t.Errorf("got %q, want %q", result.TargetID, "projects/bifrost")
 		}
 	})
 
@@ -60,13 +60,13 @@ func TestResolver(t *testing.T) {
 func TestResolverAmbiguous(t *testing.T) {
 	// Two objects with the same short name
 	objectIDs := []string{
-		"people/alice",
-		"clients/alice",
+		"people/freya",
+		"clients/freya",
 	}
 
 	r := New(objectIDs)
 
-	result := r.Resolve("alice")
+	result := r.Resolve("freya")
 	if !result.Ambiguous {
 		t.Error("expected ambiguous")
 	}
@@ -78,7 +78,7 @@ func TestResolverAmbiguous(t *testing.T) {
 func TestResolverDateShorthand(t *testing.T) {
 	objectIDs := []string{
 		"daily/2025-02-01",
-		"people/alice",
+		"people/freya",
 	}
 
 	r := NewWithDailyDir(objectIDs, "daily")
@@ -107,9 +107,9 @@ func TestResolverDateShorthand(t *testing.T) {
 	})
 
 	t.Run("non-date string not treated as date", func(t *testing.T) {
-		result := r.Resolve("alice")
-		if result.TargetID != "people/alice" {
-			t.Errorf("got %q, want %q", result.TargetID, "people/alice")
+		result := r.Resolve("freya")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
 		}
 	})
 }
@@ -117,25 +117,25 @@ func TestResolverDateShorthand(t *testing.T) {
 func TestResolverSlugifiedMatching(t *testing.T) {
 	// Files are stored with slugified names
 	objectIDs := []string{
-		"people/emily-jia",
-		"people/alice",
+		"people/sif",
+		"people/freya",
 		"projects/my-awesome-project",
 	}
 
 	r := New(objectIDs)
 
 	t.Run("proper noun resolves to slugified file", func(t *testing.T) {
-		// User writes [[people/Emily Jia]] but file is emily-jia.md
-		result := r.Resolve("people/Emily Jia")
-		if result.TargetID != "people/emily-jia" {
-			t.Errorf("got %q, want %q", result.TargetID, "people/emily-jia")
+		// User writes [[people/Sif]] but file is sif.md
+		result := r.Resolve("people/Sif")
+		if result.TargetID != "people/sif" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/sif")
 		}
 	})
 
 	t.Run("mixed case resolves to slugified file", func(t *testing.T) {
-		result := r.Resolve("people/EMILY JIA")
-		if result.TargetID != "people/emily-jia" {
-			t.Errorf("got %q, want %q", result.TargetID, "people/emily-jia")
+		result := r.Resolve("people/SIF")
+		if result.TargetID != "people/sif" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/sif")
 		}
 	})
 
@@ -147,16 +147,16 @@ func TestResolverSlugifiedMatching(t *testing.T) {
 	})
 
 	t.Run("short name with spaces resolves", func(t *testing.T) {
-		result := r.Resolve("Emily Jia")
-		if result.TargetID != "people/emily-jia" {
-			t.Errorf("got %q, want %q", result.TargetID, "people/emily-jia")
+		result := r.Resolve("Sif")
+		if result.TargetID != "people/sif" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/sif")
 		}
 	})
 
 	t.Run("exact match still works", func(t *testing.T) {
-		result := r.Resolve("people/alice")
-		if result.TargetID != "people/alice" {
-			t.Errorf("got %q, want %q", result.TargetID, "people/alice")
+		result := r.Resolve("people/freya")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
 		}
 	})
 }
