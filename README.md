@@ -484,13 +484,12 @@ Use named vaults: `rvn --vault work stats`
 
 ## Documentation
 
-See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the complete specification including:
-
-- Data model and object hierarchy
-- File format specification
-- Schema configuration options
-- Database schema
-- Implementation details
+| Document | Description |
+|----------|-------------|
+| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Complete technical specification (data model, file format, schema, database) |
+| [docs/AGENT_INTERFACE.md](docs/AGENT_INTERFACE.md) | Agent integration design and MCP server details |
+| [docs/FUTURE.md](docs/FUTURE.md) | Planned and potential future enhancements |
+| [docs/MIGRATIONS.md](docs/MIGRATIONS.md) | Schema and database migration guide |
 
 ## Design Philosophy
 

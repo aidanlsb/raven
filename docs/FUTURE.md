@@ -166,15 +166,14 @@ rvn promote daily/2025-02-01#standup --to meetings/standup-2025-02-01.md
 - @due(2025-02-01) @priority(high) @status(todo) Send proposal
 ```
 
-### CLI Task Mutation Commands
+### ~~CLI Task Mutation Commands~~ ✅ PARTIALLY IMPLEMENTED
 Commands to modify trait values without manually editing files:
 ```bash
-rvn set "Send proposal" status done      # Updates @status value
-rvn set "Send proposal" due 2025-02-05   # Updates @due value
-rvn set "Send proposal" priority high    # Updates @priority value
+rvn set people/alice email=alice@example.com   # Updates frontmatter field
+rvn set projects/website status=active         # Updates frontmatter field
 ```
 
-**Why postponed**: Requires file editing infrastructure. Users can edit files directly.
+**Status**: ✅ `rvn set` is implemented for frontmatter fields. Inline trait mutation (changing `@status(todo)` to `@status(done)` within content) is not yet implemented.
 
 ---
 
