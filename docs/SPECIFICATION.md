@@ -1536,6 +1536,7 @@ rvn --config /path/to/config.toml <command>
     - `rvn init`
     - `rvn reindex`
     - `rvn check` (validation)
+    - `rvn check --create-missing` (interactively create missing references)
     - `rvn trait` (query by trait type)
     - `rvn type` (query by object type)
     - `rvn tag` (query by tag)
@@ -1545,8 +1546,16 @@ rvn --config /path/to/config.toml <command>
     - `rvn untyped`
     - `rvn daily`
     - `rvn date`
-    - `rvn new`
+    - `rvn new` (create typed object)
     - `rvn add` (quick capture)
+    - `rvn delete` (delete object, moves to trash)
+    - `rvn read` (read raw file content)
+    - `rvn path` (print vault path)
+    - `rvn vaults` (list configured vaults)
+    - `rvn schema` (introspect schema)
+    - `rvn schema add type/trait/field` (modify schema)
+    - `rvn schema validate` (validate schema)
+    - `rvn serve` (MCP server for AI agents)
 
 ### Phase 2: Enhanced Querying
 
@@ -1862,6 +1871,79 @@ ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 - Integration tests with sample vaults
 - Property-based tests for parser edge cases
 - Benchmark tests for large vaults (1000+ files)
+
+---
+
+## MCP Server (Agent Integration)
+
+Raven provides first-class AI agent support via the **Model Context Protocol (MCP)**. The MCP server wraps CLI commands with structured JSON input/output, enabling LLM agents to interact with your knowledge base.
+
+### Starting the Server
+
+```bash
+rvn serve --vault-path /path/to/vault
+```
+
+The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Claude Desktop and other MCP clients.
+
+### Available Tools
+
+| Tool | Description | Required Args |
+|------|-------------|---------------|
+| `raven_new` | Create typed object | `type`, `title`, optional `fields` |
+| `raven_read` | Read raw file content | `path` |
+| `raven_add` | Append to existing file or daily note | `text`, optional `to` |
+| `raven_delete` | Delete object (trash by default) | `object_id` |
+| `raven_trait` | Query by trait | `trait_type`, optional `value` |
+| `raven_query` | Run saved query | `query_name` |
+| `raven_type` | List objects by type | `type_name` |
+| `raven_tag` | Query by tag | `tag` |
+| `raven_backlinks` | Find references to object | `target` |
+| `raven_date` | Get activity for date | `date` |
+| `raven_stats` | Vault statistics | (none) |
+| `raven_schema` | Introspect schema | optional `subcommand` |
+| `raven_schema_add_type` | Add type to schema | `name`, optional `default_path` |
+| `raven_schema_add_trait` | Add trait to schema | `name`, optional `type`, `values` |
+| `raven_schema_add_field` | Add field to type | `type_name`, `field_name`, optional `field_type`, `required`, `target` |
+| `raven_schema_validate` | Validate schema | (none) |
+
+### JSON Response Format
+
+All commands return a standard envelope:
+
+```json
+{
+  "ok": true,
+  "data": { ... },
+  "warnings": [ ... ],
+  "meta": {
+    "count": 5,
+    "query_time_ms": 12
+  }
+}
+```
+
+Errors use structured codes for programmatic handling:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "REQUIRED_FIELD_MISSING",
+    "message": "Missing required fields: name",
+    "details": { ... },
+    "suggestion": "Ask user for values, then retry with --field flags"
+  }
+}
+```
+
+### Design Principles
+
+1. **Schema Discovery**: Agents can call `raven_schema commands` to discover available operations
+2. **Graceful Errors**: Missing required fields return structured errors with hints
+3. **Backlink Awareness**: Delete warns about references to the deleted object
+4. **Read-Only by Default**: `add` only appends to existing files; use `new` for creation
+5. **Vault Scoped**: All operations are restricted to the configured vault
 
 ---
 

@@ -2,6 +2,8 @@
 
 A personal knowledge system with typed blocks, traits, and powerful querying. Built in Go for speed, with plain-text markdown files as the source of truth.
 
+*Named for Odin's ravens Huginn (thought) and Muninn (memory), who gathered knowledge from across the world.*
+
 ## Features
 
 - **Typed Objects**: Define what things *are* (person, project, meeting, book)
@@ -10,20 +12,24 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 - **Tags**: Lightweight categorization (`#productivity`)
 - **Saved Queries**: Define reusable queries for common workflows
 - **SQLite Index**: Fast querying while keeping markdown as source of truth
+- **MCP Server**: First-class AI agent integration via Model Context Protocol
 
 ## Installation
 
 ```bash
-go install github.com/yourusername/raven/cmd/rvn@latest
+go install github.com/aidanlsb/raven/cmd/rvn@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/yourusername/raven.git
+git clone https://github.com/aidanlsb/raven.git
 cd raven
 go build -o rvn ./cmd/rvn
+go install ./cmd/rvn  # Install to $GOPATH/bin
 ```
+
+> **Note**: If publishing to a different GitHub account, update the module path in `go.mod` accordingly.
 
 ## Quick Start
 
@@ -33,7 +39,7 @@ rvn init ~/notes
 
 # Set as default vault
 mkdir -p ~/.config/raven
-echo 'vault = "/Users/you/notes"' > ~/.config/raven/config.toml
+echo 'default_vault = "/Users/you/notes"' > ~/.config/raven/config.toml
 
 # Reindex all files
 rvn reindex
@@ -55,6 +61,10 @@ rvn add "Call Alice about the project"
 rvn add "@due(tomorrow) Send estimate"
 rvn add "Idea" --to inbox.md       # Override destination
 
+# Create new typed objects
+rvn new person "Alice Chen"        # Creates people/alice-chen.md
+rvn new project "Website Redesign" # Creates projects/website-redesign.md
+
 # Saved queries (defined in raven.yaml)
 rvn query --list                   # List available queries
 rvn query tasks                    # Run 'tasks' query
@@ -71,6 +81,87 @@ rvn daily 2025-02-01         # Specific date
 # Date hub - see everything related to a date
 rvn date                     # Today's date hub
 rvn date yesterday           # Yesterday's date hub
+```
+
+## AI Agent Integration
+
+Raven is designed for seamless AI agent workflows via the **Model Context Protocol (MCP)**. Run Raven as an MCP server and let your AI assistant manage your knowledge base.
+
+### Setting Up with Claude Desktop
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "raven": {
+      "command": "/path/to/rvn",
+      "args": ["serve", "--vault-path", "/path/to/your/notes"]
+    }
+  }
+}
+```
+
+### What Agents Can Do
+
+| Tool | Description |
+|------|-------------|
+| `raven_new` | Create new typed objects (person, project, meeting) |
+| `raven_add` | Quick capture to daily note or existing files |
+| `raven_read` | Read raw file content for context |
+| `raven_delete` | Delete objects (moves to trash by default) |
+| `raven_trait` | Query by trait (due dates, priorities, status) |
+| `raven_query` | Run saved queries (tasks, overdue, etc.) |
+| `raven_type` | List objects by type |
+| `raven_tag` | Query by tags |
+| `raven_backlinks` | Find what references an object |
+| `raven_date` | Get all activity for a specific date |
+| `raven_stats` | Vault statistics |
+| `raven_schema` | Discover types, traits, and available commands |
+| `raven_schema_add_*` | Modify the schema (add types, traits, fields) |
+| `raven_schema_validate` | Validate schema correctness |
+
+### Example Agent Interactions
+
+> "Add Tyler as a person, she's my wife"
+
+Claude uses `raven_new` → gets "missing required field: name" → asks you → retries with the field value → creates `people/tyler.md`
+
+> "What tasks do I have due this week?"
+
+Claude uses `raven_query` with `this-week` filter → returns structured results
+
+> "Add a note to the website project about the new design feedback"
+
+Claude uses `raven_add` with `--to projects/website.md` → appends to existing file
+
+### Structured JSON Output
+
+All commands support `--json` for machine-readable output:
+
+```bash
+rvn trait due --value today --json
+```
+
+```json
+{
+  "ok": true,
+  "data": {
+    "results": [
+      {
+        "id": "...",
+        "trait_type": "due",
+        "value": "2025-01-01",
+        "file_path": "projects/website.md",
+        "line": 12
+      }
+    ]
+  },
+  "meta": {
+    "count": 1,
+    "query_time_ms": 5
+  }
+}
 ```
 
 ## File Format
@@ -127,13 +218,21 @@ Some thoughts about #productivity today.
 
 ## CLI Commands
 
+### Core Commands
+
 | Command | Description |
 |---------|-------------|
 | `rvn init <path>` | Initialize a new vault |
 | `rvn check` | Validate vault (broken refs, schema errors) |
 | `rvn check --create-missing` | Interactively create missing referenced pages |
 | `rvn reindex` | Rebuild the SQLite index |
+
+### Querying
+
+| Command | Description |
+|---------|-------------|
 | `rvn trait <name>` | Query any trait type |
+| `rvn trait <name> --value <filter>` | Filter by value (today, past, this-week, etc.) |
 | `rvn type <name>` | List objects of a specific type |
 | `rvn type --list` | List available types with counts |
 | `rvn tag <name>` | Find objects by tag |
@@ -143,11 +242,43 @@ Some thoughts about #productivity today.
 | `rvn backlinks <target>` | Show incoming references |
 | `rvn stats` | Index statistics |
 | `rvn untyped` | List files using fallback 'page' type |
+
+### Creating & Editing
+
+| Command | Description |
+|---------|-------------|
+| `rvn new <type> [title]` | Create a new typed note |
+| `rvn new <type> <title> --field key=value` | Create with field values |
+| `rvn add <text>` | Quick capture to daily note |
+| `rvn add <text> --to <file>` | Append to existing file |
+| `rvn delete <object_id>` | Delete an object (moves to trash) |
+| `rvn delete <object_id> --force` | Delete without confirmation |
+
+### Daily Notes & Dates
+
+| Command | Description |
+|---------|-------------|
 | `rvn daily [date]` | Open/create a daily note |
 | `rvn date [date]` | Show everything related to a date |
-| `rvn new <type> [title]` | Create a new typed note (prompts for title/fields) |
-| `rvn add <text>` | Quick capture to daily note (or configured destination) |
-| `rvn add <text> --to <file>` | Quick capture to specific file |
+
+### Schema Management
+
+| Command | Description |
+|---------|-------------|
+| `rvn schema` | Show schema overview |
+| `rvn schema types` | List all types |
+| `rvn schema traits` | List all traits |
+| `rvn schema commands` | List available commands (for agents) |
+| `rvn schema add type <name>` | Add a new type |
+| `rvn schema add trait <name>` | Add a new trait |
+| `rvn schema add field <type> <field>` | Add a field to a type |
+| `rvn schema validate` | Validate schema for errors |
+
+### MCP Server
+
+| Command | Description |
+|---------|-------------|
+| `rvn serve` | Start MCP server for AI agents |
 
 ### Shell Completion
 
@@ -214,6 +345,19 @@ Configure vault behavior and saved queries:
 ```yaml
 daily_directory: daily
 
+# Quick capture settings
+capture:
+  destination: daily      # or a file path like "inbox.md"
+  heading: "## Captured"  # Optional heading to append under
+  timestamp: true         # Prefix captures with time
+  reindex: true           # Reindex after capture
+
+# Deletion behavior
+deletion:
+  behavior: trash         # "trash" (default) or "permanent"
+  trash_dir: .trash       # Directory for trashed files
+
+# Saved queries
 queries:
   tasks:
     traits: [due, status]
@@ -233,6 +377,21 @@ queries:
     description: "Items tagged #important"
 ```
 
+### Global Config (`~/.config/raven/config.toml`)
+
+Configure default vault and multiple vaults:
+
+```toml
+default_vault = "/Users/you/notes"
+editor = "code"  # or "vim", "nano", etc.
+
+[vaults]
+work = "/Users/you/work-notes"
+personal = "/Users/you/personal-notes"
+```
+
+Use named vaults: `rvn --vault work stats`
+
 ## Documentation
 
 See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the complete specification including:
@@ -250,6 +409,7 @@ See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the complete specificatio
 - **Schema-driven**: Types and traits are user-defined, not hard-coded
 - **Explicit over magic**: Frontmatter is the source of truth for types
 - **Query-friendly**: SQLite index enables fast structured queries
+- **Agent-native**: Built for AI workflows with structured JSON output and MCP
 
 ## License
 
