@@ -4,9 +4,9 @@ package check
 import (
 	"fmt"
 
-	"github.com/ravenscroftj/raven/internal/parser"
-	"github.com/ravenscroftj/raven/internal/resolver"
-	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/resolver"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // IssueType categorizes validation issues for programmatic handling.

@@ -1,9 +1,10 @@
-module github.com/ravenscroftj/raven
+module github.com/aidanlsb/raven
 
 go 1.22
 
 require (
 	github.com/BurntSushi/toml v1.3.2
+	github.com/gosimple/slug v1.15.0
 	github.com/spf13/cobra v1.8.0
 	github.com/yuin/goldmark v1.7.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -13,7 +14,6 @@ require (
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gosimple/slug v1.15.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

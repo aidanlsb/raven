@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ravenscroftj/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 // TestMCPToolsMatchRegistry verifies that all registry commands

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ravenscroftj/raven/internal/parser"
-	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestValidatorBasic(t *testing.T) {

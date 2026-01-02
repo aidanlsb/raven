@@ -5,9 +5,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ravenscroftj/raven/internal/commands"
-	"github.com/ravenscroftj/raven/internal/config"
-	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/spf13/cobra"
 )
 

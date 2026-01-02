@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"github.com/ravenscroftj/raven/internal/cli"
+	"github.com/aidanlsb/raven/internal/cli"
 )
 
 func main() {

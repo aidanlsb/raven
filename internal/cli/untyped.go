@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/ravenscroftj/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/spf13/cobra"
 )
 

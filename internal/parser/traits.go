@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // TraitAnnotation represents a parsed @trait() annotation.

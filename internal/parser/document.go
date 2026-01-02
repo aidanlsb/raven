@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ravenscroftj/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // ParsedDocument represents a fully parsed document.

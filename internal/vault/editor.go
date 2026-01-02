@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/ravenscroftj/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/config"
 )
 
 // OpenInEditor opens a file in the user's configured editor.
