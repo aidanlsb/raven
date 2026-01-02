@@ -289,12 +289,12 @@ References auto-slugify: `[[people/Thor Odinson]]` resolves to `people/thor-odin
 **Tags** provide lightweight categorization:
 
 ```markdown
-Some thoughts about #productivity today.
+Some thoughts about #mythology today.
 ```
 
 ```bash
 rvn backlinks people/freya       # What references Freya?
-rvn tag productivity             # All #productivity items
+rvn tag mythology                # All #mythology items
 ```
 
 ### Querying
