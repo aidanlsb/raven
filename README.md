@@ -249,6 +249,8 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_set` | Update frontmatter fields on existing objects |
 | `raven_read` | Read raw file content for context |
 | `raven_delete` | Delete objects (moves to trash by default) |
+| `raven_edit` | Surgical text replacement in vault files |
+| `raven_search` | Full-text search across vault content |
 | `raven_trait` | Query by trait (due dates, priorities, status) |
 | `raven_query` | Run saved queries (tasks, overdue, etc.) |
 | `raven_query_add` | Create a new saved query |
@@ -397,6 +399,10 @@ Some thoughts about #productivity today.
 | `rvn add <text>` | Quick capture to daily note |
 | `rvn add <text> --to <file>` | Append to existing file |
 | `rvn set <object_id> field=value...` | Update frontmatter fields |
+| `rvn edit <path> <old> <new>` | Surgical text replacement (preview by default) |
+| `rvn edit ... --confirm` | Apply the edit |
+| `rvn search <query>` | Full-text search across vault |
+| `rvn search <query> --type <type>` | Search filtered by type |
 | `rvn delete <object_id>` | Delete an object (moves to trash) |
 | `rvn delete <object_id> --force` | Delete without confirmation |
 
