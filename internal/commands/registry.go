@@ -455,6 +455,38 @@ Use this to update existing objects' metadata without manually editing files.`,
 			"Modify any frontmatter field on an object",
 		},
 	},
+	"edit": {
+		Name:        "edit",
+		Description: "Surgical text replacement in vault files",
+		LongDesc: `Replace a unique string in a vault file with another string.
+
+The string to replace must appear exactly once in the file to prevent 
+ambiguous edits. By default, returns a preview requiring confirmation.
+Call with --confirm to apply the edit.
+
+Whitespace matters—old_str must match exactly including indentation.
+For multi-line replacements, include newlines in both old_str and new_str.`,
+		Args: []ArgMeta{
+			{Name: "path", Description: "File path relative to vault root", Required: true},
+			{Name: "old_str", Description: "String to replace (must be unique in file)", Required: true},
+			{Name: "new_str", Description: "Replacement string (can be empty to delete)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "confirm", Description: "Apply the edit (default: preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[churn-analysis|Churn analysis]]" --json`,
+			`rvn edit "pages/notes.md" "reccommendation" "recommendation" --confirm --json`,
+			`rvn edit "daily/2026-01-02.md" "- old task" "" --confirm --json`,
+		},
+		UseCases: []string{
+			"Add wiki links to existing text",
+			"Fix typos in notes",
+			"Add traits to existing lines",
+			"Delete specific content",
+			"Make precise edits without overwriting files",
+		},
+	},
 	"search": {
 		Name:        "search",
 		Description: "Full-text search across all vault content",
