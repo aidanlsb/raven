@@ -256,6 +256,76 @@ rvn file append daily/2025-02-01.md --section "## Notes" --content "..."  # Appe
 
 ---
 
+## Agent Enhancements
+
+### Temporal Query Filters
+Filter queries by creation/modification timestamps:
+```bash
+rvn trait due --created-after 2025-01-20 --json
+rvn type person --modified-today --json
+rvn query tasks --created-since "2 days ago" --json
+```
+
+**Why postponed**: Audit log infrastructure exists, but temporal filters aren't wired into query commands. Add when there's a concrete use case.
+
+---
+
+### Rich Context Responses (`--depth`, `--slim`)
+Control how much context is included in JSON responses:
+```bash
+rvn trait due --json --slim          # Minimal: just IDs and values
+rvn trait due --json --depth 2       # Include parent + parent's parent + resolved refs
+```
+
+**Why postponed**: Current responses are sufficient for MVP. Add if agents need more or less context.
+
+---
+
+### Dry Run Mode
+Preview changes without committing:
+```bash
+rvn new person "Bob" --dry-run --json
+rvn set people/alice email=new@email.com --dry-run --json
+```
+
+**Why postponed**: Not critical for MVP. Useful for cautious agents.
+
+---
+
+### `rvn log` Command
+Query the audit log directly:
+```bash
+rvn log --since yesterday --json
+rvn log --id people/alice --json
+rvn log --op create --entity trait --json
+```
+
+**Why postponed**: Audit log exists but no CLI to query it. Add when temporal introspection is needed.
+
+---
+
+### `rvn validate` Command
+Pre-flight validation for inputs:
+```bash
+rvn validate --type object --input '{"type": "person", "fields": {"name": "Bob"}}' --json
+```
+
+**Why postponed**: Error messages from actual commands are clear enough. Add if agents need to check before attempting.
+
+---
+
+### Batch Operations
+Execute multiple operations atomically:
+```bash
+rvn batch --input operations.json --json
+```
+
+With support for `atomic`, `stop_on_error`, and `dry_run` options.
+
+**Why postponed**: Single operations cover most use cases. Add when agents need multi-step transactions.
+
+---
+
 ## Adding New Ideas
 
 When you think of a potential enhancement:

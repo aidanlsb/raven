@@ -486,8 +486,7 @@ Use named vaults: `rvn --vault work stats`
 
 | Document | Description |
 |----------|-------------|
-| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Complete technical specification (data model, file format, schema, database) |
-| [docs/AGENT_INTERFACE.md](docs/AGENT_INTERFACE.md) | Agent integration design and MCP server details |
+| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Complete technical specification (data model, file format, schema, database, MCP server) |
 | [docs/FUTURE.md](docs/FUTURE.md) | Planned and potential future enhancements |
 | [docs/MIGRATIONS.md](docs/MIGRATIONS.md) | Schema and database migration guide |
 
