@@ -599,6 +599,7 @@ rvn trait due --value today --json
 | Document | Description |
 |----------|-------------|
 | [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Complete technical specification (data model, file format, schema, database, MCP server) |
+| [docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md) | Guide for AI agents on using Raven effectively |
 | [docs/FUTURE.md](docs/FUTURE.md) | Planned and potential future enhancements |
 | [docs/MIGRATIONS.md](docs/MIGRATIONS.md) | Schema and database migration guide |
 

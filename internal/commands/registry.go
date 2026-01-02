@@ -255,8 +255,19 @@ Warns about backlinks (objects that reference the deleted item).`,
 	"check": {
 		Name:        "check",
 		Description: "Validate vault against schema",
+		LongDesc: `Validates all files in the vault against the schema.
+
+Returns structured issues with:
+- issue_type: unknown_type, missing_reference, undefined_trait, unknown_frontmatter_key, etc.
+- fix_command: Suggested CLI command to fix the issue
+- fix_hint: Human-readable explanation of how to fix
+
+The summary groups issues by type with counts and top values, making it easy to prioritize fixes.
+
+For agents: Use this tool to discover issues, then use the fix_command suggestions to resolve them.
+Ask the user for clarification when needed (e.g., which type to use for missing references).`,
 		Flags: []FlagMeta{
-			{Name: "create-missing", Description: "Interactively create missing pages", Type: FlagTypeBool},
+			{Name: "create-missing", Description: "Interactively create missing pages (CLI only, not for agents)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn check --json",

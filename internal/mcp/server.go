@@ -160,6 +160,10 @@ func (s *Server) handleRequest(req *Request) {
 		s.handleToolsList(req)
 	case "tools/call":
 		s.handleToolsCall(req)
+	case "resources/list":
+		s.handleResourcesList(req)
+	case "resources/read":
+		s.handleResourcesRead(req)
 	case "ping":
 		s.sendResult(req.ID, map[string]interface{}{})
 	case "notifications/cancelled":
@@ -177,7 +181,8 @@ func (s *Server) handleInitialize(req *Request) {
 	result := map[string]interface{}{
 		"protocolVersion": "2024-11-05",
 		"capabilities": ServerCapabilities{
-			Tools: &ToolsCapability{},
+			Tools:     &ToolsCapability{},
+			Resources: &ResourcesCapability{},
 		},
 		"serverInfo": ServerInfo{
 			Name:    "raven-mcp",
@@ -211,6 +216,89 @@ func (s *Server) handleToolsCall(req *Request) {
 		Content: []ToolContent{{Type: "text", Text: result}},
 		IsError: isError,
 	})
+}
+
+// Resource represents an MCP resource
+type Resource struct {
+	URI         string `json:"uri"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+}
+
+// ResourceContent represents the content of a resource
+type ResourceContent struct {
+	URI      string `json:"uri"`
+	MimeType string `json:"mimeType,omitempty"`
+	Text     string `json:"text,omitempty"`
+}
+
+func (s *Server) handleResourcesList(req *Request) {
+	resources := []Resource{
+		{
+			URI:         "raven://guide/agent",
+			Name:        "Agent Guide",
+			Description: "Comprehensive guide for AI agents on how to use Raven effectively. Includes workflows, best practices, and example conversations.",
+			MimeType:    "text/markdown",
+		},
+		{
+			URI:         "raven://schema/current",
+			Name:        "Current Schema",
+			Description: "The current schema.yaml defining types and traits for this vault.",
+			MimeType:    "text/yaml",
+		},
+	}
+	s.sendResult(req.ID, map[string]interface{}{"resources": resources})
+}
+
+func (s *Server) handleResourcesRead(req *Request) {
+	var params struct {
+		URI string `json:"uri"`
+	}
+
+	if req.Params != nil {
+		if err := json.Unmarshal(*req.Params, &params); err != nil {
+			s.sendError(req.ID, -32602, "Invalid params", err.Error())
+			return
+		}
+	}
+
+	var content ResourceContent
+	switch params.URI {
+	case "raven://guide/agent":
+		content = ResourceContent{
+			URI:      params.URI,
+			MimeType: "text/markdown",
+			Text:     getAgentGuide(),
+		}
+	case "raven://schema/current":
+		schemaContent, err := s.readSchemaFile()
+		if err != nil {
+			s.sendError(req.ID, -32603, "Failed to read schema", err.Error())
+			return
+		}
+		content = ResourceContent{
+			URI:      params.URI,
+			MimeType: "text/yaml",
+			Text:     schemaContent,
+		}
+	default:
+		s.sendError(req.ID, -32602, "Resource not found", params.URI)
+		return
+	}
+
+	s.sendResult(req.ID, map[string]interface{}{
+		"contents": []ResourceContent{content},
+	})
+}
+
+func (s *Server) readSchemaFile() (string, error) {
+	schemaPath := s.vaultPath + "/schema.yaml"
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func (s *Server) callTool(name string, args map[string]interface{}) (string, bool) {
