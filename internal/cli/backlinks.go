@@ -8,14 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// BacklinkJSON is the JSON representation of a backlink.
-type BacklinkJSON struct {
-	SourceID    string  `json:"source_id"`
-	FilePath    string  `json:"file_path"`
-	Line        *int    `json:"line,omitempty"`
-	DisplayText *string `json:"display_text,omitempty"`
-}
-
 var backlinksCmd = &cobra.Command{
 	Use:   "backlinks <target>",
 	Short: "Show backlinks to an object",
@@ -45,9 +37,9 @@ Examples:
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
-			items := make([]BacklinkJSON, len(links))
+			items := make([]BacklinkResult, len(links))
 			for i, link := range links {
-				items[i] = BacklinkJSON{
+				items[i] = BacklinkResult{
 					SourceID:    link.SourceID,
 					FilePath:    link.FilePath,
 					Line:        link.Line,

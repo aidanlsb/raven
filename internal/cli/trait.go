@@ -9,18 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TraitResultJSON is the JSON representation of a trait query result.
-type TraitResultJSON struct {
-	ID          string  `json:"id"`
-	TraitType   string  `json:"trait_type"`
-	Value       *string `json:"value,omitempty"`
-	Content     string  `json:"content"`
-	ContentText string  `json:"content_text"`
-	ObjectID    string  `json:"object_id"`
-	FilePath    string  `json:"file_path"`
-	Line        int     `json:"line"`
-}
-
 var traitCmd = &cobra.Command{
 	Use:   "trait <name> [--value <filter>]",
 	Short: "Query traits by type",
@@ -60,9 +48,9 @@ Examples:
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
-			items := make([]TraitResultJSON, len(results))
+			items := make([]TraitResult, len(results))
 			for i, r := range results {
-				items[i] = TraitResultJSON{
+				items[i] = TraitResult{
 					ID:          fmt.Sprintf("%s:%d", r.FilePath, r.Line),
 					TraitType:   r.TraitType,
 					Value:       r.Value,

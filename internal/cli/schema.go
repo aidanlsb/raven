@@ -5,72 +5,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ravenscroftj/raven/internal/commands"
 	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/schema"
 	"github.com/spf13/cobra"
 )
-
-// SchemaJSON is the JSON representation of the full schema.
-type SchemaJSON struct {
-	Version int                      `json:"version"`
-	Types   map[string]TypeSchemaJSON `json:"types"`
-	Traits  map[string]TraitSchemaJSON `json:"traits"`
-	Queries map[string]QuerySchemaJSON `json:"queries,omitempty"`
-}
-
-// TypeSchemaJSON is the JSON representation of a type definition.
-type TypeSchemaJSON struct {
-	Name          string                     `json:"name"`
-	Builtin       bool                       `json:"builtin"`
-	DefaultPath   string                     `json:"default_path,omitempty"`
-	Fields        map[string]FieldSchemaJSON `json:"fields,omitempty"`
-	Traits        []string                   `json:"traits,omitempty"`
-	RequiredTraits []string                  `json:"required_traits,omitempty"`
-}
-
-// FieldSchemaJSON is the JSON representation of a field definition.
-type FieldSchemaJSON struct {
-	Type     string   `json:"type"`
-	Required bool     `json:"required"`
-	Default  string   `json:"default,omitempty"`
-	Values   []string `json:"values,omitempty"` // For enum types
-	Target   string   `json:"target,omitempty"` // For ref types
-}
-
-// TraitSchemaJSON is the JSON representation of a trait definition.
-type TraitSchemaJSON struct {
-	Name    string   `json:"name"`
-	Type    string   `json:"type"`
-	Values  []string `json:"values,omitempty"`
-	Default string   `json:"default,omitempty"`
-}
-
-// QuerySchemaJSON is the JSON representation of a saved query.
-type QuerySchemaJSON struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Types       []string          `json:"types,omitempty"`
-	Traits      []string          `json:"traits,omitempty"`
-	Tags        []string          `json:"tags,omitempty"`
-	Filters     map[string]string `json:"filters,omitempty"`
-}
-
-// CommandSchemaJSON describes a command for agent discovery.
-type CommandSchemaJSON struct {
-	Description   string              `json:"description"`
-	DefaultTarget string              `json:"default_target,omitempty"`
-	Args          []string            `json:"args,omitempty"`
-	Flags         map[string]FlagJSON `json:"flags,omitempty"`
-	Examples      []string            `json:"examples,omitempty"`
-	UseCases      []string            `json:"use_cases,omitempty"`
-}
-
-// FlagJSON describes a command flag.
-type FlagJSON struct {
-	Type        string   `json:"type,omitempty"`
-	Description string   `json:"description"`
-	Examples    []string `json:"examples,omitempty"`
-}
 
 var schemaCmd = &cobra.Command{
 	Use:   "schema [types|traits|type <name>|trait <name>|commands]",
@@ -129,7 +68,7 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		schemaJSON := buildSchemaJSON(sch, vaultCfg)
+		schemaJSON := buildSchemaResult(sch, vaultCfg)
 		outputSuccess(schemaJSON, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
@@ -169,17 +108,17 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	// Collect types
-	types := make(map[string]TypeSchemaJSON)
+	types := make(map[string]TypeSchema)
 
 	// User-defined types
 	for name, typeDef := range sch.Types {
-		types[name] = buildTypeSchemaJSON(name, typeDef, false)
+		types[name] = buildTypeSchema(name, typeDef, false)
 	}
 
 	// Built-in types
-	types["page"] = TypeSchemaJSON{Name: "page", Builtin: true}
-	types["section"] = TypeSchemaJSON{Name: "section", Builtin: true}
-	types["date"] = TypeSchemaJSON{Name: "date", Builtin: true}
+	types["page"] = TypeSchema{Name: "page", Builtin: true}
+	types["section"] = TypeSchema{Name: "section", Builtin: true}
+	types["date"] = TypeSchema{Name: "date", Builtin: true}
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
@@ -216,9 +155,9 @@ func listSchemaTraits(vaultPath string, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	// Collect traits
-	traits := make(map[string]TraitSchemaJSON)
+	traits := make(map[string]TraitSchema)
 	for name, traitDef := range sch.Traits {
-		traits[name] = buildTraitSchemaJSON(name, traitDef)
+		traits[name] = buildTraitSchema(name, traitDef)
 	}
 
 	if isJSONOutput() {
@@ -258,7 +197,7 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	// Check for built-in types
 	switch typeName {
 	case "page", "section", "date":
-		typeJSON := TypeSchemaJSON{Name: typeName, Builtin: true}
+		typeJSON := TypeSchema{Name: typeName, Builtin: true}
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{"type": typeJSON}, &Meta{QueryTimeMs: elapsed})
 			return nil
@@ -272,7 +211,7 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "Run 'rvn schema types' to see available types")
 	}
 
-	typeJSON := buildTypeSchemaJSON(typeName, typeDef, false)
+	typeJSON := buildTypeSchema(typeName, typeDef, false)
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{"type": typeJSON}, &Meta{QueryTimeMs: elapsed})
@@ -315,7 +254,7 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 		return handleErrorMsg(ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "Run 'rvn schema traits' to see available traits")
 	}
 
-	traitJSON := buildTraitSchemaJSON(traitName, traitDef)
+	traitJSON := buildTraitSchema(traitName, traitDef)
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{"trait": traitJSON}, &Meta{QueryTimeMs: elapsed})
@@ -340,191 +279,85 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 func listSchemaCommands(start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
-	commands := map[string]CommandSchemaJSON{
-		"new": {
-			Description: "Create a new typed object (person, project, etc.). If required fields are missing, returns an error listing them - ask user for values and retry with fields parameter.",
-			Args:        []string{"type", "title"},
-			Flags: map[string]FlagJSON{
-				"--field": {
-					Type:        "key=value",
-					Description: "Set field value (can be repeated for multiple fields)",
-					Examples:    []string{"--field name=\"Alice Smith\"", "--field email=alice@example.com"},
-				},
-			},
-			UseCases: []string{
-				"Create a new person entry",
-				"Create a new project file",
-				"Create any typed object defined in schema",
-			},
-			Examples: []string{
-				"rvn new person \"Alice Smith\" --field name=\"Alice Smith\" --json",
-				"rvn new project \"Mobile App\" --json",
-				"rvn new meeting \"Team Sync\" --json",
-			},
-		},
-		"read": {
-			Description: "Read raw file content",
-			Args:        []string{"path"},
-			Examples:    []string{"rvn read daily/2025-02-01.md --json"},
-		},
-		"add": {
-			Description:   "Append content to EXISTING files or today's daily note. Only works on files that already exist (daily notes auto-created). For new objects, use 'new' command.",
-			DefaultTarget: "Today's daily note",
-			Args:          []string{"text"},
-			Flags: map[string]FlagJSON{
-				"--to": {
-					Type:        "path",
-					Description: "Target EXISTING file path. File must already exist. Omit to use daily note.",
-					Examples:    []string{"projects/website.md", "inbox.md", "daily/2025-02-01.md"},
-				},
-			},
-			UseCases: []string{
-				"Quick capture to daily note",
-				"Add tasks to existing project files",
-				"Append notes to existing documents",
-			},
-			Examples: []string{
-				"rvn add \"Quick thought\" --json",
-				"rvn add \"New task\" --to projects/website.md --json",
-				"rvn add \"@priority(high) Urgent task\" --json",
-			},
-		},
-		"trait": {
-			Description: "Query traits by type",
-			Args:        []string{"trait_name"},
-			Flags: map[string]FlagJSON{
-				"--value": {Description: "Filter by value (supports: today, past, this-week, or literal values)"},
-			},
-			Examples: []string{"rvn trait due --json", "rvn trait due --value past --json"},
-		},
-		"query": {
-			Description: "Run saved queries",
-			Args:        []string{"query_name"},
-			Flags: map[string]FlagJSON{
-				"--list": {Description: "List available saved queries"},
-			},
-			Examples: []string{"rvn query tasks --json", "rvn query overdue --json"},
-		},
-		"type": {
-			Description: "List objects by type",
-			Args:        []string{"type_name"},
-			Flags: map[string]FlagJSON{
-				"--list": {Description: "List available types with counts"},
-			},
-			Examples: []string{"rvn type person --json", "rvn type meeting --json"},
-		},
-		"tag": {
-			Description: "Query objects by tags",
-			Args:        []string{"tag_name"},
-			Flags: map[string]FlagJSON{
-				"--list": {Description: "List all tags with counts"},
-			},
-			Examples: []string{"rvn tag important --json", "rvn tag --list --json"},
-		},
-		"backlinks": {
-			Description: "Find objects that reference a target",
-			Args:        []string{"target"},
-			Examples:    []string{"rvn backlinks people/alice --json"},
-		},
-		"date": {
-			Description: "Date hub - all activity for a date",
-			Args:        []string{"date"},
-			Flags: map[string]FlagJSON{
-				"--edit": {Description: "Open the daily note in editor"},
-			},
-			Examples: []string{"rvn date today --json", "rvn date 2025-02-01 --json"},
-		},
-		"stats": {
-			Description: "Show vault statistics",
-			Examples:    []string{"rvn stats --json"},
-		},
-		"check": {
-			Description: "Validate vault against schema",
-			Flags: map[string]FlagJSON{
-				"--create-missing": {Description: "Interactively create missing referenced pages"},
-			},
-			Examples: []string{"rvn check --json"},
-		},
-		"delete": {
-			Description: "Delete an object from the vault. Moves to trash by default (configurable). Warns about backlinks.",
-			Args:        []string{"object_id"},
-			Flags: map[string]FlagJSON{
-				"--force": {Description: "Skip confirmation prompt"},
-			},
-			Examples: []string{"rvn delete people/alice --json", "rvn delete projects/old --force --json"},
-		},
-		"schema add": {
-			Description: "Add a type, trait, or field to the schema",
-			Args:        []string{"kind", "name"},
-			Flags: map[string]FlagJSON{
-				"--default-path": {Description: "Default path for new type files"},
-				"--type":         {Description: "Field/trait type (string, date, enum, ref, bool)"},
-				"--required":     {Description: "Mark field as required"},
-				"--values":       {Description: "Enum values (comma-separated)"},
-				"--target":       {Description: "Target type for ref fields"},
-			},
-			Examples: []string{
-				"rvn schema add type event --default-path events/ --json",
-				"rvn schema add trait priority --type enum --values high,medium,low --json",
-				"rvn schema add field person email --type string --required --json",
-			},
-		},
-		"schema validate": {
-			Description: "Validate the schema for correctness",
-			Examples:    []string{"rvn schema validate --json"},
-		},
+	// Generate commands from the registry - single source of truth!
+	cmds := make(map[string]CommandSchemaResult)
+	for name, meta := range commands.Registry {
+		cmd := CommandSchemaResult{
+			Description: meta.Description,
+			Examples:    meta.Examples,
+			UseCases:    meta.UseCases,
+		}
+
+		// Add args
+		for _, arg := range meta.Args {
+			cmd.Args = append(cmd.Args, arg.Name)
+		}
+
+		// Add flags
+		if len(meta.Flags) > 0 {
+			cmd.Flags = make(map[string]FlagSchema)
+			for _, flag := range meta.Flags {
+				cmd.Flags["--"+flag.Name] = FlagSchema{
+					Type:        string(flag.Type),
+					Description: flag.Description,
+					Examples:    flag.Examples,
+				}
+			}
+		}
+
+		cmds[name] = cmd
 	}
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
-			"commands": commands,
-		}, &Meta{Count: len(commands), QueryTimeMs: elapsed})
+			"commands": cmds,
+		}, &Meta{Count: len(cmds), QueryTimeMs: elapsed})
 		return nil
 	}
 
 	// Human-readable output
 	fmt.Println("Available commands:")
 	var names []string
-	for name := range commands {
+	for name := range cmds {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		c := commands[name]
-		fmt.Printf("  %-12s %s\n", name, c.Description)
+		c := cmds[name]
+		fmt.Printf("  %-18s %s\n", name, c.Description)
 	}
 	fmt.Println("\nUse 'rvn schema commands --json' for full details.")
 
 	return nil
 }
 
-func buildSchemaJSON(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaJSON {
-	result := SchemaJSON{
+func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaResult {
+	result := SchemaResult{
 		Version: sch.Version,
-		Types:   make(map[string]TypeSchemaJSON),
-		Traits:  make(map[string]TraitSchemaJSON),
+		Types:   make(map[string]TypeSchema),
+		Traits:  make(map[string]TraitSchema),
 	}
 
 	// User-defined types
 	for name, typeDef := range sch.Types {
-		result.Types[name] = buildTypeSchemaJSON(name, typeDef, false)
+		result.Types[name] = buildTypeSchema(name, typeDef, false)
 	}
 
 	// Built-in types
-	result.Types["page"] = TypeSchemaJSON{Name: "page", Builtin: true}
-	result.Types["section"] = TypeSchemaJSON{Name: "section", Builtin: true}
-	result.Types["date"] = TypeSchemaJSON{Name: "date", Builtin: true}
+	result.Types["page"] = TypeSchema{Name: "page", Builtin: true}
+	result.Types["section"] = TypeSchema{Name: "section", Builtin: true}
+	result.Types["date"] = TypeSchema{Name: "date", Builtin: true}
 
 	// Traits
 	for name, traitDef := range sch.Traits {
-		result.Traits[name] = buildTraitSchemaJSON(name, traitDef)
+		result.Traits[name] = buildTraitSchema(name, traitDef)
 	}
 
 	// Queries from vault config
 	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
-		result.Queries = make(map[string]QuerySchemaJSON)
+		result.Queries = make(map[string]QuerySchemaResult)
 		for name, q := range vaultCfg.Queries {
-			result.Queries[name] = QuerySchemaJSON{
+			result.Queries[name] = QuerySchemaResult{
 				Name:        name,
 				Description: q.Description,
 				Types:       q.Types,
@@ -538,8 +371,8 @@ func buildSchemaJSON(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaJSO
 	return result
 }
 
-func buildTypeSchemaJSON(name string, typeDef *schema.TypeDefinition, builtin bool) TypeSchemaJSON {
-	result := TypeSchemaJSON{
+func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) TypeSchema {
+	result := TypeSchema{
 		Name:    name,
 		Builtin: builtin,
 	}
@@ -548,14 +381,14 @@ func buildTypeSchemaJSON(name string, typeDef *schema.TypeDefinition, builtin bo
 		result.DefaultPath = typeDef.DefaultPath
 
 		if len(typeDef.Fields) > 0 {
-			result.Fields = make(map[string]FieldSchemaJSON)
+			result.Fields = make(map[string]FieldSchema)
 			for fieldName, fieldDef := range typeDef.Fields {
 				if fieldDef != nil {
 					defaultStr := ""
 					if fieldDef.Default != nil {
 						defaultStr = fmt.Sprintf("%v", fieldDef.Default)
 					}
-					result.Fields[fieldName] = FieldSchemaJSON{
+					result.Fields[fieldName] = FieldSchema{
 						Type:     string(fieldDef.Type),
 						Required: fieldDef.Required,
 						Default:  defaultStr,
@@ -579,8 +412,8 @@ func buildTypeSchemaJSON(name string, typeDef *schema.TypeDefinition, builtin bo
 	return result
 }
 
-func buildTraitSchemaJSON(name string, traitDef *schema.TraitDefinition) TraitSchemaJSON {
-	result := TraitSchemaJSON{Name: name}
+func buildTraitSchema(name string, traitDef *schema.TraitDefinition) TraitSchema {
+	result := TraitSchema{Name: name}
 	if traitDef != nil {
 		result.Type = string(traitDef.Type)
 		result.Values = traitDef.Values
