@@ -3,7 +3,6 @@ package vault
 import (
 	"fmt"
 	"os/exec"
-	"runtime"
 	"strings"
 
 	"github.com/ravenscroftj/raven/internal/config"
@@ -13,8 +12,9 @@ import (
 // Returns true if the editor was launched, false otherwise.
 // The process is started in the background (non-blocking).
 //
-// On macOS, if the editor contains spaces (e.g., "open -a Cursor"),
-// it will be executed via shell to handle the arguments correctly.
+// Note: If your vault path contains spaces (e.g., iCloud paths like
+// "Mobile Documents"), some editors may have issues. Use a symlink
+// to a path without spaces as a workaround.
 func OpenInEditor(cfg *config.Config, filePath string) bool {
 	if cfg == nil {
 		return false
@@ -27,16 +27,10 @@ func OpenInEditor(cfg *config.Config, filePath string) bool {
 
 	var cmd *exec.Cmd
 
-	// If editor contains spaces, it might be a compound command like "open -a Cursor"
+	// If editor contains spaces, it's a compound command like "open -a Cursor"
 	// Execute via shell to handle this correctly
 	if strings.Contains(editor, " ") {
-		if runtime.GOOS == "darwin" {
-			// macOS: use sh -c
-			cmd = exec.Command("sh", "-c", editor+" "+shellQuote(filePath))
-		} else {
-			// Linux/other: use sh -c
-			cmd = exec.Command("sh", "-c", editor+" "+shellQuote(filePath))
-		}
+		cmd = exec.Command("sh", "-c", editor+" "+shellQuote(filePath))
 	} else {
 		cmd = exec.Command(editor, filePath)
 	}
@@ -50,7 +44,6 @@ func OpenInEditor(cfg *config.Config, filePath string) bool {
 
 // shellQuote quotes a string for safe use in shell commands.
 func shellQuote(s string) string {
-	// Use single quotes and escape any single quotes in the string
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
