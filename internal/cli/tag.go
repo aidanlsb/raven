@@ -11,20 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TagItemJSON is the JSON representation of a tag query result.
-type TagItemJSON struct {
-	Tag      string `json:"tag"`
-	ObjectID string `json:"object_id"`
-	FilePath string `json:"file_path"`
-	Line     *int   `json:"line,omitempty"`
-}
-
-// TagSummaryJSON is the JSON representation of a tag in --list mode.
-type TagSummaryJSON struct {
-	Tag   string `json:"tag"`
-	Count int    `json:"count"`
-}
-
 var tagCmd = &cobra.Command{
 	Use:   "tag <name>",
 	Short: "Query objects by tag",
@@ -98,9 +84,9 @@ func listAllTagsWithJSON(db *index.Database, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		items := make([]TagSummaryJSON, len(tags))
+		items := make([]TagSummary, len(tags))
 		for i, t := range tags {
-			items[i] = TagSummaryJSON{
+			items[i] = TagSummary{
 				Tag:   t.Tag,
 				Count: t.Count,
 			}
@@ -179,9 +165,9 @@ func queryTagWithJSON(db *index.Database, vaultPath string, tagName string, star
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		items := make([]TagItemJSON, len(results))
+		items := make([]TagResult, len(results))
 		for i, r := range results {
-			items[i] = TagItemJSON{
+			items[i] = TagResult{
 				Tag:      r.Tag,
 				ObjectID: r.ObjectID,
 				FilePath: r.FilePath,

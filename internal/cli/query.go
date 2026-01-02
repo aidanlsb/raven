@@ -10,36 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// SavedQueryJSON is the JSON representation of a saved query definition.
-type SavedQueryJSON struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Types       []string          `json:"types,omitempty"`
-	Traits      []string          `json:"traits,omitempty"`
-	Tags        []string          `json:"tags,omitempty"`
-	Filters     map[string]string `json:"filters,omitempty"`
-}
-
-// QueryResultJSON is the JSON representation of query results.
-type QueryResultJSON struct {
-	QueryName string                   `json:"query_name"`
-	Types     []QueryTypeResultJSON    `json:"types,omitempty"`
-	Traits    []TraitResultJSON        `json:"traits,omitempty"`
-	Tags      []QueryTagResultJSON     `json:"tags,omitempty"`
-}
-
-// QueryTypeResultJSON represents type results in a query.
-type QueryTypeResultJSON struct {
-	Type  string       `json:"type"`
-	Items []ObjectJSON `json:"items"`
-}
-
-// QueryTagResultJSON represents tag results in a query.
-type QueryTagResultJSON struct {
-	Tags  []string `json:"tags"`
-	Items []string `json:"items"` // Object IDs
-}
-
 var queryCmd = &cobra.Command{
 	Use:   "query <name-or-trait>",
 	Short: "Run a saved query or query a trait",
@@ -100,9 +70,9 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		var queries []SavedQueryJSON
+		var queries []SavedQueryInfo
 		for name, q := range vaultCfg.Queries {
-			queries = append(queries, SavedQueryJSON{
+			queries = append(queries, SavedQueryInfo{
 				Name:        name,
 				Description: q.Description,
 				Types:       q.Types,
@@ -153,7 +123,7 @@ func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no traits, types, or tags defined", name), "")
 	}
 
-	var result QueryResultJSON
+	var result QueryResult
 	result.QueryName = name
 	hasResults := false
 
@@ -167,16 +137,16 @@ func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string
 
 			if len(results) > 0 {
 				hasResults = true
-				var items []ObjectJSON
+				var items []ObjectResult
 				for _, obj := range results {
-				items = append(items, ObjectJSON{
+				items = append(items, ObjectResult{
 					ID:        obj.ID,
 					Type:      typeName,
 					FilePath:  obj.FilePath,
 					LineStart: obj.LineStart,
 				})
 				}
-				result.Types = append(result.Types, QueryTypeResultJSON{
+				result.Types = append(result.Types, TypeQueryResult{
 					Type:  typeName,
 					Items: items,
 				})
@@ -215,7 +185,7 @@ func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string
 		if len(allResults) > 0 {
 			hasResults = true
 			for _, r := range allResults {
-				result.Traits = append(result.Traits, TraitResultJSON{
+				result.Traits = append(result.Traits, TraitResult{
 					ID:          fmt.Sprintf("%s:%d", r.FilePath, r.Line),
 					TraitType:   r.TraitType,
 					Value:       r.Value,
@@ -253,7 +223,7 @@ func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string
 
 		if len(objectIDs) > 0 {
 			hasResults = true
-			result.Tags = append(result.Tags, QueryTagResultJSON{
+			result.Tags = append(result.Tags, TagQueryResult{
 				Tags:  q.Tags,
 				Items: objectIDs,
 			})
@@ -319,9 +289,9 @@ func runTraitQueryWithJSON(db *index.Database, traitType string, valueFilter str
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		items := make([]TraitResultJSON, len(results))
+		items := make([]TraitResult, len(results))
 		for i, r := range results {
-			items[i] = TraitResultJSON{
+			items[i] = TraitResult{
 				ID:          fmt.Sprintf("%s:%d", r.FilePath, r.Line),
 				TraitType:   r.TraitType,
 				Value:       r.Value,

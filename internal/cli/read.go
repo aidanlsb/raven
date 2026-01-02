@@ -10,13 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// FileContentJSON is the JSON representation of file content.
-type FileContentJSON struct {
-	Path      string `json:"path"`
-	Content   string `json:"content"`
-	LineCount int    `json:"line_count"`
-}
-
 var readCmd = &cobra.Command{
 	Use:   "read <path>",
 	Short: "Read raw file content",
@@ -74,7 +67,7 @@ Examples:
 		}
 
 		if isJSONOutput() {
-			outputSuccess(FileContentJSON{
+			outputSuccess(FileResult{
 				Path:      filePath,
 				Content:   string(content),
 				LineCount: lineCount,

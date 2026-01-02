@@ -8,15 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// StatsJSON is the JSON representation of vault statistics.
-type StatsJSON struct {
-	FileCount   int `json:"file_count"`
-	ObjectCount int `json:"object_count"`
-	TraitCount  int `json:"trait_count"`
-	RefCount    int `json:"ref_count"`
-	TagCount    int `json:"tag_count,omitempty"`
-}
-
 var statsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Show index statistics",
@@ -43,7 +34,7 @@ Examples:
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
-			outputSuccess(StatsJSON{
+			outputSuccess(StatsResult{
 				FileCount:   stats.FileCount,
 				ObjectCount: stats.ObjectCount,
 				TraitCount:  stats.TraitCount,

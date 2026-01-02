@@ -22,13 +22,6 @@ var (
 	addToFlag string
 )
 
-// AddResultJSON is the JSON representation of an add command result.
-type AddResultJSON struct {
-	File    string `json:"file"`
-	Line    int    `json:"line"`
-	Content string `json:"content"`
-}
-
 var addCmd = &cobra.Command{
 	Use:   "add <text>",
 	Short: "Quick capture - append text to daily note or inbox",
@@ -149,7 +142,7 @@ Configuration (raven.yaml):
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
-			outputSuccessWithWarnings(AddResultJSON{
+			outputSuccessWithWarnings(CaptureResult{
 				File:    relPath,
 				Line:    lineNum,
 				Content: line,

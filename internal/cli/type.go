@@ -12,22 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ObjectJSON is the JSON representation of an object query result.
-type ObjectJSON struct {
-	ID        string                 `json:"id"`
-	Type      string                 `json:"type"`
-	FilePath  string                 `json:"file_path"`
-	LineStart int                    `json:"line_start"`
-	Fields    map[string]interface{} `json:"fields,omitempty"`
-}
-
-// TypeSummaryJSON is the JSON representation of a type in --list mode.
-type TypeSummaryJSON struct {
-	Name    string `json:"name"`
-	Count   int    `json:"count"`
-	Builtin bool   `json:"builtin"`
-}
-
 var typeCmd = &cobra.Command{
 	Use:   "type <name>",
 	Short: "List objects of a specific type",
@@ -75,13 +59,13 @@ Examples:
 		})
 
 		if isJSONOutput() {
-			items := make([]ObjectJSON, len(results))
+			items := make([]ObjectResult, len(results))
 			for i, obj := range results {
 				var fields map[string]interface{}
 				if obj.Fields != "" && obj.Fields != "{}" {
 					json.Unmarshal([]byte(obj.Fields), &fields)
 				}
-				items[i] = ObjectJSON{
+				items[i] = ObjectResult{
 					ID:        obj.ID,
 					Type:      typeName,
 					FilePath:  obj.FilePath,
@@ -149,14 +133,14 @@ func listTypesWithJSON(vaultPath string, start time.Time) error {
 	sort.Strings(typeNames)
 
 	// Gather data
-	var summaries []TypeSummaryJSON
+	var summaries []TypeSummary
 	for _, typeName := range typeNames {
 		results, err := db.QueryObjects(typeName)
 		count := 0
 		if err == nil {
 			count = len(results)
 		}
-		summaries = append(summaries, TypeSummaryJSON{
+		summaries = append(summaries, TypeSummary{
 			Name:    typeName,
 			Count:   count,
 			Builtin: typeSet[typeName],
