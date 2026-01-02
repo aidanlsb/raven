@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/schema"
@@ -37,11 +38,29 @@ Creates:
 			return fmt.Errorf("failed to create .raven directory: %w", err)
 		}
 
-		// Create vault-level .gitignore (if it doesn't already exist)
+		// Ensure .gitignore has Raven entries
 		gitignorePath := filepath.Join(path, ".gitignore")
-		createdGitignore := false
-		if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-			gitignoreContent := `# Raven (auto-generated)
+		gitignoreStatus := "created"
+		ravenGitignoreEntries := []string{".raven/", ".trash/"}
+
+		existingContent := ""
+		if data, err := os.ReadFile(gitignorePath); err == nil {
+			existingContent = string(data)
+		}
+
+		// Check which entries are missing
+		var missingEntries []string
+		for _, entry := range ravenGitignoreEntries {
+			if !strings.Contains(existingContent, entry) {
+				missingEntries = append(missingEntries, entry)
+			}
+		}
+
+		if len(missingEntries) > 0 {
+			var newContent string
+			if existingContent == "" {
+				// Create new file
+				newContent = `# Raven (auto-generated)
 # These are derived files - your markdown is the source of truth
 
 # Index database (rebuilt with 'rvn reindex')
@@ -50,10 +69,20 @@ Creates:
 # Trashed files
 .trash/
 `
-			if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
-				return fmt.Errorf("failed to create .gitignore: %w", err)
+			} else {
+				// Append to existing file
+				gitignoreStatus = "updated"
+				addition := "\n# Raven\n"
+				for _, entry := range missingEntries {
+					addition += entry + "\n"
+				}
+				newContent = strings.TrimRight(existingContent, "\n") + "\n" + addition
 			}
-			createdGitignore = true
+			if err := os.WriteFile(gitignorePath, []byte(newContent), 0644); err != nil {
+				return fmt.Errorf("failed to write .gitignore: %w", err)
+			}
+		} else if existingContent != "" {
+			gitignoreStatus = "already has Raven entries"
 		}
 
 		// Create default raven.yaml (vault config)
@@ -81,12 +110,15 @@ Creates:
 			fmt.Println("• schema.yaml already exists (kept)")
 		}
 
-		fmt.Println("✓ Created .raven/ directory (index)")
+		fmt.Println("✓ Ensured .raven/ directory exists")
 
-		if createdGitignore {
-			fmt.Println("✓ Created .gitignore (ignores derived files)")
-		} else {
-			fmt.Println("• .gitignore already exists (kept)")
+		switch gitignoreStatus {
+		case "created":
+			fmt.Println("✓ Created .gitignore")
+		case "updated":
+			fmt.Println("✓ Updated .gitignore (added Raven entries)")
+		default:
+			fmt.Println("• .gitignore already has Raven entries")
 		}
 
 		if createdConfig || createdSchema {
