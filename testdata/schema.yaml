@@ -1,61 +1,62 @@
-# Raven Schema Configuration
-
-version: 2
-
-types:
-  person:
-    default_path: people/
-    fields:
-      name:
-        type: string
-        required: true
-      email:
-        type: string
-    traits: [due, priority]  # People can have due dates and priorities
-
-  project:
-    default_path: projects/
-    fields:
-      status:
-        type: enum
-        values: [active, paused, completed, abandoned]
-        default: active
-      lead:
-        type: ref
-        target: person
-    traits:
-      due:
-        required: true  # Projects must have a due date
-      priority: {}
-
-  # Note: 'date' type is built-in for daily notes (YYYY-MM-DD.md files)
-
-  meeting:
-    fields:
-      time:
-        type: string
-      attendees:
-        type: ref[]
-        target: person
-    traits: [remind]  # Meetings can have reminders
-
-# Traits are single-valued annotations
 traits:
-  due:
-    type: date
-
-  priority:
-    type: enum
-    values: [low, medium, high]
-    default: medium
-
-  status:
-    type: enum
-    values: [todo, in_progress, done]
-    default: todo
-
-  remind:
-    type: datetime
-
-  highlight:
-    type: boolean
+    due:
+        type: date
+    highlight:
+        type: boolean
+    priority:
+        default: medium
+        type: enum
+        values:
+            - low
+            - medium
+            - high
+    remind:
+        type: datetime
+    status:
+        default: todo
+        type: enum
+        values:
+            - todo
+            - in_progress
+            - done
+types:
+    meeting:
+        fields:
+            attendees:
+                target: person
+                type: ref[]
+            time:
+                type: string
+        traits:
+            - remind
+    person:
+        default_path: people/
+        fields:
+            email:
+                required: false
+                type: string
+            name:
+                required: true
+                type: string
+        traits:
+            - due
+            - priority
+    project:
+        default_path: projects/
+        fields:
+            lead:
+                target: person
+                type: ref
+            status:
+                default: active
+                type: enum
+                values:
+                    - active
+                    - paused
+                    - completed
+                    - abandoned
+        traits:
+            due:
+                required: true
+            priority: {}
+version: 2

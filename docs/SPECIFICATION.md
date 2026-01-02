@@ -905,6 +905,8 @@ cmd/
     └── main.go              # Entry point, Cobra root command
 
 internal/
+├── commands/
+│   └── registry.go          # Command metadata registry (single source of truth)
 ├── config/
 │   ├── config.go            # Load ~/.config/raven/config.toml (global config)
 │   └── vault.go             # Load raven.yaml (vault config)
@@ -927,23 +929,56 @@ internal/
 │   └── dates.go             # Date filter parsing
 ├── check/
 │   └── validator.go         # Vault-wide validation (rvn check)
+├── pages/
+│   └── create.go            # Consolidated page creation logic
+├── vault/
+│   ├── dates.go             # Date parsing utilities
+│   ├── walk.go              # Markdown file walking
+│   └── editor.go            # Open files in editor
+├── audit/
+│   └── audit.go             # Audit log operations
+├── mcp/
+│   ├── server.go            # MCP server (JSON-RPC over stdin/stdout)
+│   └── tools.go             # Generate MCP tools from command registry
 └── cli/
     ├── root.go              # Cobra root command setup
+    ├── results.go           # Shared JSON result types
+    ├── json.go              # JSON output helpers
+    ├── errors.go            # Error codes and handling
     ├── init.go              # rvn init
     ├── reindex.go           # rvn reindex
     ├── check.go             # rvn check
     ├── trait.go             # rvn trait
-    ├── query.go             # rvn query (including saved queries)
+    ├── type.go              # rvn type
+    ├── tag.go               # rvn tag
+    ├── query.go             # rvn query
     ├── backlinks.go         # rvn backlinks
     ├── stats.go             # rvn stats
     ├── untyped.go           # rvn untyped
     ├── daily.go             # rvn daily
     ├── date.go              # rvn date
     ├── new.go               # rvn new
-    ├── daily.go             # rvn daily
-    ├── date.go              # rvn date
-    └── new.go               # rvn new
+    ├── add.go               # rvn add
+    ├── read.go              # rvn read
+    ├── delete.go            # rvn delete
+    ├── schema.go            # rvn schema (introspection)
+    ├── schema_edit.go       # rvn schema add (modification)
+    └── serve.go             # rvn serve (MCP server)
 ```
+
+### Command Registry
+
+The **command registry** (`internal/commands/registry.go`) is the single source of truth for all CLI commands:
+
+- Each command has metadata: name, description, args, flags, examples
+- MCP tools are auto-generated from this registry
+- `rvn schema commands` reads from this registry
+- This ensures CLI and MCP tool schemas never diverge
+
+When adding a new command:
+1. Add metadata to `internal/commands/registry.go`
+2. Create the Cobra command handler in `internal/cli/`
+3. The MCP tool becomes automatically available
 
 ---
 
@@ -1904,7 +1939,13 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_schema` | Introspect schema | optional `subcommand` |
 | `raven_schema_add_type` | Add type to schema | `name`, optional `default_path` |
 | `raven_schema_add_trait` | Add trait to schema | `name`, optional `type`, `values` |
-| `raven_schema_add_field` | Add field to type | `type_name`, `field_name`, optional `field_type`, `required`, `target` |
+| `raven_schema_add_field` | Add field to type | `type_name`, `field_name`, optional flags |
+| `raven_schema_update_type` | Update type | `name`, optional `default_path`, `add_trait`, `remove_trait` |
+| `raven_schema_update_trait` | Update trait | `name`, optional `type`, `values`, `default` |
+| `raven_schema_update_field` | Update field (blocks on integrity issues) | `type_name`, `field_name`, optional flags |
+| `raven_schema_remove_type` | Remove type (files become 'page') | `name`, optional `force` |
+| `raven_schema_remove_trait` | Remove trait (instances stay in files) | `name`, optional `force` |
+| `raven_schema_remove_field` | Remove field (blocks if required) | `type_name`, `field_name` |
 | `raven_schema_validate` | Validate schema | (none) |
 
 ### JSON Response Format
@@ -1944,6 +1985,7 @@ Errors use structured codes for programmatic handling:
 3. **Backlink Awareness**: Delete warns about references to the deleted object
 4. **Read-Only by Default**: `add` only appends to existing files; use `new` for creation
 5. **Vault Scoped**: All operations are restricted to the configured vault
+6. **Auto-Generated Tools**: MCP tools are generated from the command registry, ensuring CLI and MCP are always in sync
 
 ---
 

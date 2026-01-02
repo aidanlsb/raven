@@ -23,23 +23,16 @@ rvn migrate --syntax            # Apply
 
 ## CLI Improvements
 
-### Interactive Type Creation
-Allow users to define new types interactively from the CLI:
+### ~~Interactive Type/Trait Creation~~ ✅ IMPLEMENTED
+Schema modification via CLI:
 ```bash
-rvn schema add-type
-# Prompts for: type name, fields, default_path, etc.
-# Writes to schema.yaml
+rvn schema add type event --default-path events/
+rvn schema add trait priority --type enum --values high,medium,low
+rvn schema add field person email --type string --required
+rvn schema validate
 ```
 
-**Why postponed**: Schema editing is infrequent; users can edit YAML directly.
-
----
-
-### Interactive Trait Creation
-Similar to type creation, but for traits:
-```bash
-rvn schema add-trait
-```
+**Status**: ✅ Implemented. See `rvn schema add --help` for all options.
 
 ---
 

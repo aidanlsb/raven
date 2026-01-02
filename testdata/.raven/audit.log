@@ -1,1 +1,6 @@
 {"ts":"2026-01-02T01:31:07.799219Z","op":"delete","entity":"object","id":"people/bob"}
+{"ts":"2026-01-02T06:15:53.062535Z","op":"schema_update","entity":"schema","id":"person","extra":{"changes":["default_path=folks/"],"kind":"type"}}
+{"ts":"2026-01-02T06:16:07.977262Z","op":"schema_update","entity":"schema","id":"person","extra":{"changes":["default_path=people/"],"kind":"type"}}
+{"ts":"2026-01-02T06:16:13.422781Z","op":"schema_update","entity":"schema","id":"person.email","extra":{"changes":["required=true"],"kind":"field"}}
+{"ts":"2026-01-02T06:16:24.848008Z","op":"schema_remove","entity":"schema","id":"person.phone","extra":{"kind":"field"}}
+{"ts":"2026-01-02T06:16:24.858559Z","op":"schema_update","entity":"schema","id":"person.email","extra":{"changes":["required=false"],"kind":"field"}}

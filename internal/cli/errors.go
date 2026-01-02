@@ -53,6 +53,12 @@ const (
 	// General errors
 	ErrInternal         = "INTERNAL_ERROR"
 	ErrNotImplemented   = "NOT_IMPLEMENTED"
+
+	// Schema modification errors
+	ErrDataIntegrityBlock  = "DATA_INTEGRITY_BLOCK"
+	ErrConfirmationRequired = "CONFIRMATION_REQUIRED"
+	ErrFileDoesNotExist    = "FILE_DOES_NOT_EXIST"
+	ErrRequiredFieldMissing = "REQUIRED_FIELD_MISSING"
 )
 
 // Warning codes for non-fatal issues.

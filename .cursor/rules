@@ -85,6 +85,33 @@ Types declare which traits are valid in their frontmatter using the `traits` fie
 
 **No hidden behavior**: If the system does something, it should be traceable to configuration or documented built-in behavior.
 
+### Schema Changes Must Preserve Data Integrity
+
+**Any schema modification that would result in invalid or incomplete data must be blocked until the user resolves the underlying issues.**
+
+This means:
+- **Removing a required field**: Blocked if any objects of that type exist (they would become invalid)
+- **Making a field required**: Blocked if any objects lack that field
+- **Changing field type** (e.g., string → date): Blocked if existing values don't match the new type
+- **Removing a type**: Allowed, but objects become `page` type (warn, require `--force`)
+- **Removing a trait**: Allowed, but existing trait instances remain in files (warn, require `--force`)
+
+**Why strict?** Raven is a personal knowledge system—data integrity is paramount. It's better to require the user to fix 3 files before a schema change than to silently create 3 invalid objects. We start strict and can relax if it becomes burdensome, but correctness comes first.
+
+**Resolution workflow**:
+```bash
+$ rvn schema update field person email --required
+Error: 3 person objects lack 'email' field:
+  - people/alice.md
+  - people/bob.md
+  - people/carol.md
+
+Add the field to these files, then retry.
+Hint: Use 'rvn type person --json' to list all person objects.
+```
+
+**Audit logging**: All schema mutations are logged to `.raven/audit.log`.
+
 ### General System, User Workflow
 
 Raven is a **general system** for adding typed structure to markdown:
@@ -133,6 +160,18 @@ This protects users from:
 
 ### General Best Practices
 - Make sure that core functionality is implemented once, not duplicated. And then reused throughout the app as needed. For example, in an earlier version we had a few different implementations of new page creation -- this should always be a single implementation that is called from different entrypoints as needed
+
+### Command Registry Pattern
+The **command registry** (`internal/commands/registry.go`) is the single source of truth for all CLI commands:
+- Add new commands by adding an entry to the registry
+- MCP tools are auto-generated from the registry
+- `rvn schema commands` reads from the registry
+- This ensures CLI and MCP never diverge
+
+When adding a new command:
+1. Add the command metadata to `internal/commands/registry.go`
+2. Create the Cobra command handler in `internal/cli/`
+3. The MCP tool will be automatically available
 
 ### Go Conventions
 
