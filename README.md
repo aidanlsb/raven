@@ -50,47 +50,38 @@ Plain markdown. Queryable structure. AI-native.
 
 ## Table of Contents
 
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [AI Agent Integration](#ai-agent-integration)
-  - [Setting Up with Claude Desktop](#setting-up-with-claude-desktop)
-  - [What Agents Can Do](#what-agents-can-do)
-  - [Example Agent Interactions](#example-agent-interactions)
-- [File Format](#file-format)
-  - [Frontmatter](#frontmatter-file-level-type)
-  - [Embedded Types](#embedded-types)
+- [Getting Started](#getting-started)
+- [Core Concepts](#core-concepts)
+  - [File Format](#file-format)
+  - [Schema Definition](#schema-definition)
+  - [Types](#types)
   - [Traits](#traits)
   - [References & Tags](#references--tags)
-- [CLI Commands](#cli-commands)
+- [Configuration](#configuration)
+  - [Schema (schema.yaml)](#schema-schemayaml)
+  - [Vault Config (raven.yaml)](#vault-config-ravenyaml)
+  - [Global Config](#global-config-configravenconfigtoml)
+- [CLI Reference](#cli-reference)
   - [Core Commands](#core-commands)
   - [Querying](#querying)
   - [Creating & Editing](#creating--editing)
   - [Daily Notes & Dates](#daily-notes--dates)
   - [Schema Management](#schema-management)
   - [Shell Completion](#shell-completion)
-- [Configuration](#configuration)
-  - [Schema (schema.yaml)](#schema-schemayaml)
-  - [Vault Config (raven.yaml)](#vault-config-ravenyaml)
-  - [Global Config](#global-config-configravenconfigtoml)
-- [Documentation](#documentation)
+- [AI Agent Integration](#ai-agent-integration)
+  - [Setting Up with Claude Desktop](#setting-up-with-claude-desktop)
+  - [What Agents Can Do](#what-agents-can-do)
+  - [Example Agent Interactions](#example-agent-interactions)
 - [Design Philosophy](#design-philosophy)
+- [Documentation](#documentation)
 - [Development](#development)
 - [License](#license)
 
 ---
 
-## Features
+## Getting Started
 
-- **Typed Objects**: Define what things *are* (person, project, meeting, book)
-- **Traits**: Single-valued annotations on content (`@due`, `@priority`, `@highlight`)
-- **References**: Wiki-style links between notes (`[[people/alice]]`)
-- **Tags**: Lightweight categorization (`#productivity`)
-- **Saved Queries**: Define reusable queries for common workflows
-- **SQLite Index**: Fast querying while keeping markdown as source of truth
-- **MCP Server**: First-class AI agent integration via Model Context Protocol
-
-## Installation
+### Installation
 
 ```bash
 go install github.com/aidanlsb/raven/cmd/rvn@latest
@@ -105,63 +96,401 @@ go build -o rvn ./cmd/rvn
 go install ./cmd/rvn  # Install to $GOPATH/bin
 ```
 
-> **Note**: If publishing to a different GitHub account, update the module path in `go.mod` accordingly.
-
-## Quick Start
+### Initialize a Vault
 
 ```bash
-# Initialize a new vault
+# Create a new vault
 rvn init ~/notes
 
-# Set as default vault
+# Set as your default vault
 mkdir -p ~/.config/raven
 echo 'default_vault = "/Users/you/notes"' > ~/.config/raven/config.toml
+```
 
-# Reindex all files
+This creates:
+- `raven.yaml` — vault configuration
+- `schema.yaml` — your types and traits definitions
+- `.raven/` — index directory (gitignored)
+- `.gitignore` — ignores derived files
+
+### Start Writing
+
+```bash
+# Open today's daily note
+rvn daily
+
+# Quick capture a thought
+rvn add "Remember to call Alice about the project"
+
+# Build the index
 rvn reindex
+```
 
-# Validate your vault
-rvn check
+That's it! Now let's understand how Raven files work.
 
-# Query traits
-rvn trait due --value today        # Items due today
-rvn trait due --value past         # Overdue items
-rvn trait highlight                # All highlights
+---
 
-# Query tags
-rvn tag --list                     # List all tags
-rvn tag project                    # Find all #project items
+## Core Concepts
 
-# Quick capture
-rvn add "Call Alice about the project"
-rvn add "@due(tomorrow) Send estimate"
-rvn add "Idea" --to inbox.md       # Override destination
+Raven extends plain markdown with three ideas: **types** (what things are), **traits** (annotations on content), and **references** (links between notes). All of these are defined in your `schema.yaml`.
 
-# Create new typed objects
-rvn new person "Alice Chen"        # Creates people/alice-chen.md
-rvn new project "Website Redesign" # Creates projects/website-redesign.md
+### File Format
+
+A Raven file is just markdown with optional YAML frontmatter:
+
+```markdown
+---
+type: project
+status: active
+client: "[[clients/acme]]"
+---
+
+# Website Redesign
+
+Overhaul of the Acme Corp marketing site.
+
+- @due(2025-02-15) Finalize wireframes
+- @due(2025-03-01) Design review with [[people/alice]]
+- @highlight The mobile-first approach is working well
+```
+
+**What's happening here:**
+- `type: project` — this file is a "project" (defined in your schema)
+- `status`, `client` — fields defined on the project type
+- `@due(...)` — inline traits (queryable annotations)
+- `@highlight` — a boolean trait (no value needed)
+- `[[...]]` — references to other notes
+
+### Schema Definition
+
+Your `schema.yaml` defines what types and traits exist in your vault:
+
+```yaml
+version: 2
+
+types:
+  person:
+    default_path: people/      # Where new persons are created
+    fields:
+      name: { type: string, required: true }
+      email: { type: string }
+
+  project:
+    default_path: projects/
+    fields:
+      name: { type: string, required: true }
+      client: { type: ref, target: client }
+      status:
+        type: enum
+        values: [active, paused, completed]
+        default: active
+
+traits:
+  due:
+    type: date                 # Queryable with date filters
+
+  priority:
+    type: enum
+    values: [low, medium, high]
+    default: medium
+
+  highlight:
+    type: boolean              # Just @highlight, no value
+```
+
+The schema is the source of truth. Types and traits not defined here won't be indexed or queryable. Run `rvn check --create-missing` to interactively add undefined items to your schema.
+
+### Types
+
+Types define what objects **are**. They live in frontmatter:
+
+```markdown
+---
+type: person
+name: Alice Chen
+email: alice@example.com
+---
+
+# Alice Chen
+
+Senior engineer on the platform team.
+```
+
+**Built-in types:**
+- `page` — fallback for files without explicit type
+- `date` — daily notes (auto-assigned to `YYYY-MM-DD.md` files)
+
+Create typed objects with the CLI:
+
+```bash
+rvn new person "Alice Chen"        # → people/alice-chen.md
+rvn new project "Website Redesign" # → projects/website-redesign.md
+```
+
+### Traits
+
+Traits are **single-valued annotations** on content. They appear inline:
+
+```markdown
+- @due(2025-02-03) Send the proposal
+- @priority(high) Review security audit
+- @highlight This insight changed everything
+```
+
+Or in frontmatter (for types that declare them):
+
+```markdown
+---
+type: project
+due: 2025-06-30
+priority: high
+---
+```
+
+**Query traits:**
+
+```bash
+rvn trait due --value today      # Items due today
+rvn trait due --value past       # Overdue items
+rvn trait priority --value high  # High priority items
+rvn trait highlight              # All highlights
+```
+
+**"Tasks" are emergent**: Raven doesn't have a built-in task type. Anything with `@due` or `@status` is effectively a task. Define what "tasks" means in your workflow using saved queries.
+
+### References & Tags
+
+**References** link notes together using wiki-style syntax:
+
+```markdown
+Met with [[people/alice]] about [[projects/website]].
+```
+
+References auto-slugify: `[[people/Mr. Whatsit]]` resolves to `people/mr-whatsit.md`.
+
+**Tags** provide lightweight categorization:
+
+```markdown
+Some thoughts about #productivity today.
+```
+
+**Query them:**
+
+```bash
+rvn backlinks people/alice       # What references Alice?
+rvn tag productivity             # All #productivity items
+```
+
+---
+
+## Configuration
+
+### Schema (`schema.yaml`)
+
+Full schema example with types, traits, and field types:
+
+```yaml
+version: 2
+
+types:
+  person:
+    default_path: people/
+    fields:
+      name: { type: string, required: true }
+      email: { type: string }
+
+  client:
+    default_path: clients/
+    fields:
+      name: { type: string, required: true }
+      contact: { type: ref, target: person }
+
+  project:
+    default_path: projects/
+    fields:
+      client: { type: ref, target: client }
+      status:
+        type: enum
+        values: [active, paused, completed]
+        default: active
+    traits:
+      due: { required: true }  # Projects must have due dates
+      priority: {}             # Optional
+
+traits:
+  due:
+    type: date
+
+  priority:
+    type: enum
+    values: [low, medium, high]
+    default: medium
+
+  status:
+    type: enum
+    values: [todo, in_progress, done]
+    default: todo
+
+  highlight:
+    type: boolean
+```
+
+**Field types:** `string`, `date`, `datetime`, `enum`, `bool`, `ref`
+
+**Trait types:** `date`, `datetime`, `enum`, `boolean`, `string`
+
+### Vault Config (`raven.yaml`)
+
+Configure vault behavior and saved queries:
+
+```yaml
+daily_directory: daily
+
+# Quick capture settings
+capture:
+  destination: daily      # or a file path like "inbox.md"
+  heading: "## Captured"  # Optional heading to append under
+  timestamp: false        # Prefix captures with time
+  reindex: true           # Reindex after capture
+
+# Deletion behavior
+deletion:
+  behavior: trash         # "trash" (default) or "permanent"
+  trash_dir: .trash       # Directory for trashed files
 
 # Saved queries
-rvn query --list                   # List available queries
-rvn query tasks                    # Run 'tasks' query
-rvn query overdue                  # Run 'overdue' query
+queries:
+  tasks:
+    traits: [due, status]
+    filters:
+      status: "!done"              # NOT done
+    description: "Open tasks"
 
-# Create/manage saved queries
-rvn query add my-tasks --traits due,status --filter status=todo
-rvn query remove my-tasks
+  overdue:
+    traits: [due]
+    filters:
+      due: past
+    description: "Overdue items"
 
-# Show backlinks to a note
-rvn backlinks people/alice
+  urgent:
+    traits: [due]
+    filters:
+      due: "this-week|past"        # OR: this week or overdue
+    description: "Due soon or overdue"
 
-# Daily notes
-rvn daily                    # Today
-rvn daily yesterday          # Yesterday
-rvn daily 2025-02-01         # Specific date
-
-# Date hub - see everything related to a date
-rvn date                     # Today's date hub
-rvn date yesterday           # Yesterday's date hub
+  important:
+    tags: [important]
+    description: "Items tagged #important"
 ```
+
+**Filter Syntax:**
+- Simple value: `status: done` → exact match
+- OR with pipe: `due: "this-week|past"` → matches either
+- NOT with bang: `status: "!done"` → excludes value
+- Date keywords: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`
+
+### Global Config (`~/.config/raven/config.toml`)
+
+Configure default vault and editor:
+
+```toml
+default_vault = "/Users/you/notes"
+editor = "code"  # or "cursor", "vim", "nano", etc.
+
+[vaults]
+work = "/Users/you/work-notes"
+personal = "/Users/you/personal-notes"
+```
+
+Use named vaults: `rvn --vault work stats`
+
+---
+
+## CLI Reference
+
+### Core Commands
+
+| Command | Description |
+|---------|-------------|
+| `rvn init <path>` | Initialize a new vault |
+| `rvn check` | Validate vault (broken refs, schema errors) |
+| `rvn check --create-missing` | Interactively create missing pages, types, and traits |
+| `rvn reindex` | Rebuild the SQLite index |
+
+### Querying
+
+| Command | Description |
+|---------|-------------|
+| `rvn trait <name>` | Query any trait type |
+| `rvn trait <name> --value <filter>` | Filter by value (today, past, this-week, etc.) |
+| `rvn type <name>` | List objects of a specific type |
+| `rvn type --list` | List available types with counts |
+| `rvn tag <name>` | Find objects by tag |
+| `rvn tag --list` | List all tags with usage counts |
+| `rvn query <name>` | Run a saved query |
+| `rvn query --list` | List saved queries |
+| `rvn query add <name>` | Create a saved query |
+| `rvn query remove <name>` | Remove a saved query |
+| `rvn backlinks <target>` | Show incoming references |
+| `rvn search <query>` | Full-text search across vault |
+| `rvn stats` | Index statistics |
+| `rvn untyped` | List files using fallback 'page' type |
+
+### Creating & Editing
+
+| Command | Description |
+|---------|-------------|
+| `rvn new <type> [title]` | Create a new typed note |
+| `rvn new <type> <title> --field key=value` | Create with field values |
+| `rvn add <text>` | Quick capture to daily note |
+| `rvn add <text> --to <file>` | Append to existing file |
+| `rvn set <object_id> field=value...` | Update frontmatter fields |
+| `rvn edit <path> <old> <new>` | Surgical text replacement (preview by default) |
+| `rvn edit ... --confirm` | Apply the edit |
+| `rvn delete <object_id>` | Delete an object (moves to trash) |
+| `rvn delete <object_id> --force` | Delete without confirmation |
+
+### Daily Notes & Dates
+
+| Command | Description |
+|---------|-------------|
+| `rvn daily [date]` | Open/create a daily note |
+| `rvn date [date]` | Show everything related to a date |
+
+### Schema Management
+
+| Command | Description |
+|---------|-------------|
+| `rvn schema` | Show schema overview |
+| `rvn schema types` | List all types |
+| `rvn schema traits` | List all traits |
+| `rvn schema commands` | List available commands (for agents) |
+| `rvn schema add type <name>` | Add a new type |
+| `rvn schema add trait <name>` | Add a new trait |
+| `rvn schema add field <type> <field>` | Add a field to a type |
+| `rvn schema update type <name>` | Update a type (default path, add/remove traits) |
+| `rvn schema update trait <name>` | Update a trait (type, values, default) |
+| `rvn schema update field <type> <field>` | Update a field (type, required, default) |
+| `rvn schema remove type <name>` | Remove a type (files become 'page') |
+| `rvn schema remove trait <name>` | Remove a trait (instances remain) |
+| `rvn schema remove field <type> <field>` | Remove a field from a type |
+| `rvn schema validate` | Validate schema for errors |
+
+### Shell Completion
+
+Enable tab-completion for types and commands:
+
+```bash
+# Zsh (~/.zshrc)
+source <(rvn completion zsh)
+
+# Bash (~/.bashrc)
+source <(rvn completion bash)
+```
+
+Then `rvn new per<TAB>` completes to `rvn new person`.
+
+---
 
 ## AI Agent Integration
 
@@ -201,6 +530,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_tag` | Query by tags |
 | `raven_backlinks` | Find what references an object |
 | `raven_date` | Get all activity for a specific date |
+| `raven_daily` | Open or create the daily note |
 | `raven_stats` | Vault statistics |
 | `raven_schema` | Discover types, traits, and available commands |
 | `raven_schema_add_*` | Add types, traits, fields to schema |
@@ -251,270 +581,7 @@ rvn trait due --value today --json
 }
 ```
 
-## File Format
-
-### Frontmatter (File-Level Type)
-
-```markdown
 ---
-type: project
-due: 2025-06-30        # Traits can appear in frontmatter
-priority: high
-lead: "[[people/alice]]"
----
-
-# Website Redesign
-
-A complete overhaul of the company website.
-```
-
-### Embedded Types
-
-```markdown
-## Weekly Standup
-::meeting(id=standup, time=09:00, attendees=[[[people/alice]], [[people/bob]]])
-
-Discussed Q2 priorities.
-```
-
-### Traits
-
-Traits are **single-valued annotations**. They can appear:
-- **In frontmatter** (if the type declares them): `due: 2025-06-30`
-- **Inline in content**: `@due(2025-02-03) Send the estimate`
-
-```markdown
-- @due(2025-02-03) @priority(high) Send revised estimate
-- @remind(2025-02-05T09:00) Follow up on this
-- @highlight Key insight worth remembering
-```
-
-Both frontmatter and inline traits are indexed and queryable with `rvn trait`.
-
-**"Tasks" are emergent**: Anything with `@due` or `@status` is effectively a task. Use saved queries to define what "tasks" means in your workflow.
-
-### References & Tags
-
-```markdown
-Met with [[people/alice]] about [[projects/website]].
-
-Some thoughts about #productivity today.
-```
-
-**Smart resolution**: References like `[[people/Mr. Whatsit]]` automatically resolve to `people/mr-whatsit.md`. Write naturally—Raven handles the slugification.
-
-## CLI Commands
-
-### Core Commands
-
-| Command | Description |
-|---------|-------------|
-| `rvn init <path>` | Initialize a new vault |
-| `rvn check` | Validate vault (broken refs, schema errors) |
-| `rvn check --create-missing` | Interactively create missing pages, types, and traits |
-| `rvn reindex` | Rebuild the SQLite index |
-
-### Querying
-
-| Command | Description |
-|---------|-------------|
-| `rvn trait <name>` | Query any trait type |
-| `rvn trait <name> --value <filter>` | Filter by value (today, past, this-week, etc.) |
-| `rvn type <name>` | List objects of a specific type |
-| `rvn type --list` | List available types with counts |
-| `rvn tag <name>` | Find objects by tag |
-| `rvn tag --list` | List all tags with usage counts |
-| `rvn query <name>` | Run a saved query |
-| `rvn query --list` | List saved queries |
-| `rvn query add <name>` | Create a saved query |
-| `rvn query remove <name>` | Remove a saved query |
-| `rvn backlinks <target>` | Show incoming references |
-| `rvn stats` | Index statistics |
-| `rvn untyped` | List files using fallback 'page' type |
-
-### Creating & Editing
-
-| Command | Description |
-|---------|-------------|
-| `rvn new <type> [title]` | Create a new typed note |
-| `rvn new <type> <title> --field key=value` | Create with field values |
-| `rvn add <text>` | Quick capture to daily note |
-| `rvn add <text> --to <file>` | Append to existing file |
-| `rvn set <object_id> field=value...` | Update frontmatter fields |
-| `rvn edit <path> <old> <new>` | Surgical text replacement (preview by default) |
-| `rvn edit ... --confirm` | Apply the edit |
-| `rvn search <query>` | Full-text search across vault |
-| `rvn search <query> --type <type>` | Search filtered by type |
-| `rvn delete <object_id>` | Delete an object (moves to trash) |
-| `rvn delete <object_id> --force` | Delete without confirmation |
-
-### Daily Notes & Dates
-
-| Command | Description |
-|---------|-------------|
-| `rvn daily [date]` | Open/create a daily note |
-| `rvn date [date]` | Show everything related to a date |
-
-### Schema Management
-
-| Command | Description |
-|---------|-------------|
-| `rvn schema` | Show schema overview |
-| `rvn schema types` | List all types |
-| `rvn schema traits` | List all traits |
-| `rvn schema commands` | List available commands (for agents) |
-| `rvn schema add type <name>` | Add a new type |
-| `rvn schema add trait <name>` | Add a new trait |
-| `rvn schema add field <type> <field>` | Add a field to a type |
-| `rvn schema update type <name>` | Update a type (default path, add/remove traits) |
-| `rvn schema update trait <name>` | Update a trait (type, values, default) |
-| `rvn schema update field <type> <field>` | Update a field (type, required, default) |
-| `rvn schema remove type <name>` | Remove a type (files become 'page') |
-| `rvn schema remove trait <name>` | Remove a trait (instances remain) |
-| `rvn schema remove field <type> <field>` | Remove a field from a type |
-| `rvn schema validate` | Validate schema for errors |
-
-### MCP Server
-
-| Command | Description |
-|---------|-------------|
-| `rvn serve` | Start MCP server for AI agents |
-
-### Shell Completion
-
-Enable tab-completion for types and commands:
-
-```bash
-# Zsh (~/.zshrc)
-source <(rvn completion zsh)
-
-# Bash (~/.bashrc)
-source <(rvn completion bash)
-```
-
-Then `rvn new per<TAB>` completes to `rvn new person`.
-
-## Configuration
-
-### Schema (`schema.yaml`)
-
-Define types and traits:
-
-```yaml
-types:
-  person:
-    default_path: people/
-    fields:
-      name: { type: string, required: true }
-      email: { type: string }
-
-  client:
-    default_path: clients/
-    fields:
-      name: { type: string, required: true }
-      contact: { type: ref, target: person }
-
-  project:
-    default_path: projects/
-    fields:
-      client: { type: ref, target: client }
-      status:
-        type: enum
-        values: [active, paused, completed]
-        default: active
-
-# Traits are single-valued annotations
-traits:
-  due:
-    type: date
-
-  priority:
-    type: enum
-    values: [low, medium, high]
-    default: medium
-
-  status:
-    type: enum
-    values: [todo, in_progress, done]
-    default: todo
-
-  highlight:
-    type: boolean
-```
-
-### Vault Config (`raven.yaml`)
-
-Configure vault behavior and saved queries:
-
-```yaml
-daily_directory: daily
-
-# Quick capture settings
-capture:
-  destination: daily      # or a file path like "inbox.md"
-  heading: "## Captured"  # Optional heading to append under
-  timestamp: false        # Prefix captures with time (default: false, use --timestamp flag)
-  reindex: true           # Reindex after capture
-
-# Deletion behavior
-deletion:
-  behavior: trash         # "trash" (default) or "permanent"
-  trash_dir: .trash       # Directory for trashed files
-
-# Saved queries
-queries:
-  tasks:
-    traits: [due, status]
-    filters:
-      status: "!done"              # NOT done
-    description: "Open tasks"
-
-  overdue:
-    traits: [due]
-    filters:
-      due: past
-    description: "Overdue items"
-
-  urgent:
-    traits: [due]
-    filters:
-      due: "this-week|past"        # OR: this week or overdue
-    description: "Due soon or overdue"
-
-  # Tag-based queries
-  important:
-    tags: [important]
-    description: "Items tagged #important"
-```
-
-**Filter Syntax:**
-- Simple value: `status: done` → exact match
-- OR with pipe: `due: "this-week|past"` → matches either
-- NOT with bang: `status: "!done"` → excludes value
-- Date keywords: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`
-
-### Global Config (`~/.config/raven/config.toml`)
-
-Configure default vault and multiple vaults:
-
-```toml
-default_vault = "/Users/you/notes"
-editor = "code"  # or "vim", "nano", etc.
-
-[vaults]
-work = "/Users/you/work-notes"
-personal = "/Users/you/personal-notes"
-```
-
-Use named vaults: `rvn --vault work stats`
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Complete technical specification (data model, file format, schema, database, MCP server) |
-| [docs/FUTURE.md](docs/FUTURE.md) | Planned and potential future enhancements |
-| [docs/MIGRATIONS.md](docs/MIGRATIONS.md) | Schema and database migration guide |
 
 ## Design Philosophy
 
@@ -524,6 +591,18 @@ Use named vaults: `rvn --vault work stats`
 - **Explicit over magic**: Frontmatter is the source of truth for types
 - **Query-friendly**: SQLite index enables fast structured queries
 - **Agent-native**: Built for AI workflows with structured JSON output and MCP
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Complete technical specification (data model, file format, schema, database, MCP server) |
+| [docs/FUTURE.md](docs/FUTURE.md) | Planned and potential future enhancements |
+| [docs/MIGRATIONS.md](docs/MIGRATIONS.md) | Schema and database migration guide |
+
+---
 
 ## Development
 
@@ -564,6 +643,8 @@ go test ./...                    # All tests
 go test ./internal/mcp/... -v    # MCP parity tests
 go test ./internal/commands/...  # Registry tests
 ```
+
+---
 
 ## License
 
