@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>
-    Plain markdown with user-defined schemas and queryable annotations.<br>
+    Plain markdown notes with user-defined schemas and queryable annotations.<br>
     CLI-first. Agent-native.
   </strong>
 </p>
