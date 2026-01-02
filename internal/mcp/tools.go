@@ -102,6 +102,18 @@ func CLICommandName(toolName string) string {
 		return "schema add field"
 	case "schema_validate":
 		return "schema validate"
+	case "schema_update_type":
+		return "schema update type"
+	case "schema_update_trait":
+		return "schema update trait"
+	case "schema_update_field":
+		return "schema update field"
+	case "schema_remove_type":
+		return "schema remove type"
+	case "schema_remove_trait":
+		return "schema remove trait"
+	case "schema_remove_field":
+		return "schema remove field"
 	}
 
 	return toolName

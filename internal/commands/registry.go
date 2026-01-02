@@ -290,4 +290,107 @@ Warns about backlinks (objects that reference the deleted item).`,
 			"rvn schema validate --json",
 		},
 	},
+	"schema_update_type": {
+		Name:        "schema update type",
+		Description: "Update an existing type in the schema",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Name of the type to update", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "default-path", Description: "Update default directory for files", Type: FlagTypeString},
+			{Name: "add-trait", Description: "Add a trait to this type", Type: FlagTypeString},
+			{Name: "remove-trait", Description: "Remove a trait from this type", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn schema update type person --default-path people/ --json",
+			"rvn schema update type meeting --add-trait due --json",
+		},
+	},
+	"schema_update_trait": {
+		Name:        "schema update trait",
+		Description: "Update an existing trait in the schema",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Name of the trait to update", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "type", Description: "Update trait type", Type: FlagTypeString},
+			{Name: "values", Description: "Update enum values (comma-separated)", Type: FlagTypeString},
+			{Name: "default", Description: "Update default value", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn schema update trait priority --values critical,high,medium,low --json",
+		},
+	},
+	"schema_update_field": {
+		Name:        "schema update field",
+		Description: "Update a field on an existing type",
+		LongDesc: `Update an existing field's properties.
+
+Note: Making a field required will be blocked if any objects lack that field.
+Add the field to all objects first, then make it required.`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type containing the field", Required: true},
+			{Name: "field_name", Description: "Field to update", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "type", Description: "Update field type", Type: FlagTypeString},
+			{Name: "required", Description: "Update required status (true/false)", Type: FlagTypeString},
+			{Name: "default", Description: "Update default value", Type: FlagTypeString},
+			{Name: "target", Description: "Update target type for ref fields", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn schema update field person email --required=true --json",
+			"rvn schema update field project status --default=active --json",
+		},
+	},
+	"schema_remove_type": {
+		Name:        "schema remove type",
+		Description: "Remove a type from the schema",
+		LongDesc: `Remove a type definition from schema.yaml.
+
+Existing files of this type will become 'page' type (fallback).
+Use --force to skip confirmation prompt.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Name of the type to remove", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema remove type event --json",
+			"rvn schema remove type legacy --force --json",
+		},
+	},
+	"schema_remove_trait": {
+		Name:        "schema remove trait",
+		Description: "Remove a trait from the schema",
+		LongDesc: `Remove a trait definition from schema.yaml.
+
+Existing @trait instances will remain in files but no longer be indexed.
+Use --force to skip confirmation prompt.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Name of the trait to remove", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema remove trait priority --json",
+		},
+	},
+	"schema_remove_field": {
+		Name:        "schema remove field",
+		Description: "Remove a field from a type",
+		LongDesc: `Remove a field from a type definition.
+
+If the field is required, removal will be blocked until you make it optional first.
+Existing field values will remain in files but no longer be validated.`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type containing the field", Required: true},
+			{Name: "field_name", Description: "Field to remove", Required: true},
+		},
+		Examples: []string{
+			"rvn schema remove field person nickname --json",
+		},
+	},
 }

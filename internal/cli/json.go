@@ -133,3 +133,34 @@ func handleErrorMsg(code, message, suggestion string) error {
 	}
 	return fmt.Errorf("%s", message)
 }
+
+// handleErrorWithDetails handles an error with structured details.
+func handleErrorWithDetails(code, message, suggestion string, details interface{}) error {
+	if jsonOutput {
+		outputError(code, message, details, suggestion)
+		return nil
+	}
+	return fmt.Errorf("%s", message)
+}
+
+// outputSuccessWithWarningsMap outputs success with warnings as map slice.
+func outputSuccessWithWarningsMap(data interface{}, warnings []map[string]interface{}, meta *Meta) {
+	// Convert map warnings to Warning structs
+	var warningStructs []Warning
+	for _, w := range warnings {
+		ws := Warning{}
+		if code, ok := w["code"].(string); ok {
+			ws.Code = code
+		}
+		if msg, ok := w["message"].(string); ok {
+			ws.Message = msg
+		}
+		warningStructs = append(warningStructs, ws)
+	}
+	outputJSON(Response{
+		OK:       true,
+		Data:     data,
+		Warnings: warningStructs,
+		Meta:     meta,
+	})
+}

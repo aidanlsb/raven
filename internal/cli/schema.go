@@ -280,9 +280,9 @@ func listSchemaCommands(start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	// Generate commands from the registry - single source of truth!
-	cmds := make(map[string]CommandSchemaResult)
+	cmds := make(map[string]CommandSchema)
 	for name, meta := range commands.Registry {
-		cmd := CommandSchemaResult{
+		cmd := CommandSchema{
 			Description: meta.Description,
 			Examples:    meta.Examples,
 			UseCases:    meta.UseCases,
@@ -355,9 +355,9 @@ func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaR
 
 	// Queries from vault config
 	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
-		result.Queries = make(map[string]QuerySchemaResult)
+		result.Queries = make(map[string]SavedQueryInfo)
 		for name, q := range vaultCfg.Queries {
-			result.Queries[name] = QuerySchemaResult{
+			result.Queries[name] = SavedQueryInfo{
 				Name:        name,
 				Description: q.Description,
 				Types:       q.Types,

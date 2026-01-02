@@ -1,6 +1,54 @@
 # Raven
 
-A personal knowledge system with typed blocks, traits, and powerful querying. Built in Go for speed, with plain-text markdown files as the source of truth.
+Structured notes in plain text. Define types (person, project, meeting), annotate with traits (`@due`, `@priority`), and query across your vault—all while keeping files as readable markdown. First-class AI agent support via MCP.
+
+---
+
+## Quick Example
+
+**1. Define your schema** (`schema.yaml`):
+```yaml
+types:
+  person:
+    default_path: people/
+    fields:
+      name: { type: string, required: true }
+
+traits:
+  due: { type: date }
+  priority: { type: enum, values: [low, medium, high] }
+```
+
+**2. Write notes** (`projects/website.md`):
+```markdown
+---
+type: project
+---
+# Website Redesign
+
+- @due(yesterday) @priority(high) Finalize mockups with [[people/alice]]
+- @due(next-week) Review copy
+```
+
+**3. Query from CLI**:
+```bash
+$ rvn trait due --value past
+projects/website.md:6  @due(yesterday)  Finalize mockups with [[people/alice]]
+
+$ rvn backlinks people/alice
+projects/website.md:6  "Finalize mockups with [[people/alice]]"
+```
+
+**4. Or let an AI agent help**:
+```
+You: "What's overdue?"
+Claude: [calls raven_trait with due=past] 
+        "You have one overdue task: finalize mockups with Alice."
+
+You: "Add a task to follow up with Alice tomorrow"
+Claude: [calls raven_add] 
+        "Done—added to your daily note."
+```
 
 ---
 
@@ -31,6 +79,7 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
   - [Global Config](#global-config-configravenconfigtoml)
 - [Documentation](#documentation)
 - [Design Philosophy](#design-philosophy)
+- [Development](#development)
 - [License](#license)
 
 ---
@@ -149,7 +198,9 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_date` | Get all activity for a specific date |
 | `raven_stats` | Vault statistics |
 | `raven_schema` | Discover types, traits, and available commands |
-| `raven_schema_add_*` | Modify the schema (add types, traits, fields) |
+| `raven_schema_add_*` | Add types, traits, fields to schema |
+| `raven_schema_update_*` | Update existing types, traits, fields |
+| `raven_schema_remove_*` | Remove types, traits, fields (with safety checks) |
 | `raven_schema_validate` | Validate schema correctness |
 
 ### Example Agent Interactions
@@ -303,6 +354,12 @@ Some thoughts about #productivity today.
 | `rvn schema add type <name>` | Add a new type |
 | `rvn schema add trait <name>` | Add a new trait |
 | `rvn schema add field <type> <field>` | Add a field to a type |
+| `rvn schema update type <name>` | Update a type (default path, add/remove traits) |
+| `rvn schema update trait <name>` | Update a trait (type, values, default) |
+| `rvn schema update field <type> <field>` | Update a field (type, required, default) |
+| `rvn schema remove type <name>` | Remove a type (files become 'page') |
+| `rvn schema remove trait <name>` | Remove a trait (instances remain) |
+| `rvn schema remove field <type> <field>` | Remove a field from a type |
 | `rvn schema validate` | Validate schema for errors |
 
 ### MCP Server
@@ -441,6 +498,46 @@ See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the complete specificatio
 - **Explicit over magic**: Frontmatter is the source of truth for types
 - **Query-friendly**: SQLite index enables fast structured queries
 - **Agent-native**: Built for AI workflows with structured JSON output and MCP
+
+## Development
+
+### Building from Source
+
+```bash
+go build -o rvn ./cmd/rvn
+go test ./...
+```
+
+### Architecture
+
+```
+internal/
+├── commands/   # Command registry (single source of truth for CLI/MCP)
+├── cli/        # Cobra command handlers
+├── mcp/        # MCP server (generates tools from registry)
+├── parser/     # Markdown parsing (frontmatter, traits, refs)
+├── schema/     # Schema loading and validation
+├── index/      # SQLite indexing and queries
+├── config/     # Configuration loading (vault, global)
+├── pages/      # Page creation logic
+├── vault/      # Vault utilities (dates, file walking)
+├── resolver/   # Reference resolution
+├── check/      # Validation
+└── audit/      # Audit logging
+```
+
+The **command registry** (`internal/commands/registry.go`) is the single source of truth for all CLI commands. This ensures:
+- MCP tools are automatically generated from the same definitions
+- `rvn schema commands` is always accurate
+- Adding a new command is a single edit + handler
+
+### Testing
+
+```bash
+go test ./...                    # All tests
+go test ./internal/mcp/... -v    # MCP parity tests
+go test ./internal/commands/...  # Registry tests
+```
 
 ## License
 
