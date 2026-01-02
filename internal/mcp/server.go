@@ -14,9 +14,10 @@ import (
 
 // Server is an MCP server that wraps Raven CLI commands.
 type Server struct {
-	vaultPath string
-	in        io.Reader
-	out       io.Writer
+	vaultPath  string
+	in         io.Reader
+	out        io.Writer
+	executable string // Path to the rvn executable
 }
 
 // Request represents a JSON-RPC 2.0 request.
@@ -100,10 +101,18 @@ type ToolContent struct {
 
 // NewServer creates a new MCP server.
 func NewServer(vaultPath string) *Server {
+	// Get the path to the current executable so we can call it for tool execution
+	executable, err := os.Executable()
+	if err != nil {
+		// Fall back to "rvn" and hope it's in PATH
+		executable = "rvn"
+	}
+
 	return &Server{
-		vaultPath: vaultPath,
-		in:        os.Stdin,
-		out:       os.Stdout,
+		vaultPath:  vaultPath,
+		in:         os.Stdin,
+		out:        os.Stdout,
+		executable: executable,
 	}
 }
 
@@ -113,14 +122,21 @@ func (s *Server) Run() error {
 	// MCP uses line-delimited JSON
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 
+	// Log startup to stderr (not stdout which is for protocol)
+	fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting for vault:", s.vaultPath)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
 
+		// Debug log incoming requests to stderr
+		fmt.Fprintln(os.Stderr, "[raven-mcp] Received:", line)
+
 		var req Request
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			fmt.Fprintln(os.Stderr, "[raven-mcp] Parse error:", err)
 			s.sendError(nil, -32700, "Parse error", err.Error())
 			continue
 		}
@@ -128,23 +144,39 @@ func (s *Server) Run() error {
 		s.handleRequest(&req)
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, "[raven-mcp] Scanner error:", err)
+		return err
+	}
+
+	fmt.Fprintln(os.Stderr, "[raven-mcp] Server shutting down")
+	return nil
 }
 
 func (s *Server) handleRequest(req *Request) {
+	// Check if this is a notification (no ID means no response expected)
+	isNotification := req.ID == nil
+
 	switch req.Method {
 	case "initialize":
 		s.handleInitialize(req)
-	case "initialized":
+	case "initialized", "notifications/initialized":
 		// Client notification, no response needed
+		return
 	case "tools/list":
 		s.handleToolsList(req)
 	case "tools/call":
 		s.handleToolsCall(req)
 	case "ping":
 		s.sendResult(req.ID, map[string]interface{}{})
+	case "notifications/cancelled":
+		// Ignore cancellation notifications
+		return
 	default:
-		s.sendError(req.ID, -32601, "Method not found", req.Method)
+		// Only send error for requests, not notifications
+		if !isNotification {
+			s.sendError(req.ID, -32601, "Method not found", req.Method)
+		}
 	}
 }
 
@@ -396,19 +428,27 @@ func (s *Server) executeRvn(args []string) (string, bool) {
 	// Add vault path
 	args = append([]string{"--vault-path", s.vaultPath}, args...)
 
-	cmd := exec.Command("rvn", args...)
+	// Use the executable path we determined at startup
+	cmd := exec.Command(s.executable, args...)
+	
+	// Log to stderr for debugging
+	fmt.Fprintf(os.Stderr, "[raven-mcp] Executing: %s %v\n", s.executable, args)
+	
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[raven-mcp] Command error: %v, output: %s\n", err, string(output))
 		// Check if output is valid JSON error from rvn
 		var result map[string]interface{}
 		if json.Unmarshal(output, &result) == nil {
 			return string(output), true
 		}
 		// Otherwise, wrap the error
-		return fmt.Sprintf(`{"ok":false,"error":{"code":"EXECUTION_ERROR","message":"%s"}}`, err.Error()), true
+		errMsg := strings.ReplaceAll(err.Error(), `"`, `\"`)
+		return fmt.Sprintf(`{"ok":false,"error":{"code":"EXECUTION_ERROR","message":"%s"}}`, errMsg), true
 	}
 
+	fmt.Fprintf(os.Stderr, "[raven-mcp] Command succeeded, output length: %d\n", len(output))
 	return string(output), false
 }
 
