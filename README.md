@@ -13,7 +13,7 @@
 
 ---
 
-**Write notes:**
+**Write notes in any editor:**
 
 ```markdown
 # Thursday, January 2, 2026
