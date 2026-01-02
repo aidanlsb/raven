@@ -4,3 +4,7 @@
 {"ts":"2026-01-02T06:16:13.422781Z","op":"schema_update","entity":"schema","id":"person.email","extra":{"changes":["required=true"],"kind":"field"}}
 {"ts":"2026-01-02T06:16:24.848008Z","op":"schema_remove","entity":"schema","id":"person.phone","extra":{"kind":"field"}}
 {"ts":"2026-01-02T06:16:24.858559Z","op":"schema_update","entity":"schema","id":"person.email","extra":{"changes":["required=false"],"kind":"field"}}
+{"ts":"2026-01-02T06:36:34.262943Z","op":"update","entity":"people/alice.md","id":"people/alice","changes":{"email":"alice@example.com"}}
+{"ts":"2026-01-02T06:36:44.588361Z","op":"update","entity":"people/alice.md","id":"people/alice","changes":{"email":"alice@newdomain.com","role":"architect"}}
+{"ts":"2026-01-02T06:56:54.869114Z","op":"capture","entity":"file","id":"daily/2026-01-01.md","content":"- Test without timestamp"}
+{"ts":"2026-01-02T06:56:58.91577Z","op":"capture","entity":"file","id":"daily/2026-01-01.md","content":"- 22:56 Test with timestamp"}

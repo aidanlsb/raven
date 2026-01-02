@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	addToFlag string
+	addToFlag        string
+	addTimestampFlag bool
 )
 
 var addCmd = &cobra.Command{
@@ -28,19 +29,20 @@ var addCmd = &cobra.Command{
 	Long: `Quickly capture a thought, task, or note.
 
 By default, appends to today's daily note. Configure destination in raven.yaml.
+Timestamps are OFF by default; use --timestamp to include the current time.
 
 Examples:
   rvn add "Call Alice about the project"
   rvn add "@due(tomorrow) Send the estimate"
   rvn add "Project idea" --to inbox.md
-  rvn add "@priority(high) Urgent task" --to projects/ideas.md
+  rvn add "Called Tyler" --timestamp           # Includes time prefix
   rvn add "Met with [[people/alice]]" --json
 
 Configuration (raven.yaml):
   capture:
     destination: daily      # "daily" or a file path
     heading: "## Captured"  # Optional heading to append under
-    timestamp: true         # Prefix with time
+    timestamp: false        # Prefix with time (default: false)
     reindex: true           # Reindex after capture`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,6 +57,11 @@ Configuration (raven.yaml):
 
 		captureCfg := vaultCfg.GetCaptureConfig()
 
+		// Override timestamp if flag is set
+		if addTimestampFlag {
+			captureCfg.Timestamp = boolPtr(true)
+		}
+
 		// Join all args as the capture text
 		text := strings.Join(args, " ")
 
@@ -64,10 +71,10 @@ Configuration (raven.yaml):
 		if addToFlag != "" {
 			// Override with --to flag
 			destPath = filepath.Join(vaultPath, addToFlag)
-			
+
 			// Check if file exists - add only works on existing files
 			if _, err := os.Stat(destPath); os.IsNotExist(err) {
-				return handleErrorMsg(ErrFileNotFound, 
+				return handleErrorMsg(ErrFileNotFound,
 					fmt.Sprintf("File '%s' does not exist", addToFlag),
 					"Use 'rvn new <type> <title>' to create new files, or omit --to to append to daily note")
 			}
@@ -79,7 +86,7 @@ Configuration (raven.yaml):
 		} else {
 			// Use configured destination
 			destPath = filepath.Join(vaultPath, captureCfg.Destination)
-			
+
 			// Check if configured destination exists
 			if _, err := os.Stat(destPath); os.IsNotExist(err) {
 				return handleErrorMsg(ErrFileNotFound,
@@ -444,7 +451,13 @@ func inferTypeFromPath(sch *schema.Schema, refPath string) string {
 	return ""
 }
 
+// boolPtr returns a pointer to the given bool value.
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 func init() {
 	addCmd.Flags().StringVar(&addToFlag, "to", "", "Override destination file (relative to vault)")
+	addCmd.Flags().BoolVar(&addTimestampFlag, "timestamp", false, "Prefix with current time (HH:MM)")
 	rootCmd.AddCommand(addCmd)
 }

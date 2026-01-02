@@ -407,7 +407,7 @@ daily_directory: daily
 capture:
   destination: daily      # "daily" (default) or a file path like "inbox.md"
   heading: "## Captured"  # Optional - append under this heading
-  timestamp: true         # Prefix with time (default: true)
+  timestamp: false        # Prefix with time (default: false, use --timestamp flag)
   reindex: true           # Reindex file after capture (default: true)
 
 # Saved queries - run with 'rvn query <name>'
@@ -959,6 +959,7 @@ internal/
     ├── date.go              # rvn date
     ├── new.go               # rvn new
     ├── add.go               # rvn add
+    ├── set.go               # rvn set
     ├── read.go              # rvn read
     ├── delete.go            # rvn delete
     ├── schema.go            # rvn schema (introspection)
@@ -1331,7 +1332,7 @@ rvn add "Project idea" --to inbox.md
 capture:
   destination: daily      # "daily" or a file path
   heading: "## Captured"  # Append under this heading (optional)
-  timestamp: true         # Prefix with time
+  timestamp: false        # Prefix with time (default: false, use --timestamp flag)
   reindex: true           # Auto-reindex after capture
 ```
 
@@ -1340,9 +1341,48 @@ capture:
 ✓ Added to daily/2026-01-01.md
 ```
 
-The captured line in the file:
+The captured line in the file (default, no timestamp):
+```markdown
+- @due(tomorrow) @priority(high) Send estimate
+```
+
+With `--timestamp` flag:
 ```markdown
 - 15:30 @due(tomorrow) @priority(high) Send estimate
+```
+
+### The `rvn set` Command
+
+Update frontmatter fields on existing objects:
+
+```bash
+rvn set <object_id> <field=value>...
+```
+
+**Examples**:
+```bash
+rvn set people/alice email=alice@example.com
+rvn set people/alice name="Alice Chen" status=active
+rvn set projects/website priority=high
+```
+
+**Behavior**:
+- Validates fields against the object's type schema
+- Warns (but allows) unknown fields
+- Preserves existing frontmatter fields not being updated
+- Logs updates to the audit log
+
+**JSON output** (for agents):
+```json
+{
+  "ok": true,
+  "data": {
+    "file": "people/alice.md",
+    "object_id": "people/alice",
+    "type": "person",
+    "updated_fields": {"email": "alice@example.com"}
+  }
+}
 ```
 
 ### Saved Queries
@@ -1583,6 +1623,7 @@ rvn --config /path/to/config.toml <command>
     - `rvn date`
     - `rvn new` (create typed object)
     - `rvn add` (quick capture)
+    - `rvn set` (update frontmatter fields)
     - `rvn delete` (delete object, moves to trash)
     - `rvn read` (read raw file content)
     - `rvn path` (print vault path)
@@ -1926,6 +1967,7 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | Tool | Description | Required Args |
 |------|-------------|---------------|
 | `raven_new` | Create typed object | `type`, `title`, optional `fields` |
+| `raven_set` | Update frontmatter fields on object | `object_id`, `fields` (key-value pairs) |
 | `raven_read` | Read raw file content | `path` |
 | `raven_add` | Append to existing file or daily note | `text`, optional `to` |
 | `raven_delete` | Delete object (trash by default) | `object_id` |

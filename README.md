@@ -188,6 +188,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 |------|-------------|
 | `raven_new` | Create new typed objects (person, project, meeting) |
 | `raven_add` | Quick capture to daily note or existing files |
+| `raven_set` | Update frontmatter fields on existing objects |
 | `raven_read` | Read raw file content for context |
 | `raven_delete` | Delete objects (moves to trash by default) |
 | `raven_trait` | Query by trait (due dates, priorities, status) |
@@ -333,6 +334,7 @@ Some thoughts about #productivity today.
 | `rvn new <type> <title> --field key=value` | Create with field values |
 | `rvn add <text>` | Quick capture to daily note |
 | `rvn add <text> --to <file>` | Append to existing file |
+| `rvn set <object_id> field=value...` | Update frontmatter fields |
 | `rvn delete <object_id>` | Delete an object (moves to trash) |
 | `rvn delete <object_id> --force` | Delete without confirmation |
 
@@ -437,7 +439,7 @@ daily_directory: daily
 capture:
   destination: daily      # or a file path like "inbox.md"
   heading: "## Captured"  # Optional heading to append under
-  timestamp: true         # Prefix captures with time
+  timestamp: false        # Prefix captures with time (default: false, use --timestamp flag)
   reindex: true           # Reindex after capture
 
 # Deletion behavior

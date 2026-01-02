@@ -76,7 +76,7 @@ type CaptureConfig struct {
 	// The heading is created if it doesn't exist.
 	Heading string `yaml:"heading,omitempty"`
 
-	// Timestamp prefixes each capture with the time (default: true)
+	// Timestamp prefixes each capture with the time (default: false)
 	Timestamp *bool `yaml:"timestamp,omitempty"`
 
 	// Reindex triggers an incremental reindex after capture (default: true)
@@ -88,7 +88,7 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 	if vc.Capture == nil {
 		return &CaptureConfig{
 			Destination: "daily",
-			Timestamp:   boolPtr(true),
+			Timestamp:   boolPtr(false),
 			Reindex:     boolPtr(true),
 		}
 	}
@@ -98,7 +98,7 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 		cfg.Destination = "daily"
 	}
 	if cfg.Timestamp == nil {
-		cfg.Timestamp = boolPtr(true)
+		cfg.Timestamp = boolPtr(false)
 	}
 	if cfg.Reindex == nil {
 		cfg.Reindex = boolPtr(true)
