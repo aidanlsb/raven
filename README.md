@@ -15,94 +15,38 @@
 
 ---
 
-**Example usage:**
+**Your notes:**
 
-```bash
-# Tag something as due today
-$ grep -r "@due(today)" ~/notes/
-# ...good luck.
-
-# Or with Raven:
-$ rvn trait due --value today
-daily/2026-01-02.md:8   "Send Acme proposal"    @due(today) @priority(high)
-projects/api.md:42      "Fix auth bug"          @due(today)
-
-# Ask an agent:
-You: "What's due today?"
-Claude: You have 2 items due today:
-        • Send Acme proposal (high priority)
-        • Fix auth bug (from your API project)
-```
-
-Notes stay **readable markdown**. Raven adds **structure** (types, traits, references) and **queryability** (CLI, SQLite index, AI agents via MCP).
-
----
-
-## Quick Example
-
-You're a consultant juggling clients, projects, and tasks. Here's a morning with Raven:
-
-**Your daily note** (`daily/2026-01-02.md`):
 ```markdown
----
-type: date
----
 # Thursday, January 2, 2026
 
-Quick morning capture before the day starts.
-
 - @due(today) @priority(high) Send [[clients/acme]] proposal
-- Review notes from [[projects/mobile-app]] meeting
-- @highlight The key to good estimates: buffer time for unknowns
-
-## 10am Standup
-::meeting(id=standup, attendees=[[[people/sarah]], [[people/mike]]])
-
-Discussed blockers on the API integration. [[people/mike]] needs access to staging.
-
-- @due(tomorrow) Get Mike staging credentials
-- @due(next-week) Demo ready for [[clients/acme]]
+- @due(tomorrow) Get staging credentials for [[people/mike]]
+- @highlight Buffer time is the key to good estimates
 ```
 
-**Querying your knowledge**:
+**Query them:**
+
 ```bash
 $ rvn trait due --value today
-daily/2026-01-02.md:8   @due(today)    Send [[clients/acme]] proposal
-
-$ rvn date today
-# Daily Note: daily/2026-01-02.md
-
-# Due Today:
-  • Send [[clients/acme]] proposal (line 8)
-
-# Meetings:
-  • standup (10am) with sarah, mike
+daily/2026-01-02.md:3   "Send [[clients/acme]] proposal"   @due(today) @priority(high)
 
 $ rvn backlinks clients/acme
-daily/2026-01-02.md:8   "Send [[clients/acme]] proposal"
-daily/2026-01-02.md:14  "Demo ready for [[clients/acme]]"
-projects/mobile-app.md  "Client: [[clients/acme]]"
+daily/2026-01-02.md     "Send [[clients/acme]] proposal"
+projects/mobile.md      "Client: [[clients/acme]]"
 ```
 
-**Or ask your AI assistant**:
+**Or ask an agent:**
+
 ```
-You: "What do I owe Acme?"
+You: "What's due today?"
+Agent: Send Acme proposal (high priority)
 
-Claude: You have 2 things mentioning Acme:
-        • Send proposal (due today, high priority)
-        • Demo ready (due next week, for the mobile app project)
-
-You: "I just sent the proposal. Mark it done and add a follow-up for Monday."
-
-Claude: Done! Marked the proposal complete and added a follow-up for Monday to 
-        your daily note.
-
-You: "Create a new client for that lead I met yesterday - Beta Corp, Sarah's referral"
-
-Claude: Created clients/beta-corp.md. Want me to add any notes about them?
+You: "Done. Add a follow-up for Monday."
+Agent: Added to your daily note.
 ```
 
-**That's it.** Plain files. Structured data. AI that actually understands your notes.
+Plain markdown. Queryable structure. AI-native.
 
 ---
 
@@ -270,15 +214,15 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 > "Add Tyler as a person, she's my wife"
 
-Claude uses `raven_new` → gets "missing required field: name" → asks you → retries with the field value → creates `people/tyler.md`
+Agent uses `raven_new` → gets "missing required field: name" → asks you → retries with the field value → creates `people/tyler.md`
 
 > "What tasks do I have due this week?"
 
-Claude uses `raven_query` with `this-week` filter → returns structured results
+Agent uses `raven_query` with `this-week` filter → returns structured results
 
 > "Add a note to the website project about the new design feedback"
 
-Claude uses `raven_add` with `--to projects/website.md` → appends to existing file
+Agent uses `raven_add` with `--to projects/website.md` → appends to existing file
 
 ### Structured JSON Output
 
