@@ -187,13 +187,20 @@ func Exists(vaultPath, targetPath string) bool {
 
 // SlugifyPath slugifies each component of a path.
 // "people/Emily Jia" -> "people/emily-jia"
+// Also handles embedded object IDs: "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
 func SlugifyPath(path string) string {
 	// Remove .md extension if present
 	path = strings.TrimSuffix(path, ".md")
 
 	parts := strings.Split(path, "/")
 	for i, part := range parts {
-		parts[i] = Slugify(part)
+		// Handle embedded object IDs (file#id)
+		if strings.Contains(part, "#") {
+			subParts := strings.SplitN(part, "#", 2)
+			parts[i] = Slugify(subParts[0]) + "#" + Slugify(subParts[1])
+		} else {
+			parts[i] = Slugify(part)
+		}
 	}
 	return strings.Join(parts, "/")
 }

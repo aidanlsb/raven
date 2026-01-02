@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gosimple/slug"
+	"github.com/ravenscroftj/raven/internal/pages"
 )
 
 // datePattern matches YYYY-MM-DD date format
@@ -14,10 +14,10 @@ var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 // Resolver resolves short references to full object IDs.
 type Resolver struct {
-	objectIDs      map[string]struct{}   // Set of all known object IDs
-	shortMap       map[string][]string   // Map from short name to full IDs
-	slugMap        map[string]string     // Map from slugified ID to original ID
-	dailyDirectory string                // Directory for daily notes (e.g., "daily")
+	objectIDs      map[string]struct{} // Set of all known object IDs
+	shortMap       map[string][]string // Map from short name to full IDs
+	slugMap        map[string]string   // Map from slugified ID to original ID
+	dailyDirectory string              // Directory for daily notes (e.g., "daily")
 }
 
 // New creates a new Resolver with the given object IDs.
@@ -42,43 +42,11 @@ func NewWithDailyDir(objectIDs []string, dailyDirectory string) *Resolver {
 		r.shortMap[shortName] = append(r.shortMap[shortName], id)
 
 		// Build slugified map for fuzzy matching
-		sluggedID := slugifyPath(id)
+		sluggedID := pages.SlugifyPath(id)
 		r.slugMap[sluggedID] = id
 	}
 
 	return r
-}
-
-// slugifyPath slugifies each component of a path.
-// "people/Emily Jia" -> "people/emily-jia"
-func slugifyPath(path string) string {
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		// Handle embedded object IDs (file#id)
-		if strings.Contains(part, "#") {
-			subParts := strings.SplitN(part, "#", 2)
-			parts[i] = slugifyName(subParts[0]) + "#" + slugifyName(subParts[1])
-		} else {
-			parts[i] = slugifyName(part)
-		}
-	}
-	return strings.Join(parts, "/")
-}
-
-// slugifyName slugifies a single name component.
-func slugifyName(name string) string {
-	// Remove .md extension if present
-	name = strings.TrimSuffix(name, ".md")
-
-	// Use the slug library for consistent slugification
-	slugged := slug.Make(name)
-
-	// If slug is empty (e.g., all special chars), fall back to lowercase
-	if slugged == "" {
-		slugged = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
-	}
-
-	return slugged
 }
 
 // ResolveResult represents the result of a reference resolution.
@@ -134,7 +102,7 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 		}
 
 		// Try slugified match: "people/Emily Jia" -> "people/emily-jia"
-		sluggedRef := slugifyPath(ref)
+		sluggedRef := pages.SlugifyPath(ref)
 		if originalID, ok := r.slugMap[sluggedRef]; ok {
 			return ResolveResult{TargetID: originalID}
 		}
@@ -149,14 +117,14 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 
 	if len(matches) == 0 {
 		// Try slugified short name
-		sluggedRef := slugifyName(ref)
+		sluggedRef := pages.Slugify(ref)
 		matches = r.shortMap[sluggedRef]
 	}
 
 	if len(matches) == 0 {
 		// Try to find partial matches (including slugified)
 		var partialMatches []string
-		sluggedRef := slugifyName(ref)
+		sluggedRef := pages.Slugify(ref)
 		for id := range r.objectIDs {
 			shortName := shortNameFromID(id)
 			// Match exact or slugified

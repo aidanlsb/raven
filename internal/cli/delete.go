@@ -11,6 +11,7 @@ import (
 	"github.com/ravenscroftj/raven/internal/audit"
 	"github.com/ravenscroftj/raven/internal/config"
 	"github.com/ravenscroftj/raven/internal/index"
+	"github.com/ravenscroftj/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -40,11 +41,9 @@ Examples:
 		// Normalize the object ID (remove .md extension if present)
 		objectID = strings.TrimSuffix(objectID, ".md")
 
-		// Determine the file path
-		filePath := filepath.Join(vaultPath, objectID+".md")
-
-		// Check if file exists
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Resolve the file path (supports slugified matching)
+		filePath, err := vault.ResolveObjectToFile(vaultPath, objectID)
+		if err != nil {
 			return handleErrorMsg(ErrFileNotFound,
 				fmt.Sprintf("Object '%s' does not exist", objectID),
 				"Check the object ID and try again")

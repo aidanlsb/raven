@@ -145,10 +145,14 @@ rvn add "Idea" --to inbox.md       # Override destination
 rvn new person "Alice Chen"        # Creates people/alice-chen.md
 rvn new project "Website Redesign" # Creates projects/website-redesign.md
 
-# Saved queries (defined in raven.yaml)
+# Saved queries
 rvn query --list                   # List available queries
 rvn query tasks                    # Run 'tasks' query
 rvn query overdue                  # Run 'overdue' query
+
+# Create/manage saved queries
+rvn query add my-tasks --traits due,status --filter status=todo
+rvn query remove my-tasks
 
 # Show backlinks to a note
 rvn backlinks people/alice
@@ -193,6 +197,8 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_delete` | Delete objects (moves to trash by default) |
 | `raven_trait` | Query by trait (due dates, priorities, status) |
 | `raven_query` | Run saved queries (tasks, overdue, etc.) |
+| `raven_query_add` | Create a new saved query |
+| `raven_query_remove` | Remove a saved query |
 | `raven_type` | List objects by type |
 | `raven_tag` | Query by tags |
 | `raven_backlinks` | Find what references an object |
@@ -322,6 +328,8 @@ Some thoughts about #productivity today.
 | `rvn tag --list` | List all tags with usage counts |
 | `rvn query <name>` | Run a saved query |
 | `rvn query --list` | List saved queries |
+| `rvn query add <name>` | Create a saved query |
+| `rvn query remove <name>` | Remove a saved query |
 | `rvn backlinks <target>` | Show incoming references |
 | `rvn stats` | Index statistics |
 | `rvn untyped` | List files using fallback 'page' type |

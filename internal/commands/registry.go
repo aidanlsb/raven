@@ -38,10 +38,11 @@ type FlagMeta struct {
 type FlagType string
 
 const (
-	FlagTypeString   FlagType = "string"
-	FlagTypeBool     FlagType = "bool"
-	FlagTypeInt      FlagType = "int"
-	FlagTypeKeyValue FlagType = "key=value" // For --field name=value
+	FlagTypeString      FlagType = "string"
+	FlagTypeBool        FlagType = "bool"
+	FlagTypeInt         FlagType = "int"
+	FlagTypeKeyValue    FlagType = "key=value"    // For --field name=value
+	FlagTypeStringSlice FlagType = "stringSlice"  // For repeatable string flags
 )
 
 // Registry holds all registered commands.
@@ -150,6 +151,35 @@ Warns about backlinks (objects that reference the deleted item).`,
 			"rvn query tasks --json",
 			"rvn query overdue --json",
 			"rvn query --list --json",
+		},
+	},
+	"query_add": {
+		Name:        "query_add",
+		Description: "Add a saved query to raven.yaml",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Name for the new query", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "traits", Description: "Traits to query (comma-separated)", Type: FlagTypeStringSlice},
+			{Name: "types", Description: "Types to query (comma-separated)", Type: FlagTypeStringSlice},
+			{Name: "tags", Description: "Tags to query (comma-separated)", Type: FlagTypeStringSlice},
+			{Name: "filter", Description: "Filter in key=value format (repeatable)", Type: FlagTypeStringSlice},
+			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn query add overdue --traits due --filter due=past --json",
+			"rvn query add my-tasks --traits due,status --filter status=todo --json",
+			"rvn query add people --types person --json",
+		},
+	},
+	"query_remove": {
+		Name:        "query_remove",
+		Description: "Remove a saved query from raven.yaml",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Name of the query to remove", Required: true, DynamicComp: "queries"},
+		},
+		Examples: []string{
+			"rvn query remove overdue --json",
 		},
 	},
 	"type": {
