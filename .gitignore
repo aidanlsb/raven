@@ -1,15 +1,34 @@
 # Build output
 /rvn
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
 # OS files
 .DS_Store
+Thumbs.db
 
 # Editor/IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+
+# Go
+go.work
+go.work.sum
+__debug_bin*
 
 # Test artifacts
 *.test
 coverage.out
+
+# Environment
+.env
+.env.local
+
+# Raven index (derived, not source of truth)
+.raven/
