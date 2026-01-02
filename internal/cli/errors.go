@@ -70,4 +70,5 @@ const (
 	WarnMisuse           = "WRONG_COMMAND"
 	WarnMissingField     = "MISSING_REQUIRED_FIELD"
 	WarnBacklinks        = "HAS_BACKLINKS"
+	WarnUnknownField     = "UNKNOWN_FIELD"
 )

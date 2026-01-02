@@ -82,22 +82,26 @@ Ask user for values, then retry with --field flags.`,
 
 By default, appends to today's daily note. 
 Only works on files that already exist (daily notes are auto-created).
+Timestamps are OFF by default; use --timestamp to include the current time.
 For creating NEW typed objects, use 'rvn new' instead.`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target EXISTING file path (must exist)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md"}},
+			{Name: "timestamp", Description: "Prefix with current time (HH:MM)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn add \"Quick thought\" --json",
 			"rvn add \"@priority(high) Urgent task\" --json",
 			"rvn add \"Note\" --to projects/website.md --json",
+			"rvn add \"Called Tyler\" --timestamp --json",
 		},
 		UseCases: []string{
 			"Quick capture to daily note",
 			"Add tasks to existing project files",
 			"Append notes to existing documents",
+			"Log timestamped events with --timestamp",
 		},
 	},
 	"delete": {
@@ -391,6 +395,34 @@ Existing field values will remain in files but no longer be validated.`,
 		},
 		Examples: []string{
 			"rvn schema remove field person nickname --json",
+		},
+	},
+	"set": {
+		Name:        "set",
+		Description: "Set frontmatter fields on an object",
+		LongDesc: `Set one or more frontmatter fields on an existing object.
+
+The object ID can be a full path (e.g., "people/alice") or a short reference
+that uniquely identifies an object. Field values are validated against the
+schema if the object has a known type.
+
+Use this to update existing objects' metadata without manually editing files.`,
+		Args: []ArgMeta{
+			{Name: "object_id", Description: "Object to update (e.g., people/alice)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypeKeyValue, Examples: []string{`{"email": "alice@example.com"}`, `{"status": "active", "priority": "high"}`}},
+		},
+		Examples: []string{
+			"rvn set people/alice email=alice@example.com --json",
+			"rvn set people/alice name=\"Alice Chen\" status=active --json",
+			"rvn set projects/website priority=high --json",
+		},
+		UseCases: []string{
+			"Update a person's email or status",
+			"Change project priority or status",
+			"Set task due dates or assignments",
+			"Modify any frontmatter field on an object",
 		},
 	},
 }

@@ -160,10 +160,18 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 				cliArgs = append(cliArgs, "--"+flag.Name)
 			}
 		case commands.FlagTypeKeyValue:
-			// Handle map of key-value pairs (e.g., fields)
+			// Handle map of key-value pairs
 			if mapVal, ok := val.(map[string]interface{}); ok {
-				for k, v := range mapVal {
-					cliArgs = append(cliArgs, "--"+flag.Name, fmt.Sprintf("%s=%v", k, v))
+				// Special case for 'set' command: fields are positional args
+				if cmdName == "set" && flag.Name == "fields" {
+					for k, v := range mapVal {
+						cliArgs = append(cliArgs, fmt.Sprintf("%s=%v", k, v))
+					}
+				} else {
+					// Default: use --flag key=value format
+					for k, v := range mapVal {
+						cliArgs = append(cliArgs, "--"+flag.Name, fmt.Sprintf("%s=%v", k, v))
+					}
 				}
 			}
 		default:
