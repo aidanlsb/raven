@@ -252,6 +252,21 @@ Warns about backlinks (objects that reference the deleted item).`,
 			"rvn stats --json",
 		},
 	},
+	"reindex": {
+		Name:        "reindex",
+		Description: "Rebuild the SQLite index from all vault files",
+		LongDesc: `Parses all markdown files in the vault and rebuilds the SQLite index.
+
+Use this after:
+- Bulk file operations outside of Raven
+- Schema changes that affect indexing
+- Recovering from index corruption
+
+The index is rebuilt from scratch, so this is safe to run at any time.`,
+		Examples: []string{
+			"rvn reindex",
+		},
+	},
 	"check": {
 		Name:        "check",
 		Description: "Validate vault against schema",

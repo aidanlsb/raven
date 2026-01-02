@@ -97,6 +97,18 @@ When raven_check returns issues, here's how to fix them:
 | missing_required_trait | Required trait not set | raven_set(object_id="...", fields={"due": "2025-02-01"}) |
 | invalid_enum_value | Value not in allowed list | raven_set(object_id="...", fields={"status": "done"}) |
 
+### 6. Reindexing
+
+After bulk operations or schema changes:
+
+1. Use raven_reindex to rebuild the index:
+   raven_reindex()
+
+2. This is needed after:
+   - Adding new types or traits to the schema
+   - Bulk file operations outside of Raven
+   - If queries return stale results
+
 ## Best Practices
 
 1. **Always ask before bulk changes**: "I found 45 files with unknown type 'book'. Should I add this type to your schema?"
@@ -108,6 +120,8 @@ When raven_check returns issues, here's how to fix them:
 4. **Check before creating**: Use raven_backlinks or raven_search to see if something already exists before creating duplicates.
 
 5. **Respect user's organization**: Look at existing default_path settings to understand where different types of content belong.
+
+6. **Reindex after schema changes**: If you add types or traits, run raven_reindex so they become queryable.
 
 ## Example Conversations
 
