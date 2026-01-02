@@ -11,10 +11,11 @@ import (
 
 // ParsedDocument represents a fully parsed document.
 type ParsedDocument struct {
-	FilePath string          // File path relative to vault
-	Objects  []*ParsedObject // All objects in this document
-	Traits   []*ParsedTrait  // All traits in this document
-	Refs     []*ParsedRef    // All references in this document
+	FilePath   string          // File path relative to vault
+	RawContent string          // Raw markdown content (for full-text search indexing)
+	Objects    []*ParsedObject // All objects in this document
+	Traits     []*ParsedTrait  // All traits in this document
+	Refs       []*ParsedRef    // All references in this document
 }
 
 // ParsedObject represents a parsed object (file-level or embedded).
@@ -288,10 +289,11 @@ func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDo
 	computeLineEnds(objects)
 
 	return &ParsedDocument{
-		FilePath: relativePath,
-		Objects:  objects,
-		Traits:   traits,
-		Refs:     refs,
+		FilePath:   relativePath,
+		RawContent: content,
+		Objects:    objects,
+		Traits:     traits,
+		Refs:       refs,
 	}, nil
 }
 

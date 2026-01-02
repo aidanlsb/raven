@@ -95,7 +95,18 @@ func isSchemaCompatible(db *sql.DB) bool {
 		}
 	}
 
-	return hasValueColumn
+	if !hasValueColumn {
+		return false
+	}
+
+	// Check if fts_content table exists (v4+)
+	var ftsTableName string
+	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='fts_content'").Scan(&ftsTableName)
+	if err != nil {
+		return false
+	}
+
+	return true
 }
 
 // OpenInMemory opens an in-memory database (for testing).
@@ -120,7 +131,7 @@ func (d *Database) Close() error {
 }
 
 // CurrentDBVersion is the current database schema version.
-const CurrentDBVersion = 3
+const CurrentDBVersion = 4
 
 // initialize creates the database schema.
 func (d *Database) initialize() error {
@@ -214,6 +225,15 @@ func (d *Database) initialize() error {
 		CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag);
 		CREATE INDEX IF NOT EXISTS idx_tags_object ON tags(object_id);
 		CREATE INDEX IF NOT EXISTS idx_tags_file ON tags(file_path);
+
+		-- Full-text search index for content search
+		CREATE VIRTUAL TABLE IF NOT EXISTS fts_content USING fts5(
+			object_id,
+			title,
+			content,
+			file_path UNINDEXED,
+			tokenize='porter unicode61'
+		);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -255,6 +275,9 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM tags WHERE file_path = ?", doc.FilePath); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM fts_content WHERE file_path = ?", doc.FilePath); err != nil {
 		return err
 	}
 
@@ -458,6 +481,44 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 		}
 	}
 
+	// Index content for full-text search
+	ftsStmt, err := tx.Prepare(`
+		INSERT INTO fts_content (object_id, title, content, file_path)
+		VALUES (?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer ftsStmt.Close()
+
+	for _, obj := range doc.Objects {
+		// Get title from fields or heading
+		title := ""
+		if titleField, ok := obj.Fields["title"]; ok {
+			if s, ok := titleField.AsString(); ok {
+				title = s
+			}
+		} else if obj.Heading != nil {
+			title = *obj.Heading
+		} else {
+			// Use object ID as title for file-level objects
+			title = obj.ID
+		}
+
+		// Get content - for now we index the whole file content for file-level objects
+		// For embedded objects, we'd need to extract their section content
+		content := ""
+		if obj.ParentID == nil {
+			// File-level object - index full body
+			content = doc.RawContent
+		}
+
+		_, err = ftsStmt.Exec(obj.ID, title, content, doc.FilePath)
+		if err != nil {
+			return err
+		}
+	}
+
 	return tx.Commit()
 }
 
@@ -490,6 +551,9 @@ func (d *Database) RemoveFile(filePath string) error {
 	if _, err := d.db.Exec("DELETE FROM tags WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
+	if _, err := d.db.Exec("DELETE FROM fts_content WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -515,6 +579,9 @@ func (d *Database) RemoveDocument(objectID string) error {
 		return err
 	}
 	if _, err := d.db.Exec("DELETE FROM tags WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM fts_content WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
 	return nil
