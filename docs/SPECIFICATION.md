@@ -961,6 +961,8 @@ internal/
     ├── add.go               # rvn add
     ├── set.go               # rvn set
     ├── read.go              # rvn read
+    ├── edit.go              # rvn edit
+    ├── search.go            # rvn search
     ├── delete.go            # rvn delete
     ├── schema.go            # rvn schema (introspection)
     ├── schema_edit.go       # rvn schema add (modification)
@@ -1139,6 +1141,13 @@ rvn new person                    # Prompts for title interactively
 rvn add "Call Alice about the project"
 rvn add "@due(tomorrow) Send estimate"
 rvn add "Idea" --to inbox.md      # Override destination
+
+# Edit existing content
+rvn edit "daily/2026-01-02.md" "old text" "new text" --confirm
+
+# Full-text search
+rvn search "meeting notes"
+rvn search "api" --type project
 
 # Watch for changes and auto-reindex (future)
 rvn watch
@@ -1387,6 +1396,99 @@ rvn set projects/website priority=high
 }
 ```
 
+### The `rvn edit` Command
+
+Surgical text replacement in vault files:
+
+```bash
+rvn edit <path> <old_str> <new_str> [--confirm]
+```
+
+**Examples**:
+```bash
+# Preview an edit (default)
+rvn edit "daily/2026-01-02.md" "- Churn analysis" "- [[churn-analysis|Churn analysis]]"
+
+# Apply the edit
+rvn edit "daily/2026-01-02.md" "reccommendation" "recommendation" --confirm
+
+# Delete text (empty new_str)
+rvn edit "daily/2026-01-02.md" "- old task" "" --confirm
+```
+
+**Behavior**:
+- The `old_str` must appear exactly once in the file (prevents ambiguous edits)
+- Without `--confirm`, shows a preview of the change
+- With `--confirm`, applies the edit and reindexes the file
+- Whitespace matters—match exactly including indentation
+
+**Use cases**:
+- Add wiki links to existing text
+- Fix typos across files
+- Add traits to existing content
+- Remove lines
+
+**JSON output** (preview mode):
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "preview",
+    "path": "daily/2026-01-02.md",
+    "line": 8,
+    "preview": {
+      "before": "\n- Churn analysis\n\n## Notes",
+      "after": "\n- [[churn-analysis|Churn analysis]]\n\n## Notes"
+    }
+  }
+}
+```
+
+### The `rvn search` Command
+
+Full-text search across vault content:
+
+```bash
+rvn search <query> [--type <type>] [--limit <n>]
+```
+
+**Examples**:
+```bash
+rvn search "meeting notes"              # Find pages with both words
+rvn search '"team meeting"'             # Exact phrase match
+rvn search "meet*"                      # Prefix matching
+rvn search "meeting AND notes"          # Boolean AND
+rvn search "meeting OR notes"           # Boolean OR
+rvn search "meeting NOT private"        # Boolean NOT
+rvn search "api" --type project         # Filter by type
+rvn search "alice" --limit 5            # Limit results
+```
+
+**Behavior**:
+- Uses SQLite FTS5 for fast full-text search
+- Results ranked by relevance
+- Returns snippets showing matched content
+- Supports prefix matching, phrases, and boolean operators
+
+**JSON output**:
+```json
+{
+  "ok": true,
+  "data": {
+    "query": "meeting notes",
+    "items": [
+      {
+        "object_id": "daily/2026-01-02",
+        "type": "date",
+        "file_path": "daily/2026-01-02.md",
+        "snippet": "...discussed the <b>meeting</b> <b>notes</b> from..."
+      }
+    ]
+  },
+  "meta": { "count": 1, "query_time_ms": 5 }
+}
+```
+
 ### Saved Queries
 
 Saved queries provide ergonomic shortcuts for common queries. Define them in `raven.yaml`:
@@ -1630,6 +1732,8 @@ rvn --config /path/to/config.toml <command>
     - `rvn set` (update frontmatter fields)
     - `rvn delete` (delete object, moves to trash)
     - `rvn read` (read raw file content)
+    - `rvn edit` (surgical text replacement)
+    - `rvn search` (full-text search)
     - `rvn path` (print vault path)
     - `rvn vaults` (list configured vaults)
     - `rvn schema` (introspect schema)
@@ -1977,6 +2081,8 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_read` | Read raw file content | `path` |
 | `raven_add` | Append to existing file or daily note | `text`, optional `to` |
 | `raven_delete` | Delete object (trash by default) | `object_id` |
+| `raven_edit` | Surgical text replacement | `path`, `old_str`, `new_str`, optional `confirm` |
+| `raven_search` | Full-text search | `query`, optional `type`, `limit` |
 | `raven_trait` | Query by trait | `trait_type`, optional `value` |
 | `raven_query` | Run saved query | `query_name` |
 | `raven_query_add` | Create saved query | `name`, optional `traits`, `types`, `tags`, `filter`, `description` |
