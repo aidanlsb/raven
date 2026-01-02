@@ -18,7 +18,8 @@ var initCmd = &cobra.Command{
 Creates:
   - raven.yaml   (vault configuration)
   - schema.yaml  (types and traits)
-  - .raven/      (index directory, gitignored)`,
+  - .raven/      (index directory)
+  - .gitignore   (ignores derived files)`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[0]
@@ -36,26 +37,63 @@ Creates:
 			return fmt.Errorf("failed to create .raven directory: %w", err)
 		}
 
-		// Create .gitignore for .raven directory
-		gitignorePath := filepath.Join(path, ".raven", ".gitignore")
-		if err := os.WriteFile(gitignorePath, []byte("index.db\nindex.db-*\n"), 0644); err != nil {
-			return fmt.Errorf("failed to create .gitignore: %w", err)
+		// Create vault-level .gitignore (if it doesn't already exist)
+		gitignorePath := filepath.Join(path, ".gitignore")
+		createdGitignore := false
+		if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+			gitignoreContent := `# Raven (auto-generated)
+# These are derived files - your markdown is the source of truth
+
+# Index database (rebuilt with 'rvn reindex')
+.raven/
+
+# Trashed files
+.trash/
+`
+			if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+				return fmt.Errorf("failed to create .gitignore: %w", err)
+			}
+			createdGitignore = true
 		}
 
 		// Create default raven.yaml (vault config)
-		if err := config.CreateDefaultVaultConfig(path); err != nil {
+		createdConfig, err := config.CreateDefaultVaultConfig(path)
+		if err != nil {
 			return fmt.Errorf("failed to create raven.yaml: %w", err)
 		}
 
 		// Create default schema.yaml
-		if err := schema.CreateDefault(path); err != nil {
+		createdSchema, err := schema.CreateDefault(path)
+		if err != nil {
 			return fmt.Errorf("failed to create schema.yaml: %w", err)
 		}
 
-		fmt.Println("✓ Created raven.yaml (vault configuration)")
-		fmt.Println("✓ Created schema.yaml (types and traits)")
+		// Report what was done
+		if createdConfig {
+			fmt.Println("✓ Created raven.yaml (vault configuration)")
+		} else {
+			fmt.Println("• raven.yaml already exists (kept)")
+		}
+
+		if createdSchema {
+			fmt.Println("✓ Created schema.yaml (types and traits)")
+		} else {
+			fmt.Println("• schema.yaml already exists (kept)")
+		}
+
 		fmt.Println("✓ Created .raven/ directory (index)")
-		fmt.Println("\nVault initialized! Start adding markdown files.")
+
+		if createdGitignore {
+			fmt.Println("✓ Created .gitignore (ignores derived files)")
+		} else {
+			fmt.Println("• .gitignore already exists (kept)")
+		}
+
+		if createdConfig || createdSchema {
+			fmt.Println("\nVault initialized! Start adding markdown files.")
+		} else {
+			fmt.Println("\nExisting vault detected. Configuration preserved.")
+		}
 
 		return nil
 	},

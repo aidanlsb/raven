@@ -102,8 +102,14 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 }
 
 // CreateDefault creates a default schema.yaml file in the vault.
-func CreateDefault(vaultPath string) error {
+// Returns true if a new file was created, false if one already existed.
+func CreateDefault(vaultPath string) (bool, error) {
 	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+
+	// Skip if file already exists
+	if _, err := os.Stat(schemaPath); err == nil {
+		return false, nil
+	}
 
 	defaultSchema := `# Raven Schema Configuration
 # Define your types and traits here.
@@ -176,8 +182,8 @@ traits:
 `
 
 	if err := os.WriteFile(schemaPath, []byte(defaultSchema), 0644); err != nil {
-		return fmt.Errorf("failed to write schema file: %w", err)
+		return false, fmt.Errorf("failed to write schema file: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
