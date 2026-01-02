@@ -19,8 +19,41 @@ type VaultConfig struct {
 	// Capture configures quick capture behavior
 	Capture *CaptureConfig `yaml:"capture,omitempty"`
 
+	// Deletion configures file deletion behavior
+	Deletion *DeletionConfig `yaml:"deletion,omitempty"`
+
 	// AuditLog enables logging of all operations to .raven/audit.log (default: true)
 	AuditLog *bool `yaml:"audit_log,omitempty"`
+}
+
+// DeletionConfig configures how file deletion is handled.
+type DeletionConfig struct {
+	// Behavior controls what happens when a file is deleted.
+	// "trash" (default) - Move to trash directory within vault
+	// "permanent" - Delete the file permanently
+	Behavior string `yaml:"behavior,omitempty"`
+
+	// TrashDir is the directory within the vault where trashed files go (default: ".trash")
+	TrashDir string `yaml:"trash_dir,omitempty"`
+}
+
+// GetDeletionConfig returns the deletion config with defaults applied.
+func (vc *VaultConfig) GetDeletionConfig() *DeletionConfig {
+	if vc.Deletion == nil {
+		return &DeletionConfig{
+			Behavior: "trash",
+			TrashDir: ".trash",
+		}
+	}
+
+	cfg := *vc.Deletion
+	if cfg.Behavior == "" {
+		cfg.Behavior = "trash"
+	}
+	if cfg.TrashDir == "" {
+		cfg.TrashDir = ".trash"
+	}
+	return &cfg
 }
 
 // IsAuditLogEnabled returns true if audit logging is enabled (default: true).
@@ -145,6 +178,11 @@ daily_directory: daily
 #   heading: "## Captured"  # Optional heading to append under
 #   timestamp: true         # Prefix captures with time (default: true)
 #   reindex: true           # Reindex file after capture (default: true)
+
+# Deletion settings for 'rvn delete'
+# deletion:
+#   behavior: trash         # "trash" (default) or "permanent"
+#   trash_dir: .trash       # Directory for trashed files (default: .trash)
 
 # Saved queries - run with 'rvn query <name>'
 queries:

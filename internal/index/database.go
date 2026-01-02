@@ -493,6 +493,33 @@ func (d *Database) RemoveFile(filePath string) error {
 	return nil
 }
 
+// RemoveDocument removes a document and all related data by its object ID.
+func (d *Database) RemoveDocument(objectID string) error {
+	// Objects can have IDs like "people/alice" or "daily/2025-02-01#meeting"
+	// For the file-level ID, we need to delete by the root object or file path
+	filePath := objectID + ".md"
+
+	// Delete all objects whose ID starts with this objectID (handles sections/embedded)
+	if _, err := d.db.Exec("DELETE FROM objects WHERE id = ? OR id LIKE ?", objectID, objectID+"#%"); err != nil {
+		return err
+	}
+
+	// Delete related data by file path
+	if _, err := d.db.Exec("DELETE FROM traits WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := d.db.Exec("DELETE FROM tags WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Stats returns statistics about the index.
 func (d *Database) Stats() (*IndexStats, error) {
 	var stats IndexStats
