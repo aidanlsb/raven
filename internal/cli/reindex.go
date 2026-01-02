@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -16,7 +17,10 @@ var reindexCmd = &cobra.Command{
 	Long:  `Parses all markdown files in the vault and rebuilds the SQLite index.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		fmt.Printf("Reindexing vault: %s\n", vaultPath)
+
+		if !jsonOutput {
+			fmt.Printf("Reindexing vault: %s\n", vaultPath)
+		}
 
 		// Load schema
 		sch, err := schema.Load(vaultPath)
@@ -31,23 +35,30 @@ var reindexCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		if wasRebuilt {
+		if wasRebuilt && !jsonOutput {
 			fmt.Println("Database schema was outdated - rebuilt from scratch.")
 		}
 
 		var fileCount, errorCount int
+		var errors []string
 
 		// Walk all markdown files
 		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 			if result.Error != nil {
-				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.RelativePath, result.Error)
+				if !jsonOutput {
+					fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.RelativePath, result.Error)
+				}
+				errors = append(errors, fmt.Sprintf("%s: %v", result.RelativePath, result.Error))
 				errorCount++
 				return nil
 			}
 
 			// Index document
 			if err := db.IndexDocument(result.Document, sch); err != nil {
-				fmt.Fprintf(os.Stderr, "Error indexing %s: %v\n", result.RelativePath, err)
+				if !jsonOutput {
+					fmt.Fprintf(os.Stderr, "Error indexing %s: %v\n", result.RelativePath, err)
+				}
+				errors = append(errors, fmt.Sprintf("%s: %v", result.RelativePath, err))
 				errorCount++
 				return nil
 			}
@@ -65,14 +76,30 @@ var reindexCmd = &cobra.Command{
 			return fmt.Errorf("failed to get stats: %w", err)
 		}
 
-		fmt.Println()
-		fmt.Printf("✓ Indexed %d files\n", fileCount)
-		fmt.Printf("  %d objects\n", stats.ObjectCount)
-		fmt.Printf("  %d traits\n", stats.TraitCount)
-		fmt.Printf("  %d references\n", stats.RefCount)
+		if jsonOutput {
+			result := map[string]interface{}{
+				"ok": true,
+				"data": map[string]interface{}{
+					"files_indexed":    fileCount,
+					"objects":          stats.ObjectCount,
+					"traits":           stats.TraitCount,
+					"references":       stats.RefCount,
+					"schema_rebuilt":   wasRebuilt,
+					"errors":           errors,
+				},
+			}
+			out, _ := json.MarshalIndent(result, "", "  ")
+			fmt.Println(string(out))
+		} else {
+			fmt.Println()
+			fmt.Printf("✓ Indexed %d files\n", fileCount)
+			fmt.Printf("  %d objects\n", stats.ObjectCount)
+			fmt.Printf("  %d traits\n", stats.TraitCount)
+			fmt.Printf("  %d references\n", stats.RefCount)
 
-		if errorCount > 0 {
-			fmt.Printf("  %d errors\n", errorCount)
+			if errorCount > 0 {
+				fmt.Printf("  %d errors\n", errorCount)
+			}
 		}
 
 		return nil
