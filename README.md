@@ -2,6 +2,39 @@
 
 A personal knowledge system with typed blocks, traits, and powerful querying. Built in Go for speed, with plain-text markdown files as the source of truth.
 
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [AI Agent Integration](#ai-agent-integration)
+  - [Setting Up with Claude Desktop](#setting-up-with-claude-desktop)
+  - [What Agents Can Do](#what-agents-can-do)
+  - [Example Agent Interactions](#example-agent-interactions)
+- [File Format](#file-format)
+  - [Frontmatter](#frontmatter-file-level-type)
+  - [Embedded Types](#embedded-types)
+  - [Traits](#traits)
+  - [References & Tags](#references--tags)
+- [CLI Commands](#cli-commands)
+  - [Core Commands](#core-commands)
+  - [Querying](#querying)
+  - [Creating & Editing](#creating--editing)
+  - [Daily Notes & Dates](#daily-notes--dates)
+  - [Schema Management](#schema-management)
+  - [Shell Completion](#shell-completion)
+- [Configuration](#configuration)
+  - [Schema (schema.yaml)](#schema-schemayaml)
+  - [Vault Config (raven.yaml)](#vault-config-ravenyaml)
+  - [Global Config](#global-config-configravenconfigtoml)
+- [Documentation](#documentation)
+- [Design Philosophy](#design-philosophy)
+- [License](#license)
+
+---
+
 ## Features
 
 - **Typed Objects**: Define what things *are* (person, project, meeting, book)
