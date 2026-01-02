@@ -18,7 +18,7 @@
 ```markdown
 # Thursday, January 2, 2026
 
-- @due(today) @priority(high) Send [[clients/acme]] proposal
+- @due(today) Send [[clients/acme]] proposal
 - @due(tomorrow) Get staging credentials for [[people/mike]]
 - @highlight Buffer time is the key to good estimates
 ```
@@ -27,7 +27,7 @@
 
 ```bash
 $ rvn trait due --value today
-daily/2026-01-02.md:3   "Send [[clients/acme]] proposal"   @due(today) @priority(high)
+daily/2026-01-02.md:3   "Send [[clients/acme]] proposal"   @due(today)
 
 $ rvn backlinks clients/acme
 daily/2026-01-02.md     "Send [[clients/acme]] proposal"
@@ -37,11 +37,11 @@ projects/mobile.md      "Client: [[clients/acme]]"
 **Or ask an agent:**
 
 ```
-You: "What's due today?"
-Agent: Send Acme proposal (high priority)
+You: "What clients do I have meetings with this week?"
+Agent: Acme Corp - you're demoing the mobile app Friday.
 
-You: "Done. Add a follow-up for Monday."
-Agent: Added to your daily note.
+You: "Create a project for their website redesign"
+Agent: Created projects/acme-website.md with Acme as the client.
 ```
 
 Plain markdown. Queryable structure. AI-native.
