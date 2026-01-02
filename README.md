@@ -55,13 +55,14 @@ Agent: Created projects/asgard-security-audit.md with due date next Friday.
   - [Types](#types)
   - [Traits](#traits)
   - [References & Tags](#references--tags)
+  - [Querying](#querying)
 - [Configuration](#configuration)
   - [Schema (schema.yaml)](#schema-schemayaml)
   - [Vault Config (raven.yaml)](#vault-config-ravenyaml)
   - [Global Config](#global-config-configravenconfigtoml)
 - [CLI Reference](#cli-reference)
   - [Core Commands](#core-commands)
-  - [Querying](#querying)
+  - [Query Commands](#query-commands)
   - [Creating & Editing](#creating--editing)
   - [Daily Notes & Dates](#daily-notes--dates)
   - [Schema Management](#schema-management)
@@ -142,7 +143,14 @@ That's it! Now let's understand how Raven files work.
 
 ## Core Concepts
 
-Raven extends plain markdown with three ideas: **types** (what things are), **traits** (annotations on content), and **references** (links between notes). All of these are defined in your `schema.yaml`.
+Raven extends plain markdown with four ideas:
+
+- **Types** — what things are (person, project, meeting)
+- **Traits** — queryable structured annotations on content (`@due`, `@priority`)
+- **References** — wiki-style links between notes (`[[people/freya]]`)
+- **Tags** — lightweight categorization of pages (`#productivity`)
+
+Types and traits are defined in your `schema.yaml`. References and tags work automatically.
 
 ### File Format
 
@@ -284,12 +292,51 @@ References auto-slugify: `[[people/Thor Odinson]]` resolves to `people/thor-odin
 Some thoughts about #productivity today.
 ```
 
-**Query them:**
-
 ```bash
 rvn backlinks people/freya       # What references Freya?
 rvn tag productivity             # All #productivity items
 ```
+
+### Querying
+
+Raven indexes your vault into SQLite, making structured data queryable. The main query patterns:
+
+**By trait** — find content with specific annotations:
+
+```bash
+rvn trait due                    # Everything with @due
+rvn trait due --value today      # Due today
+rvn trait due --value past       # Overdue
+rvn trait priority --value high  # High priority
+```
+
+**By type** — list objects of a kind:
+
+```bash
+rvn type person                  # All people
+rvn type project                 # All projects
+```
+
+**By reference** — find connections:
+
+```bash
+rvn backlinks people/freya       # What mentions Freya?
+```
+
+**Full-text search** — search content:
+
+```bash
+rvn search "bifrost design"      # Search all content
+```
+
+**Saved queries** — define reusable queries in `raven.yaml`:
+
+```bash
+rvn query tasks                  # Run your "tasks" query
+rvn query overdue                # Run your "overdue" query
+```
+
+Saved queries let you define complex filters once and reuse them. See [Configuration](#vault-config-ravenyaml) for how to set them up.
 
 ---
 
@@ -427,7 +474,7 @@ Use named vaults: `rvn --vault work stats`
 | `rvn check --create-missing` | Interactively create missing pages, types, and traits |
 | `rvn reindex` | Rebuild the SQLite index |
 
-### Querying
+### Query Commands
 
 | Command | Description |
 |---------|-------------|
