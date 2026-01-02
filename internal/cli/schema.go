@@ -445,6 +445,34 @@ func listSchemaCommands(start time.Time) error {
 			},
 			Examples: []string{"rvn check --json"},
 		},
+		"delete": {
+			Description: "Delete an object from the vault. Moves to trash by default (configurable). Warns about backlinks.",
+			Args:        []string{"object_id"},
+			Flags: map[string]FlagJSON{
+				"--force": {Description: "Skip confirmation prompt"},
+			},
+			Examples: []string{"rvn delete people/alice --json", "rvn delete projects/old --force --json"},
+		},
+		"schema add": {
+			Description: "Add a type, trait, or field to the schema",
+			Args:        []string{"kind", "name"},
+			Flags: map[string]FlagJSON{
+				"--default-path": {Description: "Default path for new type files"},
+				"--type":         {Description: "Field/trait type (string, date, enum, ref, bool)"},
+				"--required":     {Description: "Mark field as required"},
+				"--values":       {Description: "Enum values (comma-separated)"},
+				"--target":       {Description: "Target type for ref fields"},
+			},
+			Examples: []string{
+				"rvn schema add type event --default-path events/ --json",
+				"rvn schema add trait priority --type enum --values high,medium,low --json",
+				"rvn schema add field person email --type string --required --json",
+			},
+		},
+		"schema validate": {
+			Description: "Validate the schema for correctness",
+			Examples:    []string{"rvn schema validate --json"},
+		},
 	}
 
 	if isJSONOutput() {

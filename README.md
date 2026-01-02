@@ -123,7 +123,7 @@ Met with [[people/alice]] about [[projects/website]].
 Some thoughts about #productivity today.
 ```
 
-**Smart resolution**: References like `[[people/Emily Jia]]` automatically resolve to `people/emily-jia.md`. Write naturally—Raven handles the slugification.
+**Smart resolution**: References like `[[people/Mr. Whatsit]]` automatically resolve to `people/mr-whatsit.md`. Write naturally—Raven handles the slugification.
 
 ## CLI Commands
 

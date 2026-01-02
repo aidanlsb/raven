@@ -358,6 +358,97 @@ func (s *Server) handleToolsList(req *Request) {
 				},
 			},
 		},
+		{
+			Name:        "raven_delete",
+			Description: "Delete an object from the vault. By default moves to trash (configurable). Warns about backlinks.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]interface{}{
+					"object_id": map[string]interface{}{
+						"type":        "string",
+						"description": "Object ID to delete (e.g., people/alice, projects/website)",
+					},
+				},
+				Required: []string{"object_id"},
+			},
+		},
+		{
+			Name:        "raven_schema_add_type",
+			Description: "Add a new type to the schema",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]interface{}{
+					"name": map[string]interface{}{
+						"type":        "string",
+						"description": "Name of the new type",
+					},
+					"default_path": map[string]interface{}{
+						"type":        "string",
+						"description": "Default directory for files of this type (e.g., 'people/')",
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+		{
+			Name:        "raven_schema_add_trait",
+			Description: "Add a new trait to the schema",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]interface{}{
+					"name": map[string]interface{}{
+						"type":        "string",
+						"description": "Name of the new trait",
+					},
+					"type": map[string]interface{}{
+						"type":        "string",
+						"description": "Trait type: string, date, enum, bool (default: string)",
+					},
+					"values": map[string]interface{}{
+						"type":        "string",
+						"description": "For enum traits: comma-separated list of values",
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+		{
+			Name:        "raven_schema_add_field",
+			Description: "Add a new field to an existing type",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]interface{}{
+					"type_name": map[string]interface{}{
+						"type":        "string",
+						"description": "Name of the type to add the field to",
+					},
+					"field_name": map[string]interface{}{
+						"type":        "string",
+						"description": "Name of the new field",
+					},
+					"field_type": map[string]interface{}{
+						"type":        "string",
+						"description": "Field type: string, date, enum, ref, bool (default: string)",
+					},
+					"required": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Whether the field is required",
+					},
+					"target": map[string]interface{}{
+						"type":        "string",
+						"description": "For ref fields: target type name",
+					},
+				},
+				Required: []string{"type_name", "field_name"},
+			},
+		},
+		{
+			Name:        "raven_schema_validate",
+			Description: "Validate the schema for correctness",
+			InputSchema: InputSchema{
+				Type: "object",
+			},
+		},
 	}
 
 	s.sendResult(req.ID, map[string]interface{}{"tools": tools})
@@ -449,6 +540,47 @@ func (s *Server) callTool(name string, args map[string]interface{}) (string, boo
 			cmdArgs = []string{"schema"}
 		}
 		cmdArgs = append(cmdArgs, "--json")
+
+	case "raven_delete":
+		objectID, _ := args["object_id"].(string)
+		cmdArgs = []string{"delete", objectID, "--force", "--json"}
+
+	case "raven_schema_add_type":
+		name, _ := args["name"].(string)
+		cmdArgs = []string{"schema", "add", "type", name}
+		if defaultPath, ok := args["default_path"].(string); ok && defaultPath != "" {
+			cmdArgs = append(cmdArgs, "--default-path", defaultPath)
+		}
+		cmdArgs = append(cmdArgs, "--json")
+
+	case "raven_schema_add_trait":
+		name, _ := args["name"].(string)
+		cmdArgs = []string{"schema", "add", "trait", name}
+		if traitType, ok := args["type"].(string); ok && traitType != "" {
+			cmdArgs = append(cmdArgs, "--type", traitType)
+		}
+		if values, ok := args["values"].(string); ok && values != "" {
+			cmdArgs = append(cmdArgs, "--values", values)
+		}
+		cmdArgs = append(cmdArgs, "--json")
+
+	case "raven_schema_add_field":
+		typeName, _ := args["type_name"].(string)
+		fieldName, _ := args["field_name"].(string)
+		cmdArgs = []string{"schema", "add", "field", typeName, fieldName}
+		if fieldType, ok := args["field_type"].(string); ok && fieldType != "" {
+			cmdArgs = append(cmdArgs, "--type", fieldType)
+		}
+		if required, ok := args["required"].(bool); ok && required {
+			cmdArgs = append(cmdArgs, "--required")
+		}
+		if target, ok := args["target"].(string); ok && target != "" {
+			cmdArgs = append(cmdArgs, "--target", target)
+		}
+		cmdArgs = append(cmdArgs, "--json")
+
+	case "raven_schema_validate":
+		cmdArgs = []string{"schema", "validate", "--json"}
 
 	default:
 		return fmt.Sprintf(`{"ok":false,"error":{"code":"UNKNOWN_TOOL","message":"Unknown tool: %s"}}`, name), true

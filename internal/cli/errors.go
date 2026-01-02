@@ -63,4 +63,5 @@ const (
 	WarnDatabaseOutdated = "DATABASE_OUTDATED"
 	WarnMisuse           = "WRONG_COMMAND"
 	WarnMissingField     = "MISSING_REQUIRED_FIELD"
+	WarnBacklinks        = "HAS_BACKLINKS"
 )
