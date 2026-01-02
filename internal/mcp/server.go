@@ -197,6 +197,28 @@ func (s *Server) handleInitialize(req *Request) {
 func (s *Server) handleToolsList(req *Request) {
 	tools := []Tool{
 		{
+			Name:        "raven_new",
+			Description: "Create a new typed object (person, project, meeting, etc.). Use this to create new entries. If required fields are missing, an error will list them - ask the user for values and retry with the fields parameter.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]interface{}{
+					"type": map[string]interface{}{
+						"type":        "string",
+						"description": "Object type (e.g., person, project, meeting)",
+					},
+					"title": map[string]interface{}{
+						"type":        "string",
+						"description": "Title/name for the new object (e.g., 'Alice Smith', 'Website Redesign')",
+					},
+					"fields": map[string]interface{}{
+						"type":        "object",
+						"description": "Optional field values as key-value pairs (e.g., {\"name\": \"Alice Smith\", \"email\": \"alice@example.com\"})",
+					},
+				},
+				Required: []string{"type", "title"},
+			},
+		},
+		{
 			Name:        "raven_read",
 			Description: "Read raw file content from the vault",
 			InputSchema: InputSchema{
@@ -212,7 +234,7 @@ func (s *Server) handleToolsList(req *Request) {
 		},
 		{
 			Name:        "raven_add",
-			Description: "Append content to any file in the vault. Default: today's daily note.",
+			Description: "Append content to EXISTING files or today's daily note. Only works on files that already exist (except daily notes which are auto-created). For creating new typed objects, use raven_new.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]interface{}{
@@ -222,7 +244,7 @@ func (s *Server) handleToolsList(req *Request) {
 					},
 					"to": map[string]interface{}{
 						"type":        "string",
-						"description": "Target file path (optional, defaults to daily note)",
+						"description": "Path to EXISTING file (optional, defaults to daily note). File must exist.",
 					},
 				},
 				Required: []string{"text"},
@@ -365,6 +387,18 @@ func (s *Server) callTool(name string, args map[string]interface{}) (string, boo
 	var cmdArgs []string
 
 	switch name {
+	case "raven_new":
+		objType, _ := args["type"].(string)
+		title, _ := args["title"].(string)
+		cmdArgs = []string{"new", objType, title}
+		// Add field values if provided
+		if fields, ok := args["fields"].(map[string]interface{}); ok {
+			for key, value := range fields {
+				cmdArgs = append(cmdArgs, "--field", fmt.Sprintf("%s=%v", key, value))
+			}
+		}
+		cmdArgs = append(cmdArgs, "--json")
+
 	case "raven_read":
 		path, _ := args["path"].(string)
 		cmdArgs = []string{"read", path, "--json"}

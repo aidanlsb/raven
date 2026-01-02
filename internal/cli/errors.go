@@ -57,8 +57,10 @@ const (
 
 // Warning codes for non-fatal issues.
 const (
-	WarnRefNotFound     = "REF_NOT_FOUND"
-	WarnDeprecated      = "DEPRECATED"
-	WarnSchemaOutdated  = "SCHEMA_OUTDATED"
+	WarnRefNotFound      = "REF_NOT_FOUND"
+	WarnDeprecated       = "DEPRECATED"
+	WarnSchemaOutdated   = "SCHEMA_OUTDATED"
 	WarnDatabaseOutdated = "DATABASE_OUTDATED"
+	WarnMisuse           = "WRONG_COMMAND"
+	WarnMissingField     = "MISSING_REQUIRED_FIELD"
 )

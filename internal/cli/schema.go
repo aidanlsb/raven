@@ -341,33 +341,52 @@ func listSchemaCommands(start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	commands := map[string]CommandSchemaJSON{
+		"new": {
+			Description: "Create a new typed object (person, project, etc.). If required fields are missing, returns an error listing them - ask user for values and retry with fields parameter.",
+			Args:        []string{"type", "title"},
+			Flags: map[string]FlagJSON{
+				"--field": {
+					Type:        "key=value",
+					Description: "Set field value (can be repeated for multiple fields)",
+					Examples:    []string{"--field name=\"Alice Smith\"", "--field email=alice@example.com"},
+				},
+			},
+			UseCases: []string{
+				"Create a new person entry",
+				"Create a new project file",
+				"Create any typed object defined in schema",
+			},
+			Examples: []string{
+				"rvn new person \"Alice Smith\" --field name=\"Alice Smith\" --json",
+				"rvn new project \"Mobile App\" --json",
+				"rvn new meeting \"Team Sync\" --json",
+			},
+		},
 		"read": {
 			Description: "Read raw file content",
 			Args:        []string{"path"},
 			Examples:    []string{"rvn read daily/2025-02-01.md --json"},
 		},
 		"add": {
-			Description:   "Append content to any file in the vault",
+			Description:   "Append content to EXISTING files or today's daily note. Only works on files that already exist (daily notes auto-created). For new objects, use 'new' command.",
 			DefaultTarget: "Today's daily note",
 			Args:          []string{"text"},
 			Flags: map[string]FlagJSON{
 				"--to": {
 					Type:        "path",
-					Description: "Target file path (any file in vault)",
-					Examples:    []string{"projects/website.md", "inbox.md", "people/alice.md"},
+					Description: "Target EXISTING file path. File must already exist. Omit to use daily note.",
+					Examples:    []string{"projects/website.md", "inbox.md", "daily/2025-02-01.md"},
 				},
 			},
 			UseCases: []string{
 				"Quick capture to daily note",
-				"Add tasks to project files",
-				"Append notes to any document",
-				"Insert references to build knowledge graph",
+				"Add tasks to existing project files",
+				"Append notes to existing documents",
 			},
 			Examples: []string{
 				"rvn add \"Quick thought\" --json",
 				"rvn add \"New task\" --to projects/website.md --json",
-				"rvn add \"@priority(high) Urgent\" --to inbox.md --json",
-				"rvn add \"Discussed [[projects/mobile-app]]\" --json",
+				"rvn add \"@priority(high) Urgent task\" --json",
 			},
 		},
 		"trait": {
