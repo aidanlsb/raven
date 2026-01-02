@@ -5,7 +5,7 @@
 <h1 align="center">Raven</h1>
 
 <p align="center">
-  <strong>Your notes, structured. Your AI, connected.</strong>
+  <strong>Markdown notes you can search, structure, and connect to AI tools.</strong>
 </p>
 
 <p align="center">
@@ -15,10 +15,10 @@
 
 ---
 
-**The pitch in 30 seconds:**
+**Example usage:**
 
 ```bash
-# Tag something as due today in your notes
+# Tag something as due today
 $ grep -r "@due(today)" ~/notes/
 # ...good luck.
 
@@ -27,14 +27,14 @@ $ rvn trait due --value today
 daily/2026-01-02.md:8   "Send Acme proposal"    @due(today) @priority(high)
 projects/api.md:42      "Fix auth bug"          @due(today)
 
-# Even better—ask your AI:
+# Ask an agent:
 You: "What's due today?"
 Claude: You have 2 items due today:
         • Send Acme proposal (high priority)
         • Fix auth bug (from your API project)
 ```
 
-Your notes stay **readable markdown**. Raven adds **structure** (types, traits, references) and **queryability** (CLI, SQLite index, AI agents via MCP).
+Notes stay **readable markdown**. Raven adds **structure** (types, traits, references) and **queryability** (CLI, SQLite index, AI agents via MCP).
 
 ---
 
@@ -369,7 +369,7 @@ Some thoughts about #productivity today.
 |---------|-------------|
 | `rvn init <path>` | Initialize a new vault |
 | `rvn check` | Validate vault (broken refs, schema errors) |
-| `rvn check --create-missing` | Interactively create missing referenced pages |
+| `rvn check --create-missing` | Interactively create missing pages, types, and traits |
 | `rvn reindex` | Rebuild the SQLite index |
 
 ### Querying
@@ -524,7 +524,7 @@ queries:
   tasks:
     traits: [due, status]
     filters:
-      status: "todo,in_progress,"
+      status: "!done"              # NOT done
     description: "Open tasks"
 
   overdue:
@@ -533,11 +533,23 @@ queries:
       due: past
     description: "Overdue items"
 
+  urgent:
+    traits: [due]
+    filters:
+      due: "this-week|past"        # OR: this week or overdue
+    description: "Due soon or overdue"
+
   # Tag-based queries
   important:
     tags: [important]
     description: "Items tagged #important"
 ```
+
+**Filter Syntax:**
+- Simple value: `status: done` → exact match
+- OR with pipe: `due: "this-week|past"` → matches either
+- NOT with bang: `status: "!done"` → excludes value
+- Date keywords: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`
 
 ### Global Config (`~/.config/raven/config.toml`)
 

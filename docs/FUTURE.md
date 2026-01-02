@@ -60,6 +60,39 @@ rvn trait remind --at today
 
 ---
 
+### ~~OR and NOT Filter Syntax~~ ✅ IMPLEMENTED
+Support compound filter expressions for more flexible queries:
+
+```yaml
+# raven.yaml
+queries:
+  urgent:
+    traits: [due]
+    filters:
+      due: "this-week|past"    # OR: this week or overdue
+    
+  open-tasks:
+    traits: [status]
+    filters:
+      status: "!done"          # NOT: exclude done items
+      
+  active:
+    traits: [status]
+    filters:
+      status: "!done|!cancelled"  # NOT done OR NOT cancelled
+```
+
+**Syntax:**
+- `value`: exact match
+- `a|b`: matches `a` OR `b`
+- `!value`: NOT value (excludes)
+- `!a|!b`: NOT a OR NOT b
+- Works with date keywords: `"this-week|past"`, `"!past"`
+
+**Status**: ✅ Implemented. Works in saved queries and CLI `--value` flag.
+
+---
+
 ### ~~Date Hub~~ ✅ IMPLEMENTED
 Show everything related to a specific date:
 ```bash
@@ -446,6 +479,109 @@ types:
       
       ## Action Items
 ```
+
+Then `rvn new meeting "Team Sync"` creates the file with template content.
+
+**Implementation:**
+- Add `template` field to type definitions in schema.yaml
+- `rvn new` and `pages.Create()` apply template after frontmatter
+- Template could support variables: `{{title}}`, `{{date}}`, `{{author}}`
+
+**Status**: Not implemented. Schema supports the field but template application not wired up.
+
+---
+
+## Graph Analysis & Insights
+
+Leverage the index to surface knowledge structure and improve vault hygiene.
+
+### Orphan Detection
+Find notes that nothing links to:
+```bash
+rvn orphans                     # All orphan notes
+rvn orphans --type person       # Orphan people (might be stale)
+rvn orphans --created-before 30d  # Old orphans
+```
+
+**Why useful:** Identifies notes that may be forgotten, stale, or need linking.
+
+---
+
+### Link Suggestions
+Find mentions that could be links:
+```bash
+rvn suggest-links
+# Output:
+#   daily/2026-01-02.md:15 - "talked to Alice" → [[people/alice]]?
+#   projects/website.md:8 - "the API project" → [[projects/api]]?
+```
+
+**Implementation:**
+- Scan content for object titles/names that aren't already linked
+- Use fuzzy matching against known object IDs
+- Suggest `[[ref]]` insertions
+
+**Why useful:** Improves graph connectivity without manual effort.
+
+---
+
+### Related Notes
+Find notes related to a given note:
+```bash
+rvn related people/alice
+# Output:
+#   projects/website (alice is lead)
+#   daily/2026-01-02 (3 references)
+#   people/bob (both attend same meetings)
+```
+
+**Implementation:**
+- Notes that reference the same targets
+- Notes referenced by the same sources
+- Shared tags
+- Co-occurrence in same files
+
+**Status**: Not implemented.
+
+---
+
+### Graph Visualization
+Export graph for visualization tools:
+```bash
+rvn graph --format dot > vault.dot    # Graphviz format
+rvn graph --format json > vault.json  # For D3.js etc.
+rvn graph --type person,project       # Subset
+```
+
+**Status**: Not implemented.
+
+---
+
+## Editor Integration
+
+### Language Server Protocol (LSP)
+Provide IDE features for editing Raven markdown files.
+
+**Features:**
+| Feature | Description |
+|---------|-------------|
+| `[[` autocomplete | Suggest refs from all object IDs |
+| `@` autocomplete | Suggest traits from schema |
+| Diagnostics | Broken refs, undefined traits, schema violations |
+| Go-to-definition | Jump to referenced file |
+| Hover | Show backlinks, field values, type info |
+| Code actions | "Add to schema", "Create missing page" |
+
+**Implementation approach:**
+- Implement LSP server in Go (reuse existing parser/index)
+- VS Code extension as primary client
+- Could also work with Neovim, other LSP-aware editors
+
+**Why aligned:** Keeps files as source of truth, just better editing UX. Technical users (target audience) use IDEs.
+
+**Effort estimate:** ~2 weeks for solid MVP (autocomplete + diagnostics + go-to-definition)
+
+**Status**: Not implemented.
 
 ---
 

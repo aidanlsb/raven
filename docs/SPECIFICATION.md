@@ -272,6 +272,18 @@ Content of the meeting...
 - Multiple traits can be combined: `@due(2025-02-01) @priority(high) @status(todo)`
 - Undefined traits (not in `schema.yaml`) trigger a warning during `rvn check`
 
+**Bare boolean traits**:
+When a boolean trait is used bare (e.g., `@highlight`), it's stored with value `"true"` in the index. This means:
+- `@highlight` is equivalent to `@highlight(true)`
+- Query with `rvn trait highlight --value true` or just `rvn trait highlight`
+
+**Schema as source of truth**:
+Only traits defined in `schema.yaml` are indexed and queryable. Undefined traits:
+- Appear in your files (visible in markdown)
+- Are NOT indexed in the database
+- Show warnings during `rvn check`
+- Can be added to schema interactively via `rvn check --create-missing`
+
 **"Tasks" are emergent**: Instead of a composite `@task` trait, use atomic traits. Anything with `@due` or `@status` is effectively a "task". Use saved queries to define what "tasks" means in your workflow.
 
 ### References
@@ -451,6 +463,14 @@ queries:
     description: "Human-readable description"
 ```
 
+**Filter Syntax:**
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| `value` | Exact match | `status: done` |
+| `a\|b` | OR - matches a or b | `due: "this-week\|past"` |
+| `!value` | NOT - excludes value | `status: "!done"` |
+| Date keywords | Relative dates | `today`, `this-week`, `past`, `future` |
+
 Queries can include types, traits, or both:
 
 ```yaml
@@ -466,6 +486,20 @@ queries:
     filters:
       due: past
     description: "Overdue items"
+
+  # OR filter: due this week or overdue
+  urgent:
+    traits: [due]
+    filters:
+      due: "this-week|past"
+    description: "Due soon or overdue"
+
+  # NOT filter: exclude done items
+  open-tasks:
+    traits: [status]
+    filters:
+      status: "!done"
+    description: "Tasks not yet done"
 
   # Mixed: types AND traits
   project-tasks:
@@ -1171,11 +1205,20 @@ Date fields support relative date expressions in queries:
 | `future` | After today |
 | `YYYY-MM-DD` | Specific date |
 
+**Filter operators** (work with all filters):
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `a\|b` | OR | `"this-week\|past"` (due soon or overdue) |
+| `!value` | NOT | `"!done"` (exclude done items) |
+
 **Examples:**
 ```bash
 rvn trait due --value today           # Items due today
 rvn trait due --value this-week       # Items due this week
 rvn trait due --value past            # Overdue items
+rvn trait due --value "this-week|past" # Due soon OR overdue
+rvn trait status --value "!done"      # Everything except done
 rvn trait remind --value tomorrow     # Reminders for tomorrow
 rvn query overdue                     # Run saved 'overdue' query
 ```
@@ -1625,11 +1668,33 @@ Unknown type (please specify):
 
 Available types: meeting, person, project
 
-Type for notes/random-idea (or 'skip'): skip
-  Skipped notes/random-idea
+Type for notes/random-idea (or 'skip'): vendor
+  Type 'vendor' doesn't exist. Would you like to create it? [y/N] y
+  Default path for 'vendor' files (e.g., 'vendors/', or leave empty): vendors/
+  ✓ Created type 'vendor' in schema.yaml
+  ✓ Created vendors/random-idea.md (type: vendor)
 
 ✓ Created 2 missing page(s).
 ```
+
+**Add undefined traits to schema** (`--create-missing`):
+
+When undefined traits are found, you'll be prompted to add them to your schema:
+
+```bash
+--- Undefined Traits ---
+
+  @custom (3 uses, e.g., daily/2026-01-02.md:15)
+    Used bare (no value) - suggesting: boolean
+
+Add '@custom' to schema? [y/N] y
+  Trait type (boolean/string/date/enum) [boolean]: 
+  ✓ Added trait 'custom' to schema.yaml
+
+✓ Added 1 trait(s) to schema.
+```
+
+Trait type is inferred: bare usage suggests `boolean`, usage with values suggests `string`.
 
 Type inference:
 - **Certain**: Reference is from a typed field (e.g., `attendees: ref[], target: person`) → type is known
