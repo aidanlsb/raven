@@ -13,7 +13,7 @@
 
 ---
 
-**Your notes:**
+**Write notes:**
 
 ```markdown
 # Thursday, January 2, 2026
@@ -23,7 +23,7 @@
 - @highlight Buffer time is the key to good estimates
 ```
 
-**Query them:**
+**Query them on the command line:**
 
 ```bash
 $ rvn trait due --value today
@@ -34,7 +34,7 @@ daily/2026-01-02.md     "Send [[clients/midgard]] proposal"
 projects/bifrost.md     "Client: [[clients/midgard]]"
 ```
 
-**Or ask an agent:**
+**Ask an AI agent:**
 
 ```
 You: "What's due this week?"
@@ -43,8 +43,6 @@ Agent: You have 3 items due - the Bifrost proposal for Midgard Corp is highest p
 You: "Create a project for the Asgard security audit"
 Agent: Created projects/asgard-security-audit.md with due date next Friday.
 ```
-
-Plain markdown. Queryable structure. AI-native.
 
 ---
 
