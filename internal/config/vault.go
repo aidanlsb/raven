@@ -163,8 +163,14 @@ func LoadVaultConfig(vaultPath string) (*VaultConfig, error) {
 }
 
 // CreateDefaultVaultConfig creates a default raven.yaml file in the vault.
-func CreateDefaultVaultConfig(vaultPath string) error {
+// Returns true if a new file was created, false if one already existed.
+func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 	configPath := filepath.Join(vaultPath, "raven.yaml")
+
+	// Skip if file already exists
+	if _, err := os.Stat(configPath); err == nil {
+		return false, nil
+	}
 
 	defaultConfig := `# Raven Vault Configuration
 # These settings control vault-level behavior.
@@ -214,10 +220,10 @@ queries:
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
-		return fmt.Errorf("failed to write vault config: %w", err)
+		return false, fmt.Errorf("failed to write vault config: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 // SaveVaultConfig writes the vault config back to raven.yaml.

@@ -95,9 +95,12 @@ func TestVaultConfigPaths(t *testing.T) {
 func TestCreateDefaultVaultConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := CreateDefaultVaultConfig(tmpDir)
+	created, err := CreateDefaultVaultConfig(tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !created {
+		t.Error("expected file to be created")
 	}
 
 	// Verify file exists
@@ -114,5 +117,14 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 
 	if cfg.DailyDirectory != "daily" {
 		t.Errorf("expected daily_directory 'daily', got %q", cfg.DailyDirectory)
+	}
+
+	// Calling again should NOT overwrite - returns false
+	created2, err := CreateDefaultVaultConfig(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error on second call: %v", err)
+	}
+	if created2 {
+		t.Error("expected file to NOT be created on second call (already exists)")
 	}
 }
