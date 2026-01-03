@@ -451,7 +451,7 @@ queries:
 Configure default vault and editor:
 
 ```toml
-default_vault = "/Users/you/notes"
+default_vault = "work"
 editor = "code"  # or "cursor", "vim", "nano", etc.
 
 [vaults]
