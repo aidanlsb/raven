@@ -54,7 +54,7 @@ Agent: Created projects/asgard-security-audit.md with due date next Friday.
   - [Schema Definition](#schema-definition)
   - [Types](#types)
   - [Traits](#traits)
-  - [References & Tags](#references--tags)
+  - [References](#references)
   - [Querying](#querying)
 - [Configuration](#configuration)
   - [Schema (schema.yaml)](#schema-schemayaml)
@@ -143,14 +143,13 @@ That's it! Now let's understand how Raven files work.
 
 ## Core Concepts
 
-Raven extends plain markdown with four ideas:
+Raven extends plain markdown with three ideas:
 
 - **Types** — what things are (person, project, meeting)
 - **Traits** — queryable structured annotations on content (`@due`, `@priority`)
 - **References** — wiki-style links between notes (`[[people/freya]]`)
-- **Tags** — lightweight categorization of pages (`#mythology`)
 
-Types and traits are defined in your `schema.yaml`. Tags are created as they're used. 
+Types and traits are defined in your `schema.yaml`. 
 
 ### File Format
 
@@ -276,7 +275,7 @@ rvn trait highlight              # All highlights
 
 **"Tasks" are emergent**: Raven doesn't have a built-in task type. Anything with `@due` or `@status` is effectively a task. Define what "tasks" means in your workflow using saved queries.
 
-### References & Tags
+### References
 
 **References** link notes together using wiki-style syntax:
 
@@ -286,15 +285,8 @@ Met with [[people/freya]] about [[projects/bifrost]].
 
 References auto-slugify: `[[people/Thor Odinson]]` resolves to `people/thor-odinson.md`.
 
-**Tags** provide lightweight categorization:
-
-```markdown
-Some thoughts about #mythology today.
-```
-
 ```bash
 rvn backlinks people/freya       # What references Freya?
-rvn tag mythology                # All #mythology items
 ```
 
 ### Querying
@@ -329,14 +321,36 @@ rvn backlinks people/freya       # What mentions Freya?
 rvn search "bifrost design"      # Search all content
 ```
 
-**Saved queries** — define reusable queries in `raven.yaml`:
+**Query language** — powerful queries using the Raven query language:
 
 ```bash
+# Object queries
+rvn query "object:project .status:active"
+rvn query "object:meeting has:due"
+rvn query "object:meeting parent:date"
+rvn query "object:meeting refs:[[people/freya]]"
+
+# Trait queries  
+rvn query "trait:due value:past"
+rvn query "trait:highlight on:{object:book .status:reading}"
+
+# Saved queries (defined in raven.yaml)
 rvn query tasks                  # Run your "tasks" query
 rvn query overdue                # Run your "overdue" query
 ```
 
-Saved queries let you define complex filters once and reuse them. See [Configuration](#vault-config-ravenyaml) for how to set them up.
+Query syntax:
+- `object:<type>` — query objects of a type
+- `trait:<name>` — query traits by name
+- `.field:value` — filter by field value
+- `has:trait` — filter objects that have a trait
+- `refs:[[target]]` — filter by what objects reference
+- `on:type` / `within:type` — filter traits by parent object
+- `parent:type` / `ancestor:type` — filter by hierarchy
+- `!pred` — negate a predicate
+- `pred1 | pred2` — OR predicates
+
+See [docs/QUERY_LOGIC.md](docs/QUERY_LOGIC.md) for full query language documentation.
 
 ---
 
@@ -438,10 +452,6 @@ queries:
     filters:
       due: "this-week|past"        # OR: this week or overdue
     description: "Due soon or overdue"
-
-  important:
-    tags: [important]
-    description: "Items tagged #important"
 ```
 
 **Filter Syntax:**
@@ -486,9 +496,7 @@ Use named vaults: `rvn --vault work stats`
 | `rvn trait <name> --value <filter>` | Filter by value (today, past, this-week, etc.) |
 | `rvn type <name>` | List objects of a specific type |
 | `rvn type --list` | List available types with counts |
-| `rvn tag <name>` | Find objects by tag |
-| `rvn tag --list` | List all tags with usage counts |
-| `rvn query <name>` | Run a saved query |
+| `rvn query "<query>"` | Run a query (object/trait query or saved query name) |
 | `rvn query --list` | List saved queries |
 | `rvn query add <name>` | Create a saved query |
 | `rvn query remove <name>` | Remove a saved query |
@@ -510,6 +518,8 @@ Use named vaults: `rvn --vault work stats`
 | `rvn edit ... --confirm` | Apply the edit |
 | `rvn delete <object_id>` | Delete an object (moves to trash) |
 | `rvn delete <object_id> --force` | Delete without confirmation |
+| `rvn move <source> <dest>` | Move/rename file within vault |
+| `rvn move ... --update-refs` | Update all references (default: true) |
 
 ### Daily Notes & Dates
 
@@ -581,6 +591,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_set` | Update frontmatter fields on existing objects |
 | `raven_read` | Read raw file content for context |
 | `raven_delete` | Delete objects (moves to trash by default) |
+| `raven_move` | Move/rename files within the vault (updates refs) |
 | `raven_edit` | Surgical text replacement in vault files |
 | `raven_search` | Full-text search across vault content |
 | `raven_trait` | Query by trait (due dates, priorities, status) |
@@ -588,7 +599,6 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_query_add` | Create a new saved query |
 | `raven_query_remove` | Remove a saved query |
 | `raven_type` | List objects by type |
-| `raven_tag` | Query by tags |
 | `raven_backlinks` | Find what references an object |
 | `raven_date` | Get all activity for a specific date |
 | `raven_daily` | Open or create the daily note |

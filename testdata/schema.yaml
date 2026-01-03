@@ -55,8 +55,32 @@ types:
                     - paused
                     - completed
                     - abandoned
+            technologies:
+                type: string[]
+            milestones:
+                type: date[]
         traits:
             due:
                 required: true
             priority: {}
+    book:
+        default_path: books/
+        fields:
+            title:
+                type: string
+                required: true
+            author:
+                type: ref
+                target: person
+            rating:
+                type: number
+            categories:
+                type: enum[]
+                values:
+                    - fiction
+                    - non-fiction
+                    - technical
+                    - biography
+            completed_chapters:
+                type: bool[]
 version: 2

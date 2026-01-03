@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"regexp"
 	"strings"
 	"unicode"
 
@@ -65,64 +64,6 @@ func ExtractHeadings(content string, startLine int) []Heading {
 	})
 
 	return headings
-}
-
-// ExtractInlineTags extracts #tag patterns from content.
-// Only extracts tags from regular text, not from code blocks or inline code.
-func ExtractInlineTags(content string) []string {
-	tags := make(map[string]struct{})
-
-	md := goldmark.New()
-	reader := text.NewReader([]byte(content))
-	doc := md.Parser().Parse(reader)
-
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-
-		// Skip code blocks and code spans
-		switch n.(type) {
-		case *ast.FencedCodeBlock, *ast.CodeBlock, *ast.CodeSpan:
-			return ast.WalkSkipChildren, nil
-		}
-
-		// Extract tags from text nodes
-		if textNode, ok := n.(*ast.Text); ok {
-			text := string(textNode.Segment.Value([]byte(content)))
-			for _, tag := range extractTagsFromText(text) {
-				tags[tag] = struct{}{}
-			}
-		}
-
-		return ast.WalkContinue, nil
-	})
-
-	// Convert map to sorted slice
-	result := make([]string, 0, len(tags))
-	for tag := range tags {
-		result = append(result, tag)
-	}
-
-	return result
-}
-
-// tagRegex matches #tag patterns.
-// Tags must start with a letter or underscore (not a digit to avoid #123 issue refs).
-var tagRegex = regexp.MustCompile(`(?:^|[\s\(\[])#([a-zA-Z_][a-zA-Z0-9_-]*)`)
-
-// extractTagsFromText extracts #tag patterns from a text string.
-func extractTagsFromText(text string) []string {
-	var tags []string
-
-	matches := tagRegex.FindAllStringSubmatch(text, -1)
-	for _, match := range matches {
-		if len(match) >= 2 {
-			tags = append(tags, match[1])
-		}
-	}
-
-	return tags
 }
 
 // Slugify converts a heading text to a URL-friendly slug.

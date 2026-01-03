@@ -14,7 +14,6 @@ type TypeDeclaration struct {
 	TypeName string
 	ID       string
 	Fields   map[string]schema.FieldValue
-	Tags     []string
 	Line     int
 }
 
@@ -23,7 +22,6 @@ type EmbeddedTypeInfo struct {
 	TypeName string
 	ID       string
 	Fields   map[string]schema.FieldValue
-	Tags     []string
 }
 
 // typeDeclRegex matches ::typename(args...)
@@ -46,7 +44,6 @@ func ParseEmbeddedType(line string, lineNumber int) *EmbeddedTypeInfo {
 		TypeName: decl.TypeName,
 		ID:       decl.ID,
 		Fields:   decl.Fields,
-		Tags:     decl.Tags,
 	}
 }
 
@@ -83,7 +80,6 @@ func ParseTypeDeclaration(line string, lineNumber int) (*TypeDeclaration, error)
 		TypeName: typeName,
 		ID:       id,
 		Fields:   fields,
-		Tags:     []string{}, // TODO: extract inline tags
 		Line:     lineNumber,
 	}, nil
 }

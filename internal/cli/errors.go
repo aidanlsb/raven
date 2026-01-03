@@ -72,4 +72,5 @@ const (
 	WarnMissingField     = "MISSING_REQUIRED_FIELD"
 	WarnBacklinks        = "HAS_BACKLINKS"
 	WarnUnknownField     = "UNKNOWN_FIELD"
+	WarnTypeMismatch     = "TYPE_DIRECTORY_MISMATCH"
 )

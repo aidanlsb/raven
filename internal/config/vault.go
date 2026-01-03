@@ -125,9 +125,6 @@ type SavedQuery struct {
 	// Filters for each trait (e.g., {"status": "todo,in_progress", "due": "past"})
 	Filters map[string]string `yaml:"filters,omitempty"`
 
-	// Tags to query (e.g., ["project", "important"])
-	Tags []string `yaml:"tags,omitempty"`
-
 	// Description for help text
 	Description string `yaml:"description,omitempty"`
 }
@@ -220,11 +217,6 @@ queries:
     filters:
       due: this-week
     description: "Items due this week"
-
-  # Example tag-based query
-  # important:
-  #   tags: [important]
-  #   description: "Items tagged #important"
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {

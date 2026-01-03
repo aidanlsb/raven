@@ -38,15 +38,6 @@ type BacklinkResult struct {
 	DisplayText *string `json:"display_text,omitempty"`
 }
 
-// TagResult represents a tag query result.
-// Used by: tag
-type TagResult struct {
-	Tag      string `json:"tag"`
-	ObjectID string `json:"object_id"`
-	FilePath string `json:"file_path"`
-	Line     *int   `json:"line,omitempty"`
-}
-
 // =============================================================================
 // Summary Types - For --list style commands
 // =============================================================================
@@ -57,13 +48,6 @@ type TypeSummary struct {
 	Name    string `json:"name"`
 	Count   int    `json:"count"`
 	Builtin bool   `json:"builtin"`
-}
-
-// TagSummary represents a tag with its count.
-// Used by: tag --list
-type TagSummary struct {
-	Tag   string `json:"tag"`
-	Count int    `json:"count"`
 }
 
 // =============================================================================
@@ -114,7 +98,6 @@ type StatsResult struct {
 	ObjectCount int `json:"object_count"`
 	TraitCount  int `json:"trait_count"`
 	RefCount    int `json:"ref_count"`
-	TagCount    int `json:"tag_count,omitempty"`
 }
 
 // =============================================================================
@@ -128,29 +111,21 @@ type SavedQueryInfo struct {
 	Description string            `json:"description,omitempty"`
 	Types       []string          `json:"types,omitempty"`
 	Traits      []string          `json:"traits,omitempty"`
-	Tags        []string          `json:"tags,omitempty"`
 	Filters     map[string]string `json:"filters,omitempty"`
 }
 
 // QueryResult represents results from running a saved query.
 // Used by: query <name>
 type QueryResult struct {
-	QueryName string              `json:"query_name"`
-	Types     []TypeQueryResult   `json:"types,omitempty"`
-	Traits    []TraitResult       `json:"traits,omitempty"`
-	Tags      []TagQueryResult    `json:"tags,omitempty"`
+	QueryName string            `json:"query_name"`
+	Types     []TypeQueryResult `json:"types,omitempty"`
+	Traits    []TraitResult     `json:"traits,omitempty"`
 }
 
 // TypeQueryResult represents objects of a type in query results.
 type TypeQueryResult struct {
 	Type  string         `json:"type"`
 	Items []ObjectResult `json:"items"`
-}
-
-// TagQueryResult represents tag results in a query.
-type TagQueryResult struct {
-	Tags  []string `json:"tags"`
-	Items []string `json:"items"` // Object IDs
 }
 
 // =============================================================================

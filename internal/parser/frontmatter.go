@@ -15,9 +15,6 @@ type Frontmatter struct {
 	// ObjectType is the type field (if present).
 	ObjectType string
 
-	// Tags from frontmatter.
-	Tags []string
-
 	// Fields are all other fields.
 	Fields map[string]schema.FieldValue
 
@@ -76,43 +73,12 @@ func ParseFrontmatter(content string) (*Frontmatter, error) {
 			if s, ok := value.(string); ok {
 				fm.ObjectType = s
 			}
-		case "tags":
-			fm.Tags = parseTagsValue(value)
 		default:
 			fm.Fields[key] = yamlToFieldValue(value)
 		}
 	}
 
 	return fm, nil
-}
-
-// parseTagsValue parses tags from various YAML formats.
-func parseTagsValue(value interface{}) []string {
-	var tags []string
-
-	switch v := value.(type) {
-	case string:
-		// Single tag or space/comma separated
-		for _, part := range strings.FieldsFunc(v, func(r rune) bool {
-			return r == ',' || r == ' '
-		}) {
-			tag := strings.TrimSpace(strings.TrimPrefix(part, "#"))
-			if tag != "" {
-				tags = append(tags, tag)
-			}
-		}
-	case []interface{}:
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				tag := strings.TrimSpace(strings.TrimPrefix(s, "#"))
-				if tag != "" {
-					tags = append(tags, tag)
-				}
-			}
-		}
-	}
-
-	return tags
 }
 
 // yamlToFieldValue converts a YAML value to a FieldValue.

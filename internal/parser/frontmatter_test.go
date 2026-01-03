@@ -9,7 +9,6 @@ func TestParseFrontmatter(t *testing.T) {
 		name     string
 		content  string
 		wantType string
-		wantTags []string
 		wantNil  bool
 	}{
 		{
@@ -17,14 +16,13 @@ func TestParseFrontmatter(t *testing.T) {
 			content: `---
 type: person
 name: Freya
-tags: [friend, colleague]
+email: freya@asgard.realm
 ---
 
 # Freya
 
 Some content`,
 			wantType: "person",
-			wantTags: []string{"friend", "colleague"},
 		},
 		{
 			name:    "no frontmatter",
@@ -42,15 +40,14 @@ Content here`,
 			wantType: "",
 		},
 		{
-			name: "tags as string",
+			name: "daily type",
 			content: `---
 type: daily
-tags: work, personal
+date: 2025-02-01
 ---
 
 Content`,
 			wantType: "daily",
-			wantTags: []string{"work", "personal"},
 		},
 	}
 
@@ -74,17 +71,6 @@ Content`,
 
 			if fm.ObjectType != tt.wantType {
 				t.Errorf("type = %q, want %q", fm.ObjectType, tt.wantType)
-			}
-
-			if len(tt.wantTags) > 0 {
-				if len(fm.Tags) != len(tt.wantTags) {
-					t.Errorf("tags = %v, want %v", fm.Tags, tt.wantTags)
-				}
-				for i, tag := range tt.wantTags {
-					if i < len(fm.Tags) && fm.Tags[i] != tag {
-						t.Errorf("tag[%d] = %q, want %q", i, fm.Tags[i], tag)
-					}
-				}
 			}
 		})
 	}

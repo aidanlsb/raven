@@ -123,6 +123,44 @@ Warns about backlinks (objects that reference the deleted item).`,
 			"rvn delete projects/old --force --json",
 		},
 	},
+	"move": {
+		Name:        "move",
+		Description: "Move or rename an object within the vault",
+		LongDesc: `Move or rename a file/object within the vault.
+
+SECURITY: Both source and destination must be within the vault.
+Files cannot be moved outside the vault, and external files cannot be moved in.
+
+This command:
+- Validates paths are within the vault
+- Updates all references to the moved file (--update-refs, default: true)
+- Warns if moving to a type's default directory with mismatched type
+- Creates destination directories if needed
+
+If moving a file to a type's default directory (e.g., people/) but the file
+has a different type, returns a warning with needs_confirm=true. The agent
+should ask the user how to proceed.`,
+		Args: []ArgMeta{
+			{Name: "source", Description: "Source file path (e.g., inbox/note.md or people/loki)", Required: true},
+			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/note.md)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
+			{Name: "update-refs", Description: "Update references to moved file (default: true)", Type: FlagTypeBool, Default: "true"},
+			{Name: "skip-type-check", Description: "Skip type-directory mismatch warning", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn move people/loki people/loki-archived --json",
+			"rvn move inbox/task.md projects/website/task.md --json",
+			"rvn move drafts/person.md people/freya.md --update-refs --json",
+		},
+		UseCases: []string{
+			"Rename a file in place",
+			"Move file to different directory",
+			"Reorganize vault structure",
+			"Archive old content",
+		},
+	},
 	"trait": {
 		Name:        "trait",
 		Description: "Query traits by type",
@@ -140,16 +178,20 @@ Warns about backlinks (objects that reference the deleted item).`,
 	},
 	"query": {
 		Name:        "query",
-		Description: "Run a saved query",
+		Description: "Run a query using the Raven query language",
 		Args: []ArgMeta{
-			{Name: "query_name", Description: "Name of the saved query", Required: true, DynamicComp: "queries"},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status:active' or saved query name)", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
+			{Name: "value", Description: "Filter by trait value (legacy)", Type: FlagTypeString},
 		},
 		Examples: []string{
+			"rvn query 'object:project .status:active' --json",
+			"rvn query 'object:meeting has:due' --json",
+			"rvn query 'trait:due value:past' --json",
+			"rvn query 'trait:highlight on:{object:book .status:reading}' --json",
 			"rvn query tasks --json",
-			"rvn query overdue --json",
 			"rvn query --list --json",
 		},
 	},
@@ -162,7 +204,6 @@ Warns about backlinks (objects that reference the deleted item).`,
 		Flags: []FlagMeta{
 			{Name: "traits", Description: "Traits to query (comma-separated)", Type: FlagTypeStringSlice},
 			{Name: "types", Description: "Types to query (comma-separated)", Type: FlagTypeStringSlice},
-			{Name: "tags", Description: "Tags to query (comma-separated)", Type: FlagTypeStringSlice},
 			{Name: "filter", Description: "Filter in key=value format (repeatable)", Type: FlagTypeStringSlice},
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
 		},
@@ -194,20 +235,6 @@ Warns about backlinks (objects that reference the deleted item).`,
 		Examples: []string{
 			"rvn type person --json",
 			"rvn type --list --json",
-		},
-	},
-	"tag": {
-		Name:        "tag",
-		Description: "Query objects by tag",
-		Args: []ArgMeta{
-			{Name: "tag", Description: "Tag name (without #)", Required: false},
-		},
-		Flags: []FlagMeta{
-			{Name: "list", Description: "List all tags with counts", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn tag important --json",
-			"rvn tag --list --json",
 		},
 	},
 	"backlinks": {
@@ -536,7 +563,7 @@ Use --type to filter results to specific object types.`,
 		Examples: []string{
 			"rvn search \"meeting notes\" --json",
 			"rvn search \"project*\" --type project --json",
-			"rvn search '\"atomic bomb\"' --limit 5 --json",
+			"rvn search '\"world tree\"' --limit 5 --json",
 			"rvn search \"freya OR thor\" --json",
 		},
 		UseCases: []string{

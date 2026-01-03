@@ -53,55 +53,6 @@ func TestExtractHeadings(t *testing.T) {
 	}
 }
 
-func TestExtractInlineTags(t *testing.T) {
-	tests := []struct {
-		name    string
-		content string
-		want    []string
-	}{
-		{
-			name:    "basic tags",
-			content: "Some text with #tag1 and #tag2, also (#tag3)",
-			want:    []string{"tag1", "tag2", "tag3"},
-		},
-		{
-			name:    "tags in code block ignored",
-			content: "Real #tag here\n\n```\n#not-a-tag\n```\n\nAnd `#also-not-tag` inline",
-			want:    []string{"tag"},
-		},
-		{
-			name:    "issue numbers not tags",
-			content: "Fix #123 and add #feature",
-			want:    []string{"feature"},
-		},
-		{
-			name:    "hyphenated tags",
-			content: "This is #my-tag and #another-tag",
-			want:    []string{"my-tag", "another-tag"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ExtractInlineTags(tt.content)
-
-			// Check all expected tags are present
-			for _, tag := range tt.want {
-				found := false
-				for _, g := range got {
-					if g == tag {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("missing tag %q in %v", tag, got)
-				}
-			}
-		})
-	}
-}
-
 func TestSlugify(t *testing.T) {
 	tests := []struct {
 		input string

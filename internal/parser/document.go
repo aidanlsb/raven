@@ -23,7 +23,6 @@ type ParsedObject struct {
 	ID           string                       // Unique ID (path for file-level, path#id for embedded)
 	ObjectType   string                       // Type name
 	Fields       map[string]schema.FieldValue // Fields/metadata
-	Tags         []string                     // Tags
 	Heading      *string                      // Heading text (for embedded objects)
 	HeadingLevel *int                         // Heading level (for embedded objects)
 	ParentID     *string                      // Parent object ID (for embedded objects)
@@ -116,40 +115,10 @@ func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDo
 		fileType = frontmatter.ObjectType
 	}
 
-	var fileTags []string
-	if frontmatter != nil {
-		fileTags = append(fileTags, frontmatter.Tags...)
-	}
-
-	// Add inline tags from body
-	inlineTags := ExtractInlineTags(bodyContent)
-	for _, tag := range inlineTags {
-		found := false
-		for _, existing := range fileTags {
-			if existing == tag {
-				found = true
-				break
-			}
-		}
-		if !found {
-			fileTags = append(fileTags, tag)
-		}
-	}
-
-	// Store tags in fields as well
-	if len(fileTags) > 0 {
-		tagValues := make([]schema.FieldValue, len(fileTags))
-		for i, t := range fileTags {
-			tagValues[i] = schema.String(t)
-		}
-		fileFields["tags"] = schema.Array(tagValues)
-	}
-
 	objects = append(objects, &ParsedObject{
 		ID:         fileID,
 		ObjectType: fileType,
 		Fields:     fileFields,
-		Tags:       fileTags,
 		LineStart:  1,
 	})
 
@@ -198,7 +167,6 @@ func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDo
 				ID:           embeddedID,
 				ObjectType:   embedded.TypeName,
 				Fields:       embedded.Fields,
-				Tags:         embedded.Tags,
 				Heading:      &headingText,
 				HeadingLevel: &headingLevel,
 				ParentID:     &currentParent,
@@ -234,7 +202,6 @@ func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDo
 				ID:           sectionID,
 				ObjectType:   "section",
 				Fields:       fields,
-				Tags:         []string{},
 				Heading:      &headingText,
 				HeadingLevel: &headingLevel,
 				ParentID:     &currentParent,

@@ -8,7 +8,7 @@ import (
 func TestRegistryHasRequiredCommands(t *testing.T) {
 	requiredCommands := []string{
 		"new", "add", "delete", "read",
-		"trait", "type", "tag", "query",
+		"trait", "type", "query",
 		"backlinks", "stats", "check", "date",
 		"schema",
 	}
