@@ -10,7 +10,8 @@ This guide helps AI agents effectively use Raven to manage a user's knowledge ba
 ## Core Concepts
 
 **Raven** is a plain-markdown knowledge system with:
-- **Types**: Define what objects ARE (person, project, book) — declared in frontmatter
+- **Types**: Schema definitions for what things are (e.g., person, project, book) — defined in schema.yaml
+- **Objects**: Instances of types — each file declares its type in frontmatter (e.g., people/freya.md is an object of type person)
 - **Traits**: Annotations on content (@due, @priority, @highlight) — inline or frontmatter
 - **References**: Wiki-style links between notes ([[people/freya]])
 - **Schema**: User-defined in schema.yaml — types and traits must be defined here to be queryable

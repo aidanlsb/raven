@@ -145,9 +145,11 @@ That's it! Now let's understand how Raven files work.
 
 Raven extends plain markdown with three ideas:
 
-- **Types** — what things are (person, project, meeting)
+- **Types** — schema definitions for what things are (e.g., `person`, `project`, `meeting`)
 - **Traits** — queryable structured annotations on content (`@due`, `@priority`)
 - **References** — wiki-style links between notes (`[[people/freya]]`)
+
+Files are **objects** — instances of types. For example, `people/freya.md` is an object of type `person`.
 
 Types and traits are defined in your `schema.yaml`. 
 
@@ -219,7 +221,7 @@ The schema is the source of truth. Types and traits not defined here won't be in
 
 ### Types
 
-Types define what objects **are**. They live in frontmatter:
+**Types** are schema definitions that describe what objects are. Each file declares its type in frontmatter, making it an **object** (instance) of that type:
 
 ```markdown
 ---
@@ -302,7 +304,7 @@ rvn query "trait:due value:past"        # Overdue
 rvn query "trait:priority value:high"   # High priority
 ```
 
-**By type** — list objects of a kind:
+**By type** — list all objects of a specific type:
 
 ```bash
 rvn query "object:person"               # All people
@@ -587,7 +589,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 | Tool | Description |
 |------|-------------|
-| `raven_new` | Create new typed objects (person, project, meeting) |
+| `raven_new` | Create new objects of a type (e.g., `person`, `project`) |
 | `raven_add` | Quick capture to daily note or existing files |
 | `raven_set` | Update frontmatter fields on existing objects |
 | `raven_read` | Read raw file content for context |

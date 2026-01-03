@@ -87,9 +87,9 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 
 ## Data Model
 
-### Objects (Types)
+### Objects
 
-Objects are referenceable entities. They come in two forms:
+Objects are instances of types. They are referenceable entities that come in two forms:
 
 #### File-Level Objects
 The file itself represents the object. Type declared in frontmatter.
@@ -138,7 +138,7 @@ daily/2025-02-01.md
 
 ### Object Hierarchy
 
-All headings form a tree based on heading levels. Every heading becomes an object (either an explicit type or a section):
+All headings form a tree based on heading levels. Every heading becomes an object (either an explicitly typed object via `::type()` or a `section` object by default):
 
 ```markdown
 # Daily Note (file root, type: daily)
@@ -229,7 +229,7 @@ Content here...
 **Rules**:
 - Frontmatter is optional
 - If present, must be valid YAML between `---` markers
-- The `type` field determines the object type
+- The `type` field determines which type this object is an instance of
 - Other fields are validated against the schema
 
 ### Embedded Types
