@@ -139,6 +139,15 @@ func runSet(cmd *cobra.Command, args []string) error {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
+	// Auto-reindex if configured
+	if vaultCfg.IsAutoReindexEnabled() {
+		if err := reindexFile(vaultPath, filePath); err != nil {
+			if !isJSONOutput() {
+				fmt.Printf("  (reindex failed: %v)\n", err)
+			}
+		}
+	}
+
 	// Log to audit
 	logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
 	relPath, _ := filepath.Rel(vaultPath, filePath)

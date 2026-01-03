@@ -498,17 +498,7 @@ func (s *Server) publishDiagnostics(uri string) {
 // Reindexing
 
 func (s *Server) reindexFile(path string) error {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	parsed, err := parser.ParseDocument(string(content), path, s.vaultPath)
-	if err != nil {
-		return err
-	}
-
-	return s.db.IndexDocument(parsed, s.schema)
+	return s.watcher.ReindexFile(path)
 }
 
 // Text helpers

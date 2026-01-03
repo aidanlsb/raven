@@ -30,6 +30,7 @@ var addCmd = &cobra.Command{
 
 By default, appends to today's daily note. Configure destination in raven.yaml.
 Timestamps are OFF by default; use --timestamp to include the current time.
+Auto-reindex is ON by default; configure via auto_reindex in raven.yaml.
 
 Examples:
   rvn add "Call Odin about the Bifrost"
@@ -42,8 +43,7 @@ Configuration (raven.yaml):
   capture:
     destination: daily      # "daily" or a file path
     heading: "## Captured"  # Optional heading to append under
-    timestamp: false        # Prefix with time (default: false)
-    reindex: true           # Reindex after capture`,
+    timestamp: false        # Prefix with time (default: false)`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
@@ -138,7 +138,7 @@ Configuration (raven.yaml):
 		}
 
 		// Reindex if configured
-		if captureCfg.Reindex != nil && *captureCfg.Reindex {
+		if vaultCfg.IsAutoReindexEnabled() {
 			if err := reindexFile(vaultPath, destPath); err != nil {
 				if !isJSONOutput() {
 					fmt.Printf("  (reindex failed: %v)\n", err)

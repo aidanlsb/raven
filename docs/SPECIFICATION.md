@@ -415,12 +415,16 @@ Located at vault root. Controls vault-level settings.
 # Where daily notes are stored (default: daily)
 daily_directory: daily
 
+# Auto-reindex after CLI operations that modify files (default: true)
+# Commands like 'rvn add', 'rvn new', 'rvn set', 'rvn edit' will
+# automatically update the index when they modify files.
+auto_reindex: true
+
 # Quick capture settings for 'rvn add'
 capture:
   destination: daily      # "daily" (default) or a file path like "inbox.md"
   heading: "## Captured"  # Optional - append under this heading
   timestamp: false        # Prefix with time (default: false, use --timestamp flag)
-  reindex: true           # Reindex file after capture (default: true)
 
 # Saved queries - run with 'rvn query <name>'
 queries:
@@ -1387,7 +1391,9 @@ capture:
   destination: daily      # "daily" or a file path
   heading: "## Captured"  # Append under this heading (optional)
   timestamp: false        # Prefix with time (default: false, use --timestamp flag)
-  reindex: true           # Auto-reindex after capture
+
+# Note: auto_reindex (top-level setting, default: true) controls whether
+# the file is reindexed after capture. See vault configuration section.
 ```
 
 **Output**:

@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/BurntSushi/toml v1.3.2
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gosimple/slug v1.15.0
 	github.com/spf13/cobra v1.8.0
 	github.com/yuin/goldmark v1.7.0

@@ -7,9 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commands"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -106,15 +104,12 @@ var editCmd = &cobra.Command{
 			return handleError("WRITE_ERROR", err, "")
 		}
 
-		// Reindex the file
-		sch, err := schema.Load(vaultPath)
-		if err == nil {
-			db, _, dbErr := index.OpenWithRebuild(vaultPath)
-			if dbErr == nil {
-				defer db.Close()
-				doc, parseErr := parser.ParseDocument(newContent, filePath, vaultPath)
-				if parseErr == nil {
-					db.IndexDocument(doc, sch)
+		// Auto-reindex if configured
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		if vaultCfg.IsAutoReindexEnabled() {
+			if err := reindexFile(vaultPath, filePath); err != nil {
+				if !jsonOutput {
+					fmt.Printf("  (reindex failed: %v)\n", err)
 				}
 			}
 		}

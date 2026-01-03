@@ -13,6 +13,9 @@ type VaultConfig struct {
 	// DailyDirectory is where daily notes are stored (default: "daily/")
 	DailyDirectory string `yaml:"daily_directory"`
 
+	// AutoReindex triggers an incremental reindex after CLI operations that modify files (default: true)
+	AutoReindex *bool `yaml:"auto_reindex,omitempty"`
+
 	// Queries defines saved queries that can be run with `rvn query <name>`
 	Queries map[string]*SavedQuery `yaml:"queries,omitempty"`
 
@@ -64,6 +67,14 @@ func (vc *VaultConfig) IsAuditLogEnabled() bool {
 	return *vc.AuditLog
 }
 
+// IsAutoReindexEnabled returns true if auto-reindexing is enabled (default: true).
+func (vc *VaultConfig) IsAutoReindexEnabled() bool {
+	if vc.AutoReindex == nil {
+		return true // Enabled by default
+	}
+	return *vc.AutoReindex
+}
+
 // CaptureConfig defines settings for quick capture via `rvn add`.
 type CaptureConfig struct {
 	// Destination where captures are appended.
@@ -78,9 +89,6 @@ type CaptureConfig struct {
 
 	// Timestamp prefixes each capture with the time (default: false)
 	Timestamp *bool `yaml:"timestamp,omitempty"`
-
-	// Reindex triggers an incremental reindex after capture (default: true)
-	Reindex *bool `yaml:"reindex,omitempty"`
 }
 
 // GetCaptureConfig returns the capture config with defaults applied.
@@ -89,7 +97,6 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 		return &CaptureConfig{
 			Destination: "daily",
 			Timestamp:   boolPtr(false),
-			Reindex:     boolPtr(true),
 		}
 	}
 
@@ -99,9 +106,6 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 	}
 	if cfg.Timestamp == nil {
 		cfg.Timestamp = boolPtr(false)
-	}
-	if cfg.Reindex == nil {
-		cfg.Reindex = boolPtr(true)
 	}
 	return &cfg
 }
@@ -178,12 +182,16 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 # Where daily notes are stored
 daily_directory: daily
 
+# Auto-reindex after CLI operations that modify files (default: true)
+# When enabled, commands like 'rvn add', 'rvn new', 'rvn set', 'rvn edit'
+# will automatically update the index. Disable if you prefer manual reindexing.
+auto_reindex: true
+
 # Quick capture settings for 'rvn add'
 # capture:
 #   destination: daily      # "daily" (default) or a file path like "inbox.md"
 #   heading: "## Captured"  # Optional heading to append under
-#   timestamp: true         # Prefix captures with time (default: true)
-#   reindex: true           # Reindex file after capture (default: true)
+#   timestamp: true         # Prefix captures with time (default: false)
 
 # Deletion settings for 'rvn delete'
 # deletion:

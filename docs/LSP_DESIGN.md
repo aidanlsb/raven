@@ -312,7 +312,7 @@ require (
 
 ### Remaining Work
 - [ ] Editor extension (VS Code/Cursor)
-- [ ] File watcher for external changes
+- [x] File watcher for external changes (shared `internal/watcher/`)
 - [ ] Type completion in frontmatter
 - [ ] Find all references
 - [ ] Rename support
