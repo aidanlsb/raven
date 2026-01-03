@@ -1021,6 +1021,52 @@ daily_template: |
 
 ---
 
+## Test Coverage Improvements
+
+Areas identified for additional test coverage. These require more complex test fixtures or integration testing.
+
+### Query Executor (`internal/query/executor.go`)
+
+The following functions have limited or no coverage:
+- `buildAncestorPredicateSQL` (0%) - requires multi-level hierarchy fixtures
+- `buildChildPredicateSQL` (0%) - requires parent-child relationship fixtures
+- `buildSourcePredicateSQL` (0%) - requires frontmatter vs inline trait fixtures
+- `buildWithinPredicateSQL` (0%) - requires nested object fixtures
+- `buildOrPredicateSQL` (0%) - requires complex boolean query fixtures
+- `buildGroupPredicateSQL` (0%) - requires complex grouped query fixtures
+- `Execute` (0%) - main execute method, tested indirectly through CLI
+
+**Status**: These tests require SQLite database fixtures with realistic hierarchical data. Could be added as integration tests.
+
+### Check Validator (`internal/check/validator.go`)
+
+- `MissingRefs` (0%) - summary method
+- `UndefinedTraits` (0%) - summary method
+- `trackMissingRef` (42%) - reference tracking
+- `trackUndefinedTrait` (0%) - trait tracking
+- `containsHash` (0%) - utility function
+
+**Status**: These could be unit tested with mock data or tested through integration tests.
+
+### CLI Commands (`internal/cli/`)
+
+The CLI package has no direct tests. Commands are tested indirectly through manual testing and the MCP tools tests.
+
+**Options for improvement:**
+1. Add integration tests that invoke CLI commands
+2. Refactor command logic into testable functions
+3. Use testable patterns (e.g., dependency injection for IO)
+
+**Status**: Lower priority - CLI behavior is tested indirectly via MCP and manual testing.
+
+### Editor/Watcher (`internal/vault/editor.go`, `internal/watcher/`)
+
+These packages involve external processes (opening editors, file system watching) which are difficult to unit test.
+
+**Status**: Deferred - may require mocking OS interactions.
+
+---
+
 ## Adding New Ideas
 
 When you think of a potential enhancement:
