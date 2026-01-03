@@ -8,25 +8,50 @@ import (
 	"github.com/aidanlsb/raven/internal/audit"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/query"
 	"github.com/spf13/cobra"
 )
 
 var queryCmd = &cobra.Command{
-	Use:   "query <name-or-trait>",
-	Short: "Run a saved query or query a trait",
-	Long: `Query traits using saved queries from raven.yaml or ad-hoc trait queries.
+	Use:   "query <query-string>",
+	Short: "Run a query using the Raven query language",
+	Long: `Query objects or traits using the Raven query language.
 
-Saved queries are defined in raven.yaml under 'queries:'.
+Query types:
+  object:<type> [predicates]   Query objects of a type
+  trait:<name> [predicates]    Query traits by name
+
+Predicates for object queries:
+  .field:value     Field equals value
+  .field:*         Field exists
+  !.field:value    Field does not equal value
+  has:trait        Has a trait
+  parent:type      Direct parent is type
+  ancestor:type    Any ancestor is type
+  child:type       Has child of type
+
+Predicates for trait queries:
+  value:val        Trait value equals val
+  source:inline    Only inline traits
+  on:type          Direct parent object is type
+  within:type      Any ancestor object is type
+
+Boolean operators:
+  !pred            NOT
+  pred1 pred2      AND (space-separated)
+  pred1 | pred2    OR
+
+Subqueries use curly braces:
+  has:{trait:due value:past}
+  on:{object:project .status:active}
 
 Examples:
-  rvn query tasks           # Run saved query 'tasks'
-  rvn query overdue         # Run saved query 'overdue'
-  rvn query due             # Query all @due traits
-  rvn query status --value todo  # Query @status traits with value 'todo'
-  rvn query tasks --json    # JSON output for agents
-  
-List saved queries:
-  rvn query --list`,
+  rvn query "object:project .status:active"
+  rvn query "object:meeting has:due"
+  rvn query "trait:due value:past"
+  rvn query "trait:highlight on:{object:book .status:reading}"
+  rvn query tasks                    # Run saved query
+  rvn query --list                   # List saved queries`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
@@ -45,10 +70,10 @@ List saved queries:
 		}
 
 		if len(args) == 0 {
-			return handleErrorMsg(ErrMissingArgument, "specify a query name or trait type", "Run 'rvn query --list' to see saved queries")
+			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query --list' to see saved queries")
 		}
 
-		queryName := args[0]
+		queryStr := args[0]
 		valueFilter, _ := cmd.Flags().GetString("value")
 
 		db, err := index.Open(vaultPath)
@@ -57,14 +82,126 @@ List saved queries:
 		}
 		defer db.Close()
 
-		// Check if this is a saved query
-		if savedQuery, ok := vaultCfg.Queries[queryName]; ok {
-			return runSavedQueryWithJSON(db, savedQuery, queryName, start)
+		// Check if this is a full query string (starts with object: or trait:)
+		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
+			return runFullQuery(db, queryStr, start)
 		}
 
-		// Otherwise, treat as a trait type query
-		return runTraitQueryWithJSON(db, queryName, valueFilter, start)
+		// Check if this is a saved query
+		if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
+			return runSavedQueryWithJSON(db, savedQuery, queryStr, start)
+		}
+
+		// Otherwise, treat as a trait type query (legacy behavior)
+		return runTraitQueryWithJSON(db, queryStr, valueFilter, start)
 	},
+}
+
+func runFullQuery(db *index.Database, queryStr string, start time.Time) error {
+	// Parse the query
+	q, err := query.Parse(queryStr)
+	if err != nil {
+		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("parse error: %v", err), "")
+	}
+
+	executor := query.NewExecutor(db.DB())
+
+	elapsed := time.Since(start).Milliseconds()
+
+	if q.Type == query.QueryTypeObject {
+		results, err := executor.ExecuteObjectQuery(q)
+		if err != nil {
+			return handleError(ErrDatabaseError, err, "")
+		}
+
+		if isJSONOutput() {
+			items := make([]map[string]interface{}, len(results))
+			for i, r := range results {
+				items[i] = map[string]interface{}{
+					"id":        r.ID,
+					"type":      r.Type,
+					"fields":    r.Fields,
+					"file_path": r.FilePath,
+					"line":      r.LineStart,
+				}
+			}
+			outputSuccess(map[string]interface{}{
+				"query_type": "object",
+				"type":       q.TypeName,
+				"items":      items,
+			}, &Meta{Count: len(items), QueryTimeMs: elapsed})
+			return nil
+		}
+
+		// Human-readable output
+		if len(results) == 0 {
+			fmt.Printf("No objects found for: %s\n", queryStr)
+			return nil
+		}
+
+		fmt.Printf("# %s (%d)\n\n", q.TypeName, len(results))
+		for _, r := range results {
+			fmt.Printf("• %s\n", r.ID)
+			if len(r.Fields) > 0 {
+				var fieldStrs []string
+				for k, v := range r.Fields {
+					if k != "type" && k != "id" {
+						fieldStrs = append(fieldStrs, fmt.Sprintf("%s: %v", k, v))
+					}
+				}
+				if len(fieldStrs) > 0 {
+					fmt.Printf("  %s\n", strings.Join(fieldStrs, ", "))
+				}
+			}
+			fmt.Printf("  %s:%d\n", r.FilePath, r.LineStart)
+		}
+		return nil
+	}
+
+	// Trait query
+	results, err := executor.ExecuteTraitQuery(q)
+	if err != nil {
+		return handleError(ErrDatabaseError, err, "")
+	}
+
+	if isJSONOutput() {
+		items := make([]map[string]interface{}, len(results))
+		for i, r := range results {
+			items[i] = map[string]interface{}{
+				"id":         r.ID,
+				"trait_type": r.TraitType,
+				"value":      r.Value,
+				"content":    r.Content,
+				"file_path":  r.FilePath,
+				"line":       r.Line,
+				"object_id":  r.ParentObjectID,
+				"source":     r.Source,
+			}
+		}
+		outputSuccess(map[string]interface{}{
+			"query_type": "trait",
+			"trait":      q.TypeName,
+			"items":      items,
+		}, &Meta{Count: len(items), QueryTimeMs: elapsed})
+		return nil
+	}
+
+	// Human-readable output
+	if len(results) == 0 {
+		fmt.Printf("No traits found for: %s\n", queryStr)
+		return nil
+	}
+
+	fmt.Printf("# @%s (%d)\n\n", q.TypeName, len(results))
+	for _, r := range results {
+		valueStr := ""
+		if r.Value != nil && *r.Value != "" {
+			valueStr = fmt.Sprintf("(%s)", *r.Value)
+		}
+		fmt.Printf("• %s\n", r.Content)
+		fmt.Printf("  @%s%s  %s:%d\n", r.TraitType, valueStr, r.FilePath, r.Line)
+	}
+	return nil
 }
 
 func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
@@ -78,7 +215,6 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 				Description: q.Description,
 				Types:       q.Types,
 				Traits:      q.Traits,
-				Tags:        q.Tags,
 				Filters:     q.Filters,
 			})
 		}
@@ -105,9 +241,6 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 			if len(q.Traits) > 0 {
 				parts = append(parts, fmt.Sprintf("traits: %v", q.Traits))
 			}
-			if len(q.Tags) > 0 {
-				parts = append(parts, fmt.Sprintf("tags: %v", q.Tags))
-			}
 			desc = strings.Join(parts, ", ")
 		}
 		fmt.Printf("  %-12s %s\n", name, desc)
@@ -116,8 +249,8 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 }
 
 func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time) error {
-	if len(q.Traits) == 0 && len(q.Types) == 0 && len(q.Tags) == 0 {
-		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no traits, types, or tags defined", name), "")
+	if len(q.Traits) == 0 && len(q.Types) == 0 {
+		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no traits or types defined", name), "")
 	}
 
 	var result QueryResult
@@ -199,54 +332,11 @@ func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string
 		}
 	}
 
-	// Query tags if specified
-	if len(q.Tags) > 0 {
-		var objectIDs []string
-		if len(q.Tags) == 1 {
-			results, err := db.QueryTags(q.Tags[0])
-			if err != nil {
-				return handleError(ErrDatabaseError, err, "")
-			}
-			for _, r := range results {
-				objectIDs = append(objectIDs, r.ObjectID)
-			}
-		} else {
-			var err error
-			objectIDs, err = db.QueryTagsMultiple(q.Tags)
-			if err != nil {
-				return handleError(ErrDatabaseError, err, "")
-			}
-		}
-
-		if len(objectIDs) > 0 {
-			hasResults = true
-			result.Tags = append(result.Tags, TagQueryResult{
-				Tags:  q.Tags,
-				Items: objectIDs,
-			})
-
-			if !isJSONOutput() {
-				if len(q.Tags) == 1 {
-					fmt.Printf("## #%s (%d)\n\n", q.Tags[0], len(objectIDs))
-				} else {
-					fmt.Printf("## %s (%d)\n\n", formatTagList(q.Tags), len(objectIDs))
-				}
-				for _, id := range objectIDs {
-					fmt.Printf("• %s\n", id)
-				}
-				fmt.Println()
-			}
-		}
-	}
-
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
 		totalCount := len(result.Traits)
 		for _, t := range result.Types {
-			totalCount += len(t.Items)
-		}
-		for _, t := range result.Tags {
 			totalCount += len(t.Items)
 		}
 		outputSuccess(result, &Meta{Count: totalCount, QueryTimeMs: elapsed})
@@ -258,14 +348,6 @@ func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string
 	}
 
 	return nil
-}
-
-func formatTagList(tags []string) string {
-	var formatted []string
-	for _, t := range tags {
-		formatted = append(formatted, "#"+t)
-	}
-	return strings.Join(formatted, " + ")
 }
 
 func runTraitQueryWithJSON(db *index.Database, traitType string, valueFilter string, start time.Time) error {
@@ -359,7 +441,6 @@ Examples:
   rvn query add overdue --traits due --filter due=past
   rvn query add my-tasks --traits due,status --filter status=todo
   rvn query add people --types person
-  rvn query add work-items --tags work,important
   rvn query add mixed --types project --traits due --description "Projects with due dates"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -369,13 +450,12 @@ Examples:
 		// Get flags
 		traits, _ := cmd.Flags().GetStringSlice("traits")
 		types, _ := cmd.Flags().GetStringSlice("types")
-		tags, _ := cmd.Flags().GetStringSlice("tags")
 		filters, _ := cmd.Flags().GetStringSlice("filter")
 		description, _ := cmd.Flags().GetString("description")
 
-		// Validate - must have at least one of traits, types, or tags
-		if len(traits) == 0 && len(types) == 0 && len(tags) == 0 {
-			return handleErrorMsg(ErrInvalidInput, "must specify at least one of --traits, --types, or --tags", "")
+		// Validate - must have at least one of traits or types
+		if len(traits) == 0 && len(types) == 0 {
+			return handleErrorMsg(ErrInvalidInput, "must specify at least one of --traits or --types", "")
 		}
 
 		// Parse filters into map
@@ -409,9 +489,6 @@ Examples:
 		if len(types) > 0 {
 			newQuery.Types = types
 		}
-		if len(tags) > 0 {
-			newQuery.Tags = tags
-		}
 		if len(filterMap) > 0 {
 			newQuery.Filters = filterMap
 		}
@@ -432,7 +509,6 @@ Examples:
 		logger.LogCreate("query", queryName, "saved_query", map[string]interface{}{
 			"traits":  traits,
 			"types":   types,
-			"tags":    tags,
 			"filters": filterMap,
 		})
 
@@ -441,7 +517,6 @@ Examples:
 				"name":        queryName,
 				"traits":      traits,
 				"types":       types,
-				"tags":        tags,
 				"filters":     filterMap,
 				"description": description,
 			}, nil)
@@ -510,7 +585,6 @@ func init() {
 	// query add flags
 	queryAddCmd.Flags().StringSlice("traits", nil, "Traits to query (comma-separated)")
 	queryAddCmd.Flags().StringSlice("types", nil, "Types to query (comma-separated)")
-	queryAddCmd.Flags().StringSlice("tags", nil, "Tags to query (comma-separated)")
 	queryAddCmd.Flags().StringSlice("filter", nil, "Filter in key=value format (repeatable)")
 	queryAddCmd.Flags().String("description", "", "Human-readable description")
 

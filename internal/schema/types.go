@@ -152,11 +152,11 @@ type FieldDefinition struct {
 	Type       FieldType   `yaml:"type"`
 	Required   bool        `yaml:"required,omitempty"`
 	Default    interface{} `yaml:"default,omitempty"`
-	Values     []string    `yaml:"values,omitempty"`   // For enum types
-	Target     string      `yaml:"target,omitempty"`   // For ref types
-	Min        *float64    `yaml:"min,omitempty"`      // For number types
-	Max        *float64    `yaml:"max,omitempty"`      // For number types
-	Derived    string      `yaml:"derived,omitempty"`  // How to compute value
+	Values     []string    `yaml:"values,omitempty"`     // For enum types
+	Target     string      `yaml:"target,omitempty"`     // For ref types
+	Min        *float64    `yaml:"min,omitempty"`        // For number types
+	Max        *float64    `yaml:"max,omitempty"`        // For number types
+	Derived    string      `yaml:"derived,omitempty"`    // How to compute value
 	Positional bool        `yaml:"positional,omitempty"` // For traits: positional argument
 }
 
@@ -164,17 +164,20 @@ type FieldDefinition struct {
 type FieldType string
 
 const (
-	FieldTypeString      FieldType = "string"
-	FieldTypeStringArray FieldType = "string[]"
-	FieldTypeNumber      FieldType = "number"
-	FieldTypeNumberArray FieldType = "number[]"
-	FieldTypeDate        FieldType = "date"
-	FieldTypeDateArray   FieldType = "date[]"
-	FieldTypeDatetime    FieldType = "datetime"
-	FieldTypeEnum        FieldType = "enum"
-	FieldTypeBool        FieldType = "bool"
-	FieldTypeRef         FieldType = "ref"
-	FieldTypeRefArray    FieldType = "ref[]"
+	FieldTypeString        FieldType = "string"
+	FieldTypeStringArray   FieldType = "string[]"
+	FieldTypeNumber        FieldType = "number"
+	FieldTypeNumberArray   FieldType = "number[]"
+	FieldTypeDate          FieldType = "date"
+	FieldTypeDateArray     FieldType = "date[]"
+	FieldTypeDatetime      FieldType = "datetime"
+	FieldTypeDatetimeArray FieldType = "datetime[]"
+	FieldTypeEnum          FieldType = "enum"
+	FieldTypeEnumArray     FieldType = "enum[]"
+	FieldTypeBool          FieldType = "bool"
+	FieldTypeBoolArray     FieldType = "bool[]"
+	FieldTypeRef           FieldType = "ref"
+	FieldTypeRefArray      FieldType = "ref[]"
 )
 
 // FieldValue represents a parsed field value.

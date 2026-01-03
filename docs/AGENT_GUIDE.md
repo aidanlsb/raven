@@ -23,7 +23,7 @@ When users ask about issues or want to clean up their vault:
    - missing_reference: Broken links
    - undefined_trait: Traits not in schema
 3. Work through fixes WITH the user:
-   - "I see 14 undefined types. The most common are: book (45 files), recipe (12 files)..."
+   - "I see 14 undefined types. The most common are: saga (45 files), rune (12 files)..."
    - "Would you like me to add these to your schema?"
 4. Execute fix commands based on user confirmation
 ```
@@ -47,12 +47,27 @@ When users want to create notes:
 When users ask about their data:
 
 ```
-1. Use raven_trait for trait-based queries:
-   raven_trait(trait_type="due", value="today")  # What's due today?
-   raven_trait(trait_type="due", value="past")   # What's overdue?
+1. Use raven_query with the Raven query language:
+   
+   Object queries:
+   raven_query(query_string="object:project .status:active")  # Active projects
+   raven_query(query_string="object:meeting has:due")         # Meetings with due items
+   raven_query(query_string="object:meeting parent:date")     # Meetings in daily notes
+   raven_query(query_string="object:meeting refs:[[people/freya]]")  # Meetings mentioning Freya
+   
+   Trait queries:
+   raven_query(query_string="trait:due value:past")           # Overdue items
+   raven_query(query_string="trait:highlight on:book")        # Highlights in books
+   
+   Reference queries (find things that mention X):
+   raven_query(query_string="object:meeting refs:[[projects/website]]")  # Meetings about website
+   raven_query(query_string="object:meeting refs:{object:project .status:active}")  # Meetings about active projects
+   
+   Saved queries (defined in raven.yaml):
+   raven_query(query_string="tasks")  # Run the "tasks" saved query
 
-2. Use raven_query for saved queries:
-   raven_query(query_name="tasks")  # Run the "tasks" query
+2. Use raven_trait for simple trait queries (legacy):
+   raven_trait(trait_type="due", value="today")  # What's due today?
 
 3. Use raven_search for full-text search:
    raven_search(query="meeting notes")
@@ -60,6 +75,17 @@ When users ask about their data:
 4. Use raven_backlinks to find what references something:
    raven_backlinks(target="people/freya")
 ```
+
+Query language predicates:
+- `.field:value` — filter by field (`.status:active`, `.email:*`)
+- `has:trait` — object has trait (`has:due`, `has:{trait:due value:past}`)
+- `refs:[[target]]` — object references target (`refs:[[people/freya]]`)
+- `refs:{object:type ...}` — references objects matching subquery
+- `value:val` — trait value equals (`value:past`, `!value:done`)
+- `on:type` — trait's parent object is type
+- `within:type` — trait is within ancestor of type
+- `parent:type` / `ancestor:type` — object hierarchy
+- `!pred` — negate, `pred1 | pred2` — OR
 
 ### 4. Schema Discovery
 
@@ -71,7 +97,8 @@ When you need to understand the vault structure:
    raven_schema(subcommand="traits")  # List all traits
    raven_schema(subcommand="type person")  # Details about person type
 
-2. Check raven_query with list=true to see saved queries
+2. Check saved queries:
+   raven_query(list=true)  # See saved queries defined in raven.yaml
 ```
 
 ### 5. Editing Content
@@ -86,6 +113,29 @@ When users want to modify existing notes:
    raven_edit(path="projects/website.md", old_str="Status: active", new_str="Status: completed", confirm=true)
 
 3. Use raven_read first to understand the file content
+```
+
+### 6. Moving and Renaming Files
+
+When users want to reorganize their vault:
+
+```
+1. Use raven_move to move or rename files:
+   raven_move(source="inbox/note.md", destination="projects/website/note.md")
+   raven_move(source="people/loki", destination="people/loki-archived")
+
+2. References are updated automatically (--update-refs defaults to true)
+
+3. IMPORTANT: If the response has needs_confirm=true, ASK THE USER before proceeding.
+   This happens when moving to a type's default directory with a mismatched type.
+   Example: Moving a 'page' type file to 'people/' (which is for 'person' type)
+   
+   Ask: "This file has type 'page' but you're moving it to 'people/' which is 
+         for 'person' files. Should I proceed anyway, or would you like to 
+         change the file's type first?"
+
+4. Security: Files can ONLY be moved within the vault. The command will reject
+   any attempt to move files outside the vault or move external files in.
 ```
 
 ## Issue Types Reference
@@ -122,7 +172,7 @@ After bulk operations or schema changes:
 
 2. **Use the schema as source of truth**: If something isn't in the schema, it won't be indexed or queryable. Guide users to define their types and traits.
 
-3. **Prefer structured queries over search**: Use `raven_trait`, `raven_type`, `raven_query` before falling back to `raven_search`.
+3. **Prefer structured queries over search**: Use `raven_query` with the query language (`object:type .field:value`, `trait:name value:val`) before falling back to `raven_search`.
 
 4. **Check before creating**: Use `raven_backlinks` or `raven_search` to see if something already exists before creating duplicates.
 

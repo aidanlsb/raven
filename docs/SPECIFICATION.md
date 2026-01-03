@@ -303,103 +303,6 @@ Wiki-style links:
 3. If ambiguous (multiple matches), `rvn check` warns and requires full path
 4. All references must resolve to existing objects (validated during check)
 
-### Tags
-
-Tags provide lightweight categorization for objects using `#hashtag` syntax.
-
-### Behavior
-
-Tags attach to the **object** (file or embedded type), not to a specific line. All tags found within an object's content are aggregated and stored as metadata on that object.
-
-**Tag inheritance**: Tags from child embedded objects are also inherited by parent objects.
-
-```markdown
----
-type: daily
-date: 2025-02-01
-tags: [work]                   # Tags can also be declared in frontmatter
----
-
-# February 1, 2025
-
-Some thoughts about #productivity today.
-
-## Weekly Standup
-::meeting(id=standup, time=09:00)
-
-Discussed #planning and #roadmap items.
-
-## Evening
-
-Read about #productivity and #habits.
-```
-
-In this example:
-- The `meeting` object gets tags: `["planning", "roadmap"]` (from its section)
-- The `daily` object gets tags: `["work", "productivity", "habits", "planning", "roadmap"]` (frontmatter + own content + inherited from children)
-
-### Storage
-
-Tags are stored as a JSON array in the object's `fields`:
-
-```json
-{
-  "date": "2025-02-01",
-  "tags": ["productivity", "habits"]
-}
-```
-
-### Querying
-
-```bash
-# Find all objects with a specific tag
-rvn query "tags:productivity"
-
-# Combine with type filter
-rvn query "type:daily tags:productivity"
-
-# Multiple tags (AND)
-rvn query "tags:productivity tags:habits"
-```
-
-### Database Schema Addition
-
-```sql
--- Add index for tag queries (uses JSON extraction)
-CREATE INDEX idx_objects_tags ON objects(json_extract(fields, '$.tags'));
-```
-
-### Syntax Rules
-
-| Syntax | Valid? | Notes |
-|--------|--------|-------|
-| `#productivity` | ✓ | Simple tag |
-| `#my-tag` | ✓ | Hyphens allowed |
-| `#tag_name` | ✓ | Underscores allowed |
-| `#123` | ✗ | Numbers-only tags are skipped (avoids issue refs like #123) |
-| `#tag123` | ✓ | Tags can contain numbers, just not start with them |
-| `#my tag` | ✗ | No spaces (would be `#my` only) |
-| `#über` | ✓ | Unicode letters allowed |
-| `` `#code` `` | ✗ | Tags inside inline code are ignored |
-| Code blocks | ✗ | Tags inside code blocks are ignored |
-
-### Tags vs Traits
-
-| Aspect | Tags | Traits |
-|--------|------|--------|
-| Syntax | `#name` | `@name` or `@name(value)` |
-| Attaches to | Object (aggregated) | Specific line/content |
-| Has value | No | Optional (single value) |
-| Use case | Categorization | Behavior/metadata |
-| Example | `#productivity` | `@due(2025-02-01)`, `@highlight` |
-
-### Implementation Notes
-
-1. **Extraction**: Parse `#([\w-]+)` patterns from content, plus `tags:` array from frontmatter
-2. **Aggregation**: Collect all tags within an object's scope, plus inherited tags from children
-3. **Deduplication**: Store unique tags only
-4. **Storage**: Add to object's `fields.tags` as JSON array during indexing
-
 ---
 
 ## Vault Configuration
@@ -651,7 +554,7 @@ project:
 ```
 
 **Key rules:**
-- Frontmatter can ONLY contain: `type`, `tags`, `id`, declared fields, and declared traits
+- Frontmatter can ONLY contain: `type`, `id`, declared fields, and declared traits
 - Unknown frontmatter keys trigger validation errors
 - Inline `@trait` annotations can appear anywhere regardless of type
 - Traits in frontmatter apply to the whole object; inline traits apply to specific content
@@ -690,7 +593,9 @@ Both dates appear in `rvn trait due`:
 | `date[]` | Array of dates | `milestones: [2025-02-01, 2025-03-15]` |
 | `datetime` | ISO 8601 datetime | `time: 2025-02-01T09:00` |
 | `enum` | One of specified values | `status: active` |
+| `enum[]` | Array of enum values | `categories: [work, personal]` |
 | `bool` | Boolean | `archived: true` |
+| `bool[]` | Array of booleans | `flags: [true, false, true]` |
 | `ref` | Reference to another object | `author: [[people/freya]]` |
 | `ref[]` | Array of references | `attendees: [[[people/freya]], [[people/thor]]]` |
 
@@ -714,7 +619,6 @@ The following field names are reserved and cannot be used in type/trait definiti
 |-------|---------|
 | `id` | Embedded object identifier (required for `::type()`) |
 | `type` | Object type name |
-| `tags` | Aggregated tags (auto-populated) |
 
 ### File Location (default_path)
 
@@ -754,7 +658,6 @@ types:
 | `@trait(...)` | Trait annotation | No |
 | `[[path/file]]` | Reference to file object | — |
 | `[[path/file#id]]` | Reference to embedded object | — |
-| `#tag` | Tag (aggregates to parent object) | — |
 
 ### Type Declaration Syntax
 
@@ -821,7 +724,6 @@ Traits use a simpler single-value syntax:
 ```markdown
 ---
 type: date
-tags: [work]
 ---
 
 # Saturday, February 1, 2025
@@ -847,15 +749,14 @@ Talked about his career growth.
 
 ## Reading
 
-Started [[books/atomic-habits]] by [[people/james-clear]].
+Started [[books/poetic-edda]] translated by [[people/snorri]].
 
-- @highlight Habits are compound interest for self-improvement #productivity
+- @highlight The Norns weave the fate of gods and men alike
 - @due(2025-02-15) Finish chapter 3
 
 ## Random Thoughts
 
 - @remind(2025-02-02T10:00) Check if designs are ready
-- Need to revisit my #productivity system
 ```
 
 **Object IDs in this example**:
@@ -883,7 +784,7 @@ Started [[books/atomic-habits]] by [[people/james-clear]].
 ├── projects/
 │   └── website.md
 └── books/
-    └── atomic-habits.md
+    └── poetic-edda.md
 ```
 
 ### App Configuration: `~/.config/raven/config.toml`
@@ -957,7 +858,7 @@ internal/
 │   ├── markdown.go          # Parse markdown structure (goldmark)
 │   ├── typedecl.go          # Parse ::type() declarations
 │   ├── traits.go            # Parse @trait() annotations
-│   ├── refs.go              # Extract [[references]] and #tags
+│   ├── refs.go              # Extract [[references]]
 │   └── document.go          # Combine into ParsedDocument
 ├── resolver/
 │   └── resolver.go          # Resolve short refs to full paths
@@ -988,7 +889,6 @@ internal/
     ├── check.go             # rvn check
     ├── trait.go             # rvn trait
     ├── type.go              # rvn type
-    ├── tag.go               # rvn tag
     ├── query.go             # rvn query
     ├── backlinks.go         # rvn backlinks
     ├── stats.go             # rvn stats
@@ -1035,7 +935,7 @@ CREATE TABLE objects (
     type TEXT NOT NULL,               -- person, meeting, project, page (fallback), etc.
     heading TEXT,                     -- NULL for file-level, heading text for embedded
     heading_level INTEGER,            -- NULL for file-level
-    fields TEXT NOT NULL DEFAULT '{}', -- JSON of all field values (including tags)
+    fields TEXT NOT NULL DEFAULT '{}', -- JSON of all field values
     line_start INTEGER NOT NULL,      -- Line number where object starts
     line_end INTEGER,                 -- Line number where object ends (embedded only)
     parent_id TEXT,                   -- Parent object ID (for nested embedded)
@@ -1090,7 +990,6 @@ CREATE INDEX idx_traits_parent ON traits(parent_object_id);
 -- JSON field indexes for common queries
 CREATE INDEX idx_traits_status ON traits(json_extract(fields, '$.status'));
 CREATE INDEX idx_traits_due ON traits(json_extract(fields, '$.due'));
-CREATE INDEX idx_objects_tags ON objects(json_extract(fields, '$.tags'));
 
 CREATE INDEX idx_refs_source ON refs(source_id);
 CREATE INDEX idx_refs_target ON refs(target_id);
@@ -1144,9 +1043,13 @@ rvn query add my-tasks --traits due,status --filter status=todo  # Create saved 
 rvn query remove my-tasks                # Remove saved query
 
 # Query objects
-rvn query "type:person"
-rvn query "type:meeting attendees:[[people/freya]]"
-rvn query "type:project status:active"
+rvn query "object:person"
+rvn query "object:meeting .attendees:[[people/freya]]"
+rvn query "object:project .status:active"
+
+# Query traits
+rvn query "trait:due value:past"
+rvn query "trait:highlight on:{object:book .status:reading}"
 
 # Show backlinks to a note
 rvn backlinks <target>
@@ -1324,44 +1227,6 @@ Types:
   person          2 objects
   project         1 objects
   section         12 objects (built-in)
-```
-
-### The `rvn tag` Command
-
-Query objects by tag:
-
-```bash
-rvn tag <tag-name>
-```
-
-**Examples**:
-```bash
-rvn tag project                          # Find all objects tagged #project
-rvn tag important                        # Find all objects tagged #important
-rvn tag --list                           # Show all tags with usage counts
-```
-
-**Output**:
-```
-# #project (3)
-
-• projects/website.md
-    projects/website (line 1)
-• daily/2025-02-01.md
-    daily/2025-02-01 (line 15)
-• people/freya.md
-    people/freya#current-work (line 20)
-```
-
-Use `rvn tag --list` to see all tags in your vault:
-```
-Tags (8 total):
-
-  #project              3 objects
-  #important            2 objects
-  #work                 2 objects
-  #personal             1 object
-  #reading              1 object
 ```
 
 ### The `rvn add` Command
@@ -1558,39 +1423,28 @@ queries:
     types: [project]
     traits: [due]
     description: "Projects with due dates"
-
-  important:
-    tags: [important]
-    description: "Items tagged #important"
-
-  work-projects:
-    tags: [work, project]
-    description: "Items with both #work AND #project tags"
 ```
 
-Queries can include `types`, `traits`, `tags`, or any combination. When multiple tags are specified, objects must have ALL tags (AND logic).
+Queries can include `types`, `traits`, or both.
 
 Then run them:
 
 ```bash
 rvn query tasks              # Run saved query (traits)
 rvn query people             # Run saved query (types)
-rvn query important          # Run saved query (tags)
 rvn query project-summary    # Run saved query (mixed)
 rvn query --list             # List all saved queries
 rvn query add my-tasks --traits due,status --filter status=todo  # Create
 rvn query remove my-tasks    # Remove
 ```
 
-For direct queries, use `rvn trait`, `rvn type`, or `rvn tag`:
+For direct queries, use `rvn trait` or `rvn type`:
 
 ```bash
 rvn trait due --value past   # All overdue items
 rvn trait highlight          # All highlights
 rvn type person              # All people
 rvn type project             # All projects
-rvn tag important            # All items tagged #important
-rvn tag --list               # List all tags
 ```
 
 ### Trait Definition
@@ -1736,7 +1590,6 @@ rvn --config /path/to/config.toml <command>
 3. **Frontmatter Parser**
    - Extract YAML between `---` markers
    - Convert to map[string]interface{}
-   - Support `tags:` array in frontmatter
 
 4. **Markdown Parser** (using pulldown-cmark)
    - Use AST-based parsing, NOT string manipulation
@@ -1756,11 +1609,9 @@ rvn --config /path/to/config.toml <command>
    - Support positional arguments (must precede named)
    - Extract content between carriage returns as trait content
 
-7. **Reference & Tag Extractor**
+7. **Reference Extractor**
    - Find all `[[ref]]` and `[[ref|display]]` patterns
    - Handle array syntax `[[[ref1]], [[ref2]]]` correctly
-   - Extract `#tags` using AST (ignore tags in code blocks)
-   - Skip number-only tags like `#123`
    - Track positions for source mapping
 
 8. **Document Parser**
@@ -1791,7 +1642,6 @@ rvn --config /path/to/config.toml <command>
     - `rvn check --create-missing` (interactively create missing references)
     - `rvn trait` (query by trait type)
     - `rvn type` (query by object type)
-    - `rvn tag` (query by tag)
     - `rvn query` (saved queries)
     - `rvn backlinks`
     - `rvn stats`
@@ -1956,7 +1806,6 @@ This section documents key design decisions made during planning.
 | Embedded type | `::type(id=..., ...)` | `::` distinguishes from traits (`@`), inline for speed |
 | Traits | `@trait(...)` | `@` is intuitive for annotations |
 | References | `[[path/file#id]]` | Wiki-style links, `#` for fragments (standard) |
-| Tags | `#tag` | Standard hashtag syntax |
 
 ### ID Strategy
 
@@ -2018,10 +1867,6 @@ Type is determined by a simple rule:
 
 **No detection or inference.** File location, content, or other fields never affect the type. This is explicit and predictable.
 
-### Tag Inheritance
-
-Tags flow upward: child embedded objects' tags are inherited by parent objects.
-
 ### CLI Trait Commands
 
 Rather than hard-coding trait-specific commands, we use a hybrid approach:
@@ -2058,7 +1903,6 @@ All CLI aliases are explicit in the schema—no hidden behavior.
 
 **Why AST parsing matters**:
 - Headings inside code blocks are correctly ignored
-- Tags (`#tag`) inside code blocks or inline code are correctly ignored
 - Edge cases in markdown syntax are handled correctly
 
 **Implementation pattern**:
@@ -2086,33 +1930,6 @@ func extractHeadings(content []byte) []Heading {
     return headings
 }
 ```
-
-**Tag extraction** must also use the AST to avoid false positives:
-```go
-ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-    // Skip code blocks entirely
-    if _, ok := n.(*ast.CodeBlock); ok {
-        return ast.WalkSkipChildren, nil
-    }
-    if _, ok := n.(*ast.FencedCodeBlock); ok {
-        return ast.WalkSkipChildren, nil
-    }
-    // Skip inline code
-    if _, ok := n.(*ast.CodeSpan); ok {
-        return ast.WalkSkipChildren, nil
-    }
-    // Extract tags from text nodes
-    if text, ok := n.(*ast.Text); ok && entering {
-        segment := text.Segment
-        tags = append(tags, extractTagsFromText(string(content[segment.Start:segment.Stop]))...)
-    }
-    return ast.WalkContinue, nil
-})
-```
-
-**Additional tag rules**:
-- Tags must not start with a digit (avoid `#123` issue references)
-- Tags must be preceded by whitespace or punctuation
 
 ### Performance Considerations
 
@@ -2156,10 +1973,9 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_search` | Full-text search | `query`, optional `type`, `limit` |
 | `raven_trait` | Query by trait | `trait_type`, optional `value` |
 | `raven_query` | Run saved query | `query_name` |
-| `raven_query_add` | Create saved query | `name`, optional `traits`, `types`, `tags`, `filter`, `description` |
+| `raven_query_add` | Create saved query | `name`, optional `traits`, `types`, `filter`, `description` |
 | `raven_query_remove` | Remove saved query | `name` |
 | `raven_type` | List objects by type | `type_name` |
-| `raven_tag` | Query by tag | `tag` |
 | `raven_backlinks` | Find references to object | `target` |
 | `raven_date` | Get activity for date | `date` |
 | `raven_stats` | Vault statistics | (none) |
@@ -2231,7 +2047,7 @@ vault/
 │   ├── website-redesign.md
 │   └── mobile-app.md
 ├── books/
-│   └── atomic-habits.md
+│   └── poetic-edda.md
 └── meetings/
     └── weekly-standup.md    # Recurring meeting series
 ```
@@ -2275,7 +2091,6 @@ Senior engineer on the platform team.
 ---
 type: daily
 date: 2025-02-01
-tags: [work]
 ---
 
 # Saturday, February 1, 2025
@@ -2299,9 +2114,9 @@ Discussed Q2 priorities.
 
 ## Reading
 
-Chapter 2 of [[books/atomic-habits]].
+Chapter 2 of [[books/poetic-edda]].
 
-- @highlight Small habits compound over time
+- @highlight The world tree Yggdrasil connects all nine realms
 ```
 
 **Object IDs generated from this file**:

@@ -27,7 +27,7 @@ When users ask about issues or want to clean up their vault:
    - missing_reference: Broken links  
    - undefined_trait: Traits not in schema
 3. Work through fixes WITH the user:
-   - "I see 14 undefined types. The most common are: book (45 files), recipe (12 files)..."
+   - "I see 14 undefined types. The most common are: saga (45 files), rune (12 files)..."
    - "Would you like me to add these to your schema?"
 4. Execute fix commands based on user confirmation
 

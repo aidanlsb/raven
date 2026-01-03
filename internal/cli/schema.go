@@ -362,7 +362,6 @@ func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaR
 				Description: q.Description,
 				Types:       q.Types,
 				Traits:      q.Traits,
-				Tags:        q.Tags,
 				Filters:     q.Filters,
 			}
 		}

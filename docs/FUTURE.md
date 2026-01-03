@@ -669,7 +669,7 @@ week: 2026-W01
 # Weekly Review: Dec 30, 2025 - Jan 5, 2026
 
 ## Highlights
-- @highlight "Small habits compound over time" — [[books/atomic-habits]]
+- @highlight "The Norns weave fate at Urd's Well" — [[books/poetic-edda]]
 - @highlight Bifrost API design finalized — [[projects/bifrost]]
 
 ## Completed (7 items)
@@ -771,7 +771,7 @@ Good morning! Here's your day:
 ✅ **Due Today** (4)
 - Send revised estimate to [[clients/midgard]]
 - Review PR #1234
-- Finish Chapter 3 of [[books/atomic-habits]]
+- Finish Chapter 3 of [[books/poetic-edda]]
 - Submit expense report
 
 ⏰ **Reminders**
@@ -854,8 +854,8 @@ Agent: "I found 5 captures from today. Here's what I suggest:
 2. 'Remember to review the Midgard proposal'  
    → @due(this-week) @priority(high) Review [[clients/midgard]] proposal
    
-3. 'Great insight about compound habits'
-   → @highlight Great insight about compound habits (link to [[books/atomic-habits]]?)
+3. 'Great insight about the Norns'
+   → @highlight Great insight about the Norns (link to [[books/poetic-edda]]?)
 
 Apply these suggestions? [Y/n/edit]"
 ```
