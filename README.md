@@ -403,12 +403,16 @@ Configure vault behavior and saved queries:
 ```yaml
 daily_directory: daily
 
+# Auto-reindex after CLI operations (default: true)
+# Commands like 'rvn add', 'rvn new', 'rvn set', 'rvn edit' will
+# automatically update the index when they modify files.
+auto_reindex: true
+
 # Quick capture settings
 capture:
   destination: daily      # or a file path like "inbox.md"
   heading: "## Captured"  # Optional heading to append under
   timestamp: false        # Prefix captures with time
-  reindex: true           # Reindex after capture
 
 # Deletion behavior
 deletion:

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -248,6 +249,16 @@ Examples:
 		})
 		if err != nil {
 			return handleError(ErrFileWriteError, err, "")
+		}
+
+		// Auto-reindex if configured
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		if vaultCfg.IsAutoReindexEnabled() {
+			if err := reindexFile(vaultPath, result.FilePath); err != nil {
+				if !isJSONOutput() {
+					fmt.Printf("  (reindex failed: %v)\n", err)
+				}
+			}
 		}
 
 		if isJSONOutput() {

@@ -19,6 +19,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/watcher"
 )
 
 // Server is the Raven LSP server.
@@ -28,9 +29,10 @@ type Server struct {
 	debug     bool
 
 	// Raven infrastructure
-	db     *index.Database
-	schema *schema.Schema
-	cfg    *config.VaultConfig
+	db      *index.Database
+	schema  *schema.Schema
+	cfg     *config.VaultConfig
+	watcher *watcher.Watcher
 
 	// Document management
 	documents *DocumentManager
@@ -106,6 +108,19 @@ func (s *Server) initialize() error {
 		return fmt.Errorf("failed to open index: %w", err)
 	}
 	s.db = db
+
+	// Create watcher for reindexing (we don't start the file watcher,
+	// but use it for the ReindexFile method)
+	w, err := watcher.New(watcher.Config{
+		VaultPath: s.vaultPath,
+		Database:  s.db,
+		Schema:    s.schema,
+		Debug:     s.debug,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create watcher: %w", err)
+	}
+	s.watcher = w
 
 	return nil
 }

@@ -154,19 +154,20 @@ rvn import obsidian ~/path/to/obsidian-vault
 
 The goal is to make manual `rvn reindex` rare or unnecessary. Currently users must remember to reindex after external edits.
 
-### Auto-Reindex on Change (File Watching)
+### ~~Auto-Reindex on Change (File Watching)~~ ✅ IMPLEMENTED
 Watch vault for file changes and update index automatically:
 ```bash
-rvn watch
+rvn watch          # Standalone file watcher
+rvn watch --debug  # With debug output
 ```
 
-**Implementation notes:**
-- Use `fsnotify` for cross-platform file watching
-- Debounce rapid changes (e.g., 100ms delay)
+**Implementation:**
+- Uses `fsnotify` for cross-platform file watching
+- Debounces rapid changes (100ms delay)
 - Incremental update: only reindex changed files
-- Could run as background daemon or integrate with editors
+- Shared `internal/watcher/` package used by both `rvn watch` and `rvn lsp`
 
-**Status**: Mentioned in Phase 3 of spec.
+**Status**: ✅ Implemented.
 
 ---
 
@@ -188,7 +189,7 @@ rvn reindex --full    # Force full reindex
 ---
 
 ### Auto-Reindex After Mutations
-Commands that modify files should automatically reindex the affected file:
+Commands that modify files automatically reindex the affected file:
 ```bash
 rvn add "New note"              # → auto reindex daily note
 rvn new person "Freya"          # → auto reindex new file
@@ -196,7 +197,13 @@ rvn set people/freya email=...  # → auto reindex people/freya.md
 rvn edit path "old" "new"       # → auto reindex path
 ```
 
-**Status**: Partially implemented. Some commands (`rvn add`, `rvn edit`) do trigger reindex. Should audit all mutation commands.
+**Configuration** (`raven.yaml`):
+```yaml
+# Auto-reindex after CLI operations that modify files (default: true)
+auto_reindex: true
+```
+
+**Status**: ✅ Implemented. All mutation commands (`add`, `new`, `set`, `edit`) use the centralized `auto_reindex` config. Enabled by default.
 
 ---
 
