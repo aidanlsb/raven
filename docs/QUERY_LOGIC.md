@@ -375,7 +375,7 @@ object:<type> [<object-predicates>...]
 
 Recursively validate each query:
 
-1. Query returns exactly one type (object type or trait name)
+1. Query returns exactly one kind of result (objects of a single type, or traits of a single name)
 2. Query uses only predicates valid for its query type
 3. Sub-queries inside predicates are themselves valid queries
 4. Boolean composition is well-formed
