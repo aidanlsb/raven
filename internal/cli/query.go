@@ -74,7 +74,6 @@ Examples:
 		}
 
 		queryStr := args[0]
-		valueFilter, _ := cmd.Flags().GetString("value")
 
 		db, err := index.Open(vaultPath)
 		if err != nil {
@@ -92,8 +91,10 @@ Examples:
 			return runSavedQueryWithJSON(db, savedQuery, queryStr, start)
 		}
 
-		// Otherwise, treat as a trait type query (legacy behavior)
-		return runTraitQueryWithJSON(db, queryStr, valueFilter, start)
+		// Unknown query - provide helpful error
+		return handleErrorMsg(ErrQueryInvalid,
+			fmt.Sprintf("unknown query: %s", queryStr),
+			"Queries must start with 'object:' or 'trait:', or be a saved query name. Run 'rvn query --list' to see saved queries.")
 	},
 }
 
@@ -350,50 +351,6 @@ func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string
 	return nil
 }
 
-func runTraitQueryWithJSON(db *index.Database, traitType string, valueFilter string, start time.Time) error {
-	var filter *string
-	if valueFilter != "" {
-		filter = &valueFilter
-	}
-
-	results, err := db.QueryTraits(traitType, filter)
-	if err != nil {
-		return handleError(ErrDatabaseError, err, "")
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
-	if isJSONOutput() {
-		items := make([]TraitResult, len(results))
-		for i, r := range results {
-			items[i] = TraitResult{
-				ID:          fmt.Sprintf("%s:%d", r.FilePath, r.Line),
-				TraitType:   r.TraitType,
-				Value:       r.Value,
-				Content:     r.Content,
-				ContentText: r.Content,
-				ObjectID:    r.ParentID,
-				FilePath:    r.FilePath,
-				Line:        r.Line,
-			}
-		}
-		outputSuccess(map[string]interface{}{
-			"trait": traitType,
-			"items": items,
-		}, &Meta{Count: len(items), QueryTimeMs: elapsed})
-		return nil
-	}
-
-	// Human-readable output
-	if len(results) == 0 {
-		fmt.Printf("No @%s traits found.\n", traitType)
-		return nil
-	}
-
-	printTraitResults(results)
-	return nil
-}
-
 func printTraitResults(results []index.TraitResult) {
 	// Group by content line to show all traits on same content
 	type contentKey struct {
@@ -580,7 +537,6 @@ Examples:
 
 func init() {
 	queryCmd.Flags().BoolP("list", "l", false, "List saved queries")
-	queryCmd.Flags().String("value", "", "Filter by trait value")
 
 	// query add flags
 	queryAddCmd.Flags().StringSlice("traits", nil, "Traits to query (comma-separated)")

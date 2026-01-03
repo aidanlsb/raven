@@ -51,9 +51,9 @@ rvn search "compound interest"
 ### ~~Date Range Queries~~ ✅ IMPLEMENTED
 Support relative date queries in filters:
 ```bash
-rvn tasks --due this-week
-rvn tasks --due past      # overdue tasks
-rvn trait remind --at today
+rvn query "trait:due value:this-week"
+rvn query "trait:due value:past"         # overdue items
+rvn query "trait:remind value:today"
 ```
 
 **Status**: ✅ Implemented with support for: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`, and specific `YYYY-MM-DD` dates.
@@ -210,7 +210,7 @@ auto_reindex: true
 ### Stale Index Detection
 Warn users when index may be out of date:
 ```bash
-$ rvn trait due
+$ rvn query "trait:due"
 ⚠ Index may be stale (5 files modified since last reindex)
 Run 'rvn reindex' to update.
 
@@ -617,19 +617,19 @@ trigger: manual
 Create a `weekly-review` note in `reviews/` with sections for each category.
 ```
 
-Agents discover via `raven_type(type_name="workflow")`.
+Agents discover via `raven_query(query_string="object:workflow")`.
 
-**Option B: Informal pattern with tags**
+**Option B: Informal pattern with traits**
 
-Users who want something lighter can just use a `#workflow` tag:
+Users who want something lighter can use a trait like `@workflow`:
 
 ```markdown
-# Weekly Review #workflow
+# Weekly Review @workflow
 
 Steps to generate weekly review...
 ```
 
-Agents discover via `raven_tag(tag="workflow")`.
+Agents discover via `raven_search(query="workflow")`.
 
 **Option C: Just a folder convention**
 
@@ -637,7 +637,7 @@ Or simply put workflow docs in `workflows/` and agents read from there.
 
 **Key principle:** Raven doesn't need built-in workflow support. The schema system is flexible 
 enough that users can define whatever structure makes sense for their use case. Agents can read 
-workflow documentation via existing tools (`raven_read`, `raven_type`, `raven_tag`, `raven_search`) 
+workflow documentation via existing tools (`raven_read`, `raven_query`, `raven_search`) 
 and execute accordingly.
 
 **Status**: No implementation needed — this is an emergent pattern using existing features.
@@ -740,7 +740,7 @@ Agent:
 - Holiday break debrief
 ```
 
-**Status**: Possible with current tools (`raven_backlinks`, `raven_search`, `raven_trait`). Could be a dedicated MCP tool for convenience.
+**Status**: Possible with current tools (`raven_backlinks`, `raven_search`, `raven_query`). Could be a dedicated MCP tool for convenience.
 
 ---
 

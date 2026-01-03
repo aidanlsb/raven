@@ -47,17 +47,16 @@ When users want to create notes:
 
 When users ask about their data:
 
-1. Use raven_trait for trait-based queries:
-   raven_trait(trait_type="due", value="today")  # What's due today?
-   raven_trait(trait_type="due", value="past")   # What's overdue?
+1. Use raven_query for all queries:
+   raven_query(query_string="trait:due value:today")  # What's due today?
+   raven_query(query_string="trait:due value:past")   # What's overdue?
+   raven_query(query_string="object:project .status:active")  # Active projects
+   raven_query(query_string="tasks")  # Run saved query "tasks"
 
-2. Use raven_query for saved queries:
-   raven_query(query_name="tasks")  # Run the "tasks" query
-
-3. Use raven_search for full-text search:
+2. Use raven_search for full-text search:
    raven_search(query="meeting notes")
 
-4. Use raven_backlinks to find what references something:
+3. Use raven_backlinks to find what references something:
    raven_backlinks(target="people/freya")
 
 ### 4. Schema Discovery
@@ -115,7 +114,7 @@ After bulk operations or schema changes:
 
 2. **Use the schema as source of truth**: If something isn't in the schema, it won't be indexed or queryable. Guide users to define their types and traits.
 
-3. **Prefer structured queries over search**: Use raven_trait, raven_type, raven_query before falling back to raven_search.
+3. **Prefer structured queries over search**: Use raven_query before falling back to raven_search.
 
 4. **Check before creating**: Use raven_backlinks or raven_search to see if something already exists before creating duplicates.
 
@@ -126,7 +125,7 @@ After bulk operations or schema changes:
 ## Example Conversations
 
 **User**: "What do I have due this week?"
-- Use raven_trait(trait_type="due", value="this-week")
+- Use raven_query(query_string="trait:due value:this-week")
 - Summarize results for user
 
 **User**: "Add a new person for my colleague Thor Odinson"

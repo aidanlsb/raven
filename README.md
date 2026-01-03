@@ -26,7 +26,7 @@
 **Query them on the command line:**
 
 ```bash
-$ rvn trait due --value today
+$ rvn query "trait:due value:today"
 daily/2026-01-02.md:3   "Send [[clients/midgard]] proposal"   @due(today)
 
 $ rvn backlinks clients/midgard
@@ -267,10 +267,10 @@ priority: high
 **Query traits:**
 
 ```bash
-rvn trait due --value today      # Items due today
-rvn trait due --value past       # Overdue items
-rvn trait priority --value high  # High priority items
-rvn trait highlight              # All highlights
+rvn query "trait:due value:today"      # Items due today
+rvn query "trait:due value:past"       # Overdue items
+rvn query "trait:priority value:high"  # High priority items
+rvn query "trait:highlight"            # All highlights
 ```
 
 **"Tasks" are emergent**: Raven doesn't have a built-in task type. Anything with `@due` or `@status` is effectively a task. Define what "tasks" means in your workflow using saved queries.
@@ -296,17 +296,18 @@ Raven indexes your vault into SQLite, making structured data queryable. The main
 **By trait** — find content with specific annotations:
 
 ```bash
-rvn trait due                    # Everything with @due
-rvn trait due --value today      # Due today
-rvn trait due --value past       # Overdue
-rvn trait priority --value high  # High priority
+rvn query "trait:due"                   # Everything with @due
+rvn query "trait:due value:today"       # Due today
+rvn query "trait:due value:past"        # Overdue
+rvn query "trait:priority value:high"   # High priority
 ```
 
 **By type** — list objects of a kind:
 
 ```bash
-rvn type person                  # All people
-rvn type project                 # All projects
+rvn query "object:person"               # All people
+rvn query "object:project"              # All projects
+rvn query "object:project .status:active"  # Active projects only
 ```
 
 **By reference** — find connections:
@@ -492,11 +493,11 @@ Use named vaults: `rvn --vault work stats`
 
 | Command | Description |
 |---------|-------------|
-| `rvn trait <name>` | Query any trait type |
-| `rvn trait <name> --value <filter>` | Filter by value (today, past, this-week, etc.) |
-| `rvn type <name>` | List objects of a specific type |
-| `rvn type --list` | List available types with counts |
-| `rvn query "<query>"` | Run a query (object/trait query or saved query name) |
+| `rvn query "object:<type>"` | Query objects of a type |
+| `rvn query "object:<type> .field:value"` | Query with field filter |
+| `rvn query "trait:<name>"` | Query traits by name |
+| `rvn query "trait:<name> value:<val>"` | Query traits with value filter |
+| `rvn query <saved-name>` | Run a saved query |
 | `rvn query --list` | List saved queries |
 | `rvn query add <name>` | Create a saved query |
 | `rvn query remove <name>` | Remove a saved query |
@@ -594,11 +595,9 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_move` | Move/rename files within the vault (updates refs) |
 | `raven_edit` | Surgical text replacement in vault files |
 | `raven_search` | Full-text search across vault content |
-| `raven_trait` | Query by trait (due dates, priorities, status) |
-| `raven_query` | Run saved queries (tasks, overdue, etc.) |
+| `raven_query` | Query objects/traits (ad-hoc or saved queries) |
 | `raven_query_add` | Create a new saved query |
 | `raven_query_remove` | Remove a saved query |
-| `raven_type` | List objects by type |
 | `raven_backlinks` | Find what references an object |
 | `raven_date` | Get all activity for a specific date |
 | `raven_daily` | Open or create the daily note |
@@ -628,7 +627,7 @@ Agent uses `raven_add` with `--to projects/bifrost.md` → appends to existing f
 All commands support `--json` for machine-readable output:
 
 ```bash
-rvn trait due --value today --json
+rvn query "trait:due value:today" --json
 ```
 
 ```json

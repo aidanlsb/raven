@@ -275,7 +275,7 @@ Content of the meeting...
 **Bare boolean traits**:
 When a boolean trait is used bare (e.g., `@highlight`), it's stored with value `"true"` in the index. This means:
 - `@highlight` is equivalent to `@highlight(true)`
-- Query with `rvn trait highlight --value true` or just `rvn trait highlight`
+- Query with `rvn query "trait:highlight value:true"` or just `rvn query "trait:highlight"`
 
 **Schema as source of truth**:
 Only traits defined in `schema.yaml` are indexed and queryable. Undefined traits:
@@ -577,7 +577,7 @@ priority: high
 - @due(2025-03-15) Review feedback
 ```
 
-Both dates appear in `rvn trait due`:
+Both dates appear in `rvn query "trait:due"`:
 - The project's `due: 2025-06-30` (frontmatter trait on the object)
 - The tasks' `@due(2025-03-01)` and `@due(2025-03-15)` (inline traits on content)
 
@@ -887,9 +887,7 @@ internal/
     ├── init.go              # rvn init
     ├── reindex.go           # rvn reindex
     ├── check.go             # rvn check
-    ├── trait.go             # rvn trait
-    ├── type.go              # rvn type
-    ├── query.go             # rvn query
+    ├── query.go             # rvn query (unified query interface)
     ├── backlinks.go         # rvn backlinks
     ├── stats.go             # rvn stats
     ├── untyped.go           # rvn untyped
@@ -1023,33 +1021,26 @@ rvn check --create-missing      # Interactively create missing referenced pages
 # Reindex all files
 rvn reindex
 
-# Query traits (generic form)
-rvn trait <name> [filters]
-rvn trait task                           # All tasks
-rvn trait task --status todo             # Filter by field
-# Query traits by type
-rvn trait due                            # All items with @due
-rvn trait due --value today              # Items due today
-rvn trait due --value past               # Overdue items
-rvn trait priority --value high          # High priority items
-rvn trait status --value todo            # Items with @status(todo)
-rvn trait highlight                      # All highlighted items
-
-# Saved queries (defined in raven.yaml)
-rvn query --list                         # List available saved queries
-rvn query tasks                          # Run 'tasks' saved query
-rvn query overdue                        # Run 'overdue' saved query
-rvn query add my-tasks --traits due,status --filter status=todo  # Create saved query
-rvn query remove my-tasks                # Remove saved query
-
 # Query objects
-rvn query "object:person"
+rvn query "object:person"                 # All people
+rvn query "object:project"                # All projects
+rvn query "object:project .status:active" # Active projects
 rvn query "object:meeting .attendees:[[people/freya]]"
-rvn query "object:project .status:active"
 
 # Query traits
-rvn query "trait:due value:past"
+rvn query "trait:due"                     # All items with @due
+rvn query "trait:due value:today"         # Due today
+rvn query "trait:due value:past"          # Overdue items
+rvn query "trait:priority value:high"     # High priority items
+rvn query "trait:highlight"               # All highlighted items
 rvn query "trait:highlight on:{object:book .status:reading}"
+
+# Saved queries (defined in raven.yaml)
+rvn query --list                          # List available saved queries
+rvn query tasks                           # Run 'tasks' saved query
+rvn query overdue                         # Run 'overdue' saved query
+rvn query add my-tasks --traits due,status --filter status=todo  # Create saved query
+rvn query remove my-tasks                 # Remove saved query
 
 # Show backlinks to a note
 rvn backlinks <target>
@@ -1121,13 +1112,13 @@ Date fields support relative date expressions in queries:
 
 **Examples:**
 ```bash
-rvn trait due --value today           # Items due today
-rvn trait due --value this-week       # Items due this week
-rvn trait due --value past            # Overdue items
-rvn trait due --value "this-week|past" # Due soon OR overdue
-rvn trait status --value "!done"      # Everything except done
-rvn trait remind --value tomorrow     # Reminders for tomorrow
-rvn query overdue                     # Run saved 'overdue' query
+rvn query "trait:due value:today"               # Items due today
+rvn query "trait:due value:this-week"           # Items due this week
+rvn query "trait:due value:past"                # Overdue items
+rvn query "trait:due (value:this-week | value:past)"  # Due soon OR overdue
+rvn query "trait:status !value:done"            # Everything except done
+rvn query "trait:remind value:tomorrow"         # Reminders for tomorrow
+rvn query overdue                               # Run saved 'overdue' query
 ```
 
 ### Date References
@@ -1158,55 +1149,48 @@ rvn date yesterday        # Yesterday
 rvn date 2025-02-01       # Specific date
 ```
 
-### The `rvn trait` Command
+### The `rvn query` Command
 
-Generic interface for querying any trait type:
+Unified interface for querying objects and traits:
 
 ```bash
-rvn trait <trait-name> [--field value] [--field value] ...
+rvn query "<query-string>"         # Run an ad-hoc query
+rvn query <saved-query-name>       # Run a saved query
+rvn query --list                   # List saved queries
 ```
 
-**Examples**:
+**Object Query Examples**:
 ```bash
-rvn trait task                           # All tasks
-rvn trait task --status todo             # Tasks with status=todo
-rvn trait task --due today               # Due today
-rvn trait task --due this-week           # Due this week  
-rvn trait task --due overdue             # Past due
-rvn trait task --assignee [[people/thor]] # Assigned to Thor
-rvn trait task --parent.type meeting     # Tasks inside meetings
+rvn query "object:person"                            # All people
+rvn query "object:project"                           # All projects
+rvn query "object:project .status:active"            # Active projects
+rvn query "object:meeting .attendees:[[people/thor]]" # Thor's meetings
+rvn query "object:project ancestor:{object:date}"    # Projects in daily notes
+```
 
-rvn trait remind --at today              # Reminders for today
-rvn trait remind --at this-week          # This week's reminders
+**Trait Query Examples**:
+```bash
+rvn query "trait:due"                                # All @due items
+rvn query "trait:due value:today"                    # Due today
+rvn query "trait:due value:past"                     # Overdue items
+rvn query "trait:remind value:this-week"             # This week's reminders
+rvn query "trait:highlight"                          # All highlights
+rvn query "trait:highlight on:{object:meeting}"      # Highlights in meetings
+```
 
-rvn trait highlight                      # All highlights
-rvn trait highlight --color yellow       # Yellow highlights only
+**Boolean Logic**:
+```bash
+rvn query "object:project (.status:active | .status:planning)"  # Active or planning
+rvn query "trait:due !value:done"                               # Not done
+rvn query "object:project .status:active has:{trait:due}"       # Active with due dates
 ```
 
 **Output formats**:
 ```bash
-rvn trait task --format table            # Human-readable (default)
-rvn trait task --format json             # Machine-readable
-rvn trait task --format compact          # One-line per item
+rvn query "object:person" --json           # Machine-readable JSON
 ```
 
-### The `rvn type` Command
-
-List all objects of a specific type:
-
-```bash
-rvn type <type-name>
-```
-
-**Examples**:
-```bash
-rvn type person                          # List all people
-rvn type project                         # List all projects
-rvn type meeting                         # List all meetings
-rvn type --list                          # Show all types with object counts
-```
-
-**Output**:
+**Output Example** (object query):
 ```
 # person (2)
 
@@ -1218,15 +1202,10 @@ rvn type --list                          # Show all types with object counts
   people/thor.md:1
 ```
 
-Use `rvn type --list` to see all available types:
-```
-Types:
-  date            1 objects (built-in)
-  meeting         1 objects
-  page            - (built-in)
-  person          2 objects
-  project         1 objects
-  section         12 objects (built-in)
+**Listing available types and traits**:
+Use `rvn stats` to see available types and traits with counts:
+```bash
+rvn stats
 ```
 
 ### The `rvn add` Command
@@ -1438,13 +1417,13 @@ rvn query add my-tasks --traits due,status --filter status=todo  # Create
 rvn query remove my-tasks    # Remove
 ```
 
-For direct queries, use `rvn trait` or `rvn type`:
+For direct ad-hoc queries, use the query string syntax:
 
 ```bash
-rvn trait due --value past   # All overdue items
-rvn trait highlight          # All highlights
-rvn type person              # All people
-rvn type project             # All projects
+rvn query "trait:due value:past"   # All overdue items
+rvn query "trait:highlight"        # All highlights
+rvn query "object:person"          # All people
+rvn query "object:project"         # All projects
 ```
 
 ### Trait Definition
@@ -1640,9 +1619,7 @@ rvn --config /path/to/config.toml <command>
     - `rvn reindex`
     - `rvn check` (validation)
     - `rvn check --create-missing` (interactively create missing references)
-    - `rvn trait` (query by trait type)
-    - `rvn type` (query by object type)
-    - `rvn query` (saved queries)
+    - `rvn query` (unified query interface for objects and traits)
     - `rvn backlinks`
     - `rvn stats`
     - `rvn untyped`
@@ -1867,15 +1844,15 @@ Type is determined by a simple rule:
 
 **No detection or inference.** File location, content, or other fields never affect the type. This is explicit and predictable.
 
-### CLI Trait Commands
+### CLI Query Interface
 
-Rather than hard-coding trait-specific commands, we use a hybrid approach:
+All querying is unified under `rvn query`:
 
-1. **Generic `rvn trait <name>`**: Universal interface for querying any trait
-2. **Schema-defined aliases**: Users add `cli.alias` to traits in `schema.yaml` for shortcuts
-3. **Default schema**: `rvn init` creates a schema with common aliases like `tasks`
+1. **Ad-hoc queries**: `rvn query "<query-string>"` for one-off queries
+2. **Saved queries**: Define reusable queries in `raven.yaml` and run with `rvn query <name>`
+3. **Typed results**: Queries explicitly specify return type (`object:` or `trait:`)
 
-All CLI aliases are explicit in the schema—no hidden behavior.
+This unified approach keeps the CLI minimal while supporting powerful queries.
 
 ---
 
@@ -1971,11 +1948,9 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_delete` | Delete object (trash by default) | `object_id` |
 | `raven_edit` | Surgical text replacement | `path`, `old_str`, `new_str`, optional `confirm` |
 | `raven_search` | Full-text search | `query`, optional `type`, `limit` |
-| `raven_trait` | Query by trait | `trait_type`, optional `value` |
-| `raven_query` | Run saved query | `query_name` |
+| `raven_query` | Query objects/traits or run saved query | `query_string` (ad-hoc) or `query_name` (saved) |
 | `raven_query_add` | Create saved query | `name`, optional `traits`, `types`, `filter`, `description` |
 | `raven_query_remove` | Remove saved query | `name` |
-| `raven_type` | List objects by type | `type_name` |
 | `raven_backlinks` | Find references to object | `target` |
 | `raven_date` | Get activity for date | `date` |
 | `raven_stats` | Vault statistics | (none) |

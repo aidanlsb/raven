@@ -66,13 +66,10 @@ When users ask about their data:
    Saved queries (defined in raven.yaml):
    raven_query(query_string="tasks")  # Run the "tasks" saved query
 
-2. Use raven_trait for simple trait queries (legacy):
-   raven_trait(trait_type="due", value="today")  # What's due today?
-
-3. Use raven_search for full-text search:
+2. Use raven_search for full-text search:
    raven_search(query="meeting notes")
 
-4. Use raven_backlinks to find what references something:
+3. Use raven_backlinks to find what references something:
    raven_backlinks(target="people/freya")
 ```
 
@@ -184,7 +181,7 @@ After bulk operations or schema changes:
 
 **User**: "What do I have due this week?"
 ```
-→ raven_trait(trait_type="due", value="this-week")
+→ raven_query(query_string="trait:due value:this-week")
 → Summarize results for user
 ```
 
