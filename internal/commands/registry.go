@@ -161,21 +161,6 @@ should ask the user how to proceed.`,
 			"Archive old content",
 		},
 	},
-	"trait": {
-		Name:        "trait",
-		Description: "Query traits by type",
-		Args: []ArgMeta{
-			{Name: "trait_type", Description: "Trait type to query (e.g., due, status)", Required: true, DynamicComp: "traits"},
-		},
-		Flags: []FlagMeta{
-			{Name: "value", Description: "Filter by value (today, past, this-week, or literal)", Type: FlagTypeString},
-		},
-		Examples: []string{
-			"rvn trait due --json",
-			"rvn trait due --value past --json",
-			"rvn trait status --value todo --json",
-		},
-	},
 	"query": {
 		Name:        "query",
 		Description: "Run a query using the Raven query language",
@@ -184,11 +169,11 @@ should ask the user how to proceed.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
-			{Name: "value", Description: "Filter by trait value (legacy)", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn query 'object:project .status:active' --json",
 			"rvn query 'object:meeting has:due' --json",
+			"rvn query 'object:meeting refs:[[people/freya]]' --json",
 			"rvn query 'trait:due value:past' --json",
 			"rvn query 'trait:highlight on:{object:book .status:reading}' --json",
 			"rvn query tasks --json",
@@ -221,20 +206,6 @@ should ask the user how to proceed.`,
 		},
 		Examples: []string{
 			"rvn query remove overdue --json",
-		},
-	},
-	"type": {
-		Name:        "type",
-		Description: "List objects by type",
-		Args: []ArgMeta{
-			{Name: "type_name", Description: "Type name (e.g., person, project)", Required: false, DynamicComp: "types"},
-		},
-		Flags: []FlagMeta{
-			{Name: "list", Description: "List available types with counts", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn type person --json",
-			"rvn type --list --json",
 		},
 	},
 	"backlinks": {

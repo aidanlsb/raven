@@ -78,10 +78,10 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantArgs: []string{"--json"},
 		},
 		{
-			toolName: "raven_trait",
-			args:     map[string]interface{}{"trait_type": "due", "value": "today"},
-			wantCmd:  "trait",
-			wantArgs: []string{"due", "--value", "today", "--json"},
+			toolName: "raven_query",
+			args:     map[string]interface{}{"query_string": "trait:due value:today"},
+			wantCmd:  "query",
+			wantArgs: []string{"trait:due value:today", "--json"},
 		},
 		{
 			toolName: "raven_new",
@@ -140,7 +140,7 @@ func TestCLICommandNameConversion(t *testing.T) {
 	}{
 		{"raven_new", "new"},
 		{"raven_add", "add"},
-		{"raven_trait", "trait"},
+		{"raven_query", "query"},
 		{"raven_schema_add_type", "schema add type"},
 		{"raven_schema_add_trait", "schema add trait"},
 		{"raven_schema_add_field", "schema add field"},
@@ -165,7 +165,7 @@ func TestMCPToolNameConversion(t *testing.T) {
 	}{
 		{"new", "raven_new"},
 		{"add", "raven_add"},
-		{"trait", "raven_trait"},
+		{"query", "raven_query"},
 		{"schema_add_type", "raven_schema_add_type"},
 	}
 

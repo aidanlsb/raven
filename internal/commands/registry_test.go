@@ -7,9 +7,8 @@ import (
 // TestRegistryHasRequiredCommands verifies that essential commands exist.
 func TestRegistryHasRequiredCommands(t *testing.T) {
 	requiredCommands := []string{
-		"new", "add", "delete", "read",
-		"trait", "type", "query",
-		"backlinks", "stats", "check", "date",
+		"new", "add", "delete", "read", "move",
+		"query", "backlinks", "stats", "check", "date",
 		"schema",
 	}
 
@@ -60,19 +59,19 @@ func TestRegistryMetadataComplete(t *testing.T) {
 // TestCobraCommandGeneration verifies Cobra command generation works.
 func TestCobraCommandGeneration(t *testing.T) {
 	// Test a command with args and flags
-	cmd := GenerateCobraCommand("trait", nil)
+	cmd := GenerateCobraCommand("query", nil)
 	if cmd == nil {
-		t.Fatal("GenerateCobraCommand returned nil for 'trait'")
+		t.Fatal("GenerateCobraCommand returned nil for 'query'")
 	}
 
-	if cmd.Use != "trait <trait_type>" {
-		t.Errorf("Use = %q, want 'trait <trait_type>'", cmd.Use)
+	if cmd.Use != "query <query_string>" {
+		t.Errorf("Use = %q, want 'query <query_string>'", cmd.Use)
 	}
 
 	// Check flag was added
-	valueFlag := cmd.Flags().Lookup("value")
-	if valueFlag == nil {
-		t.Error("Missing 'value' flag")
+	listFlag := cmd.Flags().Lookup("list")
+	if listFlag == nil {
+		t.Error("Missing 'list' flag")
 	}
 }
 
