@@ -390,300 +390,634 @@ rvn export-calendar --type meeting > meetings.ics
 
 ---
 
-## Refactoring Tools
+## External Integrations
 
-### Move/Rename with Reference Updates
-Move files and automatically update all references:
-```bash
-rvn mv people/freya.md people/freya-chen.md
-```
-
-**Status**: Mentioned in Phase 4 of spec.
+These integrations connect Raven to external services for data capture and publishing.
 
 ---
 
-### Promote Embedded to File
-Convert an embedded object to a standalone file:
-```bash
-rvn promote daily/2025-02-01#standup --to meetings/standup-2025-02-01.md
+### Slack Integration
+
+Capture Slack conversations and threads into Raven notes.
+
+**Use cases:**
+- Summarize a Slack thread → append to daily note
+- Save important discussions as standalone pages
+- Extract action items from conversations → `@due` traits
+- Link Slack users to `[[people/...]]` references
+
+**Agent workflow example:**
+```
+User: "Summarize that #project-bifrost thread and save it"
+Agent:
+  1. Fetches thread via Slack API
+  2. Identifies participants → links to existing people or creates new
+  3. Summarizes discussion
+  4. Extracts action items with @due traits
+  5. Appends to daily note or creates dedicated page
 ```
 
-**Status**: Mentioned in Phase 4 of spec.
+**Example output:**
+```markdown
+## Slack: #project-bifrost (2026-01-02)
+::slack-summary(id=bifrost-planning, channel="#project-bifrost", thread_ts="1704200000.000000")
+
+Discussion about Q1 timeline with [[people/freya]] and [[people/thor]].
+
+**Key decisions:**
+- Pushing launch to March 15
+- Need additional security review
+
+**Action items:**
+- @due(2026-01-15) [[people/freya]] to finalize API spec
+- @due(2026-01-10) [[people/thor]] to schedule security review
+
+[View thread](https://workspace.slack.com/archives/C123/p1704200000000000)
+```
+
+**Implementation considerations:**
+- OAuth integration for Slack API access
+- MCP tool: `raven_import_slack` with thread URL or channel/timestamp
+- Schema trait for Slack references: `slack_thread: { type: string }`
+- User mapping: match Slack display names to existing `person` objects
+- Rate limiting and pagination for long threads
+
+**Status**: Not implemented.
 
 ---
 
-## Task Workflow Enhancements
+### Calendar Two-Way Sync
 
-✅ **IMPLEMENTED**: Atomic traits model. Tasks are now emergent from atomic traits like `@due`, `@priority`, `@status`. Saved queries in `raven.yaml` define what "tasks" means.
+Bidirectional sync between Raven and calendar services (Google Calendar, Outlook, Apple Calendar).
+
+**Inbound (Calendar → Raven):**
+- Import calendar events as `meeting` objects
+- Auto-create attendee references to `[[people/...]]`
+- Pre-meeting: gather context about attendees and related projects
+- Trigger: "You have a meeting with [[people/freya]] in 30 minutes. Here's context..."
+
+**Outbound (Raven → Calendar):**
+- Push `@due` items as calendar reminders
+- Export `meeting` objects to calendar
+- Sync `@remind` traits as calendar notifications
+
+**Example workflow:**
+```
+User: "Sync my calendar for this week"
+Agent:
+  1. Fetches calendar events via API
+  2. For each event:
+     - Creates/updates meeting object with attendees, time, location
+     - Links attendees to existing people or prompts to create
+  3. Reports: "Synced 8 meetings. Created 2 new people: [[people/alex]], [[people/sam]]"
+```
+
+**Configuration** (`raven.yaml`):
+```yaml
+integrations:
+  calendar:
+    provider: google  # or outlook, apple
+    sync_direction: both  # inbound, outbound, both
+    create_people: prompt  # auto, prompt, skip
+    reminder_trait: remind  # which trait to sync as reminders
+```
+
+**Implementation considerations:**
+- OAuth flow for calendar APIs
+- Conflict resolution for two-way sync
+- Event ID storage for update tracking (new field on meeting type)
+- Recurring event handling
+- Timezone normalization
+
+**Status**: Not implemented. One-way ICS export mentioned in Data Export section.
+
+---
+
+### Meeting Transcript Processing
+
+Process meeting transcripts (Zoom, Otter.ai, Google Meet, etc.) into structured Raven notes.
+
+**What it does:**
+1. Parse transcript text or API response
+2. Identify speakers → link to `[[people/...]]`
+3. Extract key discussion points
+4. Identify action items → create `@due` traits
+5. Generate structured meeting note
+
+**Agent workflow:**
+```
+User: "Process this Zoom transcript" [pastes transcript or provides file]
+Agent:
+  1. Parses transcript, identifies speakers
+  2. Maps speakers: "I found 3 speakers. 'Freya Chen' matches [[people/freya]]. 
+     Who are 'Alex' and 'Jordan'?"
+  3. User: "Alex is new, Jordan is [[people/jordan-smith]]"
+  4. Agent creates people/alex.md, processes transcript
+  5. Creates meeting note with summary, attendees, and action items
+```
+
+**Example output:**
+```markdown
+---
+type: meeting
+time: 2026-01-02T14:00
+attendees:
+  - [[people/freya]]
+  - [[people/alex]]
+  - [[people/jordan-smith]]
+transcript_source: zoom
+---
+
+# Project Kickoff - Bifrost v2
+
+## Summary
+
+Discussed timeline for Bifrost v2 launch. Team aligned on March 15 target date.
+Main concerns around API stability and security review.
+
+## Key Points
+
+- [[people/freya]]: Proposed phased rollout starting with internal users
+- [[people/alex]]: Raised concerns about load testing capacity
+- [[people/jordan-smith]]: Volunteered to lead security review
+
+## Action Items
+
+- @due(2026-01-10) @assignee([[people/freya]]) Draft phased rollout plan
+- @due(2026-01-08) @assignee([[people/alex]]) Set up load testing environment
+- @due(2026-01-15) @assignee([[people/jordan-smith]]) Complete security review
+
+## Raw Transcript
+
+<details>
+<summary>Full transcript (click to expand)</summary>
+
+[00:00] Freya: Let's kick off the Bifrost v2 planning...
+...
+</details>
+```
+
+**Implementation considerations:**
+- Support multiple transcript formats (Zoom VTT, Otter.ai JSON, plain text)
+- Speaker diarization and name normalization
+- LLM-powered summarization and action item extraction
+- Option to store or discard raw transcript
+- MCP tool: `raven_process_transcript`
+
+**Status**: Not implemented.
+
+---
+
+## Agentic Workflows
+
+These are compound workflows that agents can perform by combining multiple Raven operations.
+They showcase what's possible with the existing MCP tools and suggest potential optimizations.
+
+---
+
+### Workflow Recipes (Pattern)
+
+Users may want to define reusable "recipes" for common agent workflows. This is fully emergent — 
+Raven provides the primitives, users compose them however they want.
+
+**Option A: User-defined `workflow` type**
+
+Users who want structured, queryable workflows can add to their schema:
+
+```yaml
+# schema.yaml
+types:
+  workflow:
+    default_path: workflows/
+    fields:
+      name: { type: string, required: true }
+      description: { type: string }
+      trigger: { type: enum, values: [manual, daily, weekly] }
+```
+
+Then create workflow files:
 
 ```markdown
-- @due(2025-02-01) @priority(high) @status(todo) Send proposal
+---
+type: workflow
+name: Weekly Review
+description: Generate a summary of the week's activity
+trigger: manual
+---
+
+# Weekly Review
+
+## Steps
+1. Query `@highlight` items from past week
+2. Query completed tasks (@status changed to done)
+3. List new pages created this week
+4. List items due next week
+
+## Output
+Create a `weekly-review` note in `reviews/` with sections for each category.
 ```
 
-### ~~CLI Task Mutation Commands~~ ✅ PARTIALLY IMPLEMENTED
-Commands to modify trait values without manually editing files:
-```bash
-rvn set people/freya email=freya@asgard.realm   # Updates frontmatter field
-rvn set projects/website status=active         # Updates frontmatter field
+Agents discover via `raven_type(type_name="workflow")`.
+
+**Option B: Informal pattern with tags**
+
+Users who want something lighter can just use a `#workflow` tag:
+
+```markdown
+# Weekly Review #workflow
+
+Steps to generate weekly review...
 ```
 
-**Status**: ✅ `rvn set` is implemented for frontmatter fields. Inline trait mutation (changing `@status(todo)` to `@status(done)` within content) is not yet implemented.
+Agents discover via `raven_tag(tag="workflow")`.
+
+**Option C: Just a folder convention**
+
+Or simply put workflow docs in `workflows/` and agents read from there.
+
+**Key principle:** Raven doesn't need built-in workflow support. The schema system is flexible 
+enough that users can define whatever structure makes sense for their use case. Agents can read 
+workflow documentation via existing tools (`raven_read`, `raven_type`, `raven_tag`, `raven_search`) 
+and execute accordingly.
+
+**Status**: No implementation needed — this is an emergent pattern using existing features.
 
 ---
 
-### Stable Trait IDs for Cross-Session References
-Allow agents/users to assign stable IDs to traits for persistent references:
+### Weekly Review Generation
+
+Automatically generate a weekly review note summarizing activity.
+
+**What the agent does:**
+```
+User: "Generate my weekly review"
+Agent:
+  1. Query items with @highlight from past week
+  2. Query completed tasks (items where @status changed to done)
+  3. Query new pages created this week
+  4. Query upcoming items for next week
+  5. Compile into structured weekly review
+```
+
+**Example output:**
 ```markdown
-- @due(2025-02-01) @id(review-contract) Review the contract
+---
+type: weekly-review
+week: 2026-W01
+---
+
+# Weekly Review: Dec 30, 2025 - Jan 5, 2026
+
+## Highlights
+- @highlight "Small habits compound over time" — [[books/atomic-habits]]
+- @highlight Bifrost API design finalized — [[projects/bifrost]]
+
+## Completed (7 items)
+- ✓ Send [[clients/midgard]] proposal
+- ✓ Security review for [[projects/bifrost]]
+- ✓ 1:1 with [[people/freya]]
+...
+
+## Created This Week
+- [[people/alex]] (person)
+- [[projects/asgard-security-audit]] (project)
+
+## Upcoming Next Week
+- @due(2026-01-08) Load testing setup
+- @due(2026-01-10) Phased rollout plan
+- @due(2026-01-10) 1:1 with [[people/thor]]
+
+## Focus Areas
+Based on your activity, you spent most time on:
+1. [[projects/bifrost]] (mentioned 12 times)
+2. [[clients/midgard]] (mentioned 8 times)
 ```
 
-Then reference or update by ID:
-```bash
-rvn trait get review-contract
-rvn trait update review-contract --set status=done
-```
+**Implementation notes:**
+- Could be a saved query + template, or a dedicated MCP tool
+- Temporal filters (`--created-since`, `--modified-since`) would help
+- Consider adding `weekly-review` as a built-in type
 
-**Why postponed**: Most agent workflows are synchronous within a single session. The agent queries, gets file:line coordinates, and mutates immediately. Cross-session persistence can use content-based re-querying. Add this if external system integration or user-named traits become a real need.
-
-**Alternative considered**: Content-hashing to auto-generate stable IDs. Rejected as "magic" that's complex to implement and debug.
+**Status**: Possible with current tools, but requires agent orchestration. Could be optimized with dedicated command.
 
 ---
 
-### Trait Instance IDs (Referencing)
-Allow referencing specific trait instances in links:
-```markdown
-See [[daily/2025-02-01#due:1]] for the original due date.
+### 1:1 Meeting Prep
+
+Gather context before a 1:1 meeting with someone.
+
+**What the agent does:**
+```
+User: "Prep for my 1:1 with [[people/freya]]"
+Agent:
+  1. Get all backlinks to people/freya (recent mentions)
+  2. Query open tasks assigned to or mentioning Freya
+  3. Find last 1:1 meeting notes with Freya
+  4. Check any pending action items from previous 1:1s
+  5. Compile into prep document
 ```
 
-**Why postponed**: Adds complexity. Most use cases don't need to reference individual traits.
+**Example output:**
+```markdown
+# 1:1 Prep: [[people/freya]] — 2026-01-02
+
+## Recent Activity
+- Mentioned in [[daily/2026-01-02]]: "Discussed timeline with Freya"
+- Mentioned in [[projects/bifrost]]: Lead engineer
+- Last 1:1: [[daily/2025-12-19#freya-1-1]] (2 weeks ago)
+
+## Open Items Involving Freya
+- @due(2026-01-10) Freya to finalize API spec — [[projects/bifrost]]
+- @due(2026-01-15) Review Freya's promotion case — [[daily/2025-12-19]]
+
+## Pending from Last 1:1
+- [ ] Discuss tech lead role interest (from [[daily/2025-12-19]])
+- [ ] Follow up on conference budget
+
+## Suggested Topics
+- Bifrost timeline pressure
+- Career growth / tech lead path
+- Holiday break debrief
+```
+
+**Status**: Possible with current tools (`raven_backlinks`, `raven_search`, `raven_trait`). Could be a dedicated MCP tool for convenience.
 
 ---
 
-### Checkbox Syntax Sync (Editor Integration)
-Sync markdown checkboxes with status trait:
-```markdown
-- [ ] @due(2025-02-01) Send proposal  → infers @status(todo)
-- [x] @due(2025-02-01) Send proposal  → infers @status(done)
+### Daily Digest
+
+Morning briefing of what's relevant today.
+
+**What the agent does:**
+```
+User: "What's my day look like?" (or triggered automatically)
+Agent:
+  1. Query @due(today) items
+  2. Query @remind(today) items  
+  3. Check calendar events (if integrated)
+  4. Find items from yesterday that weren't completed
+  5. Surface any highlights from yesterday
 ```
 
-**Why postponed**: Creates two sources of truth. Better solved via editor plugins that understand Raven syntax.
+**Example output:**
+```
+Good morning! Here's your day:
+
+📅 **Meetings** (3)
+- 09:00 Weekly Standup with [[people/freya]], [[people/thor]]
+- 14:00 1:1 with [[people/alex]]
+- 16:00 Client call with [[clients/midgard]]
+
+✅ **Due Today** (4)
+- Send revised estimate to [[clients/midgard]]
+- Review PR #1234
+- Finish Chapter 3 of [[books/atomic-habits]]
+- Submit expense report
+
+⏰ **Reminders**
+- 10:00 Check if designs are ready
+- 14:00 Prep for Alex 1:1
+
+⚠️ **Carried Over** (2 items from yesterday)
+- Security review feedback (was due yesterday)
+- Update project timeline
+
+💡 **Yesterday's Highlight**
+"Buffer time is the key to good estimates" — [[daily/2026-01-01]]
+```
+
+**Status**: Possible with current tools. Natural extension of `rvn date`.
+
+---
+
+### Research Assistant
+
+Research a topic and add findings to a project or note.
+
+**What the agent does:**
+```
+User: "Research Kubernetes security best practices and add to [[projects/infrastructure]]"
+Agent:
+  1. Search web for topic
+  2. Synthesize findings
+  3. Append to specified page with sources
+  4. Add @highlight for key insights
+```
+
+**Example addition to projects/infrastructure.md:**
+```markdown
+## Kubernetes Security Research (added 2026-01-02)
+
+Key findings from security best practices research:
+
+- @highlight Use network policies to restrict pod-to-pod communication
+- Enable Pod Security Standards (replacing deprecated PodSecurityPolicy)
+- Implement RBAC with least-privilege principle
+- Use secrets management (Vault, Sealed Secrets) instead of plain K8s secrets
+- Regular vulnerability scanning with Trivy or similar
+
+**Sources:**
+- [CNCF Security Whitepaper](https://...)
+- [NSA Kubernetes Hardening Guide](https://...)
+- [Kubernetes Security Best Practices - OWASP](https://...)
+```
+
+**Status**: Requires web search capability (not in current Raven tools). Agent could use external search + Raven write tools.
+
+---
+
+### Capture Processing
+
+Process inbox items captured throughout the day.
+
+**What the agent does:**
+```
+User: "Process my captures from today"
+Agent:
+  1. Read today's daily note
+  2. For each captured item:
+     - Identify if it's a task (has due date or action verb)
+     - Identify people mentioned → suggest [[people/...]] links
+     - Identify projects mentioned → suggest [[projects/...]] links
+     - Suggest appropriate traits (@due, @priority)
+  3. Present suggestions for user approval
+  4. Apply approved changes
+```
+
+**Example interaction:**
+```
+Agent: "I found 5 captures from today. Here's what I suggest:
+
+1. 'Call Odin about the Bifrost ceremony'
+   → @due(tomorrow) Call [[people/odin]] about [[projects/bifrost]] ceremony
+   
+2. 'Remember to review the Midgard proposal'  
+   → @due(this-week) @priority(high) Review [[clients/midgard]] proposal
+   
+3. 'Great insight about compound habits'
+   → @highlight Great insight about compound habits (link to [[books/atomic-habits]]?)
+
+Apply these suggestions? [Y/n/edit]"
+```
+
+**Status**: Possible with current tools. Agent interprets captures and uses `raven_edit` to enhance them.
 
 ---
 
 ## Template System
 
+Templates provide default content when creating new typed notes.
+
+---
+
 ### Type Templates
-Define templates for new notes of each type:
+
+Define templates for new notes of each type. When `rvn new meeting "Team Sync"` runs,
+the file is created with frontmatter + template content.
+
+**Template location: File-based (recommended)**
+
+Templates live in a `templates/` directory, referenced from the schema:
+
 ```yaml
+# schema.yaml
 types:
   meeting:
+    default_path: meetings/
+    template: templates/meeting.md
+    fields:
+      time: { type: datetime }
+      attendees: { type: ref[], target: person }
+```
+
+With `templates/meeting.md`:
+```markdown
+# {{title}}
+
+**Time:** {{field.time}}
+
+## Attendees
+
+## Agenda
+
+## Notes
+
+## Action Items
+```
+
+**Template location: Inline (for short templates)**
+
+Small templates can be inline in the schema:
+
+```yaml
+types:
+  quick-note:
     template: |
-      ## Attendees
-      
-      ## Agenda
+      # {{title}}
       
       ## Notes
-      
-      ## Action Items
 ```
 
-Then `rvn new meeting "Team Sync"` creates the file with template content.
+---
 
-**Implementation:**
-- Add `template` field to type definitions in schema.yaml
-- `rvn new` and `pages.Create()` apply template after frontmatter
-- Template could support variables: `{{title}}`, `{{date}}`, `{{author}}`
+### Template Variables
+
+Simple `{{var}}` substitution — no conditionals or loops. Keep it minimal.
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{{title}}` | Title passed to `rvn new` | "Team Sync" |
+| `{{slug}}` | Slugified title | "team-sync" |
+| `{{type}}` | The type name | "meeting" |
+| `{{date}}` | Today's date | "2026-01-02" |
+| `{{datetime}}` | Current datetime | "2026-01-02T14:30" |
+| `{{year}}` | Current year | "2026" |
+| `{{month}}` | Current month (2 digit) | "01" |
+| `{{day}}` | Current day (2 digit) | "02" |
+| `{{field.X}}` | Value of field X (from `--field`) | `{{field.time}}` |
+
+**Escaping:** Use `\{{literal}}` if you need literal `{{` in output.
+
+**Example template:**
+```markdown
+# {{title}}
+
+Created: {{date}}
+
+## Notes
+```
+
+**No conditionals for v1.** If users need conditional content, they can use agent workflows 
+to post-process the created file.
+
+---
+
+### Daily Note Templates
+
+The `date` type is built-in and special. To customize daily note structure,
+add `daily_template` to `raven.yaml`:
+
+```yaml
+# raven.yaml
+daily_directory: daily
+daily_template: templates/daily.md
+```
+
+With `templates/daily.md`:
+```markdown
+# {{date}}
+
+## Morning
+
+## Afternoon  
+
+## Evening
+
+## Reflections
+```
+
+Or inline:
+```yaml
+daily_template: |
+  # {{date}}
+  
+  ## Tasks
+  
+  ## Notes
+```
+
+**Variables for daily templates:**
+- `{{date}}` — the date (YYYY-MM-DD)
+- `{{year}}`, `{{month}}`, `{{day}}` — components
+- `{{weekday}}` — day name ("Monday", "Tuesday", etc.)
+
+---
+
+### Implementation Notes
+
+1. **Template resolution order:**
+   - Check for `template` field on type definition
+   - If path, read from `templates/` directory
+   - If inline string, use directly
+
+2. **Template application:**
+   - `rvn new` creates frontmatter from type fields + passed values
+   - Template content is appended after frontmatter
+   - Variables are substituted
+
+3. **Required fields interaction:**
+   - User is prompted for required fields (existing behavior)
+   - Those values become available as `{{field.X}}` in template
+
+4. **MCP support:**
+   - `raven_new` applies templates the same way
+   - Template content included in response
+
+5. **Error handling:**
+   - Missing template file → warning, create without template
+   - Unknown variable → leave as literal `{{unknown}}`
 
 **Status**: Not implemented. Schema supports the field but template application not wired up.
-
----
-
-## Graph Analysis & Insights
-
-Leverage the index to surface knowledge structure and improve vault hygiene.
-
-### Orphan Detection
-Find notes that nothing links to:
-```bash
-rvn orphans                     # All orphan notes
-rvn orphans --type person       # Orphan people (might be stale)
-rvn orphans --created-before 30d  # Old orphans
-```
-
-**Why useful:** Identifies notes that may be forgotten, stale, or need linking.
-
----
-
-### Link Suggestions
-Find mentions that could be links:
-```bash
-rvn suggest-links
-# Output:
-#   daily/2026-01-02.md:15 - "talked to Freya" → [[people/freya]]?
-#   projects/website.md:8 - "the API project" → [[projects/api]]?
-```
-
-**Implementation:**
-- Scan content for object titles/names that aren't already linked
-- Use fuzzy matching against known object IDs
-- Suggest `[[ref]]` insertions
-
-**Why useful:** Improves graph connectivity without manual effort.
-
----
-
-### Related Notes
-Find notes related to a given note:
-```bash
-rvn related people/freya
-# Output:
-#   projects/bifrost (freya is lead)
-#   daily/2026-01-02 (3 references)
-#   people/thor (both attend same meetings)
-```
-
-**Implementation:**
-- Notes that reference the same targets
-- Notes referenced by the same sources
-- Shared tags
-- Co-occurrence in same files
-
-**Status**: Not implemented.
-
----
-
-### Graph Visualization
-Export graph for visualization tools:
-```bash
-rvn graph --format dot > vault.dot    # Graphviz format
-rvn graph --format json > vault.json  # For D3.js etc.
-rvn graph --type person,project       # Subset
-```
-
-**Status**: Not implemented.
-
----
-
-## Editor Integration
-
-### Language Server Protocol (LSP)
-Provide IDE features for editing Raven markdown files.
-
-**Features:**
-| Feature | Description | Status |
-|---------|-------------|--------|
-| `[[` autocomplete | Suggest refs from all object IDs | ✅ Skeleton |
-| `@` autocomplete | Suggest traits from schema | ✅ Skeleton |
-| Go-to-definition | Jump to referenced file | ✅ Skeleton |
-| Hover | Show type info and fields | ✅ Skeleton |
-| Diagnostics | Broken refs, undefined traits, schema violations | ✅ Skeleton |
-| Auto-reindex on save | Keep index fresh | ✅ Skeleton |
-| Code actions | "Add to schema", "Create missing page" | 🔲 Planned |
-| Rename support | Rename and update all refs | 🔲 Planned |
-
-**Usage:**
-```bash
-# Start LSP server (for editor integration)
-rvn lsp
-
-# Start with debug logging
-rvn lsp --debug --vault-path /path/to/vault
-```
-
-**Why aligned:** Keeps files as source of truth, just better editing UX. Technical users (target audience) use IDEs.
-
-**Status**: Foundation implemented (`internal/lsp/`). Needs editor extension and real-world testing. See [docs/LSP_DESIGN.md](LSP_DESIGN.md) for architecture.
-
----
-
-## Agent Integration
-
-### Raw File Commands
-Low-level file access for edge cases the structured commands can't handle:
-```bash
-rvn file read daily/2025-02-01.md --json    # Get raw markdown content
-rvn file write daily/2025-02-01.md --content "..."  # Overwrite file
-rvn file append daily/2025-02-01.md --content "..."  # Append to file
-rvn file append daily/2025-02-01.md --section "## Notes" --content "..."  # Append under heading
-```
-
-**Why postponed**: Structured commands (`rvn object get/update`, `rvn trait create/update/delete`, `rvn add`) should cover most use cases. Add raw file access only if we hit cases the abstraction can't handle.
-
-**Existing coverage**:
-- `rvn add` — append content to files
-- `rvn object get --json` — includes content in response
-- `rvn object update` — modify frontmatter fields
-- `rvn trait create/update/delete` — manage inline traits
-
----
-
-## Agent Enhancements
-
-### Temporal Query Filters
-Filter queries by creation/modification timestamps:
-```bash
-rvn trait due --created-after 2025-01-20 --json
-rvn type person --modified-today --json
-rvn query tasks --created-since "2 days ago" --json
-```
-
-**Why postponed**: Audit log infrastructure exists, but temporal filters aren't wired into query commands. Add when there's a concrete use case.
-
----
-
-### Rich Context Responses (`--depth`, `--slim`)
-Control how much context is included in JSON responses:
-```bash
-rvn trait due --json --slim          # Minimal: just IDs and values
-rvn trait due --json --depth 2       # Include parent + parent's parent + resolved refs
-```
-
-**Why postponed**: Current responses are sufficient for MVP. Add if agents need more or less context.
-
----
-
-### Dry Run Mode
-Preview changes without committing:
-```bash
-rvn new person "Thor" --dry-run --json
-rvn set people/freya email=freya@vanaheim.realm --dry-run --json
-```
-
-**Why postponed**: Not critical for MVP. Useful for cautious agents.
-
----
-
-### `rvn log` Command
-Query the audit log directly:
-```bash
-rvn log --since yesterday --json
-rvn log --id people/freya --json
-rvn log --op create --entity trait --json
-```
-
-**Why postponed**: Audit log exists but no CLI to query it. Add when temporal introspection is needed.
-
----
-
-### `rvn validate` Command
-Pre-flight validation for inputs:
-```bash
-rvn validate --type object --input '{"type": "person", "fields": {"name": "Thor"}}' --json
-```
-
-**Why postponed**: Error messages from actual commands are clear enough. Add if agents need to check before attempting.
-
----
-
-### Batch Operations
-Execute multiple operations atomically:
-```bash
-rvn batch --input operations.json --json
-```
-
-With support for `atomic`, `stop_on_error`, and `dry_run` options.
-
-**Why postponed**: Single operations cover most use cases. Add when agents need multi-step transactions.
 
 ---
 
