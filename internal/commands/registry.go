@@ -187,17 +187,15 @@ should ask the user how to proceed.`,
 		Description: "Add a saved query to raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name for the new query", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status:active' or 'trait:due value:past')", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "traits", Description: "Traits to query (comma-separated)", Type: FlagTypeStringSlice},
-			{Name: "types", Description: "Types to query (comma-separated)", Type: FlagTypeStringSlice},
-			{Name: "filter", Description: "Filter in key=value format (repeatable)", Type: FlagTypeStringSlice},
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
 		},
 		Examples: []string{
-			"rvn query add overdue --traits due --filter due=past --json",
-			"rvn query add my-tasks --traits due,status --filter status=todo --json",
-			"rvn query add people --types person --json",
+			"rvn query add tasks 'trait:due' --json",
+			"rvn query add overdue 'trait:due value:past' --json",
+			"rvn query add active-projects 'object:project .status:active' --json",
 		},
 	},
 	"query_remove": {

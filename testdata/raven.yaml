@@ -1,30 +1,17 @@
-# Raven Vault Configuration
-
 daily_directory: daily
-
-# Saved queries
 queries:
-  tasks:
-    traits: [due, status]
-    filters:
-      status: "todo,in_progress,"
-    description: "Open tasks"
-
-  overdue:
-    traits: [due]
-    filters:
-      due: past
-    description: "Overdue items"
-
-  people:
-    types: [person]
-    description: "All people"
-
-  all-meetings:
-    types: [meeting]
-    traits: [due]
-    description: "All meetings with due dates"
-
-  important:
-    tags: [important]
-    description: "Items tagged #important"
+    active-projects:
+        query: object:project .status:active
+        description: Active projects
+    overdue:
+        query: trait:due value:past
+        description: Overdue items
+    people:
+        query: object:person
+        description: All people
+    projects:
+        query: object:project
+        description: All projects
+    tasks:
+        query: trait:due
+        description: All tasks with due dates

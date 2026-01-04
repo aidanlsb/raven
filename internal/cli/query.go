@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,6 +15,103 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
+
+// tableRow represents a row in the output table
+type tableRow struct {
+	name     string // Object name/slug
+	location string // File path and line number
+}
+
+// traitTableRow represents a row for trait output (content-first)
+type traitTableRow struct {
+	content  string // The task/content text
+	traits   string // Trait annotations like @due(2025-01-01)
+	location string // File path and line number
+}
+
+// printTable prints rows as a nicely formatted table with two columns
+func printTable(rows []tableRow) {
+	if len(rows) == 0 {
+		return
+	}
+
+	// Calculate max width for name column
+	maxNameWidth := 4 // minimum width for "NAME"
+	for _, row := range rows {
+		if len(row.name) > maxNameWidth {
+			maxNameWidth = len(row.name)
+		}
+	}
+
+	// Cap name width at a reasonable max to prevent super wide tables
+	if maxNameWidth > 40 {
+		maxNameWidth = 40
+	}
+
+	// Print header
+	fmt.Printf("%-*s  %s\n", maxNameWidth, "NAME", "LOCATION")
+	fmt.Printf("%s  %s\n", strings.Repeat("─", maxNameWidth), strings.Repeat("─", 30))
+
+	// Print rows
+	for _, row := range rows {
+		name := row.name
+		if len(name) > maxNameWidth {
+			name = name[:maxNameWidth-1] + "…"
+		}
+		fmt.Printf("%-*s  %s\n", maxNameWidth, name, row.location)
+	}
+}
+
+// printTraitTable prints trait results in a content-first format
+func printTraitTable(rows []traitTableRow) {
+	if len(rows) == 0 {
+		return
+	}
+
+	// Fixed column widths for consistent readable output
+	const contentWidth = 45
+	const traitWidth = 18
+
+	// Print header
+	fmt.Printf("%-*s  %-*s  %s\n", contentWidth, "CONTENT", traitWidth, "TRAITS", "LOCATION")
+	fmt.Printf("%s  %s  %s\n",
+		strings.Repeat("─", contentWidth),
+		strings.Repeat("─", traitWidth),
+		strings.Repeat("─", 25))
+
+	// Print rows
+	for _, row := range rows {
+		content := truncateText(row.content, contentWidth)
+		traits := row.traits
+		if len(traits) > traitWidth {
+			traits = traits[:traitWidth-1] + "…"
+		}
+		fmt.Printf("%-*s  %-*s  %s\n", contentWidth, content, traitWidth, traits, row.location)
+	}
+}
+
+// truncateText truncates text at a word boundary if possible
+func truncateText(text string, maxLen int) string {
+	if len(text) <= maxLen {
+		return text
+	}
+
+	// Try to truncate at a word boundary
+	truncated := text[:maxLen-3]
+	lastSpace := strings.LastIndex(truncated, " ")
+	if lastSpace > maxLen/2 {
+		// Found a space in the second half, use it
+		truncated = truncated[:lastSpace]
+	}
+	return truncated + "..."
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 var queryCmd = &cobra.Command{
 	Use:   "query <query-string>",
@@ -155,21 +253,18 @@ func runFullQuery(db *index.Database, queryStr string, start time.Time) error {
 		}
 
 		fmt.Printf("# %s (%d)\n\n", q.TypeName, len(results))
-		for _, r := range results {
-			fmt.Printf("• %s\n", r.ID)
-			if len(r.Fields) > 0 {
-				var fieldStrs []string
-				for k, v := range r.Fields {
-					if k != "type" && k != "id" {
-						fieldStrs = append(fieldStrs, fmt.Sprintf("%s: %v", k, v))
-					}
-				}
-				if len(fieldStrs) > 0 {
-					fmt.Printf("  %s\n", strings.Join(fieldStrs, ", "))
-				}
+
+		// Build table rows
+		rows := make([]tableRow, len(results))
+		for i, r := range results {
+			// Use the filename without extension as the name
+			name := filepath.Base(r.ID)
+			rows[i] = tableRow{
+				name:     name,
+				location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
 			}
-			fmt.Printf("  %s:%d\n", r.FilePath, r.LineStart)
 		}
+		printTable(rows)
 		return nil
 	}
 
@@ -208,14 +303,23 @@ func runFullQuery(db *index.Database, queryStr string, start time.Time) error {
 	}
 
 	fmt.Printf("# @%s (%d)\n\n", q.TypeName, len(results))
-	for _, r := range results {
-		valueStr := ""
+
+	// Build table rows
+	rows := make([]traitTableRow, len(results))
+	for i, r := range results {
+		// Build trait string
+		traitStr := "@" + r.TraitType
 		if r.Value != nil && *r.Value != "" {
-			valueStr = fmt.Sprintf("(%s)", *r.Value)
+			traitStr += fmt.Sprintf("(%s)", *r.Value)
 		}
-		fmt.Printf("• %s\n", r.Content)
-		fmt.Printf("  @%s%s  %s:%d\n", r.TraitType, valueStr, r.FilePath, r.Line)
+
+		rows[i] = traitTableRow{
+			content:  r.Content,
+			traits:   traitStr,
+			location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
+		}
 	}
+	printTraitTable(rows)
 	return nil
 }
 
@@ -227,10 +331,8 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 		for name, q := range vaultCfg.Queries {
 			queries = append(queries, SavedQueryInfo{
 				Name:        name,
+				Query:       q.Query,
 				Description: q.Description,
-				Types:       q.Types,
-				Traits:      q.Traits,
-				Filters:     q.Filters,
 			})
 		}
 		outputSuccess(map[string]interface{}{
@@ -249,120 +351,20 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 	for name, q := range vaultCfg.Queries {
 		desc := q.Description
 		if desc == "" {
-			var parts []string
-			if len(q.Types) > 0 {
-				parts = append(parts, fmt.Sprintf("types: %v", q.Types))
-			}
-			if len(q.Traits) > 0 {
-				parts = append(parts, fmt.Sprintf("traits: %v", q.Traits))
-			}
-			desc = strings.Join(parts, ", ")
+			desc = q.Query
 		}
-		fmt.Printf("  %-12s %s\n", name, desc)
+		fmt.Printf("  %-16s %s\n", name, desc)
 	}
 	return nil
 }
 
 func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time) error {
-	if len(q.Traits) == 0 && len(q.Types) == 0 {
-		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no traits or types defined", name), "")
+	if q.Query == "" {
+		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
 	}
 
-	var result QueryResult
-	result.QueryName = name
-	hasResults := false
-
-	// Query types if specified
-	if len(q.Types) > 0 {
-		for _, typeName := range q.Types {
-			results, err := db.QueryObjects(typeName)
-			if err != nil {
-				return handleError(ErrDatabaseError, err, "")
-			}
-
-			if len(results) > 0 {
-				hasResults = true
-				var items []ObjectResult
-				for _, obj := range results {
-				items = append(items, ObjectResult{
-					ID:        obj.ID,
-					Type:      typeName,
-					FilePath:  obj.FilePath,
-					LineStart: obj.LineStart,
-				})
-				}
-				result.Types = append(result.Types, TypeQueryResult{
-					Type:  typeName,
-					Items: items,
-				})
-
-				if !isJSONOutput() {
-					fmt.Printf("## %s (%d)\n\n", typeName, len(results))
-					for _, obj := range results {
-						fmt.Printf("• %s\n", obj.ID)
-						fmt.Printf("  %s:%d\n", obj.FilePath, obj.LineStart)
-					}
-					fmt.Println()
-				}
-			}
-		}
-	}
-
-	// Query traits if specified
-	if len(q.Traits) > 0 {
-		var allResults []index.TraitResult
-
-		for _, traitType := range q.Traits {
-			var filter *string
-			if q.Filters != nil {
-				if f, ok := q.Filters[traitType]; ok {
-					filter = &f
-				}
-			}
-
-			results, err := db.QueryTraits(traitType, filter)
-			if err != nil {
-				return handleError(ErrDatabaseError, err, "")
-			}
-			allResults = append(allResults, results...)
-		}
-
-		if len(allResults) > 0 {
-			hasResults = true
-			for _, r := range allResults {
-				result.Traits = append(result.Traits, TraitResult{
-					ID:          fmt.Sprintf("%s:%d", r.FilePath, r.Line),
-					TraitType:   r.TraitType,
-					Value:       r.Value,
-					Content:     r.Content,
-					ContentText: r.Content,
-					ObjectID:    r.ParentID,
-					FilePath:    r.FilePath,
-					Line:        r.Line,
-				})
-			}
-			if !isJSONOutput() {
-				printTraitResults(allResults)
-			}
-		}
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
-	if isJSONOutput() {
-		totalCount := len(result.Traits)
-		for _, t := range result.Types {
-			totalCount += len(t.Items)
-		}
-		outputSuccess(result, &Meta{Count: totalCount, QueryTimeMs: elapsed})
-		return nil
-	}
-
-	if !hasResults {
-		fmt.Printf("No results for query '%s'.\n", name)
-	}
-
-	return nil
+	// Just run the query string through the normal query parser
+	return runFullQuery(db, q.Query, start)
 }
 
 func printTraitResults(results []index.TraitResult) {
@@ -383,6 +385,8 @@ func printTraitResults(results []index.TraitResult) {
 		grouped[key] = append(grouped[key], r)
 	}
 
+	// Build table rows
+	rows := make([]traitTableRow, 0, len(order))
 	for _, key := range order {
 		traits := grouped[key]
 		// Use content from first trait (they should be the same)
@@ -398,45 +402,39 @@ func printTraitResults(results []index.TraitResult) {
 			}
 		}
 
-		fmt.Printf("• %s\n", content)
-		fmt.Printf("  %s  %s:%d\n", strings.Join(traitStrs, " "), key.filePath, key.line)
+		rows = append(rows, traitTableRow{
+			content:  content,
+			traits:   strings.Join(traitStrs, " "),
+			location: fmt.Sprintf("%s:%d", key.filePath, key.line),
+		})
 	}
+
+	printTraitTable(rows)
 }
 
 var queryAddCmd = &cobra.Command{
-	Use:   "add <name>",
+	Use:   "add <name> <query-string>",
 	Short: "Add a saved query to raven.yaml",
 	Long: `Add a new saved query to raven.yaml.
 
+The query string uses the Raven query language (same as 'rvn query "..."').
+
 Examples:
-  rvn query add overdue --traits due --filter due=past
-  rvn query add my-tasks --traits due,status --filter status=todo
-  rvn query add people --types person
-  rvn query add mixed --types project --traits due --description "Projects with due dates"`,
-	Args: cobra.ExactArgs(1),
+  rvn query add tasks "trait:due"
+  rvn query add overdue "trait:due value:past"
+  rvn query add active-projects "object:project .status:active"
+  rvn query add urgent "trait:due value:this-week|past" --description "Due soon or overdue"`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		queryName := args[0]
-
-		// Get flags
-		traits, _ := cmd.Flags().GetStringSlice("traits")
-		types, _ := cmd.Flags().GetStringSlice("types")
-		filters, _ := cmd.Flags().GetStringSlice("filter")
+		queryStr := args[1]
 		description, _ := cmd.Flags().GetString("description")
 
-		// Validate - must have at least one of traits or types
-		if len(traits) == 0 && len(types) == 0 {
-			return handleErrorMsg(ErrInvalidInput, "must specify at least one of --traits or --types", "")
-		}
-
-		// Parse filters into map
-		filterMap := make(map[string]string)
-		for _, f := range filters {
-			parts := strings.SplitN(f, "=", 2)
-			if len(parts) != 2 {
-				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("invalid filter format: %s (expected key=value)", f), "")
-			}
-			filterMap[parts[0]] = parts[1]
+		// Validate the query string by parsing it
+		_, err := query.Parse(queryStr)
+		if err != nil {
+			return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("invalid query: %v", err), "")
 		}
 
 		// Load existing config
@@ -452,16 +450,8 @@ Examples:
 
 		// Build new query
 		newQuery := config.SavedQuery{
+			Query:       queryStr,
 			Description: description,
-		}
-		if len(traits) > 0 {
-			newQuery.Traits = traits
-		}
-		if len(types) > 0 {
-			newQuery.Types = types
-		}
-		if len(filterMap) > 0 {
-			newQuery.Filters = filterMap
 		}
 
 		// Update config
@@ -478,17 +468,13 @@ Examples:
 		// Audit log
 		logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
 		logger.LogCreate("query", queryName, "saved_query", map[string]interface{}{
-			"traits":  traits,
-			"types":   types,
-			"filters": filterMap,
+			"query": queryStr,
 		})
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"name":        queryName,
-				"traits":      traits,
-				"types":       types,
-				"filters":     filterMap,
+				"query":       queryStr,
 				"description": description,
 			}, nil)
 		} else {
@@ -620,9 +606,6 @@ func init() {
 	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
 
 	// query add flags
-	queryAddCmd.Flags().StringSlice("traits", nil, "Traits to query (comma-separated)")
-	queryAddCmd.Flags().StringSlice("types", nil, "Types to query (comma-separated)")
-	queryAddCmd.Flags().StringSlice("filter", nil, "Filter in key=value format (repeatable)")
 	queryAddCmd.Flags().String("description", "", "Human-readable description")
 
 	queryCmd.AddCommand(queryAddCmd)
