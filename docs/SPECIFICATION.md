@@ -874,8 +874,6 @@ internal/
 │   ├── dates.go             # Date parsing utilities
 │   ├── walk.go              # Markdown file walking
 │   └── editor.go            # Open files in editor
-├── audit/
-│   └── audit.go             # Audit log operations
 ├── mcp/
 │   ├── server.go            # MCP server (JSON-RPC over stdin/stdout)
 │   └── tools.go             # Generate MCP tools from command registry
@@ -1274,7 +1272,6 @@ rvn set projects/website priority=high
 - Validates fields against the object's type schema
 - Warns (but allows) unknown fields
 - Preserves existing frontmatter fields not being updated
-- Logs updates to the audit log
 
 **JSON output** (for agents):
 ```json

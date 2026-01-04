@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/audit"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -208,19 +206,6 @@ Examples:
 			db.IndexDocument(newDoc, sch)
 		}
 	}
-
-	// Log to audit
-	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
-	auditLogger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
-	auditLogger.Log(audit.Entry{
-		Operation: "move",
-		Entity:    "object",
-		ID:        strings.TrimSuffix(source, ".md"),
-		Extra: map[string]interface{}{
-			"destination": strings.TrimSuffix(destination, ".md"),
-		},
-		Timestamp: time.Now(),
-	})
 
 		elapsed := time.Since(start).Milliseconds()
 

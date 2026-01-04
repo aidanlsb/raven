@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/audit"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/query"
@@ -69,7 +68,7 @@ func printTraitTable(rows []traitTableRow) {
 	}
 
 	// Fixed column widths for consistent readable output
-	const contentWidth = 45
+	const contentWidth = 65
 	const traitWidth = 18
 
 	// Print header
@@ -465,12 +464,6 @@ Examples:
 			return handleError(ErrInternal, err, "")
 		}
 
-		// Audit log
-		logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
-		logger.LogCreate("query", queryName, "saved_query", map[string]interface{}{
-			"query": queryStr,
-		})
-
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"name":        queryName,
@@ -517,10 +510,6 @@ Examples:
 		if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
 			return handleError(ErrInternal, err, "")
 		}
-
-		// Audit log
-		logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
-		logger.LogDelete("query", queryName)
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{

@@ -24,9 +24,6 @@ type VaultConfig struct {
 
 	// Deletion configures file deletion behavior
 	Deletion *DeletionConfig `yaml:"deletion,omitempty"`
-
-	// AuditLog enables logging of all operations to .raven/audit.log (default: true)
-	AuditLog *bool `yaml:"audit_log,omitempty"`
 }
 
 // DeletionConfig configures how file deletion is handled.
@@ -57,14 +54,6 @@ func (vc *VaultConfig) GetDeletionConfig() *DeletionConfig {
 		cfg.TrashDir = ".trash"
 	}
 	return &cfg
-}
-
-// IsAuditLogEnabled returns true if audit logging is enabled (default: true).
-func (vc *VaultConfig) IsAuditLogEnabled() bool {
-	if vc.AuditLog == nil {
-		return true // Enabled by default
-	}
-	return *vc.AuditLog
 }
 
 // IsAutoReindexEnabled returns true if auto-reindexing is enabled (default: true).

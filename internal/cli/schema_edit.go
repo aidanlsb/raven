@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/audit"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/spf13/cobra"
@@ -42,30 +40,6 @@ var (
 var (
 	schemaRemoveForce bool
 )
-
-// logSchemaChange logs a schema modification to the audit log.
-func logSchemaChange(vaultPath, operation, kind, name string, changes []string) {
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return // Vault config not loaded, skip audit
-	}
-	logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
-	if logger == nil || !logger.Enabled() {
-		return
-	}
-	extra := map[string]interface{}{
-		"kind": kind,
-	}
-	if changes != nil {
-		extra["changes"] = changes
-	}
-	logger.Log(audit.Entry{
-		Operation: "schema_" + operation,
-		Entity:    "schema",
-		ID:        name,
-		Extra:     extra,
-	})
-}
 
 var schemaAddCmd = &cobra.Command{
 	Use:   "add <type|trait|field> <name> [parent-type]",
@@ -584,9 +558,6 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
-	// Audit log
-	logSchemaChange(vaultPath, "update", "type", typeName, changes)
-
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
@@ -668,9 +639,6 @@ func updateTrait(vaultPath, traitName string, start time.Time) error {
 	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
-
-	// Audit log
-	logSchemaChange(vaultPath, "update", "trait", traitName, changes)
 
 	elapsed := time.Since(start).Milliseconds()
 
@@ -812,9 +780,6 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
-	// Audit log
-	logSchemaChange(vaultPath, "update", "field", fmt.Sprintf("%s.%s", typeName, fieldName), changes)
-
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
@@ -951,9 +916,6 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
-	// Audit log
-	logSchemaChange(vaultPath, "remove", "type", typeName, nil)
-
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
@@ -1044,9 +1006,6 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
-	// Audit log
-	logSchemaChange(vaultPath, "remove", "trait", traitName, nil)
-
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
@@ -1135,9 +1094,6 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
-
-	// Audit log
-	logSchemaChange(vaultPath, "remove", "field", fmt.Sprintf("%s.%s", typeName, fieldName), nil)
 
 	elapsed := time.Since(start).Milliseconds()
 
