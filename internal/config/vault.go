@@ -114,16 +114,11 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-// SavedQuery defines a saved query.
+// SavedQuery defines a saved query using the Raven query language.
 type SavedQuery struct {
-	// Types to query (e.g., ["person", "project"])
-	Types []string `yaml:"types,omitempty"`
-
-	// Traits to query (e.g., ["due", "status"])
-	Traits []string `yaml:"traits,omitempty"`
-
-	// Filters for each trait (e.g., {"status": "todo,in_progress", "due": "past"})
-	Filters map[string]string `yaml:"filters,omitempty"`
+	// Query is the query string using Raven query language
+	// e.g., "object:project .status:active" or "trait:due value:past"
+	Query string `yaml:"query"`
 
 	// Description for help text
 	Description string `yaml:"description,omitempty"`
@@ -196,27 +191,27 @@ auto_reindex: true
 #   trash_dir: .trash       # Directory for trashed files (default: .trash)
 
 # Saved queries - run with 'rvn query <name>'
+# Uses the Raven query language (same as 'rvn query "..."')
 queries:
-  # All items with @due or @status traits (i.e., "tasks")
+  # All items with @due trait
   tasks:
-    traits: [due, status]
-    filters:
-      status: "todo,in_progress,"   # Include items without explicit status
-    description: "Open tasks"
+    query: "trait:due"
+    description: "All tasks with due dates"
 
   # Overdue items
   overdue:
-    traits: [due]
-    filters:
-      due: past
+    query: "trait:due value:past"
     description: "Items past their due date"
 
   # Items due this week
   this-week:
-    traits: [due]
-    filters:
-      due: this-week
+    query: "trait:due value:this-week"
     description: "Items due this week"
+
+  # Active projects
+  active-projects:
+    query: "object:project .status:active"
+    description: "Projects with status active"
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {

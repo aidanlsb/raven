@@ -436,32 +436,26 @@ deletion:
   behavior: trash         # "trash" (default) or "permanent"
   trash_dir: .trash       # Directory for trashed files
 
-# Saved queries
+# Saved queries - use the Raven query language
 queries:
   tasks:
-    traits: [due, status]
-    filters:
-      status: "!done"              # NOT done
-    description: "Open tasks"
+    query: "trait:due"
+    description: "All tasks with due dates"
 
   overdue:
-    traits: [due]
-    filters:
-      due: past
+    query: "trait:due value:past"
     description: "Overdue items"
 
   urgent:
-    traits: [due]
-    filters:
-      due: "this-week|past"        # OR: this week or overdue
+    query: "trait:due value:this-week|past"
     description: "Due soon or overdue"
+
+  active-projects:
+    query: "object:project .status:active"
+    description: "Active projects"
 ```
 
-**Filter Syntax:**
-- Simple value: `status: done` → exact match
-- OR with pipe: `due: "this-week|past"` → matches either
-- NOT with bang: `status: "!done"` → excludes value
-- Date keywords: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`
+Saved queries use the same query language as `rvn query "..."`. See the [Query Language](#query-language) section for full syntax.
 
 ### Global Config (`~/.config/raven/config.toml`)
 
@@ -501,7 +495,7 @@ Use named vaults: `rvn --vault work stats`
 | `rvn query "trait:<name> value:<val>"` | Query traits with value filter |
 | `rvn query <saved-name>` | Run a saved query |
 | `rvn query --list` | List saved queries |
-| `rvn query add <name>` | Create a saved query |
+| `rvn query add <name> <query>` | Create a saved query |
 | `rvn query remove <name>` | Remove a saved query |
 | `rvn backlinks <target>` | Show incoming references |
 | `rvn search <query>` | Full-text search across vault |

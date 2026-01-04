@@ -578,6 +578,40 @@ func (d *Database) RemoveFile(filePath string) error {
 	return nil
 }
 
+// RemoveFilesWithPrefix removes all data for files whose paths start with a given prefix.
+// This is used to clean up files in excluded directories like .trash/.
+// Returns the number of files removed.
+func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
+	// Count files that will be removed
+	var count int
+	err := d.db.QueryRow("SELECT COUNT(DISTINCT file_path) FROM objects WHERE file_path LIKE ?", pathPrefix+"%").Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+
+	if count == 0 {
+		return 0, nil
+	}
+
+	pattern := pathPrefix + "%"
+	if _, err := d.db.Exec("DELETE FROM objects WHERE file_path LIKE ?", pattern); err != nil {
+		return 0, err
+	}
+	if _, err := d.db.Exec("DELETE FROM traits WHERE file_path LIKE ?", pattern); err != nil {
+		return 0, err
+	}
+	if _, err := d.db.Exec("DELETE FROM refs WHERE file_path LIKE ?", pattern); err != nil {
+		return 0, err
+	}
+	if _, err := d.db.Exec("DELETE FROM date_index WHERE file_path LIKE ?", pattern); err != nil {
+		return 0, err
+	}
+	if _, err := d.db.Exec("DELETE FROM fts_content WHERE file_path LIKE ?", pattern); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // RemoveDocument removes a document and all related data by its object ID.
 func (d *Database) RemoveDocument(objectID string) error {
 	// Objects can have IDs like "people/freya" or "daily/2025-02-01#meeting"

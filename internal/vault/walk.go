@@ -37,9 +37,10 @@ func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) 
 			return nil // Skip errors
 		}
 
-		// Skip directories, but skip .raven entirely
+		// Skip directories, but skip .raven and .trash entirely
 		if d.IsDir() {
-			if d.Name() == ".raven" {
+			name := d.Name()
+			if name == ".raven" || name == ".trash" {
 				return filepath.SkipDir
 			}
 			return nil

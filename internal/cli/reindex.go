@@ -62,6 +62,16 @@ Examples:
 			}
 		}
 
+		// Clean up files in excluded directories (.trash/, etc.)
+		// These should never be in the index but might exist from before this check was added
+		trashRemoved, err := db.RemoveFilesWithPrefix(".trash/")
+		if err != nil && !jsonOutput {
+			fmt.Fprintf(os.Stderr, "Warning: failed to clean up trash files from index: %v\n", err)
+		}
+		if trashRemoved > 0 && !jsonOutput && !dryRun {
+			fmt.Printf("Cleaned up %d files from .trash/ in index\n", trashRemoved)
+		}
+
 		var fileCount, skippedCount, errorCount int
 		var errors []string
 		var staleFiles []string

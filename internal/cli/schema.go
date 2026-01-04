@@ -359,10 +359,8 @@ func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaR
 		for name, q := range vaultCfg.Queries {
 			result.Queries[name] = SavedQueryInfo{
 				Name:        name,
+				Query:       q.Query,
 				Description: q.Description,
-				Types:       q.Types,
-				Traits:      q.Traits,
-				Filters:     q.Filters,
 			}
 		}
 	}

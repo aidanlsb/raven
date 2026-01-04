@@ -10,3 +10,5 @@
 {"ts":"2026-01-02T06:56:58.91577Z","op":"capture","entity":"file","id":"daily/2026-01-01.md","content":"- 22:56 Test with timestamp"}
 {"ts":"2026-01-02T09:21:46.813343Z","op":"capture","entity":"file","id":"daily/2026-01-02.md","content":"- - Test item with --double-dash--"}
 {"ts":"2026-01-03T15:09:59.019611-08:00","op":"move","entity":"object","id":"test-move","extra":{"destination":"archive/old-note"}}
+{"ts":"2026-01-04T18:22:15.172087Z","op":"create","entity":"query","id":"test-query","type":"saved_query","extra":{"query":"trait:status"}}
+{"ts":"2026-01-04T18:22:19.475377Z","op":"delete","entity":"query","id":"test-query"}

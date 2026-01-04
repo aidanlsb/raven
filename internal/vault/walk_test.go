@@ -21,6 +21,8 @@ func TestWalkMarkdownFiles(t *testing.T) {
 	//     page2.md
 	//   .raven/
 	//     index.db (should be skipped)
+	//   .trash/
+	//     deleted.md (should be skipped)
 	//   readme.txt (should be skipped)
 
 	// Create page1.md
@@ -54,6 +56,20 @@ type: person
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, ".raven", "index.db"), []byte("fake db"), 0644); err != nil {
 		t.Fatalf("Failed to write index.db: %v", err)
+	}
+
+	// Create .trash/deleted.md (should be skipped - trash directory)
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".trash"), 0755); err != nil {
+		t.Fatalf("Failed to create .trash: %v", err)
+	}
+	trashedContent := `---
+type: person
+---
+
+# Deleted Person
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, ".trash", "deleted.md"), []byte(trashedContent), 0644); err != nil {
+		t.Fatalf("Failed to write deleted.md: %v", err)
 	}
 
 	// Create readme.txt (should be skipped - not .md)
@@ -91,6 +107,13 @@ type: person
 	for _, f := range foundFiles {
 		if filepath.Dir(f) == ".raven" {
 			t.Errorf("Should not have found files in .raven: %s", f)
+		}
+	}
+
+	// Verify .trash was skipped
+	for _, f := range foundFiles {
+		if filepath.Dir(f) == ".trash" {
+			t.Errorf("Should not have found files in .trash: %s", f)
 		}
 	}
 
