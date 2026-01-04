@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -75,12 +74,6 @@ Examples:
 			if title == "" {
 				return handleErrorMsg(ErrMissingArgument, "title cannot be empty", "")
 			}
-		}
-
-		// Get default_path
-		var defaultPath string
-		if typeDef != nil && typeDef.DefaultPath != "" {
-			defaultPath = typeDef.DefaultPath
 		}
 
 		// Parse --field flags into a map
@@ -159,30 +152,19 @@ Examples:
 			return nil // Error already output
 		}
 
-		// Build target path from default_path + slugified title
-		filename := pages.Slugify(title)
-		if filename == "" {
+		// Use title as target path - pages.Create will apply default_path from schema
+		targetPath := title
+		if targetPath == "" {
 			return fmt.Errorf("invalid title: cannot generate safe filename")
 		}
 
-		var targetPath string
-		if defaultPath != "" {
-			// Validate default_path doesn't escape vault
-			cleanPath := filepath.Clean(defaultPath)
-			if strings.Contains(cleanPath, "..") || filepath.IsAbs(cleanPath) {
-				return fmt.Errorf("invalid default_path in schema: %s", defaultPath)
-			}
-			targetPath = filepath.Join(cleanPath, filename)
-		} else {
-			targetPath = filename
+		// Check if file exists (with default_path resolution)
+		if pages.ExistsWithSchema(vaultPath, targetPath, typeName, s) {
+			resolvedPath := pages.ResolveTargetPath(targetPath, typeName, s)
+			return fmt.Errorf("file already exists: %s.md", pages.SlugifyPath(resolvedPath))
 		}
 
-		// Check if file exists
-		if pages.Exists(vaultPath, targetPath) {
-			return fmt.Errorf("file already exists: %s.md", pages.SlugifyPath(targetPath))
-		}
-
-		// Create the page
+		// Create the page - pages.Create handles default_path resolution
 		result, err := pages.Create(pages.CreateOptions{
 			VaultPath:  vaultPath,
 			TypeName:   typeName,
