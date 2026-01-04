@@ -146,11 +146,6 @@ func (v *Validator) validateFieldPredicate(p *FieldPredicate, typeName string, t
 	}
 
 	if _, exists := typeDef.Fields[p.Field]; !exists {
-		// Also check if it's a trait on the type (frontmatter traits are valid fields)
-		if typeDef.Traits.HasTrait(p.Field) {
-			return nil // Valid - it's a trait
-		}
-
 		available := v.availableFields(typeDef)
 		return &ValidationError{
 			Message:    fmt.Sprintf("type '%s' has no field '%s'", typeName, p.Field),
@@ -183,10 +178,6 @@ func (v *Validator) availableFields(typeDef *schema.TypeDefinition) []string {
 		for name := range typeDef.Fields {
 			fields = append(fields, name)
 		}
-	}
-	// Include traits as they can appear in frontmatter
-	for _, traitName := range typeDef.Traits.List() {
-		fields = append(fields, traitName)
 	}
 	return fields
 }

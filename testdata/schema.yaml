@@ -27,8 +27,6 @@ types:
                 type: ref[]
             time:
                 type: string
-        traits:
-            - remind
     person:
         default_path: people/
         fields:
@@ -38,9 +36,6 @@ types:
             name:
                 required: true
                 type: string
-        traits:
-            - due
-            - priority
     project:
         default_path: projects/
         fields:
@@ -59,10 +54,6 @@ types:
                 type: string[]
             milestones:
                 type: date[]
-        traits:
-            due:
-                required: true
-            priority: {}
     book:
         default_path: books/
         fields:

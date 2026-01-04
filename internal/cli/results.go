@@ -140,12 +140,10 @@ type SchemaResult struct {
 
 // TypeSchema represents a type definition.
 type TypeSchema struct {
-	Name           string                 `json:"name"`
-	Builtin        bool                   `json:"builtin"`
-	DefaultPath    string                 `json:"default_path,omitempty"`
-	Fields         map[string]FieldSchema `json:"fields,omitempty"`
-	Traits         []string               `json:"traits,omitempty"`
-	RequiredTraits []string               `json:"required_traits,omitempty"`
+	Name        string                 `json:"name"`
+	Builtin     bool                   `json:"builtin"`
+	DefaultPath string                 `json:"default_path,omitempty"`
+	Fields      map[string]FieldSchema `json:"fields,omitempty"`
 }
 
 // FieldSchema represents a field definition.

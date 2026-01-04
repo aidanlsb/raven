@@ -146,62 +146,6 @@ Examples:
 				}
 			}
 
-			// Collect required traits
-			for _, traitName := range typeDef.Traits.List() {
-				if typeDef.Traits.IsRequired(traitName) {
-					// Check if already provided via --field
-					if _, ok := fieldValues[traitName]; ok {
-						continue
-					}
-					
-					// Check for default
-					traitConfig := typeDef.Traits.Configs[traitName]
-					if traitConfig != nil && traitConfig.Default != nil {
-						fieldValues[traitName] = fmt.Sprintf("%v", traitConfig.Default)
-						continue
-					}
-					
-					traitDef := s.Traits[traitName]
-					
-					if isJSONOutput() {
-						// Non-interactive: collect missing required traits for error
-						missingFields = append(missingFields, traitName)
-						detail := map[string]interface{}{
-							"name":     traitName,
-							"type":     "trait",
-							"required": true,
-						}
-						if traitDef != nil {
-							detail["trait_type"] = string(traitDef.Type)
-							if len(traitDef.Values) > 0 {
-								detail["values"] = traitDef.Values
-							}
-						}
-						fieldDetails = append(fieldDetails, detail)
-					} else {
-						// Interactive: prompt for value
-						hint := ""
-						if traitDef != nil {
-							switch traitDef.Type {
-							case schema.FieldTypeDate:
-								hint = " (YYYY-MM-DD)"
-							case schema.FieldTypeEnum:
-								hint = fmt.Sprintf(" (%s)", strings.Join(traitDef.Values, "/"))
-							}
-						}
-						fmt.Printf("%s (required)%s: ", traitName, hint)
-						value, err := reader.ReadString('\n')
-						if err != nil {
-							return fmt.Errorf("failed to read input: %w", err)
-						}
-						value = strings.TrimSpace(value)
-						if value == "" {
-							return fmt.Errorf("required trait '%s' cannot be empty", traitName)
-						}
-						fieldValues[traitName] = value
-					}
-				}
-			}
 		}
 		
 		// In JSON mode, error if required fields are missing

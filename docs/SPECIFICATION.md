@@ -484,7 +484,6 @@ types:
       company:
         type: ref
         target: company
-    traits: [due, priority]  # Optional: person can have these in frontmatter
 
   project:
     default_path: projects/
@@ -494,12 +493,6 @@ types:
         target: person
       technologies:
         type: string[]
-    traits:
-      due:
-        required: true       # Projects MUST have a due date
-      priority:
-        default: high        # Override trait default for projects
-      status: {}             # Optional, uses trait default
 
   # Note: 'date' type is built-in for daily notes (YYYY-MM-DD.md)
 
@@ -510,7 +503,6 @@ types:
       attendees:
         type: ref[]
         target: person
-    traits: [remind]  # Meetings can have reminders
       
   book:
     fields:
@@ -523,40 +515,19 @@ types:
         type: number
         min: 1
         max: 5
-    traits:
-      status:
-        required: true
 ```
 
-### Traits on Types
+### Separation of Fields and Traits
 
-Types can declare which traits are valid in their frontmatter using the `traits` field.
-
-**Simple list (all optional):**
-```yaml
-person:
-  fields:
-    name: { type: string, required: true }
-  traits: [due, priority]  # Person can have @due and @priority in frontmatter
-```
-
-**Map with configuration:**
-```yaml
-project:
-  fields:
-    lead: { type: ref, target: person }
-  traits:
-    due:
-      required: true    # Project MUST have a due date
-    priority:
-      default: high     # Override trait default for this type
-    status: {}          # Optional, uses trait default
-```
+**Key design principle:**
+- **Fields** are type-specific structured data in frontmatter
+- **Traits** are universal annotations in content (not frontmatter)
 
 **Key rules:**
-- Frontmatter can ONLY contain: `type`, `id`, declared fields, and declared traits
+- Frontmatter can ONLY contain: `type`, `id`, `tags`, and declared fields
 - Unknown frontmatter keys trigger validation errors
-- Inline `@trait` annotations can appear anywhere regardless of type
+- Traits appear in content using `@trait` or `@trait(value)` syntax
+- Traits can be used on ANY object type - they are universal
 - Traits in frontmatter apply to the whole object; inline traits apply to specific content
 - Both frontmatter traits and inline traits are indexed and queryable
 

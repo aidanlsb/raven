@@ -384,12 +384,6 @@ Examples:
 				}
 			}
 
-			// Check that declared traits exist
-			for _, traitName := range typeDef.Traits.List() {
-				if _, exists := sch.Traits[traitName]; !exists {
-					issues = append(issues, fmt.Sprintf("Type '%s' declares unknown trait '%s'", typeName, traitName))
-				}
-			}
 		}
 
 		elapsed := time.Since(start).Milliseconds()
@@ -966,18 +960,6 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 				if strings.ToLower(response) != "y" {
 					return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
 				}
-			}
-		}
-	}
-
-	// Check if any types declare this trait
-	for typeNameCheck, typeDef := range sch.Types {
-		for _, t := range typeDef.Traits.List() {
-			if t == traitName {
-				warnings = append(warnings, Warning{
-					Code:    "TYPE_USES_TRAIT",
-					Message: fmt.Sprintf("type '%s' declares trait '%s'", typeNameCheck, traitName),
-				})
 			}
 		}
 	}
