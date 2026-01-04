@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	_ "modernc.org/sqlite"
 )
@@ -838,4 +839,90 @@ func (d *Database) IsFileStale(vaultPath, filePath string) (bool, error) {
 	}
 
 	return stat.ModTime().Unix() > indexedMtime, nil
+}
+
+// ReferenceResolutionResult contains statistics about reference resolution.
+type ReferenceResolutionResult struct {
+	Resolved   int // Number of references successfully resolved
+	Unresolved int // Number of references that couldn't be resolved
+	Ambiguous  int // Number of ambiguous references (multiple matches)
+	Total      int // Total number of references processed
+}
+
+// ResolveReferences resolves all unresolved references in the refs table.
+// This should be called after all files have been indexed.
+// dailyDirectory is used to resolve date shorthand references like [[2025-02-01]].
+func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutionResult, error) {
+	result := &ReferenceResolutionResult{}
+
+	// Get all object IDs for resolution
+	objectIDs, err := d.AllObjectIDs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object IDs: %w", err)
+	}
+
+	// Create resolver with all known object IDs
+	res := resolver.NewWithDailyDir(objectIDs, dailyDirectory)
+
+	// Get all unresolved references
+	rows, err := d.db.Query(`
+		SELECT id, target_raw FROM refs WHERE target_id IS NULL
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query refs: %w", err)
+	}
+	defer rows.Close()
+
+	type refToResolve struct {
+		id        int64
+		targetRaw string
+	}
+	var refs []refToResolve
+
+	for rows.Next() {
+		var r refToResolve
+		if err := rows.Scan(&r.id, &r.targetRaw); err != nil {
+			return nil, err
+		}
+		refs = append(refs, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result.Total = len(refs)
+
+	// Resolve each reference
+	tx, err := d.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`UPDATE refs SET target_id = ? WHERE id = ?`)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	for _, ref := range refs {
+		resolved := res.Resolve(ref.targetRaw)
+		if resolved.Ambiguous {
+			result.Ambiguous++
+			result.Unresolved++
+		} else if resolved.TargetID != "" {
+			if _, err := stmt.Exec(resolved.TargetID, ref.id); err != nil {
+				return nil, err
+			}
+			result.Resolved++
+		} else {
+			result.Unresolved++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

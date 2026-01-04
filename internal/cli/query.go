@@ -192,14 +192,21 @@ Examples:
 			warnIfStale(db, vaultPath)
 		}
 
+		// Load schema for validation
+		sch, schemaErr := schema.Load(vaultPath)
+		if schemaErr != nil {
+			// Schema load failure is not fatal - continue without validation
+			sch = nil
+		}
+
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQuery(db, queryStr, start)
+			return runFullQueryWithSchema(db, queryStr, start, sch)
 		}
 
 		// Check if this is a saved query
 		if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
-			return runSavedQueryWithJSON(db, savedQuery, queryStr, start)
+			return runSavedQueryWithJSON(db, savedQuery, queryStr, start, sch)
 		}
 
 		// Unknown query - provide helpful error
@@ -210,10 +217,25 @@ Examples:
 }
 
 func runFullQuery(db *index.Database, queryStr string, start time.Time) error {
+	return runFullQueryWithSchema(db, queryStr, start, nil)
+}
+
+func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time, sch *schema.Schema) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
 	if err != nil {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("parse error: %v", err), "")
+	}
+
+	// Validate against schema if available
+	if sch != nil {
+		validator := query.NewValidator(sch)
+		if err := validator.Validate(q); err != nil {
+			if ve, ok := err.(*query.ValidationError); ok {
+				return handleErrorMsg(ErrQueryInvalid, ve.Message, ve.Suggestion)
+			}
+			return handleErrorMsg(ErrQueryInvalid, err.Error(), "")
+		}
 	}
 
 	executor := query.NewExecutor(db.DB())
@@ -357,13 +379,13 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 	return nil
 }
 
-func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time) error {
+func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema) error {
 	if q.Query == "" {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
 	}
 
 	// Just run the query string through the normal query parser
-	return runFullQuery(db, q.Query, start)
+	return runFullQueryWithSchema(db, q.Query, start, sch)
 }
 
 func printTraitResults(results []index.TraitResult) {
