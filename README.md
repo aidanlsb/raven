@@ -72,6 +72,7 @@ Agent: Created projects/asgard-security-audit.md with due date next Friday.
   - [What Agents Can Do](#what-agents-can-do)
   - [Example Agent Interactions](#example-agent-interactions)
 - [Design Philosophy](#design-philosophy)
+- [Workflow Tips](#workflow-tips)
 - [Documentation](#documentation)
 - [Development](#development)
 - [License](#license)
@@ -655,6 +656,59 @@ rvn query "trait:due value:today" --json
 - **Explicit over magic**: Frontmatter is the source of truth for types
 - **Query-friendly**: SQLite index enables fast structured queries
 - **Agent-native**: Built for AI workflows with structured JSON output and MCP
+
+---
+
+## Workflow Tips
+
+Tips and tricks for using Raven effectively.
+
+### Use Espanso for Relative Dates
+
+When writing notes, you often want to reference dates relative to today—"due tomorrow", "meeting next Friday". [Espanso](https://github.com/espanso/espanso) is a cross-platform text expander that can automatically insert calculated dates.
+
+Example Espanso config (`~/.config/espanso/match/raven.yml`):
+
+```yaml
+matches:
+  # @due shortcuts
+  - trigger: ":dtd"
+    replace: "@due({{today}})"
+    vars:
+      - name: today
+        type: date
+        params:
+          format: "%Y-%m-%d"
+
+  - trigger: ":dtm"
+    replace: "@due({{tomorrow}})"
+    vars:
+      - name: tomorrow
+        type: date
+        params:
+          format: "%Y-%m-%d"
+          offset: 86400  # +1 day in seconds
+
+  - trigger: ":dnw"
+    replace: "@due({{next_week}})"
+    vars:
+      - name: next_week
+        type: date
+        params:
+          format: "%Y-%m-%d"
+          offset: 604800  # +7 days
+
+  # Quick date insertion
+  - trigger: ":td"
+    replace: "{{today}}"
+    vars:
+      - name: today
+        type: date
+        params:
+          format: "%Y-%m-%d"
+```
+
+Now typing `:dtm` expands to `@due(2025-01-05)` (tomorrow's actual date).
 
 ---
 
