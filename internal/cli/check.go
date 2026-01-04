@@ -305,7 +305,8 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			if source == "" {
 				source = ref.SourceFile
 			}
-			fmt.Printf("  • %s → %s (from %s.%s)\n", ref.TargetPath, ref.InferredType, source, ref.FieldSource)
+			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
+			fmt.Printf("  • %s → %s.md (from %s.%s)\n", ref.TargetPath, resolvedPath, source, ref.FieldSource)
 		}
 
 		fmt.Print("\nCreate these pages? [Y/n] ")
@@ -313,11 +314,11 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range certain {
-				sluggedPath := pages.SlugifyPath(ref.TargetPath)
+				resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
-					fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
+					fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
 				} else {
-					fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, ref.InferredType)
+					fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, ref.InferredType)
 					created++
 				}
 			}
@@ -328,19 +329,20 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	if len(inferred) > 0 {
 		fmt.Println("\nInferred (from path matching default_path):")
 		for _, ref := range inferred {
-			fmt.Printf("  ? %s → %s (inferred from path)\n", ref.TargetPath, ref.InferredType)
+			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
+			fmt.Printf("  ? %s → %s.md (type: %s)\n", ref.TargetPath, resolvedPath, ref.InferredType)
 		}
 
 		for _, ref := range inferred {
-			sluggedPath := pages.SlugifyPath(ref.TargetPath)
-			fmt.Printf("\nCreate %s as '%s'? [y/N] ", sluggedPath, ref.InferredType)
+			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
+			fmt.Printf("\nCreate %s.md as '%s'? [y/N] ", resolvedPath, ref.InferredType)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
-					fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
+					fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
 				} else {
-					fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, ref.InferredType)
+					fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, ref.InferredType)
 					created++
 				}
 			}
@@ -363,7 +365,6 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		fmt.Printf("\nAvailable types: %s\n", strings.Join(typeNames, ", "))
 
 		for _, ref := range unknown {
-			sluggedPath := pages.SlugifyPath(ref.TargetPath)
 			fmt.Printf("\nType for %s (or 'skip'): ", ref.TargetPath)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
@@ -375,14 +376,15 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 			// Validate type exists, offer to create if not
 			if _, exists := s.Types[response]; !exists {
-				created += handleNewTypeCreation(vaultPath, s, ref, response, sluggedPath, reader)
+				created += handleNewTypeCreation(vaultPath, s, ref, response, reader)
 				continue
 			}
 
+			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, response, s))
 			if err := createMissingPage(vaultPath, s, ref.TargetPath, response); err != nil {
-				fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
+				fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
 			} else {
-				fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, response)
+				fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, response)
 				created++
 			}
 		}
@@ -585,7 +587,7 @@ func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType str
 
 // handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
 // Returns the number of pages created (0 or 1).
-func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName, sluggedPath string, reader *bufio.Reader) int {
+func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader) int {
 	fmt.Printf("\n  Type '%s' doesn't exist. Would you like to create it? [y/N] ", typeName)
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))
@@ -610,12 +612,13 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 		fmt.Printf("    default_path: %s\n", defaultPath)
 	}
 
-	// Now create the page with the new type
+	// Now create the page with the new type (resolving path with new default_path)
+	resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, typeName, s))
 	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName); err != nil {
-		fmt.Printf("  ✗ Failed to create %s: %v\n", sluggedPath, err)
+		fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
 		return 0
 	}
-	fmt.Printf("  ✓ Created %s.md (type: %s)\n", sluggedPath, typeName)
+	fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, typeName)
 	return 1
 }
 
@@ -674,6 +677,7 @@ func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath str
 }
 
 // createMissingPage creates a new page file using the pages package.
+// pages.Create handles default_path resolution automatically via the schema.
 func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName string) error {
 	_, err := pages.Create(pages.CreateOptions{
 		VaultPath:                   vaultPath,

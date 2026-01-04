@@ -24,7 +24,10 @@ type CreateOptions struct {
 	// If empty, derived from the target path.
 	Title string
 
-	// TargetPath is the relative path within the vault (e.g., "people/freya").
+	// TargetPath is the relative path within the vault.
+	// Can be just a filename (e.g., "freya") or a full path (e.g., "people/freya").
+	// If no directory is specified AND the type has a default_path in the schema,
+	// the file will be created in the type's default directory.
 	// Will be slugified automatically.
 	TargetPath string
 
@@ -32,8 +35,10 @@ type CreateOptions struct {
 	// Keys are field names, values are the field values.
 	Fields map[string]string
 
-	// Schema is used to determine required fields for the type.
-	// If nil, only basic frontmatter is generated.
+	// Schema is used for:
+	// 1. Resolving default_path for types
+	// 2. Determining required fields for placeholders
+	// If nil, no default_path resolution or required field handling occurs.
 	Schema *schema.Schema
 
 	// IncludeRequiredPlaceholders adds empty placeholders for required fields.
@@ -64,7 +69,7 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		return nil, fmt.Errorf("target path is required")
 	}
 
-	// Extract original title before slugifying
+	// Extract original title before any path manipulation
 	originalBaseName := filepath.Base(opts.TargetPath)
 	originalBaseName = strings.TrimSuffix(originalBaseName, ".md")
 
@@ -74,8 +79,11 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		title = originalBaseName
 	}
 
+	// Resolve target path: apply type's default_path if needed
+	targetPath := resolveDefaultPath(opts.TargetPath, opts.TypeName, opts.Schema)
+
 	// Slugify the path for the filename
-	slugifiedPath := SlugifyPath(opts.TargetPath)
+	slugifiedPath := SlugifyPath(targetPath)
 
 	// Build the file path with slugified name
 	filePath := filepath.Join(opts.VaultPath, slugifiedPath)
@@ -165,7 +173,44 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	}, nil
 }
 
+// resolveDefaultPath applies the type's default_path if the target doesn't already have a directory.
+// This is the single source of truth for default_path resolution.
+func resolveDefaultPath(targetPath, typeName string, sch *schema.Schema) string {
+	// If no schema, can't resolve default_path
+	if sch == nil {
+		return targetPath
+	}
+
+	// If target already has a directory component, use as-is
+	if strings.Contains(targetPath, "/") {
+		return targetPath
+	}
+
+	// Look up the type's default_path
+	typeDef, ok := sch.Types[typeName]
+	if !ok || typeDef == nil || typeDef.DefaultPath == "" {
+		return targetPath
+	}
+
+	// Security: validate default_path doesn't escape vault
+	defaultPath := filepath.Clean(typeDef.DefaultPath)
+	if strings.Contains(defaultPath, "..") || filepath.IsAbs(defaultPath) {
+		return targetPath
+	}
+
+	return filepath.Join(defaultPath, targetPath)
+}
+
+// ResolveTargetPath applies the type's default_path if the target doesn't already have a directory.
+// This is exported for use by other packages that need to compute the resolved path
+// (e.g., for display purposes) without creating the file.
+func ResolveTargetPath(targetPath, typeName string, sch *schema.Schema) string {
+	return resolveDefaultPath(targetPath, typeName, sch)
+}
+
 // Exists checks if a page already exists at the given path.
+// Note: This does NOT apply default_path resolution. Pass the already-resolved path
+// or use ExistsWithSchema for type-aware checking.
 func Exists(vaultPath, targetPath string) bool {
 	slugifiedPath := SlugifyPath(targetPath)
 	filePath := filepath.Join(vaultPath, slugifiedPath)
@@ -174,6 +219,12 @@ func Exists(vaultPath, targetPath string) bool {
 	}
 	_, err := os.Stat(filePath)
 	return err == nil
+}
+
+// ExistsWithSchema checks if a page already exists, applying default_path resolution.
+func ExistsWithSchema(vaultPath, targetPath, typeName string, sch *schema.Schema) bool {
+	resolved := resolveDefaultPath(targetPath, typeName, sch)
+	return Exists(vaultPath, resolved)
 }
 
 // SlugifyPath slugifies each component of a path.
