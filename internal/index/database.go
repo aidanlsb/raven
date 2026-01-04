@@ -343,7 +343,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		}
 	}
 
-	// Insert traits (both inline and frontmatter-based)
+	// Insert traits (inline only - traits in content, not frontmatter)
 	traitStmt, err := tx.Prepare(`
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -355,52 +355,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 
 	traitIdx := 0
 
-	// First, index frontmatter traits from objects
-	for _, obj := range doc.Objects {
-		// Only file-level objects (no parent) have frontmatter traits
-		if obj.ParentID != nil {
-			continue
-		}
-
-		typeDef, typeExists := sch.Types[obj.ObjectType]
-		if !typeExists || typeDef == nil {
-			continue
-		}
-
-		// Check each trait the type declares
-		for _, traitName := range typeDef.Traits.List() {
-			fieldValue, hasField := obj.Fields[traitName]
-			if !hasField {
-				continue
-			}
-
-			traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, traitIdx)
-			traitIdx++
-
-			// Get value as string
-			var valueStr interface{}
-			if s, ok := fieldValue.AsString(); ok {
-				valueStr = s
-			}
-
-			// Use object ID as content for frontmatter traits
-			_, err = traitStmt.Exec(
-				traitID,
-				doc.FilePath,
-				obj.ID,
-				traitName,
-				valueStr,
-				obj.ID, // Content is the object itself
-				obj.LineStart,
-				now,
-			)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// Then, index inline traits (only if defined in schema)
+	// Index inline traits (only if defined in schema)
 	for _, trait := range doc.Traits {
 		// Skip undefined traits - schema is source of truth
 		if sch != nil {

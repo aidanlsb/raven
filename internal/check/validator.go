@@ -285,72 +285,7 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 			}
 		}
 
-		// Validate required traits
-		for _, traitName := range typeDef.Traits.List() {
-			if typeDef.Traits.IsRequired(traitName) {
-				// Check if this trait is present in frontmatter
-				if _, hasField := obj.Fields[traitName]; !hasField {
-					issues = append(issues, Issue{
-						Level:      LevelError,
-						Type:       IssueMissingRequiredTrait,
-						FilePath:   filePath,
-						Line:       obj.LineStart,
-						Message:    fmt.Sprintf("Required trait '%s' missing for type '%s'", traitName, obj.ObjectType),
-						Value:      traitName,
-						FixCommand: fmt.Sprintf("rvn set %s %s=<value>", obj.ID, traitName),
-						FixHint:    fmt.Sprintf("Add '%s' to the file's frontmatter", traitName),
-					})
-				}
-			}
-		}
-
-		// Validate trait values against trait definitions
-		for _, traitName := range typeDef.Traits.List() {
-			if fieldValue, hasField := obj.Fields[traitName]; hasField {
-				traitDef, traitExists := v.schema.Traits[traitName]
-				if !traitExists {
-					issues = append(issues, Issue{
-						Level:      LevelWarning,
-						Type:       IssueUndefinedTrait,
-						FilePath:   filePath,
-						Line:       obj.LineStart,
-						Message:    fmt.Sprintf("Trait '%s' used in type but not defined in schema", traitName),
-						Value:      traitName,
-						FixCommand: fmt.Sprintf("rvn schema add trait %s", traitName),
-						FixHint:    fmt.Sprintf("Add trait '%s' to schema", traitName),
-					})
-					continue
-				}
-
-				// Validate enum values
-				if traitDef.Type == schema.FieldTypeEnum {
-					valueStr, ok := fieldValue.AsString()
-					if ok {
-						validValue := false
-						for _, allowed := range traitDef.Values {
-							if allowed == valueStr {
-								validValue = true
-								break
-							}
-						}
-						if !validValue {
-							issues = append(issues, Issue{
-								Level:      LevelError,
-								Type:       IssueInvalidEnumValue,
-								FilePath:   filePath,
-								Line:       obj.LineStart,
-								Message:    fmt.Sprintf("Invalid value '%s' for trait '%s' (allowed: %v)", valueStr, traitName, traitDef.Values),
-								Value:      valueStr,
-								FixCommand: fmt.Sprintf("rvn set %s %s=<valid_value>", obj.ID, traitName),
-								FixHint:    fmt.Sprintf("Change to one of: %v", traitDef.Values),
-							})
-						}
-					}
-				}
-			}
-		}
-
-		// Check for unknown frontmatter keys (not a field, not a trait)
+		// Check for unknown frontmatter keys (not a defined field)
 		// Reserved keys that are always allowed
 		reservedKeys := map[string]bool{
 			"type": true, // Object type declaration
@@ -367,17 +302,13 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 			if _, isField := typeDef.Fields[fieldName]; isField {
 				continue
 			}
-			// Skip if it's a declared trait for this type
-			if typeDef.Traits.HasTrait(fieldName) {
-				continue
-			}
 			// Unknown key - error
 			issues = append(issues, Issue{
 				Level:      LevelError,
 				Type:       IssueUnknownFrontmatter,
 				FilePath:   filePath,
 				Line:       obj.LineStart,
-				Message:    fmt.Sprintf("Unknown frontmatter key '%s' for type '%s' (not a field or declared trait)", fieldName, obj.ObjectType),
+				Message:    fmt.Sprintf("Unknown frontmatter key '%s' for type '%s'", fieldName, obj.ObjectType),
 				Value:      fieldName,
 				FixCommand: fmt.Sprintf("rvn schema add field %s %s", obj.ObjectType, fieldName),
 				FixHint:    fmt.Sprintf("Add field '%s' to type '%s', or remove it from the file", fieldName, obj.ObjectType),

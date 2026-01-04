@@ -396,14 +396,6 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 			}
 		}
 
-		if len(typeDef.Traits.List()) > 0 {
-			result.Traits = typeDef.Traits.List()
-			for _, traitName := range result.Traits {
-				if typeDef.Traits.IsRequired(traitName) {
-					result.RequiredTraits = append(result.RequiredTraits, traitName)
-				}
-			}
-		}
 	}
 
 	return result

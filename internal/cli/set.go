@@ -98,13 +98,11 @@ func runSet(cmd *cobra.Command, args []string) error {
 		if hasType && typeDef != nil {
 			// Check if this is a valid field
 			fieldDef, isField := typeDef.Fields[fieldName]
-			_, isTrait := typeDef.Traits.Configs[fieldName]
-			traitDef := sch.Traits[fieldName]
 
-			if !isField && !isTrait && fieldName != "tags" {
+			if !isField && fieldName != "tags" {
 				// Unknown field - warn but allow (for flexibility)
 				validationWarnings = append(validationWarnings,
-					fmt.Sprintf("'%s' is not a declared field or trait for type '%s'", fieldName, objectType))
+					fmt.Sprintf("'%s' is not a declared field for type '%s'", fieldName, objectType))
 			}
 
 			// Validate enum values
@@ -113,15 +111,6 @@ func runSet(cmd *cobra.Command, args []string) error {
 					return handleErrorMsg(ErrValidationFailed,
 						fmt.Sprintf("invalid value '%s' for field '%s'", value, fieldName),
 						fmt.Sprintf("Allowed values: %s", strings.Join(fieldDef.Values, ", ")))
-				}
-			}
-
-			// Validate trait enum values
-			if isTrait && traitDef != nil && traitDef.Type == schema.FieldTypeEnum && len(traitDef.Values) > 0 {
-				if !contains(traitDef.Values, value) {
-					return handleErrorMsg(ErrValidationFailed,
-						fmt.Sprintf("invalid value '%s' for trait '%s'", value, fieldName),
-						fmt.Sprintf("Allowed values: %s", strings.Join(traitDef.Values, ", ")))
 				}
 			}
 		}

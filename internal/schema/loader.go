@@ -117,7 +117,7 @@ func CreateDefault(vaultPath string) (bool, error) {
 version: 2  # Schema format version (do not change manually)
 
 # Types: Define what objects ARE (frontmatter 'type:' field)
-# Traits: Single-valued annotations on content (@name or @name(value))
+# Types have fields (structured data in frontmatter)
 #
 # Built-in types (always available):
 #   - page: fallback for files without explicit type
@@ -133,7 +133,6 @@ types:
         required: true
       email:
         type: string
-    traits: [due, priority]  # Optional traits this type can have
 
   project:
     default_path: projects/
@@ -141,14 +140,9 @@ types:
       name:
         type: string
         required: true
-    traits:
-      due:
-        required: true       # Projects must have a due date
-      priority: {}           # Optional, uses trait default
-      status: {}
 
-# Traits are single-valued annotations.
-# Can appear inline (@trait) or in frontmatter for types that list them.
+# Traits: Universal annotations in content (@name or @name(value))
+# Traits can be used on any object - just add them to your content.
 # Boolean traits: @highlight (no value)
 # Valued traits: @due(2025-02-01), @priority(high)
 traits:

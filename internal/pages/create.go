@@ -126,15 +126,6 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 					}
 				}
 			}
-
-			// Add required traits
-			for _, traitName := range typeDef.Traits.List() {
-				if typeDef.Traits.IsRequired(traitName) {
-					if _, exists := allFields[traitName]; !exists {
-						allFields[traitName] = "" // Empty placeholder
-					}
-				}
-			}
 		}
 	}
 

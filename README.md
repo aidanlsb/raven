@@ -387,10 +387,8 @@ types:
         type: enum
         values: [active, paused, completed]
         default: active
-    traits:
-      due: { required: true }  # Projects must have due dates
-      priority: {}             # Optional
 
+# Traits: Universal annotations (use anywhere in content)
 traits:
   due:
     type: date

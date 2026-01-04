@@ -163,19 +163,13 @@ func TestValidator_ValidQuery(t *testing.T) {
 	}
 }
 
-func TestValidator_FrontmatterTraitAsField(t *testing.T) {
-	// Traits declared on a type should be valid as field access
+func TestValidator_FieldNotTrait(t *testing.T) {
+	// Traits are NOT valid as field access - only actual fields are
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"project": {
 				Fields: map[string]*schema.FieldDefinition{
 					"name": {Type: schema.FieldTypeString},
-				},
-				Traits: schema.TypeTraits{
-					Configs: map[string]*schema.TypeTraitConfig{
-						"due":      {},
-						"priority": {},
-					},
 				},
 			},
 		},
@@ -187,14 +181,15 @@ func TestValidator_FrontmatterTraitAsField(t *testing.T) {
 
 	v := NewValidator(sch)
 
-	// Should be valid - due is a trait on the type
+	// Should be invalid - due is a trait, not a field on project
 	q, err := Parse("object:project .due:2025-01-01")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
 
-	if err := v.Validate(q); err != nil {
-		t.Errorf("unexpected validation error for frontmatter trait: %v", err)
+	err = v.Validate(q)
+	if err == nil {
+		t.Error("expected validation error for trait used as field, got nil")
 	}
 }
 
