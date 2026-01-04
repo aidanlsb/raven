@@ -14,12 +14,31 @@ import (
 var reindexCmd = &cobra.Command{
 	Use:   "reindex",
 	Short: "Reindex all files",
-	Long:  `Parses all markdown files in the vault and rebuilds the SQLite index.`,
+	Long: `Parses all markdown files in the vault and rebuilds the SQLite index.
+
+By default, reindexes all files. Use --smart for incremental mode that only
+reindexes files that have changed since the last index.
+
+Examples:
+  # Full reindex
+  rvn reindex
+
+  # Smart incremental reindex (only changed files)
+  rvn reindex --smart
+
+  # Check what would be reindexed without doing it
+  rvn reindex --smart --dry-run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
+		smart, _ := cmd.Flags().GetBool("smart")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
-		if !jsonOutput {
-			fmt.Printf("Reindexing vault: %s\n", vaultPath)
+		if !jsonOutput && !dryRun {
+			if smart {
+				fmt.Printf("Smart reindexing vault: %s\n", vaultPath)
+			} else {
+				fmt.Printf("Reindexing vault: %s\n", vaultPath)
+			}
 		}
 
 		// Load schema
@@ -35,12 +54,17 @@ var reindexCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		if wasRebuilt && !jsonOutput {
-			fmt.Println("Database schema was outdated - rebuilt from scratch.")
+		// If schema was rebuilt, force full reindex
+		if wasRebuilt {
+			smart = false
+			if !jsonOutput {
+				fmt.Println("Database schema was outdated - performing full reindex.")
+			}
 		}
 
-		var fileCount, errorCount int
+		var fileCount, skippedCount, errorCount int
 		var errors []string
+		var staleFiles []string
 
 		// Walk all markdown files
 		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
@@ -53,8 +77,28 @@ var reindexCmd = &cobra.Command{
 				return nil
 			}
 
-			// Index document
-			if err := db.IndexDocument(result.Document, sch); err != nil {
+			// In smart mode, check if file needs reindexing
+			if smart {
+				indexedMtime, err := db.GetFileMtime(result.RelativePath)
+				if err == nil && indexedMtime > 0 && result.FileMtime <= indexedMtime {
+					// File hasn't changed since last index
+					skippedCount++
+					return nil
+				}
+				staleFiles = append(staleFiles, result.RelativePath)
+			}
+
+			// Dry run mode - just report, don't index
+			if dryRun {
+				if !jsonOutput {
+					fmt.Printf("  Would reindex: %s\n", result.RelativePath)
+				}
+				fileCount++
+				return nil
+			}
+
+			// Index document with mtime
+			if err := db.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); err != nil {
 				if !jsonOutput {
 					fmt.Fprintf(os.Stderr, "Error indexing %s: %v\n", result.RelativePath, err)
 				}
@@ -77,22 +121,39 @@ var reindexCmd = &cobra.Command{
 		}
 
 		if jsonOutput {
+			data := map[string]interface{}{
+				"files_indexed":  fileCount,
+				"files_skipped":  skippedCount,
+				"objects":        stats.ObjectCount,
+				"traits":         stats.TraitCount,
+				"references":     stats.RefCount,
+				"schema_rebuilt": wasRebuilt,
+				"smart_mode":     smart,
+				"dry_run":        dryRun,
+				"errors":         errors,
+			}
+			if smart {
+				data["stale_files"] = staleFiles
+			}
 			result := map[string]interface{}{
-				"ok": true,
-				"data": map[string]interface{}{
-					"files_indexed":    fileCount,
-					"objects":          stats.ObjectCount,
-					"traits":           stats.TraitCount,
-					"references":       stats.RefCount,
-					"schema_rebuilt":   wasRebuilt,
-					"errors":           errors,
-				},
+				"ok":   true,
+				"data": data,
 			}
 			out, _ := json.MarshalIndent(result, "", "  ")
 			fmt.Println(string(out))
+		} else if dryRun {
+			if smart {
+				fmt.Printf("\nDry run: %d files would be reindexed, %d up-to-date\n", fileCount, skippedCount)
+			} else {
+				fmt.Printf("\nDry run: %d files would be reindexed\n", fileCount)
+			}
 		} else {
 			fmt.Println()
-			fmt.Printf("✓ Indexed %d files\n", fileCount)
+			if smart && skippedCount > 0 {
+				fmt.Printf("✓ Indexed %d changed files (%d up-to-date)\n", fileCount, skippedCount)
+			} else {
+				fmt.Printf("✓ Indexed %d files\n", fileCount)
+			}
 			fmt.Printf("  %d objects\n", stats.ObjectCount)
 			fmt.Printf("  %d traits\n", stats.TraitCount)
 			fmt.Printf("  %d references\n", stats.RefCount)
@@ -108,4 +169,6 @@ var reindexCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(reindexCmd)
+	reindexCmd.Flags().Bool("smart", false, "Only reindex files that have changed since last index")
+	reindexCmd.Flags().Bool("dry-run", false, "Show what would be reindexed without doing it")
 }

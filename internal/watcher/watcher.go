@@ -134,6 +134,13 @@ func (w *Watcher) ReindexFile(path string) error {
 		return nil
 	}
 
+	// Get file mtime before reading
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat file: %w", err)
+	}
+	fileMtime := stat.ModTime().Unix()
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
@@ -144,7 +151,7 @@ func (w *Watcher) ReindexFile(path string) error {
 		return fmt.Errorf("failed to parse document: %w", err)
 	}
 
-	if err := w.db.IndexDocument(parsed, w.schema); err != nil {
+	if err := w.db.IndexDocumentWithMtime(parsed, w.schema, fileMtime); err != nil {
 		return fmt.Errorf("failed to index document: %w", err)
 	}
 

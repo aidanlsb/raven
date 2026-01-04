@@ -111,7 +111,29 @@ func isSchemaCompatible(db *sql.DB) bool {
 		return false
 	}
 
-	return true
+	// Check if objects table has 'file_mtime' column (v5+)
+	rows2, err := db.Query("PRAGMA table_info(objects)")
+	if err != nil {
+		return false
+	}
+	defer rows2.Close()
+
+	hasFileMtimeColumn := false
+	for rows2.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue interface{}
+		if err := rows2.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return false
+		}
+		if name == "file_mtime" {
+			hasFileMtimeColumn = true
+			break
+		}
+	}
+
+	return hasFileMtimeColumn
 }
 
 // OpenInMemory opens an in-memory database (for testing).
@@ -136,7 +158,7 @@ func (d *Database) Close() error {
 }
 
 // CurrentDBVersion is the current database schema version.
-const CurrentDBVersion = 4
+const CurrentDBVersion = 5
 
 // initialize creates the database schema.
 func (d *Database) initialize() error {
@@ -162,7 +184,8 @@ func (d *Database) initialize() error {
 			line_end INTEGER,
 			parent_id TEXT,
 			created_at INTEGER,
-			updated_at INTEGER
+			updated_at INTEGER,
+			file_mtime INTEGER          -- File modification time when indexed (Unix timestamp)
 		);
 		
 		-- All trait annotations (single-valued)
@@ -245,7 +268,15 @@ func (d *Database) initialize() error {
 // IndexDocument indexes a parsed document (replaces existing data for the file).
 // IndexDocument indexes a parsed document into the database.
 // The schema is needed to determine which frontmatter fields are traits.
+// Deprecated: Use IndexDocumentWithMtime for proper staleness tracking.
 func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema) error {
+	return d.IndexDocumentWithMtime(doc, sch, 0)
+}
+
+// IndexDocumentWithMtime indexes a parsed document with file modification time tracking.
+// fileMtime should be the file's modification time as Unix timestamp (seconds).
+// Pass 0 if mtime is unknown (will use current time as fallback).
+func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schema.Schema, fileMtime int64) error {
 	tx, err := d.db.Begin()
 	if err != nil {
 		return err
@@ -271,10 +302,16 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 
 	now := time.Now().Unix()
 
+	// Use provided mtime or fall back to current time
+	mtime := fileMtime
+	if mtime == 0 {
+		mtime = now
+	}
+
 	// Insert objects
 	objStmt, err := tx.Prepare(`
-		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, created_at, updated_at, file_mtime)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -299,6 +336,7 @@ func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema)
 			obj.ParentID,
 			now,
 			now,
+			mtime,
 		)
 		if err != nil {
 			return err
@@ -661,4 +699,106 @@ func getTraitDefault(sch *schema.Schema, traitType string) interface{} {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// StalenessInfo contains information about index freshness.
+type StalenessInfo struct {
+	IsStale      bool     // True if any files are stale
+	StaleFiles   []string // List of stale file paths (relative to vault)
+	TotalFiles   int      // Total number of indexed files
+	CheckedFiles int      // Number of files checked
+}
+
+// CheckStaleness compares indexed file mtimes against current filesystem mtimes.
+// vaultPath is needed to stat files. Returns info about which files are stale.
+func (d *Database) CheckStaleness(vaultPath string) (*StalenessInfo, error) {
+	info := &StalenessInfo{}
+
+	// Get all unique file paths and their indexed mtimes
+	rows, err := d.db.Query(`
+		SELECT DISTINCT file_path, file_mtime 
+		FROM objects 
+		WHERE parent_id IS NULL
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var filePath string
+		var indexedMtime sql.NullInt64
+
+		if err := rows.Scan(&filePath, &indexedMtime); err != nil {
+			return nil, err
+		}
+
+		info.TotalFiles++
+
+		// Build full path and check current mtime
+		fullPath := filepath.Join(vaultPath, filePath)
+		stat, err := os.Stat(fullPath)
+		if err != nil {
+			// File was deleted or moved - consider stale
+			info.StaleFiles = append(info.StaleFiles, filePath)
+			info.IsStale = true
+			continue
+		}
+
+		info.CheckedFiles++
+		currentMtime := stat.ModTime().Unix()
+
+		// If no indexed mtime or current > indexed, file is stale
+		if !indexedMtime.Valid || currentMtime > indexedMtime.Int64 {
+			info.StaleFiles = append(info.StaleFiles, filePath)
+			info.IsStale = true
+		}
+	}
+
+	return info, rows.Err()
+}
+
+// GetFileMtime returns the indexed mtime for a file, or 0 if not found.
+func (d *Database) GetFileMtime(filePath string) (int64, error) {
+	var mtime sql.NullInt64
+	err := d.db.QueryRow(`
+		SELECT file_mtime FROM objects 
+		WHERE file_path = ? AND parent_id IS NULL 
+		LIMIT 1
+	`, filePath).Scan(&mtime)
+
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	if !mtime.Valid {
+		return 0, nil
+	}
+	return mtime.Int64, nil
+}
+
+// IsFileStale checks if a single file needs reindexing.
+// Returns true if the file's current mtime is newer than indexed mtime.
+func (d *Database) IsFileStale(vaultPath, filePath string) (bool, error) {
+	indexedMtime, err := d.GetFileMtime(filePath)
+	if err != nil {
+		return false, err
+	}
+
+	// File not in index - needs indexing
+	if indexedMtime == 0 {
+		return true, nil
+	}
+
+	// Check current file mtime
+	fullPath := filepath.Join(vaultPath, filePath)
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		// File doesn't exist - consider stale (will be cleaned up)
+		return true, nil
+	}
+
+	return stat.ModTime().Unix() > indexedMtime, nil
 }

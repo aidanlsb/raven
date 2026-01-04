@@ -16,6 +16,7 @@ type WalkResult struct {
 	Path         string
 	RelativePath string
 	Document     *parser.ParsedDocument
+	FileMtime    int64 // File modification time as Unix timestamp
 	Error        error
 }
 
@@ -60,6 +61,17 @@ func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) 
 
 		relativePath, _ := filepath.Rel(vaultPath, path)
 
+		// Get file mtime
+		info, err := d.Info()
+		if err != nil {
+			return handler(WalkResult{
+				Path:         path,
+				RelativePath: relativePath,
+				Error:        err,
+			})
+		}
+		fileMtime := info.ModTime().Unix()
+
 		// Read file
 		content, err := os.ReadFile(path)
 		if err != nil {
@@ -84,6 +96,7 @@ func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) 
 			Path:         path,
 			RelativePath: relativePath,
 			Document:     doc,
+			FileMtime:    fileMtime,
 		})
 	})
 }

@@ -169,6 +169,7 @@ should ask the user how to proceed.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
+			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn query 'object:project .status:active' --json",
@@ -178,6 +179,7 @@ should ask the user how to proceed.`,
 			"rvn query 'trait:highlight on:{object:book .status:reading}' --json",
 			"rvn query tasks --json",
 			"rvn query --list --json",
+			"rvn query 'object:project' --refresh --json",
 		},
 	},
 	"query_add": {
@@ -260,9 +262,16 @@ Use this after:
 - Schema changes that affect indexing
 - Recovering from index corruption
 
-The index is rebuilt from scratch, so this is safe to run at any time.`,
+By default, reindexes all files. Use --smart for incremental mode that only
+reindexes files that have changed since the last index.`,
 		Examples: []string{
 			"rvn reindex",
+			"rvn reindex --smart",
+			"rvn reindex --smart --dry-run",
+		},
+		Flags: []FlagMeta{
+			{Name: "smart", Description: "Only reindex files that have changed since last index", Type: FlagTypeBool},
+			{Name: "dry-run", Description: "Show what would be reindexed without doing it", Type: FlagTypeBool},
 		},
 	},
 	"check": {
