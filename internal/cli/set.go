@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/audit"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -67,7 +66,7 @@ func runSet(cmd *cobra.Command, args []string) error {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
 
-	// Load vault config for audit logging
+	// Load vault config
 	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
 
 	// Read the file
@@ -148,15 +147,7 @@ func runSet(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Log to audit
-	logger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
 	relPath, _ := filepath.Rel(vaultPath, filePath)
-	// Convert updates to map[string]interface{} for logging
-	changesMap := make(map[string]interface{})
-	for k, v := range updates {
-		changesMap[k] = v
-	}
-	logger.LogUpdate(relPath, objectID, changesMap)
 
 	// Output
 	if isJSONOutput() {

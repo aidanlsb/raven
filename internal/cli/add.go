@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/audit"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -125,10 +124,6 @@ Configuration (raven.yaml):
 		lineNum := getFileLineCount(destPath)
 
 		relPath, _ := filepath.Rel(vaultPath, destPath)
-
-		// Log to audit log if enabled
-		auditLogger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
-		auditLogger.LogCapture(relPath, line)
 
 		// Check for broken references and build warnings
 		var warnings []Warning

@@ -694,8 +694,7 @@ internal/
 ├── pages/      # Page creation logic
 ├── vault/      # Vault utilities (dates, file walking)
 ├── resolver/   # Reference resolution
-├── check/      # Validation
-└── audit/      # Audit logging
+└── check/      # Validation
 ```
 
 The **command registry** (`internal/commands/registry.go`) is the single source of truth for all CLI commands. This ensures:

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/audit"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -157,10 +156,6 @@ Examples:
 				fmt.Printf("  (warning: failed to remove from index: %v)\n", err)
 			}
 		}
-
-		// Log to audit
-		auditLogger := audit.New(vaultPath, vaultCfg.IsAuditLogEnabled())
-		auditLogger.LogDelete("object", objectID)
 
 		elapsed := time.Since(start).Milliseconds()
 

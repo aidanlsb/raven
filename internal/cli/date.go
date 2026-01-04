@@ -17,10 +17,8 @@ var dateCmd = &cobra.Command{
 
 This includes:
 - The daily note for that date (if exists)
-- Tasks due on that date
-- Events on that date
-- Any object with a date field matching that date
-- References to that date
+- Any trait or field with a date value matching that date (e.g., @due, @remind, event dates)
+- References to that date (e.g., [[2025-02-01]])
 
 Examples:
   rvn date              # Today
@@ -88,18 +86,18 @@ Examples:
 		for fieldName, fieldItems := range byField {
 			fmt.Printf("## %s: %s (%d)\n", strings.Title(fieldName), dateStr, len(fieldItems))
 			for _, item := range fieldItems {
-			if item.SourceType == "trait" {
-				// Get trait content
-				trait, err := db.GetTrait(item.SourceID)
-				if err == nil && trait != nil {
-					valueStr := ""
-					if trait.Value != nil && *trait.Value != "" {
-						valueStr = fmt.Sprintf(" (%s)", *trait.Value)
+				if item.SourceType == "trait" {
+					// Get trait content
+					trait, err := db.GetTrait(item.SourceID)
+					if err == nil && trait != nil {
+						valueStr := ""
+						if trait.Value != nil && *trait.Value != "" {
+							valueStr = fmt.Sprintf(" (%s)", *trait.Value)
+						}
+						fmt.Printf("  @%s%s %s\n", trait.TraitType, valueStr, trait.Content)
+						fmt.Printf("    %s\n", trait.FilePath)
 					}
-					fmt.Printf("  @%s%s %s\n", trait.TraitType, valueStr, trait.Content)
-					fmt.Printf("    %s\n", trait.FilePath)
-				}
-			} else {
+				} else {
 					// Object
 					obj, err := db.GetObject(item.SourceID)
 					if err == nil && obj != nil {

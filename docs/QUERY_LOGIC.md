@@ -449,7 +449,7 @@ object:meeting !refs:[[projects/website]]
 6. **Curly braces for sub-queries**: `has:{trait:due}` vs parentheses `()` for boolean grouping.
 7. **Explicit sub-query types**: `parent:{object:date}` not `parent:{date}` for consistency.
 8. **Unified "matches" semantics**: `.<field>:<value>` means "equals" for single values, "contains" for arrays.
-9. **Temporal queries deferred**: Use audit log for temporal needs; may add dedicated support later.
+9. **Temporal queries deferred**: Use git history for temporal needs; may add dedicated support later.
 
 ---
 

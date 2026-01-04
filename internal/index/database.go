@@ -111,14 +111,15 @@ func isSchemaCompatible(db *sql.DB) bool {
 		return false
 	}
 
-	// Check if objects table has 'file_mtime' column (v5+)
+	// Check if objects table has 'indexed_at' column (v6+)
+	// This replaced the old created_at/updated_at columns
 	rows2, err := db.Query("PRAGMA table_info(objects)")
 	if err != nil {
 		return false
 	}
 	defer rows2.Close()
 
-	hasFileMtimeColumn := false
+	hasIndexedAtColumn := false
 	for rows2.Next() {
 		var cid int
 		var name, colType string
@@ -127,13 +128,13 @@ func isSchemaCompatible(db *sql.DB) bool {
 		if err := rows2.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
 			return false
 		}
-		if name == "file_mtime" {
-			hasFileMtimeColumn = true
+		if name == "indexed_at" {
+			hasIndexedAtColumn = true
 			break
 		}
 	}
 
-	return hasFileMtimeColumn
+	return hasIndexedAtColumn
 }
 
 // OpenInMemory opens an in-memory database (for testing).
@@ -158,7 +159,7 @@ func (d *Database) Close() error {
 }
 
 // CurrentDBVersion is the current database schema version.
-const CurrentDBVersion = 5
+const CurrentDBVersion = 6
 
 // initialize creates the database schema.
 func (d *Database) initialize() error {
@@ -183,9 +184,8 @@ func (d *Database) initialize() error {
 			line_start INTEGER NOT NULL,
 			line_end INTEGER,
 			parent_id TEXT,
-			created_at INTEGER,
-			updated_at INTEGER,
-			file_mtime INTEGER          -- File modification time when indexed (Unix timestamp)
+			file_mtime INTEGER,         -- File modification time from filesystem (Unix timestamp)
+			indexed_at INTEGER          -- When this row was written to the index
 		);
 		
 		-- All trait annotations (single-valued)
@@ -197,7 +197,7 @@ func (d *Database) initialize() error {
 			value TEXT,                          -- Single trait value (NULL for boolean traits)
 			content TEXT NOT NULL,
 			line_number INTEGER NOT NULL,
-			created_at INTEGER
+			indexed_at INTEGER          -- When this row was written to the index
 		);
 		
 		-- References between objects
@@ -310,8 +310,8 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 
 	// Insert objects
 	objStmt, err := tx.Prepare(`
-		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, created_at, updated_at, file_mtime)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, file_mtime, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -334,9 +334,8 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 			obj.LineStart,
 			obj.LineEnd,
 			obj.ParentID,
-			now,
-			now,
 			mtime,
+			now,
 		)
 		if err != nil {
 			return err
@@ -345,7 +344,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 
 	// Insert traits (both inline and frontmatter-based)
 	traitStmt, err := tx.Prepare(`
-		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, created_at)
+		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
@@ -547,6 +546,10 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 }
 
 // extractDateString extracts a date string from a field value if it's a date type.
+// Only extracts absolute dates in YYYY-MM-DD format.
+// Relative keywords (today, tomorrow, etc.) are NOT resolved here because the
+// resolved value would become stale on reindex. Instead, relative dates are
+// handled at query time.
 // Returns empty string if not a date.
 func extractDateString(fv schema.FieldValue) string {
 	if s, ok := fv.AsString(); ok {

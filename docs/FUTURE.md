@@ -248,6 +248,228 @@ rvn migrate --syntax            # Apply
 
 ## CLI Improvements
 
+### Configurable Query Output Formatting
+
+Allow users to configure how query results are displayed, particularly for trait queries where content length matters for readability.
+
+**Use case**: When using traits for task management, users need to see enough content to identify specific tasks at a glance.
+
+**Proposed configuration** (`raven.yaml`):
+```yaml
+# Output formatting
+output:
+  # Content column width for trait queries (default: 65)
+  content_width: 80
+  
+  # Trait column width (default: 18)
+  trait_width: 20
+  
+  # Location column width (default: 25)
+  location_width: 30
+  
+  # Or use "auto" to adapt to terminal width
+  # content_width: auto
+```
+
+**Alternative**: Command-line flags for ad-hoc adjustment:
+```bash
+rvn query tasks --content-width 80
+rvn query "trait:due" --wide  # Use full terminal width
+```
+
+**Status**: Not implemented. Currently hardcoded to 65 characters for content column.
+
+---
+
+### Custom Query Output Columns
+
+Allow users to define what columns appear in query results, enabling richer table views with specific fields.
+
+**Use cases:**
+- Show `@due`, `@status`, and `@priority` together for task management
+- Display object fields like `lead`, `status` alongside the object name
+- Include custom computed columns (e.g., days until due)
+
+#### Approach A: Column Flags
+
+Simple flag-based column selection:
+
+```bash
+# Specify columns to display
+rvn query "trait:due" --columns content,value,status,location
+
+# For object queries, pull in field values
+rvn query "object:project" --columns name,status,lead,due
+
+# Shorthand for common patterns
+rvn query tasks --columns +status,+priority  # Add to defaults
+```
+
+**Pros**: Simple, no new syntax
+**Cons**: Verbose for complex cases, no persistence
+
+---
+
+#### Approach B: Named Views in Config
+
+Define reusable output formats in `raven.yaml`:
+
+```yaml
+views:
+  task-board:
+    query: "trait:due | trait:status"
+    columns:
+      - name: content
+        width: 50
+      - name: due
+        source: trait.due.value  # Extract from @due trait
+        width: 12
+      - name: status
+        source: trait.status.value
+        width: 10
+      - name: priority
+        source: trait.priority.value
+        width: 8
+    sort: due
+
+  project-overview:
+    query: "object:project"
+    columns:
+      - name: project
+        source: id
+        width: 20
+      - name: status
+        source: field.status
+      - name: lead
+        source: field.lead
+      - name: due
+        source: field.due
+```
+
+```bash
+rvn view task-board
+rvn view project-overview
+```
+
+**Pros**: Reusable, declarative, powerful
+**Cons**: More complex config, new command
+
+---
+
+#### Approach C: SQL-like SELECT in Query Language
+
+Extend the query language with projection:
+
+```bash
+# Select specific fields
+rvn query "object:project .status:active SELECT name, status, lead, due"
+
+# For traits, select from trait attributes
+rvn query "trait:due SELECT content, value AS due, parent.status"
+
+# With expressions
+rvn query "trait:due SELECT content, value, days_until(value) AS remaining"
+```
+
+**Pros**: Powerful, familiar SQL-like syntax, composable
+**Cons**: Significant parser changes, complexity
+
+---
+
+#### Approach D: Output Templates
+
+Simple templates for formatting each row:
+
+```yaml
+# raven.yaml
+output_templates:
+  task: "{{content | truncate:50}}  @due({{due}})  {{status | default:'-'}}"
+  project: "{{name}}  [{{status}}]  lead: {{lead}}"
+```
+
+```bash
+rvn query tasks --template task
+rvn query "object:project" --template project
+```
+
+**Pros**: Flexible formatting, readable output
+**Cons**: No automatic column alignment
+
+---
+
+#### Approach E: Views as First-Class Objects
+
+Views stored as markdown files with embedded query + display config:
+
+```markdown
+---
+type: view
+query: "trait:due | trait:status"
+---
+
+# Task Board
+
+| Content | Due | Status | Priority |
+|---------|-----|--------|----------|
+{{#each results}}
+| {{content}} | {{due}} | {{status}} | {{priority}} |
+{{/each}}
+```
+
+```bash
+rvn view task-board  # Runs the view, renders the table
+```
+
+**Pros**: Views are documents, can include descriptions, versioned in vault
+**Cons**: Mixing data and presentation, template complexity
+
+---
+
+#### Recommended Path
+
+**Phase 1**: Column flags (`--columns`) for ad-hoc customization
+- Simple to implement
+- Covers most use cases
+- No config changes needed
+
+**Phase 2**: Named views in `raven.yaml` for saved configurations
+- Build on saved queries
+- Add column/sort definitions
+- New `rvn view` command
+
+**Phase 3 (if needed)**: SQL-like SELECT for power users
+- Only if Phase 1-2 insufficient
+- Significant parser work
+
+**Key design decision**: Should views be separate from saved queries, or extend them?
+
+Option A - Extend saved queries:
+```yaml
+queries:
+  tasks:
+    query: "trait:due"
+    columns: [content, value, status]
+    sort: value
+```
+
+Option B - Separate views concept:
+```yaml
+queries:
+  tasks:
+    query: "trait:due"
+
+views:
+  task-board:
+    query: tasks  # Reference saved query
+    columns: [...]
+```
+
+Option A is simpler; Option B allows multiple views of the same query.
+
+**Status**: Not implemented. Design exploration only.
+
+---
+
 ### ~~Interactive Type/Trait Creation~~ ✅ IMPLEMENTED
 Schema modification via CLI:
 ```bash
