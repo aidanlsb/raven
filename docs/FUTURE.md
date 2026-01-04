@@ -1575,9 +1575,143 @@ Issues identified through theoretical analysis of the system design.
 - **Status**: Design choice for simplicity. Workaround: enumerate types explicitly or use traits.
 - **Future option**: Add optional `extends:` field to type definitions.
 
+#### Proposed: Type Inheritance
+
+Allow types to inherit fields and traits from a parent type:
+
+```yaml
+# schema.yaml
+types:
+  content:
+    fields:
+      title: { type: string, required: true }
+      created: { type: date }
+    traits: [status, priority]
+
+  book:
+    extends: content    # Inherits title, created, status, priority
+    fields:
+      author: { type: ref, target: person }
+      rating: { type: number, min: 1, max: 5 }
+
+  article:
+    extends: content
+    fields:
+      url: { type: string }
+      source: { type: string }
+```
+
+**Query implications:**
+- `object:book` matches only books
+- `object:content` could match all subtypes (books, articles, etc.)
+- Alternatively, add `object:content+` for "content and subtypes"
+
+**Implementation considerations:**
+- Single inheritance only (no diamond problem)
+- Field override semantics: child can add fields, not redefine parent fields
+- Trait inheritance: child inherits parent traits, can add more
+- Built-in types (`page`, `section`, `date`) cannot be extended
+
+**Status**: Not implemented. Would require schema loader changes and query executor updates.
+
+---
+
 **No cross-type unions in queries**: `object:(book | article)` is not valid—each query returns exactly one type.
 
 - **Status**: Design choice for type safety. Workaround: use OR at predicate level or run separate queries.
+
+#### Proposed: Wildcard Type Queries
+
+Allow querying across all types when needed:
+
+```bash
+# All objects with a due trait
+object:* has:due
+
+# All objects referencing a person
+object:* refs:[[people/freya]]
+```
+
+**Implementation**: `object:*` would omit the `type = ?` filter in SQL, returning all object types. Results would be grouped by type in output.
+
+**Status**: Not implemented. Simple extension that doesn't break existing semantics.
+
+---
+
+### Trait Patterns (Composite Traits)
+
+Currently, "tasks" are emergent—anything with `@due` or `@status` is effectively a task. This works but has limitations:
+
+1. No way to query "all task-like things" without knowing which traits define a task
+2. Users must remember which trait combinations constitute a "task"
+3. Schema doesn't document these emergent patterns
+
+#### Proposed: Trait Patterns
+
+Define named patterns that represent common trait combinations:
+
+```yaml
+# schema.yaml
+trait_patterns:
+  task:
+    description: "Items with due dates and/or status tracking"
+    requires_any: [due, status]   # At least one of these
+    # or: requires_all: [due, status]  # Must have both
+
+  actionable:
+    description: "Things that need action"
+    requires_all: [due]
+    requires_any: [status, priority]
+
+  reviewable:
+    description: "Items awaiting review"
+    requires_all: [status]
+    where:
+      status: [pending, in_review]   # Additional value constraints
+```
+
+**Query syntax:**
+```bash
+# All items matching the "task" pattern
+pattern:task
+
+# Task pattern on projects only
+pattern:task on:{object:project}
+
+# Combined with value filters
+pattern:task value:past   # Overdue tasks
+```
+
+**Benefits:**
+- Documents emergent patterns in schema
+- Single query for common concepts
+- Schema introspection shows what patterns exist
+- Agents can discover patterns via `rvn schema patterns`
+
+**Implementation considerations:**
+- Patterns are query macros, not new data structures
+- `pattern:task` expands to `(trait:due | trait:status)` at parse time
+- OR: patterns query the `traits` table with `trait_type IN (...)`
+- Value constraints (`where:`) add additional filters
+
+**Alternative: Saved query approach**
+
+Instead of schema-level patterns, use saved queries:
+
+```yaml
+# raven.yaml
+queries:
+  tasks:
+    description: "All task-like items"
+    query: "trait:due | trait:status"
+```
+
+This already works today but:
+- Less discoverable (not in schema introspection)
+- Doesn't validate trait existence
+- Query syntax more verbose than `pattern:task`
+
+**Status**: Not implemented. The saved query approach covers most use cases. Pattern syntax would be a convenience layer.
 
 ### Query Semantics
 

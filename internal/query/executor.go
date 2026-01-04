@@ -365,10 +365,10 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 
 	if p.Target != "" {
 		// Direct reference to specific target
-		// Use target_raw since target_id may not be populated
+		// Prefer target_id (resolved at index time), fall back to target_raw
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			WHERE r.source_id = %s.id AND (r.target_id = ? OR r.target_raw = ?)
+			WHERE r.source_id = %s.id AND (r.target_id = ? OR (r.target_id IS NULL AND r.target_raw = ?))
 		)`, alias)
 		args = append(args, p.Target, p.Target)
 	} else if p.SubQuery != nil {
@@ -386,10 +386,13 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 			args = append(args, predArgs...)
 		}
 
-		// Join on both target_id (if populated) or target_raw (fallback)
+		// Prefer target_id (resolved at index time), fall back to target_raw for unresolved refs
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			JOIN objects target_obj ON (r.target_id = target_obj.id OR r.target_raw = target_obj.id)
+			JOIN objects target_obj ON (
+				r.target_id = target_obj.id OR 
+				(r.target_id IS NULL AND r.target_raw = target_obj.id)
+			)
 			WHERE r.source_id = %s.id AND %s
 		)`, alias, strings.Join(targetConditions, " AND "))
 	} else {

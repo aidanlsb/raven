@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -125,6 +126,20 @@ Examples:
 			return fmt.Errorf("error walking vault: %w", err)
 		}
 
+		// Resolve references after all files are indexed
+		var refResult *index.ReferenceResolutionResult
+		if !dryRun && fileCount > 0 {
+			dailyDir := "daily" // default
+			if vaultCfg, err := config.LoadVaultConfig(vaultPath); err == nil && vaultCfg.DailyDirectory != "" {
+				dailyDir = vaultCfg.DailyDirectory
+			}
+
+			refResult, err = db.ResolveReferences(dailyDir)
+			if err != nil && !jsonOutput {
+				fmt.Fprintf(os.Stderr, "Warning: failed to resolve references: %v\n", err)
+			}
+		}
+
 		stats, err := db.Stats()
 		if err != nil {
 			return fmt.Errorf("failed to get stats: %w", err)
@@ -144,6 +159,10 @@ Examples:
 			}
 			if smart {
 				data["stale_files"] = staleFiles
+			}
+			if refResult != nil {
+				data["refs_resolved"] = refResult.Resolved
+				data["refs_unresolved"] = refResult.Unresolved
 			}
 			result := map[string]interface{}{
 				"ok":   true,
@@ -166,7 +185,12 @@ Examples:
 			}
 			fmt.Printf("  %d objects\n", stats.ObjectCount)
 			fmt.Printf("  %d traits\n", stats.TraitCount)
-			fmt.Printf("  %d references\n", stats.RefCount)
+			if refResult != nil && refResult.Unresolved > 0 {
+				fmt.Printf("  %d references (%d resolved, %d unresolved)\n",
+					stats.RefCount, refResult.Resolved, refResult.Unresolved)
+			} else {
+				fmt.Printf("  %d references\n", stats.RefCount)
+			}
 
 			if errorCount > 0 {
 				fmt.Printf("  %d errors\n", errorCount)
