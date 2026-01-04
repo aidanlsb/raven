@@ -1923,6 +1923,126 @@ func extractHeadings(content []byte) []Heading {
 - Property-based tests for parser edge cases
 - Benchmark tests for large vaults (1000+ files)
 
+### Consistency Model
+
+Raven uses an **eventually consistent** architecture where plain-text files are the source of truth and the SQLite index is a derived cache.
+
+**Key properties:**
+
+| Property | Behavior |
+|----------|----------|
+| **Source of truth** | Markdown files in the vault |
+| **Index** | Derived cache, can be deleted and rebuilt |
+| **Consistency** | Eventually consistent (index may lag behind files) |
+| **Staleness** | Index becomes stale when files are edited externally |
+| **Recovery** | Run `rvn reindex` to resync index with files |
+
+**Closed World Assumption (CWA):**
+
+Queries operate under the Closed World Assumption—if something isn't in the index, it doesn't exist from the query's perspective:
+
+- `!has:due` returns objects where no `@due` trait is indexed
+- If the index is stale, this may include objects that actually have `@due` in their files
+- Run `rvn check` to detect undefined traits and `rvn reindex` to refresh
+
+**When to reindex:**
+
+| Scenario | Reindex needed? |
+|----------|-----------------|
+| Edits via `rvn add`, `rvn edit`, `rvn set` | No (auto-reindex if enabled) |
+| Edits via external editor | Yes, unless `rvn watch` is running |
+| Schema changes (new types/traits) | Yes |
+| Bulk file operations (move, rename outside Raven) | Yes |
+| Index corruption or upgrade | Yes (delete `.raven/` and reindex) |
+
+**Concurrency:**
+
+The current system is designed for single-writer access:
+
+- Multiple readers are safe (SQLite WAL mode)
+- Multiple writers may cause lost updates or stale reads
+- Multi-agent workflows should serialize writes or use external coordination
+
+**Future improvements** (see FUTURE.md):
+- Optimistic locking (detect external changes before writing)
+- Write-ahead journaling for multi-file operations
+- File watching with auto-reindex
+
+### Formal Grammar
+
+The Raven file format can be described with the following grammar (EBNF notation):
+
+```ebnf
+(* Document structure *)
+document     = [ frontmatter ], body ;
+frontmatter  = "---", newline, yaml_content, "---", newline ;
+body         = { line } ;
+
+(* Frontmatter *)
+yaml_content = (* Valid YAML key-value pairs *) ;
+
+(* Line content *)
+line         = [ heading | embedded_type | content ], newline ;
+heading      = { "#" }, " ", text ;
+embedded_type = "::", type_name, "(", field_list, ")" ;
+content      = { text | trait | reference } ;
+
+(* Embedded type declarations *)
+type_name    = identifier ;
+field_list   = field, { ",", field } ;
+field        = identifier, "=", field_value ;
+field_value  = string | number | boolean | reference | array ;
+array        = "[", [ field_value, { ",", field_value } ], "]" ;
+
+(* Traits *)
+trait        = "@", trait_name, [ "(", trait_value, ")" ] ;
+trait_name   = identifier ;
+trait_value  = (* Value appropriate to trait type: date, enum, string, etc. *) ;
+
+(* References *)
+reference    = "[[", ref_path, [ "|", display_text ], "]]" ;
+ref_path     = path_segment, { "/", path_segment }, [ "#", fragment ] ;
+path_segment = { letter | digit | "-" | "_" } ;
+fragment     = identifier ;
+display_text = text ;
+
+(* Primitives *)
+identifier   = letter, { letter | digit | "-" | "_" } ;
+string       = '"', { character }, '"' | "'", { character }, "'" ;
+number       = [ "-" ], digit, { digit }, [ ".", { digit } ] ;
+boolean      = "true" | "false" ;
+date         = digit, digit, digit, digit, "-", digit, digit, "-", digit, digit ;
+datetime     = date, "T", digit, digit, ":", digit, digit, [ ":", digit, digit ], [ timezone ] ;
+timezone     = "Z" | ( "+" | "-" ), digit, digit, ":", digit, digit ;
+
+(* Basic elements *)
+letter       = "a" | ... | "z" | "A" | ... | "Z" ;
+digit        = "0" | ... | "9" ;
+newline      = "\n" | "\r\n" ;
+text         = { character - newline } ;
+character    = (* Any Unicode character *) ;
+```
+
+**Parsing precedence for traits:**
+
+1. `@` must be preceded by whitespace or start of line
+2. Trait name is parsed greedily until `(` or whitespace
+3. Trait value extends to matching `)`, handling nested parens
+4. Multiple traits on same line: each parsed independently left-to-right
+
+**Embedded type constraints:**
+
+1. `::type()` must appear within 2 lines after a heading
+2. The `id` field is required for embedded types
+3. ID must be unique within the file
+
+**Reference resolution:**
+
+1. Full paths (`[[people/freya]]`) resolve directly
+2. Short refs (`[[freya]]`) search for unique match
+3. Date shorthand (`[[2025-02-01]]`) resolves to daily note directory
+4. Fragment refs (`[[file#section]]`) resolve to embedded objects
+
 ---
 
 ## MCP Server (Agent Integration)

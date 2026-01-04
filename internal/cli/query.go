@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -80,6 +83,17 @@ Examples:
 			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 		}
 		defer db.Close()
+
+		// Check staleness and optionally refresh
+		refresh, _ := cmd.Flags().GetBool("refresh")
+		if refresh {
+			if err := smartReindex(db, vaultPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to refresh index: %v\n", err)
+			}
+		} else {
+			// Check for staleness and warn
+			warnIfStale(db, vaultPath)
+		}
 
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
@@ -535,8 +549,75 @@ Examples:
 	},
 }
 
+// warnIfStale checks if the index has stale files and prints a warning.
+// Only warns for non-JSON output to avoid polluting machine-readable results.
+func warnIfStale(db *index.Database, vaultPath string) {
+	if isJSONOutput() {
+		return
+	}
+
+	staleness, err := db.CheckStaleness(vaultPath)
+	if err != nil {
+		return // Silently fail - don't break queries for staleness check errors
+	}
+
+	if staleness.IsStale {
+		staleCount := len(staleness.StaleFiles)
+		if staleCount == 1 {
+			fmt.Fprintf(os.Stderr, "⚠ Warning: 1 file may be stale. Run 'rvn reindex --smart' or use '--refresh'.\n")
+		} else if staleCount <= 3 {
+			fmt.Fprintf(os.Stderr, "⚠ Warning: %d files may be stale: %s\n",
+				staleCount, strings.Join(staleness.StaleFiles, ", "))
+			fmt.Fprintf(os.Stderr, "  Run 'rvn reindex --smart' or use '--refresh' to update.\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "⚠ Warning: %d files may be stale. Run 'rvn reindex --smart' or use '--refresh'.\n", staleCount)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+}
+
+// smartReindex performs an incremental reindex of only stale files.
+func smartReindex(db *index.Database, vaultPath string) error {
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return err
+	}
+
+	var reindexed int
+	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+		if result.Error != nil {
+			return nil // Skip files with errors
+		}
+
+		// Check if file needs reindexing
+		indexedMtime, err := db.GetFileMtime(result.RelativePath)
+		if err == nil && indexedMtime > 0 && result.FileMtime <= indexedMtime {
+			return nil // File is up-to-date
+		}
+
+		// Reindex this file
+		if err := db.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); err != nil {
+			return nil // Skip files that fail to index
+		}
+
+		reindexed++
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if reindexed > 0 && !isJSONOutput() {
+		fmt.Fprintf(os.Stderr, "Refreshed %d stale file(s)\n\n", reindexed)
+	}
+
+	return nil
+}
+
 func init() {
 	queryCmd.Flags().BoolP("list", "l", false, "List saved queries")
+	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
 
 	// query add flags
 	queryAddCmd.Flags().StringSlice("traits", nil, "Traits to query (comma-separated)")
