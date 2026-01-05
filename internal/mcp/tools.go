@@ -134,11 +134,16 @@ func CLICommandName(toolName string) string {
 //
 // This standard ensures consistent, predictable parsing regardless of argument content.
 // No special cases allowed - all commands must follow this pattern.
+//
+// FLAG NAME NORMALIZATION:
+// MCP clients may send property names with either hyphens or underscores
+// (e.g., "default-path" or "default_path"). This function accepts both forms
+// and normalizes them to match the registry's canonical names (which use hyphens).
 func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	cmdName := CLICommandName(toolName)
 	meta, ok := commands.Registry[cmdName]
 	if !ok {
-		// Registry uses underscores (e.g., "schema_add_type"), 
+		// Registry uses underscores (e.g., "schema_add_type"),
 		// but CLICommandName returns spaces (e.g., "schema add type").
 		// Try with underscores.
 		underscoreName := strings.ReplaceAll(cmdName, " ", "_")
@@ -152,12 +157,16 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 
 	var cliArgs []string
 
+	// Normalize args to handle both hyphen and underscore variants
+	// (e.g., accept both "default-path" and "default_path")
+	normalizedArgs := normalizeArgs(args)
+
 	// Step 1: Command name
 	cliArgs = strings.Fields(meta.Name)
 
 	// Step 2: Collect all flags
 	for _, flag := range meta.Flags {
-		val, ok := args[flag.Name]
+		val, ok := normalizedArgs[flag.Name]
 		if !ok {
 			continue
 		}
@@ -201,7 +210,7 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 
 	// Step 5: Add positional arguments in registry-defined order
 	for _, arg := range meta.Args {
-		if val, ok := args[arg.Name]; ok {
+		if val, ok := normalizedArgs[arg.Name]; ok {
 			if strVal, ok := val.(string); ok && strVal != "" {
 				cliArgs = append(cliArgs, strVal)
 			}
@@ -211,7 +220,7 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	// Step 5b: Add key-value pairs as positional args (e.g., "set" command's fields)
 	for _, flag := range meta.Flags {
 		if flag.Type == commands.FlagTypeKeyValue {
-			if mapVal, ok := args[flag.Name].(map[string]interface{}); ok {
+			if mapVal, ok := normalizedArgs[flag.Name].(map[string]interface{}); ok {
 				for k, v := range mapVal {
 					cliArgs = append(cliArgs, fmt.Sprintf("%s=%v", k, v))
 				}
@@ -236,4 +245,22 @@ func toString(v interface{}) string {
 	default:
 		return ""
 	}
+}
+
+// normalizeArgs returns a copy of the args map with normalized keys.
+// MCP clients may send property names with underscores (e.g., "default_path")
+// instead of hyphens (e.g., "default-path"). This creates a lookup map that
+// accepts both forms by converting underscores to hyphens.
+func normalizeArgs(args map[string]interface{}) map[string]interface{} {
+	normalized := make(map[string]interface{}, len(args)*2)
+	for k, v := range args {
+		// Keep the original key
+		normalized[k] = v
+		// Also add the hyphenated version if it uses underscores
+		hyphenKey := strings.ReplaceAll(k, "_", "-")
+		if hyphenKey != k {
+			normalized[hyphenKey] = v
+		}
+	}
+	return normalized
 }

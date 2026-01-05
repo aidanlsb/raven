@@ -9,10 +9,11 @@ import (
 	"path/filepath"
 	"time"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
-	_ "modernc.org/sqlite"
 )
 
 // Database is the SQLite database handle.

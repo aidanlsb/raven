@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 var migrateCmd = &cobra.Command{
@@ -41,7 +42,7 @@ Run with --dry-run first to preview changes.`,
 
 		if dryRun {
 			fmt.Println("=== DRY RUN - No changes will be made ===")
-		fmt.Println()
+			fmt.Println()
 		}
 
 		var changesMade bool

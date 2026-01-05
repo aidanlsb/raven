@@ -41,8 +41,8 @@ const (
 	FlagTypeString      FlagType = "string"
 	FlagTypeBool        FlagType = "bool"
 	FlagTypeInt         FlagType = "int"
-	FlagTypeKeyValue    FlagType = "key=value"    // For --field name=value
-	FlagTypeStringSlice FlagType = "stringSlice"  // For repeatable string flags
+	FlagTypeKeyValue    FlagType = "key=value"   // For --field name=value
+	FlagTypeStringSlice FlagType = "stringSlice" // For repeatable string flags
 )
 
 // Registry holds all registered commands.

@@ -3,8 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/mcp"
 )
 
 var serveCmd = &cobra.Command{

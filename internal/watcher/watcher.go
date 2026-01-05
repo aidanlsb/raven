@@ -12,10 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/fsnotify/fsnotify"
 )
 
 // Watcher monitors a vault directory for changes and automatically reindexes files.
