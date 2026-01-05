@@ -213,3 +213,164 @@ func TestQueryTraitsWithFilterExpressions(t *testing.T) {
 		}
 	})
 }
+
+func TestBacklinks(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test objects
+	_, err = db.db.Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields)
+		VALUES 
+			('people/freya', 'people/freya.md', 'person', 1, '{}'),
+			('daily/2025-02-01', 'daily/2025-02-01.md', 'date', 1, '{}'),
+			('projects/bifrost', 'projects/bifrost.md', 'project', 1, '{}')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test objects: %v", err)
+	}
+
+	// Insert test refs
+	_, err = db.db.Exec(`
+		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number)
+		VALUES 
+			('daily/2025-02-01', 'people/freya', '[[people/freya]]', 'daily/2025-02-01.md', 5),
+			('projects/bifrost', 'people/freya', '[[freya]]', 'projects/bifrost.md', 10)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test refs: %v", err)
+	}
+
+	t.Run("find backlinks to person", func(t *testing.T) {
+		results, err := db.Backlinks("people/freya")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("expected 2 backlinks, got %d", len(results))
+		}
+	})
+
+	t.Run("no backlinks", func(t *testing.T) {
+		results, err := db.Backlinks("projects/bifrost")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0 backlinks, got %d", len(results))
+		}
+	})
+}
+
+func TestGetObject(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test object
+	_, err = db.db.Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields)
+		VALUES ('people/freya', 'people/freya.md', 'person', 1, '{"name": "Freya"}')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test object: %v", err)
+	}
+
+	t.Run("find existing object", func(t *testing.T) {
+		obj, err := db.GetObject("people/freya")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if obj == nil {
+			t.Fatal("expected object, got nil")
+		}
+		if obj.Type != "person" {
+			t.Errorf("expected type 'person', got '%s'", obj.Type)
+		}
+	})
+
+	t.Run("object not found", func(t *testing.T) {
+		obj, err := db.GetObject("people/nonexistent")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if obj != nil {
+			t.Errorf("expected nil for nonexistent object, got %v", obj)
+		}
+	})
+}
+
+func TestUntypedPages(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test objects
+	_, err = db.db.Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields)
+		VALUES 
+			('notes/random', 'notes/random.md', 'page', 1, '{}'),
+			('people/freya', 'people/freya.md', 'person', 1, '{}'),
+			('notes/another', 'notes/another.md', 'page', 1, '{}')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test objects: %v", err)
+	}
+
+	t.Run("find untyped pages", func(t *testing.T) {
+		results, err := db.UntypedPages()
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("expected 2 untyped pages, got %d", len(results))
+		}
+	})
+}
+
+func TestQueryObjects(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test objects
+	_, err = db.db.Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields)
+		VALUES 
+			('people/freya', 'people/freya.md', 'person', 1, '{"name": "Freya"}'),
+			('people/thor', 'people/thor.md', 'person', 1, '{"name": "Thor"}'),
+			('projects/bifrost', 'projects/bifrost.md', 'project', 1, '{}')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test objects: %v", err)
+	}
+
+	t.Run("query by type", func(t *testing.T) {
+		results, err := db.QueryObjects("person")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("expected 2 person objects, got %d", len(results))
+		}
+	})
+
+	t.Run("query non-existent type", func(t *testing.T) {
+		results, err := db.QueryObjects("company")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0 results, got %d", len(results))
+		}
+	})
+}
