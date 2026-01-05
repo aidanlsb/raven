@@ -257,22 +257,12 @@ rvn new project "Bifrost Rebuild"  # → projects/bifrost-rebuild.md
 
 ### Traits
 
-Traits are **single-valued annotations** on content. They appear inline:
+Traits are **single-valued annotations** in content using `@trait` or `@trait(value)` syntax:
 
 ```markdown
 - @due(2025-02-03) Send the proposal
 - @priority(high) Review security audit
 - @highlight This insight changed everything
-```
-
-Or in frontmatter (for types that declare them):
-
-```markdown
----
-type: project
-due: 2025-06-30
-priority: high
----
 ```
 
 **Query traits:**
@@ -284,7 +274,7 @@ rvn query "trait:priority value:high"  # High priority items
 rvn query "trait:highlight"            # All highlights
 ```
 
-**"Tasks" are emergent**: Raven doesn't have a built-in task type. Anything with `@due` or `@status` is effectively a task. Define what "tasks" means in your workflow using saved queries.
+**Concepts emerge from traits**: For example, Raven doesn't have built-in "tasks"—but you might define tasks as anything with `@due`, or items marked `@status(todo)`. Saved queries let you codify these patterns for your workflow.
 
 ### References
 

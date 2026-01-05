@@ -268,7 +268,7 @@ func (d *Database) initialize() error {
 
 // IndexDocument indexes a parsed document (replaces existing data for the file).
 // IndexDocument indexes a parsed document into the database.
-// The schema is needed to determine which frontmatter fields are traits.
+// The schema is needed to validate field types and trait definitions.
 // Deprecated: Use IndexDocumentWithMtime for proper staleness tracking.
 func (d *Database) IndexDocument(doc *parser.ParsedDocument, sch *schema.Schema) error {
 	return d.IndexDocumentWithMtime(doc, sch, 0)

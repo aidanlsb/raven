@@ -200,18 +200,18 @@ trait:priority value:high
 
 ### Source
 
-Filter by where the trait appears. If omitted, both sources are included.
+Filter by line position. Traits always appear inline in content (not frontmatter).
 
 | Predicate | Meaning |
 |-----------|---------|
-| `source:inline` | Only inline traits (`@trait(value)` in content) |
-| `source:frontmatter` | Only frontmatter traits (in YAML header) |
+| `source:inline` | Traits appearing after line 1 |
 
 **Examples:**
 ```
 trait:due source:inline
-trait:due value:past source:frontmatter
 ```
+
+> **Note:** All traits are inline (`@trait(value)` syntax in content). Frontmatter contains type-specific fields, not traits.
 
 ### Object Association (Direct) (`on:`)
 
@@ -406,7 +406,7 @@ object:meeting parent:date
 # Meetings anywhere within daily notes (any depth)
 object:meeting ancestor:date
 
-# All overdue items (frontmatter + inline)
+# All overdue items
 trait:due value:past
 
 # Overdue items directly on active projects
@@ -443,7 +443,7 @@ object:meeting !refs:[[projects/website]]
 
 1. **No cross-type unions**: A query returns one type. Use separate queries and combine results if needed.
 2. **Direct vs ancestor**: Separate predicates for direct parent (`parent:`, `on:`) vs any ancestor (`ancestor:`, `within:`).
-3. **Trait sources unified**: `trait:due` returns both frontmatter and inline traits.
+3. **Traits are inline-only**: `trait:due` returns all inline `@due` annotations in content.
 4. **Explicit predicates**: No shorthand value syntax (`=past`), use `value:past` for clarity.
 5. **Dot prefix for fields**: `.status:active` distinguishes fields from keywords, avoiding collisions.
 6. **Curly braces for sub-queries**: `has:{trait:due}` vs parentheses `()` for boolean grouping.
