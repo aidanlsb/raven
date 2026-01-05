@@ -22,6 +22,8 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 10. [Future Enhancements](#future-enhancements)
 11. [Design Decisions](#design-decisions)
 12. [Technical Notes](#technical-notes)
+13. [MCP Server](#mcp-server-agent-integration)
+14. [LSP Server](#lsp-server-editor-integration)
 
 ---
 
@@ -161,7 +163,7 @@ All headings form a tree based on heading levels. Every heading becomes an objec
 - Explicit types (`::type()`) take precedence over auto-created sections
 - The `::type()` must appear on the line immediately after the heading
 
-**Nesting limit**: Standard markdown heading depth (H1-H6). The `rvn check` command validates nesting doesn't exceed limits.
+**Nesting limit**: Standard markdown heading depth (H1-H6). Deeper nesting is not supported.
 
 **Parent Resolution for Traits/Refs**: Traits and references are assigned to the object (section or explicit type) that contains them based on line numbers.
 
@@ -867,10 +869,15 @@ internal/
     ├── set.go               # rvn set
     ├── read.go              # rvn read
     ├── edit.go              # rvn edit
+    ├── move.go              # rvn move
     ├── search.go            # rvn search
     ├── delete.go            # rvn delete
+    ├── path.go              # rvn path (print vault path)
+    ├── vaults.go            # rvn vaults (list configured vaults)
     ├── schema.go            # rvn schema (introspection)
-    ├── schema_edit.go       # rvn schema add (modification)
+    ├── schema_edit.go       # rvn schema add/update/remove
+    ├── lsp.go               # rvn lsp (LSP server mode)
+    ├── watch.go             # rvn watch (file watching)
     └── serve.go             # rvn serve (MCP server)
 ```
 
@@ -906,6 +913,8 @@ CREATE TABLE objects (
     line_start INTEGER NOT NULL,      -- Line number where object starts
     line_end INTEGER,                 -- Line number where object ends (embedded only)
     parent_id TEXT,                   -- Parent object ID (for nested embedded)
+    file_mtime INTEGER,               -- File modification time (for staleness detection)
+    indexed_at INTEGER,               -- When this object was indexed
     created_at INTEGER,
     updated_at INTEGER
 );
@@ -986,9 +995,12 @@ rvn init <path>
 rvn check
 rvn check --strict              # Treat warnings as errors
 rvn check --create-missing      # Interactively create missing referenced pages
+rvn check --by-file             # Group issues by file path
 
 # Reindex all files
 rvn reindex
+rvn reindex --smart             # Only reindex changed files
+rvn reindex --smart --dry-run   # Show what would be reindexed
 
 # Query objects
 rvn query "object:person"                 # All people
@@ -1046,6 +1058,16 @@ rvn add "Idea" --to inbox.md      # Override destination
 # Edit existing content
 rvn edit "daily/2026-01-02.md" "old text" "new text" --confirm
 
+# Move or rename files (with reference updates)
+rvn move people/loki people/loki-archived
+rvn move drafts/note.md projects/website/note.md --update-refs
+
+# Delete objects (moves to .trash/ by default)
+rvn delete people/loki
+
+# Read raw file content
+rvn read people/freya
+
 # Full-text search
 rvn search "meeting notes"
 rvn search "api" --type project
@@ -1055,6 +1077,9 @@ rvn watch
 
 # Start MCP server for AI agents
 rvn serve --vault-path /path/to/vault
+
+# Start LSP server for editor integration
+rvn lsp --vault-path /path/to/vault
 ```
 
 ### Date Filters
@@ -1305,6 +1330,50 @@ rvn edit "daily/2026-01-02.md" "- old task" "" --confirm
 }
 ```
 
+### The `rvn move` Command
+
+Move or rename files within the vault with automatic reference updates:
+
+```bash
+rvn move <source> <destination> [--update-refs] [--force]
+```
+
+**Examples**:
+```bash
+# Rename a file
+rvn move people/loki people/loki-archived
+
+# Move to a different directory
+rvn move inbox/task.md projects/website/task.md
+
+# Move with reference updates (default behavior)
+rvn move drafts/person.md people/freya.md --update-refs
+```
+
+**Behavior**:
+- Both source and destination must be within the vault (security constraint)
+- By default, updates all references to the moved file (`--update-refs` defaults to true)
+- Warns if moving to a type's default directory with mismatched type
+- Creates destination directories if needed
+- Reindexes affected files after move
+
+**Flags**:
+- `--update-refs`: Update all references to the moved file (default: true)
+- `--force`: Skip confirmation prompts
+- `--skip-type-check`: Skip type-directory mismatch warning
+
+**JSON output**:
+```json
+{
+  "ok": true,
+  "data": {
+    "source": "people/loki.md",
+    "destination": "people/loki-archived.md",
+    "refs_updated": 5
+  }
+}
+```
+
 ### The `rvn search` Command
 
 Full-text search across vault content:
@@ -1427,30 +1496,63 @@ The check command validates the entire vault and surfaces errors and warnings:
 **Errors** (must fix):
 - Type not defined in `schema.yaml`
 - Required field missing
-- Field value doesn't match schema type
+- Field value doesn't match schema type (including date/datetime format)
 - Enum value not in allowed list
 - Number outside min/max bounds
 - Reference to non-existent object
+- Wrong target type for `ref` fields (e.g., `lead: ref, target: person` pointing to a `project`)
 - Embedded object missing `id` field
 - Duplicate object IDs
 - Ambiguous short reference (multiple matches)
+- Unknown frontmatter key for type
+- Missing target type in schema (ref field references non-existent type)
 
 **Warnings** (informational):
 - Undefined trait (not in schema, will be skipped)
-- Orphan files (not referenced by anything)
-- Heading nesting approaching limit
+- Stale index (files modified since last reindex)
+- Unused types in schema (defined but never used)
+- Unused traits in schema (defined but never used)
+- Self-referential required fields (impossible to create first instance)
+- Short refs that could be full paths (for clarity)
+
+**Flags**:
+- `--strict`: Treat warnings as errors (exit code 1 if any warnings)
+- `--create-missing`: Interactively create missing referenced pages and undefined traits
+- `--by-file`: Group issues by file path for better readability
+- `--json`: Output structured JSON for programmatic use
 
 **Output**:
 ```bash
 $ rvn check
-Checking 847 files...
+Checking vault: /path/to/vault
+WARN:  Index may be stale (3 file(s) modified since last reindex)
+       Run 'rvn reindex' to update the index.
 
-ERROR: daily/2025-02-01.md:15 - Missing required field 'id' in embedded type 'meeting'
-ERROR: projects/bifrost.md:8 - Reference [[freya]] is ambiguous (matches: people/freya, clients/freya)
-WARN:  notes/random.md:23 - Undefined trait '@custom' will be skipped
-WARN:  books/old-book.md - No incoming references (orphan)
+ERROR:  daily/2025-02-01.md:15 - Missing required field 'id' in embedded type 'meeting'
+ERROR:  projects/bifrost.md:8 - Reference [[freya]] is ambiguous (matches: people/freya, clients/freya)
+ERROR:  projects/mobile.md:5 - Field 'lead' expects type 'person', but [[projects/website]] is type 'project'
+WARN:   notes/random.md:23 - Undefined trait '@custom'
+WARN:   [schema] Type 'vendor' is defined in schema but never used
+WARN:   [schema] Trait '@archived' is defined in schema but never used
 
-Found 2 errors, 2 warnings in 847 files.
+Found 3 error(s), 4 warning(s) in 847 files.
+```
+
+**Grouped output** (`--by-file`):
+```bash
+$ rvn check --by-file
+Checking vault: /path/to/vault
+
+schema.yaml:
+  WARN: Type 'vendor' is defined in schema but never used
+
+daily/2025-02-01.md (1 errors):
+  Line 15: ERROR - Missing required field 'id' in embedded type 'meeting'
+
+projects/bifrost.md (1 errors):
+  Line 8: ERROR - Reference [[freya]] is ambiguous
+
+Found 2 error(s), 1 warning(s) in 847 files.
 ```
 
 **Create missing references** (`--create-missing`):
@@ -1597,6 +1699,7 @@ rvn --config /path/to/config.toml <command>
     - `rvn add` (quick capture)
     - `rvn set` (update frontmatter fields)
     - `rvn delete` (delete object, moves to trash)
+    - `rvn move` (move/rename with reference updates)
     - `rvn read` (read raw file content)
     - `rvn edit` (surgical text replacement)
     - `rvn search` (full-text search)
@@ -1608,43 +1711,44 @@ rvn --config /path/to/config.toml <command>
     - `rvn schema remove type/trait/field` (remove from schema)
     - `rvn schema validate` (validate schema)
     - `rvn serve` (MCP server for AI agents)
+    - `rvn lsp` (LSP server for editor integration)
+    - `rvn watch` (file watcher with auto-reindex)
 
-### Phase 2: Enhanced Querying
+### Phase 2: Enhanced Querying ✅
 
-1. **Query Language**
-   - Parse query strings like `type:meeting attendees:[[freya]]`
+1. **Query Language** ✅
+   - Parse query strings like `object:meeting .attendees:[[freya]]`
    - Support field filters with JSON extraction
-   - Support date ranges (`due:this-week`)
-   - Support parent filters (`parent.type:meeting`)
+   - Support date ranges (`trait:due value:this-week`)
+   - Support parent filters and nested queries
 
-2. **Full-Text Search**
-   - Add FTS5 virtual table
-   - Index content for text search
-   - Combine with structured queries
+2. **Full-Text Search** ✅
+   - FTS5 virtual table with BM25 ranking
+   - Index content for text search via `rvn search`
+   - Supports phrases, prefix matching, and boolean operators
 
-3. **Output Formatting**
-   - JSON output for scripting
-   - Table format for humans
-   - Customizable fields to display
+3. **Output Formatting** ✅
+   - JSON output for scripting (`--json`)
+   - Human-readable table format (default)
 
-### Phase 3: File Watching & Live Index
+### Phase 3: File Watching & Live Index ✅
 
-1. **File Watcher**
-   - Use `fsnotify` package to watch vault directory
+1. **File Watcher** ✅
+   - Uses `fsnotify` package to watch vault directory
    - Debounce rapid changes
    - Incremental reindex on file change
 
-2. **Background Service**
+2. **Background Service** ✅
    - `rvn watch` runs in background
    - Keeps index always up-to-date
 
 ### Phase 4: Refactoring Tools
 
-1. **Reference Updates**
+1. **Reference Updates** ✅
    - When an object is renamed/moved, update all references
-   - `rvn mv <old-path> <new-path>` command
+   - `rvn move <old-path> <new-path>` command (implemented)
 
-2. **Note Promotion**
+2. **Note Promotion** (future)
    - Move embedded object to standalone file
    - `rvn promote <object-id> --to <new-path>`
    - Update references automatically
@@ -2034,6 +2138,7 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_read` | Read raw file content | `path` |
 | `raven_add` | Append to existing file or daily note | `text`, optional `to` |
 | `raven_delete` | Delete object (trash by default) | `object_id` |
+| `raven_move` | Move or rename object (updates references) | `source`, `destination`, optional `update-refs`, `force` |
 | `raven_edit` | Surgical text replacement | `path`, `old_str`, `new_str`, optional `confirm` |
 | `raven_search` | Full-text search | `query`, optional `type`, `limit` |
 | `raven_query` | Query objects/traits or run saved query | `query_string` (ad-hoc) or `query_name` (saved) |
@@ -2041,6 +2146,8 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_query_remove` | Remove saved query | `name` |
 | `raven_backlinks` | Find references to object | `target` |
 | `raven_date` | Get activity for date | `date` |
+| `raven_check` | Validate vault against schema | optional `refresh` (reindex stale files first) |
+| `raven_reindex` | Rebuild the index | optional `smart` (only changed files) |
 | `raven_stats` | Vault statistics | (none) |
 | `raven_schema` | Introspect schema | optional `subcommand` |
 | `raven_schema_add_type` | Add type to schema | `name`, optional `default_path` |
@@ -2092,6 +2199,48 @@ Errors use structured codes for programmatic handling:
 4. **Read-Only by Default**: `add` only appends to existing files; use `new` for creation
 5. **Vault Scoped**: All operations are restricted to the configured vault
 6. **Auto-Generated Tools**: MCP tools are generated from the command registry, ensuring CLI and MCP are always in sync
+
+---
+
+## LSP Server (Editor Integration)
+
+Raven provides a Language Server Protocol (LSP) server for rich editor integration in IDEs like VS Code, Neovim, and Emacs.
+
+### Starting the Server
+
+```bash
+rvn lsp --vault-path /path/to/vault
+rvn lsp --debug  # With debug logging to stderr
+```
+
+The server communicates via JSON-RPC over stdin/stdout (standard LSP transport).
+
+### Supported Features
+
+| Feature | Description |
+|---------|-------------|
+| **Completion** | Autocomplete for `[[references]]` and `@traits` |
+| **Go to Definition** | Jump to referenced files and objects |
+| **Hover** | Show object type and frontmatter fields on hover |
+| **Diagnostics** | Real-time validation errors and warnings |
+
+### Editor Configuration
+
+**VS Code** (add to `.vscode/settings.json`):
+```json
+{
+  "raven.serverPath": "/path/to/rvn",
+  "raven.vaultPath": "/path/to/vault"
+}
+```
+
+**Neovim** (with nvim-lspconfig):
+```lua
+require('lspconfig').raven.setup({
+  cmd = { 'rvn', 'lsp', '--vault-path', '/path/to/vault' },
+  filetypes = { 'markdown' },
+})
+```
 
 ---
 

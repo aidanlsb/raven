@@ -2,13 +2,13 @@
 
 ## FUNDAMENTAL PRINCIPLE: Plain Text is the Source of Truth
 
-**Raven is a plain-text-first system. The user's markdown files and `schema.yaml` are the ONLY source of truth.**
+**Raven is a plain-text-first system. The user's markdown files, `schema.yaml`, and `raven.yaml` are the ONLY source of truth for a vault.**
 
 The SQLite database (`.raven/index.sqlite`) is a **derived, disposable cache**:
 
 - It can be deleted at any time without data loss
 - It is fully recreated by `rvn reindex` from the markdown files
-- It should NEVER contain data that doesn't exist in the text files
+- It should NEVER contain data that doesn't exist in the text files, outside of conveniences
 - It exists solely for fast querying—not for storage
 
 **This means:**
@@ -252,6 +252,37 @@ When fixing a bug:
 2. [ ] If spec is unclear, clarify it first
 3. [ ] Fix code to match spec
 4. [ ] Add regression test
+
+---
+
+## Documentation Sync (After Code Changes)
+
+**After making code changes, always check if documentation needs updating.**
+
+### File-to-Doc Mapping
+
+| When you modify... | Update... |
+|-------------------|-----------|
+| `internal/cli/*.go` (new/modified commands) | `docs/SPECIFICATION.md` (CLI Interface section) |
+| `internal/commands/registry.go` | `docs/SPECIFICATION.md` (MCP Tools table) |
+| `internal/check/validator.go` (new validations) | `docs/SPECIFICATION.md` (`rvn check` section) |
+| `internal/index/database.go` (schema changes) | `docs/SPECIFICATION.md` (Database Schema section) |
+| `internal/query/*.go` (query syntax) | `docs/QUERY_LOGIC.md` |
+| User-facing behavior changes | `README.md` |
+
+### Quick Checklist
+
+After completing code changes, ask:
+
+1. **Does this change user-facing behavior?** → Update SPECIFICATION.md
+2. **Did I add/modify a CLI command?** → Update command examples and flags
+3. **Did I add/modify validation in `rvn check`?** → Update error/warning lists
+4. **Did I add a new MCP tool?** → Update MCP Tools table
+5. **Is the feature mentioned in Implementation Phases?** → Mark as complete if done
+
+### Verification
+
+Run `rvn --help` and compare documented commands against actual behavior. Check that documented flags match implementation.
 
 ---
 

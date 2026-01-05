@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -21,6 +22,7 @@ import (
 var (
 	checkStrict        bool
 	checkCreateMissing bool
+	checkByFile        bool
 )
 
 // CheckIssueJSON represents an issue in JSON output
@@ -74,16 +76,54 @@ var checkCmd = &cobra.Command{
 
 		var errorCount, warningCount, fileCount int
 		var allDocs []*parser.ParsedDocument
-		var allObjectIDs []string
+		var allObjectInfos []check.ObjectInfo
 		var allIssues []check.Issue
 		var parseErrors []check.Issue
+		var schemaIssues []check.SchemaIssue
 
-		// First pass: parse all documents and collect object IDs
+		// Check for stale index first
+		staleWarningShown := false
+		db, err := index.Open(vaultPath)
+		if err == nil {
+			defer db.Close()
+			stalenessInfo, err := db.CheckStaleness(vaultPath)
+			if err == nil && stalenessInfo.IsStale {
+				staleCount := len(stalenessInfo.StaleFiles)
+				if !jsonOutput {
+					fmt.Printf("WARN:  Index may be stale (%d file(s) modified since last reindex)\n", staleCount)
+					if staleCount <= 5 {
+						for _, f := range stalenessInfo.StaleFiles {
+							fmt.Printf("       - %s\n", f)
+						}
+					} else {
+						for i := 0; i < 3; i++ {
+							fmt.Printf("       - %s\n", stalenessInfo.StaleFiles[i])
+						}
+						fmt.Printf("       ... and %d more\n", staleCount-3)
+					}
+					fmt.Printf("       Run 'rvn reindex' to update the index.\n\n")
+				}
+				// Add to issues for JSON output
+				allIssues = append(allIssues, check.Issue{
+					Level:      check.LevelWarning,
+					Type:       check.IssueStaleIndex,
+					FilePath:   "",
+					Line:       0,
+					Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
+					FixCommand: "rvn reindex",
+					FixHint:    "Run 'rvn reindex' to update the index",
+				})
+				warningCount++
+				staleWarningShown = true
+			}
+		}
+
+		// First pass: parse all documents and collect object IDs with types
 		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 			fileCount++
 
 			if result.Error != nil {
-				if !jsonOutput {
+				if !jsonOutput && !checkByFile {
 					fmt.Printf("ERROR: %s - %v\n", result.RelativePath, result.Error)
 				}
 				parseErrors = append(parseErrors, check.Issue{
@@ -100,7 +140,10 @@ var checkCmd = &cobra.Command{
 
 			allDocs = append(allDocs, result.Document)
 			for _, obj := range result.Document.Objects {
-				allObjectIDs = append(allObjectIDs, obj.ID)
+				allObjectInfos = append(allObjectInfos, check.ObjectInfo{
+					ID:   obj.ID,
+					Type: obj.ObjectType,
+				})
 			}
 
 			return nil
@@ -110,8 +153,8 @@ var checkCmd = &cobra.Command{
 			return fmt.Errorf("error walking vault: %w", err)
 		}
 
-		// Second pass: validate with full context
-		validator := check.NewValidator(s, allObjectIDs)
+		// Second pass: validate with full context (including type information)
+		validator := check.NewValidatorWithTypes(s, allObjectInfos)
 
 		for _, doc := range allDocs {
 			issues := validator.ValidateDocument(doc)
@@ -125,7 +168,7 @@ var checkCmd = &cobra.Command{
 					errorCount++
 				}
 
-				if !jsonOutput {
+				if !jsonOutput && !checkByFile {
 					prefix := "ERROR"
 					if issue.Level == check.LevelWarning {
 						prefix = "WARN"
@@ -138,11 +181,38 @@ var checkCmd = &cobra.Command{
 		// Add parse errors to all issues
 		allIssues = append(parseErrors, allIssues...)
 
+		// Run schema integrity checks
+		schemaIssues = validator.ValidateSchema()
+		for _, issue := range schemaIssues {
+			if issue.Level == check.LevelWarning {
+				warningCount++
+			} else {
+				errorCount++
+			}
+
+			if !jsonOutput && !checkByFile {
+				prefix := "ERROR"
+				if issue.Level == check.LevelWarning {
+					prefix = "WARN"
+				}
+				fmt.Printf("%s:  [schema] %s\n", prefix, issue.Message)
+			}
+		}
+
 		// JSON output mode
 		if jsonOutput {
-			result := buildCheckJSON(vaultPath, fileCount, errorCount, warningCount, allIssues)
+			result := buildCheckJSON(vaultPath, fileCount, errorCount, warningCount, allIssues, schemaIssues)
 			out, _ := json.MarshalIndent(result, "", "  ")
 			fmt.Println(string(out))
+		} else if checkByFile {
+			// Group issues by file
+			printIssuesByFile(allIssues, schemaIssues, staleWarningShown)
+			fmt.Println()
+			if errorCount == 0 && warningCount == 0 {
+				fmt.Printf("✓ No issues found in %d files.\n", fileCount)
+			} else {
+				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
+			}
 		} else {
 			fmt.Println()
 			if errorCount == 0 && warningCount == 0 {
@@ -179,14 +249,101 @@ var checkCmd = &cobra.Command{
 	},
 }
 
+// printIssuesByFile groups and prints issues by file path
+func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, staleWarningShown bool) {
+	// Group issues by file
+	issuesByFile := make(map[string][]check.Issue)
+	var globalIssues []check.Issue
+
+	for _, issue := range issues {
+		if issue.FilePath == "" {
+			globalIssues = append(globalIssues, issue)
+		} else {
+			issuesByFile[issue.FilePath] = append(issuesByFile[issue.FilePath], issue)
+		}
+	}
+
+	// Print global issues first (like stale index)
+	if len(globalIssues) > 0 && !staleWarningShown {
+		for _, issue := range globalIssues {
+			prefix := "ERROR"
+			if issue.Level == check.LevelWarning {
+				prefix = "WARN"
+			}
+			fmt.Printf("%s:  %s\n", prefix, issue.Message)
+		}
+		fmt.Println()
+	}
+
+	// Print schema issues
+	if len(schemaIssues) > 0 {
+		fmt.Println("schema.yaml:")
+		for _, issue := range schemaIssues {
+			prefix := "ERROR"
+			if issue.Level == check.LevelWarning {
+				prefix = "WARN"
+			}
+			fmt.Printf("  %s: %s\n", prefix, issue.Message)
+		}
+		fmt.Println()
+	}
+
+	// Get sorted file paths
+	var filePaths []string
+	for fp := range issuesByFile {
+		filePaths = append(filePaths, fp)
+	}
+	sort.Strings(filePaths)
+
+	// Print issues for each file
+	for _, filePath := range filePaths {
+		fileIssues := issuesByFile[filePath]
+
+		// Count errors and warnings for this file
+		var errCount, warnCount int
+		for _, issue := range fileIssues {
+			if issue.Level == check.LevelWarning {
+				warnCount++
+			} else {
+				errCount++
+			}
+		}
+
+		// Print file header
+		fmt.Printf("%s", filePath)
+		if errCount > 0 && warnCount > 0 {
+			fmt.Printf(" (%d errors, %d warnings):\n", errCount, warnCount)
+		} else if errCount > 0 {
+			fmt.Printf(" (%d errors):\n", errCount)
+		} else {
+			fmt.Printf(" (%d warnings):\n", warnCount)
+		}
+
+		// Sort issues by line number
+		sort.Slice(fileIssues, func(i, j int) bool {
+			return fileIssues[i].Line < fileIssues[j].Line
+		})
+
+		// Print each issue
+		for _, issue := range fileIssues {
+			prefix := "ERROR"
+			if issue.Level == check.LevelWarning {
+				prefix = "WARN"
+			}
+			fmt.Printf("  Line %d: %s - %s\n", issue.Line, prefix, issue.Message)
+		}
+		fmt.Println()
+	}
+}
+
 // buildCheckJSON creates the structured JSON output for check command
-func buildCheckJSON(vaultPath string, fileCount, errorCount, warnCount int, issues []check.Issue) CheckResultJSON {
+func buildCheckJSON(vaultPath string, fileCount, errorCount, warnCount int, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
 	result := CheckResultJSON{
 		VaultPath:  vaultPath,
 		FileCount:  fileCount,
 		ErrorCount: errorCount,
 		WarnCount:  warnCount,
-		Issues:     make([]CheckIssueJSON, 0, len(issues)),
+		Issues:     make([]CheckIssueJSON, 0, len(issues)+len(schemaIssues)),
 	}
 
 	// Convert issues to JSON format
@@ -196,6 +353,20 @@ func buildCheckJSON(vaultPath string, fileCount, errorCount, warnCount int, issu
 			Level:      issue.Level.String(),
 			FilePath:   issue.FilePath,
 			Line:       issue.Line,
+			Message:    issue.Message,
+			Value:      issue.Value,
+			FixCommand: issue.FixCommand,
+			FixHint:    issue.FixHint,
+		})
+	}
+
+	// Convert schema issues to JSON format
+	for _, issue := range schemaIssues {
+		result.Issues = append(result.Issues, CheckIssueJSON{
+			Type:       string(issue.Type),
+			Level:      issue.Level.String(),
+			FilePath:   "schema.yaml",
+			Line:       0,
 			Message:    issue.Message,
 			Value:      issue.Value,
 			FixCommand: issue.FixCommand,
@@ -493,11 +664,11 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 
 	validTypes := map[string]bool{
 		"boolean": true, "bool": true,
-		"string": true,
-		"date": true,
+		"string":   true,
+		"date":     true,
 		"datetime": true,
-		"enum": true,
-		"ref": true,
+		"enum":     true,
+		"ref":      true,
 	}
 
 	// Normalize bool -> boolean
@@ -692,5 +863,6 @@ func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName 
 func init() {
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
 	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Interactively create missing referenced pages")
+	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
 	rootCmd.AddCommand(checkCmd)
 }
