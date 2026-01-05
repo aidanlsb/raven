@@ -213,9 +213,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 		}
 	})
 
-	// Note: Date format validation may not be implemented in the validator yet
-	// This test documents expected behavior for future implementation
-	t.Run("invalid date trait (validation not yet implemented)", func(t *testing.T) {
+	t.Run("invalid date trait", func(t *testing.T) {
 		badValue := schema.String("not-a-date")
 		doc := &parser.ParsedDocument{
 			FilePath: "notes/test.md",
@@ -235,9 +233,17 @@ func TestValidatorTraitValidation(t *testing.T) {
 			},
 		}
 
-		// Just verify it doesn't panic
 		issues := v.ValidateDocument(doc)
-		_ = issues // Date validation not yet implemented
+		hasDateError := false
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidDateFormat {
+				hasDateError = true
+				break
+			}
+		}
+		if !hasDateError {
+			t.Errorf("Expected invalid date format error, got: %v", issues)
+		}
 	})
 
 	t.Run("invalid enum trait", func(t *testing.T) {
@@ -304,6 +310,292 @@ func TestInferConfidence(t *testing.T) {
 	t.Run("unknown string", func(t *testing.T) {
 		if ConfidenceUnknown.String() != "unknown" {
 			t.Errorf("ConfidenceUnknown.String() = %q, want %q", ConfidenceUnknown.String(), "unknown")
+		}
+	})
+}
+
+func TestValidatorTargetTypeValidation(t *testing.T) {
+	s := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"lead": {
+						Type:   schema.FieldTypeRef,
+						Target: "person",
+					},
+				},
+			},
+			"person": {
+				DefaultPath: "people/",
+				Fields: map[string]*schema.FieldDefinition{
+					"name": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{},
+	}
+
+	objectInfos := []ObjectInfo{
+		{ID: "people/freya", Type: "person"},
+		{ID: "projects/website", Type: "project"},
+	}
+	v := NewValidatorWithTypes(s, objectInfos)
+
+	t.Run("correct target type", func(t *testing.T) {
+		doc := &parser.ParsedDocument{
+			FilePath: "projects/website.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "projects/website",
+					ObjectType: "project",
+					Fields: map[string]schema.FieldValue{
+						"lead": schema.String("people/freya"),
+					},
+				},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueWrongTargetType {
+				t.Errorf("Should not have wrong target type error for valid ref: %v", issue)
+			}
+		}
+	})
+
+	t.Run("wrong target type", func(t *testing.T) {
+		doc := &parser.ParsedDocument{
+			FilePath: "projects/mobile.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "projects/mobile",
+					ObjectType: "project",
+					Fields: map[string]schema.FieldValue{
+						"lead": schema.String("projects/website"), // Wrong - should be person
+					},
+				},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		hasWrongTypeError := false
+		for _, issue := range issues {
+			if issue.Type == IssueWrongTargetType {
+				hasWrongTypeError = true
+				break
+			}
+		}
+		if !hasWrongTypeError {
+			t.Errorf("Expected wrong target type error, got: %v", issues)
+		}
+	})
+}
+
+func TestValidatorSchemaIntegrity(t *testing.T) {
+	t.Run("unused type", func(t *testing.T) {
+		s := &schema.Schema{
+			Types: map[string]*schema.TypeDefinition{
+				"person":  {Fields: map[string]*schema.FieldDefinition{}},
+				"meeting": {Fields: map[string]*schema.FieldDefinition{}}, // Never used
+			},
+			Traits: map[string]*schema.TraitDefinition{},
+		}
+
+		objectInfos := []ObjectInfo{
+			{ID: "people/freya", Type: "person"},
+		}
+		v := NewValidatorWithTypes(s, objectInfos)
+
+		// Validate a document to populate usedTypes
+		doc := &parser.ParsedDocument{
+			FilePath: "people/freya.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "people/freya", ObjectType: "person"},
+			},
+		}
+		v.ValidateDocument(doc)
+
+		schemaIssues := v.ValidateSchema()
+		hasUnusedType := false
+		for _, issue := range schemaIssues {
+			if issue.Type == IssueUnusedType && issue.Value == "meeting" {
+				hasUnusedType = true
+				break
+			}
+		}
+		if !hasUnusedType {
+			t.Errorf("Expected unused type warning for 'meeting', got: %v", schemaIssues)
+		}
+	})
+
+	t.Run("missing target type", func(t *testing.T) {
+		s := &schema.Schema{
+			Types: map[string]*schema.TypeDefinition{
+				"project": {
+					Fields: map[string]*schema.FieldDefinition{
+						"owner": {
+							Type:   schema.FieldTypeRef,
+							Target: "nonexistent", // Type doesn't exist
+						},
+					},
+				},
+			},
+			Traits: map[string]*schema.TraitDefinition{},
+		}
+
+		v := NewValidatorWithTypes(s, []ObjectInfo{})
+		schemaIssues := v.ValidateSchema()
+
+		hasMissingTarget := false
+		for _, issue := range schemaIssues {
+			if issue.Type == IssueMissingTargetType {
+				hasMissingTarget = true
+				break
+			}
+		}
+		if !hasMissingTarget {
+			t.Errorf("Expected missing target type error, got: %v", schemaIssues)
+		}
+	})
+
+	t.Run("self-referential required field", func(t *testing.T) {
+		s := &schema.Schema{
+			Types: map[string]*schema.TypeDefinition{
+				"person": {
+					Fields: map[string]*schema.FieldDefinition{
+						"manager": {
+							Type:     schema.FieldTypeRef,
+							Target:   "person",
+							Required: true, // Can't create first person!
+						},
+					},
+				},
+			},
+			Traits: map[string]*schema.TraitDefinition{},
+		}
+
+		v := NewValidatorWithTypes(s, []ObjectInfo{})
+		schemaIssues := v.ValidateSchema()
+
+		hasSelfRef := false
+		for _, issue := range schemaIssues {
+			if issue.Type == IssueSelfReferentialRequired {
+				hasSelfRef = true
+				break
+			}
+		}
+		if !hasSelfRef {
+			t.Errorf("Expected self-referential required field warning, got: %v", schemaIssues)
+		}
+	})
+}
+
+func TestValidatorShortRefSuggestion(t *testing.T) {
+	s := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"page": {Fields: map[string]*schema.FieldDefinition{}},
+		},
+		Traits: map[string]*schema.TraitDefinition{},
+	}
+
+	objectInfos := []ObjectInfo{
+		{ID: "people/freya", Type: "person"},
+	}
+	v := NewValidatorWithTypes(s, objectInfos)
+
+	doc := &parser.ParsedDocument{
+		FilePath: "notes/test.md",
+		Objects: []*parser.ParsedObject{
+			{ID: "notes/test", ObjectType: "page"},
+		},
+		Refs: []*parser.ParsedRef{
+			{SourceID: "notes/test", TargetRaw: "freya", Line: 5}, // Short ref
+		},
+	}
+
+	issues := v.ValidateDocument(doc)
+	hasShortRefWarning := false
+	for _, issue := range issues {
+		if issue.Type == IssueShortRefCouldBeFullPath {
+			hasShortRefWarning = true
+			break
+		}
+	}
+	if !hasShortRefWarning {
+		t.Errorf("Expected short ref suggestion warning, got: %v", issues)
+	}
+
+	// Check that shortRefs map was populated
+	if fullPath, ok := v.ShortRefs()["freya"]; !ok || fullPath != "people/freya" {
+		t.Errorf("Expected shortRefs to contain 'freya' -> 'people/freya', got: %v", v.ShortRefs())
+	}
+}
+
+func TestValidatorDatetimeValidation(t *testing.T) {
+	s := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"page": {},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"remind": {Type: schema.FieldTypeDatetime},
+		},
+	}
+
+	objectIDs := []string{"notes/test"}
+	v := NewValidator(s, objectIDs)
+
+	t.Run("valid datetime trait", func(t *testing.T) {
+		validValue := schema.String("2025-02-01T09:00")
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/test", ObjectType: "page"},
+			},
+			Traits: []*parser.ParsedTrait{
+				{
+					TraitType:      "remind",
+					Value:          &validValue,
+					ParentObjectID: "notes/test",
+					Line:           5,
+				},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidDateFormat {
+				t.Errorf("Should not have datetime error for valid value: %v", issue)
+			}
+		}
+	})
+
+	t.Run("invalid datetime trait", func(t *testing.T) {
+		badValue := schema.String("not-a-datetime")
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/test", ObjectType: "page"},
+			},
+			Traits: []*parser.ParsedTrait{
+				{
+					TraitType:      "remind",
+					Value:          &badValue,
+					ParentObjectID: "notes/test",
+					Line:           5,
+				},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		hasDatetimeError := false
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidDateFormat {
+				hasDatetimeError = true
+				break
+			}
+		}
+		if !hasDatetimeError {
+			t.Errorf("Expected invalid datetime format error, got: %v", issues)
 		}
 	})
 }

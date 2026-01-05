@@ -3,6 +3,9 @@ package check
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -13,18 +16,26 @@ import (
 type IssueType string
 
 const (
-	IssueUnknownType         IssueType = "unknown_type"
-	IssueMissingReference    IssueType = "missing_reference"
-	IssueUndefinedTrait      IssueType = "undefined_trait"
-	IssueUnknownFrontmatter  IssueType = "unknown_frontmatter_key"
-	IssueDuplicateID         IssueType = "duplicate_object_id"
+	IssueUnknownType          IssueType = "unknown_type"
+	IssueMissingReference     IssueType = "missing_reference"
+	IssueUndefinedTrait       IssueType = "undefined_trait"
+	IssueUnknownFrontmatter   IssueType = "unknown_frontmatter_key"
+	IssueDuplicateID          IssueType = "duplicate_object_id"
 	IssueMissingRequiredField IssueType = "missing_required_field"
 	IssueMissingRequiredTrait IssueType = "missing_required_trait"
-	IssueInvalidEnumValue    IssueType = "invalid_enum_value"
-	IssueAmbiguousReference  IssueType = "ambiguous_reference"
-	IssueInvalidTraitValue   IssueType = "invalid_trait_value"
-	IssueParseError          IssueType = "parse_error"
-	IssueMissingEmbeddedID   IssueType = "missing_embedded_id"
+	IssueInvalidEnumValue     IssueType = "invalid_enum_value"
+	IssueAmbiguousReference   IssueType = "ambiguous_reference"
+	IssueInvalidTraitValue    IssueType = "invalid_trait_value"
+	IssueParseError           IssueType = "parse_error"
+	IssueMissingEmbeddedID    IssueType = "missing_embedded_id"
+	IssueWrongTargetType      IssueType = "wrong_target_type"
+	IssueInvalidDateFormat    IssueType = "invalid_date_format"
+	IssueShortRefCouldBeFullPath IssueType = "short_ref_could_be_full_path"
+	IssueStaleIndex           IssueType = "stale_index"
+	IssueUnusedType           IssueType = "unused_type"
+	IssueUnusedTrait          IssueType = "unused_trait"
+	IssueMissingTargetType    IssueType = "missing_target_type"
+	IssueSelfReferentialRequired IssueType = "self_referential_required"
 )
 
 // Issue represents a validation issue.
@@ -104,8 +115,18 @@ type Validator struct {
 	schema           *schema.Schema
 	resolver         *resolver.Resolver
 	allIDs           map[string]struct{}
+	objectTypes      map[string]string           // Object ID -> type name (for target type validation)
 	missingRefs      map[string]*MissingRef      // Keyed by target path to dedupe
 	undefinedTraits  map[string]*UndefinedTrait  // Keyed by trait name to dedupe
+	usedTypes        map[string]struct{}         // Types actually used in documents
+	usedTraits       map[string]struct{}         // Traits actually used in documents
+	shortRefs        map[string]string           // Short ref -> full path (for suggestions)
+}
+
+// ObjectInfo contains basic info about an object for validation.
+type ObjectInfo struct {
+	ID   string
+	Type string
 }
 
 // NewValidator creates a new validator.
@@ -119,8 +140,38 @@ func NewValidator(s *schema.Schema, objectIDs []string) *Validator {
 		schema:          s,
 		resolver:        resolver.New(objectIDs),
 		allIDs:          allIDs,
+		objectTypes:     make(map[string]string),
 		missingRefs:     make(map[string]*MissingRef),
 		undefinedTraits: make(map[string]*UndefinedTrait),
+		usedTypes:       make(map[string]struct{}),
+		usedTraits:      make(map[string]struct{}),
+		shortRefs:       make(map[string]string),
+	}
+}
+
+// NewValidatorWithTypes creates a new validator with object type information.
+// objectInfos should contain ID and type for each object in the vault.
+func NewValidatorWithTypes(s *schema.Schema, objectInfos []ObjectInfo) *Validator {
+	allIDs := make(map[string]struct{}, len(objectInfos))
+	objectTypes := make(map[string]string, len(objectInfos))
+	ids := make([]string, 0, len(objectInfos))
+
+	for _, info := range objectInfos {
+		allIDs[info.ID] = struct{}{}
+		objectTypes[info.ID] = info.Type
+		ids = append(ids, info.ID)
+	}
+
+	return &Validator{
+		schema:          s,
+		resolver:        resolver.New(ids),
+		allIDs:          allIDs,
+		objectTypes:     objectTypes,
+		missingRefs:     make(map[string]*MissingRef),
+		undefinedTraits: make(map[string]*UndefinedTrait),
+		usedTypes:       make(map[string]struct{}),
+		usedTraits:      make(map[string]struct{}),
+		shortRefs:       make(map[string]string),
 	}
 }
 
@@ -198,9 +249,12 @@ func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []Issue {
 	var issues []Issue
 
+	// Track type usage
+	v.usedTypes[obj.ObjectType] = struct{}{}
+
 	// Check if type is defined
 	typeDef, typeExists := v.schema.Types[obj.ObjectType]
-	if !typeExists && obj.ObjectType != "page" && obj.ObjectType != "section" {
+	if !typeExists && obj.ObjectType != "page" && obj.ObjectType != "section" && obj.ObjectType != "date" {
 		issues = append(issues, Issue{
 			Level:      LevelError,
 			Type:       IssueUnknownType,
@@ -322,6 +376,9 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []Issue {
 	var issues []Issue
 
+	// Track trait usage
+	v.usedTraits[trait.TraitType] = struct{}{}
+
 	// Check if trait is defined
 	traitDef, exists := v.schema.Traits[trait.TraitType]
 	if !exists {
@@ -368,31 +425,92 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 					FixHint:  fmt.Sprintf("Add a value: @%s(<value>)", trait.TraitType),
 				})
 			}
-		} else if traitDef.Type == schema.FieldTypeEnum {
-			// Validate enum value
+		} else {
 			valueStr := trait.ValueString()
-			validValue := false
-			for _, allowed := range traitDef.Values {
-				if allowed == valueStr {
-					validValue = true
-					break
+
+			// Validate date format for date traits
+			if traitDef.Type == schema.FieldTypeDate {
+				if !isValidDate(valueStr) {
+					issues = append(issues, Issue{
+						Level:    LevelError,
+						Type:     IssueInvalidDateFormat,
+						FilePath: filePath,
+						Line:     trait.Line,
+						Message:  fmt.Sprintf("Invalid date format '%s' for trait '@%s' (expected YYYY-MM-DD)", valueStr, trait.TraitType),
+						Value:    valueStr,
+						FixHint:  "Use date format YYYY-MM-DD (e.g., 2025-02-01)",
+					})
 				}
 			}
-			if !validValue {
-				issues = append(issues, Issue{
-					Level:    LevelError,
-					Type:     IssueInvalidEnumValue,
-					FilePath: filePath,
-					Line:     trait.Line,
-					Message:  fmt.Sprintf("Invalid value '%s' for trait '@%s' (allowed: %v)", valueStr, trait.TraitType, traitDef.Values),
-					Value:    valueStr,
-					FixHint:  fmt.Sprintf("Change to one of: %v", traitDef.Values),
-				})
+
+			// Validate datetime format for datetime traits
+			if traitDef.Type == schema.FieldTypeDatetime {
+				if !isValidDatetime(valueStr) {
+					issues = append(issues, Issue{
+						Level:    LevelError,
+						Type:     IssueInvalidDateFormat,
+						FilePath: filePath,
+						Line:     trait.Line,
+						Message:  fmt.Sprintf("Invalid datetime format '%s' for trait '@%s'", valueStr, trait.TraitType),
+						Value:    valueStr,
+						FixHint:  "Use datetime format YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS",
+					})
+				}
+			}
+
+			// Validate enum value
+			if traitDef.Type == schema.FieldTypeEnum {
+				validValue := false
+				for _, allowed := range traitDef.Values {
+					if allowed == valueStr {
+						validValue = true
+						break
+					}
+				}
+				if !validValue {
+					issues = append(issues, Issue{
+						Level:    LevelError,
+						Type:     IssueInvalidEnumValue,
+						FilePath: filePath,
+						Line:     trait.Line,
+						Message:  fmt.Sprintf("Invalid value '%s' for trait '@%s' (allowed: %v)", valueStr, trait.TraitType, traitDef.Values),
+						Value:    valueStr,
+						FixHint:  fmt.Sprintf("Change to one of: %v", traitDef.Values),
+					})
+				}
 			}
 		}
 	}
 
 	return issues
+}
+
+// Date validation regex
+var dateRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// isValidDate checks if a string is a valid YYYY-MM-DD date.
+func isValidDate(s string) bool {
+	if !dateRegex.MatchString(s) {
+		return false
+	}
+	_, err := time.Parse("2006-01-02", s)
+	return err == nil
+}
+
+// isValidDatetime checks if a string is a valid datetime.
+func isValidDatetime(s string) bool {
+	// Try various datetime formats
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04",
+		"2006-01-02T15:04:05",
+	}
+	for _, format := range formats {
+		if _, err := time.Parse(format, s); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {
@@ -447,6 +565,39 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 
 		// Track this missing reference with type inference
 		v.trackMissingRef(ref.TargetRaw, filePath, sourceObjectID, ref.Line, targetType, fieldName)
+	} else {
+		// Reference resolved successfully - perform additional checks
+
+		// Check if short ref could be a full path (for better clarity)
+		if !strings.Contains(ref.TargetRaw, "/") && strings.Contains(result.TargetID, "/") {
+			// Short ref that resolved to a full path - suggest using full path
+			v.shortRefs[ref.TargetRaw] = result.TargetID
+			issues = append(issues, Issue{
+				Level:    LevelWarning,
+				Type:     IssueShortRefCouldBeFullPath,
+				FilePath: filePath,
+				Line:     ref.Line,
+				Message:  fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, result.TargetID),
+				Value:    ref.TargetRaw,
+				FixHint:  fmt.Sprintf("Consider using full path: [[%s]]", result.TargetID),
+			})
+		}
+
+		// Validate target type if specified (e.g., for ref fields with target constraint)
+		if targetType != "" && len(v.objectTypes) > 0 {
+			actualType, exists := v.objectTypes[result.TargetID]
+			if exists && actualType != targetType {
+				issues = append(issues, Issue{
+					Level:    LevelError,
+					Type:     IssueWrongTargetType,
+					FilePath: filePath,
+					Line:     ref.Line,
+					Message:  fmt.Sprintf("Field '%s' expects type '%s', but [[%s]] is type '%s'", fieldName, targetType, ref.TargetRaw, actualType),
+					Value:    ref.TargetRaw,
+					FixHint:  fmt.Sprintf("Reference a '%s' object instead, or change the field's target type", targetType),
+				})
+			}
+		}
 	}
 
 	return issues
@@ -529,4 +680,110 @@ func containsHash(s string) bool {
 		}
 	}
 	return false
+}
+
+// SchemaIssue represents a schema-level validation issue (not file-specific).
+type SchemaIssue struct {
+	Level      IssueLevel
+	Type       IssueType
+	Message    string
+	Value      string // The type/trait/field name
+	FixCommand string
+	FixHint    string
+}
+
+// ValidateSchema checks the schema for integrity issues.
+// This should be called after all documents have been validated.
+func (v *Validator) ValidateSchema() []SchemaIssue {
+	var issues []SchemaIssue
+
+	// Check for unused types (defined in schema but never used)
+	for typeName := range v.schema.Types {
+		// Skip built-in types
+		if typeName == "page" || typeName == "section" || typeName == "date" {
+			continue
+		}
+		if _, used := v.usedTypes[typeName]; !used {
+			issues = append(issues, SchemaIssue{
+				Level:   LevelWarning,
+				Type:    IssueUnusedType,
+				Message: fmt.Sprintf("Type '%s' is defined in schema but never used", typeName),
+				Value:   typeName,
+				FixHint: fmt.Sprintf("Create a file with 'type: %s' or remove the type from schema", typeName),
+			})
+		}
+	}
+
+	// Check for unused traits (defined in schema but never used)
+	for traitName := range v.schema.Traits {
+		if _, used := v.usedTraits[traitName]; !used {
+			issues = append(issues, SchemaIssue{
+				Level:   LevelWarning,
+				Type:    IssueUnusedTrait,
+				Message: fmt.Sprintf("Trait '@%s' is defined in schema but never used", traitName),
+				Value:   traitName,
+				FixHint: fmt.Sprintf("Use @%s in a file or remove the trait from schema", traitName),
+			})
+		}
+	}
+
+	// Check for missing target types in ref fields
+	for typeName, typeDef := range v.schema.Types {
+		if typeDef == nil || typeDef.Fields == nil {
+			continue
+		}
+		for fieldName, fieldDef := range typeDef.Fields {
+			if fieldDef == nil {
+				continue
+			}
+			// Check ref and ref[] fields with target constraints
+			if (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target != "" {
+				// Check if target type exists
+				if _, exists := v.schema.Types[fieldDef.Target]; !exists {
+					// Also check built-in types
+					if fieldDef.Target != "page" && fieldDef.Target != "section" && fieldDef.Target != "date" {
+						issues = append(issues, SchemaIssue{
+							Level:      LevelError,
+							Type:       IssueMissingTargetType,
+							Message:    fmt.Sprintf("Field '%s.%s' references non-existent type '%s'", typeName, fieldName, fieldDef.Target),
+							Value:      fieldDef.Target,
+							FixCommand: fmt.Sprintf("rvn schema add type %s", fieldDef.Target),
+							FixHint:    fmt.Sprintf("Add type '%s' to schema or change the target", fieldDef.Target),
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Check for self-referential required fields (impossible to create first instance)
+	for typeName, typeDef := range v.schema.Types {
+		if typeDef == nil || typeDef.Fields == nil {
+			continue
+		}
+		for fieldName, fieldDef := range typeDef.Fields {
+			if fieldDef == nil {
+				continue
+			}
+			// Check if a required ref field points to the same type
+			if fieldDef.Required && fieldDef.Default == nil {
+				if (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target == typeName {
+					issues = append(issues, SchemaIssue{
+						Level:   LevelWarning,
+						Type:    IssueSelfReferentialRequired,
+						Message: fmt.Sprintf("Type '%s' has required field '%s' that references itself - impossible to create first instance", typeName, fieldName),
+						Value:   typeName + "." + fieldName,
+						FixHint: "Make the field optional (required: false) or add a default value",
+					})
+				}
+			}
+		}
+	}
+
+	return issues
+}
+
+// ShortRefs returns the short refs that could be full paths.
+func (v *Validator) ShortRefs() map[string]string {
+	return v.shortRefs
 }
