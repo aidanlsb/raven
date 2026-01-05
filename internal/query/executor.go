@@ -417,10 +417,9 @@ func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (stri
 	return cond, []interface{}{p.Value}, nil
 }
 
-// buildSourcePredicateSQL builds SQL for source:inline/frontmatter predicates.
+// buildSourcePredicateSQL builds SQL for source:inline predicates.
 func (e *Executor) buildSourcePredicateSQL(p *SourcePredicate, alias string) (string, []interface{}, error) {
-	// Frontmatter traits are stored in objects.fields, inline traits are in traits table
-	// This is a heuristic - frontmatter traits have line_number = 0 or are at file start
+	// All traits are inline (in content). source:inline filters by line position.
 	var cond string
 	if p.Source == "frontmatter" {
 		cond = fmt.Sprintf("%s.line_number <= 1", alias)

@@ -431,7 +431,7 @@ Located at vault root. Defines all types and traits.
 version: 2  # Schema format version
 
 # Global trait definitions
-# Traits can be used inline (@trait) OR in frontmatter (if type declares them)
+# Traits appear inline in content using @trait or @trait(value) syntax
 traits:
   # Date-related traits
   due:
@@ -523,36 +523,35 @@ types:
 
 **Key design principle:**
 - **Fields** are type-specific structured data in frontmatter
-- **Traits** are universal annotations in content (not frontmatter)
+- **Traits** are universal annotations in content using `@trait` or `@trait(value)` syntax
 
 **Key rules:**
 - Frontmatter can ONLY contain: `type`, `id`, `tags`, and declared fields
 - Unknown frontmatter keys trigger validation errors
 - Traits appear in content using `@trait` or `@trait(value)` syntax
 - Traits can be used on ANY object type - they are universal
-- Traits in frontmatter apply to the whole object; inline traits apply to specific content
-- Both frontmatter traits and inline traits are indexed and queryable
+- Traits annotate specific content (lines) within documents
 
-**Example: Frontmatter traits vs inline traits**
+**Example: Fields vs Traits**
 
 ```markdown
 ---
 type: project
-due: 2025-06-30       # The project itself is due June 30
-priority: high
+status: active        # Field: type-specific metadata on the project
+client: "[[clients/midgard]]"
 ---
 
 # Website Redesign
 
 ## Tasks
 
-- @due(2025-03-01) Send proposal       # This specific task is due March 1
-- @due(2025-03-15) Review feedback
+- @due(2025-03-01) Send proposal       # Trait: annotates this specific task
+- @due(2025-03-15) Review feedback     # Trait: annotates this specific task
+- @priority(high) Security review
 ```
 
-Both dates appear in `rvn query "trait:due"`:
-- The project's `due: 2025-06-30` (frontmatter trait on the object)
-- The tasks' `@due(2025-03-01)` and `@due(2025-03-15)` (inline traits on content)
+Fields (`status`, `client`) are queried with object filters: `rvn query "object:project .status:active"`
+Traits (`@due`, `@priority`) are queried with trait filters: `rvn query "trait:due value:past"`
 
 ### Field Types
 
