@@ -39,11 +39,17 @@ projects/bifrost.md     "Client: [[clients/midgard]]"
 **Ask an AI agent:**
 
 ```
-You: "What's due this week?"
-Agent: You have 3 items due - the Bifrost proposal for Midgard Corp is highest priority.
+You: "What should I focus on today?"
+Agent: You have 2 overdue items blocking others:
+       • Heimdall needs Bifrost access (blocks the Midgard project)
+       • Proposal review for Thor (he's asked twice)
+       Plus 3 items due today. Want me to add these to your daily note?
 
-You: "Create a project for the Asgard security audit"
-Agent: Created projects/asgard-security-audit.md with due date next Friday.
+You: "Midgard call went great - security audit approved. Freya's leading it, 
+      starts Monday, 50k budget."
+Agent: Created projects/midgard-security-audit.md linked to [[clients/midgard]].
+       Set Freya as lead, status: active. Added kickoff task @due(Monday) 
+       to your daily note.
 ```
 
 ---
