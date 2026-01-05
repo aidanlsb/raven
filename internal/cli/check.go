@@ -9,14 +9,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
+
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var (

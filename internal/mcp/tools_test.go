@@ -68,7 +68,7 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 	tests := []struct {
 		toolName string
 		args     map[string]interface{}
-		wantCmd  string // Expected first command part
+		wantCmd  string   // Expected first command part
 		wantArgs []string // Expected to be present (order may vary)
 	}{
 		{
@@ -106,6 +106,13 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			args:     map[string]interface{}{"name": "event", "default-path": "events/"},
 			wantCmd:  "schema",
 			wantArgs: []string{"add", "type", "event", "--default-path", "events/", "--json"},
+		},
+		// Test that underscore variants of flag names also work (MCP clients may normalize names)
+		{
+			toolName: "raven_schema_add_type",
+			args:     map[string]interface{}{"name": "meeting", "default_path": "meetings/"},
+			wantCmd:  "schema",
+			wantArgs: []string{"add", "type", "meeting", "--default-path", "meetings/", "--json"},
 		},
 	}
 

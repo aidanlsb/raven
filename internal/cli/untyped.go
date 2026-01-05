@@ -3,8 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/index"
 )
 
 var untypedCmd = &cobra.Command{
@@ -31,7 +32,7 @@ var untypedCmd = &cobra.Command{
 		}
 
 		fmt.Println("Untyped pages (using 'page' fallback):")
-	fmt.Println()
+		fmt.Println()
 		for _, page := range pages {
 			fmt.Printf("  %s\n", page)
 		}

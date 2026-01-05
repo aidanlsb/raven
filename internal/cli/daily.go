@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 var dailyCmd = &cobra.Command{

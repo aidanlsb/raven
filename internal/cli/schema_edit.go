@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // Flags for schema add commands
@@ -325,11 +326,11 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 
 	if isJSONOutput() {
 		result := map[string]interface{}{
-			"added":    "field",
-			"type":     typeName,
-			"field":    fieldName,
+			"added":      "field",
+			"type":       typeName,
+			"field":      fieldName,
 			"field_type": fieldType,
-			"required": schemaAddRequired,
+			"required":   schemaAddRequired,
 		}
 		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
 		return nil
@@ -695,14 +696,14 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 				}
 				if len(missing) > 0 {
 					details := map[string]interface{}{
-						"missing_field":   fieldName,
-						"affected_count":  len(missing),
+						"missing_field":    fieldName,
+						"affected_count":   len(missing),
 						"affected_objects": missing,
 					}
 					if len(missing) > 5 {
 						details["affected_objects"] = append(missing[:5], "... and more")
 					}
-					return handleErrorWithDetails(ErrDataIntegrityBlock, 
+					return handleErrorWithDetails(ErrDataIntegrityBlock,
 						fmt.Sprintf("%d objects of type '%s' lack field '%s'", len(missing), typeName, fieldName),
 						"Add the field to these files, then retry",
 						details)
@@ -861,7 +862,7 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 		defer db.Close()
 		objects, err := db.QueryObjects(typeName)
 		if err == nil && len(objects) > 0 {
-				warning := Warning{
+			warning := Warning{
 				Code:    "ORPHANED_FILES",
 				Message: fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
 			}

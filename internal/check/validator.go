@@ -16,25 +16,25 @@ import (
 type IssueType string
 
 const (
-	IssueUnknownType          IssueType = "unknown_type"
-	IssueMissingReference     IssueType = "missing_reference"
-	IssueUndefinedTrait       IssueType = "undefined_trait"
-	IssueUnknownFrontmatter   IssueType = "unknown_frontmatter_key"
-	IssueDuplicateID          IssueType = "duplicate_object_id"
-	IssueMissingRequiredField IssueType = "missing_required_field"
-	IssueMissingRequiredTrait IssueType = "missing_required_trait"
-	IssueInvalidEnumValue     IssueType = "invalid_enum_value"
-	IssueAmbiguousReference   IssueType = "ambiguous_reference"
-	IssueInvalidTraitValue    IssueType = "invalid_trait_value"
-	IssueParseError           IssueType = "parse_error"
-	IssueMissingEmbeddedID    IssueType = "missing_embedded_id"
-	IssueWrongTargetType      IssueType = "wrong_target_type"
-	IssueInvalidDateFormat    IssueType = "invalid_date_format"
+	IssueUnknownType             IssueType = "unknown_type"
+	IssueMissingReference        IssueType = "missing_reference"
+	IssueUndefinedTrait          IssueType = "undefined_trait"
+	IssueUnknownFrontmatter      IssueType = "unknown_frontmatter_key"
+	IssueDuplicateID             IssueType = "duplicate_object_id"
+	IssueMissingRequiredField    IssueType = "missing_required_field"
+	IssueMissingRequiredTrait    IssueType = "missing_required_trait"
+	IssueInvalidEnumValue        IssueType = "invalid_enum_value"
+	IssueAmbiguousReference      IssueType = "ambiguous_reference"
+	IssueInvalidTraitValue       IssueType = "invalid_trait_value"
+	IssueParseError              IssueType = "parse_error"
+	IssueMissingEmbeddedID       IssueType = "missing_embedded_id"
+	IssueWrongTargetType         IssueType = "wrong_target_type"
+	IssueInvalidDateFormat       IssueType = "invalid_date_format"
 	IssueShortRefCouldBeFullPath IssueType = "short_ref_could_be_full_path"
-	IssueStaleIndex           IssueType = "stale_index"
-	IssueUnusedType           IssueType = "unused_type"
-	IssueUnusedTrait          IssueType = "unused_trait"
-	IssueMissingTargetType    IssueType = "missing_target_type"
+	IssueStaleIndex              IssueType = "stale_index"
+	IssueUnusedType              IssueType = "unused_type"
+	IssueUnusedTrait             IssueType = "unused_trait"
+	IssueMissingTargetType       IssueType = "missing_target_type"
 	IssueSelfReferentialRequired IssueType = "self_referential_required"
 )
 
@@ -45,9 +45,9 @@ type Issue struct {
 	FilePath   string
 	Line       int
 	Message    string
-	Value      string   // The problematic value (type name, trait name, ref, etc.)
-	FixCommand string   // Suggested command to fix the issue
-	FixHint    string   // Human-readable fix hint
+	Value      string // The problematic value (type name, trait name, ref, etc.)
+	FixCommand string // Suggested command to fix the issue
+	FixHint    string // Human-readable fix hint
 }
 
 // MissingRef represents a reference to a non-existent object.
@@ -112,15 +112,15 @@ func (l IssueLevel) String() string {
 
 // Validator validates documents against a schema.
 type Validator struct {
-	schema           *schema.Schema
-	resolver         *resolver.Resolver
-	allIDs           map[string]struct{}
-	objectTypes      map[string]string           // Object ID -> type name (for target type validation)
-	missingRefs      map[string]*MissingRef      // Keyed by target path to dedupe
-	undefinedTraits  map[string]*UndefinedTrait  // Keyed by trait name to dedupe
-	usedTypes        map[string]struct{}         // Types actually used in documents
-	usedTraits       map[string]struct{}         // Traits actually used in documents
-	shortRefs        map[string]string           // Short ref -> full path (for suggestions)
+	schema          *schema.Schema
+	resolver        *resolver.Resolver
+	allIDs          map[string]struct{}
+	objectTypes     map[string]string          // Object ID -> type name (for target type validation)
+	missingRefs     map[string]*MissingRef     // Keyed by target path to dedupe
+	undefinedTraits map[string]*UndefinedTrait // Keyed by trait name to dedupe
+	usedTypes       map[string]struct{}        // Types actually used in documents
+	usedTraits      map[string]struct{}        // Traits actually used in documents
+	shortRefs       map[string]string          // Short ref -> full path (for suggestions)
 }
 
 // ObjectInfo contains basic info about an object for validation.
@@ -216,13 +216,13 @@ func (v *Validator) ValidateDocument(doc *parser.ParsedDocument) []Issue {
 	for _, obj := range doc.Objects {
 		if _, exists := seenIDs[obj.ID]; exists {
 			issues = append(issues, Issue{
-				Level:      LevelError,
-				Type:       IssueDuplicateID,
-				FilePath:   doc.FilePath,
-				Line:       obj.LineStart,
-				Message:    fmt.Sprintf("Duplicate object ID '%s'", obj.ID),
-				Value:      obj.ID,
-				FixHint:    "Rename one of the duplicate objects",
+				Level:    LevelError,
+				Type:     IssueDuplicateID,
+				FilePath: doc.FilePath,
+				Line:     obj.LineStart,
+				Message:  fmt.Sprintf("Duplicate object ID '%s'", obj.ID),
+				Value:    obj.ID,
+				FixHint:  "Rename one of the duplicate objects",
 			})
 		}
 		seenIDs[obj.ID] = struct{}{}

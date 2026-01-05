@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/spf13/cobra"
 )
 
 var editConfirm bool
@@ -144,7 +145,7 @@ var editCmd = &cobra.Command{
 // extractContext extracts ~3 lines of context around a match
 func extractContext(content string, matchIndex int, matchLen int) string {
 	lines := strings.Split(content, "\n")
-	
+
 	// Find line containing the match
 	charCount := 0
 	startLine := 0

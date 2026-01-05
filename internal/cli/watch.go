@@ -7,10 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/watcher"
-	"github.com/spf13/cobra"
 )
 
 var watchCmd = &cobra.Command{

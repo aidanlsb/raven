@@ -8,17 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 var (
-	moveForce          bool
-	moveUpdateRefs     bool
-	moveSkipTypeCheck  bool
+	moveForce         bool
+	moveUpdateRefs    bool
+	moveSkipTypeCheck bool
 )
 
 var moveCmd = &cobra.Command{
@@ -101,14 +102,14 @@ Examples:
 		}
 		doc, err := parser.ParseDocument(string(content), sourceFile, vaultPath)
 		if err != nil {
-		return handleError(ErrInternal, err, "Failed to parse source file")
-	}
+			return handleError(ErrInternal, err, "Failed to parse source file")
+		}
 
-	// Get file type from first object
-	var fileType string
-	if len(doc.Objects) > 0 {
-		fileType = doc.Objects[0].ObjectType
-	}
+		// Get file type from first object
+		var fileType string
+		if len(doc.Objects) > 0 {
+			fileType = doc.Objects[0].ObjectType
+		}
 
 		// Check for type-directory mismatch
 		var warnings []Warning
@@ -192,20 +193,20 @@ Examples:
 			return handleError(ErrFileWriteError, err, "")
 		}
 
-	// Update index
-	db, err := index.Open(vaultPath)
-	if err == nil {
-		defer db.Close()
-		// Remove old entry
-		sourceID := strings.TrimSuffix(source, ".md")
-		db.RemoveDocument(sourceID)
-		// Index new location
-		newContent, _ := os.ReadFile(destFile)
-		newDoc, _ := parser.ParseDocument(string(newContent), destFile, vaultPath)
-		if newDoc != nil {
-			db.IndexDocument(newDoc, sch)
+		// Update index
+		db, err := index.Open(vaultPath)
+		if err == nil {
+			defer db.Close()
+			// Remove old entry
+			sourceID := strings.TrimSuffix(source, ".md")
+			db.RemoveDocument(sourceID)
+			// Index new location
+			newContent, _ := os.ReadFile(destFile)
+			newDoc, _ := parser.ParseDocument(string(newContent), destFile, vaultPath)
+			if newDoc != nil {
+				db.IndexDocument(newDoc, sch)
+			}
 		}
-	}
 
 		elapsed := time.Since(start).Milliseconds()
 

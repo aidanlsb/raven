@@ -7,11 +7,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 var newFieldFlags []string
@@ -88,7 +89,7 @@ Examples:
 		// Collect required fields and check which are missing
 		var missingFields []string
 		var fieldDetails []map[string]interface{}
-		
+
 		if typeDef != nil {
 			// Sort field names for consistent order
 			var fieldNames []string
@@ -104,13 +105,13 @@ Examples:
 					if _, ok := fieldValues[fieldName]; ok {
 						continue
 					}
-					
+
 					// Check if there's a default
 					if fieldDef.Default != nil {
 						fieldValues[fieldName] = fmt.Sprintf("%v", fieldDef.Default)
 						continue
 					}
-					
+
 					if isJSONOutput() {
 						// Non-interactive: collect missing required fields for error
 						missingFields = append(missingFields, fieldName)
@@ -140,10 +141,10 @@ Examples:
 			}
 
 		}
-		
+
 		// In JSON mode, error if required fields are missing
 		if isJSONOutput() && len(missingFields) > 0 {
-			outputError(ErrRequiredField, 
+			outputError(ErrRequiredField,
 				fmt.Sprintf("Missing required fields: %s", strings.Join(missingFields, ", ")),
 				map[string]interface{}{
 					"missing_fields": fieldDetails,

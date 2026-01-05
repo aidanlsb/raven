@@ -132,9 +132,9 @@ type TypeQueryResult struct {
 
 // SchemaResult represents the full schema dump.
 type SchemaResult struct {
-	Version int                      `json:"version"`
-	Types   map[string]TypeSchema    `json:"types"`
-	Traits  map[string]TraitSchema   `json:"traits"`
+	Version int                       `json:"version"`
+	Types   map[string]TypeSchema     `json:"types"`
+	Traits  map[string]TraitSchema    `json:"traits"`
 	Queries map[string]SavedQueryInfo `json:"queries,omitempty"`
 }
 
@@ -165,12 +165,12 @@ type TraitSchema struct {
 
 // CommandSchema describes a command for agent discovery.
 type CommandSchema struct {
-	Description   string            `json:"description"`
-	DefaultTarget string            `json:"default_target,omitempty"`
-	Args          []string          `json:"args,omitempty"`
+	Description   string                `json:"description"`
+	DefaultTarget string                `json:"default_target,omitempty"`
+	Args          []string              `json:"args,omitempty"`
 	Flags         map[string]FlagSchema `json:"flags,omitempty"`
-	Examples      []string          `json:"examples,omitempty"`
-	UseCases      []string          `json:"use_cases,omitempty"`
+	Examples      []string              `json:"examples,omitempty"`
+	UseCases      []string              `json:"use_cases,omitempty"`
 }
 
 // FlagSchema describes a command flag.

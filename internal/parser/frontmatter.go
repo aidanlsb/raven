@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/schema"
 	"gopkg.in/yaml.v3"
+
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // Frontmatter represents parsed frontmatter data.

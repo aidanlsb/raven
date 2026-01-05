@@ -5,10 +5,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/spf13/cobra"
 )
 
 var schemaCmd = &cobra.Command{

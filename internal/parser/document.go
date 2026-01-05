@@ -32,11 +32,11 @@ type ParsedObject struct {
 
 // ParsedTrait represents a parsed trait annotation.
 type ParsedTrait struct {
-	TraitType      string              // Trait type name (e.g., "due", "priority", "highlight")
-	Value          *schema.FieldValue  // Trait value (nil for boolean traits)
-	Content        string              // The content the trait annotates
-	ParentObjectID string              // Parent object ID
-	Line           int                 // Line number
+	TraitType      string             // Trait type name (e.g., "due", "priority", "highlight")
+	Value          *schema.FieldValue // Trait value (nil for boolean traits)
+	Content        string             // The content the trait annotates
+	ParentObjectID string             // Parent object ID
+	Line           int                // Line number
 }
 
 // HasValue returns true if this trait has a value.

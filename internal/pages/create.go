@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gosimple/slug"
+
 	"github.com/aidanlsb/raven/internal/schema"
 )
 

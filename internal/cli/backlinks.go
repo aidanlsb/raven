@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/index"
 )
 
 var backlinksCmd = &cobra.Command{

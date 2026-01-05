@@ -29,7 +29,7 @@ func TestRegistryMetadataComplete(t *testing.T) {
 			if meta.Description == "" {
 				t.Error("Command has empty Description")
 			}
-			
+
 			// Check args have names and descriptions
 			for i, arg := range meta.Args {
 				if arg.Name == "" {

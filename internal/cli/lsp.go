@@ -6,8 +6,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/aidanlsb/raven/internal/lsp"
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/lsp"
 )
 
 var lspCmd = &cobra.Command{
