@@ -10,6 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -116,7 +117,7 @@ Configuration (raven.yaml):
 		line := formatCaptureLine(text, captureCfg)
 
 		// Append to file (create if daily note)
-		if err := appendToFile(destPath, line, captureCfg, vaultCfg, isDailyNote); err != nil {
+		if err := appendToFile(vaultPath, destPath, line, captureCfg, vaultCfg, isDailyNote); err != nil {
 			return handleError(ErrFileWriteError, err, "")
 		}
 
@@ -178,7 +179,7 @@ func formatCaptureLine(text string, cfg *config.CaptureConfig) string {
 	return "- " + strings.Join(parts, " ")
 }
 
-func appendToFile(destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool) error {
+func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool) error {
 	// Check if file exists
 	fileExists := true
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
@@ -188,8 +189,21 @@ func appendToFile(destPath, line string, cfg *config.CaptureConfig, vaultCfg *co
 	// If file doesn't exist and it's a daily note, create it
 	if !fileExists {
 		if isDailyNote {
-			if err := createDailyNote(destPath, vaultCfg); err != nil {
-				return err
+			// Extract date from path and create using pages package
+			base := filepath.Base(destPath)
+			dateStr := strings.TrimSuffix(base, ".md")
+			t, err := time.Parse("2006-01-02", dateStr)
+			if err != nil {
+				t = time.Now()
+				dateStr = vault.FormatDateISO(t)
+			}
+			friendlyTitle := vault.FormatDateFriendly(t)
+			dailyDir := vaultCfg.DailyDirectory
+			if dailyDir == "" {
+				dailyDir = "daily"
+			}
+			if _, err := pages.CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle); err != nil {
+				return fmt.Errorf("failed to create daily note: %w", err)
 			}
 			fileExists = true
 		} else {
@@ -290,37 +304,6 @@ func appendUnderHeading(destPath, line, heading string) error {
 	}
 
 	return os.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0644)
-}
-
-func createDailyNote(destPath string, vaultCfg *config.VaultConfig) error {
-	// Extract date from path
-	base := filepath.Base(destPath)
-	date := strings.TrimSuffix(base, ".md")
-
-	// Parse the date to get a friendly title
-	t, err := time.Parse("2006-01-02", date)
-	if err != nil {
-		// Fall back to just the date string
-		t = time.Now()
-		date = vault.FormatDateISO(t)
-	}
-
-	title := vault.FormatDateFriendly(t)
-
-	content := fmt.Sprintf(`---
-type: date
----
-
-# %s
-
-`, title)
-
-	// Create parent directory
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	return os.WriteFile(destPath, []byte(content), 0644)
 }
 
 func reindexFile(vaultPath, filePath string) error {

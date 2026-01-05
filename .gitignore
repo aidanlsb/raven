@@ -24,6 +24,7 @@ __debug_bin*
 
 # Test artifacts
 *.test
+cover.out
 coverage.out
 
 # Environment

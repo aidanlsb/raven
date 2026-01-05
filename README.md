@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/raven-logo.svg" width="120" alt="Raven logo">
+  <img src="raven-logo.svg" width="120" alt="Raven logo">
 </p>
 
 <h1 align="center">Raven</h1>
@@ -10,6 +10,8 @@
     Built around a CLI that enables agent-driven workflows.
   </strong>
 </p>
+
+> ⚠️ **Experimental:** Raven is super early and under active development. Everything is subject to change!
 
 ---
 
@@ -294,65 +296,98 @@ rvn backlinks people/freya       # What references Freya?
 
 ### Querying
 
-Raven indexes your vault into SQLite, making structured data queryable. The main query patterns:
+Raven has two foundational query types that compose together for powerful information retrieval:
 
-**By trait** — find content with specific annotations:
+#### Object Queries
+
+Find objects (files or embedded sections) by type and filter by their fields:
 
 ```bash
-rvn query "trait:due"                   # Everything with @due
-rvn query "trait:due value:today"       # Due today
-rvn query "trait:due value:past"        # Overdue
-rvn query "trait:priority value:high"   # High priority
+rvn query "object:person"                    # All people
+rvn query "object:project .status:active"    # Active projects only
+rvn query "object:meeting .attendees:[[people/freya]]"  # Freya's meetings
 ```
 
-**By type** — list all objects of a specific type:
+#### Trait Queries
+
+Find traits (inline annotations like `@due`, `@priority`) across your vault:
 
 ```bash
-rvn query "object:person"               # All people
-rvn query "object:project"              # All projects
-rvn query "object:project .status:active"  # Active projects only
+rvn query "trait:due"                    # Everything with @due
+rvn query "trait:due value:today"        # Due today
+rvn query "trait:due value:past"         # Overdue items
+rvn query "trait:highlight"              # All highlights
 ```
 
-**By reference** — find connections:
+#### Composing Queries
+
+**Important constraint:** Each query returns items of exactly one type. `object:project` returns only projects; `trait:due` returns only `@due` traits. This constraint enables composition; you can nest queries inside each other to specify complicated query conditions.
+
+Use `{...}` to embed one query inside another:
 
 ```bash
-rvn backlinks people/freya       # What mentions Freya?
+# Objects that HAVE certain traits
+rvn query "object:project has:{trait:due value:past}"
+# → Projects with overdue tasks
+
+# Traits that appear ON certain objects
+rvn query "trait:highlight on:{object:book}"
+# → Highlights from books
+
+# Traits WITHIN a hierarchy (any ancestor)
+rvn query "trait:due within:{object:date}"
+# → All @due items in daily notes
 ```
 
-**Full-text search** — search content:
+You can also filter by **relationships**:
 
 ```bash
-rvn search "bifrost design"      # Search all content
-```
-
-**Query language** — powerful queries using the Raven query language:
-
-```bash
-# Object queries
-rvn query "object:project .status:active"
-rvn query "object:meeting has:due"
-rvn query "object:meeting parent:date"
+# Objects that reference something
 rvn query "object:meeting refs:[[people/freya]]"
 
-# Trait queries  
-rvn query "trait:due value:past"
-rvn query "trait:highlight on:{object:book .status:reading}"
-
-# Saved queries (defined in raven.yaml)
-rvn query tasks                  # Run your "tasks" query
-rvn query overdue                # Run your "overdue" query
+# Objects with a specific parent type
+rvn query "object:meeting parent:{object:date}"
+# → Meetings embedded in daily notes
 ```
 
-Query syntax:
-- `object:<type>` — query objects of a type
-- `trait:<name>` — query traits by name
-- `.field:value` — filter by field value
-- `has:trait` — filter objects that have a trait
-- `refs:[[target]]` — filter by what objects reference
-- `on:type` / `within:type` — filter traits by parent object
-- `parent:type` / `ancestor:type` — filter by hierarchy
-- `!pred` — negate a predicate
-- `pred1 | pred2` — OR predicates
+And combine with **boolean logic**:
+
+```bash
+# OR: active or planning projects
+rvn query "object:project (.status:active | .status:planning)"
+
+# NOT: everything except done
+rvn query "trait:status !value:done"
+```
+
+#### Saved Queries
+
+Define common queries in `raven.yaml` and run them by name:
+
+```bash
+rvn query tasks          # Run your "tasks" query
+rvn query overdue        # Run your "overdue" query
+rvn query --list         # List all saved queries
+```
+
+#### Full-Text Search
+
+Search across all content (not just structured data):
+
+```bash
+rvn search "bifrost design"         # Find pages mentioning both words
+rvn search '"world tree"'           # Exact phrase
+rvn search "meet*" --type meeting   # Prefix match, filtered by type
+```
+
+#### Backlinks
+
+Find what references a specific object:
+
+```bash
+rvn backlinks people/freya      # What mentions Freya?
+rvn backlinks projects/bifrost  # What links to this project?
+```
 
 See [docs/QUERY_LOGIC.md](docs/QUERY_LOGIC.md) for full query language documentation.
 
@@ -481,8 +516,11 @@ Use named vaults: `rvn --vault work stats`
 |---------|-------------|
 | `rvn init <path>` | Initialize a new vault |
 | `rvn check` | Validate vault (broken refs, schema errors) |
+| `rvn check --strict` | Treat warnings as errors |
+| `rvn check --by-file` | Group issues by file path |
 | `rvn check --create-missing` | Interactively create missing pages, types, and traits |
 | `rvn reindex` | Rebuild the SQLite index |
+| `rvn reindex --smart` | Only reindex changed files |
 
 ### Query Commands
 
@@ -543,6 +581,16 @@ Use named vaults: `rvn --vault work stats`
 | `rvn schema remove field <type> <field>` | Remove a field from a type |
 | `rvn schema validate` | Validate schema for errors |
 
+### Advanced Commands
+
+| Command | Description |
+|---------|-------------|
+| `rvn watch` | Auto-reindex on file changes (background) |
+| `rvn lsp` | Start LSP server for editor integration |
+| `rvn read <path>` | Read raw file content |
+| `rvn path` | Print the vault path |
+| `rvn vaults` | List configured vaults |
+
 ### Shell Completion
 
 Enable tab-completion for types and commands:
@@ -602,6 +650,8 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_schema_update_*` | Update existing types, traits, fields |
 | `raven_schema_remove_*` | Remove types, traits, fields (with safety checks) |
 | `raven_schema_validate` | Validate schema correctness |
+| `raven_check` | Validate vault against schema |
+| `raven_reindex` | Rebuild the index |
 
 ### Example Agent Interactions
 

@@ -551,4 +551,38 @@ Use --type to filter results to specific object types.`,
 			"Find all mentions of a person or concept",
 		},
 	},
+	"daily": {
+		Name:        "daily",
+		Description: "Open or create a daily note",
+		LongDesc: `Open or create a daily note for a given date.
+
+If no date is provided, opens today's note. Creates the file if it doesn't exist.`,
+		Args: []ArgMeta{
+			{Name: "date", Description: "Date (today, yesterday, tomorrow, YYYY-MM-DD)", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "edit", Short: "e", Description: "Open the note in the configured editor", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn daily --json",
+			"rvn daily yesterday --json",
+			"rvn daily 2025-02-01 --json",
+		},
+		UseCases: []string{
+			"Access or create today's daily note",
+			"Navigate to past daily notes",
+		},
+	},
+	"untyped": {
+		Name:        "untyped",
+		Description: "List pages without an explicit type",
+		LongDesc:    `Lists all markdown files that don't have an explicit type in their frontmatter (fallback to 'page' type).`,
+		Examples: []string{
+			"rvn untyped --json",
+		},
+		UseCases: []string{
+			"Find notes that need to be typed",
+			"Identify pages that could benefit from schema",
+		},
+	},
 }
