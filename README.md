@@ -74,10 +74,12 @@ Agent: Created projects/midgard-security-audit.md linked to [[clients/midgard]].
   - [Creating & Editing](#creating--editing)
   - [Daily Notes & Dates](#daily-notes--dates)
   - [Schema Management](#schema-management)
+  - [Workflows](#workflows-1)
   - [Shell Completion](#shell-completion)
 - [AI Agent Integration](#ai-agent-integration)
   - [Setting Up with Claude Desktop](#setting-up-with-claude-desktop)
   - [What Agents Can Do](#what-agents-can-do)
+  - [Workflows](#workflows)
   - [Example Agent Interactions](#example-agent-interactions)
 - [Design Philosophy](#design-philosophy)
 - [Workflow Tips](#workflow-tips)
@@ -577,6 +579,15 @@ Use named vaults: `rvn --vault work stats`
 | `rvn schema remove field <type> <field>` | Remove a field from a type |
 | `rvn schema validate` | Validate schema for errors |
 
+### Workflows
+
+| Command | Description |
+|---------|-------------|
+| `rvn workflow list` | List available workflows |
+| `rvn workflow show <name>` | Show workflow details and inputs |
+| `rvn workflow render <name>` | Render workflow with context |
+| `rvn workflow render <name> --input key=value` | Provide input values |
+
 ### Advanced Commands
 
 | Command | Description |
@@ -648,6 +659,113 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `raven_schema_validate` | Validate schema correctness |
 | `raven_check` | Validate vault against schema |
 | `raven_reindex` | Rebuild the index |
+| `raven_workflow_list` | List available workflows |
+| `raven_workflow_show` | Show workflow details |
+| `raven_workflow_render` | Render a workflow with inputs |
+
+### Workflows
+
+Workflows are **reusable prompt templates** for agents. Define structured tasks once, then run them with different inputs. Each workflow can gather context from your vault before generating a prompt.
+
+#### Defining Workflows
+
+Add workflows to your `raven.yaml`:
+
+```yaml
+workflows:
+  person-summary:
+    description: "Generate a summary of a person and their work"
+    inputs:
+      person_id:
+        type: ref
+        target: person
+        required: true
+        description: "The person to summarize"
+    context:
+      person:
+        read: "{{inputs.person_id}}"
+      related:
+        backlinks: "{{inputs.person_id}}"
+    prompt: |
+      Summarize this person based on their profile and related items.
+      
+      ## Person
+      {{context.person}}
+      
+      ## Related Items
+      {{context.related}}
+
+  project-review:
+    description: "Review active projects and suggest next steps"
+    inputs:
+      status:
+        type: string
+        default: "active"
+    context:
+      projects:
+        query: "object:project .status:{{inputs.status}}"
+    prompt: |
+      Review these projects and suggest prioritized next steps.
+      
+      ## Projects
+      {{context.projects}}
+
+  research:
+    description: "Research a topic across the vault"
+    inputs:
+      question:
+        type: string
+        required: true
+    context:
+      results:
+        search: "{{inputs.question}}"
+        limit: 10
+    prompt: |
+      Answer this question using the search results.
+      
+      Question: {{inputs.question}}
+      
+      ## Relevant Content
+      {{context.results}}
+```
+
+You can also store workflows in external files:
+
+```yaml
+workflows:
+  code-review:
+    file: workflows/code-review.yaml
+```
+
+#### Context Query Types
+
+| Type | Description |
+|------|-------------|
+| `read: <id>` | Read a single object by ID |
+| `query: "<query>"` | Run a Raven query (type-constrained) |
+| `backlinks: <id>` | Find objects that reference the target |
+| `search: "<term>"` | Full-text search (unconstrained) |
+
+#### Using Workflows
+
+```bash
+# List available workflows
+rvn workflow list
+
+# Show workflow details
+rvn workflow show person-summary
+
+# Render a workflow with inputs
+rvn workflow render person-summary --input person_id=people/freya
+```
+
+When rendered, the workflow:
+1. Validates inputs (reports missing required fields)
+2. Runs all context queries
+3. Substitutes variables in the prompt
+4. Returns the complete prompt and gathered context
+
+The result is ready for an AI agent to execute—Raven handles the context gathering, the agent handles the reasoning.
 
 ### Example Agent Interactions
 
@@ -764,6 +882,7 @@ Now typing `:dtm` expands to `@due(2025-01-05)` (tomorrow's actual date).
 |----------|-------------|
 | [docs/SPECIFICATION.md](docs/SPECIFICATION.md) | Complete technical specification (data model, file format, schema, database, MCP server) |
 | [docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md) | Guide for AI agents on using Raven effectively |
+| [docs/WORKFLOWS_SPEC.md](docs/WORKFLOWS_SPEC.md) | Workflow system specification for reusable prompt templates |
 | [docs/FUTURE.md](docs/FUTURE.md) | Planned and potential future enhancements |
 | [docs/MIGRATIONS.md](docs/MIGRATIONS.md) | Schema and database migration guide |
 
