@@ -118,6 +118,12 @@ func CLICommandName(toolName string) string {
 		return "query add"
 	case "query_remove":
 		return "query remove"
+	case "workflow_list":
+		return "workflow list"
+	case "workflow_show":
+		return "workflow show"
+	case "workflow_render":
+		return "workflow render"
 	}
 
 	return toolName

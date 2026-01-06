@@ -13,17 +13,56 @@ type VaultConfig struct {
 	// DailyDirectory is where daily notes are stored (default: "daily/")
 	DailyDirectory string `yaml:"daily_directory"`
 
+	// DailyTemplate is either a path to a template file (e.g., "templates/daily.md")
+	// or inline template content for daily notes.
+	DailyTemplate string `yaml:"daily_template,omitempty"`
+
 	// AutoReindex triggers an incremental reindex after CLI operations that modify files (default: true)
 	AutoReindex *bool `yaml:"auto_reindex,omitempty"`
 
 	// Queries defines saved queries that can be run with `rvn query <name>`
 	Queries map[string]*SavedQuery `yaml:"queries,omitempty"`
 
+	// Workflows defines reusable prompt templates for agents.
+	// Can be inline definitions or references to external files.
+	Workflows map[string]*WorkflowRef `yaml:"workflows,omitempty"`
+
 	// Capture configures quick capture behavior
 	Capture *CaptureConfig `yaml:"capture,omitempty"`
 
 	// Deletion configures file deletion behavior
 	Deletion *DeletionConfig `yaml:"deletion,omitempty"`
+}
+
+// WorkflowRef is a reference to a workflow definition.
+// It can contain an inline definition or a file reference.
+type WorkflowRef struct {
+	// File is a path to an external workflow file (relative to vault root).
+	File string `yaml:"file,omitempty"`
+
+	// Inline definition fields
+	Description string                    `yaml:"description,omitempty"`
+	Inputs      map[string]*WorkflowInput `yaml:"inputs,omitempty"`
+	Context     map[string]*ContextQuery  `yaml:"context,omitempty"`
+	Prompt      string                    `yaml:"prompt,omitempty"`
+}
+
+// WorkflowInput defines a workflow input parameter.
+type WorkflowInput struct {
+	Type        string `yaml:"type" json:"type"`
+	Required    bool   `yaml:"required,omitempty" json:"required,omitempty"`
+	Default     string `yaml:"default,omitempty" json:"default,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Target      string `yaml:"target,omitempty" json:"target,omitempty"`
+}
+
+// ContextQuery defines a query to run for gathering context.
+type ContextQuery struct {
+	Read      string `yaml:"read,omitempty"`
+	Query     string `yaml:"query,omitempty"`
+	Backlinks string `yaml:"backlinks,omitempty"`
+	Search    string `yaml:"search,omitempty"`
+	Limit     int    `yaml:"limit,omitempty"`
 }
 
 // DeletionConfig configures how file deletion is handled.

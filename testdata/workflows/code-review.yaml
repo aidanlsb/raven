@@ -1,0 +1,17 @@
+description: "Review code changes and suggest improvements"
+inputs:
+  topic:
+    type: string
+    required: true
+    description: "What to focus the review on"
+context:
+  relevant:
+    search: "{{inputs.topic}}"
+    limit: 5
+prompt: |
+  Conduct a focused code review on the topic: {{inputs.topic}}
+  
+  ## Relevant Context
+  {{context.relevant}}
+  
+  Provide constructive feedback and suggestions for improvement.

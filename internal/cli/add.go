@@ -203,7 +203,7 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 			if dailyDir == "" {
 				dailyDir = "daily"
 			}
-			if _, err := pages.CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle); err != nil {
+			if _, err := pages.CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, vaultCfg.DailyTemplate); err != nil {
 				return fmt.Errorf("failed to create daily note: %w", err)
 			}
 			fileExists = true

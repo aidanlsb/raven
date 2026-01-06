@@ -43,6 +43,9 @@ func NewSchema() *Schema {
 type TypeDefinition struct {
 	Fields      map[string]*FieldDefinition `yaml:"fields"`
 	DefaultPath string                      `yaml:"default_path,omitempty"`
+	// Template is either a path to a template file (e.g., "templates/meeting.md")
+	// or inline template content (multi-line string starting with content, not a path).
+	Template string `yaml:"template,omitempty"`
 }
 
 // TraitDefinition defines a trait (@due, @priority, @highlight, etc.).

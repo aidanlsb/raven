@@ -11,6 +11,7 @@ import (
 	"github.com/gosimple/slug"
 
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/template"
 )
 
 // CreateOptions configures page creation behavior.
@@ -39,11 +40,17 @@ type CreateOptions struct {
 	// Schema is used for:
 	// 1. Resolving default_path for types
 	// 2. Determining required fields for placeholders
-	// If nil, no default_path resolution or required field handling occurs.
+	// 3. Loading type templates
+	// If nil, no default_path resolution, required field handling, or template loading occurs.
 	Schema *schema.Schema
 
 	// IncludeRequiredPlaceholders adds empty placeholders for required fields.
 	IncludeRequiredPlaceholders bool
+
+	// TemplateOverride allows overriding the type's template.
+	// If set, this is used instead of the schema's template for the type.
+	// Can be a file path (relative to vault) or inline template content.
+	TemplateOverride string
 }
 
 // CreateResult contains information about the created page.
@@ -158,7 +165,40 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	}
 
 	content.WriteString("---\n\n")
-	content.WriteString(fmt.Sprintf("# %s\n\n", title))
+
+	// Determine template to use
+	templateSpec := opts.TemplateOverride
+	if templateSpec == "" && opts.Schema != nil {
+		if typeDef, ok := opts.Schema.Types[opts.TypeName]; ok && typeDef != nil {
+			templateSpec = typeDef.Template
+		}
+	}
+
+	// Load and apply template if specified
+	if templateSpec != "" {
+		templateContent, err := template.Load(opts.VaultPath, templateSpec)
+		if err != nil {
+			// Log warning but continue without template
+			templateContent = ""
+		}
+
+		if templateContent != "" {
+			// Apply variable substitution
+			vars := template.NewVariables(title, opts.TypeName, slugifiedPath, opts.Fields)
+			processedContent := template.Apply(templateContent, vars)
+			content.WriteString(processedContent)
+			// Ensure template ends with newline
+			if !strings.HasSuffix(processedContent, "\n") {
+				content.WriteString("\n")
+			}
+		} else {
+			// No template - use default heading
+			content.WriteString(fmt.Sprintf("# %s\n\n", title))
+		}
+	} else {
+		// No template - use default heading
+		content.WriteString(fmt.Sprintf("# %s\n\n", title))
+	}
 
 	// Write the file
 	if err := os.WriteFile(filePath, []byte(content.String()), 0644); err != nil {
@@ -260,12 +300,18 @@ func Slugify(s string) string {
 
 // CreateDailyNote creates a daily note for the given date.
 func CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle string) (*CreateResult, error) {
+	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "")
+}
+
+// CreateDailyNoteWithTemplate creates a daily note with an optional template.
+func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, dailyTemplate string) (*CreateResult, error) {
 	targetPath := filepath.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
-		VaultPath:  vaultPath,
-		TypeName:   "date",
-		Title:      friendlyTitle,
-		TargetPath: targetPath,
+		VaultPath:        vaultPath,
+		TypeName:         "date",
+		Title:            friendlyTitle,
+		TargetPath:       targetPath,
+		TemplateOverride: dailyTemplate,
 	})
 }
