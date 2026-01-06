@@ -166,6 +166,25 @@ Workflows are reusable prompt templates:
 2. Show: raven_workflow_show(name="meeting-prep")
 3. Render: raven_workflow_render(name="research", input={"question": "How does auth work?"})
 
+**How workflows work:**
+- Inputs are validated first
+- Context queries run with {{inputs.X}} substituted BEFORE execution
+- Prompt is rendered with both {{inputs.X}} and {{context.X}}
+
+**Context queries support input substitution:**
+  context:
+    person:
+      read: "{{inputs.person_id}}"     # Input substituted before read
+    tasks:
+      query: "object:task .owner:{{inputs.person_id}}"  # Also works
+
+**Prompt patterns:**
+- {{inputs.name}} → Raw input value
+- {{context.X}} → Auto-formatted result  
+- {{context.X.content}} → Document content (for read: results)
+- {{context.X.id}} → Object ID
+- {{context.X.fields.name}} → Specific field
+
 When to use: User asks for complex analysis, or there's a workflow matching their request.
 
 ### 13. Setting Up Templates

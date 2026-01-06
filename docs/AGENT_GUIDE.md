@@ -282,6 +282,30 @@ Workflows are reusable prompt templates. Help users discover and run them:
    - Use the prompt to guide your response to the user
 ```
 
+**How workflows work:**
+
+1. **Inputs** are validated (required fields checked, defaults applied)
+2. **Context queries** execute with `{{inputs.X}}` substituted first:
+   ```yaml
+   context:
+     person:
+       read: "{{inputs.person_id}}"     # Input substituted BEFORE read
+     tasks:
+       query: "object:task .owner:{{inputs.person_id}}"  # Also substituted
+   ```
+3. **Prompt** is rendered with both `{{inputs.X}}` and `{{context.X}}` substituted
+4. **Result** contains the rendered prompt + raw context data
+
+**Prompt variable patterns:**
+
+| Pattern | What It Returns |
+|---------|-----------------|
+| `{{inputs.name}}` | Raw input value |
+| `{{context.X}}` | Auto-formatted result (readable for prompts) |
+| `{{context.X.content}}` | Document content (for `read:` results) |
+| `{{context.X.id}}` | Object ID |
+| `{{context.X.fields.name}}` | Specific field value |
+
 **When to use workflows:**
 - User asks for a complex, multi-step analysis
 - User wants consistent formatting for recurring tasks

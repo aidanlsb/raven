@@ -160,6 +160,8 @@ When `type: ref` is used with a `target`, the input is validated to ensure it re
 
 The `context` block gathers data before the prompt is rendered. This reduces round-trips when the agent executes the workflow.
 
+**Important:** All context queries support `{{inputs.X}}` substitution. Inputs are substituted *before* the query executes, enabling dynamic context gathering based on user-provided inputs.
+
 Each context entry uses one of these query types:
 
 ### Read a single object
@@ -181,9 +183,13 @@ context:
   
   overdue_tasks:
     query: "trait:due value:past"
+  
+  # Dynamic query using inputs:
+  project_tasks:
+    query: "object:task .project:{{inputs.project_id}}"
 ```
 
-This uses Raven's query language exactly as documented. Returns an array of matching results.
+This uses Raven's query language exactly as documented. Returns an array of matching results. Input variables like `{{inputs.project_id}}` are substituted before the query executes.
 
 Note: The query language requires a type constraint (`object:<type>` or `trait:<name>`). For unconstrained full-text search, use `search:` instead.
 
