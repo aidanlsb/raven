@@ -66,6 +66,7 @@ Agent: Created projects/midgard-security-audit.md linked to [[clients/midgard]].
   - [Querying](#querying)
 - [Configuration](#configuration)
   - [Schema (schema.yaml)](#schema-schemayaml)
+  - [Templates](#templates)
   - [Vault Config (raven.yaml)](#vault-config-ravenyaml)
   - [Global Config](#global-config-configravenconfigtoml)
 - [CLI Reference](#cli-reference)
@@ -444,6 +445,77 @@ traits:
 **Field types:** `string`, `date`, `datetime`, `enum`, `bool`, `ref`
 
 **Trait types:** `date`, `datetime`, `enum`, `boolean`, `string`
+
+### Templates
+
+Templates provide default content when creating new notes. Define a `template` field on any type:
+
+```yaml
+# schema.yaml
+types:
+  meeting:
+    default_path: meetings/
+    template: templates/meeting.md    # File-based template
+    fields:
+      time: { type: datetime }
+      attendees: { type: string }
+
+  quick-note:
+    template: |                        # Inline template
+      # {{title}}
+      
+      ## Notes
+```
+
+With `templates/meeting.md`:
+
+```markdown
+# {{title}}
+
+**Time:** {{field.time}}
+
+## Attendees
+
+## Agenda
+
+## Notes
+
+## Action Items
+```
+
+**Template Variables:**
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{{title}}` | Title passed to `rvn new` | "Team Sync" |
+| `{{slug}}` | Slugified title | "team-sync" |
+| `{{type}}` | The type name | "meeting" |
+| `{{date}}` | Today's date | "2026-01-02" |
+| `{{datetime}}` | Current datetime | "2026-01-02T14:30" |
+| `{{year}}`, `{{month}}`, `{{day}}` | Date components | "2026", "01", "02" |
+| `{{weekday}}` | Day name | "Monday" |
+| `{{field.X}}` | Value of field X (from `--field`) | `{{field.time}}` |
+
+**Daily Note Templates:**
+
+Configure in `raven.yaml`:
+
+```yaml
+daily_directory: daily
+daily_template: templates/daily.md   # Or inline template
+```
+
+With `templates/daily.md`:
+
+```markdown
+# {{weekday}}, {{date}}
+
+## Morning
+
+## Afternoon
+
+## Evening
+```
 
 ### Vault Config (`raven.yaml`)
 
