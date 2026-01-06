@@ -818,6 +818,35 @@ workflows:
 | `backlinks: <id>` | Find objects that reference the target |
 | `search: "<term>"` | Full-text search (unconstrained) |
 
+**Important:** All context queries support `{{inputs.X}}` substitution. The inputs are substituted *before* the query executes, allowing dynamic context gathering:
+
+```yaml
+inputs:
+  project:
+    type: ref
+    target: project
+    required: true
+
+context:
+  # All of these work - inputs are substituted before execution:
+  project_content:
+    read: "{{inputs.project}}"                    # ✓ Dynamic read
+  tasks:
+    query: "object:task .project:{{inputs.project}}"  # ✓ Dynamic query
+  mentions:
+    backlinks: "{{inputs.project}}"               # ✓ Dynamic backlinks
+```
+
+#### Prompt Variable Patterns
+
+| Pattern | Description |
+|---------|-------------|
+| `{{inputs.name}}` | Raw input value |
+| `{{context.X}}` | Entire context result (auto-formatted for readability) |
+| `{{context.X.content}}` | Document content (for `read:` results) |
+| `{{context.X.id}}` | Object ID |
+| `{{context.X.fields.field}}` | Specific field value |
+
 #### Using Workflows
 
 ```bash
