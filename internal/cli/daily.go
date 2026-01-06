@@ -52,12 +52,13 @@ Examples:
 		if !pages.Exists(vaultPath, targetPath) {
 			friendlyDate := vault.FormatDateFriendly(targetDate)
 
-			result, err := pages.Create(pages.CreateOptions{
-				VaultPath:  vaultPath,
-				TypeName:   "date",
-				Title:      friendlyDate,
-				TargetPath: targetPath,
-			})
+			result, err := pages.CreateDailyNoteWithTemplate(
+				vaultPath,
+				vaultCfg.DailyDirectory,
+				dateStr,
+				friendlyDate,
+				vaultCfg.DailyTemplate,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to create daily note: %w", err)
 			}

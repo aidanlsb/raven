@@ -141,6 +141,23 @@ types:
         type: string
         required: true
 
+  # Example with inline template:
+  # meeting:
+  #   default_path: meetings/
+  #   template: |
+  #     # {{title}}
+  #     
+  #     **Date:** {{date}}
+  #     
+  #     ## Attendees
+  #     
+  #     ## Notes
+  #     
+  #     ## Action Items
+  #
+  # Or use a file-based template:
+  #   template: templates/meeting.md
+
 # Traits: Universal annotations in content (@name or @name(value))
 # Traits can be used on any object - just add them to your content.
 # Boolean traits: @highlight (no value)

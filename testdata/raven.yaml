@@ -15,3 +15,70 @@ queries:
     tasks:
         query: trait:due
         description: All tasks with due dates
+
+workflows:
+  person-summary:
+    description: "Generate a summary of a person and their related work"
+    inputs:
+      person_id:
+        type: ref
+        target: person
+        required: true
+        description: "The person to summarize"
+    context:
+      person:
+        read: "{{inputs.person_id}}"
+      related:
+        backlinks: "{{inputs.person_id}}"
+    prompt: |
+      Summarize the following person based on their profile and related items.
+      
+      ## Person
+      {{context.person}}
+      
+      ## Related Items
+      {{context.related}}
+      
+      Generate a brief overview of this person including their role and involvement in projects.
+
+  project-status:
+    description: "Review project status and suggest next steps"
+    inputs:
+      status:
+        type: string
+        default: "active"
+        description: "Filter by project status"
+    context:
+      projects:
+        query: "object:project .status:{{inputs.status}}"
+    prompt: |
+      Review the following projects and suggest prioritized next steps.
+      
+      ## Projects
+      {{context.projects}}
+      
+      For each project, summarize its current state and recommend immediate actions.
+
+  research:
+    description: "Research a topic across the vault"
+    inputs:
+      question:
+        type: string
+        required: true
+        description: "Research question or topic"
+    context:
+      results:
+        search: "{{inputs.question}}"
+        limit: 10
+    prompt: |
+      Answer the following question using the search results.
+      
+      Question: {{inputs.question}}
+      
+      ## Relevant Content
+      {{context.results}}
+      
+      Synthesize the information and provide a comprehensive answer.
+
+  code-review:
+    file: workflows/code-review.yaml

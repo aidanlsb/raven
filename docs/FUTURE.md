@@ -1362,13 +1362,13 @@ Apply these suggestions? [Y/n/edit]"
 
 ---
 
-## Template System
+## ~~Template System~~ ✅ IMPLEMENTED
 
 Templates provide default content when creating new typed notes.
 
 ---
 
-### Type Templates
+### ~~Type Templates~~ ✅ IMPLEMENTED
 
 Define templates for new notes of each type. When `rvn new meeting "Team Sync"` runs,
 the file is created with frontmatter + template content.
@@ -1416,9 +1416,11 @@ types:
       ## Notes
 ```
 
+**Status**: ✅ Implemented. Add `template` field to any type definition in schema.yaml.
+
 ---
 
-### Template Variables
+### ~~Template Variables~~ ✅ IMPLEMENTED
 
 Simple `{{var}}` substitution — no conditionals or loops. Keep it minimal.
 
@@ -1432,6 +1434,7 @@ Simple `{{var}}` substitution — no conditionals or loops. Keep it minimal.
 | `{{year}}` | Current year | "2026" |
 | `{{month}}` | Current month (2 digit) | "01" |
 | `{{day}}` | Current day (2 digit) | "02" |
+| `{{weekday}}` | Day name | "Monday" |
 | `{{field.X}}` | Value of field X (from `--field`) | `{{field.time}}` |
 
 **Escaping:** Use `\{{literal}}` if you need literal `{{` in output.
@@ -1448,9 +1451,11 @@ Created: {{date}}
 **No conditionals for v1.** If users need conditional content, they can use agent workflows 
 to post-process the created file.
 
+**Status**: ✅ Implemented.
+
 ---
 
-### Daily Note Templates
+### ~~Daily Note Templates~~ ✅ IMPLEMENTED
 
 The `date` type is built-in and special. To customize daily note structure,
 add `daily_template` to `raven.yaml`:
@@ -1489,6 +1494,8 @@ daily_template: |
 - `{{year}}`, `{{month}}`, `{{day}}` — components
 - `{{weekday}}` — day name ("Monday", "Tuesday", etc.)
 
+**Status**: ✅ Implemented. Add `daily_template` to raven.yaml.
+
 ---
 
 ### Implementation Notes
@@ -1515,7 +1522,7 @@ daily_template: |
    - Missing template file → warning, create without template
    - Unknown variable → leave as literal `{{unknown}}`
 
-**Status**: Not implemented. Schema supports the field but template application not wired up.
+**Status**: ✅ Implemented in `internal/template/` package.
 
 ---
 

@@ -588,4 +588,60 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 			"Identify pages that could benefit from schema",
 		},
 	},
+	"workflow_list": {
+		Name:        "workflow list",
+		Description: "List available workflows",
+		LongDesc:    `Lists all workflows defined in raven.yaml with their descriptions and required inputs.`,
+		Examples: []string{
+			"rvn workflow list --json",
+		},
+		UseCases: []string{
+			"Discover available workflows",
+			"See what inputs each workflow requires",
+		},
+	},
+	"workflow_show": {
+		Name:        "workflow show",
+		Description: "Show workflow details",
+		LongDesc:    `Shows the full definition of a workflow including inputs, context queries, and prompt.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Workflow name", Required: true},
+		},
+		Examples: []string{
+			"rvn workflow show meeting-prep --json",
+		},
+		UseCases: []string{
+			"Inspect workflow configuration",
+			"Understand what a workflow does before running it",
+		},
+	},
+	"workflow_render": {
+		Name:        "workflow render",
+		Description: "Render a workflow with context",
+		LongDesc: `Renders a workflow and returns the prompt with pre-gathered context.
+
+This command:
+1. Loads the workflow definition
+2. Validates inputs
+3. Runs all context queries (read, query, backlinks, search)
+4. Renders the template with input and context substitution
+5. Returns the complete prompt and gathered context
+
+The returned prompt and context are ready for an agent to execute.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Workflow name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "input", Description: "Set input value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"meeting_id=meetings/alice-1on1", "question=How does auth work?"}},
+		},
+		Examples: []string{
+			"rvn workflow render meeting-prep --input meeting_id=meetings/alice-1on1 --json",
+			"rvn workflow render research --input question=\"How does the auth system work?\" --json",
+		},
+		UseCases: []string{
+			"Execute a workflow with specific inputs",
+			"Get a pre-formatted prompt for agent execution",
+			"Gather context before running a complex task",
+		},
+	},
 }
