@@ -158,6 +158,8 @@ func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
 			return p.parseChildPredicate(negated)
 		case "refs":
 			return p.parseRefsPredicate(negated)
+		case "content":
+			return p.parseContentPredicate(negated)
 		// Trait predicates
 		case "value":
 			return p.parseValuePredicate(negated)
@@ -286,6 +288,22 @@ func (p *Parser) parseRefsPredicate(negated bool) (Predicate, error) {
 	}
 
 	return nil, fmt.Errorf("expected [[reference]] or {subquery} after refs:")
+}
+
+// parseContentPredicate parses content:"search terms"
+func (p *Parser) parseContentPredicate(negated bool) (Predicate, error) {
+	// Expect a quoted string
+	if p.curr.Type != TokenString {
+		return nil, fmt.Errorf("expected quoted string after content:, got %v", p.curr.Type)
+	}
+
+	searchTerm := p.curr.Value
+	p.advance()
+
+	return &ContentPredicate{
+		basePredicate: basePredicate{negated: negated},
+		SearchTerm:    searchTerm,
+	}, nil
 }
 
 // parseValuePredicate parses value:val

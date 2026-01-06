@@ -117,6 +117,11 @@ func parseTraitValue(valueStr string) schema.FieldValue {
 
 // ExtractTraitContent extracts the full content for a trait.
 // Returns the content after removing all trait annotations from the line.
+//
+// CONTENT SCOPE RULE: A trait's content consists of all text on the same line
+// as the trait annotation. This same rule applies to determining which references
+// are associated with a trait - refs on the same line are considered part of the
+// trait's content. See IsRefOnTraitLine for the matching implementation.
 func ExtractTraitContent(lines []string, lineIdx int) string {
 	if lineIdx >= len(lines) {
 		return ""
@@ -126,4 +131,14 @@ func ExtractTraitContent(lines []string, lineIdx int) string {
 	// Remove the trait annotation itself, return remaining content
 	result := traitRegex.ReplaceAllString(line, "")
 	return strings.TrimSpace(result)
+}
+
+// IsRefOnTraitLine returns true if a reference is on the same line as a trait.
+// This implements the CONTENT SCOPE RULE: refs on the same line as a trait
+// are considered associated with that trait's content.
+//
+// This function is the single source of truth for trait-to-reference association.
+// The query executor uses this same logic (matching by file_path and line_number).
+func IsRefOnTraitLine(traitLine, refLine int) bool {
+	return traitLine == refLine
 }

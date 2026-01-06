@@ -100,3 +100,43 @@ func TestParseTrait(t *testing.T) {
 		})
 	}
 }
+
+func TestIsRefOnTraitLine(t *testing.T) {
+	// This test documents the CONTENT SCOPE RULE:
+	// A reference is associated with a trait if and only if they are on the same line.
+	tests := []struct {
+		name      string
+		traitLine int
+		refLine   int
+		want      bool
+	}{
+		{
+			name:      "same line - associated",
+			traitLine: 10,
+			refLine:   10,
+			want:      true,
+		},
+		{
+			name:      "different lines - not associated",
+			traitLine: 10,
+			refLine:   11,
+			want:      false,
+		},
+		{
+			name:      "ref before trait - not associated",
+			traitLine: 10,
+			refLine:   9,
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsRefOnTraitLine(tt.traitLine, tt.refLine)
+			if got != tt.want {
+				t.Errorf("IsRefOnTraitLine(%d, %d) = %v, want %v",
+					tt.traitLine, tt.refLine, got, tt.want)
+			}
+		})
+	}
+}

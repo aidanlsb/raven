@@ -260,15 +260,18 @@ Use this after:
 - Schema changes that affect indexing
 - Recovering from index corruption
 
-By default, reindexes all files. Use --smart for incremental mode that only
-reindexes files that have changed since the last index.`,
+By default, performs an incremental reindex that only processes files that have
+changed since the last index. Deleted files are automatically detected and
+removed from the index.
+
+Use --full to force a complete rebuild of the entire index.`,
 		Examples: []string{
 			"rvn reindex",
-			"rvn reindex --smart",
-			"rvn reindex --smart --dry-run",
+			"rvn reindex --dry-run",
+			"rvn reindex --full",
 		},
 		Flags: []FlagMeta{
-			{Name: "smart", Description: "Only reindex files that have changed since last index", Type: FlagTypeBool},
+			{Name: "full", Description: "Force full reindex of all files (default is incremental)", Type: FlagTypeBool},
 			{Name: "dry-run", Description: "Show what would be reindexed without doing it", Type: FlagTypeBool},
 		},
 	},

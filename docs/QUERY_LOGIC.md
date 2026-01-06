@@ -177,6 +177,34 @@ object:meeting !refs:[[projects/website]]
 
 **Note:** For finding all objects that reference a given target (backlinks/incoming links), use `rvn backlinks <target>`. The `refs:` predicate filters by outgoing references within a typed query.
 
+### Content Search (`content:`)
+
+Filter by full-text search on object content. Uses FTS5 for efficient text matching.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `content:"term"` | Content contains search term(s) |
+| `content:"exact phrase"` | Content contains exact phrase |
+| `!content:"term"` | Content does NOT contain term |
+
+**Search syntax** (FTS5):
+- Simple words: `content:"meeting notes"` (finds pages with both words)
+- Exact phrase: `content:"team meeting"` (exact phrase match)
+- Prefix: `content:"meet*"` (matches meeting, meetings, etc.)
+- Boolean: `content:"meeting AND notes"`, `content:"meeting OR notes"`
+
+**Examples:**
+```
+object:person content:"colleague"
+object:project content:"api design"
+object:meeting content:"quarterly review"
+object:person !content:"contractor"
+
+# Combined with other predicates
+object:person .status:active content:"engineer"
+object:project has:due content:"deadline"
+```
+
 ---
 
 ## Trait Query Predicates
@@ -250,6 +278,28 @@ trait:highlight within:{object:date}
 trait:due within:{object:project .status:active}
 trait:due (within:book | within:article)
 ```
+
+### References (`refs:`)
+
+Filter traits by references that appear on the same line as the trait. Use `refs:[[target]]` for a specific target, or `refs:{object:...}` to match targets by a sub-query.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `refs:[[target]]` | Trait line contains reference to specific target |
+| `refs:{object:<type> ...}` | Trait line contains reference to objects matching sub-query |
+| `!refs:[[target]]` | Trait line does NOT contain reference to target |
+| `!refs:{object:<type> ...}` | Trait line does NOT contain references to any matching objects |
+
+**Examples:**
+```
+trait:due refs:[[people/freya]]
+trait:highlight refs:[[projects/website]]
+trait:due refs:{object:person}
+trait:due refs:{object:project .status:active}
+trait:highlight !refs:[[people/loki]]
+```
+
+**Note:** The `refs:` predicate for traits matches references that appear on the same line as the trait annotation. This is useful for finding tasks assigned to specific people (`@due(tomorrow) Send report to [[people/freya]]`) or highlights that reference specific projects.
 
 ---
 
@@ -359,7 +409,7 @@ Inside sub-query curly braces, write full queries with explicit type prefixes:
 trait:<name> [<trait-predicates>...]
 ```
 
-**Object sub-query** (inside `on:{...}`, `within:{...}`, `parent:{...}`, `ancestor:{...}`, `child:{...}`, `refs:{...}`)
+**Object sub-query** (inside `on:{...}`, `within:{...}`, `parent:{...}`, `ancestor:{...}`, `child:{...}`, `refs:{...}` for both object and trait queries)
 ```
 object:<type> [<object-predicates>...]
 ```
@@ -417,6 +467,18 @@ trait:due value:past within:{object:project .status:active}
 
 # Highlights in books or articles that are being read
 trait:highlight (on:{object:book .status:reading} | on:{object:article .status:reading})
+
+# Due items that reference a specific person (e.g., tasks assigned to someone)
+trait:due refs:[[people/freya]]
+
+# Highlights that reference any active project
+trait:highlight refs:{object:project .status:active}
+
+# People whose pages mention "colleague"
+object:person content:"colleague"
+
+# Active projects with deadline-related content
+object:project .status:active content:"deadline"
 
 # Projects with active status OR having high-priority traits, but NOT deprecated
 object:project (.status:active | has:{trait:priority value:high}) !has:deprecated

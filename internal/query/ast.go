@@ -86,6 +86,15 @@ type RefsPredicate struct {
 
 func (RefsPredicate) predicateNode() {}
 
+// ContentPredicate filters objects by full-text search on their content.
+// Syntax: content:"search terms", content:"exact phrase"
+type ContentPredicate struct {
+	basePredicate
+	SearchTerm string // The search term or phrase
+}
+
+func (ContentPredicate) predicateNode() {}
+
 // ValuePredicate filters traits by value.
 // Syntax: value:val, !value:val
 type ValuePredicate struct {

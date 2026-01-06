@@ -23,6 +23,7 @@ const (
 	TokenRBracket           // ]
 	TokenStar               // *
 	TokenRef                // [[...]] reference
+	TokenString             // "quoted string" for content search
 	TokenError              // error token
 )
 
@@ -95,6 +96,8 @@ func (l *Lexer) NextToken() Token {
 	case '*':
 		l.pos++
 		return Token{Type: TokenStar, Value: "*", Pos: l.start}
+	case '"':
+		return l.scanString()
 	default:
 		if isIdentStart(ch) {
 			return l.scanIdent()
@@ -141,6 +144,34 @@ func (l *Lexer) scanReference() Token {
 	// Extract the reference path (without [[ and ]])
 	value := strings.TrimPrefix(strings.TrimSuffix(literal, "]]"), "[[")
 	return Token{Type: TokenRef, Value: value, Literal: literal, Pos: start}
+}
+
+func (l *Lexer) scanString() Token {
+	start := l.pos
+	// Skip opening quote
+	l.pos++
+
+	// Find closing quote
+	for l.pos < len(l.input) {
+		ch := l.input[l.pos]
+		if ch == '"' {
+			l.pos++
+			break
+		}
+		// Handle escaped quotes
+		if ch == '\\' && l.pos+1 < len(l.input) {
+			l.pos += 2
+			continue
+		}
+		l.pos++
+	}
+
+	literal := l.input[start:l.pos]
+	// Extract the string content (without quotes)
+	value := strings.TrimPrefix(strings.TrimSuffix(literal, "\""), "\"")
+	// Unescape escaped quotes
+	value = strings.ReplaceAll(value, "\\\"", "\"")
+	return Token{Type: TokenString, Value: value, Literal: literal, Pos: start}
 }
 
 func isIdentStart(ch byte) bool {

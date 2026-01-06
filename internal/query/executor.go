@@ -178,6 +178,8 @@ func (e *Executor) buildObjectPredicateSQL(pred Predicate, alias string) (string
 		return e.buildChildPredicateSQL(p, alias)
 	case *RefsPredicate:
 		return e.buildRefsPredicateSQL(p, alias)
+	case *ContentPredicate:
+		return e.buildContentPredicateSQL(p, alias)
 	case *OrPredicate:
 		return e.buildOrPredicateSQL(p, alias, e.buildObjectPredicateSQL)
 	case *GroupPredicate:
@@ -198,6 +200,8 @@ func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string,
 		return e.buildOnPredicateSQL(p, alias)
 	case *WithinPredicate:
 		return e.buildWithinPredicateSQL(p, alias)
+	case *RefsPredicate:
+		return e.buildTraitRefsPredicateSQL(p, alias)
 	case *OrPredicate:
 		return e.buildOrPredicateSQL(p, alias, e.buildTraitPredicateSQL)
 	case *GroupPredicate:
@@ -395,6 +399,81 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 			)
 			WHERE r.source_id = %s.id AND %s
 		)`, alias, strings.Join(targetConditions, " AND "))
+	} else {
+		return "", nil, fmt.Errorf("refs predicate must have target or subquery")
+	}
+
+	if p.Negated() {
+		cond = "NOT " + cond
+	}
+
+	return cond, args, nil
+}
+
+// buildContentPredicateSQL builds SQL for content:"search terms" predicates.
+// Uses FTS5 full-text search to filter objects by their content.
+func (e *Executor) buildContentPredicateSQL(p *ContentPredicate, alias string) (string, []interface{}, error) {
+	// Use FTS5 to search content
+	// The fts_content table has: object_id, title, content, file_path
+	cond := fmt.Sprintf(`EXISTS (
+		SELECT 1 FROM fts_content
+		WHERE fts_content.object_id = %s.id
+		  AND fts_content MATCH ?
+	)`, alias)
+
+	if p.Negated() {
+		cond = "NOT " + cond
+	}
+
+	return cond, []interface{}{p.SearchTerm}, nil
+}
+
+// buildTraitRefsPredicateSQL builds SQL for refs:[[target]] or refs:{object:...} predicates on traits.
+//
+// CONTENT SCOPE RULE: This matches refs that appear on the same line as the trait.
+// This is the same rule used by parser.IsRefOnTraitLine and parser.ExtractTraitContent -
+// a trait's associated content (including references) is defined as everything on the
+// same line as the trait annotation.
+func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (string, []interface{}, error) {
+	var cond string
+	var args []interface{}
+
+	if p.Target != "" {
+		// Direct reference to specific target
+		// Match refs on the same line as the trait
+		cond = fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM refs r
+			WHERE r.file_path = %s.file_path 
+			  AND r.line_number = %s.line_number
+			  AND (r.target_id = ? OR (r.target_id IS NULL AND r.target_raw = ?))
+		)`, alias, alias)
+		args = append(args, p.Target, p.Target)
+	} else if p.SubQuery != nil {
+		// Subquery - reference to objects matching the subquery
+		var targetConditions []string
+		targetConditions = append(targetConditions, "target_obj.type = ?")
+		args = append(args, p.SubQuery.TypeName)
+
+		for _, pred := range p.SubQuery.Predicates {
+			predCond, predArgs, err := e.buildObjectPredicateSQL(pred, "target_obj")
+			if err != nil {
+				return "", nil, err
+			}
+			targetConditions = append(targetConditions, predCond)
+			args = append(args, predArgs...)
+		}
+
+		// Match refs on the same line as the trait that point to matching objects
+		cond = fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM refs r
+			JOIN objects target_obj ON (
+				r.target_id = target_obj.id OR 
+				(r.target_id IS NULL AND r.target_raw = target_obj.id)
+			)
+			WHERE r.file_path = %s.file_path 
+			  AND r.line_number = %s.line_number
+			  AND %s
+		)`, alias, alias, strings.Join(targetConditions, " AND "))
 	} else {
 		return "", nil, fmt.Errorf("refs predicate must have target or subquery")
 	}

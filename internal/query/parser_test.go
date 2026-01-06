@@ -458,6 +458,66 @@ func TestParseRefsPredicate(t *testing.T) {
 	}
 }
 
+func TestParseContentPredicate(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantTerm   string
+		wantNeg    bool
+		wantErr    bool
+	}{
+		{
+			name:     "simple content search",
+			input:    `object:person content:"colleague"`,
+			wantTerm: "colleague",
+		},
+		{
+			name:     "content with multiple words",
+			input:    `object:project content:"api design"`,
+			wantTerm: "api design",
+		},
+		{
+			name:     "negated content search",
+			input:    `object:person !content:"contractor"`,
+			wantTerm: "contractor",
+			wantNeg:  true,
+		},
+		{
+			name:    "content without quotes",
+			input:   `object:person content:colleague`,
+			wantErr: true, // requires quoted string
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+			cp, ok := q.Predicates[0].(*ContentPredicate)
+			if !ok {
+				t.Fatalf("expected ContentPredicate, got %T", q.Predicates[0])
+			}
+			if cp.SearchTerm != tt.wantTerm {
+				t.Errorf("SearchTerm = %q, want %q", cp.SearchTerm, tt.wantTerm)
+			}
+			if cp.Negated() != tt.wantNeg {
+				t.Errorf("Negated() = %v, want %v", cp.Negated(), tt.wantNeg)
+			}
+		})
+	}
+}
+
 func TestParseComplexQueries(t *testing.T) {
 	tests := []struct {
 		name    string

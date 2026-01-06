@@ -996,10 +996,10 @@ rvn check --strict              # Treat warnings as errors
 rvn check --create-missing      # Interactively create missing referenced pages
 rvn check --by-file             # Group issues by file path
 
-# Reindex all files
+# Reindex (incremental by default - only changed/deleted files)
 rvn reindex
-rvn reindex --smart             # Only reindex changed files
-rvn reindex --smart --dry-run   # Show what would be reindexed
+rvn reindex --dry-run           # Show what would be reindexed
+rvn reindex --full              # Force full reindex of all files
 
 # Query objects
 rvn query "object:person"                 # All people
@@ -1014,6 +1014,11 @@ rvn query "trait:due value:past"          # Overdue items
 rvn query "trait:priority value:high"     # High priority items
 rvn query "trait:highlight"               # All highlighted items
 rvn query "trait:highlight on:{object:book .status:reading}"
+rvn query "trait:due refs:[[people/freya]]"  # Tasks referencing Freya
+
+# Query with full-text content search
+rvn query 'object:person content:"colleague"'   # People pages mentioning "colleague"
+rvn query 'object:project content:"api design"' # Projects about API design
 
 # Saved queries (defined in raven.yaml)
 rvn query --list                          # List available saved queries
@@ -1159,6 +1164,8 @@ rvn query "object:project"                           # All projects
 rvn query "object:project .status:active"            # Active projects
 rvn query "object:meeting .attendees:[[people/thor]]" # Thor's meetings
 rvn query "object:project ancestor:{object:date}"    # Projects in daily notes
+rvn query 'object:person content:"colleague"'        # People pages containing "colleague"
+rvn query 'object:project content:"api"'             # Projects mentioning "api"
 ```
 
 **Trait Query Examples**:
@@ -1169,6 +1176,8 @@ rvn query "trait:due value:past"                     # Overdue items
 rvn query "trait:remind value:this-week"             # This week's reminders
 rvn query "trait:highlight"                          # All highlights
 rvn query "trait:highlight on:{object:meeting}"      # Highlights in meetings
+rvn query "trait:due refs:[[people/freya]]"          # Tasks that reference Freya
+rvn query "trait:highlight refs:{object:project}"    # Highlights referencing any project
 ```
 
 **Boolean Logic**:
@@ -2146,7 +2155,7 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_backlinks` | Find references to object | `target` |
 | `raven_date` | Get activity for date | `date` |
 | `raven_check` | Validate vault against schema | optional `refresh` (reindex stale files first) |
-| `raven_reindex` | Rebuild the index | optional `smart` (only changed files) |
+| `raven_reindex` | Rebuild the index | optional `full` (force complete rebuild) |
 | `raven_stats` | Vault statistics | (none) |
 | `raven_schema` | Introspect schema | optional `subcommand` |
 | `raven_schema_add_type` | Add type to schema | `name`, optional `default_path` |

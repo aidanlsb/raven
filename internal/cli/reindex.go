@@ -18,28 +18,34 @@ var reindexCmd = &cobra.Command{
 	Short: "Reindex all files",
 	Long: `Parses all markdown files in the vault and rebuilds the SQLite index.
 
-By default, reindexes all files. Use --smart for incremental mode that only
-reindexes files that have changed since the last index.
+By default, performs an incremental reindex that only processes files that have
+changed since the last index. Deleted files are automatically detected and
+removed from the index.
+
+Use --full to force a complete rebuild of the entire index.
 
 Examples:
-  # Full reindex
+  # Incremental reindex (default - only changed/deleted files)
   rvn reindex
 
-  # Smart incremental reindex (only changed files)
-  rvn reindex --smart
+  # Full reindex (rebuild everything)
+  rvn reindex --full
 
   # Check what would be reindexed without doing it
-  rvn reindex --smart --dry-run`,
+  rvn reindex --dry-run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		smart, _ := cmd.Flags().GetBool("smart")
+		fullReindex, _ := cmd.Flags().GetBool("full")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
+		// Incremental is the default, --full forces complete rebuild
+		incremental := !fullReindex
+
 		if !jsonOutput && !dryRun {
-			if smart {
-				fmt.Printf("Smart reindexing vault: %s\n", vaultPath)
-			} else {
+			if incremental {
 				fmt.Printf("Reindexing vault: %s\n", vaultPath)
+			} else {
+				fmt.Printf("Full reindexing vault: %s\n", vaultPath)
 			}
 		}
 
@@ -58,7 +64,7 @@ Examples:
 
 		// If schema was rebuilt, force full reindex
 		if wasRebuilt {
-			smart = false
+			incremental = false
 			if !jsonOutput {
 				fmt.Println("Database schema was outdated - performing full reindex.")
 			}
@@ -74,9 +80,42 @@ Examples:
 			fmt.Printf("Cleaned up %d files from .trash/ in index\n", trashRemoved)
 		}
 
-		var fileCount, skippedCount, errorCount int
+		var fileCount, skippedCount, errorCount, deletedCount int
 		var errors []string
 		var staleFiles []string
+		var deletedFiles []string
+
+		// In incremental mode, first detect and remove deleted files
+		if incremental {
+			if dryRun {
+				// In dry-run mode, just detect deleted files without removing
+				indexedPaths, err := db.AllIndexedFilePaths()
+				if err != nil && !jsonOutput {
+					fmt.Fprintf(os.Stderr, "Warning: failed to check for deleted files: %v\n", err)
+				} else {
+					for _, relPath := range indexedPaths {
+						fullPath := vaultPath + "/" + relPath
+						if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+							deletedFiles = append(deletedFiles, relPath)
+							if !jsonOutput {
+								fmt.Printf("  Would remove (deleted): %s\n", relPath)
+							}
+						}
+					}
+					deletedCount = len(deletedFiles)
+				}
+			} else {
+				// Actually remove deleted files
+				deletedFiles, err = db.RemoveDeletedFiles(vaultPath)
+				if err != nil && !jsonOutput {
+					fmt.Fprintf(os.Stderr, "Warning: failed to clean up deleted files: %v\n", err)
+				}
+				deletedCount = len(deletedFiles)
+				if deletedCount > 0 && !jsonOutput {
+					fmt.Printf("Removed %d deleted files from index\n", deletedCount)
+				}
+			}
+		}
 
 		// Walk all markdown files
 		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
@@ -89,8 +128,8 @@ Examples:
 				return nil
 			}
 
-			// In smart mode, check if file needs reindexing
-			if smart {
+			// In incremental mode, check if file needs reindexing
+			if incremental {
 				indexedMtime, err := db.GetFileMtime(result.RelativePath)
 				if err == nil && indexedMtime > 0 && result.FileMtime <= indexedMtime {
 					// File hasn't changed since last index
@@ -139,6 +178,11 @@ Examples:
 			if err != nil && !jsonOutput {
 				fmt.Fprintf(os.Stderr, "Warning: failed to resolve references: %v\n", err)
 			}
+
+			// Update query planner statistics for optimal performance
+			if err := db.Analyze(); err != nil && !jsonOutput {
+				fmt.Fprintf(os.Stderr, "Warning: failed to analyze database: %v\n", err)
+			}
 		}
 
 		stats, err := db.Stats()
@@ -150,16 +194,18 @@ Examples:
 			data := map[string]interface{}{
 				"files_indexed":  fileCount,
 				"files_skipped":  skippedCount,
+				"files_deleted":  deletedCount,
 				"objects":        stats.ObjectCount,
 				"traits":         stats.TraitCount,
 				"references":     stats.RefCount,
 				"schema_rebuilt": wasRebuilt,
-				"smart_mode":     smart,
+				"incremental":    incremental,
 				"dry_run":        dryRun,
 				"errors":         errors,
 			}
-			if smart {
+			if incremental {
 				data["stale_files"] = staleFiles
+				data["deleted_files"] = deletedFiles
 			}
 			if refResult != nil {
 				data["refs_resolved"] = refResult.Resolved
@@ -172,15 +218,21 @@ Examples:
 			out, _ := json.MarshalIndent(result, "", "  ")
 			fmt.Println(string(out))
 		} else if dryRun {
-			if smart {
-				fmt.Printf("\nDry run: %d files would be reindexed, %d up-to-date\n", fileCount, skippedCount)
+			if incremental {
+				fmt.Printf("\nDry run: %d files would be reindexed, %d deleted, %d up-to-date\n",
+					fileCount, deletedCount, skippedCount)
 			} else {
 				fmt.Printf("\nDry run: %d files would be reindexed\n", fileCount)
 			}
 		} else {
 			fmt.Println()
-			if smart && skippedCount > 0 {
-				fmt.Printf("✓ Indexed %d changed files (%d up-to-date)\n", fileCount, skippedCount)
+			if incremental && (skippedCount > 0 || deletedCount > 0) {
+				if deletedCount > 0 {
+					fmt.Printf("✓ Indexed %d changed files, removed %d deleted (%d up-to-date)\n",
+						fileCount, deletedCount, skippedCount)
+				} else {
+					fmt.Printf("✓ Indexed %d changed files (%d up-to-date)\n", fileCount, skippedCount)
+				}
 			} else {
 				fmt.Printf("✓ Indexed %d files\n", fileCount)
 			}
@@ -204,6 +256,6 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(reindexCmd)
-	reindexCmd.Flags().Bool("smart", false, "Only reindex files that have changed since last index")
+	reindexCmd.Flags().Bool("full", false, "Force full reindex of all files (default is incremental)")
 	reindexCmd.Flags().Bool("dry-run", false, "Show what would be reindexed without doing it")
 }
