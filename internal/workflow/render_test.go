@@ -164,7 +164,7 @@ func TestRenderPrompt(t *testing.T) {
 		{
 			name:     "context object",
 			template: "Person: {{context.person}}",
-			expected: `Person: {"id":"people/freya","name":"Freya"}`,
+			expected: "Person: - **id**: people/freya\n- **name**: Freya",
 		},
 		{
 			name:     "context path",

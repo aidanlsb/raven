@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -247,12 +248,173 @@ func formatValue(val interface{}) string {
 		return fmt.Sprintf("%v", v)
 	case nil:
 		return ""
+	case []interface{}:
+		// Format arrays more readably
+		return formatArray(v)
+	case []map[string]interface{}:
+		// Format arrays of maps (common from query results)
+		return formatMapArray(v)
+	case map[string]interface{}:
+		// Format objects more readably
+		return formatObject(v)
 	default:
-		// For complex types, return JSON
-		b, err := json.Marshal(v)
+		// For other complex types, return pretty JSON
+		b, err := json.MarshalIndent(v, "", "  ")
 		if err != nil {
 			return fmt.Sprintf("%v", v)
 		}
 		return string(b)
 	}
+}
+
+// formatMapArray formats an array of maps for readable output.
+func formatMapArray(arr []map[string]interface{}) string {
+	if len(arr) == 0 {
+		return "(none)"
+	}
+
+	var lines []string
+	for i, item := range arr {
+		line := formatObjectSummary(item, i+1)
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// formatArray formats an array for readable output in prompts.
+func formatArray(arr []interface{}) string {
+	if len(arr) == 0 {
+		return "(none)"
+	}
+
+	var lines []string
+	for i, item := range arr {
+		switch v := item.(type) {
+		case map[string]interface{}:
+			// For objects, try to extract meaningful info
+			line := formatObjectSummary(v, i+1)
+			lines = append(lines, line)
+		case string:
+			lines = append(lines, fmt.Sprintf("- %s", v))
+		default:
+			b, _ := json.Marshal(v)
+			lines = append(lines, fmt.Sprintf("- %s", string(b)))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// formatObjectSummary creates a readable one-line summary of an object.
+func formatObjectSummary(obj map[string]interface{}, num int) string {
+	// Try to find the most useful fields to display
+	var parts []string
+
+	// First, try to get a good identifier
+	identifier := ""
+	// Prefer title/name over IDs for readability
+	for _, key := range []string{"title", "name"} {
+		if val, ok := obj[key]; ok && val != nil {
+			if s, ok := val.(string); ok && s != "" {
+				identifier = s
+				break
+			}
+		}
+	}
+	// Fall back to ID fields
+	if identifier == "" {
+		for _, key := range []string{"id", "object_id", "source_id"} {
+			if val, ok := obj[key]; ok && val != nil {
+				if s, ok := val.(string); ok && s != "" {
+					identifier = s
+					break
+				}
+			}
+		}
+	}
+	if identifier != "" {
+		parts = append(parts, identifier)
+	}
+
+	// Add type if present
+	if t, ok := obj["type"].(string); ok && t != "" {
+		parts = append(parts, fmt.Sprintf("(%s)", t))
+	}
+
+	// Add file path if present and not already shown via identifier
+	if fp, ok := obj["file_path"].(string); ok && fp != "" {
+		hasPath := false
+		for _, p := range parts {
+			if strings.Contains(p, "/") {
+				hasPath = true
+				break
+			}
+		}
+		if !hasPath {
+			parts = append(parts, fmt.Sprintf("[%s]", fp))
+		}
+	}
+
+	// Add line number if present
+	if line, ok := obj["line"].(float64); ok {
+		parts = append(parts, fmt.Sprintf("line %d", int(line)))
+	}
+
+	// Add snippet if present (for search results)
+	if snippet, ok := obj["snippet"].(string); ok && snippet != "" {
+		// Truncate long snippets
+		if len(snippet) > 100 {
+			snippet = snippet[:97] + "..."
+		}
+		// Clean up snippet for single line
+		snippet = strings.ReplaceAll(snippet, "\n", " ")
+		parts = append(parts, fmt.Sprintf("- %s", snippet))
+	}
+
+	if len(parts) == 0 {
+		// Fallback to JSON
+		b, _ := json.Marshal(obj)
+		return fmt.Sprintf("%d. %s", num, string(b))
+	}
+
+	return fmt.Sprintf("%d. %s", num, strings.Join(parts, " "))
+}
+
+// formatObject formats a single object for readable output.
+func formatObject(obj map[string]interface{}) string {
+	// If it has content, prefer showing that
+	if content, ok := obj["content"].(string); ok && content != "" {
+		return content
+	}
+
+	// Otherwise, format as readable key-value pairs
+	var lines []string
+	for key, val := range obj {
+		if val == nil {
+			continue
+		}
+		switch v := val.(type) {
+		case string:
+			if v != "" {
+				lines = append(lines, fmt.Sprintf("- **%s**: %s", key, v))
+			}
+		case float64:
+			lines = append(lines, fmt.Sprintf("- **%s**: %v", key, v))
+		case bool:
+			lines = append(lines, fmt.Sprintf("- **%s**: %v", key, v))
+		case map[string]interface{}:
+			b, _ := json.Marshal(v)
+			lines = append(lines, fmt.Sprintf("- **%s**: %s", key, string(b)))
+		default:
+			b, _ := json.Marshal(v)
+			lines = append(lines, fmt.Sprintf("- **%s**: %s", key, string(b)))
+		}
+	}
+
+	if len(lines) == 0 {
+		return "(empty)"
+	}
+
+	// Sort for consistent output
+	sort.Strings(lines)
+	return strings.Join(lines, "\n")
 }

@@ -165,7 +165,129 @@ After bulk operations or schema changes:
    - If queries return stale results
 ```
 
-### 7. Setting Up Templates
+### 7. Deleting Content
+
+**⚠️ ALWAYS confirm with the user before deleting anything.**
+
+When users want to remove files:
+
+```
+1. FIRST check for backlinks:
+   raven_backlinks(target="projects/old-project")
+
+2. THEN confirm with the user before deleting:
+   - "I found this file is referenced by 3 other pages. Deleting it will create 
+     broken links. Are you sure you want to delete it?"
+   - Even if no backlinks: "Are you sure you want to delete projects/old-project?"
+
+3. Only after user confirms, use raven_delete:
+   raven_delete(object_id="projects/old-project")
+
+4. Files are moved to .trash/ by default (not permanently deleted), but still 
+   ALWAYS get user confirmation first.
+```
+
+**Never delete without explicit user approval, even if they asked to delete something.**
+
+### 8. Daily Notes & Dates
+
+When users ask about daily notes or date-based queries:
+
+```
+1. Use raven_daily to open/create daily notes:
+   raven_daily()                    # Today's note
+   raven_daily(date="yesterday")    # Yesterday
+   raven_daily(date="2026-01-15")   # Specific date
+
+2. Use raven_date for a date hub (everything related to a date):
+   raven_date()                     # Today
+   raven_date(date="2026-01-15")    # Specific date
+   
+   Returns: daily note, items due on that date, meetings, etc.
+```
+
+### 9. Vault Statistics & Untyped Pages
+
+For understanding vault structure:
+
+```
+1. Use raven_stats for vault overview:
+   raven_stats()
+   - Returns counts of objects, traits, references, files by type
+
+2. Use raven_untyped to find pages without explicit types:
+   raven_untyped()
+   - Returns files using fallback 'page' type
+   - Helpful for cleanup: "I found 23 untyped pages. Would you like to 
+     assign types to them?"
+```
+
+### 10. Managing Saved Queries
+
+Help users create reusable queries:
+
+```
+1. Add a saved query:
+   raven_query_add(name="urgent", query_string="trait:due value:this-week|past", 
+                   description="Due soon or overdue")
+
+2. Remove a saved query:
+   raven_query_remove(name="old-query")
+
+3. List saved queries:
+   raven_query(list=true)
+```
+
+### 11. Schema Updates & Removals
+
+For modifying existing schema elements:
+
+```
+1. Update a type:
+   raven_schema_update_type(name="person", default_path="contacts/")
+   raven_schema_update_type(name="meeting", add_trait="due")
+
+2. Update a trait:
+   raven_schema_update_trait(name="priority", values="critical,high,medium,low")
+
+3. Update a field:
+   raven_schema_update_field(type_name="person", field_name="email", required="true")
+
+4. Remove schema elements (use with caution):
+   raven_schema_remove_type(name="old-type", force=true)
+   raven_schema_remove_trait(name="unused-trait", force=true)
+   raven_schema_remove_field(type_name="person", field_name="nickname")
+
+5. Validate schema:
+   raven_schema_validate()
+```
+
+### 12. Workflows
+
+Workflows are reusable prompt templates. Help users discover and run them:
+
+```
+1. List available workflows:
+   raven_workflow_list()
+
+2. Show workflow details:
+   raven_workflow_show(name="meeting-prep")
+   - Returns inputs required, context queries, and prompt template
+
+3. Render a workflow with inputs:
+   raven_workflow_render(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
+   raven_workflow_render(name="research", input={"question": "How does auth work?"})
+   
+   - Returns rendered prompt with gathered context
+   - Use the prompt to guide your response to the user
+```
+
+**When to use workflows:**
+- User asks for a complex, multi-step analysis
+- User wants consistent formatting for recurring tasks
+- There's a workflow matching their request (check with raven_workflow_list)
+
+### 13. Setting Up Templates
 
 Templates provide default content when users create new notes. Help users set up templates by editing their schema and creating template files.
 
@@ -320,4 +442,45 @@ daily_template: |
               new_str="meeting:\n    default_path: meetings/\n    template: templates/meeting.md", 
               confirm=true)
 → "Done! Now when you run 'rvn new meeting \"Team Sync\"' it will include those sections automatically."
+```
+
+**User**: "What happened yesterday?"
+```
+→ raven_date(date="yesterday")
+→ Summarize: daily note content, items that were due, any meetings
+```
+
+**User**: "Delete the old bifrost project"
+```
+→ raven_backlinks(target="projects/old-bifrost")  # ALWAYS check for references first
+→ "Before I delete projects/old-bifrost, I want to let you know it's referenced by 
+   5 other pages. Deleting it will create broken links. 
+   Should I proceed, or would you like to update those references first?"
+→ Wait for explicit user confirmation
+→ Only after user says yes: raven_delete(object_id="projects/old-bifrost")
+→ "Done. The file has been moved to .trash/ and can be recovered if needed."
+```
+
+**User**: "Run the meeting prep workflow for my 1:1 with Freya"
+```
+→ raven_workflow_list()  # Check if meeting-prep exists
+→ raven_workflow_render(name="meeting-prep", input={"person_id": "people/freya"})
+→ Use the rendered prompt and context to provide a comprehensive meeting prep
+```
+
+**User**: "I want to save a query for finding all my reading list items"
+```
+→ raven_query_add(name="reading-list", 
+                  query_string="trait:toread", 
+                  description="Books and articles to read")
+→ "Created saved query 'reading-list'. You can now run it with 'rvn query reading-list'"
+```
+
+**User**: "Show me pages that need to be organized"
+```
+→ raven_untyped()
+→ "I found 15 pages without explicit types. Here are the most recent:
+   - inbox/random-note.md
+   - ideas/app-concept.md
+   Would you like to assign types to any of these?"
 ```
