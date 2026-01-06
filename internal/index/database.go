@@ -160,14 +160,28 @@ func (d *Database) Close() error {
 	return d.db.Close()
 }
 
+// Analyze runs SQLite's ANALYZE command to update query planner statistics.
+// This should be called after bulk indexing operations for optimal query performance.
+func (d *Database) Analyze() error {
+	_, err := d.db.Exec("ANALYZE")
+	return err
+}
+
 // CurrentDBVersion is the current database schema version.
-const CurrentDBVersion = 6
+// v7: Added composite indexes for trait refs matching and performance PRAGMAs
+const CurrentDBVersion = 7
 
 // initialize creates the database schema.
 func (d *Database) initialize() error {
 	schema := `
 		-- Enable WAL mode for better concurrency
 		PRAGMA journal_mode = WAL;
+		
+		-- Performance optimizations
+		PRAGMA synchronous = NORMAL;      -- Faster writes (safe with WAL)
+		PRAGMA temp_store = MEMORY;       -- Keep temp tables in memory
+		PRAGMA cache_size = -64000;       -- 64MB cache (negative = KB)
+		PRAGMA mmap_size = 268435456;     -- 256MB memory-mapped I/O
 		
 		-- Metadata table for version tracking
 		CREATE TABLE IF NOT EXISTS meta (
@@ -227,6 +241,13 @@ func (d *Database) initialize() error {
 		CREATE INDEX IF NOT EXISTS idx_refs_source ON refs(source_id);
 		CREATE INDEX IF NOT EXISTS idx_refs_target ON refs(target_id);
 		CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file_path);
+		
+		-- Composite indexes for trait refs matching (content scope rule)
+		CREATE INDEX IF NOT EXISTS idx_traits_file_line ON traits(file_path, line_number);
+		CREATE INDEX IF NOT EXISTS idx_refs_file_line ON refs(file_path, line_number);
+		
+		-- Index for faster trait value queries
+		CREATE INDEX IF NOT EXISTS idx_traits_type_value ON traits(trait_type, value);
 		
 		-- Date index for temporal queries
 		-- Links dates to objects/traits that have date fields
@@ -570,6 +591,51 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+// AllIndexedFilePaths returns all distinct file paths currently in the index.
+// This is useful for detecting deleted files during incremental reindexing.
+func (d *Database) AllIndexedFilePaths() ([]string, error) {
+	rows, err := d.db.Query(`
+		SELECT DISTINCT file_path FROM objects WHERE parent_id IS NULL
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		paths = append(paths, path)
+	}
+	return paths, rows.Err()
+}
+
+// RemoveDeletedFiles removes index entries for files that no longer exist on the filesystem.
+// Returns the list of removed file paths.
+func (d *Database) RemoveDeletedFiles(vaultPath string) ([]string, error) {
+	indexedPaths, err := d.AllIndexedFilePaths()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get indexed paths: %w", err)
+	}
+
+	var removed []string
+	for _, relPath := range indexedPaths {
+		fullPath := filepath.Join(vaultPath, relPath)
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			// File was deleted - remove from index
+			if err := d.RemoveFile(relPath); err != nil {
+				return removed, fmt.Errorf("failed to remove %s: %w", relPath, err)
+			}
+			removed = append(removed, relPath)
+		}
+	}
+
+	return removed, nil
 }
 
 // RemoveDocument removes a document and all related data by its object ID.

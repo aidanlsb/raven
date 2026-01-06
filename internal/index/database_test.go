@@ -318,3 +318,53 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 }
+
+func TestAllIndexedFilePaths(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	sch := schema.NewSchema()
+
+	// Index a few documents
+	files := []string{"people/alice.md", "projects/foo.md", "daily/2025-01-01.md"}
+	for _, file := range files {
+		doc := &parser.ParsedDocument{
+			FilePath: file,
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         file[:len(file)-3], // strip .md
+					ObjectType: "page",
+					Fields:     make(map[string]schema.FieldValue),
+					LineStart:  1,
+				},
+			},
+		}
+		if err := db.IndexDocument(doc, sch); err != nil {
+			t.Fatalf("failed to index %s: %v", file, err)
+		}
+	}
+
+	// Get all indexed paths
+	paths, err := db.AllIndexedFilePaths()
+	if err != nil {
+		t.Fatalf("failed to get indexed paths: %v", err)
+	}
+
+	if len(paths) != 3 {
+		t.Errorf("expected 3 indexed paths, got %d", len(paths))
+	}
+
+	// Verify all paths are present
+	pathSet := make(map[string]bool)
+	for _, p := range paths {
+		pathSet[p] = true
+	}
+	for _, f := range files {
+		if !pathSet[f] {
+			t.Errorf("expected path %s to be in indexed paths", f)
+		}
+	}
+}

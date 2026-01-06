@@ -664,20 +664,21 @@ rvn watch --debug  # With debug output
 ---
 
 ### ~~Incremental Reindexing~~ ✅ IMPLEMENTED
-Only reindex files that have changed since last index:
+Incremental reindexing is now the default behavior:
 ```bash
-rvn reindex --smart        # Only changed files
-rvn reindex --smart --dry-run  # Preview what would be reindexed
-rvn reindex                # Full reindex (all files)
+rvn reindex                # Incremental (default) - only changed/deleted files
+rvn reindex --dry-run      # Preview what would be reindexed
+rvn reindex --full         # Force full reindex (all files)
 ```
 
 **Implementation:**
 - `file_mtime` column tracks when each file was last modified at index time
-- On smart reindex, compares current mtime to stored mtime
-- Only parses and re-indexes files with newer mtime
+- Compares current mtime to stored mtime, only re-indexes files with newer mtime
+- **Detects deleted files**: Compares indexed paths against filesystem, removes orphaned entries
 - Much faster for large vaults with few changes
+- Schema version changes automatically trigger full reindex
 
-**Status**: ✅ Implemented.
+**Status**: ✅ Implemented. Incremental is the default, `--full` forces complete rebuild.
 
 ---
 
@@ -705,7 +706,7 @@ Warn users when index may be out of date:
 ```bash
 $ rvn query "trait:due"
 ⚠ Warning: 3 files may be stale: people/freya.md, projects/website.md, daily/2026-01-02.md
-  Run 'rvn reindex --smart' or use '--refresh' to update.
+  Run 'rvn reindex' or use '--refresh' to update.
 
 • @due(2025-02-01) Send proposal
   ...

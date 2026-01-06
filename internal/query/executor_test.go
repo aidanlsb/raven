@@ -51,6 +51,14 @@ func setupTestDB(t *testing.T) *sql.DB {
 			position_start INTEGER,
 			position_end INTEGER
 		);
+
+		CREATE VIRTUAL TABLE fts_content USING fts5(
+			object_id,
+			title,
+			content,
+			file_path UNINDEXED,
+			tokenize='porter unicode61'
+		);
 	`)
 	if err != nil {
 		t.Fatalf("failed to create schema: %v", err)
@@ -79,9 +87,19 @@ func setupTestDB(t *testing.T) *sql.DB {
 		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number) VALUES
 			('daily/2025-02-01#standup', 'projects/website', 'projects/website', 'daily/2025-02-01.md', 12),
 			('daily/2025-02-01#standup', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 13),
+			('daily/2025-02-01#standup', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 15),
 			('daily/2025-02-01#planning', 'projects/mobile', 'projects/mobile', 'daily/2025-02-01.md', 32),
 			('daily/2025-02-01#planning', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 33),
 			('projects/website', 'people/freya', 'people/freya', 'projects/website.md', 5);
+
+		INSERT INTO fts_content (object_id, title, content, file_path) VALUES
+			('projects/website', 'Website Project', 'This is the website redesign project. Freya is a colleague working on this.', 'projects/website.md'),
+			('projects/mobile', 'Mobile App', 'Mobile application for customers. Currently paused.', 'projects/mobile.md'),
+			('people/freya', 'Freya', 'Senior engineer and colleague. Works on platform team.', 'people/freya.md'),
+			('people/loki', 'Loki', 'Contractor helping with security review.', 'people/loki.md'),
+			('daily/2025-02-01', 'Daily Note', 'Morning standup and planning session.', 'daily/2025-02-01.md'),
+			('daily/2025-02-01#standup', 'Standup', 'Weekly standup meeting discussion.', 'daily/2025-02-01.md'),
+			('daily/2025-02-01#planning', 'Planning', 'Q2 planning session with the team.', 'daily/2025-02-01.md');
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -167,6 +185,31 @@ func TestExecuteObjectQuery(t *testing.T) {
 			query:     "object:project refs:[[people/freya]]",
 			wantCount: 1, // Website refs Freya
 		},
+		{
+			name:      "content search simple",
+			query:     `object:person content:"colleague"`,
+			wantCount: 1, // Freya's page mentions "colleague"
+		},
+		{
+			name:      "content search multiple words",
+			query:     `object:project content:"website redesign"`,
+			wantCount: 1, // Website project has both words
+		},
+		{
+			name:      "content search negated",
+			query:     `object:person !content:"contractor"`,
+			wantCount: 1, // Freya doesn't mention contractor, Loki does
+		},
+		{
+			name:      "content search no match",
+			query:     `object:project content:"nonexistent"`,
+			wantCount: 0,
+		},
+		{
+			name:      "content combined with field",
+			query:     `object:project .status:active content:"colleague"`,
+			wantCount: 1, // Website is active and mentions colleague
+		},
 	}
 
 	for _, tt := range tests {
@@ -232,6 +275,26 @@ func TestExecuteTraitQuery(t *testing.T) {
 			name:      "on project",
 			query:     "trait:due on:project",
 			wantCount: 1,
+		},
+		{
+			name:      "refs to specific person",
+			query:     "trait:due refs:[[people/freya]]",
+			wantCount: 1, // trait2 on line 15 has a ref to freya on the same line
+		},
+		{
+			name:      "refs with object subquery",
+			query:     "trait:due refs:{object:person}",
+			wantCount: 1, // trait2 refs a person on the same line
+		},
+		{
+			name:      "negated refs",
+			query:     "trait:due !refs:[[people/freya]]",
+			wantCount: 2, // trait1 and trait4 don't have freya refs on same line
+		},
+		{
+			name:      "refs to non-existent target",
+			query:     "trait:due refs:[[people/thor]]",
+			wantCount: 0, // No trait has refs to thor on same line
 		},
 	}
 

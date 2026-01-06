@@ -102,7 +102,8 @@ When raven_check returns issues, here's how to fix them:
 After bulk operations or schema changes:
 
 1. Use raven_reindex to rebuild the index:
-   raven_reindex()
+   raven_reindex()              # Incremental (default) - only changed/deleted files
+   raven_reindex(full=True)     # Force complete rebuild
 
 2. This is needed after:
    - Adding new types or traits to the schema
@@ -121,7 +122,7 @@ After bulk operations or schema changes:
 
 5. **Respect user's organization**: Look at existing default_path settings to understand where different types of content belong.
 
-6. **Reindex after schema changes**: If you add types or traits, run raven_reindex so they become queryable.
+6. **Reindex after schema changes**: If you add types or traits, run raven_reindex(full=True) so all files are re-parsed with the new schema.
 
 ## Example Conversations
 
