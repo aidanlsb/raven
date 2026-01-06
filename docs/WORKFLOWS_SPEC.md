@@ -1,5 +1,7 @@
 # Raven Workflows
 
+> ✅ **Status: Implemented** — Phase 1 of this specification is now available. See the [README](../README.md#workflows) for usage examples.
+
 Workflows are reusable prompt templates that enable LLM agents to perform complex, multi-step operations against a Raven vault. They combine pre-gathered context with structured instructions, allowing any agent to invoke sophisticated knowledge management tasks.
 
 ## Design Philosophy

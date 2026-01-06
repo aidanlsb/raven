@@ -1066,79 +1066,21 @@ Main concerns around API stability and security review.
 
 ---
 
-## Agentic Workflows
+## ~~Agentic Workflows~~ ✅ IMPLEMENTED
 
-These are compound workflows that agents can perform by combining multiple Raven operations.
-They showcase what's possible with the existing MCP tools and suggest potential optimizations.
+Workflows are now a first-class feature in Raven. They allow users to define reusable prompt templates
+that gather context from the vault and render structured prompts for AI agents.
 
----
+**Status**: ✅ Implemented. See [WORKFLOWS_SPEC.md](WORKFLOWS_SPEC.md) for the full specification and
+the [README](../README.md#workflows) for usage examples.
 
-### Workflow Recipes (Pattern)
-
-Users may want to define reusable "recipes" for common agent workflows. This is fully emergent — 
-Raven provides the primitives, users compose them however they want.
-
-**Option A: User-defined `workflow` type**
-
-Users who want structured, queryable workflows can add to their schema:
-
-```yaml
-# schema.yaml
-types:
-  workflow:
-    default_path: workflows/
-    fields:
-      name: { type: string, required: true }
-      description: { type: string }
-      trigger: { type: enum, values: [manual, daily, weekly] }
-```
-
-Then create workflow files:
-
-```markdown
----
-type: workflow
-name: Weekly Review
-description: Generate a summary of the week's activity
-trigger: manual
----
-
-# Weekly Review
-
-## Steps
-1. Query `@highlight` items from past week
-2. Query completed tasks (@status changed to done)
-3. List new pages created this week
-4. List items due next week
-
-## Output
-Create a `weekly-review` note in `reviews/` with sections for each category.
-```
-
-Agents discover via `raven_query(query_string="object:workflow")`.
-
-**Option B: Informal pattern with traits**
-
-Users who want something lighter can use a trait like `@workflow`:
-
-```markdown
-# Weekly Review @workflow
-
-Steps to generate weekly review...
-```
-
-Agents discover via `raven_search(query="workflow")`.
-
-**Option C: Just a folder convention**
-
-Or simply put workflow docs in `workflows/` and agents read from there.
-
-**Key principle:** Raven doesn't need built-in workflow support. The schema system is flexible 
-enough that users can define whatever structure makes sense for their use case. Agents can read 
-workflow documentation via existing tools (`raven_read`, `raven_query`, `raven_search`) 
-and execute accordingly.
-
-**Status**: No implementation needed — this is an emergent pattern using existing features.
+**Key features:**
+- Define workflows in `raven.yaml` (inline or file-based)
+- Input parameters with types, defaults, and validation
+- Context queries: `read`, `query`, `backlinks`, `search`
+- Simple `{{var}}` template substitution
+- CLI: `rvn workflow list`, `rvn workflow show`, `rvn workflow render`
+- MCP tools: `raven_workflow_list`, `raven_workflow_show`, `raven_workflow_render`
 
 ---
 
