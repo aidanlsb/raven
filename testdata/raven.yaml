@@ -34,7 +34,7 @@ workflows:
       Summarize the following person based on their profile and related items.
       
       ## Person
-      {{context.person}}
+      {{context.person.content}}
       
       ## Related Items
       {{context.related}}

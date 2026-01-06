@@ -110,7 +110,65 @@ After bulk operations or schema changes:
    - Bulk file operations outside of Raven
    - If queries return stale results
 
-### 7. Setting Up Templates
+### 7. Deleting Content
+
+**ALWAYS confirm with the user before deleting anything.**
+
+1. FIRST check for backlinks:
+   raven_backlinks(target="projects/old-project")
+
+2. THEN ask user to confirm:
+   "Are you sure you want to delete projects/old-project?"
+   If backlinks exist: "This is referenced by 3 pages. Deleting creates broken links. Continue?"
+
+3. Only AFTER user confirms:
+   raven_delete(object_id="projects/old-project")
+
+4. Files go to .trash/ (not permanent), but STILL always confirm first.
+
+Never delete without explicit user approval.
+
+### 8. Daily Notes & Dates
+
+1. Use raven_daily for daily notes:
+   raven_daily()                    # Today
+   raven_daily(date="yesterday")
+   raven_daily(date="2026-01-15")
+
+2. Use raven_date for date hub (everything for a date):
+   raven_date()
+   raven_date(date="2026-01-15")
+
+### 9. Vault Statistics
+
+1. raven_stats() - vault overview with counts
+2. raven_untyped() - pages without explicit types
+
+### 10. Managing Saved Queries
+
+1. Add: raven_query_add(name="urgent", query_string="trait:due value:this-week|past")
+2. Remove: raven_query_remove(name="old-query")
+3. List: raven_query(list=true)
+
+### 11. Schema Updates
+
+1. Update type: raven_schema_update_type(name="person", default_path="contacts/")
+2. Update trait: raven_schema_update_trait(name="priority", values="critical,high,medium,low")
+3. Update field: raven_schema_update_field(type_name="person", field_name="email", required="true")
+4. Remove: raven_schema_remove_type, raven_schema_remove_trait, raven_schema_remove_field
+5. Validate: raven_schema_validate()
+
+### 12. Workflows
+
+Workflows are reusable prompt templates:
+
+1. List: raven_workflow_list()
+2. Show: raven_workflow_show(name="meeting-prep")
+3. Render: raven_workflow_render(name="research", input={"question": "How does auth work?"})
+
+When to use: User asks for complex analysis, or there's a workflow matching their request.
+
+### 13. Setting Up Templates
 
 Templates provide default content when creating notes. Help users by editing their schema.yaml.
 
@@ -207,5 +265,26 @@ daily_template: |
 - Read current schema: raven_read(path="schema.yaml")
 - Edit schema to add template field: raven_edit(path="schema.yaml", old_str="meeting:\n    default_path: meetings/", new_str="meeting:\n    default_path: meetings/\n    template: templates/meeting.md", confirm=true)
 - "Done! Now when you run 'rvn new meeting \"Team Sync\"' it will include those sections automatically."
+
+**User**: "What happened yesterday?"
+- raven_date(date="yesterday")
+- Summarize: daily note content, items due, meetings
+
+**User**: "Delete the old bifrost project"
+- raven_backlinks(target="projects/old-bifrost")  # ALWAYS check references first
+- Ask: "This is referenced by 5 pages. Are you sure you want to delete it?"
+- Wait for explicit confirmation, then: raven_delete(object_id="projects/old-bifrost")
+
+**User**: "Run the meeting prep workflow"
+- raven_workflow_list()  # Check available workflows
+- raven_workflow_render(name="meeting-prep", input={"person_id": "people/freya"})
+- Use rendered prompt to provide meeting prep
+
+**User**: "Save a query for my reading list"
+- raven_query_add(name="reading-list", query_string="trait:toread", description="Books to read")
+
+**User**: "Show me pages that need organizing"
+- raven_untyped()
+- List pages without types, offer to assign types
 `
 }
