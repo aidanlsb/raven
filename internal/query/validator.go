@@ -91,13 +91,22 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 	case *HasPredicate:
 		return v.validateQuery(p.SubQuery)
 	case *ParentPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+		// Target-based predicate doesn't need schema validation
 	case *AncestorPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
 	case *ChildPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
 	case *DescendantPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
 	case *ContainsPredicate:
 		return v.validateQuery(p.SubQuery)
 	case *RefsPredicate:
@@ -130,9 +139,14 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 func (v *Validator) validateTraitPredicate(pred Predicate) error {
 	switch p := pred.(type) {
 	case *OnPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+		// Target-based predicate doesn't need schema validation
 	case *WithinPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
 	case *RefsPredicate:
 		if p.SubQuery != nil {
 			return v.validateQuery(p.SubQuery)

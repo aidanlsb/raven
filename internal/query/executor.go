@@ -407,6 +407,16 @@ func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string)
 	ancestorConditions = append(ancestorConditions, "anc.type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
+	// Process predicates from the subquery
+	for _, pred := range p.SubQuery.Predicates {
+		predCond, predArgs, err := e.buildObjectPredicateSQL(pred, "anc")
+		if err != nil {
+			return "", nil, err
+		}
+		ancestorConditions = append(ancestorConditions, predCond)
+		args = append(args, predArgs...)
+	}
+
 	// Build ancestor query using recursive CTE
 	cond := fmt.Sprintf(`EXISTS (
 		WITH RECURSIVE ancestors AS (
@@ -798,6 +808,16 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (st
 
 	ancestorConditions = append(ancestorConditions, "anc.type = ?")
 	args = append(args, p.SubQuery.TypeName)
+
+	// Process predicates from the subquery
+	for _, pred := range p.SubQuery.Predicates {
+		predCond, predArgs, err := e.buildObjectPredicateSQL(pred, "anc")
+		if err != nil {
+			return "", nil, err
+		}
+		ancestorConditions = append(ancestorConditions, predCond)
+		args = append(args, predArgs...)
+	}
 
 	// Build ancestor query using recursive CTE
 	cond := fmt.Sprintf(`EXISTS (

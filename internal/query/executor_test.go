@@ -533,3 +533,319 @@ func TestDirectTargetPredicates(t *testing.T) {
 		})
 	}
 }
+
+func TestSourcePredicate(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// Add traits with different line numbers to test source filtering
+	// line_number <= 1 = frontmatter, line_number > 1 = inline
+	_, err := db.Exec(`
+		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
+			('fm_trait1', 'people/loki.md', 'people/loki', 'status', 'active', 'Loki status', 1),
+			('inline_trait1', 'people/loki.md', 'people/loki', 'status', 'review', 'Loki inline status', 10);
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert source test data: %v", err)
+	}
+
+	executor := NewExecutor(db)
+
+	tests := []struct {
+		name      string
+		query     string
+		wantCount int
+	}{
+		{
+			name:      "source inline - due traits",
+			query:     "trait:due source:inline",
+			wantCount: 2, // trait2 line 15, trait4 line 12 (trait1 is line 1 = frontmatter)
+		},
+		{
+			name:      "source frontmatter - due traits",
+			query:     "trait:due source:frontmatter",
+			wantCount: 1, // trait1 is at line 1
+		},
+		{
+			name:      "source inline - status traits",
+			query:     "trait:status source:inline",
+			wantCount: 1, // inline_trait1 at line 10
+		},
+		{
+			name:      "source frontmatter - status traits",
+			query:     "trait:status source:frontmatter",
+			wantCount: 1, // fm_trait1 at line 1
+		},
+		{
+			name:      "combined source and value",
+			query:     "trait:status source:inline value:review",
+			wantCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.ExecuteTraitQuery(q)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s: %s (line: %d)", r.TraitType, r.Content, r.Line)
+				}
+			}
+		})
+	}
+}
+
+func TestOrAndGroupPredicates(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	executor := NewExecutor(db)
+
+	// Object query tests with OR and groups
+	objectTests := []struct {
+		name      string
+		query     string
+		wantCount int
+	}{
+		{
+			name:      "OR field values",
+			query:     "object:project (.status:active | .status:paused)",
+			wantCount: 2, // website (active) and mobile (paused)
+		},
+		{
+			name:      "OR with one match",
+			query:     "object:project (.status:active | .status:nonexistent)",
+			wantCount: 1, // website only
+		},
+		{
+			name:      "grouped AND with field",
+			query:     "object:project (.status:active) .priority:high",
+			wantCount: 1, // website has both
+		},
+		{
+			name:      "negated OR",
+			query:     "object:project !(.status:active | .status:paused)",
+			wantCount: 0, // both projects match the OR, so negation returns none
+		},
+		{
+			name:      "OR priority values",
+			query:     "object:project (.priority:high | .priority:medium)",
+			wantCount: 2,
+		},
+		{
+			name:      "complex: OR with has",
+			query:     "object:project (has:due | has:todo)",
+			wantCount: 1, // website has due directly
+		},
+	}
+
+	for _, tt := range objectTests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.ExecuteObjectQuery(q)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s (%s)", r.ID, r.Type)
+				}
+			}
+		})
+	}
+
+	// Trait query tests with OR and groups
+	traitTests := []struct {
+		name      string
+		query     string
+		wantCount int
+	}{
+		{
+			name:      "OR on object types",
+			query:     "trait:due (on:project | on:person)",
+			wantCount: 2, // trait1 on project, trait4 on person
+		},
+		{
+			name:      "OR value filter",
+			query:     "trait:todo (value:todo | value:done)",
+			wantCount: 2, // trait5 (todo) and trait7 (done)
+		},
+		{
+			name:      "grouped with value",
+			query:     "trait:todo (value:todo) on:section",
+			wantCount: 1, // trait5
+		},
+	}
+
+	for _, tt := range traitTests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.ExecuteTraitQuery(q)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentObjectID)
+				}
+			}
+		})
+	}
+}
+
+func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	executor := NewExecutor(db)
+
+	// Object query hierarchy tests
+	objectTests := []struct {
+		name      string
+		query     string
+		wantCount int
+	}{
+		// Ancestor with subquery predicates
+		{
+			name:      "ancestor with field filter",
+			query:     "object:meeting ancestor:{object:date}",
+			wantCount: 2, // standup and planning are under date
+		},
+		{
+			name:      "negated ancestor",
+			query:     "object:section !ancestor:project",
+			wantCount: 0, // all sections have project ancestors
+		},
+		// Child with subquery predicates
+		{
+			name:      "child with type",
+			query:     "object:date child:meeting",
+			wantCount: 1, // daily/2025-02-01 has meeting children
+		},
+		{
+			name:      "child with has predicate",
+			query:     "object:date child:{object:meeting has:due}",
+			wantCount: 1, // standup has due
+		},
+		{
+			name:      "child no match",
+			query:     "object:project child:meeting",
+			wantCount: 0, // projects don't have meetings as children
+		},
+		// Descendant with subquery predicates
+		{
+			name:      "descendant with field filter",
+			query:     "object:project descendant:{object:section .title:Tasks}",
+			wantCount: 2, // both projects have Tasks sections
+		},
+		{
+			name:      "descendant meeting in date",
+			query:     "object:date descendant:{object:meeting has:highlight}",
+			wantCount: 1, // standup has highlight
+		},
+		// Parent with subquery predicates
+		{
+			name:      "parent with field filter",
+			query:     "object:section parent:{object:project .status:active}",
+			wantCount: 2, // website#tasks and website#design
+		},
+		{
+			name:      "parent with has predicate",
+			query:     "object:section parent:{object:project has:due}",
+			wantCount: 2, // website has due, so its sections match
+		},
+	}
+
+	for _, tt := range objectTests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.ExecuteObjectQuery(q)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s (%s)", r.ID, r.Type)
+				}
+			}
+		})
+	}
+
+	// Trait query hierarchy tests
+	traitTests := []struct {
+		name      string
+		query     string
+		wantCount int
+	}{
+		// Within with subquery predicates
+		{
+			name:      "within with field filter",
+			query:     "trait:todo within:{object:project .status:active}",
+			wantCount: 1, // trait5 is within website (active)
+		},
+		{
+			name:      "within with has predicate",
+			query:     "trait:todo within:{object:project has:due}",
+			wantCount: 1, // website has due, trait5 is within it
+		},
+		{
+			name:      "on with field filter",
+			query:     "trait:todo on:{object:section .title:Tasks}",
+			wantCount: 2, // both tasks sections have todos
+		},
+		{
+			name:      "within paused project",
+			query:     "trait:todo within:{object:project .status:paused}",
+			wantCount: 1, // trait7 is within mobile (paused)
+		},
+		{
+			name:      "highlight within date",
+			query:     "trait:highlight within:date",
+			wantCount: 1, // trait3 is within daily note
+		},
+	}
+
+	for _, tt := range traitTests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.ExecuteTraitQuery(q)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentObjectID)
+				}
+			}
+		})
+	}
+}
