@@ -71,6 +71,14 @@ Examples:
 			}
 		}
 
+		// For full reindex, clear all existing data first to avoid ID conflicts
+		// (e.g., after directory migration where file paths change but IDs stay the same)
+		if !incremental && !dryRun {
+			if err := db.ClearAllData(); err != nil {
+				return fmt.Errorf("failed to clear database for full reindex: %w", err)
+			}
+		}
+
 		// Load vault config for directory roots
 		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
 
