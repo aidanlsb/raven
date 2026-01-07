@@ -396,3 +396,140 @@ func TestExecuteTraitQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestDirectTargetPredicates(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	executor := NewExecutor(db)
+
+	// Object query tests with [[target]] predicates
+	objectTests := []struct {
+		name      string
+		query     string
+		wantCount int
+		wantErr   bool
+	}{
+		{
+			name:      "parent with direct target",
+			query:     "object:section parent:[[projects/website]]",
+			wantCount: 2, // website#tasks and website#design
+		},
+		{
+			name:      "parent with short reference",
+			query:     "object:section parent:[[website]]",
+			wantCount: 2, // website#tasks and website#design
+		},
+		{
+			name:      "ancestor with direct target",
+			query:     "object:meeting ancestor:[[daily/2025-02-01]]",
+			wantCount: 2, // standup and planning
+		},
+		{
+			name:      "child with direct target",
+			query:     "object:date child:[[daily/2025-02-01#standup]]",
+			wantCount: 1, // daily/2025-02-01
+		},
+		{
+			name:      "descendant with direct target",
+			query:     "object:project descendant:[[projects/website#tasks]]",
+			wantCount: 1, // projects/website
+		},
+		{
+			name:      "negated parent target",
+			query:     "object:section !parent:[[projects/website]]",
+			wantCount: 1, // mobile#tasks
+		},
+		{
+			name:      "non-existent target returns nothing",
+			query:     "object:section parent:[[nonexistent]]",
+			wantCount: 0,
+		},
+	}
+
+	for _, tt := range objectTests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.ExecuteObjectQuery(q)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s (%s)", r.ID, r.Type)
+				}
+			}
+		})
+	}
+
+	// Trait query tests with [[target]] predicates
+	traitTests := []struct {
+		name      string
+		query     string
+		wantCount int
+		wantErr   bool
+	}{
+		{
+			name:      "on with direct target",
+			query:     "trait:todo on:[[projects/website#tasks]]",
+			wantCount: 1, // trait5 on website#tasks
+		},
+		{
+			name:      "within with direct target",
+			query:     "trait:todo within:[[projects/website]]",
+			wantCount: 1, // trait5 is within website (on website#tasks)
+		},
+		{
+			name:      "within with short reference",
+			query:     "trait:todo within:[[website]]",
+			wantCount: 1, // trait5 is within website
+		},
+		{
+			name:      "on non-existent target returns nothing",
+			query:     "trait:todo on:[[nonexistent]]",
+			wantCount: 0,
+		},
+		{
+			name:      "negated on target",
+			query:     "trait:todo !on:[[projects/website#tasks]]",
+			wantCount: 1, // mobile#tasks has a todo
+		},
+	}
+
+	for _, tt := range traitTests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.ExecuteTraitQuery(q)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s: %s (parent: %s)", r.TraitType, r.Content, r.ParentObjectID)
+				}
+			}
+		})
+	}
+}

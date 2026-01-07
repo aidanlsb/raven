@@ -104,74 +104,91 @@ object:project (has:due | has:remind)
 
 ### Parent (Direct)
 
-Filter by whether object's direct parent matches an object sub-query.
+Filter by whether object's direct parent matches an object sub-query or a specific object.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `parent:{object:<type> ...}` | Direct parent matches sub-query |
+| `parent:[[target]]` | Direct parent is the specified object |
 | `!parent:{object:<type> ...}` | Direct parent does NOT match sub-query |
 
 **Shorthand:** `parent:<type>` expands to `parent:{object:<type>}`
+
+**Direct target:** `parent:[[target]]` checks if the parent is a specific known object. The target is resolved using standard reference resolution (short names work if unambiguous).
 
 **Examples:**
 ```
 object:meeting parent:date
 object:meeting parent:{object:date}
 object:section parent:{object:project .status:active}
+object:section parent:[[projects/website]]     # sections whose parent is this specific project
+object:section parent:[[website]]              # short reference (if unambiguous)
 ```
 
 ### Ancestor (Any Depth)
 
-Filter by whether any ancestor matches an object sub-query.
+Filter by whether any ancestor matches an object sub-query or is a specific object.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `ancestor:{object:<type> ...}` | Some ancestor matches sub-query |
+| `ancestor:[[target]]` | The specified object is an ancestor |
 | `!ancestor:{object:<type> ...}` | No ancestor matches sub-query |
 
 **Shorthand:** `ancestor:<type>` expands to `ancestor:{object:<type>}`
+
+**Direct target:** `ancestor:[[target]]` checks if a specific object appears anywhere in the ancestor chain.
 
 **Examples:**
 ```
 object:meeting ancestor:date
 object:meeting ancestor:{object:date}
 object:topic ancestor:{object:meeting ancestor:date}
+object:section ancestor:[[projects/website]]   # sections anywhere inside this project
 ```
 
 ### Child (Direct)
 
-Filter by whether object has at least one direct child matching an object sub-query.
+Filter by whether object has at least one direct child matching an object sub-query or is a specific object.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `child:{object:<type> ...}` | Has child matching sub-query |
+| `child:[[target]]` | The specified object is a direct child |
 | `!child:{object:<type> ...}` | No child matches sub-query |
 
 **Shorthand:** `child:<type>` expands to `child:{object:<type>}`
+
+**Direct target:** `child:[[target]]` checks if a specific object is a direct child of the queried object.
 
 **Examples:**
 ```
 object:meeting child:topic
 object:meeting child:{object:topic}
 object:date child:{object:meeting has:due}
+object:date child:[[daily/2025-02-01#standup]]  # dates that have this specific meeting as a child
 ```
 
 ### Descendant (Any Depth)
 
-Filter by whether object has any descendant matching an object sub-query at any depth.
+Filter by whether object has any descendant matching an object sub-query at any depth, or a specific object.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `descendant:{object:<type> ...}` | Has descendant matching sub-query |
+| `descendant:[[target]]` | The specified object is a descendant |
 | `!descendant:{object:<type> ...}` | No descendant matches sub-query |
 
 **Shorthand:** `descendant:<type>` expands to `descendant:{object:<type>}`
+
+**Direct target:** `descendant:[[target]]` checks if a specific object appears anywhere in the descendant tree.
 
 **Examples:**
 ```
 object:project descendant:section
 object:project descendant:{object:section}
 object:date descendant:{object:meeting has:due}
+object:project descendant:[[projects/website#tasks]]  # projects that have this section as a descendant
 ```
 
 ### Contains (`contains:`)
@@ -287,14 +304,17 @@ trait:due source:inline
 
 ### Object Association (Direct) (`on:`)
 
-Filter by the object the trait is directly associated with.
+Filter by the object the trait is directly associated with, either by type or specific object.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `on:{object:<type> ...}` | Direct parent object matches sub-query |
+| `on:[[target]]` | Direct parent object is the specified object |
 | `!on:{object:<type> ...}` | Direct parent object does NOT match sub-query |
 
 **Shorthand:** `on:<type>` expands to `on:{object:<type>}`
+
+**Direct target:** `on:[[target]]` checks if the trait's direct parent object is a specific known object.
 
 **Examples:**
 ```
@@ -302,18 +322,22 @@ trait:due on:meeting
 trait:due on:{object:meeting}
 trait:highlight on:{object:book .status:reading}
 trait:due value:past on:{object:project .status:active}
+trait:todo on:[[projects/website#tasks]]   # todos directly on this specific section
 ```
 
 ### Object Association (Any Ancestor) (`within:`)
 
-Filter by whether any ancestor object matches a sub-query.
+Filter by whether any ancestor object (including direct parent) matches a sub-query or is a specific object.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `within:{object:<type> ...}` | Some ancestor object matches sub-query |
+| `within:[[target]]` | The specified object is an ancestor |
 | `!within:{object:<type> ...}` | No ancestor object matches sub-query |
 
 **Shorthand:** `within:<type>` expands to `within:{object:<type>}`
+
+**Direct target:** `within:[[target]]` checks if the trait is anywhere inside a specific object (trait's parent is the object or any descendant of it).
 
 **Examples:**
 ```
@@ -321,6 +345,8 @@ trait:highlight within:date
 trait:highlight within:{object:date}
 trait:due within:{object:project .status:active}
 trait:due (within:book | within:article)
+trait:todo within:[[projects/website]]     # todos anywhere inside this project
+trait:todo within:[[website]]              # short reference (if unambiguous)
 ```
 
 ### References (`refs:`)
@@ -448,20 +474,32 @@ trait:highlight on:{object:book | object:article}  # ✗ Not allowed
 
 Inside sub-query curly braces, write full queries with explicit type prefixes:
 
-**Trait sub-query** (inside `has:{...}`)
+**Trait sub-query** (inside `has:{...}`, `contains:{...}`)
 ```
 trait:<name> [<trait-predicates>...]
 ```
 
-**Object sub-query** (inside `on:{...}`, `within:{...}`, `parent:{...}`, `ancestor:{...}`, `child:{...}`, `refs:{...}` for both object and trait queries)
+**Object sub-query** (inside `on:{...}`, `within:{...}`, `parent:{...}`, `ancestor:{...}`, `child:{...}`, `descendant:{...}`, `refs:{...}`)
 ```
 object:<type> [<object-predicates>...]
 ```
 
 **Shorthand:** For simple type/trait-only sub-queries, omit the braces:
 - `has:due` → `has:{trait:due}`
+- `contains:todo` → `contains:{trait:todo}`
 - `parent:date` → `parent:{object:date}`
+- `descendant:section` → `descendant:{object:section}`
 - `on:meeting` → `on:{object:meeting}`
+
+**Direct target:** For hierarchy and association predicates, use `[[target]]` instead of a sub-query to match a specific known object:
+- `parent:[[projects/website]]` — parent is this specific project
+- `ancestor:[[daily/2025-02-01]]` — this date is an ancestor
+- `child:[[daily/2025-02-01#standup]]` — this meeting is a child
+- `descendant:[[projects/website#tasks]]` — this section is a descendant
+- `on:[[projects/website#tasks]]` — trait's direct parent is this section
+- `within:[[projects/website]]` — trait is anywhere inside this project
+
+Short references work if unambiguous (e.g., `within:[[website]]`). Ambiguous references return an error with matching options.
 
 ---
 
@@ -564,7 +602,11 @@ object:project contains:{trait:due}         # Due trait anywhere (including sect
 ## Design Decisions
 
 1. **No cross-type unions**: A query returns one type. Use separate queries and combine results if needed.
-2. **Direct vs ancestor**: Separate predicates for direct parent (`parent:`, `on:`) vs any ancestor (`ancestor:`, `within:`).
+2. **Direct vs deep hierarchy**: Separate predicates for each direction and depth:
+   - Up: `parent:` (direct) vs `ancestor:` (any depth)
+   - Down: `child:` (direct) vs `descendant:` (any depth)
+   - Object→Trait: `has:` (direct) vs `contains:` (subtree)
+   - Trait→Object: `on:` (direct) vs `within:` (ancestors)
 3. **Traits are inline-only**: `trait:due` returns all inline `@due` annotations in content.
 4. **Explicit predicates**: No shorthand value syntax (`=past`), use `value:past` for clarity.
 5. **Dot prefix for fields**: `.status:active` distinguishes fields from keywords, avoiding collisions.
