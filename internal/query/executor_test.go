@@ -78,11 +78,21 @@ func setupTestDB(t *testing.T) *sql.DB {
 		UPDATE objects SET parent_id = 'daily/2025-02-01' WHERE id = 'daily/2025-02-01#standup';
 		UPDATE objects SET parent_id = 'daily/2025-02-01' WHERE id = 'daily/2025-02-01#planning';
 
+		-- Add deeper hierarchy for descendant/contains tests
+		INSERT INTO objects (id, file_path, type, fields, line_start, parent_id) VALUES
+			('projects/website#tasks', 'projects/website.md', 'section', '{"title":"Tasks"}', 20, 'projects/website'),
+			('projects/website#design', 'projects/website.md', 'section', '{"title":"Design"}', 50, 'projects/website'),
+			('projects/mobile#tasks', 'projects/mobile.md', 'section', '{"title":"Tasks"}', 15, 'projects/mobile');
+
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
 			('trait1', 'projects/website.md', 'projects/website', 'due', '2025-06-30', 'projects/website', 1),
 			('trait2', 'daily/2025-02-01.md', 'daily/2025-02-01#standup', 'due', '2025-02-03', 'Follow up on timeline', 15),
 			('trait3', 'daily/2025-02-01.md', 'daily/2025-02-01#standup', 'highlight', NULL, 'Important insight', 18),
-			('trait4', 'people/freya.md', 'people/freya', 'due', '2025-02-01', 'Send docs', 12);
+			('trait4', 'people/freya.md', 'people/freya', 'due', '2025-02-01', 'Send docs', 12),
+			-- Traits on nested sections for contains tests
+			('trait5', 'projects/website.md', 'projects/website#tasks', 'todo', 'todo', 'Build landing page', 25),
+			('trait6', 'projects/website.md', 'projects/website#tasks', 'priority', 'high', 'Build landing page', 25),
+			('trait7', 'projects/mobile.md', 'projects/mobile#tasks', 'todo', 'done', 'Setup CI/CD', 20);
 
 		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number) VALUES
 			('daily/2025-02-01#standup', 'projects/website', 'projects/website', 'daily/2025-02-01.md', 12),
@@ -209,6 +219,68 @@ func TestExecuteObjectQuery(t *testing.T) {
 			name:      "content combined with field",
 			query:     `object:project .status:active content:"colleague"`,
 			wantCount: 1, // Website is active and mentions colleague
+		},
+		// Descendant predicate tests
+		{
+			name:      "descendant section",
+			query:     "object:project descendant:section",
+			wantCount: 2, // Both website and mobile have section children
+		},
+		{
+			name:      "descendant section with title",
+			query:     `object:project descendant:{object:section}`,
+			wantCount: 2,
+		},
+		{
+			name:      "negated descendant",
+			query:     "object:project !descendant:section",
+			wantCount: 0, // Both projects have sections
+		},
+		{
+			name:      "date has descendant meeting",
+			query:     "object:date descendant:meeting",
+			wantCount: 1, // daily/2025-02-01 has meetings
+		},
+		// Contains predicate tests
+		{
+			name:      "contains todo trait",
+			query:     "object:project contains:{trait:todo}",
+			wantCount: 2, // Both projects have todo traits in nested sections
+		},
+		{
+			name:      "contains todo with value filter",
+			query:     "object:project contains:{trait:todo value:todo}",
+			wantCount: 1, // Only website has incomplete todo
+		},
+		{
+			name:      "contains todo value done",
+			query:     "object:project contains:{trait:todo value:done}",
+			wantCount: 1, // Only mobile has completed todo
+		},
+		{
+			name:      "contains priority high",
+			query:     "object:project contains:{trait:priority value:high}",
+			wantCount: 1, // Only website has high priority in subtree
+		},
+		{
+			name:      "negated contains",
+			query:     "object:project !contains:{trait:todo}",
+			wantCount: 0, // Both projects have todos
+		},
+		{
+			name:      "contains on date (direct trait on child)",
+			query:     "object:date contains:{trait:due}",
+			wantCount: 1, // daily note has due trait on its child meeting
+		},
+		{
+			name:      "contains highlight",
+			query:     "object:date contains:{trait:highlight}",
+			wantCount: 1, // daily note has highlight on its meeting child
+		},
+		{
+			name:      "project with direct has vs contains",
+			query:     "object:project has:{trait:due}",
+			wantCount: 1, // Only website has due directly on project (not section)
 		},
 	}
 

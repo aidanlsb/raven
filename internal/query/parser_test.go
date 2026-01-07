@@ -518,6 +518,99 @@ func TestParseContentPredicate(t *testing.T) {
 	}
 }
 
+func TestParseDescendantContains(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		predType     string
+		wantTypeName string
+		wantNeg      bool
+	}{
+		{
+			name:         "descendant shorthand",
+			input:        "object:project descendant:section",
+			predType:     "descendant",
+			wantTypeName: "section",
+		},
+		{
+			name:         "descendant full",
+			input:        "object:project descendant:{object:section}",
+			predType:     "descendant",
+			wantTypeName: "section",
+		},
+		{
+			name:         "negated descendant",
+			input:        "object:project !descendant:section",
+			predType:     "descendant",
+			wantTypeName: "section",
+			wantNeg:      true,
+		},
+		{
+			name:         "contains shorthand",
+			input:        "object:project contains:todo",
+			predType:     "contains",
+			wantTypeName: "todo",
+		},
+		{
+			name:         "contains full",
+			input:        "object:project contains:{trait:todo}",
+			predType:     "contains",
+			wantTypeName: "todo",
+		},
+		{
+			name:         "contains with value",
+			input:        "object:project contains:{trait:todo value:done}",
+			predType:     "contains",
+			wantTypeName: "todo",
+		},
+		{
+			name:         "negated contains",
+			input:        "object:project !contains:{trait:todo}",
+			predType:     "contains",
+			wantTypeName: "todo",
+			wantNeg:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+
+			var subQuery *Query
+			var negated bool
+			switch p := q.Predicates[0].(type) {
+			case *DescendantPredicate:
+				if tt.predType != "descendant" {
+					t.Fatalf("expected %s, got descendant", tt.predType)
+				}
+				subQuery = p.SubQuery
+				negated = p.Negated()
+			case *ContainsPredicate:
+				if tt.predType != "contains" {
+					t.Fatalf("expected %s, got contains", tt.predType)
+				}
+				subQuery = p.SubQuery
+				negated = p.Negated()
+			default:
+				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+			}
+
+			if subQuery.TypeName != tt.wantTypeName {
+				t.Errorf("TypeName = %v, want %v", subQuery.TypeName, tt.wantTypeName)
+			}
+			if negated != tt.wantNeg {
+				t.Errorf("Negated = %v, want %v", negated, tt.wantNeg)
+			}
+		})
+	}
+}
+
 func TestParseComplexQueries(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -543,6 +636,18 @@ func TestParseComplexQueries(t *testing.T) {
 		{
 			name:  "multiple field predicates",
 			input: "object:project .status:active .priority:high",
+		},
+		{
+			name:  "contains with value predicate",
+			input: "object:project contains:{trait:todo value:todo}",
+		},
+		{
+			name:  "descendant with field predicate",
+			input: "object:project descendant:{object:section .title:Tasks}",
+		},
+		{
+			name:  "combined contains and field",
+			input: "object:project .status:active contains:{trait:todo}",
 		},
 	}
 

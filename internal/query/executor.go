@@ -176,6 +176,10 @@ func (e *Executor) buildObjectPredicateSQL(pred Predicate, alias string) (string
 		return e.buildAncestorPredicateSQL(p, alias)
 	case *ChildPredicate:
 		return e.buildChildPredicateSQL(p, alias)
+	case *DescendantPredicate:
+		return e.buildDescendantPredicateSQL(p, alias)
+	case *ContainsPredicate:
+		return e.buildContainsPredicateSQL(p, alias)
 	case *RefsPredicate:
 		return e.buildRefsPredicateSQL(p, alias)
 	case *ContentPredicate:
@@ -354,6 +358,89 @@ func (e *Executor) buildChildPredicateSQL(p *ChildPredicate, alias string) (stri
 		SELECT 1 FROM objects child_obj
 		WHERE child_obj.parent_id = %s.id AND %s
 	)`, alias, strings.Join(childConditions, " AND "))
+
+	if p.Negated() {
+		cond = "NOT " + cond
+	}
+
+	return cond, args, nil
+}
+
+// buildDescendantPredicateSQL builds SQL for descendant:{object:...} predicates.
+// Uses a recursive CTE to find all descendants at any depth.
+func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias string) (string, []interface{}, error) {
+	var descendantConditions []string
+	var args []interface{}
+
+	descendantConditions = append(descendantConditions, "desc_obj.type = ?")
+	args = append(args, p.SubQuery.TypeName)
+
+	for _, pred := range p.SubQuery.Predicates {
+		cond, predArgs, err := e.buildObjectPredicateSQL(pred, "desc_obj")
+		if err != nil {
+			return "", nil, err
+		}
+		descendantConditions = append(descendantConditions, cond)
+		args = append(args, predArgs...)
+	}
+
+	// Build descendant query using recursive CTE
+	cond := fmt.Sprintf(`EXISTS (
+		WITH RECURSIVE descendants AS (
+			SELECT id, parent_id, type, fields FROM objects WHERE parent_id = %s.id
+			UNION ALL
+			SELECT o.id, o.parent_id, o.type, o.fields FROM objects o
+			JOIN descendants d ON o.parent_id = d.id
+		)
+		SELECT 1 FROM descendants desc_obj WHERE %s
+	)`, alias, strings.Join(descendantConditions, " AND "))
+
+	if p.Negated() {
+		cond = "NOT " + cond
+	}
+
+	return cond, args, nil
+}
+
+// buildContainsPredicateSQL builds SQL for contains:{trait:...} predicates.
+// Finds objects that have a matching trait anywhere in their subtree (self or descendants).
+func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string) (string, []interface{}, error) {
+	var traitConditions []string
+	var args []interface{}
+
+	traitConditions = append(traitConditions, "t.trait_type = ?")
+	args = append(args, p.SubQuery.TypeName)
+
+	for _, pred := range p.SubQuery.Predicates {
+		switch tp := pred.(type) {
+		case *ValuePredicate:
+			if tp.Negated() {
+				traitConditions = append(traitConditions, "t.value != ?")
+			} else {
+				traitConditions = append(traitConditions, "t.value = ?")
+			}
+			args = append(args, tp.Value)
+		case *SourcePredicate:
+			if tp.Source == "frontmatter" {
+				traitConditions = append(traitConditions, "t.line_number <= 1")
+			} else {
+				traitConditions = append(traitConditions, "t.line_number > 1")
+			}
+		}
+	}
+
+	// Build a query that checks for traits on self OR any descendant
+	// Use recursive CTE to find all descendants, then check traits on any of them
+	cond := fmt.Sprintf(`EXISTS (
+		WITH RECURSIVE subtree AS (
+			SELECT id FROM objects WHERE id = %s.id
+			UNION ALL
+			SELECT o.id FROM objects o
+			JOIN subtree s ON o.parent_id = s.id
+		)
+		SELECT 1 FROM traits t
+		WHERE t.parent_object_id IN (SELECT id FROM subtree) AND %s
+	)`, alias, strings.Join(traitConditions, " AND "))
 
 	if p.Negated() {
 		cond = "NOT " + cond
