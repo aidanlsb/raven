@@ -156,6 +156,10 @@ func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
 			return p.parseAncestorPredicate(negated)
 		case "child":
 			return p.parseChildPredicate(negated)
+		case "descendant":
+			return p.parseDescendantPredicate(negated)
+		case "contains":
+			return p.parseContainsPredicate(negated)
 		case "refs":
 			return p.parseRefsPredicate(negated)
 		case "content":
@@ -258,6 +262,30 @@ func (p *Parser) parseChildPredicate(negated bool) (Predicate, error) {
 		return nil, err
 	}
 	return &ChildPredicate{
+		basePredicate: basePredicate{negated: negated},
+		SubQuery:      subQuery,
+	}, nil
+}
+
+// parseDescendantPredicate parses descendant:type or descendant:{object:type ...}
+func (p *Parser) parseDescendantPredicate(negated bool) (Predicate, error) {
+	subQuery, err := p.parseSubQuery(QueryTypeObject, "object")
+	if err != nil {
+		return nil, err
+	}
+	return &DescendantPredicate{
+		basePredicate: basePredicate{negated: negated},
+		SubQuery:      subQuery,
+	}, nil
+}
+
+// parseContainsPredicate parses contains:{trait:name ...}
+func (p *Parser) parseContainsPredicate(negated bool) (Predicate, error) {
+	subQuery, err := p.parseSubQuery(QueryTypeTrait, "trait")
+	if err != nil {
+		return nil, err
+	}
+	return &ContainsPredicate{
 		basePredicate: basePredicate{negated: negated},
 		SubQuery:      subQuery,
 	}, nil

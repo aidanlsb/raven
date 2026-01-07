@@ -96,6 +96,10 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 		return v.validateQuery(p.SubQuery)
 	case *ChildPredicate:
 		return v.validateQuery(p.SubQuery)
+	case *DescendantPredicate:
+		return v.validateQuery(p.SubQuery)
+	case *ContainsPredicate:
+		return v.validateQuery(p.SubQuery)
 	case *RefsPredicate:
 		if p.SubQuery != nil {
 			return v.validateQuery(p.SubQuery)

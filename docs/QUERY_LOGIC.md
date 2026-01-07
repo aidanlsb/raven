@@ -156,6 +156,50 @@ object:meeting child:{object:topic}
 object:date child:{object:meeting has:due}
 ```
 
+### Descendant (Any Depth)
+
+Filter by whether object has any descendant matching an object sub-query at any depth.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `descendant:{object:<type> ...}` | Has descendant matching sub-query |
+| `!descendant:{object:<type> ...}` | No descendant matches sub-query |
+
+**Shorthand:** `descendant:<type>` expands to `descendant:{object:<type>}`
+
+**Examples:**
+```
+object:project descendant:section
+object:project descendant:{object:section}
+object:date descendant:{object:meeting has:due}
+```
+
+### Contains (`contains:`)
+
+Filter by whether object has matching traits anywhere in its subtree (self or any descendant). This is the inverse of `within:` — where `within:` finds traits inside objects, `contains:` finds objects that contain traits.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `contains:{trait:<name> ...}` | Has trait matching sub-query on self or any descendant |
+| `!contains:{trait:<name> ...}` | No matching trait on self or any descendant |
+
+**Shorthand:** `contains:<trait>` expands to `contains:{trait:<trait>}`
+
+**Examples:**
+```
+object:project contains:todo
+object:project contains:{trait:todo}
+object:project contains:{trait:todo value:todo}
+object:project contains:{trait:priority value:high}
+object:date contains:{trait:due value:past}
+```
+
+**Semantic distinctions:**
+- `has:{trait:todo}` — Has a todo trait **directly on** the object
+- `contains:{trait:todo}` — Has a todo trait **anywhere** (self or nested sections/children)
+- `contains:{trait:todo value:todo}` — Has an incomplete todo anywhere in subtree
+- `!contains:{trait:todo value:done}` — Has no completed todos in subtree
+
 ### References (`refs:`)
 
 Filter by what an object references (outgoing links). Use `refs:[[target]]` for a specific target, or `refs:{object:...}` to match targets by a sub-query.
@@ -497,6 +541,22 @@ object:meeting refs:{object:project .status:active}
 
 # Meetings that don't reference a specific project
 object:meeting !refs:[[projects/website]]
+
+# Projects with any todo anywhere in their hierarchy (self or nested sections)
+object:project contains:{trait:todo}
+
+# Active projects with incomplete todos
+object:project .status:active contains:{trait:todo value:todo}
+
+# Projects with sections nested inside
+object:project descendant:section
+
+# Daily notes that contain overdue items anywhere
+object:date contains:{trait:due value:past}
+
+# Difference between has: and contains:
+object:project has:{trait:due}              # Due trait directly on project
+object:project contains:{trait:due}         # Due trait anywhere (including sections)
 ```
 
 ---

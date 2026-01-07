@@ -76,6 +76,25 @@ type ChildPredicate struct {
 
 func (ChildPredicate) predicateNode() {}
 
+// DescendantPredicate filters by having any descendant matching (at any depth).
+// Syntax: descendant:type, descendant:{object:type ...}
+type DescendantPredicate struct {
+	basePredicate
+	SubQuery *Query // An object query
+}
+
+func (DescendantPredicate) predicateNode() {}
+
+// ContainsPredicate filters objects by whether they contain matching traits anywhere
+// in their subtree (self or any descendant object).
+// Syntax: contains:{trait:name ...}
+type ContainsPredicate struct {
+	basePredicate
+	SubQuery *Query // A trait query
+}
+
+func (ContainsPredicate) predicateNode() {}
+
 // RefsPredicate filters objects by what they reference.
 // Syntax: refs:[[target]], refs:{object:type ...}
 type RefsPredicate struct {
