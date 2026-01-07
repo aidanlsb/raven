@@ -225,3 +225,58 @@ func TestValidator_NestedSubqueryValidation(t *testing.T) {
 		t.Errorf("expected error about unknown trait, got: %s", ve.Message)
 	}
 }
+
+func TestValidator_DirectTargetPredicates(t *testing.T) {
+	// Test that [[target]] predicates don't panic and validate correctly
+	// This is a regression test for the nil pointer dereference when SubQuery is nil
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"status": {Type: schema.FieldTypeString},
+				},
+			},
+			"section": {Fields: map[string]*schema.FieldDefinition{}},
+			"date":    {Fields: map[string]*schema.FieldDefinition{}},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"todo": {},
+			"due":  {},
+		},
+	}
+
+	v := NewValidator(sch)
+
+	// All these queries use [[target]] syntax which sets Target instead of SubQuery
+	// They should validate without panicking
+	tests := []string{
+		// Object predicates with [[target]]
+		"object:section parent:[[projects/website]]",
+		"object:section ancestor:[[projects/website]]",
+		"object:project child:[[projects/website#tasks]]",
+		"object:project descendant:[[projects/website#tasks]]",
+		// Trait predicates with [[target]]
+		"trait:todo on:[[projects/website]]",
+		"trait:todo within:[[projects/website]]",
+		// Negated versions
+		"object:section !parent:[[projects/website]]",
+		"trait:todo !within:[[projects/website]]",
+		// Short references
+		"trait:todo within:[[website]]",
+	}
+
+	for _, queryStr := range tests {
+		t.Run(queryStr, func(t *testing.T) {
+			q, err := Parse(queryStr)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+
+			// This should NOT panic - that's the main test
+			err = v.Validate(q)
+			if err != nil {
+				t.Errorf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}
