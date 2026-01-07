@@ -5,16 +5,68 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/resolver"
 )
 
 // Executor executes queries against the database.
 type Executor struct {
-	db *sql.DB
+	db       *sql.DB
+	resolver *resolver.Resolver // Cached resolver for target resolution
 }
 
 // NewExecutor creates a new query executor.
 func NewExecutor(db *sql.DB) *Executor {
 	return &Executor{db: db}
+}
+
+// getResolver returns a resolver for target resolution, creating it if needed.
+func (e *Executor) getResolver() (*resolver.Resolver, error) {
+	if e.resolver != nil {
+		return e.resolver, nil
+	}
+
+	// Query all object IDs from the database
+	rows, err := e.db.Query("SELECT id FROM objects")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var objectIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		objectIDs = append(objectIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	e.resolver = resolver.New(objectIDs)
+	return e.resolver, nil
+}
+
+// resolveTarget resolves a reference to an object ID.
+// Returns the resolved ID or an error if ambiguous.
+func (e *Executor) resolveTarget(target string) (string, error) {
+	res, err := e.getResolver()
+	if err != nil {
+		return "", err
+	}
+
+	result := res.Resolve(target)
+	if result.Ambiguous {
+		return "", fmt.Errorf("ambiguous reference '%s' - matches: %s",
+			target, strings.Join(result.Matches, ", "))
+	}
+	if result.TargetID == "" {
+		// Not found - return the original target (will match nothing)
+		return target, nil
+	}
+	return result.TargetID, nil
 }
 
 // ObjectResult represents an object returned from a query.
@@ -284,6 +336,20 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 
 // buildParentPredicateSQL builds SQL for parent:{object:...} predicates.
 func (e *Executor) buildParentPredicateSQL(p *ParentPredicate, alias string) (string, []interface{}, error) {
+	// Handle direct target reference: parent:[[target]]
+	if p.Target != "" {
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
+		}
+		cond := fmt.Sprintf("%s.parent_id = ?", alias)
+		if p.Negated() {
+			cond = fmt.Sprintf("(%s.parent_id IS NULL OR %s.parent_id != ?)", alias, alias)
+			return cond, []interface{}{resolvedTarget}, nil
+		}
+		return cond, []interface{}{resolvedTarget}, nil
+	}
+
 	var parentConditions []string
 	var args []interface{}
 
@@ -311,8 +377,30 @@ func (e *Executor) buildParentPredicateSQL(p *ParentPredicate, alias string) (st
 	return cond, args, nil
 }
 
-// buildAncestorPredicateSQL builds SQL for ancestor:{object:...} predicates.
+// buildAncestorPredicateSQL builds SQL for ancestor:{object:...} or ancestor:[[target]] predicates.
 func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string) (string, []interface{}, error) {
+	// Handle direct target reference: ancestor:[[target]]
+	if p.Target != "" {
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
+		}
+		// Check if target is anywhere in the ancestor chain
+		cond := fmt.Sprintf(`EXISTS (
+			WITH RECURSIVE ancestors AS (
+				SELECT id, parent_id FROM objects WHERE id = %s.parent_id
+				UNION ALL
+				SELECT o.id, o.parent_id FROM objects o
+				JOIN ancestors a ON o.id = a.parent_id
+			)
+			SELECT 1 FROM ancestors WHERE id = ?
+		)`, alias)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, []interface{}{resolvedTarget}, nil
+	}
+
 	var ancestorConditions []string
 	var args []interface{}
 
@@ -337,8 +425,24 @@ func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string)
 	return cond, args, nil
 }
 
-// buildChildPredicateSQL builds SQL for child:{object:...} predicates.
+// buildChildPredicateSQL builds SQL for child:{object:...} or child:[[target]] predicates.
 func (e *Executor) buildChildPredicateSQL(p *ChildPredicate, alias string) (string, []interface{}, error) {
+	// Handle direct target reference: child:[[target]]
+	if p.Target != "" {
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
+		}
+		// Check if target is a direct child of this object
+		cond := fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM objects WHERE id = ? AND parent_id = %s.id
+		)`, alias)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, []interface{}{resolvedTarget}, nil
+	}
+
 	var childConditions []string
 	var args []interface{}
 
@@ -366,9 +470,31 @@ func (e *Executor) buildChildPredicateSQL(p *ChildPredicate, alias string) (stri
 	return cond, args, nil
 }
 
-// buildDescendantPredicateSQL builds SQL for descendant:{object:...} predicates.
+// buildDescendantPredicateSQL builds SQL for descendant:{object:...} or descendant:[[target]] predicates.
 // Uses a recursive CTE to find all descendants at any depth.
 func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias string) (string, []interface{}, error) {
+	// Handle direct target reference: descendant:[[target]]
+	if p.Target != "" {
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
+		}
+		// Check if target is anywhere in the descendant tree
+		cond := fmt.Sprintf(`EXISTS (
+			WITH RECURSIVE descendants AS (
+				SELECT id, parent_id FROM objects WHERE parent_id = %s.id
+				UNION ALL
+				SELECT o.id, o.parent_id FROM objects o
+				JOIN descendants d ON o.parent_id = d.id
+			)
+			SELECT 1 FROM descendants WHERE id = ?
+		)`, alias)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, []interface{}{resolvedTarget}, nil
+	}
+
 	var descendantConditions []string
 	var args []interface{}
 
@@ -600,8 +726,22 @@ func (e *Executor) buildSourcePredicateSQL(p *SourcePredicate, alias string) (st
 	return cond, nil, nil
 }
 
-// buildOnPredicateSQL builds SQL for on:{object:...} predicates.
+// buildOnPredicateSQL builds SQL for on:{object:...} or on:[[target]] predicates.
 func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []interface{}, error) {
+	// Handle direct target reference: on:[[target]]
+	if p.Target != "" {
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
+		}
+		cond := fmt.Sprintf("%s.parent_object_id = ?", alias)
+		if p.Negated() {
+			cond = fmt.Sprintf("(%s.parent_object_id IS NULL OR %s.parent_object_id != ?)", alias, alias)
+			return cond, []interface{}{resolvedTarget}, nil
+		}
+		return cond, []interface{}{resolvedTarget}, nil
+	}
+
 	var objConditions []string
 	var args []interface{}
 
@@ -629,8 +769,30 @@ func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []
 	return cond, args, nil
 }
 
-// buildWithinPredicateSQL builds SQL for within:{object:...} predicates.
+// buildWithinPredicateSQL builds SQL for within:{object:...} or within:[[target]] predicates.
 func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (string, []interface{}, error) {
+	// Handle direct target reference: within:[[target]]
+	if p.Target != "" {
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
+		}
+		// Check if target is the trait's parent or any ancestor of the trait's parent
+		cond := fmt.Sprintf(`EXISTS (
+			WITH RECURSIVE ancestors AS (
+				SELECT id, parent_id FROM objects WHERE id = %s.parent_object_id
+				UNION ALL
+				SELECT o.id, o.parent_id FROM objects o
+				JOIN ancestors a ON o.id = a.parent_id
+			)
+			SELECT 1 FROM ancestors WHERE id = ?
+		)`, alias)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, []interface{}{resolvedTarget}, nil
+	}
+
 	var ancestorConditions []string
 	var args []interface{}
 

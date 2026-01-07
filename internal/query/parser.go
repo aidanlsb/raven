@@ -231,8 +231,18 @@ func (p *Parser) parseHasPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseParentPredicate parses parent:type or parent:{object:type ...}
+// parseParentPredicate parses parent:type, parent:{object:type ...}, or parent:[[target]]
 func (p *Parser) parseParentPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &ParentPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
 	subQuery, err := p.parseSubQuery(QueryTypeObject, "object")
 	if err != nil {
 		return nil, err
@@ -243,8 +253,18 @@ func (p *Parser) parseParentPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseAncestorPredicate parses ancestor:type or ancestor:{object:type ...}
+// parseAncestorPredicate parses ancestor:type, ancestor:{object:type ...}, or ancestor:[[target]]
 func (p *Parser) parseAncestorPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &AncestorPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
 	subQuery, err := p.parseSubQuery(QueryTypeObject, "object")
 	if err != nil {
 		return nil, err
@@ -255,8 +275,18 @@ func (p *Parser) parseAncestorPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseChildPredicate parses child:type or child:{object:type ...}
+// parseChildPredicate parses child:type, child:{object:type ...}, or child:[[target]]
 func (p *Parser) parseChildPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &ChildPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
 	subQuery, err := p.parseSubQuery(QueryTypeObject, "object")
 	if err != nil {
 		return nil, err
@@ -267,8 +297,18 @@ func (p *Parser) parseChildPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseDescendantPredicate parses descendant:type or descendant:{object:type ...}
+// parseDescendantPredicate parses descendant:type, descendant:{object:type ...}, or descendant:[[target]]
 func (p *Parser) parseDescendantPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &DescendantPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
 	subQuery, err := p.parseSubQuery(QueryTypeObject, "object")
 	if err != nil {
 		return nil, err
@@ -366,8 +406,18 @@ func (p *Parser) parseSourcePredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseOnPredicate parses on:type or on:{object:type ...}
+// parseOnPredicate parses on:type, on:{object:type ...}, or on:[[target]]
 func (p *Parser) parseOnPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &OnPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
 	subQuery, err := p.parseSubQuery(QueryTypeObject, "object")
 	if err != nil {
 		return nil, err
@@ -378,8 +428,18 @@ func (p *Parser) parseOnPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseWithinPredicate parses within:type or within:{object:type ...}
+// parseWithinPredicate parses within:type, within:{object:type ...}, or within:[[target]]
 func (p *Parser) parseWithinPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &WithinPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
 	subQuery, err := p.parseSubQuery(QueryTypeObject, "object")
 	if err != nil {
 		return nil, err

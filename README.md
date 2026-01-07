@@ -294,6 +294,60 @@ References auto-slugify: `[[people/Thor Odinson]]` resolves to `people/thor-odin
 rvn backlinks people/freya       # What references Freya?
 ```
 
+### Embedded Types & Heading Scoping
+
+Every markdown heading in a file automatically becomes a **section object**. This creates a hierarchy that Raven uses for scoping traits and queries.
+
+```markdown
+---
+type: project
+status: active
+---
+
+# My Project
+
+## Tasks
+- @todo @priority(high) Build the API
+- @todo Fix the bug
+
+## Notes
+Some notes here...
+```
+
+**What Raven sees:**
+```
+projects/my-project (type: project)
+├── #my-project (type: section)
+│   ├── #tasks (type: section)  ← @todo traits are parented here
+│   └── #notes (type: section)
+```
+
+**Why this matters:**
+
+1. **Trait scoping**: The `@todo` traits belong to the `#tasks` section, not directly to the project. Use `has:` for direct traits, `contains:` for traits anywhere in the subtree:
+
+   ```bash
+   # Only finds projects with @todo directly on the project object
+   rvn query "object:project has:{trait:todo}"
+   
+   # Finds projects with @todo anywhere (including nested sections)
+   rvn query "object:project contains:{trait:todo}"
+   ```
+
+2. **Referenceable sections**: You can link directly to headings:
+   ```markdown
+   See [[projects/my-project#tasks]] for the task list.
+   ```
+
+3. **Explicit embedded types**: For more structure, declare a typed section:
+   ```markdown
+   ## Weekly Standup
+   ::meeting(id=standup, time=09:00)
+   
+   Discussion notes...
+   ```
+   This creates a `meeting` object at `daily/2025-01-06#standup` that's queryable by type.
+
 ### Querying
 
 Raven has two foundational query types that compose together for powerful information retrieval:
@@ -326,9 +380,13 @@ rvn query "trait:highlight"              # All highlights
 Use `{...}` to embed one query inside another:
 
 ```bash
-# Objects that HAVE certain traits
+# Objects that HAVE certain traits (directly on the object)
 rvn query "object:project has:{trait:due value:past}"
-# → Projects with overdue tasks
+# → Projects with overdue tasks directly on the project
+
+# Objects that CONTAIN traits anywhere in their subtree
+rvn query "object:project contains:{trait:todo}"
+# → Projects with todos anywhere (including nested sections)
 
 # Traits that appear ON certain objects
 rvn query "trait:highlight on:{object:book}"
@@ -337,6 +395,25 @@ rvn query "trait:highlight on:{object:book}"
 # Traits WITHIN a hierarchy (any ancestor)
 rvn query "trait:due within:{object:date}"
 # → All @due items in daily notes
+```
+
+**Direct vs. deep hierarchy predicates:**
+
+| Direction | Direct only | Any depth |
+|-----------|-------------|-----------|
+| Parent → Child | `child:` | `descendant:` |
+| Child → Parent | `parent:` | `ancestor:` |
+| Object → Trait | `has:` | `contains:` |
+| Trait → Object | `on:` | `within:` |
+
+```bash
+# Direct child vs any descendant
+rvn query "object:project child:section"      # Direct child sections
+rvn query "object:project descendant:section" # Sections at any depth
+
+# Direct trait vs trait anywhere
+rvn query "object:project has:{trait:todo}"      # Todo on project itself
+rvn query "object:project contains:{trait:todo}" # Todo anywhere in project
 ```
 
 You can also filter by **relationships**:
@@ -348,6 +425,22 @@ rvn query "object:meeting refs:[[people/freya]]"
 # Objects with a specific parent type
 rvn query "object:meeting parent:{object:date}"
 # → Meetings embedded in daily notes
+```
+
+**Direct target references** — use `[[target]]` to filter by a specific known object:
+
+```bash
+# Traits directly on a specific section
+rvn query "trait:todo on:[[projects/website#tasks]]"
+
+# Traits anywhere inside a specific project
+rvn query "trait:todo within:[[projects/website]]"
+
+# Sections with a specific project as parent
+rvn query "object:section parent:[[projects/website]]"
+
+# Short references work if unambiguous
+rvn query "trait:todo within:[[website]]"
 ```
 
 And combine with **boolean logic**:

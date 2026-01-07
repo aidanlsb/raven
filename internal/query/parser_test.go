@@ -669,3 +669,125 @@ func TestParseComplexQueries(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDirectTargetPredicates(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		predType   string
+		wantTarget string
+		wantNeg    bool
+	}{
+		{
+			name:       "parent with direct target",
+			input:      "object:section parent:[[projects/website]]",
+			predType:   "parent",
+			wantTarget: "projects/website",
+		},
+		{
+			name:       "ancestor with direct target",
+			input:      "object:section ancestor:[[projects/website]]",
+			predType:   "ancestor",
+			wantTarget: "projects/website",
+		},
+		{
+			name:       "child with direct target",
+			input:      "object:project child:[[projects/website#overview]]",
+			predType:   "child",
+			wantTarget: "projects/website#overview",
+		},
+		{
+			name:       "descendant with direct target",
+			input:      "object:project descendant:[[projects/website#tasks]]",
+			predType:   "descendant",
+			wantTarget: "projects/website#tasks",
+		},
+		{
+			name:       "on with direct target (trait query)",
+			input:      "trait:todo on:[[projects/website]]",
+			predType:   "on",
+			wantTarget: "projects/website",
+		},
+		{
+			name:       "within with direct target (trait query)",
+			input:      "trait:todo within:[[projects/website]]",
+			predType:   "within",
+			wantTarget: "projects/website",
+		},
+		{
+			name:       "negated parent with direct target",
+			input:      "object:section !parent:[[projects/website]]",
+			predType:   "parent",
+			wantTarget: "projects/website",
+			wantNeg:    true,
+		},
+		{
+			name:       "short reference",
+			input:      "trait:todo within:[[website]]",
+			predType:   "within",
+			wantTarget: "website",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+
+			var target string
+			var negated bool
+			switch p := q.Predicates[0].(type) {
+			case *ParentPredicate:
+				if tt.predType != "parent" {
+					t.Fatalf("expected %s, got parent", tt.predType)
+				}
+				target = p.Target
+				negated = p.Negated()
+			case *AncestorPredicate:
+				if tt.predType != "ancestor" {
+					t.Fatalf("expected %s, got ancestor", tt.predType)
+				}
+				target = p.Target
+				negated = p.Negated()
+			case *ChildPredicate:
+				if tt.predType != "child" {
+					t.Fatalf("expected %s, got child", tt.predType)
+				}
+				target = p.Target
+				negated = p.Negated()
+			case *DescendantPredicate:
+				if tt.predType != "descendant" {
+					t.Fatalf("expected %s, got descendant", tt.predType)
+				}
+				target = p.Target
+				negated = p.Negated()
+			case *OnPredicate:
+				if tt.predType != "on" {
+					t.Fatalf("expected %s, got on", tt.predType)
+				}
+				target = p.Target
+				negated = p.Negated()
+			case *WithinPredicate:
+				if tt.predType != "within" {
+					t.Fatalf("expected %s, got within", tt.predType)
+				}
+				target = p.Target
+				negated = p.Negated()
+			default:
+				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+			}
+
+			if target != tt.wantTarget {
+				t.Errorf("Target = %v, want %v", target, tt.wantTarget)
+			}
+			if negated != tt.wantNeg {
+				t.Errorf("Negated = %v, want %v", negated, tt.wantNeg)
+			}
+		})
+	}
+}

@@ -74,6 +74,9 @@ When users ask about their data:
    raven_backlinks(target="people/freya")
 ```
 
+When a user asks a general question about their notes, always prefer the query language to full text search. Resort to search only if the query fails or the user is unhappy with what you returned. 
+
+
 Query language predicates:
 - `.field:value` — filter by field (`.status:active`, `.email:*`)
 - `has:trait` — object has trait (`has:due`, `has:{trait:due value:past}`)

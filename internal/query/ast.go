@@ -50,37 +50,41 @@ type HasPredicate struct {
 func (HasPredicate) predicateNode() {}
 
 // ParentPredicate filters by direct parent matching.
-// Syntax: parent:type, parent:{object:type ...}
+// Syntax: parent:type, parent:{object:type ...}, parent:[[target]]
 type ParentPredicate struct {
 	basePredicate
-	SubQuery *Query // An object query
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (ParentPredicate) predicateNode() {}
 
 // AncestorPredicate filters by any ancestor matching.
-// Syntax: ancestor:type, ancestor:{object:type ...}
+// Syntax: ancestor:type, ancestor:{object:type ...}, ancestor:[[target]]
 type AncestorPredicate struct {
 	basePredicate
-	SubQuery *Query // An object query
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (AncestorPredicate) predicateNode() {}
 
 // ChildPredicate filters by having a direct child matching.
-// Syntax: child:type, child:{object:type ...}
+// Syntax: child:type, child:{object:type ...}, child:[[target]]
 type ChildPredicate struct {
 	basePredicate
-	SubQuery *Query // An object query
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (ChildPredicate) predicateNode() {}
 
 // DescendantPredicate filters by having any descendant matching (at any depth).
-// Syntax: descendant:type, descendant:{object:type ...}
+// Syntax: descendant:type, descendant:{object:type ...}, descendant:[[target]]
 type DescendantPredicate struct {
 	basePredicate
-	SubQuery *Query // An object query
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (DescendantPredicate) predicateNode() {}
@@ -133,19 +137,21 @@ type SourcePredicate struct {
 func (SourcePredicate) predicateNode() {}
 
 // OnPredicate filters traits by direct parent object.
-// Syntax: on:type, on:{object:type ...}
+// Syntax: on:type, on:{object:type ...}, on:[[target]]
 type OnPredicate struct {
 	basePredicate
-	SubQuery *Query // An object query
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (OnPredicate) predicateNode() {}
 
 // WithinPredicate filters traits by any ancestor object.
-// Syntax: within:type, within:{object:type ...}
+// Syntax: within:type, within:{object:type ...}, within:[[target]]
 type WithinPredicate struct {
 	basePredicate
-	SubQuery *Query // An object query
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (WithinPredicate) predicateNode() {}
