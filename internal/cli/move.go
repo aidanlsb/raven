@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -42,6 +43,9 @@ Examples:
 		vaultPath := getVaultPath()
 		start := time.Now()
 
+		// Load vault config for directory roots
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+
 		source := args[0]
 		destination := args[1]
 
@@ -49,8 +53,17 @@ Examples:
 		source = normalizePath(source)
 		destination = normalizePath(destination)
 
-		// Resolve source file
+		// Resolve source file - first try as object ID, then as literal path
 		sourceFile, err := vault.ResolveObjectToFile(vaultPath, strings.TrimSuffix(source, ".md"))
+		if err != nil {
+			// Try with directory root prefix if configured
+			if vaultCfg.HasDirectoriesConfig() {
+				// Try resolving via the config's path translation
+				resolvedPath := vaultCfg.ResolveReferenceToFilePath(strings.TrimSuffix(source, ".md"))
+				resolvedPath = strings.TrimSuffix(resolvedPath, ".md")
+				sourceFile, err = vault.ResolveObjectToFile(vaultPath, resolvedPath)
+			}
+		}
 		if err != nil {
 			return handleErrorMsg(ErrFileNotFound,
 				fmt.Sprintf("Source '%s' does not exist", source),
@@ -64,8 +77,13 @@ Examples:
 				"Files can only be moved within the vault")
 		}
 
-		// Build destination path
-		destFile := filepath.Join(vaultPath, destination)
+		// Build destination path - apply directory roots if configured
+		destPath := destination
+		if vaultCfg.HasDirectoriesConfig() {
+			// If destination is an object ID (like "people/freya.md"), resolve to file path
+			destPath = vaultCfg.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
+		}
+		destFile := filepath.Join(vaultPath, destPath)
 
 		// Security: Validate destination is within vault
 		if err := validateWithinVault(vaultPath, destFile); err != nil {
@@ -95,12 +113,21 @@ Examples:
 			sch = schema.NewSchema()
 		}
 
+		// Build parse options from vault config
+		var parseOpts *parser.ParseOptions
+		if vaultCfg.HasDirectoriesConfig() {
+			parseOpts = &parser.ParseOptions{
+				ObjectsRoot: vaultCfg.GetObjectsRoot(),
+				PagesRoot:   vaultCfg.GetPagesRoot(),
+			}
+		}
+
 		// Parse source file to get its type
 		content, err := os.ReadFile(sourceFile)
 		if err != nil {
 			return handleError(ErrFileReadError, err, "")
 		}
-		doc, err := parser.ParseDocument(string(content), sourceFile, vaultPath)
+		doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, vaultPath, parseOpts)
 		if err != nil {
 			return handleError(ErrInternal, err, "Failed to parse source file")
 		}
@@ -202,7 +229,7 @@ Examples:
 			db.RemoveDocument(sourceID)
 			// Index new location
 			newContent, _ := os.ReadFile(destFile)
-			newDoc, _ := parser.ParseDocument(string(newContent), destFile, vaultPath)
+			newDoc, _ := parser.ParseDocumentWithOptions(string(newContent), destFile, vaultPath, parseOpts)
 			if newDoc != nil {
 				db.IndexDocument(newDoc, sch)
 			}

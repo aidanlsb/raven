@@ -65,8 +65,24 @@ type ParsedRef struct {
 	End         int     // End position
 }
 
+// ParseOptions contains options for parsing documents.
+type ParseOptions struct {
+	// ObjectsRoot is the root directory for typed objects (e.g., "objects/").
+	// If set, this prefix is stripped from file paths when computing object IDs.
+	ObjectsRoot string
+
+	// PagesRoot is the root directory for untyped pages (e.g., "pages/").
+	// If set, this prefix is stripped from file paths when computing object IDs.
+	PagesRoot string
+}
+
 // ParseDocument parses a markdown document.
 func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDocument, error) {
+	return ParseDocumentWithOptions(content, filePath, vaultPath, nil)
+}
+
+// ParseDocumentWithOptions parses a markdown document with custom options.
+func ParseDocumentWithOptions(content string, filePath string, vaultPath string, opts *ParseOptions) (*ParsedDocument, error) {
 	relativePath := filePath
 	if vaultPath != "" {
 		if rel, err := filepath.Rel(vaultPath, filePath); err == nil {
@@ -79,6 +95,11 @@ func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDo
 	fileID = strings.TrimSuffix(fileID, filepath.Ext(relativePath))
 	// Normalize path separators
 	fileID = filepath.ToSlash(fileID)
+
+	// Strip directory roots if configured
+	if opts != nil {
+		fileID = stripDirectoryRoot(fileID, opts)
+	}
 
 	var objects []*ParsedObject
 	var traits []*ParsedTrait
@@ -306,4 +327,28 @@ func computeLineEnds(objects []*ParsedObject) {
 		}
 		// Last object extends to end of file (nil)
 	}
+}
+
+// stripDirectoryRoot strips the appropriate directory root from a file ID.
+// For example, with ObjectsRoot="objects/", "objects/people/freya" becomes "people/freya".
+func stripDirectoryRoot(fileID string, opts *ParseOptions) string {
+	if opts == nil {
+		return fileID
+	}
+
+	// Normalize roots to have no leading slash and no trailing slash for comparison
+	objectsRoot := strings.TrimSuffix(strings.TrimPrefix(opts.ObjectsRoot, "/"), "/")
+	pagesRoot := strings.TrimSuffix(strings.TrimPrefix(opts.PagesRoot, "/"), "/")
+
+	// Try stripping objects root first (more specific paths)
+	if objectsRoot != "" && strings.HasPrefix(fileID, objectsRoot+"/") {
+		return strings.TrimPrefix(fileID, objectsRoot+"/")
+	}
+
+	// Try stripping pages root
+	if pagesRoot != "" && strings.HasPrefix(fileID, pagesRoot+"/") {
+		return strings.TrimPrefix(fileID, pagesRoot+"/")
+	}
+
+	return fileID
 }

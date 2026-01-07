@@ -4,6 +4,120 @@ This document tracks potential future enhancements and ideas. These are not curr
 
 ---
 
+## ~~Directory Organization~~ ✅ IMPLEMENTED
+
+As vaults grow with many types, the root directory becomes cluttered. This enhancement allows nesting typed object folders under a common root while keeping reference paths short.
+
+**Status**: ✅ Implemented. See the [README](../README.md#directory-organization) for usage.
+
+---
+
+### ~~Configurable Directory Roots~~ ✅ IMPLEMENTED
+
+Configuration in `raven.yaml` for directory organization:
+
+```yaml
+# raven.yaml
+directories:
+  # Root for typed objects (type default_path is relative to this)
+  objects: objects/
+  
+  # Where untyped pages go
+  pages: pages/
+  
+  # Daily notes (already exists as daily_directory, would move here)
+  daily: daily/
+```
+
+**Key behavior**: Directory roots are **stripped from object IDs**, keeping references short.
+
+| Physical Path | Object ID | Reference |
+|---------------|-----------|-----------|
+| `objects/people/freya.md` | `people/freya` | `[[people/freya]]` |
+| `objects/projects/bifrost.md` | `projects/bifrost` | `[[projects/bifrost]]` |
+| `pages/random-note.md` | `random-note` | `[[random-note]]` |
+| `daily/2026-01-06.md` | `2026-01-06` | `[[2026-01-06]]` |
+
+**Example vault structure:**
+```
+vault/
+├── daily/
+├── objects/
+│   ├── people/
+│   ├── projects/
+│   └── meetings/
+├── pages/
+├── templates/
+├── workflows/
+├── raven.yaml
+└── schema.yaml
+```
+
+**Status**: ✅ Implemented.
+
+---
+
+### ~~Reference Resolution~~ ✅ IMPLEMENTED
+
+References are resolved **literally** based on the path:
+
+- `[[freya]]` → looks in `pages/freya.md`
+- `[[people/freya]]` → looks in `objects/people/freya.md`
+
+If there's no ambiguity (e.g., only one `freya` exists anywhere), resolution works for either form. If there IS ambiguity (same name in pages and in a type folder), `rvn check` warns and the reference is resolved literally.
+
+**Resolution order:**
+1. Check if reference matches a type prefix (e.g., `people/`) → resolve under `objects/`
+2. Otherwise → resolve under `pages/`
+3. Fall back to daily notes for date patterns (`[[2026-01-06]]`)
+
+**Status**: ✅ Implemented.
+
+---
+
+### ~~Schema Integration~~ ✅ IMPLEMENTED
+
+Type `default_path` values are relative to the `objects` directory:
+
+```yaml
+# schema.yaml
+types:
+  person:
+    default_path: people/   # → objects/people/
+  project:
+    default_path: projects/ # → objects/projects/
+```
+
+To place a type outside the objects root, use an absolute path (leading `/`):
+
+```yaml
+  special-type:
+    default_path: /special/  # → vault root: special/
+```
+
+**Status**: ✅ Implemented.
+
+---
+
+### ~~Implementation Notes~~ ✅ IMPLEMENTED
+
+**Affected components:**
+- `internal/config/vault.go` - directory config and path translation helpers
+- `internal/parser/document.go` - `ParseOptions` with root stripping
+- `internal/resolver/` - collision detection
+- `internal/pages/create.go` - file creation uses configured roots
+- `internal/vault/walk.go` - walk with parse options
+- `rvn new`, `rvn move`, `rvn delete` - all path operations
+- `rvn check` - warns on ID collisions across roots
+
+**Backward compatibility:**
+- If `directories` config is absent, behavior is unchanged (current flat structure)
+- Existing vaults can migrate using `rvn migrate directories`
+
+**Status**: ✅ Implemented.
+
+---
+
 ## Content Migration & Refactoring
 
 As vaults grow and evolve, users need ways to restructure content without losing data or breaking references. These operations go beyond simple file moves.
@@ -231,18 +345,75 @@ Agent:
 
 ## Migrations
 
-### Automatic Syntax Migration
-Implement `rvn migrate --syntax` to automatically convert deprecated trait syntax:
+The `rvn migrate` command provides subcommands for various vault restructuring operations. All migrations support `--dry-run` to preview changes before applying.
+
+---
+
+### ~~Directory Migration~~ ✅ IMPLEMENTED
+
+Migrate an existing vault to use the new directory organization structure:
+
 ```bash
-rvn migrate --syntax --dry-run  # Preview
-rvn migrate --syntax            # Apply
+rvn migrate directories --dry-run  # Preview what would change
+rvn migrate directories            # Apply the migration
+```
+
+**What it does:**
+1. Reads the `directories` config from `raven.yaml`
+2. Moves files to their new locations:
+   - Typed objects → `objects/<type>/`
+   - Untyped pages → `pages/`
+   - Daily notes → `daily/` (unchanged)
+3. Object IDs remain the same (references don't need updating)
+4. Run `rvn reindex --full` after to rebuild the index
+
+**Example migration:**
+```
+Before:                          After:
+vault/                           vault/
+├── people/                      ├── objects/
+│   └── freya.md                 │   ├── people/
+├── projects/                    │   │   └── freya.md
+│   └── bifrost.md               │   └── projects/
+├── daily/                       │       └── bifrost.md
+├── random-note.md               ├── pages/
+└── raven.yaml                   │   └── random-note.md
+                                 ├── daily/
+                                 └── raven.yaml
+```
+
+**Reference behavior:**
+- References like `[[people/freya]]` remain unchanged (ID is preserved)
+- The physical path changes but the logical ID stays the same
+
+**Status**: ✅ Implemented.
+
+---
+
+### Syntax Migration
+
+Automatically convert deprecated trait syntax:
+
+```bash
+rvn migrate syntax --dry-run  # Preview
+rvn migrate syntax            # Apply
 
 # Transforms:
 # @task(due=2025-02-01, priority=high) → @due(2025-02-01) @priority(high)
 # @remind(at=2025-02-01T09:00) → @remind(2025-02-01T09:00)
 ```
 
-**Current status**: Framework exists (`rvn migrate`), but automatic file transformation not yet implemented.
+**Status**: Not implemented.
+
+---
+
+### Future Migration Subcommands
+
+Other potential migrations that fit this pattern:
+
+- `rvn migrate type-rename <old> <new>` — rename a type across all files
+- `rvn migrate trait-rename <old> <new>` — rename a trait across all files
+- `rvn migrate field-rename <type> <old> <new>` — rename a field in frontmatter
 
 ---
 

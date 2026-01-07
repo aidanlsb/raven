@@ -68,6 +68,7 @@ Agent: Created projects/midgard-security-audit.md linked to [[clients/midgard]].
   - [Schema (schema.yaml)](#schema-schemayaml)
   - [Templates](#templates)
   - [Vault Config (raven.yaml)](#vault-config-ravenyaml)
+  - [Directory Organization](#directory-organization)
   - [Global Config](#global-config-configravenconfigtoml)
 - [CLI Reference](#cli-reference)
   - [Core Commands](#core-commands)
@@ -561,6 +562,68 @@ queries:
 
 Saved queries use the same query language as `rvn query "..."`. See the [Query Language](#query-language) section for full syntax.
 
+### Directory Organization
+
+As your vault grows with many types, the root directory can become cluttered. Raven supports nesting type folders under a common root while keeping reference paths short.
+
+**Configuration:**
+
+```yaml
+# raven.yaml
+directories:
+  objects: objects/   # Typed objects nest here
+  pages: pages/       # Untyped pages go here
+```
+
+**Resulting structure:**
+
+```
+vault/
+├── objects/
+│   ├── people/
+│   │   └── freya.md
+│   └── projects/
+│       └── website.md
+├── pages/
+│   └── random-note.md
+├── daily/
+│   └── 2026-01-06.md
+├── raven.yaml
+└── schema.yaml
+```
+
+**Key behavior:** Directory roots are stripped from object IDs, keeping references short:
+
+| Physical Path | Object ID | Reference |
+|---------------|-----------|-----------|
+| `objects/people/freya.md` | `people/freya` | `[[people/freya]]` |
+| `objects/projects/website.md` | `projects/website` | `[[projects/website]]` |
+| `pages/my-note.md` | `my-note` | `[[my-note]]` |
+| `daily/2026-01-06.md` | `daily/2026-01-06` | `[[2026-01-06]]` |
+
+**Reference resolution:**
+- `[[people/freya]]` → looks in `objects/people/freya.md` (has path separator → typed object)
+- `[[my-note]]` → looks in `pages/my-note.md` (bare name → untyped page)
+
+If the same short name exists in both locations, `rvn check` warns about the ambiguity. References are resolved literally.
+
+**Migrating an existing vault:**
+
+```bash
+# 1. Add the directories config to raven.yaml
+
+# 2. Preview what would change
+rvn migrate directories --dry-run
+
+# 3. Apply the migration
+rvn migrate directories
+
+# 4. Rebuild the index
+rvn reindex --full
+```
+
+The `migrate directories` command moves files to their new locations based on their types. References remain valid because object IDs don't change—only the physical file paths.
+
 ### Global Config (`~/.config/raven/config.toml`)
 
 Configure default vault and editor:
@@ -590,7 +653,9 @@ Use named vaults: `rvn --vault work stats`
 | `rvn check --by-file` | Group issues by file path |
 | `rvn check --create-missing` | Interactively create missing pages, types, and traits |
 | `rvn reindex` | Rebuild the SQLite index |
-| `rvn reindex --smart` | Only reindex changed files |
+| `rvn reindex --full` | Force full rebuild (default is incremental) |
+| `rvn migrate` | Check what migrations are available |
+| `rvn migrate directories` | Migrate vault to directory organization |
 
 ### Query Commands
 

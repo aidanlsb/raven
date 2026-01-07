@@ -159,4 +159,71 @@ Second ideas section with same heading.
 			t.Errorf("trait parent = %q, want project#tasks", doc.Traits[0].ParentObjectID)
 		}
 	})
+
+	t.Run("with directory roots", func(t *testing.T) {
+		content := `---
+type: person
+name: Freya
+---
+
+# Freya
+`
+		opts := &ParseOptions{
+			ObjectsRoot: "objects/",
+			PagesRoot:   "pages/",
+		}
+
+		doc, err := ParseDocumentWithOptions(content, "/vault/objects/people/freya.md", "/vault", opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Object ID should strip the objects/ prefix
+		if doc.Objects[0].ID != "people/freya" {
+			t.Errorf("object ID = %q, want %q", doc.Objects[0].ID, "people/freya")
+		}
+	})
+
+	t.Run("pages root stripping", func(t *testing.T) {
+		content := `# My Note
+Some content.
+`
+		opts := &ParseOptions{
+			ObjectsRoot: "objects/",
+			PagesRoot:   "pages/",
+		}
+
+		doc, err := ParseDocumentWithOptions(content, "/vault/pages/my-note.md", "/vault", opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Object ID should strip the pages/ prefix
+		if doc.Objects[0].ID != "my-note" {
+			t.Errorf("object ID = %q, want %q", doc.Objects[0].ID, "my-note")
+		}
+	})
+
+	t.Run("files outside roots", func(t *testing.T) {
+		content := `---
+type: date
+---
+# Daily Note
+`
+		opts := &ParseOptions{
+			ObjectsRoot: "objects/",
+			PagesRoot:   "pages/",
+		}
+
+		// Daily notes are not under objects/ or pages/
+		doc, err := ParseDocumentWithOptions(content, "/vault/daily/2025-01-01.md", "/vault", opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Object ID should remain unchanged (no prefix to strip)
+		if doc.Objects[0].ID != "daily/2025-01-01" {
+			t.Errorf("object ID = %q, want %q", doc.Objects[0].ID, "daily/2025-01-01")
+		}
+	})
 }

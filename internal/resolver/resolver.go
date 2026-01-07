@@ -49,6 +49,43 @@ func NewWithDailyDir(objectIDs []string, dailyDirectory string) *Resolver {
 	return r
 }
 
+// ResolverConfig contains configuration for the resolver.
+type ResolverConfig struct {
+	DailyDirectory string // Directory for daily notes
+	ObjectsRoot    string // Root directory for typed objects (e.g., "objects/")
+	PagesRoot      string // Root directory for untyped pages (e.g., "pages/")
+}
+
+// NewWithConfig creates a new Resolver with full configuration.
+// This is the preferred constructor when directory organization is enabled.
+func NewWithConfig(objectIDs []string, cfg ResolverConfig) *Resolver {
+	dailyDir := cfg.DailyDirectory
+	if dailyDir == "" {
+		dailyDir = "daily"
+	}
+
+	r := &Resolver{
+		objectIDs:      make(map[string]struct{}),
+		shortMap:       make(map[string][]string),
+		slugMap:        make(map[string]string),
+		dailyDirectory: dailyDir,
+	}
+
+	for _, id := range objectIDs {
+		r.objectIDs[id] = struct{}{}
+
+		// Build short name map
+		shortName := shortNameFromID(id)
+		r.shortMap[shortName] = append(r.shortMap[shortName], id)
+
+		// Build slugified map for fuzzy matching
+		sluggedID := pages.SlugifyPath(id)
+		r.slugMap[sluggedID] = id
+	}
+
+	return r
+}
+
 // ResolveResult represents the result of a reference resolution.
 type ResolveResult struct {
 	// TargetID is the resolved target object ID (empty if unresolved).
@@ -179,4 +216,34 @@ func (r *Resolver) ResolveAll(refs []string) map[string]ResolveResult {
 		results[ref] = r.Resolve(ref)
 	}
 	return results
+}
+
+// IDCollision represents a collision between object IDs with the same short name.
+type IDCollision struct {
+	ShortName string   // The short name that collides (e.g., "freya")
+	ObjectIDs []string // The full object IDs that share this short name
+}
+
+// FindCollisions finds object IDs that share the same short name.
+// This is useful for `rvn check` to warn about potential reference ambiguity.
+func (r *Resolver) FindCollisions() []IDCollision {
+	var collisions []IDCollision
+	for shortName, ids := range r.shortMap {
+		if len(ids) > 1 {
+			collisions = append(collisions, IDCollision{
+				ShortName: shortName,
+				ObjectIDs: ids,
+			})
+		}
+	}
+	return collisions
+}
+
+// AllObjectIDs returns a slice of all known object IDs.
+func (r *Resolver) AllObjectIDs() []string {
+	ids := make([]string, 0, len(r.objectIDs))
+	for id := range r.objectIDs {
+		ids = append(ids, id)
+	}
+	return ids
 }
