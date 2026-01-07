@@ -41,18 +41,26 @@ Examples:
 		// Normalize the object ID (remove .md extension if present)
 		objectID = strings.TrimSuffix(objectID, ".md")
 
+		// Load vault config for deletion settings and directory roots
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
 		// Resolve the file path (supports slugified matching)
 		filePath, err := vault.ResolveObjectToFile(vaultPath, objectID)
+		if err != nil {
+			// Try with directory root prefix if configured
+			if vaultCfg.HasDirectoriesConfig() {
+				resolvedPath := vaultCfg.ResolveReferenceToFilePath(objectID)
+				resolvedPath = strings.TrimSuffix(resolvedPath, ".md")
+				filePath, err = vault.ResolveObjectToFile(vaultPath, resolvedPath)
+			}
+		}
 		if err != nil {
 			return handleErrorMsg(ErrFileNotFound,
 				fmt.Sprintf("Object '%s' does not exist", objectID),
 				"Check the object ID and try again")
-		}
-
-		// Load vault config for deletion settings
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
 		}
 		deletionCfg := vaultCfg.GetDeletionConfig()
 

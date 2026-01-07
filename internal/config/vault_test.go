@@ -92,6 +92,132 @@ func TestVaultConfigPaths(t *testing.T) {
 	})
 }
 
+func TestDirectoriesConfig(t *testing.T) {
+	t.Run("loads directories config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := `
+daily_directory: daily
+directories:
+  objects: objects/
+  pages: pages/
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !cfg.HasDirectoriesConfig() {
+			t.Error("expected HasDirectoriesConfig to return true")
+		}
+
+		dirs := cfg.GetDirectoriesConfig()
+		if dirs.Objects != "objects/" {
+			t.Errorf("expected objects 'objects/', got %q", dirs.Objects)
+		}
+		if dirs.Pages != "pages/" {
+			t.Errorf("expected pages 'pages/', got %q", dirs.Pages)
+		}
+	})
+
+	t.Run("nil when not configured", func(t *testing.T) {
+		cfg := &VaultConfig{DailyDirectory: "daily"}
+
+		if cfg.HasDirectoriesConfig() {
+			t.Error("expected HasDirectoriesConfig to return false")
+		}
+		if cfg.GetDirectoriesConfig() != nil {
+			t.Error("expected GetDirectoriesConfig to return nil")
+		}
+	})
+
+	t.Run("FilePathToObjectID with roots", func(t *testing.T) {
+		cfg := &VaultConfig{
+			DailyDirectory: "daily",
+			Directories: &DirectoriesConfig{
+				Objects: "objects/",
+				Pages:   "pages/",
+			},
+		}
+
+		tests := []struct {
+			filePath string
+			expected string
+		}{
+			{"objects/people/freya.md", "people/freya"},
+			{"objects/projects/website.md", "projects/website"},
+			{"pages/my-note.md", "my-note"},
+			{"daily/2025-01-01.md", "daily/2025-01-01"}, // Not in objects or pages
+		}
+
+		for _, tc := range tests {
+			got := cfg.FilePathToObjectID(tc.filePath)
+			if got != tc.expected {
+				t.Errorf("FilePathToObjectID(%q) = %q, want %q", tc.filePath, got, tc.expected)
+			}
+		}
+	})
+
+	t.Run("ObjectIDToFilePath with roots", func(t *testing.T) {
+		cfg := &VaultConfig{
+			DailyDirectory: "daily",
+			Directories: &DirectoriesConfig{
+				Objects: "objects/",
+				Pages:   "pages/",
+			},
+		}
+
+		tests := []struct {
+			objectID string
+			typeName string
+			expected string
+		}{
+			{"people/freya", "person", "objects/people/freya.md"},
+			{"projects/website", "project", "objects/projects/website.md"},
+			{"my-note", "page", "pages/my-note.md"},
+			{"random-note", "", "pages/random-note.md"},
+		}
+
+		for _, tc := range tests {
+			got := cfg.ObjectIDToFilePath(tc.objectID, tc.typeName)
+			if got != tc.expected {
+				t.Errorf("ObjectIDToFilePath(%q, %q) = %q, want %q", tc.objectID, tc.typeName, got, tc.expected)
+			}
+		}
+	})
+
+	t.Run("ResolveReferenceToFilePath", func(t *testing.T) {
+		cfg := &VaultConfig{
+			DailyDirectory: "daily",
+			Directories: &DirectoriesConfig{
+				Objects: "objects/",
+				Pages:   "pages/",
+			},
+		}
+
+		tests := []struct {
+			ref      string
+			expected string
+		}{
+			{"people/freya", "objects/people/freya.md"},
+			{"projects/website", "objects/projects/website.md"},
+			{"my-note", "pages/my-note.md"},
+		}
+
+		for _, tc := range tests {
+			got := cfg.ResolveReferenceToFilePath(tc.ref)
+			if got != tc.expected {
+				t.Errorf("ResolveReferenceToFilePath(%q) = %q, want %q", tc.ref, got, tc.expected)
+			}
+		}
+	})
+}
+
 func TestCreateDefaultVaultConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 

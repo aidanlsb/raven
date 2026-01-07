@@ -36,6 +36,7 @@ const (
 	IssueUnusedTrait             IssueType = "unused_trait"
 	IssueMissingTargetType       IssueType = "missing_target_type"
 	IssueSelfReferentialRequired IssueType = "self_referential_required"
+	IssueIDCollision             IssueType = "id_collision"
 )
 
 // Issue represents a validation issue.
@@ -777,6 +778,23 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 					})
 				}
 			}
+		}
+	}
+
+	// Check for object ID collisions (same short name, different full paths)
+	// This can cause ambiguous references when using short names like [[freya]]
+	collisions := v.resolver.FindCollisions()
+	for _, collision := range collisions {
+		// Only warn if there are exactly 2 collisions and one could shadow the other
+		// More than 2 is always a problem
+		if len(collision.ObjectIDs) >= 2 {
+			issues = append(issues, SchemaIssue{
+				Level:   LevelWarning,
+				Type:    IssueIDCollision,
+				Message: fmt.Sprintf("Short name '%s' matches multiple objects: %s", collision.ShortName, strings.Join(collision.ObjectIDs, ", ")),
+				Value:   collision.ShortName,
+				FixHint: "Use full paths in references to avoid ambiguity (e.g., [[people/freya]] instead of [[freya]])",
+			})
 		}
 	}
 

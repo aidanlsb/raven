@@ -159,27 +159,33 @@ Examples:
 			return fmt.Errorf("invalid title: cannot generate safe filename")
 		}
 
-		// Check if file exists (with default_path resolution)
-		if pages.ExistsWithSchema(vaultPath, targetPath, typeName, s) {
-			resolvedPath := pages.ResolveTargetPath(targetPath, typeName, s)
+		// Load vault config for directory roots
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		objectsRoot := vaultCfg.GetObjectsRoot()
+		pagesRoot := vaultCfg.GetPagesRoot()
+
+		// Check if file exists (with full path resolution including directory roots)
+		resolvedPath := pages.ResolveTargetPathWithRoots(targetPath, typeName, s, objectsRoot, pagesRoot)
+		if pages.Exists(vaultPath, resolvedPath) {
 			return fmt.Errorf("file already exists: %s.md", pages.SlugifyPath(resolvedPath))
 		}
 
-		// Create the page - pages.Create handles default_path resolution
+		// Create the page - pages.Create handles default_path and directory roots
 		result, err := pages.Create(pages.CreateOptions{
-			VaultPath:  vaultPath,
-			TypeName:   typeName,
-			Title:      title,
-			TargetPath: targetPath,
-			Fields:     fieldValues,
-			Schema:     s,
+			VaultPath:   vaultPath,
+			TypeName:    typeName,
+			Title:       title,
+			TargetPath:  targetPath,
+			Fields:      fieldValues,
+			Schema:      s,
+			ObjectsRoot: objectsRoot,
+			PagesRoot:   pagesRoot,
 		})
 		if err != nil {
 			return handleError(ErrFileWriteError, err, "")
 		}
 
-		// Auto-reindex if configured
-		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		// Auto-reindex if configured (vaultCfg already loaded above)
 		if vaultCfg.IsAutoReindexEnabled() {
 			if err := reindexFile(vaultPath, result.FilePath); err != nil {
 				if !isJSONOutput() {

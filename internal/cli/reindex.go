@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -70,6 +71,18 @@ Examples:
 			}
 		}
 
+		// Load vault config for directory roots
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+
+		// Build parse options from vault config
+		var parseOpts *parser.ParseOptions
+		if vaultCfg.HasDirectoriesConfig() {
+			parseOpts = &parser.ParseOptions{
+				ObjectsRoot: vaultCfg.GetObjectsRoot(),
+				PagesRoot:   vaultCfg.GetPagesRoot(),
+			}
+		}
+
 		// Clean up files in excluded directories (.trash/, etc.)
 		// These should never be in the index but might exist from before this check was added
 		trashRemoved, err := db.RemoveFilesWithPrefix(".trash/")
@@ -117,8 +130,9 @@ Examples:
 			}
 		}
 
-		// Walk all markdown files
-		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+		// Walk all markdown files with parse options
+		walkOpts := &vault.WalkOptions{ParseOptions: parseOpts}
+		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
 			if result.Error != nil {
 				if !jsonOutput {
 					fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.RelativePath, result.Error)
@@ -169,9 +183,9 @@ Examples:
 		// Resolve references after all files are indexed
 		var refResult *index.ReferenceResolutionResult
 		if !dryRun && fileCount > 0 {
-			dailyDir := "daily" // default
-			if vaultCfg, err := config.LoadVaultConfig(vaultPath); err == nil && vaultCfg.DailyDirectory != "" {
-				dailyDir = vaultCfg.DailyDirectory
+			dailyDir := vaultCfg.DailyDirectory
+			if dailyDir == "" {
+				dailyDir = "daily"
 			}
 
 			refResult, err = db.ResolveReferences(dailyDir)

@@ -20,6 +20,12 @@ type WalkResult struct {
 	Error        error
 }
 
+// WalkOptions contains options for walking markdown files.
+type WalkOptions struct {
+	// ParseOptions are passed to the parser for each file.
+	ParseOptions *parser.ParseOptions
+}
+
 // WalkMarkdownFiles walks all markdown files in a vault and calls the handler for each.
 // It automatically:
 // - Skips the .raven directory
@@ -27,9 +33,19 @@ type WalkResult struct {
 // - Verifies files are within the vault (security check)
 // - Parses each document
 func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) error {
+	return WalkMarkdownFilesWithOptions(vaultPath, nil, handler)
+}
+
+// WalkMarkdownFilesWithOptions walks all markdown files with custom options.
+func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler func(result WalkResult) error) error {
 	canonicalVault, err := filepath.Abs(vaultPath)
 	if err != nil {
 		canonicalVault = vaultPath
+	}
+
+	var parseOpts *parser.ParseOptions
+	if opts != nil {
+		parseOpts = opts.ParseOptions
 	}
 
 	return filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
@@ -83,8 +99,8 @@ func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) 
 			})
 		}
 
-		// Parse document
-		doc, err := parser.ParseDocument(string(content), path, vaultPath)
+		// Parse document with options
+		doc, err := parser.ParseDocumentWithOptions(string(content), path, vaultPath, parseOpts)
 		if err != nil {
 			return handler(WalkResult{
 				Path:         path,

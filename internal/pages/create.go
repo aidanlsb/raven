@@ -51,6 +51,14 @@ type CreateOptions struct {
 	// If set, this is used instead of the schema's template for the type.
 	// Can be a file path (relative to vault) or inline template content.
 	TemplateOverride string
+
+	// ObjectsRoot is the root directory for typed objects (e.g., "objects/").
+	// If set, the type's default_path is nested under this root.
+	ObjectsRoot string
+
+	// PagesRoot is the root directory for untyped pages (e.g., "pages/").
+	// If set, pages without a type-specific directory go here.
+	PagesRoot string
 }
 
 // CreateResult contains information about the created page.
@@ -87,8 +95,8 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		title = originalBaseName
 	}
 
-	// Resolve target path: apply type's default_path if needed
-	targetPath := resolveDefaultPath(opts.TargetPath, opts.TypeName, opts.Schema)
+	// Resolve target path: apply type's default_path and directory roots
+	targetPath := resolveDefaultPathWithRoots(opts.TargetPath, opts.TypeName, opts.Schema, opts.ObjectsRoot, opts.PagesRoot)
 
 	// Slugify the path for the filename
 	slugifiedPath := SlugifyPath(targetPath)
@@ -217,29 +225,62 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 // resolveDefaultPath applies the type's default_path if the target doesn't already have a directory.
 // This is the single source of truth for default_path resolution.
 func resolveDefaultPath(targetPath, typeName string, sch *schema.Schema) string {
-	// If no schema, can't resolve default_path
-	if sch == nil {
-		return targetPath
-	}
+	return resolveDefaultPathWithRoots(targetPath, typeName, sch, "", "")
+}
 
-	// If target already has a directory component, use as-is
+// resolveDefaultPathWithRoots applies directory roots and type default_path.
+func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot string) string {
+	// Normalize roots
+	objectsRoot = strings.TrimSuffix(strings.TrimPrefix(objectsRoot, "/"), "/")
+	pagesRoot = strings.TrimSuffix(strings.TrimPrefix(pagesRoot, "/"), "/")
+
+	// If target already has a directory component, just add the appropriate root
 	if strings.Contains(targetPath, "/") {
+		// Check if it starts with a leading / (absolute within vault)
+		if strings.HasPrefix(targetPath, "/") {
+			return strings.TrimPrefix(targetPath, "/")
+		}
+		// Has directory - add objects root if configured
+		if objectsRoot != "" {
+			return filepath.Join(objectsRoot, targetPath)
+		}
 		return targetPath
 	}
 
-	// Look up the type's default_path
-	typeDef, ok := sch.Types[typeName]
-	if !ok || typeDef == nil || typeDef.DefaultPath == "" {
-		return targetPath
+	// No directory in target - look up type's default_path
+	var defaultPath string
+	if sch != nil {
+		if typeDef, ok := sch.Types[typeName]; ok && typeDef != nil && typeDef.DefaultPath != "" {
+			defaultPath = typeDef.DefaultPath
+			// Security: validate default_path doesn't escape vault
+			defaultPath = filepath.Clean(defaultPath)
+			if strings.Contains(defaultPath, "..") || filepath.IsAbs(defaultPath) {
+				defaultPath = ""
+			}
+		}
 	}
 
-	// Security: validate default_path doesn't escape vault
-	defaultPath := filepath.Clean(typeDef.DefaultPath)
-	if strings.Contains(defaultPath, "..") || filepath.IsAbs(defaultPath) {
-		return targetPath
+	if defaultPath != "" {
+		// Type has a default_path - nest under objects root
+		if objectsRoot != "" {
+			return filepath.Join(objectsRoot, defaultPath, targetPath)
+		}
+		return filepath.Join(defaultPath, targetPath)
 	}
 
-	return filepath.Join(defaultPath, targetPath)
+	// No default_path - use pages root for untyped pages, or objects root for typed objects
+	if typeName == "" || typeName == "page" {
+		if pagesRoot != "" {
+			return filepath.Join(pagesRoot, targetPath)
+		}
+	} else {
+		// Typed but no default_path - put in objects root
+		if objectsRoot != "" {
+			return filepath.Join(objectsRoot, targetPath)
+		}
+	}
+
+	return targetPath
 }
 
 // ResolveTargetPath applies the type's default_path if the target doesn't already have a directory.
@@ -247,6 +288,12 @@ func resolveDefaultPath(targetPath, typeName string, sch *schema.Schema) string 
 // (e.g., for display purposes) without creating the file.
 func ResolveTargetPath(targetPath, typeName string, sch *schema.Schema) string {
 	return resolveDefaultPath(targetPath, typeName, sch)
+}
+
+// ResolveTargetPathWithRoots applies directory roots and type default_path.
+// This is the full resolution including configured directory organization.
+func ResolveTargetPathWithRoots(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot string) string {
+	return resolveDefaultPathWithRoots(targetPath, typeName, sch, objectsRoot, pagesRoot)
 }
 
 // Exists checks if a page already exists at the given path.
