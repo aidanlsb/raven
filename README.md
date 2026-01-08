@@ -342,11 +342,11 @@ projects/my-project (type: project)
 3. **Explicit embedded types**: For more structure, declare a typed section:
    ```markdown
    ## Weekly Standup
-   ::meeting(id=standup, time=09:00)
+   ::meeting(time=09:00)
    
    Discussion notes...
    ```
-   This creates a `meeting` object at `daily/2025-01-06#standup` that's queryable by type.
+   This creates a `meeting` object at `daily/2025-01-06#weekly-standup` (ID derived from the heading). You can override the auto-generated ID with an explicit `id` field: `::meeting(id=standup, time=09:00)` → `#standup`.
 
 ### Querying
 

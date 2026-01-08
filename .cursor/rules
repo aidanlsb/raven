@@ -45,8 +45,8 @@ Prefer explicit configuration and behavior over implicit "magic":
 
 - **Good**: User defines types in `schema.yaml`, those are the available types
 - **Bad**: Auto-detecting types based on content patterns without user configuration
-- **Good**: Requiring `id=` for explicit `::type()` declarations so IDs are predictable
-- **Acceptable**: Section IDs auto-generated from slugified heading text (documented, predictable, overridable with `::type(id=...)`)
+- **Good**: IDs auto-generated from slugified heading text (consistent with sections, documented, predictable)
+- **Good**: Optional `id=` override for explicit `::type()` declarations when users need custom IDs
 - **Bad**: Undocumented auto-generation that users can't predict or override
 
 Configuration should be discoverable and documented. A user reading `schema.yaml` should understand exactly what types and traits are available.

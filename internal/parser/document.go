@@ -180,7 +180,25 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 
 		if embedded, ok := typeDeclLines[nextLine]; ok {
 			// Explicit type declaration
-			embeddedID := fileID + "#" + embedded.ID
+			// Use explicit ID if provided, otherwise derive from slugified heading
+			var slug string
+			if embedded.ID != "" {
+				slug = embedded.ID
+			} else {
+				baseSlug := Slugify(heading.Text)
+				if baseSlug == "" {
+					baseSlug = embedded.TypeName
+				}
+
+				// Ensure unique ID using counter approach
+				slug = baseSlug
+				usedIDs[baseSlug]++
+				if usedIDs[baseSlug] > 1 {
+					slug = baseSlug + "-" + strconv.Itoa(usedIDs[baseSlug])
+				}
+			}
+
+			embeddedID := fileID + "#" + slug
 			headingText := heading.Text
 			headingLevel := heading.Level
 

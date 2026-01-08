@@ -27,7 +27,6 @@ const (
 	IssueAmbiguousReference      IssueType = "ambiguous_reference"
 	IssueInvalidTraitValue       IssueType = "invalid_trait_value"
 	IssueParseError              IssueType = "parse_error"
-	IssueMissingEmbeddedID       IssueType = "missing_embedded_id"
 	IssueWrongTargetType         IssueType = "wrong_target_type"
 	IssueInvalidDateFormat       IssueType = "invalid_date_format"
 	IssueShortRefCouldBeFullPath IssueType = "short_ref_could_be_full_path"
@@ -269,21 +268,8 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 		return issues
 	}
 
-	// Check embedded objects have IDs (if not a section)
-	if obj.Heading != nil && obj.ObjectType != "section" && obj.ParentID != nil {
-		// This is an embedded typed object - it should have an ID in its ID field
-		// The ID is part of the full object ID after #
-		if !containsHash(obj.ID) {
-			issues = append(issues, Issue{
-				Level:    LevelError,
-				Type:     IssueMissingEmbeddedID,
-				FilePath: filePath,
-				Line:     obj.LineStart,
-				Message:  "Embedded object missing 'id' field",
-				FixHint:  "Add 'id' parameter to the embedded object declaration",
-			})
-		}
-	}
+	// Note: Embedded object IDs are now auto-generated from heading text if not explicitly provided,
+	// so we no longer need to check for missing IDs.
 
 	// Validate fields against schema
 	if typeDef != nil {
