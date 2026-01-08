@@ -59,15 +59,21 @@ Filter by object frontmatter fields. Fields use dot prefix to distinguish from k
 | Predicate | Meaning |
 |-----------|---------|
 | `.<field>:<value>` | Field equals/contains value |
+| `.<field>:"value with spaces"` | Field equals quoted string (supports spaces) |
 | `.<field>:*` | Field exists (has any value) |
 | `!.<field>:<value>` | Field does NOT equal/contain value |
 | `!.<field>:*` | Field does NOT exist (missing) |
 
 For array fields, `.<field>:<value>` matches if the array contains the value.
 
+Use double quotes for values containing spaces or special characters.
+
 **Examples:**
 ```
 object:project .status:active
+object:project .title:"My Project"           # quoted string with spaces
+object:book .author:"J.R.R. Tolkien"         # quoted string with punctuation
+object:project .status:"in progress"         # status with space
 object:person .email:*
 object:person !.email:*
 object:project !.status:done
@@ -277,14 +283,19 @@ Filter by trait value.
 | Predicate | Meaning |
 |-----------|---------|
 | `value:<val>` | Value equals val |
+| `value:"val with spaces"` | Value equals quoted string (supports spaces) |
 | `!value:<val>` | Value NOT equals val |
+
+Use double quotes for values containing spaces or special characters.
 
 **Examples:**
 ```
 trait:due value:past
 trait:due !value:past
 trait:status value:todo
+trait:status value:"in progress"       # quoted string with spaces
 trait:priority value:high
+trait:priority value:"very high"       # quoted string
 ```
 
 ### Content Search (`content:`)

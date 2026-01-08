@@ -93,6 +93,25 @@ func TestParseFieldPredicates(t *testing.T) {
 			wantExists: true,
 			wantNeg:    true,
 		},
+		{
+			name:      "quoted string value",
+			input:     `object:project .title:"My Project"`,
+			wantField: "title",
+			wantValue: "My Project",
+		},
+		{
+			name:      "quoted string with spaces",
+			input:     `object:book .author:"J.R.R. Tolkien"`,
+			wantField: "author",
+			wantValue: "J.R.R. Tolkien",
+		},
+		{
+			name:      "negated quoted string",
+			input:     `object:project !.status:"in progress"`,
+			wantField: "status",
+			wantValue: "in progress",
+			wantNeg:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -255,6 +274,18 @@ func TestParseTraitPredicates(t *testing.T) {
 			input:     "trait:due value:past",
 			predType:  "value",
 			wantValue: "past",
+		},
+		{
+			name:      "value predicate with quoted string",
+			input:     `trait:status value:"in progress"`,
+			predType:  "value",
+			wantValue: "in progress",
+		},
+		{
+			name:      "value predicate with spaces",
+			input:     `trait:priority value:"very high"`,
+			predType:  "value",
+			wantValue: "very high",
 		},
 		{
 			name:      "source inline",

@@ -16,6 +16,11 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
+var (
+	setStdin   bool
+	setConfirm bool
+)
+
 var setCmd = &cobra.Command{
 	Use:   "set <object-id> <field=value>...",
 	Short: "Set frontmatter fields on an object",
@@ -25,17 +30,36 @@ The object ID can be a full path (e.g., "people/freya") or a short reference
 that uniquely identifies an object. Field values are validated against the
 schema if the object has a known type.
 
+Bulk operations:
+  Use --stdin to read object IDs from stdin (one per line).
+  Bulk operations preview changes by default; use --confirm to apply.
+
 Examples:
   rvn set people/freya email=freya@asgard.realm
   rvn set people/freya name="Freya" email=freya@vanaheim.realm
   rvn set projects/website status=active priority=high
-  rvn set projects/website --json    # Machine-readable output`,
-	Args: cobra.MinimumNArgs(2),
+  rvn set projects/website --json
+
+Bulk examples:
+  rvn query "object:project .status:active" --ids | rvn set --stdin status=archived
+  rvn query "trait:due value:past" --ids | rvn set --stdin status=overdue --confirm`,
+	Args: cobra.ArbitraryArgs,
 	RunE: runSet,
 }
 
 func runSet(cmd *cobra.Command, args []string) error {
 	vaultPath := getVaultPath()
+
+	// Handle --stdin mode for bulk operations
+	if setStdin {
+		return runSetBulk(cmd, args, vaultPath)
+	}
+
+	// Single object mode - requires object-id and at least one field=value
+	if len(args) < 2 {
+		return handleErrorMsg(ErrMissingArgument, "requires object-id and field=value arguments", "Usage: rvn set <object-id> field=value...")
+	}
+
 	objectID := args[0]
 	fieldArgs := args[1:]
 
@@ -55,6 +79,242 @@ func runSet(cmd *cobra.Command, args []string) error {
 		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <object-id> field=value...")
 	}
 
+	return setSingleObject(vaultPath, objectID, updates)
+}
+
+// runSetBulk handles bulk set operations from stdin.
+func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
+	// Parse field=value arguments (all args are field=value in stdin mode)
+	updates := make(map[string]string)
+	for _, arg := range args {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 {
+			return handleErrorMsg(ErrInvalidInput,
+				fmt.Sprintf("invalid field format: %s", arg),
+				"Use format: field=value")
+		}
+		updates[parts[0]] = parts[1]
+	}
+
+	if len(updates) == 0 {
+		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value...")
+	}
+
+	// Read IDs from stdin
+	ids, embedded, err := ReadIDsFromStdin()
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+
+	if len(ids) == 0 && len(embedded) == 0 {
+		return handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
+	}
+
+	// Build warnings for embedded objects
+	var warnings []Warning
+	if w := BuildEmbeddedSkipWarning(embedded); w != nil {
+		warnings = append(warnings, *w)
+	}
+
+	// Load schema for validation
+	sch, _ := schema.Load(vaultPath)
+
+	// If not confirming, show preview
+	if !setConfirm {
+		return previewSetBulk(vaultPath, ids, updates, warnings, sch)
+	}
+
+	// Apply the changes
+	return applySetBulk(vaultPath, ids, updates, warnings, sch)
+}
+
+// previewSetBulk shows a preview of bulk set operations.
+func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema) error {
+	var previewItems []BulkPreviewItem
+	var skipped []BulkResult
+
+	for _, id := range ids {
+		filePath, err := vault.ResolveObjectToFile(vaultPath, id)
+		if err != nil {
+			skipped = append(skipped, BulkResult{
+				ID:     id,
+				Status: "skipped",
+				Reason: "object not found",
+			})
+			continue
+		}
+
+		// Read current values to show diff
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			skipped = append(skipped, BulkResult{
+				ID:     id,
+				Status: "skipped",
+				Reason: fmt.Sprintf("read error: %v", err),
+			})
+			continue
+		}
+
+		fm, err := parser.ParseFrontmatter(string(content))
+		if err != nil || fm == nil {
+			skipped = append(skipped, BulkResult{
+				ID:     id,
+				Status: "skipped",
+				Reason: "no frontmatter",
+			})
+			continue
+		}
+
+		// Build change summary
+		changes := make(map[string]string)
+		for field, newVal := range updates {
+			oldVal := "<unset>"
+			if fm.Fields != nil {
+				if v, ok := fm.Fields[field]; ok {
+					oldVal = fmt.Sprintf("%v", v)
+				}
+			}
+			changes[field] = fmt.Sprintf("%s (was: %s)", newVal, oldVal)
+		}
+
+		previewItems = append(previewItems, BulkPreviewItem{
+			ID:      id,
+			Action:  "set",
+			Changes: changes,
+		})
+	}
+
+	preview := &BulkPreview{
+		Action:   "set",
+		Items:    previewItems,
+		Skipped:  skipped,
+		Total:    len(ids),
+		Warnings: warnings,
+	}
+
+	if isJSONOutput() {
+		outputSuccess(map[string]interface{}{
+			"preview":  true,
+			"action":   "set",
+			"fields":   updates,
+			"items":    previewItems,
+			"skipped":  skipped,
+			"total":    len(ids),
+			"warnings": warnings,
+		}, &Meta{Count: len(previewItems)})
+		return nil
+	}
+
+	PrintBulkPreview(preview)
+	return nil
+}
+
+// applySetBulk applies bulk set operations.
+func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema) error {
+	var results []BulkResult
+	modified := 0
+	skipped := 0
+	errors := 0
+
+	// Load vault config for auto-reindex
+	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+
+	for _, id := range ids {
+		result := BulkResult{ID: id}
+
+		filePath, err := vault.ResolveObjectToFile(vaultPath, id)
+		if err != nil {
+			result.Status = "skipped"
+			result.Reason = "object not found"
+			skipped++
+			results = append(results, result)
+			continue
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			result.Status = "error"
+			result.Reason = fmt.Sprintf("read error: %v", err)
+			errors++
+			results = append(results, result)
+			continue
+		}
+
+		fm, err := parser.ParseFrontmatter(string(content))
+		if err != nil || fm == nil {
+			result.Status = "skipped"
+			result.Reason = "no frontmatter"
+			skipped++
+			results = append(results, result)
+			continue
+		}
+
+		// Build updated frontmatter
+		newContent, err := updateFrontmatter(string(content), fm, updates)
+		if err != nil {
+			result.Status = "error"
+			result.Reason = fmt.Sprintf("update error: %v", err)
+			errors++
+			results = append(results, result)
+			continue
+		}
+
+		// Write the file back
+		if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+			result.Status = "error"
+			result.Reason = fmt.Sprintf("write error: %v", err)
+			errors++
+			results = append(results, result)
+			continue
+		}
+
+		// Auto-reindex if configured
+		if vaultCfg.IsAutoReindexEnabled() {
+			reindexFile(vaultPath, filePath)
+		}
+
+		result.Status = "modified"
+		modified++
+		results = append(results, result)
+	}
+
+	summary := &BulkSummary{
+		Action:   "set",
+		Results:  results,
+		Total:    len(ids),
+		Modified: modified,
+		Skipped:  skipped,
+		Errors:   errors,
+	}
+
+	if isJSONOutput() {
+		data := map[string]interface{}{
+			"ok":       errors == 0,
+			"action":   "set",
+			"fields":   updates,
+			"results":  results,
+			"total":    len(ids),
+			"modified": modified,
+			"skipped":  skipped,
+			"errors":   errors,
+		}
+		if len(warnings) > 0 {
+			outputSuccessWithWarnings(data, warnings, &Meta{Count: modified})
+		} else {
+			outputSuccess(data, &Meta{Count: modified})
+		}
+		return nil
+	}
+
+	PrintBulkSummary(summary)
+	for _, w := range warnings {
+		fmt.Printf("⚠ %s\n", w.Message)
+	}
+	return nil
+}
+
+// setSingleObject sets fields on a single object (non-bulk mode).
+func setSingleObject(vaultPath, objectID string, updates map[string]string) error {
 	// Resolve object ID to file path
 	filePath, err := vault.ResolveObjectToFile(vaultPath, objectID)
 	if err != nil {
@@ -289,5 +549,7 @@ func contains(slice []string, value string) bool {
 }
 
 func init() {
+	setCmd.Flags().BoolVar(&setStdin, "stdin", false, "Read object IDs from stdin (one per line)")
+	setCmd.Flags().BoolVar(&setConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
 	rootCmd.AddCommand(setCmd)
 }

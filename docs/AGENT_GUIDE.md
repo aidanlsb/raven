@@ -153,7 +153,48 @@ When `raven_check` returns issues, here's how to fix them:
 | `missing_required_trait` | Required trait not set | `raven_set(object_id="...", fields={"due": "2025-02-01"})` |
 | `invalid_enum_value` | Value not in allowed list | `raven_set(object_id="...", fields={"status": "done"})` |
 
-### 6. Reindexing
+### 6. Bulk Operations
+
+When users want to update many objects at once:
+
+```
+1. Use raven_query with --apply to update query results in bulk:
+   
+   # Preview changes (dry-run by default)
+   raven_query(query_string="trait:due value:past", apply="set status=overdue")
+   
+   # Apply changes after user confirmation
+   raven_query(query_string="trait:due value:past", apply="set status=overdue", confirm=true)
+
+2. Supported bulk operations:
+   - set field=value  — Update frontmatter fields
+   - delete          — Delete matching objects
+   - add <text>      — Append text to matching files
+   - move <dir/>     — Move to directory (destination must end with /)
+
+3. Alternative: Use --ids to get IDs for piping:
+   raven_query(query_string="object:project .status:archived", ids=true)
+   # Returns just the IDs, one per line
+
+4. Commands with --stdin read IDs from standard input:
+   raven_set(stdin=true, fields={"status": "archived"}, confirm=true)
+   raven_delete(stdin=true, confirm=true)
+   raven_add(stdin=true, text="@reviewed(2026-01-07)", confirm=true)
+   raven_move(stdin=true, destination="archive/", confirm=true)
+
+5. ALWAYS preview first, then confirm:
+   - Run without --confirm to see what will change
+   - Present the preview to the user
+   - Only run with --confirm after user approval
+```
+
+**Bulk operation safety rules:**
+- Always preview before applying
+- Embedded objects (file#section) are automatically skipped
+- Errors are collected and reported, but don't stop other operations
+- Use git to rollback if needed: `git checkout .`
+
+### 7. Reindexing
 
 After bulk operations or schema changes:
 
@@ -168,7 +209,7 @@ After bulk operations or schema changes:
    - If queries return stale results
 ```
 
-### 7. Deleting Content
+### 8. Deleting Content
 
 **⚠️ ALWAYS confirm with the user before deleting anything.**
 

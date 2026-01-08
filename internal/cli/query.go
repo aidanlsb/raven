@@ -204,14 +204,26 @@ Examples:
 			sch = nil
 		}
 
+		// Get --ids flag
+		idsOnly, _ := cmd.Flags().GetBool("ids")
+
+		// Get --apply flag
+		applyArgs, _ := cmd.Flags().GetStringArray("apply")
+		confirmApply, _ := cmd.Flags().GetBool("confirm")
+
+		// If --apply is set, run query and apply bulk operation
+		if len(applyArgs) > 0 {
+			return runQueryWithApply(db, vaultPath, queryStr, vaultCfg, sch, applyArgs, confirmApply, start)
+		}
+
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithSchema(db, queryStr, start, sch)
+			return runFullQueryWithOptions(db, queryStr, start, sch, idsOnly)
 		}
 
 		// Check if this is a saved query
 		if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
-			return runSavedQueryWithJSON(db, savedQuery, queryStr, start, sch)
+			return runSavedQueryWithOptions(db, savedQuery, queryStr, start, sch, idsOnly)
 		}
 
 		// Unknown query - provide helpful error
@@ -221,11 +233,185 @@ Examples:
 	},
 }
 
+// runQueryWithApply runs a query and applies a bulk operation to the results.
+func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg *config.VaultConfig, sch *schema.Schema, applyArgs []string, confirm bool, start time.Time) error {
+	// Resolve the query string (could be saved query)
+	actualQueryStr := queryStr
+	if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
+		actualQueryStr = savedQuery.Query
+	}
+
+	if !strings.HasPrefix(actualQueryStr, "object:") && !strings.HasPrefix(actualQueryStr, "trait:") {
+		return handleErrorMsg(ErrQueryInvalid,
+			fmt.Sprintf("unknown query: %s", queryStr),
+			"Queries must start with 'object:' or 'trait:', or be a saved query name.")
+	}
+
+	// Parse the query
+	q, err := query.Parse(actualQueryStr)
+	if err != nil {
+		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("parse error: %v", err), "")
+	}
+
+	// Execute the query to get IDs
+	executor := query.NewExecutor(db.DB())
+
+	var ids []string
+	if q.Type == query.QueryTypeObject {
+		results, err := executor.ExecuteObjectQuery(q)
+		if err != nil {
+			return handleError(ErrDatabaseError, err, "")
+		}
+		for _, r := range results {
+			ids = append(ids, r.ID)
+		}
+	} else {
+		results, err := executor.ExecuteTraitQuery(q)
+		if err != nil {
+			return handleError(ErrDatabaseError, err, "")
+		}
+		for _, r := range results {
+			ids = append(ids, r.ID)
+		}
+	}
+
+	if len(ids) == 0 {
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"preview": !confirm,
+				"action":  applyArgs[0],
+				"items":   []interface{}{},
+				"total":   0,
+			}, &Meta{Count: 0})
+			return nil
+		}
+		fmt.Printf("No results found for query: %s\n", queryStr)
+		return nil
+	}
+
+	// Filter out embedded IDs
+	var fileIDs []string
+	var embedded []string
+	for _, id := range ids {
+		if IsEmbeddedID(id) {
+			embedded = append(embedded, id)
+		} else {
+			fileIDs = append(fileIDs, id)
+		}
+	}
+
+	// Build warnings for embedded objects
+	var warnings []Warning
+	if w := BuildEmbeddedSkipWarning(embedded); w != nil {
+		warnings = append(warnings, *w)
+	}
+
+	// Parse the apply command
+	// Format: --apply "set field=value" or --apply set --apply field=value
+	// We'll join all apply args and parse them
+	applyStr := strings.Join(applyArgs, " ")
+	applyParts := strings.Fields(applyStr)
+
+	if len(applyParts) == 0 {
+		return handleErrorMsg(ErrInvalidInput, "no apply command specified", "Use --apply <command> [args...]")
+	}
+
+	applyCmd := applyParts[0]
+	applyOperationArgs := applyParts[1:]
+
+	// Dispatch to the appropriate bulk operation
+	switch applyCmd {
+	case "set":
+		return applySetFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, sch, confirm)
+	case "delete":
+		return applyDeleteFromQuery(vaultPath, fileIDs, warnings, vaultCfg, confirm)
+	case "add":
+		return applyAddFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, vaultCfg, confirm)
+	case "move":
+		return applyMoveFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, vaultCfg, confirm)
+	default:
+		return handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("unknown apply command: %s", applyCmd),
+			"Supported commands: set, delete, add, move")
+	}
+}
+
+// applySetFromQuery applies set operation from query results.
+func applySetFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, sch *schema.Schema, confirm bool) error {
+	// Parse field=value arguments
+	updates := make(map[string]string)
+	for _, arg := range args {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 {
+			return handleErrorMsg(ErrInvalidInput,
+				fmt.Sprintf("invalid field format: %s", arg),
+				"Use format: field=value")
+		}
+		updates[parts[0]] = parts[1]
+	}
+
+	if len(updates) == 0 {
+		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: --apply set field=value...")
+	}
+
+	if !confirm {
+		return previewSetBulk(vaultPath, ids, updates, warnings, sch)
+	}
+	return applySetBulk(vaultPath, ids, updates, warnings, sch)
+}
+
+// applyDeleteFromQuery applies delete operation from query results.
+func applyDeleteFromQuery(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
+	if !confirm {
+		return previewDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+	}
+	return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+}
+
+// applyAddFromQuery applies add operation from query results.
+func applyAddFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
+	if len(args) == 0 {
+		return handleErrorMsg(ErrMissingArgument, "no text to add", "Usage: --apply add <text>")
+	}
+
+	text := strings.Join(args, " ")
+	captureCfg := vaultCfg.GetCaptureConfig()
+	line := formatCaptureLine(text, captureCfg)
+
+	if !confirm {
+		return previewAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+	}
+	return applyAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+}
+
+// applyMoveFromQuery applies move operation from query results.
+func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
+	if len(args) == 0 {
+		return handleErrorMsg(ErrMissingArgument, "no destination provided", "Usage: --apply move <destination-directory/>")
+	}
+
+	destination := args[0]
+	if !strings.HasSuffix(destination, "/") {
+		return handleErrorMsg(ErrInvalidInput,
+			"destination must be a directory (end with /)",
+			"Example: --apply move archive/projects/")
+	}
+
+	if !confirm {
+		return previewMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+	}
+	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+}
+
 func runFullQuery(db *index.Database, queryStr string, start time.Time) error {
 	return runFullQueryWithSchema(db, queryStr, start, nil)
 }
 
 func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time, sch *schema.Schema) error {
+	return runFullQueryWithOptions(db, queryStr, start, sch, false)
+}
+
+func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
 	if err != nil {
@@ -251,6 +437,24 @@ func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time
 		results, err := executor.ExecuteObjectQuery(q)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "")
+		}
+
+		// --ids mode: output just IDs, one per line
+		if idsOnly {
+			if isJSONOutput() {
+				ids := make([]string, len(results))
+				for i, r := range results {
+					ids[i] = r.ID
+				}
+				outputSuccess(map[string]interface{}{
+					"ids": ids,
+				}, &Meta{Count: len(ids), QueryTimeMs: elapsed})
+				return nil
+			}
+			for _, r := range results {
+				fmt.Println(r.ID)
+			}
+			return nil
 		}
 
 		if isJSONOutput() {
@@ -285,10 +489,10 @@ func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time
 		for i, r := range results {
 			// Use the filename without extension as the name
 			name := filepath.Base(r.ID)
-		rows[i] = tableRow{
-			name:     name,
-			location: formatLocationLinkSimple(r.FilePath, r.LineStart),
-		}
+			rows[i] = tableRow{
+				name:     name,
+				location: formatLocationLinkSimple(r.FilePath, r.LineStart),
+			}
 		}
 		printTable(rows)
 		return nil
@@ -298,6 +502,24 @@ func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time
 	results, err := executor.ExecuteTraitQuery(q)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "")
+	}
+
+	// --ids mode: output just trait IDs, one per line
+	if idsOnly {
+		if isJSONOutput() {
+			ids := make([]string, len(results))
+			for i, r := range results {
+				ids[i] = r.ID
+			}
+			outputSuccess(map[string]interface{}{
+				"ids": ids,
+			}, &Meta{Count: len(ids), QueryTimeMs: elapsed})
+			return nil
+		}
+		for _, r := range results {
+			fmt.Println(r.ID)
+		}
+		return nil
 	}
 
 	if isJSONOutput() {
@@ -385,12 +607,16 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 }
 
 func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema) error {
+	return runSavedQueryWithOptions(db, q, name, start, sch, false)
+}
+
+func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool) error {
 	if q.Query == "" {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
 	}
 
 	// Just run the query string through the normal query parser
-	return runFullQueryWithSchema(db, q.Query, start, sch)
+	return runFullQueryWithOptions(db, q.Query, start, sch, idsOnly)
 }
 
 func printTraitResults(results []index.TraitResult) {
@@ -653,6 +879,9 @@ func joinQueryArgs(args []string) string {
 func init() {
 	queryCmd.Flags().BoolP("list", "l", false, "List saved queries")
 	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
+	queryCmd.Flags().Bool("ids", false, "Output only object/trait IDs, one per line (for piping)")
+	queryCmd.Flags().StringArray("apply", nil, "Apply a bulk operation to query results (format: command args...)")
+	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
 
 	// query add flags
 	queryAddCmd.Flags().String("description", "", "Human-readable description")

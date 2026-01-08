@@ -97,7 +97,36 @@ When raven_check returns issues, here's how to fix them:
 | missing_required_trait | Required trait not set | raven_set(object_id="...", fields={"due": "2025-02-01"}) |
 | invalid_enum_value | Value not in allowed list | raven_set(object_id="...", fields={"status": "done"}) |
 
-### 6. Reindexing
+### 6. Bulk Operations
+
+When users want to update many objects at once:
+
+1. Use raven_query with apply to update results in bulk:
+   
+   Preview changes (dry-run by default):
+   raven_query(query_string="trait:due value:past", apply="set status=overdue")
+   
+   Apply after user confirmation:
+   raven_query(query_string="trait:due value:past", apply="set status=overdue", confirm=true)
+
+2. Supported bulk operations:
+   - set field=value  — Update frontmatter fields
+   - delete          — Delete matching objects
+   - add <text>      — Append text to matching files
+   - move <dir/>     — Move to directory (must end with /)
+
+3. Use ids=true to get IDs for piping:
+   raven_query(query_string="object:project .status:archived", ids=true)
+
+4. Commands with stdin read IDs from input:
+   raven_set(stdin=true, fields={"status": "archived"}, confirm=true)
+   raven_delete(stdin=true, confirm=true)
+   raven_add(stdin=true, text="@reviewed", confirm=true)
+   raven_move(stdin=true, destination="archive/", confirm=true)
+
+IMPORTANT: Always preview first, then confirm with user before applying.
+
+### 7. Reindexing
 
 After bulk operations or schema changes:
 
@@ -110,7 +139,7 @@ After bulk operations or schema changes:
    - Bulk file operations outside of Raven
    - If queries return stale results
 
-### 7. Deleting Content
+### 8. Deleting Content
 
 **ALWAYS confirm with the user before deleting anything.**
 
@@ -128,7 +157,7 @@ After bulk operations or schema changes:
 
 Never delete without explicit user approval.
 
-### 8. Daily Notes & Dates
+### 9. Daily Notes & Dates
 
 1. Use raven_daily for daily notes:
    raven_daily()                    # Today
@@ -139,18 +168,18 @@ Never delete without explicit user approval.
    raven_date()
    raven_date(date="2026-01-15")
 
-### 9. Vault Statistics
+### 10. Vault Statistics
 
 1. raven_stats() - vault overview with counts
 2. raven_untyped() - pages without explicit types
 
-### 10. Managing Saved Queries
+### 11. Managing Saved Queries
 
 1. Add: raven_query_add(name="urgent", query_string="trait:due value:this-week|past")
 2. Remove: raven_query_remove(name="old-query")
 3. List: raven_query(list=true)
 
-### 11. Schema Updates
+### 12. Schema Updates
 
 1. Update type: raven_schema_update_type(name="person", default_path="contacts/")
 2. Update trait: raven_schema_update_trait(name="priority", values="critical,high,medium,low")
@@ -158,7 +187,7 @@ Never delete without explicit user approval.
 4. Remove: raven_schema_remove_type, raven_schema_remove_trait, raven_schema_remove_field
 5. Validate: raven_schema_validate()
 
-### 12. Workflows
+### 13. Workflows
 
 Workflows are reusable prompt templates:
 
@@ -187,7 +216,7 @@ Workflows are reusable prompt templates:
 
 When to use: User asks for complex analysis, or there's a workflow matching their request.
 
-### 13. Setting Up Templates
+### 14. Setting Up Templates
 
 Templates provide default content when creating notes. Help users by editing their schema.yaml.
 
