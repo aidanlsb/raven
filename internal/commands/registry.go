@@ -84,13 +84,19 @@ Ask user for values, then retry with --field flags.`,
 By default, appends to today's daily note. 
 Only works on files that already exist (daily notes are auto-created).
 Timestamps are OFF by default; use --timestamp to include the current time.
-For creating NEW typed objects, use 'rvn new' instead.`,
+For creating NEW typed objects, use 'rvn new' instead.
+
+Bulk operations:
+Use --stdin to read object IDs from stdin (one per line).
+Bulk operations preview changes by default; use --confirm to apply.`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target EXISTING file path (must exist)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md"}},
 			{Name: "timestamp", Description: "Prefix with current time (HH:MM)", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn add \"Quick thought\" --json",
@@ -111,12 +117,18 @@ For creating NEW typed objects, use 'rvn new' instead.`,
 		LongDesc: `Delete a file/object from the vault.
 
 By default, files are moved to a trash directory (.trash/).
-Warns about backlinks (objects that reference the deleted item).`,
+Warns about backlinks (objects that reference the deleted item).
+
+Bulk operations:
+Use --stdin to read object IDs from stdin (one per line).
+Bulk operations preview changes by default; use --confirm to apply.`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object ID to delete (e.g., people/freya)", Required: true},
+			{Name: "object_id", Description: "Object ID to delete (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn delete people/freya --json",
@@ -139,15 +151,22 @@ This command:
 
 If moving a file to a type's default directory (e.g., people/) but the file
 has a different type, returns a warning with needs_confirm=true. The agent
-should ask the user how to proceed.`,
+should ask the user how to proceed.
+
+Bulk operations:
+Use --stdin to read object IDs from stdin (one per line).
+Destination must be a directory (ending with /).
+Bulk operations preview changes by default; use --confirm to apply.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source file path (e.g., inbox/note.md or people/loki)", Required: true},
-			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/note.md)", Required: true},
+			{Name: "source", Description: "Source file path (e.g., inbox/note.md or people/loki)", Required: false},
+			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
 			{Name: "update-refs", Description: "Update references to moved file (default: true)", Type: FlagTypeBool, Default: "true"},
 			{Name: "skip-type-check", Description: "Skip type-directory mismatch warning", Type: FlagTypeBool},
+			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn move people/loki people/loki-archived --json",
@@ -164,22 +183,39 @@ should ask the user how to proceed.`,
 	"query": {
 		Name:        "query",
 		Description: "Run a query using the Raven query language",
+		LongDesc: `Query objects or traits using the Raven query language.
+
+Use --ids to output just IDs (one per line) for piping to other commands.
+Use --apply to run a bulk operation directly on query results.
+
+For bulk operations:
+- Preview changes by default; use --confirm to apply
+- Supported commands: set, delete, add, move`,
 		Args: []ArgMeta{
 			{Name: "query_string", Description: "Query string (e.g., 'object:project .status:active' or saved query name)", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
 			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
+			{Name: "ids", Description: "Output only object/trait IDs, one per line (for piping)", Type: FlagTypeBool},
+			{Name: "apply", Description: "Apply bulk operation to results (e.g., 'set status=done', 'delete', 'add @reviewed')", Type: FlagTypeString},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn query 'object:project .status:active' --json",
 			"rvn query 'object:meeting has:due' --json",
-			"rvn query 'object:meeting refs:[[people/freya]]' --json",
 			"rvn query 'trait:due value:past' --json",
-			"rvn query 'trait:highlight on:{object:book .status:reading}' --json",
+			"rvn query 'trait:due value:past' --ids",
+			"rvn query 'trait:due value:past' --apply 'set status=overdue' --json",
+			"rvn query 'trait:due value:past' --apply 'set status=overdue' --confirm --json",
 			"rvn query tasks --json",
 			"rvn query --list --json",
-			"rvn query 'object:project' --refresh --json",
+		},
+		UseCases: []string{
+			"Find objects matching specific criteria",
+			"Find traits with specific values",
+			"Bulk update query results with --apply",
+			"Pipe query results to other commands with --ids",
 		},
 	},
 	"query_add": {
@@ -470,12 +506,18 @@ The object ID can be a full path (e.g., "people/freya") or a short reference
 that uniquely identifies an object. Field values are validated against the
 schema if the object has a known type.
 
-Use this to update existing objects' metadata without manually editing files.`,
+Use this to update existing objects' metadata without manually editing files.
+
+Bulk operations:
+Use --stdin to read object IDs from stdin (one per line).
+Bulk operations preview changes by default; use --confirm to apply.`,
 		Args: []ArgMeta{
-			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: true},
+			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypeKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn set people/freya email=freya@asgard.realm --json",
@@ -487,6 +529,7 @@ Use this to update existing objects' metadata without manually editing files.`,
 			"Change project priority or status",
 			"Set task due dates or assignments",
 			"Modify any frontmatter field on an object",
+			"Bulk update multiple objects via --stdin",
 		},
 	},
 	"edit": {

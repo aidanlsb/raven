@@ -181,7 +181,7 @@ func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
 	return nil, nil
 }
 
-// parseFieldPredicate parses .field:value
+// parseFieldPredicate parses .field:value or .field:"quoted value"
 func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected field name after '.'")
@@ -197,18 +197,23 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 	var value string
 	isExists := false
 
-	if p.curr.Type == TokenStar {
+	switch p.curr.Type {
+	case TokenStar:
 		value = "*"
 		isExists = true
 		p.advance()
-	} else if p.curr.Type == TokenIdent {
+	case TokenIdent:
 		value = p.curr.Value
 		p.advance()
-	} else if p.curr.Type == TokenRef {
+	case TokenRef:
 		value = p.curr.Literal
 		p.advance()
-	} else {
-		return nil, fmt.Errorf("expected field value or '*'")
+	case TokenString:
+		// Support quoted strings for values with spaces
+		value = p.curr.Value
+		p.advance()
+	default:
+		return nil, fmt.Errorf("expected field value, '*', or quoted string")
 	}
 
 	return &FieldPredicate{
@@ -374,14 +379,19 @@ func (p *Parser) parseContentPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseValuePredicate parses value:val
+// parseValuePredicate parses value:val or value:"quoted value"
 func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
-	if p.curr.Type != TokenIdent && p.curr.Type != TokenRef {
-		return nil, fmt.Errorf("expected value")
-	}
-	value := p.curr.Value
-	if p.curr.Type == TokenRef {
+	var value string
+	switch p.curr.Type {
+	case TokenIdent:
+		value = p.curr.Value
+	case TokenRef:
 		value = p.curr.Literal
+	case TokenString:
+		// Support quoted strings for values with spaces
+		value = p.curr.Value
+	default:
+		return nil, fmt.Errorf("expected value or quoted string")
 	}
 	p.advance()
 	return &ValuePredicate{
