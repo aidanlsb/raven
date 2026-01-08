@@ -151,6 +151,14 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 		if p.SubQuery != nil {
 			return v.validateQuery(p.SubQuery)
 		}
+	case *ContentPredicate:
+		// Content predicate just needs a non-empty search term
+		if p.SearchTerm == "" {
+			return &ValidationError{
+				Message:    "content search term cannot be empty",
+				Suggestion: "Provide a search term: content:\"search terms\"",
+			}
+		}
 	case *OrPredicate:
 		if err := v.validateTraitPredicate(p.Left); err != nil {
 			return err

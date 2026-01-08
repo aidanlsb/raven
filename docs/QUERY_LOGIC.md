@@ -287,6 +287,32 @@ trait:status value:todo
 trait:priority value:high
 ```
 
+### Content Search (`content:`)
+
+Filter by text content on the same line as the trait. Uses substring matching.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `content:"term"` | Line content contains term |
+| `!content:"term"` | Line content does NOT contain term |
+
+**Examples:**
+```
+trait:todo content:"refactor"
+trait:highlight content:"important"
+trait:due content:"deadline"
+!trait:todo content:"optional"
+```
+
+**Combined with other predicates:**
+```
+trait:todo content:"landing page" value:todo
+trait:highlight content:"insight" on:meeting
+trait:due content:"urgent" within:project
+```
+
+**Note:** Unlike object `content:` which uses FTS5 full-text search, trait `content:` uses simple case-insensitive substring matching on the line where the trait appears. This is sufficient since trait content is a single line.
+
 ### Source
 
 Filter by line position. Traits always appear inline in content (not frontmatter).
@@ -555,6 +581,10 @@ trait:due refs:[[people/freya]]
 
 # Highlights that reference any active project
 trait:highlight refs:{object:project .status:active}
+
+# Traits with specific content on their line
+trait:todo content:"refactor"
+trait:highlight content:"important" on:book
 
 # People whose pages mention "colleague"
 object:person content:"colleague"

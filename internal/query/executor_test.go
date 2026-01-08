@@ -368,6 +368,42 @@ func TestExecuteTraitQuery(t *testing.T) {
 			query:     "trait:due refs:[[people/thor]]",
 			wantCount: 0, // No trait has refs to thor on same line
 		},
+		// Content predicate tests
+		{
+			name:      "content search simple",
+			query:     `trait:due content:"Follow up"`,
+			wantCount: 1, // trait2 has "Follow up on timeline"
+		},
+		{
+			name:      "content search case insensitive",
+			query:     `trait:due content:"follow UP"`,
+			wantCount: 1, // SQLite LIKE is case-insensitive by default
+		},
+		{
+			name:      "content search no match",
+			query:     `trait:due content:"nonexistent"`,
+			wantCount: 0,
+		},
+		{
+			name:      "content search negated",
+			query:     `trait:due !content:"Follow up"`,
+			wantCount: 2, // trait1 and trait4 don't have "Follow up"
+		},
+		{
+			name:      "content combined with value",
+			query:     `trait:todo content:"landing page" value:todo`,
+			wantCount: 1, // trait5 has "Build landing page" with value:todo
+		},
+		{
+			name:      "content combined with on",
+			query:     `trait:highlight content:"Important" on:meeting`,
+			wantCount: 1, // trait3 has "Important insight" on a meeting
+		},
+		{
+			name:      "content search highlight",
+			query:     `trait:highlight content:"insight"`,
+			wantCount: 1, // trait3 has "Important insight"
+		},
 	}
 
 	for _, tt := range tests {
