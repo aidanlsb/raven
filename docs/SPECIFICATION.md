@@ -207,12 +207,62 @@ Both outgoing refs (what this note links to) and backlinks (what links to this n
 **Reference resolution**:
 - Use full path for clarity: `[[people/freya]]`
 - Short names allowed if unambiguous: `[[freya]]` works if only one `freya` exists
+- Aliases can be used: `[[goddess]]` resolves to `people/freya` if that object has `alias: goddess`
 - Embedded objects: `[[daily/2025-02-01#standup]]`
 - The `rvn check` command warns about ambiguous short references
 
 **Slugified matching**: References are matched using slugification, so `[[people/Sif]]` will resolve to `people/sif.md`. This allows natural inline references while maintaining clean, URL-safe filenames.
 
 **Validation**: All references must resolve to existing objects. The `rvn check` command errors on broken references.
+
+### Aliases
+
+Objects can define an optional `alias` field in their frontmatter to provide an alternative name for reference resolution:
+
+```yaml
+---
+type: person
+name: Freya
+alias: goddess
+---
+```
+
+Now `[[goddess]]` will resolve to `people/freya`.
+
+**Alias rules**:
+- Aliases must be unique across the vault
+- An alias cannot conflict with an existing object's short name or ID
+- If a conflict exists, references using that alias become **ambiguous** (explicit is better than implicit)
+- Aliases are case-insensitive (matched via slugification)
+
+**Examples**:
+
+```yaml
+# people/freya.md
+---
+type: person
+name: Freya
+alias: goddess
+---
+
+# companies/acme-corp.md
+---
+type: company
+name: Acme Corporation
+alias: ACME
+---
+```
+
+```markdown
+Met with [[goddess]] about the [[ACME]] project.
+# Resolves to: people/freya and companies/acme-corp
+```
+
+**Conflict detection**: The `rvn check` command reports alias conflicts:
+- `duplicate_alias`: Multiple objects using the same alias
+- `alias_collision`: An alias conflicts with an existing short name or object ID
+
+**When conflicts occur**: If an alias conflicts with something else, references using that alias are treated as ambiguous—Raven won't silently guess. Use the full path to disambiguate.
 
 ---
 
@@ -238,6 +288,7 @@ Content here...
 - Frontmatter is optional
 - If present, must be valid YAML between `---` markers
 - The `type` field determines which type this object is an instance of
+- The `alias` field (optional) provides an alternative name for reference resolution
 - Other fields are validated against the schema
 
 ### Embedded Types
@@ -598,6 +649,7 @@ The following field names are reserved and cannot be used in type/trait definiti
 |-------|---------|
 | `id` | Embedded object identifier (optional, overrides auto-generated slug from heading) |
 | `type` | Object type name |
+| `alias` | Alternative name for reference resolution (optional) |
 
 ### File Location (default_path)
 
@@ -919,6 +971,7 @@ CREATE TABLE objects (
     line_start INTEGER NOT NULL,      -- Line number where object starts
     line_end INTEGER,                 -- Line number where object ends (embedded only)
     parent_id TEXT,                   -- Parent object ID (for nested embedded)
+    alias TEXT,                       -- Optional alias for reference resolution
     file_mtime INTEGER,               -- File modification time (for staleness detection)
     indexed_at INTEGER,               -- When this object was indexed
     created_at INTEGER,
@@ -1520,6 +1573,8 @@ The check command validates the entire vault and surfaces errors and warnings:
 - Ambiguous short reference (multiple matches)
 - Unknown frontmatter key for type
 - Missing target type in schema (ref field references non-existent type)
+- Duplicate alias (multiple objects using the same alias)
+- Alias collision (alias conflicts with existing short name or object ID)
 
 **Warnings** (informational):
 - Undefined trait (not in schema, will be skipped)
@@ -2122,10 +2177,13 @@ character    = (* Any Unicode character *) ;
 
 **Reference resolution:**
 
-1. Full paths (`[[people/freya]]`) resolve directly
-2. Short refs (`[[freya]]`) search for unique match
-3. Date shorthand (`[[2025-02-01]]`) resolves to daily note directory
-4. Fragment refs (`[[file#section]]`) resolve to embedded objects
+1. Aliases are checked first (if `[[goddess]]` is an alias for `people/freya`)
+2. Full paths (`[[people/freya]]`) resolve directly
+3. Short refs (`[[freya]]`) search for unique match
+4. Date shorthand (`[[2025-02-01]]`) resolves to daily note directory
+5. Fragment refs (`[[file#section]]`) resolve to embedded objects
+
+**Ambiguity handling**: If a reference matches multiple things (e.g., an alias AND a short name), it's treated as ambiguous and requires a full path to resolve.
 
 ---
 
@@ -2283,11 +2341,14 @@ vault/
 type: person
 name: Freya
 email: freya@asgard.realm
+alias: goddess
 ---
 
 # Freya
 
 Senior engineer on the platform team.
+
+(Note: Can also be referenced as `[[goddess]]` due to the alias field.)
 
 ## Notes
 

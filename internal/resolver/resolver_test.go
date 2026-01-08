@@ -160,3 +160,326 @@ func TestResolverSlugifiedMatching(t *testing.T) {
 		}
 	})
 }
+
+func TestResolverAliases(t *testing.T) {
+	objectIDs := []string{
+		"people/freya",
+		"people/thor",
+		"companies/acme-corp",
+	}
+
+	aliases := map[string]string{
+		"goddess":    "people/freya",
+		"thunder":    "people/thor",
+		"ACME":       "companies/acme-corp",
+		"Acme Corp":  "companies/acme-corp",
+	}
+
+	r := NewWithAliases(objectIDs, aliases, "daily")
+
+	t.Run("resolve by alias", func(t *testing.T) {
+		result := r.Resolve("goddess")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+
+	t.Run("alias takes priority over short name lookup", func(t *testing.T) {
+		result := r.Resolve("thunder")
+		if result.TargetID != "people/thor" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/thor")
+		}
+	})
+
+	t.Run("case-insensitive alias matching", func(t *testing.T) {
+		result := r.Resolve("GODDESS")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+
+	t.Run("alias with spaces", func(t *testing.T) {
+		result := r.Resolve("Acme Corp")
+		if result.TargetID != "companies/acme-corp" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/acme-corp")
+		}
+	})
+
+	t.Run("short form alias", func(t *testing.T) {
+		result := r.Resolve("acme")
+		if result.TargetID != "companies/acme-corp" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/acme-corp")
+		}
+	})
+
+	t.Run("original ID still works", func(t *testing.T) {
+		result := r.Resolve("freya")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+
+	t.Run("full path still works with alias defined", func(t *testing.T) {
+		result := r.Resolve("people/freya")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+}
+
+func TestResolverWithConfig(t *testing.T) {
+	objectIDs := []string{
+		"people/freya",
+		"projects/bifrost",
+	}
+
+	cfg := ResolverConfig{
+		DailyDirectory: "journal",
+		Aliases: map[string]string{
+			"goddess": "people/freya",
+		},
+	}
+
+	r := NewWithConfig(objectIDs, cfg)
+
+	t.Run("alias works with config", func(t *testing.T) {
+		result := r.Resolve("goddess")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+
+	t.Run("daily directory from config", func(t *testing.T) {
+		result := r.Resolve("2025-02-01")
+		if result.TargetID != "journal/2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "journal/2025-02-01")
+		}
+	})
+}
+
+func TestAliasConflicts(t *testing.T) {
+	t.Run("alias conflicting with short name is ambiguous", func(t *testing.T) {
+		// "thor" is both a short name for people/thor and an alias for people/freya
+		objectIDs := []string{
+			"people/freya",
+			"people/thor",
+		}
+		aliases := map[string]string{
+			"thor": "people/freya", // alias "thor" points to freya, but thor also exists!
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+
+		// Should be ambiguous - not silently resolved
+		result := r.Resolve("thor")
+		if !result.Ambiguous {
+			t.Error("expected ambiguous result when alias conflicts with short name")
+		}
+		if len(result.Matches) != 2 {
+			t.Errorf("expected 2 matches, got %d", len(result.Matches))
+		}
+
+		// Full path should still work unambiguously for the actual thor
+		result = r.Resolve("people/thor")
+		if result.Ambiguous {
+			t.Error("full path should not be ambiguous")
+		}
+		if result.TargetID != "people/thor" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/thor")
+		}
+	})
+
+	t.Run("alias conflicting with object ID is ambiguous", func(t *testing.T) {
+		// An alias that matches an actual object ID
+		objectIDs := []string{
+			"people/freya",
+			"people/thor",
+		}
+		aliases := map[string]string{
+			"people/thor": "people/freya", // alias "people/thor" points to freya!
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+
+		// Should be ambiguous
+		result := r.Resolve("people/thor")
+		if !result.Ambiguous {
+			t.Error("expected ambiguous result when alias conflicts with object ID")
+		}
+		if len(result.Matches) != 2 {
+			t.Errorf("expected 2 matches, got %d", len(result.Matches))
+		}
+	})
+
+	t.Run("detect alias conflicts with short names", func(t *testing.T) {
+		objectIDs := []string{
+			"people/freya",
+			"people/thor",
+		}
+		aliases := map[string]string{
+			"thor": "people/freya", // conflicts with people/thor's short name
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+		collisions := r.FindAliasCollisions()
+
+		if len(collisions) != 1 {
+			t.Errorf("expected 1 collision, got %d", len(collisions))
+		}
+		if len(collisions) > 0 {
+			if collisions[0].Alias != "thor" {
+				t.Errorf("expected collision on alias 'thor', got %q", collisions[0].Alias)
+			}
+			if collisions[0].ConflictsWith != "short_name" {
+				t.Errorf("expected conflict type 'short_name', got %q", collisions[0].ConflictsWith)
+			}
+		}
+	})
+
+	t.Run("detect alias conflicts with object IDs", func(t *testing.T) {
+		objectIDs := []string{
+			"people/freya",
+			"people/thor",
+		}
+		aliases := map[string]string{
+			"people/thor": "people/freya", // conflicts with actual object ID
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+		collisions := r.FindAliasCollisions()
+
+		found := false
+		for _, c := range collisions {
+			if c.Alias == "people/thor" && c.ConflictsWith == "object_id" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected to find collision with object_id")
+		}
+	})
+
+	t.Run("no collision when alias is unique", func(t *testing.T) {
+		objectIDs := []string{
+			"people/freya",
+			"people/thor",
+		}
+		aliases := map[string]string{
+			"goddess": "people/freya", // unique alias
+			"thunder": "people/thor",  // unique alias
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+		collisions := r.FindAliasCollisions()
+
+		if len(collisions) != 0 {
+			t.Errorf("expected 0 collisions for unique aliases, got %d", len(collisions))
+		}
+
+		// Both should resolve unambiguously
+		result := r.Resolve("goddess")
+		if result.Ambiguous {
+			t.Error("unique alias should not be ambiguous")
+		}
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+
+	t.Run("alias resolves when no conflict exists", func(t *testing.T) {
+		objectIDs := []string{
+			"people/freya",
+			"people/thor",
+		}
+		aliases := map[string]string{
+			"goddess": "people/freya", // unique - no object named "goddess"
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+
+		result := r.Resolve("goddess")
+		if result.Ambiguous {
+			t.Error("unique alias should resolve unambiguously")
+		}
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+}
+
+func TestAliasEdgeCases(t *testing.T) {
+	t.Run("empty alias is ignored", func(t *testing.T) {
+		objectIDs := []string{"people/freya"}
+		aliases := map[string]string{
+			"":        "people/freya", // empty alias should be ignored
+			"goddess": "people/freya",
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+
+		// Empty string should not resolve
+		result := r.Resolve("")
+		if result.TargetID != "" {
+			t.Errorf("empty alias should not resolve, got %q", result.TargetID)
+		}
+
+		// Valid alias should work
+		result = r.Resolve("goddess")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+
+	t.Run("alias with special characters", func(t *testing.T) {
+		objectIDs := []string{"companies/acme-corp"}
+		aliases := map[string]string{
+			"ACME Inc.": "companies/acme-corp",
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+
+		// Exact match should work
+		result := r.Resolve("ACME Inc.")
+		if result.TargetID != "companies/acme-corp" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/acme-corp")
+		}
+
+		// Slugified version should also work
+		result = r.Resolve("acme-inc")
+		if result.TargetID != "companies/acme-corp" {
+			t.Errorf("slugified alias should work, got %q, want %q", result.TargetID, "companies/acme-corp")
+		}
+	})
+
+	t.Run("alias pointing to non-existent object", func(t *testing.T) {
+		objectIDs := []string{"people/freya"}
+		aliases := map[string]string{
+			"ghost": "people/nonexistent", // target doesn't exist
+		}
+
+		r := NewWithAliases(objectIDs, aliases, "daily")
+
+		// Alias should still resolve to the target even if target doesn't exist in objectIDs
+		// (the alias map is independent - validation of target existence should happen elsewhere)
+		result := r.Resolve("ghost")
+		if result.Ambiguous {
+			t.Error("alias to non-existent target should not be ambiguous")
+		}
+		if result.TargetID != "people/nonexistent" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/nonexistent")
+		}
+	})
+
+	t.Run("nil aliases map is handled", func(t *testing.T) {
+		objectIDs := []string{"people/freya"}
+
+		r := NewWithAliases(objectIDs, nil, "daily")
+
+		// Should still resolve by short name
+		result := r.Resolve("freya")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+	})
+}
