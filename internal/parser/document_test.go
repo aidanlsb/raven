@@ -82,7 +82,7 @@ Even more text.
 		}
 	})
 
-	t.Run("explicit type overrides section", func(t *testing.T) {
+	t.Run("explicit type with explicit id", func(t *testing.T) {
 		content := `# Weekly Standup
 ::meeting(id=standup, time=09:00)
 
@@ -102,6 +102,83 @@ Discussion notes here.
 			t.Errorf("second object type = %q, want meeting", doc.Objects[1].ObjectType)
 		}
 
+		if doc.Objects[1].ID != "meetings#standup" {
+			t.Errorf("meeting ID = %q, want meetings#standup", doc.Objects[1].ID)
+		}
+	})
+
+	t.Run("explicit type with id derived from heading", func(t *testing.T) {
+		content := `# Weekly Standup
+::meeting(time=09:00)
+
+Discussion notes here.
+`
+		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// File + 1 meeting (not section)
+		if len(doc.Objects) != 2 {
+			t.Errorf("got %d objects, want 2", len(doc.Objects))
+		}
+
+		if doc.Objects[1].ObjectType != "meeting" {
+			t.Errorf("second object type = %q, want meeting", doc.Objects[1].ObjectType)
+		}
+
+		// ID should be derived from slugified heading
+		if doc.Objects[1].ID != "meetings#weekly-standup" {
+			t.Errorf("meeting ID = %q, want meetings#weekly-standup", doc.Objects[1].ID)
+		}
+	})
+
+	t.Run("duplicate headings with derived ids", func(t *testing.T) {
+		content := `# Notes
+
+## Team Sync
+::meeting(time=09:00)
+
+First meeting.
+
+## Team Sync
+::meeting(time=14:00)
+
+Second meeting with same heading.
+`
+		doc, err := ParseDocument(content, "/vault/daily.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// File + Notes section + 2 meetings
+		if len(doc.Objects) != 4 {
+			t.Errorf("got %d objects, want 4", len(doc.Objects))
+		}
+
+		// First meeting gets the base slug
+		if doc.Objects[2].ID != "daily#team-sync" {
+			t.Errorf("first meeting ID = %q, want daily#team-sync", doc.Objects[2].ID)
+		}
+
+		// Second meeting gets -2 suffix
+		if doc.Objects[3].ID != "daily#team-sync-2" {
+			t.Errorf("second meeting ID = %q, want daily#team-sync-2", doc.Objects[3].ID)
+		}
+	})
+
+	t.Run("explicit id overrides heading slug", func(t *testing.T) {
+		content := `# Very Long Meeting Title That Would Make A Bad ID
+::meeting(id=standup, time=09:00)
+
+Discussion notes here.
+`
+		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Explicit id=standup should be used, not the slugified heading
 		if doc.Objects[1].ID != "meetings#standup" {
 			t.Errorf("meeting ID = %q, want meetings#standup", doc.Objects[1].ID)
 		}

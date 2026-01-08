@@ -69,14 +69,20 @@ func TestParseEmbeddedType(t *testing.T) {
 		wantNil  bool
 	}{
 		{
-			name:     "valid embedded type",
+			name:     "valid embedded type with explicit id",
 			line:     "::topic(id=website-discussion, project=[[projects/website]])",
 			wantType: "topic",
 			wantID:   "website-discussion",
 		},
 		{
-			name:    "type without id",
-			line:    "::meeting(time=09:00)",
+			name:     "type without id - id derived from heading later",
+			line:     "::meeting(time=09:00)",
+			wantType: "meeting",
+			wantID:   "", // ID will be derived from heading by document parser
+		},
+		{
+			name:    "not a type declaration",
+			line:    "Some regular text",
 			wantNil: true,
 		},
 	}

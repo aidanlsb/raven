@@ -34,7 +34,7 @@ A personal knowledge system with typed blocks, traits, and powerful querying. Bu
 | Concept | Purpose | Syntax | Can be Referenced? | Example |
 |---------|---------|--------|-------------------|---------|
 | **Types** | Define what something *is* | Frontmatter `type:` | Yes, via `[[path/file]]` | person, project, meeting, book |
-| **Embedded Types** | A typed section within a file | `::type(id=..., ...)` | Yes, via `[[path/file#id]]` | A meeting inside a daily note |
+| **Embedded Types** | A typed section within a file | `::type(...)` | Yes, via `[[path/file#slug]]` | A meeting inside a daily note |
 | **Sections** | Auto-created for every heading | Markdown headings (`#`, `##`, etc.) | Yes, via `[[path/file#slug]]` | Any heading without explicit type |
 | **Traits** | Add behavior/metadata to content | `@name` or `@name(value)` | No (queryable, not referenceable) | @due, @priority, @highlight |
 
@@ -107,11 +107,17 @@ A section within a file can be explicitly typed with `::type()` on the line afte
 
 ```
 daily/2025-02-01.md
-  └── ## Weekly Standup     →  Object(id="daily/2025-02-01#standup", type="meeting", ...)
-        ::meeting(id=standup, ...)
+  └── ## Weekly Standup     →  Object(id="daily/2025-02-01#weekly-standup", type="meeting", ...)
+        ::meeting(time=09:00)
 ```
 
-**Object ID**: The file path + `#` + explicit ID (e.g., `daily/2025-02-01#standup`). The `id` field is **required** for explicitly typed embedded objects.
+**Object ID**: The file path + `#` + slugified heading text (e.g., `daily/2025-02-01#weekly-standup`).
+
+**ID Generation Rules** (same as sections):
+1. Heading text is slugified (lowercased, spaces become hyphens, special chars removed)
+2. If multiple headings have the same slug, numbers are appended: `#team-sync`, `#team-sync-2`
+3. If heading text is empty, fallback to the type name as the slug
+4. An explicit `id` field can override the auto-generated slug: `::meeting(id=standup)` → `#standup`
 
 #### Sections (Auto-Created from Headings)
 Every markdown heading automatically becomes a `section` object, even without an explicit `::type()` declaration.
@@ -239,8 +245,8 @@ Content here...
 Declared with `::type()` on a heading:
 
 ```markdown
-## Meeting Title
-::meeting(id=team-sync, time=2025-02-01T09:00, attendees=[[[people/freya]], [[people/thor]]])
+## Team Sync
+::meeting(time=2025-02-01T09:00, attendees=[[[people/freya]], [[people/thor]]])
 
 Content of the meeting...
 ```
@@ -248,10 +254,11 @@ Content of the meeting...
 **Rules**:
 - `::type()` must appear on the line immediately after the heading (or within 2 lines)
 - First argument is the type name
-- The `id` field is **required** and must be unique within the file
+- Object ID is derived from the slugified heading text (e.g., `## Team Sync` → `#team-sync`)
+- Optional `id` field overrides the auto-generated slug: `::meeting(id=standup)` → `#standup`
 - Additional arguments are `key=value` field assignments
 - Scope extends from this heading to the next heading at same or higher level
-- Full object ID = `file-path#id` (e.g., `daily/2025-02-01#team-sync`)
+- Full object ID = `file-path#slug` (e.g., `daily/2025-02-01#team-sync`)
 
 **Why `::` instead of `@`?** The `::` prefix distinguishes type declarations (which create referenceable objects) from trait annotations (which add metadata to content). This makes the syntax visually distinct and unambiguous.
 
@@ -589,7 +596,7 @@ The following field names are reserved and cannot be used in type/trait definiti
 
 | Field | Purpose |
 |-------|---------|
-| `id` | Embedded object identifier (required for `::type()`) |
+| `id` | Embedded object identifier (optional, overrides auto-generated slug from heading) |
 | `type` | Object type name |
 
 ### File Location (default_path)
@@ -626,7 +633,7 @@ types:
 | Syntax | Purpose | Creates Object? |
 |--------|---------|-----------------|
 | `---`...`---` (frontmatter) | File-level type declaration | Yes |
-| `::type(id=..., ...)` | Embedded type declaration | Yes |
+| `::type(...)` | Embedded type declaration (id auto-generated from heading) | Yes |
 | `@trait(...)` | Trait annotation | No |
 | `[[path/file]]` | Reference to file object | — |
 | `[[path/file#id]]` | Reference to embedded object | — |
@@ -648,7 +655,7 @@ attendees:
 ```
 ::meeting(id=standup, time=2025-02-01T09:00, attendees=[[[people/freya]], [[people/thor]]])
    │       │           └── key=value field assignments
-   │       └── required ID (unique within file)
+   │       └── optional ID override (defaults to slugified heading)
    └── type name
 ```
 
@@ -1509,7 +1516,6 @@ The check command validates the entire vault and surfaces errors and warnings:
 - Number outside min/max bounds
 - Reference to non-existent object
 - Wrong target type for `ref` fields (e.g., `lead: ref, target: person` pointing to a `project`)
-- Embedded object missing `id` field
 - Duplicate object IDs
 - Ambiguous short reference (multiple matches)
 - Unknown frontmatter key for type
@@ -1536,14 +1542,13 @@ Checking vault: /path/to/vault
 WARN:  Index may be stale (3 file(s) modified since last reindex)
        Run 'rvn reindex' to update the index.
 
-ERROR:  daily/2025-02-01.md:15 - Missing required field 'id' in embedded type 'meeting'
 ERROR:  projects/bifrost.md:8 - Reference [[freya]] is ambiguous (matches: people/freya, clients/freya)
 ERROR:  projects/mobile.md:5 - Field 'lead' expects type 'person', but [[projects/website]] is type 'project'
 WARN:   notes/random.md:23 - Undefined trait '@custom'
 WARN:   [schema] Type 'vendor' is defined in schema but never used
 WARN:   [schema] Trait '@archived' is defined in schema but never used
 
-Found 3 error(s), 4 warning(s) in 847 files.
+Found 2 error(s), 3 warning(s) in 847 files.
 ```
 
 **Grouped output** (`--by-file`):
@@ -1554,13 +1559,10 @@ Checking vault: /path/to/vault
 schema.yaml:
   WARN: Type 'vendor' is defined in schema but never used
 
-daily/2025-02-01.md (1 errors):
-  Line 15: ERROR - Missing required field 'id' in embedded type 'meeting'
-
 projects/bifrost.md (1 errors):
   Line 8: ERROR - Reference [[freya]] is ambiguous
 
-Found 2 error(s), 1 warning(s) in 847 files.
+Found 1 error(s), 1 warning(s) in 847 files.
 ```
 
 **Create missing references** (`--create-missing`):
@@ -1860,7 +1862,7 @@ This section documents key design decisions made during planning.
 | Element | Syntax | Rationale |
 |---------|--------|-----------|
 | File-level type | YAML frontmatter | Familiar, standard markdown convention |
-| Embedded type | `::type(id=..., ...)` | `::` distinguishes from traits (`@`), inline for speed |
+| Embedded type | `::type(...)` | `::` distinguishes from traits (`@`), inline for speed |
 | Traits | `@trait(...)` | `@` is intuitive for annotations |
 | References | `[[path/file#id]]` | Wiki-style links, `#` for fragments (standard) |
 
@@ -1869,11 +1871,12 @@ This section documents key design decisions made during planning.
 | Object Type | ID Format | Example |
 |-------------|-----------|---------|
 | File-level | Path without extension | `people/freya` |
-| Embedded (explicit) | Path + `#` + explicit ID | `daily/2025-02-01#standup` |
+| Embedded (explicit) | Path + `#` + slugified heading | `daily/2025-02-01#weekly-standup` |
 | Section (auto) | Path + `#` + slugified heading | `daily/2025-02-01#morning` |
 
-- **Explicit IDs required**: Explicitly typed embedded objects must have an `id` field
-- **Section IDs auto-generated**: Slugified from heading text, with duplicate handling (`#ideas`, `#ideas-2`)
+- **IDs auto-generated**: Both embedded types and sections derive their ID from the slugified heading text
+- **Optional ID override**: Explicit `id` field overrides the auto-generated slug: `::meeting(id=standup)` → `#standup`
+- **Duplicate handling**: Counter suffix for same-slug headings (`#team-sync`, `#team-sync-2`)
 - **Path uniqueness**: File paths must be unique across the vault
 - **Short references**: Allowed if unambiguous, warned otherwise
 
@@ -2113,8 +2116,9 @@ character    = (* Any Unicode character *) ;
 **Embedded type constraints:**
 
 1. `::type()` must appear within 2 lines after a heading
-2. The `id` field is required for embedded types
-3. ID must be unique within the file
+2. Object ID is auto-generated from the slugified heading text
+3. Optional `id` field overrides the auto-generated slug
+4. IDs must be unique within the file (duplicates get `-2`, `-3` suffix)
 
 **Reference resolution:**
 

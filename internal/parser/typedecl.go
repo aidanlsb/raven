@@ -28,18 +28,15 @@ type EmbeddedTypeInfo struct {
 var typeDeclRegex = regexp.MustCompile(`^::(\w+)\s*\(([^)]*)\)\s*$`)
 
 // ParseEmbeddedType parses an embedded type declaration from a line.
-// Returns nil if the line is not a type declaration or has no ID.
+// Returns nil if the line is not a type declaration.
+// The ID field may be empty - the caller should derive it from the heading if so.
 func ParseEmbeddedType(line string, lineNumber int) *EmbeddedTypeInfo {
 	decl, err := ParseTypeDeclaration(line, lineNumber)
 	if err != nil || decl == nil {
 		return nil
 	}
 
-	// Embedded types must have an ID
-	if decl.ID == "" {
-		return nil
-	}
-
+	// ID is optional - caller will derive from heading if empty
 	return &EmbeddedTypeInfo{
 		TypeName: decl.TypeName,
 		ID:       decl.ID,
