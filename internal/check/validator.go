@@ -36,6 +36,8 @@ const (
 	IssueMissingTargetType       IssueType = "missing_target_type"
 	IssueSelfReferentialRequired IssueType = "self_referential_required"
 	IssueIDCollision             IssueType = "id_collision"
+	IssueDuplicateAlias          IssueType = "duplicate_alias"
+	IssueAliasCollision          IssueType = "alias_collision"
 )
 
 // Issue represents a validation issue.
@@ -116,11 +118,19 @@ type Validator struct {
 	resolver        *resolver.Resolver
 	allIDs          map[string]struct{}
 	objectTypes     map[string]string          // Object ID -> type name (for target type validation)
+	aliases         map[string]string          // Alias -> object ID
+	duplicateAliases []DuplicateAlias          // Aliases used by multiple objects
 	missingRefs     map[string]*MissingRef     // Keyed by target path to dedupe
 	undefinedTraits map[string]*UndefinedTrait // Keyed by trait name to dedupe
 	usedTypes       map[string]struct{}        // Types actually used in documents
 	usedTraits      map[string]struct{}        // Traits actually used in documents
 	shortRefs       map[string]string          // Short ref -> full path (for suggestions)
+}
+
+// DuplicateAlias represents multiple objects sharing the same alias.
+type DuplicateAlias struct {
+	Alias     string   // The duplicated alias
+	ObjectIDs []string // All object IDs using this alias
 }
 
 // ObjectInfo contains basic info about an object for validation.
@@ -131,6 +141,11 @@ type ObjectInfo struct {
 
 // NewValidator creates a new validator.
 func NewValidator(s *schema.Schema, objectIDs []string) *Validator {
+	return NewValidatorWithAliases(s, objectIDs, nil)
+}
+
+// NewValidatorWithAliases creates a new validator with alias support.
+func NewValidatorWithAliases(s *schema.Schema, objectIDs []string, aliases map[string]string) *Validator {
 	allIDs := make(map[string]struct{}, len(objectIDs))
 	for _, id := range objectIDs {
 		allIDs[id] = struct{}{}
@@ -138,9 +153,10 @@ func NewValidator(s *schema.Schema, objectIDs []string) *Validator {
 
 	return &Validator{
 		schema:          s,
-		resolver:        resolver.New(objectIDs),
+		resolver:        resolver.NewWithAliases(objectIDs, aliases, "daily"),
 		allIDs:          allIDs,
 		objectTypes:     make(map[string]string),
+		aliases:         aliases,
 		missingRefs:     make(map[string]*MissingRef),
 		undefinedTraits: make(map[string]*UndefinedTrait),
 		usedTypes:       make(map[string]struct{}),
@@ -152,6 +168,11 @@ func NewValidator(s *schema.Schema, objectIDs []string) *Validator {
 // NewValidatorWithTypes creates a new validator with object type information.
 // objectInfos should contain ID and type for each object in the vault.
 func NewValidatorWithTypes(s *schema.Schema, objectInfos []ObjectInfo) *Validator {
+	return NewValidatorWithTypesAndAliases(s, objectInfos, nil)
+}
+
+// NewValidatorWithTypesAndAliases creates a new validator with type info and aliases.
+func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo, aliases map[string]string) *Validator {
 	allIDs := make(map[string]struct{}, len(objectInfos))
 	objectTypes := make(map[string]string, len(objectInfos))
 	ids := make([]string, 0, len(objectInfos))
@@ -164,15 +185,22 @@ func NewValidatorWithTypes(s *schema.Schema, objectInfos []ObjectInfo) *Validato
 
 	return &Validator{
 		schema:          s,
-		resolver:        resolver.New(ids),
+		resolver:        resolver.NewWithAliases(ids, aliases, "daily"),
 		allIDs:          allIDs,
 		objectTypes:     objectTypes,
+		aliases:         aliases,
 		missingRefs:     make(map[string]*MissingRef),
 		undefinedTraits: make(map[string]*UndefinedTrait),
 		usedTypes:       make(map[string]struct{}),
 		usedTraits:      make(map[string]struct{}),
 		shortRefs:       make(map[string]string),
 	}
+}
+
+// SetDuplicateAliases sets duplicate alias information for validation.
+// This should be called before ValidateSchema to report duplicate aliases.
+func (v *Validator) SetDuplicateAliases(duplicates []DuplicateAlias) {
+	v.duplicateAliases = duplicates
 }
 
 // MissingRefs returns all missing references collected during validation.
@@ -782,6 +810,38 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 				FixHint: "Use full paths in references to avoid ambiguity (e.g., [[people/freya]] instead of [[freya]])",
 			})
 		}
+	}
+
+	// Check for alias collisions (alias conflicts with short name or object ID)
+	aliasCollisions := v.resolver.FindAliasCollisions()
+	for _, collision := range aliasCollisions {
+		var msg string
+		switch collision.ConflictsWith {
+		case "short_name":
+			msg = fmt.Sprintf("Alias '%s' conflicts with short name of object(s): %s", collision.Alias, strings.Join(collision.ObjectIDs, ", "))
+		case "object_id":
+			msg = fmt.Sprintf("Alias '%s' conflicts with existing object ID: %s", collision.Alias, strings.Join(collision.ObjectIDs, ", "))
+		default:
+			msg = fmt.Sprintf("Alias '%s' has a conflict: %s", collision.Alias, strings.Join(collision.ObjectIDs, ", "))
+		}
+		issues = append(issues, SchemaIssue{
+			Level:   LevelError,
+			Type:    IssueAliasCollision,
+			Message: msg,
+			Value:   collision.Alias,
+			FixHint: "Rename the alias to something unique, or use full paths in references",
+		})
+	}
+
+	// Check for duplicate aliases (multiple objects using the same alias)
+	for _, dup := range v.duplicateAliases {
+		issues = append(issues, SchemaIssue{
+			Level:   LevelError,
+			Type:    IssueDuplicateAlias,
+			Message: fmt.Sprintf("Alias '%s' is used by multiple objects: %s", dup.Alias, strings.Join(dup.ObjectIDs, ", ")),
+			Value:   dup.Alias,
+			FixHint: "Each alias must be unique - rename one of the conflicting aliases",
+		})
 	}
 
 	return issues

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -113,8 +114,7 @@ func isSchemaCompatible(db *sql.DB) bool {
 		return false
 	}
 
-	// Check if objects table has 'indexed_at' column (v6+)
-	// This replaced the old created_at/updated_at columns
+	// Check if objects table has required columns (v6+: indexed_at, v8+: alias)
 	rows2, err := db.Query("PRAGMA table_info(objects)")
 	if err != nil {
 		return false
@@ -122,6 +122,7 @@ func isSchemaCompatible(db *sql.DB) bool {
 	defer rows2.Close()
 
 	hasIndexedAtColumn := false
+	hasAliasColumn := false
 	for rows2.Next() {
 		var cid int
 		var name, colType string
@@ -132,11 +133,13 @@ func isSchemaCompatible(db *sql.DB) bool {
 		}
 		if name == "indexed_at" {
 			hasIndexedAtColumn = true
-			break
+		}
+		if name == "alias" {
+			hasAliasColumn = true
 		}
 	}
 
-	return hasIndexedAtColumn
+	return hasIndexedAtColumn && hasAliasColumn
 }
 
 // OpenInMemory opens an in-memory database (for testing).
@@ -169,7 +172,8 @@ func (d *Database) Analyze() error {
 
 // CurrentDBVersion is the current database schema version.
 // v7: Added composite indexes for trait refs matching and performance PRAGMAs
-const CurrentDBVersion = 7
+// v8: Added alias column to objects table for reference aliasing
+const CurrentDBVersion = 8
 
 // initialize creates the database schema.
 func (d *Database) initialize() error {
@@ -200,6 +204,7 @@ func (d *Database) initialize() error {
 			line_start INTEGER NOT NULL,
 			line_end INTEGER,
 			parent_id TEXT,
+			alias TEXT,                 -- Optional alias for reference resolution
 			file_mtime INTEGER,         -- File modification time from filesystem (Unix timestamp)
 			indexed_at INTEGER          -- When this row was written to the index
 		);
@@ -233,6 +238,7 @@ func (d *Database) initialize() error {
 		CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);
 		CREATE INDEX IF NOT EXISTS idx_objects_type ON objects(type);
 		CREATE INDEX IF NOT EXISTS idx_objects_parent ON objects(parent_id);
+		CREATE INDEX IF NOT EXISTS idx_objects_alias ON objects(alias) WHERE alias IS NOT NULL;
 		
 		CREATE INDEX IF NOT EXISTS idx_traits_file ON traits(file_path);
 		CREATE INDEX IF NOT EXISTS idx_traits_type ON traits(trait_type);
@@ -333,8 +339,8 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 
 	// Insert objects
 	objStmt, err := tx.Prepare(`
-		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, file_mtime, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, alias, file_mtime, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -347,6 +353,14 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 			return err
 		}
 
+		// Extract alias from fields if present
+		var alias *string
+		if aliasField, ok := obj.Fields["alias"]; ok {
+			if s, ok := aliasField.AsString(); ok && s != "" {
+				alias = &s
+			}
+		}
+
 		_, err = objStmt.Exec(
 			obj.ID,
 			doc.FilePath,
@@ -357,6 +371,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 			obj.LineStart,
 			obj.LineEnd,
 			obj.ParentID,
+			alias,
 			mtime,
 			now,
 		)
@@ -734,6 +749,71 @@ func (d *Database) AllObjectIDs() ([]string, error) {
 	return ids, rows.Err()
 }
 
+// AllAliases returns a map from alias to object ID for all objects with aliases.
+// This is used for reference resolution where [[alias]] should resolve to the object.
+// If multiple objects have the same alias, the first one encountered wins (non-deterministic).
+// Use FindDuplicateAliases to detect and report conflicts.
+func (d *Database) AllAliases() (map[string]string, error) {
+	rows, err := d.db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	aliases := make(map[string]string)
+	for rows.Next() {
+		var alias, id string
+		if err := rows.Scan(&alias, &id); err != nil {
+			return nil, err
+		}
+		// First one wins (deterministic due to ORDER BY id)
+		if _, exists := aliases[alias]; !exists {
+			aliases[alias] = id
+		}
+	}
+
+	return aliases, rows.Err()
+}
+
+// DuplicateAlias represents multiple objects sharing the same alias.
+type DuplicateAlias struct {
+	Alias     string   // The duplicated alias
+	ObjectIDs []string // All object IDs using this alias
+}
+
+// FindDuplicateAliases finds cases where multiple objects use the same alias.
+// This is a validation issue that should be reported to the user.
+func (d *Database) FindDuplicateAliases() ([]DuplicateAlias, error) {
+	// Find aliases that appear more than once
+	rows, err := d.db.Query(`
+		SELECT alias, GROUP_CONCAT(id, '|') as ids
+		FROM objects 
+		WHERE alias IS NOT NULL AND alias != ''
+		GROUP BY alias 
+		HAVING COUNT(*) > 1
+		ORDER BY alias
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var duplicates []DuplicateAlias
+	for rows.Next() {
+		var alias, idsConcat string
+		if err := rows.Scan(&alias, &idsConcat); err != nil {
+			return nil, err
+		}
+		ids := strings.Split(idsConcat, "|")
+		duplicates = append(duplicates, DuplicateAlias{
+			Alias:     alias,
+			ObjectIDs: ids,
+		})
+	}
+
+	return duplicates, rows.Err()
+}
+
 // Helper to convert FieldValue map to interface map for JSON serialization.
 func fieldsToMap(fields map[string]schema.FieldValue) map[string]interface{} {
 	result := make(map[string]interface{}, len(fields))
@@ -904,8 +984,14 @@ func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutio
 		return nil, fmt.Errorf("failed to get object IDs: %w", err)
 	}
 
-	// Create resolver with all known object IDs
-	res := resolver.NewWithDailyDir(objectIDs, dailyDirectory)
+	// Get all aliases for resolution
+	aliases, err := d.AllAliases()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get aliases: %w", err)
+	}
+
+	// Create resolver with all known object IDs and aliases
+	res := resolver.NewWithAliases(objectIDs, aliases, dailyDirectory)
 
 	// Get all unresolved references
 	rows, err := d.db.Query(`

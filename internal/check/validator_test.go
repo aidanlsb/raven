@@ -599,3 +599,129 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 		}
 	})
 }
+
+func TestAliasCollisionDetection(t *testing.T) {
+	s := schema.NewSchema()
+	s.Types["person"] = &schema.TypeDefinition{}
+
+	t.Run("alias conflicts with short name reported as error", func(t *testing.T) {
+		objectIDs := []string{"people/freya", "people/thor"}
+		aliases := map[string]string{
+			"thor": "people/freya", // Conflicts with people/thor's short name
+		}
+
+		v := NewValidatorWithAliases(s, objectIDs, aliases)
+		schemaIssues := v.ValidateSchema()
+
+		hasAliasCollision := false
+		for _, issue := range schemaIssues {
+			if issue.Type == IssueAliasCollision {
+				hasAliasCollision = true
+				if !strings.Contains(issue.Message, "thor") {
+					t.Errorf("Expected message to mention 'thor', got: %s", issue.Message)
+				}
+				if issue.Level != LevelError {
+					t.Errorf("Expected error level, got: %v", issue.Level)
+				}
+				break
+			}
+		}
+		if !hasAliasCollision {
+			t.Errorf("Expected alias collision issue, got: %v", schemaIssues)
+		}
+	})
+
+	t.Run("duplicate aliases reported as error", func(t *testing.T) {
+		objectIDs := []string{"people/freya", "people/frigg"}
+		aliases := map[string]string{
+			"goddess": "people/freya", // Only one is stored, but we have duplicates info
+		}
+
+		v := NewValidatorWithAliases(s, objectIDs, aliases)
+		v.SetDuplicateAliases([]DuplicateAlias{
+			{
+				Alias:     "goddess",
+				ObjectIDs: []string{"people/freya", "people/frigg"},
+			},
+		})
+
+		schemaIssues := v.ValidateSchema()
+
+		hasDuplicateAlias := false
+		for _, issue := range schemaIssues {
+			if issue.Type == IssueDuplicateAlias {
+				hasDuplicateAlias = true
+				if !strings.Contains(issue.Message, "goddess") {
+					t.Errorf("Expected message to mention 'goddess', got: %s", issue.Message)
+				}
+				if !strings.Contains(issue.Message, "people/freya") || !strings.Contains(issue.Message, "people/frigg") {
+					t.Errorf("Expected message to list conflicting objects, got: %s", issue.Message)
+				}
+				if issue.Level != LevelError {
+					t.Errorf("Expected error level, got: %v", issue.Level)
+				}
+				break
+			}
+		}
+		if !hasDuplicateAlias {
+			t.Errorf("Expected duplicate alias issue, got: %v", schemaIssues)
+		}
+	})
+
+	t.Run("unique alias has no collision", func(t *testing.T) {
+		objectIDs := []string{"people/freya", "people/thor"}
+		aliases := map[string]string{
+			"goddess": "people/freya", // Unique - no conflict
+		}
+
+		v := NewValidatorWithAliases(s, objectIDs, aliases)
+		schemaIssues := v.ValidateSchema()
+
+		for _, issue := range schemaIssues {
+			if issue.Type == IssueAliasCollision || issue.Type == IssueDuplicateAlias {
+				t.Errorf("Expected no alias issues for unique alias, got: %v", issue)
+			}
+		}
+	})
+
+	t.Run("ambiguous reference due to alias conflict", func(t *testing.T) {
+		aliases := map[string]string{
+			"thor": "people/freya", // Conflicts with people/thor
+		}
+
+		v := NewValidatorWithTypesAndAliases(s, []ObjectInfo{
+			{ID: "people/freya", Type: "person"},
+			{ID: "people/thor", Type: "person"},
+		}, aliases)
+
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/test", ObjectType: "page"},
+			},
+			Refs: []*parser.ParsedRef{
+				{
+					SourceID:  "notes/test",
+					TargetRaw: "thor", // Ambiguous - matches alias AND short name
+					Line:      5,
+				},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+
+		hasAmbiguousRef := false
+		for _, issue := range issues {
+			if issue.Type == IssueAmbiguousReference {
+				hasAmbiguousRef = true
+				if !strings.Contains(issue.Message, "thor") {
+					t.Errorf("Expected message to mention 'thor', got: %s", issue.Message)
+				}
+				break
+			}
+		}
+		if !hasAmbiguousRef {
+			t.Errorf("Expected ambiguous reference issue, got: %v", issues)
+		}
+	})
+}

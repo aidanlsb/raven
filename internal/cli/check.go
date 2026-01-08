@@ -82,8 +82,10 @@ var checkCmd = &cobra.Command{
 		var parseErrors []check.Issue
 		var schemaIssues []check.SchemaIssue
 
-		// Check for stale index first
+		// Check for stale index first and fetch aliases
 		staleWarningShown := false
+		var aliases map[string]string
+		var duplicateAliases []check.DuplicateAlias
 		db, err := index.Open(vaultPath)
 		if err == nil {
 			defer db.Close()
@@ -116,6 +118,18 @@ var checkCmd = &cobra.Command{
 				})
 				warningCount++
 				staleWarningShown = true
+			}
+
+			// Fetch aliases for validation
+			aliases, _ = db.AllAliases()
+
+			// Fetch duplicate aliases
+			dbDuplicates, _ := db.FindDuplicateAliases()
+			for _, dup := range dbDuplicates {
+				duplicateAliases = append(duplicateAliases, check.DuplicateAlias{
+					Alias:     dup.Alias,
+					ObjectIDs: dup.ObjectIDs,
+				})
 			}
 		}
 
@@ -154,8 +168,9 @@ var checkCmd = &cobra.Command{
 			return fmt.Errorf("error walking vault: %w", err)
 		}
 
-		// Second pass: validate with full context (including type information)
-		validator := check.NewValidatorWithTypes(s, allObjectInfos)
+		// Second pass: validate with full context (including type information and aliases)
+		validator := check.NewValidatorWithTypesAndAliases(s, allObjectInfos, aliases)
+		validator.SetDuplicateAliases(duplicateAliases)
 
 		for _, doc := range allDocs {
 			issues := validator.ValidateDocument(doc)
