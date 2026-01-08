@@ -281,10 +281,10 @@ func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time
 		for i, r := range results {
 			// Use the filename without extension as the name
 			name := filepath.Base(r.ID)
-			rows[i] = tableRow{
-				name:     name,
-				location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
-			}
+		rows[i] = tableRow{
+			name:     name,
+			location: formatLocationLinkSimple(r.FilePath, r.LineStart),
+		}
 		}
 		printTable(rows)
 		return nil
@@ -338,7 +338,7 @@ func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time
 		rows[i] = traitTableRow{
 			content:  r.Content,
 			traits:   traitStr,
-			location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
+			location: formatLocationLinkSimple(r.FilePath, r.Line),
 		}
 	}
 	printTraitTable(rows)
@@ -427,7 +427,7 @@ func printTraitResults(results []index.TraitResult) {
 		rows = append(rows, traitTableRow{
 			content:  content,
 			traits:   strings.Join(traitStrs, " "),
-			location: fmt.Sprintf("%s:%d", key.filePath, key.line),
+			location: formatLocationLinkSimple(key.filePath, key.line),
 		})
 	}
 
