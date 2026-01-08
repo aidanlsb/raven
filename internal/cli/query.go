@@ -150,10 +150,11 @@ Examples:
   rvn query "object:project .status:active"
   rvn query "object:meeting has:due"
   rvn query "trait:due value:past"
+  rvn query trait:todo content:"my task"
   rvn query "trait:highlight on:{object:book .status:reading}"
   rvn query tasks                    # Run saved query
   rvn query --list                   # List saved queries`,
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		start := time.Now()
@@ -174,7 +175,10 @@ Examples:
 			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query --list' to see saved queries")
 		}
 
-		queryStr := args[0]
+		// Join multiple args with spaces - allows running without quoting the whole query
+		// e.g., `rvn query trait:todo content:"my task"` works the same as
+		//       `rvn query 'trait:todo content:"my task"'`
+		queryStr := joinQueryArgs(args)
 
 		db, err := index.Open(vaultPath)
 		if err != nil {
@@ -611,6 +615,39 @@ func smartReindex(db *index.Database, vaultPath string) error {
 	}
 
 	return nil
+}
+
+// joinQueryArgs joins command-line arguments into a single query string.
+// It handles the case where the shell has already processed quotes, e.g.:
+//
+//	rvn query trait:todo content:"my task"
+//
+// becomes args ["trait:todo", "content:my task"] after shell processing.
+// We need to re-quote the content value so the parser sees content:"my task".
+func joinQueryArgs(args []string) string {
+	if len(args) == 1 {
+		return args[0]
+	}
+
+	result := make([]string, len(args))
+	for i, arg := range args {
+		// Check if this arg is content: with an unquoted value containing spaces
+		// Shell would have processed content:"foo bar" into content:foo bar
+		if strings.HasPrefix(arg, "content:") || strings.HasPrefix(arg, "!content:") {
+			prefix := "content:"
+			if strings.HasPrefix(arg, "!") {
+				prefix = "!content:"
+			}
+			value := strings.TrimPrefix(arg, prefix)
+			// If value doesn't start with a quote but contains content, re-quote it
+			if value != "" && !strings.HasPrefix(value, "\"") {
+				arg = prefix + "\"" + value + "\""
+			}
+		}
+		result[i] = arg
+	}
+
+	return strings.Join(result, " ")
 }
 
 func init() {
