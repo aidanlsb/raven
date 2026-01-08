@@ -58,8 +58,8 @@ var searchCmd = &cobra.Command{
 
 		fmt.Printf("Found %d results for: %s\n\n", len(results), query)
 		for i, result := range results {
-			fmt.Printf("%d. %s\n", i+1, result.Title)
-			fmt.Printf("   %s\n", result.FilePath)
+		fmt.Printf("%d. %s\n", i+1, result.Title)
+		fmt.Printf("   %s\n", formatLocationLinkSimple(result.FilePath, 1))
 			if result.Snippet != "" {
 				// Clean up snippet for display
 				snippet := strings.ReplaceAll(result.Snippet, "\n", " ")

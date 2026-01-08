@@ -72,7 +72,7 @@ Examples:
 				line = *link.Line
 			}
 
-			fmt.Printf("  ← %s (%s:%d)\n", display, link.FilePath, line)
+			fmt.Printf("  ← %s (%s)\n", display, formatLocationLinkSimple(link.FilePath, line))
 		}
 
 		return nil
