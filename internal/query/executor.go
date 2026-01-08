@@ -258,6 +258,8 @@ func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string,
 		return e.buildWithinPredicateSQL(p, alias)
 	case *RefsPredicate:
 		return e.buildTraitRefsPredicateSQL(p, alias)
+	case *ContentPredicate:
+		return e.buildTraitContentPredicateSQL(p, alias)
 	case *OrPredicate:
 		return e.buildOrPredicateSQL(p, alias, e.buildTraitPredicateSQL)
 	case *GroupPredicate:
@@ -649,6 +651,33 @@ func (e *Executor) buildContentPredicateSQL(p *ContentPredicate, alias string) (
 	}
 
 	return cond, []interface{}{p.SearchTerm}, nil
+}
+
+// buildTraitContentPredicateSQL builds SQL for content:"search terms" predicates on traits.
+// Uses LIKE matching on the trait's content column (the line text where the trait appears).
+// This is simpler than FTS5 since trait content is a single line.
+func (e *Executor) buildTraitContentPredicateSQL(p *ContentPredicate, alias string) (string, []interface{}, error) {
+	// Use case-insensitive LIKE to search the trait's line content
+	// The content column stores the full line where the trait annotation appears
+	cond := fmt.Sprintf("%s.content LIKE ? ESCAPE '\\'", alias)
+
+	// Escape special LIKE characters and wrap with wildcards for substring match
+	searchPattern := "%" + escapeLikePattern(p.SearchTerm) + "%"
+
+	if p.Negated() {
+		cond = "NOT " + cond
+	}
+
+	return cond, []interface{}{searchPattern}, nil
+}
+
+// escapeLikePattern escapes special characters for LIKE pattern matching.
+func escapeLikePattern(s string) string {
+	// Escape backslash first, then % and _
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
+	return s
 }
 
 // buildTraitRefsPredicateSQL builds SQL for refs:[[target]] or refs:{object:...} predicates on traits.
