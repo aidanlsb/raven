@@ -2,9 +2,9 @@
 package vault
 
 import (
-	"fmt"
-	"strings"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/dates"
 )
 
 // ParseDateArg parses a date argument which can be:
@@ -12,25 +12,9 @@ import (
 // - "YYYY-MM-DD" format (absolute date)
 // - Empty string defaults to today
 func ParseDateArg(arg string) (time.Time, error) {
-	if arg == "" {
-		return time.Now(), nil
-	}
-
-	dateArg := strings.ToLower(strings.TrimSpace(arg))
-	switch dateArg {
-	case "today":
-		return time.Now(), nil
-	case "yesterday":
-		return time.Now().AddDate(0, 0, -1), nil
-	case "tomorrow":
-		return time.Now().AddDate(0, 0, 1), nil
-	default:
-		parsed, err := time.Parse("2006-01-02", dateArg)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("invalid date format '%s', use YYYY-MM-DD or today/yesterday/tomorrow", dateArg)
-		}
-		return parsed, nil
-	}
+	// Preserve historical behavior: default to time.Now() when empty, and accept
+	// today/yesterday/tomorrow or YYYY-MM-DD (case-insensitive).
+	return dates.ParseDateArg(arg, time.Now())
 }
 
 // FormatDateISO formats a time as YYYY-MM-DD.

@@ -3,10 +3,9 @@ package check
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
-	"time"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -445,7 +444,7 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 
 			// Validate date format for date traits
 			if traitDef.Type == schema.FieldTypeDate {
-				if !isValidDate(valueStr) {
+				if !dates.IsValidDate(valueStr) {
 					issues = append(issues, Issue{
 						Level:    LevelError,
 						Type:     IssueInvalidDateFormat,
@@ -460,7 +459,7 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 
 			// Validate datetime format for datetime traits
 			if traitDef.Type == schema.FieldTypeDatetime {
-				if !isValidDatetime(valueStr) {
+				if !dates.IsValidDatetime(valueStr) {
 					issues = append(issues, Issue{
 						Level:    LevelError,
 						Type:     IssueInvalidDateFormat,
@@ -500,32 +499,14 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 	return issues
 }
 
-// Date validation regex
-var dateRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-
 // isValidDate checks if a string is a valid YYYY-MM-DD date.
 func isValidDate(s string) bool {
-	if !dateRegex.MatchString(s) {
-		return false
-	}
-	_, err := time.Parse("2006-01-02", s)
-	return err == nil
+	return dates.IsValidDate(s)
 }
 
 // isValidDatetime checks if a string is a valid datetime.
 func isValidDatetime(s string) bool {
-	// Try various datetime formats
-	formats := []string{
-		time.RFC3339,
-		"2006-01-02T15:04",
-		"2006-01-02T15:04:05",
-	}
-	for _, format := range formats {
-		if _, err := time.Parse(format, s); err == nil {
-			return true
-		}
-	}
-	return false
+	return dates.IsValidDatetime(s)
 }
 
 func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {

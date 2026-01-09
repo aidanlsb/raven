@@ -15,6 +15,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -24,6 +25,7 @@ type Watcher struct {
 	vaultPath string
 	db        *index.Database
 	schema    *schema.Schema
+	parseOpts *parser.ParseOptions
 
 	// Configuration
 	debounceDelay time.Duration
@@ -43,6 +45,7 @@ type Config struct {
 	VaultPath     string
 	Database      *index.Database
 	Schema        *schema.Schema
+	ParseOptions  *parser.ParseOptions
 	DebounceDelay time.Duration // Default: 100ms
 	Debug         bool
 	OnReindex     func(path string, err error) // Optional callback
@@ -69,6 +72,7 @@ func New(cfg Config) (*Watcher, error) {
 		vaultPath:     cfg.VaultPath,
 		db:            cfg.Database,
 		schema:        cfg.Schema,
+		parseOpts:     cfg.ParseOptions,
 		debounceDelay: debounce,
 		debug:         cfg.Debug,
 		pending:       make(map[string]time.Time),
@@ -147,7 +151,7 @@ func (w *Watcher) ReindexFile(path string) error {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	parsed, err := parser.ParseDocument(string(content), path, w.vaultPath)
+	parsed, err := parser.ParseDocumentWithOptions(string(content), path, w.vaultPath, w.parseOpts)
 	if err != nil {
 		return fmt.Errorf("failed to parse document: %w", err)
 	}
@@ -167,8 +171,13 @@ func (w *Watcher) RemoveFromIndex(path string) error {
 		return err
 	}
 
-	// Remove .md extension to get object ID
-	objectID := strings.TrimSuffix(relPath, ".md")
+	objectsRoot := ""
+	pagesRoot := ""
+	if w.parseOpts != nil {
+		objectsRoot = w.parseOpts.ObjectsRoot
+		pagesRoot = w.parseOpts.PagesRoot
+	}
+	objectID := paths.FilePathToObjectID(relPath, objectsRoot, pagesRoot)
 
 	return w.db.RemoveDocument(objectID)
 }

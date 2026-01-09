@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // VaultConfig represents vault-level configuration from raven.yaml.
@@ -61,24 +63,10 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 		return nil
 	}
 	cfg := *vc.Directories
-	// Normalize paths: ensure trailing slash and no leading slash
-	if cfg.Objects != "" {
-		cfg.Objects = normalizeDirectoryPath(cfg.Objects)
-	}
-	if cfg.Pages != "" {
-		cfg.Pages = normalizeDirectoryPath(cfg.Pages)
-	}
+	// Normalize paths: ensure trailing slash and no leading slash.
+	cfg.Objects = paths.NormalizeDirRoot(cfg.Objects)
+	cfg.Pages = paths.NormalizeDirRoot(cfg.Pages)
 	return &cfg
-}
-
-// normalizeDirectoryPath ensures a directory path has no leading slash and has a trailing slash.
-func normalizeDirectoryPath(path string) string {
-	path = strings.TrimPrefix(path, "/")
-	path = strings.TrimSuffix(path, "/")
-	if path == "" {
-		return ""
-	}
-	return path + "/"
 }
 
 // HasDirectoriesConfig returns true if directory organization is configured.
@@ -331,28 +319,11 @@ func (vc *VaultConfig) DailyNoteID(date string) string {
 // If directories are configured, the appropriate root prefix is stripped.
 // For example, with objects: "objects/", the path "objects/people/freya.md" becomes "people/freya".
 func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
-	// Remove .md extension
-	id := strings.TrimSuffix(filePath, ".md")
-
-	// Normalize path separators
-	id = filepath.ToSlash(id)
-
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
-		return id
+		return paths.FilePathToObjectID(filePath, "", "")
 	}
-
-	// Try stripping objects root first (more specific paths like people/, projects/)
-	if dirs.Objects != "" && strings.HasPrefix(id, dirs.Objects) {
-		return strings.TrimPrefix(id, dirs.Objects)
-	}
-
-	// Try stripping pages root (for untyped pages)
-	if dirs.Pages != "" && strings.HasPrefix(id, dirs.Pages) {
-		return strings.TrimPrefix(id, dirs.Pages)
-	}
-
-	return id
+	return paths.FilePathToObjectID(filePath, dirs.Objects, dirs.Pages)
 }
 
 // ObjectIDToFilePath converts an object ID to a file path (relative to vault).
@@ -362,24 +333,9 @@ func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
 func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
-		return objectID + ".md"
+		return paths.ObjectIDToFilePath(objectID, typeName, "", "")
 	}
-
-	// Determine which root to use based on type
-	var root string
-	if typeName == "" || typeName == "page" {
-		root = dirs.Pages
-		if root == "" {
-			root = dirs.Objects // Fall back to objects if pages not set
-		}
-	} else {
-		root = dirs.Objects
-	}
-
-	if root != "" {
-		return root + objectID + ".md"
-	}
-	return objectID + ".md"
+	return paths.ObjectIDToFilePath(objectID, typeName, dirs.Objects, dirs.Pages)
 }
 
 // ResolveReferenceToFilePath resolves a reference (object ID) to a file path.
@@ -389,7 +345,7 @@ func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
-		return ref + ".md"
+		return paths.ObjectIDToFilePath(ref, "", "", "")
 	}
 
 	// If the reference contains a slash, it's likely a typed object path

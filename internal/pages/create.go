@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gosimple/slug"
-
+	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/template"
 )
@@ -231,8 +231,8 @@ func resolveDefaultPath(targetPath, typeName string, sch *schema.Schema) string 
 // resolveDefaultPathWithRoots applies directory roots and type default_path.
 func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot string) string {
 	// Normalize roots
-	objectsRoot = strings.TrimSuffix(strings.TrimPrefix(objectsRoot, "/"), "/")
-	pagesRoot = strings.TrimSuffix(strings.TrimPrefix(pagesRoot, "/"), "/")
+	objectsRoot = paths.NormalizeDirRoot(objectsRoot)
+	pagesRoot = paths.NormalizeDirRoot(pagesRoot)
 
 	// If target already has a directory component, just add the appropriate root
 	if strings.Contains(targetPath, "/") {
@@ -319,30 +319,12 @@ func ExistsWithSchema(vaultPath, targetPath, typeName string, sch *schema.Schema
 // "people/Sif" -> "people/sif"
 // Also handles embedded object IDs: "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
 func SlugifyPath(path string) string {
-	// Remove .md extension if present
-	path = strings.TrimSuffix(path, ".md")
-
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		// Handle embedded object IDs (file#id)
-		if strings.Contains(part, "#") {
-			subParts := strings.SplitN(part, "#", 2)
-			parts[i] = Slugify(subParts[0]) + "#" + Slugify(subParts[1])
-		} else {
-			parts[i] = Slugify(part)
-		}
-	}
-	return strings.Join(parts, "/")
+	return slugs.PathSlug(path)
 }
 
 // Slugify converts a string to a URL-safe slug.
 func Slugify(s string) string {
-	s = strings.TrimSuffix(s, ".md")
-	slugged := slug.Make(s)
-	if slugged == "" {
-		slugged = strings.ToLower(strings.ReplaceAll(s, " ", "-"))
-	}
-	return slugged
+	return slugs.ComponentSlug(s)
 }
 
 // CreateDailyNote creates a daily note for the given date.

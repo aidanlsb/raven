@@ -1098,6 +1098,11 @@ rvn stats
 # List untyped pages (missing explicit type)
 rvn untyped
 
+# Open files by reference
+rvn open cursor                  # Opens companies/cursor.md
+rvn open companies/cursor        # Partial path also works
+rvn open people/freya            # Opens people/freya.md
+
 # Open/create daily notes
 rvn daily                        # Today's note
 rvn daily yesterday              # Yesterday's note
@@ -1276,7 +1281,7 @@ Quick capture for low-friction note-taking:
 
 ```bash
 rvn add <text>
-rvn add <text> --to <file>
+rvn add <text> --to <file-or-reference>
 ```
 
 **Examples**:
@@ -1284,10 +1289,13 @@ rvn add <text> --to <file>
 rvn add "Call Odin about the Bifrost"
 rvn add "@due(tomorrow) @priority(high) Send estimate"
 rvn add "Project idea" --to inbox.md
+rvn add "Meeting notes" --to cursor           # Resolves to companies/cursor.md
+rvn add "Update" --to companies/cursor        # Partial path also works
 ```
 
 **Behavior**:
 - By default, appends to today's daily note (creates if needed)
+- The `--to` flag accepts file paths, short references (`cursor`), or partial paths (`companies/cursor`)
 - Traits in the text are preserved and indexed
 - Timestamps are added by default
 
@@ -2206,7 +2214,8 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_new` | Create typed object | `type`, `title`, optional `fields` |
 | `raven_set` | Update frontmatter fields on object | `object_id`, `fields` (key-value pairs) |
 | `raven_read` | Read raw file content | `path` |
-| `raven_add` | Append to existing file or daily note | `text`, optional `to` |
+| `raven_add` | Append to existing file or daily note | `text`, optional `to` (supports references) |
+| `raven_open` | Open file in editor by reference | `reference` (short name, partial path, or full path) |
 | `raven_delete` | Delete object (trash by default) | `object_id` |
 | `raven_move` | Move or rename object (updates references) | `source`, `destination`, optional `update-refs`, `force` |
 | `raven_edit` | Surgical text replacement | `path`, `old_str`, `new_str`, optional `confirm` |

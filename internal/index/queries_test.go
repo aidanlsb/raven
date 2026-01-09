@@ -12,6 +12,7 @@ func TestParseFilterExpression(t *testing.T) {
 		wantCondition  string
 		wantArgsCount  int
 		wantArgsValues []interface{}
+		wantErr        bool
 	}{
 		{
 			name:           "simple value",
@@ -99,11 +100,26 @@ func TestParseFilterExpression(t *testing.T) {
 			wantCondition: "(value = ? OR value = ?)",
 			wantArgsCount: 2,
 		},
+		{
+			name:      "invalid date-like filter errors",
+			filter:    "2025-13-45",
+			fieldExpr: "value",
+			wantErr:   true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			condition, args := parseFilterExpression(tt.filter, tt.fieldExpr)
+			condition, args, err := parseFilterExpression(tt.filter, tt.fieldExpr)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			if condition != tt.wantCondition {
 				t.Errorf("condition = %q, want %q", condition, tt.wantCondition)
@@ -212,6 +228,14 @@ func TestQueryTraitsWithFilterExpressions(t *testing.T) {
 			t.Errorf("expected 4 results, got %d", len(results))
 		}
 	})
+
+	t.Run("invalid date-like filter errors", func(t *testing.T) {
+		filter := "2025-13-45"
+		_, err := db.QueryTraits("status", &filter)
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+	})
 }
 
 func TestBacklinks(t *testing.T) {
@@ -237,8 +261,9 @@ func TestBacklinks(t *testing.T) {
 	_, err = db.db.Exec(`
 		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number)
 		VALUES 
-			('daily/2025-02-01', 'people/freya', '[[people/freya]]', 'daily/2025-02-01.md', 5),
-			('projects/bifrost', 'people/freya', '[[freya]]', 'projects/bifrost.md', 10)
+			('daily/2025-02-01', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 5),
+			('projects/bifrost', 'people/freya', 'freya', 'projects/bifrost.md', 10),
+			('projects/bifrost', 'people/freya#notes', 'freya#notes', 'projects/bifrost.md', 11)
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test refs: %v", err)
@@ -249,8 +274,9 @@ func TestBacklinks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("query failed: %v", err)
 		}
-		if len(results) != 2 {
-			t.Errorf("expected 2 backlinks, got %d", len(results))
+		// Includes a section backlink via target_id LIKE 'people/freya#%'.
+		if len(results) != 3 {
+			t.Errorf("expected 3 backlinks, got %d", len(results))
 		}
 	})
 

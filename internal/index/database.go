@@ -12,6 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -548,7 +549,10 @@ func extractDateString(fv schema.FieldValue) string {
 	if s, ok := fv.AsString(); ok {
 		// Check if it looks like a date (YYYY-MM-DD)
 		if len(s) >= 10 && s[4] == '-' && s[7] == '-' {
-			return s[:10] // Return just the date part (in case of datetime)
+			candidate := s[:10] // Return just the date part (in case of datetime)
+			if dates.IsValidDate(candidate) {
+				return candidate
+			}
 		}
 	}
 	return ""
@@ -676,12 +680,36 @@ func (d *Database) RemoveDeletedFiles(vaultPath string) ([]string, error) {
 
 // RemoveDocument removes a document and all related data by its object ID.
 func (d *Database) RemoveDocument(objectID string) error {
-	// Objects can have IDs like "people/freya" or "daily/2025-02-01#meeting"
-	// For the file-level ID, we need to delete by the root object or file path
-	filePath := objectID + ".md"
+	// Objects can have IDs like "people/freya" or "daily/2025-02-01#meeting".
+	// This method removes the *entire file/document* from the index.
+	//
+	// Callers may pass an embedded/section ID (with a '#'). In that case we still
+	// remove the whole document, since Raven cannot delete embedded objects from
+	// the markdown file without rewriting content.
+	baseID := objectID
+	if hash := strings.Index(baseID, "#"); hash >= 0 {
+		baseID = baseID[:hash]
+	}
 
-	// Delete all objects whose ID starts with this objectID (handles sections/embedded)
-	if _, err := d.db.Exec("DELETE FROM objects WHERE id = ? OR id LIKE ?", objectID, objectID+"#%"); err != nil {
+	// Prefer the canonical file_path stored in the DB (important when directory
+	// roots are configured and object IDs do not match file paths).
+	var filePath string
+	err := d.db.QueryRow(
+		"SELECT file_path FROM objects WHERE id = ? OR id LIKE ? LIMIT 1",
+		baseID,
+		baseID+"#%",
+	).Scan(&filePath)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Best-effort fallback.
+			filePath = baseID + ".md"
+		} else {
+			return err
+		}
+	}
+
+	// Delete all objects in this document (file-level + sections/embedded).
+	if _, err := d.db.Exec("DELETE FROM objects WHERE id = ? OR id LIKE ?", baseID, baseID+"#%"); err != nil {
 		return err
 	}
 
@@ -773,6 +801,62 @@ func (d *Database) AllAliases() (map[string]string, error) {
 	}
 
 	return aliases, rows.Err()
+}
+
+// Resolver builds a canonical resolver for this vault index.
+//
+// It includes:
+// - all object IDs (for full + short reference resolution)
+// - all aliases (for alias resolution)
+// - the configured daily directory for date shorthand refs (e.g. [[2025-02-01]])
+func (d *Database) Resolver(dailyDirectory string) (*resolver.Resolver, error) {
+	if dailyDirectory == "" {
+		dailyDirectory = "daily"
+	}
+	objectIDs, err := d.AllObjectIDs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object IDs: %w", err)
+	}
+	aliases, err := d.AllAliases()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get aliases: %w", err)
+	}
+	return resolver.NewWithAliases(objectIDs, aliases, dailyDirectory), nil
+}
+
+// ResolverWithExtraIDs is like Resolver, but ensures extraIDs are included in the
+// resolver's known object ID list.
+//
+// This is useful for operations like `move` where the destination object ID may
+// not yet be indexed, but we still want to test whether a candidate short ref
+// would resolve uniquely after the move.
+func (d *Database) ResolverWithExtraIDs(dailyDirectory string, extraIDs ...string) (*resolver.Resolver, error) {
+	if dailyDirectory == "" {
+		dailyDirectory = "daily"
+	}
+	objectIDs, err := d.AllObjectIDs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object IDs: %w", err)
+	}
+	aliases, err := d.AllAliases()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get aliases: %w", err)
+	}
+	seen := make(map[string]struct{}, len(objectIDs))
+	for _, id := range objectIDs {
+		seen[id] = struct{}{}
+	}
+	for _, id := range extraIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		objectIDs = append(objectIDs, id)
+		seen[id] = struct{}{}
+	}
+	return resolver.NewWithAliases(objectIDs, aliases, dailyDirectory), nil
 }
 
 // DuplicateAlias represents multiple objects sharing the same alias.
@@ -978,20 +1062,10 @@ type ReferenceResolutionResult struct {
 func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutionResult, error) {
 	result := &ReferenceResolutionResult{}
 
-	// Get all object IDs for resolution
-	objectIDs, err := d.AllObjectIDs()
+	res, err := d.Resolver(dailyDirectory)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get object IDs: %w", err)
+		return nil, err
 	}
-
-	// Get all aliases for resolution
-	aliases, err := d.AllAliases()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get aliases: %w", err)
-	}
-
-	// Create resolver with all known object IDs and aliases
-	res := resolver.NewWithAliases(objectIDs, aliases, dailyDirectory)
 
 	// Get all unresolved references
 	rows, err := d.db.Query(`

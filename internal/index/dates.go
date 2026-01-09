@@ -1,8 +1,11 @@
 package index
 
 import (
+	"fmt"
 	"strings"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/dates"
 )
 
 // ParseDateFilter parses a date filter string and returns the SQL condition and args.
@@ -63,7 +66,10 @@ func ParseDateFilter(filter string, fieldExpr string) (condition string, args []
 			[]interface{}{today}, nil
 
 	default:
-		// Assume it's a YYYY-MM-DD date
+		// Require an actual valid YYYY-MM-DD date.
+		if !dates.IsValidDate(filter) {
+			return "", nil, fmt.Errorf("invalid date filter: %q", filter)
+		}
 		return fieldExpr + " = ?", []interface{}{filter}, nil
 	}
 }

@@ -30,6 +30,7 @@ type ObjectResult struct {
 type BacklinkResult struct {
 	SourceID    string
 	SourceType  string
+	TargetRaw   string
 	FilePath    string
 	Line        *int
 	DisplayText *string
@@ -51,7 +52,10 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitRe
 	args := []interface{}{traitType}
 
 	if valueFilter != nil && *valueFilter != "" {
-		condition, filterArgs := parseFilterExpression(*valueFilter, "value")
+		condition, filterArgs, err := parseFilterExpression(*valueFilter, "value")
+		if err != nil {
+			return nil, err
+		}
 		query += " AND " + condition
 		args = append(args, filterArgs...)
 	}
@@ -82,7 +86,7 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitRe
 //   - Date filters are automatically detected and expanded
 //
 // Returns SQL condition and args.
-func parseFilterExpression(filter string, fieldExpr string) (condition string, args []interface{}) {
+func parseFilterExpression(filter string, fieldExpr string) (condition string, args []interface{}, err error) {
 	// Split on | for OR logic
 	parts := strings.Split(filter, "|")
 
@@ -101,43 +105,49 @@ func parseFilterExpression(filter string, fieldExpr string) (condition string, a
 		}
 
 		// Build condition for this part
-		partCondition, partArgs := buildSingleFilterCondition(part, fieldExpr, isNegated)
+		partCondition, partArgs, buildErr := buildSingleFilterCondition(part, fieldExpr, isNegated)
+		if buildErr != nil {
+			return "", nil, buildErr
+		}
 		conditions = append(conditions, partCondition)
 		args = append(args, partArgs...)
 	}
 
 	if len(conditions) == 0 {
-		return "1=1", nil // No filter, match all
+		return "1=1", nil, nil // No filter, match all
 	}
 
 	if len(conditions) == 1 {
-		return conditions[0], args
+		return conditions[0], args, nil
 	}
 
 	// Multiple conditions → OR them together
-	return "(" + strings.Join(conditions, " OR ") + ")", args
+	return "(" + strings.Join(conditions, " OR ") + ")", args, nil
 }
 
 // buildSingleFilterCondition builds a SQL condition for a single filter value.
-func buildSingleFilterCondition(value string, fieldExpr string, isNegated bool) (condition string, args []interface{}) {
+func buildSingleFilterCondition(value string, fieldExpr string, isNegated bool) (condition string, args []interface{}, err error) {
 	// Check if it's a date filter
 	if isDateFilter(value) {
-		dateCondition, dateArgs, _ := ParseDateFilter(value, fieldExpr)
+		dateCondition, dateArgs, parseErr := ParseDateFilter(value, fieldExpr)
+		if parseErr != nil {
+			return "", nil, parseErr
+		}
 
 		if isNegated {
 			// Negate the date condition
 			// For simple comparisons, just flip the operator
 			// For range conditions (this-week), wrap in NOT(...)
-			return "NOT (" + dateCondition + ")", dateArgs
+			return "NOT (" + dateCondition + ")", dateArgs, nil
 		}
-		return dateCondition, dateArgs
+		return dateCondition, dateArgs, nil
 	}
 
 	// Simple value match
 	if isNegated {
-		return fieldExpr + " != ?", []interface{}{value}
+		return fieldExpr + " != ?", []interface{}{value}, nil
 	}
-	return fieldExpr + " = ?", []interface{}{value}
+	return fieldExpr + " = ?", []interface{}{value}, nil
 }
 
 // isDateFilter checks if a filter string is a date filter.
@@ -245,13 +255,16 @@ func (d *Database) QueryObjects(objectType string) ([]ObjectResult, error) {
 func (d *Database) Backlinks(targetID string) ([]BacklinkResult, error) {
 	// Support both exact match and date shorthand
 	query := `
-		SELECT r.source_id, o.type, r.file_path, r.line_number, r.display_text
+		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.display_text
 		FROM refs r
 		LEFT JOIN objects o ON r.source_id = o.id
-		WHERE r.target_raw = ? OR r.target_id = ?
+		WHERE r.target_raw = ?
+		   OR r.target_raw LIKE ?
+		   OR r.target_id = ?
+		   OR r.target_id LIKE ?
 	`
 
-	rows, err := d.db.Query(query, targetID, targetID)
+	rows, err := d.db.Query(query, targetID, targetID+"#%", targetID, targetID+"#%")
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +274,7 @@ func (d *Database) Backlinks(targetID string) ([]BacklinkResult, error) {
 	for rows.Next() {
 		var result BacklinkResult
 		var sourceType sql.NullString
-		if err := rows.Scan(&result.SourceID, &sourceType, &result.FilePath, &result.Line, &result.DisplayText); err != nil {
+		if err := rows.Scan(&result.SourceID, &sourceType, &result.TargetRaw, &result.FilePath, &result.Line, &result.DisplayText); err != nil {
 			return nil, err
 		}
 		if sourceType.Valid {

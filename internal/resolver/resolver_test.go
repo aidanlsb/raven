@@ -75,6 +75,177 @@ func TestResolverAmbiguous(t *testing.T) {
 	}
 }
 
+func TestResolverSuffixMatching(t *testing.T) {
+	// When objects have a directory prefix (e.g., "objects/") but the user
+	// references by a partial path, suffix matching should find them.
+	t.Run("partial path matches full path with prefix", func(t *testing.T) {
+		objectIDs := []string{
+			"objects/companies/cursor",
+			"objects/companies/cursor#notes",
+			"objects/people/freya",
+		}
+
+		r := New(objectIDs)
+
+		// "companies/cursor" should resolve to "objects/companies/cursor"
+		result := r.Resolve("companies/cursor")
+		if result.Ambiguous {
+			t.Errorf("expected non-ambiguous, got ambiguous with matches: %v", result.Matches)
+		}
+		if result.TargetID != "objects/companies/cursor" {
+			t.Errorf("got %q, want %q", result.TargetID, "objects/companies/cursor")
+		}
+	})
+
+	t.Run("short name still works with prefix", func(t *testing.T) {
+		objectIDs := []string{
+			"objects/companies/cursor",
+			"objects/companies/cursor#cursor",
+		}
+
+		r := New(objectIDs)
+
+		// "cursor" should still resolve via short name matching
+		result := r.Resolve("cursor")
+		if result.Ambiguous {
+			t.Errorf("expected non-ambiguous, got ambiguous with matches: %v", result.Matches)
+		}
+		if result.TargetID != "objects/companies/cursor" {
+			t.Errorf("got %q, want %q", result.TargetID, "objects/companies/cursor")
+		}
+	})
+
+	t.Run("exact match takes priority over suffix match", func(t *testing.T) {
+		objectIDs := []string{
+			"objects/companies/cursor",
+			"companies/cursor", // Also exists as a standalone
+		}
+
+		r := New(objectIDs)
+
+		// "companies/cursor" should resolve to the exact match
+		result := r.Resolve("companies/cursor")
+		if result.Ambiguous {
+			t.Errorf("expected non-ambiguous, got ambiguous with matches: %v", result.Matches)
+		}
+		if result.TargetID != "companies/cursor" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/cursor")
+		}
+	})
+
+	t.Run("ambiguous suffix matches are detected", func(t *testing.T) {
+		objectIDs := []string{
+			"objects/companies/cursor",
+			"pages/companies/cursor", // Two different prefixes with same suffix
+		}
+
+		r := New(objectIDs)
+
+		// "companies/cursor" matches both, should be ambiguous
+		result := r.Resolve("companies/cursor")
+		if !result.Ambiguous {
+			t.Error("expected ambiguous when multiple suffix matches exist")
+		}
+		if len(result.Matches) != 2 {
+			t.Errorf("expected 2 matches, got %d", len(result.Matches))
+		}
+	})
+}
+
+func TestResolverPrefersParentOverSection(t *testing.T) {
+	// When a file and its section have the same short name (e.g., "cursor"),
+	// the resolver should prefer the parent file object.
+	t.Run("parent object is preferred over section with same short name", func(t *testing.T) {
+		objectIDs := []string{
+			"companies/cursor",         // parent file object
+			"companies/cursor#cursor",  // section "# Cursor" inside the file
+		}
+
+		r := New(objectIDs)
+
+		// [[cursor]] should resolve to companies/cursor, not be ambiguous
+		result := r.Resolve("cursor")
+		if result.Ambiguous {
+			t.Errorf("expected non-ambiguous, got ambiguous with matches: %v", result.Matches)
+		}
+		if result.TargetID != "companies/cursor" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/cursor")
+		}
+	})
+
+	t.Run("section can still be resolved with full path", func(t *testing.T) {
+		objectIDs := []string{
+			"companies/cursor",
+			"companies/cursor#cursor",
+		}
+
+		r := New(objectIDs)
+
+		result := r.Resolve("companies/cursor#cursor")
+		if result.Ambiguous {
+			t.Error("full path should not be ambiguous")
+		}
+		if result.TargetID != "companies/cursor#cursor" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/cursor#cursor")
+		}
+	})
+
+	t.Run("section with unique short name still works", func(t *testing.T) {
+		objectIDs := []string{
+			"companies/cursor",
+			"companies/cursor#notes",  // section with different short name
+		}
+
+		r := New(objectIDs)
+
+		// [[notes]] should resolve to the section
+		result := r.Resolve("notes")
+		if result.Ambiguous {
+			t.Error("unique section short name should not be ambiguous")
+		}
+		if result.TargetID != "companies/cursor#notes" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/cursor#notes")
+		}
+	})
+
+	t.Run("two unrelated sections with same name are still ambiguous", func(t *testing.T) {
+		objectIDs := []string{
+			"companies/cursor#notes",
+			"people/freya#notes",
+		}
+
+		r := New(objectIDs)
+
+		result := r.Resolve("notes")
+		if !result.Ambiguous {
+			t.Error("expected ambiguous when two unrelated sections have same name")
+		}
+		if len(result.Matches) != 2 {
+			t.Errorf("expected 2 matches, got %d", len(result.Matches))
+		}
+	})
+
+	t.Run("parent preferred even with multiple sections", func(t *testing.T) {
+		objectIDs := []string{
+			"companies/cursor",
+			"companies/cursor#cursor",
+			"companies/cursor#notes",
+			"companies/cursor#history",
+		}
+
+		r := New(objectIDs)
+
+		// [[cursor]] should resolve to companies/cursor
+		result := r.Resolve("cursor")
+		if result.Ambiguous {
+			t.Errorf("expected non-ambiguous, got ambiguous with matches: %v", result.Matches)
+		}
+		if result.TargetID != "companies/cursor" {
+			t.Errorf("got %q, want %q", result.TargetID, "companies/cursor")
+		}
+	})
+}
+
 func TestResolverDateShorthand(t *testing.T) {
 	objectIDs := []string{
 		"daily/2025-02-01",
@@ -253,6 +424,13 @@ func TestResolverWithConfig(t *testing.T) {
 		result := r.Resolve("2025-02-01")
 		if result.TargetID != "journal/2025-02-01" {
 			t.Errorf("got %q, want %q", result.TargetID, "journal/2025-02-01")
+		}
+	})
+
+	t.Run("invalid date does not resolve as date shorthand", func(t *testing.T) {
+		result := r.Resolve("2025-13-45")
+		if result.TargetID == "journal/2025-13-45" {
+			t.Errorf("expected invalid date not to be treated as date shorthand, got %q", result.TargetID)
 		}
 	})
 }

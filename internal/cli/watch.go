@@ -9,7 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/watcher"
 )
@@ -62,6 +64,19 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load schema: %w", err)
 	}
 
+	// Load vault config (optional) to support directory roots.
+	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	if err != nil || vaultCfg == nil {
+		vaultCfg = &config.VaultConfig{}
+	}
+	var parseOpts *parser.ParseOptions
+	if vaultCfg.HasDirectoriesConfig() {
+		parseOpts = &parser.ParseOptions{
+			ObjectsRoot: vaultCfg.GetObjectsRoot(),
+			PagesRoot:   vaultCfg.GetPagesRoot(),
+		}
+	}
+
 	// Open database
 	db, err := index.Open(vaultPath)
 	if err != nil {
@@ -74,6 +89,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		VaultPath: vaultPath,
 		Database:  db,
 		Schema:    sch,
+		ParseOptions: parseOpts,
 		Debug:     debug,
 		OnReindex: func(path string, err error) {
 			if err != nil {

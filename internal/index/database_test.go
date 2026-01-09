@@ -1,6 +1,7 @@
 package index
 
 import (
+	"database/sql"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/parser"
@@ -254,6 +255,143 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("remove document resolves file_path from DB (including embedded IDs)", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		doc := &parser.ParsedDocument{
+			// Simulate vaults with directories config enabled: object ID does not include "objects/".
+			FilePath: "objects/people/freya.md",
+			RawContent: `---
+---
+
+# Freya
+
+- @highlight Hello`,
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "people/freya",
+					ObjectType: "person",
+					Fields:     map[string]schema.FieldValue{},
+					LineStart:  1,
+				},
+				{
+					ID:         "people/freya#notes",
+					ObjectType: "section",
+					Fields: map[string]schema.FieldValue{
+						"title": schema.String("Notes"),
+						"level": schema.Number(2),
+					},
+					LineStart: 5,
+				},
+			},
+			Traits: []*parser.ParsedTrait{
+				{
+					TraitType:      "highlight",
+					Value:          nil,
+					Content:        "Hello",
+					ParentObjectID: "people/freya",
+					Line:           7,
+				},
+			},
+			Refs: []*parser.ParsedRef{
+				{
+					SourceID:  "people/freya",
+					TargetRaw: "projects/website",
+					Line:      8,
+					Start:     0,
+					End:       0,
+				},
+			},
+		}
+
+		// Define trait so it gets indexed.
+		testSchema := schema.NewSchema()
+		testSchema.Traits["highlight"] = &schema.TraitDefinition{Type: schema.FieldTypeBool}
+
+		if err := db.IndexDocument(doc, testSchema); err != nil {
+			t.Fatalf("failed to index document: %v", err)
+		}
+
+		// Remove by embedded ID (callers may pass file#section).
+		if err := db.RemoveDocument("people/freya#notes"); err != nil {
+			t.Fatalf("failed to remove document: %v", err)
+		}
+
+		// Verify all tables have been cleaned for that file.
+		type tableCount struct {
+			table string
+		}
+		for _, tc := range []tableCount{
+			{table: "objects"},
+			{table: "traits"},
+			{table: "refs"},
+			{table: "date_index"},
+			{table: "fts_content"},
+		} {
+			var n int
+			var q string
+			if tc.table == "objects" {
+				// objects are removed by id prefix; file_path should be irrelevant after RemoveDocument
+				q = "SELECT COUNT(*) FROM objects WHERE id = ? OR id LIKE ?"
+				err = db.db.QueryRow(q, "people/freya", "people/freya#%").Scan(&n)
+			} else {
+				q = "SELECT COUNT(*) FROM " + tc.table + " WHERE file_path = ?"
+				err = db.db.QueryRow(q, "objects/people/freya.md").Scan(&n)
+			}
+			if err != nil && err != sql.ErrNoRows {
+				t.Fatalf("failed to query %s: %v", tc.table, err)
+			}
+			if n != 0 {
+				t.Fatalf("expected %s rows to be 0, got %d", tc.table, n)
+			}
+		}
+	})
+
+	t.Run("resolver includes aliases and daily directory", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		doc := &parser.ParsedDocument{
+			FilePath:   "projects/website.md",
+			RawContent: "# Website",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "projects/website",
+					ObjectType: "project",
+					Fields: map[string]schema.FieldValue{
+						"alias": schema.String("WebSiteAlias"),
+					},
+					LineStart: 1,
+				},
+			},
+		}
+		if err := db.IndexDocument(doc, sch); err != nil {
+			t.Fatalf("failed to index document: %v", err)
+		}
+
+		res, err := db.Resolver("journal")
+		if err != nil {
+			t.Fatalf("failed to build resolver: %v", err)
+		}
+
+		aliasResolved := res.Resolve("websitealias") // different casing
+		if aliasResolved.Ambiguous || aliasResolved.TargetID != "projects/website" {
+			t.Fatalf("expected alias to resolve to projects/website, got %+v", aliasResolved)
+		}
+
+		dateResolved := res.Resolve("2025-02-01")
+		if dateResolved.Ambiguous || dateResolved.TargetID != "journal/2025-02-01" {
+			t.Fatalf("expected date shorthand to resolve to journal/2025-02-01, got %+v", dateResolved)
+		}
+	})
+
 	t.Run("undefined traits are not indexed", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {
@@ -315,6 +453,61 @@ func TestDatabase(t *testing.T) {
 		}
 		if len(undefinedResults) != 0 {
 			t.Errorf("expected 0 results for undefined trait, got %d (schema is source of truth)", len(undefinedResults))
+		}
+	})
+
+	t.Run("backlinks include frontmatter refs", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		freyaContent := `---
+type: person
+---
+
+# Freya
+`
+		freyaDoc, err := parser.ParseDocument(freyaContent, "/vault/people/freya.md", "/vault")
+		if err != nil {
+			t.Fatalf("failed to parse freya doc: %v", err)
+		}
+		if err := db.IndexDocument(freyaDoc, sch); err != nil {
+			t.Fatalf("failed to index freya doc: %v", err)
+		}
+
+		alphaContent := `---
+type: project
+owner: "[[people/freya]]"
+---
+
+# Alpha
+`
+		alphaDoc, err := parser.ParseDocument(alphaContent, "/vault/projects/alpha.md", "/vault")
+		if err != nil {
+			t.Fatalf("failed to parse alpha doc: %v", err)
+		}
+		if err := db.IndexDocument(alphaDoc, sch); err != nil {
+			t.Fatalf("failed to index alpha doc: %v", err)
+		}
+
+		// Frontmatter refs should be indexed into refs table and show up in backlinks.
+		bls, err := db.Backlinks("people/freya")
+		if err != nil {
+			t.Fatalf("failed to query backlinks: %v", err)
+		}
+		if len(bls) != 1 {
+			t.Fatalf("expected 1 backlink, got %d", len(bls))
+		}
+		if bls[0].SourceID != "projects/alpha" {
+			t.Fatalf("SourceID = %q, want %q", bls[0].SourceID, "projects/alpha")
+		}
+		if bls[0].FilePath != "projects/alpha.md" {
+			t.Fatalf("FilePath = %q, want %q", bls[0].FilePath, "projects/alpha.md")
+		}
+		if bls[0].Line == nil || *bls[0].Line != 3 {
+			t.Fatalf("Line = %v, want 3", bls[0].Line)
 		}
 	})
 }

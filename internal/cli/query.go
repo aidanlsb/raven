@@ -218,12 +218,12 @@ Examples:
 
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithOptions(db, queryStr, start, sch, idsOnly)
+			return runFullQueryWithOptions(db, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
 		}
 
 		// Check if this is a saved query
 		if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
-			return runSavedQueryWithOptions(db, savedQuery, queryStr, start, sch, idsOnly)
+			return runSavedQueryWithOptions(db, savedQuery, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
 		}
 
 		// Unknown query - provide helpful error
@@ -255,6 +255,9 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 	// Execute the query to get IDs
 	executor := query.NewExecutor(db.DB())
+	if res, err := db.Resolver(vaultCfg.DailyDirectory); err == nil {
+		executor.SetResolver(res)
+	}
 
 	var ids []string
 	if q.Type == query.QueryTypeObject {
@@ -322,7 +325,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 	// Dispatch to the appropriate bulk operation
 	switch applyCmd {
 	case "set":
-		return applySetFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, sch, confirm)
+		return applySetFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, sch, vaultCfg, confirm)
 	case "delete":
 		return applyDeleteFromQuery(vaultPath, fileIDs, warnings, vaultCfg, confirm)
 	case "add":
@@ -337,7 +340,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 }
 
 // applySetFromQuery applies set operation from query results.
-func applySetFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, sch *schema.Schema, confirm bool) error {
+func applySetFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
 	// Parse field=value arguments
 	updates := make(map[string]string)
 	for _, arg := range args {
@@ -355,9 +358,9 @@ func applySetFromQuery(vaultPath string, ids []string, args []string, warnings [
 	}
 
 	if !confirm {
-		return previewSetBulk(vaultPath, ids, updates, warnings, sch)
+		return previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
 	}
-	return applySetBulk(vaultPath, ids, updates, warnings, sch)
+	return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
 }
 
 // applyDeleteFromQuery applies delete operation from query results.
@@ -403,15 +406,15 @@ func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings 
 	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
 }
 
-func runFullQuery(db *index.Database, queryStr string, start time.Time) error {
-	return runFullQueryWithSchema(db, queryStr, start, nil)
+func runFullQuery(db *index.Database, queryStr string, start time.Time, dailyDir string) error {
+	return runFullQueryWithSchema(db, queryStr, start, nil, dailyDir)
 }
 
-func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time, sch *schema.Schema) error {
-	return runFullQueryWithOptions(db, queryStr, start, sch, false)
+func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, dailyDir string) error {
+	return runFullQueryWithOptions(db, queryStr, start, sch, false, dailyDir)
 }
 
-func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool) error {
+func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
 	if err != nil {
@@ -430,6 +433,9 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	}
 
 	executor := query.NewExecutor(db.DB())
+	if res, err := db.Resolver(dailyDir); err == nil {
+		executor.SetResolver(res)
+	}
 
 	elapsed := time.Since(start).Milliseconds()
 
@@ -606,17 +612,17 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 	return nil
 }
 
-func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema) error {
-	return runSavedQueryWithOptions(db, q, name, start, sch, false)
+func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, dailyDir string) error {
+	return runSavedQueryWithOptions(db, q, name, start, sch, false, dailyDir)
 }
 
-func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool) error {
+func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
 	if q.Query == "" {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
 	}
 
 	// Just run the query string through the normal query parser
-	return runFullQueryWithOptions(db, q.Query, start, sch, idsOnly)
+	return runFullQueryWithOptions(db, q.Query, start, sch, idsOnly, dailyDir)
 }
 
 func printTraitResults(results []index.TraitResult) {

@@ -1,8 +1,9 @@
 package parser
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // Reference represents a parsed [[wikilink]] reference.
@@ -14,43 +15,76 @@ type Reference struct {
 	End         int     // End position in line
 }
 
-// wikilinkRegex matches [[target]] or [[target|display]]
-// The target cannot contain [ or ] to avoid matching array syntax like [[[ref]]]
-var wikilinkRegex = regexp.MustCompile(`\[\[([^\]\[|]+)(?:\|([^\]]+))?\]\]`)
+type fenceState struct {
+	inFence  bool
+	fenceCh  byte
+	fenceLen int
+}
+
+func normalizeFenceLine(line string) string {
+	// Allow up to 3 leading spaces and handle blockquote prefixes (`>`),
+	// so we can detect fenced code blocks in common markdown contexts.
+	s := strings.TrimLeft(line, " \t")
+	for strings.HasPrefix(s, ">") {
+		s = strings.TrimPrefix(s, ">")
+		s = strings.TrimLeft(s, " \t")
+	}
+	return s
+}
+
+func parseFenceMarker(line string) (ch byte, n int, ok bool) {
+	if len(line) < 3 {
+		return 0, 0, false
+	}
+	ch = line[0]
+	if ch != '`' && ch != '~' {
+		return 0, 0, false
+	}
+	i := 0
+	for i < len(line) && line[i] == ch {
+		i++
+	}
+	if i < 3 {
+		return 0, 0, false
+	}
+	return ch, i, true
+}
 
 // ExtractRefs extracts references from content.
 func ExtractRefs(content string, startLine int) []Reference {
 	var refs []Reference
 
 	lines := strings.Split(content, "\n")
+	state := fenceState{}
 	for lineOffset, line := range lines {
 		lineNum := startLine + lineOffset
 
-		matches := wikilinkRegex.FindAllStringSubmatchIndex(line, -1)
+		// Skip wiki refs inside fenced code blocks.
+		fenceLine := normalizeFenceLine(line)
+		if ch, n, ok := parseFenceMarker(fenceLine); ok {
+			if !state.inFence {
+				state.inFence = true
+				state.fenceCh = ch
+				state.fenceLen = n
+			} else if state.fenceCh == ch && n >= state.fenceLen {
+				state.inFence = false
+				state.fenceCh = 0
+				state.fenceLen = 0
+			}
+			continue
+		}
+		if state.inFence {
+			continue
+		}
+
+		matches := wikilink.FindAllInLine(line, false)
 		for _, match := range matches {
-			if len(match) < 4 {
-				continue
-			}
-
-			// Skip if preceded by [ (array syntax like [[[ref]]])
-			if match[0] > 0 && line[match[0]-1] == '[' {
-				continue
-			}
-
-			target := strings.TrimSpace(line[match[2]:match[3]])
-
-			var displayText *string
-			if match[4] >= 0 && match[5] >= 0 {
-				dt := strings.TrimSpace(line[match[4]:match[5]])
-				displayText = &dt
-			}
-
 			refs = append(refs, Reference{
-				TargetRaw:   target,
-				DisplayText: displayText,
+				TargetRaw:   match.Target,
+				DisplayText: match.DisplayText,
 				Line:        lineNum,
-				Start:       match[0],
-				End:         match[1],
+				Start:       match.Start,
+				End:         match.End,
 			})
 		}
 	}
@@ -63,16 +97,9 @@ func ExtractRefs(content string, startLine int) []Reference {
 func ExtractEmbeddedRefs(value string) []string {
 	var refs []string
 
-	matches := wikilinkRegex.FindAllStringSubmatch(value, -1)
+	matches := wikilink.FindAllInLine(value, true)
 	for _, match := range matches {
-		if len(match) >= 2 {
-			target := strings.TrimSpace(match[1])
-			// For embedded refs, we DO want to match inside arrays
-			// Just make sure the target doesn't start with [
-			if !strings.HasPrefix(target, "[") {
-				refs = append(refs, target)
-			}
-		}
+		refs = append(refs, match.Target)
 	}
 
 	return refs

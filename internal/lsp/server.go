@@ -111,11 +111,19 @@ func (s *Server) initialize() error {
 
 	// Create watcher for reindexing (we don't start the file watcher,
 	// but use it for the ReindexFile method)
+	var parseOpts *parser.ParseOptions
+	if s.cfg != nil && s.cfg.HasDirectoriesConfig() {
+		parseOpts = &parser.ParseOptions{
+			ObjectsRoot: s.cfg.GetObjectsRoot(),
+			PagesRoot:   s.cfg.GetPagesRoot(),
+		}
+	}
 	w, err := watcher.New(watcher.Config{
 		VaultPath: s.vaultPath,
 		Database:  s.db,
 		Schema:    s.schema,
 		Debug:     s.debug,
+		ParseOptions: parseOpts,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create watcher: %w", err)
@@ -286,8 +294,17 @@ func (s *Server) pathToURI(path string) string {
 }
 
 func (s *Server) getResolver() *resolver.Resolver {
-	objectIDs, _ := s.db.AllObjectIDs()
-	return resolver.New(objectIDs)
+	dailyDir := "daily"
+	if s.cfg != nil && s.cfg.DailyDirectory != "" {
+		dailyDir = s.cfg.DailyDirectory
+	}
+	res, err := s.db.Resolver(dailyDir)
+	if err != nil {
+		// Fall back to a best-effort resolver from IDs only.
+		objectIDs, _ := s.db.AllObjectIDs()
+		return resolver.NewWithDailyDir(objectIDs, dailyDir)
+	}
+	return res
 }
 
 func (s *Server) parseDocument(uri string, content string) (*parser.ParsedDocument, error) {

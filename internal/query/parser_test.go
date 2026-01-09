@@ -112,6 +112,12 @@ func TestParseFieldPredicates(t *testing.T) {
 			wantValue: "in progress",
 			wantNeg:   true,
 		},
+		{
+			name:      "field ref value uses wikilink target",
+			input:     `object:meeting .attendees:[[people/freya|Freya]]`,
+			wantField: "attendees",
+			wantValue: "people/freya",
+		},
 	}
 
 	for _, tt := range tests {

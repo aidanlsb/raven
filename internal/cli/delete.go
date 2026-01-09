@@ -110,15 +110,8 @@ func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vault
 	defer db.Close()
 
 	for _, id := range ids {
-		filePath, err := vault.ResolveObjectToFile(vaultPath, id)
-		if err != nil {
-			// Try with directory root prefix if configured
-			if vaultCfg.HasDirectoriesConfig() {
-				resolvedPath := vaultCfg.ResolveReferenceToFilePath(id)
-				resolvedPath = strings.TrimSuffix(resolvedPath, ".md")
-				filePath, err = vault.ResolveObjectToFile(vaultPath, resolvedPath)
-			}
-		}
+		objectID := vaultCfg.FilePathToObjectID(id)
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{
 				ID:     id,
@@ -129,7 +122,7 @@ func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vault
 		}
 
 		// Check for backlinks
-		backlinks, _ := db.Backlinks(id)
+		backlinks, _ := db.Backlinks(objectID)
 		details := ""
 		if len(backlinks) > 0 {
 			details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
@@ -203,18 +196,10 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 	for _, id := range ids {
 		result := BulkResult{ID: id}
 
-		// Normalize the object ID
-		objectID := strings.TrimSuffix(id, ".md")
-
-		filePath, err := vault.ResolveObjectToFile(vaultPath, objectID)
-		if err != nil {
-			// Try with directory root prefix if configured
-			if vaultCfg.HasDirectoriesConfig() {
-				resolvedPath := vaultCfg.ResolveReferenceToFilePath(objectID)
-				resolvedPath = strings.TrimSuffix(resolvedPath, ".md")
-				filePath, err = vault.ResolveObjectToFile(vaultPath, resolvedPath)
-			}
-		}
+		// Canonicalize the object ID, but resolve the file using the original input
+		// (it may already include a rooted path).
+		objectID := vaultCfg.FilePathToObjectID(id)
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -235,8 +220,8 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 				continue
 			}
 
-			// Preserve directory structure in trash
-			relPath := objectID + ".md"
+			// Preserve the file's actual directory structure in trash.
+			relPath, _ := filepath.Rel(vaultPath, filePath)
 			destPath := filepath.Join(trashDir, relPath)
 
 			// Create parent directories in trash
@@ -320,25 +305,19 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 func deleteSingleObject(vaultPath, objectID string) error {
 	start := time.Now()
 
-	// Normalize the object ID (remove .md extension if present)
-	objectID = strings.TrimSuffix(objectID, ".md")
-
 	// Load vault config for deletion settings and directory roots
 	vaultCfg, err := config.LoadVaultConfig(vaultPath)
 	if err != nil {
-		return handleError(ErrInternal, err, "")
+		// Config is optional; fall back to defaults.
+		vaultCfg = &config.VaultConfig{}
 	}
 
-	// Resolve the file path (supports slugified matching)
-	filePath, err := vault.ResolveObjectToFile(vaultPath, objectID)
-	if err != nil {
-		// Try with directory root prefix if configured
-		if vaultCfg.HasDirectoriesConfig() {
-			resolvedPath := vaultCfg.ResolveReferenceToFilePath(objectID)
-			resolvedPath = strings.TrimSuffix(resolvedPath, ".md")
-			filePath, err = vault.ResolveObjectToFile(vaultPath, resolvedPath)
-		}
-	}
+	// Normalize/canonicalize the object ID (remove .md, strip roots if present).
+	input := strings.TrimSuffix(objectID, ".md")
+	objectID = vaultCfg.FilePathToObjectID(input)
+
+	// Resolve the file path (supports roots + slugified matching).
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, input, vaultCfg)
 	if err != nil {
 		return handleErrorMsg(ErrFileNotFound,
 			fmt.Sprintf("Object '%s' does not exist", objectID),
@@ -414,8 +393,8 @@ func deleteSingleObject(vaultPath, objectID string) error {
 			return handleError(ErrFileWriteError, err, "")
 		}
 
-		// Preserve directory structure in trash
-		relPath := objectID + ".md"
+		// Preserve the file's actual directory structure in trash.
+		relPath, _ := filepath.Rel(vaultPath, filePath)
 		destPath = filepath.Join(trashDir, relPath)
 
 		// Create parent directories in trash

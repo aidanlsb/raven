@@ -2,8 +2,8 @@ package schema
 
 import (
 	"fmt"
-	"regexp"
-	"time"
+
+	"github.com/aidanlsb/raven/internal/dates"
 )
 
 // ValidationError represents a field validation error.
@@ -180,27 +180,10 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 	return nil
 }
 
-var dateRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-
 func isValidDate(s string) bool {
-	if !dateRegex.MatchString(s) {
-		return false
-	}
-	_, err := time.Parse("2006-01-02", s)
-	return err == nil
+	return dates.IsValidDate(s)
 }
 
 func isValidDatetime(s string) bool {
-	// Try various datetime formats
-	formats := []string{
-		time.RFC3339,
-		"2006-01-02T15:04",
-		"2006-01-02T15:04:05",
-	}
-	for _, format := range formats {
-		if _, err := time.Parse(format, s); err == nil {
-			return true
-		}
-	}
-	return false
+	return dates.IsValidDatetime(s)
 }
