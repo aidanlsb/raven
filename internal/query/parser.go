@@ -206,7 +206,9 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		value = p.curr.Value
 		p.advance()
 	case TokenRef:
-		value = p.curr.Literal
+		// Store the resolved reference target (without [[...]]), matching how refs
+		// are stored in indexed JSON fields and how other predicates treat TokenRef.
+		value = p.curr.Value
 		p.advance()
 	case TokenString:
 		// Support quoted strings for values with spaces

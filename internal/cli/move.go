@@ -12,7 +12,9 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -100,7 +102,10 @@ func runMoveBulk(args []string, vaultPath string) error {
 	}
 
 	// Load vault config
-	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	if err != nil || vaultCfg == nil {
+		vaultCfg = &config.VaultConfig{}
+	}
 
 	// If not confirming, show preview
 	if !moveConfirm {
@@ -117,7 +122,7 @@ func previewMoveBulk(vaultPath string, ids []string, destDir string, warnings []
 	var skipped []BulkResult
 
 	for _, id := range ids {
-		sourceFile, err := vault.ResolveObjectToFile(vaultPath, id)
+		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{
 				ID:     id,
@@ -200,7 +205,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 	for _, id := range ids {
 		result := BulkResult{ID: id}
 
-		sourceFile, err := vault.ResolveObjectToFile(vaultPath, id)
+		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -226,11 +231,33 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		// Update references if enabled
 		var updatedRefs []string
 		if moveUpdateRefs {
-			sourceID := strings.TrimSuffix(id, ".md")
-			destID := strings.TrimSuffix(destPath, ".md")
+			relSource, _ := filepath.Rel(vaultPath, sourceFile)
+			sourceID := vaultCfg.FilePathToObjectID(relSource)
+			destID := vaultCfg.FilePathToObjectID(destPath)
+			aliases, _ := db.AllAliases()
+			res, _ := db.ResolverWithExtraIDs(vaultCfg.DailyDirectory, destID)
+			aliasSlugToID := make(map[string]string, len(aliases))
+			for a, oid := range aliases {
+				aliasSlugToID[pages.SlugifyPath(a)] = oid
+			}
+
 			backlinks, _ := db.Backlinks(sourceID)
 			for _, bl := range backlinks {
-				if err := updateReference(vaultPath, bl.SourceID, sourceID, destID); err == nil {
+				oldRaw := strings.TrimSpace(bl.TargetRaw)
+				oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[") // tolerate bracketed legacy data
+				base := oldRaw
+				if i := strings.Index(base, "#"); i >= 0 {
+					base = base[:i]
+				}
+				if base == "" {
+					continue
+				}
+				repl := chooseReplacementRefBase(base, sourceID, destID, aliasSlugToID, res)
+				line := 0
+				if bl.Line != nil {
+					line = *bl.Line
+				}
+				if err := updateReferenceAtLine(vaultPath, vaultCfg, bl.SourceID, line, base, repl); err == nil {
 					updatedRefs = append(updatedRefs, bl.SourceID)
 				}
 			}
@@ -309,23 +336,17 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	start := time.Now()
 
 	// Load vault config for directory roots
-	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	if err != nil || vaultCfg == nil {
+		vaultCfg = &config.VaultConfig{}
+	}
 
 	// Normalize paths (add .md if missing)
 	source = normalizePath(source)
 	destination = normalizePath(destination)
 
-	// Resolve source file - first try as object ID, then as literal path
-	sourceFile, err := vault.ResolveObjectToFile(vaultPath, strings.TrimSuffix(source, ".md"))
-	if err != nil {
-		// Try with directory root prefix if configured
-		if vaultCfg.HasDirectoriesConfig() {
-			// Try resolving via the config's path translation
-			resolvedPath := vaultCfg.ResolveReferenceToFilePath(strings.TrimSuffix(source, ".md"))
-			resolvedPath = strings.TrimSuffix(resolvedPath, ".md")
-			sourceFile, err = vault.ResolveObjectToFile(vaultPath, resolvedPath)
-		}
-	}
+	// Resolve source file (supports roots + slugified matching).
+	sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, source, vaultCfg)
 	if err != nil {
 		return handleErrorMsg(ErrFileNotFound,
 			fmt.Sprintf("Source '%s' does not exist", source),
@@ -425,8 +446,8 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		// In JSON mode, return warning for agent to handle
 		if isJSONOutput() {
 			result := MoveResult{
-				Source:       strings.TrimSuffix(source, ".md"),
-				Destination:  strings.TrimSuffix(destination, ".md"),
+				Source:       vaultCfg.FilePathToObjectID(source),
+				Destination:  vaultCfg.FilePathToObjectID(destPath),
 				NeedsConfirm: true,
 				Reason:       fmt.Sprintf("Type mismatch: file is '%s' but destination is default path for '%s'", fileType, mismatchType),
 			}
@@ -459,12 +480,33 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		db, err := index.Open(vaultPath)
 		if err == nil {
 			defer db.Close()
-			sourceID := strings.TrimSuffix(source, ".md")
+			sourceID := vaultCfg.FilePathToObjectID(source)
 			backlinks, _ := db.Backlinks(sourceID)
 
-			destID := strings.TrimSuffix(destination, ".md")
+			destID := vaultCfg.FilePathToObjectID(destPath)
+			aliases, _ := db.AllAliases()
+			res, _ := db.ResolverWithExtraIDs(vaultCfg.DailyDirectory, destID)
+			aliasSlugToID := make(map[string]string, len(aliases))
+			for a, oid := range aliases {
+				aliasSlugToID[pages.SlugifyPath(a)] = oid
+			}
+
 			for _, bl := range backlinks {
-				if err := updateReference(vaultPath, bl.SourceID, sourceID, destID); err == nil {
+				oldRaw := strings.TrimSpace(bl.TargetRaw)
+				oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[") // tolerate bracketed legacy data
+				base := oldRaw
+				if i := strings.Index(base, "#"); i >= 0 {
+					base = base[:i]
+				}
+				if base == "" {
+					continue
+				}
+				repl := chooseReplacementRefBase(base, sourceID, destID, aliasSlugToID, res)
+				line := 0
+				if bl.Line != nil {
+					line = *bl.Line
+				}
+				if err := updateReferenceAtLine(vaultPath, vaultCfg, bl.SourceID, line, base, repl); err == nil {
 					updatedRefs = append(updatedRefs, bl.SourceID)
 				}
 			}
@@ -487,7 +529,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	if err == nil {
 		defer db.Close()
 		// Remove old entry
-		sourceID := strings.TrimSuffix(source, ".md")
+		sourceID := vaultCfg.FilePathToObjectID(source)
 		db.RemoveDocument(sourceID)
 		// Index new location
 		newContent, _ := os.ReadFile(destFile)
@@ -501,8 +543,8 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 	if isJSONOutput() {
 		result := MoveResult{
-			Source:      strings.TrimSuffix(source, ".md"),
-			Destination: strings.TrimSuffix(destination, ".md"),
+			Source:      vaultCfg.FilePathToObjectID(source),
+			Destination: vaultCfg.FilePathToObjectID(destPath),
 			UpdatedRefs: updatedRefs,
 		}
 		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
@@ -572,8 +614,8 @@ func normalizePath(p string) string {
 }
 
 // updateReference updates a reference in a source file.
-func updateReference(vaultPath, sourceID, oldRef, newRef string) error {
-	filePath, err := vault.ResolveObjectToFile(vaultPath, sourceID)
+func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldRef, newRef string) error {
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, sourceID, vaultCfg)
 	if err != nil {
 		return err
 	}
@@ -593,11 +635,101 @@ func updateReference(vaultPath, sourceID, oldRef, newRef string) error {
 	newPatternWithText := "[[" + newRef + "|"
 	newContent = strings.ReplaceAll(newContent, oldPatternWithText, newPatternWithText)
 
+	// Also handle section/fragment links: [[old#section]] -> [[new#section]]
+	oldPatternWithFragment := "[[" + oldRef + "#"
+	newPatternWithFragment := "[[" + newRef + "#"
+	newContent = strings.ReplaceAll(newContent, oldPatternWithFragment, newPatternWithFragment)
+
 	if newContent == string(content) {
 		return nil // No changes needed
 	}
 
 	return os.WriteFile(filePath, []byte(newContent), 0644)
+}
+
+func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldRef, newRef string) error {
+	if line <= 0 {
+		// Fallback to whole-file replacement.
+		return updateReference(vaultPath, vaultCfg, sourceID, oldRef, newRef)
+	}
+
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, sourceID, vaultCfg)
+	if err != nil {
+		return err
+	}
+
+	contentBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(contentBytes), "\n")
+	idx := line - 1 // 1-indexed in DB
+	if idx < 0 || idx >= len(lines) {
+		// Out of range; avoid rewriting unknown locations.
+		return nil
+	}
+
+	orig := lines[idx]
+	updated := orig
+
+	// Replace the reference
+	oldPattern := "[[" + oldRef + "]]"
+	newPattern := "[[" + newRef + "]]"
+	updated = strings.ReplaceAll(updated, oldPattern, newPattern)
+
+	// Also handle references with display text: [[old|text]] -> [[new|text]]
+	oldPatternWithText := "[[" + oldRef + "|"
+	newPatternWithText := "[[" + newRef + "|"
+	updated = strings.ReplaceAll(updated, oldPatternWithText, newPatternWithText)
+
+	// Also handle section/fragment links: [[old#section]] -> [[new#section]]
+	oldPatternWithFragment := "[[" + oldRef + "#"
+	newPatternWithFragment := "[[" + newRef + "#"
+	updated = strings.ReplaceAll(updated, oldPatternWithFragment, newPatternWithFragment)
+
+	if updated == orig {
+		return nil
+	}
+	lines[idx] = updated
+
+	return os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0644)
+}
+
+func shortNameFromID(id string) string {
+	id = strings.TrimSuffix(id, ".md")
+	if i := strings.LastIndex(id, "/"); i >= 0 && i+1 < len(id) {
+		return id[i+1:]
+	}
+	return id
+}
+
+func chooseReplacementRefBase(oldBase, sourceID, destID string, aliasSlugToID map[string]string, res *resolver.Resolver) string {
+	// If the original reference was explicit (contains a path), keep it explicit.
+	if strings.Contains(oldBase, "/") {
+		return destID
+	}
+
+	// If the original reference looks like an alias for this object, keep it stable.
+	// Aliases are designed to survive renames/moves without needing ref rewrites.
+	if aliasSlugToID != nil {
+		if aliasSlugToID[pages.SlugifyPath(oldBase)] == sourceID {
+			return oldBase
+		}
+	}
+
+	// Otherwise, this is a short ref. Prefer keeping it short *if* the new short name
+	// resolves uniquely to the destination ID.
+	candidate := shortNameFromID(destID)
+	if candidate != "" && res != nil {
+		r := res.Resolve(candidate)
+		if !r.Ambiguous && r.TargetID == destID {
+			return candidate
+		}
+	}
+
+	// Fall back to explicit ref (always correct).
+	return destID
 }
 
 func init() {

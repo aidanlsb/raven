@@ -43,6 +43,7 @@ Examples:
   rvn add "Call Odin about the Bifrost"
   rvn add "@due(tomorrow) Send the estimate"
   rvn add "Project idea" --to inbox.md
+  rvn add "Meeting notes" --to cursor       # Resolves to companies/cursor.md
   rvn add "Call Odin" --timestamp           # Includes time prefix
   rvn add "Met with [[people/freya]]" --json
 
@@ -126,7 +127,7 @@ func previewAddBulk(vaultPath string, ids []string, line string, warnings []Warn
 	var skipped []BulkResult
 
 	for _, id := range ids {
-		filePath, err := vault.ResolveObjectToFile(vaultPath, id)
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{
 				ID:     id,
@@ -190,7 +191,7 @@ func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warnin
 	for _, id := range ids {
 		result := BulkResult{ID: id}
 
-		filePath, err := vault.ResolveObjectToFile(vaultPath, id)
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -277,15 +278,16 @@ func addSingleCapture(vaultPath string, args []string) error {
 	var destPath string
 	var isDailyNote bool
 	if addToFlag != "" {
-		// Override with --to flag
-		destPath = filepath.Join(vaultPath, addToFlag)
-
-		// Check if file exists - add only works on existing files
-		if _, err := os.Stat(destPath); os.IsNotExist(err) {
-			return handleErrorMsg(ErrFileNotFound,
-				fmt.Sprintf("File '%s' does not exist", addToFlag),
-				"Use 'rvn new <type> <title>' to create new files, or omit --to to append to daily note")
+		// Try to resolve --to flag as a reference first
+		resolvedPath, err := resolveToPath(vaultPath, addToFlag, vaultCfg)
+		if err != nil {
+			// In JSON mode, error is already output; return nil to suppress Cobra's error handling
+			if jsonOutput {
+				return nil
+			}
+			return err
 		}
+		destPath = resolvedPath
 	} else if captureCfg.Destination == "daily" {
 		// Use today's daily note (auto-created if needed)
 		today := vault.FormatDateISO(time.Now())
@@ -641,8 +643,89 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+// resolveToPath resolves the --to flag value to a file path.
+// It first tries to resolve it as a reference (e.g., "cursor" -> "companies/cursor.md"),
+// then falls back to treating it as a literal path.
+func resolveToPath(vaultPath, toValue string, vaultCfg *config.VaultConfig) (string, error) {
+	// First, try treating it as a literal path
+	literalPath := filepath.Join(vaultPath, toValue)
+	if _, err := os.Stat(literalPath); err == nil {
+		return literalPath, nil
+	}
+
+	// Try adding .md extension if not present
+	if !strings.HasSuffix(toValue, ".md") {
+		literalPathMd := filepath.Join(vaultPath, toValue+".md")
+		if _, err := os.Stat(literalPathMd); err == nil {
+			return literalPathMd, nil
+		}
+	}
+
+	// Try to resolve as a reference using the database
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		// If we can't open the database, fall back to literal path error
+		return "", resolveToPathError(ErrFileNotFound,
+			fmt.Sprintf("File '%s' does not exist", toValue),
+			"Use 'rvn new <type> <title>' to create new files, or omit --to to append to daily note")
+	}
+	defer db.Close()
+
+	// Get the resolver from the database
+	dailyDir := "daily"
+	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
+		dailyDir = vaultCfg.DailyDirectory
+	}
+	res, err := db.Resolver(dailyDir)
+	if err != nil {
+		return "", resolveToPathError(ErrFileNotFound,
+			fmt.Sprintf("File '%s' does not exist", toValue),
+			"Use 'rvn new <type> <title>' to create new files, or omit --to to append to daily note")
+	}
+
+	// Try to resolve the reference
+	result := res.Resolve(toValue)
+	if result.Ambiguous {
+		return "", resolveToPathError(ErrRefAmbiguous,
+			fmt.Sprintf("Reference '%s' is ambiguous, matches: %v", toValue, result.Matches),
+			"Use a more specific path like 'companies/cursor' or 'people/cursor'")
+	}
+
+	if result.TargetID == "" {
+		return "", resolveToPathError(ErrFileNotFound,
+			fmt.Sprintf("File '%s' does not exist", toValue),
+			"Use 'rvn new <type> <title>' to create new files, or omit --to to append to daily note")
+	}
+
+	// Convert the resolved object ID to a file path
+	resolvedPath, err := vault.ResolveObjectToFileWithConfig(vaultPath, result.TargetID, vaultCfg)
+	if err != nil {
+		return "", resolveToPathError(ErrFileNotFound,
+			fmt.Sprintf("Could not find file for '%s'", result.TargetID),
+			"The reference resolved but the file could not be found")
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+		return "", resolveToPathError(ErrFileNotFound,
+			fmt.Sprintf("File '%s' does not exist", resolvedPath),
+			"Use 'rvn new <type> <title>' to create new files, or omit --to to append to daily note")
+	}
+
+	return resolvedPath, nil
+}
+
+// resolveToPathError outputs a JSON error if in JSON mode and returns an error.
+// The caller should check jsonOutput and return nil to suppress Cobra's error handling.
+func resolveToPathError(code, message, suggestion string) error {
+	if jsonOutput {
+		outputError(code, message, nil, suggestion)
+	}
+	return fmt.Errorf("%s", message)
+}
+
 func init() {
-	addCmd.Flags().StringVar(&addToFlag, "to", "", "Override destination file (relative to vault)")
+	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
 	addCmd.Flags().BoolVar(&addTimestampFlag, "timestamp", false, "Prefix with current time (HH:MM)")
 	addCmd.Flags().BoolVar(&addStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")

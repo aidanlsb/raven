@@ -3,6 +3,8 @@ package query
 import (
 	"strings"
 	"unicode"
+
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // TokenType represents the type of a lexer token.
@@ -124,26 +126,14 @@ func (l *Lexer) scanIdent() Token {
 
 func (l *Lexer) scanReference() Token {
 	start := l.pos
-	// Skip [[
-	l.pos += 2
-
-	// Find closing ]]
-	depth := 1
-	for l.pos < len(l.input) && depth > 0 {
-		if l.pos+1 < len(l.input) && l.input[l.pos] == ']' && l.input[l.pos+1] == ']' {
-			depth--
-			if depth == 0 {
-				l.pos += 2
-				break
-			}
-		}
+	end, target, literal, ok := wikilink.ScanAt(l.input, start)
+	if !ok {
+		// Consume one byte to avoid infinite loops on malformed input.
 		l.pos++
+		return Token{Type: TokenError, Value: l.input[start:l.pos], Pos: start}
 	}
-
-	literal := l.input[start:l.pos]
-	// Extract the reference path (without [[ and ]])
-	value := strings.TrimPrefix(strings.TrimSuffix(literal, "]]"), "[[")
-	return Token{Type: TokenRef, Value: value, Literal: literal, Pos: start}
+	l.pos = end
+	return Token{Type: TokenRef, Value: target, Literal: literal, Pos: start}
 }
 
 func (l *Lexer) scanString() Token {

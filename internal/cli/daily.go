@@ -47,7 +47,7 @@ Examples:
 		targetPath := filepath.Join(vaultCfg.DailyDirectory, dateStr)
 		dailyPath := filepath.Join(vaultPath, vaultCfg.DailyDirectory, dateStr+".md")
 
-		// Check if daily note already exists
+		// Check if daily note already exists, create if needed
 		created := false
 		if !pages.Exists(vaultPath, targetPath) {
 			friendlyDate := vault.FormatDateFriendly(targetDate)
@@ -68,18 +68,9 @@ Examples:
 			created = true
 		}
 
-		// Open in editor
-		cfg := getConfig()
-		if vault.OpenInEditor(cfg, dailyPath) {
-			if !created {
-				relPath, _ := filepath.Rel(vaultPath, dailyPath)
-				fmt.Printf("Opening %s\n", relPath)
-			}
-		} else {
-			relPath, _ := filepath.Rel(vaultPath, dailyPath)
-			fmt.Printf("Daily note: %s\n", relPath)
-			fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
-		}
+		// Open in editor using shared logic
+		relPath, _ := filepath.Rel(vaultPath, dailyPath)
+		openFileInEditor(dailyPath, relPath, created)
 
 		return nil
 	},

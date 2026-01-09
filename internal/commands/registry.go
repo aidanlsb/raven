@@ -631,6 +631,28 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 			"Identify pages that could benefit from schema",
 		},
 	},
+	"open": {
+		Name:        "open",
+		Description: "Open a file in your editor",
+		LongDesc: `Opens a file in your configured editor.
+
+The reference can be a short reference (cursor), a partial path (companies/cursor),
+or a full path (objects/companies/cursor.md).
+
+The editor is determined by the 'editor' setting in config.toml or $EDITOR.`,
+		Args: []ArgMeta{
+			{Name: "reference", Description: "Reference to the file (short name, partial path, or full path)", Required: true},
+		},
+		Examples: []string{
+			"rvn open cursor --json",
+			"rvn open companies/cursor --json",
+			"rvn open people/freya --json",
+		},
+		UseCases: []string{
+			"Quickly open a file by its short name",
+			"Open files using references without knowing full paths",
+		},
+	},
 	"workflow_list": {
 		Name:        "workflow list",
 		Description: "List available workflows",

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -90,16 +91,15 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		}
 	}
 
-	// File ID is path without extension
-	fileID := strings.TrimSuffix(relativePath, ".md")
-	fileID = strings.TrimSuffix(fileID, filepath.Ext(relativePath))
-	// Normalize path separators
-	fileID = filepath.ToSlash(fileID)
-
-	// Strip directory roots if configured
+	// File ID is derived from the vault-relative file path.
+	// This is the canonical path->ID mapping, including directory roots.
+	objectsRoot := ""
+	pagesRoot := ""
 	if opts != nil {
-		fileID = stripDirectoryRoot(fileID, opts)
+		objectsRoot = opts.ObjectsRoot
+		pagesRoot = opts.PagesRoot
 	}
+	fileID := paths.FilePathToObjectID(relativePath, objectsRoot, pagesRoot)
 
 	var objects []*ParsedObject
 	var traits []*ParsedTrait
@@ -142,6 +142,26 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		Fields:     fileFields,
 		LineStart:  1,
 	})
+
+	// Extract references from frontmatter, if present.
+	//
+	// Historically, Raven only extracted refs from the markdown body, which meant
+	// wikilinks inside YAML frontmatter were not indexed and therefore missing
+	// from `rvn backlinks`. Frontmatter content starts on line 2 (the line after
+	// the opening '---') and ends at frontmatter.EndLine-1.
+	if frontmatter != nil && frontmatter.Raw != "" {
+		fmRefs := ExtractRefs(frontmatter.Raw, 2)
+		for _, refItem := range fmRefs {
+			refs = append(refs, &ParsedRef{
+				SourceID:    fileID,
+				TargetRaw:   refItem.TargetRaw,
+				DisplayText: refItem.DisplayText,
+				Line:        refItem.Line,
+				Start:       refItem.Start,
+				End:         refItem.End,
+			})
+		}
+	}
 
 	// Extract all headings from the body
 	headings := ExtractHeadings(bodyContent, contentStartLine)
@@ -347,26 +367,4 @@ func computeLineEnds(objects []*ParsedObject) {
 	}
 }
 
-// stripDirectoryRoot strips the appropriate directory root from a file ID.
-// For example, with ObjectsRoot="objects/", "objects/people/freya" becomes "people/freya".
-func stripDirectoryRoot(fileID string, opts *ParseOptions) string {
-	if opts == nil {
-		return fileID
-	}
-
-	// Normalize roots to have no leading slash and no trailing slash for comparison
-	objectsRoot := strings.TrimSuffix(strings.TrimPrefix(opts.ObjectsRoot, "/"), "/")
-	pagesRoot := strings.TrimSuffix(strings.TrimPrefix(opts.PagesRoot, "/"), "/")
-
-	// Try stripping objects root first (more specific paths)
-	if objectsRoot != "" && strings.HasPrefix(fileID, objectsRoot+"/") {
-		return strings.TrimPrefix(fileID, objectsRoot+"/")
-	}
-
-	// Try stripping pages root
-	if pagesRoot != "" && strings.HasPrefix(fileID, pagesRoot+"/") {
-		return strings.TrimPrefix(fileID, pagesRoot+"/")
-	}
-
-	return fileID
-}
+// (directory root stripping is handled by internal/paths)

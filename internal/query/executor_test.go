@@ -72,7 +72,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('people/freya', 'people/freya.md', 'person', '{"name":"Freya","email":"freya@asgard.realm"}', 1),
 			('people/loki', 'people/loki.md', 'person', '{"name":"Loki"}', 1),
 			('daily/2025-02-01', 'daily/2025-02-01.md', 'date', '{}', 1),
-			('daily/2025-02-01#standup', 'daily/2025-02-01.md', 'meeting', '{"time":"09:00"}', 10),
+			('daily/2025-02-01#standup', 'daily/2025-02-01.md', 'meeting', '{"time":"09:00","attendees":["people/freya","people/loki"]}', 10),
 			('daily/2025-02-01#planning', 'daily/2025-02-01.md', 'meeting', '{"time":"14:00"}', 30);
 		
 		UPDATE objects SET parent_id = 'daily/2025-02-01' WHERE id = 'daily/2025-02-01#standup';
@@ -139,6 +139,11 @@ func TestExecuteObjectQuery(t *testing.T) {
 			name:      "type with field filter",
 			query:     "object:project .status:active",
 			wantCount: 1,
+		},
+		{
+			name:      "array field membership (ref token)",
+			query:     "object:meeting .attendees:[[people/freya]]",
+			wantCount: 1, // standup has attendees including freya
 		},
 		{
 			name:      "negated field filter",

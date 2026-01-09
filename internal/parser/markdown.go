@@ -2,11 +2,12 @@ package parser
 
 import (
 	"strings"
-	"unicode"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/aidanlsb/raven/internal/slugs"
 )
 
 // Heading represents a parsed heading.
@@ -68,26 +69,7 @@ func ExtractHeadings(content string, startLine int) []Heading {
 
 // Slugify converts a heading text to a URL-friendly slug.
 func Slugify(text string) string {
-	var result strings.Builder
-	prevDash := false
-
-	for _, r := range strings.ToLower(text) {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			result.WriteRune(r)
-			prevDash = false
-		case r == ' ' || r == '-' || r == '_' || r == ':':
-			// Convert separators (including colon) to dashes
-			if !prevDash && result.Len() > 0 {
-				result.WriteRune('-')
-				prevDash = true
-			}
-		}
-	}
-
-	s := result.String()
-	// Trim trailing dash
-	return strings.TrimSuffix(s, "-")
+	return slugs.HeadingSlug(text)
 }
 
 // computeLineStarts computes the byte offset of each line start.

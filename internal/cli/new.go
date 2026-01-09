@@ -159,8 +159,11 @@ Examples:
 			return fmt.Errorf("invalid title: cannot generate safe filename")
 		}
 
-		// Load vault config for directory roots
-		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		// Load vault config for directory roots (optional)
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil || vaultCfg == nil {
+			vaultCfg = &config.VaultConfig{}
+		}
 		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
 
@@ -199,7 +202,7 @@ Examples:
 				"file":  result.RelativePath,
 				"type":  typeName,
 				"title": title,
-				"id":    strings.TrimSuffix(result.RelativePath, ".md"),
+				"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
 			}, nil)
 			return nil
 		}

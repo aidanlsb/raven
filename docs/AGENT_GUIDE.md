@@ -39,6 +39,7 @@ When users want to create notes:
    
 2. Use raven_add for quick capture:
    raven_add(text="@due(tomorrow) Follow up with Odin")
+   raven_add(text="Meeting notes", to="cursor")  # Resolves to companies/cursor.md
    
 3. If a required field is missing, ask the user for the value
 ```
@@ -233,17 +234,24 @@ When users want to remove files:
 
 **Never delete without explicit user approval, even if they asked to delete something.**
 
-### 8. Daily Notes & Dates
+### 8. Opening Files
 
-When users ask about daily notes or date-based queries:
+When users want to open or navigate to files:
 
 ```
-1. Use raven_daily to open/create daily notes:
+1. Use raven_open to open files by reference:
+   raven_open(reference="cursor")           # Opens companies/cursor.md
+   raven_open(reference="companies/cursor") # Partial path also works
+   raven_open(reference="people/freya")     # Opens people/freya.md
+   
+   The reference can be a short name, partial path, or full path.
+
+2. Use raven_daily to open/create daily notes:
    raven_daily()                    # Today's note
    raven_daily(date="yesterday")    # Yesterday
    raven_daily(date="2026-01-15")   # Specific date
 
-2. Use raven_date for a date hub (everything related to a date):
+3. Use raven_date for a date hub (everything related to a date):
    raven_date()                     # Today
    raven_date(date="2026-01-15")    # Specific date
    
@@ -516,6 +524,12 @@ daily_template: |
 ```
 → raven_date(date="yesterday")
 → Summarize: daily note content, items that were due, any meetings
+```
+
+**User**: "Open the cursor company page"
+```
+→ raven_open(reference="cursor")
+→ "Opening companies/cursor.md"
 ```
 
 **User**: "Delete the old bifrost project"

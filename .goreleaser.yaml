@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: rvn
+    main: ./cmd/rvn
+    binary: rvn
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: 'New Features'
+      regexp: '^.*?feat(\(.+\))?\!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\(.+\))?\!?:.+$'
+      order: 1
+    - title: 'Other Changes'
+      order: 999
+
+release:
+  github:
+    owner: aidanlsb
+    name: raven
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Raven {{ .Version }}
+    
+    Install with:
+    ```bash
+    go install github.com/aidanlsb/raven/cmd/rvn@{{ .Tag }}
+    ```
+    
+    Or download the binary for your platform below.
+  footer: |
+    **Full Changelog**: https://github.com/aidanlsb/raven/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+brews:
+  - name: raven
+    repository:
+      owner: aidanlsb
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: auto
+    directory: Formula
+    homepage: https://github.com/aidanlsb/raven
+    description: Plain markdown notes with custom schemas and annotations for querying
+    license: MIT
+    install: |
+      bin.install "rvn"
+    test: |
+      system "#{bin}/rvn", "--help"

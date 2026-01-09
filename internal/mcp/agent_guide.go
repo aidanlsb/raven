@@ -41,6 +41,7 @@ When users want to create notes:
    
 2. Use raven_add for quick capture:
    raven_add(text="@due(tomorrow) Follow up with Odin")
+   raven_add(text="Meeting notes", to="cursor")  # Resolves to companies/cursor.md
    
 3. If a required field is missing, ask the user for the value
 
@@ -157,14 +158,19 @@ After bulk operations or schema changes:
 
 Never delete without explicit user approval.
 
-### 9. Daily Notes & Dates
+### 9. Opening Files & Daily Notes
 
-1. Use raven_daily for daily notes:
+1. Use raven_open to open files by reference:
+   raven_open(reference="cursor")           # Opens companies/cursor.md
+   raven_open(reference="companies/cursor") # Partial path also works
+   raven_open(reference="people/freya")     # Opens people/freya.md
+
+2. Use raven_daily for daily notes:
    raven_daily()                    # Today
    raven_daily(date="yesterday")
    raven_daily(date="2026-01-15")
 
-2. Use raven_date for date hub (everything for a date):
+3. Use raven_date for date hub (everything for a date):
    raven_date()
    raven_date(date="2026-01-15")
 

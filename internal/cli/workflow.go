@@ -301,6 +301,13 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 		}
 		defer db.Close()
 
+		// Load vault config for canonical reference resolution settings.
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		dailyDir := "daily"
+		if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
+			dailyDir = vaultCfg.DailyDirectory
+		}
+
 		// Parse the query
 		q, err := query.Parse(queryStr)
 		if err != nil {
@@ -308,6 +315,9 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 		}
 
 		executor := query.NewExecutor(db.DB())
+		if res, err := db.Resolver(dailyDir); err == nil {
+			executor.SetResolver(res)
+		}
 
 		if q.Type == query.QueryTypeObject {
 			results, err := executor.ExecuteObjectQuery(q)

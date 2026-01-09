@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // Frontmatter represents parsed frontmatter data.
@@ -58,8 +59,10 @@ func ParseFrontmatter(content string) (*Frontmatter, error) {
 		return nil, fmt.Errorf("failed to parse frontmatter as YAML: %w", err)
 	}
 
+	// YAML can decode an empty document (or comments/whitespace only) into a nil map.
+	// We still consider this "frontmatter present" because it affects body line offsets.
 	if yamlData == nil {
-		return nil, nil
+		yamlData = map[string]interface{}{}
 	}
 
 	fm := &Frontmatter{
@@ -87,8 +90,8 @@ func yamlToFieldValue(value interface{}) schema.FieldValue {
 	switch v := value.(type) {
 	case string:
 		// Check if it's a reference
-		if strings.HasPrefix(v, "[[") && strings.HasSuffix(v, "]]") {
-			return schema.Ref(v[2 : len(v)-2])
+		if target, _, ok := wikilink.ParseExact(v); ok {
+			return schema.Ref(target)
 		}
 		return schema.String(v)
 	case int:

@@ -3,14 +3,11 @@ package resolver
 
 import (
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/pages"
 )
-
-// datePattern matches YYYY-MM-DD date format
-var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 // Resolver resolves short references to full object IDs.
 type Resolver struct {
@@ -125,7 +122,7 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 	}
 
 	// Check if this is a date reference (YYYY-MM-DD)
-	if datePattern.MatchString(ref) {
+	if dates.IsValidDate(ref) {
 		// Convert date reference to daily note path
 		dateID := filepath.Join(r.dailyDirectory, ref)
 		// Date references are special - they always resolve to the daily note path
@@ -173,6 +170,21 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 				matchSources[originalID] = "object_id"
 			}
 		}
+
+		// Try suffix matching: "companies/cursor" -> "objects/companies/cursor"
+		// This handles cases where a directories.objects prefix is used
+		if len(matches) == 0 {
+			suffix := "/" + ref
+			sluggedSuffix := "/" + sluggedRefPath
+			for id := range r.objectIDs {
+				if strings.HasSuffix(id, suffix) || strings.HasSuffix(id, sluggedSuffix) {
+					if _, exists := matchSources[id]; !exists {
+						matches = append(matches, id)
+						matchSources[id] = "suffix_match"
+					}
+				}
+			}
+		}
 	} else {
 		// Short reference - search for matches
 		shortMatches := r.shortMap[ref]
@@ -200,6 +212,13 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 		}
 	}
 
+	// If we have multiple matches, try to disambiguate by preferring parent objects
+	// over their sections. E.g., if we match both "companies/cursor" and
+	// "companies/cursor#cursor", prefer the parent "companies/cursor".
+	if len(matches) > 1 {
+		matches = preferParentOverSections(matches)
+	}
+
 	// Return result based on number of unique matches
 	switch len(matches) {
 	case 0:
@@ -215,6 +234,42 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 			Error:     "ambiguous reference, multiple matches found",
 		}
 	}
+}
+
+// preferParentOverSections filters out section matches when their parent file
+// also matches. For example, if both "companies/cursor" and "companies/cursor#cursor"
+// match, only "companies/cursor" is returned.
+func preferParentOverSections(matches []string) []string {
+	// Build a set of parent IDs (non-section matches)
+	parents := make(map[string]bool)
+	for _, id := range matches {
+		if !strings.Contains(id, "#") {
+			parents[id] = true
+		}
+	}
+
+	// If we have no parents, return all matches as-is
+	if len(parents) == 0 {
+		return matches
+	}
+
+	// Filter: keep non-sections, and only keep sections if their parent isn't matched
+	var filtered []string
+	for _, id := range matches {
+		if !strings.Contains(id, "#") {
+			// Keep parent objects
+			filtered = append(filtered, id)
+		} else {
+			// Only keep section if its parent file isn't also a match
+			parts := strings.SplitN(id, "#", 2)
+			parentID := parts[0]
+			if !parents[parentID] {
+				filtered = append(filtered, id)
+			}
+		}
+	}
+
+	return filtered
 }
 
 // Exists checks if an object ID exists.

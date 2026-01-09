@@ -119,22 +119,28 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 	// Load schema for validation
 	sch, _ := schema.Load(vaultPath)
 
+	// Load vault config (optional, used for roots + auto-reindex)
+	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	if err != nil || vaultCfg == nil {
+		vaultCfg = &config.VaultConfig{}
+	}
+
 	// If not confirming, show preview
 	if !setConfirm {
-		return previewSetBulk(vaultPath, ids, updates, warnings, sch)
+		return previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
 	}
 
 	// Apply the changes
-	return applySetBulk(vaultPath, ids, updates, warnings, sch)
+	return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
 }
 
 // previewSetBulk shows a preview of bulk set operations.
-func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema) error {
+func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
 	var previewItems []BulkPreviewItem
 	var skipped []BulkResult
 
 	for _, id := range ids {
-		filePath, err := vault.ResolveObjectToFile(vaultPath, id)
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{
 				ID:     id,
@@ -210,19 +216,16 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 }
 
 // applySetBulk applies bulk set operations.
-func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema) error {
+func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
 	var results []BulkResult
 	modified := 0
 	skipped := 0
 	errors := 0
 
-	// Load vault config for auto-reindex
-	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
-
 	for _, id := range ids {
 		result := BulkResult{ID: id}
 
-		filePath, err := vault.ResolveObjectToFile(vaultPath, id)
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -315,12 +318,6 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 
 // setSingleObject sets fields on a single object (non-bulk mode).
 func setSingleObject(vaultPath, objectID string, updates map[string]string) error {
-	// Resolve object ID to file path
-	filePath, err := vault.ResolveObjectToFile(vaultPath, objectID)
-	if err != nil {
-		return handleError(ErrFileDoesNotExist, err, "")
-	}
-
 	// Load schema for validation
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
@@ -328,7 +325,16 @@ func setSingleObject(vaultPath, objectID string, updates map[string]string) erro
 	}
 
 	// Load vault config
-	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	if err != nil || vaultCfg == nil {
+		vaultCfg = &config.VaultConfig{}
+	}
+
+	// Resolve object ID to file path
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, objectID, vaultCfg)
+	if err != nil {
+		return handleError(ErrFileDoesNotExist, err, "")
+	}
 
 	// Read the file
 	content, err := os.ReadFile(filePath)

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 )
@@ -139,16 +141,37 @@ func CollectDocuments(vaultPath string) ([]*parser.ParsedDocument, []WalkResult,
 // ResolveObjectToFile resolves an object ID to an absolute file path.
 // Supports exact matches and slugified matching (e.g., "people/Sif" -> "people/sif.md").
 func ResolveObjectToFile(vaultPath, objectID string) (string, error) {
-	// Normalize the object ID
-	objectID = strings.TrimSuffix(objectID, ".md")
+	return ResolveObjectToFileWithRoots(vaultPath, objectID, "", "")
+}
 
-	// Try direct path first
-	filePath := filepath.Join(vaultPath, objectID+".md")
-	if _, err := os.Stat(filePath); err == nil {
-		return filePath, nil
+// ResolveObjectToFileWithConfig resolves a reference/object ID to an absolute file path,
+// using vault directory roots when configured.
+func ResolveObjectToFileWithConfig(vaultPath, ref string, vaultCfg *config.VaultConfig) (string, error) {
+	objectsRoot := ""
+	pagesRoot := ""
+	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
+		if dirs := vaultCfg.GetDirectoriesConfig(); dirs != nil {
+			objectsRoot = dirs.Objects
+			pagesRoot = dirs.Pages
+		}
+	}
+	return ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot)
+}
+
+// ResolveObjectToFileWithRoots resolves a reference/object ID to an absolute file path,
+// using the provided objects/pages roots for both direct candidate paths and fuzzy matching.
+func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string) (string, error) {
+	// Try direct candidates first (literal + rooted).
+	for _, rel := range paths.CandidateFilePaths(ref, objectsRoot, pagesRoot) {
+		filePath := filepath.Join(vaultPath, rel)
+		if _, err := os.Stat(filePath); err == nil {
+			return filePath, nil
+		}
 	}
 
-	// Try with different casing/slugification by walking the vault
+	wantID := paths.FilePathToObjectID(ref, objectsRoot, pagesRoot)
+
+	// Fall back to walking the vault and using exact/slugified matching.
 	var foundPath string
 	err := filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -165,32 +188,28 @@ func ResolveObjectToFile(vaultPath, objectID string) (string, error) {
 			return nil
 		}
 
-		// Get relative path and compare
 		relPath, _ := filepath.Rel(vaultPath, path)
-		relID := strings.TrimSuffix(relPath, ".md")
+		relID := paths.FilePathToObjectID(relPath, objectsRoot, pagesRoot)
 
 		// Exact match
-		if relID == objectID {
+		if relID == wantID {
 			foundPath = path
 			return filepath.SkipAll
 		}
 
 		// Slugified match
-		if pages.SlugifyPath(relID) == pages.SlugifyPath(objectID) {
+		if pages.SlugifyPath(relID) == pages.SlugifyPath(wantID) {
 			foundPath = path
 			return filepath.SkipAll
 		}
 
 		return nil
 	})
-
 	if err != nil && err != filepath.SkipAll {
 		return "", err
 	}
-
 	if foundPath != "" {
 		return foundPath, nil
 	}
-
-	return "", fmt.Errorf("object not found: %s", objectID)
+	return "", fmt.Errorf("object not found: %s", strings.TrimSuffix(ref, ".md"))
 }

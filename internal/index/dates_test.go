@@ -93,6 +93,23 @@ func TestParseDateFilter(t *testing.T) {
 	}
 }
 
+func TestParseDateFilterInvalidDates(t *testing.T) {
+	tests := []string{
+		"2025-13-45",
+		"2025-02-30",
+		"not-a-date",
+	}
+
+	for _, filter := range tests {
+		t.Run(filter, func(t *testing.T) {
+			_, _, err := ParseDateFilter(filter, "field")
+			if err == nil {
+				t.Fatalf("expected error for %q, got nil", filter)
+			}
+		})
+	}
+}
+
 func TestParseDateFilterCaseInsensitive(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 
