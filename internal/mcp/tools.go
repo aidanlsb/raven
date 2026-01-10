@@ -4,6 +4,7 @@ package mcp
 import (
 	"fmt"
 	"strings"
+	"sort"
 
 	"github.com/aidanlsb/raven/internal/commands"
 )
@@ -51,7 +52,7 @@ func GenerateToolSchemas() []Tool {
 				prop["type"] = "boolean"
 			case commands.FlagTypeInt:
 				prop["type"] = "integer"
-			case commands.FlagTypeKeyValue:
+			case commands.FlagTypeKeyValue, commands.FlagTypePosKeyValue:
 				prop["type"] = "object"
 				prop["description"] = flag.Description + " (key-value object)"
 			default:
@@ -197,8 +198,22 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 				}
 			}
 		case commands.FlagTypeKeyValue:
-			// Key-value maps become key=value positional args AFTER the separator
-			// Handled in step 5 below
+			// Key-value maps become repeatable flags: --flag k=v
+			// (e.g., `new --field name=Freya`, `workflow render --input meeting_id=...`)
+			mapVal, ok := val.(map[string]interface{})
+			if !ok || len(mapVal) == 0 {
+				continue
+			}
+			keys := make([]string, 0, len(mapVal))
+			for k := range mapVal {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				cliArgs = append(cliArgs, "--"+flag.Name, fmt.Sprintf("%s=%v", k, mapVal[k]))
+			}
+		case commands.FlagTypePosKeyValue:
+			// Positional key=value args are handled in step 5b below.
 			continue
 		default: // FlagTypeString
 			if strVal := toString(val); strVal != "" {
@@ -223,12 +238,17 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 		}
 	}
 
-	// Step 5b: Add key-value pairs as positional args (e.g., "set" command's fields)
+	// Step 5b: Add positional key=value pairs (e.g., "set" command's fields)
 	for _, flag := range meta.Flags {
-		if flag.Type == commands.FlagTypeKeyValue {
+		if flag.Type == commands.FlagTypePosKeyValue {
 			if mapVal, ok := normalizedArgs[flag.Name].(map[string]interface{}); ok {
-				for k, v := range mapVal {
-					cliArgs = append(cliArgs, fmt.Sprintf("%s=%v", k, v))
+				keys := make([]string, 0, len(mapVal))
+				for k := range mapVal {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
+					cliArgs = append(cliArgs, fmt.Sprintf("%s=%v", k, mapVal[k]))
 				}
 			}
 		}
