@@ -327,17 +327,50 @@ func (s *Server) executeRvn(args []string) (string, bool) {
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[raven-mcp] Command error: %v, output: %s\n", err, string(output))
-		// Check if output is valid JSON error from rvn
-		var result map[string]interface{}
-		if json.Unmarshal(output, &result) == nil {
+
+		// If the CLI returned structured JSON, pass it through unchanged.
+		// Also treat ok:false as an error even if the process exit code was non-zero.
+		type envelope struct {
+			OK *bool `json:"ok"`
+		}
+		var env envelope
+		if json.Unmarshal(output, &env) == nil && env.OK != nil {
 			return string(output), true
 		}
-		// Otherwise, wrap the error
-		errMsg := strings.ReplaceAll(err.Error(), `"`, `\"`)
-		return fmt.Sprintf(`{"ok":false,"error":{"code":"EXECUTION_ERROR","message":"%s"}}`, errMsg), true
+
+		// Otherwise, wrap the error but KEEP the CLI output so users can see what failed.
+		wrapped := map[string]interface{}{
+			"ok": false,
+			"error": map[string]interface{}{
+				"code":    "EXECUTION_ERROR",
+				"message": err.Error(),
+				"details": map[string]interface{}{
+					"output": strings.TrimSpace(string(output)),
+				},
+			},
+		}
+		b, mErr := json.Marshal(wrapped)
+		if mErr != nil {
+			// Last resort: escape quotes
+			errMsg := strings.ReplaceAll(err.Error(), `"`, `\"`)
+			return fmt.Sprintf(`{"ok":false,"error":{"code":"EXECUTION_ERROR","message":"%s"}}`, errMsg), true
+		}
+		return string(b), true
 	}
 
 	fmt.Fprintf(os.Stderr, "[raven-mcp] Command succeeded, output length: %d\n", len(output))
+
+	// If the CLI returned a standard Raven JSON envelope with ok:false, surface it as an MCP tool error.
+	// This matters because some Raven commands intentionally exit 0 in --json mode to avoid Cobra printing,
+	// and rely on the JSON envelope for error signaling.
+	type envelope struct {
+		OK *bool `json:"ok"`
+	}
+	var env envelope
+	if json.Unmarshal(output, &env) == nil && env.OK != nil && !*env.OK {
+		return string(output), true
+	}
+
 	return string(output), false
 }
 

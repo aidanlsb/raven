@@ -167,7 +167,7 @@ Examples:
 		// Use title as target path - pages.Create will apply default_path from schema
 		targetPath := title
 		if targetPath == "" {
-			return fmt.Errorf("invalid title: cannot generate safe filename")
+			return handleErrorMsg(ErrInvalidInput, "invalid title: cannot generate safe filename", "Provide a non-empty title")
 		}
 
 		// Load vault config for directory roots (optional)
@@ -181,7 +181,11 @@ Examples:
 		// Check if file exists (with full path resolution including directory roots)
 		resolvedPath := pages.ResolveTargetPathWithRoots(targetPath, typeName, s, objectsRoot, pagesRoot)
 		if pages.Exists(vaultPath, resolvedPath) {
-			return fmt.Errorf("file already exists: %s.md", pages.SlugifyPath(resolvedPath))
+			return handleErrorMsg(
+				ErrFileExists,
+				fmt.Sprintf("file already exists: %s.md", pages.SlugifyPath(resolvedPath)),
+				"Choose a different title, or use `raven_open` to open the existing object",
+			)
 		}
 
 		// Create the page - pages.Create handles default_path and directory roots
