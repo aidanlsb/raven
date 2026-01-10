@@ -1141,7 +1141,7 @@ rvn read people/freya
 rvn search "meeting notes"
 rvn search "api" --type project
 
-# Watch for changes and auto-reindex (future)
+# Watch for changes and auto-reindex
 rvn watch
 
 # Start MCP server for AI agents
@@ -1252,9 +1252,23 @@ rvn query "trait:due !value:done"                               # Not done
 rvn query "object:project .status:active has:{trait:due}"       # Active with due dates
 ```
 
-**Output formats**:
+**Flags**:
 ```bash
 rvn query "object:person" --json           # Machine-readable JSON
+rvn query "object:person" --ids            # IDs only (one per line, for piping)
+rvn query "..." --refresh                  # Refresh stale files before query
+```
+
+**Bulk Operations** (`--apply`):
+```bash
+# Preview bulk operation on query results
+rvn query "trait:todo" --apply "set status=done"
+
+# Apply the operation
+rvn query "trait:todo" --apply "set status=done" --confirm
+
+# Other supported commands: add, delete, move
+rvn query "object:project .status:archived" --apply "delete" --confirm
 ```
 
 **Output Example** (object query):
@@ -1282,15 +1296,21 @@ Quick capture for low-friction note-taking:
 ```bash
 rvn add <text>
 rvn add <text> --to <file-or-reference>
+rvn add --stdin <text> [--confirm]
 ```
 
 **Examples**:
 ```bash
+# Single file
 rvn add "Call Odin about the Bifrost"
 rvn add "@due(tomorrow) @priority(high) Send estimate"
 rvn add "Project idea" --to inbox.md
 rvn add "Meeting notes" --to cursor           # Resolves to companies/cursor.md
 rvn add "Update" --to companies/cursor        # Partial path also works
+
+# Bulk operations via stdin
+rvn query "object:project .status:active" --ids | rvn add --stdin "Review scheduled"
+rvn query "object:project .status:active" --ids | rvn add --stdin "@reviewed" --confirm
 ```
 
 **Behavior**:
@@ -1327,23 +1347,45 @@ With `--timestamp` flag:
 
 ### The `rvn set` Command
 
-Update frontmatter fields on existing objects:
+Update fields on existing objects (both file-level and embedded types):
 
 ```bash
 rvn set <object_id> <field=value>...
+rvn set --stdin <field=value>... [--confirm]
 ```
 
 **Examples**:
 ```bash
+# Single object
 rvn set people/freya email=freya@asgard.realm
 rvn set people/freya name="Freya" status=active
 rvn set projects/website priority=high
+
+# Embedded objects (use # to reference)
+rvn set "daily/2026-01-09#standup" status=done
+rvn set "daily/2026-01-09#planning-session" attendees='[[[people/freya]]]'
+
+# Bulk operations via stdin (preview mode by default)
+echo -e "people/freya\npeople/thor" | rvn set --stdin status=active
+
+# Bulk with confirmation to apply
+rvn query "@status(active)" --ids | rvn set --stdin status=archived --confirm
+
+# Query with --apply for bulk set
+rvn query "@status(todo)" --apply "set status=done" --confirm
 ```
 
 **Behavior**:
 - Validates fields against the object's type schema
 - Warns (but allows) unknown fields
-- Preserves existing frontmatter fields not being updated
+- Preserves existing fields not being updated
+- For embedded types: updates the `::type()` declaration line in the containing file
+
+**Bulk Operations** (`--stdin`):
+- Reads object IDs from stdin (one per line)
+- Without `--confirm`: shows preview of changes
+- With `--confirm`: applies changes to all objects
+- Supports both file-level and embedded object IDs
 
 **JSON output** (for agents):
 ```json
@@ -1412,6 +1454,7 @@ Move or rename files within the vault with automatic reference updates:
 
 ```bash
 rvn move <source> <destination> [--update-refs] [--force]
+rvn move --stdin <destination-directory/> [--confirm]
 ```
 
 **Examples**:
@@ -1424,6 +1467,10 @@ rvn move inbox/task.md projects/website/task.md
 
 # Move with reference updates (default behavior)
 rvn move drafts/person.md people/freya.md --update-refs
+
+# Bulk move via stdin (destination must be a directory ending with /)
+rvn query "object:project .status:archived" --ids | rvn move --stdin archive/projects/
+rvn query "object:project .status:archived" --ids | rvn move --stdin archive/projects/ --confirm
 ```
 
 **Behavior**:
@@ -1437,6 +1484,8 @@ rvn move drafts/person.md people/freya.md --update-refs
 - `--update-refs`: Update all references to the moved file (default: true)
 - `--force`: Skip confirmation prompts
 - `--skip-type-check`: Skip type-directory mismatch warning
+- `--stdin`: Read object IDs from stdin for bulk moves
+- `--confirm`: Apply changes (preview only without this flag)
 
 **JSON output**:
 ```json
@@ -1446,6 +1495,56 @@ rvn move drafts/person.md people/freya.md --update-refs
     "source": "people/loki.md",
     "destination": "people/loki-archived.md",
     "refs_updated": 5
+  }
+}
+```
+
+### The `rvn delete` Command
+
+Delete objects from the vault:
+
+```bash
+rvn delete <object_id> [--permanent] [--force]
+rvn delete --stdin [--confirm]
+```
+
+**Examples**:
+```bash
+# Move to .trash/ (default, recoverable)
+rvn delete people/loki
+
+# Permanently delete (no trash)
+rvn delete people/loki --permanent
+
+# Skip confirmation
+rvn delete people/loki --force
+
+# Bulk delete via stdin
+rvn query "object:project .status:archived" --ids | rvn delete --stdin
+rvn query "object:project .status:archived" --ids | rvn delete --stdin --confirm
+```
+
+**Behavior**:
+- By default, moves files to `.trash/` directory (recoverable)
+- With `--permanent`, permanently deletes the file
+- Warns about existing backlinks to the deleted object
+- Updates the index after deletion
+
+**Flags**:
+- `--permanent`: Permanently delete instead of moving to trash
+- `--force`: Skip confirmation prompts
+- `--stdin`: Read object IDs from stdin for bulk deletes
+- `--confirm`: Apply changes (preview only without this flag)
+
+**JSON output**:
+```json
+{
+  "ok": true,
+  "data": {
+    "object_id": "people/loki",
+    "file": "people/loki.md",
+    "action": "trashed",
+    "backlinks_warned": 3
   }
 }
 ```
@@ -2239,6 +2338,11 @@ The server communicates via JSON-RPC 2.0 over stdin/stdout, compatible with Clau
 | `raven_schema_remove_trait` | Remove trait (instances stay in files) | `name`, optional `force` |
 | `raven_schema_remove_field` | Remove field (blocks if required) | `type_name`, `field_name` |
 | `raven_schema_validate` | Validate schema | (none) |
+| `raven_daily` | Open or create a daily note | optional `date` |
+| `raven_untyped` | List pages without explicit type | (none) |
+| `raven_workflow_list` | List available workflows | (none) |
+| `raven_workflow_show` | Show workflow details | `name` |
+| `raven_workflow_render` | Render workflow with context | `name`, optional `input` |
 
 ### JSON Response Format
 
