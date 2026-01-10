@@ -122,9 +122,35 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 	types["date"] = TypeSchema{Name: "date", Builtin: true}
 
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
+		// Count types without name_field that have required string fields
+		var typesWithoutNameField []string
+		for name, typeDef := range sch.Types {
+			if typeDef != nil && typeDef.NameField == "" && !isBuiltinType(name) {
+				// Check if type has a required string field that could be a name_field
+				for _, fieldDef := range typeDef.Fields {
+					if fieldDef != nil && fieldDef.Required && fieldDef.Type == schema.FieldTypeString {
+						typesWithoutNameField = append(typesWithoutNameField, name)
+						break
+					}
+				}
+			}
+		}
+
+		result := map[string]interface{}{
 			"types": types,
-		}, &Meta{Count: len(types), QueryTimeMs: elapsed})
+		}
+
+		// Add hint for agents about name_field
+		if len(typesWithoutNameField) > 0 {
+			sort.Strings(typesWithoutNameField)
+			result["hint"] = map[string]interface{}{
+				"message":                    "Some types have required string fields but no name_field configured. Setting name_field enables auto-population from the title argument in raven_new.",
+				"types_without_name_field":   typesWithoutNameField,
+				"fix_command":                "raven_schema_update_type with name-field parameter",
+			}
+		}
+
+		outputSuccess(result, &Meta{Count: len(types), QueryTimeMs: elapsed})
 		return nil
 	}
 
@@ -420,6 +446,10 @@ func buildTraitSchema(name string, traitDef *schema.TraitDefinition) TraitSchema
 		}
 	}
 	return result
+}
+
+func isBuiltinType(name string) bool {
+	return name == "page" || name == "section" || name == "date"
 }
 
 func init() {
