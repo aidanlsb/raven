@@ -32,8 +32,37 @@ traits:
 
 Type definition keys:
 - `default_path`: where `rvn new <type> ...` creates files
+- `name_field`: which field serves as the display name (auto-populated from title in `rvn new`)
 - `fields`: field definitions for frontmatter (and for `::type(...)` embedded declarations)
 - `template`: optional template (file path or inline template content)
+
+### name_field
+
+The `name_field` property designates which field serves as the display name for objects of that type. When set:
+
+1. **Auto-population**: The title argument to `rvn new` automatically populates this field
+2. **Reference resolution**: `[[Display Name]]` can resolve to objects by their name_field value
+
+```yaml
+types:
+  person:
+    name_field: name        # "name" field is the display name
+    default_path: people/
+    fields:
+      name: { type: string, required: true }
+      email: { type: string }
+
+  book:
+    name_field: title       # "title" field is the display name
+    default_path: books/
+    fields:
+      title: { type: string, required: true }
+      author: { type: ref, target: person }
+```
+
+With this configuration:
+- `rvn new person "Freya"` creates a person with `name: Freya` in frontmatter
+- `[[Harry Potter]]` can resolve to `books/harry-potter.md` if it has `title: Harry Potter`
 
 ### Field types
 
