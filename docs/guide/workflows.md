@@ -51,3 +51,9 @@ rvn workflow render meeting-prep --input meeting_id=meetings/alice-1on1
 
 Reference: `reference/workflows.md`.
 
+## Next steps
+
+- See `reference/workflows.md` for complete workflow configuration
+- See `reference/query-language.md` for context query syntax
+- See `agents.md` for using workflows with MCP
+

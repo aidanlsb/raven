@@ -44,3 +44,9 @@ The MCP tool list is generated from Raven's command registry. For the authoritat
 - `rvn schema commands --json` (CLI)
 
 Reference: `reference/mcp.md`.
+
+## Next steps
+
+- See `reference/mcp.md` for complete tool reference and examples
+- See `agent-guide.md` for comprehensive agent usage patterns
+- See `reference/query-language.md` for writing effective queries

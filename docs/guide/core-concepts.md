@@ -59,3 +59,9 @@ Raven queries are type-constrained:
 
 See `reference/query-language.md` for the full language.
 
+## Next steps
+
+- See `cli.md` for common CLI patterns and workflows
+- See `reference/schema.md` for defining types and traits
+- See `reference/file-format.md` for the complete file format specification
+

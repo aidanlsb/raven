@@ -32,3 +32,9 @@ Templates can be:
 
 Template variables are documented in `reference/schema.md` (type templates) and `reference/vault-config.md` (daily template).
 
+## Next steps
+
+- See `reference/schema.md` for complete type and trait definition options
+- See `reference/vault-config.md` for all vault configuration settings
+- See `cli.md` for schema management commands
+
