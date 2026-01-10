@@ -35,7 +35,7 @@ This principle is NON-NEGOTIABLE. It's what makes Raven portable, trustworthy, a
 - If docs and code diverge, update docs to match intended behavior (or fix code if it’s a regression)
 - When proposing new features, update the spec first, then implement
 - Reference docs document “what”; design docs in `docs/design/*` document “why”
-- Start at `docs/README.md` for the docs index
+- Start in `README.md` (repo root) for the docs index
 
 ## Design Philosophy
 

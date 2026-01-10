@@ -1,32 +1,24 @@
-<p align="center">
-  <img src="raven-logo.svg" width="120" alt="Raven logo">
-</p>
+# Raven
 
-<h1 align="center">Raven</h1>
-
-<p align="center">
-  <strong>
-    Structured markdown notes with schema validation, querying, and MCP support.
-  </strong>
-</p>
+**Markdown notes with structure to power collaboration with AI agents on your knowledge base.**
 
 > ⚠️ **Experimental:** Raven is early and under active development.
 
 ---
 
-Raven adds structure to markdown notes without sacrificing portability. Files stay as plain `.md` — readable in any editor, greppable, yours to keep. But with a schema and some lightweight conventions, you get:
+Raven adds a few concepts and capabilities on stop of standard markdown:
 
-- **Typed objects** — define types (person, project, etc.) with validated frontmatter fields
-- **Traits** — inline annotations like `@due(2026-01-15)` that are indexed and queryable
-- **References** — `[[wiki-links]]` with validation and backlink tracking
-- **Query language** — find objects and traits across your vault without grep gymnastics
-- **MCP server** — expose your vault to AI agents with schema-aware tooling
-
-The MCP angle is the interesting part. Agents can create, query, and update your notes — but they're constrained by your schema. An agent can't create a malformed project or reference a person that doesn't exist. You get useful automation without the usual "AI making things up" problem.
+- **Typed objects**: define types (person, project, etc.) with validated frontmatter fields
+- **Traits**: custom inline annotations (e.g., `@due(2026-02-01)`) that are indexed and queryable
+- **References**: `[[wiki-links]]` with validation and backlink tracking
+- **Query language**: write and save queries with a rich syntax to retrieve your notes efficiently
+- **CLI**: create, update, and navigate your notes from the command line
+- **MCP**: expose your vault to AI agents with schema-aware tooling
+- **Workflows**: combine your óstructured data with packaged prompts for agents to execute complex workflows consistentlyó
 
 ---
 
-## Example
+## Illustration
 
 A consulting firm tracking people, clients, and projects.
 
@@ -67,7 +59,7 @@ traits:
 
 ### Notes
 
-A daily note:
+Open your daily note from the command line: `rvn daily`
 
 ```markdown
 # Friday, January 9, 2026
@@ -175,10 +167,12 @@ rvn query --list
 ## Documentation
 
 **Getting started:**
+
 - [Getting started guide](docs/guide/getting-started.md)
 - [Core concepts](docs/guide/core-concepts.md)
 
 **How-to guides:**
+
 - [Configuration](docs/guide/configuration.md)
 - [CLI usage](docs/guide/cli.md)
 - [Working with agents](docs/guide/agents.md)
@@ -186,6 +180,7 @@ rvn query --list
 - [Workflows](docs/guide/workflows.md)
 
 **Reference:**
+
 - [File format](docs/reference/file-format.md)
 - [Schema (`schema.yaml`)](docs/reference/schema.md)
 - [Vault config (`raven.yaml`)](docs/reference/vault-config.md)
@@ -195,6 +190,7 @@ rvn query --list
 - [MCP tools](docs/reference/mcp.md)
 
 **Design docs:**
+
 - [Architecture](docs/design/architecture.md)
 - [Database / index](docs/design/database.md)
 - [Migrations](docs/design/migrations.md)
