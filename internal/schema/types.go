@@ -43,6 +43,11 @@ func NewSchema() *Schema {
 type TypeDefinition struct {
 	Fields      map[string]*FieldDefinition `yaml:"fields"`
 	DefaultPath string                      `yaml:"default_path,omitempty"`
+	// NameField specifies which field serves as the display name for this type.
+	// When set, the title argument to `rvn new` will auto-populate this field.
+	// The field must be a string type. If the field doesn't exist, it will be
+	// auto-created as a required string field.
+	NameField string `yaml:"name_field,omitempty"`
 	// Template is either a path to a template file (e.g., "templates/meeting.md")
 	// or inline template content (multi-line string starting with content, not a path).
 	Template string `yaml:"template,omitempty"`

@@ -86,14 +86,12 @@ Examples:
 			}
 		}
 
-		// Auto-fill a declared `title` field from the positional title.
-		// This avoids a common footgun where a type defines a required `title` field
-		// and agents/users assume `rvn new <type> <title>` satisfies it.
-		if typeDef != nil {
-			if _, hasTitleField := typeDef.Fields["title"]; hasTitleField {
-				if _, provided := fieldValues["title"]; !provided && title != "" {
-					fieldValues["title"] = title
-				}
+		// Auto-fill the name_field from the positional title argument.
+		// If a type declares name_field (e.g., name_field: name), the title argument
+		// automatically populates that field, eliminating the need to specify it twice.
+		if typeDef != nil && typeDef.NameField != "" {
+			if _, provided := fieldValues[typeDef.NameField]; !provided && title != "" {
+				fieldValues[typeDef.NameField] = title
 			}
 		}
 
@@ -155,12 +153,35 @@ Examples:
 
 		// In JSON mode, error if required fields are missing
 		if isJSONOutput() && len(missingFields) > 0 {
+			// Build a concrete example showing exactly how to provide the missing fields.
+			// This helps agents understand exactly what parameters to add on retry.
+			var exampleParts []string
+			for _, f := range missingFields {
+				exampleParts = append(exampleParts, fmt.Sprintf(`"%s": "<value>"`, f))
+			}
+			example := fmt.Sprintf(`field: {%s}`, strings.Join(exampleParts, ", "))
+
+			details := map[string]interface{}{
+				"missing_fields": fieldDetails,
+				"type":           typeName,
+				"title":          title,
+				"retry_with": map[string]interface{}{
+					"type":  typeName,
+					"title": title,
+					"field": buildFieldTemplate(missingFields),
+				},
+			}
+
+			// Include name_field info to help agents understand auto-population
+			if typeDef != nil && typeDef.NameField != "" {
+				details["name_field"] = typeDef.NameField
+				details["name_field_hint"] = fmt.Sprintf("The title argument auto-populates the '%s' field", typeDef.NameField)
+			}
+
 			outputError(ErrRequiredField,
 				fmt.Sprintf("Missing required fields: %s", strings.Join(missingFields, ", ")),
-				map[string]interface{}{
-					"missing_fields": fieldDetails,
-				},
-				"Ask user for values, then retry with --field name=value (CLI) or `field: {name: value}` (MCP)")
+				details,
+				fmt.Sprintf("Retry the same call with: %s", example))
 			return nil // Error already output
 		}
 
@@ -230,6 +251,16 @@ Examples:
 		return nil
 	},
 	ValidArgsFunction: completeTypes,
+}
+
+// buildFieldTemplate creates a template object showing required field names.
+// This is included in error responses so agents can see exactly what structure to provide.
+func buildFieldTemplate(missingFields []string) map[string]string {
+	result := make(map[string]string)
+	for _, f := range missingFields {
+		result[f] = "<value>"
+	}
+	return result
 }
 
 // completeTypes provides shell completion for type names

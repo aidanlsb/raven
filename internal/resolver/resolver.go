@@ -15,6 +15,7 @@ type Resolver struct {
 	shortMap       map[string][]string // Map from short name to full IDs
 	slugMap        map[string]string   // Map from slugified ID to original ID
 	aliasMap       map[string]string   // Map from alias to object ID
+	nameFieldMap   map[string][]string // Map from name_field value (slugified) to object IDs
 	dailyDirectory string              // Directory for daily notes (e.g., "daily")
 }
 
@@ -31,11 +32,18 @@ func NewWithDailyDir(objectIDs []string, dailyDirectory string) *Resolver {
 // NewWithAliases creates a new Resolver with object IDs, aliases, and daily directory.
 // The aliases map maps alias strings to their target object IDs.
 func NewWithAliases(objectIDs []string, aliases map[string]string, dailyDirectory string) *Resolver {
+	return NewWithNameFields(objectIDs, aliases, nil, dailyDirectory)
+}
+
+// NewWithNameFields creates a new Resolver with object IDs, aliases, name field values, and daily directory.
+// The nameFieldMap maps name_field values to their object IDs (for semantic resolution).
+func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldMap map[string]string, dailyDirectory string) *Resolver {
 	r := &Resolver{
 		objectIDs:      make(map[string]struct{}),
 		shortMap:       make(map[string][]string),
 		slugMap:        make(map[string]string),
 		aliasMap:       make(map[string]string),
+		nameFieldMap:   make(map[string][]string),
 		dailyDirectory: dailyDirectory,
 	}
 
@@ -64,6 +72,24 @@ func NewWithAliases(objectIDs []string, aliases map[string]string, dailyDirector
 		}
 	}
 
+	// Build name_field map (both exact and slugified keys for case-insensitive matching)
+	for nameValue, objectID := range nameFieldMap {
+		if nameValue == "" {
+			continue
+		}
+		// Store both exact and slugified versions
+		r.nameFieldMap[nameValue] = append(r.nameFieldMap[nameValue], objectID)
+		sluggedName := pages.Slugify(nameValue)
+		if sluggedName != "" && sluggedName != nameValue {
+			r.nameFieldMap[sluggedName] = append(r.nameFieldMap[sluggedName], objectID)
+		}
+		// Also store lowercase for case-insensitive matching
+		lowerName := strings.ToLower(nameValue)
+		if lowerName != nameValue && lowerName != sluggedName {
+			r.nameFieldMap[lowerName] = append(r.nameFieldMap[lowerName], objectID)
+		}
+	}
+
 	return r
 }
 
@@ -73,6 +99,7 @@ type ResolverConfig struct {
 	ObjectsRoot    string            // Root directory for typed objects (e.g., "objects/")
 	PagesRoot      string            // Root directory for untyped pages (e.g., "pages/")
 	Aliases        map[string]string // Map from alias to object ID
+	NameFieldMap   map[string]string // Map from name_field value to object ID (e.g., "Harry Potter" -> "books/harry-potter")
 }
 
 // NewWithConfig creates a new Resolver with full configuration.
@@ -83,7 +110,7 @@ func NewWithConfig(objectIDs []string, cfg ResolverConfig) *Resolver {
 		dailyDir = "daily"
 	}
 
-	return NewWithAliases(objectIDs, cfg.Aliases, dailyDir)
+	return NewWithNameFields(objectIDs, cfg.Aliases, cfg.NameFieldMap, dailyDir)
 }
 
 // ResolveResult represents the result of a reference resolution.
@@ -104,9 +131,17 @@ type ResolveResult struct {
 // Resolve resolves a reference to its target object ID.
 // If a reference matches multiple things (alias + object, alias + short name, etc.),
 // it is treated as ambiguous and returns an error.
+//
+// Resolution priority:
+//  1. Aliases (exact match)
+//  2. Name field values (semantic match by display name)
+//  3. Date references (YYYY-MM-DD)
+//  4. Object IDs (exact path match)
+//  5. Short names (filename match)
 func (r *Resolver) Resolve(ref string) ResolveResult {
 	ref = strings.TrimSpace(ref)
 	sluggedRef := pages.Slugify(ref)
+	lowerRef := strings.ToLower(ref)
 
 	// Collect all possible matches
 	var matches []string
@@ -119,6 +154,31 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 	} else if targetID, ok := r.aliasMap[sluggedRef]; ok {
 		matches = append(matches, targetID)
 		matchSources[targetID] = "alias"
+	}
+
+	// Check name_field values (semantic matching by display name)
+	// This allows [[Harry Potter]] to resolve even if the file is harry-potter.md
+	if nameMatches, ok := r.nameFieldMap[ref]; ok {
+		for _, id := range nameMatches {
+			if _, exists := matchSources[id]; !exists {
+				matches = append(matches, id)
+				matchSources[id] = "name_field"
+			}
+		}
+	} else if nameMatches, ok := r.nameFieldMap[sluggedRef]; ok {
+		for _, id := range nameMatches {
+			if _, exists := matchSources[id]; !exists {
+				matches = append(matches, id)
+				matchSources[id] = "name_field"
+			}
+		}
+	} else if nameMatches, ok := r.nameFieldMap[lowerRef]; ok {
+		for _, id := range nameMatches {
+			if _, exists := matchSources[id]; !exists {
+				matches = append(matches, id)
+				matchSources[id] = "name_field"
+			}
+		}
 	}
 
 	// Check if this is a date reference (YYYY-MM-DD)

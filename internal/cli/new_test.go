@@ -33,15 +33,16 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-func TestNewAutoFillsTitleFieldFromPositionalTitle(t *testing.T) {
+func TestNewAutoFillsNameFieldFromPositionalTitle(t *testing.T) {
 	vaultPath := t.TempDir()
 
-	// Minimal schema: `book` has a required `title` field.
+	// Schema with name_field set to 'title' - the positional title should auto-fill it.
 	schemaYAML := strings.TrimSpace(`
 version: 2
 types:
   book:
     default_path: books/
+    name_field: title
     fields:
       title:
         type: string
@@ -81,18 +82,20 @@ types:
 		t.Fatalf("expected type frontmatter, got:\n%s", got)
 	}
 	if !strings.Contains(got, "title: My Book") {
-		t.Fatalf("expected auto-filled title field, got:\n%s", got)
+		t.Fatalf("expected auto-filled title field via name_field, got:\n%s", got)
 	}
 }
 
-func TestNewDoesNotOverrideExplicitTitleField(t *testing.T) {
+func TestNewDoesNotOverrideExplicitNameField(t *testing.T) {
 	vaultPath := t.TempDir()
 
+	// Schema with name_field - explicit --field should take precedence over positional title
 	schemaYAML := strings.TrimSpace(`
 version: 2
 types:
   book:
     default_path: books/
+    name_field: title
     fields:
       title:
         type: string

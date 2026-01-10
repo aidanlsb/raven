@@ -661,3 +661,67 @@ func TestAliasEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestNameFieldResolution(t *testing.T) {
+	objectIDs := []string{
+		"books/harry-potter",
+		"books/the-hobbit",
+		"people/john-doe",
+	}
+
+	// Name field map: display name -> object ID
+	nameFieldMap := map[string]string{
+		"Harry Potter":                  "books/harry-potter",
+		"The Hobbit":                    "books/the-hobbit",
+		"John Doe":                      "people/john-doe",
+	}
+
+	r := NewWithNameFields(objectIDs, nil, nameFieldMap, "daily")
+
+	t.Run("resolve by name_field value - exact match", func(t *testing.T) {
+		result := r.Resolve("Harry Potter")
+		if result.TargetID != "books/harry-potter" {
+			t.Errorf("got %q, want %q", result.TargetID, "books/harry-potter")
+		}
+	})
+
+	t.Run("resolve by name_field value - case insensitive", func(t *testing.T) {
+		result := r.Resolve("harry potter")
+		if result.TargetID != "books/harry-potter" {
+			t.Errorf("got %q, want %q", result.TargetID, "books/harry-potter")
+		}
+	})
+
+	t.Run("resolve by name_field value - slugified", func(t *testing.T) {
+		result := r.Resolve("the-hobbit")
+		if result.TargetID != "books/the-hobbit" {
+			t.Errorf("got %q, want %q", result.TargetID, "books/the-hobbit")
+		}
+	})
+
+	t.Run("name_field takes precedence over filename for different names", func(t *testing.T) {
+		// When name_field value is different from filename, name_field should match
+		result := r.Resolve("John Doe")
+		if result.TargetID != "people/john-doe" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/john-doe")
+		}
+	})
+
+	t.Run("fallback to filename when name_field doesn't match", func(t *testing.T) {
+		// Short filename should still work
+		result := r.Resolve("the-hobbit")
+		if result.TargetID != "books/the-hobbit" {
+			t.Errorf("got %q, want %q", result.TargetID, "books/the-hobbit")
+		}
+	})
+
+	t.Run("nil name_field map is handled", func(t *testing.T) {
+		r := NewWithNameFields(objectIDs, nil, nil, "daily")
+
+		// Should still resolve by short name
+		result := r.Resolve("harry-potter")
+		if result.TargetID != "books/harry-potter" {
+			t.Errorf("got %q, want %q", result.TargetID, "books/harry-potter")
+		}
+	})
+}

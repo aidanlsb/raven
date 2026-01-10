@@ -57,19 +57,27 @@ The type is required. If title is not provided, you will be prompted for it.
 Required fields (as defined in schema.yaml) will be prompted for interactively,
 or can be provided via --field flags.
 
-For agents: If required fields are missing, returns error with details. 
-Ask user for values, then retry with --field flags.`,
+If the type has a name_field configured (e.g., name_field: name), the title
+argument automatically populates that field. This means for a person type with
+name_field: name, you can just call: rvn new person "Freya" --json
+and the name field will be set to "Freya" automatically.
+
+For agents/MCP: Raven runs non-interactively with --json, so title must be provided.
+For agents: If required fields are missing, returns error with details including
+a retry_with template. Check if the type has name_field set (via raven_schema type <name>)
+to understand which fields are auto-populated.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., person, project)", Required: true, DynamicComp: "types"},
-			{Name: "title", Description: "Title/name for the object", Required: false},
+			// NOTE: Title is optional in interactive CLI mode, but required in --json (MCP) mode.
+			{Name: "title", Description: "Title/name for the object (auto-populates name_field if configured)", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"name=Freya", "email=a@b.com"}},
 		},
 		Examples: []string{
 			"rvn new person \"Freya\" --json",
-			"rvn new person \"Freya\" --field name=\"Freya\" --json",
 			"rvn new project \"Website Redesign\" --json",
+			"rvn new book \"Harry Potter\" --field author=people/jk-rowling --json",
 		},
 		UseCases: []string{
 			"Create a new person entry",
@@ -350,14 +358,31 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 	"schema_add_type": {
 		Name:        "schema add type",
 		Description: "Add a new type to the schema",
+		LongDesc: `Add a new type definition to schema.yaml.
+
+When creating a type, you can specify a name_field which designates which field
+serves as the display name for objects of this type. The title argument to
+'rvn new' will auto-populate this field.
+
+If the name_field doesn't exist, it will be auto-created as a required string field.
+
+For agents: When helping users create types, ask what field should be used as the
+display name. Common choices are 'name' (for people, companies) or 'title' 
+(for documents, projects).`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the new type", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "default-path", Description: "Default directory for files of this type", Type: FlagTypeString, Examples: []string{"people/", "projects/"}},
+			{Name: "name-field", Description: "Field to use as display name (auto-created if doesn't exist)", Type: FlagTypeString, Examples: []string{"name", "title"}},
 		},
 		Examples: []string{
-			"rvn schema add type event --default-path events/ --json",
+			"rvn schema add type person --name-field name --default-path people/ --json",
+			"rvn schema add type project --name-field title --default-path projects/ --json",
+		},
+		UseCases: []string{
+			"Create a new type for organizing objects",
+			"Define a type with a display name field for easier object creation",
 		},
 	},
 	"schema_add_trait": {
@@ -400,15 +425,22 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 	"schema_update_type": {
 		Name:        "schema update type",
 		Description: "Update an existing type in the schema",
+		LongDesc: `Update an existing type definition in schema.yaml.
+
+Use --name-field to set or change which field serves as the display name.
+If the field doesn't exist, it will be auto-created as a required string field.
+Use --name-field="-" to remove the name_field setting.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the type to update", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "default-path", Description: "Update default directory for files", Type: FlagTypeString},
+			{Name: "name-field", Description: "Set/update display name field (use '-' to remove)", Type: FlagTypeString, Examples: []string{"name", "title", "-"}},
 			{Name: "add-trait", Description: "Add a trait to this type", Type: FlagTypeString},
 			{Name: "remove-trait", Description: "Remove a trait from this type", Type: FlagTypeString},
 		},
 		Examples: []string{
+			"rvn schema update type person --name-field name --json",
 			"rvn schema update type person --default-path people/ --json",
 			"rvn schema update type meeting --add-trait due --json",
 		},

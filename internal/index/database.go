@@ -809,6 +809,8 @@ func (d *Database) AllAliases() (map[string]string, error) {
 // - all object IDs (for full + short reference resolution)
 // - all aliases (for alias resolution)
 // - the configured daily directory for date shorthand refs (e.g. [[2025-02-01]])
+//
+// Note: This does not include name_field resolution. Use ResolverWithSchema for that.
 func (d *Database) Resolver(dailyDirectory string) (*resolver.Resolver, error) {
 	if dailyDirectory == "" {
 		dailyDirectory = "daily"
@@ -822,6 +824,83 @@ func (d *Database) Resolver(dailyDirectory string) (*resolver.Resolver, error) {
 		return nil, fmt.Errorf("failed to get aliases: %w", err)
 	}
 	return resolver.NewWithAliases(objectIDs, aliases, dailyDirectory), nil
+}
+
+// ResolverWithSchema builds a resolver that includes name_field values for semantic resolution.
+// This allows [[Harry Potter]] to resolve to a book with name_field: title even if the
+// filename is harry-potter.md.
+func (d *Database) ResolverWithSchema(dailyDirectory string, sch *schema.Schema) (*resolver.Resolver, error) {
+	if dailyDirectory == "" {
+		dailyDirectory = "daily"
+	}
+	objectIDs, err := d.AllObjectIDs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object IDs: %w", err)
+	}
+	aliases, err := d.AllAliases()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get aliases: %w", err)
+	}
+	nameFieldMap, err := d.AllNameFieldValues(sch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get name field values: %w", err)
+	}
+	return resolver.NewWithNameFields(objectIDs, aliases, nameFieldMap, dailyDirectory), nil
+}
+
+// AllNameFieldValues returns a map from name_field values to object IDs.
+// It queries each type's name_field and extracts the corresponding field value.
+func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, error) {
+	nameFieldMap := make(map[string]string)
+
+	if sch == nil {
+		return nameFieldMap, nil
+	}
+
+	// Build a map of type -> name_field
+	typeNameFields := make(map[string]string)
+	for typeName, typeDef := range sch.Types {
+		if typeDef != nil && typeDef.NameField != "" {
+			typeNameFields[typeName] = typeDef.NameField
+		}
+	}
+
+	if len(typeNameFields) == 0 {
+		return nameFieldMap, nil
+	}
+
+	// Query all objects and extract name_field values
+	rows, err := d.db.Query(`SELECT id, type, fields FROM objects WHERE type != '' AND fields != '{}'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, objType, fieldsJSON string
+		if err := rows.Scan(&id, &objType, &fieldsJSON); err != nil {
+			continue
+		}
+
+		nameField, ok := typeNameFields[objType]
+		if !ok {
+			continue
+		}
+
+		// Parse fields JSON and extract name_field value
+		var fields map[string]interface{}
+		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
+			continue
+		}
+
+		if nameValue, ok := fields[nameField]; ok {
+			if nameStr, ok := nameValue.(string); ok && nameStr != "" {
+				nameFieldMap[nameStr] = id
+			}
+		}
+	}
+
+	return nameFieldMap, rows.Err()
 }
 
 // ResolverWithExtraIDs is like Resolver, but ensures extraIDs are included in the

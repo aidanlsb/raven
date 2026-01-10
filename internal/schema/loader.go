@@ -123,10 +123,14 @@ version: 2  # Schema format version (do not change manually)
 #   - page: fallback for files without explicit type
 #   - section: auto-created for headings
 #   - date: daily notes (files named YYYY-MM-DD.md in daily_directory)
+#
+# name_field: When set, 'rvn new <type> <title>' auto-populates this field
+# with the title argument. Makes object creation more intuitive.
 
 types:
   person:
     default_path: people/
+    name_field: name
     fields:
       name:
         type: string
@@ -136,6 +140,7 @@ types:
 
   project:
     default_path: projects/
+    name_field: name
     fields:
       name:
         type: string

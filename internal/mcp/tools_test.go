@@ -90,6 +90,36 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantArgs: []string{"person", "Freya", "--json"},
 		},
 		{
+			toolName: "raven_new",
+			args: map[string]interface{}{
+				"type":  "person",
+				"title": "Freya",
+				"field": map[string]interface{}{"name": "Freya", "email": "freya@asgard.realm"},
+			},
+			wantCmd:  "new",
+			wantArgs: []string{"--field", "email=freya@asgard.realm", "--field", "name=Freya", "person", "Freya", "--json"},
+		},
+		{
+			toolName: "raven_new",
+			args: map[string]interface{}{
+				"type":   "person",
+				"title":  "Freya",
+				"fields": map[string]interface{}{"name": "Freya"}, // alias for `field`
+			},
+			wantCmd:  "new",
+			wantArgs: []string{"--field", "name=Freya", "person", "Freya", "--json"},
+		},
+		{
+			toolName: "raven_new",
+			args: map[string]interface{}{
+				"type":  "person",
+				"title": "Freya",
+				"field": []interface{}{"name=Freya", "email=freya@asgard.realm"},
+			},
+			wantCmd:  "new",
+			wantArgs: []string{"--field", "name=Freya", "--field", "email=freya@asgard.realm", "person", "Freya", "--json"},
+		},
+		{
 			toolName: "raven_add",
 			args:     map[string]interface{}{"text": "Hello world", "to": "inbox.md"},
 			wantCmd:  "add",
@@ -100,6 +130,24 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			args:     map[string]interface{}{"object_id": "people/loki", "force": true},
 			wantCmd:  "delete",
 			wantArgs: []string{"people/loki", "--force", "--json"},
+		},
+		{
+			toolName: "raven_set",
+			args: map[string]interface{}{
+				"object_id": "people/freya",
+				"fields":    map[string]interface{}{"status": "active", "priority": "high"},
+			},
+			wantCmd:  "set",
+			wantArgs: []string{"people/freya", "priority=high", "status=active", "--json"},
+		},
+		{
+			toolName: "raven_set",
+			args: map[string]interface{}{
+				"object_id": "people/freya",
+				"field":     []interface{}{"status=active"}, // alias for `fields`
+			},
+			wantCmd:  "set",
+			wantArgs: []string{"people/freya", "status=active", "--json"},
 		},
 		{
 			toolName: "raven_schema_add_type",

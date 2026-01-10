@@ -198,19 +198,10 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 				}
 			}
 		case commands.FlagTypeKeyValue:
-			// Key-value maps become repeatable flags: --flag k=v
-			// (e.g., `new --field name=Freya`, `workflow render --input meeting_id=...`)
-			mapVal, ok := val.(map[string]interface{})
-			if !ok || len(mapVal) == 0 {
-				continue
-			}
-			keys := make([]string, 0, len(mapVal))
-			for k := range mapVal {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				cliArgs = append(cliArgs, "--"+flag.Name, fmt.Sprintf("%s=%v", k, mapVal[k]))
+			// Key-value flags are represented as a JSON object in MCP, but some clients may
+			// send a single "k=v" string or an array of "k=v" strings. Accept all.
+			for _, pair := range keyValuePairs(val) {
+				cliArgs = append(cliArgs, "--"+flag.Name, pair)
 			}
 		case commands.FlagTypePosKeyValue:
 			// Positional key=value args are handled in step 5b below.
@@ -241,15 +232,9 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	// Step 5b: Add positional key=value pairs (e.g., "set" command's fields)
 	for _, flag := range meta.Flags {
 		if flag.Type == commands.FlagTypePosKeyValue {
-			if mapVal, ok := normalizedArgs[flag.Name].(map[string]interface{}); ok {
-				keys := make([]string, 0, len(mapVal))
-				for k := range mapVal {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				for _, k := range keys {
-					cliArgs = append(cliArgs, fmt.Sprintf("%s=%v", k, mapVal[k]))
-				}
+			if val, ok := normalizedArgs[flag.Name]; ok {
+				// Like FlagTypeKeyValue: primarily a JSON object, but accept "k=v" strings/arrays too.
+				cliArgs = append(cliArgs, keyValuePairs(val)...)
 			}
 		}
 	}
@@ -273,6 +258,78 @@ func toString(v interface{}) string {
 	}
 }
 
+// keyValuePairs normalizes a key-value input into one or more "k=v" strings.
+//
+// Supported forms:
+// - map/object: {"name":"Freya","email":"a@b.com"}  -> ["email=a@b.com","name=Freya"] (sorted by key)
+// - string:     "name=Freya"                       -> ["name=Freya"]
+// - array:      ["name=Freya","email=a@b.com"]     -> ["name=Freya","email=a@b.com"]
+//
+// This is intentionally permissive to accommodate variations in MCP clients.
+func keyValuePairs(v interface{}) []string {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		if len(val) == 0 {
+			return nil
+		}
+		keys := make([]string, 0, len(val))
+		for k := range val {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		pairs := make([]string, 0, len(keys))
+		for _, k := range keys {
+			pairs = append(pairs, fmt.Sprintf("%s=%v", k, val[k]))
+		}
+		return pairs
+	case string:
+		s := strings.TrimSpace(val)
+		if s == "" {
+			return nil
+		}
+		// If it looks like "k=v,k2=v2", accept it as multiple pairs (best-effort).
+		if strings.Contains(s, ",") {
+			parts := strings.Split(s, ",")
+			var pairs []string
+			allKV := true
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p == "" {
+					continue
+				}
+				if !strings.Contains(p, "=") {
+					allKV = false
+					break
+				}
+				pairs = append(pairs, p)
+			}
+			if allKV && len(pairs) > 0 {
+				return pairs
+			}
+		}
+		if !strings.Contains(s, "=") {
+			return nil
+		}
+		return []string{s}
+	case []interface{}:
+		var pairs []string
+		for _, item := range val {
+			s, ok := item.(string)
+			if !ok {
+				continue
+			}
+			s = strings.TrimSpace(s)
+			if s == "" || !strings.Contains(s, "=") {
+				continue
+			}
+			pairs = append(pairs, s)
+		}
+		return pairs
+	default:
+		return nil
+	}
+}
+
 // normalizeArgs returns a copy of the args map with normalized keys.
 // MCP clients may send property names with underscores (e.g., "default_path")
 // instead of hyphens (e.g., "default-path"). This creates a lookup map that
@@ -288,5 +345,19 @@ func normalizeArgs(args map[string]interface{}) map[string]interface{} {
 			normalized[hyphenKey] = v
 		}
 	}
+
+	// Compatibility aliases:
+	// - Some clients may send `fields` where Raven expects `field` (and vice versa).
+	if v, ok := normalized["fields"]; ok {
+		if _, exists := normalized["field"]; !exists {
+			normalized["field"] = v
+		}
+	}
+	if v, ok := normalized["field"]; ok {
+		if _, exists := normalized["fields"]; !exists {
+			normalized["fields"] = v
+		}
+	}
+
 	return normalized
 }
