@@ -1,11 +1,37 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = orig })
+
+	fn()
+
+	_ = w.Close()
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("io.Copy: %v", err)
+	}
+	_ = r.Close()
+	return buf.String()
+}
 
 func TestNewAutoFillsTitleFieldFromPositionalTitle(t *testing.T) {
 	vaultPath := t.TempDir()
@@ -106,6 +132,65 @@ types:
 	}
 	if !strings.Contains(got, "title: Override Title") {
 		t.Fatalf("expected explicit title field to be preserved, got:\n%s", got)
+	}
+}
+
+func TestNewFileExistsEmitsJSONErrorInJSONMode(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  person:
+    default_path: people/
+`) + "\n"
+
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	// Isolate global state used by the CLI package.
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+
+	// First run creates the file successfully.
+	_ = captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"person", "Freya"}); err != nil {
+			t.Fatalf("newCmd.RunE (first): %v", err)
+		}
+	})
+
+	// Second run should emit a structured JSON error (and return nil error in JSON mode).
+	out := captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"person", "Freya"}); err != nil {
+			t.Fatalf("newCmd.RunE (second): %v", err)
+		}
+	})
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
+	}
+	if resp.OK {
+		t.Fatalf("expected ok=false; out=%s", out)
+	}
+	if resp.Error == nil || resp.Error.Code != ErrFileExists {
+		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrFileExists, resp.Error, out)
 	}
 }
 
