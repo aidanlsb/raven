@@ -100,21 +100,20 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value...")
 	}
 
-	// Read IDs from stdin
-	ids, embedded, err := ReadIDsFromStdin()
+	// Read IDs from stdin (both file-level and embedded)
+	fileIDs, embeddedIDs, err := ReadIDsFromStdin()
 	if err != nil {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if len(ids) == 0 && len(embedded) == 0 {
+	// Combine all IDs - we now support embedded objects
+	ids := append(fileIDs, embeddedIDs...)
+
+	if len(ids) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 	}
 
-	// Build warnings for embedded objects
 	var warnings []Warning
-	if w := BuildEmbeddedSkipWarning(embedded); w != nil {
-		warnings = append(warnings, *w)
-	}
 
 	// Load schema for validation
 	sch, _ := schema.Load(vaultPath)
@@ -139,7 +138,30 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 	var previewItems []BulkPreviewItem
 	var skipped []BulkResult
 
+	// Get parse options from vault config
+	var parseOpts *parser.ParseOptions
+	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
+		dirs := vaultCfg.GetDirectoriesConfig()
+		if dirs != nil {
+			parseOpts = &parser.ParseOptions{
+				ObjectsRoot: dirs.Objects,
+				PagesRoot:   dirs.Pages,
+			}
+		}
+	}
+
 	for _, id := range ids {
+		// Check if this is an embedded object
+		if IsEmbeddedID(id) {
+			item, skip := previewSetEmbedded(vaultPath, id, updates, vaultCfg, parseOpts)
+			if skip != nil {
+				skipped = append(skipped, *skip)
+			} else if item != nil {
+				previewItems = append(previewItems, *item)
+			}
+			continue
+		}
+
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			skipped = append(skipped, BulkResult{
@@ -222,8 +244,35 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 	skipped := 0
 	errors := 0
 
+	// Get parse options from vault config
+	var parseOpts *parser.ParseOptions
+	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
+		dirs := vaultCfg.GetDirectoriesConfig()
+		if dirs != nil {
+			parseOpts = &parser.ParseOptions{
+				ObjectsRoot: dirs.Objects,
+				PagesRoot:   dirs.Pages,
+			}
+		}
+	}
+
 	for _, id := range ids {
 		result := BulkResult{ID: id}
+
+		// Check if this is an embedded object
+		if IsEmbeddedID(id) {
+			err := applySetEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
+			if err != nil {
+				result.Status = "error"
+				result.Reason = err.Error()
+				errors++
+			} else {
+				result.Status = "modified"
+				modified++
+			}
+			results = append(results, result)
+			continue
+		}
 
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
@@ -328,6 +377,11 @@ func setSingleObject(vaultPath, objectID string, updates map[string]string) erro
 	vaultCfg, err := config.LoadVaultConfig(vaultPath)
 	if err != nil || vaultCfg == nil {
 		vaultCfg = &config.VaultConfig{}
+	}
+
+	// Check if this is an embedded object
+	if IsEmbeddedID(objectID) {
+		return setEmbeddedObject(vaultPath, objectID, updates, sch, vaultCfg)
 	}
 
 	// Resolve object ID to file path
@@ -552,6 +606,392 @@ func contains(slice []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// setEmbeddedObject sets fields on an embedded object.
+func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
+	// Parse the embedded ID: fileID#slug
+	parts := strings.SplitN(objectID, "#", 2)
+	if len(parts) != 2 {
+		return handleErrorMsg(ErrInvalidInput, "invalid embedded object ID", "Expected format: file-id#embedded-id")
+	}
+	fileID := parts[0]
+	slug := parts[1]
+
+	// Resolve file ID to file path
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+	if err != nil {
+		return handleError(ErrFileDoesNotExist, err, "")
+	}
+
+	// Read the file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return handleError(ErrFileReadError, err, "")
+	}
+
+	// Get parse options from vault config
+	var parseOpts *parser.ParseOptions
+	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
+		dirs := vaultCfg.GetDirectoriesConfig()
+		if dirs != nil {
+			parseOpts = &parser.ParseOptions{
+				ObjectsRoot: dirs.Objects,
+				PagesRoot:   dirs.Pages,
+			}
+		}
+	}
+
+	// Parse the document to find the embedded object
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+	if err != nil {
+		return handleError(ErrInvalidInput, err, "Failed to parse document")
+	}
+
+	// Find the embedded object by ID
+	var targetObj *parser.ParsedObject
+	for _, obj := range doc.Objects {
+		if obj.ID == objectID {
+			targetObj = obj
+			break
+		}
+	}
+
+	if targetObj == nil {
+		return handleErrorMsg(ErrFileDoesNotExist,
+			fmt.Sprintf("embedded object '%s' not found in file", slug),
+			"Check that the embedded ID exists in the file")
+	}
+
+	// Verify this is actually an embedded object (not the file-level object)
+	if targetObj.ParentID == nil {
+		return handleErrorMsg(ErrInvalidInput,
+			"cannot use embedded set on file-level object",
+			fmt.Sprintf("Use 'rvn set %s field=value' instead", fileID))
+	}
+
+	// Get the object type for validation
+	objectType := targetObj.ObjectType
+
+	// Validate fields against schema
+	typeDef, hasType := sch.Types[objectType]
+	var validationWarnings []string
+
+	for fieldName, value := range updates {
+		if hasType && typeDef != nil {
+			fieldDef, isField := typeDef.Fields[fieldName]
+
+			if !isField && fieldName != "tags" && fieldName != "id" {
+				validationWarnings = append(validationWarnings,
+					fmt.Sprintf("'%s' is not a declared field for type '%s'", fieldName, objectType))
+			}
+
+			// Validate enum values
+			if isField && fieldDef != nil && fieldDef.Type == schema.FieldTypeEnum && len(fieldDef.Values) > 0 {
+				if !contains(fieldDef.Values, value) {
+					return handleErrorMsg(ErrValidationFailed,
+						fmt.Sprintf("invalid value '%s' for field '%s'", value, fieldName),
+						fmt.Sprintf("Allowed values: %s", strings.Join(fieldDef.Values, ", ")))
+				}
+			}
+		}
+	}
+
+	// Find the type declaration line (line after the heading)
+	typeDeclLine := targetObj.LineStart + 1
+
+	// Update the file content
+	lines := strings.Split(string(content), "\n")
+
+	// Verify the line is a type declaration
+	if typeDeclLine-1 >= len(lines) {
+		return handleErrorMsg(ErrInvalidInput, "type declaration line not found", "")
+	}
+
+	declLine := lines[typeDeclLine-1] // Convert to 0-indexed
+	trimmedDecl := strings.TrimSpace(declLine)
+	if !strings.HasPrefix(trimmedDecl, "::") {
+		return handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("expected type declaration at line %d, found: %s", typeDeclLine, trimmedDecl),
+			"The embedded object may have been modified or is in an unexpected format")
+	}
+
+	// Merge existing fields with updates
+	newFields := make(map[string]schema.FieldValue)
+	for k, v := range targetObj.Fields {
+		newFields[k] = v
+	}
+
+	// Apply updates (parse the string values into FieldValues)
+	for fieldName, value := range updates {
+		newFields[fieldName] = parseFieldValueToSchema(value)
+	}
+
+	// Serialize the updated type declaration
+	// Preserve leading whitespace from original line
+	leadingSpace := ""
+	for _, c := range declLine {
+		if c == ' ' || c == '\t' {
+			leadingSpace += string(c)
+		} else {
+			break
+		}
+	}
+
+	newDeclLine := leadingSpace + parser.SerializeTypeDeclaration(objectType, newFields)
+
+	// Replace the line
+	lines[typeDeclLine-1] = newDeclLine
+
+	// Write the file back
+	newContent := strings.Join(lines, "\n")
+	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		return handleError(ErrFileWriteError, err, "")
+	}
+
+	// Auto-reindex if configured
+	if vaultCfg.IsAutoReindexEnabled() {
+		if err := reindexFile(vaultPath, filePath); err != nil {
+			if !isJSONOutput() {
+				fmt.Printf("  (reindex failed: %v)\n", err)
+			}
+		}
+	}
+
+	relPath, _ := filepath.Rel(vaultPath, filePath)
+
+	// Output
+	if isJSONOutput() {
+		result := map[string]interface{}{
+			"file":           relPath,
+			"object_id":      objectID,
+			"type":           objectType,
+			"embedded":       true,
+			"updated_fields": updates,
+		}
+		if len(validationWarnings) > 0 {
+			var warnings []Warning
+			for _, w := range validationWarnings {
+				warnings = append(warnings, Warning{
+					Code:    WarnUnknownField,
+					Message: w,
+				})
+			}
+			outputSuccessWithWarnings(result, warnings, nil)
+		} else {
+			outputSuccess(result, nil)
+		}
+		return nil
+	}
+
+	// Human-readable output
+	fmt.Printf("Updated %s (embedded: %s):\n", relPath, slug)
+	var fieldNames []string
+	for name := range updates {
+		fieldNames = append(fieldNames, name)
+	}
+	sort.Strings(fieldNames)
+	for _, name := range fieldNames {
+		fmt.Printf("  %s = %s\n", name, updates[name])
+	}
+	for _, warning := range validationWarnings {
+		fmt.Printf("  Warning: %s\n", warning)
+	}
+
+	return nil
+}
+
+// previewSetEmbedded generates a preview for an embedded object.
+func previewSetEmbedded(vaultPath, id string, updates map[string]string, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) (*BulkPreviewItem, *BulkResult) {
+	// Parse the embedded ID
+	parts := strings.SplitN(id, "#", 2)
+	if len(parts) != 2 {
+		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "invalid embedded ID format"}
+	}
+	fileID := parts[0]
+
+	// Resolve file ID to file path
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+	if err != nil {
+		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "parent file not found"}
+	}
+
+	// Read the file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
+	}
+
+	// Parse the document
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+	if err != nil {
+		return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
+	}
+
+	// Find the embedded object
+	var targetObj *parser.ParsedObject
+	for _, obj := range doc.Objects {
+		if obj.ID == id {
+			targetObj = obj
+			break
+		}
+	}
+
+	if targetObj == nil {
+		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
+	}
+
+	// Build change summary
+	changes := make(map[string]string)
+	for field, newVal := range updates {
+		oldVal := "<unset>"
+		if targetObj.Fields != nil {
+			if v, ok := targetObj.Fields[field]; ok {
+				if s, ok := v.AsString(); ok {
+					oldVal = s
+				} else if n, ok := v.AsNumber(); ok {
+					oldVal = fmt.Sprintf("%v", n)
+				} else if b, ok := v.AsBool(); ok {
+					oldVal = fmt.Sprintf("%v", b)
+				} else {
+					oldVal = fmt.Sprintf("%v", v.Raw())
+				}
+			}
+		}
+		changes[field] = fmt.Sprintf("%s (was: %s)", newVal, oldVal)
+	}
+
+	return &BulkPreviewItem{
+		ID:      id,
+		Action:  "set",
+		Changes: changes,
+	}, nil
+}
+
+// applySetEmbedded applies a set operation to an embedded object.
+func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) error {
+	// Parse the embedded ID
+	parts := strings.SplitN(id, "#", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid embedded ID format")
+	}
+	fileID := parts[0]
+	slug := parts[1]
+
+	// Resolve file ID to file path
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+	if err != nil {
+		return fmt.Errorf("parent file not found: %w", err)
+	}
+
+	// Read the file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("read error: %w", err)
+	}
+
+	// Parse the document
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+	if err != nil {
+		return fmt.Errorf("parse error: %w", err)
+	}
+
+	// Find the embedded object
+	var targetObj *parser.ParsedObject
+	for _, obj := range doc.Objects {
+		if obj.ID == id {
+			targetObj = obj
+			break
+		}
+	}
+
+	if targetObj == nil {
+		return fmt.Errorf("embedded object '%s' not found", slug)
+	}
+
+	// Verify this is an embedded object
+	if targetObj.ParentID == nil {
+		return fmt.Errorf("cannot modify file-level object as embedded")
+	}
+
+	// Find the type declaration line
+	typeDeclLine := targetObj.LineStart + 1
+	lines := strings.Split(string(content), "\n")
+
+	if typeDeclLine-1 >= len(lines) {
+		return fmt.Errorf("type declaration line not found")
+	}
+
+	declLine := lines[typeDeclLine-1]
+	trimmedDecl := strings.TrimSpace(declLine)
+	if !strings.HasPrefix(trimmedDecl, "::") {
+		return fmt.Errorf("expected type declaration at line %d", typeDeclLine)
+	}
+
+	// Merge existing fields with updates
+	newFields := make(map[string]schema.FieldValue)
+	for k, v := range targetObj.Fields {
+		newFields[k] = v
+	}
+
+	for fieldName, value := range updates {
+		newFields[fieldName] = parseFieldValueToSchema(value)
+	}
+
+	// Preserve leading whitespace
+	leadingSpace := ""
+	for _, c := range declLine {
+		if c == ' ' || c == '\t' {
+			leadingSpace += string(c)
+		} else {
+			break
+		}
+	}
+
+	// Serialize and replace
+	newDeclLine := leadingSpace + parser.SerializeTypeDeclaration(targetObj.ObjectType, newFields)
+	lines[typeDeclLine-1] = newDeclLine
+
+	// Write the file back
+	newContent := strings.Join(lines, "\n")
+	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("write error: %w", err)
+	}
+
+	// Auto-reindex if configured
+	if vaultCfg.IsAutoReindexEnabled() {
+		reindexFile(vaultPath, filePath)
+	}
+
+	return nil
+}
+
+// parseFieldValueToSchema converts a string value to schema.FieldValue.
+func parseFieldValueToSchema(value string) schema.FieldValue {
+	parsed := parseFieldValue(value)
+	return convertToSchemaFieldValue(parsed)
+}
+
+// convertToSchemaFieldValue converts an interface{} to schema.FieldValue.
+func convertToSchemaFieldValue(v interface{}) schema.FieldValue {
+	switch val := v.(type) {
+	case bool:
+		return schema.Bool(val)
+	case string:
+		// Check if it's a reference
+		if strings.HasPrefix(val, "[[") && strings.HasSuffix(val, "]]") {
+			return schema.Ref(val[2 : len(val)-2])
+		}
+		return schema.String(val)
+	case []interface{}:
+		var items []schema.FieldValue
+		for _, item := range val {
+			items = append(items, convertToSchemaFieldValue(item))
+		}
+		return schema.Array(items)
+	default:
+		return schema.String(fmt.Sprintf("%v", v))
+	}
 }
 
 func init() {

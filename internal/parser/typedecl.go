@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -266,4 +267,83 @@ func parseArrayItems(s string) []schema.FieldValue {
 	}
 
 	return items
+}
+
+// SerializeTypeDeclaration serializes a type declaration back to ::typename(fields) format.
+func SerializeTypeDeclaration(typeName string, fields map[string]schema.FieldValue) string {
+	if len(fields) == 0 {
+		return "::" + typeName + "()"
+	}
+
+	// Collect and sort field names for consistent output
+	var keys []string
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var parts []string
+	for _, k := range keys {
+		v := fields[k]
+		if !v.IsNull() {
+			parts = append(parts, k+"="+serializeFieldValue(v))
+		}
+	}
+
+	return "::" + typeName + "(" + strings.Join(parts, ", ") + ")"
+}
+
+// serializeFieldValue converts a FieldValue back to string format for embedded type declarations.
+func serializeFieldValue(fv schema.FieldValue) string {
+	if fv.IsNull() {
+		return ""
+	}
+
+	// Check for reference first
+	if ref, ok := fv.AsRef(); ok {
+		return "[[" + ref + "]]"
+	}
+
+	// Check for array
+	if arr, ok := fv.AsArray(); ok {
+		var items []string
+		for _, item := range arr {
+			items = append(items, serializeFieldValue(item))
+		}
+		return "[" + strings.Join(items, ", ") + "]"
+	}
+
+	// Check for boolean
+	if b, ok := fv.AsBool(); ok {
+		if b {
+			return "true"
+		}
+		return "false"
+	}
+
+	// Check for number
+	if n, ok := fv.AsNumber(); ok {
+		// Format without trailing zeros for integers
+		if n == float64(int64(n)) {
+			return strconv.FormatInt(int64(n), 10)
+		}
+		return strconv.FormatFloat(n, 'f', -1, 64)
+	}
+
+	// String (may need quoting if it contains special chars)
+	if s, ok := fv.AsString(); ok {
+		return serializeString(s)
+	}
+
+	return ""
+}
+
+// serializeString returns a string value, quoting if necessary.
+func serializeString(s string) string {
+	// Quote if contains special characters that would break parsing
+	needsQuote := strings.ContainsAny(s, ",()[]=\"")
+	if needsQuote {
+		return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	}
+	return s
 }
