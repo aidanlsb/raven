@@ -42,7 +42,24 @@ When users want to create notes:
    raven_add(text="Meeting notes", to="cursor")  # Resolves to companies/cursor.md
    
 3. If a required field is missing, ask the user for the value
+
+4. Check if the type has name_field configured (via raven_schema type <name>):
+   - If name_field is set, the title argument auto-populates that field
+   - Example: person type with name_field: name means title="Freya" sets name="Freya"
 ```
+
+**name_field auto-population:**
+
+If a type has `name_field` configured, you don't need to provide that field separately:
+```
+# Type has name_field: name
+raven_new(type="person", title="Freya")  # name="Freya" is auto-set
+
+# Type has name_field: title  
+raven_new(type="book", title="Harry Potter")  # title="Harry Potter" is auto-set
+```
+
+Check `raven_schema types` - if you see a hint about types without `name_field`, suggest setting it up to simplify object creation.
 
 ### 3. Querying
 
@@ -95,12 +112,27 @@ When you need to understand the vault structure:
 
 ```
 1. Use raven_schema to see available types and traits:
-   raven_schema(subcommand="types")   # List all types
+   raven_schema(subcommand="types")   # List all types (includes name_field hints)
    raven_schema(subcommand="traits")  # List all traits
    raven_schema(subcommand="type person")  # Details about person type
 
 2. Check saved queries:
    raven_query(list=true)  # See saved queries defined in raven.yaml
+
+3. Look for name_field hints in the types response:
+   - Types with required string fields but no name_field are listed
+   - Suggest setting up name_field for easier object creation
+```
+
+**Understanding name_field:**
+
+When you call `raven_schema(subcommand="type person")`, check for:
+- `name_field`: Which field is the display name (e.g., "name", "title")
+- If set, the title argument to raven_new auto-populates this field
+
+To set up name_field on an existing type:
+```
+raven_schema_update_type(name="person", name-field="name")
 ```
 
 ### 5. Editing Content
@@ -298,8 +330,12 @@ For modifying existing schema elements:
 1. Update a type:
    raven_schema_update_type(name="person", default_path="contacts/")
    raven_schema_update_type(name="meeting", add_trait="due")
+   raven_schema_update_type(name="person", name-field="name")  # Set display name field
 
-2. Update a trait:
+2. Add a new type with name_field:
+   raven_schema_add_type(name="book", default-path="books/", name-field="title")
+
+3. Update a trait:
    raven_schema_update_trait(name="priority", values="critical,high,medium,low")
 
 3. Update a field:
@@ -481,8 +517,11 @@ daily_template: |
 
 **User**: "Add a new person for my colleague Thor Odinson"
 ```
-→ raven_schema(subcommand="type person")  # Check required fields
-→ raven_new(type="person", title="Thor Odinson", field={"name": "Thor Odinson"})
+→ raven_schema(subcommand="type person")  # Check required fields and name_field
+→ If name_field: name is set:
+    raven_new(type="person", title="Thor Odinson")  # name auto-populated
+→ If no name_field:
+    raven_new(type="person", title="Thor Odinson", field={"name": "Thor Odinson"})
 ```
 
 **User**: "My vault has a lot of broken links, can you help fix them?"
