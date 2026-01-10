@@ -6,22 +6,33 @@
 
 <p align="center">
   <strong>
-    Plain markdown notes with schemas, traits, and querying.<br>
-    Built around a CLI that also exposes MCP tools for agents.
+    Structured markdown notes with schema validation, querying, and MCP support.
   </strong>
 </p>
 
 > ⚠️ **Experimental:** Raven is early and under active development.
 
-## A compelling end-to-end example
+---
 
-Raven is just markdown files plus:
-- **Schema** (`schema.yaml`) for typed frontmatter + embedded objects
-- **Traits** (`@due(...)`, `@priority(...)`) for queryable annotations in text
-- **Querying** (`rvn query ...`) across your whole vault
-- **Agentic workflows** via MCP (`rvn serve`) so an assistant can safely operate on your vault
+Raven adds structure to markdown notes without sacrificing portability. Files stay as plain `.md` — readable in any editor, greppable, yours to keep. But with a schema and some lightweight conventions, you get:
 
-### 1) Define a schema
+- **Typed objects** — define types (person, project, etc.) with validated frontmatter fields
+- **Traits** — inline annotations like `@due(2026-01-15)` that are indexed and queryable
+- **References** — `[[wiki-links]]` with validation and backlink tracking
+- **Query language** — find objects and traits across your vault without grep gymnastics
+- **MCP server** — expose your vault to AI agents with schema-aware tooling
+
+The MCP angle is the interesting part. Agents can create, query, and update your notes — but they're constrained by your schema. An agent can't create a malformed project or reference a person that doesn't exist. You get useful automation without the usual "AI making things up" problem.
+
+---
+
+## Example
+
+A consulting firm tracking people, clients, and projects.
+
+### Schema
+
+Define types and traits in `schema.yaml`:
 
 ```yaml
 # schema.yaml
@@ -33,7 +44,6 @@ types:
     fields:
       name: { type: string, required: true }
       email: { type: string }
-      alias: { type: string } # optional: enables [[alias]] resolution
 
   client:
     default_path: clients/
@@ -43,10 +53,7 @@ types:
   project:
     default_path: projects/
     fields:
-      status:
-        type: enum
-        values: [active, paused, completed]
-        default: active
+      status: { type: enum, values: [active, paused, completed], default: active }
       lead: { type: ref, target: person }
       client: { type: ref, target: client }
       budget_usd: { type: number }
@@ -58,13 +65,18 @@ traits:
   highlight: { type: boolean }
 ```
 
-### 2) Write plain markdown with traits + refs
+### Notes
+
+A daily note:
 
 ```markdown
 # Friday, January 9, 2026
 
 ## Midgard Security Audit
 ::meeting(time=09:00, attendees=[[[people/freya]]])
+
+The call went well. Audit is approved — $50k budget, starting Monday.
+Freya will lead. Need to get Heimdall to provision Bifrost access.
 
 - @due(2026-01-12) @priority(high) Send kickoff doc to [[clients/midgard]]
 - @status(in_progress) Get Bifrost access from [[people/heimdall]]
@@ -73,7 +85,7 @@ traits:
 - @highlight Freya thinks the bottleneck is review latency, not implementation.
 ```
 
-And a typed object file:
+A typed project file:
 
 ```markdown
 ---
@@ -86,47 +98,55 @@ budget_usd: 50000
 
 # Midgard Security Audit
 
+Comprehensive security review of Midgard's infrastructure.
+
 ## Tasks
 - @due(2026-01-12) @priority(high) Kickoff doc
 - @due(2026-01-15) Draft audit plan
+- @due(2026-01-20) Initial findings review
 ```
 
-### 3) Query it
+Still plain markdown — works in any editor.
+
+### Queries
 
 ```bash
-# Overdue items anywhere in the vault
+# What's overdue?
 rvn query "trait:due value:past"
 
 # All active projects
 rvn query "object:project .status:active"
 
-# Projects that contain overdue items anywhere in their hierarchy
-rvn query "object:project contains:{trait:due value:past}"
+# High-priority tasks for Midgard
+rvn query "trait:priority value:high refs:[[clients/midgard]]"
 
-# Tasks that mention Midgard (refs on the same line as the trait)
-rvn query "trait:due refs:[[clients/midgard]]"
+# Projects with overdue items somewhere inside them
+rvn query "object:project contains:{trait:due value:past}"
 ```
 
-### 4) Use an agent (MCP)
+### Agent usage (MCP)
 
-Run Raven as an MCP server so an assistant can safely read/query/update your vault:
+Run as an MCP server:
 
 ```bash
 rvn serve --vault-path /path/to/vault
 ```
 
-Example interaction:
+Agents (Claude, Cursor, etc.) can then read, query, and update your vault:
 
 ```
-You: Midgard call went great — security audit approved. Freya’s leading it,
-     starts Monday, 50k budget. Capture this and create whatever pages we need.
+You: "Midgard call went great — security audit approved. Freya's leading it,
+      starts Monday, 50k budget. Capture this and create whatever pages we need."
 
 Agent:
-  - creates `projects/midgard-security-audit.md` (type: project)
-  - sets lead = [[people/freya]], client = [[clients/midgard]], status = active, budget_usd = 50000
-  - appends kickoff tasks to today’s daily note with @due(...) and links
-  - suggests a meeting-prep workflow render if you have one configured
+  → Creates projects/midgard-security-audit.md (type: project)
+  → Sets lead, client, budget_usd via schema-validated fields
+  → Appends tasks to today's daily note with @due traits
 ```
+
+The agent operates within your schema. Missing required fields get rejected. Invalid references get caught. Automation that actually works.
+
+---
 
 ## Install
 
@@ -137,15 +157,51 @@ go install github.com/aidanlsb/raven/cmd/rvn@latest
 ## Quickstart
 
 ```bash
+# Initialize a new vault
 rvn init /path/to/notes
+
+# Build the index
 rvn reindex
+
+# Open today's daily note
 rvn daily
+
+# See what queries are available
 rvn query --list
 ```
 
+---
+
 ## Documentation
 
-Start here: `docs/README.md`.
+**Getting started:**
+- [Getting started guide](docs/guide/getting-started.md)
+- [Core concepts](docs/guide/core-concepts.md)
+
+**How-to guides:**
+- [Configuration](docs/guide/configuration.md)
+- [CLI usage](docs/guide/cli.md)
+- [Working with agents](docs/guide/agents.md)
+- [Agent guide](docs/guide/agent-guide.md)
+- [Workflows](docs/guide/workflows.md)
+
+**Reference:**
+- [File format](docs/reference/file-format.md)
+- [Schema (`schema.yaml`)](docs/reference/schema.md)
+- [Vault config (`raven.yaml`)](docs/reference/vault-config.md)
+- [Query language](docs/reference/query-language.md)
+- [Bulk operations](docs/reference/bulk-operations.md)
+- [Workflows spec](docs/reference/workflows.md)
+- [MCP tools](docs/reference/mcp.md)
+
+**Design docs:**
+- [Architecture](docs/design/architecture.md)
+- [Database / index](docs/design/database.md)
+- [Migrations](docs/design/migrations.md)
+- [LSP design notes](docs/design/lsp.md)
+- [Future ideas](docs/design/future.md)
+
+---
 
 ## Development
 
@@ -157,4 +213,3 @@ go build ./cmd/rvn
 ## License
 
 MIT
-
