@@ -41,7 +41,8 @@ const (
 	FlagTypeString      FlagType = "string"
 	FlagTypeBool        FlagType = "bool"
 	FlagTypeInt         FlagType = "int"
-	FlagTypeKeyValue    FlagType = "key=value"   // For --field name=value
+	FlagTypeKeyValue    FlagType = "key=value"   // For repeatable flags: --field name=value, --input name=value
+	FlagTypePosKeyValue FlagType = "pos-key=value" // For positional key=value args (e.g., `set <id> field=value...`)
 	FlagTypeStringSlice FlagType = "stringSlice" // For repeatable string flags
 )
 
@@ -515,7 +516,7 @@ Bulk operations preview changes by default; use --confirm to apply.`,
 			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypeKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypePosKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},

@@ -90,6 +90,10 @@ func GenerateCobraCommand(name string, handler Handler) *cobra.Command {
 		case FlagTypeKeyValue:
 			// StringArray for repeatable flags
 			cmd.Flags().StringArray(flag.Name, nil, flag.Description)
+		case FlagTypePosKeyValue:
+			// Positional key=value args are not Cobra flags.
+			// (This exists in the registry primarily for MCP schema generation.)
+			continue
 		default:
 			cmd.Flags().String(flag.Name, flag.Default, flag.Description)
 		}
@@ -129,6 +133,9 @@ func GenerateCobraCommand(name string, handler Handler) *cobra.Command {
 				case FlagTypeKeyValue:
 					val, _ := cmd.Flags().GetStringArray(flag.Name)
 					flags[flag.Name] = val
+				case FlagTypePosKeyValue:
+					// Positional key=value args are in args, not flags.
+					continue
 				default:
 					val, _ := cmd.Flags().GetString(flag.Name)
 					flags[flag.Name] = val

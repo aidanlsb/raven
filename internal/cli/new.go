@@ -86,6 +86,17 @@ Examples:
 			}
 		}
 
+		// Auto-fill a declared `title` field from the positional title.
+		// This avoids a common footgun where a type defines a required `title` field
+		// and agents/users assume `rvn new <type> <title>` satisfies it.
+		if typeDef != nil {
+			if _, hasTitleField := typeDef.Fields["title"]; hasTitleField {
+				if _, provided := fieldValues["title"]; !provided && title != "" {
+					fieldValues["title"] = title
+				}
+			}
+		}
+
 		// Collect required fields and check which are missing
 		var missingFields []string
 		var fieldDetails []map[string]interface{}
@@ -149,7 +160,7 @@ Examples:
 				map[string]interface{}{
 					"missing_fields": fieldDetails,
 				},
-				"Ask user for values, then retry with --field name=value flags")
+				"Ask user for values, then retry with --field name=value (CLI) or `field: {name: value}` (MCP)")
 			return nil // Error already output
 		}
 
