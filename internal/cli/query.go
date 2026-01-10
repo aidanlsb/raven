@@ -16,6 +16,22 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
+func dedupePreserveOrder(ids []string) []string {
+	seen := make(map[string]struct{}, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
 // tableRow represents a row in the output table
 type tableRow struct {
 	name     string // Object name/slug
@@ -206,6 +222,10 @@ Examples:
 
 		// Get --ids flag
 		idsOnly, _ := cmd.Flags().GetBool("ids")
+	objectIDsOnly, _ := cmd.Flags().GetBool("object-ids")
+	if idsOnly && objectIDsOnly {
+		return handleErrorMsg(ErrInvalidInput, "cannot use --ids and --object-ids together", "Use --ids for result IDs, or --object-ids to output containing object IDs for trait queries")
+	}
 
 		// Get --apply flag
 		applyArgs, _ := cmd.Flags().GetStringArray("apply")
@@ -218,12 +238,12 @@ Examples:
 
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithOptions(db, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
+			return runFullQueryWithOptions(db, queryStr, start, sch, idsOnly, objectIDsOnly, vaultCfg.DailyDirectory)
 		}
 
 		// Check if this is a saved query
 		if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
-			return runSavedQueryWithOptions(db, savedQuery, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
+			return runSavedQueryWithOptions(db, savedQuery, queryStr, start, sch, idsOnly, objectIDsOnly, vaultCfg.DailyDirectory)
 		}
 
 		// Unknown query - provide helpful error
@@ -274,9 +294,11 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 			return handleError(ErrDatabaseError, err, "")
 		}
 		for _, r := range results {
-			ids = append(ids, r.ID)
+			// For trait queries, bulk operations act on the containing object.
+			ids = append(ids, r.ParentObjectID)
 		}
 	}
+	ids = dedupePreserveOrder(ids)
 
 	if len(ids) == 0 {
 		if isJSONOutput() {
@@ -415,10 +437,10 @@ func runFullQuery(db *index.Database, queryStr string, start time.Time, dailyDir
 }
 
 func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, dailyDir string) error {
-	return runFullQueryWithOptions(db, queryStr, start, sch, false, dailyDir)
+	return runFullQueryWithOptions(db, queryStr, start, sch, false, false, dailyDir)
 }
 
-func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
+func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, objectIDsOnly bool, dailyDir string) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
 	if err != nil {
@@ -450,7 +472,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 		}
 
 		// --ids mode: output just IDs, one per line
-		if idsOnly {
+		if idsOnly || objectIDsOnly {
 			if isJSONOutput() {
 				ids := make([]string, len(results))
 				for i, r := range results {
@@ -514,20 +536,30 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 		return handleError(ErrDatabaseError, err, "")
 	}
 
-	// --ids mode: output just trait IDs, one per line
-	if idsOnly {
-		if isJSONOutput() {
-			ids := make([]string, len(results))
-			for i, r := range results {
-				ids[i] = r.ID
+	// --ids / --object-ids mode
+	if idsOnly || objectIDsOnly {
+		ids := make([]string, 0, len(results))
+		if objectIDsOnly {
+			// For trait queries, --object-ids outputs the containing object's ID (deduped).
+			for _, r := range results {
+				ids = append(ids, r.ParentObjectID)
 			}
+			ids = dedupePreserveOrder(ids)
+		} else {
+			// --ids outputs the trait IDs (IDs of the query results).
+			for _, r := range results {
+				ids = append(ids, r.ID)
+			}
+		}
+
+		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"ids": ids,
 			}, &Meta{Count: len(ids), QueryTimeMs: elapsed})
 			return nil
 		}
-		for _, r := range results {
-			fmt.Println(r.ID)
+		for _, id := range ids {
+			fmt.Println(id)
 		}
 		return nil
 	}
@@ -617,16 +649,16 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 }
 
 func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, dailyDir string) error {
-	return runSavedQueryWithOptions(db, q, name, start, sch, false, dailyDir)
+	return runSavedQueryWithOptions(db, q, name, start, sch, false, false, dailyDir)
 }
 
-func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
+func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool, objectIDsOnly bool, dailyDir string) error {
 	if q.Query == "" {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
 	}
 
 	// Just run the query string through the normal query parser
-	return runFullQueryWithOptions(db, q.Query, start, sch, idsOnly, dailyDir)
+	return runFullQueryWithOptions(db, q.Query, start, sch, idsOnly, objectIDsOnly, dailyDir)
 }
 
 func printTraitResults(results []index.TraitResult) {
@@ -890,6 +922,7 @@ func init() {
 	queryCmd.Flags().BoolP("list", "l", false, "List saved queries")
 	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
 	queryCmd.Flags().Bool("ids", false, "Output only object/trait IDs, one per line (for piping)")
+	queryCmd.Flags().Bool("object-ids", false, "Output object IDs (for trait queries, outputs containing object IDs; for object queries same as --ids)")
 	queryCmd.Flags().StringArray("apply", nil, "Apply a bulk operation to query results (format: command args...)")
 	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
 
