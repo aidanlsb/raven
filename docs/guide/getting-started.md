@@ -19,16 +19,7 @@ This creates:
 
 ## Configure your default vault (optional)
 
-Raven looks for a global config at `~/.config/raven/config.toml` (or your OS config dir).
-
-Simple (legacy) single-vault config:
-
-```toml
-vault = "/path/to/notes"
-editor = "code"
-```
-
-Named vaults:
+Raven looks for a global config at `~/.config/raven/config.toml` (or your OS config dir). You can have multiple named vaults and set one as your default:
 
 ```toml
 default_vault = "work"
