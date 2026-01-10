@@ -292,24 +292,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 		return nil
 	}
 
-	// Filter out embedded IDs
-	var fileIDs []string
-	var embedded []string
-	for _, id := range ids {
-		if IsEmbeddedID(id) {
-			embedded = append(embedded, id)
-		} else {
-			fileIDs = append(fileIDs, id)
-		}
-	}
-
-	// Build warnings for embedded objects
-	var warnings []Warning
-	if w := BuildEmbeddedSkipWarning(embedded); w != nil {
-		warnings = append(warnings, *w)
-	}
-
-	// Parse the apply command
+	// Parse the apply command first to determine if we need to filter embedded IDs
 	// Format: --apply "set field=value" or --apply set --apply field=value
 	// We'll join all apply args and parse them
 	applyStr := strings.Join(applyArgs, " ")
@@ -322,10 +305,31 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 	applyCmd := applyParts[0]
 	applyOperationArgs := applyParts[1:]
 
+	// Filter embedded IDs for operations that don't support them
+	// Note: "set" now supports embedded objects, so we pass all IDs to it
+	var fileIDs []string
+	var embedded []string
+	for _, id := range ids {
+		if IsEmbeddedID(id) {
+			embedded = append(embedded, id)
+		} else {
+			fileIDs = append(fileIDs, id)
+		}
+	}
+
+	// Build warnings for embedded objects (only for commands that don't support them)
+	var warnings []Warning
+	if applyCmd != "set" {
+		if w := BuildEmbeddedSkipWarning(embedded); w != nil {
+			warnings = append(warnings, *w)
+		}
+	}
+
 	// Dispatch to the appropriate bulk operation
 	switch applyCmd {
 	case "set":
-		return applySetFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, sch, vaultCfg, confirm)
+		// Set supports embedded objects, so pass all IDs
+		return applySetFromQuery(vaultPath, ids, applyOperationArgs, warnings, sch, vaultCfg, confirm)
 	case "delete":
 		return applyDeleteFromQuery(vaultPath, fileIDs, warnings, vaultCfg, confirm)
 	case "add":
