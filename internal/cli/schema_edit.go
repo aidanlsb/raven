@@ -18,6 +18,7 @@ import (
 // Flags for schema add commands
 var (
 	schemaAddDefaultPath string
+	schemaAddNameField   string
 	schemaAddFieldType   string
 	schemaAddRequired    bool
 	schemaAddDefault     string
@@ -28,6 +29,7 @@ var (
 // Flags for schema update commands
 var (
 	schemaUpdateDefaultPath string
+	schemaUpdateNameField   string
 	schemaUpdateFieldType   string
 	schemaUpdateRequired    string // "true", "false", or "" (no change)
 	schemaUpdateDefault     string
@@ -97,6 +99,15 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type", typeName), "Choose a different name")
 	}
 
+	// Interactive prompt for name_field if not provided and not in JSON mode
+	nameField := schemaAddNameField
+	if nameField == "" && !isJSONOutput() {
+		fmt.Print("Which field should be the display name? (common: name, title; leave blank for none): ")
+		var input string
+		fmt.Scanln(&input)
+		nameField = strings.TrimSpace(input)
+	}
+
 	// Read current schema file to preserve formatting
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
@@ -122,6 +133,19 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		newType["default_path"] = schemaAddDefaultPath
 	}
 
+	// Handle name_field - auto-create the field if it doesn't exist
+	if nameField != "" {
+		newType["name_field"] = nameField
+
+		// Auto-create the field as required string
+		fields := make(map[string]interface{})
+		fields[nameField] = map[string]interface{}{
+			"type":     "string",
+			"required": true,
+		}
+		newType["fields"] = fields
+	}
+
 	types[typeName] = newType
 
 	// Write back
@@ -137,17 +161,25 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
+		result := map[string]interface{}{
 			"added":        "type",
 			"name":         typeName,
 			"default_path": schemaAddDefaultPath,
-		}, &Meta{QueryTimeMs: elapsed})
+		}
+		if nameField != "" {
+			result["name_field"] = nameField
+			result["auto_created_field"] = nameField
+		}
+		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
 	fmt.Printf("✓ Added type '%s' to schema.yaml\n", typeName)
 	if schemaAddDefaultPath != "" {
 		fmt.Printf("  default_path: %s\n", schemaAddDefaultPath)
+	}
+	if nameField != "" {
+		fmt.Printf("  name_field: %s (auto-created as required string)\n", nameField)
 	}
 	return nil
 }
@@ -354,6 +386,7 @@ Checks:
   - Valid field types
   - Valid trait types
   - Referenced types exist
+  - name_field references valid string fields
   - No circular references
 
 Examples:
@@ -370,22 +403,8 @@ Examples:
 			return handleError(ErrSchemaInvalid, err, "Fix the errors and try again")
 		}
 
-		// Additional validation
-		var issues []string
-
-		// Check that ref targets exist
-		for typeName, typeDef := range sch.Types {
-			if typeDef.Fields != nil {
-				for fieldName, fieldDef := range typeDef.Fields {
-					if fieldDef != nil && fieldDef.Type == schema.FieldTypeRef && fieldDef.Target != "" {
-						if _, exists := sch.Types[fieldDef.Target]; !exists {
-							issues = append(issues, fmt.Sprintf("Type '%s' field '%s' references unknown type '%s'", typeName, fieldName, fieldDef.Target))
-						}
-					}
-				}
-			}
-
-		}
+		// Use the comprehensive validation function
+		issues := schema.ValidateSchema(sch)
 
 		elapsed := time.Since(start).Milliseconds()
 
@@ -469,7 +488,8 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	// Check if type exists
-	if _, exists := sch.Types[typeName]; !exists {
+	typeDef, exists := sch.Types[typeName]
+	if !exists {
 		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "Use 'rvn schema add type' to create it")
 	}
 
@@ -497,6 +517,47 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	if schemaUpdateDefaultPath != "" {
 		typeNode["default_path"] = schemaUpdateDefaultPath
 		changes = append(changes, fmt.Sprintf("default_path=%s", schemaUpdateDefaultPath))
+	}
+
+	// Handle name_field update
+	if schemaUpdateNameField != "" {
+		// Empty string means remove name_field
+		if schemaUpdateNameField == "-" || schemaUpdateNameField == "none" || schemaUpdateNameField == "\"\"" {
+			delete(typeNode, "name_field")
+			changes = append(changes, "removed name_field")
+		} else {
+			// Check if field exists; if not, auto-create it
+			fieldExists := false
+			if typeDef.Fields != nil {
+				if fieldDef, ok := typeDef.Fields[schemaUpdateNameField]; ok {
+					fieldExists = true
+					// Validate it's a string type
+					if fieldDef.Type != schema.FieldTypeString {
+						return handleErrorMsg(ErrInvalidInput,
+							fmt.Sprintf("name_field must reference a string field, '%s' is type '%s'", schemaUpdateNameField, fieldDef.Type),
+							"Choose a string field or create a new one")
+					}
+				}
+			}
+
+			typeNode["name_field"] = schemaUpdateNameField
+
+			if !fieldExists {
+				// Auto-create the field
+				fields, ok := typeNode["fields"].(map[string]interface{})
+				if !ok {
+					fields = make(map[string]interface{})
+					typeNode["fields"] = fields
+				}
+				fields[schemaUpdateNameField] = map[string]interface{}{
+					"type":     "string",
+					"required": true,
+				}
+				changes = append(changes, fmt.Sprintf("name_field=%s (auto-created as required string)", schemaUpdateNameField))
+			} else {
+				changes = append(changes, fmt.Sprintf("name_field=%s", schemaUpdateNameField))
+			}
+		}
 	}
 
 	// Handle trait additions/removals
@@ -540,7 +601,7 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	if len(changes) == 0 {
-		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --default-path, --add-trait, --remove-trait")
+		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --default-path, --name-field, --add-trait, --remove-trait")
 	}
 
 	// Write back
@@ -1096,6 +1157,7 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 func init() {
 	// Add flags to schema add command
 	schemaAddCmd.Flags().StringVar(&schemaAddDefaultPath, "default-path", "", "Default path for new type files")
+	schemaAddCmd.Flags().StringVar(&schemaAddNameField, "name-field", "", "Field to use as display name (auto-created if doesn't exist)")
 	schemaAddCmd.Flags().StringVar(&schemaAddFieldType, "type", "", "Field/trait type (string, date, enum, ref, bool)")
 	schemaAddCmd.Flags().BoolVar(&schemaAddRequired, "required", false, "Mark field as required")
 	schemaAddCmd.Flags().StringVar(&schemaAddDefault, "default", "", "Default value")
@@ -1104,6 +1166,7 @@ func init() {
 
 	// Add flags to schema update command
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDefaultPath, "default-path", "", "Update default path for type")
+	schemaUpdateCmd.Flags().StringVar(&schemaUpdateNameField, "name-field", "", "Set/update display name field (use '-' to remove)")
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateFieldType, "type", "", "Update field/trait type")
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateRequired, "required", "", "Update required status (true/false)")
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDefault, "default", "", "Update default value")

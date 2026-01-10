@@ -143,6 +143,7 @@ type TypeSchema struct {
 	Name        string                 `json:"name"`
 	Builtin     bool                   `json:"builtin"`
 	DefaultPath string                 `json:"default_path,omitempty"`
+	NameField   string                 `json:"name_field,omitempty"`
 	Fields      map[string]FieldSchema `json:"fields,omitempty"`
 }
 

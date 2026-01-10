@@ -550,3 +550,92 @@ func TestIsValidDatetime(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateNameField(t *testing.T) {
+	t.Run("no name_field is valid", func(t *testing.T) {
+		typeDef := &TypeDefinition{
+			Fields: map[string]*FieldDefinition{
+				"title": {Type: FieldTypeString, Required: true},
+			},
+		}
+		err := ValidateNameField(typeDef)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("name_field referencing valid string field", func(t *testing.T) {
+		typeDef := &TypeDefinition{
+			NameField: "title",
+			Fields: map[string]*FieldDefinition{
+				"title": {Type: FieldTypeString, Required: true},
+			},
+		}
+		err := ValidateNameField(typeDef)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("name_field referencing non-existent field", func(t *testing.T) {
+		typeDef := &TypeDefinition{
+			NameField: "foo",
+			Fields: map[string]*FieldDefinition{
+				"title": {Type: FieldTypeString, Required: true},
+			},
+		}
+		err := ValidateNameField(typeDef)
+		if err == nil {
+			t.Error("expected error for non-existent field")
+		}
+	})
+
+	t.Run("name_field referencing non-string field", func(t *testing.T) {
+		typeDef := &TypeDefinition{
+			NameField: "count",
+			Fields: map[string]*FieldDefinition{
+				"count": {Type: FieldTypeNumber, Required: true},
+			},
+		}
+		err := ValidateNameField(typeDef)
+		if err == nil {
+			t.Error("expected error for non-string field")
+		}
+	})
+}
+
+func TestValidateSchema(t *testing.T) {
+	t.Run("valid schema with name_field", func(t *testing.T) {
+		sch := &Schema{
+			Types: map[string]*TypeDefinition{
+				"book": {
+					NameField: "title",
+					Fields: map[string]*FieldDefinition{
+						"title": {Type: FieldTypeString, Required: true},
+					},
+				},
+			},
+		}
+		issues := ValidateSchema(sch)
+		if len(issues) != 0 {
+			t.Errorf("expected no issues, got %v", issues)
+		}
+	})
+
+	t.Run("invalid name_field in schema", func(t *testing.T) {
+		sch := &Schema{
+			Types: map[string]*TypeDefinition{
+				"book": {
+					NameField: "nonexistent",
+					Fields: map[string]*FieldDefinition{
+						"title": {Type: FieldTypeString, Required: true},
+					},
+				},
+			},
+		}
+		issues := ValidateSchema(sch)
+		if len(issues) != 1 {
+			t.Errorf("expected 1 issue, got %d", len(issues))
+		}
+	})
+}

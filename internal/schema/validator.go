@@ -187,3 +187,53 @@ func isValidDate(s string) bool {
 func isValidDatetime(s string) bool {
 	return dates.IsValidDatetime(s)
 }
+
+// ValidateNameField checks that a type's name_field is valid.
+// Returns an error if the name_field references a non-existent field or a non-string field.
+func ValidateNameField(typeDef *TypeDefinition) error {
+	if typeDef.NameField == "" {
+		return nil // No name_field configured is valid
+	}
+
+	fieldDef, exists := typeDef.Fields[typeDef.NameField]
+	if !exists {
+		return fmt.Errorf("name_field '%s' references non-existent field", typeDef.NameField)
+	}
+
+	if fieldDef.Type != FieldTypeString {
+		return fmt.Errorf("name_field '%s' must be a string field, got '%s'", typeDef.NameField, fieldDef.Type)
+	}
+
+	return nil
+}
+
+// ValidateSchema performs comprehensive validation of a schema.
+// Returns a list of issues found.
+func ValidateSchema(sch *Schema) []string {
+	var issues []string
+
+	for typeName, typeDef := range sch.Types {
+		// Skip built-in types
+		if typeName == "page" || typeName == "section" || typeName == "date" {
+			continue
+		}
+
+		// Validate name_field
+		if err := ValidateNameField(typeDef); err != nil {
+			issues = append(issues, fmt.Sprintf("Type '%s': %s", typeName, err.Error()))
+		}
+
+		// Validate ref field targets
+		if typeDef.Fields != nil {
+			for fieldName, fieldDef := range typeDef.Fields {
+				if fieldDef != nil && (fieldDef.Type == FieldTypeRef || fieldDef.Type == FieldTypeRefArray) && fieldDef.Target != "" {
+					if _, exists := sch.Types[fieldDef.Target]; !exists {
+						issues = append(issues, fmt.Sprintf("Type '%s' field '%s' references unknown type '%s'", typeName, fieldName, fieldDef.Target))
+					}
+				}
+			}
+		}
+	}
+
+	return issues
+}

@@ -224,6 +224,9 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	if typeDef.DefaultPath != "" {
 		fmt.Printf("  Default path: %s\n", typeDef.DefaultPath)
 	}
+	if typeDef.NameField != "" {
+		fmt.Printf("  Name field: %s\n", typeDef.NameField)
+	}
 	if len(typeDef.Fields) > 0 {
 		fmt.Println("  Fields:")
 		for name, field := range typeDef.Fields {
@@ -235,7 +238,11 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 			if field != nil && field.Type != "" {
 				fieldType = string(field.Type)
 			}
-			fmt.Printf("    %s: %s%s\n", name, fieldType, required)
+			isNameField := ""
+			if name == typeDef.NameField {
+				isNameField = " [name_field]"
+			}
+			fmt.Printf("    %s: %s%s%s\n", name, fieldType, required, isNameField)
 		}
 	}
 
@@ -377,6 +384,7 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 
 	if typeDef != nil {
 		result.DefaultPath = typeDef.DefaultPath
+		result.NameField = typeDef.NameField
 
 		if len(typeDef.Fields) > 0 {
 			result.Fields = make(map[string]FieldSchema)
