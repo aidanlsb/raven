@@ -8,7 +8,7 @@ This document tracks potential future enhancements and ideas. These are not curr
 
 As vaults grow with many types, the root directory becomes cluttered. This enhancement allows nesting typed object folders under a common root while keeping reference paths short.
 
-**Status**: ✅ Implemented. See the [README](../README.md#directory-organization) for usage.
+**Status**: ✅ Implemented. See `../guide/configuration.md` and `../reference/vault-config.md`.
 
 ---
 
@@ -1242,8 +1242,7 @@ Main concerns around API stability and security review.
 Workflows are now a first-class feature in Raven. They allow users to define reusable prompt templates
 that gather context from the vault and render structured prompts for AI agents.
 
-**Status**: ✅ Implemented. See [WORKFLOWS_SPEC.md](WORKFLOWS_SPEC.md) for the full specification and
-the [README](../README.md#workflows) for usage examples.
+**Status**: ✅ Implemented. See `../reference/workflows.md` (spec) and `../guide/workflows.md` (how-to).
 
 **Key features:**
 - Define workflows in `raven.yaml` (inline or file-based)

@@ -191,7 +191,7 @@ When users want to update many objects at once:
 
 **Bulk operation safety rules:**
 - Always preview before applying
-- Embedded objects (file#section) are automatically skipped
+- Embedded objects (file#section): `set` supports them; `add/delete/move` skip them
 - Errors are collected and reported, but don't stop other operations
 - Use git to rollback if needed: `git checkout .`
 

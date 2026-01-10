@@ -28,14 +28,14 @@ This principle is NON-NEGOTIABLE. It's what makes Raven portable, trustworthy, a
 
 ## Specification Source of Truth
 
-**`docs/SPECIFICATION.md` is the authoritative specification for all Raven behavior.**
+**`docs/reference/*` is the authoritative specification for Raven behavior.**
 
 - Before implementing any feature, verify it matches the specification
-- After implementing a feature, update the specification if behavior changed
-- If the spec and code diverge, the spec is correct—fix the code
+- After implementing a feature, update the relevant reference doc(s) if behavior changed
+- If docs and code diverge, update docs to match intended behavior (or fix code if it’s a regression)
 - When proposing new features, update the spec first, then implement
-- The spec documents both "what" and "why" for design decisions
-- You should be able to read the spec and fully understand how the system works
+- Reference docs document “what”; design docs in `docs/design/*` document “why”
+- Start at `docs/README.md` for the docs index
 
 ## Design Philosophy
 
@@ -239,8 +239,8 @@ The MCP server calls CLI commands via `exec.Command`. **Argument ordering is str
 
 When adding a feature:
 
-1. [ ] Verify feature is documented in `docs/SPECIFICATION.md`
-2. [ ] If new, add to spec with rationale in Design Decisions section
+1. [ ] Verify feature is documented in `docs/reference/*` (or add docs first)
+2. [ ] If new, add/extend reference docs and (if needed) design rationale in `docs/design/*`
 3. [ ] Implement with explicit configuration (no magic)
 4. [ ] Add tests covering normal and edge cases
 5. [ ] Update README.md if user-facing behavior changes
@@ -263,18 +263,19 @@ When fixing a bug:
 
 | When you modify... | Update... |
 |-------------------|-----------|
-| `internal/cli/*.go` (new/modified commands) | `docs/SPECIFICATION.md` (CLI Interface section) |
-| `internal/commands/registry.go` | `docs/SPECIFICATION.md` (MCP Tools table) |
-| `internal/check/validator.go` (new validations) | `docs/SPECIFICATION.md` (`rvn check` section) |
-| `internal/index/database.go` (schema changes) | `docs/SPECIFICATION.md` (Database Schema section) |
-| `internal/query/*.go` (query syntax) | `docs/QUERY_LOGIC.md` |
+| `internal/cli/*.go` (new/modified commands) | `docs/guide/cli.md` (usage) and/or relevant `docs/reference/*` |
+| `internal/commands/registry.go` / `internal/mcp/*` | `docs/reference/mcp.md` |
+| `internal/check/validator.go` (new validations) | relevant `docs/reference/*` pages (file format / schema / config) |
+| `internal/index/database.go` (schema/index changes) | `docs/design/database.md` (high level) |
+| `internal/query/*` (query syntax) | `docs/reference/query-language.md` |
+| `internal/workflow/*` | `docs/reference/workflows.md` |
 | User-facing behavior changes | `README.md` |
 
 ### Quick Checklist
 
 After completing code changes, ask:
 
-1. **Does this change user-facing behavior?** → Update SPECIFICATION.md
+1. **Does this change user-facing behavior?** → Update `README.md` and/or `docs/guide/*`
 2. **Did I add/modify a CLI command?** → Update command examples and flags
 3. **Did I add/modify validation in `rvn check`?** → Update error/warning lists
 4. **Did I add a new MCP tool?** → Update MCP Tools table
