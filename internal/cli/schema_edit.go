@@ -103,7 +103,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	// Check built-in types
-	if typeName == "page" || typeName == "section" || typeName == "date" {
+	if schema.IsBuiltinType(typeName) {
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type", typeName), "Choose a different name")
 	}
 
@@ -451,6 +451,11 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "Add the type first with 'rvn schema add type'")
 	}
 
+	// Check if type is a built-in type (cannot be modified)
+	if schema.IsBuiltinType(typeName) {
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot add fields to built-in type '%s'", typeName), "Built-in types (page, section, date) have fixed definitions. Use traits for additional metadata.")
+	}
+
 	// Check if field already exists
 	if typeDef.Fields != nil {
 		if _, exists := typeDef.Fields[fieldName]; exists {
@@ -668,7 +673,7 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	schemaPath := filepath.Join(vaultPath, "schema.yaml")
 
 	// Check built-in types
-	if typeName == "page" || typeName == "section" || typeName == "date" {
+	if schema.IsBuiltinType(typeName) {
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be modified", typeName), "")
 	}
 
@@ -920,6 +925,11 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "")
 	}
 
+	// Check if type is a built-in type (cannot be modified)
+	if schema.IsBuiltinType(typeName) {
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot modify fields on built-in type '%s'", typeName), "Built-in types (page, section, date) have fixed definitions.")
+	}
+
 	// Check if field exists
 	if typeDef.Fields == nil {
 		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "Use 'rvn schema add field' to create it")
@@ -1092,7 +1102,7 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 	schemaPath := filepath.Join(vaultPath, "schema.yaml")
 
 	// Check built-in types
-	if typeName == "page" || typeName == "section" || typeName == "date" {
+	if schema.IsBuiltinType(typeName) {
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be removed", typeName), "")
 	}
 
@@ -1271,6 +1281,11 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "")
 	}
 
+	// Check if type is a built-in type (cannot be modified)
+	if schema.IsBuiltinType(typeName) {
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot remove fields from built-in type '%s'", typeName), "Built-in types (page, section, date) have fixed definitions.")
+	}
+
 	// Check if field exists
 	if typeDef.Fields == nil {
 		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "")
@@ -1401,11 +1416,10 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	}
 
 	// Check built-in types
-	builtins := map[string]bool{"page": true, "section": true, "date": true}
-	if builtins[oldName] {
+	if schema.IsBuiltinType(oldName) {
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be renamed", oldName), "")
 	}
-	if builtins[newName] {
+	if schema.IsBuiltinType(newName) {
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot rename to '%s' - it's a built-in type", newName), "")
 	}
 

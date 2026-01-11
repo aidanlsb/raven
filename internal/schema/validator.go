@@ -214,7 +214,7 @@ func ValidateSchema(sch *Schema) []string {
 
 	for typeName, typeDef := range sch.Types {
 		// Skip built-in types
-		if typeName == "page" || typeName == "section" || typeName == "date" {
+		if IsBuiltinType(typeName) {
 			continue
 		}
 
