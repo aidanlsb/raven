@@ -60,7 +60,7 @@ rvn new <type> <title> [--field key=value...]
 ```bash
 rvn new person "Freya"
 rvn new project "Website Redesign"
-rvn new book "Harry Potter" --field author=people/jk-rowling
+rvn new book "The Prose Edda" --field author=people/snorri
 ```
 
 **Notes:**

@@ -155,7 +155,7 @@ types:
 
 2. **Reference resolution:** `[[Display Name]]` can resolve to objects by their name_field value
    ```markdown
-   [[Harry Potter]]  # Can resolve to books/harry-potter.md if it has title: Harry Potter
+   [[The Prose Edda]]  # Can resolve to books/the-prose-edda.md if it has title: The Prose Edda
    ```
 
 **Setting via CLI:**

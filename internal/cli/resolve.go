@@ -47,7 +47,7 @@ type ResolveOptions struct {
 //   - Literal paths: "people/freya", "people/freya.md"
 //   - Short names: "freya" → "people/freya"
 //   - Aliases: "The Queen" → "people/freya"
-//   - Name field values: "Harry Potter" → "books/harry-potter"
+//   - Name field values: "The Prose Edda" → "books/the-prose-edda"
 //   - Date references: "2025-02-01" → "daily/2025-02-01"
 //   - Section references: "projects/website#tasks"
 //
