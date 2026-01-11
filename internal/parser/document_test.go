@@ -317,6 +317,36 @@ Use ` + "`@decorator`" + ` for Python decorators.
 		}
 	})
 
+	t.Run("traits in fenced code block inside list ignored", func(t *testing.T) {
+		// Fenced code blocks can appear inside list items with the list marker
+		// prefix (e.g., "- ```"). These should still be detected as code blocks.
+		content := `# Notes
+
+- @todo Real task
+
+- ` + "```python" + `
+  @decorator
+  def my_function():
+      pass
+  ` + "```" + `
+
+- @done Another real task
+`
+		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should only have 2 traits: @todo and @done
+		// The @decorator inside the code block (even with list marker) should be ignored
+		if len(doc.Traits) != 2 {
+			t.Errorf("got %d traits, want 2", len(doc.Traits))
+			for _, tr := range doc.Traits {
+				t.Logf("  trait: %s", tr.TraitType)
+			}
+		}
+	})
+
 	t.Run("with directory roots", func(t *testing.T) {
 		content := `---
 type: person
