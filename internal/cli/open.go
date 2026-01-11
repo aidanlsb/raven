@@ -2,14 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -40,20 +37,19 @@ Examples:
 		// Load vault config
 		vaultCfg, err := config.LoadVaultConfig(vaultPath)
 		if err != nil {
-			return handleError(ErrInternal, err, "")
+			vaultCfg = &config.VaultConfig{}
 		}
 
-		// Resolve the reference to a file path
-		filePath, err := resolveReferenceToFile(vaultPath, reference, vaultCfg)
+		// Resolve the reference using unified resolver
+		result, err := ResolveReference(reference, ResolveOptions{
+			VaultPath:   vaultPath,
+			VaultConfig: vaultCfg,
+		})
 		if err != nil {
-			// In JSON mode, error is already output
-			if jsonOutput {
-				return nil
-			}
-			return err
+			return handleResolveError(err, reference)
 		}
 
-		relPath, _ := filepath.Rel(vaultPath, filePath)
+		relPath, _ := filepath.Rel(vaultPath, result.FilePath)
 
 		// JSON output
 		if isJSONOutput() {
@@ -63,7 +59,7 @@ Examples:
 				editor = cfg.GetEditor()
 			}
 
-			opened := vault.OpenInEditor(cfg, filePath)
+			opened := vault.OpenInEditor(cfg, result.FilePath)
 			outputSuccess(map[string]interface{}{
 				"file":   relPath,
 				"opened": opened,
@@ -73,7 +69,7 @@ Examples:
 		}
 
 		// Human output - open in editor
-		openFileInEditor(filePath, relPath, false)
+		openFileInEditor(result.FilePath, relPath, false)
 
 		return nil
 	},
@@ -91,99 +87,6 @@ func openFileInEditor(filePath, relPath string, skipOpenMessage bool) {
 		fmt.Printf("File: %s\n", relPath)
 		fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
 	}
-}
-
-// resolveReferenceToFile resolves a reference to an absolute file path.
-// It handles short references, partial paths, and full paths.
-func resolveReferenceToFile(vaultPath, reference string, vaultCfg *config.VaultConfig) (string, error) {
-	// First, try treating it as a literal path
-	literalPath := filepath.Join(vaultPath, reference)
-	if fileExists(literalPath) {
-		return literalPath, nil
-	}
-
-	// Try adding .md extension if not present
-	if !strings.HasSuffix(reference, ".md") {
-		literalPathMd := filepath.Join(vaultPath, reference+".md")
-		if fileExists(literalPathMd) {
-			return literalPathMd, nil
-		}
-	}
-
-	// Try to resolve as a reference using the database
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return "", resolveRefError(ErrDatabaseError,
-			fmt.Sprintf("Failed to open database: %v", err),
-			"Run 'rvn reindex' to rebuild the database")
-	}
-	defer db.Close()
-
-	// Get the resolver from the database
-	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
-		dailyDir = vaultCfg.DailyDirectory
-	}
-	res, err := db.Resolver(dailyDir)
-	if err != nil {
-		return "", resolveRefError(ErrDatabaseError,
-			fmt.Sprintf("Failed to create resolver: %v", err),
-			"Run 'rvn reindex' to rebuild the database")
-	}
-
-	// Try to resolve the reference
-	result := res.Resolve(reference)
-	if result.Ambiguous {
-		return "", resolveRefError(ErrRefAmbiguous,
-			fmt.Sprintf("Reference '%s' is ambiguous, matches: %v", reference, result.Matches),
-			"Use a more specific path")
-	}
-
-	if result.TargetID == "" {
-		return "", resolveRefError(ErrRefNotFound,
-			fmt.Sprintf("Reference '%s' not found", reference),
-			"Check the reference and try again")
-	}
-
-	// Handle section references - strip the #section part for file opening
-	targetID := result.TargetID
-	if idx := strings.Index(targetID, "#"); idx >= 0 {
-		targetID = targetID[:idx]
-	}
-
-	// Convert the resolved object ID to a file path
-	resolvedPath, err := vault.ResolveObjectToFileWithConfig(vaultPath, targetID, vaultCfg)
-	if err != nil {
-		return "", resolveRefError(ErrFileNotFound,
-			fmt.Sprintf("Could not find file for '%s'", targetID),
-			"The reference resolved but the file could not be found")
-	}
-
-	// Verify file exists
-	if !fileExists(resolvedPath) {
-		return "", resolveRefError(ErrFileNotFound,
-			fmt.Sprintf("File '%s' does not exist", resolvedPath),
-			"The file may have been deleted or moved")
-	}
-
-	return resolvedPath, nil
-}
-
-// resolveRefError outputs a JSON error if in JSON mode and returns an error.
-func resolveRefError(code, message, suggestion string) error {
-	if jsonOutput {
-		outputError(code, message, nil, suggestion)
-	}
-	return fmt.Errorf("%s", message)
-}
-
-// fileExists checks if a file exists and is not a directory.
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
 }
 
 func init() {

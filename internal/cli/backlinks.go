@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 )
 
@@ -14,15 +15,35 @@ var backlinksCmd = &cobra.Command{
 	Short: "Show backlinks to an object",
 	Long: `Shows all references pointing to the specified object.
 
+The target can be a short reference (freya), partial path (people/freya),
+or full path (people/freya.md).
+
 Examples:
+  rvn backlinks freya                    # Resolves to people/freya
   rvn backlinks people/freya
   rvn backlinks daily/2025-02-01#standup
   rvn backlinks people/freya --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		target := args[0]
+		reference := args[0]
 		start := time.Now()
+
+		// Load vault config
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			vaultCfg = &config.VaultConfig{}
+		}
+
+		// Resolve the reference to get the canonical object ID
+		result, err := ResolveReference(reference, ResolveOptions{
+			VaultPath:   vaultPath,
+			VaultConfig: vaultCfg,
+		})
+		if err != nil {
+			return handleResolveError(err, reference)
+		}
+		target := result.ObjectID
 
 		db, err := index.Open(vaultPath)
 		if err != nil {

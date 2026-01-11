@@ -302,7 +302,7 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 }
 
 // deleteSingleObject deletes a single object (non-bulk mode).
-func deleteSingleObject(vaultPath, objectID string) error {
+func deleteSingleObject(vaultPath, reference string) error {
 	start := time.Now()
 
 	// Load vault config for deletion settings and directory roots
@@ -312,17 +312,17 @@ func deleteSingleObject(vaultPath, objectID string) error {
 		vaultCfg = &config.VaultConfig{}
 	}
 
-	// Normalize/canonicalize the object ID (remove .md, strip roots if present).
-	input := strings.TrimSuffix(objectID, ".md")
-	objectID = vaultCfg.FilePathToObjectID(input)
-
-	// Resolve the file path (supports roots + slugified matching).
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, input, vaultCfg)
+	// Resolve the reference using unified resolver
+	result, err := ResolveReference(reference, ResolveOptions{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+	})
 	if err != nil {
-		return handleErrorMsg(ErrFileNotFound,
-			fmt.Sprintf("Object '%s' does not exist", objectID),
-			"Check the object ID and try again")
+		return handleResolveError(err, reference)
 	}
+
+	objectID := result.ObjectID
+	filePath := result.FilePath
 	deletionCfg := vaultCfg.GetDeletionConfig()
 
 	// Find backlinks
