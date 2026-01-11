@@ -341,17 +341,18 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		vaultCfg = &config.VaultConfig{}
 	}
 
-	// Normalize paths (add .md if missing)
-	source = normalizePath(source)
+	// Normalize destination path (add .md if missing)
 	destination = normalizePath(destination)
 
-	// Resolve source file (supports roots + slugified matching).
-	sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, source, vaultCfg)
+	// Resolve source using unified resolver (supports short names, aliases, etc.)
+	sourceResult, err := ResolveReference(source, ResolveOptions{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+	})
 	if err != nil {
-		return handleErrorMsg(ErrFileNotFound,
-			fmt.Sprintf("Source '%s' does not exist", source),
-			"Check the source path and try again")
+		return handleResolveError(err, source)
 	}
+	sourceFile := sourceResult.FilePath
 
 	// Security: Validate source is within vault
 	if err := validateWithinVault(vaultPath, sourceFile); err != nil {

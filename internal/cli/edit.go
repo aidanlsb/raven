@@ -15,28 +15,37 @@ import (
 var editConfirm bool
 
 var editCmd = &cobra.Command{
-	Use:   "edit <path> <old_str> <new_str>",
+	Use:   "edit <reference> <old_str> <new_str>",
 	Short: commands.Registry["edit"].Description,
 	Long:  commands.Registry["edit"].LongDesc,
 	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		relPath := args[0]
+		reference := args[0]
 		oldStr := args[1]
 		newStr := args[2]
 
-		// Resolve file path
-		filePath := filepath.Join(vaultPath, relPath)
+		// Load vault config
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			vaultCfg = &config.VaultConfig{}
+		}
 
-		// Check file exists
+		// Resolve the reference using unified resolver
+		result, err := ResolveReference(reference, ResolveOptions{
+			VaultPath:   vaultPath,
+			VaultConfig: vaultCfg,
+		})
+		if err != nil {
+			return handleResolveError(err, reference)
+		}
+
+		filePath := result.FilePath
+		relPath, _ := filepath.Rel(vaultPath, filePath)
+
+		// Read file content
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			if os.IsNotExist(err) {
-				return handleErrorWithDetails("FILE_NOT_FOUND",
-					fmt.Sprintf("file not found: %s", relPath),
-					"Check the path and try again",
-					map[string]string{"path": relPath})
-			}
 			return handleError("READ_ERROR", err, "")
 		}
 
@@ -106,7 +115,6 @@ var editCmd = &cobra.Command{
 		}
 
 		// Auto-reindex if configured
-		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
 		if vaultCfg.IsAutoReindexEnabled() {
 			if err := reindexFile(vaultPath, filePath); err != nil {
 				if !jsonOutput {

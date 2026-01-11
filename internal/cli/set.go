@@ -366,7 +366,7 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 }
 
 // setSingleObject sets fields on a single object (non-bulk mode).
-func setSingleObject(vaultPath, objectID string, updates map[string]string) error {
+func setSingleObject(vaultPath, reference string, updates map[string]string) error {
 	// Load schema for validation
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
@@ -379,16 +379,22 @@ func setSingleObject(vaultPath, objectID string, updates map[string]string) erro
 		vaultCfg = &config.VaultConfig{}
 	}
 
-	// Check if this is an embedded object
-	if IsEmbeddedID(objectID) {
-		return setEmbeddedObject(vaultPath, objectID, updates, sch, vaultCfg)
+	// Resolve the reference using unified resolver
+	result, err := ResolveReference(reference, ResolveOptions{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+	})
+	if err != nil {
+		return handleResolveError(err, reference)
 	}
 
-	// Resolve object ID to file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, objectID, vaultCfg)
-	if err != nil {
-		return handleError(ErrFileDoesNotExist, err, "")
+	// Check if this is an embedded object (section)
+	if result.IsSection {
+		return setEmbeddedObject(vaultPath, result.ObjectID, updates, sch, vaultCfg)
 	}
+
+	objectID := result.ObjectID
+	filePath := result.FilePath
 
 	// Read the file
 	content, err := os.ReadFile(filePath)
