@@ -163,19 +163,16 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		}
 	}
 
-	// Extract all headings from the body
-	headings := ExtractHeadings(bodyContent, contentStartLine)
-
-	// Build a map of line -> type declaration for quick lookup
-	bodyLines := strings.Split(bodyContent, "\n")
-	typeDeclLines := make(map[int]*EmbeddedTypeInfo)
-
-	for lineOffset, line := range bodyLines {
-		lineNum := contentStartLine + lineOffset
-		if embedded := ParseEmbeddedType(line, lineNum); embedded != nil {
-			typeDeclLines[lineNum] = embedded
-		}
+	// Use goldmark AST to extract all content from the body.
+	// This automatically skips code blocks (fenced, indented, inline).
+	astContent, err := ExtractFromAST([]byte(bodyContent), contentStartLine)
+	if err != nil {
+		return nil, err
 	}
+
+	// Use headings and type declarations from AST extraction
+	headings := astContent.Headings
+	typeDeclLines := astContent.TypeDecls
 
 	// Track used IDs to ensure uniqueness
 	usedIDs := make(map[string]int)
@@ -189,16 +186,15 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 
 	// Process each heading
 	for _, heading := range headings {
-		// Check if the line after this heading has a type declaration
-		nextLine := heading.Line + 1
-
 		// Pop parents that are at same or deeper level
 		for len(parentStack) > 1 && parentStack[len(parentStack)-1].level >= heading.Level {
 			parentStack = parentStack[:len(parentStack)-1]
 		}
 		currentParent := parentStack[len(parentStack)-1].id
 
-		if embedded, ok := typeDeclLines[nextLine]; ok {
+		// Check if this heading has an associated type declaration.
+		// The AST extraction stores type decls keyed by the heading line number.
+		if embedded, ok := typeDeclLines[heading.Line]; ok {
 			// Explicit type declaration
 			// Use explicit ID if provided, otherwise derive from slugified heading
 			var slug string
@@ -271,53 +267,32 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		}
 	}
 
-	// Process traits - assign to the correct parent based on line number
-	// Track fenced code blocks to skip trait parsing inside them
-	traitFenceState := FenceState{}
-	for lineOffset, line := range bodyLines {
-		lineNum := contentStartLine + lineOffset
+	// Process traits from AST extraction - assign to the correct parent based on line number
+	// Code blocks are already filtered out by the AST walker.
+	for _, astTrait := range astContent.Traits {
+		parentID := findParentForLine(objects, astTrait.Line)
 
-		// Update fence state and skip lines inside fenced code blocks
-		if traitFenceState.UpdateFenceState(line) {
-			continue // This line is a fence marker
-		}
-		if traitFenceState.InFence {
-			continue // Inside a fenced code block
-		}
-
-		// Parse ALL traits on this line
-		parsedTraits := ParseTraitAnnotations(line, lineNum)
-		if len(parsedTraits) > 0 {
-			parentID := findParentForLine(objects, lineNum)
-
-			// Get the shared content (text after all traits)
-			// Use the content from the last trait (everything after the last @)
-			sharedContent := ExtractTraitContent(bodyLines, lineOffset)
-
-			for _, parsedTrait := range parsedTraits {
-				traits = append(traits, &ParsedTrait{
-					TraitType:      parsedTrait.TraitName,
-					Value:          parsedTrait.Value,
-					Content:        sharedContent,
-					ParentObjectID: parentID,
-					Line:           lineNum,
-				})
-			}
-		}
+		traits = append(traits, &ParsedTrait{
+			TraitType:      astTrait.TraitName,
+			Value:          astTrait.Value,
+			Content:        astTrait.Content,
+			ParentObjectID: parentID,
+			Line:           astTrait.Line,
+		})
 	}
 
-	// Extract all references from body
-	bodyRefs := ExtractRefs(bodyContent, contentStartLine)
-	for _, refItem := range bodyRefs {
-		parentID := findParentForLine(objects, refItem.Line)
+	// Process references from AST extraction
+	// Code blocks are already filtered out by the AST walker.
+	for _, astRef := range astContent.Refs {
+		parentID := findParentForLine(objects, astRef.Line)
 
 		refs = append(refs, &ParsedRef{
 			SourceID:    parentID,
-			TargetRaw:   refItem.TargetRaw,
-			DisplayText: refItem.DisplayText,
-			Line:        refItem.Line,
-			Start:       refItem.Start,
-			End:         refItem.End,
+			TargetRaw:   astRef.TargetRaw,
+			DisplayText: astRef.DisplayText,
+			Line:        astRef.Line,
+			Start:       astRef.Start,
+			End:         astRef.End,
 		})
 	}
 

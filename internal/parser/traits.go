@@ -38,15 +38,16 @@ func (t *TraitAnnotation) ValueString() string {
 // The (?:^|[\s\-\*]) ensures @ is at start of line or after whitespace/list markers
 var traitRegex = regexp.MustCompile(`(?:^|[\s\-\*])@(\w+)(?:\s*\(([^)]*)\))?`)
 
-// ParseTraitAnnotations parses all trait annotations from a line.
-// It automatically filters out traits that appear inside inline code spans (backticks).
+// ParseTraitAnnotations parses all trait annotations from a text segment.
+//
+// Note: This function does NOT filter out inline code. When used with the AST-based
+// parser (ExtractFromAST), code filtering is handled by the AST walker which skips
+// CodeSpan nodes entirely. The text passed to this function should already be from
+// a non-code AST node.
 func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 	var traits []TraitAnnotation
 
-	// Remove inline code spans to avoid matching traits inside them
-	// We use the sanitized line for matching but preserve positions
-	sanitizedLine := RemoveInlineCode(line)
-	matches := traitRegex.FindAllStringSubmatchIndex(sanitizedLine, -1)
+	matches := traitRegex.FindAllStringSubmatchIndex(line, -1)
 
 	for _, match := range matches {
 		if len(match) < 4 {
