@@ -12,16 +12,22 @@ type FenceState struct {
 }
 
 // NormalizeFenceLine prepares a line for fence marker detection.
-// It strips leading whitespace and blockquote prefixes so we can detect
-// fenced code blocks in common markdown contexts.
+// It strips leading whitespace, blockquote prefixes, and list markers so we can
+// detect fenced code blocks in common markdown contexts (including inside lists).
 func NormalizeFenceLine(line string) string {
-	// Allow up to 3 leading spaces and handle blockquote prefixes (`>`),
-	// so we can detect fenced code blocks in common markdown contexts.
 	s := strings.TrimLeft(line, " \t")
+
+	// Handle blockquote prefixes (`>`)
 	for strings.HasPrefix(s, ">") {
 		s = strings.TrimPrefix(s, ">")
 		s = strings.TrimLeft(s, " \t")
 	}
+
+	// Handle unordered list markers (-, *, +) followed by space
+	if len(s) >= 2 && (s[0] == '-' || s[0] == '*' || s[0] == '+') && (s[1] == ' ' || s[1] == '\t') {
+		s = strings.TrimLeft(s[2:], " \t")
+	}
+
 	return s
 }
 
