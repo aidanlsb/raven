@@ -91,8 +91,9 @@ func TestCreate(t *testing.T) {
 		if !strings.Contains(contentStr, "type: person") {
 			t.Error("File missing 'type: person' in frontmatter")
 		}
-		if !strings.Contains(contentStr, "# Freya") {
-			t.Error("File missing '# Freya' heading")
+		// No default heading should be added (headings create section objects)
+		if strings.Contains(contentStr, "# Freya") {
+			t.Error("File should NOT have a default heading (headings create section objects)")
 		}
 	})
 
@@ -112,10 +113,10 @@ func TestCreate(t *testing.T) {
 			t.Errorf("SlugifiedPath = %q, want %q", result.SlugifiedPath, "people/sif")
 		}
 
-		// But heading should preserve original
+		// No default heading should be added
 		content, _ := os.ReadFile(result.FilePath)
-		if !strings.Contains(string(content), "# Sif") {
-			t.Error("File should preserve original title in heading")
+		if strings.Contains(string(content), "# Sif") {
+			t.Error("File should NOT have a default heading")
 		}
 	})
 
@@ -236,7 +237,7 @@ func TestCreateWithTemplate(t *testing.T) {
 		}
 	})
 
-	t.Run("missing template file uses default", func(t *testing.T) {
+	t.Run("missing template file leaves empty body", func(t *testing.T) {
 		result, err := Create(CreateOptions{
 			VaultPath:        tmpDir,
 			TypeName:         "note",
@@ -254,9 +255,13 @@ func TestCreateWithTemplate(t *testing.T) {
 		}
 		contentStr := string(content)
 
-		// Should fall back to default heading
-		if !strings.Contains(contentStr, "# Quick Note") {
-			t.Error("Should fall back to default heading when template missing")
+		// Should NOT add a default heading (headings create section objects)
+		if strings.Contains(contentStr, "# Quick Note") {
+			t.Error("Should NOT add default heading when template missing")
+		}
+		// But should have frontmatter
+		if !strings.Contains(contentStr, "type: note") {
+			t.Error("Should have type in frontmatter")
 		}
 	})
 
