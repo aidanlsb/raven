@@ -457,21 +457,30 @@ daily_template: |
 
 ## Best Practices
 
-1. **Master the query language**: A single well-crafted query is better than multiple simple queries and file reads. Invest time in understanding predicates and composition.
+1. **Always use Raven commands instead of shell commands**: Raven commands maintain index consistency and update references automatically.
 
-2. **Err on more information**: When in doubt about what the user wants, provide more results rather than fewer. Run multiple query interpretations if ambiguous.
+   Use raven_move (not mv) - updates all references to the moved file
+   Use raven_delete (not rm) - warns about backlinks, moves to .trash/
+   Use raven_new (not writing files) - applies templates, validates schema
+   Use raven_set (not manual edits) - validates fields, triggers reindex
+   Use raven_edit (not sed/awk) - safe content replacement
+   Use raven_read (not cat) - for reading vault files
 
-3. **Always ask before bulk changes**: "I found 45 files with unknown type 'book'. Should I add this type to your schema?"
+2. **Master the query language**: A single well-crafted query is better than multiple simple queries and file reads. Invest time in understanding predicates and composition.
 
-4. **Use the schema as source of truth**: If something isn't in the schema, it won't be indexed or queryable. Guide users to define their types and traits.
+3. **Err on more information**: When in doubt about what the user wants, provide more results rather than fewer. Run multiple query interpretations if ambiguous.
 
-5. **Prefer structured queries over search**: Use raven_query before falling back to raven_search.
+4. **Always ask before bulk changes**: "I found 45 files with unknown type 'book'. Should I add this type to your schema?"
 
-6. **Check before creating**: Use raven_backlinks or raven_search to see if something already exists before creating duplicates.
+5. **Use the schema as source of truth**: If something isn't in the schema, it won't be indexed or queryable. Guide users to define their types and traits.
 
-7. **Respect user's organization**: Look at existing default_path settings to understand where different types of content belong.
+6. **Prefer structured queries over search**: Use raven_query before falling back to raven_search.
 
-8. **Reindex after schema changes**: If you add types or traits, run raven_reindex(full=True) so all files are re-parsed with the new schema.
+7. **Check before creating**: Use raven_backlinks or raven_search to see if something already exists before creating duplicates.
+
+8. **Respect user's organization**: Look at existing default_path settings to understand where different types of content belong.
+
+9. **Reindex after schema changes**: If you add types or traits, run raven_reindex(full=True) so all files are re-parsed with the new schema.
 
 ## Example Conversations
 
