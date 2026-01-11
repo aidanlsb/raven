@@ -188,8 +188,9 @@ func (r *Renderer) renderPrompt(template string, inputs map[string]string, conte
 	result := template
 
 	// First, handle escaped braces
-	result = strings.ReplaceAll(result, "\\{{", "\x00ESCAPED_OPEN\x00")
-	result = strings.ReplaceAll(result, "\\}}", "\x00ESCAPED_CLOSE\x00")
+	// Use safe placeholder strings instead of null bytes to avoid editor issues
+	result = strings.ReplaceAll(result, "\\{{", "«RAVEN_ESC_OPEN»")
+	result = strings.ReplaceAll(result, "\\}}", "«RAVEN_ESC_CLOSE»")
 
 	// Substitute {{inputs.X}}
 	result = substituteInputs(result, inputs)
@@ -206,8 +207,8 @@ func (r *Renderer) renderPrompt(template string, inputs map[string]string, conte
 	})
 
 	// Restore escaped braces
-	result = strings.ReplaceAll(result, "\x00ESCAPED_OPEN\x00", "{{")
-	result = strings.ReplaceAll(result, "\x00ESCAPED_CLOSE\x00", "}}")
+	result = strings.ReplaceAll(result, "«RAVEN_ESC_OPEN»", "{{")
+	result = strings.ReplaceAll(result, "«RAVEN_ESC_CLOSE»", "}}")
 
 	return result
 }

@@ -147,8 +147,9 @@ func Apply(content string, vars *Variables) string {
 	}
 
 	// First, temporarily replace escaped sequences
-	content = strings.ReplaceAll(content, "\\{{", "\x00ESCAPED_OPEN\x00")
-	content = strings.ReplaceAll(content, "\\}}", "\x00ESCAPED_CLOSE\x00")
+	// Use safe placeholder strings instead of null bytes to avoid editor issues
+	content = strings.ReplaceAll(content, "\\{{", "«RAVEN_ESC_OPEN»")
+	content = strings.ReplaceAll(content, "\\}}", "«RAVEN_ESC_CLOSE»")
 
 	// Build replacement map
 	replacements := map[string]string{
@@ -177,8 +178,8 @@ func Apply(content string, vars *Variables) string {
 	}
 
 	// Restore escaped sequences as literals
-	content = strings.ReplaceAll(content, "\x00ESCAPED_OPEN\x00", "{{")
-	content = strings.ReplaceAll(content, "\x00ESCAPED_CLOSE\x00", "}}")
+	content = strings.ReplaceAll(content, "«RAVEN_ESC_OPEN»", "{{")
+	content = strings.ReplaceAll(content, "«RAVEN_ESC_CLOSE»", "}}")
 
 	return content
 }
