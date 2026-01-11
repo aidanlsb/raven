@@ -99,7 +99,7 @@ type ResolverConfig struct {
 	ObjectsRoot    string            // Root directory for typed objects (e.g., "objects/")
 	PagesRoot      string            // Root directory for untyped pages (e.g., "pages/")
 	Aliases        map[string]string // Map from alias to object ID
-	NameFieldMap   map[string]string // Map from name_field value to object ID (e.g., "Harry Potter" -> "books/harry-potter")
+	NameFieldMap   map[string]string // Map from name_field value to object ID (e.g., "The Prose Edda" -> "books/the-prose-edda")
 }
 
 // NewWithConfig creates a new Resolver with full configuration.
@@ -157,7 +157,7 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 	}
 
 	// Check name_field values (semantic matching by display name)
-	// This allows [[Harry Potter]] to resolve even if the file is harry-potter.md
+	// This allows [[The Prose Edda]] to resolve even if the file is the-prose-edda.md
 	if nameMatches, ok := r.nameFieldMap[ref]; ok {
 		for _, id := range nameMatches {
 			if _, exists := matchSources[id]; !exists {

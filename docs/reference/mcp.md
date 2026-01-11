@@ -374,7 +374,7 @@ See `guide/agent-guide.md` for comprehensive agent guidelines. Key points:
 Types can specify a `name_field` which:
 
 1. **Auto-populates from title** — The `title` argument to `raven_new` sets this field automatically
-2. **Enables semantic resolution** — References like `[[Harry Potter]]` can find the book by its title field
+2. **Enables semantic resolution** — References like `[[The Prose Edda]]` can find the book by its title field
 
 ### Checking name_field
 

@@ -237,6 +237,86 @@ Second ideas section with same heading.
 		}
 	})
 
+	t.Run("traits in fenced code block ignored", func(t *testing.T) {
+		content := `# Notes
+
+- @todo Real task
+
+` + "```python" + `
+@decorator
+def my_function():
+    pass
+` + "```" + `
+
+- @done Another real task
+`
+		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should only have 2 traits: @todo and @done
+		// The @decorator inside the code block should be ignored
+		if len(doc.Traits) != 2 {
+			t.Errorf("got %d traits, want 2", len(doc.Traits))
+			for _, tr := range doc.Traits {
+				t.Logf("  trait: %s", tr.TraitType)
+			}
+		}
+	})
+
+	t.Run("refs in fenced code block ignored", func(t *testing.T) {
+		content := `# Notes
+
+See [[real-ref]] for details.
+
+` + "```markdown" + `
+This is example code with [[fake-ref]]
+` + "```" + `
+
+Also see [[another-real-ref]].
+`
+		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should only have 2 refs: real-ref and another-real-ref
+		// The fake-ref inside the code block should be ignored
+		if len(doc.Refs) != 2 {
+			t.Errorf("got %d refs, want 2", len(doc.Refs))
+			for _, ref := range doc.Refs {
+				t.Logf("  ref: %s", ref.TargetRaw)
+			}
+		}
+	})
+
+	t.Run("inline code filtering", func(t *testing.T) {
+		content := `# Notes
+
+Use ` + "`@decorator`" + ` for Python decorators.
+
+- @todo This is a real task
+`
+		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should only have 1 trait: @todo
+		// The @decorator inside backticks should be ignored
+		if len(doc.Traits) != 1 {
+			t.Errorf("got %d traits, want 1", len(doc.Traits))
+			for _, tr := range doc.Traits {
+				t.Logf("  trait: %s", tr.TraitType)
+			}
+		}
+
+		if len(doc.Traits) > 0 && doc.Traits[0].TraitType != "todo" {
+			t.Errorf("trait type = %q, want %q", doc.Traits[0].TraitType, "todo")
+		}
+	})
+
 	t.Run("with directory roots", func(t *testing.T) {
 		content := `---
 type: person

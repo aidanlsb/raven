@@ -77,7 +77,7 @@ to understand which fields are auto-populated.`,
 		Examples: []string{
 			"rvn new person \"Freya\" --json",
 			"rvn new project \"Website Redesign\" --json",
-			"rvn new book \"Harry Potter\" --field author=people/jk-rowling --json",
+			"rvn new book \"The Prose Edda\" --field author=people/snorri --json",
 		},
 		UseCases: []string{
 			"Create a new person entry",

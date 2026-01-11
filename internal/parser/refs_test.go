@@ -40,6 +40,16 @@ func TestExtractRefs(t *testing.T) {
 			content: "Outside [[ok]]\n\n~~~\n[[nope]]\n~~~\n\nAfter [[ok2]]",
 			want: []string{"ok", "ok2"},
 		},
+		{
+			name:    "ignore refs inside inline code",
+			content: "See [[ok]] but not `[[ignored]]` for details",
+			want:    []string{"ok"},
+		},
+		{
+			name:    "ignore refs inside double backticks",
+			content: "See [[ok]] and ``[[also ignored `with` backtick]]`` here",
+			want:    []string{"ok"},
+		},
 	}
 
 	for _, tt := range tests {

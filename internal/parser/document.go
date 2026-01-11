@@ -272,8 +272,18 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	}
 
 	// Process traits - assign to the correct parent based on line number
+	// Track fenced code blocks to skip trait parsing inside them
+	traitFenceState := FenceState{}
 	for lineOffset, line := range bodyLines {
 		lineNum := contentStartLine + lineOffset
+
+		// Update fence state and skip lines inside fenced code blocks
+		if traitFenceState.UpdateFenceState(line) {
+			continue // This line is a fence marker
+		}
+		if traitFenceState.InFence {
+			continue // Inside a fenced code block
+		}
 
 		// Parse ALL traits on this line
 		parsedTraits := ParseTraitAnnotations(line, lineNum)

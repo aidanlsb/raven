@@ -104,7 +104,7 @@ If a type has `name_field` configured, you don't need to provide that field sepa
 raven_new(type="person", title="Freya")  # name="Freya" is auto-set
 
 # Type has name_field: title  
-raven_new(type="book", title="Harry Potter")  # title="Harry Potter" is auto-set
+raven_new(type="book", title="The Prose Edda")  # title="The Prose Edda" is auto-set
 ```
 
 Check `raven_schema types` - if you see a hint about types without `name_field`, suggest setting it up to simplify object creation.

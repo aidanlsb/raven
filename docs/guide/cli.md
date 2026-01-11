@@ -80,7 +80,7 @@ rvn new project "Website Redesign"
 
 # With fields
 rvn new person "Thor Odinson" --field email=thor@asgard.realm
-rvn new book "Harry Potter" --field author=people/jk-rowling
+rvn new book "The Prose Edda" --field author=people/snorri
 
 # Check what fields a type needs
 rvn schema type person

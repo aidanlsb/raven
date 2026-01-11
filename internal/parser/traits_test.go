@@ -101,6 +101,49 @@ func TestParseTrait(t *testing.T) {
 	}
 }
 
+func TestParseTraitAnnotations_InlineCode(t *testing.T) {
+	tests := []struct {
+		name      string
+		line      string
+		wantCount int
+	}{
+		{
+			name:      "trait inside inline code ignored",
+			line:      "use `@decorator` for Python",
+			wantCount: 0,
+		},
+		{
+			name:      "trait outside inline code found",
+			line:      "@todo check `some code` here",
+			wantCount: 1,
+		},
+		{
+			name:      "mixed: one in code, one outside",
+			line:      "@todo `@ignored` task",
+			wantCount: 1,
+		},
+		{
+			name:      "double backticks",
+			line:      "``@inside`` @outside",
+			wantCount: 1,
+		},
+		{
+			name:      "python decorator example",
+			line:      "`@property` is a Python decorator",
+			wantCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseTraitAnnotations(tt.line, 1)
+			if len(got) != tt.wantCount {
+				t.Errorf("got %d traits, want %d (line: %q)", len(got), tt.wantCount, tt.line)
+			}
+		})
+	}
+}
+
 func TestIsRefOnTraitLine(t *testing.T) {
 	// This test documents the CONTENT SCOPE RULE:
 	// A reference is associated with a trait if and only if they are on the same line.

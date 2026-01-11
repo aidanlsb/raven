@@ -15,69 +15,27 @@ type Reference struct {
 	End         int     // End position in line
 }
 
-type fenceState struct {
-	inFence  bool
-	fenceCh  byte
-	fenceLen int
-}
-
-func normalizeFenceLine(line string) string {
-	// Allow up to 3 leading spaces and handle blockquote prefixes (`>`),
-	// so we can detect fenced code blocks in common markdown contexts.
-	s := strings.TrimLeft(line, " \t")
-	for strings.HasPrefix(s, ">") {
-		s = strings.TrimPrefix(s, ">")
-		s = strings.TrimLeft(s, " \t")
-	}
-	return s
-}
-
-func parseFenceMarker(line string) (ch byte, n int, ok bool) {
-	if len(line) < 3 {
-		return 0, 0, false
-	}
-	ch = line[0]
-	if ch != '`' && ch != '~' {
-		return 0, 0, false
-	}
-	i := 0
-	for i < len(line) && line[i] == ch {
-		i++
-	}
-	if i < 3 {
-		return 0, 0, false
-	}
-	return ch, i, true
-}
-
 // ExtractRefs extracts references from content.
+// It automatically skips refs inside fenced code blocks and inline code spans.
 func ExtractRefs(content string, startLine int) []Reference {
 	var refs []Reference
 
 	lines := strings.Split(content, "\n")
-	state := fenceState{}
+	state := FenceState{}
 	for lineOffset, line := range lines {
 		lineNum := startLine + lineOffset
 
 		// Skip wiki refs inside fenced code blocks.
-		fenceLine := normalizeFenceLine(line)
-		if ch, n, ok := parseFenceMarker(fenceLine); ok {
-			if !state.inFence {
-				state.inFence = true
-				state.fenceCh = ch
-				state.fenceLen = n
-			} else if state.fenceCh == ch && n >= state.fenceLen {
-				state.inFence = false
-				state.fenceCh = 0
-				state.fenceLen = 0
-			}
-			continue
+		if state.UpdateFenceState(line) {
+			continue // This line is a fence marker
 		}
-		if state.inFence {
-			continue
+		if state.InFence {
+			continue // Inside a fenced code block
 		}
 
-		matches := wikilink.FindAllInLine(line, false)
+		// Remove inline code spans to avoid matching refs inside them
+		sanitizedLine := RemoveInlineCode(line)
+		matches := wikilink.FindAllInLine(sanitizedLine, false)
 		for _, match := range matches {
 			refs = append(refs, Reference{
 				TargetRaw:   match.Target,

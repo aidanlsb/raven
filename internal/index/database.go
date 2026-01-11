@@ -827,8 +827,8 @@ func (d *Database) Resolver(dailyDirectory string) (*resolver.Resolver, error) {
 }
 
 // ResolverWithSchema builds a resolver that includes name_field values for semantic resolution.
-// This allows [[Harry Potter]] to resolve to a book with name_field: title even if the
-// filename is harry-potter.md.
+// This allows [[The Prose Edda]] to resolve to a book with name_field: title even if the
+// filename is the-prose-edda.md.
 func (d *Database) ResolverWithSchema(dailyDirectory string, sch *schema.Schema) (*resolver.Resolver, error) {
 	if dailyDirectory == "" {
 		dailyDirectory = "daily"

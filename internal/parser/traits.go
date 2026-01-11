@@ -39,10 +39,14 @@ func (t *TraitAnnotation) ValueString() string {
 var traitRegex = regexp.MustCompile(`(?:^|[\s\-\*])@(\w+)(?:\s*\(([^)]*)\))?`)
 
 // ParseTraitAnnotations parses all trait annotations from a line.
+// It automatically filters out traits that appear inside inline code spans (backticks).
 func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 	var traits []TraitAnnotation
 
-	matches := traitRegex.FindAllStringSubmatchIndex(line, -1)
+	// Remove inline code spans to avoid matching traits inside them
+	// We use the sanitized line for matching but preserve positions
+	sanitizedLine := RemoveInlineCode(line)
+	matches := traitRegex.FindAllStringSubmatchIndex(sanitizedLine, -1)
 
 	for _, match := range matches {
 		if len(match) < 4 {
