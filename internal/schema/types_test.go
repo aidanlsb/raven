@@ -319,3 +319,25 @@ func TestNewFieldValue(t *testing.T) {
 		t.Errorf("expected 'test', got %q", s)
 	}
 }
+
+func TestIsBuiltinType(t *testing.T) {
+	tests := []struct {
+		typeName string
+		want     bool
+	}{
+		{"page", true},
+		{"section", true},
+		{"date", true},
+		{"person", false},
+		{"project", false},
+		{"meeting", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		got := IsBuiltinType(tt.typeName)
+		if got != tt.want {
+			t.Errorf("IsBuiltinType(%q) = %v, want %v", tt.typeName, got, tt.want)
+		}
+	}
+}

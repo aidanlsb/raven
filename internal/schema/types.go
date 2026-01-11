@@ -6,6 +6,19 @@ import "encoding/json"
 // CurrentSchemaVersion is the latest schema format version.
 const CurrentSchemaVersion = 2
 
+// BuiltinTypes are types that are always present and cannot be modified by users.
+// These types have fixed definitions managed by Raven itself.
+var BuiltinTypes = map[string]bool{
+	"page":    true, // Fallback for files without explicit type
+	"section": true, // Auto-created for headings
+	"date":    true, // Daily notes
+}
+
+// IsBuiltinType returns true if the type name is a built-in type that cannot be modified.
+func IsBuiltinType(typeName string) bool {
+	return BuiltinTypes[typeName]
+}
+
 // Schema represents the complete schema definition loaded from schema.yaml.
 type Schema struct {
 	Version int                         `yaml:"version,omitempty"` // Schema format version
@@ -19,7 +32,12 @@ func NewSchema() *Schema {
 		Types: map[string]*TypeDefinition{
 			// Built-in 'page' type as fallback for untyped files
 			"page": {
-				Fields: make(map[string]*FieldDefinition),
+				NameField: "title",
+				Fields: map[string]*FieldDefinition{
+					"title": {
+						Type: FieldTypeString,
+					},
+				},
 			},
 			// Built-in 'section' type for headings without explicit types
 			"section": {

@@ -70,22 +70,21 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		schema.Traits = make(map[string]*TraitDefinition)
 	}
 
-	// Ensure built-in types exist
-	if _, ok := schema.Types["page"]; !ok {
-		schema.Types["page"] = &TypeDefinition{
-			Fields: make(map[string]*FieldDefinition),
-		}
+	// Ensure built-in types exist with their fixed definitions.
+	// Built-in types are always overwritten to ensure consistency.
+	schema.Types["page"] = &TypeDefinition{
+		NameField: "title",
+		Fields: map[string]*FieldDefinition{
+			"title": {Type: FieldTypeString},
+		},
 	}
-	if _, ok := schema.Types["section"]; !ok {
-		schema.Types["section"] = &TypeDefinition{
-			Fields: map[string]*FieldDefinition{
-				"title": {Type: FieldTypeString},
-				"level": {Type: FieldTypeNumber, Min: floatPtr(1), Max: floatPtr(6)},
-			},
-		}
+	schema.Types["section"] = &TypeDefinition{
+		Fields: map[string]*FieldDefinition{
+			"title": {Type: FieldTypeString},
+			"level": {Type: FieldTypeNumber, Min: floatPtr(1), Max: floatPtr(6)},
+		},
 	}
-	// Built-in 'date' type for daily notes - locked, cannot be modified
-	// Users should use traits for additional daily note metadata
+	// Built-in 'date' type for daily notes
 	schema.Types["date"] = &TypeDefinition{
 		Fields: make(map[string]*FieldDefinition),
 	}
