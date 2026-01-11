@@ -144,8 +144,8 @@ These keys are always allowed regardless of type:
 | Key | Description |
 |-----|-------------|
 | `type` | Object type (defaults to `page` if omitted) |
-| `tags` | Generic tags (not schema-validated) |
 | `id` | Explicit object ID (primarily for embedded objects) |
+| `alias` | Alternative name for reference resolution |
 
 ### Field Values
 
@@ -170,15 +170,7 @@ collaborators:                           # ref array
 
 ### `alias`
 
-The `alias` field enables alternative reference resolution. It's not reserved, so add it to your schema:
-
-```yaml
-# schema.yaml
-types:
-  person:
-    fields:
-      alias: { type: string }
-```
+The `alias` field enables alternative reference resolution. It's a reserved key, so any object can have an alias without needing to declare it in the schema:
 
 ```yaml
 # people/freya.md
@@ -190,6 +182,8 @@ alias: The Queen
 ```
 
 Now `[[The Queen]]` resolves to `people/freya`.
+
+Aliases are matched case-insensitively and also in slugified form (e.g., `[[the-queen]]` also works).
 
 ---
 
@@ -332,10 +326,11 @@ Wiki-style links reference other objects:
 
 References are resolved in this order:
 
-1. **Exact match** — ID matches exactly
-2. **Filename match** — Reference matches filename (without path)
-3. **Alias match** — Reference matches an object's `alias` field
-4. **Date match** — `[[YYYY-MM-DD]]` resolves to daily notes
+1. **Alias match** — Reference matches an object's `alias` field
+2. **Name field match** — Reference matches an object's `name_field` value
+3. **Date match** — `[[YYYY-MM-DD]]` resolves to daily notes
+4. **Object ID match** — Reference matches a full object path
+5. **Short name match** — Reference matches filename (without path)
 
 **Short references** work when unambiguous:
 

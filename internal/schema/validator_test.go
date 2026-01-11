@@ -70,9 +70,9 @@ func TestValidateFields(t *testing.T) {
 
 	t.Run("reserved fields skipped", func(t *testing.T) {
 		fields := map[string]FieldValue{
-			"id":   String("test-id"),
-			"type": String("person"),
-			"tags": Array([]FieldValue{String("a")}),
+			"id":    String("test-id"),
+			"type":  String("person"),
+			"alias": String("The Queen"),
 		}
 		defs := map[string]*FieldDefinition{}
 
@@ -118,7 +118,6 @@ func TestValidateFieldValueString(t *testing.T) {
 }
 
 func TestValidateFieldValueStringArray(t *testing.T) {
-	// Note: "tags" is a reserved field, so use "labels" instead
 	defs := map[string]*FieldDefinition{
 		"labels": {Type: FieldTypeStringArray},
 	}

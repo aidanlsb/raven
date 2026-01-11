@@ -564,21 +564,25 @@ These frontmatter keys are always allowed regardless of type:
 | Key | Description |
 |-----|-------------|
 | `type` | Object type (defaults to `page` if omitted) |
-| `tags` | Generic tags (not validated) |
 | `id` | Explicit object ID (primarily for embedded objects) |
+| `alias` | Alternative name for reference resolution |
 
 ### `alias`
 
-`alias` is a **special field name** used for reference resolution. It's not reserved, so add it to relevant types if you use it:
+The `alias` field enables alternative reference resolution. Any object can have an alias without needing to declare it in the schema:
 
 ```yaml
-types:
-  person:
-    fields:
-      alias: { type: string }
+# people/freya.md
+---
+type: person
+name: Freya
+alias: The Queen
+---
 ```
 
-This allows `[[alias-value]]` to resolve to the object.
+Now `[[The Queen]]` resolves to `people/freya`.
+
+Aliases are matched case-insensitively and also in slugified form (e.g., `[[the-queen]]` also works).
 
 ---
 
