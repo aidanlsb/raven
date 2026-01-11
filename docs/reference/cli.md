@@ -506,17 +506,69 @@ rvn reindex [--full] [--dry-run]
 Validate vault against schema.
 
 ```bash
-rvn check [--create-missing]
+rvn check [path] [flags]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--create-missing` | Interactively create missing pages (CLI only) |
+| Argument | Description |
+|----------|-------------|
+| `path` | Optional: file, directory, or reference to check (defaults to entire vault) |
 
-Returns structured issues with:
-- `issue_type`: unknown_type, missing_reference, undefined_trait, etc.
-- `fix_command`: Suggested CLI command to fix the issue
-- `fix_hint`: Human-readable explanation
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--type` | `-t` | Check only objects of this type |
+| `--trait` | | Check only usages of this trait |
+| `--issues` | | Only check these issue types (comma-separated) |
+| `--exclude` | | Exclude these issue types (comma-separated) |
+| `--errors-only` | | Only report errors, skip warnings |
+| `--strict` | | Treat warnings as errors (exit code 1) |
+| `--by-file` | | Group output by file path |
+| `--create-missing` | | Interactively create missing pages (CLI only) |
+
+**Examples:**
+
+```bash
+# Check entire vault
+rvn check
+
+# Check a specific file
+rvn check people/freya.md
+rvn check freya              # Using a reference
+
+# Check a directory
+rvn check projects/
+
+# Check all objects of a type
+rvn check --type project
+
+# Check all usages of a trait
+rvn check --trait due
+
+# Only check specific issue types
+rvn check --issues missing_reference,unknown_type
+
+# Exclude certain issue types
+rvn check --exclude unused_type,unused_trait
+
+# Only show errors
+rvn check --errors-only
+```
+
+**JSON output includes scope:**
+
+```json
+{
+  "vault_path": "/path/to/vault",
+  "scope": {
+    "type": "file",
+    "value": "people/freya.md"
+  },
+  "file_count": 1,
+  "error_count": 0,
+  "warning_count": 0,
+  "issues": [],
+  "summary": []
+}
+```
 
 **Issue types:**
 
@@ -528,6 +580,12 @@ Returns structured issues with:
 | `unknown_frontmatter_key` | Field not defined for type |
 | `missing_required_field` | Required field not set |
 | `invalid_enum_value` | Value not in allowed enum list |
+| `wrong_target_type` | Ref field points to wrong type |
+| `invalid_date_format` | Date/datetime value is malformed |
+| `duplicate_object_id` | Multiple objects share the same ID |
+| `unused_type` | Type defined but never used (warning) |
+| `unused_trait` | Trait defined but never used (warning) |
+| `stale_index` | Index needs reindexing (warning) |
 
 ---
 
@@ -810,6 +868,45 @@ rvn schema remove field <type_name> <field_name>
 **Notes:**
 - If the field is required, removal is blocked (make it optional first)
 - Existing field values remain in files but are no longer validated
+
+---
+
+### `rvn schema rename type`
+
+Rename a type and update all references.
+
+```bash
+rvn schema rename type <old_name> <new_name> [--confirm]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `old_name` | Current type name |
+| `new_name` | New type name |
+
+| Flag | Description |
+|------|-------------|
+| `--confirm` | Apply the rename (default: preview only) |
+
+**What it updates:**
+1. The type definition in `schema.yaml`
+2. All `type:` frontmatter fields in files
+3. All `::type()` embedded declarations
+4. All ref field `target:` values pointing to the old type
+
+**Examples:**
+
+```bash
+# Preview changes
+rvn schema rename type event meeting
+
+# Apply changes
+rvn schema rename type event meeting --confirm
+```
+
+**Notes:**
+- Always run `rvn reindex --full` after renaming to update the index
+- Built-in types (`page`, `section`, `date`) cannot be renamed
 
 ---
 

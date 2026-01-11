@@ -605,6 +605,10 @@ rvn schema update type person --name-field name
 rvn schema update trait priority --values critical,high,medium,low
 rvn schema update field person email --required=true
 
+# Rename a type (updates all files)
+rvn schema rename type event meeting          # Preview
+rvn schema rename type event meeting --confirm # Apply
+
 # Remove from schema
 rvn schema remove type old-type
 rvn schema remove trait old-trait

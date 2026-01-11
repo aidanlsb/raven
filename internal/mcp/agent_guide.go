@@ -228,6 +228,44 @@ When users ask about issues or want to clean up their vault:
    - "Would you like me to add these to your schema?"
 4. Execute fix commands based on user confirmation
 
+**Scoped checks for precision:**
+
+  # Check a specific file (verify your own work after edits)
+  raven_check(path="people/freya.md")
+  raven_check(path="freya")  # References work too
+
+  # Check a directory
+  raven_check(path="projects/")
+
+  # Check all objects of a specific type
+  raven_check(type="project")
+
+  # Check all usages of a specific trait
+  raven_check(trait="due")
+
+  # Filter to specific issue types
+  raven_check(issues="missing_reference,unknown_type")
+
+  # Exclude noisy warnings
+  raven_check(exclude="unused_type,unused_trait")
+
+  # Only errors (skip warnings)
+  raven_check(errors_only=true)
+
+**When to use scoped checks:**
+
+- After creating/editing a file: raven_check(path="path/to/file.md")
+- Validating a type's instances: raven_check(type="project")
+- Checking trait value correctness: raven_check(trait="due")
+- Quick error-only scan: raven_check(errors_only=true)
+- Focus on broken links: raven_check(issues="missing_reference")
+
+**Verify your own work:**
+
+After making changes, run a scoped check to verify:
+  raven_new(type="person", title="Thor")
+  raven_check(path="thor")  # Verify the new file is valid
+
 ### 2. Creating Content
 
 When users want to create notes:
@@ -268,15 +306,28 @@ When users want to modify existing notes:
 
 When raven_check returns issues, here's how to fix them:
 
-| Issue Type | Meaning | Fix Command |
-|------------|---------|-------------|
-| unknown_type | File uses a type not in schema | raven_schema_add_type(name="book") |
-| missing_reference | Link to non-existent page | raven_new(type="person", title="Freya") |
-| undefined_trait | Trait not in schema | raven_schema_add_trait(name="toread", type="boolean") |
-| unknown_frontmatter_key | Field not defined for type | raven_schema_add_field(type_name="person", field_name="company") |
-| missing_required_field | Required field not set | raven_set(object_id="...", fields={"name": "..."}) |
-| missing_required_trait | Required trait not set | raven_set(object_id="...", fields={"due": "2025-02-01"}) |
-| invalid_enum_value | Value not in allowed list | raven_set(object_id="...", fields={"status": "done"}) |
+**Errors (must fix):**
+- unknown_type: File uses type not in schema → raven_schema_add_type(name="book")
+- missing_reference: Link to non-existent page → raven_new(type="person", title="Freya")
+- unknown_frontmatter_key: Field not defined → raven_schema_add_field(...)
+- missing_required_field: Required field not set → raven_set(object_id="...", fields={...})
+- invalid_enum_value: Value not in allowed list → raven_set(...) with valid value
+- wrong_target_type: Ref field points to wrong type → Update reference
+- invalid_date_format: Date value malformed → Fix to YYYY-MM-DD
+- parse_error: YAML/syntax error → Fix malformed syntax
+
+**Warnings (optional):**
+- undefined_trait: Trait not in schema → raven_schema_add_trait(...)
+- unused_type: Type defined but never used → Remove or create instance
+- unused_trait: Trait defined but never used → Remove or use it
+- stale_index: Index needs refresh → raven_reindex()
+- short_ref_could_be_full_path: Use full path for clarity
+- id_collision: Short name matches multiple objects → Use full paths
+
+**Using issue types for filtering:**
+  raven_check(issues="missing_reference,unknown_type")  # Focus on these
+  raven_check(exclude="unused_type,unused_trait")       # Skip these
+  raven_check(errors_only=true)                          # No warnings
 
 ### 5. Bulk Operations
 
@@ -365,15 +416,56 @@ Never delete without explicit user approval.
 2. Remove: raven_query_remove(name="old-query")
 3. List: raven_query(list=true)
 
-### 11. Schema Updates
+### 11. Adding Fields to Types
+
+Field type syntax (--type flag takes FIELD types, not schema types):
+
+  string      → text value
+  string[]    → array of text (tags, keywords)
+  number      → numeric value
+  date        → date (YYYY-MM-DD)
+  datetime    → date and time
+  bool        → true/false
+  enum        → single choice (requires --values)
+  enum[]      → multiple choice (requires --values)
+  ref         → reference to object (requires --target)
+  ref[]       → array of references (requires --target)
+
+**Common examples:**
+
+  # Text field
+  raven_schema_add_field(type_name="person", field_name="email", type="string")
+  
+  # Array of strings (tags)
+  raven_schema_add_field(type_name="project", field_name="tags", type="string[]")
+  
+  # Single reference
+  raven_schema_add_field(type_name="project", field_name="owner", type="ref", target="person")
+  
+  # Array of references (team members, attendees)
+  raven_schema_add_field(type_name="team", field_name="members", type="ref[]", target="person")
+  
+  # Enum with choices
+  raven_schema_add_field(type_name="project", field_name="status", type="enum", values="active,paused,done")
+
+**Wrong:** --type person (person is a schema type, not a field type)
+**Right:** --type ref --target person
+
+The command shows helpful errors if syntax is incorrect.
+
+### 12. Schema Updates & Renames
 
 1. Update type: raven_schema_update_type(name="person", default_path="contacts/")
 2. Update trait: raven_schema_update_trait(name="priority", values="critical,high,medium,low")
 3. Update field: raven_schema_update_field(type_name="person", field_name="email", required="true")
-4. Remove: raven_schema_remove_type, raven_schema_remove_trait, raven_schema_remove_field
-5. Validate: raven_schema_validate()
+4. Rename type (updates all files):
+   raven_schema_rename_type(old_name="event", new_name="meeting")  # Preview
+   raven_schema_rename_type(old_name="event", new_name="meeting", confirm=true)  # Apply
+   raven_reindex(full=true)  # Always reindex after
+5. Remove: raven_schema_remove_type, raven_schema_remove_trait, raven_schema_remove_field
+6. Validate: raven_schema_validate()
 
-### 12. Workflows
+### 13. Workflows
 
 Workflows are reusable prompt templates:
 
@@ -402,7 +494,7 @@ Workflows are reusable prompt templates:
 
 When to use: User asks for complex analysis, or there's a workflow matching their request.
 
-### 13. Setting Up Templates
+### 14. Setting Up Templates
 
 Templates provide default content when creating notes. Help users by editing their schema.yaml.
 
@@ -508,13 +600,22 @@ daily_template: |
 - Use raven_new(type="person", title="Thor Odinson", field={"name": "Thor Odinson"})
 
 **User**: "My vault has a lot of broken links, can you help fix them?"
-- Use raven_check() to get structured issues
+- Use raven_check(issues="missing_reference") to focus on broken links
 - Review summary, explain to user
 - "I see 2798 missing references. The most-referenced missing pages are:
     - 'bifrost-bridge' (referenced 15 times)
     - 'Baldur' (referenced 12 times)
    Would you like me to create pages for the most common ones? What type should they be?"
 - Create pages based on user input
+
+**User**: "I just created some new projects, make sure they're set up correctly"
+- Use raven_check(type="project") to validate all projects
+- Report any issues: "All 5 projects are valid" or "2 projects have issues: ..."
+- Offer to fix any problems found
+
+**User**: "Check if my due dates are formatted correctly"
+- Use raven_check(trait="due") to validate all @due usages
+- Report: "Found 3 invalid date formats: ..." or "All 42 due dates are valid"
 
 **User**: "Create a project for the website redesign"  
 - Use raven_schema(subcommand="type project") to check fields/traits

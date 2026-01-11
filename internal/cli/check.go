@@ -24,6 +24,11 @@ var (
 	checkStrict        bool
 	checkCreateMissing bool
 	checkByFile        bool
+	checkType          string
+	checkTrait         string
+	checkIssues        string
+	checkExclude       string
+	checkErrorsOnly    bool
 )
 
 // CheckIssueJSON represents an issue in JSON output
@@ -48,9 +53,16 @@ type CheckSummaryJSON struct {
 	TopValues    []string `json:"top_values,omitempty"` // Top 10 unique values (most common first)
 }
 
+// CheckScopeJSON describes the scope of the check
+type CheckScopeJSON struct {
+	Type  string `json:"type"`            // "full", "file", "directory", "type_filter", "trait_filter"
+	Value string `json:"value,omitempty"` // The path, type name, or trait name
+}
+
 // CheckResultJSON is the top-level JSON output
 type CheckResultJSON struct {
 	VaultPath  string             `json:"vault_path"`
+	Scope      *CheckScopeJSON    `json:"scope,omitempty"`
 	FileCount  int                `json:"file_count"`
 	ErrorCount int                `json:"error_count"`
 	WarnCount  int                `json:"warning_count"`
@@ -58,16 +70,170 @@ type CheckResultJSON struct {
 	Summary    []CheckSummaryJSON `json:"summary"`
 }
 
+// checkScope describes what subset of the vault to check
+type checkScope struct {
+	scopeType   string   // "full", "file", "directory", "type_filter", "trait_filter"
+	scopeValue  string   // The path, type name, or trait name
+	targetFiles []string // For file/directory scopes, the absolute paths to check
+}
+
+// resolveCheckScope determines what to check based on args and flags
+func resolveCheckScope(vaultPath string, args []string) (*checkScope, error) {
+	scope := &checkScope{scopeType: "full"}
+
+	// Type filter takes precedence
+	if checkType != "" {
+		scope.scopeType = "type_filter"
+		scope.scopeValue = checkType
+		return scope, nil
+	}
+
+	// Trait filter
+	if checkTrait != "" {
+		scope.scopeType = "trait_filter"
+		scope.scopeValue = checkTrait
+		return scope, nil
+	}
+
+	// No positional arg means full vault
+	if len(args) == 0 {
+		return scope, nil
+	}
+
+	pathArg := args[0]
+
+	// Try as literal file/directory first
+	fullPath := filepath.Join(vaultPath, pathArg)
+
+	// Check if it's a directory
+	if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
+		scope.scopeType = "directory"
+		scope.scopeValue = pathArg
+		return scope, nil
+	}
+
+	// Check if it's a file (with or without .md)
+	filePath := fullPath
+	if !strings.HasSuffix(filePath, ".md") {
+		filePath = fullPath + ".md"
+	}
+	if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+		scope.scopeType = "file"
+		relPath, _ := filepath.Rel(vaultPath, filePath)
+		scope.scopeValue = relPath
+		scope.targetFiles = []string{filePath}
+		return scope, nil
+	}
+
+	// Try resolving as a reference
+	result, err := ResolveReference(pathArg, ResolveOptions{VaultPath: vaultPath})
+	if err != nil {
+		return nil, fmt.Errorf("could not resolve '%s': %w", pathArg, err)
+	}
+
+	scope.scopeType = "file"
+	relPath, _ := filepath.Rel(vaultPath, result.FilePath)
+	scope.scopeValue = relPath
+	scope.targetFiles = []string{result.FilePath}
+	return scope, nil
+}
+
+// parseIssueFilter parses the --issues and --exclude flags
+func parseIssueFilter() (include map[check.IssueType]bool, exclude map[check.IssueType]bool) {
+	include = make(map[check.IssueType]bool)
+	exclude = make(map[check.IssueType]bool)
+
+	if checkIssues != "" {
+		for _, issueType := range strings.Split(checkIssues, ",") {
+			issueType = strings.TrimSpace(issueType)
+			if issueType != "" {
+				include[check.IssueType(issueType)] = true
+			}
+		}
+	}
+
+	if checkExclude != "" {
+		for _, issueType := range strings.Split(checkExclude, ",") {
+			issueType = strings.TrimSpace(issueType)
+			if issueType != "" {
+				exclude[check.IssueType(issueType)] = true
+			}
+		}
+	}
+
+	return include, exclude
+}
+
+// shouldIncludeIssue checks if an issue should be included based on filters
+func shouldIncludeIssue(issue check.Issue, include, exclude map[check.IssueType]bool) bool {
+	// Check errors-only filter
+	if checkErrorsOnly && issue.Level == check.LevelWarning {
+		return false
+	}
+
+	// If include filter is set, issue must be in it
+	if len(include) > 0 && !include[issue.Type] {
+		return false
+	}
+
+	// If exclude filter is set, issue must not be in it
+	if exclude[issue.Type] {
+		return false
+	}
+
+	return true
+}
+
+// shouldIncludeSchemaIssue checks if a schema issue should be included based on filters
+func shouldIncludeSchemaIssue(issue check.SchemaIssue, include, exclude map[check.IssueType]bool) bool {
+	// Check errors-only filter
+	if checkErrorsOnly && issue.Level == check.LevelWarning {
+		return false
+	}
+
+	// If include filter is set, issue must be in it
+	if len(include) > 0 && !include[issue.Type] {
+		return false
+	}
+
+	// If exclude filter is set, issue must not be in it
+	if exclude[issue.Type] {
+		return false
+	}
+
+	return true
+}
+
 var checkCmd = &cobra.Command{
-	Use:   "check",
+	Use:   "check [path]",
 	Short: "Validate the vault",
 	Long:  `Checks all files for errors and warnings (type mismatches, broken references, etc.)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 
-		if !jsonOutput {
-			fmt.Printf("Checking vault: %s\n", vaultPath)
+		// Resolve the check scope
+		scope, err := resolveCheckScope(vaultPath, args)
+		if err != nil {
+			return err
 		}
+
+		if !jsonOutput {
+			switch scope.scopeType {
+			case "full":
+				fmt.Printf("Checking vault: %s\n", vaultPath)
+			case "file":
+				fmt.Printf("Checking file: %s\n", scope.scopeValue)
+			case "directory":
+				fmt.Printf("Checking directory: %s/\n", scope.scopeValue)
+			case "type_filter":
+				fmt.Printf("Checking type: %s\n", scope.scopeValue)
+			case "trait_filter":
+				fmt.Printf("Checking trait: @%s\n", scope.scopeValue)
+			}
+		}
+
+		// Parse issue filters
+		includeIssues, excludeIssues := parseIssueFilter()
 
 		// Load schema
 		s, err := schema.Load(vaultPath)
@@ -106,17 +272,22 @@ var checkCmd = &cobra.Command{
 					}
 					fmt.Printf("       Run 'rvn reindex' to update the index.\n\n")
 				}
-				// Add to issues for JSON output
-				allIssues = append(allIssues, check.Issue{
-					Level:      check.LevelWarning,
-					Type:       check.IssueStaleIndex,
-					FilePath:   "",
-					Line:       0,
-					Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
-					FixCommand: "rvn reindex",
-					FixHint:    "Run 'rvn reindex' to update the index",
-				})
-				warningCount++
+				// Add to issues for JSON output (only for full vault checks)
+				if scope.scopeType == "full" {
+					staleIssue := check.Issue{
+						Level:      check.LevelWarning,
+						Type:       check.IssueStaleIndex,
+						FilePath:   "",
+						Line:       0,
+						Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
+						FixCommand: "rvn reindex",
+						FixHint:    "Run 'rvn reindex' to update the index",
+					}
+					if shouldIncludeIssue(staleIssue, includeIssues, excludeIssues) {
+						allIssues = append(allIssues, staleIssue)
+						warningCount++
+					}
+				}
 				staleWarningShown = true
 			}
 
@@ -133,32 +304,57 @@ var checkCmd = &cobra.Command{
 			}
 		}
 
-		// First pass: parse all documents and collect object IDs with types
-		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
-			fileCount++
+		// Determine which files to walk based on scope
+		var walkPath string
+		var targetFileSet map[string]bool
 
+		switch scope.scopeType {
+		case "file":
+			// For single file, we still need all object IDs for reference validation
+			// but we only validate the target file
+			walkPath = vaultPath
+			targetFileSet = make(map[string]bool)
+			for _, f := range scope.targetFiles {
+				targetFileSet[f] = true
+			}
+		case "directory":
+			walkPath = filepath.Join(vaultPath, scope.scopeValue)
+		default:
+			walkPath = vaultPath
+		}
+
+		// First pass: parse all documents in the vault to collect object IDs
+		// (needed for reference validation even when checking a subset)
+		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 			if result.Error != nil {
-				if !jsonOutput && !checkByFile {
-					fmt.Printf("ERROR: %s - %v\n", result.RelativePath, result.Error)
+				// Only count files in scope
+				if isFileInScope(result.Path, scope, walkPath, targetFileSet) {
+					fileCount++
+					parseErrors = append(parseErrors, check.Issue{
+						Level:    check.LevelError,
+						Type:     check.IssueParseError,
+						FilePath: result.RelativePath,
+						Line:     1,
+						Message:  result.Error.Error(),
+						FixHint:  "Fix the YAML frontmatter or markdown syntax",
+					})
+					errorCount++
 				}
-				parseErrors = append(parseErrors, check.Issue{
-					Level:    check.LevelError,
-					Type:     check.IssueParseError,
-					FilePath: result.RelativePath,
-					Line:     1,
-					Message:  result.Error.Error(),
-					FixHint:  "Fix the YAML frontmatter or markdown syntax",
-				})
-				errorCount++
 				return nil
 			}
 
-			allDocs = append(allDocs, result.Document)
+			// Collect all object infos for reference resolution
 			for _, obj := range result.Document.Objects {
 				allObjectInfos = append(allObjectInfos, check.ObjectInfo{
 					ID:   obj.ID,
 					Type: obj.ObjectType,
 				})
+			}
+
+			// Only include documents that are in scope for validation
+			if isFileInScope(result.Path, scope, walkPath, targetFileSet) {
+				fileCount++
+				allDocs = append(allDocs, result.Document)
 			}
 
 			return nil
@@ -176,6 +372,16 @@ var checkCmd = &cobra.Command{
 			issues := validator.ValidateDocument(doc)
 
 			for _, issue := range issues {
+				// Apply type/trait filter
+				if !isIssueInScope(issue, doc, scope, s) {
+					continue
+				}
+
+				// Apply issue type filter
+				if !shouldIncludeIssue(issue, includeIssues, excludeIssues) {
+					continue
+				}
+
 				allIssues = append(allIssues, issue)
 
 				if issue.Level == check.LevelWarning {
@@ -194,30 +400,61 @@ var checkCmd = &cobra.Command{
 			}
 		}
 
-		// Add parse errors to all issues
-		allIssues = append(parseErrors, allIssues...)
-
-		// Run schema integrity checks
-		schemaIssues = validator.ValidateSchema()
-		for _, issue := range schemaIssues {
-			if issue.Level == check.LevelWarning {
-				warningCount++
-			} else {
-				errorCount++
+		// Add filtered parse errors to all issues
+		for _, pe := range parseErrors {
+			if shouldIncludeIssue(pe, includeIssues, excludeIssues) {
+				allIssues = append([]check.Issue{pe}, allIssues...)
 			}
+		}
 
-			if !jsonOutput && !checkByFile {
-				prefix := "ERROR"
-				if issue.Level == check.LevelWarning {
-					prefix = "WARN"
+		// Run schema integrity checks (only for full vault checks, or when checking types/traits)
+		if scope.scopeType == "full" || scope.scopeType == "type_filter" || scope.scopeType == "trait_filter" {
+			schemaIssues = validator.ValidateSchema()
+
+			// Filter schema issues based on scope
+			var filteredSchemaIssues []check.SchemaIssue
+			for _, issue := range schemaIssues {
+				// For type_filter, only show schema issues related to that type
+				if scope.scopeType == "type_filter" {
+					if !strings.Contains(issue.Value, scope.scopeValue) &&
+						!strings.HasPrefix(issue.Value, scope.scopeValue+".") {
+						continue
+					}
 				}
-				fmt.Printf("%s:  [schema] %s\n", prefix, issue.Message)
+
+				// For trait_filter, only show schema issues related to that trait
+				if scope.scopeType == "trait_filter" {
+					if issue.Value != scope.scopeValue {
+						continue
+					}
+				}
+
+				if !shouldIncludeSchemaIssue(issue, includeIssues, excludeIssues) {
+					continue
+				}
+
+				filteredSchemaIssues = append(filteredSchemaIssues, issue)
+
+				if issue.Level == check.LevelWarning {
+					warningCount++
+				} else {
+					errorCount++
+				}
+
+				if !jsonOutput && !checkByFile {
+					prefix := "ERROR"
+					if issue.Level == check.LevelWarning {
+						prefix = "WARN"
+					}
+					fmt.Printf("%s:  [schema] %s\n", prefix, issue.Message)
+				}
 			}
+			schemaIssues = filteredSchemaIssues
 		}
 
 		// JSON output mode
 		if jsonOutput {
-			result := buildCheckJSON(vaultPath, fileCount, errorCount, warningCount, allIssues, schemaIssues)
+			result := buildCheckJSONWithScope(vaultPath, scope, fileCount, errorCount, warningCount, allIssues, schemaIssues)
 			out, _ := json.MarshalIndent(result, "", "  ")
 			fmt.Println(string(out))
 		} else if checkByFile {
@@ -237,8 +474,8 @@ var checkCmd = &cobra.Command{
 				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
 			}
 
-			// Handle --create-missing (interactive mode only)
-			if checkCreateMissing {
+			// Handle --create-missing (interactive mode only, full vault check only)
+			if checkCreateMissing && scope.scopeType == "full" {
 				missingRefs := validator.MissingRefs()
 				if len(missingRefs) > 0 {
 					created := handleMissingRefs(vaultPath, s, missingRefs)
@@ -263,6 +500,51 @@ var checkCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// isFileInScope checks if a file path is within the check scope
+func isFileInScope(filePath string, scope *checkScope, walkPath string, targetFileSet map[string]bool) bool {
+	switch scope.scopeType {
+	case "file":
+		return targetFileSet[filePath]
+	case "directory":
+		return strings.HasPrefix(filePath, walkPath)
+	default:
+		return true
+	}
+}
+
+// isIssueInScope checks if an issue matches the type/trait filter
+func isIssueInScope(issue check.Issue, doc *parser.ParsedDocument, scope *checkScope, s *schema.Schema) bool {
+	switch scope.scopeType {
+	case "type_filter":
+		// Check if any object in the document matches the type
+		for _, obj := range doc.Objects {
+			if obj.ObjectType == scope.scopeValue {
+				return true
+			}
+		}
+		return false
+
+	case "trait_filter":
+		// Check if the issue is related to the trait
+		// Issues about traits include the trait name in the Value field
+		if issue.Type == check.IssueUndefinedTrait ||
+			issue.Type == check.IssueInvalidTraitValue ||
+			issue.Type == check.IssueMissingRequiredTrait {
+			return issue.Value == scope.scopeValue || strings.HasPrefix(issue.Value, scope.scopeValue)
+		}
+		// For other issues, include them if the document uses the trait
+		for _, trait := range doc.Traits {
+			if trait.TraitType == scope.scopeValue {
+				return true
+			}
+		}
+		return false
+
+	default:
+		return true
+	}
 }
 
 // printIssuesByFile groups and prints issues by file path
@@ -352,7 +634,28 @@ func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, s
 	}
 }
 
-// buildCheckJSON creates the structured JSON output for check command
+// buildCheckJSONWithScope creates the structured JSON output for check command with scope info
+func buildCheckJSONWithScope(vaultPath string, scope *checkScope, fileCount, errorCount, warnCount int, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
+	result := CheckResultJSON{
+		VaultPath:  vaultPath,
+		FileCount:  fileCount,
+		ErrorCount: errorCount,
+		WarnCount:  warnCount,
+		Issues:     make([]CheckIssueJSON, 0, len(issues)+len(schemaIssues)),
+	}
+
+	// Add scope information
+	if scope != nil && scope.scopeType != "full" {
+		result.Scope = &CheckScopeJSON{
+			Type:  scope.scopeType,
+			Value: scope.scopeValue,
+		}
+	}
+
+	return buildCheckJSONInternal(result, issues, schemaIssues)
+}
+
+// buildCheckJSON creates the structured JSON output for check command (legacy, for compatibility)
 func buildCheckJSON(vaultPath string, fileCount, errorCount, warnCount int, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
 	result := CheckResultJSON{
 		VaultPath:  vaultPath,
@@ -361,6 +664,11 @@ func buildCheckJSON(vaultPath string, fileCount, errorCount, warnCount int, issu
 		WarnCount:  warnCount,
 		Issues:     make([]CheckIssueJSON, 0, len(issues)+len(schemaIssues)),
 	}
+	return buildCheckJSONInternal(result, issues, schemaIssues)
+}
+
+// buildCheckJSONInternal is the shared implementation for building check JSON output
+func buildCheckJSONInternal(result CheckResultJSON, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
 
 	// Convert issues to JSON format
 	for _, issue := range issues {
@@ -880,5 +1188,10 @@ func init() {
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
 	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Interactively create missing referenced pages")
 	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
+	checkCmd.Flags().StringVarP(&checkType, "type", "t", "", "Check only objects of this type")
+	checkCmd.Flags().StringVar(&checkTrait, "trait", "", "Check only usages of this trait")
+	checkCmd.Flags().StringVar(&checkIssues, "issues", "", "Only check these issue types (comma-separated)")
+	checkCmd.Flags().StringVar(&checkExclude, "exclude", "", "Exclude these issue types (comma-separated)")
+	checkCmd.Flags().BoolVar(&checkErrorsOnly, "errors-only", false, "Only report errors, skip warnings")
 	rootCmd.AddCommand(checkCmd)
 }
