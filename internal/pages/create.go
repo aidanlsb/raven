@@ -199,14 +199,11 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 			if !strings.HasSuffix(processedContent, "\n") {
 				content.WriteString("\n")
 			}
-		} else {
-			// No template - use default heading
-			content.WriteString(fmt.Sprintf("# %s\n\n", title))
 		}
-	} else {
-		// No template - use default heading
-		content.WriteString(fmt.Sprintf("# %s\n\n", title))
+		// If template is empty/not found, leave file with just frontmatter
 	}
+	// No template specified - leave file with just frontmatter
+	// (Headings create section objects which adds noise to the index)
 
 	// Write the file
 	if err := os.WriteFile(filePath, []byte(content.String()), 0644); err != nil {
