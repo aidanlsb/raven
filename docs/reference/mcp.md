@@ -97,6 +97,7 @@ rvn schema commands --json
 | `raven_schema_remove_type` | Remove a type |
 | `raven_schema_remove_trait` | Remove a trait |
 | `raven_schema_remove_field` | Remove a field |
+| `raven_schema_rename_type` | Rename a type and update all references |
 | `raven_schema_validate` | Validate schema correctness |
 
 ### Saved Queries
@@ -255,13 +256,40 @@ raven_schema_add_field(type_name="person", field_name="company", type="ref", tar
 
 # Update schema
 raven_schema_update_type(name="person", name_field="name")
+
+# Rename a type (preview first, then confirm)
+raven_schema_rename_type(old_name="event", new_name="meeting")  # Preview
+raven_schema_rename_type(old_name="event", new_name="meeting", confirm=true)  # Apply
+raven_reindex(full=true)  # Always reindex after rename
 ```
 
 ### Vault Health
 
 ```python
-# Check for issues
+# Check entire vault
 raven_check()
+
+# Check a specific file (by path or reference)
+raven_check(path="people/freya.md")
+raven_check(path="freya")
+
+# Check a directory
+raven_check(path="projects/")
+
+# Check all objects of a type
+raven_check(type="project")
+
+# Check all usages of a trait
+raven_check(trait="due")
+
+# Only check specific issue types
+raven_check(issues="missing_reference,unknown_type")
+
+# Exclude certain issue types
+raven_check(exclude="unused_type,unused_trait")
+
+# Only show errors (skip warnings)
+raven_check(errors_only=true)
 
 # Reindex after changes
 raven_reindex()

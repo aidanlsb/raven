@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/vault"
 )
 
 // Flags for schema add commands
@@ -42,6 +45,11 @@ var (
 // Flags for schema remove commands
 var (
 	schemaRemoveForce bool
+)
+
+// Flags for schema rename commands
+var (
+	schemaRenameConfirm bool
 )
 
 var schemaAddCmd = &cobra.Command{
@@ -268,6 +276,166 @@ func addTrait(vaultPath, traitName string, start time.Time) error {
 	return nil
 }
 
+// validFieldTypes are the base field types supported by Raven
+var validFieldTypes = map[string]bool{
+	"string":   true,
+	"number":   true,
+	"date":     true,
+	"datetime": true,
+	"bool":     true,
+	"boolean":  true,
+	"enum":     true,
+	"ref":      true,
+}
+
+// FieldTypeValidation holds the result of validating a field type specification
+type FieldTypeValidation struct {
+	Valid       bool
+	BaseType    string
+	IsArray     bool
+	Error       string
+	Suggestion  string
+	Examples    []string
+	ValidTypes  []string
+	TargetHint  string
+}
+
+// validateFieldTypeSpec validates the --type and related flags for adding a field
+func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema) FieldTypeValidation {
+	result := FieldTypeValidation{
+		ValidTypes: []string{"string", "number", "date", "datetime", "bool", "enum", "ref"},
+	}
+
+	// Handle empty type (defaults to string)
+	if fieldType == "" {
+		fieldType = "string"
+	}
+
+	// Check for array suffix
+	isArray := strings.HasSuffix(fieldType, "[]")
+	baseType := strings.TrimSuffix(fieldType, "[]")
+
+	result.BaseType = baseType
+	result.IsArray = isArray
+
+	// Check if this looks like a schema type name (common mistake)
+	if sch != nil {
+		if _, isSchemaType := sch.Types[baseType]; isSchemaType {
+			result.Error = fmt.Sprintf("'%s' is a type name, not a field type", baseType)
+			result.Suggestion = fmt.Sprintf("To reference objects of type '%s', use --type ref --target %s", baseType, baseType)
+			if isArray {
+				result.Examples = []string{
+					fmt.Sprintf("--type ref[] --target %s  (array of %s references)", baseType, baseType),
+				}
+			} else {
+				result.Examples = []string{
+					fmt.Sprintf("--type ref --target %s  (single %s reference)", baseType, baseType),
+					fmt.Sprintf("--type ref[] --target %s  (array of %s references)", baseType, baseType),
+				}
+			}
+			return result
+		}
+
+		// Also check if adding [] to a type name
+		if _, isSchemaType := sch.Types[strings.TrimSuffix(baseType, "[]")]; isSchemaType {
+			cleanType := strings.TrimSuffix(baseType, "[]")
+			result.Error = fmt.Sprintf("'%s' is a type name, not a field type", cleanType)
+			result.Suggestion = fmt.Sprintf("To reference an array of '%s' objects, use --type ref[] --target %s", cleanType, cleanType)
+			result.Examples = []string{
+				fmt.Sprintf("--type ref[] --target %s", cleanType),
+			}
+			return result
+		}
+	}
+
+	// Check if base type is valid
+	if !validFieldTypes[baseType] {
+		result.Error = fmt.Sprintf("'%s' is not a valid field type", fieldType)
+		result.Suggestion = "Valid types: string, number, date, datetime, bool, enum, ref (add [] suffix for arrays)"
+		result.Examples = []string{
+			"--type string        (text)",
+			"--type string[]      (array of text, e.g., tags)",
+			"--type ref --target person   (reference to a person)",
+			"--type ref[] --target person (array of person references)",
+			"--type enum --values a,b,c   (single choice from list)",
+		}
+		return result
+	}
+
+	// Validate ref type requires target
+	if (baseType == "ref") && target == "" {
+		result.Error = "ref fields require --target to specify which type they reference"
+		result.Suggestion = "Add --target <type_name> to specify the referenced type"
+		if sch != nil && len(sch.Types) > 0 {
+			var typeNames []string
+			for name := range sch.Types {
+				typeNames = append(typeNames, name)
+			}
+			// Sort for consistent output
+			sort.Strings(typeNames)
+			if len(typeNames) > 3 {
+				typeNames = typeNames[:3]
+			}
+			result.Examples = []string{}
+			for _, t := range typeNames {
+				if isArray {
+					result.Examples = append(result.Examples, fmt.Sprintf("--type ref[] --target %s", t))
+				} else {
+					result.Examples = append(result.Examples, fmt.Sprintf("--type ref --target %s", t))
+				}
+			}
+		}
+		result.TargetHint = "Available types can be listed with 'rvn schema types'"
+		return result
+	}
+
+	// Validate enum type requires values
+	if (baseType == "enum") && values == "" {
+		result.Error = "enum fields require --values to specify allowed values"
+		result.Suggestion = "Add --values with comma-separated allowed values"
+		result.Examples = []string{
+			"--type enum --values active,paused,done",
+			"--type enum[] --values red,green,blue  (allows multiple selections)",
+		}
+		return result
+	}
+
+	// Warn if target is provided but type is not ref
+	if target != "" && baseType != "ref" {
+		result.Error = fmt.Sprintf("--target is only valid for ref fields, but type is '%s'", fieldType)
+		result.Suggestion = fmt.Sprintf("Either change --type to ref (or ref[]) or remove --target")
+		result.Examples = []string{
+			fmt.Sprintf("--type ref --target %s  (single reference)", target),
+			fmt.Sprintf("--type ref[] --target %s  (array of references)", target),
+		}
+		return result
+	}
+
+	// Validate target type exists if specified
+	if target != "" && sch != nil {
+		if _, exists := sch.Types[target]; !exists {
+			// Check built-in types
+			builtins := map[string]bool{"page": true, "section": true, "date": true}
+			if !builtins[target] {
+				result.Error = fmt.Sprintf("target type '%s' does not exist in schema", target)
+				result.Suggestion = fmt.Sprintf("Either create the type first with 'rvn schema add type %s' or use an existing type", target)
+				if len(sch.Types) > 0 {
+					var typeNames []string
+					for name := range sch.Types {
+						typeNames = append(typeNames, name)
+					}
+					sort.Strings(typeNames)
+					result.TargetHint = fmt.Sprintf("Existing types: %s", strings.Join(typeNames, ", "))
+				}
+				return result
+			}
+		}
+	}
+
+	result.Valid = true
+	return result
+}
+
 func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 	schemaPath := filepath.Join(vaultPath, "schema.yaml")
 
@@ -288,6 +456,29 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 		if _, exists := typeDef.Fields[fieldName]; exists {
 			return handleErrorMsg(ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", fieldName, typeName), "")
 		}
+	}
+
+	// Validate field type specification
+	validation := validateFieldTypeSpec(schemaAddFieldType, schemaAddTarget, schemaAddValues, sch)
+	if !validation.Valid {
+		details := map[string]interface{}{
+			"field_type":  schemaAddFieldType,
+			"valid_types": validation.ValidTypes,
+		}
+		if len(validation.Examples) > 0 {
+			details["examples"] = validation.Examples
+		}
+		if validation.TargetHint != "" {
+			details["target_hint"] = validation.TargetHint
+		}
+		hint := validation.Suggestion
+		if len(validation.Examples) > 0 && !isJSONOutput() {
+			hint += "\n\nExamples:\n"
+			for _, ex := range validation.Examples {
+				hint += "  " + ex + "\n"
+			}
+		}
+		return handleErrorWithDetails(ErrInvalidInput, validation.Error, hint, details)
 	}
 
 	// Read current schema file
@@ -1154,6 +1345,321 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 	return nil
 }
 
+// =============================================================================
+// RENAME COMMANDS
+// =============================================================================
+
+var schemaRenameCmd = &cobra.Command{
+	Use:   "rename <type> <old_name> <new_name>",
+	Short: "Rename a type and update all references",
+	Long: `Rename a type in schema.yaml and update all files that use it.
+
+This command:
+1. Renames the type in schema.yaml
+2. Updates all 'type:' frontmatter fields
+3. Updates all ::type() embedded declarations
+4. Updates all ref field targets pointing to the old type
+
+By default, previews changes. Use --confirm to apply.
+
+Examples:
+  rvn schema rename type event meeting
+  rvn schema rename type event meeting --confirm`,
+	Args: cobra.ExactArgs(3),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		start := time.Now()
+		kind := args[0]
+
+		switch kind {
+		case "type":
+			return renameType(vaultPath, args[1], args[2], start)
+		default:
+			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Currently supported: type")
+		}
+	},
+}
+
+// TypeRenameChange represents a single change to be made
+type TypeRenameChange struct {
+	FilePath    string `json:"file_path"`
+	ChangeType  string `json:"change_type"` // "frontmatter", "embedded", "schema_ref_target"
+	Description string `json:"description"`
+	Line        int    `json:"line,omitempty"`
+}
+
+func renameType(vaultPath, oldName, newName string, start time.Time) error {
+	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+
+	// Validate names
+	if oldName == "" || newName == "" {
+		return handleErrorMsg(ErrInvalidInput, "type names cannot be empty", "")
+	}
+
+	if oldName == newName {
+		return handleErrorMsg(ErrInvalidInput, "old and new names are the same", "")
+	}
+
+	// Check built-in types
+	builtins := map[string]bool{"page": true, "section": true, "date": true}
+	if builtins[oldName] {
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be renamed", oldName), "")
+	}
+	if builtins[newName] {
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot rename to '%s' - it's a built-in type", newName), "")
+	}
+
+	// Load existing schema
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
+	}
+
+	// Check if old type exists
+	if _, exists := sch.Types[oldName]; !exists {
+		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", oldName), "")
+	}
+
+	// Check if new type already exists
+	if _, exists := sch.Types[newName]; exists {
+		return handleErrorMsg(ErrObjectExists, fmt.Sprintf("type '%s' already exists", newName), "Choose a different name")
+	}
+
+	// Collect all changes needed
+	var changes []TypeRenameChange
+
+	// 1. Schema changes - the type itself
+	changes = append(changes, TypeRenameChange{
+		FilePath:    "schema.yaml",
+		ChangeType:  "schema_type",
+		Description: fmt.Sprintf("rename type '%s' to '%s'", oldName, newName),
+	})
+
+	// 2. Schema changes - ref field targets
+	for typeName, typeDef := range sch.Types {
+		if typeDef == nil || typeDef.Fields == nil {
+			continue
+		}
+		for fieldName, fieldDef := range typeDef.Fields {
+			if fieldDef == nil {
+				continue
+			}
+			if fieldDef.Target == oldName {
+				changes = append(changes, TypeRenameChange{
+					FilePath:    "schema.yaml",
+					ChangeType:  "schema_ref_target",
+					Description: fmt.Sprintf("update field '%s.%s' target from '%s' to '%s'", typeName, fieldName, oldName, newName),
+				})
+			}
+		}
+	}
+
+	// 3. File changes - walk all markdown files
+	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+		if result.Error != nil {
+			return nil // Skip errors
+		}
+
+		content, err := os.ReadFile(result.Path)
+		if err != nil {
+			return nil
+		}
+		lines := strings.Split(string(content), "\n")
+
+		// Check frontmatter for type: old_name
+		for _, obj := range result.Document.Objects {
+			if obj.ObjectType == oldName && !strings.Contains(obj.ID, "#") {
+				// This is a file-level object with the old type
+				changes = append(changes, TypeRenameChange{
+					FilePath:    result.RelativePath,
+					ChangeType:  "frontmatter",
+					Description: fmt.Sprintf("change type: %s → type: %s", oldName, newName),
+					Line:        1, // Frontmatter is at the start
+				})
+			}
+		}
+
+		// Check for embedded type declarations ::old_name(...)
+		embeddedPattern := fmt.Sprintf("::%s(", oldName)
+		for lineNum, line := range lines {
+			if strings.Contains(line, embeddedPattern) {
+				changes = append(changes, TypeRenameChange{
+					FilePath:    result.RelativePath,
+					ChangeType:  "embedded",
+					Description: fmt.Sprintf("change ::%s(...) → ::%s(...)", oldName, newName),
+					Line:        lineNum + 1,
+				})
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+
+	elapsed := time.Since(start).Milliseconds()
+
+	// If not confirming, show preview
+	if !schemaRenameConfirm {
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"preview":       true,
+				"old_name":      oldName,
+				"new_name":      newName,
+				"total_changes": len(changes),
+				"changes":       changes,
+				"hint":          "Run with --confirm to apply changes",
+			}, &Meta{QueryTimeMs: elapsed})
+			return nil
+		}
+
+		fmt.Printf("Preview: Rename type '%s' to '%s'\n\n", oldName, newName)
+		fmt.Printf("Changes to be made (%d total):\n", len(changes))
+
+		// Group by file
+		byFile := make(map[string][]TypeRenameChange)
+		for _, c := range changes {
+			byFile[c.FilePath] = append(byFile[c.FilePath], c)
+		}
+
+		for file, fileChanges := range byFile {
+			fmt.Printf("\n  %s:\n", file)
+			for _, c := range fileChanges {
+				if c.Line > 0 {
+					fmt.Printf("    Line %d: %s\n", c.Line, c.Description)
+				} else {
+					fmt.Printf("    %s\n", c.Description)
+				}
+			}
+		}
+
+		fmt.Printf("\nRun with --confirm to apply these changes.\n")
+		return nil
+	}
+
+	// Apply changes
+	appliedChanges := 0
+
+	// 1. Update schema.yaml
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return handleError(ErrFileReadError, err, "")
+	}
+
+	var schemaDoc map[string]interface{}
+	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
+		return handleError(ErrSchemaInvalid, err, "")
+	}
+
+	types, ok := schemaDoc["types"].(map[string]interface{})
+	if !ok {
+		return handleErrorMsg(ErrSchemaInvalid, "types section not found", "")
+	}
+
+	// Rename the type
+	if typeDef, exists := types[oldName]; exists {
+		types[newName] = typeDef
+		delete(types, oldName)
+		appliedChanges++
+	}
+
+	// Update ref field targets
+	for _, typeDef := range types {
+		typeMap, ok := typeDef.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		fields, ok := typeMap["fields"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, fieldDef := range fields {
+			fieldMap, ok := fieldDef.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if target, ok := fieldMap["target"].(string); ok && target == oldName {
+				fieldMap["target"] = newName
+				appliedChanges++
+			}
+		}
+	}
+
+	// Write schema back
+	output, err := yaml.Marshal(schemaDoc)
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+		return handleError(ErrFileWriteError, err, "")
+	}
+
+	// 2. Update markdown files
+	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+		if result.Error != nil {
+			return nil
+		}
+
+		content, err := os.ReadFile(result.Path)
+		if err != nil {
+			return nil
+		}
+
+		originalContent := string(content)
+		newContent := originalContent
+		modified := false
+
+		// Update frontmatter type: old_name → type: new_name
+		// Pattern matches "type: old_name" at start of line in frontmatter
+		frontmatterPattern := regexp.MustCompile(`(?m)^type:\s*` + regexp.QuoteMeta(oldName) + `\s*$`)
+		if frontmatterPattern.MatchString(newContent) {
+			newContent = frontmatterPattern.ReplaceAllString(newContent, "type: "+newName)
+			modified = true
+			appliedChanges++
+		}
+
+		// Update embedded ::old_name(...) → ::new_name(...)
+		embeddedPattern := regexp.MustCompile(`::` + regexp.QuoteMeta(oldName) + `\(`)
+		if embeddedPattern.MatchString(newContent) {
+			newContent = embeddedPattern.ReplaceAllString(newContent, "::"+newName+"(")
+			modified = true
+			appliedChanges++
+		}
+
+		if modified {
+			if err := os.WriteFile(result.Path, []byte(newContent), 0644); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+
+	elapsed = time.Since(start).Milliseconds()
+
+	if isJSONOutput() {
+		outputSuccess(map[string]interface{}{
+			"renamed":         true,
+			"old_name":        oldName,
+			"new_name":        newName,
+			"changes_applied": appliedChanges,
+			"hint":            "Run 'rvn reindex --full' to update the index",
+		}, &Meta{QueryTimeMs: elapsed})
+		return nil
+	}
+
+	fmt.Printf("✓ Renamed type '%s' to '%s'\n", oldName, newName)
+	fmt.Printf("  Applied %d changes\n", appliedChanges)
+	fmt.Printf("\nRun 'rvn reindex --full' to update the index.\n")
+	return nil
+}
+
 func init() {
 	// Add flags to schema add command
 	schemaAddCmd.Flags().StringVar(&schemaAddDefaultPath, "default-path", "", "Default path for new type files")
@@ -1178,9 +1684,13 @@ func init() {
 	// Add flags to schema remove command
 	schemaRemoveCmd.Flags().BoolVar(&schemaRemoveForce, "force", false, "Skip confirmation prompts")
 
+	// Add flags to schema rename command
+	schemaRenameCmd.Flags().BoolVar(&schemaRenameConfirm, "confirm", false, "Apply the rename (default: preview only)")
+
 	// Add subcommands to schema command
 	schemaCmd.AddCommand(schemaAddCmd)
 	schemaCmd.AddCommand(schemaUpdateCmd)
 	schemaCmd.AddCommand(schemaRemoveCmd)
+	schemaCmd.AddCommand(schemaRenameCmd)
 	schemaCmd.AddCommand(schemaValidateCmd)
 }

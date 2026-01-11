@@ -369,14 +369,38 @@ rvn schema remove trait unused-trait
 ### Check for Issues
 
 ```bash
-# Run validation
+# Run full vault validation
 rvn check
+
+# Check a specific file (by path or reference)
+rvn check people/freya.md
+rvn check freya
+
+# Check a directory
+rvn check projects/
+
+# Check all objects of a type
+rvn check --type project
+
+# Check all usages of a trait
+rvn check --trait due
+
+# Only check specific issue types
+rvn check --issues missing_reference,unknown_type
+
+# Exclude certain issue types
+rvn check --exclude unused_type,unused_trait
+
+# Only show errors (skip warnings)
+rvn check --errors-only
 
 # Common issues:
 # - unknown_type: File uses undefined type
 # - missing_reference: Broken [[link]]
 # - undefined_trait: @trait not in schema
 # - missing_required_field: Required field not set
+# - unknown_frontmatter_key: Field not defined for type
+# - invalid_enum_value: Value not in allowed list
 ```
 
 ### Fix Common Issues

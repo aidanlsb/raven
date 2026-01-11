@@ -334,13 +334,42 @@ Returns structured issues with:
 
 The summary groups issues by type with counts and top values, making it easy to prioritize fixes.
 
+Scoping:
+- Pass a file path, directory, or reference to check a subset of the vault
+- Use --type to check all objects of a specific type
+- Use --trait to check all usages of a specific trait
+- Use --issues to check only specific issue types
+- Use --exclude to skip specific issue types
+
 For agents: Use this tool to discover issues, then use the fix_command suggestions to resolve them.
 Ask the user for clarification when needed (e.g., which type to use for missing references).`,
+		Args: []ArgMeta{
+			{Name: "path", Description: "File, directory, or reference to check (optional, defaults to entire vault)", Required: false},
+		},
 		Flags: []FlagMeta{
+			{Name: "type", Short: "t", Description: "Check only objects of this type", Type: FlagTypeString},
+			{Name: "trait", Description: "Check only usages of this trait", Type: FlagTypeString},
+			{Name: "issues", Description: "Only check these issue types (comma-separated)", Type: FlagTypeString},
+			{Name: "exclude", Description: "Exclude these issue types (comma-separated)", Type: FlagTypeString},
+			{Name: "errors-only", Description: "Only report errors, skip warnings", Type: FlagTypeBool},
 			{Name: "create-missing", Description: "Interactively create missing pages (CLI only, not for agents)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn check --json",
+			"rvn check people/freya.md --json",
+			"rvn check projects/ --json",
+			"rvn check freya --json",
+			"rvn check --type project --json",
+			"rvn check --trait due --json",
+			"rvn check --issues missing_reference,unknown_type --json",
+			"rvn check --exclude unused_type,unused_trait --json",
+		},
+		UseCases: []string{
+			"Validate entire vault for issues",
+			"Check a specific file after editing",
+			"Verify all objects of a type are valid",
+			"Check all trait usages for correct values",
+			"Focus on specific issue types",
 		},
 	},
 	"schema": {
@@ -402,17 +431,50 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 	"schema_add_field": {
 		Name:        "schema add field",
 		Description: "Add a field to an existing type",
+		LongDesc: `Add a field to an existing type definition.
+
+Field Types:
+  string      Plain text value
+  string[]    Array of text values (e.g., tags)
+  number      Numeric value
+  date        Date in YYYY-MM-DD format
+  datetime    Date and time
+  bool        Boolean (true/false)
+  enum        Single value from a list (requires --values)
+  enum[]      Multiple values from a list (requires --values)
+  ref         Reference to another object (requires --target)
+  ref[]       Array of references (requires --target)
+
+Common patterns:
+  Single reference:     --type ref --target person
+  Array of references:  --type ref[] --target person
+  Tags/keywords:        --type string[]
+  Status field:         --type enum --values active,paused,done
+
+The command validates inputs and provides helpful suggestions if the syntax is incorrect.`,
 		Args: []ArgMeta{
 			{Name: "type_name", Description: "Type to add field to", Required: true},
 			{Name: "field_name", Description: "Name of the new field", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "type", Description: "Field type (string, date, enum, ref, bool)", Type: FlagTypeString, Default: "string"},
+			{Name: "type", Description: "Field type: string, number, date, datetime, bool, enum, ref (add [] for arrays)", Type: FlagTypeString, Default: "string"},
 			{Name: "required", Description: "Mark field as required", Type: FlagTypeBool},
-			{Name: "target", Description: "Target type for ref fields", Type: FlagTypeString},
+			{Name: "target", Description: "Target type for ref/ref[] fields (required for references)", Type: FlagTypeString},
+			{Name: "values", Description: "Allowed values for enum/enum[] fields (comma-separated)", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn schema add field person email --type string --required --json",
+			"rvn schema add field person tags --type string[] --json",
+			"rvn schema add field project owner --type ref --target person --json",
+			"rvn schema add field team members --type ref[] --target person --json",
+			"rvn schema add field project status --type enum --values active,paused,done --json",
+		},
+		UseCases: []string{
+			"Add a text field to a type",
+			"Add an array field for tags or keywords",
+			"Add a reference to link objects together",
+			"Add an array of references (e.g., team members, attendees)",
+			"Add an enum field with predefined choices",
 		},
 	},
 	"schema_validate": {
@@ -530,6 +592,37 @@ Existing field values will remain in files but no longer be validated.`,
 		},
 		Examples: []string{
 			"rvn schema remove field person nickname --json",
+		},
+	},
+	"schema_rename_type": {
+		Name:        "schema rename type",
+		Description: "Rename a type and update all references",
+		LongDesc: `Rename a type in schema.yaml and update all files that use it.
+
+This command:
+1. Renames the type in schema.yaml
+2. Updates all 'type:' frontmatter fields in files
+3. Updates all ::type() embedded declarations
+4. Updates all ref field targets pointing to the old type
+
+By default, previews changes. Use --confirm to apply.
+
+For agents: After renaming, run raven_reindex(full=true) to update the index.`,
+		Args: []ArgMeta{
+			{Name: "old_name", Description: "Current type name", Required: true},
+			{Name: "new_name", Description: "New type name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "confirm", Description: "Apply the rename (default: preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema rename type event meeting --json",
+			"rvn schema rename type event meeting --confirm --json",
+		},
+		UseCases: []string{
+			"Rename a type while keeping all files valid",
+			"Refactor schema type names",
+			"Migrate from old naming conventions",
 		},
 	},
 	"set": {

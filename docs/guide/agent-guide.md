@@ -29,6 +29,54 @@ When users ask about issues or want to clean up their vault:
 4. Execute fix commands based on user confirmation
 ```
 
+**Scoped checks for precision:**
+
+```
+# Check a specific file (verify your own work after edits)
+raven_check(path="people/freya.md")
+raven_check(path="freya")  # References work too
+
+# Check a directory
+raven_check(path="projects/")
+
+# Check all objects of a specific type
+raven_check(type="project")
+
+# Check all usages of a specific trait
+raven_check(trait="due")
+
+# Filter to specific issue types
+raven_check(issues="missing_reference,unknown_type")
+
+# Exclude noisy warnings
+raven_check(exclude="unused_type,unused_trait,short_ref_could_be_full_path")
+
+# Only errors (skip warnings)
+raven_check(errors_only=true)
+```
+
+**When to use scoped checks:**
+
+| Scenario | Command |
+|----------|---------|
+| After creating/editing a file | `raven_check(path="path/to/file.md")` |
+| Validating a type's instances | `raven_check(type="project")` |
+| Checking trait value correctness | `raven_check(trait="due")` |
+| Quick error-only scan | `raven_check(errors_only=true)` |
+| Focus on broken links | `raven_check(issues="missing_reference")` |
+
+**Verify your own work:**
+
+After making changes, run a scoped check to verify:
+```
+# After creating a person
+raven_new(type="person", title="Thor")
+raven_check(path="thor")  # Verify the new file is valid
+
+# After bulk edits to projects
+raven_check(type="project")  # Verify all projects are still valid
+```
+
 ### 2. Creating Content
 
 When users want to create notes:
@@ -176,15 +224,49 @@ When users want to reorganize their vault:
 
 When `raven_check` returns issues, here's how to fix them:
 
+**Errors (must fix):**
+
 | Issue Type | Meaning | Fix Command |
 |------------|---------|-------------|
 | `unknown_type` | File uses a type not in schema | `raven_schema_add_type(name="book")` |
 | `missing_reference` | Link to non-existent page | `raven_new(type="person", title="Freya")` |
-| `undefined_trait` | Trait not in schema | `raven_schema_add_trait(name="toread", type="boolean")` |
 | `unknown_frontmatter_key` | Field not defined for type | `raven_schema_add_field(type_name="person", field_name="company")` |
 | `missing_required_field` | Required field not set | `raven_set(object_id="...", fields={"name": "..."})` |
 | `missing_required_trait` | Required trait not set | `raven_set(object_id="...", fields={"due": "2025-02-01"})` |
 | `invalid_enum_value` | Value not in allowed list | `raven_set(object_id="...", fields={"status": "done"})` |
+| `wrong_target_type` | Ref field points to wrong type | Update the reference to point to correct type |
+| `invalid_date_format` | Date/datetime value malformed | Fix to YYYY-MM-DD format |
+| `duplicate_object_id` | Multiple objects share same ID | Rename one of the duplicates |
+| `parse_error` | YAML frontmatter or syntax error | Fix the malformed syntax |
+| `ambiguous_reference` | Reference matches multiple objects | Use full path: `[[people/freya]]` |
+| `missing_target_type` | Ref field's target type doesn't exist | Add the target type to schema |
+| `duplicate_alias` | Multiple objects use same alias | Rename one of the aliases |
+| `alias_collision` | Alias conflicts with object ID/short name | Rename the alias |
+
+**Warnings (optional to fix):**
+
+| Issue Type | Meaning | Fix Suggestion |
+|------------|---------|----------------|
+| `undefined_trait` | Trait not in schema | `raven_schema_add_trait(name="toread", type="boolean")` |
+| `unused_type` | Type defined but never used | Remove from schema or create an instance |
+| `unused_trait` | Trait defined but never used | Remove from schema or use it |
+| `stale_index` | Index needs reindexing | `raven_reindex()` |
+| `short_ref_could_be_full_path` | Short ref could be clearer | Consider using full path |
+| `id_collision` | Short name matches multiple objects | Use full paths in references |
+| `self_referential_required` | Type has required ref to itself | Make field optional or add default |
+
+**Using issue types for filtering:**
+
+```
+# Focus on actionable errors only
+raven_check(issues="missing_reference,unknown_type,missing_required_field")
+
+# Skip noisy schema warnings during cleanup
+raven_check(exclude="unused_type,unused_trait,short_ref_could_be_full_path")
+
+# Just errors, no warnings
+raven_check(errors_only=true)
+```
 
 ### 6. Bulk Operations
 
@@ -322,7 +404,53 @@ Help users create reusable queries:
    raven_query(list=true)
 ```
 
-### 11. Schema Updates & Removals
+### 11. Adding Fields to Types
+
+When adding fields to types, use the correct `--type` syntax:
+
+**Field Type Reference:**
+
+| Field Type | Syntax | Example |
+|------------|--------|---------|
+| Text | `--type string` | name, email, notes |
+| Array of text | `--type string[]` | tags, keywords |
+| Number | `--type number` | priority, score |
+| Date | `--type date` | due, birthday |
+| DateTime | `--type datetime` | created_at, meeting_time |
+| Boolean | `--type bool` | active, archived |
+| Single choice | `--type enum --values a,b,c` | status |
+| Multiple choice | `--type enum[] --values a,b,c` | categories |
+| Reference | `--type ref --target <type>` | owner, author |
+| Array of refs | `--type ref[] --target <type>` | members, attendees |
+
+**Common patterns:**
+
+```
+# Simple text field
+raven_schema_add_field(type_name="person", field_name="email", type="string")
+
+# Array of strings (tags, keywords)
+raven_schema_add_field(type_name="project", field_name="tags", type="string[]")
+
+# Reference to another type (single)
+raven_schema_add_field(type_name="project", field_name="owner", type="ref", target="person")
+
+# Array of references (team members, attendees)
+raven_schema_add_field(type_name="team", field_name="members", type="ref[]", target="person")
+raven_schema_add_field(type_name="meeting", field_name="attendees", type="ref[]", target="person")
+
+# Enum with choices
+raven_schema_add_field(type_name="project", field_name="status", type="enum", values="active,paused,done")
+
+# Multiple enum selections
+raven_schema_add_field(type_name="book", field_name="genres", type="enum[]", values="fiction,non-fiction,technical")
+```
+
+**Important:** The `--type` flag takes field types (string, ref, etc.), NOT schema type names. If you need a field that references objects of a certain type, use `--type ref --target <type_name>`.
+
+The command provides helpful error messages if the syntax is incorrect, showing examples of the correct usage.
+
+### 12. Schema Updates, Renames & Removals
 
 For modifying existing schema elements:
 
@@ -338,19 +466,24 @@ For modifying existing schema elements:
 3. Update a trait:
    raven_schema_update_trait(name="priority", values="critical,high,medium,low")
 
-3. Update a field:
+4. Update a field:
    raven_schema_update_field(type_name="person", field_name="email", required="true")
 
-4. Remove schema elements (use with caution):
+5. Rename a type (updates schema AND all files):
+   raven_schema_rename_type(old_name="event", new_name="meeting")  # Preview first
+   raven_schema_rename_type(old_name="event", new_name="meeting", confirm=true)  # Apply
+   raven_reindex(full=true)  # Always reindex after rename
+
+6. Remove schema elements (use with caution):
    raven_schema_remove_type(name="old-type", force=true)
    raven_schema_remove_trait(name="unused-trait", force=true)
    raven_schema_remove_field(type_name="person", field_name="nickname")
 
-5. Validate schema:
+7. Validate schema:
    raven_schema_validate()
 ```
 
-### 12. Workflows
+### 13. Workflows
 
 Workflows are reusable prompt templates. Help users discover and run them:
 
@@ -543,13 +676,32 @@ daily_template: |
 
 **User**: "My vault has a lot of broken links, can you help fix them?"
 ```
-→ raven_check()
+→ raven_check(issues="missing_reference")  # Focus on broken links
 → Review summary, explain to user
 → "I see 2798 missing references. The most-referenced missing pages are:
     - 'bifrost-bridge' (referenced 15 times)
     - 'Baldur' (referenced 12 times)
    Would you like me to create pages for the most common ones? What type should they be?"
 → Create pages based on user input
+```
+
+**User**: "I just created some new projects, make sure they're set up correctly"
+```
+→ raven_check(type="project")  # Validate all project objects
+→ Report any issues: "All 5 projects are valid" or "2 projects have issues: ..."
+→ Offer to fix any problems found
+```
+
+**User**: "Check if my due dates are formatted correctly"
+```
+→ raven_check(trait="due")  # Validate all @due trait usages
+→ Report: "Found 3 invalid date formats: ..." or "All 42 due dates are valid"
+```
+
+**User**: "Verify that file I just edited"
+```
+→ raven_check(path="people/freya.md")  # Check specific file
+→ "The file is valid" or "Found 1 issue: missing required field 'email'"
 ```
 
 **User**: "Create a project for the website redesign"
