@@ -420,7 +420,7 @@ func setSingleObject(vaultPath, objectID string, updates map[string]string) erro
 			// Check if this is a valid field
 			fieldDef, isField := typeDef.Fields[fieldName]
 
-			if !isField && fieldName != "tags" {
+			if !isField && fieldName != "alias" {
 				// Unknown field - warn but allow (for flexibility)
 				validationWarnings = append(validationWarnings,
 					fmt.Sprintf("'%s' is not a declared field for type '%s'", fieldName, objectType))
@@ -681,7 +681,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 		if hasType && typeDef != nil {
 			fieldDef, isField := typeDef.Fields[fieldName]
 
-			if !isField && fieldName != "tags" && fieldName != "id" {
+			if !isField && fieldName != "alias" && fieldName != "id" {
 				validationWarnings = append(validationWarnings,
 					fmt.Sprintf("'%s' is not a declared field for type '%s'", fieldName, objectType))
 			}

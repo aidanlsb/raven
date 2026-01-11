@@ -38,7 +38,7 @@ func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDef
 	// Validate each provided field
 	for name, value := range fields {
 		// Skip reserved fields
-		if name == "id" || name == "type" || name == "tags" {
+		if name == "id" || name == "type" || name == "alias" {
 			continue
 		}
 

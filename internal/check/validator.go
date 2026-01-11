@@ -356,9 +356,9 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 		// Check for unknown frontmatter keys (not a defined field)
 		// Reserved keys that are always allowed
 		reservedKeys := map[string]bool{
-			"type": true, // Object type declaration
-			"tags": true, // Tags are always allowed
-			"id":   true, // ID for embedded objects
+			"type":  true, // Object type declaration
+			"id":    true, // ID for embedded objects
+			"alias": true, // Alias for reference resolution
 		}
 
 		for fieldName := range obj.Fields {
