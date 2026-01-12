@@ -247,11 +247,11 @@ func TestValidator_SortGroupValidation(t *testing.T) {
 	validTests := []string{
 		"trait:todo sort:_.value",
 		"trait:todo sort:_.parent",
-		"trait:todo sort:{trait:due}",
+		"trait:todo sort:{trait:due at:_}",
 		"trait:todo group:_.parent",
 		"trait:todo group:_.refs:project",
 		"object:project sort:_.status",
-		"object:project sort:min:{trait:due}",
+		"object:project sort:min:{trait:due within:_}",
 	}
 
 	for _, queryStr := range validTests {

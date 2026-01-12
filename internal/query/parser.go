@@ -326,8 +326,17 @@ func (p *Parser) parseHasPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseParentPredicate parses parent:type, parent:{object:type ...}, or parent:[[target]]
+// parseParentPredicate parses parent:type, parent:{object:type ...}, parent:[[target]], or parent:_
 func (p *Parser) parseParentPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &ParentPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -348,8 +357,17 @@ func (p *Parser) parseParentPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseAncestorPredicate parses ancestor:type, ancestor:{object:type ...}, or ancestor:[[target]]
+// parseAncestorPredicate parses ancestor:type, ancestor:{object:type ...}, ancestor:[[target]], or ancestor:_
 func (p *Parser) parseAncestorPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &AncestorPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -370,8 +388,17 @@ func (p *Parser) parseAncestorPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseChildPredicate parses child:type, child:{object:type ...}, or child:[[target]]
+// parseChildPredicate parses child:type, child:{object:type ...}, child:[[target]], or child:_
 func (p *Parser) parseChildPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &ChildPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -392,8 +419,17 @@ func (p *Parser) parseChildPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseDescendantPredicate parses descendant:type, descendant:{object:type ...}, or descendant:[[target]]
+// parseDescendantPredicate parses descendant:type, descendant:{object:type ...}, descendant:[[target]], or descendant:_
 func (p *Parser) parseDescendantPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &DescendantPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -426,8 +462,17 @@ func (p *Parser) parseContainsPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseRefsPredicate parses refs:[[target]] or refs:{object:type ...}
+// parseRefsPredicate parses refs:[[target]], refs:{object:type ...}, or refs:_
 func (p *Parser) parseRefsPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &RefsPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -450,7 +495,7 @@ func (p *Parser) parseRefsPredicate(negated bool) (Predicate, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("expected [[reference]] or {subquery} after refs:")
+	return nil, fmt.Errorf("expected [[reference]], {subquery}, or _ after refs:")
 }
 
 // parseContentPredicate parses content:"search terms"
@@ -524,8 +569,17 @@ func (p *Parser) parseSourcePredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseOnPredicate parses on:type, on:{object:type ...}, or on:[[target]]
+// parseOnPredicate parses on:type, on:{object:type ...}, on:[[target]], or on:_
 func (p *Parser) parseOnPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &OnPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -546,8 +600,17 @@ func (p *Parser) parseOnPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseWithinPredicate parses within:type, within:{object:type ...}, or within:[[target]]
+// parseWithinPredicate parses within:type, within:{object:type ...}, within:[[target]], or within:_
 func (p *Parser) parseWithinPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &WithinPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -568,8 +631,17 @@ func (p *Parser) parseWithinPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseAtPredicate parses at:{trait:...} or at:[[target]]
+// parseAtPredicate parses at:{trait:...}, at:[[target]], or at:_
 func (p *Parser) parseAtPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &AtPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -591,10 +663,19 @@ func (p *Parser) parseAtPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseRefdPredicate parses refd:{object:...}, refd:{trait:...}, refd:type, or refd:[[target]]
+// parseRefdPredicate parses refd:{object:...}, refd:{trait:...}, refd:type, refd:[[target]], or refd:_
 // Note: Unlike most predicates, refd: accepts both object and trait subqueries because
 // something can be referenced by either objects or traits.
 func (p *Parser) parseRefdPredicate(negated bool) (Predicate, error) {
+	// Check for self-reference _
+	if p.curr.Type == TokenUnderscore {
+		p.advance()
+		return &RefdPredicate{
+			basePredicate: basePredicate{negated: negated},
+			IsSelfRef:     true,
+		}, nil
+	}
+
 	// Check for direct reference [[target]]
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -634,7 +715,7 @@ func (p *Parser) parseRefdPredicate(negated bool) (Predicate, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("expected [[reference]], {subquery}, or type name after refd:")
+	return nil, fmt.Errorf("expected [[reference]], {subquery}, type name, or _ after refd:")
 }
 
 // parseSubQuery parses either a shorthand (type name) or full subquery ({object:type ...})

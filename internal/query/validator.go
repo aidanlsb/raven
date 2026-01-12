@@ -282,12 +282,20 @@ func (v *Validator) validateSortSpec(spec *SortSpec, queryType QueryType) error 
 				Suggestion: "Sort subqueries must be valid trait or object queries",
 			}
 		}
+
+		// Check that subquery contains at least one _ reference
+		if !containsSelfRef(spec.SubQuery) {
+			return &ValidationError{
+				Message:    "sort subquery should contain a _ reference to bind to the current result",
+				Suggestion: "Use predicates like on:_, within:_, refs:_, at:_ to relate the subquery to each result. Example: sort:{trait:due within:_}",
+			}
+		}
 	}
 
 	if spec.Path == nil && spec.SubQuery == nil {
 		return &ValidationError{
 			Message:    "sort spec must have either a path or subquery",
-			Suggestion: "Use sort:_.value or sort:{trait:due}",
+			Suggestion: "Use sort:_.value or sort:{trait:due within:_}",
 		}
 	}
 
@@ -312,16 +320,122 @@ func (v *Validator) validateGroupSpec(spec *GroupSpec, queryType QueryType) erro
 				Suggestion: "Group subqueries must be valid trait or object queries",
 			}
 		}
+
+		// Check that subquery contains at least one _ reference
+		if !containsSelfRef(spec.SubQuery) {
+			return &ValidationError{
+				Message:    "group subquery should contain a _ reference to bind to the current result",
+				Suggestion: "Use predicates like on:_, within:_, refs:_, refd:_ to relate the subquery to each result. Example: group:{object:project refd:_}",
+			}
+		}
 	}
 
 	if spec.Path == nil && spec.SubQuery == nil {
 		return &ValidationError{
 			Message:    "group spec must have either a path or subquery",
-			Suggestion: "Use group:_.parent or group:{object:project}",
+			Suggestion: "Use group:_.parent or group:{object:project refd:_}",
 		}
 	}
 
 	return nil
+}
+
+// containsSelfRef checks if a query contains any _ (self-reference) predicates.
+func containsSelfRef(q *Query) bool {
+	for _, pred := range q.Predicates {
+		if predicateContainsSelfRef(pred) {
+			return true
+		}
+	}
+	return false
+}
+
+// predicateContainsSelfRef checks if a predicate or its subqueries contain _ references.
+func predicateContainsSelfRef(pred Predicate) bool {
+	switch p := pred.(type) {
+	case *OnPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *WithinPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *AtPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *RefsPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *RefdPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *ParentPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *AncestorPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *ChildPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *DescendantPredicate:
+		if p.IsSelfRef {
+			return true
+		}
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *HasPredicate:
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *ContainsPredicate:
+		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
+			return true
+		}
+	case *OrPredicate:
+		if predicateContainsSelfRef(p.Left) || predicateContainsSelfRef(p.Right) {
+			return true
+		}
+	case *GroupPredicate:
+		for _, subPred := range p.Predicates {
+			if predicateContainsSelfRef(subPred) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // validatePathExpr validates a path expression.

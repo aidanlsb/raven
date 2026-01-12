@@ -84,41 +84,45 @@ type HasPredicate struct {
 func (HasPredicate) predicateNode() {}
 
 // ParentPredicate filters by direct parent matching.
-// Syntax: parent:type, parent:{object:type ...}, parent:[[target]]
+// Syntax: parent:type, parent:{object:type ...}, parent:[[target]], parent:_
 type ParentPredicate struct {
 	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
+	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
+	IsSelfRef bool   // True if parent:_ (binds to current result in sort/group context)
 }
 
 func (ParentPredicate) predicateNode() {}
 
 // AncestorPredicate filters by any ancestor matching.
-// Syntax: ancestor:type, ancestor:{object:type ...}, ancestor:[[target]]
+// Syntax: ancestor:type, ancestor:{object:type ...}, ancestor:[[target]], ancestor:_
 type AncestorPredicate struct {
 	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
+	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
+	IsSelfRef bool   // True if ancestor:_ (binds to current result in sort/group context)
 }
 
 func (AncestorPredicate) predicateNode() {}
 
 // ChildPredicate filters by having a direct child matching.
-// Syntax: child:type, child:{object:type ...}, child:[[target]]
+// Syntax: child:type, child:{object:type ...}, child:[[target]], child:_
 type ChildPredicate struct {
 	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
+	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
+	IsSelfRef bool   // True if child:_ (binds to current result in sort/group context)
 }
 
 func (ChildPredicate) predicateNode() {}
 
 // DescendantPredicate filters by having any descendant matching (at any depth).
-// Syntax: descendant:type, descendant:{object:type ...}, descendant:[[target]]
+// Syntax: descendant:type, descendant:{object:type ...}, descendant:[[target]], descendant:_
 type DescendantPredicate struct {
 	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
+	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
+	IsSelfRef bool   // True if descendant:_ (binds to current result in sort/group context)
 }
 
 func (DescendantPredicate) predicateNode() {}
@@ -134,11 +138,12 @@ type ContainsPredicate struct {
 func (ContainsPredicate) predicateNode() {}
 
 // RefsPredicate filters objects by what they reference.
-// Syntax: refs:[[target]], refs:{object:type ...}
+// Syntax: refs:[[target]], refs:{object:type ...}, refs:_
 type RefsPredicate struct {
 	basePredicate
-	Target   string // Specific target like "projects/website" (mutually exclusive with SubQuery)
-	SubQuery *Query // Subquery to match targets (mutually exclusive with Target)
+	Target    string // Specific target like "projects/website" (mutually exclusive with SubQuery and IsSelfRef)
+	SubQuery  *Query // Subquery to match targets (mutually exclusive with Target and IsSelfRef)
+	IsSelfRef bool   // True if refs:_ (binds to current result in sort/group context)
 }
 
 func (RefsPredicate) predicateNode() {}
@@ -172,21 +177,23 @@ type SourcePredicate struct {
 func (SourcePredicate) predicateNode() {}
 
 // OnPredicate filters traits by direct parent object.
-// Syntax: on:type, on:{object:type ...}, on:[[target]]
+// Syntax: on:type, on:{object:type ...}, on:[[target]], on:_
 type OnPredicate struct {
 	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
+	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
+	IsSelfRef bool   // True if on:_ (binds to current result in sort/group context)
 }
 
 func (OnPredicate) predicateNode() {}
 
 // WithinPredicate filters traits by any ancestor object.
-// Syntax: within:type, within:{object:type ...}, within:[[target]]
+// Syntax: within:type, within:{object:type ...}, within:[[target]], within:_
 type WithinPredicate struct {
 	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
+	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
+	IsSelfRef bool   // True if within:_ (binds to current result in sort/group context)
 }
 
 func (WithinPredicate) predicateNode() {}
@@ -211,22 +218,24 @@ type GroupPredicate struct {
 func (GroupPredicate) predicateNode() {}
 
 // AtPredicate filters traits by co-location (same file:line).
-// Syntax: at:{trait:name ...}, at:[[target]]
+// Syntax: at:{trait:name ...}, at:[[target]], at:_
 // For traits only - matches traits at the same file and line.
 type AtPredicate struct {
 	basePredicate
-	Target   string // Specific trait ID (if referencing a known trait)
-	SubQuery *Query // A trait query to match against
+	Target    string // Specific trait ID (if referencing a known trait)
+	SubQuery  *Query // A trait query to match against
+	IsSelfRef bool   // True if at:_ (binds to current result in sort/group context)
 }
 
 func (AtPredicate) predicateNode() {}
 
 // RefdPredicate filters objects/traits by what references them (inverse of refs:).
-// Syntax: refd:{object:type ...}, refd:{trait:name ...}, refd:[[target]]
+// Syntax: refd:{object:type ...}, refd:{trait:name ...}, refd:[[target]], refd:_
 type RefdPredicate struct {
 	basePredicate
-	Target   string // Specific source ID
-	SubQuery *Query // Query matching the sources that reference this
+	Target    string // Specific source ID
+	SubQuery  *Query // Query matching the sources that reference this
+	IsSelfRef bool   // True if refd:_ (binds to current result in sort/group context)
 }
 
 func (RefdPredicate) predicateNode() {}
