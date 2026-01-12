@@ -52,11 +52,12 @@ func printTable(rows []tableRow) {
 		return
 	}
 
-	// Calculate max width for name column
+	// Calculate max width for name column (use visible length for ANSI-aware sizing)
 	maxNameWidth := 4 // minimum width for "NAME"
 	for _, row := range rows {
-		if len(row.name) > maxNameWidth {
-			maxNameWidth = len(row.name)
+		visibleLen := ui.VisibleLen(row.name)
+		if visibleLen > maxNameWidth {
+			maxNameWidth = visibleLen
 		}
 	}
 
@@ -72,10 +73,10 @@ func printTable(rows []tableRow) {
 	// Print rows
 	for _, row := range rows {
 		name := row.name
-		if len(name) > maxNameWidth {
+		if ui.VisibleLen(name) > maxNameWidth {
 			name = name[:maxNameWidth-1] + "…"
 		}
-		fmt.Printf("%-*s  %s\n", maxNameWidth, name, row.location)
+		fmt.Printf("%s  %s\n", ui.PadRight(name, maxNameWidth), row.location)
 	}
 }
 
@@ -86,7 +87,7 @@ func printTraitTable(rows []traitTableRow) {
 	}
 
 	// Fixed column widths for consistent readable output
-	const contentWidth = 65
+	const contentWidth = 55
 	const traitWidth = 18
 
 	// Print header
@@ -97,7 +98,7 @@ func printTraitTable(rows []traitTableRow) {
 	fmt.Printf("%s  %s  %s\n",
 		ui.Muted.Render(strings.Repeat("─", contentWidth)),
 		ui.Muted.Render(strings.Repeat("─", traitWidth)),
-		ui.Muted.Render(strings.Repeat("─", 25)))
+		ui.Muted.Render(strings.Repeat("─", 30)))
 
 	// Print rows
 	for _, row := range rows {
@@ -105,8 +106,12 @@ func printTraitTable(rows []traitTableRow) {
 		// Highlight any traits in the content
 		content = ui.HighlightTraits(content)
 		traits := row.traits
-		// Don't truncate traits column since it contains ANSI codes
-		fmt.Printf("%-*s  %s  %s\n", contentWidth, content, traits, row.location)
+
+		// Use PadRight to handle ANSI escape codes correctly
+		fmt.Printf("%s  %s  %s\n",
+			ui.PadRight(content, contentWidth),
+			ui.PadRight(traits, traitWidth),
+			row.location)
 	}
 }
 
