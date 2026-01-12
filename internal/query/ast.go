@@ -14,6 +14,13 @@ type Query struct {
 	Type       QueryType
 	TypeName   string      // Object type or trait name
 	Predicates []Predicate // Filters to apply
+
+	// Sort and group specifications (optional)
+	Sort  *SortSpec
+	Group *GroupSpec
+
+	// Limit restricts the number of results (0 = no limit)
+	Limit int
 }
 
 // Predicate represents a filter condition in a query.
@@ -29,13 +36,40 @@ type basePredicate struct {
 
 func (b basePredicate) Negated() bool { return b.negated }
 
+// CompareOp represents a comparison operator.
+type CompareOp int
+
+const (
+	CompareEq  CompareOp = iota // = (default, equals)
+	CompareLt                   // <
+	CompareGt                   // >
+	CompareLte                  // <=
+	CompareGte                  // >=
+)
+
+func (op CompareOp) String() string {
+	switch op {
+	case CompareLt:
+		return "<"
+	case CompareGt:
+		return ">"
+	case CompareLte:
+		return "<="
+	case CompareGte:
+		return ">="
+	default:
+		return "="
+	}
+}
+
 // FieldPredicate filters by object field value.
-// Syntax: .field:value, .field:*, !.field:value
+// Syntax: .field:value, .field:*, .field:<value, !.field:value
 type FieldPredicate struct {
 	basePredicate
-	Field    string
-	Value    string // "*" means "exists"
-	IsExists bool   // true if Value is "*"
+	Field     string
+	Value     string    // "*" means "exists"
+	IsExists  bool      // true if Value is "*"
+	CompareOp CompareOp // comparison operator (default: equals)
 }
 
 func (FieldPredicate) predicateNode() {}
@@ -119,10 +153,11 @@ type ContentPredicate struct {
 func (ContentPredicate) predicateNode() {}
 
 // ValuePredicate filters traits by value.
-// Syntax: value:val, !value:val
+// Syntax: value:val, value:<val, value:>val, !value:val
 type ValuePredicate struct {
 	basePredicate
-	Value string
+	Value     string
+	CompareOp CompareOp // comparison operator (default: equals)
 }
 
 func (ValuePredicate) predicateNode() {}
@@ -174,3 +209,75 @@ type GroupPredicate struct {
 }
 
 func (GroupPredicate) predicateNode() {}
+
+// AtPredicate filters traits by co-location (same file:line).
+// Syntax: at:{trait:name ...}, at:[[target]]
+// For traits only - matches traits at the same file and line.
+type AtPredicate struct {
+	basePredicate
+	Target   string // Specific trait ID (if referencing a known trait)
+	SubQuery *Query // A trait query to match against
+}
+
+func (AtPredicate) predicateNode() {}
+
+// RefdPredicate filters objects/traits by what references them (inverse of refs:).
+// Syntax: refd:{object:type ...}, refd:{trait:name ...}, refd:[[target]]
+type RefdPredicate struct {
+	basePredicate
+	Target   string // Specific source ID
+	SubQuery *Query // Query matching the sources that reference this
+}
+
+func (RefdPredicate) predicateNode() {}
+
+// AggregationType represents how to aggregate multiple values for sort/group.
+type AggregationType int
+
+const (
+	AggFirst AggregationType = iota // Default: first by position
+	AggMin                          // Minimum value
+	AggMax                          // Maximum value
+	AggCount                        // Count of matches
+)
+
+// SortSpec represents a sort specification.
+type SortSpec struct {
+	Aggregation AggregationType
+	Descending  bool
+
+	// One of these will be set:
+	Path     *PathExpr // Direct path: _.parent.status
+	SubQuery *Query    // Subquery: {trait:due at:_}
+}
+
+// GroupSpec represents a group specification.
+type GroupSpec struct {
+	Aggregation AggregationType // Usually not used, but count: could be useful
+
+	// One of these will be set:
+	Path     *PathExpr // Direct path: _.refs:project
+	SubQuery *Query    // Subquery: {object:project refd:_}
+}
+
+// PathExpr represents a path expression from the result reference (_).
+type PathExpr struct {
+	Steps []PathStep
+}
+
+// PathStep represents one step in a path expression.
+type PathStep struct {
+	Kind PathStepKind
+	Name string // Field name, type name, etc.
+}
+
+// PathStepKind represents the kind of path step.
+type PathStepKind int
+
+const (
+	PathStepField    PathStepKind = iota // .fieldname
+	PathStepParent                       // .parent
+	PathStepAncestor                     // .ancestor:type
+	PathStepRefs                         // .refs:type
+	PathStepValue                        // .value
+)

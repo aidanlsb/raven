@@ -37,10 +37,29 @@ func (v *Validator) Validate(q *Query) error {
 }
 
 func (v *Validator) validateQuery(q *Query) error {
+	var err error
 	if q.Type == QueryTypeObject {
-		return v.validateObjectQuery(q)
+		err = v.validateObjectQuery(q)
+	} else {
+		err = v.validateTraitQuery(q)
 	}
-	return v.validateTraitQuery(q)
+	if err != nil {
+		return err
+	}
+
+	// Validate sort/group clauses
+	if q.Sort != nil {
+		if err := v.validateSortSpec(q.Sort, q.Type); err != nil {
+			return err
+		}
+	}
+	if q.Group != nil {
+		if err := v.validateGroupSpec(q.Group, q.Type); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {
@@ -121,6 +140,16 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 				Suggestion: "Provide a search term: content:\"search terms\"",
 			}
 		}
+	case *RefdPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *AtPredicate:
+		// at: is only valid for trait queries
+		return &ValidationError{
+			Message:    "at: predicate is only valid for trait queries",
+			Suggestion: "Use at: to find traits co-located with other traits",
+		}
 	case *OrPredicate:
 		if err := v.validateObjectPredicate(p.Left, typeName, typeDef); err != nil {
 			return err
@@ -158,6 +187,21 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 				Message:    "content search term cannot be empty",
 				Suggestion: "Provide a search term: content:\"search terms\"",
 			}
+		}
+	case *AtPredicate:
+		// at: is only valid for trait queries (which we're in)
+		if p.SubQuery != nil {
+			if p.SubQuery.Type != QueryTypeTrait {
+				return &ValidationError{
+					Message:    "at: requires a trait subquery",
+					Suggestion: "Use at:{trait:name} to find traits co-located with other traits",
+				}
+			}
+			return v.validateQuery(p.SubQuery)
+		}
+	case *RefdPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
 		}
 	case *OrPredicate:
 		if err := v.validateTraitPredicate(p.Left); err != nil {
@@ -218,4 +262,118 @@ func (v *Validator) availableFields(typeDef *schema.TypeDefinition) []string {
 		}
 	}
 	return fields
+}
+
+// validateSortSpec validates a sort specification.
+func (v *Validator) validateSortSpec(spec *SortSpec, queryType QueryType) error {
+	if spec.Path != nil {
+		if err := v.validatePathExpr(spec.Path, queryType); err != nil {
+			return &ValidationError{
+				Message:    fmt.Sprintf("invalid sort path: %s", err.Error()),
+				Suggestion: "Valid path steps: _.value, _.parent, _.fieldname, _.refs:type, _.ancestor:type",
+			}
+		}
+	}
+
+	if spec.SubQuery != nil {
+		if err := v.validateQuery(spec.SubQuery); err != nil {
+			return &ValidationError{
+				Message:    fmt.Sprintf("invalid sort subquery: %s", err.Error()),
+				Suggestion: "Sort subqueries must be valid trait or object queries",
+			}
+		}
+	}
+
+	if spec.Path == nil && spec.SubQuery == nil {
+		return &ValidationError{
+			Message:    "sort spec must have either a path or subquery",
+			Suggestion: "Use sort:_.value or sort:{trait:due}",
+		}
+	}
+
+	return nil
+}
+
+// validateGroupSpec validates a group specification.
+func (v *Validator) validateGroupSpec(spec *GroupSpec, queryType QueryType) error {
+	if spec.Path != nil {
+		if err := v.validatePathExpr(spec.Path, queryType); err != nil {
+			return &ValidationError{
+				Message:    fmt.Sprintf("invalid group path: %s", err.Error()),
+				Suggestion: "Valid path steps: _.parent, _.refs:type, _.ancestor:type",
+			}
+		}
+	}
+
+	if spec.SubQuery != nil {
+		if err := v.validateQuery(spec.SubQuery); err != nil {
+			return &ValidationError{
+				Message:    fmt.Sprintf("invalid group subquery: %s", err.Error()),
+				Suggestion: "Group subqueries must be valid trait or object queries",
+			}
+		}
+	}
+
+	if spec.Path == nil && spec.SubQuery == nil {
+		return &ValidationError{
+			Message:    "group spec must have either a path or subquery",
+			Suggestion: "Use group:_.parent or group:{object:project}",
+		}
+	}
+
+	return nil
+}
+
+// validatePathExpr validates a path expression.
+func (v *Validator) validatePathExpr(path *PathExpr, queryType QueryType) error {
+	if len(path.Steps) == 0 {
+		return fmt.Errorf("empty path expression")
+	}
+
+	for i, step := range path.Steps {
+		switch step.Kind {
+		case PathStepValue:
+			// _.value is only valid for trait queries
+			if queryType != QueryTypeTrait {
+				return fmt.Errorf("_.value is only valid for trait queries")
+			}
+			// value must be the only or last step
+			if i != len(path.Steps)-1 {
+				return fmt.Errorf("_.value cannot be followed by other path steps")
+			}
+
+		case PathStepParent:
+			// parent is valid for both, no additional validation needed
+
+		case PathStepAncestor:
+			// ancestor requires a type name
+			if step.Name == "" {
+				return fmt.Errorf("_.ancestor requires a type name (_.ancestor:type)")
+			}
+			// Validate the type exists
+			if _, exists := v.schema.Types[step.Name]; !exists {
+				return fmt.Errorf("unknown type '%s' in _.ancestor:%s", step.Name, step.Name)
+			}
+
+		case PathStepRefs:
+			// refs requires a type name
+			if step.Name == "" {
+				return fmt.Errorf("_.refs requires a type name (_.refs:type)")
+			}
+			// Validate the type exists
+			if _, exists := v.schema.Types[step.Name]; !exists {
+				return fmt.Errorf("unknown type '%s' in _.refs:%s", step.Name, step.Name)
+			}
+
+		case PathStepField:
+			// Field access - we can't easily validate this because it depends on
+			// what object we're accessing (could be parent, ancestor, etc.)
+			// For now, just ensure it has a name
+			if step.Name == "" {
+				return fmt.Errorf("field step requires a field name")
+			}
+		}
+	}
+
+	return nil
 }
