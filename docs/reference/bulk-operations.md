@@ -166,23 +166,11 @@ rvn query "object:project .status:active" --ids
 rvn query "trait:due value:past" --ids
 ```
 
-### `--object-ids` Flag
-
-For trait queries, outputs the containing object IDs (deduplicated):
-
-```bash
-# Get objects that contain overdue traits
-rvn query "trait:due value:past" --object-ids
-```
-
 ### Piping Examples
 
 ```bash
 # Set fields via pipe
 rvn query "object:project .status:active" --ids | rvn set --stdin priority=high --confirm
-
-# Add text via pipe
-rvn query "trait:due value:past" --object-ids | rvn add --stdin "@reviewed(2026-01-10)" --confirm
 
 # Delete via pipe
 rvn query "object:project .status:archived" --ids | rvn delete --stdin --confirm
@@ -199,10 +187,6 @@ rvn query "object:project" --ids | head -10 | rvn set --stdin reviewed=true --co
 
 # Filter with grep
 rvn query "object:person" --ids | grep "team-" | rvn set --stdin department=engineering --confirm
-
-# Save IDs for later
-rvn query "trait:due value:past" --object-ids > overdue.txt
-cat overdue.txt | rvn set --stdin status=overdue --confirm
 ```
 
 ---
@@ -298,17 +282,14 @@ rvn query "object:person !.status:*" --apply "set status=active" --confirm
 
 ```bash
 # After adding "critical" to priority enum, update old "urgent" values
-rvn query "trait:priority value:urgent" --object-ids | rvn set --stdin priority=critical --confirm
+rvn query "object:project .priority:urgent" --ids | rvn set --stdin priority=critical --confirm
 ```
 
 ### Clean Up Overdue Items
 
 ```bash
-# Mark overdue items with a status
+# Mark overdue items with a status (acts on containing objects)
 rvn query "trait:due value:past" --apply "set status=overdue" --confirm
-
-# Or add a note
-rvn query "trait:due value:past" --object-ids | rvn add --stdin "@flagged Overdue - needs attention" --confirm
 ```
 
 ### Batch Create Tags

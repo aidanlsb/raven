@@ -257,7 +257,6 @@ rvn query <query_string> [flags]
 | `--list` | List available saved queries |
 | `--refresh` | Refresh stale files before query (auto-reindex changed files) |
 | `--ids` | Output only object/trait IDs, one per line (for piping) |
-| `--object-ids` | Output object IDs (for trait queries, outputs containing object IDs) |
 | `--apply` | Apply bulk operation to results |
 | `--confirm` | Apply bulk changes (preview-only by default) |
 
