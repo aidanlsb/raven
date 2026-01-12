@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -71,6 +72,60 @@ func (p *Parser) parseQuery() (*Query, error) {
 	}
 	query.Predicates = predicates
 
+	// Parse optional sort/group/limit clauses
+	for p.curr.Type == TokenIdent {
+		keyword := strings.ToLower(p.curr.Value)
+
+		switch keyword {
+		case "sort":
+			if query.Sort != nil {
+				return nil, fmt.Errorf("duplicate sort clause")
+			}
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+			sort, err := p.parseSortSpec()
+			if err != nil {
+				return nil, err
+			}
+			query.Sort = sort
+
+		case "group":
+			if query.Group != nil {
+				return nil, fmt.Errorf("duplicate group clause")
+			}
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+			group, err := p.parseGroupSpec()
+			if err != nil {
+				return nil, err
+			}
+			query.Group = group
+
+		case "limit":
+			if query.Limit != 0 {
+				return nil, fmt.Errorf("duplicate limit clause")
+			}
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+			limit, err := p.parseLimit()
+			if err != nil {
+				return nil, err
+			}
+			query.Limit = limit
+
+		default:
+			// Not a clause keyword, stop parsing clauses
+			goto done
+		}
+	}
+done:
+
 	return &query, nil
 }
 
@@ -82,6 +137,14 @@ func (p *Parser) parsePredicates(qt QueryType) ([]Predicate, error) {
 		// Stop at EOF, closing braces, or closing parens
 		if p.curr.Type == TokenEOF || p.curr.Type == TokenRBrace || p.curr.Type == TokenRParen {
 			break
+		}
+
+		// Stop at sort/group/limit keywords (these are clauses, not predicates)
+		if p.curr.Type == TokenIdent {
+			keyword := strings.ToLower(p.curr.Value)
+			if keyword == "sort" || keyword == "group" || keyword == "limit" {
+				break
+			}
 		}
 
 		pred, err := p.parsePredicate(qt)
@@ -173,6 +236,10 @@ func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
 			return p.parseOnPredicate(negated)
 		case "within":
 			return p.parseWithinPredicate(negated)
+		case "at":
+			return p.parseAtPredicate(negated)
+		case "refd":
+			return p.parseRefdPredicate(negated)
 		default:
 			return nil, fmt.Errorf("unknown predicate: %s", keyword)
 		}
@@ -181,7 +248,7 @@ func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
 	return nil, nil
 }
 
-// parseFieldPredicate parses .field:value or .field:"quoted value"
+// parseFieldPredicate parses .field:value, .field:<value, or .field:"quoted value"
 func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected field name after '.'")
@@ -194,11 +261,31 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		return nil, err
 	}
 
+	// Check for comparison operator prefix
+	compareOp := CompareEq
+	switch p.curr.Type {
+	case TokenLt:
+		compareOp = CompareLt
+		p.advance()
+	case TokenGt:
+		compareOp = CompareGt
+		p.advance()
+	case TokenLte:
+		compareOp = CompareLte
+		p.advance()
+	case TokenGte:
+		compareOp = CompareGte
+		p.advance()
+	}
+
 	var value string
 	isExists := false
 
 	switch p.curr.Type {
 	case TokenStar:
+		if compareOp != CompareEq {
+			return nil, fmt.Errorf("comparison operators cannot be used with '*' (exists check)")
+		}
 		value = "*"
 		isExists = true
 		p.advance()
@@ -223,6 +310,7 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		Field:         field,
 		Value:         value,
 		IsExists:      isExists,
+		CompareOp:     compareOp,
 	}, nil
 }
 
@@ -381,8 +469,25 @@ func (p *Parser) parseContentPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseValuePredicate parses value:val or value:"quoted value"
+// parseValuePredicate parses value:val, value:<val, value:>val, or value:"quoted value"
 func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
+	// Check for comparison operator prefix
+	compareOp := CompareEq
+	switch p.curr.Type {
+	case TokenLt:
+		compareOp = CompareLt
+		p.advance()
+	case TokenGt:
+		compareOp = CompareGt
+		p.advance()
+	case TokenLte:
+		compareOp = CompareLte
+		p.advance()
+	case TokenGte:
+		compareOp = CompareGte
+		p.advance()
+	}
+
 	var value string
 	switch p.curr.Type {
 	case TokenIdent:
@@ -399,6 +504,7 @@ func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
 	return &ValuePredicate{
 		basePredicate: basePredicate{negated: negated},
 		Value:         value,
+		CompareOp:     compareOp,
 	}, nil
 }
 
@@ -462,6 +568,75 @@ func (p *Parser) parseWithinPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
+// parseAtPredicate parses at:{trait:...} or at:[[target]]
+func (p *Parser) parseAtPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &AtPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
+	// Otherwise expect a trait subquery
+	subQuery, err := p.parseSubQuery(QueryTypeTrait, "trait")
+	if err != nil {
+		return nil, err
+	}
+	return &AtPredicate{
+		basePredicate: basePredicate{negated: negated},
+		SubQuery:      subQuery,
+	}, nil
+}
+
+// parseRefdPredicate parses refd:{object:...}, refd:{trait:...}, refd:type, or refd:[[target]]
+// Note: Unlike most predicates, refd: accepts both object and trait subqueries because
+// something can be referenced by either objects or traits.
+func (p *Parser) parseRefdPredicate(negated bool) (Predicate, error) {
+	// Check for direct reference [[target]]
+	if p.curr.Type == TokenRef {
+		target := p.curr.Value
+		p.advance()
+		return &RefdPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Target:        target,
+		}, nil
+	}
+
+	// Full subquery in braces (accepts either object or trait)
+	if p.curr.Type == TokenLBrace {
+		p.advance()
+		subQuery, err := p.parseQuery()
+		if err != nil {
+			return nil, fmt.Errorf("in refd subquery: %w", err)
+		}
+		if err := p.expect(TokenRBrace); err != nil {
+			return nil, fmt.Errorf("unclosed refd subquery: %w", err)
+		}
+		return &RefdPredicate{
+			basePredicate: basePredicate{negated: negated},
+			SubQuery:      subQuery,
+		}, nil
+	}
+
+	// Shorthand: refd:type expands to refd:{object:type}
+	if p.curr.Type == TokenIdent {
+		typeName := p.curr.Value
+		p.advance()
+		return &RefdPredicate{
+			basePredicate: basePredicate{negated: negated},
+			SubQuery: &Query{
+				Type:     QueryTypeObject,
+				TypeName: typeName,
+			},
+		}, nil
+	}
+
+	return nil, fmt.Errorf("expected [[reference]], {subquery}, or type name after refd:")
+}
+
 // parseSubQuery parses either a shorthand (type name) or full subquery ({object:type ...})
 func (p *Parser) parseSubQuery(expectedType QueryType, expectedKind string) (*Query, error) {
 	// Full subquery in braces
@@ -499,4 +674,215 @@ func (p *Parser) parseSubQuery(expectedType QueryType, expectedKind string) (*Qu
 		Type:     expectedType,
 		TypeName: typeName,
 	}, nil
+}
+
+// parseSortSpec parses sort:[agg:]{subquery} or sort:[agg:]_.path
+func (p *Parser) parseSortSpec() (*SortSpec, error) {
+	spec := &SortSpec{Aggregation: AggFirst}
+
+	// Check for aggregation prefix
+	if p.curr.Type == TokenIdent {
+		switch strings.ToLower(p.curr.Value) {
+		case "min":
+			spec.Aggregation = AggMin
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+		case "max":
+			spec.Aggregation = AggMax
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+		case "first":
+			spec.Aggregation = AggFirst
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+		case "count":
+			spec.Aggregation = AggCount
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Check for subquery or path
+	if p.curr.Type == TokenLBrace {
+		// Subquery: {trait:due at:_}
+		p.advance()
+		subQuery, err := p.parseQuery()
+		if err != nil {
+			return nil, fmt.Errorf("in sort subquery: %w", err)
+		}
+		if err := p.expect(TokenRBrace); err != nil {
+			return nil, err
+		}
+		spec.SubQuery = subQuery
+
+		// Check for optional field extraction: {object:...}.field
+		if p.curr.Type == TokenDot {
+			p.advance()
+			if p.curr.Type != TokenIdent {
+				return nil, fmt.Errorf("expected field name after '.'")
+			}
+			// Append field extraction to path
+			spec.Path = &PathExpr{Steps: []PathStep{{Kind: PathStepField, Name: p.curr.Value}}}
+			p.advance()
+		}
+	} else if p.curr.Type == TokenUnderscore {
+		// Path: _.parent.status
+		path, err := p.parsePathExpr()
+		if err != nil {
+			return nil, err
+		}
+		spec.Path = path
+	} else {
+		return nil, fmt.Errorf("expected '{' or '_' in sort specification")
+	}
+
+	// Check for :asc or :desc
+	if p.curr.Type == TokenColon {
+		p.advance()
+		if p.curr.Type != TokenIdent {
+			return nil, fmt.Errorf("expected 'asc' or 'desc'")
+		}
+		switch strings.ToLower(p.curr.Value) {
+		case "asc":
+			spec.Descending = false
+		case "desc":
+			spec.Descending = true
+		default:
+			return nil, fmt.Errorf("expected 'asc' or 'desc', got '%s'", p.curr.Value)
+		}
+		p.advance()
+	}
+
+	return spec, nil
+}
+
+// parseGroupSpec parses group:{subquery} or group:_.path
+func (p *Parser) parseGroupSpec() (*GroupSpec, error) {
+	spec := &GroupSpec{}
+
+	// Check for aggregation prefix (mainly count: for grouping)
+	if p.curr.Type == TokenIdent {
+		if strings.ToLower(p.curr.Value) == "count" {
+			spec.Aggregation = AggCount
+			p.advance()
+			if err := p.expect(TokenColon); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Check for subquery or path
+	if p.curr.Type == TokenLBrace {
+		p.advance()
+		subQuery, err := p.parseQuery()
+		if err != nil {
+			return nil, fmt.Errorf("in group subquery: %w", err)
+		}
+		if err := p.expect(TokenRBrace); err != nil {
+			return nil, err
+		}
+		spec.SubQuery = subQuery
+
+		// Check for optional field extraction
+		if p.curr.Type == TokenDot {
+			p.advance()
+			if p.curr.Type != TokenIdent {
+				return nil, fmt.Errorf("expected field name after '.'")
+			}
+			spec.Path = &PathExpr{Steps: []PathStep{{Kind: PathStepField, Name: p.curr.Value}}}
+			p.advance()
+		}
+	} else if p.curr.Type == TokenUnderscore {
+		path, err := p.parsePathExpr()
+		if err != nil {
+			return nil, err
+		}
+		spec.Path = path
+	} else {
+		return nil, fmt.Errorf("expected '{' or '_' in group specification")
+	}
+
+	return spec, nil
+}
+
+// parseLimit parses a limit value (positive integer).
+func (p *Parser) parseLimit() (int, error) {
+	if p.curr.Type != TokenIdent {
+		return 0, fmt.Errorf("expected number after limit:")
+	}
+
+	n, err := strconv.Atoi(p.curr.Value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid limit value '%s': must be a positive integer", p.curr.Value)
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("limit must be a positive integer, got %d", n)
+	}
+	p.advance()
+	return n, nil
+}
+
+// parsePathExpr parses _.parent.status, _.refs:project, _.value, etc.
+func (p *Parser) parsePathExpr() (*PathExpr, error) {
+	if p.curr.Type != TokenUnderscore {
+		return nil, fmt.Errorf("expected '_'")
+	}
+	p.advance()
+
+	path := &PathExpr{}
+
+	for p.curr.Type == TokenDot {
+		p.advance()
+
+		if p.curr.Type != TokenIdent {
+			return nil, fmt.Errorf("expected path step after '.'")
+		}
+
+		stepName := p.curr.Value
+		p.advance()
+
+		switch stepName {
+		case "parent":
+			path.Steps = append(path.Steps, PathStep{Kind: PathStepParent})
+		case "value":
+			path.Steps = append(path.Steps, PathStep{Kind: PathStepValue})
+		case "ancestor":
+			// Expect :type
+			if err := p.expect(TokenColon); err != nil {
+				return nil, fmt.Errorf("expected ':type' after 'ancestor'")
+			}
+			if p.curr.Type != TokenIdent {
+				return nil, fmt.Errorf("expected type name after 'ancestor:'")
+			}
+			path.Steps = append(path.Steps, PathStep{Kind: PathStepAncestor, Name: p.curr.Value})
+			p.advance()
+		case "refs":
+			// Expect :type
+			if err := p.expect(TokenColon); err != nil {
+				return nil, fmt.Errorf("expected ':type' after 'refs'")
+			}
+			if p.curr.Type != TokenIdent {
+				return nil, fmt.Errorf("expected type name after 'refs:'")
+			}
+			path.Steps = append(path.Steps, PathStep{Kind: PathStepRefs, Name: p.curr.Value})
+			p.advance()
+		default:
+			// Regular field access
+			path.Steps = append(path.Steps, PathStep{Kind: PathStepField, Name: stepName})
+		}
+	}
+
+	if len(path.Steps) == 0 {
+		return nil, fmt.Errorf("expected path after '_'")
+	}
+
+	return path, nil
 }

@@ -11,22 +11,27 @@ import (
 type TokenType int
 
 const (
-	TokenEOF      TokenType = iota
-	TokenIdent              // identifiers like "object", "trait", "project", "due"
-	TokenColon              // :
-	TokenDot                // .
-	TokenBang               // !
-	TokenPipe               // |
-	TokenLParen             // (
-	TokenRParen             // )
-	TokenLBrace             // {
-	TokenRBrace             // }
-	TokenLBracket           // [
-	TokenRBracket           // ]
-	TokenStar               // *
-	TokenRef                // [[...]] reference
-	TokenString             // "quoted string" for content search
-	TokenError              // error token
+	TokenEOF        TokenType = iota
+	TokenIdent                // identifiers like "object", "trait", "project", "due"
+	TokenColon                // :
+	TokenDot                  // .
+	TokenBang                 // !
+	TokenPipe                 // |
+	TokenLParen               // (
+	TokenRParen               // )
+	TokenLBrace               // {
+	TokenRBrace               // }
+	TokenLBracket             // [
+	TokenRBracket             // ]
+	TokenStar                 // *
+	TokenRef                  // [[...]] reference
+	TokenString               // "quoted string" for content search
+	TokenUnderscore           // _ (result reference)
+	TokenLt                   // <
+	TokenGt                   // >
+	TokenLte                  // <=
+	TokenGte                  // >=
+	TokenError                // error token
 )
 
 // Token represents a lexer token.
@@ -98,8 +103,31 @@ func (l *Lexer) NextToken() Token {
 	case '*':
 		l.pos++
 		return Token{Type: TokenStar, Value: "*", Pos: l.start}
+	case '<':
+		l.pos++
+		if l.pos < len(l.input) && l.input[l.pos] == '=' {
+			l.pos++
+			return Token{Type: TokenLte, Value: "<=", Pos: l.start}
+		}
+		return Token{Type: TokenLt, Value: "<", Pos: l.start}
+	case '>':
+		l.pos++
+		if l.pos < len(l.input) && l.input[l.pos] == '=' {
+			l.pos++
+			return Token{Type: TokenGte, Value: ">=", Pos: l.start}
+		}
+		return Token{Type: TokenGt, Value: ">", Pos: l.start}
 	case '"':
 		return l.scanString()
+	case '_':
+		// Check if it's a standalone _ or part of an identifier
+		// Standalone _ is followed by nothing, whitespace, '.', ':', or EOF
+		if l.pos+1 >= len(l.input) || !isIdentCharAfterUnderscore(l.input[l.pos+1]) {
+			l.pos++
+			return Token{Type: TokenUnderscore, Value: "_", Pos: l.start}
+		}
+		// Otherwise it's part of an identifier
+		return l.scanIdent()
 	default:
 		if isIdentStart(ch) {
 			return l.scanIdent()
@@ -174,4 +202,15 @@ func isIdentStart(ch byte) bool {
 
 func isIdentChar(ch byte) bool {
 	return isIdentStart(ch) || ch == '/' || ch == '#'
+}
+
+// isIdentCharAfterUnderscore returns true if ch would make a leading underscore
+// part of an identifier. We want standalone _ to be TokenUnderscore when followed
+// by '.', ':', whitespace, or EOF, but part of an identifier if followed by letters/digits.
+func isIdentCharAfterUnderscore(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_' ||
+		ch == '-'
 }

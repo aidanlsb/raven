@@ -54,13 +54,17 @@ trait:highlight on:{object:book .status:reading}
 
 ### Field-Based
 
-Filter by object frontmatter fields. Fields use dot prefix to distinguish from keywords.
+Filter by object frontmatter fields. Fields use dot prefix to distinguish from keywords. Supports equality and comparison operators.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `.<field>:<value>` | Field equals/contains value |
 | `.<field>:"value with spaces"` | Field equals quoted string (supports spaces) |
 | `.<field>:*` | Field exists (has any value) |
+| `.<field>:<<value>` | Field is less than value |
+| `.<field>:><value>` | Field is greater than value |
+| `.<field>:<=<value>` | Field is less than or equal to value |
+| `.<field>:>=<value>` | Field is greater than or equal to value |
 | `!.<field>:<value>` | Field does NOT equal/contain value |
 | `!.<field>:*` | Field does NOT exist (missing) |
 
@@ -79,6 +83,11 @@ object:person !.email:*
 object:project !.status:done
 object:project .tags:urgent          # array contains "urgent"
 object:project .tags:urgent .tags:frontend   # has both
+
+# Comparison operators (useful for dates and numbers)
+object:task .priority:>5                     # high priority tasks
+object:project .created:>=2025-01-01         # created this year
+object:invoice .amount:<1000                 # invoices under $1000
 ```
 
 ### Trait-Based (`has:`)
@@ -242,7 +251,30 @@ object:meeting refs:{object:project .status:active}
 object:meeting !refs:[[projects/website]]
 ```
 
-**Note:** For finding all objects that reference a given target (backlinks/incoming links), use `rvn backlinks <target>`. The `refs:` predicate filters by outgoing references within a typed query.
+**Note:** For finding all objects that reference a given target (backlinks/incoming links), use `rvn backlinks <target>` or the `refd:` predicate. The `refs:` predicate filters by outgoing references within a typed query.
+
+### Referenced-By (`refd:`)
+
+Filter by what references this object (incoming links/backlinks). This is the inverse of `refs:`.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `refd:[[source]]` | Referenced by specific source |
+| `refd:{object:<type> ...}` | Referenced by objects matching sub-query |
+| `refd:{trait:<name> ...}` | Referenced by traits matching sub-query |
+| `!refd:[[source]]` | NOT referenced by source |
+| `!refd:{object:<type> ...}` | NOT referenced by any matching objects |
+
+**Shorthand:** `refd:<type>` expands to `refd:{object:<type>}`
+
+**Examples:**
+```
+object:project refd:[[daily/2025-02-01#standup]]  # Projects mentioned in this meeting
+object:project refd:meeting                       # Projects mentioned in any meeting (shorthand)
+object:project refd:{object:meeting}              # Same as above (full form)
+object:person refd:{object:project .status:active} # People mentioned in active projects
+object:person !refd:{object:meeting}              # People not mentioned in any meeting
+```
 
 ### Content Search (`content:`)
 
@@ -278,12 +310,16 @@ object:project has:due content:"deadline"
 
 ### Value-Based
 
-Filter by trait value.
+Filter by trait value. Supports equality and comparison operators.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `value:<val>` | Value equals val |
 | `value:"val with spaces"` | Value equals quoted string (supports spaces) |
+| `value:<<val>` | Value is less than val |
+| `value:><val>` | Value is greater than val |
+| `value:<=<val>` | Value is less than or equal to val |
+| `value:>=<val>` | Value is greater than or equal to val |
 | `!value:<val>` | Value NOT equals val |
 
 Use double quotes for values containing spaces or special characters.
@@ -296,6 +332,12 @@ trait:status value:todo
 trait:status value:"in progress"       # quoted string with spaces
 trait:priority value:high
 trait:priority value:"very high"       # quoted string
+
+# Comparison operators (useful for dates and numbers)
+trait:due value:<2025-01-01            # due before 2025-01-01
+trait:due value:>=2025-06-01           # due on or after June 1st
+trait:priority value:>5                # priority greater than 5
+trait:score value:<=100                # score up to 100
 ```
 
 ### Content Search (`content:`)
@@ -407,6 +449,103 @@ trait:highlight !refs:[[people/loki]]
 ```
 
 **Note:** The `refs:` predicate for traits matches references that appear on the same line as the trait annotation. This is useful for finding tasks assigned to specific people (`@due(tomorrow) Send report to [[people/freya]]`) or highlights that reference specific projects.
+
+### Co-location (`at:`)
+
+Filter traits by co-location (same file and line) with other traits. This is useful for finding traits that are annotated together on the same line.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `at:{trait:<name> ...}` | Co-located with trait matching sub-query |
+| `!at:{trait:<name> ...}` | NOT co-located with matching trait |
+
+**Shorthand:** `at:<trait>` expands to `at:{trait:<trait>}`
+
+**Examples:**
+```
+trait:due at:{trait:todo}                    # @due on same line as @todo
+trait:priority at:{trait:due value:past}     # @priority on same line as overdue @due
+trait:due !at:{trait:priority}               # @due NOT on same line as @priority
+```
+
+---
+
+## Sorting and Grouping
+
+Queries can include `sort:` and `group:` clauses to control result ordering and grouping.
+
+### Result Reference (`_`)
+
+In sort and group clauses, `_` represents the current result being processed.
+
+Path navigation from `_`:
+- `_.value` — trait's value
+- `_.fieldname` — object's field
+- `_.parent` — parent object
+- `_.parent.fieldname` — field on parent object
+- `_.ancestor:type` — ancestor of type
+- `_.refs:type` — objects referenced by `_`
+
+### Sort Clause
+
+```
+sort:[agg:]<spec>[:asc|:desc]
+```
+
+**Aggregation prefixes:**
+- `min:` — minimum value (earliest date, lowest number)
+- `max:` — maximum value
+- `first:` — first by position (default)
+- `count:` — count of matches
+
+**Examples:**
+```
+trait:todo sort:_.value                      # By own value
+trait:todo sort:{trait:due}                  # By co-located @due value
+trait:todo sort:min:{trait:due}              # By minimum @due on parent
+trait:todo sort:_.parent.status              # By parent's status field
+object:project sort:_.status                 # By own field
+object:project sort:min:{trait:due}          # By min @due on self
+object:project sort:_.status:desc            # Descending
+```
+
+### Group Clause
+
+```
+group:<spec>
+```
+
+Groups results by the evaluated path or subquery. Results are organized into sections by group key.
+
+**Examples:**
+```
+trait:todo group:_.refs:project              # By referenced project
+trait:todo group:{object:project}            # Same, with subquery
+trait:todo group:_.parent                    # By parent object
+object:meeting group:_.ancestor:project      # By ancestor project
+```
+
+### Combined Sort and Group
+
+```
+trait:todo refs:{object:project} group:_.refs:project sort:{trait:due}
+```
+
+This query finds todos that reference projects, groups them by the referenced project, and sorts within each group by the due date.
+
+---
+
+## Limiting Results
+
+Use `limit:N` to restrict the number of results returned.
+
+```
+trait:due limit:10
+object:project .status:active limit:5
+trait:todo sort:_.value limit:20
+```
+
+**Note:** When combined with sort/group, limit is applied to the final result set.
 
 ---
 
@@ -636,6 +775,25 @@ object:date contains:{trait:due value:past}
 # Difference between has: and contains:
 object:project has:{trait:due}              # Due trait directly on project
 object:project contains:{trait:due}         # Due trait anywhere (including sections)
+
+# New predicates: at: and refd:
+trait:due at:{trait:todo}                   # @due traits co-located with @todo
+trait:priority at:{trait:due value:past}    # @priority on same line as overdue @due
+object:project refd:{object:meeting}        # Projects mentioned in meetings
+object:person refd:{object:project .status:active}  # People mentioned in active projects
+
+# Sorting and Grouping
+trait:todo sort:_.value                     # Sort todos by their value
+trait:due sort:_.value:desc                 # Sort due dates descending (latest first)
+object:project sort:_.status                # Sort projects by status
+object:project sort:min:{trait:due}         # Sort projects by earliest due date
+
+trait:todo group:_.parent                   # Group todos by parent object
+trait:todo group:_.refs:project             # Group todos by referenced project
+object:meeting group:_.ancestor:project     # Group meetings by ancestor project
+
+# Combined sort and group
+trait:todo group:_.refs:project sort:{trait:due}  # Group by project, sort by due date
 ```
 
 ---
@@ -662,42 +820,26 @@ object:project contains:{trait:due}         # Due trait anywhere (including sect
 
 Features identified as valuable but not yet designed:
 
-### Critical
-
-1. **Comparison operators**: Beyond equality for dates and numbers.
-   ```
-   # Proposed syntax
-   trait:due value:<today
-   object:project .priority:>3
-   ```
-   Essential for date-based queries (`before`, `after`, `between`).
-
-3. **Sorting**: Order results by field or trait.
-   ```
-   # Proposed syntax
-   object:project .status:active sort:.updated
-   ```
-   Essential for practical use.
-
 ### Important
 
-4. **Limiting**: Cap result count.
-   ```
-   # Proposed syntax
-   trait:highlight limit:10
-   ```
-
-5. **String matching**: Contains, starts-with, regex.
+1. **String matching**: Contains, starts-with, regex.
    ```
    # Proposed syntax
    object:project .name:~website
    ```
 
+2. **Range syntax**: For between queries on dates and numbers.
+   ```
+   # Proposed syntax
+   .date:2024-01..2024-06
+   ```
+
 ### Deferred
 
-6. **Aggregations**: COUNT, SUM, GROUP BY — agents can compute these.
-7. **Position-based selection**: First, last, nth — not natural for this domain.
-8. **Sibling queries**: Covered by composing parent/child predicates.
+3. **Position-based selection**: First, last, nth — not natural for this domain.
+4. **Sibling queries**: Covered by composing parent/child predicates.
+5. **Multiple sort keys**: For tie-breaking with multiple fields.
+6. **Nested grouping**: Multiple group clauses for hierarchical grouping.
 
 ### Future Extension Points
 

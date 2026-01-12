@@ -707,6 +707,523 @@ func TestParseComplexQueries(t *testing.T) {
 	}
 }
 
+func TestParseAtPredicate(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		wantTraitName string
+		wantNeg       bool
+	}{
+		{
+			name:          "at with shorthand trait",
+			input:         "trait:due at:todo",
+			wantTraitName: "todo",
+		},
+		{
+			name:          "at with full trait subquery",
+			input:         "trait:due at:{trait:todo}",
+			wantTraitName: "todo",
+		},
+		{
+			name:          "at with trait subquery and value",
+			input:         "trait:due at:{trait:priority value:high}",
+			wantTraitName: "priority",
+		},
+		{
+			name:          "negated at",
+			input:         "trait:due !at:{trait:todo}",
+			wantTraitName: "todo",
+			wantNeg:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+			ap, ok := q.Predicates[0].(*AtPredicate)
+			if !ok {
+				t.Fatalf("expected AtPredicate, got %T", q.Predicates[0])
+			}
+			if ap.SubQuery.TypeName != tt.wantTraitName {
+				t.Errorf("trait name = %v, want %v", ap.SubQuery.TypeName, tt.wantTraitName)
+			}
+			if ap.Negated() != tt.wantNeg {
+				t.Errorf("Negated = %v, want %v", ap.Negated(), tt.wantNeg)
+			}
+		})
+	}
+}
+
+func TestParseRefdPredicate(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantTarget string
+		wantSubQ   bool
+		wantNeg    bool
+	}{
+		{
+			name:       "refd with target",
+			input:      "object:project refd:[[meetings/standup]]",
+			wantTarget: "meetings/standup",
+		},
+		{
+			name:     "refd with object subquery",
+			input:    "object:project refd:{object:meeting}",
+			wantSubQ: true,
+		},
+		{
+			name:       "negated refd",
+			input:      "object:project !refd:[[meetings/standup]]",
+			wantTarget: "meetings/standup",
+			wantNeg:    true,
+		},
+		{
+			name:     "refd with complex subquery",
+			input:    "object:person refd:{object:project .status:active}",
+			wantSubQ: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+			rp, ok := q.Predicates[0].(*RefdPredicate)
+			if !ok {
+				t.Fatalf("expected RefdPredicate, got %T", q.Predicates[0])
+			}
+			if tt.wantTarget != "" && rp.Target != tt.wantTarget {
+				t.Errorf("Target = %v, want %v", rp.Target, tt.wantTarget)
+			}
+			if tt.wantSubQ && rp.SubQuery == nil {
+				t.Error("expected SubQuery, got nil")
+			}
+			if !tt.wantSubQ && rp.SubQuery != nil {
+				t.Error("expected no SubQuery")
+			}
+			if rp.Negated() != tt.wantNeg {
+				t.Errorf("Negated = %v, want %v", rp.Negated(), tt.wantNeg)
+			}
+		})
+	}
+}
+
+func TestParseSortClause(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		wantAggregation AggregationType
+		wantDescending  bool
+		wantPath        bool
+		wantSubQuery    bool
+	}{
+		{
+			name:     "sort by path",
+			input:    "trait:todo sort:_.value",
+			wantPath: true,
+		},
+		{
+			name:         "sort by subquery",
+			input:        "trait:todo sort:{trait:due}",
+			wantSubQuery: true,
+		},
+		{
+			name:            "sort with min aggregation",
+			input:           "object:project sort:min:{trait:due}",
+			wantAggregation: AggMin,
+			wantSubQuery:    true,
+		},
+		{
+			name:            "sort with max aggregation",
+			input:           "object:project sort:max:{trait:due}",
+			wantAggregation: AggMax,
+			wantSubQuery:    true,
+		},
+		{
+			name:           "sort descending",
+			input:          "trait:due sort:_.value:desc",
+			wantPath:       true,
+			wantDescending: true,
+		},
+		{
+			name:           "sort ascending explicit",
+			input:          "trait:due sort:_.value:asc",
+			wantPath:       true,
+			wantDescending: false,
+		},
+		{
+			name:     "sort by parent field",
+			input:    "trait:todo sort:_.parent.status",
+			wantPath: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if q.Sort == nil {
+				t.Fatal("expected Sort spec, got nil")
+			}
+			if tt.wantPath && q.Sort.Path == nil && q.Sort.SubQuery == nil {
+				t.Error("expected Path, got nil")
+			}
+			if tt.wantSubQuery && q.Sort.SubQuery == nil {
+				t.Error("expected SubQuery, got nil")
+			}
+			if q.Sort.Aggregation != tt.wantAggregation {
+				t.Errorf("Aggregation = %v, want %v", q.Sort.Aggregation, tt.wantAggregation)
+			}
+			if q.Sort.Descending != tt.wantDescending {
+				t.Errorf("Descending = %v, want %v", q.Sort.Descending, tt.wantDescending)
+			}
+		})
+	}
+}
+
+func TestParseGroupClause(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantPath     bool
+		wantSubQuery bool
+	}{
+		{
+			name:     "group by path",
+			input:    "trait:todo group:_.parent",
+			wantPath: true,
+		},
+		{
+			name:     "group by refs path",
+			input:    "trait:todo group:_.refs:project",
+			wantPath: true,
+		},
+		{
+			name:         "group by subquery",
+			input:        "trait:todo group:{object:project}",
+			wantSubQuery: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if q.Group == nil {
+				t.Fatal("expected Group spec, got nil")
+			}
+			if tt.wantPath && q.Group.Path == nil && q.Group.SubQuery == nil {
+				t.Error("expected Path, got nil")
+			}
+			if tt.wantSubQuery && q.Group.SubQuery == nil {
+				t.Error("expected SubQuery, got nil")
+			}
+		})
+	}
+}
+
+func TestParseCombinedSortAndGroup(t *testing.T) {
+	input := "trait:todo group:_.refs:project sort:{trait:due}"
+	q, err := Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.Sort == nil {
+		t.Error("expected Sort spec, got nil")
+	}
+	if q.Group == nil {
+		t.Error("expected Group spec, got nil")
+	}
+}
+
+func TestParsePathExpr(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantSteps []PathStepKind
+	}{
+		{
+			name:      "simple value path",
+			input:     "trait:todo sort:_.value",
+			wantSteps: []PathStepKind{PathStepValue},
+		},
+		{
+			name:      "parent path",
+			input:     "trait:todo sort:_.parent",
+			wantSteps: []PathStepKind{PathStepParent},
+		},
+		{
+			name:      "parent with field",
+			input:     "trait:todo sort:_.parent.status",
+			wantSteps: []PathStepKind{PathStepParent, PathStepField},
+		},
+		{
+			name:      "refs path",
+			input:     "trait:todo group:_.refs:project",
+			wantSteps: []PathStepKind{PathStepRefs},
+		},
+		{
+			name:      "ancestor path",
+			input:     "object:meeting group:_.ancestor:project",
+			wantSteps: []PathStepKind{PathStepAncestor},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			
+			var path *PathExpr
+			if q.Sort != nil && q.Sort.Path != nil {
+				path = q.Sort.Path
+			} else if q.Group != nil && q.Group.Path != nil {
+				path = q.Group.Path
+			}
+			
+			if path == nil {
+				t.Fatal("expected path, got nil")
+			}
+			
+			if len(path.Steps) != len(tt.wantSteps) {
+				t.Fatalf("got %d steps, want %d", len(path.Steps), len(tt.wantSteps))
+			}
+			
+			for i, step := range path.Steps {
+				if step.Kind != tt.wantSteps[i] {
+					t.Errorf("step %d: got kind %v, want %v", i, step.Kind, tt.wantSteps[i])
+				}
+			}
+		})
+	}
+}
+
+func TestParseLimitClause(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantLimit int
+		wantErr   bool
+	}{
+		{
+			name:      "simple limit",
+			input:     "trait:todo limit:10",
+			wantLimit: 10,
+		},
+		{
+			name:      "limit with predicates",
+			input:     "object:project .status:active limit:5",
+			wantLimit: 5,
+		},
+		{
+			name:      "limit with sort",
+			input:     "trait:due sort:_.value limit:20",
+			wantLimit: 20,
+		},
+		{
+			name:    "invalid limit - not a number",
+			input:   "trait:todo limit:abc",
+			wantErr: true,
+		},
+		{
+			name:    "invalid limit - zero",
+			input:   "trait:todo limit:0",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if q.Limit != tt.wantLimit {
+				t.Errorf("Limit = %d, want %d", q.Limit, tt.wantLimit)
+			}
+		})
+	}
+}
+
+func TestParseComparisonOperators(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		wantCompareOp CompareOp
+		wantValue     string
+	}{
+		{
+			name:          "value less than",
+			input:         "trait:due value:<2025-01-01",
+			wantCompareOp: CompareLt,
+			wantValue:     "2025-01-01",
+		},
+		{
+			name:          "value greater than",
+			input:         "trait:priority value:>5",
+			wantCompareOp: CompareGt,
+			wantValue:     "5",
+		},
+		{
+			name:          "value less than or equal",
+			input:         "trait:due value:<=2025-12-31",
+			wantCompareOp: CompareLte,
+			wantValue:     "2025-12-31",
+		},
+		{
+			name:          "value greater than or equal",
+			input:         "trait:score value:>=100",
+			wantCompareOp: CompareGte,
+			wantValue:     "100",
+		},
+		{
+			name:          "value equals (default)",
+			input:         "trait:status value:active",
+			wantCompareOp: CompareEq,
+			wantValue:     "active",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+			vp, ok := q.Predicates[0].(*ValuePredicate)
+			if !ok {
+				t.Fatalf("expected ValuePredicate, got %T", q.Predicates[0])
+			}
+			if vp.CompareOp != tt.wantCompareOp {
+				t.Errorf("CompareOp = %v, want %v", vp.CompareOp, tt.wantCompareOp)
+			}
+			if vp.Value != tt.wantValue {
+				t.Errorf("Value = %v, want %v", vp.Value, tt.wantValue)
+			}
+		})
+	}
+}
+
+func TestParseFieldComparisonOperators(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		wantField     string
+		wantCompareOp CompareOp
+		wantValue     string
+	}{
+		{
+			name:          "field less than",
+			input:         "object:project .priority:<5",
+			wantField:     "priority",
+			wantCompareOp: CompareLt,
+			wantValue:     "5",
+		},
+		{
+			name:          "field greater than or equal",
+			input:         "object:task .count:>=10",
+			wantField:     "count",
+			wantCompareOp: CompareGte,
+			wantValue:     "10",
+		},
+		{
+			name:          "field equals (default)",
+			input:         "object:project .status:active",
+			wantField:     "status",
+			wantCompareOp: CompareEq,
+			wantValue:     "active",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+			fp, ok := q.Predicates[0].(*FieldPredicate)
+			if !ok {
+				t.Fatalf("expected FieldPredicate, got %T", q.Predicates[0])
+			}
+			if fp.Field != tt.wantField {
+				t.Errorf("Field = %v, want %v", fp.Field, tt.wantField)
+			}
+			if fp.CompareOp != tt.wantCompareOp {
+				t.Errorf("CompareOp = %v, want %v", fp.CompareOp, tt.wantCompareOp)
+			}
+			if fp.Value != tt.wantValue {
+				t.Errorf("Value = %v, want %v", fp.Value, tt.wantValue)
+			}
+		})
+	}
+}
+
+func TestParseRefdShorthand(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantTypeName string
+	}{
+		{
+			name:         "refd shorthand",
+			input:        "object:project refd:meeting",
+			wantTypeName: "meeting",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+			rp, ok := q.Predicates[0].(*RefdPredicate)
+			if !ok {
+				t.Fatalf("expected RefdPredicate, got %T", q.Predicates[0])
+			}
+			if rp.SubQuery == nil {
+				t.Fatal("expected SubQuery, got nil")
+			}
+			if rp.SubQuery.TypeName != tt.wantTypeName {
+				t.Errorf("TypeName = %v, want %v", rp.SubQuery.TypeName, tt.wantTypeName)
+			}
+		})
+	}
+}
+
 func TestParseDirectTargetPredicates(t *testing.T) {
 	tests := []struct {
 		name       string
