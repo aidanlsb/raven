@@ -102,11 +102,11 @@ func printTraitTable(rows []traitTableRow) {
 	// Print rows
 	for _, row := range rows {
 		content := truncateText(row.content, contentWidth)
+		// Highlight any traits in the content
+		content = ui.HighlightTraits(content)
 		traits := row.traits
-		if len(traits) > traitWidth {
-			traits = traits[:traitWidth-1] + "…"
-		}
-		fmt.Printf("%-*s  %-*s  %s\n", contentWidth, content, traitWidth, traits, row.location)
+		// Don't truncate traits column since it contains ANSI codes
+		fmt.Printf("%-*s  %s  %s\n", contentWidth, content, traits, row.location)
 	}
 }
 
@@ -601,11 +601,12 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	// Build table rows
 	rows := make([]traitTableRow, len(results))
 	for i, r := range results {
-		// Build trait string
-		traitStr := "@" + r.TraitType
-		if r.Value != nil && *r.Value != "" {
-			traitStr += fmt.Sprintf("(%s)", *r.Value)
+		// Build trait string with syntax highlighting
+		value := ""
+		if r.Value != nil {
+			value = *r.Value
 		}
+		traitStr := ui.Trait(r.TraitType, value)
 
 		rows[i] = traitTableRow{
 			content:  r.Content,
@@ -690,14 +691,14 @@ func printTraitResults(results []index.TraitResult) {
 		// Use content from first trait (they should be the same)
 		content := traits[0].Content
 
-		// Build trait summary
+		// Build trait summary with syntax highlighting
 		var traitStrs []string
 		for _, t := range traits {
-			if t.Value != nil && *t.Value != "" {
-				traitStrs = append(traitStrs, fmt.Sprintf("@%s(%s)", t.TraitType, *t.Value))
-			} else {
-				traitStrs = append(traitStrs, fmt.Sprintf("@%s", t.TraitType))
+			value := ""
+			if t.Value != nil {
+				value = *t.Value
 			}
+			traitStrs = append(traitStrs, ui.Trait(t.TraitType, value))
 		}
 
 		rows = append(rows, traitTableRow{
