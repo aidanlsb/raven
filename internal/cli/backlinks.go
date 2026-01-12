@@ -94,7 +94,7 @@ Examples:
 				line = *link.Line
 			}
 
-			fmt.Printf("  %s %s %s\n", ui.SymbolAttention, ui.Accent.Render(display), ui.Muted.Render(formatLocationLinkSimple(link.FilePath, line)))
+			fmt.Printf("  %s %s %s\n", ui.SymbolAttention, display, formatLocationLinkSimple(link.FilePath, line))
 		}
 
 		return nil

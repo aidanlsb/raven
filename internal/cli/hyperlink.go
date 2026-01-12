@@ -9,6 +9,7 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 // hyperlinkEnabled caches whether we should emit hyperlinks.
@@ -29,6 +30,7 @@ func shouldEmitHyperlinks() bool {
 
 // formatLocationLink formats a file:line location as a clickable hyperlink.
 // If hyperlinks are not supported, returns the plain location string.
+// The output is styled with the accent color.
 //
 // The link URL is determined by the configured editor:
 //   - cursor, code (VS Code): cursor://file/path:line or vscode://file/path:line
@@ -39,7 +41,7 @@ func formatLocationLink(cfg *config.Config, vaultPath, relPath string, line int)
 	location := fmt.Sprintf("%s:%d", relPath, line)
 
 	if !shouldEmitHyperlinks() {
-		return location
+		return ui.Accent.Render(location)
 	}
 
 	// Build absolute path for URL
@@ -50,7 +52,8 @@ func formatLocationLink(cfg *config.Config, vaultPath, relPath string, line int)
 
 	// OSC 8 hyperlink format: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
 	// Using \x07 (BEL) as terminator for broader compatibility
-	return fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location)
+	// Wrap with accent color styling
+	return ui.Accent.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
 }
 
 // buildEditorURL builds the appropriate URL for the configured editor.
@@ -107,11 +110,12 @@ func buildEditorURL(cfg *config.Config, absPath string, line int) string {
 
 // formatLocationLinkSimple formats a location using only the relative path (no vault context).
 // This is useful when vault path is not easily available.
+// The output is styled with the accent color.
 func formatLocationLinkSimple(relPath string, line int) string {
 	location := fmt.Sprintf("%s:%d", relPath, line)
 
 	if !shouldEmitHyperlinks() {
-		return location
+		return ui.Accent.Render(location)
 	}
 
 	// Get vault path and config
@@ -119,11 +123,12 @@ func formatLocationLinkSimple(relPath string, line int) string {
 	cfg := getConfig()
 
 	if vaultPath == "" {
-		return location
+		return ui.Accent.Render(location)
 	}
 
 	absPath := filepath.Join(vaultPath, relPath)
 	url := buildEditorURL(cfg, absPath, line)
 
-	return fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location)
+	// Wrap with accent color styling
+	return ui.Accent.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
 }
