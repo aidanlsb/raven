@@ -413,18 +413,23 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 
 	// Validate value based on trait type
 	if traitDef.IsBoolean() {
-		// Boolean traits should have no value
+		// Boolean traits can be used bare (@done) which defaults to true,
+		// or with explicit value (@done(true) or @done(false))
 		if trait.HasValue() {
-			issues = append(issues, Issue{
-				Level:    LevelWarning,
-				Type:     IssueInvalidTraitValue,
-				FilePath: filePath,
-				Line:     trait.Line,
-				Message:  fmt.Sprintf("Trait '@%s' is a marker trait and should not have a value", trait.TraitType),
-				Value:    trait.TraitType,
-				FixHint:  fmt.Sprintf("Remove the value: use @%s instead of @%s(...)", trait.TraitType, trait.TraitType),
-			})
+			valueStr := trait.ValueString()
+			if valueStr != "true" && valueStr != "false" {
+				issues = append(issues, Issue{
+					Level:    LevelError,
+					Type:     IssueInvalidTraitValue,
+					FilePath: filePath,
+					Line:     trait.Line,
+					Message:  fmt.Sprintf("Invalid value '%s' for boolean trait '@%s' (expected true or false)", valueStr, trait.TraitType),
+					Value:    valueStr,
+					FixHint:  fmt.Sprintf("Use @%s, @%s(true), or @%s(false)", trait.TraitType, trait.TraitType, trait.TraitType),
+				})
+			}
 		}
+		// No value is fine - defaults to true
 	} else {
 		// Non-boolean traits should have a value
 		if !trait.HasValue() {

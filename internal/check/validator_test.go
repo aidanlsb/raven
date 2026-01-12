@@ -280,6 +280,109 @@ func TestValidatorTraitValidation(t *testing.T) {
 	})
 }
 
+func TestValidatorBooleanTraitValidation(t *testing.T) {
+	s := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"page": {},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"done":   {Type: schema.FieldTypeBool},
+			"toread": {}, // Empty type also means boolean
+		},
+	}
+
+	objectIDs := []string{"notes/test"}
+	v := NewValidator(s, objectIDs)
+
+	t.Run("bare boolean trait is valid", func(t *testing.T) {
+		// @done with no value - should be valid (defaults to true)
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/test", ObjectType: "page"},
+			},
+			Traits: []*parser.ParsedTrait{
+				{TraitType: "done", Value: nil, ParentObjectID: "notes/test", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidTraitValue && strings.Contains(issue.Message, "done") {
+				t.Errorf("Bare boolean trait should be valid, got: %v", issue)
+			}
+		}
+	})
+
+	t.Run("boolean trait with true value is valid", func(t *testing.T) {
+		// @done(true) - should be valid
+		trueValue := schema.String("true")
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/test", ObjectType: "page"},
+			},
+			Traits: []*parser.ParsedTrait{
+				{TraitType: "done", Value: &trueValue, ParentObjectID: "notes/test", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidTraitValue && strings.Contains(issue.Message, "done") {
+				t.Errorf("Boolean trait with 'true' value should be valid, got: %v", issue)
+			}
+		}
+	})
+
+	t.Run("boolean trait with false value is valid", func(t *testing.T) {
+		// @toread(false) - should be valid
+		falseValue := schema.String("false")
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/test", ObjectType: "page"},
+			},
+			Traits: []*parser.ParsedTrait{
+				{TraitType: "toread", Value: &falseValue, ParentObjectID: "notes/test", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidTraitValue && strings.Contains(issue.Message, "toread") {
+				t.Errorf("Boolean trait with 'false' value should be valid, got: %v", issue)
+			}
+		}
+	})
+
+	t.Run("boolean trait with invalid value is error", func(t *testing.T) {
+		// @done(maybe) - should error
+		badValue := schema.String("maybe")
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/test", ObjectType: "page"},
+			},
+			Traits: []*parser.ParsedTrait{
+				{TraitType: "done", Value: &badValue, ParentObjectID: "notes/test", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		hasError := false
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidTraitValue && strings.Contains(issue.Message, "maybe") {
+				hasError = true
+				break
+			}
+		}
+		if !hasError {
+			t.Errorf("Expected invalid value error for 'maybe', got: %v", issues)
+		}
+	})
+}
+
 func TestIssueLevel(t *testing.T) {
 	t.Run("error string", func(t *testing.T) {
 		if LevelError.String() != "ERROR" {
