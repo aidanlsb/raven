@@ -476,15 +476,23 @@ Queries can include `sort:` and `group:` clauses to control result ordering and 
 
 ### Result Reference (`_`)
 
-In sort and group clauses, `_` represents the current result being processed.
+In sort and group clauses, `_` represents the current result being processed. It can be used in two ways:
 
-Path navigation from `_`:
+**1. Path expressions** — navigate from the current result:
 - `_.value` — trait's value
 - `_.fieldname` — object's field
 - `_.parent` — parent object
 - `_.parent.fieldname` — field on parent object
 - `_.ancestor:type` — ancestor of type
 - `_.refs:type` — objects referenced by `_`
+
+**2. Subquery predicates** — bind `_` to relate the subquery to each result:
+- `on:_` — trait is directly on the current result
+- `within:_` — trait is within the current result (self or descendants)
+- `at:_` — trait is co-located with the current result (same file:line)
+- `refs:_` — references the current result
+- `refd:_` — referenced by the current result
+- `parent:_`, `ancestor:_`, `child:_`, `descendant:_` — hierarchy relationships
 
 ### Sort Clause
 
@@ -498,15 +506,20 @@ sort:[agg:]<spec>[:asc|:desc]
 - `first:` — first by position (default)
 - `count:` — count of matches
 
-**Examples:**
+**Examples with path expressions:**
 ```
 trait:todo sort:_.value                      # By own value
-trait:todo sort:{trait:due}                  # By co-located @due value
-trait:todo sort:min:{trait:due}              # By minimum @due on parent
 trait:todo sort:_.parent.status              # By parent's status field
 object:project sort:_.status                 # By own field
-object:project sort:min:{trait:due}          # By min @due on self
 object:project sort:_.status:desc            # Descending
+```
+
+**Examples with subqueries (explicit `_` binding required):**
+```
+trait:todo sort:{trait:due at:_}             # By co-located @due value
+trait:todo sort:{trait:due on:_.parent}      # By @due on same parent
+object:project sort:min:{trait:due within:_} # By min @due in subtree
+object:project sort:{trait:priority on:_}    # By @priority directly on project
 ```
 
 ### Group Clause
@@ -517,21 +530,34 @@ group:<spec>
 
 Groups results by the evaluated path or subquery. Results are organized into sections by group key.
 
-**Examples:**
+**Examples with path expressions:**
 ```
 trait:todo group:_.refs:project              # By referenced project
-trait:todo group:{object:project}            # Same, with subquery
 trait:todo group:_.parent                    # By parent object
 object:meeting group:_.ancestor:project      # By ancestor project
+```
+
+**Examples with subqueries (explicit `_` binding required):**
+```
+trait:todo group:{object:project refd:_}     # By project that references this todo
+object:task group:{object:person refs:_}     # By person assigned to this task
 ```
 
 ### Combined Sort and Group
 
 ```
-trait:todo refs:{object:project} group:_.refs:project sort:{trait:due}
+trait:todo refs:{object:project} group:_.refs:project sort:{trait:due at:_}
 ```
 
-This query finds todos that reference projects, groups them by the referenced project, and sorts within each group by the due date.
+This query finds todos that reference projects, groups them by the referenced project, and sorts within each group by the co-located due date.
+
+### Why Explicit `_` Binding?
+
+Subqueries in sort/group clauses **must** include a `_` reference to specify how the subquery relates to each result. This ensures:
+
+1. **Explicit semantics** — no hidden heuristics about what "related" means
+2. **Precise control** — choose exactly how to bind (direct, ancestor, reference, etc.)
+3. **Composability** — subqueries use the same predicates as regular queries
 
 ---
 
@@ -782,18 +808,22 @@ trait:priority at:{trait:due value:past}    # @priority on same line as overdue 
 object:project refd:{object:meeting}        # Projects mentioned in meetings
 object:person refd:{object:project .status:active}  # People mentioned in active projects
 
-# Sorting and Grouping
+# Sorting and Grouping (path expressions)
 trait:todo sort:_.value                     # Sort todos by their value
 trait:due sort:_.value:desc                 # Sort due dates descending (latest first)
 object:project sort:_.status                # Sort projects by status
-object:project sort:min:{trait:due}         # Sort projects by earliest due date
 
 trait:todo group:_.parent                   # Group todos by parent object
 trait:todo group:_.refs:project             # Group todos by referenced project
 object:meeting group:_.ancestor:project     # Group meetings by ancestor project
 
+# Sorting and Grouping (subqueries with explicit _ binding)
+trait:todo sort:{trait:due at:_}            # Sort by co-located @due value
+object:project sort:min:{trait:due within:_} # Sort projects by min due in subtree
+trait:todo group:{object:project refd:_}    # Group by project referencing this todo
+
 # Combined sort and group
-trait:todo group:_.refs:project sort:{trait:due}  # Group by project, sort by due date
+trait:todo group:_.refs:project sort:{trait:due at:_}  # Group by project, sort by due
 ```
 
 ---

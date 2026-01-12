@@ -1006,6 +1006,19 @@ func (e *Executor) buildGroupPredicateSQL(p *GroupPredicate, alias string,
 // Matches traits at the same file:line location as matching traits.
 func (e *Executor) buildAtPredicateSQL(p *AtPredicate, alias string) (string, []interface{}, error) {
 	if p.Target != "" {
+		// Check for special self-reference marker from at:_ binding
+		if strings.HasPrefix(p.Target, "__selfref_trait:") {
+			// Parse file:line from the marker
+			parts := strings.SplitN(strings.TrimPrefix(p.Target, "__selfref_trait:"), ":", 2)
+			if len(parts) == 2 {
+				cond := fmt.Sprintf(`(%s.file_path = ? AND %s.line_number = ?)`, alias, alias)
+				if p.Negated() {
+					cond = "NOT " + cond
+				}
+				return cond, []interface{}{parts[0], parts[1]}, nil
+			}
+		}
+
 		// Direct reference to specific trait location
 		// Need to look up the trait's file:line
 		cond := fmt.Sprintf(`EXISTS (
@@ -1390,18 +1403,28 @@ func (e *Executor) evaluateObjectPath(r ObjectResult, path *PathExpr) (interface
 func (e *Executor) evaluateTraitSortSubquery(r TraitResult, spec *SortSpec) (interface{}, error) {
 	subQ := spec.SubQuery
 
-	// Build conditions for the subquery, substituting _ references
-	if subQ.Type == QueryTypeTrait {
-		// Find co-located or related traits
-		values, err := e.findRelatedTraitValues(r, subQ)
+	// Create a copy of the subquery with _ bound to the current trait
+	boundQuery := e.bindSelfRefsForTrait(subQ, r)
+
+	if boundQuery.Type == QueryTypeTrait {
+		// Execute the trait query
+		results, err := e.ExecuteTraitQuery(boundQuery)
 		if err != nil {
 			return nil, nil
+		}
+
+		// Extract values
+		var values []interface{}
+		for _, tr := range results {
+			if tr.Value != nil {
+				values = append(values, *tr.Value)
+			}
 		}
 		return aggregate(values, spec.Aggregation), nil
 	}
 
-	// Object subquery - find related objects
-	objects, err := e.findRelatedObjects(r.ParentObjectID, subQ)
+	// Object subquery - execute and extract values
+	objects, err := e.ExecuteObjectQuery(boundQuery)
 	if err != nil {
 		return nil, nil
 	}
@@ -1428,17 +1451,28 @@ func (e *Executor) evaluateTraitSortSubquery(r TraitResult, spec *SortSpec) (int
 func (e *Executor) evaluateObjectSortSubquery(r ObjectResult, spec *SortSpec) (interface{}, error) {
 	subQ := spec.SubQuery
 
-	if subQ.Type == QueryTypeTrait {
-		// Find traits on or within this object
-		values, err := e.findObjectTraitValues(r.ID, subQ)
+	// Create a copy of the subquery with _ bound to the current object
+	boundQuery := e.bindSelfRefsForObject(subQ, r)
+
+	if boundQuery.Type == QueryTypeTrait {
+		// Execute the trait query
+		results, err := e.ExecuteTraitQuery(boundQuery)
 		if err != nil {
 			return nil, nil
+		}
+
+		// Extract values
+		var values []interface{}
+		for _, tr := range results {
+			if tr.Value != nil {
+				values = append(values, *tr.Value)
+			}
 		}
 		return aggregate(values, spec.Aggregation), nil
 	}
 
-	// Object subquery - find related objects
-	objects, err := e.findRelatedObjects(r.ID, subQ)
+	// Object subquery - execute and extract values
+	objects, err := e.ExecuteObjectQuery(boundQuery)
 	if err != nil {
 		return nil, nil
 	}
@@ -1461,223 +1495,416 @@ func (e *Executor) evaluateObjectSortSubquery(r ObjectResult, spec *SortSpec) (i
 	return objects[0].ID, nil
 }
 
-// findRelatedTraitValues finds trait values matching a subquery relative to a trait.
-// It searches for traits that are:
-// 1. Co-located (same file and line) as the current trait
-// 2. On the same parent object as the current trait
-func (e *Executor) findRelatedTraitValues(r TraitResult, subQ *Query) ([]interface{}, error) {
-	// Build conditions from the subquery predicates
-	var conditions []string
-	var args []interface{}
-
-	conditions = append(conditions, "t.trait_type = ?")
-	args = append(args, subQ.TypeName)
-
-	// Add value predicate if present
-	for _, pred := range subQ.Predicates {
-		if vp, ok := pred.(*ValuePredicate); ok {
-			if vp.CompareOp == CompareEq {
-				if vp.Negated() {
-					conditions = append(conditions, "LOWER(t.value) != LOWER(?)")
-				} else {
-					conditions = append(conditions, "LOWER(t.value) = LOWER(?)")
-				}
-			} else {
-				op := vp.CompareOp.String()
-				if vp.Negated() {
-					conditions = append(conditions, fmt.Sprintf("NOT (t.value %s ?)", op))
-				} else {
-					conditions = append(conditions, fmt.Sprintf("t.value %s ?", op))
-				}
-			}
-			args = append(args, vp.Value)
-		}
+// bindSelfRefsForTrait creates a copy of the query with all IsSelfRef predicates
+// bound to the given trait result.
+//
+// For a trait result, _ can be bound to:
+// - at:_ → matches traits at the same file:line as this trait
+// - on:_ → matches traits whose parent is this trait's parent (i.e., siblings)
+// - within:_ → matches traits within this trait's parent object
+// - refs:_ → matches things that reference this trait's parent object
+// - refd:_ → matches things referenced by this trait's parent object
+func (e *Executor) bindSelfRefsForTrait(q *Query, r TraitResult) *Query {
+	boundQuery := &Query{
+		Type:     q.Type,
+		TypeName: q.TypeName,
+		Sort:     q.Sort,
+		Group:    q.Group,
+		Limit:    q.Limit,
 	}
 
-	// Don't match self
-	conditions = append(conditions, "t.id != ?")
-	args = append(args, r.ID)
-
-	// Look for co-located traits OR traits on the same parent object
-	query := fmt.Sprintf(`
-		SELECT t.value FROM traits t
-		WHERE %s
-		  AND (
-		      (t.file_path = ? AND t.line_number = ?)
-		      OR t.parent_object_id = ?
-		  )
-		ORDER BY t.line_number
-	`, strings.Join(conditions, " AND "))
-	args = append(args, r.FilePath, r.Line, r.ParentObjectID)
-
-	rows, err := e.db.Query(query, args...)
-	if err != nil {
-		return nil, err
+	for _, pred := range q.Predicates {
+		boundQuery.Predicates = append(boundQuery.Predicates, e.bindPredicateForTrait(pred, r))
 	}
-	defer rows.Close()
 
-	var values []interface{}
-	for rows.Next() {
-		var value sql.NullString
-		if err := rows.Scan(&value); err != nil {
-			continue
-		}
-		if value.Valid {
-			values = append(values, value.String)
-		}
-	}
-	return values, rows.Err()
+	return boundQuery
 }
 
-// findObjectTraitValues finds trait values on or within an object.
-func (e *Executor) findObjectTraitValues(objectID string, subQ *Query) ([]interface{}, error) {
-	// Build conditions from the subquery predicates
-	var conditions []string
-	var args []interface{}
-
-	// First arg is for the subtree CTE
-	args = append(args, objectID)
-
-	conditions = append(conditions, "t.trait_type = ?")
-	args = append(args, subQ.TypeName)
-
-	// Add value predicate if present
-	for _, pred := range subQ.Predicates {
-		if vp, ok := pred.(*ValuePredicate); ok {
-			if vp.CompareOp == CompareEq {
-				if vp.Negated() {
-					conditions = append(conditions, "LOWER(t.value) != LOWER(?)")
-				} else {
-					conditions = append(conditions, "LOWER(t.value) = LOWER(?)")
-				}
-			} else {
-				op := vp.CompareOp.String()
-				if vp.Negated() {
-					conditions = append(conditions, fmt.Sprintf("NOT (t.value %s ?)", op))
-				} else {
-					conditions = append(conditions, fmt.Sprintf("t.value %s ?", op))
-				}
-			}
-			args = append(args, vp.Value)
-		}
-	}
-
-	// Look for traits on this object or its descendants
-	query := fmt.Sprintf(`
-		WITH RECURSIVE subtree AS (
-			SELECT id FROM objects WHERE id = ?
-			UNION ALL
-			SELECT o.id FROM objects o
-			JOIN subtree s ON o.parent_id = s.id
-		)
-		SELECT t.value FROM traits t
-		WHERE t.parent_object_id IN (SELECT id FROM subtree)
-		  AND %s
-		ORDER BY t.line_number
-	`, strings.Join(conditions, " AND "))
-
-	rows, err := e.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var values []interface{}
-	for rows.Next() {
-		var value sql.NullString
-		if err := rows.Scan(&value); err != nil {
-			continue
-		}
-		if value.Valid {
-			values = append(values, value.String)
-		}
-	}
-	return values, rows.Err()
-}
-
-// findRelatedObjects finds objects matching a subquery that are related to sourceID.
-// Related objects are those that:
-// 1. Are referenced by the source
-// 2. Reference the source
-// 3. Are ancestors or descendants of the source
-func (e *Executor) findRelatedObjects(sourceID string, subQ *Query) ([]ObjectResult, error) {
-	// Build conditions from the subquery predicates
-	var conditions []string
-	var args []interface{}
-
-	conditions = append(conditions, "o.type = ?")
-	args = append(args, subQ.TypeName)
-
-	// Add field predicates
-	for _, pred := range subQ.Predicates {
-		if fp, ok := pred.(*FieldPredicate); ok {
-			jsonPath := fmt.Sprintf("$.%s", fp.Field)
-			if fp.IsExists {
-				if fp.Negated() {
-					conditions = append(conditions, "json_extract(o.fields, ?) IS NULL")
-				} else {
-					conditions = append(conditions, "json_extract(o.fields, ?) IS NOT NULL")
-				}
-				args = append(args, jsonPath)
-			} else if fp.CompareOp != CompareEq {
-				op := fp.CompareOp.String()
-				if fp.Negated() {
-					conditions = append(conditions, fmt.Sprintf("NOT (json_extract(o.fields, ?) %s ?)", op))
-				} else {
-					conditions = append(conditions, fmt.Sprintf("json_extract(o.fields, ?) %s ?", op))
-				}
-				args = append(args, jsonPath, fp.Value)
-			} else {
-				if fp.Negated() {
-					conditions = append(conditions, "LOWER(json_extract(o.fields, ?)) != LOWER(?)")
-				} else {
-					conditions = append(conditions, "LOWER(json_extract(o.fields, ?)) = LOWER(?)")
-				}
-				args = append(args, jsonPath, fp.Value)
+// bindPredicateForTrait binds IsSelfRef in a predicate to a trait result.
+func (e *Executor) bindPredicateForTrait(pred Predicate, r TraitResult) Predicate {
+	switch p := pred.(type) {
+	case *AtPredicate:
+		if p.IsSelfRef {
+			// at:_ for a trait means "same file and line as this trait"
+			// We create a condition that matches the trait's location
+			// Since we can't easily express file:line as a target, we use a special marker
+			// that the SQL builder will handle
+			return &AtPredicate{
+				basePredicate: p.basePredicate,
+				Target:        fmt.Sprintf("__selfref_trait:%s:%d", r.FilePath, r.Line),
 			}
 		}
-	}
-
-	// Find objects that are related to sourceID:
-	// - Referenced by sourceID
-	// - Or that match the type (for simple subqueries like {object:project})
-	query := fmt.Sprintf(`
-		SELECT DISTINCT o.id, o.type, o.fields, o.file_path, o.line_start, o.parent_id
-		FROM objects o
-		WHERE %s
-		  AND (
-		      -- Objects referenced by source
-		      o.id IN (
-		          SELECT COALESCE(r.target_id, r.target_raw) 
-		          FROM refs r WHERE r.source_id = ?
-		      )
-		      -- Or just match the type (fallback for simple queries)
-		      OR 1=1
-		  )
-		ORDER BY o.file_path, o.line_start
-	`, strings.Join(conditions, " AND "))
-	args = append(args, sourceID)
-
-	rows, err := e.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []ObjectResult
-	for rows.Next() {
-		var r ObjectResult
-		var fieldsJSON string
-		if err := rows.Scan(&r.ID, &r.Type, &fieldsJSON, &r.FilePath, &r.LineStart, &r.ParentID); err != nil {
-			continue
+		if p.SubQuery != nil {
+			return &AtPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForTrait(p.SubQuery, r),
+			}
 		}
-		if err := json.Unmarshal([]byte(fieldsJSON), &r.Fields); err != nil {
-			r.Fields = make(map[string]interface{})
+	case *OnPredicate:
+		if p.IsSelfRef {
+			// on:_ for a trait means "directly on this trait's parent object"
+			return &OnPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ParentObjectID,
+			}
 		}
-		results = append(results, r)
+		if p.SubQuery != nil {
+			return &OnPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, ObjectResult{ID: r.ParentObjectID}),
+			}
+		}
+	case *WithinPredicate:
+		if p.IsSelfRef {
+			// within:_ for a trait means "within this trait's parent object"
+			return &WithinPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ParentObjectID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &WithinPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, ObjectResult{ID: r.ParentObjectID}),
+			}
+		}
+	case *RefsPredicate:
+		if p.IsSelfRef {
+			// refs:_ for a trait means "references this trait's parent object"
+			return &RefsPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ParentObjectID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &RefsPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, ObjectResult{ID: r.ParentObjectID}),
+			}
+		}
+	case *RefdPredicate:
+		if p.IsSelfRef {
+			// refd:_ for a trait means "referenced by this trait's parent object"
+			return &RefdPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ParentObjectID,
+			}
+		}
+		if p.SubQuery != nil {
+			boundSubQ := p.SubQuery
+			if p.SubQuery.Type == QueryTypeObject {
+				boundSubQ = e.bindSelfRefsForObject(p.SubQuery, ObjectResult{ID: r.ParentObjectID})
+			} else {
+				boundSubQ = e.bindSelfRefsForTrait(p.SubQuery, r)
+			}
+			return &RefdPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      boundSubQ,
+			}
+		}
+	case *OrPredicate:
+		return &OrPredicate{
+			basePredicate: p.basePredicate,
+			Left:          e.bindPredicateForTrait(p.Left, r),
+			Right:         e.bindPredicateForTrait(p.Right, r),
+		}
+	case *GroupPredicate:
+		boundPreds := make([]Predicate, len(p.Predicates))
+		for i, subPred := range p.Predicates {
+			boundPreds[i] = e.bindPredicateForTrait(subPred, r)
+		}
+		return &GroupPredicate{
+			basePredicate: p.basePredicate,
+			Predicates:    boundPreds,
+		}
 	}
-	return results, rows.Err()
+	return pred
 }
+
+// bindSelfRefsForObject creates a copy of the query with all IsSelfRef predicates
+// bound to the given object result.
+//
+// For an object result, _ can be bound to:
+// - on:_ → matches traits directly on this object
+// - within:_ → matches traits within this object (self or descendants)
+// - parent:_ → matches objects whose parent is this object
+// - ancestor:_ → matches objects where this object is an ancestor
+// - child:_ → matches objects that are children of this object
+// - descendant:_ → matches objects that are descendants of this object
+// - refs:_ → matches things that reference this object
+// - refd:_ → matches things that this object references
+func (e *Executor) bindSelfRefsForObject(q *Query, r ObjectResult) *Query {
+	boundQuery := &Query{
+		Type:     q.Type,
+		TypeName: q.TypeName,
+		Sort:     q.Sort,
+		Group:    q.Group,
+		Limit:    q.Limit,
+	}
+
+	for _, pred := range q.Predicates {
+		boundQuery.Predicates = append(boundQuery.Predicates, e.bindPredicateForObject(pred, r))
+	}
+
+	return boundQuery
+}
+
+// bindPredicateForObject binds IsSelfRef in a predicate to an object result.
+func (e *Executor) bindPredicateForObject(pred Predicate, r ObjectResult) Predicate {
+	switch p := pred.(type) {
+	case *OnPredicate:
+		if p.IsSelfRef {
+			// on:_ for an object means "directly on this object"
+			return &OnPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &OnPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *WithinPredicate:
+		if p.IsSelfRef {
+			// within:_ for an object means "within this object"
+			return &WithinPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &WithinPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *ParentPredicate:
+		if p.IsSelfRef {
+			// parent:_ means "whose parent is this object"
+			return &ParentPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &ParentPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *AncestorPredicate:
+		if p.IsSelfRef {
+			// ancestor:_ means "this object is an ancestor"
+			return &AncestorPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &AncestorPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *ChildPredicate:
+		if p.IsSelfRef {
+			// child:_ means "this object is a child"
+			return &ChildPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &ChildPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *DescendantPredicate:
+		if p.IsSelfRef {
+			// descendant:_ means "this object is a descendant"
+			return &DescendantPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &DescendantPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *RefsPredicate:
+		if p.IsSelfRef {
+			// refs:_ means "references this object"
+			return &RefsPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &RefsPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *RefdPredicate:
+		if p.IsSelfRef {
+			// refd:_ means "referenced by this object"
+			return &RefdPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			boundSubQ := p.SubQuery
+			if p.SubQuery.Type == QueryTypeObject {
+				boundSubQ = e.bindSelfRefsForObject(p.SubQuery, r)
+			}
+			return &RefdPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      boundSubQ,
+			}
+		}
+	case *HasPredicate:
+		if p.SubQuery != nil {
+			// For has:, we need to pass through the binding to trait predicates
+			return &HasPredicate{
+				basePredicate: p.basePredicate,
+				SubQuery:      e.bindSelfRefsForObjectInTraitQuery(p.SubQuery, r),
+			}
+		}
+	case *ContainsPredicate:
+		if p.SubQuery != nil {
+			return &ContainsPredicate{
+				basePredicate: p.basePredicate,
+				SubQuery:      e.bindSelfRefsForObjectInTraitQuery(p.SubQuery, r),
+			}
+		}
+	case *OrPredicate:
+		return &OrPredicate{
+			basePredicate: p.basePredicate,
+			Left:          e.bindPredicateForObject(p.Left, r),
+			Right:         e.bindPredicateForObject(p.Right, r),
+		}
+	case *GroupPredicate:
+		boundPreds := make([]Predicate, len(p.Predicates))
+		for i, subPred := range p.Predicates {
+			boundPreds[i] = e.bindPredicateForObject(subPred, r)
+		}
+		return &GroupPredicate{
+			basePredicate: p.basePredicate,
+			Predicates:    boundPreds,
+		}
+	}
+	return pred
+}
+
+// bindSelfRefsForObjectInTraitQuery binds _ refs in a trait query to an object.
+// This is used when we have a trait subquery inside an object query (e.g., has:{trait:due within:_}).
+func (e *Executor) bindSelfRefsForObjectInTraitQuery(q *Query, r ObjectResult) *Query {
+	boundQuery := &Query{
+		Type:     q.Type,
+		TypeName: q.TypeName,
+		Sort:     q.Sort,
+		Group:    q.Group,
+		Limit:    q.Limit,
+	}
+
+	for _, pred := range q.Predicates {
+		boundQuery.Predicates = append(boundQuery.Predicates, e.bindTraitPredicateForObject(pred, r))
+	}
+
+	return boundQuery
+}
+
+// bindTraitPredicateForObject binds IsSelfRef in trait predicates to an object result.
+func (e *Executor) bindTraitPredicateForObject(pred Predicate, r ObjectResult) Predicate {
+	switch p := pred.(type) {
+	case *OnPredicate:
+		if p.IsSelfRef {
+			return &OnPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &OnPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *WithinPredicate:
+		if p.IsSelfRef {
+			return &WithinPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &WithinPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *RefsPredicate:
+		if p.IsSelfRef {
+			return &RefsPredicate{
+				basePredicate: p.basePredicate,
+				Target:        r.ID,
+			}
+		}
+		if p.SubQuery != nil {
+			return &RefsPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObject(p.SubQuery, r),
+			}
+		}
+	case *AtPredicate:
+		if p.SubQuery != nil {
+			return &AtPredicate{
+				basePredicate: p.basePredicate,
+				Target:        p.Target,
+				SubQuery:      e.bindSelfRefsForObjectInTraitQuery(p.SubQuery, r),
+			}
+		}
+	case *OrPredicate:
+		return &OrPredicate{
+			basePredicate: p.basePredicate,
+			Left:          e.bindTraitPredicateForObject(p.Left, r),
+			Right:         e.bindTraitPredicateForObject(p.Right, r),
+		}
+	case *GroupPredicate:
+		boundPreds := make([]Predicate, len(p.Predicates))
+		for i, subPred := range p.Predicates {
+			boundPreds[i] = e.bindTraitPredicateForObject(subPred, r)
+		}
+		return &GroupPredicate{
+			basePredicate: p.basePredicate,
+			Predicates:    boundPreds,
+		}
+	}
+	return pred
+}
+
 
 // getObjectByID retrieves an object by its ID.
 func (e *Executor) getObjectByID(id string) (*ObjectResult, error) {
@@ -1890,39 +2117,55 @@ func (e *Executor) computeObjectGroupKey(r ObjectResult, spec *GroupSpec) (inter
 
 // evaluateTraitGroupSubquery evaluates a group subquery with _ bound to a trait result.
 func (e *Executor) evaluateTraitGroupSubquery(r TraitResult, spec *GroupSpec) (interface{}, error) {
-	// For grouping, we typically want a single key, so we just return the first match
 	subQ := spec.SubQuery
 
-	if subQ.Type == QueryTypeObject {
-		// Find related object (e.g., referenced project)
-		refs, err := e.findTraitRefs(r, subQ.TypeName)
-		if err != nil || len(refs) == 0 {
+	// Create a copy of the subquery with _ bound to the current trait
+	boundQuery := e.bindSelfRefsForTrait(subQ, r)
+
+	if boundQuery.Type == QueryTypeObject {
+		// Execute the object query
+		results, err := e.ExecuteObjectQuery(boundQuery)
+		if err != nil || len(results) == 0 {
 			return nil, nil
 		}
-		return refs[0], nil
+		return results[0].ID, nil
 	}
 
-	// Trait subquery - find co-located trait
-	values, err := e.findRelatedTraitValues(r, subQ)
-	if err != nil || len(values) == 0 {
+	// Trait subquery - execute and get first value
+	results, err := e.ExecuteTraitQuery(boundQuery)
+	if err != nil || len(results) == 0 {
 		return nil, nil
 	}
-	return values[0], nil
+	if results[0].Value != nil {
+		return *results[0].Value, nil
+	}
+	return nil, nil
 }
 
 // evaluateObjectGroupSubquery evaluates a group subquery with _ bound to an object result.
 func (e *Executor) evaluateObjectGroupSubquery(r ObjectResult, spec *GroupSpec) (interface{}, error) {
 	subQ := spec.SubQuery
 
-	if subQ.Type == QueryTypeObject {
-		// Find related objects
-		if r.ParentID != nil {
-			return *r.ParentID, nil
+	// Create a copy of the subquery with _ bound to the current object
+	boundQuery := e.bindSelfRefsForObject(subQ, r)
+
+	if boundQuery.Type == QueryTypeObject {
+		// Execute the object query
+		results, err := e.ExecuteObjectQuery(boundQuery)
+		if err != nil || len(results) == 0 {
+			return nil, nil
 		}
-		return nil, nil
+		return results[0].ID, nil
 	}
 
-	// Trait subquery - not commonly used for grouping objects
+	// Trait subquery - execute and get first value
+	results, err := e.ExecuteTraitQuery(boundQuery)
+	if err != nil || len(results) == 0 {
+		return nil, nil
+	}
+	if results[0].Value != nil {
+		return *results[0].Value, nil
+	}
 	return nil, nil
 }
 

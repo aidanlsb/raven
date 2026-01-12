@@ -1345,3 +1345,140 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSelfRefPredicates(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		predType string
+	}{
+		{
+			name:     "on:_ in trait query",
+			input:    "trait:due on:_",
+			predType: "on",
+		},
+		{
+			name:     "within:_ in trait query",
+			input:    "trait:due within:_",
+			predType: "within",
+		},
+		{
+			name:     "at:_ in trait query",
+			input:    "trait:due at:_",
+			predType: "at",
+		},
+		{
+			name:     "refs:_ in trait query",
+			input:    "trait:due refs:_",
+			predType: "refs",
+		},
+		{
+			name:     "refd:_ in trait query",
+			input:    "trait:due refd:_",
+			predType: "refd",
+		},
+		{
+			name:     "parent:_ in object query",
+			input:    "object:section parent:_",
+			predType: "parent",
+		},
+		{
+			name:     "ancestor:_ in object query",
+			input:    "object:section ancestor:_",
+			predType: "ancestor",
+		},
+		{
+			name:     "child:_ in object query",
+			input:    "object:project child:_",
+			predType: "child",
+		},
+		{
+			name:     "descendant:_ in object query",
+			input:    "object:project descendant:_",
+			predType: "descendant",
+		},
+		{
+			name:     "refs:_ in object query",
+			input:    "object:meeting refs:_",
+			predType: "refs",
+		},
+		{
+			name:     "refd:_ in object query",
+			input:    "object:project refd:_",
+			predType: "refd",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(q.Predicates) != 1 {
+				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			}
+
+			var isSelfRef bool
+			switch p := q.Predicates[0].(type) {
+			case *OnPredicate:
+				isSelfRef = p.IsSelfRef
+			case *WithinPredicate:
+				isSelfRef = p.IsSelfRef
+			case *AtPredicate:
+				isSelfRef = p.IsSelfRef
+			case *RefsPredicate:
+				isSelfRef = p.IsSelfRef
+			case *RefdPredicate:
+				isSelfRef = p.IsSelfRef
+			case *ParentPredicate:
+				isSelfRef = p.IsSelfRef
+			case *AncestorPredicate:
+				isSelfRef = p.IsSelfRef
+			case *ChildPredicate:
+				isSelfRef = p.IsSelfRef
+			case *DescendantPredicate:
+				isSelfRef = p.IsSelfRef
+			default:
+				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+			}
+
+			if !isSelfRef {
+				t.Error("expected IsSelfRef to be true")
+			}
+		})
+	}
+}
+
+func TestParseSortWithSelfRef(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "sort by trait with at:_",
+			input: "trait:todo sort:{trait:due at:_}",
+		},
+		{
+			name:  "sort by trait with within:_",
+			input: "object:project sort:min:{trait:due within:_}",
+		},
+		{
+			name:  "group by object with refd:_",
+			input: "trait:todo group:{object:project refd:_}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Just verify it parses successfully
+			if q.Sort == nil && q.Group == nil {
+				t.Error("expected Sort or Group spec")
+			}
+		})
+	}
+}
