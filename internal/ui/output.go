@@ -6,6 +6,23 @@ import (
 	"strings"
 )
 
+// ansiPattern matches ANSI escape sequences
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// VisibleLen returns the visible length of a string, excluding ANSI escape codes
+func VisibleLen(s string) int {
+	return len(ansiPattern.ReplaceAllString(s, ""))
+}
+
+// PadRight pads a string to the specified visible width, accounting for ANSI codes
+func PadRight(s string, width int) string {
+	visible := VisibleLen(s)
+	if visible >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-visible)
+}
+
 // Symbols for status indicators
 const (
 	SymbolCheck     = "✓" // Explicit action success (created, added, etc.)
