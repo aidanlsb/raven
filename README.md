@@ -148,8 +148,6 @@ rvn init /path/to/notes
 
 - [Configuration](docs/guide/configuration.md)
 - [CLI usage](docs/guide/cli.md)
-- [Working with agents](docs/guide/agents.md)
-- [Agent guide](docs/guide/agent-guide.md)
 - [Workflows](docs/guide/workflows.md)
 
 **Reference:**
@@ -160,7 +158,8 @@ rvn init /path/to/notes
 - [Query language](docs/reference/query-language.md)
 - [Bulk operations](docs/reference/bulk-operations.md)
 - [Workflows spec](docs/reference/workflows.md)
-- [MCP tools](docs/reference/mcp.md)
+- [MCP tools & agents](docs/reference/mcp.md)
+- [Agent guide](internal/mcp/agent-guide.md)
 
 
 **Design docs:**
