@@ -72,7 +72,7 @@ to understand which fields are auto-populated.`,
 			{Name: "title", Description: "Title/name for the object (auto-populates name_field if configured)", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Set field value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"name=Freya", "email=a@b.com"}},
+			{Name: "field", Description: "Set field value (repeatable) (key-value object)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
 		},
 		Examples: []string{
 			"rvn new person \"Freya\" --json",
@@ -97,7 +97,7 @@ For creating NEW typed objects, use 'rvn new' instead.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
-Bulk operations preview changes by default; use --confirm to apply.`,
+IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
@@ -130,7 +130,7 @@ Warns about backlinks (objects that reference the deleted item).
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
-Bulk operations preview changes by default; use --confirm to apply.`,
+IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "object_id", Description: "Object ID to delete (e.g., people/freya)", Required: false},
 		},
@@ -165,7 +165,7 @@ should ask the user how to proceed.
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).
-Bulk operations preview changes by default; use --confirm to apply.`,
+IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source file path (e.g., inbox/note.md or people/loki)", Required: false},
 			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false},
@@ -194,11 +194,27 @@ Bulk operations preview changes by default; use --confirm to apply.`,
 		Description: "Run a query using the Raven query language",
 		LongDesc: `Query objects or traits using the Raven query language.
 
+Query syntax:
+- Object queries: object:<type> [predicates...]
+  Examples: object:project .status:active, object:meeting refs:[[people/freya]]
+- Trait queries: trait:<name> [predicates...]
+  Examples: trait:due value:past, trait:highlight on:book
+
+Common predicates:
+- .field:value — Filter by field (.status:active, .priority:high)
+- has:trait — Has trait directly (has:due, has:priority)
+- refs:[[target]] — References target (refs:[[people/freya]])
+- within:type — Trait is inside object type (within:meeting)
+- value:X — Trait value equals X (value:past, value:high)
+
+Special date values for trait:due:
+- value:past, value:today, value:tomorrow, value:this-week, value:next-week
+
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --apply to run a bulk operation directly on query results.
 
 For bulk operations:
-- Preview changes by default; use --confirm to apply
+- Returns preview by default. Changes are NOT applied unless confirm=true.
 - Supported commands: set, delete, add, move`,
 		Args: []ArgMeta{
 			{Name: "query_string", Description: "Query string (e.g., 'object:project .status:active' or saved query name)", Required: true},
@@ -605,7 +621,7 @@ This command:
 3. Updates all ::type() embedded declarations
 4. Updates all ref field targets pointing to the old type
 
-By default, previews changes. Use --confirm to apply.
+IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
 For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 		Args: []ArgMeta{
@@ -638,7 +654,7 @@ Use this to update existing objects' metadata without manually editing files.
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
-Bulk operations preview changes by default; use --confirm to apply.`,
+IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: false},
 		},
@@ -666,8 +682,9 @@ Bulk operations preview changes by default; use --confirm to apply.`,
 		LongDesc: `Replace a unique string in a vault file with another string.
 
 The string to replace must appear exactly once in the file to prevent 
-ambiguous edits. By default, returns a preview requiring confirmation.
-Call with --confirm to apply the edit.
+ambiguous edits.
+
+IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
 Whitespace matters—old_str must match exactly including indentation.
 For multi-line replacements, include newlines in both old_str and new_str.`,

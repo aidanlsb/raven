@@ -353,7 +353,7 @@ All tools return JSON with a consistent envelope:
 
 ## Agent Best Practices
 
-See `guide/agent-guide.md` for comprehensive agent guidelines. Key points:
+See [`internal/mcp/agent-guide.md`](../../internal/mcp/agent-guide.md) for comprehensive agent guidelines (also available via the `raven://guide/agent` MCP resource). Key points:
 
 1. **Check schema first** — Use `raven_schema` to understand types and required fields before creating objects
 

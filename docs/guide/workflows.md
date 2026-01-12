@@ -55,5 +55,5 @@ Reference: `reference/workflows.md`.
 
 - See `reference/workflows.md` for complete workflow configuration
 - See `reference/query-language.md` for context query syntax
-- See `agents.md` for using workflows with MCP
+- See `reference/mcp.md` for using workflows with MCP agents
 
