@@ -1,13 +1,20 @@
 package ui
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Symbols for status indicators
 const (
-	SymbolSuccess = "✓"
-	SymbolError   = "✗"
-	SymbolWarning = "!"
-	SymbolInfo    = "*"
+	SymbolSuccess   = "✓"
+	SymbolError     = "✗"
+	SymbolWarning   = "!"
+	SymbolInfo      = "*"
+	SymbolUnchecked = "□"
+	SymbolChecked   = "☑"
+	SymbolDot       = "·"
+	SymbolDash      = "—"
 )
 
 // Success returns a success message with checkmark symbol
@@ -101,4 +108,51 @@ func pluralize(singular string, count int) string {
 		return singular
 	}
 	return singular + "s"
+}
+
+// Divider returns a section divider like "— tasks ————————————————"
+func Divider(label string, width int) string {
+	if label == "" {
+		return Muted.Render(strings.Repeat(SymbolDash, width))
+	}
+	// Format: "— label ————————"
+	prefix := SymbolDash + " " + label + " "
+	remaining := width - len(prefix)
+	if remaining < 3 {
+		remaining = 3
+	}
+	return Muted.Render(prefix + strings.Repeat(SymbolDash, remaining))
+}
+
+// Badge returns a styled badge/pill like "[today]" or "(3)"
+func Badge(text string) string {
+	return Muted.Render("[" + text + "]")
+}
+
+// Metadata returns dot-separated metadata like "status: active · due: 2025-02-15"
+func Metadata(pairs ...string) string {
+	return Muted.Render(strings.Join(pairs, " " + SymbolDot + " "))
+}
+
+// MetadataItem returns a single "key: value" metadata item
+func MetadataItem(key, value string) string {
+	return key + ": " + value
+}
+
+// Checkbox returns a checkbox symbol based on checked state
+func Checkbox(checked bool) string {
+	if checked {
+		return SymbolChecked
+	}
+	return SymbolUnchecked
+}
+
+// Indent returns a string indented by n spaces
+func Indent(n int, text string) string {
+	return strings.Repeat(" ", n) + text
+}
+
+// ResultCount returns a muted result count like "2 results"
+func ResultCount(n int) string {
+	return Muted.Render(fmt.Sprintf("%d %s", n, pluralize("result", n)))
 }

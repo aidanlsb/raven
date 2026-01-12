@@ -628,16 +628,16 @@ func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, s
 	}
 }
 
+// issueGroup represents a group of issues of the same type
+type issueGroup struct {
+	issueType check.IssueType
+	level     check.IssueLevel
+	count     int
+	topValues []string // Up to 3 examples
+}
+
 // printIssueSummary prints a compact summary grouped by issue type
 func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
-	// Group by issue type
-	type issueGroup struct {
-		issueType check.IssueType
-		level     check.IssueLevel
-		count     int
-		topValues []string // Up to 3 examples
-	}
-
 	groups := make(map[check.IssueType]*issueGroup)
 	valuesByType := make(map[check.IssueType]map[string]int)
 
@@ -707,23 +707,44 @@ func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
 		return sortedGroups[i].count > sortedGroups[j].count
 	})
 
-	// Print each group
+	// Separate errors and warnings
+	var errors, warnings []*issueGroup
 	for _, g := range sortedGroups {
-		symbol := ui.SymbolError
-		if g.level == check.LevelWarning {
-			symbol = ui.SymbolWarning
-		}
-
-		// Format: ✗ 4 unknown_frontmatter_key  (due, priority)
-		issueLabel := ui.Accent.Render(string(g.issueType))
-		countStr := fmt.Sprintf("%d", g.count)
-
-		if len(g.topValues) > 0 {
-			examples := ui.Muted.Render("(" + strings.Join(g.topValues, ", ") + ")")
-			fmt.Printf("%s %s %s  %s\n", symbol, countStr, issueLabel, examples)
+		if g.level == check.LevelError {
+			errors = append(errors, g)
 		} else {
-			fmt.Printf("%s %s %s\n", symbol, countStr, issueLabel)
+			warnings = append(warnings, g)
 		}
+	}
+
+	// Print errors section
+	if len(errors) > 0 {
+		fmt.Println(ui.Divider("errors", 50))
+		for _, g := range errors {
+			printIssueGroup(g)
+		}
+	}
+
+	// Print warnings section
+	if len(warnings) > 0 {
+		fmt.Println(ui.Divider("warnings", 50))
+		for _, g := range warnings {
+			printIssueGroup(g)
+		}
+	}
+}
+
+// printIssueGroup prints a single issue group with its details
+func printIssueGroup(g *issueGroup) {
+	// Issue type as header with count badge
+	issueLabel := ui.Accent.Render(string(g.issueType))
+	countBadge := ui.Badge(fmt.Sprintf("%d", g.count))
+	fmt.Printf("%s  %s\n", issueLabel, countBadge)
+
+	// Examples as indented metadata
+	if len(g.topValues) > 0 {
+		examples := strings.Join(g.topValues, " " + ui.SymbolDot + " ")
+		fmt.Printf("    %s\n", ui.Muted.Render(examples))
 	}
 }
 
