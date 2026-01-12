@@ -151,6 +151,16 @@ func TestExecuteObjectQuery(t *testing.T) {
 			wantCount: 1,
 		},
 		{
+			name:      "field filter case insensitive",
+			query:     "object:project .status:ACTIVE",
+			wantCount: 1, // matches "active" case-insensitively
+		},
+		{
+			name:      "field filter mixed case",
+			query:     "object:project .status:Active",
+			wantCount: 1, // matches "active" case-insensitively
+		},
+		{
 			name:      "field exists",
 			query:     "object:person .email:*",
 			wantCount: 1,
@@ -337,6 +347,16 @@ func TestExecuteTraitQuery(t *testing.T) {
 			name:      "trait with value filter",
 			query:     "trait:due value:2025-06-30",
 			wantCount: 1,
+		},
+		{
+			name:      "trait value case insensitive",
+			query:     "trait:todo value:TODO",
+			wantCount: 1, // matches "todo" case-insensitively
+		},
+		{
+			name:      "trait value mixed case",
+			query:     "trait:priority value:HIGH",
+			wantCount: 1, // matches "high" case-insensitively
 		},
 		{
 			name:      "highlight traits",

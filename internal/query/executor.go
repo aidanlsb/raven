@@ -279,6 +279,7 @@ func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string,
 }
 
 // buildFieldPredicateSQL builds SQL for .field:value predicates.
+// Comparisons are case-insensitive for better UX.
 func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
 	jsonPath := fmt.Sprintf("$.%s", p.Field)
 
@@ -290,13 +291,13 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 		cond = fmt.Sprintf("json_extract(%s.fields, ?) IS NOT NULL", alias)
 		args = append(args, jsonPath)
 	} else {
-		// Check if value is in array or equals scalar
+		// Check if value is in array or equals scalar (case-insensitive)
 		// Use json_each to check array membership, fall back to direct comparison
 		cond = fmt.Sprintf(`(
-			json_extract(%s.fields, ?) = ? OR
+			LOWER(json_extract(%s.fields, ?)) = LOWER(?) OR
 			EXISTS (
 				SELECT 1 FROM json_each(%s.fields, ?)
-				WHERE json_each.value = ?
+				WHERE LOWER(json_each.value) = LOWER(?)
 			)
 		)`, alias, alias)
 		args = append(args, jsonPath, p.Value, jsonPath, p.Value)
@@ -321,10 +322,11 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 	for _, pred := range p.SubQuery.Predicates {
 		switch tp := pred.(type) {
 		case *ValuePredicate:
+			// Case-insensitive comparison for better UX
 			if tp.Negated() {
-				traitConditions = append(traitConditions, "value != ?")
+				traitConditions = append(traitConditions, "LOWER(value) != LOWER(?)")
 			} else {
-				traitConditions = append(traitConditions, "value = ?")
+				traitConditions = append(traitConditions, "LOWER(value) = LOWER(?)")
 			}
 			args = append(args, tp.Value)
 		case *SourcePredicate:
@@ -747,12 +749,13 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 }
 
 // buildValuePredicateSQL builds SQL for value:val predicates.
+// Comparisons are case-insensitive for better UX.
 func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (string, []interface{}, error) {
 	var cond string
 	if p.Negated() {
-		cond = fmt.Sprintf("%s.value != ?", alias)
+		cond = fmt.Sprintf("LOWER(%s.value) != LOWER(?)", alias)
 	} else {
-		cond = fmt.Sprintf("%s.value = ?", alias)
+		cond = fmt.Sprintf("LOWER(%s.value) = LOWER(?)", alias)
 	}
 	return cond, []interface{}{p.Value}, nil
 }
