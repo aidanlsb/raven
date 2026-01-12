@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -369,6 +370,11 @@ var checkCmd = &cobra.Command{
 		// Second pass: validate with full context (including type information and aliases)
 		validator := check.NewValidatorWithTypesAndAliases(s, allObjectInfos, aliases)
 		validator.SetDuplicateAliases(duplicateAliases)
+
+		// Set directory roots for cleaner path suggestions (e.g., [[people/freya]] instead of [[objects/people/freya]])
+		if vaultCfg, _ := config.LoadVaultConfig(vaultPath); vaultCfg.HasDirectoriesConfig() {
+			validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
+		}
 
 		for _, doc := range allDocs {
 			issues := validator.ValidateDocument(doc)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -125,6 +126,8 @@ type Validator struct {
 	usedTraits      map[string]struct{}        // Traits actually used in documents
 	shortRefs       map[string]string          // Short ref -> full path (for suggestions)
 	usedShortNames  map[string]struct{}        // Short names actually used in references
+	objectsRoot     string                     // Directory prefix for typed objects (e.g., "objects/")
+	pagesRoot       string                     // Directory prefix for untyped pages (e.g., "pages/")
 }
 
 // DuplicateAlias represents multiple objects sharing the same alias.
@@ -203,6 +206,24 @@ func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo,
 // This should be called before ValidateSchema to report duplicate aliases.
 func (v *Validator) SetDuplicateAliases(duplicates []DuplicateAlias) {
 	v.duplicateAliases = duplicates
+}
+
+// SetDirectoryRoots sets the directory prefixes for typed objects and pages.
+// When set, suggestions will strip these prefixes for cleaner display.
+func (v *Validator) SetDirectoryRoots(objectsRoot, pagesRoot string) {
+	v.objectsRoot = paths.NormalizeDirRoot(objectsRoot)
+	v.pagesRoot = paths.NormalizeDirRoot(pagesRoot)
+}
+
+// displayID returns an object ID suitable for display (with directory prefix stripped).
+func (v *Validator) displayID(id string) string {
+	if v.objectsRoot != "" && strings.HasPrefix(id, v.objectsRoot) {
+		return strings.TrimPrefix(id, v.objectsRoot)
+	}
+	if v.pagesRoot != "" && strings.HasPrefix(id, v.pagesRoot) {
+		return strings.TrimPrefix(id, v.pagesRoot)
+	}
+	return id
 }
 
 // MissingRefs returns all missing references collected during validation.
@@ -581,15 +602,17 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 		// Check if short ref could be a full path (for better clarity)
 		if !strings.Contains(ref.TargetRaw, "/") && strings.Contains(result.TargetID, "/") {
 			// Short ref that resolved to a full path - suggest using full path
-			v.shortRefs[ref.TargetRaw] = result.TargetID
+			// Use displayID to strip directory prefix (e.g., "objects/") for cleaner suggestions
+			suggestedID := v.displayID(result.TargetID)
+			v.shortRefs[ref.TargetRaw] = suggestedID
 			issues = append(issues, Issue{
 				Level:    LevelWarning,
 				Type:     IssueShortRefCouldBeFullPath,
 				FilePath: filePath,
 				Line:     ref.Line,
-				Message:  fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, result.TargetID),
+				Message:  fmt.Sprintf("Short reference [[%s]] could be written as [[%s]] for clarity", ref.TargetRaw, suggestedID),
 				Value:    ref.TargetRaw,
-				FixHint:  fmt.Sprintf("Consider using full path: [[%s]]", result.TargetID),
+				FixHint:  fmt.Sprintf("Consider using full path: [[%s]]", suggestedID),
 			})
 		}
 
