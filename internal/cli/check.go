@@ -17,6 +17,7 @@ import (
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -24,6 +25,7 @@ var (
 	checkStrict        bool
 	checkCreateMissing bool
 	checkByFile        bool
+	checkVerbose       bool
 	checkType          string
 	checkTrait         string
 	checkIssues        string
@@ -220,15 +222,15 @@ var checkCmd = &cobra.Command{
 		if !jsonOutput {
 			switch scope.scopeType {
 			case "full":
-				fmt.Printf("Checking vault: %s\n", vaultPath)
+				fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
 			case "file":
-				fmt.Printf("Checking file: %s\n", scope.scopeValue)
+				fmt.Printf("Checking file: %s\n", ui.FilePath(scope.scopeValue))
 			case "directory":
-				fmt.Printf("Checking directory: %s/\n", scope.scopeValue)
+				fmt.Printf("Checking directory: %s\n", ui.FilePath(scope.scopeValue+"/"))
 			case "type_filter":
-				fmt.Printf("Checking type: %s\n", scope.scopeValue)
+				fmt.Printf("Checking type: %s\n", ui.Accent.Render(scope.scopeValue))
 			case "trait_filter":
-				fmt.Printf("Checking trait: @%s\n", scope.scopeValue)
+				fmt.Printf("Checking trait: %s\n", ui.Accent.Render("@"+scope.scopeValue))
 			}
 		}
 
@@ -259,18 +261,18 @@ var checkCmd = &cobra.Command{
 			if err == nil && stalenessInfo.IsStale {
 				staleCount := len(stalenessInfo.StaleFiles)
 				if !jsonOutput {
-					fmt.Printf("WARN:  Index may be stale (%d file(s) modified since last reindex)\n", staleCount)
+					fmt.Println(ui.Warningf("Index may be stale (%d file(s) modified since last reindex)", staleCount))
 					if staleCount <= 5 {
 						for _, f := range stalenessInfo.StaleFiles {
-							fmt.Printf("       - %s\n", f)
+							fmt.Printf("       - %s\n", ui.FilePath(f))
 						}
 					} else {
 						for i := 0; i < 3; i++ {
-							fmt.Printf("       - %s\n", stalenessInfo.StaleFiles[i])
+							fmt.Printf("       - %s\n", ui.FilePath(stalenessInfo.StaleFiles[i]))
 						}
-						fmt.Printf("       ... and %d more\n", staleCount-3)
+						fmt.Printf("       %s\n", ui.Muted.Render(fmt.Sprintf("... and %d more", staleCount-3)))
 					}
-					fmt.Printf("       Run 'rvn reindex' to update the index.\n\n")
+					fmt.Printf("       %s\n\n", ui.Hint("Run 'rvn reindex' to update the index."))
 				}
 				// Add to issues for JSON output (only for full vault checks)
 				if scope.scopeType == "full" {
@@ -389,14 +391,6 @@ var checkCmd = &cobra.Command{
 				} else {
 					errorCount++
 				}
-
-				if !jsonOutput && !checkByFile {
-					prefix := "ERROR"
-					if issue.Level == check.LevelWarning {
-						prefix = "WARN"
-					}
-					fmt.Printf("%s:  %s:%d - %s\n", prefix, issue.FilePath, issue.Line, issue.Message)
-				}
 			}
 		}
 
@@ -440,14 +434,6 @@ var checkCmd = &cobra.Command{
 				} else {
 					errorCount++
 				}
-
-				if !jsonOutput && !checkByFile {
-					prefix := "ERROR"
-					if issue.Level == check.LevelWarning {
-						prefix = "WARN"
-					}
-					fmt.Printf("%s:  [schema] %s\n", prefix, issue.Message)
-				}
 			}
 			schemaIssues = filteredSchemaIssues
 		}
@@ -462,16 +448,29 @@ var checkCmd = &cobra.Command{
 			printIssuesByFile(allIssues, schemaIssues, staleWarningShown)
 			fmt.Println()
 			if errorCount == 0 && warningCount == 0 {
-				fmt.Printf("✓ No issues found in %d files.\n", fileCount)
+				fmt.Println(ui.Successf("No issues found in %d files.", fileCount))
+			} else {
+				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
+			}
+		} else if checkVerbose {
+			// Verbose mode: print all issues inline
+			printIssuesVerbose(allIssues, schemaIssues)
+			fmt.Println()
+			if errorCount == 0 && warningCount == 0 {
+				fmt.Println(ui.Successf("No issues found in %d files.", fileCount))
 			} else {
 				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
 			}
 		} else {
+			// Default: summary by issue type
 			fmt.Println()
 			if errorCount == 0 && warningCount == 0 {
-				fmt.Printf("✓ No issues found in %d files.\n", fileCount)
+				fmt.Println(ui.Successf("No issues found in %d files.", fileCount))
 			} else {
+				printIssueSummary(allIssues, schemaIssues)
+				fmt.Println()
 				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
+				fmt.Println(ui.Hint("Use --verbose to see all issues, or --by-file to group by file."))
 			}
 
 			// Handle --create-missing (interactive mode only, full vault check only)
@@ -480,7 +479,7 @@ var checkCmd = &cobra.Command{
 				if len(missingRefs) > 0 {
 					created := handleMissingRefs(vaultPath, s, missingRefs)
 					if created > 0 {
-						fmt.Printf("\n✓ Created %d missing page(s).\n", created)
+						fmt.Printf("\n%s\n", ui.Successf("Created %d missing page(s).", created))
 					}
 				}
 
@@ -488,7 +487,7 @@ var checkCmd = &cobra.Command{
 				if len(undefinedTraits) > 0 {
 					added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
 					if added > 0 {
-						fmt.Printf("\n✓ Added %d trait(s) to schema.\n", added)
+						fmt.Printf("\n%s\n", ui.Successf("Added %d trait(s) to schema.", added))
 					}
 				}
 			}
@@ -564,24 +563,24 @@ func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, s
 	// Print global issues first (like stale index)
 	if len(globalIssues) > 0 && !staleWarningShown {
 		for _, issue := range globalIssues {
-			prefix := "ERROR"
 			if issue.Level == check.LevelWarning {
-				prefix = "WARN"
+				fmt.Println(ui.Warning(issue.Message))
+			} else {
+				fmt.Println(ui.Error(issue.Message))
 			}
-			fmt.Printf("%s:  %s\n", prefix, issue.Message)
 		}
 		fmt.Println()
 	}
 
 	// Print schema issues
 	if len(schemaIssues) > 0 {
-		fmt.Println("schema.yaml:")
+		fmt.Println(ui.FilePath("schema.yaml") + ":")
 		for _, issue := range schemaIssues {
-			prefix := "ERROR"
+			symbol := ui.SymbolError
 			if issue.Level == check.LevelWarning {
-				prefix = "WARN"
+				symbol = ui.SymbolWarning
 			}
-			fmt.Printf("  %s: %s\n", prefix, issue.Message)
+			fmt.Printf("  %s %s\n", symbol, issue.Message)
 		}
 		fmt.Println()
 	}
@@ -607,15 +606,9 @@ func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, s
 			}
 		}
 
-		// Print file header
-		fmt.Printf("%s", filePath)
-		if errCount > 0 && warnCount > 0 {
-			fmt.Printf(" (%d errors, %d warnings):\n", errCount, warnCount)
-		} else if errCount > 0 {
-			fmt.Printf(" (%d errors):\n", errCount)
-		} else {
-			fmt.Printf(" (%d warnings):\n", warnCount)
-		}
+		// Print file header with styled path and count badge
+		countBadge := ui.Muted.Render(ui.ErrorWarningCounts(errCount, warnCount))
+		fmt.Printf("%s %s:\n", ui.FilePath(filePath), countBadge)
 
 		// Sort issues by line number
 		sort.Slice(fileIssues, func(i, j int) bool {
@@ -624,13 +617,145 @@ func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, s
 
 		// Print each issue
 		for _, issue := range fileIssues {
-			prefix := "ERROR"
+			symbol := ui.SymbolError
 			if issue.Level == check.LevelWarning {
-				prefix = "WARN"
+				symbol = ui.SymbolWarning
 			}
-			fmt.Printf("  Line %d: %s - %s\n", issue.Line, prefix, issue.Message)
+			lineNum := ui.Muted.Render(fmt.Sprintf("L%d", issue.Line))
+			fmt.Printf("  %s %s %s\n", symbol, lineNum, issue.Message)
 		}
 		fmt.Println()
+	}
+}
+
+// printIssueSummary prints a compact summary grouped by issue type
+func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
+	// Group by issue type
+	type issueGroup struct {
+		issueType check.IssueType
+		level     check.IssueLevel
+		count     int
+		topValues []string // Up to 3 examples
+	}
+
+	groups := make(map[check.IssueType]*issueGroup)
+	valuesByType := make(map[check.IssueType]map[string]int)
+
+	// Process file issues
+	for _, issue := range issues {
+		if groups[issue.Type] == nil {
+			groups[issue.Type] = &issueGroup{
+				issueType: issue.Type,
+				level:     issue.Level,
+			}
+			valuesByType[issue.Type] = make(map[string]int)
+		}
+		groups[issue.Type].count++
+		if issue.Value != "" {
+			valuesByType[issue.Type][issue.Value]++
+		} else if issue.FilePath != "" {
+			// Use file path as value for display
+			valuesByType[issue.Type][issue.FilePath]++
+		}
+	}
+
+	// Process schema issues
+	for _, issue := range schemaIssues {
+		if groups[issue.Type] == nil {
+			groups[issue.Type] = &issueGroup{
+				issueType: issue.Type,
+				level:     issue.Level,
+			}
+			valuesByType[issue.Type] = make(map[string]int)
+		}
+		groups[issue.Type].count++
+		if issue.Value != "" {
+			valuesByType[issue.Type][issue.Value]++
+		}
+	}
+
+	// Compute top values for each group
+	for issueType, valueCounts := range valuesByType {
+		type vc struct {
+			value string
+			count int
+		}
+		var sorted []vc
+		for v, c := range valueCounts {
+			sorted = append(sorted, vc{v, c})
+		}
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].count > sorted[j].count
+		})
+		// Take top 3
+		for i := 0; i < len(sorted) && i < 3; i++ {
+			groups[issueType].topValues = append(groups[issueType].topValues, sorted[i].value)
+		}
+	}
+
+	// Sort groups: errors first, then by count descending
+	var sortedGroups []*issueGroup
+	for _, g := range groups {
+		sortedGroups = append(sortedGroups, g)
+	}
+	sort.Slice(sortedGroups, func(i, j int) bool {
+		// Errors before warnings
+		if sortedGroups[i].level != sortedGroups[j].level {
+			return sortedGroups[i].level == check.LevelError
+		}
+		// Then by count descending
+		return sortedGroups[i].count > sortedGroups[j].count
+	})
+
+	// Print each group
+	for _, g := range sortedGroups {
+		symbol := ui.SymbolError
+		if g.level == check.LevelWarning {
+			symbol = ui.SymbolWarning
+		}
+
+		// Format: ✗ 4 unknown_frontmatter_key  (due, priority)
+		issueLabel := ui.Accent.Render(string(g.issueType))
+		countStr := fmt.Sprintf("%d", g.count)
+
+		if len(g.topValues) > 0 {
+			examples := ui.Muted.Render("(" + strings.Join(g.topValues, ", ") + ")")
+			fmt.Printf("%s %s %s  %s\n", symbol, countStr, issueLabel, examples)
+		} else {
+			fmt.Printf("%s %s %s\n", symbol, countStr, issueLabel)
+		}
+	}
+}
+
+// printIssuesVerbose prints all issues inline (verbose mode)
+func printIssuesVerbose(issues []check.Issue, schemaIssues []check.SchemaIssue) {
+	// Print schema issues first
+	for _, issue := range schemaIssues {
+		schemaLabel := ui.Muted.Render("[schema]")
+		if issue.Level == check.LevelWarning {
+			fmt.Printf("%s %s %s\n", ui.SymbolWarning, schemaLabel, issue.Message)
+		} else {
+			fmt.Printf("%s %s %s\n", ui.SymbolError, schemaLabel, issue.Message)
+		}
+	}
+
+	// Print file issues
+	for _, issue := range issues {
+		if issue.FilePath == "" {
+			// Global issue (like stale index)
+			if issue.Level == check.LevelWarning {
+				fmt.Println(ui.Warning(issue.Message))
+			} else {
+				fmt.Println(ui.Error(issue.Message))
+			}
+		} else {
+			location := fmt.Sprintf("%s:%s", ui.FilePath(issue.FilePath), ui.LineNum(issue.Line))
+			if issue.Level == check.LevelWarning {
+				fmt.Printf("%s %s %s\n", ui.SymbolWarning, location, issue.Message)
+			} else {
+				fmt.Printf("%s %s %s\n", ui.SymbolError, location, issue.Message)
+			}
+		}
 	}
 }
 
@@ -788,32 +913,35 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	sortRefs(inferred)
 	sortRefs(unknown)
 
-	fmt.Println("\n--- Missing References ---")
+	fmt.Printf("\n%s\n", ui.Header("--- Missing References ---"))
 	reader := bufio.NewReader(os.Stdin)
 	created := 0
 
 	// Handle certain refs (from typed fields)
 	if len(certain) > 0 {
-		fmt.Println("\nCertain (from typed fields):")
+		fmt.Printf("\n%s\n", ui.Bold.Render("Certain (from typed fields):"))
 		for _, ref := range certain {
 			source := ref.SourceObjectID
 			if source == "" {
 				source = ref.SourceFile
 			}
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
-			fmt.Printf("  • %s → %s.md (from %s.%s)\n", ref.TargetPath, resolvedPath, source, ref.FieldSource)
+			fmt.Printf("  • %s → %s %s\n",
+				ui.Accent.Render(ref.TargetPath),
+				ui.FilePath(resolvedPath+".md"),
+				ui.Muted.Render(fmt.Sprintf("(from %s.%s)", source, ref.FieldSource)))
 		}
 
-		fmt.Print("\nCreate these pages? [Y/n] ")
+		fmt.Printf("\nCreate these pages? %s ", ui.Muted.Render("[Y/n]"))
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range certain {
 				resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
-					fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
+					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
-					fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, ref.InferredType)
+					fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
 					created++
 				}
 			}
@@ -822,22 +950,25 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 	// Handle inferred refs (from path matching)
 	if len(inferred) > 0 {
-		fmt.Println("\nInferred (from path matching default_path):")
+		fmt.Printf("\n%s\n", ui.Bold.Render("Inferred (from path matching default_path):"))
 		for _, ref := range inferred {
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
-			fmt.Printf("  ? %s → %s.md (type: %s)\n", ref.TargetPath, resolvedPath, ref.InferredType)
+			fmt.Printf("  ? %s → %s %s\n",
+				ui.Accent.Render(ref.TargetPath),
+				ui.FilePath(resolvedPath+".md"),
+				ui.Muted.Render(fmt.Sprintf("(type: %s)", ref.InferredType)))
 		}
 
 		for _, ref := range inferred {
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
-			fmt.Printf("\nCreate %s.md as '%s'? [y/N] ", resolvedPath, ref.InferredType)
+			fmt.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Accent.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
-					fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
+					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
-					fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, ref.InferredType)
+					fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
 					created++
 				}
 			}
@@ -846,9 +977,11 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 	// Handle unknown refs
 	if len(unknown) > 0 {
-		fmt.Println("\nUnknown type (please specify):")
+		fmt.Printf("\n%s\n", ui.Bold.Render("Unknown type (please specify):"))
 		for _, ref := range unknown {
-			fmt.Printf("  ? %s (referenced in %s:%d)\n", ref.TargetPath, ref.SourceFile, ref.Line)
+			fmt.Printf("  ? %s %s\n",
+				ui.Accent.Render(ref.TargetPath),
+				ui.Muted.Render(fmt.Sprintf("(referenced in %s:%d)", ref.SourceFile, ref.Line)))
 		}
 
 		// List available types
@@ -857,15 +990,15 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			typeNames = append(typeNames, name)
 		}
 		sort.Strings(typeNames)
-		fmt.Printf("\nAvailable types: %s\n", strings.Join(typeNames, ", "))
+		fmt.Printf("\nAvailable types: %s\n", ui.Accent.Render(strings.Join(typeNames, ", ")))
 
 		for _, ref := range unknown {
-			fmt.Printf("\nType for %s (or 'skip'): ", ref.TargetPath)
+			fmt.Printf("\nType for %s %s: ", ui.Accent.Render(ref.TargetPath), ui.Muted.Render("(or 'skip')"))
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
 
 			if response == "" || response == "skip" || response == "s" {
-				fmt.Printf("  Skipped %s\n", ref.TargetPath)
+				fmt.Printf("  %s\n", ui.Muted.Render("Skipped "+ref.TargetPath))
 				continue
 			}
 
@@ -877,9 +1010,9 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, response, s))
 			if err := createMissingPage(vaultPath, s, ref.TargetPath, response); err != nil {
-				fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
+				fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 			} else {
-				fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, response)
+				fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, response))
 				created++
 			}
 		}
@@ -900,16 +1033,18 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		return traits[i].UsageCount > traits[j].UsageCount
 	})
 
-	fmt.Println("\n--- Undefined Traits ---")
+	fmt.Printf("\n%s\n", ui.Header("--- Undefined Traits ---"))
 	fmt.Println("\nThe following traits are used but not defined in schema.yaml:")
 	for _, trait := range traits {
 		valueInfo := "no value"
 		if trait.HasValue {
 			valueInfo = "with value"
 		}
-		fmt.Printf("  • @%s (%d usages, %s)\n", trait.TraitName, trait.UsageCount, valueInfo)
+		fmt.Printf("  • %s %s\n",
+			ui.Accent.Render("@"+trait.TraitName),
+			ui.Muted.Render(fmt.Sprintf("(%d usages, %s)", trait.UsageCount, valueInfo)))
 		for _, loc := range trait.Locations {
-			fmt.Printf("      %s\n", loc)
+			fmt.Printf("      %s\n", ui.Muted.Render(loc))
 		}
 	}
 
@@ -919,19 +1054,19 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 	fmt.Println("\nWould you like to add these traits to the schema?")
 
 	for _, trait := range traits {
-		fmt.Printf("\nAdd '@%s' to schema? [y/N] ", trait.TraitName)
+		fmt.Printf("\nAdd %s to schema? %s ", ui.Accent.Render("@"+trait.TraitName), ui.Muted.Render("[y/N]"))
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(strings.ToLower(response))
 
 		if response != "y" && response != "yes" {
-			fmt.Printf("  Skipped @%s\n", trait.TraitName)
+			fmt.Printf("  %s\n", ui.Muted.Render("Skipped @"+trait.TraitName))
 			continue
 		}
 
 		// Determine trait type
 		traitType := promptTraitType(trait, reader)
 		if traitType == "" {
-			fmt.Printf("  Skipped @%s\n", trait.TraitName)
+			fmt.Printf("  %s\n", ui.Muted.Render("Skipped @"+trait.TraitName))
 			continue
 		}
 
@@ -940,7 +1075,7 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		var defaultValue string
 
 		if traitType == "enum" {
-			fmt.Printf("  Enum values (comma-separated, e.g., 'low,medium,high'): ")
+			fmt.Printf("  Enum values %s: ", ui.Muted.Render("(comma-separated, e.g., 'low,medium,high')"))
 			valuesStr, _ := reader.ReadString('\n')
 			valuesStr = strings.TrimSpace(valuesStr)
 			if valuesStr != "" {
@@ -952,18 +1087,18 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		}
 
 		if traitType == "boolean" || traitType == "enum" {
-			fmt.Printf("  Default value (or leave empty): ")
+			fmt.Printf("  Default value %s: ", ui.Muted.Render("(or leave empty)"))
 			defaultValue, _ = reader.ReadString('\n')
 			defaultValue = strings.TrimSpace(defaultValue)
 		}
 
 		// Create the trait
 		if err := createNewTrait(vaultPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
-			fmt.Printf("  ✗ Failed to add @%s: %v\n", trait.TraitName, err)
+			fmt.Printf("  %s\n", ui.Errorf("Failed to add @%s: %v", trait.TraitName, err))
 			continue
 		}
 
-		fmt.Printf("  ✓ Added trait '@%s' (type: %s) to schema.yaml\n", trait.TraitName, traitType)
+		fmt.Printf("  %s\n", ui.Successf("Added trait '@%s' (type: %s) to schema.yaml", trait.TraitName, traitType))
 		added++
 	}
 
@@ -978,7 +1113,10 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 		suggested = "string"
 	}
 
-	fmt.Printf("  Type for @%s? [boolean/string/date/enum] (default: %s): ", trait.TraitName, suggested)
+	fmt.Printf("  Type for %s? %s %s: ",
+		ui.Accent.Render("@"+trait.TraitName),
+		ui.Muted.Render("[boolean/string/date/enum]"),
+		ui.Muted.Render(fmt.Sprintf("(default: %s)", suggested)))
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))
 
@@ -1001,7 +1139,7 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 	}
 
 	if !validTypes[response] {
-		fmt.Printf("  Invalid type '%s'\n", response)
+		fmt.Printf("  %s\n", ui.Errorf("Invalid type '%s'", response))
 		return ""
 	}
 
@@ -1083,37 +1221,39 @@ func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType str
 // handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
 // Returns the number of pages created (0 or 1).
 func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader) int {
-	fmt.Printf("\n  Type '%s' doesn't exist. Would you like to create it? [y/N] ", typeName)
+	fmt.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
+		ui.Accent.Render("'"+typeName+"'"),
+		ui.Muted.Render("[y/N]"))
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))
 
 	if response != "y" && response != "yes" {
-		fmt.Printf("  Skipped %s\n", ref.TargetPath)
+		fmt.Printf("  %s\n", ui.Muted.Render("Skipped "+ref.TargetPath))
 		return 0
 	}
 
 	// Prompt for default_path (optional)
-	fmt.Printf("  Default path for '%s' files (e.g., '%s/', or leave empty): ", typeName, typeName+"s")
+	fmt.Printf("  Default path for '%s' files %s: ", typeName, ui.Muted.Render(fmt.Sprintf("(e.g., '%s/', or leave empty)", typeName+"s")))
 	defaultPath, _ := reader.ReadString('\n')
 	defaultPath = strings.TrimSpace(defaultPath)
 
 	// Create the type
 	if err := createNewType(vaultPath, s, typeName, defaultPath); err != nil {
-		fmt.Printf("  ✗ Failed to create type '%s': %v\n", typeName, err)
+		fmt.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeName, err))
 		return 0
 	}
-	fmt.Printf("  ✓ Created type '%s' in schema.yaml\n", typeName)
+	fmt.Printf("  %s\n", ui.Successf("Created type '%s' in schema.yaml", typeName))
 	if defaultPath != "" {
-		fmt.Printf("    default_path: %s\n", defaultPath)
+		fmt.Printf("    %s\n", ui.Muted.Render("default_path: "+defaultPath))
 	}
 
 	// Now create the page with the new type (resolving path with new default_path)
 	resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, typeName, s))
 	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName); err != nil {
-		fmt.Printf("  ✗ Failed to create %s.md: %v\n", resolvedPath, err)
+		fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
 	}
-	fmt.Printf("  ✓ Created %s.md (type: %s)\n", resolvedPath, typeName)
+	fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, typeName))
 	return 1
 }
 
@@ -1188,6 +1328,7 @@ func init() {
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
 	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Interactively create missing referenced pages")
 	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
+	checkCmd.Flags().BoolVarP(&checkVerbose, "verbose", "V", false, "Show all issues with full details")
 	checkCmd.Flags().StringVarP(&checkType, "type", "t", "", "Check only objects of this type")
 	checkCmd.Flags().StringVar(&checkTrait, "trait", "", "Check only usages of this trait")
 	checkCmd.Flags().StringVar(&checkIssues, "issues", "", "Only check these issue types (comma-separated)")
