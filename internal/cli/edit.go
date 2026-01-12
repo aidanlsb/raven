@@ -103,7 +103,7 @@ var editCmd = &cobra.Command{
 			fmt.Println(ui.Muted.Render("BEFORE:"))
 			fmt.Println(indent(beforeContext, "  "))
 			fmt.Println()
-			fmt.Println(ui.Accent.Render("AFTER:"))
+			fmt.Println(ui.Bold.Render("AFTER:"))
 			fmt.Println(indent(afterContext, "  "))
 			fmt.Println()
 			fmt.Println(ui.Hint("Run with --confirm to apply this edit"))

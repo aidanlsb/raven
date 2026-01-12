@@ -41,7 +41,7 @@ func formatLocationLink(cfg *config.Config, vaultPath, relPath string, line int)
 	location := fmt.Sprintf("%s:%d", relPath, line)
 
 	if !shouldEmitHyperlinks() {
-		return ui.Accent.Render(location)
+		return ui.Bold.Render(location)
 	}
 
 	// Build absolute path for URL
@@ -52,8 +52,7 @@ func formatLocationLink(cfg *config.Config, vaultPath, relPath string, line int)
 
 	// OSC 8 hyperlink format: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
 	// Using \x07 (BEL) as terminator for broader compatibility
-	// Wrap with accent color styling
-	return ui.Accent.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
+	return ui.Bold.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
 }
 
 // buildEditorURL builds the appropriate URL for the configured editor.
@@ -110,12 +109,11 @@ func buildEditorURL(cfg *config.Config, absPath string, line int) string {
 
 // formatLocationLinkSimple formats a location using only the relative path (no vault context).
 // This is useful when vault path is not easily available.
-// The output is styled with the accent color.
 func formatLocationLinkSimple(relPath string, line int) string {
 	location := fmt.Sprintf("%s:%d", relPath, line)
 
 	if !shouldEmitHyperlinks() {
-		return ui.Accent.Render(location)
+		return ui.Bold.Render(location)
 	}
 
 	// Get vault path and config
@@ -123,12 +121,11 @@ func formatLocationLinkSimple(relPath string, line int) string {
 	cfg := getConfig()
 
 	if vaultPath == "" {
-		return ui.Accent.Render(location)
+		return ui.Bold.Render(location)
 	}
 
 	absPath := filepath.Join(vaultPath, relPath)
 	url := buildEditorURL(cfg, absPath, line)
 
-	// Wrap with accent color styling
-	return ui.Accent.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
+	return ui.Bold.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
 }

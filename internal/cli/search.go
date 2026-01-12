@@ -59,7 +59,7 @@ var searchCmd = &cobra.Command{
 
 		fmt.Printf("%s %s\n\n", ui.Header(query), ui.Hint(fmt.Sprintf("(%d results)", len(results))))
 		for i, result := range results {
-			fmt.Printf("%s %s\n", ui.Accent.Render(fmt.Sprintf("%d.", i+1)), result.Title)
+			fmt.Printf("%s %s\n", ui.Bold.Render(fmt.Sprintf("%d.", i+1)), result.Title)
 			fmt.Printf("   %s\n", formatLocationLinkSimple(result.FilePath, 1))
 			if result.Snippet != "" {
 				// Clean up snippet for display

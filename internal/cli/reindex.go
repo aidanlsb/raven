@@ -269,14 +269,14 @@ Examples:
 			} else {
 				fmt.Println(ui.Checkf("Indexed %d files", fileCount))
 			}
-			fmt.Printf("  %s objects\n", ui.Accent.Render(fmt.Sprintf("%d", stats.ObjectCount)))
-			fmt.Printf("  %s traits\n", ui.Accent.Render(fmt.Sprintf("%d", stats.TraitCount)))
+			fmt.Printf("  %s objects\n", ui.Bold.Render(fmt.Sprintf("%d", stats.ObjectCount)))
+			fmt.Printf("  %s traits\n", ui.Bold.Render(fmt.Sprintf("%d", stats.TraitCount)))
 			if refResult != nil && refResult.Unresolved > 0 {
 				fmt.Printf("  %s references %s\n",
-					ui.Accent.Render(fmt.Sprintf("%d", stats.RefCount)),
+					ui.Bold.Render(fmt.Sprintf("%d", stats.RefCount)),
 					ui.Hint(fmt.Sprintf("(%d resolved, %d unresolved)", refResult.Resolved, refResult.Unresolved)))
 			} else {
-				fmt.Printf("  %s references\n", ui.Accent.Render(fmt.Sprintf("%d", stats.RefCount)))
+				fmt.Printf("  %s references\n", ui.Bold.Render(fmt.Sprintf("%d", stats.RefCount)))
 			}
 
 			if errorCount > 0 {

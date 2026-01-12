@@ -75,9 +75,9 @@ func Header(msg string) string {
 	return Bold.Render(msg)
 }
 
-// FilePath returns an accent-styled file path
+// FilePath returns a styled file path
 func FilePath(path string) string {
-	return Accent.Render(path)
+	return Bold.Render(path)
 }
 
 // LineNum returns a muted line number
@@ -173,17 +173,17 @@ func ResultCount(n int) string {
 // traitPattern matches @trait or @trait(value) patterns
 var traitPattern = regexp.MustCompile(`@(\w+)(?:\(([^)]*)\))?`)
 
-// Trait formats a trait with syntax highlighting.
-// The @ and trait name use accent color, the value (if any) uses muted.
+// Trait formats a trait with styling.
+// The @ and trait name are bold, the value (if any) is muted.
 func Trait(traitType string, value string) string {
 	if value == "" {
-		return Accent.Render("@" + traitType)
+		return Bold.Render("@" + traitType)
 	}
-	return Accent.Render("@"+traitType) + Muted.Render("("+value+")")
+	return Bold.Render("@"+traitType) + Muted.Render("("+value+")")
 }
 
 // HighlightTraits highlights all @trait patterns in text.
-// Traits are styled with accent color, values with muted.
+// Traits are bold, values are muted.
 func HighlightTraits(text string) string {
 	return traitPattern.ReplaceAllStringFunc(text, func(match string) string {
 		parts := traitPattern.FindStringSubmatch(match)
@@ -204,17 +204,17 @@ func FieldChange(field, oldValue, newValue string) string {
 	return fmt.Sprintf("%s: %s → %s",
 		field,
 		Muted.Render(oldValue),
-		Accent.Render(newValue))
+		Bold.Render(newValue))
 }
 
 // FieldSet formats a new field value as "field: value"
 func FieldSet(field, value string) string {
-	return fmt.Sprintf("%s: %s", field, Accent.Render(value))
+	return fmt.Sprintf("%s: %s", field, Bold.Render(value))
 }
 
 // FieldAdd formats an added field as "+ field: value"
 func FieldAdd(field, value string) string {
-	return fmt.Sprintf("+ %s: %s", field, Accent.Render(value))
+	return fmt.Sprintf("+ %s: %s", field, Bold.Render(value))
 }
 
 // FieldRemove formats a removed field as "- field: value"
