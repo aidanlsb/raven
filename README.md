@@ -1,8 +1,16 @@
-# Raven
+<p align="center">
+  <img src="raven.svg" alt="Raven" width="200" />
+</p>
 
-**A structured, plain-text knowledge base for agent collaboration.**
+<h1 align="center">Raven</h1>
 
-> ⚠️ **Experimental:** Raven is early and under active development.
+<p align="center">
+  <strong>A structured, plain-text knowledge base for agent collaboration.</strong>
+</p>
+
+<p align="center">
+  ⚠️ <em>Experimental: Raven is early and under active development.</em>
+</p>
 
 ---
 
