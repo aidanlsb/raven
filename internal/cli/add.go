@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -360,7 +361,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 	}
 
 	// Human-readable output
-	fmt.Printf("✓ Added to %s\n", relPath)
+	fmt.Println(ui.Checkf("Added to %s", ui.FilePath(relPath)))
 	for _, w := range warnings {
 		fmt.Printf("  ⚠ %s: %s\n", w.Code, w.Message)
 		if w.CreateCommand != "" {

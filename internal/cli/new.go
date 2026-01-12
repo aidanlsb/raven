@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -243,7 +244,7 @@ Examples:
 			return nil
 		}
 
-		fmt.Printf("Created: %s\n", result.RelativePath)
+		fmt.Println(ui.Checkf("Created %s", ui.FilePath(result.RelativePath)))
 
 		// Open in editor (or print path if no editor configured)
 		vault.OpenInEditorOrPrintPath(getConfig(), result.FilePath)

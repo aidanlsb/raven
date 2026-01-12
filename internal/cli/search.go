@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var searchLimit int
@@ -52,14 +53,14 @@ var searchCmd = &cobra.Command{
 		}
 
 		if len(results) == 0 {
-			fmt.Printf("No results found for: %s\n", query)
+			fmt.Println(ui.Starf("No results found for: %s", query))
 			return nil
 		}
 
-		fmt.Printf("Found %d results for: %s\n\n", len(results), query)
+		fmt.Printf("%s %s\n\n", ui.Header(query), ui.Hint(fmt.Sprintf("(%d results)", len(results))))
 		for i, result := range results {
-		fmt.Printf("%d. %s\n", i+1, result.Title)
-		fmt.Printf("   %s\n", formatLocationLinkSimple(result.FilePath, 1))
+			fmt.Printf("%s %s\n", ui.Accent.Render(fmt.Sprintf("%d.", i+1)), result.Title)
+			fmt.Printf("   %s\n", ui.Muted.Render(formatLocationLinkSimple(result.FilePath, 1)))
 			if result.Snippet != "" {
 				// Clean up snippet for display
 				snippet := strings.ReplaceAll(result.Snippet, "\n", " ")

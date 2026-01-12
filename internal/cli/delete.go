@@ -12,6 +12,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -296,7 +297,7 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 
 	PrintBulkSummary(summary)
 	for _, w := range warnings {
-		fmt.Printf("⚠ %s\n", w.Message)
+		fmt.Println(ui.Warning(w.Message))
 	}
 	return nil
 }
@@ -444,9 +445,9 @@ func deleteSingleObject(vaultPath, reference string) error {
 
 	if deletionCfg.Behavior == "trash" {
 		relDest, _ := filepath.Rel(vaultPath, destPath)
-		fmt.Printf("✓ Moved to %s\n", relDest)
+		fmt.Println(ui.Checkf("Moved to %s", ui.FilePath(relDest)))
 	} else {
-		fmt.Printf("✓ Deleted %s\n", objectID)
+		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(objectID)))
 	}
 
 	return nil

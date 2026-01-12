@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var backlinksCmd = &cobra.Command{
@@ -77,11 +78,11 @@ Examples:
 
 		// Human-readable output
 		if len(links) == 0 {
-			fmt.Printf("No backlinks found for '%s'\n", target)
+			fmt.Println(ui.Starf("No backlinks found for '%s'", target))
 			return nil
 		}
 
-		fmt.Printf("Backlinks to '%s':\n\n", target)
+		fmt.Printf("%s %s\n\n", ui.Header("Backlinks to "+target), ui.Hint(fmt.Sprintf("(%d)", len(links))))
 		for _, link := range links {
 			display := link.SourceID
 			if link.DisplayText != nil {
@@ -93,7 +94,7 @@ Examples:
 				line = *link.Line
 			}
 
-			fmt.Printf("  ← %s (%s)\n", display, formatLocationLinkSimple(link.FilePath, line))
+			fmt.Printf("  %s %s %s\n", ui.SymbolAttention, ui.Accent.Render(display), ui.Muted.Render(formatLocationLinkSimple(link.FilePath, line)))
 		}
 
 		return nil

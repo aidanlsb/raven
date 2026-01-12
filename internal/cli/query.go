@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -65,8 +66,8 @@ func printTable(rows []tableRow) {
 	}
 
 	// Print header
-	fmt.Printf("%-*s  %s\n", maxNameWidth, "NAME", "LOCATION")
-	fmt.Printf("%s  %s\n", strings.Repeat("─", maxNameWidth), strings.Repeat("─", 30))
+	fmt.Printf("%s  %s\n", ui.Muted.Render(fmt.Sprintf("%-*s", maxNameWidth, "NAME")), ui.Muted.Render("LOCATION"))
+	fmt.Printf("%s  %s\n", ui.Muted.Render(strings.Repeat("─", maxNameWidth)), ui.Muted.Render(strings.Repeat("─", 30)))
 
 	// Print rows
 	for _, row := range rows {
@@ -89,11 +90,14 @@ func printTraitTable(rows []traitTableRow) {
 	const traitWidth = 18
 
 	// Print header
-	fmt.Printf("%-*s  %-*s  %s\n", contentWidth, "CONTENT", traitWidth, "TRAITS", "LOCATION")
 	fmt.Printf("%s  %s  %s\n",
-		strings.Repeat("─", contentWidth),
-		strings.Repeat("─", traitWidth),
-		strings.Repeat("─", 25))
+		ui.Muted.Render(fmt.Sprintf("%-*s", contentWidth, "CONTENT")),
+		ui.Muted.Render(fmt.Sprintf("%-*s", traitWidth, "TRAITS")),
+		ui.Muted.Render("LOCATION"))
+	fmt.Printf("%s  %s  %s\n",
+		ui.Muted.Render(strings.Repeat("─", contentWidth)),
+		ui.Muted.Render(strings.Repeat("─", traitWidth)),
+		ui.Muted.Render(strings.Repeat("─", 25)))
 
 	// Print rows
 	for _, row := range rows {
@@ -510,11 +514,11 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 
 		// Human-readable output
 		if len(results) == 0 {
-			fmt.Printf("No objects found for: %s\n", queryStr)
+			fmt.Println(ui.Starf("No objects found for: %s", queryStr))
 			return nil
 		}
 
-		fmt.Printf("# %s (%d)\n\n", q.TypeName, len(results))
+		fmt.Printf("%s %s\n\n", ui.Header(q.TypeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
 
 		// Build table rows
 		rows := make([]tableRow, len(results))
@@ -588,11 +592,11 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 
 	// Human-readable output
 	if len(results) == 0 {
-		fmt.Printf("No traits found for: %s\n", queryStr)
+		fmt.Println(ui.Starf("No traits found for: %s", queryStr))
 		return nil
 	}
 
-	fmt.Printf("# @%s (%d)\n\n", q.TypeName, len(results))
+	fmt.Printf("%s %s\n\n", ui.Header("@"+q.TypeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
 
 	// Build table rows
 	rows := make([]traitTableRow, len(results))
@@ -766,8 +770,8 @@ Examples:
 				"description": description,
 			}, nil)
 		} else {
-			fmt.Printf("✓ Added query '%s'\n", queryName)
-			fmt.Printf("  Run with: rvn query %s\n", queryName)
+			fmt.Println(ui.Checkf("Added query '%s'", queryName))
+			fmt.Printf("  Run with: %s\n", ui.Accent.Render("rvn query "+queryName))
 		}
 
 		return nil
@@ -812,7 +816,7 @@ Examples:
 				"removed": true,
 			}, nil)
 		} else {
-			fmt.Printf("✓ Removed query '%s'\n", queryName)
+			fmt.Println(ui.Checkf("Removed query '%s'", queryName))
 		}
 
 		return nil
@@ -834,13 +838,13 @@ func warnIfStale(db *index.Database, vaultPath string) {
 	if staleness.IsStale {
 		staleCount := len(staleness.StaleFiles)
 		if staleCount == 1 {
-			fmt.Fprintf(os.Stderr, "⚠ Warning: 1 file may be stale. Run 'rvn reindex --smart' or use '--refresh'.\n")
+			fmt.Fprintln(os.Stderr, ui.Warning("1 file may be stale. Run 'rvn reindex' or use '--refresh'."))
 		} else if staleCount <= 3 {
-			fmt.Fprintf(os.Stderr, "⚠ Warning: %d files may be stale: %s\n",
-				staleCount, strings.Join(staleness.StaleFiles, ", "))
-			fmt.Fprintf(os.Stderr, "  Run 'rvn reindex --smart' or use '--refresh' to update.\n")
+			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale: %s",
+				staleCount, strings.Join(staleness.StaleFiles, ", ")))
+			fmt.Fprintf(os.Stderr, "  Run 'rvn reindex' or use '--refresh' to update.\n")
 		} else {
-			fmt.Fprintf(os.Stderr, "⚠ Warning: %d files may be stale. Run 'rvn reindex --smart' or use '--refresh'.\n", staleCount)
+			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale. Run 'rvn reindex' or use '--refresh'.", staleCount))
 		}
 		fmt.Fprintln(os.Stderr)
 	}
