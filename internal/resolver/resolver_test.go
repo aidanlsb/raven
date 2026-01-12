@@ -725,3 +725,92 @@ func TestNameFieldResolution(t *testing.T) {
 		}
 	})
 }
+
+func TestFindCollisions(t *testing.T) {
+	t.Run("file and its own section is not a collision", func(t *testing.T) {
+		// people/freya and people/freya#freya both have short name "freya"
+		// but this is not a real collision - [[freya]] resolves to the file
+		objectIDs := []string{
+			"people/freya",
+			"people/freya#freya",
+			"people/freya#notes",
+		}
+		r := New(objectIDs)
+
+		collisions := r.FindCollisions()
+
+		// Should not report "freya" as a collision
+		for _, c := range collisions {
+			if c.ShortName == "freya" {
+				t.Errorf("should not report 'freya' as collision between file and its own section")
+			}
+		}
+	})
+
+	t.Run("sections in different files is a real collision", func(t *testing.T) {
+		// notes section exists in both freya and thor files
+		objectIDs := []string{
+			"people/freya",
+			"people/freya#notes",
+			"people/thor",
+			"people/thor#notes",
+		}
+		r := New(objectIDs)
+
+		collisions := r.FindCollisions()
+
+		// Should report "notes" as a collision
+		foundNotes := false
+		for _, c := range collisions {
+			if c.ShortName == "notes" {
+				foundNotes = true
+				if len(c.ObjectIDs) != 2 {
+					t.Errorf("expected 2 colliding IDs for 'notes', got %d", len(c.ObjectIDs))
+				}
+			}
+		}
+		if !foundNotes {
+			t.Error("expected 'notes' collision between sections in different files")
+		}
+	})
+
+	t.Run("two different files with same name is a collision", func(t *testing.T) {
+		objectIDs := []string{
+			"people/alex",
+			"companies/alex",
+		}
+		r := New(objectIDs)
+
+		collisions := r.FindCollisions()
+
+		foundAlex := false
+		for _, c := range collisions {
+			if c.ShortName == "alex" {
+				foundAlex = true
+			}
+		}
+		if !foundAlex {
+			t.Error("expected 'alex' collision between two different files")
+		}
+	})
+
+	t.Run("section colliding with file in different path is a collision", func(t *testing.T) {
+		objectIDs := []string{
+			"projects/overview",
+			"docs/readme#overview",
+		}
+		r := New(objectIDs)
+
+		collisions := r.FindCollisions()
+
+		foundOverview := false
+		for _, c := range collisions {
+			if c.ShortName == "overview" {
+				foundOverview = true
+			}
+		}
+		if !foundOverview {
+			t.Error("expected 'overview' collision between file and section in different file")
+		}
+	})
+}

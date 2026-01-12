@@ -369,10 +369,20 @@ type IDCollision struct {
 
 // FindCollisions finds object IDs that share the same short name.
 // This is useful for `rvn check` to warn about potential reference ambiguity.
+//
+// Note: Collisions between a file and sections within that same file are NOT
+// reported, since these resolve unambiguously (the file takes precedence).
+// For example, `people/freya` and `people/freya#freya` sharing short name "freya"
+// is fine - [[freya]] resolves to the file.
 func (r *Resolver) FindCollisions() []IDCollision {
 	var collisions []IDCollision
 	for shortName, ids := range r.shortMap {
 		if len(ids) > 1 {
+			// Filter out "false" collisions where a file collides only with
+			// sections within that same file
+			if isFileSectionCollisionOnly(ids) {
+				continue
+			}
 			collisions = append(collisions, IDCollision{
 				ShortName: shortName,
 				ObjectIDs: ids,
@@ -380,6 +390,42 @@ func (r *Resolver) FindCollisions() []IDCollision {
 		}
 	}
 	return collisions
+}
+
+// isFileSectionCollisionOnly returns true if all the colliding IDs are:
+// - One parent file, and
+// - Sections within that same file
+// This is not a real collision because the file takes precedence.
+func isFileSectionCollisionOnly(ids []string) bool {
+	// Find the parent file(s) - IDs without "#"
+	var parentFiles []string
+	for _, id := range ids {
+		if !strings.Contains(id, "#") {
+			parentFiles = append(parentFiles, id)
+		}
+	}
+
+	// Must have exactly one parent file for this to be a non-collision
+	if len(parentFiles) != 1 {
+		return false
+	}
+
+	parentFile := parentFiles[0]
+
+	// All section IDs must belong to this parent file
+	for _, id := range ids {
+		if strings.Contains(id, "#") {
+			// Extract parent from section ID
+			parts := strings.SplitN(id, "#", 2)
+			if parts[0] != parentFile {
+				// Section belongs to a different file - real collision
+				return false
+			}
+		}
+	}
+
+	// All sections belong to the single parent file - not a real collision
+	return true
 }
 
 // AliasCollision represents a collision where an alias conflicts with something else.
