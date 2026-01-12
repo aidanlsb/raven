@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -553,7 +554,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	}
 
 	relSource, _ := filepath.Rel(vaultPath, sourceFile)
-	fmt.Printf("✓ Moved %s → %s\n", relSource, destination)
+	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(relSource), ui.FilePath(destination)))
 	if len(updatedRefs) > 0 {
 		fmt.Printf("  Updated %d references\n", len(updatedRefs))
 	}

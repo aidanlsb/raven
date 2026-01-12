@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var statsCmd = &cobra.Command{
@@ -45,12 +46,11 @@ Examples:
 		}
 
 		// Human-readable output
-		fmt.Println("Vault Statistics")
-		fmt.Println("================")
-		fmt.Printf("Files:      %d\n", stats.FileCount)
-		fmt.Printf("Objects:    %d\n", stats.ObjectCount)
-		fmt.Printf("Traits:     %d\n", stats.TraitCount)
-		fmt.Printf("References: %d\n", stats.RefCount)
+		fmt.Println(ui.Header("Vault Statistics"))
+		fmt.Printf("%s  %s\n", ui.Muted.Render("Files:     "), ui.Accent.Render(fmt.Sprintf("%d", stats.FileCount)))
+		fmt.Printf("%s  %s\n", ui.Muted.Render("Objects:   "), ui.Accent.Render(fmt.Sprintf("%d", stats.ObjectCount)))
+		fmt.Printf("%s  %s\n", ui.Muted.Render("Traits:    "), ui.Accent.Render(fmt.Sprintf("%d", stats.TraitCount)))
+		fmt.Printf("%s  %s\n", ui.Muted.Render("References:"), ui.Accent.Render(fmt.Sprintf("%d", stats.RefCount)))
 
 		return nil
 	},

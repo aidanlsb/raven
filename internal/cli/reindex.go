@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -44,9 +45,9 @@ Examples:
 
 		if !jsonOutput && !dryRun {
 			if incremental {
-				fmt.Printf("Reindexing vault: %s\n", vaultPath)
+				fmt.Printf("Reindexing vault: %s\n", ui.FilePath(vaultPath))
 			} else {
-				fmt.Printf("Full reindexing vault: %s\n", vaultPath)
+				fmt.Printf("Full reindexing vault: %s\n", ui.FilePath(vaultPath))
 			}
 		}
 
@@ -67,7 +68,7 @@ Examples:
 		if wasRebuilt {
 			incremental = false
 			if !jsonOutput {
-				fmt.Println("Database schema was outdated - performing full reindex.")
+				fmt.Println(ui.Info("Database schema was outdated - performing full reindex."))
 			}
 		}
 
@@ -98,7 +99,7 @@ Examples:
 			fmt.Fprintf(os.Stderr, "Warning: failed to clean up trash files from index: %v\n", err)
 		}
 		if trashRemoved > 0 && !jsonOutput && !dryRun {
-			fmt.Printf("Cleaned up %d files from .trash/ in index\n", trashRemoved)
+			fmt.Println(ui.Infof("Cleaned up %d files from .trash/ in index", trashRemoved))
 		}
 
 		var fileCount, skippedCount, errorCount, deletedCount int
@@ -133,7 +134,7 @@ Examples:
 				}
 				deletedCount = len(deletedFiles)
 				if deletedCount > 0 && !jsonOutput {
-					fmt.Printf("Removed %d deleted files from index\n", deletedCount)
+					fmt.Println(ui.Infof("Removed %d deleted files from index", deletedCount))
 				}
 			}
 		}
@@ -250,25 +251,26 @@ Examples:
 			fmt.Println()
 			if incremental && (skippedCount > 0 || deletedCount > 0) {
 				if deletedCount > 0 {
-					fmt.Printf("✓ Indexed %d changed files, removed %d deleted (%d up-to-date)\n",
-						fileCount, deletedCount, skippedCount)
+					fmt.Println(ui.Checkf("Indexed %d changed files, removed %d deleted %s",
+						fileCount, deletedCount, ui.Hint(fmt.Sprintf("(%d up-to-date)", skippedCount))))
 				} else {
-					fmt.Printf("✓ Indexed %d changed files (%d up-to-date)\n", fileCount, skippedCount)
+					fmt.Println(ui.Checkf("Indexed %d changed files %s", fileCount, ui.Hint(fmt.Sprintf("(%d up-to-date)", skippedCount))))
 				}
 			} else {
-				fmt.Printf("✓ Indexed %d files\n", fileCount)
+				fmt.Println(ui.Checkf("Indexed %d files", fileCount))
 			}
-			fmt.Printf("  %d objects\n", stats.ObjectCount)
-			fmt.Printf("  %d traits\n", stats.TraitCount)
+			fmt.Printf("  %s objects\n", ui.Accent.Render(fmt.Sprintf("%d", stats.ObjectCount)))
+			fmt.Printf("  %s traits\n", ui.Accent.Render(fmt.Sprintf("%d", stats.TraitCount)))
 			if refResult != nil && refResult.Unresolved > 0 {
-				fmt.Printf("  %d references (%d resolved, %d unresolved)\n",
-					stats.RefCount, refResult.Resolved, refResult.Unresolved)
+				fmt.Printf("  %s references %s\n",
+					ui.Accent.Render(fmt.Sprintf("%d", stats.RefCount)),
+					ui.Hint(fmt.Sprintf("(%d resolved, %d unresolved)", refResult.Resolved, refResult.Unresolved)))
 			} else {
-				fmt.Printf("  %d references\n", stats.RefCount)
+				fmt.Printf("  %s references\n", ui.Accent.Render(fmt.Sprintf("%d", stats.RefCount)))
 			}
 
 			if errorCount > 0 {
-				fmt.Printf("  %d errors\n", errorCount)
+				fmt.Printf("  %s\n", ui.Errorf("%d errors", errorCount))
 			}
 		}
 
