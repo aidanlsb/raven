@@ -229,9 +229,9 @@ var checkCmd = &cobra.Command{
 			case "directory":
 				fmt.Printf("Checking directory: %s\n", ui.FilePath(scope.scopeValue+"/"))
 			case "type_filter":
-				fmt.Printf("Checking type: %s\n", ui.Accent.Render(scope.scopeValue))
+				fmt.Printf("Checking type: %s\n", ui.Bold.Render(scope.scopeValue))
 			case "trait_filter":
-				fmt.Printf("Checking trait: %s\n", ui.Accent.Render("@"+scope.scopeValue))
+				fmt.Printf("Checking trait: %s\n", ui.Bold.Render("@"+scope.scopeValue))
 			}
 		}
 
@@ -746,7 +746,7 @@ func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
 // printIssueGroup prints a single issue group on one line
 func printIssueGroup(g *issueGroup) {
 	// Format: issue_type (count)  examples...
-	issueLabel := ui.Accent.Render(string(g.issueType))
+	issueLabel := ui.Bold.Render(string(g.issueType))
 	countStr := fmt.Sprintf("(%d)", g.count)
 
 	if len(g.topValues) > 0 {
@@ -961,7 +961,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			}
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
 			fmt.Printf("  • %s → %s %s\n",
-				ui.Accent.Render(ref.TargetPath),
+				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
 				ui.Muted.Render(fmt.Sprintf("(from %s.%s)", source, ref.FieldSource)))
 		}
@@ -988,14 +988,14 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		for _, ref := range inferred {
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
 			fmt.Printf("  ? %s → %s %s\n",
-				ui.Accent.Render(ref.TargetPath),
+				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
 				ui.Muted.Render(fmt.Sprintf("(type: %s)", ref.InferredType)))
 		}
 
 		for _, ref := range inferred {
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
-			fmt.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Accent.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
+			fmt.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
@@ -1014,7 +1014,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		fmt.Printf("\n%s\n", ui.Bold.Render("Unknown type (please specify):"))
 		for _, ref := range unknown {
 			fmt.Printf("  ? %s %s\n",
-				ui.Accent.Render(ref.TargetPath),
+				ui.Bold.Render(ref.TargetPath),
 				ui.Muted.Render(fmt.Sprintf("(referenced in %s:%d)", ref.SourceFile, ref.Line)))
 		}
 
@@ -1024,10 +1024,10 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			typeNames = append(typeNames, name)
 		}
 		sort.Strings(typeNames)
-		fmt.Printf("\nAvailable types: %s\n", ui.Accent.Render(strings.Join(typeNames, ", ")))
+		fmt.Printf("\nAvailable types: %s\n", ui.Bold.Render(strings.Join(typeNames, ", ")))
 
 		for _, ref := range unknown {
-			fmt.Printf("\nType for %s %s: ", ui.Accent.Render(ref.TargetPath), ui.Muted.Render("(or 'skip')"))
+			fmt.Printf("\nType for %s %s: ", ui.Bold.Render(ref.TargetPath), ui.Muted.Render("(or 'skip')"))
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
 
@@ -1075,7 +1075,7 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 			valueInfo = "with value"
 		}
 		fmt.Printf("  • %s %s\n",
-			ui.Accent.Render("@"+trait.TraitName),
+			ui.Bold.Render("@"+trait.TraitName),
 			ui.Muted.Render(fmt.Sprintf("(%d usages, %s)", trait.UsageCount, valueInfo)))
 		for _, loc := range trait.Locations {
 			fmt.Printf("      %s\n", ui.Muted.Render(loc))
@@ -1088,7 +1088,7 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 	fmt.Println("\nWould you like to add these traits to the schema?")
 
 	for _, trait := range traits {
-		fmt.Printf("\nAdd %s to schema? %s ", ui.Accent.Render("@"+trait.TraitName), ui.Muted.Render("[y/N]"))
+		fmt.Printf("\nAdd %s to schema? %s ", ui.Bold.Render("@"+trait.TraitName), ui.Muted.Render("[y/N]"))
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(strings.ToLower(response))
 
@@ -1148,7 +1148,7 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 	}
 
 	fmt.Printf("  Type for %s? %s %s: ",
-		ui.Accent.Render("@"+trait.TraitName),
+		ui.Bold.Render("@"+trait.TraitName),
 		ui.Muted.Render("[boolean/string/date/enum]"),
 		ui.Muted.Render(fmt.Sprintf("(default: %s)", suggested)))
 	response, _ := reader.ReadString('\n')
@@ -1256,7 +1256,7 @@ func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType str
 // Returns the number of pages created (0 or 1).
 func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader) int {
 	fmt.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
-		ui.Accent.Render("'"+typeName+"'"),
+		ui.Bold.Render("'"+typeName+"'"),
 		ui.Muted.Render("[y/N]"))
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))

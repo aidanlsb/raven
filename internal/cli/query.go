@@ -759,7 +759,7 @@ Examples:
 			}, nil)
 		} else {
 			fmt.Println(ui.Checkf("Added query '%s'", queryName))
-			fmt.Printf("  Run with: %s\n", ui.Accent.Render("rvn query "+queryName))
+			fmt.Printf("  Run with: %s\n", ui.Bold.Render("rvn query "+queryName))
 		}
 
 		return nil
