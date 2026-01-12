@@ -29,6 +29,35 @@ Replace `/path/to/rvn` with the actual binary path (find with `which rvn`).
 
 ---
 
+## MCP Resources
+
+Raven exposes two MCP resources that agents can fetch:
+
+| URI | Name | Description |
+|-----|------|-------------|
+| `raven://guide/agent` | Agent Guide | Comprehensive guide for AI agents on how to use Raven effectively |
+| `raven://schema/current` | Current Schema | The vault's `schema.yaml` defining types and traits |
+
+### Agent Guide Resource
+
+The agent guide (`raven://guide/agent`) provides:
+- Getting started sequence for new vaults
+- Query language syntax and composition patterns
+- All key workflows (creating, editing, querying, bulk operations)
+- Error handling patterns
+- Best practices and example conversations
+
+Agents should fetch this resource when they need detailed guidance on Raven usage.
+
+### Schema Resource
+
+The schema resource (`raven://schema/current`) returns the raw `schema.yaml` content, giving agents full visibility into:
+- Available types and their fields
+- Trait definitions
+- Field constraints (required, enums, refs)
+
+---
+
 ## Tool Discovery
 
 Tools are generated from Raven's command registry. To see the full list:
