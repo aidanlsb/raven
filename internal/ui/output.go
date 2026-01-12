@@ -2,12 +2,12 @@ package ui
 
 import "fmt"
 
-// Unicode symbols for status indicators
+// Symbols for status indicators
 const (
 	SymbolSuccess = "✓"
 	SymbolError   = "✗"
-	SymbolWarning = "⚠"
-	SymbolInfo    = "ℹ"
+	SymbolWarning = "!"
+	SymbolInfo    = "*"
 )
 
 // Success returns a success message with checkmark symbol
