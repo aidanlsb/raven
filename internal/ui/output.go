@@ -7,7 +7,8 @@ import (
 
 // Symbols for status indicators
 const (
-	SymbolSuccess   = "✦"
+	SymbolCheck     = "✓" // Explicit action success (created, added, etc.)
+	SymbolStar      = "✦" // Concluding/summary messages (no issues, results)
 	SymbolError     = "✗"
 	SymbolWarning   = "!"
 	SymbolInfo      = "*"
@@ -18,14 +19,24 @@ const (
 	SymbolAttention = "»"
 )
 
-// Success returns a success message with checkmark symbol
-func Success(msg string) string {
-	return fmt.Sprintf("%s %s", SymbolSuccess, msg)
+// Check returns a message with checkmark symbol (for explicit action success)
+func Check(msg string) string {
+	return fmt.Sprintf("%s %s", SymbolCheck, msg)
 }
 
-// Successf returns a formatted success message with checkmark symbol
-func Successf(format string, args ...interface{}) string {
-	return Success(fmt.Sprintf(format, args...))
+// Checkf returns a formatted message with checkmark symbol
+func Checkf(format string, args ...interface{}) string {
+	return Check(fmt.Sprintf(format, args...))
+}
+
+// Star returns a message with star symbol (for concluding/summary messages)
+func Star(msg string) string {
+	return fmt.Sprintf("%s %s", SymbolStar, msg)
+}
+
+// Starf returns a formatted message with star symbol
+func Starf(format string, args ...interface{}) string {
+	return Star(fmt.Sprintf(format, args...))
 }
 
 // Error returns an error message with X symbol

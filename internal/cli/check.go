@@ -448,7 +448,7 @@ var checkCmd = &cobra.Command{
 			printIssuesByFile(allIssues, schemaIssues, staleWarningShown)
 			fmt.Println()
 			if errorCount == 0 && warningCount == 0 {
-				fmt.Println(ui.Successf("No issues found in %d files.", fileCount))
+				fmt.Println(ui.Starf("No issues found in %d files.", fileCount))
 			} else {
 				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
 			}
@@ -457,7 +457,7 @@ var checkCmd = &cobra.Command{
 			printIssuesVerbose(allIssues, schemaIssues)
 			fmt.Println()
 			if errorCount == 0 && warningCount == 0 {
-				fmt.Println(ui.Successf("No issues found in %d files.", fileCount))
+				fmt.Println(ui.Starf("No issues found in %d files.", fileCount))
 			} else {
 				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
 			}
@@ -465,7 +465,7 @@ var checkCmd = &cobra.Command{
 			// Default: summary by issue type
 			fmt.Println()
 			if errorCount == 0 && warningCount == 0 {
-				fmt.Println(ui.Successf("No issues found in %d files.", fileCount))
+				fmt.Println(ui.Starf("No issues found in %d files.", fileCount))
 			} else {
 				printIssueSummary(allIssues, schemaIssues)
 				fmt.Println()
@@ -479,7 +479,7 @@ var checkCmd = &cobra.Command{
 				if len(missingRefs) > 0 {
 					created := handleMissingRefs(vaultPath, s, missingRefs)
 					if created > 0 {
-						fmt.Printf("\n%s\n", ui.Successf("Created %d missing page(s).", created))
+						fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 					}
 				}
 
@@ -487,7 +487,7 @@ var checkCmd = &cobra.Command{
 				if len(undefinedTraits) > 0 {
 					added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
 					if added > 0 {
-						fmt.Printf("\n%s\n", ui.Successf("Added %d trait(s) to schema.", added))
+						fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
 					}
 				}
 			}
@@ -969,7 +969,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
-					fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
+					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
 					created++
 				}
 			}
@@ -996,7 +996,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
-					fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
+					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
 					created++
 				}
 			}
@@ -1040,7 +1040,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			if err := createMissingPage(vaultPath, s, ref.TargetPath, response); err != nil {
 				fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 			} else {
-				fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, response))
+				fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
 				created++
 			}
 		}
@@ -1126,7 +1126,7 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 			continue
 		}
 
-		fmt.Printf("  %s\n", ui.Successf("Added trait '@%s' (type: %s) to schema.yaml", trait.TraitName, traitType))
+		fmt.Printf("  %s\n", ui.Checkf("Added trait '@%s' (type: %s) to schema.yaml", trait.TraitName, traitType))
 		added++
 	}
 
@@ -1270,7 +1270,7 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeName, err))
 		return 0
 	}
-	fmt.Printf("  %s\n", ui.Successf("Created type '%s' in schema.yaml", typeName))
+	fmt.Printf("  %s\n", ui.Checkf("Created type '%s' in schema.yaml", typeName))
 	if defaultPath != "" {
 		fmt.Printf("    %s\n", ui.Muted.Render("default_path: "+defaultPath))
 	}
@@ -1281,7 +1281,7 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
 	}
-	fmt.Printf("  %s\n", ui.Successf("Created %s.md (type: %s)", resolvedPath, typeName))
+	fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, typeName))
 	return 1
 }
 
