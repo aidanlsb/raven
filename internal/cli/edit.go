@@ -10,6 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var editConfirm bool
@@ -98,14 +99,14 @@ var editCmd = &cobra.Command{
 				return nil
 			}
 
-			fmt.Printf("Preview edit in %s (line %d):\n\n", relPath, lineNumber)
-			fmt.Println("BEFORE:")
+			fmt.Printf("%s %s\n\n", ui.Header("Preview edit"), ui.FilePath(fmt.Sprintf("%s:%d", relPath, lineNumber)))
+			fmt.Println(ui.Muted.Render("BEFORE:"))
 			fmt.Println(indent(beforeContext, "  "))
 			fmt.Println()
-			fmt.Println("AFTER:")
+			fmt.Println(ui.Accent.Render("AFTER:"))
 			fmt.Println(indent(afterContext, "  "))
 			fmt.Println()
-			fmt.Println("Run with --confirm to apply this edit")
+			fmt.Println(ui.Hint("Run with --confirm to apply this edit"))
 			return nil
 		}
 
@@ -142,9 +143,9 @@ var editCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("✓ Applied edit in %s (line %d)\n", relPath, lineNumber)
+		fmt.Println(ui.Checkf("Applied edit in %s", ui.FilePath(fmt.Sprintf("%s:%d", relPath, lineNumber))))
 		fmt.Println()
-		fmt.Println("Context:")
+		fmt.Println(ui.Muted.Render("Context:"))
 		fmt.Println(indent(context, "  "))
 		return nil
 	},

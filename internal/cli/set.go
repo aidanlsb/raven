@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -360,7 +361,7 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 
 	PrintBulkSummary(summary)
 	for _, w := range warnings {
-		fmt.Printf("⚠ %s\n", w.Message)
+		fmt.Println(ui.Warning(w.Message))
 	}
 	return nil
 }
@@ -488,18 +489,30 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 		return nil
 	}
 
-	// Human-readable output
-	fmt.Printf("Updated %s:\n", relPath)
+	// Human-readable output with diff-style changes
+	fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relPath)))
 	var fieldNames []string
 	for name := range updates {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
-		fmt.Printf("  %s = %s\n", name, updates[name])
+		oldVal := ""
+		if fm.Fields != nil {
+			if v, ok := fm.Fields[name]; ok {
+				oldVal = fmt.Sprintf("%v", v)
+			}
+		}
+		if oldVal != "" && oldVal != updates[name] {
+			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, updates[name]))
+		} else if oldVal == "" {
+			fmt.Printf("  %s\n", ui.FieldAdd(name, updates[name]))
+		} else {
+			fmt.Printf("  %s\n", ui.FieldSet(name, updates[name]))
+		}
 	}
 	for _, warning := range validationWarnings {
-		fmt.Printf("  Warning: %s\n", warning)
+		fmt.Printf("  %s\n", ui.Warning(warning))
 	}
 
 	return nil
@@ -790,18 +803,38 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 		return nil
 	}
 
-	// Human-readable output
-	fmt.Printf("Updated %s (embedded: %s):\n", relPath, slug)
+	// Human-readable output with diff-style changes
+	fmt.Println(ui.Checkf("Updated %s %s", ui.FilePath(relPath), ui.Hint("(embedded: "+slug+")")))
 	var fieldNames []string
 	for name := range updates {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
-		fmt.Printf("  %s = %s\n", name, updates[name])
+		oldVal := ""
+		if targetObj.Fields != nil {
+			if v, ok := targetObj.Fields[name]; ok {
+				if s, ok := v.AsString(); ok {
+					oldVal = s
+				} else if n, ok := v.AsNumber(); ok {
+					oldVal = fmt.Sprintf("%v", n)
+				} else if b, ok := v.AsBool(); ok {
+					oldVal = fmt.Sprintf("%v", b)
+				} else {
+					oldVal = fmt.Sprintf("%v", v.Raw())
+				}
+			}
+		}
+		if oldVal != "" && oldVal != updates[name] {
+			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, updates[name]))
+		} else if oldVal == "" {
+			fmt.Printf("  %s\n", ui.FieldAdd(name, updates[name]))
+		} else {
+			fmt.Printf("  %s\n", ui.FieldSet(name, updates[name]))
+		}
 	}
 	for _, warning := range validationWarnings {
-		fmt.Printf("  Warning: %s\n", warning)
+		fmt.Printf("  %s\n", ui.Warning(warning))
 	}
 
 	return nil

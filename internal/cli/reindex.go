@@ -140,6 +140,12 @@ Examples:
 		}
 
 		// Walk all markdown files with parse options
+		var spinner *ui.Spinner
+		if !jsonOutput && !dryRun {
+			spinner = ui.NewSpinner("Indexing files")
+			spinner.Start()
+		}
+
 		walkOpts := &vault.WalkOptions{ParseOptions: parseOpts}
 		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
 			if result.Error != nil {
@@ -184,6 +190,10 @@ Examples:
 			fileCount++
 			return nil
 		})
+
+		if spinner != nil {
+			spinner.Stop()
+		}
 
 		if err != nil {
 			return fmt.Errorf("error walking vault: %w", err)

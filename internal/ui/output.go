@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -167,4 +168,56 @@ func Indent(n int, text string) string {
 // ResultCount returns a muted result count like "2 results"
 func ResultCount(n int) string {
 	return Muted.Render(fmt.Sprintf("%d %s", n, pluralize("result", n)))
+}
+
+// traitPattern matches @trait or @trait(value) patterns
+var traitPattern = regexp.MustCompile(`@(\w+)(?:\(([^)]*)\))?`)
+
+// Trait formats a trait with syntax highlighting.
+// The @ and trait name use accent color, the value (if any) uses muted.
+func Trait(traitType string, value string) string {
+	if value == "" {
+		return Accent.Render("@" + traitType)
+	}
+	return Accent.Render("@"+traitType) + Muted.Render("("+value+")")
+}
+
+// HighlightTraits highlights all @trait patterns in text.
+// Traits are styled with accent color, values with muted.
+func HighlightTraits(text string) string {
+	return traitPattern.ReplaceAllStringFunc(text, func(match string) string {
+		parts := traitPattern.FindStringSubmatch(match)
+		if len(parts) < 2 {
+			return match
+		}
+		traitName := parts[1]
+		value := ""
+		if len(parts) >= 3 {
+			value = parts[2]
+		}
+		return Trait(traitName, value)
+	})
+}
+
+// FieldChange formats a field change as "field: old → new"
+func FieldChange(field, oldValue, newValue string) string {
+	return fmt.Sprintf("%s: %s → %s",
+		field,
+		Muted.Render(oldValue),
+		Accent.Render(newValue))
+}
+
+// FieldSet formats a new field value as "field: value"
+func FieldSet(field, value string) string {
+	return fmt.Sprintf("%s: %s", field, Accent.Render(value))
+}
+
+// FieldAdd formats an added field as "+ field: value"
+func FieldAdd(field, value string) string {
+	return fmt.Sprintf("+ %s: %s", field, Accent.Render(value))
+}
+
+// FieldRemove formats a removed field as "- field: value"
+func FieldRemove(field, value string) string {
+	return fmt.Sprintf("- %s: %s", field, Muted.Render(value))
 }
