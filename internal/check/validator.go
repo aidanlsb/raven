@@ -124,6 +124,7 @@ type Validator struct {
 	usedTypes       map[string]struct{}        // Types actually used in documents
 	usedTraits      map[string]struct{}        // Traits actually used in documents
 	shortRefs       map[string]string          // Short ref -> full path (for suggestions)
+	usedShortNames  map[string]struct{}        // Short names actually used in references
 }
 
 // DuplicateAlias represents multiple objects sharing the same alias.
@@ -161,6 +162,7 @@ func NewValidatorWithAliases(s *schema.Schema, objectIDs []string, aliases map[s
 		usedTypes:       make(map[string]struct{}),
 		usedTraits:      make(map[string]struct{}),
 		shortRefs:       make(map[string]string),
+		usedShortNames:  make(map[string]struct{}),
 	}
 }
 
@@ -193,6 +195,7 @@ func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo,
 		usedTypes:       make(map[string]struct{}),
 		usedTraits:      make(map[string]struct{}),
 		shortRefs:       make(map[string]string),
+		usedShortNames:  make(map[string]struct{}),
 	}
 }
 
@@ -523,6 +526,12 @@ func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue 
 func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref *parser.ParsedRef, targetType, fieldName string) []Issue {
 	var issues []Issue
 
+	// Track short name usage (references without path separators)
+	// This is used to only warn about collisions for short names that are actually used
+	if !strings.Contains(ref.TargetRaw, "/") && !strings.HasPrefix(ref.TargetRaw, "#") {
+		v.usedShortNames[ref.TargetRaw] = struct{}{}
+	}
+
 	result := v.resolver.Resolve(ref.TargetRaw)
 
 	if result.Ambiguous {
@@ -782,12 +791,14 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 	}
 
 	// Check for object ID collisions (same short name, different full paths)
-	// This can cause ambiguous references when using short names like [[freya]]
+	// Only warn if the short name is actually used in a reference somewhere
 	collisions := v.resolver.FindCollisions()
 	for _, collision := range collisions {
-		// Only warn if there are exactly 2 collisions and one could shadow the other
-		// More than 2 is always a problem
 		if len(collision.ObjectIDs) >= 2 {
+			// Only warn if this short name is actually used in a reference
+			if _, used := v.usedShortNames[collision.ShortName]; !used {
+				continue // Skip - this collision is hypothetical, not actually used
+			}
 			issues = append(issues, SchemaIssue{
 				Level:   LevelWarning,
 				Type:    IssueIDCollision,
