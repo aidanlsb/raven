@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -306,6 +307,20 @@ var checkCmd = &cobra.Command{
 			}
 		}
 
+		// Load vault config for directory roots (used to strip prefixes from object IDs)
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+
+		// Build parse options from vault config
+		var walkOpts *vault.WalkOptions
+		if vaultCfg.HasDirectoriesConfig() {
+			walkOpts = &vault.WalkOptions{
+				ParseOptions: &parser.ParseOptions{
+					ObjectsRoot: vaultCfg.GetObjectsRoot(),
+					PagesRoot:   vaultCfg.GetPagesRoot(),
+				},
+			}
+		}
+
 		// Determine which files to walk based on scope
 		var walkPath string
 		var targetFileSet map[string]bool
@@ -327,7 +342,7 @@ var checkCmd = &cobra.Command{
 
 		// First pass: parse all documents in the vault to collect object IDs
 		// (needed for reference validation even when checking a subset)
-		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
 			if result.Error != nil {
 				// Only count files in scope
 				if isFileInScope(result.Path, scope, walkPath, targetFileSet) {
