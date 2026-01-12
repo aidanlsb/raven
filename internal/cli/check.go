@@ -719,7 +719,7 @@ func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
 
 	// Print errors section
 	if len(errors) > 0 {
-		fmt.Println(ui.Bold.Render("Errors"))
+		fmt.Printf("%s %s\n", ui.SymbolAttention, ui.Bold.Render("Errors"))
 		for _, g := range errors {
 			printIssueGroup(g)
 		}
@@ -730,7 +730,7 @@ func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
 		if len(errors) > 0 {
 			fmt.Println() // blank line between sections
 		}
-		fmt.Println(ui.Bold.Render("Warnings"))
+		fmt.Printf("%s %s\n", ui.SymbolAttention, ui.Bold.Render("Warnings"))
 		for _, g := range warnings {
 			printIssueGroup(g)
 		}

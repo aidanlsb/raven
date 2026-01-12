@@ -7,7 +7,7 @@ import (
 
 // Symbols for status indicators
 const (
-	SymbolSuccess   = "✓"
+	SymbolSuccess   = "✦"
 	SymbolError     = "✗"
 	SymbolWarning   = "!"
 	SymbolInfo      = "*"
@@ -15,6 +15,7 @@ const (
 	SymbolChecked   = "☑"
 	SymbolDot       = "·"
 	SymbolDash      = "—"
+	SymbolAttention = "»"
 )
 
 // Success returns a success message with checkmark symbol
