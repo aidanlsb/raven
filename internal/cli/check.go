@@ -719,7 +719,7 @@ func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
 
 	// Print errors section
 	if len(errors) > 0 {
-		fmt.Println(ui.Divider("errors", 50))
+		fmt.Println(ui.Bold.Render("Errors"))
 		for _, g := range errors {
 			printIssueGroup(g)
 		}
@@ -727,24 +727,31 @@ func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
 
 	// Print warnings section
 	if len(warnings) > 0 {
-		fmt.Println(ui.Divider("warnings", 50))
+		if len(errors) > 0 {
+			fmt.Println() // blank line between sections
+		}
+		fmt.Println(ui.Bold.Render("Warnings"))
 		for _, g := range warnings {
 			printIssueGroup(g)
 		}
 	}
 }
 
-// printIssueGroup prints a single issue group with its details
+// printIssueGroup prints a single issue group on one line
 func printIssueGroup(g *issueGroup) {
-	// Issue type as header with count badge
+	// Format: issue_type (count)  examples...
 	issueLabel := ui.Accent.Render(string(g.issueType))
-	countBadge := ui.Badge(fmt.Sprintf("%d", g.count))
-	fmt.Printf("%s  %s\n", issueLabel, countBadge)
+	countStr := fmt.Sprintf("(%d)", g.count)
 
-	// Examples as indented metadata
 	if len(g.topValues) > 0 {
-		examples := strings.Join(g.topValues, " " + ui.SymbolDot + " ")
-		fmt.Printf("    %s\n", ui.Muted.Render(examples))
+		// Show examples with ellipsis if there might be more
+		examples := strings.Join(g.topValues, ", ")
+		if g.count > len(g.topValues) {
+			examples += ", ..."
+		}
+		fmt.Printf("  %s %s  %s\n", issueLabel, countStr, ui.Muted.Render("("+examples+")"))
+	} else {
+		fmt.Printf("  %s %s\n", issueLabel, countStr)
 	}
 }
 
