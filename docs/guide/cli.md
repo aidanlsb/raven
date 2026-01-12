@@ -233,9 +233,6 @@ rvn query "object:project .status:active" --ids
 
 # Pipe to set
 rvn query "object:project .status:active" --ids | rvn set --stdin priority=high --confirm
-
-# For trait queries, use --object-ids to get containing objects
-rvn query "trait:due value:past" --object-ids | rvn add --stdin "@reviewed" --confirm
 ```
 
 ---
