@@ -27,38 +27,6 @@ func TestLexerNewTokens(t *testing.T) {
 			},
 		},
 		{
-			name:  "contains operator",
-			input: "~=",
-			tokens: []Token{
-				{Type: TokenTildeEq, Value: "~="},
-				{Type: TokenEOF},
-			},
-		},
-		{
-			name:  "starts with operator",
-			input: "^=",
-			tokens: []Token{
-				{Type: TokenCaretEq, Value: "^="},
-				{Type: TokenEOF},
-			},
-		},
-		{
-			name:  "ends with operator",
-			input: "$=",
-			tokens: []Token{
-				{Type: TokenDollarEq, Value: "$="},
-				{Type: TokenEOF},
-			},
-		},
-		{
-			name:  "regex match operator",
-			input: "=~",
-			tokens: []Token{
-				{Type: TokenEqTilde, Value: "=~"},
-				{Type: TokenEOF},
-			},
-		},
-		{
 			name:  "pipeline operator",
 			input: "|>",
 			tokens: []Token{
@@ -129,24 +97,38 @@ func TestLexerNewTokens(t *testing.T) {
 			},
 		},
 		{
-			name:  "field contains v2 syntax",
-			input: `.name~="website"`,
+			name:  "includes function syntax",
+			input: `includes(.name, "website")`,
 			tokens: []Token{
+				{Type: TokenIdent, Value: "includes"},
+				{Type: TokenLParen, Value: "("},
 				{Type: TokenDot, Value: "."},
 				{Type: TokenIdent, Value: "name"},
-				{Type: TokenTildeEq, Value: "~="},
+				{Type: TokenComma, Value: ","},
 				{Type: TokenString, Value: "website"},
+				{Type: TokenRParen, Value: ")"},
 				{Type: TokenEOF},
 			},
 		},
 		{
-			name:  "field regex v2 syntax",
-			input: `.name=~/^api/`,
+			name:  "matches function syntax",
+			input: `matches(.name, "^api")`,
 			tokens: []Token{
+				{Type: TokenIdent, Value: "matches"},
+				{Type: TokenLParen, Value: "("},
 				{Type: TokenDot, Value: "."},
 				{Type: TokenIdent, Value: "name"},
-				{Type: TokenEqTilde, Value: "=~"},
-				{Type: TokenRegex, Value: "^api"},
+				{Type: TokenComma, Value: ","},
+				{Type: TokenString, Value: "^api"},
+				{Type: TokenRParen, Value: ")"},
+				{Type: TokenEOF},
+			},
+		},
+		{
+			name:  "raw string",
+			input: `r"foo\bar"`,
+			tokens: []Token{
+				{Type: TokenString, Value: `foo\bar`},
 				{Type: TokenEOF},
 			},
 		},

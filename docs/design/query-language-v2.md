@@ -3,11 +3,12 @@
 This document specifies the redesigned Raven query language. Key changes from v1:
 
 1. **Operator-based equality**: `==` instead of `:` for value comparison
-2. **String matching operators**: `~=`, `^=`, `$=`, `=~` for contains/starts/ends/regex
-3. **Pipeline operator**: `|>` separates selection from post-processing
-4. **Computed aggregations**: Assign results to named values for filtering/sorting
-5. **Extended navigation**: `child()`, `ancestors()`, `descendants()` functions
-6. **No shorthands**: All syntax is explicit (no `has:due` → `has:{trait:due}`)
+2. **Function-style string matching**: `includes()`, `startswith()`, `endswith()`, `matches()`
+3. **Array quantifiers**: `any()`, `all()`, `none()` for array field matching
+4. **Pipeline operator**: `|>` separates selection from post-processing
+5. **Computed aggregations**: Assign results to named values for filtering/sorting
+6. **Extended navigation**: `child()`, `ancestors()`, `descendants()` functions
+7. **No shorthands**: All syntax is explicit (no `has:due` → `has:{trait:due}`)
 
 ---
 
@@ -31,10 +32,6 @@ This document specifies the redesigned Raven query language. Key changes from v1
 | `<` | Less than | `.created<2025-01-01` |
 | `>=` | Greater or equal | `.priority>=3` |
 | `<=` | Less or equal | `.created<=2025-12-31` |
-| `~=` | Contains (string) | `.name~="website"` |
-| `^=` | Starts with | `.name^="My"` |
-| `$=` | Ends with | `.name$=".md"` |
-| `=~` | Regex match | `.name=~/^web.*api$/` |
 | `=` | Assignment | After `\|>` only |
 | `.` | Field access | `.status`, `_.fieldname` |
 | `!` | Negation | `!has:{...}`, `!.archived==true` |
@@ -44,6 +41,28 @@ This document specifies the redesigned Raven query language. Key changes from v1
 | `[[...]]` | Direct reference | `refs:[[people/freya]]` |
 | `(...)` | Grouping / function args | `(.a==1 \| .b==2)`, `count(...)` |
 | `*` | Wildcard (exists) | `.email==*` |
+| `r"..."` | Raw string (no escaping) | `matches(.path, r"C:\Users\.*")` |
+
+## String Matching Functions
+
+| Function | Meaning | Example |
+|----------|---------|---------|
+| `includes(.field, "str")` | Contains substring | `includes(.name, "api")` |
+| `startswith(.field, "str")` | Starts with | `startswith(.name, "My")` |
+| `endswith(.field, "str")` | Ends with | `endswith(.name, ".md")` |
+| `matches(.field, "pattern")` | Regex match | `matches(.name, "^api.*$")` |
+
+All string functions are case-insensitive by default. Add `true` as third argument for case-sensitive matching.
+
+## Array Quantifier Functions
+
+| Function | Meaning | Example |
+|----------|---------|---------|
+| `any(.field, pred)` | Any element matches | `any(.tags, _ == "urgent")` |
+| `all(.field, pred)` | All elements match | `all(.tags, startswith(_, "feat-"))` |
+| `none(.field, pred)` | No element matches | `none(.tags, _ == "deprecated")` |
+
+The `_` symbol represents the current element being tested.
 
 ---
 
@@ -59,14 +78,32 @@ This document specifies the redesigned Raven query language. Key changes from v1
 | `.field<value` | Field less than |
 | `.field>=value` | Field greater or equal |
 | `.field<=value` | Field less or equal |
-| `.field~="val"` | Field contains substring |
-| `.field^="val"` | Field starts with |
-| `.field$="val"` | Field ends with |
-| `.field=~/pat/` | Field matches regex |
 | `.field==*` | Field exists |
 | `.field!=*` | Field does not exist |
 
-For array fields, `.field==value` matches if the array contains the value.
+### String Matching on Fields
+
+| Syntax | Meaning |
+|--------|---------|
+| `includes(.field, "str")` | Field contains substring |
+| `startswith(.field, "str")` | Field starts with |
+| `endswith(.field, "str")` | Field ends with |
+| `matches(.field, "pattern")` | Field matches regex |
+
+### Array Field Matching
+
+| Syntax | Meaning |
+|--------|---------|
+| `any(.field, pred)` | Any element matches predicate |
+| `all(.field, pred)` | All elements match predicate |
+| `none(.field, pred)` | No element matches predicate |
+
+Examples:
+```
+any(.tags, _ == "urgent")
+all(.tags, startswith(_, "feature-"))
+any(.tags, _ == "urgent" | _ == "critical")
+```
 
 ### Trait Predicates
 
@@ -277,10 +314,14 @@ sort(overdue, desc)
 object:project .status==active
 
 # String matching
-object:project .name~="api" .name$="-service"
+object:project includes(.name, "api") endswith(.name, "-service")
 
 # Regex matching
-object:project .name=~/^web-.*-api$/
+object:project matches(.name, "^web-.*-api$")
+
+# Array matching
+object:project any(.tags, _ == "urgent")
+object:project all(.tags, startswith(_, "feature-"))
 
 # Boolean logic
 object:project (.status==active | .status==backlog) !.archived==true
@@ -358,8 +399,11 @@ All shorthands are removed for consistency:
 
 ### New Capabilities
 
-1. **String matching**: `~=`, `^=`, `$=`, `=~` operators
-2. **Pipeline post-processing**: `|>` for clean separation
-3. **Computed aggregations**: Named values with `=`
-4. **Filter on computed values**: `filter(todos > 5)`
-5. **Extended navigation**: `ancestors(_)`, `descendants(_)` sets
+1. **Function-style string matching**: `includes()`, `startswith()`, `endswith()`, `matches()`
+2. **Array quantifiers**: `any()`, `all()`, `none()` for array field matching
+3. **Raw strings**: `r"..."` for regex patterns without escaping
+4. **Case sensitivity control**: Optional third argument for case-sensitive matching
+5. **Pipeline post-processing**: `|>` for clean separation
+6. **Computed aggregations**: Named values with `=`
+7. **Filter on computed values**: `filter(todos > 5)`
+8. **Extended navigation**: `ancestors(_)`, `descendants(_)` sets
