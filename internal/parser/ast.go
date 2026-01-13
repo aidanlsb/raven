@@ -161,8 +161,11 @@ func extractHeadingFromNode(heading *ast.Heading, content []byte, lineStarts []i
 
 // extractTypeDeclFromParagraph checks if a paragraph contains a type declaration.
 // Returns nil if the paragraph doesn't start with "::".
+//
+// Note: Goldmark splits text at special characters like '[', so we need to
+// collect all text nodes in the paragraph to get the full type declaration.
 func extractTypeDeclFromParagraph(para *ast.Paragraph, content []byte, lineStarts []int, startLine int) *EmbeddedTypeInfo {
-	// Get the first text node
+	// Get the first text node to check for "::" prefix and get the line number
 	firstChild := para.FirstChild()
 	if firstChild == nil {
 		return nil
@@ -173,15 +176,24 @@ func extractTypeDeclFromParagraph(para *ast.Paragraph, content []byte, lineStart
 		return nil
 	}
 
-	segment := textNode.Segment
-	textContent := strings.TrimSpace(string(segment.Value(content)))
-
-	if !strings.HasPrefix(textContent, "::") {
+	// Quick check: first text node must start with "::"
+	firstSegment := textNode.Segment
+	firstText := strings.TrimSpace(string(firstSegment.Value(content)))
+	if !strings.HasPrefix(firstText, "::") {
 		return nil
 	}
 
-	line := startLine + offsetToLine(lineStarts, segment.Start)
-	return ParseEmbeddedType(textContent, line)
+	// Collect all text from the paragraph (goldmark may split at '[' etc.)
+	var builder strings.Builder
+	for child := para.FirstChild(); child != nil; child = child.NextSibling() {
+		if tn, ok := child.(*ast.Text); ok {
+			builder.Write(tn.Segment.Value(content))
+		}
+	}
+
+	fullText := strings.TrimSpace(builder.String())
+	line := startLine + offsetToLine(lineStarts, firstSegment.Start)
+	return ParseEmbeddedType(fullText, line)
 }
 
 // extractRefsFromText extracts wikilink references from a text segment.
