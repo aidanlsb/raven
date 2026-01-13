@@ -125,6 +125,910 @@ type ObjectGroup struct {
 	Results []ObjectResult
 }
 
+// PipelineObjectResult represents an object with computed values from pipeline.
+type PipelineObjectResult struct {
+	ObjectResult
+	Computed map[string]interface{} // Computed values from assignments
+}
+
+// PipelineTraitResult represents a trait with computed values from pipeline.
+type PipelineTraitResult struct {
+	TraitResult
+	Computed map[string]interface{} // Computed values from assignments
+}
+
+// ExecuteObjectQueryWithPipeline executes an object query with pipeline processing.
+func (e *Executor) ExecuteObjectQueryWithPipeline(q *Query) ([]PipelineObjectResult, error) {
+	if q.Type != QueryTypeObject {
+		return nil, fmt.Errorf("expected object query, got trait query")
+	}
+
+	// First, execute the base query
+	baseResults, err := e.ExecuteObjectQuery(q)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no pipeline, return base results with empty computed maps
+	if q.Pipeline == nil || len(q.Pipeline.Stages) == 0 {
+		results := make([]PipelineObjectResult, len(baseResults))
+		for i, r := range baseResults {
+			results[i] = PipelineObjectResult{ObjectResult: r, Computed: make(map[string]interface{})}
+		}
+		return results, nil
+	}
+
+	// Execute pipeline stages
+	return e.executePipelineForObjects(baseResults, q.Pipeline)
+}
+
+// ExecuteTraitQueryWithPipeline executes a trait query with pipeline processing.
+func (e *Executor) ExecuteTraitQueryWithPipeline(q *Query) ([]PipelineTraitResult, error) {
+	if q.Type != QueryTypeTrait {
+		return nil, fmt.Errorf("expected trait query, got object query")
+	}
+
+	// First, execute the base query
+	baseResults, err := e.ExecuteTraitQuery(q)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no pipeline, return base results with empty computed maps
+	if q.Pipeline == nil || len(q.Pipeline.Stages) == 0 {
+		results := make([]PipelineTraitResult, len(baseResults))
+		for i, r := range baseResults {
+			results[i] = PipelineTraitResult{TraitResult: r, Computed: make(map[string]interface{})}
+		}
+		return results, nil
+	}
+
+	// Execute pipeline stages
+	return e.executePipelineForTraits(baseResults, q.Pipeline)
+}
+
+// mergeSortStages combines consecutive SortStages into a single stage with multiple criteria
+func mergeSortStages(stages []PipelineStage) []PipelineStage {
+	if len(stages) == 0 {
+		return stages
+	}
+
+	merged := make([]PipelineStage, 0, len(stages))
+	var currentSort *SortStage
+
+	for _, stage := range stages {
+		if s, ok := stage.(*SortStage); ok {
+			if currentSort == nil {
+				// Start a new sort stage
+				currentSort = &SortStage{Criteria: make([]SortCriterion, 0, len(s.Criteria))}
+			}
+			// Append criteria to current sort
+			currentSort.Criteria = append(currentSort.Criteria, s.Criteria...)
+		} else {
+			// Non-sort stage - flush current sort if any
+			if currentSort != nil {
+				merged = append(merged, currentSort)
+				currentSort = nil
+			}
+			merged = append(merged, stage)
+		}
+	}
+
+	// Flush remaining sort
+	if currentSort != nil {
+		merged = append(merged, currentSort)
+	}
+
+	return merged
+}
+
+// executePipelineForObjects executes pipeline stages on object results.
+func (e *Executor) executePipelineForObjects(results []ObjectResult, pipeline *Pipeline) ([]PipelineObjectResult, error) {
+	// Initialize results with computed maps
+	pResults := make([]PipelineObjectResult, len(results))
+	for i, r := range results {
+		pResults[i] = PipelineObjectResult{ObjectResult: r, Computed: make(map[string]interface{})}
+	}
+
+	// Merge consecutive sort stages
+	stages := mergeSortStages(pipeline.Stages)
+
+	// Process each stage
+	for _, stage := range stages {
+		var err error
+		switch s := stage.(type) {
+		case *AssignmentStage:
+			err = e.executeAssignmentForObjects(pResults, s)
+		case *FilterStage:
+			pResults, err = e.executeFilterForObjects(pResults, s)
+		case *SortStage:
+			err = e.executeSortForObjects(pResults, s)
+		case *LimitStage:
+			if len(pResults) > s.N {
+				pResults = pResults[:s.N]
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return pResults, nil
+}
+
+// executePipelineForTraits executes pipeline stages on trait results.
+func (e *Executor) executePipelineForTraits(results []TraitResult, pipeline *Pipeline) ([]PipelineTraitResult, error) {
+	// Initialize results with computed maps
+	pResults := make([]PipelineTraitResult, len(results))
+	for i, r := range results {
+		pResults[i] = PipelineTraitResult{TraitResult: r, Computed: make(map[string]interface{})}
+	}
+
+	// Merge consecutive sort stages
+	stages := mergeSortStages(pipeline.Stages)
+
+	// Process each stage
+	for _, stage := range stages {
+		var err error
+		switch s := stage.(type) {
+		case *AssignmentStage:
+			err = e.executeAssignmentForTraits(pResults, s)
+		case *FilterStage:
+			pResults, err = e.executeFilterForTraits(pResults, s)
+		case *SortStage:
+			err = e.executeSortForTraits(pResults, s)
+		case *LimitStage:
+			if len(pResults) > s.N {
+				pResults = pResults[:s.N]
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return pResults, nil
+}
+
+// executeAssignmentForObjects computes an aggregation for each object result.
+func (e *Executor) executeAssignmentForObjects(results []PipelineObjectResult, stage *AssignmentStage) error {
+	for i := range results {
+		value, err := e.computeAggregationForObject(&results[i].ObjectResult, stage)
+		if err != nil {
+			return err
+		}
+		results[i].Computed[stage.Name] = value
+	}
+	return nil
+}
+
+// executeAssignmentForTraits computes an aggregation for each trait result.
+func (e *Executor) executeAssignmentForTraits(results []PipelineTraitResult, stage *AssignmentStage) error {
+	for i := range results {
+		value, err := e.computeAggregationForTrait(&results[i].TraitResult, stage)
+		if err != nil {
+			return err
+		}
+		results[i].Computed[stage.Name] = value
+	}
+	return nil
+}
+
+// computeAggregationForObject computes an aggregation value for a single object.
+func (e *Executor) computeAggregationForObject(obj *ObjectResult, stage *AssignmentStage) (interface{}, error) {
+	// Handle navigation functions
+	if stage.NavFunc != nil {
+		return e.computeNavFuncForObject(obj, stage.NavFunc, stage.Aggregation)
+	}
+
+	// Handle subquery aggregation
+	if stage.SubQuery != nil {
+		return e.computeSubqueryAggregationForObject(obj, stage.SubQuery, stage.Aggregation, stage.AggField)
+	}
+
+	return 0, fmt.Errorf("assignment stage has neither nav function nor subquery")
+}
+
+// computeAggregationForTrait computes an aggregation value for a single trait.
+func (e *Executor) computeAggregationForTrait(trait *TraitResult, stage *AssignmentStage) (interface{}, error) {
+	// Handle navigation functions
+	if stage.NavFunc != nil {
+		return e.computeNavFuncForTrait(trait, stage.NavFunc, stage.Aggregation)
+	}
+
+	// Handle subquery aggregation
+	if stage.SubQuery != nil {
+		return e.computeSubqueryAggregationForTrait(trait, stage.SubQuery, stage.Aggregation, stage.AggField)
+	}
+
+	return 0, fmt.Errorf("assignment stage has neither nav function nor subquery")
+}
+
+// computeNavFuncForObject computes a navigation function result for an object.
+func (e *Executor) computeNavFuncForObject(obj *ObjectResult, navFunc *NavFunc, agg AggregationType) (interface{}, error) {
+	var count int
+	var err error
+
+	switch navFunc.Name {
+	case "refs":
+		count, err = e.countRefsFrom(obj.ID)
+	case "refd":
+		count, err = e.countRefsTo(obj.ID)
+	case "ancestors":
+		count, err = e.countAncestors(obj.ID)
+	case "descendants":
+		count, err = e.countDescendants(obj.ID)
+	case "parent":
+		if obj.ParentID != nil {
+			count = 1
+		}
+	case "child":
+		count, err = e.countChildren(obj.ID)
+	default:
+		return 0, fmt.Errorf("unknown navigation function: %s", navFunc.Name)
+	}
+
+	if err != nil {
+		return 0, err
+	}
+
+	// For count aggregation, return the count
+	if agg == AggCount {
+		return count, nil
+	}
+
+	return count, nil
+}
+
+// computeNavFuncForTrait computes a navigation function result for a trait.
+func (e *Executor) computeNavFuncForTrait(trait *TraitResult, navFunc *NavFunc, agg AggregationType) (interface{}, error) {
+	// For traits, navigation functions typically operate on the parent object
+	switch navFunc.Name {
+	case "refs":
+		// Count refs on the same line as the trait
+		return e.countRefsOnLine(trait.FilePath, trait.Line)
+	case "refd":
+		// Traits aren't typically referenced directly, so this returns 0
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("navigation function %s not supported for traits", navFunc.Name)
+	}
+}
+
+// computeSubqueryAggregationForObject executes a subquery with _ bound to the object.
+func (e *Executor) computeSubqueryAggregationForObject(obj *ObjectResult, subQuery *Query, agg AggregationType, field string) (interface{}, error) {
+	// Build the subquery SQL with _ bound to the current object
+	// We need to replace ancestor:_ or within:_ predicates with the current object ID
+	boundQuery := e.bindObjectToQuery(obj.ID, subQuery)
+
+	switch subQuery.Type {
+	case QueryTypeObject:
+		results, err := e.ExecuteObjectQuery(boundQuery)
+		if err != nil {
+			return 0, err
+		}
+		return e.aggregateObjectResults(results, agg, field)
+
+	case QueryTypeTrait:
+		results, err := e.ExecuteTraitQuery(boundQuery)
+		if err != nil {
+			return 0, err
+		}
+		return e.aggregateTraitResults(results, agg)
+	}
+
+	return 0, nil
+}
+
+// computeSubqueryAggregationForTrait executes a subquery with _ bound to the trait.
+func (e *Executor) computeSubqueryAggregationForTrait(trait *TraitResult, subQuery *Query, agg AggregationType, field string) (interface{}, error) {
+	// Bind _ to the trait - this may error if predicates expect objects
+	boundQuery, err := e.bindTraitToQuery(trait, subQuery)
+	if err != nil {
+		return 0, err
+	}
+
+	switch subQuery.Type {
+	case QueryTypeObject:
+		results, err := e.ExecuteObjectQuery(boundQuery)
+		if err != nil {
+			return 0, err
+		}
+		return e.aggregateObjectResults(results, agg, field)
+
+	case QueryTypeTrait:
+		results, err := e.ExecuteTraitQuery(boundQuery)
+		if err != nil {
+			return 0, err
+		}
+		return e.aggregateTraitResults(results, agg)
+	}
+
+	return 0, nil
+}
+
+// bindObjectToQuery creates a copy of the query with _ references resolved to the object ID.
+func (e *Executor) bindObjectToQuery(objectID string, q *Query) *Query {
+	// Deep copy the query and replace self-reference predicates
+	bound := &Query{
+		Type:     q.Type,
+		TypeName: q.TypeName,
+		Limit:    q.Limit,
+	}
+
+	for _, pred := range q.Predicates {
+		bound.Predicates = append(bound.Predicates, e.bindPredicateToObject(objectID, pred))
+	}
+
+	return bound
+}
+
+// bindPredicateToObject resolves _ references in a predicate to a specific object ID.
+func (e *Executor) bindPredicateToObject(objectID string, pred Predicate) Predicate {
+	switch p := pred.(type) {
+	case *AncestorPredicate:
+		if p.IsSelfRef {
+			return &AncestorPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *WithinPredicate:
+		if p.IsSelfRef {
+			return &WithinPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *ParentPredicate:
+		if p.IsSelfRef {
+			return &ParentPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *DescendantPredicate:
+		if p.IsSelfRef {
+			return &DescendantPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *ChildPredicate:
+		if p.IsSelfRef {
+			return &ChildPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *RefsPredicate:
+		if p.IsSelfRef {
+			return &RefsPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *RefdPredicate:
+		if p.IsSelfRef {
+			return &RefdPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *OnPredicate:
+		if p.IsSelfRef {
+			return &OnPredicate{
+				basePredicate: p.basePredicate,
+				Target:        objectID,
+			}
+		}
+	case *GroupPredicate:
+		boundPreds := make([]Predicate, len(p.Predicates))
+		for i, subPred := range p.Predicates {
+			boundPreds[i] = e.bindPredicateToObject(objectID, subPred)
+		}
+		return &GroupPredicate{basePredicate: p.basePredicate, Predicates: boundPreds}
+	case *OrPredicate:
+		return &OrPredicate{
+			basePredicate: p.basePredicate,
+			Left:          e.bindPredicateToObject(objectID, p.Left),
+			Right:         e.bindPredicateToObject(objectID, p.Right),
+		}
+	}
+	return pred
+}
+
+// TraitBinding holds a trait's identity for binding _ references
+type TraitBinding struct {
+	ID       string // Trait ID
+	FilePath string // File containing the trait
+	Line     int    // Line number of the trait
+}
+
+// bindTraitToQuery creates a copy of the query with _ references resolved to the trait.
+// IMPORTANT: _ ALWAYS represents the trait itself. Predicates that expect objects
+// (like on:, within:) will error when given a trait reference.
+func (e *Executor) bindTraitToQuery(trait *TraitResult, q *Query) (*Query, error) {
+	bound := &Query{
+		Type:     q.Type,
+		TypeName: q.TypeName,
+		Limit:    q.Limit,
+	}
+
+	binding := &TraitBinding{
+		ID:       trait.ID,
+		FilePath: trait.FilePath,
+		Line:     trait.Line,
+	}
+
+	for _, pred := range q.Predicates {
+		boundPred, err := e.bindPredicateToTrait(binding, pred)
+		if err != nil {
+			return nil, err
+		}
+		bound.Predicates = append(bound.Predicates, boundPred)
+	}
+
+	return bound, nil
+}
+
+// bindPredicateToTrait resolves _ references in a predicate to a specific trait.
+// Returns an error if the predicate expects an object but receives a trait reference.
+func (e *Executor) bindPredicateToTrait(trait *TraitBinding, pred Predicate) (Predicate, error) {
+	switch p := pred.(type) {
+	case *OnPredicate:
+		if p.IsSelfRef {
+			return nil, fmt.Errorf("on:_ is invalid in trait context: 'on:' expects an object, but _ refers to a trait. Use a subquery to access related objects")
+		}
+	case *WithinPredicate:
+		if p.IsSelfRef {
+			return nil, fmt.Errorf("within:_ is invalid in trait context: 'within:' expects an object, but _ refers to a trait. Use a subquery to access related objects")
+		}
+	case *AncestorPredicate:
+		if p.IsSelfRef {
+			return nil, fmt.Errorf("ancestor:_ is invalid in trait context: 'ancestor:' expects an object, but _ refers to a trait")
+		}
+	case *DescendantPredicate:
+		if p.IsSelfRef {
+			return nil, fmt.Errorf("descendant:_ is invalid in trait context: 'descendant:' expects an object, but _ refers to a trait")
+		}
+	case *ParentPredicate:
+		if p.IsSelfRef {
+			return nil, fmt.Errorf("parent:_ is invalid in trait context: 'parent:' expects an object, but _ refers to a trait")
+		}
+	case *ChildPredicate:
+		if p.IsSelfRef {
+			return nil, fmt.Errorf("child:_ is invalid in trait context: 'child:' expects an object, but _ refers to a trait")
+		}
+	case *AtPredicate:
+		if p.IsSelfRef {
+			// at:_ for a trait means "at the same file+line as this trait"
+			return &AtPredicate{
+				basePredicate: p.basePredicate,
+				Target:        trait.ID,
+			}, nil
+		}
+	case *RefsPredicate:
+		if p.IsSelfRef {
+			// refs:_ means "has a reference to _" but traits can't be referenced via [[...]]
+			return nil, fmt.Errorf("refs:_ is invalid in trait context: traits cannot be referenced via wikilinks")
+		}
+	case *HasPredicate:
+		if p.IsSelfRef {
+			// has:_ in trait context means "objects that have this trait"
+			return &HasPredicate{
+				basePredicate: p.basePredicate,
+				TraitID:       trait.ID,
+			}, nil
+		}
+	case *ContainsPredicate:
+		if p.IsSelfRef {
+			// contains:_ in trait context means "objects that contain this trait in subtree"
+			return &ContainsPredicate{
+				basePredicate: p.basePredicate,
+				TraitID:       trait.ID,
+			}, nil
+		}
+	case *RefdPredicate:
+		if p.IsSelfRef {
+			// refd:_ means "is referenced by _" - for traits, this means
+			// "is referenced by the line containing this trait"
+			// We encode the trait's file:line as a special marker
+			return &RefdPredicate{
+				basePredicate: p.basePredicate,
+				Target:        fmt.Sprintf("__trait_line:%s:%d", trait.FilePath, trait.Line),
+			}, nil
+		}
+	case *GroupPredicate:
+		boundPreds := make([]Predicate, len(p.Predicates))
+		for i, subPred := range p.Predicates {
+			boundPred, err := e.bindPredicateToTrait(trait, subPred)
+			if err != nil {
+				return nil, err
+			}
+			boundPreds[i] = boundPred
+		}
+		return &GroupPredicate{basePredicate: p.basePredicate, Predicates: boundPreds}, nil
+	case *OrPredicate:
+		left, err := e.bindPredicateToTrait(trait, p.Left)
+		if err != nil {
+			return nil, err
+		}
+		right, err := e.bindPredicateToTrait(trait, p.Right)
+		if err != nil {
+			return nil, err
+		}
+		return &OrPredicate{
+			basePredicate: p.basePredicate,
+			Left:          left,
+			Right:         right,
+		}, nil
+	}
+	return pred, nil
+}
+
+// aggregateObjectResults computes an aggregate value from object results.
+// For min/max/sum, a field name must be provided.
+func (e *Executor) aggregateObjectResults(results []ObjectResult, agg AggregationType, field string) (interface{}, error) {
+	switch agg {
+	case AggCount:
+		return len(results), nil
+	case AggMin:
+		if field == "" {
+			return nil, fmt.Errorf("min() on object query requires a field: use min(.field, {object:...})")
+		}
+		if len(results) == 0 {
+			return nil, nil
+		}
+		var minVal interface{}
+		for _, r := range results {
+			val := r.Fields[field]
+			if val == nil {
+				continue
+			}
+			if minVal == nil || compareValues(val, minVal) < 0 {
+				minVal = val
+			}
+		}
+		return minVal, nil
+	case AggMax:
+		if field == "" {
+			return nil, fmt.Errorf("max() on object query requires a field: use max(.field, {object:...})")
+		}
+		if len(results) == 0 {
+			return nil, nil
+		}
+		var maxVal interface{}
+		for _, r := range results {
+			val := r.Fields[field]
+			if val == nil {
+				continue
+			}
+			if maxVal == nil || compareValues(val, maxVal) > 0 {
+				maxVal = val
+			}
+		}
+		return maxVal, nil
+	case AggSum:
+		if field == "" {
+			return nil, fmt.Errorf("sum() on object query requires a field: use sum(.field, {object:...})")
+		}
+		var sum float64
+		for _, r := range results {
+			val := r.Fields[field]
+			if num, ok := toNumber(val); ok {
+				sum += num
+			}
+		}
+		return sum, nil
+	default:
+		return len(results), nil
+	}
+}
+
+// aggregateTraitResults computes an aggregate value from trait results.
+// For traits, min/max/sum operate on the trait's Value field.
+func (e *Executor) aggregateTraitResults(results []TraitResult, agg AggregationType) (interface{}, error) {
+	switch agg {
+	case AggCount:
+		return len(results), nil
+	case AggMin:
+		if len(results) == 0 {
+			return nil, nil
+		}
+		var minVal *string
+		for i := range results {
+			if results[i].Value != nil {
+				if minVal == nil || *results[i].Value < *minVal {
+					minVal = results[i].Value
+				}
+			}
+		}
+		return minVal, nil
+	case AggMax:
+		if len(results) == 0 {
+			return nil, nil
+		}
+		var maxVal *string
+		for i := range results {
+			if results[i].Value != nil {
+				if maxVal == nil || *results[i].Value > *maxVal {
+					maxVal = results[i].Value
+				}
+			}
+		}
+		return maxVal, nil
+	case AggSum:
+		var sum float64
+		for _, r := range results {
+			if r.Value != nil {
+				if num, ok := toNumber(*r.Value); ok {
+					sum += num
+				}
+			}
+		}
+		return sum, nil
+	default:
+		return len(results), nil
+	}
+}
+
+// Helper functions for navigation
+
+func (e *Executor) countRefsFrom(objectID string) (int, error) {
+	var count int
+	err := e.db.QueryRow("SELECT COUNT(*) FROM refs WHERE source_id = ?", objectID).Scan(&count)
+	return count, err
+}
+
+func (e *Executor) countRefsTo(objectID string) (int, error) {
+	var count int
+	err := e.db.QueryRow("SELECT COUNT(*) FROM refs WHERE target_id = ? OR target_raw = ?", objectID, objectID).Scan(&count)
+	return count, err
+}
+
+func (e *Executor) countAncestors(objectID string) (int, error) {
+	var count int
+	err := e.db.QueryRow(`
+		WITH RECURSIVE ancestors AS (
+			SELECT parent_id FROM objects WHERE id = ?
+			UNION ALL
+			SELECT o.parent_id FROM objects o
+			JOIN ancestors a ON o.id = a.parent_id
+			WHERE o.parent_id IS NOT NULL
+		)
+		SELECT COUNT(*) FROM ancestors WHERE parent_id IS NOT NULL
+	`, objectID).Scan(&count)
+	return count, err
+}
+
+func (e *Executor) countDescendants(objectID string) (int, error) {
+	var count int
+	err := e.db.QueryRow(`
+		WITH RECURSIVE descendants AS (
+			SELECT id FROM objects WHERE parent_id = ?
+			UNION ALL
+			SELECT o.id FROM objects o
+			JOIN descendants d ON o.parent_id = d.id
+		)
+		SELECT COUNT(*) FROM descendants
+	`, objectID).Scan(&count)
+	return count, err
+}
+
+func (e *Executor) countChildren(objectID string) (int, error) {
+	var count int
+	err := e.db.QueryRow("SELECT COUNT(*) FROM objects WHERE parent_id = ?", objectID).Scan(&count)
+	return count, err
+}
+
+func (e *Executor) countRefsOnLine(filePath string, line int) (int, error) {
+	var count int
+	err := e.db.QueryRow("SELECT COUNT(*) FROM refs WHERE file_path = ? AND line_number = ?", filePath, line).Scan(&count)
+	return count, err
+}
+
+// Filter execution
+
+func (e *Executor) executeFilterForObjects(results []PipelineObjectResult, stage *FilterStage) ([]PipelineObjectResult, error) {
+	var filtered []PipelineObjectResult
+	for _, r := range results {
+		match, err := e.evaluateFilterExpr(r.Computed, r.Fields, stage.Expr)
+		if err != nil {
+			return nil, err
+		}
+		if match {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered, nil
+}
+
+func (e *Executor) executeFilterForTraits(results []PipelineTraitResult, stage *FilterStage) ([]PipelineTraitResult, error) {
+	var filtered []PipelineTraitResult
+	for _, r := range results {
+		// For traits, create a pseudo-fields map with the value
+		traitFields := map[string]interface{}{}
+		if r.Value != nil {
+			traitFields["value"] = *r.Value
+		}
+		match, err := e.evaluateFilterExpr(r.Computed, traitFields, stage.Expr)
+		if err != nil {
+			return nil, err
+		}
+		if match {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered, nil
+}
+
+func (e *Executor) evaluateFilterExpr(computed map[string]interface{}, fields map[string]interface{}, expr *FilterExpr) (bool, error) {
+	// Get left value
+	var leftVal interface{}
+	if expr.IsField {
+		if fields != nil {
+			leftVal = fields[expr.Left]
+		}
+	} else {
+		leftVal = computed[expr.Left]
+	}
+
+	// Convert to comparable types
+	leftNum, leftIsNum := toNumber(leftVal)
+	rightNum, rightIsNum := toNumber(expr.Right)
+
+	// Compare
+	switch expr.Op {
+	case CompareEq:
+		if leftIsNum && rightIsNum {
+			return leftNum == rightNum, nil
+		}
+		return fmt.Sprint(leftVal) == expr.Right, nil
+	case CompareNeq:
+		if leftIsNum && rightIsNum {
+			return leftNum != rightNum, nil
+		}
+		return fmt.Sprint(leftVal) != expr.Right, nil
+	case CompareLt:
+		if leftIsNum && rightIsNum {
+			return leftNum < rightNum, nil
+		}
+		return fmt.Sprint(leftVal) < expr.Right, nil
+	case CompareGt:
+		if leftIsNum && rightIsNum {
+			return leftNum > rightNum, nil
+		}
+		return fmt.Sprint(leftVal) > expr.Right, nil
+	case CompareLte:
+		if leftIsNum && rightIsNum {
+			return leftNum <= rightNum, nil
+		}
+		return fmt.Sprint(leftVal) <= expr.Right, nil
+	case CompareGte:
+		if leftIsNum && rightIsNum {
+			return leftNum >= rightNum, nil
+		}
+		return fmt.Sprint(leftVal) >= expr.Right, nil
+	}
+
+	return false, nil
+}
+
+func toNumber(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case float64:
+		return n, true
+	case string:
+		var f float64
+		_, err := fmt.Sscanf(n, "%f", &f)
+		return f, err == nil
+	}
+	return 0, false
+}
+
+// Sort execution
+
+func (e *Executor) executeSortForObjects(results []PipelineObjectResult, stage *SortStage) error {
+	sort.SliceStable(results, func(i, j int) bool {
+		// Compare by each criterion in order
+		for _, c := range stage.Criteria {
+			var iVal, jVal interface{}
+
+			if c.IsField {
+				iVal = results[i].Fields[c.Field]
+				jVal = results[j].Fields[c.Field]
+			} else {
+				iVal = results[i].Computed[c.Field]
+				jVal = results[j].Computed[c.Field]
+			}
+
+			cmp := compareValues(iVal, jVal)
+			if cmp != 0 {
+				if c.Descending {
+					return cmp > 0
+				}
+				return cmp < 0
+			}
+			// Equal on this criterion, continue to next
+		}
+		return false // All criteria equal
+	})
+	return nil
+}
+
+func (e *Executor) executeSortForTraits(results []PipelineTraitResult, stage *SortStage) error {
+	sort.SliceStable(results, func(i, j int) bool {
+		// Compare by each criterion in order
+		for _, c := range stage.Criteria {
+			var iVal, jVal interface{}
+
+			if c.IsField {
+				// Traits don't have fields, use value
+				if c.Field == "value" {
+					iVal = results[i].Value
+					jVal = results[j].Value
+				}
+			} else {
+				iVal = results[i].Computed[c.Field]
+				jVal = results[j].Computed[c.Field]
+			}
+
+			cmp := compareValues(iVal, jVal)
+			if cmp != 0 {
+				if c.Descending {
+					return cmp > 0
+				}
+				return cmp < 0
+			}
+			// Equal on this criterion, continue to next
+		}
+		return false // All criteria equal
+	})
+	return nil
+}
+
+func compareValues(a, b interface{}) int {
+	// Handle nil
+	if a == nil && b == nil {
+		return 0
+	}
+	if a == nil {
+		return -1
+	}
+	if b == nil {
+		return 1
+	}
+
+	// Try numeric comparison
+	aNum, aIsNum := toNumber(a)
+	bNum, bIsNum := toNumber(b)
+	if aIsNum && bIsNum {
+		if aNum < bNum {
+			return -1
+		}
+		if aNum > bNum {
+			return 1
+		}
+		return 0
+	}
+
+	// String comparison
+	aStr := fmt.Sprint(a)
+	bStr := fmt.Sprint(b)
+	if aStr < bStr {
+		return -1
+	}
+	if aStr > bStr {
+		return 1
+	}
+	return 0
+}
+
 // ExecuteObjectQuery executes an object query and returns matching objects.
 func (e *Executor) ExecuteObjectQuery(q *Query) ([]ObjectResult, error) {
 	if q.Type != QueryTypeObject {
@@ -319,7 +1223,7 @@ func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string,
 	}
 }
 
-// buildFieldPredicateSQL builds SQL for .field:value predicates.
+// buildFieldPredicateSQL builds SQL for .field==value predicates.
 // Comparisons are case-insensitive for equality, but case-sensitive for ordering comparisons.
 func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
 	jsonPath := fmt.Sprintf("$.%s", p.Field)
@@ -328,9 +1232,48 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 	var args []interface{}
 
 	if p.IsExists {
-		// .field:* means field exists
-		cond = fmt.Sprintf("json_extract(%s.fields, ?) IS NOT NULL", alias)
+		// .field==* means field exists, .field!=* means field doesn't exist
+		if p.CompareOp == CompareNeq {
+			cond = fmt.Sprintf("json_extract(%s.fields, ?) IS NULL", alias)
+		} else {
+			cond = fmt.Sprintf("json_extract(%s.fields, ?) IS NOT NULL", alias)
+		}
 		args = append(args, jsonPath)
+	} else if p.StringOp != StringNone {
+		// String matching operators: ~=, ^=, $=, =~
+		fieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
+		args = append(args, jsonPath)
+
+		switch p.StringOp {
+		case StringContains:
+			// Case-insensitive contains
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+			args = append(args, "%"+p.Value+"%")
+		case StringStartsWith:
+			// Case-insensitive starts with
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+			args = append(args, p.Value+"%")
+		case StringEndsWith:
+			// Case-insensitive ends with
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+			args = append(args, "%"+p.Value)
+		case StringRegex:
+			// SQLite doesn't have native regex - use GLOB for simple patterns or REGEXP extension
+			// For now, use LIKE as a fallback (limited regex support)
+			// TODO: Consider using sqlite3 REGEXP extension
+			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
+			args = append(args, p.Value)
+		}
+	} else if p.CompareOp == CompareNeq {
+		// Not equals: check both scalar and array membership
+		cond = fmt.Sprintf(`(
+			LOWER(json_extract(%s.fields, ?)) != LOWER(?) AND
+			NOT EXISTS (
+				SELECT 1 FROM json_each(%s.fields, ?)
+				WHERE LOWER(json_each.value) = LOWER(?)
+			)
+		)`, alias, alias)
+		args = append(args, jsonPath, p.Value, jsonPath, p.Value)
 	} else if p.CompareOp != CompareEq {
 		// Comparison operators: <, >, <=, >=
 		var op string
@@ -368,6 +1311,18 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 
 // buildHasPredicateSQL builds SQL for has:{trait:...} predicates.
 func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, []interface{}, error) {
+	// Handle bound trait ID (from has:_ in trait pipeline)
+	if p.TraitID != "" {
+		cond := fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM traits
+			WHERE parent_object_id = %s.id AND id = ?
+		)`, alias)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, []interface{}{p.TraitID}, nil
+	}
+
 	// Build subquery conditions for the trait
 	var traitConditions []string
 	var args []interface{}
@@ -378,13 +1333,9 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 	for _, pred := range p.SubQuery.Predicates {
 		switch tp := pred.(type) {
 		case *ValuePredicate:
-			// Case-insensitive comparison for better UX
-			if tp.Negated() {
-				traitConditions = append(traitConditions, "LOWER(value) != LOWER(?)")
-			} else {
-				traitConditions = append(traitConditions, "LOWER(value) = LOWER(?)")
-			}
-			args = append(args, tp.Value)
+			cond, condArgs := buildValueCondition(tp, "value")
+			traitConditions = append(traitConditions, cond)
+			args = append(args, condArgs...)
 		case *SourcePredicate:
 			// Source filtering would require more complex logic
 			// For now, we'll skip it in subqueries
@@ -610,6 +1561,25 @@ func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias str
 // buildContainsPredicateSQL builds SQL for contains:{trait:...} predicates.
 // Finds objects that have a matching trait anywhere in their subtree (self or descendants).
 func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string) (string, []interface{}, error) {
+	// Handle bound trait ID (from contains:_ in trait pipeline)
+	if p.TraitID != "" {
+		// Find objects that have this specific trait in their subtree
+		cond := fmt.Sprintf(`EXISTS (
+			WITH RECURSIVE subtree AS (
+				SELECT id FROM objects WHERE id = %s.id
+				UNION ALL
+				SELECT o.id FROM objects o
+				JOIN subtree s ON o.parent_id = s.id
+			)
+			SELECT 1 FROM traits t
+			WHERE t.parent_object_id IN (SELECT id FROM subtree) AND t.id = ?
+		)`, alias)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, []interface{}{p.TraitID}, nil
+	}
+
 	var traitConditions []string
 	var args []interface{}
 
@@ -619,18 +1589,9 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 	for _, pred := range p.SubQuery.Predicates {
 		switch tp := pred.(type) {
 		case *ValuePredicate:
-			if tp.Negated() {
-				traitConditions = append(traitConditions, "t.value != ?")
-			} else {
-				traitConditions = append(traitConditions, "t.value = ?")
-			}
-			args = append(args, tp.Value)
-		case *SourcePredicate:
-			if tp.Source == "frontmatter" {
-				traitConditions = append(traitConditions, "t.line_number <= 1")
-			} else {
-				traitConditions = append(traitConditions, "t.line_number > 1")
-			}
+			cond, condArgs := buildValueCondition(tp, "t.value")
+			traitConditions = append(traitConditions, cond)
+			args = append(args, condArgs...)
 		}
 	}
 
@@ -804,10 +1765,36 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 	return cond, args, nil
 }
 
-// buildValuePredicateSQL builds SQL for value:val predicates.
+// buildValuePredicateSQL builds SQL for value==val predicates.
 // Comparisons are case-insensitive for equality, but case-sensitive for ordering comparisons.
 func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (string, []interface{}, error) {
 	var cond string
+	var args []interface{}
+
+	// Handle string operators first
+	if p.StringOp != StringNone {
+		fieldExpr := fmt.Sprintf("%s.value", alias)
+
+		switch p.StringOp {
+		case StringContains:
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+			args = append(args, "%"+p.Value+"%")
+		case StringStartsWith:
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+			args = append(args, p.Value+"%")
+		case StringEndsWith:
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+			args = append(args, "%"+p.Value)
+		case StringRegex:
+			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
+			args = append(args, p.Value)
+		}
+
+		if p.Negated() {
+			cond = "NOT (" + cond + ")"
+		}
+		return cond, args, nil
+	}
 
 	switch p.CompareOp {
 	case CompareLt:
@@ -818,6 +1805,9 @@ func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (stri
 		cond = fmt.Sprintf("%s.value <= ?", alias)
 	case CompareGte:
 		cond = fmt.Sprintf("%s.value >= ?", alias)
+	case CompareNeq:
+		cond = fmt.Sprintf("LOWER(%s.value) != LOWER(?)", alias)
+		return cond, []interface{}{p.Value}, nil
 	default: // CompareEq
 		if p.Negated() {
 			cond = fmt.Sprintf("LOWER(%s.value) != LOWER(?)", alias)
@@ -833,6 +1823,61 @@ func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (stri
 	}
 
 	return cond, []interface{}{p.Value}, nil
+}
+
+// buildValueCondition builds a SQL condition for a ValuePredicate.
+// This is a helper for use in subqueries where we don't have the full executor context.
+func buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
+	var cond string
+	var args []interface{}
+
+	// Handle string operators first
+	if p.StringOp != StringNone {
+		switch p.StringOp {
+		case StringContains:
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", column)
+			args = append(args, "%"+p.Value+"%")
+		case StringStartsWith:
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", column)
+			args = append(args, p.Value+"%")
+		case StringEndsWith:
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", column)
+			args = append(args, "%"+p.Value)
+		case StringRegex:
+			cond = fmt.Sprintf("%s REGEXP ?", column)
+			args = append(args, p.Value)
+		}
+
+		if p.Negated() {
+			cond = "NOT (" + cond + ")"
+		}
+		return cond, args
+	}
+
+	switch p.CompareOp {
+	case CompareLt:
+		cond = fmt.Sprintf("%s < ?", column)
+	case CompareGt:
+		cond = fmt.Sprintf("%s > ?", column)
+	case CompareLte:
+		cond = fmt.Sprintf("%s <= ?", column)
+	case CompareGte:
+		cond = fmt.Sprintf("%s >= ?", column)
+	case CompareNeq:
+		cond = fmt.Sprintf("LOWER(%s) != LOWER(?)", column)
+	default: // CompareEq
+		if p.Negated() {
+			cond = fmt.Sprintf("LOWER(%s) != LOWER(?)", column)
+		} else {
+			cond = fmt.Sprintf("LOWER(%s) = LOWER(?)", column)
+		}
+	}
+
+	if p.CompareOp != CompareEq && p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+
+	return cond, []interface{}{p.Value}
 }
 
 // buildSourcePredicateSQL builds SQL for source:inline predicates.
@@ -1070,6 +2115,28 @@ func (e *Executor) buildAtPredicateSQL(p *AtPredicate, alias string) (string, []
 // isTrait indicates if we're building for a trait query (uses different columns).
 func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait bool) (string, []interface{}, error) {
 	if p.Target != "" {
+		// Check for trait line marker: __trait_line:filepath:line
+		if strings.HasPrefix(p.Target, "__trait_line:") {
+			// Parse file:line from the marker
+			rest := strings.TrimPrefix(p.Target, "__trait_line:")
+			lastColon := strings.LastIndex(rest, ":")
+			if lastColon > 0 {
+				filePath := rest[:lastColon]
+				lineStr := rest[lastColon+1:]
+				// Find refs on that specific line
+				cond := fmt.Sprintf(`EXISTS (
+					SELECT 1 FROM refs r
+					WHERE r.file_path = ?
+					  AND r.line_number = ?
+					  AND (r.target_id = %s.id OR r.target_raw = %s.id)
+				)`, alias, alias)
+				if p.Negated() {
+					cond = "NOT " + cond
+				}
+				return cond, []interface{}{filePath, lineStr}, nil
+			}
+		}
+
 		// Referenced by a specific source
 		cond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r

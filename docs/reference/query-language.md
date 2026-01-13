@@ -1,20 +1,30 @@
-# Query Logic
+# Query Language
 
 ## Core Principles
 
 1. **Two query types**: Object queries and trait queries
-2. **Single return type**: Every query (including sub-queries) returns exactly one type of thing
+2. **Single return type**: Every query (including sub-queries) returns exactly one type
 3. **Boolean composition**: Predicates can be combined with AND, OR, NOT
-4. **Recursive sub-queries**: Some predicates contain sub-queries that follow all the same rules
+4. **Recursive sub-queries**: Predicates can contain sub-queries that follow all the same rules
+5. **Pipeline processing**: Use `|>` to chain post-processing operations
 
 ## Syntax Conventions
 
 | Element | Syntax | Example |
 |---------|--------|---------|
-| Field access | `.` prefix | `.status:active` |
-| Subquery | `{...}` curly braces | `has:{trait:due}` |
-| Grouping | `(...)` parentheses | `(.status:active \| .status:done)` |
-| References | `[[...]]` double brackets | `[[people/freya]]` |
+| Field access | `.` prefix | `.status==active` |
+| Equality | `==` | `.status==active`, `value==past` |
+| Not equals | `!=` | `.status!=done` |
+| Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
+| Contains | `~=` | `.name~="website"` |
+| Starts with | `^=` | `.name^="My"` |
+| Ends with | `$=` | `.name$=".md"` |
+| Regex | `=~` | `.name=~/^api.*$/` |
+| Subquery | `{...}` | `has:{trait:due}` |
+| Pipeline | `\|>` | `\|> sort(.name, asc)` |
+| Grouping | `(...)` | `(.status==active \| .status==done)` |
+| References | `[[...]]` | `[[people/freya]]` |
+| Exists | `*` | `.email==*` |
 
 ## Query Types
 
@@ -23,14 +33,15 @@
 Returns objects of a single type.
 
 ```
-object:<type> [<predicates>...]
+object:<type> [<predicates>...] [|> <pipeline>]
 ```
 
 **Examples:**
 ```
-object:meeting
-object:project .status:active
-object:meeting has:{trait:due value:past} ancestor:{object:date}
+object:project
+object:project .status==active
+object:meeting has:{trait:due value==past}
+object:project .status==active |> sort(.name, asc) limit(10)
 ```
 
 ### Trait Query
@@ -38,14 +49,14 @@ object:meeting has:{trait:due value:past} ancestor:{object:date}
 Returns traits of a single name.
 
 ```
-trait:<name> [<predicates>...]
+trait:<name> [<predicates>...] [|> <pipeline>]
 ```
 
 **Examples:**
 ```
 trait:due
-trait:due value:past
-trait:highlight on:{object:book .status:reading}
+trait:due value==past
+trait:highlight on:{object:book .status==reading}
 ```
 
 ---
@@ -54,254 +65,138 @@ trait:highlight on:{object:book .status:reading}
 
 ### Field-Based
 
-Filter by object frontmatter fields. Fields use dot prefix to distinguish from keywords. Supports equality and comparison operators.
+Filter by object frontmatter fields. Fields use dot prefix. Supports equality, comparison, and string matching operators.
 
 | Predicate | Meaning |
 |-----------|---------|
-| `.<field>:<value>` | Field equals/contains value |
-| `.<field>:"value with spaces"` | Field equals quoted string (supports spaces) |
-| `.<field>:*` | Field exists (has any value) |
-| `.<field>:<<value>` | Field is less than value |
-| `.<field>:><value>` | Field is greater than value |
-| `.<field>:<=<value>` | Field is less than or equal to value |
-| `.<field>:>=<value>` | Field is greater than or equal to value |
-| `!.<field>:<value>` | Field does NOT equal/contain value |
-| `!.<field>:*` | Field does NOT exist (missing) |
+| `.field==value` | Field equals value |
+| `.field!=value` | Field does NOT equal value |
+| `.field==*` | Field exists (has any value) |
+| `.field!=*` | Field does NOT exist |
+| `.field>value` | Field is greater than value |
+| `.field<value` | Field is less than value |
+| `.field>=value` | Field is greater or equal |
+| `.field<=value` | Field is less or equal |
+| `.field~="text"` | Field contains substring |
+| `.field^="text"` | Field starts with |
+| `.field$="text"` | Field ends with |
+| `.field=~/regex/` | Field matches regex |
 
-For array fields, `.<field>:<value>` matches if the array contains the value.
-
-Use double quotes for values containing spaces or special characters.
+For array fields, `.field==value` matches if the array contains the value.
 
 **Examples:**
 ```
-object:project .status:active
-object:project .title:"My Project"           # quoted string with spaces
-object:book .author:"J.R.R. Tolkien"         # quoted string with punctuation
-object:project .status:"in progress"         # status with space
-object:person .email:*
-object:person !.email:*
-object:project !.status:done
-object:project .tags:urgent          # array contains "urgent"
-object:project .tags:urgent .tags:frontend   # has both
-
-# Comparison operators (useful for dates and numbers)
-object:task .priority:>5                     # high priority tasks
-object:project .created:>=2025-01-01         # created this year
-object:invoice .amount:<1000                 # invoices under $1000
+object:project .status==active
+object:project .title=="My Project"
+object:person .email==*
+object:person !.email==*
+object:project .priority>5
+object:project .created>=2025-01-01
+object:project .name~="website"
+object:project .name^="api-"
+object:project .name$="-service"
+object:project .name=~/^web-.*-api$/
 ```
 
 ### Trait-Based (`has:`)
 
-Filter by whether object contains matching traits. The predicate contains a trait sub-query.
+Filter by whether object contains matching traits.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `has:{trait:<name> ...}` | Has trait matching sub-query |
-| `!has:{trait:<name> ...}` | Does NOT have trait matching sub-query |
-
-**Shorthand:** `has:<trait>` expands to `has:{trait:<trait>}`
+| `!has:{trait:<name> ...}` | Does NOT have trait matching |
 
 **Examples:**
 ```
-object:meeting has:due
-object:meeting has:{trait:due}
-object:meeting has:{trait:due value:past}
-object:meeting !has:{trait:due value:past}
-object:meeting has:{trait:due !value:past}
-object:project (has:due | has:remind)
+object:project has:{trait:due}
+object:meeting has:{trait:due value==past}
+object:meeting !has:{trait:due value==past}
 ```
 
-**Semantic distinctions:**
-- `has:{trait:due value:past}` — Has a due trait with value=past
-- `has:{trait:due !value:past}` — Has a due trait with value≠past
-- `!has:{trait:due value:past}` — Does NOT have any due trait with value=past
-- `!has:due` — Does NOT have any due trait
-
-### Parent (Direct)
-
-Filter by whether object's direct parent matches an object sub-query or a specific object.
+### Hierarchy Predicates
 
 | Predicate | Meaning |
 |-----------|---------|
 | `parent:{object:<type> ...}` | Direct parent matches sub-query |
-| `parent:[[target]]` | Direct parent is the specified object |
-| `!parent:{object:<type> ...}` | Direct parent does NOT match sub-query |
-
-**Shorthand:** `parent:<type>` expands to `parent:{object:<type>}`
-
-**Direct target:** `parent:[[target]]` checks if the parent is a specific known object. The target is resolved using standard reference resolution (short names work if unambiguous).
+| `parent:[[target]]` | Direct parent is specific object |
+| `ancestor:{object:<type> ...}` | Some ancestor matches |
+| `ancestor:[[target]]` | Specific object is an ancestor |
+| `child:{object:<type> ...}` | Has child matching |
+| `child:[[target]]` | Specific object is a child |
+| `descendant:{object:<type> ...}` | Has descendant matching |
+| `descendant:[[target]]` | Specific object is a descendant |
 
 **Examples:**
 ```
-object:meeting parent:date
 object:meeting parent:{object:date}
-object:section parent:{object:project .status:active}
-object:section parent:[[projects/website]]     # sections whose parent is this specific project
-object:section parent:[[website]]              # short reference (if unambiguous)
-```
-
-### Ancestor (Any Depth)
-
-Filter by whether any ancestor matches an object sub-query or is a specific object.
-
-| Predicate | Meaning |
-|-----------|---------|
-| `ancestor:{object:<type> ...}` | Some ancestor matches sub-query |
-| `ancestor:[[target]]` | The specified object is an ancestor |
-| `!ancestor:{object:<type> ...}` | No ancestor matches sub-query |
-
-**Shorthand:** `ancestor:<type>` expands to `ancestor:{object:<type>}`
-
-**Direct target:** `ancestor:[[target]]` checks if a specific object appears anywhere in the ancestor chain.
-
-**Examples:**
-```
-object:meeting ancestor:date
 object:meeting ancestor:{object:date}
-object:topic ancestor:{object:meeting ancestor:date}
-object:section ancestor:[[projects/website]]   # sections anywhere inside this project
-```
-
-### Child (Direct)
-
-Filter by whether object has at least one direct child matching an object sub-query or is a specific object.
-
-| Predicate | Meaning |
-|-----------|---------|
-| `child:{object:<type> ...}` | Has child matching sub-query |
-| `child:[[target]]` | The specified object is a direct child |
-| `!child:{object:<type> ...}` | No child matches sub-query |
-
-**Shorthand:** `child:<type>` expands to `child:{object:<type>}`
-
-**Direct target:** `child:[[target]]` checks if a specific object is a direct child of the queried object.
-
-**Examples:**
-```
-object:meeting child:topic
-object:meeting child:{object:topic}
-object:date child:{object:meeting has:due}
-object:date child:[[daily/2025-02-01#standup]]  # dates that have this specific meeting as a child
-```
-
-### Descendant (Any Depth)
-
-Filter by whether object has any descendant matching an object sub-query at any depth, or a specific object.
-
-| Predicate | Meaning |
-|-----------|---------|
-| `descendant:{object:<type> ...}` | Has descendant matching sub-query |
-| `descendant:[[target]]` | The specified object is a descendant |
-| `!descendant:{object:<type> ...}` | No descendant matches sub-query |
-
-**Shorthand:** `descendant:<type>` expands to `descendant:{object:<type>}`
-
-**Direct target:** `descendant:[[target]]` checks if a specific object appears anywhere in the descendant tree.
-
-**Examples:**
-```
-object:project descendant:section
-object:project descendant:{object:section}
-object:date descendant:{object:meeting has:due}
-object:project descendant:[[projects/website#tasks]]  # projects that have this section as a descendant
+object:section parent:[[projects/website]]
+object:date descendant:{object:meeting has:{trait:due}}
 ```
 
 ### Contains (`contains:`)
 
-Filter by whether object has matching traits anywhere in its subtree (self or any descendant). This is the inverse of `within:` — where `within:` finds traits inside objects, `contains:` finds objects that contain traits.
+Filter by whether object has matching traits anywhere in its subtree.
 
 | Predicate | Meaning |
 |-----------|---------|
-| `contains:{trait:<name> ...}` | Has trait matching sub-query on self or any descendant |
-| `!contains:{trait:<name> ...}` | No matching trait on self or any descendant |
-
-**Shorthand:** `contains:<trait>` expands to `contains:{trait:<trait>}`
+| `contains:{trait:<name> ...}` | Has trait on self or any descendant |
+| `!contains:{trait:<name> ...}` | No matching trait in subtree |
 
 **Examples:**
 ```
-object:project contains:todo
 object:project contains:{trait:todo}
-object:project contains:{trait:todo value:todo}
-object:project contains:{trait:priority value:high}
-object:date contains:{trait:due value:past}
+object:project contains:{trait:todo value==todo}
+object:date contains:{trait:due value==past}
 ```
-
-**Semantic distinctions:**
-- `has:{trait:todo}` — Has a todo trait **directly on** the object
-- `contains:{trait:todo}` — Has a todo trait **anywhere** (self or nested sections/children)
-- `contains:{trait:todo value:todo}` — Has an incomplete todo anywhere in subtree
-- `!contains:{trait:todo value:done}` — Has no completed todos in subtree
 
 ### References (`refs:`)
 
-Filter by what an object references (outgoing links). Use `refs:[[target]]` for a specific target, or `refs:{object:...}` to match targets by a sub-query.
+Filter by what an object references (outgoing links).
 
 | Predicate | Meaning |
 |-----------|---------|
 | `refs:[[target]]` | References specific target |
 | `refs:{object:<type> ...}` | References objects matching sub-query |
 | `!refs:[[target]]` | Does NOT reference target |
-| `!refs:{object:<type> ...}` | Does NOT reference any matching objects |
 
 **Examples:**
 ```
 object:meeting refs:[[projects/website]]
-object:meeting refs:[[people/freya]]
-object:meeting refs:{object:project .status:active}
-object:meeting !refs:[[projects/website]]
+object:meeting refs:{object:project .status==active}
 ```
-
-**Note:** For finding all objects that reference a given target (backlinks/incoming links), use `rvn backlinks <target>` or the `refd:` predicate. The `refs:` predicate filters by outgoing references within a typed query.
 
 ### Referenced-By (`refd:`)
 
-Filter by what references this object (incoming links/backlinks). This is the inverse of `refs:`.
+Filter by what references this object (incoming links/backlinks).
 
 | Predicate | Meaning |
 |-----------|---------|
 | `refd:[[source]]` | Referenced by specific source |
 | `refd:{object:<type> ...}` | Referenced by objects matching sub-query |
 | `refd:{trait:<name> ...}` | Referenced by traits matching sub-query |
-| `!refd:[[source]]` | NOT referenced by source |
-| `!refd:{object:<type> ...}` | NOT referenced by any matching objects |
-
-**Shorthand:** `refd:<type>` expands to `refd:{object:<type>}`
 
 **Examples:**
 ```
-object:project refd:[[daily/2025-02-01#standup]]  # Projects mentioned in this meeting
-object:project refd:meeting                       # Projects mentioned in any meeting (shorthand)
-object:project refd:{object:meeting}              # Same as above (full form)
-object:person refd:{object:project .status:active} # People mentioned in active projects
-object:person !refd:{object:meeting}              # People not mentioned in any meeting
+object:project refd:[[daily/2025-02-01#standup]]
+object:person refd:{object:project .status==active}
 ```
 
 ### Content Search (`content:`)
 
-Filter by full-text search on object content. Uses FTS5 for efficient text matching.
+Filter by full-text search on object content.
 
 | Predicate | Meaning |
 |-----------|---------|
 | `content:"term"` | Content contains search term(s) |
-| `content:"exact phrase"` | Content contains exact phrase |
 | `!content:"term"` | Content does NOT contain term |
-
-**Search syntax** (FTS5):
-- Simple words: `content:"meeting notes"` (finds pages with both words)
-- Exact phrase: `content:"team meeting"` (exact phrase match)
-- Prefix: `content:"meet*"` (matches meeting, meetings, etc.)
-- Boolean: `content:"meeting AND notes"`, `content:"meeting OR notes"`
 
 **Examples:**
 ```
 object:person content:"colleague"
 object:project content:"api design"
-object:meeting content:"quarterly review"
-object:person !content:"contractor"
-
-# Combined with other predicates
-object:person .status:active content:"engineer"
-object:project has:due content:"deadline"
+object:project .status==active content:"deadline"
 ```
 
 ---
@@ -310,570 +205,300 @@ object:project has:due content:"deadline"
 
 ### Value-Based
 
-Filter by trait value. Supports equality and comparison operators.
+Filter by trait value.
 
 | Predicate | Meaning |
 |-----------|---------|
-| `value:<val>` | Value equals val |
-| `value:"val with spaces"` | Value equals quoted string (supports spaces) |
-| `value:<<val>` | Value is less than val |
-| `value:><val>` | Value is greater than val |
-| `value:<=<val>` | Value is less than or equal to val |
-| `value:>=<val>` | Value is greater than or equal to val |
-| `!value:<val>` | Value NOT equals val |
-
-Use double quotes for values containing spaces or special characters.
+| `value==val` | Value equals val |
+| `value!=val` | Value does NOT equal val |
+| `value>val` | Value greater than |
+| `value<val` | Value less than |
+| `value>=val` | Value greater or equal |
+| `value<=val` | Value less or equal |
+| `value~="text"` | Value contains substring |
 
 **Examples:**
 ```
-trait:due value:past
-trait:due !value:past
-trait:status value:todo
-trait:status value:"in progress"       # quoted string with spaces
-trait:priority value:high
-trait:priority value:"very high"       # quoted string
-
-# Comparison operators (useful for dates and numbers)
-trait:due value:<2025-01-01            # due before 2025-01-01
-trait:due value:>=2025-06-01           # due on or after June 1st
-trait:priority value:>5                # priority greater than 5
-trait:score value:<=100                # score up to 100
+trait:due value==past
+trait:due !value==past
+trait:due value<2025-01-01
+trait:status value~="progress"
 ```
 
-### Content Search (`content:`)
-
-Filter by text content on the same line as the trait. Uses substring matching.
+### Object Association (`on:`, `within:`)
 
 | Predicate | Meaning |
 |-----------|---------|
-| `content:"term"` | Line content contains term |
-| `!content:"term"` | Line content does NOT contain term |
+| `on:{object:<type> ...}` | Direct parent object matches |
+| `on:[[target]]` | Direct parent is specific object |
+| `within:{object:<type> ...}` | Some ancestor matches |
+| `within:[[target]]` | Specific object is an ancestor |
 
 **Examples:**
 ```
-trait:todo content:"refactor"
-trait:highlight content:"important"
-trait:due content:"deadline"
-!trait:todo content:"optional"
-```
-
-**Combined with other predicates:**
-```
-trait:todo content:"landing page" value:todo
-trait:highlight content:"insight" on:meeting
-trait:due content:"urgent" within:project
-```
-
-**Note:** Unlike object `content:` which uses FTS5 full-text search, trait `content:` uses simple case-insensitive substring matching on the line where the trait appears. This is sufficient since trait content is a single line.
-
-### Source
-
-Filter by line position. Traits always appear inline in content (not frontmatter).
-
-| Predicate | Meaning |
-|-----------|---------|
-| `source:inline` | Traits appearing after line 1 |
-
-**Examples:**
-```
-trait:due source:inline
-```
-
-> **Note:** All traits are inline (`@trait(value)` syntax in content). Frontmatter contains type-specific fields, not traits.
-
-### Object Association (Direct) (`on:`)
-
-Filter by the object the trait is directly associated with, either by type or specific object.
-
-| Predicate | Meaning |
-|-----------|---------|
-| `on:{object:<type> ...}` | Direct parent object matches sub-query |
-| `on:[[target]]` | Direct parent object is the specified object |
-| `!on:{object:<type> ...}` | Direct parent object does NOT match sub-query |
-
-**Shorthand:** `on:<type>` expands to `on:{object:<type>}`
-
-**Direct target:** `on:[[target]]` checks if the trait's direct parent object is a specific known object.
-
-**Examples:**
-```
-trait:due on:meeting
 trait:due on:{object:meeting}
-trait:highlight on:{object:book .status:reading}
-trait:due value:past on:{object:project .status:active}
-trait:todo on:[[projects/website#tasks]]   # todos directly on this specific section
+trait:highlight on:{object:book .status==reading}
+trait:todo within:{object:project .status==active}
+trait:todo within:[[projects/website]]
 ```
-
-### Object Association (Any Ancestor) (`within:`)
-
-Filter by whether any ancestor object (including direct parent) matches a sub-query or is a specific object.
-
-| Predicate | Meaning |
-|-----------|---------|
-| `within:{object:<type> ...}` | Some ancestor object matches sub-query |
-| `within:[[target]]` | The specified object is an ancestor |
-| `!within:{object:<type> ...}` | No ancestor object matches sub-query |
-
-**Shorthand:** `within:<type>` expands to `within:{object:<type>}`
-
-**Direct target:** `within:[[target]]` checks if the trait is anywhere inside a specific object (trait's parent is the object or any descendant of it).
-
-**Examples:**
-```
-trait:highlight within:date
-trait:highlight within:{object:date}
-trait:due within:{object:project .status:active}
-trait:due (within:book | within:article)
-trait:todo within:[[projects/website]]     # todos anywhere inside this project
-trait:todo within:[[website]]              # short reference (if unambiguous)
-```
-
-### References (`refs:`)
-
-Filter traits by references that appear on the same line as the trait. Use `refs:[[target]]` for a specific target, or `refs:{object:...}` to match targets by a sub-query.
-
-| Predicate | Meaning |
-|-----------|---------|
-| `refs:[[target]]` | Trait line contains reference to specific target |
-| `refs:{object:<type> ...}` | Trait line contains reference to objects matching sub-query |
-| `!refs:[[target]]` | Trait line does NOT contain reference to target |
-| `!refs:{object:<type> ...}` | Trait line does NOT contain references to any matching objects |
-
-**Examples:**
-```
-trait:due refs:[[people/freya]]
-trait:highlight refs:[[projects/website]]
-trait:due refs:{object:person}
-trait:due refs:{object:project .status:active}
-trait:highlight !refs:[[people/loki]]
-```
-
-**Note:** The `refs:` predicate for traits matches references that appear on the same line as the trait annotation. This is useful for finding tasks assigned to specific people (`@due(tomorrow) Send report to [[people/freya]]`) or highlights that reference specific projects.
 
 ### Co-location (`at:`)
 
-Filter traits by co-location (same file and line) with other traits. This is useful for finding traits that are annotated together on the same line.
+Filter traits by co-location (same file and line).
 
 | Predicate | Meaning |
 |-----------|---------|
 | `at:{trait:<name> ...}` | Co-located with trait matching sub-query |
 | `!at:{trait:<name> ...}` | NOT co-located with matching trait |
 
-**Shorthand:** `at:<trait>` expands to `at:{trait:<trait>}`
+**Examples:**
+```
+trait:due at:{trait:todo}
+trait:priority at:{trait:due value==past}
+```
+
+### References (`refs:`)
+
+Filter traits by references on the same line.
+
+| Predicate | Meaning |
+|-----------|---------|
+| `refs:[[target]]` | Line contains reference to target |
+| `refs:{object:<type> ...}` | Line references objects matching sub-query |
 
 **Examples:**
 ```
-trait:due at:{trait:todo}                    # @due on same line as @todo
-trait:priority at:{trait:due value:past}     # @priority on same line as overdue @due
-trait:due !at:{trait:priority}               # @due NOT on same line as @priority
+trait:due refs:[[people/freya]]
+trait:highlight refs:{object:project}
 ```
 
----
+### Content Search (`content:`)
 
-## Sorting and Grouping
+Filter by text content on the same line as the trait.
 
-Queries can include `sort:` and `group:` clauses to control result ordering and grouping.
+| Predicate | Meaning |
+|-----------|---------|
+| `content:"term"` | Line content contains term |
+| `!content:"term"` | Line does NOT contain term |
 
-### Result Reference (`_`)
-
-In sort and group clauses, `_` represents the current result being processed. It can be used in two ways:
-
-**1. Path expressions** — navigate from the current result:
-- `_.value` — trait's value
-- `_.fieldname` — object's field
-- `_.parent` — parent object
-- `_.parent.fieldname` — field on parent object
-- `_.ancestor:type` — ancestor of type
-- `_.refs:type` — objects referenced by `_`
-
-**2. Subquery predicates** — bind `_` to relate the subquery to each result:
-- `on:_` — trait is directly on the current result
-- `within:_` — trait is within the current result (self or descendants)
-- `at:_` — trait is co-located with the current result (same file:line)
-- `refs:_` — references the current result
-- `refd:_` — referenced by the current result
-- `parent:_`, `ancestor:_`, `child:_`, `descendant:_` — hierarchy relationships
-
-### Sort Clause
-
+**Examples:**
 ```
-sort:[agg:]<spec>[:asc|:desc]
+trait:todo content:"refactor"
+trait:highlight content:"important"
 ```
-
-**Aggregation prefixes:**
-- `min:` — minimum value (earliest date, lowest number)
-- `max:` — maximum value
-- `first:` — first by position (default)
-- `count:` — count of matches
-
-**Examples with path expressions:**
-```
-trait:todo sort:_.value                      # By own value
-trait:todo sort:_.parent.status              # By parent's status field
-object:project sort:_.status                 # By own field
-object:project sort:_.status:desc            # Descending
-```
-
-**Examples with subqueries (explicit `_` binding required):**
-```
-trait:todo sort:{trait:due at:_}             # By co-located @due value
-trait:todo sort:{trait:due on:_.parent}      # By @due on same parent
-object:project sort:min:{trait:due within:_} # By min @due in subtree
-object:project sort:{trait:priority on:_}    # By @priority directly on project
-```
-
-### Group Clause
-
-```
-group:<spec>
-```
-
-Groups results by the evaluated path or subquery. Results are organized into sections by group key.
-
-**Examples with path expressions:**
-```
-trait:todo group:_.refs:project              # By referenced project
-trait:todo group:_.parent                    # By parent object
-object:meeting group:_.ancestor:project      # By ancestor project
-```
-
-**Examples with subqueries (explicit `_` binding required):**
-```
-trait:todo group:{object:project refd:_}     # By project that references this todo
-object:task group:{object:person refs:_}     # By person assigned to this task
-```
-
-### Combined Sort and Group
-
-```
-trait:todo refs:{object:project} group:_.refs:project sort:{trait:due at:_}
-```
-
-This query finds todos that reference projects, groups them by the referenced project, and sorts within each group by the co-located due date.
-
-### Why Explicit `_` Binding?
-
-Subqueries in sort/group clauses **must** include a `_` reference to specify how the subquery relates to each result. This ensures:
-
-1. **Explicit semantics** — no hidden heuristics about what "related" means
-2. **Precise control** — choose exactly how to bind (direct, ancestor, reference, etc.)
-3. **Composability** — subqueries use the same predicates as regular queries
-
----
-
-## Limiting Results
-
-Use `limit:N` to restrict the number of results returned.
-
-```
-trait:due limit:10
-object:project .status:active limit:5
-trait:todo sort:_.value limit:20
-```
-
-**Note:** When combined with sort/group, limit is applied to the final result set.
 
 ---
 
 ## Boolean Composition
 
-### Operators
-
-| Operator | Syntax | Binding |
-|----------|--------|---------|
-| NOT | `!` prefix | Tightest |
+| Operator | Syntax | Precedence |
+|----------|--------|------------|
+| NOT | `!` prefix | Highest |
 | AND | space (implicit) | Middle |
-| OR | `\|` | Loosest |
-| Grouping | `( )` | Explicit precedence |
+| OR | `\|` | Lowest |
+| Grouping | `( )` | Explicit |
 
-### Precedence
-
-Standard precedence: NOT > AND > OR
-
-`A | B C` = `A | (B AND C)`
-
-Use parentheses to override: `(A | B) C`
-
-### Examples
-
-Multiple predicates of the same kind are allowed — they're just AND'd together:
-
+**Examples:**
 ```
-# Multiple field predicates
-object:project .status:active .priority:high
-
-# Multiple has: predicates
-object:meeting has:due has:remind
-
-# AND (implicit, space-separated)
-object:project .status:active has:due
-
-# OR (with |)
-object:project (.status:active | .status:backlog)
-
-# NOT (with !)
-object:project !has:deprecated
-
-# Combined
-object:project .status:active !has:deprecated
-object:project (.status:active | .status:backlog) !has:deprecated
-object:meeting (has:{trait:due value:past} | has:{trait:remind value:past})
+object:project .status==active has:{trait:due}
+object:project (.status==active | .status==backlog) !.archived==true
+object:meeting (has:{trait:due value==past} | has:{trait:remind value==past})
 ```
 
 ---
 
-## Sub-Query Composition
+## Pipeline (`|>`)
 
-Predicates can contain sub-queries in curly braces. Each sub-query follows all the same rules.
-
-### Object Query with Trait Sub-Query
+The pipeline operator separates selection (predicates) from post-processing.
 
 ```
-object:meeting has:{trait:due value:past source:inline}
+<query> |> <stage1> <stage2> ...
 ```
 
-The `has:{...}` contains a full trait query.
+### Available Stages
 
-### Trait Query with Object Sub-Query
+| Stage | Syntax | Description |
+|-------|--------|-------------|
+| Assignment | `name = count({...})` | Compute and store a value |
+| Filter | `filter(expr)` | Keep results matching expression |
+| Sort | `sort(field, asc\|desc)` | Order results |
+| Limit | `limit(n)` | Cap results at n |
 
-```
-trait:highlight on:{object:book .status:reading}
-```
+### Aggregation Functions
 
-The `on:{...}` contains a full object query.
+| Function | Description |
+|----------|-------------|
+| `count({subquery})` | Count matching items |
+| `count(refs(_))` | Count outgoing references |
+| `count(refd(_))` | Count incoming references |
+| `count(ancestors(_))` | Count ancestors |
+| `count(descendants(_))` | Count descendants |
+| `min({trait:...})` | Minimum trait value |
+| `max({trait:...})` | Maximum trait value |
+| `min(.field, {object:...})` | Minimum field value on objects |
+| `max(.field, {object:...})` | Maximum field value on objects |
+| `sum(.field, {object:...})` | Sum of field values on objects |
+| `sum({trait:...})` | Sum of numeric trait values |
 
-### Deep Nesting
-
-```
-trait:due on:{object:project has:{trait:priority value:high}}
-```
-
-"Due traits directly on projects that have high-priority traits"
-
-### Combining Direct and Ancestor
-
-```
-trait:highlight within:{object:date child:{object:project .status:active}}
-```
-
-"Highlights anywhere within daily notes that have an active project as a direct child"
-
-### OR Across Sub-Queries
-
-Each sub-query must return one type. OR happens at the predicate level:
+**Important**: All subqueries in pipeline assignments **must** contain a `_` reference to connect to the current result. Subqueries without `_` are invalid because they would produce the same value for every result:
 
 ```
-# CORRECT: Two sub-queries, OR'd at filter level
-trait:highlight (on:{object:book .status:reading} | on:{object:article .status:reading})
+# ✅ Valid - subquery references _
+object:project |> todos = count({trait:todo within:_})
 
-# INVALID: Single sub-query returning two types
-trait:highlight on:{object:book | object:article}  # ✗ Not allowed
+# ❌ Invalid - subquery doesn't reference _, returns same value for all
+object:project |> todos = count({trait:todo})
 ```
 
----
+The `_` symbol represents the current result being processed.
 
-## Sub-Query Syntax
+**Important**: `_` is **strictly typed** - it always represents the exact item being processed:
+- In object pipelines: `_` is the object
+- In trait pipelines: `_` is the trait
 
-Inside sub-query curly braces, write full queries with explicit type prefixes:
+### Self-Reference Compatibility
 
-**Trait sub-query** (inside `has:{...}`, `contains:{...}`)
+#### In Object Pipelines (`_` = object)
+
+| Predicate | Supported | Meaning |
+|-----------|-----------|---------|
+| `ancestor:_` | ✅ | Has this object as ancestor |
+| `descendant:_` | ✅ | Has this object as descendant |
+| `parent:_` | ✅ | This object is direct parent |
+| `child:_` | ✅ | This object is direct child |
+| `refs:_` | ✅ | References this object |
+| `refd:_` | ✅ | Referenced by this object |
+| `on:_` | ✅ | Trait is directly on this object |
+| `within:_` | ✅ | Trait is within this object's subtree |
+
+#### In Trait Pipelines (`_` = trait)
+
+| Predicate | Supported | Meaning |
+|-----------|-----------|---------|
+| `at:_` | ✅ | Co-located (same file+line) |
+| `refd:_` | ✅ | Referenced by this trait's line |
+| `has:_` | ✅ | Objects that have this trait |
+| `contains:_` | ✅ | Objects that contain this trait in subtree |
+| `on:_` | ❌ ERROR | `on:` expects an object |
+| `within:_` | ❌ ERROR | `within:` expects an object |
+| `ancestor:_` | ❌ ERROR | Traits can't be ancestors |
+| `descendant:_` | ❌ ERROR | Traits can't be descendants |
+| `parent:_` | ❌ ERROR | Traits can't be parents |
+| `child:_` | ❌ ERROR | Traits can't be children |
+| `refs:_` | ❌ ERROR | Traits can't be referenced via `[[...]]` |
+
+**Note**: `min`, `max`, and `sum` on object queries require a field specifier (`.field`). For trait queries, these operate on the trait's value directly.
+
+### Filter Expressions
+
+Filter expressions compare computed or field values:
+
 ```
-trait:<name> [<trait-predicates>...]
+filter(todos > 0)
+filter(overdue >= 1)
+filter(.status == active)
 ```
 
-**Object sub-query** (inside `on:{...}`, `within:{...}`, `parent:{...}`, `ancestor:{...}`, `child:{...}`, `descendant:{...}`, `refs:{...}`)
+### Sort Expressions
+
+Sort by field or computed value:
+
 ```
-object:<type> [<object-predicates>...]
+sort(.name, asc)
+sort(todos, desc)
 ```
 
-**Shorthand:** For simple type/trait-only sub-queries, omit the braces:
-- `has:due` → `has:{trait:due}`
-- `contains:todo` → `contains:{trait:todo}`
-- `parent:date` → `parent:{object:date}`
-- `descendant:section` → `descendant:{object:section}`
-- `on:meeting` → `on:{object:meeting}`
+### Pipeline Examples
 
-**Direct target:** For hierarchy and association predicates, use `[[target]]` instead of a sub-query to match a specific known object:
-- `parent:[[projects/website]]` — parent is this specific project
-- `ancestor:[[daily/2025-02-01]]` — this date is an ancestor
-- `child:[[daily/2025-02-01#standup]]` — this meeting is a child
-- `descendant:[[projects/website#tasks]]` — this section is a descendant
-- `on:[[projects/website#tasks]]` — trait's direct parent is this section
-- `within:[[projects/website]]` — trait is anywhere inside this project
+```
+# Simple sort and limit
+object:project .status==active |> sort(.name, asc) limit(10)
 
-Short references work if unambiguous (e.g., `within:[[website]]`). Ambiguous references return an error with matching options.
+# Count and filter
+object:project |> todos = count({trait:todo value==todo within:_}) filter(todos > 0)
 
----
+# Full pipeline
+object:project .status==active |>
+  todos = count({trait:todo value==todo within:_})
+  overdue = count({trait:due value==past within:_})
+  filter(todos > 0)
+  sort(overdue, desc)
+  limit(10)
 
-## Validation Rules
-
-Recursively validate each query:
-
-1. Query returns exactly one kind of result (objects of a single type, or traits of a single name)
-2. Query uses only predicates valid for its query type
-3. Sub-queries inside predicates are themselves valid queries
-4. Boolean composition is well-formed
+# Reference counting
+object:person |>
+  mentions = count(refd(_))
+  projects = count({object:project refs:_})
+  sort(mentions, desc)
+  limit(20)
+```
 
 ---
 
 ## Full Examples
 
-```bash
-# Active projects
-object:project .status:active
-
-# People with email
-object:person .email:*
-
-# People without email  
-object:person !.email:*
-
-# Meetings with overdue items
-object:meeting has:{trait:due value:past}
-
-# Meetings without any due traits
-object:meeting !has:due
-
-# Meetings that are direct children of daily notes
-object:meeting parent:date
-
-# Meetings anywhere within daily notes (any depth)
-object:meeting ancestor:date
-
-# All overdue items
-trait:due value:past
-
-# Overdue items directly on active projects
-trait:due value:past on:{object:project .status:active}
-
-# Overdue items anywhere within active projects
-trait:due value:past within:{object:project .status:active}
-
-# Highlights in books or articles that are being read
-trait:highlight (on:{object:book .status:reading} | on:{object:article .status:reading})
-
-# Due items that reference a specific person (e.g., tasks assigned to someone)
-trait:due refs:[[people/freya]]
-
-# Highlights that reference any active project
-trait:highlight refs:{object:project .status:active}
-
-# Traits with specific content on their line
-trait:todo content:"refactor"
-trait:highlight content:"important" on:book
-
-# People whose pages mention "colleague"
-object:person content:"colleague"
-
-# Active projects with deadline-related content
-object:project .status:active content:"deadline"
-
-# Projects with active status OR having high-priority traits, but NOT deprecated
-object:project (.status:active | has:{trait:priority value:high}) !has:deprecated
-
-# Due traits on projects that have high-priority traits
-trait:due on:{object:project has:{trait:priority value:high}}
-
-# Complex: meetings whose ancestor is a daily note that has a child project with status active
-object:meeting ancestor:{object:date child:{object:project .status:active}}
-
-# Meetings that reference a specific person
-object:meeting refs:[[people/freya]]
-
-# Meetings that reference any active project
-object:meeting refs:{object:project .status:active}
-
-# Meetings that don't reference a specific project
-object:meeting !refs:[[projects/website]]
-
-# Projects with any todo anywhere in their hierarchy (self or nested sections)
-object:project contains:{trait:todo}
-
-# Active projects with incomplete todos
-object:project .status:active contains:{trait:todo value:todo}
-
-# Projects with sections nested inside
-object:project descendant:section
-
-# Daily notes that contain overdue items anywhere
-object:date contains:{trait:due value:past}
-
-# Difference between has: and contains:
-object:project has:{trait:due}              # Due trait directly on project
-object:project contains:{trait:due}         # Due trait anywhere (including sections)
-
-# New predicates: at: and refd:
-trait:due at:{trait:todo}                   # @due traits co-located with @todo
-trait:priority at:{trait:due value:past}    # @priority on same line as overdue @due
-object:project refd:{object:meeting}        # Projects mentioned in meetings
-object:person refd:{object:project .status:active}  # People mentioned in active projects
-
-# Sorting and Grouping (path expressions)
-trait:todo sort:_.value                     # Sort todos by their value
-trait:due sort:_.value:desc                 # Sort due dates descending (latest first)
-object:project sort:_.status                # Sort projects by status
-
-trait:todo group:_.parent                   # Group todos by parent object
-trait:todo group:_.refs:project             # Group todos by referenced project
-object:meeting group:_.ancestor:project     # Group meetings by ancestor project
-
-# Sorting and Grouping (subqueries with explicit _ binding)
-trait:todo sort:{trait:due at:_}            # Sort by co-located @due value
-object:project sort:min:{trait:due within:_} # Sort projects by min due in subtree
-trait:todo group:{object:project refd:_}    # Group by project referencing this todo
-
-# Combined sort and group
-trait:todo group:_.refs:project sort:{trait:due at:_}  # Group by project, sort by due
 ```
+# Simple queries
+object:project .status==active
+trait:due value==past
+
+# String matching
+object:project .name~="api" .name$="-service"
+
+# Boolean logic
+object:project (.status==active | .status==backlog) !.archived==true
+
+# With sub-query
+object:meeting has:{trait:due value==past}
+
+# Trait query with hierarchy
+trait:todo value==todo within:{object:project .status==active}
+
+# Content search
+object:project content:"api design"
+trait:highlight content:"important"
+
+# References
+object:meeting refs:[[people/freya]]
+object:project refd:{object:meeting}
+
+# Pipeline with aggregation
+object:project .status==active |>
+  todos = count({trait:todo value==todo within:_})
+  filter(todos > 0)
+  sort(todos, desc)
+  limit(10)
+```
+
+---
+
+## Predicate Reference
+
+### Predicates by Query Type
+
+| Predicate | Object Query | Trait Query |
+|-----------|--------------|-------------|
+| `.field==value` | ✅ Frontmatter fields | ❌ |
+| `value==val` | ❌ | ✅ Trait value |
+| `has:{trait:...}` | ✅ Has matching trait | ❌ |
+| `contains:{trait:...}` | ✅ Has trait in subtree | ❌ |
+| `parent:` | ✅ Direct parent matches | ❌ |
+| `ancestor:` | ✅ Some ancestor matches | ❌ |
+| `child:` | ✅ Has child matching | ❌ |
+| `descendant:` | ✅ Has descendant matching | ❌ |
+| `refs:` | ✅ References target | ✅ Line references target |
+| `refd:` | ✅ Referenced by source | ❌ |
+| `on:` | ❌ | ✅ Direct parent object |
+| `within:` | ❌ | ✅ Ancestor object |
+| `at:` | ❌ | ✅ Co-located (same line) |
+| `content:` | ✅ Full-text search | ✅ Line content |
 
 ---
 
 ## Design Decisions
 
-1. **No cross-type unions**: A query returns one type. Use separate queries and combine results if needed.
-2. **Direct vs deep hierarchy**: Separate predicates for each direction and depth:
-   - Up: `parent:` (direct) vs `ancestor:` (any depth)
-   - Down: `child:` (direct) vs `descendant:` (any depth)
-   - Object→Trait: `has:` (direct) vs `contains:` (subtree)
-   - Trait→Object: `on:` (direct) vs `within:` (ancestors)
-3. **Traits are inline-only**: `trait:due` returns all inline `@due` annotations in content.
-4. **Explicit predicates**: No shorthand value syntax (`=past`), use `value:past` for clarity.
-5. **Dot prefix for fields**: `.status:active` distinguishes fields from keywords, avoiding collisions.
-6. **Curly braces for sub-queries**: `has:{trait:due}` vs parentheses `()` for boolean grouping.
-7. **Explicit sub-query types**: `parent:{object:date}` not `parent:{date}` for consistency.
-8. **Unified "matches" semantics**: `.<field>:<value>` means "equals" for single values, "contains" for arrays.
-9. **Temporal queries deferred**: Use git history for temporal needs; may add dedicated support later.
-
----
-
-## Known Gaps (Future Work)
-
-Features identified as valuable but not yet designed:
-
-### Important
-
-1. **String matching**: Contains, starts-with, regex.
-   ```
-   # Proposed syntax
-   object:project .name:~website
-   ```
-
-2. **Range syntax**: For between queries on dates and numbers.
-   ```
-   # Proposed syntax
-   .date:2024-01..2024-06
-   ```
-
-### Deferred
-
-3. **Position-based selection**: First, last, nth — not natural for this domain.
-4. **Sibling queries**: Covered by composing parent/child predicates.
-5. **Multiple sort keys**: For tie-breaking with multiple fields.
-6. **Nested grouping**: Multiple group clauses for hierarchical grouping.
-
-### Future Extension Points
-
-The syntax has clean extension paths:
-- **Operator prefixes** after `:` → `>`, `<`, `>=`, `<=`, `~` (regex), `=` (exact array)
-- **Dot notation** for field properties → `.tags.length:>2`, `.tags.all:value`
-- **Range syntax** → `.date:2024-01..2024-06` for between
+1. **No cross-type unions**: A query returns one type only
+2. **Explicit subqueries**: All predicates require explicit `{object:...}` or `{trait:...}` syntax
+3. **Operator-based syntax**: `==` for equality, comparison operators standalone
+4. **Pipeline separation**: `|>` clearly separates selection from processing
+5. **Self-reference with `_`**: Pipeline operations use `_` to reference current result

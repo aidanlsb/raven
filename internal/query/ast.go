@@ -15,11 +15,14 @@ type Query struct {
 	TypeName   string      // Object type or trait name
 	Predicates []Predicate // Filters to apply
 
-	// Sort and group specifications (optional)
+	// v2 Pipeline (after |>)
+	Pipeline *Pipeline
+
+	// v1 Sort and group specifications (deprecated, kept for migration)
 	Sort  *SortSpec
 	Group *GroupSpec
 
-	// Limit restricts the number of results (0 = no limit)
+	// v1 Limit (deprecated, use Pipeline LimitStage instead)
 	Limit int
 }
 
@@ -40,7 +43,8 @@ func (b basePredicate) Negated() bool { return b.negated }
 type CompareOp int
 
 const (
-	CompareEq  CompareOp = iota // = (default, equals)
+	CompareEq  CompareOp = iota // == (equals)
+	CompareNeq                  // != (not equals)
 	CompareLt                   // <
 	CompareGt                   // >
 	CompareLte                  // <=
@@ -49,6 +53,8 @@ const (
 
 func (op CompareOp) String() string {
 	switch op {
+	case CompareNeq:
+		return "!="
 	case CompareLt:
 		return "<"
 	case CompareGt:
@@ -58,27 +64,56 @@ func (op CompareOp) String() string {
 	case CompareGte:
 		return ">="
 	default:
-		return "="
+		return "=="
+	}
+}
+
+// StringOp represents a string matching operator.
+type StringOp int
+
+const (
+	StringNone       StringOp = iota // No string operation (use CompareOp)
+	StringContains                   // ~= (contains)
+	StringStartsWith                 // ^= (starts with)
+	StringEndsWith                   // $= (ends with)
+	StringRegex                      // =~ (regex match)
+)
+
+func (op StringOp) String() string {
+	switch op {
+	case StringContains:
+		return "~="
+	case StringStartsWith:
+		return "^="
+	case StringEndsWith:
+		return "$="
+	case StringRegex:
+		return "=~"
+	default:
+		return ""
 	}
 }
 
 // FieldPredicate filters by object field value.
-// Syntax: .field:value, .field:*, .field:<value, !.field:value
+// Syntax: .field==value, .field==*, .field>value, .field~="pattern", .field=~/regex/
 type FieldPredicate struct {
 	basePredicate
 	Field     string
 	Value     string    // "*" means "exists"
 	IsExists  bool      // true if Value is "*"
-	CompareOp CompareOp // comparison operator (default: equals)
+	CompareOp CompareOp // comparison operator (==, !=, <, >, <=, >=)
+	StringOp  StringOp  // string matching operator (~=, ^=, $=, =~)
 }
 
 func (FieldPredicate) predicateNode() {}
 
 // HasPredicate filters objects by whether they contain matching traits.
-// Syntax: has:trait, has:{trait:name value:...}
+// Syntax: has:{trait:name value:...}, has:_
 type HasPredicate struct {
 	basePredicate
-	SubQuery *Query // A trait query
+	SubQuery  *Query // A trait query (mutually exclusive with IsSelfRef)
+	IsSelfRef bool   // True if has:_ (in trait pipeline: objects that have this trait)
+	TraitID   string // Bound trait ID when IsSelfRef is resolved
 }
 
 func (HasPredicate) predicateNode() {}
@@ -129,10 +164,12 @@ func (DescendantPredicate) predicateNode() {}
 
 // ContainsPredicate filters objects by whether they contain matching traits anywhere
 // in their subtree (self or any descendant object).
-// Syntax: contains:{trait:name ...}
+// Syntax: contains:{trait:name ...}, contains:_
 type ContainsPredicate struct {
 	basePredicate
-	SubQuery *Query // A trait query
+	SubQuery  *Query // A trait query (mutually exclusive with IsSelfRef)
+	IsSelfRef bool   // True if contains:_ (in trait pipeline: objects that contain this trait)
+	TraitID   string // Bound trait ID when IsSelfRef is resolved
 }
 
 func (ContainsPredicate) predicateNode() {}
@@ -158,11 +195,12 @@ type ContentPredicate struct {
 func (ContentPredicate) predicateNode() {}
 
 // ValuePredicate filters traits by value.
-// Syntax: value:val, value:<val, value:>val, !value:val
+// Syntax: value==val, value<val, value>val, value~="pattern"
 type ValuePredicate struct {
 	basePredicate
 	Value     string
-	CompareOp CompareOp // comparison operator (default: equals)
+	CompareOp CompareOp // comparison operator (==, !=, <, >, <=, >=)
+	StringOp  StringOp  // string matching operator (~=, ^=, $=, =~)
 }
 
 func (ValuePredicate) predicateNode() {}
@@ -248,6 +286,7 @@ const (
 	AggMin                          // Minimum value
 	AggMax                          // Maximum value
 	AggCount                        // Count of matches
+	AggSum                          // Sum of values
 )
 
 // SortSpec represents a sort specification.
@@ -290,3 +329,65 @@ const (
 	PathStepRefs                         // .refs:type
 	PathStepValue                        // .value
 )
+
+// Pipeline represents the post-processing stages after |>
+type Pipeline struct {
+	Stages []PipelineStage
+}
+
+// PipelineStage represents a single stage in the pipeline
+type PipelineStage interface {
+	pipelineStageNode()
+}
+
+// AssignmentStage represents name = aggregation(...)
+type AssignmentStage struct {
+	Name        string          // Variable name being assigned
+	Aggregation AggregationType // count, min, max, sum
+	AggField    string          // For min/max/sum on objects: the field to aggregate (e.g., "priority")
+	SubQuery    *Query          // Subquery for aggregation
+	NavFunc     *NavFunc        // Navigation function like refs(_), refd(_)
+}
+
+func (AssignmentStage) pipelineStageNode() {}
+
+// NavFunc represents a navigation function like refs(_), refd(_), ancestors(_), descendants(_)
+type NavFunc struct {
+	Name string // "refs", "refd", "parent", "child", "ancestors", "descendants"
+}
+
+// FilterStage represents filter(expr)
+type FilterStage struct {
+	Expr *FilterExpr
+}
+
+func (FilterStage) pipelineStageNode() {}
+
+// FilterExpr represents a filter expression like "todos > 5"
+type FilterExpr struct {
+	Left     string    // Variable name or field
+	Op       CompareOp // Comparison operator
+	Right    string    // Value to compare against
+	IsField  bool      // True if Left is a field reference (starts with .)
+}
+
+// SortCriterion represents a single sort field with direction
+type SortCriterion struct {
+	Field      string // Field name or computed variable
+	IsField    bool   // True if sorting by object field (starts with .)
+	Descending bool
+}
+
+// SortStage represents sort(field, asc/desc) - can have multiple criteria
+type SortStage struct {
+	Criteria []SortCriterion
+}
+
+func (SortStage) pipelineStageNode() {}
+
+// LimitStage represents limit(n)
+type LimitStage struct {
+	N int
+}
+
+func (LimitStage) pipelineStageNode() {}
