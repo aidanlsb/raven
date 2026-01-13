@@ -413,4 +413,136 @@ type: date
 			t.Errorf("object ID = %q, want %q", doc.Objects[0].ID, "daily/2025-01-01")
 		}
 	})
+
+	t.Run("refs extracted from embedded object fields", func(t *testing.T) {
+		content := `# Daily Note
+
+## Weekly Standup
+::meeting(series=[[meetings/standup]])
+
+Discussed project status.
+`
+		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should have at least one ref from the embedded field
+		found := false
+		for _, ref := range doc.Refs {
+			if ref.TargetRaw == "meetings/standup" && ref.SourceID == "daily/2025-01-15#weekly-standup" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected ref to meetings/standup from embedded object, got refs: %v", doc.Refs)
+		}
+	})
+
+	t.Run("refs extracted from embedded object field arrays", func(t *testing.T) {
+		content := `# Daily Note
+
+## Team Sync
+::meeting(attendees=[[[people/freya]], [[people/thor]]])
+
+Team discussion.
+`
+		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Debug: Print what we got
+		t.Logf("Found %d refs:", len(doc.Refs))
+		for _, ref := range doc.Refs {
+			t.Logf("  source=%s target=%s", ref.SourceID, ref.TargetRaw)
+		}
+
+		// Should have refs from the array field
+		foundFreya := false
+		foundThor := false
+		for _, ref := range doc.Refs {
+			if ref.SourceID == "daily/2025-01-15#team-sync" {
+				if ref.TargetRaw == "people/freya" {
+					foundFreya = true
+				}
+				if ref.TargetRaw == "people/thor" {
+					foundThor = true
+				}
+			}
+		}
+		if !foundFreya {
+			t.Errorf("expected ref to people/freya from embedded object array field")
+		}
+		if !foundThor {
+			t.Errorf("expected ref to people/thor from embedded object array field")
+		}
+	})
+
+	t.Run("multiple refs in embedded object fields", func(t *testing.T) {
+		content := `# Daily Note
+
+## Client Meeting
+::meeting(series=[[meetings/acme-weekly]], client=[[companies/acme]])
+
+Discussed roadmap.
+`
+		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should have refs from both fields
+		foundSeries := false
+		foundClient := false
+		for _, ref := range doc.Refs {
+			if ref.SourceID == "daily/2025-01-15#client-meeting" {
+				if ref.TargetRaw == "meetings/acme-weekly" {
+					foundSeries = true
+				}
+				if ref.TargetRaw == "companies/acme" {
+					foundClient = true
+				}
+			}
+		}
+		if !foundSeries {
+			t.Errorf("expected ref to meetings/acme-weekly from embedded object field")
+		}
+		if !foundClient {
+			t.Errorf("expected ref to companies/acme from embedded object field")
+		}
+	})
+
+	t.Run("embedded field refs distinct from body refs", func(t *testing.T) {
+		content := `# Daily Note
+
+## Standup
+::meeting(series=[[meetings/standup]])
+
+Discussed [[projects/website]] progress.
+`
+		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should have both the field ref and body ref
+		foundFieldRef := false
+		foundBodyRef := false
+		for _, ref := range doc.Refs {
+			if ref.TargetRaw == "meetings/standup" {
+				foundFieldRef = true
+			}
+			if ref.TargetRaw == "projects/website" {
+				foundBodyRef = true
+			}
+		}
+		if !foundFieldRef {
+			t.Errorf("expected ref to meetings/standup from embedded field")
+		}
+		if !foundBodyRef {
+			t.Errorf("expected ref to projects/website from body")
+		}
+	})
 }

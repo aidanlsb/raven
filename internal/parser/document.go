@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // ParsedDocument represents a fully parsed document.
@@ -214,7 +215,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 				}
 			}
 
-			embeddedID := fileID + "#" + slug
+				embeddedID := fileID + "#" + slug
 			headingText := heading.Text
 			headingLevel := heading.Level
 
@@ -227,6 +228,11 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 				ParentID:     &currentParent,
 				LineStart:    heading.Line,
 			})
+
+			// Extract references from embedded object field values.
+			// This enables ::type(field=[[target]]) to be indexed for backlinks.
+			fieldRefs := extractRefsFromFields(embedded.Fields, embeddedID, heading.Line)
+			refs = append(refs, fieldRefs...)
 
 			parentStack = append(parentStack, parentEntry{id: embeddedID, level: heading.Level})
 		} else {
@@ -353,3 +359,56 @@ func computeLineEnds(objects []*ParsedObject) {
 }
 
 // (directory root stripping is handled by internal/paths)
+
+// extractRefsFromFields extracts references from embedded object field values.
+// This enables wikilinks in ::type() declarations to be indexed for backlinks.
+//
+// It handles:
+//   - Ref types: directly adds the target as a reference
+//   - String types: scans for wikilinks using the wikilink parser
+//   - Array types: recursively processes each element
+func extractRefsFromFields(fields map[string]schema.FieldValue, sourceID string, line int) []*ParsedRef {
+	var refs []*ParsedRef
+	for _, fv := range fields {
+		refs = append(refs, extractRefsFromFieldValue(fv, sourceID, line)...)
+	}
+	return refs
+}
+
+// extractRefsFromFieldValue extracts references from a single field value.
+func extractRefsFromFieldValue(fv schema.FieldValue, sourceID string, line int) []*ParsedRef {
+	var refs []*ParsedRef
+
+	// Ref type - already parsed, just extract the target
+	if target, ok := fv.AsRef(); ok {
+		refs = append(refs, &ParsedRef{
+			SourceID:  sourceID,
+			TargetRaw: target,
+			Line:      line,
+		})
+		return refs
+	}
+
+	// Array type - recurse into each element
+	if arr, ok := fv.AsArray(); ok {
+		for _, item := range arr {
+			refs = append(refs, extractRefsFromFieldValue(item, sourceID, line)...)
+		}
+		return refs
+	}
+
+	// String type - scan for wikilinks (handles edge cases like wikilinks in string values)
+	if s, ok := fv.AsString(); ok {
+		matches := wikilink.FindAllInLine(s, true) // allowTriple=true to handle array contexts
+		for _, match := range matches {
+			refs = append(refs, &ParsedRef{
+				SourceID:    sourceID,
+				TargetRaw:   match.Target,
+				DisplayText: match.DisplayText,
+				Line:        line,
+			})
+		}
+	}
+
+	return refs
+}
