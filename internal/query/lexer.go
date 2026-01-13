@@ -34,13 +34,9 @@ const (
 	TokenLte                  // <=
 	TokenGte                  // >=
 	TokenEq                   // =
-	TokenEqEq                 // ==
-	TokenBangEq               // !=
-	TokenTildeEq              // ~=
-	TokenCaretEq              // ^=
-	TokenDollarEq             // $=
-	TokenEqTilde              // =~
-	TokenComma                // ,
+	TokenEqEq   // ==
+	TokenBangEq // !=
+	TokenComma  // ,
 	TokenError                // error token
 )
 
@@ -98,38 +94,11 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: TokenPipe, Value: "|", Pos: l.start}
 	case '=':
 		l.pos++
-		if l.pos < len(l.input) {
-			switch l.input[l.pos] {
-			case '=':
-				l.pos++
-				return Token{Type: TokenEqEq, Value: "==", Pos: l.start}
-			case '~':
-				l.pos++
-				return Token{Type: TokenEqTilde, Value: "=~", Pos: l.start}
-			}
+		if l.pos < len(l.input) && l.input[l.pos] == '=' {
+			l.pos++
+			return Token{Type: TokenEqEq, Value: "==", Pos: l.start}
 		}
 		return Token{Type: TokenEq, Value: "=", Pos: l.start}
-	case '~':
-		l.pos++
-		if l.pos < len(l.input) && l.input[l.pos] == '=' {
-			l.pos++
-			return Token{Type: TokenTildeEq, Value: "~=", Pos: l.start}
-		}
-		return Token{Type: TokenError, Value: "~", Pos: l.start}
-	case '^':
-		l.pos++
-		if l.pos < len(l.input) && l.input[l.pos] == '=' {
-			l.pos++
-			return Token{Type: TokenCaretEq, Value: "^=", Pos: l.start}
-		}
-		return Token{Type: TokenError, Value: "^", Pos: l.start}
-	case '$':
-		l.pos++
-		if l.pos < len(l.input) && l.input[l.pos] == '=' {
-			l.pos++
-			return Token{Type: TokenDollarEq, Value: "$=", Pos: l.start}
-		}
-		return Token{Type: TokenError, Value: "$", Pos: l.start}
 	case ',':
 		l.pos++
 		return Token{Type: TokenComma, Value: ",", Pos: l.start}
@@ -177,6 +146,13 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: TokenGt, Value: ">", Pos: l.start}
 	case '"':
 		return l.scanString()
+	case 'r':
+		// Check for raw string r"..."
+		if l.pos+1 < len(l.input) && l.input[l.pos+1] == '"' {
+			return l.scanRawString()
+		}
+		// Otherwise it's an identifier
+		return l.scanIdent()
 	case '_':
 		// Check if it's a standalone _ or part of an identifier
 		// Standalone _ is followed by nothing, whitespace, '.', ':', or EOF
@@ -247,6 +223,28 @@ func (l *Lexer) scanString() Token {
 	value := strings.TrimPrefix(strings.TrimSuffix(literal, "\""), "\"")
 	// Unescape escaped quotes
 	value = strings.ReplaceAll(value, "\\\"", "\"")
+	return Token{Type: TokenString, Value: value, Literal: literal, Pos: start}
+}
+
+func (l *Lexer) scanRawString() Token {
+	start := l.pos
+	l.pos += 2 // skip r"
+
+	// Find closing quote — no escape processing
+	for l.pos < len(l.input) && l.input[l.pos] != '"' {
+		l.pos++
+	}
+
+	if l.pos < len(l.input) {
+		l.pos++ // skip closing quote
+	}
+
+	literal := l.input[start:l.pos]
+	// Extract content between r" and "
+	value := ""
+	if len(literal) >= 3 {
+		value = l.input[start+2 : l.pos-1]
+	}
 	return Token{Type: TokenString, Value: value, Literal: literal, Pos: start}
 }
 

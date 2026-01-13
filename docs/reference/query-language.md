@@ -16,15 +16,18 @@
 | Equality | `==` | `.status==active`, `value==past` |
 | Not equals | `!=` | `.status!=done` |
 | Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
-| Contains | `~=` | `.name~="website"` |
-| Starts with | `^=` | `.name^="My"` |
-| Ends with | `$=` | `.name$=".md"` |
-| Regex | `=~` | `.name=~/^api.*$/` |
+| Contains | `includes()` | `includes(.name, "website")` |
+| Starts with | `startswith()` | `startswith(.name, "My")` |
+| Ends with | `endswith()` | `endswith(.name, ".md")` |
+| Regex | `matches()` | `matches(.name, "^api.*$")` |
+| Array any | `any()` | `any(.tags, _ == "urgent")` |
+| Array all | `all()` | `all(.tags, startswith(_, "feat-"))` |
 | Subquery | `{...}` | `has:{trait:due}` |
 | Pipeline | `\|>` | `\|> sort(.name, asc)` |
 | Grouping | `(...)` | `(.status==active \| .status==done)` |
 | References | `[[...]]` | `[[people/freya]]` |
 | Exists | `*` | `.email==*` |
+| Raw string | `r"..."` | `matches(.path, r"C:\Users\.*")` |
 
 ## Query Types
 
@@ -65,7 +68,7 @@ trait:highlight on:{object:book .status==reading}
 
 ### Field-Based
 
-Filter by object frontmatter fields. Fields use dot prefix. Supports equality, comparison, and string matching operators.
+Filter by object frontmatter fields. Fields use dot prefix.
 
 | Predicate | Meaning |
 |-----------|---------|
@@ -77,12 +80,6 @@ Filter by object frontmatter fields. Fields use dot prefix. Supports equality, c
 | `.field<value` | Field is less than value |
 | `.field>=value` | Field is greater or equal |
 | `.field<=value` | Field is less or equal |
-| `.field~="text"` | Field contains substring |
-| `.field^="text"` | Field starts with |
-| `.field$="text"` | Field ends with |
-| `.field=~/regex/` | Field matches regex |
-
-For array fields, `.field==value` matches if the array contains the value.
 
 **Examples:**
 ```
@@ -92,10 +89,56 @@ object:person .email==*
 object:person !.email==*
 object:project .priority>5
 object:project .created>=2025-01-01
-object:project .name~="website"
-object:project .name^="api-"
-object:project .name$="-service"
-object:project .name=~/^web-.*-api$/
+```
+
+### String Matching Functions
+
+For string matching, use function-style predicates:
+
+| Function | Meaning |
+|----------|---------|
+| `includes(.field, "str")` | Field contains substring |
+| `startswith(.field, "str")` | Field starts with |
+| `endswith(.field, "str")` | Field ends with |
+| `matches(.field, "pattern")` | Field matches regex |
+
+All string functions are **case-insensitive by default**. Add `true` as third argument for case-sensitive:
+```
+includes(.name, "API", true)   # case-sensitive
+```
+
+Use raw strings (`r"..."`) for regex patterns to avoid escaping:
+```
+matches(.path, r"C:\Users\.*")
+```
+
+**Examples:**
+```
+object:project includes(.name, "website")
+object:project startswith(.name, "api-")
+object:project endswith(.name, "-service")
+object:project matches(.name, "^web-.*-api$")
+```
+
+### Array Field Matching
+
+For array fields, use quantifier functions:
+
+| Function | Meaning |
+|----------|---------|
+| `any(.field, predicate)` | Any element matches predicate |
+| `all(.field, predicate)` | All elements match predicate |
+| `none(.field, predicate)` | No element matches predicate |
+
+The `_` symbol represents the current element being tested.
+
+**Examples:**
+```
+object:project any(.tags, _ == "urgent")
+object:project all(.tags, startswith(_, "feature-"))
+object:project none(.tags, _ == "deprecated")
+object:project any(.tags, _ == "urgent" | _ == "critical")
+object:project any(.tags, includes(_, "api"))
 ```
 
 ### Trait-Based (`has:`)
@@ -215,14 +258,15 @@ Filter by trait value.
 | `value<val` | Value less than |
 | `value>=val` | Value greater or equal |
 | `value<=val` | Value less or equal |
-| `value~="text"` | Value contains substring |
+
+For string matching on values, use `includes()`, `startswith()`, `endswith()`, or `matches()`.
 
 **Examples:**
 ```
 trait:due value==past
 trait:due !value==past
 trait:due value<2025-01-01
-trait:status value~="progress"
+trait:status includes(.value, "progress")
 ```
 
 ### Object Association (`on:`, `within:`)
@@ -443,7 +487,12 @@ object:project .status==active
 trait:due value==past
 
 # String matching
-object:project .name~="api" .name$="-service"
+object:project includes(.name, "api") endswith(.name, "-service")
+object:project matches(.name, r"^web-.*-api$")
+
+# Array matching
+object:project any(.tags, _ == "urgent")
+object:project all(.tags, startswith(_, "feature-"))
 
 # Boolean logic
 object:project (.status==active | .status==backlog) !.archived==true

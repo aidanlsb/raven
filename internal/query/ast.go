@@ -61,41 +61,15 @@ func (op CompareOp) String() string {
 	}
 }
 
-// StringOp represents a string matching operator.
-type StringOp int
-
-const (
-	StringNone       StringOp = iota // No string operation (use CompareOp)
-	StringContains                   // ~= (contains)
-	StringStartsWith                 // ^= (starts with)
-	StringEndsWith                   // $= (ends with)
-	StringRegex                      // =~ (regex match)
-)
-
-func (op StringOp) String() string {
-	switch op {
-	case StringContains:
-		return "~="
-	case StringStartsWith:
-		return "^="
-	case StringEndsWith:
-		return "$="
-	case StringRegex:
-		return "=~"
-	default:
-		return ""
-	}
-}
-
 // FieldPredicate filters by object field value.
-// Syntax: .field==value, .field==*, .field>value, .field~="pattern", .field=~/regex/
+// Syntax: .field==value, .field==*, .field>value
+// For string matching, use StringFuncPredicate (includes, startswith, endswith, matches).
 type FieldPredicate struct {
 	basePredicate
 	Field     string
 	Value     string    // "*" means "exists"
 	IsExists  bool      // true if Value is "*"
 	CompareOp CompareOp // comparison operator (==, !=, <, >, <=, >=)
-	StringOp  StringOp  // string matching operator (~=, ^=, $=, =~)
 }
 
 func (FieldPredicate) predicateNode() {}
@@ -188,12 +162,12 @@ type ContentPredicate struct {
 func (ContentPredicate) predicateNode() {}
 
 // ValuePredicate filters traits by value.
-// Syntax: value==val, value<val, value>val, value~="pattern"
+// Syntax: value==val, value<val, value>val
+// For string matching, use StringFuncPredicate (includes, startswith, endswith, matches).
 type ValuePredicate struct {
 	basePredicate
 	Value     string
 	CompareOp CompareOp // comparison operator (==, !=, <, >, <=, >=)
-	StringOp  StringOp  // string matching operator (~=, ^=, $=, =~)
 }
 
 func (ValuePredicate) predicateNode() {}
@@ -238,6 +212,88 @@ type OrPredicate struct {
 }
 
 func (OrPredicate) predicateNode() {}
+
+// StringFuncType represents the type of string function.
+type StringFuncType int
+
+const (
+	StringFuncIncludes   StringFuncType = iota // includes(.field, "str") - contains substring
+	StringFuncStartsWith                       // startswith(.field, "str")
+	StringFuncEndsWith                         // endswith(.field, "str")
+	StringFuncMatches                          // matches(.field, "pattern") - regex match
+)
+
+func (sf StringFuncType) String() string {
+	switch sf {
+	case StringFuncIncludes:
+		return "includes"
+	case StringFuncStartsWith:
+		return "startswith"
+	case StringFuncEndsWith:
+		return "endswith"
+	case StringFuncMatches:
+		return "matches"
+	default:
+		return "unknown"
+	}
+}
+
+// StringFuncPredicate represents a string function predicate.
+// Syntax: includes(.field, "value"), startswith(.field, "value"), etc.
+// Can also be used with _ as the field for array element context.
+type StringFuncPredicate struct {
+	basePredicate
+	FuncType      StringFuncType
+	Field         string    // Field name (without .) or "_" for array element
+	Value         string    // The string to match against
+	CaseSensitive bool      // If true, match is case-sensitive (default: false)
+	IsElementRef  bool      // True if Field is "_" (array element reference)
+}
+
+func (StringFuncPredicate) predicateNode() {}
+
+// ArrayQuantifierType represents the type of array quantifier.
+type ArrayQuantifierType int
+
+const (
+	ArrayQuantifierAny  ArrayQuantifierType = iota // any(.field, predicate) - any element matches
+	ArrayQuantifierAll                             // all(.field, predicate) - all elements match
+	ArrayQuantifierNone                            // none(.field, predicate) - no element matches
+)
+
+func (aq ArrayQuantifierType) String() string {
+	switch aq {
+	case ArrayQuantifierAny:
+		return "any"
+	case ArrayQuantifierAll:
+		return "all"
+	case ArrayQuantifierNone:
+		return "none"
+	default:
+		return "unknown"
+	}
+}
+
+// ArrayQuantifierPredicate represents an array quantifier predicate.
+// Syntax: any(.tags, _ == "urgent"), all(.tags, startswith(_, "feature-"))
+type ArrayQuantifierPredicate struct {
+	basePredicate
+	Quantifier   ArrayQuantifierType
+	Field        string    // The array field to iterate
+	ElementPred  Predicate // Predicate to test against each element (uses _ as element reference)
+}
+
+func (ArrayQuantifierPredicate) predicateNode() {}
+
+// ElementEqualityPredicate represents _ == value or _ != value within array context.
+// Syntax: _ == "urgent", _ != "deprecated"
+type ElementEqualityPredicate struct {
+	basePredicate
+	Value     string
+	CompareOp CompareOp // == or !=
+}
+
+func (ElementEqualityPredicate) predicateNode() {}
 
 // GroupPredicate represents a parenthesized group of predicates.
 // Used for explicit precedence control.

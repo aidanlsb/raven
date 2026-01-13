@@ -1716,6 +1716,10 @@ func (e *Executor) buildObjectPredicateSQL(pred Predicate, alias string) (string
 	switch p := pred.(type) {
 	case *FieldPredicate:
 		return e.buildFieldPredicateSQL(p, alias)
+	case *StringFuncPredicate:
+		return e.buildStringFuncPredicateSQL(p, alias)
+	case *ArrayQuantifierPredicate:
+		return e.buildArrayQuantifierPredicateSQL(p, alias)
 	case *HasPredicate:
 		return e.buildHasPredicateSQL(p, alias)
 	case *ParentPredicate:
@@ -1748,6 +1752,8 @@ func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string,
 	switch p := pred.(type) {
 	case *ValuePredicate:
 		return e.buildValuePredicateSQL(p, alias)
+	case *StringFuncPredicate:
+		return e.buildTraitStringFuncPredicateSQL(p, alias)
 	case *SourcePredicate:
 		return e.buildSourcePredicateSQL(p, alias)
 	case *OnPredicate:
@@ -1787,31 +1793,6 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 			cond = fmt.Sprintf("json_extract(%s.fields, ?) IS NOT NULL", alias)
 		}
 		args = append(args, jsonPath)
-	} else if p.StringOp != StringNone {
-		// String matching operators: ~=, ^=, $=, =~
-		fieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
-		args = append(args, jsonPath)
-
-		switch p.StringOp {
-		case StringContains:
-			// Case-insensitive contains
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
-			args = append(args, "%"+p.Value+"%")
-		case StringStartsWith:
-			// Case-insensitive starts with
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
-			args = append(args, p.Value+"%")
-		case StringEndsWith:
-			// Case-insensitive ends with
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
-			args = append(args, "%"+p.Value)
-		case StringRegex:
-			// SQLite doesn't have native regex - use GLOB for simple patterns or REGEXP extension
-			// For now, use LIKE as a fallback (limited regex support)
-			// TODO: Consider using sqlite3 REGEXP extension
-			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
-			args = append(args, p.Value)
-		}
 	} else if p.CompareOp == CompareNeq {
 		// Not equals: check both scalar and array membership
 		cond = fmt.Sprintf(`(
@@ -1848,6 +1829,246 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 			)
 		)`, alias, alias)
 		args = append(args, jsonPath, p.Value, jsonPath, p.Value)
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+
+	return cond, args, nil
+}
+
+// buildStringFuncPredicateSQL builds SQL for string function predicates.
+// Handles: includes(.field, "str"), startswith(.field, "str"), endswith(.field, "str"), matches(.field, "pattern")
+func (e *Executor) buildStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
+	jsonPath := fmt.Sprintf("$.%s", p.Field)
+	fieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
+
+	var cond string
+	var args []interface{}
+	args = append(args, jsonPath)
+
+	// Determine case handling
+	wrapLower := !p.CaseSensitive
+
+	switch p.FuncType {
+	case StringFuncIncludes:
+		if wrapLower {
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+		} else {
+			cond = fmt.Sprintf("%s LIKE ?", fieldExpr)
+		}
+		args = append(args, "%"+p.Value+"%")
+
+	case StringFuncStartsWith:
+		if wrapLower {
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+		} else {
+			cond = fmt.Sprintf("%s LIKE ?", fieldExpr)
+		}
+		args = append(args, p.Value+"%")
+
+	case StringFuncEndsWith:
+		if wrapLower {
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+		} else {
+			cond = fmt.Sprintf("%s LIKE ?", fieldExpr)
+		}
+		args = append(args, "%"+p.Value)
+
+	case StringFuncMatches:
+		if wrapLower {
+			// For case-insensitive regex, we use (?i) prefix in the pattern
+			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
+			args = append(args, "(?i)"+p.Value)
+		} else {
+			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
+			args = append(args, p.Value)
+		}
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+
+	return cond, args, nil
+}
+
+// buildArrayQuantifierPredicateSQL builds SQL for array quantifier predicates.
+// Handles: any(.tags, _ == "urgent"), all(.tags, startswith(_, "feature-")), none(.tags, _ == "deprecated")
+func (e *Executor) buildArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, alias string) (string, []interface{}, error) {
+	jsonPath := fmt.Sprintf("$.%s", p.Field)
+
+	var cond string
+	var args []interface{}
+
+	// Build the element condition
+	elemCond, elemArgs, err := e.buildElementPredicateSQL(p.ElementPred)
+	if err != nil {
+		return "", nil, err
+	}
+
+	switch p.Quantifier {
+	case ArrayQuantifierAny:
+		// EXISTS (SELECT 1 FROM json_each(fields, '$.field') WHERE <elemCond>)
+		cond = fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM json_each(%s.fields, ?)
+			WHERE %s
+		)`, alias, elemCond)
+		args = append(args, jsonPath)
+		args = append(args, elemArgs...)
+
+	case ArrayQuantifierAll:
+		// NOT EXISTS (SELECT 1 FROM json_each(fields, '$.field') WHERE NOT <elemCond>)
+		// This means: there is no element that doesn't satisfy the condition
+		cond = fmt.Sprintf(`NOT EXISTS (
+			SELECT 1 FROM json_each(%s.fields, ?)
+			WHERE NOT (%s)
+		)`, alias, elemCond)
+		args = append(args, jsonPath)
+		args = append(args, elemArgs...)
+
+	case ArrayQuantifierNone:
+		// NOT EXISTS (SELECT 1 FROM json_each(fields, '$.field') WHERE <elemCond>)
+		cond = fmt.Sprintf(`NOT EXISTS (
+			SELECT 1 FROM json_each(%s.fields, ?)
+			WHERE %s
+		)`, alias, elemCond)
+		args = append(args, jsonPath)
+		args = append(args, elemArgs...)
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+
+	return cond, args, nil
+}
+
+// buildElementPredicateSQL builds SQL for predicates used within array quantifiers.
+// The context is json_each.value representing the current array element.
+func (e *Executor) buildElementPredicateSQL(pred Predicate) (string, []interface{}, error) {
+	switch p := pred.(type) {
+	case *ElementEqualityPredicate:
+		return e.buildElementEqualitySQL(p)
+
+	case *StringFuncPredicate:
+		if !p.IsElementRef {
+			return "", nil, fmt.Errorf("string function in array context must use _ as first argument")
+		}
+		return e.buildElementStringFuncSQL(p)
+
+	case *OrPredicate:
+		leftCond, leftArgs, err := e.buildElementPredicateSQL(p.Left)
+		if err != nil {
+			return "", nil, err
+		}
+		rightCond, rightArgs, err := e.buildElementPredicateSQL(p.Right)
+		if err != nil {
+			return "", nil, err
+		}
+		cond := fmt.Sprintf("(%s OR %s)", leftCond, rightCond)
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, append(leftArgs, rightArgs...), nil
+
+	case *GroupPredicate:
+		var conditions []string
+		var args []interface{}
+		for _, subPred := range p.Predicates {
+			cond, predArgs, err := e.buildElementPredicateSQL(subPred)
+			if err != nil {
+				return "", nil, err
+			}
+			conditions = append(conditions, cond)
+			args = append(args, predArgs...)
+		}
+		cond := "(" + strings.Join(conditions, " AND ") + ")"
+		if p.Negated() {
+			cond = "NOT " + cond
+		}
+		return cond, args, nil
+
+	default:
+		return "", nil, fmt.Errorf("unsupported element predicate type: %T", pred)
+	}
+}
+
+// buildElementEqualitySQL builds SQL for _ == value or _ != value.
+func (e *Executor) buildElementEqualitySQL(p *ElementEqualityPredicate) (string, []interface{}, error) {
+	var cond string
+	var args []interface{}
+
+	switch p.CompareOp {
+	case CompareEq:
+		// Case-insensitive equality
+		cond = "LOWER(json_each.value) = LOWER(?)"
+		args = append(args, p.Value)
+	case CompareNeq:
+		cond = "LOWER(json_each.value) != LOWER(?)"
+		args = append(args, p.Value)
+	case CompareLt:
+		cond = "json_each.value < ?"
+		args = append(args, p.Value)
+	case CompareGt:
+		cond = "json_each.value > ?"
+		args = append(args, p.Value)
+	case CompareLte:
+		cond = "json_each.value <= ?"
+		args = append(args, p.Value)
+	case CompareGte:
+		cond = "json_each.value >= ?"
+		args = append(args, p.Value)
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+
+	return cond, args, nil
+}
+
+// buildElementStringFuncSQL builds SQL for string functions on array elements.
+func (e *Executor) buildElementStringFuncSQL(p *StringFuncPredicate) (string, []interface{}, error) {
+	var cond string
+	var args []interface{}
+
+	wrapLower := !p.CaseSensitive
+
+	switch p.FuncType {
+	case StringFuncIncludes:
+		if wrapLower {
+			cond = "LOWER(json_each.value) LIKE LOWER(?)"
+		} else {
+			cond = "json_each.value LIKE ?"
+		}
+		args = append(args, "%"+p.Value+"%")
+
+	case StringFuncStartsWith:
+		if wrapLower {
+			cond = "LOWER(json_each.value) LIKE LOWER(?)"
+		} else {
+			cond = "json_each.value LIKE ?"
+		}
+		args = append(args, p.Value+"%")
+
+	case StringFuncEndsWith:
+		if wrapLower {
+			cond = "LOWER(json_each.value) LIKE LOWER(?)"
+		} else {
+			cond = "json_each.value LIKE ?"
+		}
+		args = append(args, "%"+p.Value)
+
+	case StringFuncMatches:
+		if wrapLower {
+			cond = "json_each.value REGEXP ?"
+			args = append(args, "(?i)"+p.Value)
+		} else {
+			cond = "json_each.value REGEXP ?"
+			args = append(args, p.Value)
+		}
 	}
 
 	if p.Negated() {
@@ -2313,36 +2534,62 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 	return cond, args, nil
 }
 
+// buildTraitStringFuncPredicateSQL builds SQL for string function predicates on trait values.
+// For traits, the field is implicitly the trait's value column.
+func (e *Executor) buildTraitStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
+	fieldExpr := fmt.Sprintf("%s.value", alias)
+
+	var cond string
+	var args []interface{}
+
+	wrapLower := !p.CaseSensitive
+
+	switch p.FuncType {
+	case StringFuncIncludes:
+		if wrapLower {
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+		} else {
+			cond = fmt.Sprintf("%s LIKE ?", fieldExpr)
+		}
+		args = append(args, "%"+p.Value+"%")
+
+	case StringFuncStartsWith:
+		if wrapLower {
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+		} else {
+			cond = fmt.Sprintf("%s LIKE ?", fieldExpr)
+		}
+		args = append(args, p.Value+"%")
+
+	case StringFuncEndsWith:
+		if wrapLower {
+			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
+		} else {
+			cond = fmt.Sprintf("%s LIKE ?", fieldExpr)
+		}
+		args = append(args, "%"+p.Value)
+
+	case StringFuncMatches:
+		if wrapLower {
+			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
+			args = append(args, "(?i)"+p.Value)
+		} else {
+			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
+			args = append(args, p.Value)
+		}
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+
+	return cond, args, nil
+}
+
 // buildValuePredicateSQL builds SQL for value==val predicates.
 // Comparisons are case-insensitive for equality, but case-sensitive for ordering comparisons.
 func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (string, []interface{}, error) {
 	var cond string
-	var args []interface{}
-
-	// Handle string operators first
-	if p.StringOp != StringNone {
-		fieldExpr := fmt.Sprintf("%s.value", alias)
-
-		switch p.StringOp {
-		case StringContains:
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
-			args = append(args, "%"+p.Value+"%")
-		case StringStartsWith:
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
-			args = append(args, p.Value+"%")
-		case StringEndsWith:
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", fieldExpr)
-			args = append(args, "%"+p.Value)
-		case StringRegex:
-			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
-			args = append(args, p.Value)
-		}
-
-		if p.Negated() {
-			cond = "NOT (" + cond + ")"
-		}
-		return cond, args, nil
-	}
 
 	switch p.CompareOp {
 	case CompareLt:
@@ -2377,30 +2624,6 @@ func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (stri
 // This is a helper for use in subqueries where we don't have the full executor context.
 func buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
 	var cond string
-	var args []interface{}
-
-	// Handle string operators first
-	if p.StringOp != StringNone {
-		switch p.StringOp {
-		case StringContains:
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", column)
-			args = append(args, "%"+p.Value+"%")
-		case StringStartsWith:
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", column)
-			args = append(args, p.Value+"%")
-		case StringEndsWith:
-			cond = fmt.Sprintf("LOWER(%s) LIKE LOWER(?)", column)
-			args = append(args, "%"+p.Value)
-		case StringRegex:
-			cond = fmt.Sprintf("%s REGEXP ?", column)
-			args = append(args, p.Value)
-		}
-
-		if p.Negated() {
-			cond = "NOT (" + cond + ")"
-		}
-		return cond, args
-	}
 
 	switch p.CompareOp {
 	case CompareLt:
