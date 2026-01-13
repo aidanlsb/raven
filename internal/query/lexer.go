@@ -17,6 +17,7 @@ const (
 	TokenDot                  // .
 	TokenBang                 // !
 	TokenPipe                 // |
+	TokenPipeline             // |>
 	TokenLParen               // (
 	TokenRParen               // )
 	TokenLBrace               // {
@@ -26,11 +27,20 @@ const (
 	TokenStar                 // *
 	TokenRef                  // [[...]] reference
 	TokenString               // "quoted string" for content search
+	TokenRegex                // /pattern/ for regex matching
 	TokenUnderscore           // _ (result reference)
 	TokenLt                   // <
 	TokenGt                   // >
 	TokenLte                  // <=
 	TokenGte                  // >=
+	TokenEq                   // =
+	TokenEqEq                 // ==
+	TokenBangEq               // !=
+	TokenTildeEq              // ~=
+	TokenCaretEq              // ^=
+	TokenDollarEq             // $=
+	TokenEqTilde              // =~
+	TokenComma                // ,
 	TokenError                // error token
 )
 
@@ -74,10 +84,58 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: TokenDot, Value: ".", Pos: l.start}
 	case '!':
 		l.pos++
+		if l.pos < len(l.input) && l.input[l.pos] == '=' {
+			l.pos++
+			return Token{Type: TokenBangEq, Value: "!=", Pos: l.start}
+		}
 		return Token{Type: TokenBang, Value: "!", Pos: l.start}
 	case '|':
 		l.pos++
+		if l.pos < len(l.input) && l.input[l.pos] == '>' {
+			l.pos++
+			return Token{Type: TokenPipeline, Value: "|>", Pos: l.start}
+		}
 		return Token{Type: TokenPipe, Value: "|", Pos: l.start}
+	case '=':
+		l.pos++
+		if l.pos < len(l.input) {
+			switch l.input[l.pos] {
+			case '=':
+				l.pos++
+				return Token{Type: TokenEqEq, Value: "==", Pos: l.start}
+			case '~':
+				l.pos++
+				return Token{Type: TokenEqTilde, Value: "=~", Pos: l.start}
+			}
+		}
+		return Token{Type: TokenEq, Value: "=", Pos: l.start}
+	case '~':
+		l.pos++
+		if l.pos < len(l.input) && l.input[l.pos] == '=' {
+			l.pos++
+			return Token{Type: TokenTildeEq, Value: "~=", Pos: l.start}
+		}
+		return Token{Type: TokenError, Value: "~", Pos: l.start}
+	case '^':
+		l.pos++
+		if l.pos < len(l.input) && l.input[l.pos] == '=' {
+			l.pos++
+			return Token{Type: TokenCaretEq, Value: "^=", Pos: l.start}
+		}
+		return Token{Type: TokenError, Value: "^", Pos: l.start}
+	case '$':
+		l.pos++
+		if l.pos < len(l.input) && l.input[l.pos] == '=' {
+			l.pos++
+			return Token{Type: TokenDollarEq, Value: "$=", Pos: l.start}
+		}
+		return Token{Type: TokenError, Value: "$", Pos: l.start}
+	case ',':
+		l.pos++
+		return Token{Type: TokenComma, Value: ",", Pos: l.start}
+	case '/':
+		// Regex literal
+		return l.scanRegex()
 	case '(':
 		l.pos++
 		return Token{Type: TokenLParen, Value: "(", Pos: l.start}
@@ -190,6 +248,34 @@ func (l *Lexer) scanString() Token {
 	// Unescape escaped quotes
 	value = strings.ReplaceAll(value, "\\\"", "\"")
 	return Token{Type: TokenString, Value: value, Literal: literal, Pos: start}
+}
+
+func (l *Lexer) scanRegex() Token {
+	start := l.pos
+	// Skip opening slash
+	l.pos++
+
+	// Find closing slash
+	for l.pos < len(l.input) {
+		ch := l.input[l.pos]
+		if ch == '/' {
+			l.pos++
+			break
+		}
+		// Handle escaped slashes
+		if ch == '\\' && l.pos+1 < len(l.input) {
+			l.pos += 2
+			continue
+		}
+		l.pos++
+	}
+
+	literal := l.input[start:l.pos]
+	// Extract the regex content (without slashes)
+	value := strings.TrimPrefix(strings.TrimSuffix(literal, "/"), "/")
+	// Unescape escaped slashes
+	value = strings.ReplaceAll(value, "\\/", "/")
+	return Token{Type: TokenRegex, Value: value, Literal: literal, Pos: start}
 }
 
 func isIdentStart(ch byte) bool {

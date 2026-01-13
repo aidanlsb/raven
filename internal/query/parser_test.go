@@ -69,52 +69,52 @@ func TestParseFieldPredicates(t *testing.T) {
 	}{
 		{
 			name:      "simple field",
-			input:     "object:project .status:active",
+			input:     "object:project .status==active",
 			wantField: "status",
 			wantValue: "active",
 		},
 		{
 			name:       "field exists",
-			input:      "object:person .email:*",
+			input:      "object:person .email==*",
 			wantField:  "email",
 			wantExists: true,
 		},
 		{
 			name:      "negated field",
-			input:     "object:project !.status:done",
+			input:     "object:project !.status==done",
 			wantField: "status",
 			wantValue: "done",
 			wantNeg:   true,
 		},
 		{
 			name:       "negated exists",
-			input:      "object:person !.email:*",
+			input:      "object:person !.email==*",
 			wantField:  "email",
 			wantExists: true,
 			wantNeg:    true,
 		},
 		{
 			name:      "quoted string value",
-			input:     `object:project .title:"My Project"`,
+			input:     `object:project .title=="My Project"`,
 			wantField: "title",
 			wantValue: "My Project",
 		},
 		{
 			name:      "quoted string with spaces",
-			input:     `object:book .author:"J.R.R. Tolkien"`,
+			input:     `object:book .author=="J.R.R. Tolkien"`,
 			wantField: "author",
 			wantValue: "J.R.R. Tolkien",
 		},
 		{
 			name:      "negated quoted string",
-			input:     `object:project !.status:"in progress"`,
+			input:     `object:project !.status=="in progress"`,
 			wantField: "status",
 			wantValue: "in progress",
 			wantNeg:   true,
 		},
 		{
 			name:      "field ref value uses wikilink target",
-			input:     `object:meeting .attendees:[[people/freya|Freya]]`,
+			input:     `object:meeting .attendees==[[people/freya|Freya]]`,
 			wantField: "attendees",
 			wantValue: "people/freya",
 		},
@@ -158,7 +158,7 @@ func TestParseHasPredicate(t *testing.T) {
 	}{
 		{
 			name:          "shorthand has",
-			input:         "object:meeting has:due",
+			input:         "object:meeting has:{trait:due}",
 			wantTraitName: "due",
 		},
 		{
@@ -168,7 +168,7 @@ func TestParseHasPredicate(t *testing.T) {
 		},
 		{
 			name:          "negated has",
-			input:         "object:meeting !has:due",
+			input:         "object:meeting !has:{trait:due}",
 			wantTraitName: "due",
 			wantNeg:       true,
 		},
@@ -206,7 +206,7 @@ func TestParseParentAncestorChild(t *testing.T) {
 	}{
 		{
 			name:         "parent shorthand",
-			input:        "object:meeting parent:date",
+			input:        "object:meeting parent:{object:date}",
 			predType:     "parent",
 			wantTypeName: "date",
 		},
@@ -218,13 +218,13 @@ func TestParseParentAncestorChild(t *testing.T) {
 		},
 		{
 			name:         "ancestor shorthand",
-			input:        "object:meeting ancestor:date",
+			input:        "object:meeting ancestor:{object:date}",
 			predType:     "ancestor",
 			wantTypeName: "date",
 		},
 		{
 			name:         "child shorthand",
-			input:        "object:date child:meeting",
+			input:        "object:date child:{object:meeting}",
 			predType:     "child",
 			wantTypeName: "meeting",
 		},
@@ -277,19 +277,19 @@ func TestParseTraitPredicates(t *testing.T) {
 	}{
 		{
 			name:      "value predicate",
-			input:     "trait:due value:past",
+			input:     "trait:due value==past",
 			predType:  "value",
 			wantValue: "past",
 		},
 		{
 			name:      "value predicate with quoted string",
-			input:     `trait:status value:"in progress"`,
+			input:     `trait:status value=="in progress"`,
 			predType:  "value",
 			wantValue: "in progress",
 		},
 		{
 			name:      "value predicate with spaces",
-			input:     `trait:priority value:"very high"`,
+			input:     `trait:priority value=="very high"`,
 			predType:  "value",
 			wantValue: "very high",
 		},
@@ -348,7 +348,7 @@ func TestParseOnWithin(t *testing.T) {
 	}{
 		{
 			name:         "on shorthand",
-			input:        "trait:due on:meeting",
+			input:        "trait:due on:{object:meeting}",
 			predType:     "on",
 			wantTypeName: "meeting",
 		},
@@ -360,7 +360,7 @@ func TestParseOnWithin(t *testing.T) {
 		},
 		{
 			name:         "within shorthand",
-			input:        "trait:highlight within:date",
+			input:        "trait:highlight within:{object:date}",
 			predType:     "within",
 			wantTypeName: "date",
 		},
@@ -407,17 +407,17 @@ func TestParseBooleanComposition(t *testing.T) {
 	}{
 		{
 			name:           "multiple predicates AND",
-			input:          "object:project .status:active has:due",
+			input:          "object:project .status==active has:{trait:due}",
 			wantPredicates: 2,
 		},
 		{
 			name:           "OR predicate",
-			input:          "object:project .status:active | .status:done",
+			input:          "object:project .status==active | .status==done",
 			wantPredicates: 1, // Becomes single OrPredicate
 		},
 		{
 			name:           "grouped predicates",
-			input:          "object:project (.status:active | .status:done)",
+			input:          "object:project (.status==active | .status==done)",
 			wantPredicates: 1, // Becomes single GroupPredicate
 		},
 	}
@@ -461,7 +461,7 @@ func TestParseRefsPredicate(t *testing.T) {
 		},
 		{
 			name:     "refs with complex subquery",
-			input:    "object:meeting refs:{object:project .status:active}",
+			input:    "object:meeting refs:{object:project .status==active}",
 			wantSubQ: true,
 		},
 	}
@@ -565,7 +565,7 @@ func TestParseDescendantContains(t *testing.T) {
 	}{
 		{
 			name:         "descendant shorthand",
-			input:        "object:project descendant:section",
+			input:        "object:project descendant:{object:section}",
 			predType:     "descendant",
 			wantTypeName: "section",
 		},
@@ -577,14 +577,14 @@ func TestParseDescendantContains(t *testing.T) {
 		},
 		{
 			name:         "negated descendant",
-			input:        "object:project !descendant:section",
+			input:        "object:project !descendant:{object:section}",
 			predType:     "descendant",
 			wantTypeName: "section",
 			wantNeg:      true,
 		},
 		{
 			name:         "contains shorthand",
-			input:        "object:project contains:todo",
+			input:        "object:project contains:{trait:todo}",
 			predType:     "contains",
 			wantTypeName: "todo",
 		},
@@ -596,7 +596,7 @@ func TestParseDescendantContains(t *testing.T) {
 		},
 		{
 			name:         "contains with value",
-			input:        "object:project contains:{trait:todo value:done}",
+			input:        "object:project contains:{trait:todo value==done}",
 			predType:     "contains",
 			wantTypeName: "todo",
 		},
@@ -656,35 +656,35 @@ func TestParseComplexQueries(t *testing.T) {
 	}{
 		{
 			name:  "nested has with value",
-			input: "object:meeting has:{trait:due value:past}",
+			input: "object:meeting has:{trait:due value==past}",
 		},
 		{
 			name:  "on with field",
-			input: "trait:highlight on:{object:book .status:reading}",
+			input: "trait:highlight on:{object:book .status==reading}",
 		},
 		{
 			name:  "ancestor chain",
-			input: "object:topic ancestor:{object:meeting ancestor:date}",
+			input: "object:topic ancestor:{object:meeting ancestor:{object:date}}",
 		},
 		{
 			name:  "complex with OR",
-			input: "trait:highlight (on:{object:book .status:reading} | on:{object:article .status:reading})",
+			input: "trait:highlight (on:{object:book .status==reading} | on:{object:article .status==reading})",
 		},
 		{
 			name:  "multiple field predicates",
-			input: "object:project .status:active .priority:high",
+			input: "object:project .status==active .priority==high",
 		},
 		{
 			name:  "contains with value predicate",
-			input: "object:project contains:{trait:todo value:todo}",
+			input: "object:project contains:{trait:todo value==todo}",
 		},
 		{
 			name:  "descendant with field predicate",
-			input: "object:project descendant:{object:section .title:Tasks}",
+			input: "object:project descendant:{object:section .title==Tasks}",
 		},
 		{
 			name:  "combined contains and field",
-			input: "object:project .status:active contains:{trait:todo}",
+			input: "object:project .status==active contains:{trait:todo}",
 		},
 	}
 
@@ -716,7 +716,7 @@ func TestParseAtPredicate(t *testing.T) {
 	}{
 		{
 			name:          "at with shorthand trait",
-			input:         "trait:due at:todo",
+			input:         "trait:due at:{trait:todo}",
 			wantTraitName: "todo",
 		},
 		{
@@ -726,7 +726,7 @@ func TestParseAtPredicate(t *testing.T) {
 		},
 		{
 			name:          "at with trait subquery and value",
-			input:         "trait:due at:{trait:priority value:high}",
+			input:         "trait:due at:{trait:priority value==high}",
 			wantTraitName: "priority",
 		},
 		{
@@ -786,7 +786,7 @@ func TestParseRefdPredicate(t *testing.T) {
 		},
 		{
 			name:     "refd with complex subquery",
-			input:    "object:person refd:{object:project .status:active}",
+			input:    "object:person refd:{object:project .status==active}",
 			wantSubQ: true,
 		},
 	}
@@ -1030,7 +1030,7 @@ func TestParseLimitClause(t *testing.T) {
 		},
 		{
 			name:      "limit with predicates",
-			input:     "object:project .status:active limit:5",
+			input:     "object:project .status==active limit:5",
 			wantLimit: 5,
 		},
 		{
@@ -1078,31 +1078,31 @@ func TestParseComparisonOperators(t *testing.T) {
 	}{
 		{
 			name:          "value less than",
-			input:         "trait:due value:<2025-01-01",
+			input:         "trait:due value<2025-01-01",
 			wantCompareOp: CompareLt,
 			wantValue:     "2025-01-01",
 		},
 		{
 			name:          "value greater than",
-			input:         "trait:priority value:>5",
+			input:         "trait:priority value>5",
 			wantCompareOp: CompareGt,
 			wantValue:     "5",
 		},
 		{
 			name:          "value less than or equal",
-			input:         "trait:due value:<=2025-12-31",
+			input:         "trait:due value<=2025-12-31",
 			wantCompareOp: CompareLte,
 			wantValue:     "2025-12-31",
 		},
 		{
 			name:          "value greater than or equal",
-			input:         "trait:score value:>=100",
+			input:         "trait:score value>=100",
 			wantCompareOp: CompareGte,
 			wantValue:     "100",
 		},
 		{
 			name:          "value equals (default)",
-			input:         "trait:status value:active",
+			input:         "trait:status value==active",
 			wantCompareOp: CompareEq,
 			wantValue:     "active",
 		},
@@ -1141,21 +1141,21 @@ func TestParseFieldComparisonOperators(t *testing.T) {
 	}{
 		{
 			name:          "field less than",
-			input:         "object:project .priority:<5",
+			input:         "object:project .priority<5",
 			wantField:     "priority",
 			wantCompareOp: CompareLt,
 			wantValue:     "5",
 		},
 		{
 			name:          "field greater than or equal",
-			input:         "object:task .count:>=10",
+			input:         "object:task .count>=10",
 			wantField:     "count",
 			wantCompareOp: CompareGte,
 			wantValue:     "10",
 		},
 		{
 			name:          "field equals (default)",
-			input:         "object:project .status:active",
+			input:         "object:project .status==active",
 			wantField:     "status",
 			wantCompareOp: CompareEq,
 			wantValue:     "active",
@@ -1196,7 +1196,7 @@ func TestParseRefdShorthand(t *testing.T) {
 	}{
 		{
 			name:         "refd shorthand",
-			input:        "object:project refd:meeting",
+			input:        "object:project refd:{object:meeting}",
 			wantTypeName: "meeting",
 		},
 	}

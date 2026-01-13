@@ -59,6 +59,54 @@ func (v *Validator) validateQuery(q *Query) error {
 		}
 	}
 
+	// Validate pipeline stages
+	if q.Pipeline != nil {
+		if err := v.validatePipeline(q.Pipeline, q.Type); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validatePipeline validates all stages in a pipeline.
+func (v *Validator) validatePipeline(p *Pipeline, queryType QueryType) error {
+	for _, stage := range p.Stages {
+		switch s := stage.(type) {
+		case *AssignmentStage:
+			if err := v.validateAssignmentStage(s, queryType); err != nil {
+				return err
+			}
+		// FilterStage and SortStage don't contain subqueries, just computed/field references
+		}
+	}
+	return nil
+}
+
+// validateAssignmentStage validates that assignment subqueries contain _ references.
+func (v *Validator) validateAssignmentStage(s *AssignmentStage, queryType QueryType) error {
+	// Navigation functions like refs(_), refd(_) are always connected
+	if s.NavFunc != nil {
+		return nil
+	}
+
+	// Subqueries must contain a _ reference to be meaningful
+	if s.SubQuery != nil {
+		if err := v.validateQuery(s.SubQuery); err != nil {
+			return &ValidationError{
+				Message:    fmt.Sprintf("invalid subquery in assignment '%s': %s", s.Name, err.Error()),
+				Suggestion: "Ensure the subquery references valid types/traits",
+			}
+		}
+
+		if !containsSelfRef(s.SubQuery) {
+			return &ValidationError{
+				Message:    fmt.Sprintf("pipeline subquery in '%s' must reference _ to connect to the query result", s.Name),
+				Suggestion: "Use predicates like within:_, on:_, refs:_, at:_ to relate the subquery to each result. Example: count({trait:todo within:_})",
+			}
+		}
+	}
+
 	return nil
 }
 

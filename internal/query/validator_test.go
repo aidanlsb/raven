@@ -92,7 +92,7 @@ func TestValidator_UnknownField(t *testing.T) {
 
 	v := NewValidator(sch)
 
-	q, err := Parse("object:person .nonexistent:value")
+	q, err := Parse("object:person .nonexistent==value")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -141,10 +141,10 @@ func TestValidator_ValidQuery(t *testing.T) {
 
 	tests := []string{
 		"object:person",
-		"object:person .name:Freya",
-		"object:project .status:active",
+		"object:person .name==Freya",
+		"object:project .status==active",
 		"trait:due",
-		"trait:due value:past",
+		"trait:due value==past",
 		"object:person has:{trait:due}",
 		"trait:due on:{object:project}",
 	}
@@ -182,7 +182,7 @@ func TestValidator_FieldNotTrait(t *testing.T) {
 	v := NewValidator(sch)
 
 	// Should be invalid - due is a trait, not a field on project
-	q, err := Parse("object:project .due:2025-01-01")
+	q, err := Parse("object:project .due==2025-01-01")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -305,6 +305,93 @@ func TestValidator_SortGroupValidation(t *testing.T) {
 			err = v.Validate(q)
 			if err == nil {
 				t.Fatal("expected validation error, got nil")
+			}
+
+			if !strings.Contains(err.Error(), tt.wantContain) {
+				t.Errorf("expected error containing %q, got: %s", tt.wantContain, err.Error())
+			}
+		})
+	}
+}
+
+func TestValidator_PipelineSubqueriesMustReferenceSelf(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"status": {Type: schema.FieldTypeString},
+				},
+			},
+			"section": {Fields: map[string]*schema.FieldDefinition{}},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"todo": {},
+			"due":  {},
+		},
+	}
+
+	v := NewValidator(sch)
+
+	// Valid pipeline queries - subqueries reference _
+	validTests := []string{
+		"object:project |> todos = count({trait:todo within:_})",
+		"object:project |> children = count({object:section parent:_})",
+		"object:project |> refs = count({object:project refs:_})",
+		"trait:todo |> colocated = count({trait:due at:_})",
+		"trait:todo |> refs = count(refs(_))", // NavFunc, not subquery
+	}
+
+	for _, queryStr := range validTests {
+		t.Run("valid: "+queryStr, func(t *testing.T) {
+			q, err := Parse(queryStr)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+
+			if err := v.Validate(q); err != nil {
+				t.Errorf("unexpected validation error: %v", err)
+			}
+		})
+	}
+
+	// Invalid pipeline queries - subqueries DON'T reference _
+	invalidTests := []struct {
+		name        string
+		query       string
+		wantContain string
+	}{
+		{
+			name:        "count without self-ref",
+			query:       "object:project |> todos = count({trait:todo})",
+			wantContain: "must reference _",
+		},
+		{
+			name:        "max without self-ref",
+			query:       "object:project |> latest = max({trait:due})",
+			wantContain: "must reference _",
+		},
+		{
+			name:        "min without self-ref",
+			query:       "object:project |> earliest = min({trait:due})",
+			wantContain: "must reference _",
+		},
+		{
+			name:        "subquery with filter but no self-ref",
+			query:       "object:project |> active = count({object:section})",
+			wantContain: "must reference _",
+		},
+	}
+
+	for _, tt := range invalidTests {
+		t.Run("invalid: "+tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+
+			err = v.Validate(q)
+			if err == nil {
+				t.Fatal("expected validation error for subquery without _, got nil")
 			}
 
 			if !strings.Contains(err.Error(), tt.wantContain) {
