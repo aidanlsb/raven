@@ -31,6 +31,24 @@ func TestParseTypeDeclaration(t *testing.T) {
 			wantType: "meeting",
 			wantID:   "standup",
 		},
+		{
+			name:     "shorthand without parens",
+			line:     "::meeting",
+			wantType: "meeting",
+			wantID:   "",
+		},
+		{
+			name:     "shorthand with whitespace",
+			line:     "  ::task  ",
+			wantType: "task",
+			wantID:   "",
+		},
+		{
+			name:     "empty parens equivalent to shorthand",
+			line:     "::section()",
+			wantType: "section",
+			wantID:   "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -86,6 +104,18 @@ func TestParseEmbeddedType(t *testing.T) {
 			name:    "not a type declaration",
 			line:    "Some regular text",
 			wantNil: true,
+		},
+		{
+			name:     "shorthand without parentheses",
+			line:     "::meeting",
+			wantType: "meeting",
+			wantID:   "", // ID will be derived from heading by document parser
+		},
+		{
+			name:     "shorthand with different type",
+			line:     "::task",
+			wantType: "task",
+			wantID:   "",
 		},
 	}
 

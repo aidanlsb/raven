@@ -232,12 +232,14 @@ Use `parent:`, `ancestor:`, `child:`, `descendant:` predicates to query this hie
 
 ## Embedded Type Declarations
 
-The `::type(...)` syntax declares a typed object embedded within a file.
+The `::type` syntax declares a typed object embedded within a file.
 
 ### Syntax
 
 ```
-::typename(field=value, field=value, ...)
+::typename                              # shorthand (no fields)
+::typename()                            # explicit empty (no fields)
+::typename(field=value, field=value, ...) # with fields
 ```
 
 Must appear on the line **immediately after** a heading:
@@ -298,8 +300,13 @@ This creates ID `file-id#task-1` instead of slugifying the heading.
 
 ```markdown
 ## Design Notes
+::section
+
+## Another Section
 ::section()
 ```
+
+Both `::section` and `::section()` are equivalent - parentheses are optional when there are no fields.
 
 ---
 

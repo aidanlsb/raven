@@ -25,12 +25,19 @@ type EmbeddedTypeInfo struct {
 	Fields   map[string]schema.FieldValue
 }
 
-// typeDeclRegex matches ::typename(args...)
-var typeDeclRegex = regexp.MustCompile(`^::(\w+)\s*\(([^)]*)\)\s*$`)
+// typeDeclWithArgsRegex matches ::typename(args...)
+var typeDeclWithArgsRegex = regexp.MustCompile(`^::(\w+)\s*\(([^)]*)\)\s*$`)
+
+// typeDeclNoArgsRegex matches ::typename without parentheses (shorthand for ::typename())
+var typeDeclNoArgsRegex = regexp.MustCompile(`^::(\w+)\s*$`)
 
 // ParseEmbeddedType parses an embedded type declaration from a line.
 // Returns nil if the line is not a type declaration.
 // The ID field may be empty - the caller should derive it from the heading if so.
+//
+// Supports both forms:
+//   - ::typename(field=value, ...) - with parentheses and optional fields
+//   - ::typename - shorthand for ::typename() with no fields
 func ParseEmbeddedType(line string, lineNumber int) *EmbeddedTypeInfo {
 	decl, err := ParseTypeDeclaration(line, lineNumber)
 	if err != nil || decl == nil {
@@ -46,6 +53,7 @@ func ParseEmbeddedType(line string, lineNumber int) *EmbeddedTypeInfo {
 }
 
 // ParseTypeDeclaration parses a type declaration from a line.
+// Supports both ::typename(args...) and ::typename (without parentheses).
 func ParseTypeDeclaration(line string, lineNumber int) (*TypeDeclaration, error) {
 	trimmed := strings.TrimSpace(line)
 
@@ -53,33 +61,45 @@ func ParseTypeDeclaration(line string, lineNumber int) (*TypeDeclaration, error)
 		return nil, nil
 	}
 
-	matches := typeDeclRegex.FindStringSubmatch(trimmed)
-	if matches == nil {
-		return nil, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
-	}
+	// Try matching with parentheses first
+	if matches := typeDeclWithArgsRegex.FindStringSubmatch(trimmed); matches != nil {
+		typeName := matches[1]
+		argsStr := matches[2]
 
-	typeName := matches[1]
-	argsStr := matches[2]
-
-	fields, err := parseArguments(argsStr)
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract ID from fields
-	var id string
-	if idVal, ok := fields["id"]; ok {
-		if s, ok := idVal.AsString(); ok {
-			id = s
+		fields, err := parseArguments(argsStr)
+		if err != nil {
+			return nil, err
 		}
+
+		// Extract ID from fields
+		var id string
+		if idVal, ok := fields["id"]; ok {
+			if s, ok := idVal.AsString(); ok {
+				id = s
+			}
+		}
+
+		return &TypeDeclaration{
+			TypeName: typeName,
+			ID:       id,
+			Fields:   fields,
+			Line:     lineNumber,
+		}, nil
 	}
 
-	return &TypeDeclaration{
-		TypeName: typeName,
-		ID:       id,
-		Fields:   fields,
-		Line:     lineNumber,
-	}, nil
+	// Try matching without parentheses (shorthand for ::typename())
+	if matches := typeDeclNoArgsRegex.FindStringSubmatch(trimmed); matches != nil {
+		typeName := matches[1]
+
+		return &TypeDeclaration{
+			TypeName: typeName,
+			ID:       "",
+			Fields:   make(map[string]schema.FieldValue),
+			Line:     lineNumber,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
 }
 
 // parseArguments parses comma-separated key=value arguments.
