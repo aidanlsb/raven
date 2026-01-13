@@ -835,6 +835,135 @@ func TestTraitPipelineComplex(t *testing.T) {
 	})
 }
 
+func TestBatchedAggregation(t *testing.T) {
+	db := setupPipelineTestDB(t)
+	defer db.Close()
+
+	executor := NewExecutor(db)
+
+	// These queries should use batched execution (no extra predicates beyond the type and binding)
+	t.Run("batched count refs from", func(t *testing.T) {
+		q, err := Parse("object:project |> outgoing = count(refs(_))")
+		if err != nil {
+			t.Fatalf("failed to parse query: %v", err)
+		}
+
+		results, err := executor.ExecuteObjectQueryWithPipeline(q)
+		if err != nil {
+			t.Fatalf("failed to execute query: %v", err)
+		}
+
+		// Verify counts
+		for _, r := range results {
+			switch r.ID {
+			case "projects/alpha":
+				if r.Computed["outgoing"] != 2 {
+					t.Errorf("alpha outgoing: got %v, want 2", r.Computed["outgoing"])
+				}
+			case "projects/beta":
+				if r.Computed["outgoing"] != 1 {
+					t.Errorf("beta outgoing: got %v, want 1", r.Computed["outgoing"])
+				}
+			case "projects/gamma":
+				if r.Computed["outgoing"] != 0 {
+					t.Errorf("gamma outgoing: got %v, want 0", r.Computed["outgoing"])
+				}
+			}
+		}
+	})
+
+	t.Run("batched count children", func(t *testing.T) {
+		q, err := Parse("object:project |> sections = count({object:section parent:_})")
+		if err != nil {
+			t.Fatalf("failed to parse query: %v", err)
+		}
+
+		results, err := executor.ExecuteObjectQueryWithPipeline(q)
+		if err != nil {
+			t.Fatalf("failed to execute query: %v", err)
+		}
+
+		// Alpha and Beta have 1 section each, Gamma has 0
+		for _, r := range results {
+			switch r.ID {
+			case "projects/alpha":
+				if r.Computed["sections"] != 1 {
+					t.Errorf("alpha sections: got %v, want 1", r.Computed["sections"])
+				}
+			case "projects/beta":
+				if r.Computed["sections"] != 1 {
+					t.Errorf("beta sections: got %v, want 1", r.Computed["sections"])
+				}
+			case "projects/gamma":
+				if r.Computed["sections"] != 0 {
+					t.Errorf("gamma sections: got %v, want 0", r.Computed["sections"])
+				}
+			}
+		}
+	})
+
+	t.Run("batched count descendants", func(t *testing.T) {
+		q, err := Parse("object:project |> desc = count(descendants(_))")
+		if err != nil {
+			t.Fatalf("failed to parse query: %v", err)
+		}
+
+		results, err := executor.ExecuteObjectQueryWithPipeline(q)
+		if err != nil {
+			t.Fatalf("failed to execute query: %v", err)
+		}
+
+		// Alpha and Beta have 1 descendant (their section), Gamma has 0
+		for _, r := range results {
+			switch r.ID {
+			case "projects/alpha":
+				if r.Computed["desc"] != 1 {
+					t.Errorf("alpha descendants: got %v, want 1", r.Computed["desc"])
+				}
+			case "projects/beta":
+				if r.Computed["desc"] != 1 {
+					t.Errorf("beta descendants: got %v, want 1", r.Computed["desc"])
+				}
+			case "projects/gamma":
+				if r.Computed["desc"] != 0 {
+					t.Errorf("gamma descendants: got %v, want 0", r.Computed["desc"])
+				}
+			}
+		}
+	})
+
+	t.Run("batched count traits with within binding", func(t *testing.T) {
+		// Simple trait query without extra predicates - should batch
+		q, err := Parse("object:project |> traits = count({trait:todo within:_})")
+		if err != nil {
+			t.Fatalf("failed to parse query: %v", err)
+		}
+
+		results, err := executor.ExecuteObjectQueryWithPipeline(q)
+		if err != nil {
+			t.Fatalf("failed to execute query: %v", err)
+		}
+
+		// Alpha has 3 todos, Beta has 1, Gamma has 0
+		for _, r := range results {
+			switch r.ID {
+			case "projects/alpha":
+				if r.Computed["traits"] != 3 {
+					t.Errorf("alpha todos: got %v, want 3", r.Computed["traits"])
+				}
+			case "projects/beta":
+				if r.Computed["traits"] != 1 {
+					t.Errorf("beta todos: got %v, want 1", r.Computed["traits"])
+				}
+			case "projects/gamma":
+				if r.Computed["traits"] != 0 {
+					t.Errorf("gamma todos: got %v, want 0", r.Computed["traits"])
+				}
+			}
+		}
+	})
+}
+
 func TestTraitPipelineMinMax(t *testing.T) {
 	db := setupPipelineTestDB(t)
 	defer db.Close()
