@@ -15,15 +15,8 @@ type Query struct {
 	TypeName   string      // Object type or trait name
 	Predicates []Predicate // Filters to apply
 
-	// v2 Pipeline (after |>)
+	// Pipeline (after |>)
 	Pipeline *Pipeline
-
-	// v1 Sort and group specifications (deprecated, kept for migration)
-	Sort  *SortSpec
-	Group *GroupSpec
-
-	// v1 Limit (deprecated, use Pipeline LimitStage instead)
-	Limit int
 }
 
 // Predicate represents a filter condition in a query.
@@ -278,7 +271,7 @@ type RefdPredicate struct {
 
 func (RefdPredicate) predicateNode() {}
 
-// AggregationType represents how to aggregate multiple values for sort/group.
+// AggregationType represents how to aggregate multiple values.
 type AggregationType int
 
 const (
@@ -287,47 +280,6 @@ const (
 	AggMax                          // Maximum value
 	AggCount                        // Count of matches
 	AggSum                          // Sum of values
-)
-
-// SortSpec represents a sort specification.
-type SortSpec struct {
-	Aggregation AggregationType
-	Descending  bool
-
-	// One of these will be set:
-	Path     *PathExpr // Direct path: _.parent.status
-	SubQuery *Query    // Subquery: {trait:due at:_}
-}
-
-// GroupSpec represents a group specification.
-type GroupSpec struct {
-	Aggregation AggregationType // Usually not used, but count: could be useful
-
-	// One of these will be set:
-	Path     *PathExpr // Direct path: _.refs:project
-	SubQuery *Query    // Subquery: {object:project refd:_}
-}
-
-// PathExpr represents a path expression from the result reference (_).
-type PathExpr struct {
-	Steps []PathStep
-}
-
-// PathStep represents one step in a path expression.
-type PathStep struct {
-	Kind PathStepKind
-	Name string // Field name, type name, etc.
-}
-
-// PathStepKind represents the kind of path step.
-type PathStepKind int
-
-const (
-	PathStepField    PathStepKind = iota // .fieldname
-	PathStepParent                       // .parent
-	PathStepAncestor                     // .ancestor:type
-	PathStepRefs                         // .refs:type
-	PathStepValue                        // .value
 )
 
 // Pipeline represents the post-processing stages after |>
