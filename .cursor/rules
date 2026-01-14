@@ -180,6 +180,37 @@ Keep functionality in the right package:
 - A function in one CLI file used by another CLI file → move to shared package
 - Config writing in `cli/` instead of `config/`
 
+### Resolver Creation: Use the Database Factory
+
+**NEVER create resolvers directly using `resolver.New*()` functions in production code.**
+
+The `resolver` package has multiple constructors (`New`, `NewWithAliases`, `NewWithDailyDir`, `NewWithNameFields`), but using them directly leads to inconsistent behavior—especially missing alias resolution.
+
+**Always use the unified database factory:**
+
+```go
+// ✅ CORRECT: Use the database's unified factory
+res, err := db.Resolver(index.ResolverOptions{
+    DailyDirectory: dailyDir,
+    Schema:         sch,  // Optional: enables name_field resolution
+    ExtraIDs:       ids,  // Optional: for hypothetical resolution (move command)
+})
+
+// ❌ WRONG: Direct resolver creation misses aliases
+res := resolver.New(objectIDs)
+res := resolver.NewWithDailyDir(objectIDs, "daily")
+```
+
+**Why this matters:**
+- The database factory includes aliases, name_field values, and all indexed objects
+- Direct creation requires manually fetching these, which is error-prone
+- A resolver without aliases causes false "reference not found" warnings
+
+**Exceptions:**
+- Test files in `*_test.go` may create resolvers directly for unit testing
+- The `internal/resolver/` package itself (it's the implementation)
+- Fallback paths when the database is unavailable (document the limitation)
+
 ### Command Registry Pattern
 The **command registry** (`internal/commands/registry.go`) is the single source of truth for all CLI commands:
 - Add new commands by adding an entry to the registry

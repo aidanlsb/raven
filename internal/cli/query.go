@@ -280,7 +280,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 	// Execute the query to get IDs
 	executor := query.NewExecutor(db.DB())
-	if res, err := db.Resolver(vaultCfg.DailyDirectory); err == nil {
+	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory}); err == nil {
 		executor.SetResolver(res)
 	}
 
@@ -464,7 +464,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	}
 
 	executor := query.NewExecutor(db.DB())
-	if res, err := db.Resolver(dailyDir); err == nil {
+	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir}); err == nil {
 		executor.SetResolver(res)
 	}
 

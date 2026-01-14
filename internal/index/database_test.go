@@ -376,7 +376,7 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
-		res, err := db.Resolver("journal")
+		res, err := db.Resolver(ResolverOptions{DailyDirectory: "journal"})
 		if err != nil {
 			t.Fatalf("failed to build resolver: %v", err)
 		}

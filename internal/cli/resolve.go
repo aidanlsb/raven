@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -85,13 +84,11 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 		dailyDir = vaultCfg.DailyDirectory
 	}
 
-	var res *resolver.Resolver
-	sch, schErr := schema.Load(opts.VaultPath)
-	if schErr == nil && sch != nil {
-		res, err = db.ResolverWithSchema(dailyDir, sch)
-	} else {
-		res, err = db.Resolver(dailyDir)
-	}
+	sch, _ := schema.Load(opts.VaultPath)
+	res, err := db.Resolver(index.ResolverOptions{
+		DailyDirectory: dailyDir,
+		Schema:         sch, // nil is fine, aliases still work
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resolver: %w", err)
 	}

@@ -441,7 +441,17 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	}
 	defer refStmt.Close()
 
-	for _, ref := range doc.Refs {
+	// Collect all refs: parsed refs + refs from schema-typed ref fields
+	allRefs := doc.Refs
+
+	// Extract additional refs from ref-typed fields in frontmatter/embedded objects.
+	// This allows `company: cursor` to work when the schema declares `company: ref`.
+	if sch != nil {
+		schemaRefs := extractRefsFromSchemaFields(doc.Objects, sch, doc.FilePath)
+		allRefs = mergeRefs(allRefs, schemaRefs)
+	}
+
+	for _, ref := range allRefs {
 		_, err = refStmt.Exec(
 			ref.SourceID,
 			nil, // target_id resolved later
@@ -803,49 +813,86 @@ func (d *Database) AllAliases() (map[string]string, error) {
 	return aliases, rows.Err()
 }
 
-// Resolver builds a canonical resolver for this vault index.
-//
-// It includes:
-// - all object IDs (for full + short reference resolution)
-// - all aliases (for alias resolution)
-// - the configured daily directory for date shorthand refs (e.g. [[2025-02-01]])
-//
-// Note: This does not include name_field resolution. Use ResolverWithSchema for that.
-func (d *Database) Resolver(dailyDirectory string) (*resolver.Resolver, error) {
-	if dailyDirectory == "" {
-		dailyDirectory = "daily"
-	}
-	objectIDs, err := d.AllObjectIDs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get object IDs: %w", err)
-	}
-	aliases, err := d.AllAliases()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get aliases: %w", err)
-	}
-	return resolver.NewWithAliases(objectIDs, aliases, dailyDirectory), nil
+// ResolverOptions configures resolver creation.
+type ResolverOptions struct {
+	// DailyDirectory is the directory for daily notes (default: "daily").
+	DailyDirectory string
+
+	// Schema enables name_field resolution for semantic matching.
+	// When provided, [[The Prose Edda]] can resolve to books/the-prose-edda
+	// if the book type has name_field: title.
+	Schema *schema.Schema
+
+	// ExtraIDs are additional object IDs to include in the resolver.
+	// Useful for hypothetical resolution (e.g., testing if refs will
+	// resolve after a move operation).
+	ExtraIDs []string
 }
 
-// ResolverWithSchema builds a resolver that includes name_field values for semantic resolution.
-// This allows [[The Prose Edda]] to resolve to a book with name_field: title even if the
-// filename is the-prose-edda.md.
-func (d *Database) ResolverWithSchema(dailyDirectory string, sch *schema.Schema) (*resolver.Resolver, error) {
-	if dailyDirectory == "" {
-		dailyDirectory = "daily"
+// Resolver builds the canonical resolver for this vault index.
+//
+// This is the ONE resolver factory that handles all cases:
+// - Object IDs (full path + short name resolution)
+// - Aliases (e.g., [[The Queen]] → people/freya)
+// - Name field values (e.g., [[The Prose Edda]] → books/the-prose-edda) - when Schema provided
+// - Date shorthand (e.g., [[2025-02-01]] → daily/2025-02-01)
+// - Extra IDs for hypothetical resolution
+//
+// Use this method for all resolver creation to ensure consistent behavior.
+func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
+	dailyDir := opts.DailyDirectory
+	if dailyDir == "" {
+		dailyDir = "daily"
 	}
+
 	objectIDs, err := d.AllObjectIDs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object IDs: %w", err)
 	}
+
 	aliases, err := d.AllAliases()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get aliases: %w", err)
 	}
-	nameFieldMap, err := d.AllNameFieldValues(sch)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get name field values: %w", err)
+
+	// Add extra IDs if provided (for hypothetical resolution)
+	if len(opts.ExtraIDs) > 0 {
+		seen := make(map[string]struct{}, len(objectIDs))
+		for _, id := range objectIDs {
+			seen[id] = struct{}{}
+		}
+		for _, id := range opts.ExtraIDs {
+			if id != "" {
+				if _, ok := seen[id]; !ok {
+					objectIDs = append(objectIDs, id)
+					seen[id] = struct{}{}
+				}
+			}
+		}
 	}
-	return resolver.NewWithNameFields(objectIDs, aliases, nameFieldMap, dailyDirectory), nil
+
+	// Include name_field values if schema is provided
+	if opts.Schema != nil {
+		nameFieldMap, err := d.AllNameFieldValues(opts.Schema)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get name field values: %w", err)
+		}
+		return resolver.NewWithNameFields(objectIDs, aliases, nameFieldMap, dailyDir), nil
+	}
+
+	return resolver.NewWithAliases(objectIDs, aliases, dailyDir), nil
+}
+
+// ResolverSimple is a convenience wrapper for Resolver with just a daily directory.
+// Deprecated: Use Resolver(ResolverOptions{DailyDirectory: dir}) for new code.
+func (d *Database) ResolverSimple(dailyDirectory string) (*resolver.Resolver, error) {
+	return d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory})
+}
+
+// ResolverWithSchema is a convenience wrapper for Resolver with schema support.
+// Deprecated: Use Resolver(ResolverOptions{DailyDirectory: dir, Schema: sch}) for new code.
+func (d *Database) ResolverWithSchema(dailyDirectory string, sch *schema.Schema) (*resolver.Resolver, error) {
+	return d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory, Schema: sch})
 }
 
 // AllNameFieldValues returns a map from name_field values to object IDs.
@@ -903,39 +950,10 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, er
 	return nameFieldMap, rows.Err()
 }
 
-// ResolverWithExtraIDs is like Resolver, but ensures extraIDs are included in the
-// resolver's known object ID list.
-//
-// This is useful for operations like `move` where the destination object ID may
-// not yet be indexed, but we still want to test whether a candidate short ref
-// would resolve uniquely after the move.
+// ResolverWithExtraIDs is a convenience wrapper for Resolver with extra IDs.
+// Deprecated: Use Resolver(ResolverOptions{DailyDirectory: dir, ExtraIDs: ids}) for new code.
 func (d *Database) ResolverWithExtraIDs(dailyDirectory string, extraIDs ...string) (*resolver.Resolver, error) {
-	if dailyDirectory == "" {
-		dailyDirectory = "daily"
-	}
-	objectIDs, err := d.AllObjectIDs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get object IDs: %w", err)
-	}
-	aliases, err := d.AllAliases()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get aliases: %w", err)
-	}
-	seen := make(map[string]struct{}, len(objectIDs))
-	for _, id := range objectIDs {
-		seen[id] = struct{}{}
-	}
-	for _, id := range extraIDs {
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		objectIDs = append(objectIDs, id)
-		seen[id] = struct{}{}
-	}
-	return resolver.NewWithAliases(objectIDs, aliases, dailyDirectory), nil
+	return d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory, ExtraIDs: extraIDs})
 }
 
 // DuplicateAlias represents multiple objects sharing the same alias.
@@ -1141,7 +1159,7 @@ type ReferenceResolutionResult struct {
 func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutionResult, error) {
 	result := &ReferenceResolutionResult{}
 
-	res, err := d.Resolver(dailyDirectory)
+	res, err := d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory})
 	if err != nil {
 		return nil, err
 	}
@@ -1207,4 +1225,116 @@ func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutio
 	}
 
 	return result, nil
+}
+
+// extractRefsFromSchemaFields extracts refs from ref-typed fields that are bare strings.
+// This enables `company: cursor` to work when the schema declares `company: ref`.
+//
+// The parser doesn't have schema context, so bare strings like "cursor" are stored as strings.
+// At index time, we use the schema to identify ref-typed fields and extract their values as refs.
+func extractRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema, filePath string) []*parser.ParsedRef {
+	var refs []*parser.ParsedRef
+
+	for _, obj := range objects {
+		// Get type definition from schema
+		typeDef := sch.Types[obj.ObjectType]
+		if typeDef == nil {
+			continue
+		}
+
+		for fieldName, fieldValue := range obj.Fields {
+			fieldDef := typeDef.Fields[fieldName]
+			if fieldDef == nil {
+				continue
+			}
+
+			// Check if field is a ref or ref[] type
+			switch fieldDef.Type {
+			case schema.FieldTypeRef:
+				// Single ref field - extract target from string value
+				if target := extractRefTarget(fieldValue); target != "" {
+					refs = append(refs, &parser.ParsedRef{
+						SourceID:  obj.ID,
+						TargetRaw: target,
+						Line:      obj.LineStart,
+					})
+				}
+
+			case schema.FieldTypeRefArray:
+				// Array of refs - extract targets from each element
+				if arr, ok := fieldValue.AsArray(); ok {
+					for _, item := range arr {
+						if target := extractRefTarget(item); target != "" {
+							refs = append(refs, &parser.ParsedRef{
+								SourceID:  obj.ID,
+								TargetRaw: target,
+								Line:      obj.LineStart,
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return refs
+}
+
+// extractRefTarget extracts the ref target from a FieldValue.
+// Returns the target string for both ref types (already parsed [[target]])
+// and bare string values (needs to be treated as a ref).
+//
+// Also handles the case where YAML parsed `[[target]]` as a nested array.
+func extractRefTarget(fv schema.FieldValue) string {
+	// If already a ref type, return the target
+	if target, ok := fv.AsRef(); ok {
+		return target
+	}
+
+	// If a bare string, use it as the target
+	if s, ok := fv.AsString(); ok && s != "" {
+		// Skip strings that look like they contain wikilinks - those are already extracted
+		// by the parser's raw YAML scanning
+		if !strings.Contains(s, "[[") {
+			return s
+		}
+	}
+
+	// Handle YAML parsing `[[target]]` as nested array: [[target]] -> [["target"]]
+	// This happens when users write `company: [[cursor]]` without quotes.
+	// YAML interprets this as an array containing an array containing "cursor".
+	if arr, ok := fv.AsArray(); ok && len(arr) == 1 {
+		if innerArr, ok := arr[0].AsArray(); ok && len(innerArr) == 1 {
+			if s, ok := innerArr[0].AsString(); ok && s != "" {
+				return s
+			}
+		}
+	}
+
+	return ""
+}
+
+// mergeRefs merges two ref slices, deduplicating by (sourceID, targetRaw) pairs.
+// This prevents double-indexing when a ref is both:
+// 1. Found by raw YAML scanning (as [[target]])
+// 2. Extracted from a ref-typed field
+func mergeRefs(existing, additional []*parser.ParsedRef) []*parser.ParsedRef {
+	// Build a set of existing (sourceID, targetRaw) pairs
+	seen := make(map[string]bool)
+	for _, ref := range existing {
+		key := ref.SourceID + "\x00" + ref.TargetRaw
+		seen[key] = true
+	}
+
+	// Add new refs that aren't duplicates
+	result := existing
+	for _, ref := range additional {
+		key := ref.SourceID + "\x00" + ref.TargetRaw
+		if !seen[key] {
+			result = append(result, ref)
+			seen[key] = true
+		}
+	}
+
+	return result
 }

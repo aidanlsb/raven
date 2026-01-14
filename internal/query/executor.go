@@ -55,7 +55,27 @@ func (e *Executor) getResolver() (*resolver.Resolver, error) {
 		return nil, err
 	}
 
-	e.resolver = resolver.New(objectIDs)
+	// Query all aliases from the database
+	aliasRows, err := e.db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
+	if err != nil {
+		// Fall back to resolver without aliases
+		e.resolver = resolver.New(objectIDs)
+		return e.resolver, nil
+	}
+	defer aliasRows.Close()
+
+	aliases := make(map[string]string)
+	for aliasRows.Next() {
+		var alias, id string
+		if err := aliasRows.Scan(&alias, &id); err != nil {
+			continue
+		}
+		if _, exists := aliases[alias]; !exists {
+			aliases[alias] = id
+		}
+	}
+
+	e.resolver = resolver.NewWithAliases(objectIDs, aliases, "daily")
 	return e.resolver, nil
 }
 
@@ -2391,12 +2411,18 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 
 	if p.Target != "" {
 		// Direct reference to specific target
-		// Prefer target_id (resolved at index time), fall back to target_raw
+		// Resolve the target to its canonical object ID (like backlinks does)
+		resolvedTarget := p.Target
+		if resolved, err := e.resolveTarget(p.Target); err == nil && resolved != "" {
+			resolvedTarget = resolved
+		}
+
+		// Match against resolved target_id, OR fall back to target_raw for unresolved refs
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
 			WHERE r.source_id = %s.id AND (r.target_id = ? OR (r.target_id IS NULL AND r.target_raw = ?))
 		)`, alias)
-		args = append(args, p.Target, p.Target)
+		args = append(args, resolvedTarget, p.Target)
 	} else if p.SubQuery != nil {
 		// Subquery - reference to objects matching the subquery
 		var targetConditions []string
@@ -2489,6 +2515,12 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 
 	if p.Target != "" {
 		// Direct reference to specific target
+		// Resolve the target to its canonical object ID (like backlinks does)
+		resolvedTarget := p.Target
+		if resolved, err := e.resolveTarget(p.Target); err == nil && resolved != "" {
+			resolvedTarget = resolved
+		}
+
 		// Match refs on the same line as the trait
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
@@ -2496,7 +2528,7 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 			  AND r.line_number = %s.line_number
 			  AND (r.target_id = ? OR (r.target_id IS NULL AND r.target_raw = ?))
 		)`, alias, alias)
-		args = append(args, p.Target, p.Target)
+		args = append(args, resolvedTarget, p.Target)
 	} else if p.SubQuery != nil {
 		// Subquery - reference to objects matching the subquery
 		var targetConditions []string

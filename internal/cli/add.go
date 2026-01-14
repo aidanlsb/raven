@@ -337,7 +337,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 	var warnings []Warning
 	refs := parser.ExtractRefs(text, 1)
 	if len(refs) > 0 {
-		warnings = append(warnings, validateRefs(vaultPath, refs)...)
+		warnings = append(warnings, validateRefs(vaultPath, refs, vaultCfg)...)
 	}
 
 	// Reindex if configured
@@ -566,7 +566,7 @@ func getFileLineCount(path string) int {
 }
 
 // validateRefs checks if references exist and returns warnings for missing ones.
-func validateRefs(vaultPath string, refs []parser.Reference) []Warning {
+func validateRefs(vaultPath string, refs []parser.Reference, vaultCfg *config.VaultConfig) []Warning {
 	var warnings []Warning
 
 	// Load schema to infer types from default_path
@@ -574,6 +574,60 @@ func validateRefs(vaultPath string, refs []parser.Reference) []Warning {
 	if err != nil {
 		return warnings
 	}
+
+	// Determine daily directory from config
+	dailyDir := "daily"
+	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
+		dailyDir = vaultCfg.DailyDirectory
+	}
+
+	// Open database and use its resolver (includes aliases and name_field values)
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		// Fall back to walking vault if database is unavailable
+		return validateRefsWithoutDB(vaultPath, refs, sch, dailyDir)
+	}
+	defer db.Close()
+
+	// Build resolver with aliases and name_field support
+	res, err := db.Resolver(index.ResolverOptions{
+		DailyDirectory: dailyDir,
+		Schema:         sch,
+	})
+	if err != nil {
+		return validateRefsWithoutDB(vaultPath, refs, sch, dailyDir)
+	}
+
+	for _, ref := range refs {
+		// Try to resolve the reference
+		resolved := res.Resolve(ref.TargetRaw)
+		if resolved.TargetID == "" {
+			// Reference not found - build a warning
+			warning := Warning{
+				Code:    WarnRefNotFound,
+				Message: fmt.Sprintf("Reference [[%s]] does not exist", ref.TargetRaw),
+				Ref:     ref.TargetRaw,
+			}
+
+			// Try to infer the type from the path
+			suggestedType := inferTypeFromPath(sch, ref.TargetRaw)
+			if suggestedType != "" {
+				warning.SuggestedType = suggestedType
+				warning.CreateCommand = fmt.Sprintf("rvn object create %s --title \"%s\" --json",
+					suggestedType, filepath.Base(ref.TargetRaw))
+			}
+
+			warnings = append(warnings, warning)
+		}
+	}
+
+	return warnings
+}
+
+// validateRefsWithoutDB is a fallback for when the database is unavailable.
+// It walks the vault files but does not support alias resolution.
+func validateRefsWithoutDB(vaultPath string, refs []parser.Reference, sch *schema.Schema, dailyDir string) []Warning {
+	var warnings []Warning
 
 	// Collect existing object IDs by walking the vault
 	var objectIDs []string
@@ -586,8 +640,8 @@ func validateRefs(vaultPath string, refs []parser.Reference) []Warning {
 		return nil
 	})
 
-	// Build resolver with existing objects
-	res := resolver.New(objectIDs)
+	// Build resolver with existing objects (no alias support)
+	res := resolver.NewWithDailyDir(objectIDs, dailyDir)
 
 	for _, ref := range refs {
 		// Try to resolve the reference
