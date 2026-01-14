@@ -140,7 +140,7 @@ func (e *Executor) ExecuteObjectQueryWithPipeline(q *Query) ([]PipelineObjectRes
 	}
 
 	// First, execute the base query
-	baseResults, err := e.ExecuteObjectQuery(q)
+	baseResults, err := e.executeObjectQuery(q)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (e *Executor) ExecuteTraitQueryWithPipeline(q *Query) ([]PipelineTraitResul
 	}
 
 	// First, execute the base query
-	baseResults, err := e.ExecuteTraitQuery(q)
+	baseResults, err := e.executeTraitQuery(q)
 	if err != nil {
 		return nil, err
 	}
@@ -983,14 +983,14 @@ func (e *Executor) computeSubqueryAggregationForObject(obj *ObjectResult, subQue
 
 	switch subQuery.Type {
 	case QueryTypeObject:
-		results, err := e.ExecuteObjectQuery(boundQuery)
+		results, err := e.executeObjectQuery(boundQuery)
 		if err != nil {
 			return 0, err
 		}
 		return e.aggregateObjectResults(results, agg, field)
 
 	case QueryTypeTrait:
-		results, err := e.ExecuteTraitQuery(boundQuery)
+		results, err := e.executeTraitQuery(boundQuery)
 		if err != nil {
 			return 0, err
 		}
@@ -1010,14 +1010,14 @@ func (e *Executor) computeSubqueryAggregationForTrait(trait *TraitResult, subQue
 
 	switch subQuery.Type {
 	case QueryTypeObject:
-		results, err := e.ExecuteObjectQuery(boundQuery)
+		results, err := e.executeObjectQuery(boundQuery)
 		if err != nil {
 			return 0, err
 		}
 		return e.aggregateObjectResults(results, agg, field)
 
 	case QueryTypeTrait:
-		results, err := e.ExecuteTraitQuery(boundQuery)
+		results, err := e.executeTraitQuery(boundQuery)
 		if err != nil {
 			return 0, err
 		}
@@ -1607,8 +1607,9 @@ func compareValues(a, b interface{}) int {
 	return 0
 }
 
-// ExecuteObjectQuery executes an object query and returns matching objects.
-func (e *Executor) ExecuteObjectQuery(q *Query) ([]ObjectResult, error) {
+// executeObjectQuery executes an object query and returns matching objects.
+// This is internal - external callers should use ExecuteObjectQueryWithPipeline.
+func (e *Executor) executeObjectQuery(q *Query) ([]ObjectResult, error) {
 	if q.Type != QueryTypeObject {
 		return nil, fmt.Errorf("expected object query, got trait query")
 	}
@@ -1640,8 +1641,9 @@ func (e *Executor) ExecuteObjectQuery(q *Query) ([]ObjectResult, error) {
 	return results, rows.Err()
 }
 
-// ExecuteTraitQuery executes a trait query and returns matching traits.
-func (e *Executor) ExecuteTraitQuery(q *Query) ([]TraitResult, error) {
+// executeTraitQuery executes a trait query and returns matching traits.
+// This is internal - external callers should use ExecuteTraitQueryWithPipeline.
+func (e *Executor) executeTraitQuery(q *Query) ([]TraitResult, error) {
 	if q.Type != QueryTypeTrait {
 		return nil, fmt.Errorf("expected trait query, got object query")
 	}
@@ -3018,9 +3020,9 @@ func (e *Executor) Execute(queryStr string) (interface{}, error) {
 	}
 
 	if q.Type == QueryTypeObject {
-		return e.ExecuteObjectQuery(q)
+		return e.executeObjectQuery(q)
 	}
-	return e.ExecuteTraitQuery(q)
+	return e.executeTraitQuery(q)
 }
 
 // bindSelfRefsForTrait creates a copy of the query with all IsSelfRef predicates

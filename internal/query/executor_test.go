@@ -310,7 +310,7 @@ func TestExecuteObjectQuery(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := executor.executeObjectQuery(q)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -453,7 +453,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteTraitQuery(q)
+			results, err := executor.executeTraitQuery(q)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -530,7 +530,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := executor.executeObjectQuery(q)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -590,7 +590,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteTraitQuery(q)
+			results, err := executor.executeTraitQuery(q)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -666,7 +666,7 @@ func TestSourcePredicate(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteTraitQuery(q)
+			results, err := executor.executeTraitQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -731,7 +731,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := executor.executeObjectQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -774,7 +774,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteTraitQuery(q)
+			results, err := executor.executeTraitQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -838,7 +838,7 @@ func TestAtPredicate(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteTraitQuery(q)
+			results, err := executor.executeTraitQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -897,7 +897,7 @@ func TestRefdPredicate(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := executor.executeObjectQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -952,7 +952,7 @@ func TestComparisonOperators(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteTraitQuery(q)
+			results, err := executor.executeTraitQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -992,7 +992,7 @@ func TestRefdShorthand(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := executor.executeObjectQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -1076,7 +1076,7 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteObjectQuery(q)
+			results, err := executor.executeObjectQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -1130,7 +1130,7 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			results, err := executor.ExecuteTraitQuery(q)
+			results, err := executor.executeTraitQuery(q)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
