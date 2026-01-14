@@ -286,7 +286,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 	var ids []string
 	if q.Type == query.QueryTypeObject {
-		results, err := executor.ExecuteObjectQuery(q)
+		results, err := executor.ExecuteObjectQueryWithPipeline(q)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "")
 		}
@@ -294,7 +294,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 			ids = append(ids, r.ID)
 		}
 	} else {
-		results, err := executor.ExecuteTraitQuery(q)
+		results, err := executor.ExecuteTraitQueryWithPipeline(q)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "")
 		}
@@ -471,7 +471,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	elapsed := time.Since(start).Milliseconds()
 
 	if q.Type == query.QueryTypeObject {
-		results, err := executor.ExecuteObjectQuery(q)
+		results, err := executor.ExecuteObjectQueryWithPipeline(q)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "")
 		}
@@ -497,13 +497,18 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 		if isJSONOutput() {
 			items := make([]map[string]interface{}, len(results))
 			for i, r := range results {
-				items[i] = map[string]interface{}{
+				item := map[string]interface{}{
 					"id":        r.ID,
 					"type":      r.Type,
 					"fields":    r.Fields,
 					"file_path": r.FilePath,
 					"line":      r.LineStart,
 				}
+				// Include computed values from pipeline if present
+				if len(r.Computed) > 0 {
+					item["computed"] = r.Computed
+				}
+				items[i] = item
 			}
 			outputSuccess(map[string]interface{}{
 				"query_type": "object",
@@ -536,7 +541,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	}
 
 	// Trait query
-	results, err := executor.ExecuteTraitQuery(q)
+	results, err := executor.ExecuteTraitQueryWithPipeline(q)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "")
 	}
@@ -563,7 +568,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	if isJSONOutput() {
 		items := make([]map[string]interface{}, len(results))
 		for i, r := range results {
-			items[i] = map[string]interface{}{
+			item := map[string]interface{}{
 				"id":         r.ID,
 				"trait_type": r.TraitType,
 				"value":      r.Value,
@@ -573,6 +578,11 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 				"object_id":  r.ParentObjectID,
 				"source":     r.Source,
 			}
+			// Include computed values from pipeline if present
+			if len(r.Computed) > 0 {
+				item["computed"] = r.Computed
+			}
+			items[i] = item
 		}
 		outputSuccess(map[string]interface{}{
 			"query_type": "trait",
