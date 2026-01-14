@@ -315,7 +315,7 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 		}
 
 		executor := query.NewExecutor(db.DB())
-		if res, err := db.Resolver(dailyDir); err == nil {
+		if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir}); err == nil {
 			executor.SetResolver(res)
 		}
 

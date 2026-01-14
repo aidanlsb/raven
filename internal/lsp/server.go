@@ -298,9 +298,9 @@ func (s *Server) getResolver() *resolver.Resolver {
 	if s.cfg != nil && s.cfg.DailyDirectory != "" {
 		dailyDir = s.cfg.DailyDirectory
 	}
-	res, err := s.db.Resolver(dailyDir)
+	res, err := s.db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir})
 	if err != nil {
-		// Fall back to a best-effort resolver from IDs only.
+		// Fall back to a best-effort resolver from IDs only (no alias support).
 		objectIDs, _ := s.db.AllObjectIDs()
 		return resolver.NewWithDailyDir(objectIDs, dailyDir)
 	}
