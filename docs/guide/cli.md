@@ -526,6 +526,30 @@ rvn query "object:project" --json | jq '.results[].id'
 rvn stats --json | jq '.object_count'
 ```
 
+### Shell Quoting
+
+**Always use single quotes** for queries to prevent shell interpretation of special characters:
+
+```bash
+# ✅ Correct - single quotes
+rvn query 'trait:todo refs:{object:project .status=="active"}'
+
+# ❌ Problematic - the shell interprets {} and other special characters
+rvn query trait:todo refs:{object:project}
+
+# ❌ Problematic - double quotes require escaping
+rvn query "trait:todo refs:{object:project .status==\"active\"}"
+```
+
+Characters that shells interpret:
+- `{}` — brace expansion (bash/zsh)
+- `!` — history expansion (bash)
+- `|` — pipe (all shells)
+- `$` — variable expansion
+- `"` — needs escaping inside double quotes
+
+Single quotes pass the string literally to raven, avoiding these issues.
+
 ### Shell Completion
 
 Enable tab completion:

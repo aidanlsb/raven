@@ -1,5 +1,7 @@
 # Query Language
 
+> **Shell Tip:** Always wrap queries in single quotes to prevent shell interpretation of special characters like `{}`, `|`, and `!`. See the [CLI Guide](../guide/cli.md#shell-quoting) for details.
+
 ## Core Principles
 
 1. **Two query types**: Object queries and trait queries

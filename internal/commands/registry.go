@@ -225,8 +225,10 @@ Common predicates:
 - .field:value — Filter by field (.status:active, .priority:high)
 - has:trait — Has trait directly (has:due, has:priority)
 - refs:[[target]] — References target (refs:[[people/freya]])
+- refs:{object:type} — References objects matching subquery (refs:{object:project .status:active})
 - within:type — Trait is inside object type (within:meeting)
 - value:X — Trait value equals X (value:past, value:high)
+- content:"text" — Full-text search within content (content:"meeting notes")
 
 Special date values for trait:due:
 - value:past, value:today, value:tomorrow, value:this-week, value:next-week
