@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -118,8 +119,8 @@ type Validator struct {
 	resolver        *resolver.Resolver
 	allIDs          map[string]struct{}
 	objectTypes     map[string]string          // Object ID -> type name (for target type validation)
-	aliases         map[string]string          // Alias -> object ID
-	duplicateAliases []DuplicateAlias          // Aliases used by multiple objects
+	aliases          map[string]string           // Alias -> object ID
+	duplicateAliases []index.DuplicateAlias     // Aliases used by multiple objects
 	missingRefs     map[string]*MissingRef     // Keyed by target path to dedupe
 	undefinedTraits map[string]*UndefinedTrait // Keyed by trait name to dedupe
 	usedTypes       map[string]struct{}        // Types actually used in documents
@@ -128,12 +129,6 @@ type Validator struct {
 	usedShortNames  map[string]struct{}        // Short names actually used in references
 	objectsRoot     string                     // Directory prefix for typed objects (e.g., "objects/")
 	pagesRoot       string                     // Directory prefix for untyped pages (e.g., "pages/")
-}
-
-// DuplicateAlias represents multiple objects sharing the same alias.
-type DuplicateAlias struct {
-	Alias     string   // The duplicated alias
-	ObjectIDs []string // All object IDs using this alias
 }
 
 // ObjectInfo contains basic info about an object for validation.
@@ -204,7 +199,7 @@ func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo,
 
 // SetDuplicateAliases sets duplicate alias information for validation.
 // This should be called before ValidateSchema to report duplicate aliases.
-func (v *Validator) SetDuplicateAliases(duplicates []DuplicateAlias) {
+func (v *Validator) SetDuplicateAliases(duplicates []index.DuplicateAlias) {
 	v.duplicateAliases = duplicates
 }
 
@@ -528,16 +523,6 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 	return issues
 }
 
-// isValidDate checks if a string is a valid YYYY-MM-DD date.
-func isValidDate(s string) bool {
-	return dates.IsValidDate(s)
-}
-
-// isValidDatetime checks if a string is a valid datetime.
-func isValidDatetime(s string) bool {
-	return dates.IsValidDatetime(s)
-}
-
 func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {
 	return v.validateRefWithContext(filePath, "", ref, "", "")
 }
@@ -704,15 +689,6 @@ func (v *Validator) trackUndefinedTrait(traitName, sourceFile string, line int, 
 		UsageCount: 1,
 		Locations:  []string{location},
 	}
-}
-
-func containsHash(s string) bool {
-	for _, c := range s {
-		if c == '#' {
-			return true
-		}
-	}
-	return false
 }
 
 // SchemaIssue represents a schema-level validation issue (not file-specific).

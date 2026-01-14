@@ -106,7 +106,7 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 		if !ok {
 			return fmt.Errorf("expected date")
 		}
-		if !isValidDate(s) {
+		if !dates.IsValidDate(s) {
 			return fmt.Errorf("invalid date format, expected YYYY-MM-DD")
 		}
 
@@ -117,7 +117,7 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 		}
 		for _, v := range arr {
 			s, ok := v.AsString()
-			if !ok || !isValidDate(s) {
+			if !ok || !dates.IsValidDate(s) {
 				return fmt.Errorf("expected array of dates")
 			}
 		}
@@ -127,7 +127,7 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 		if !ok {
 			return fmt.Errorf("expected datetime")
 		}
-		if !isValidDatetime(s) {
+		if !dates.IsValidDatetime(s) {
 			return fmt.Errorf("invalid datetime format")
 		}
 
@@ -178,14 +178,6 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 	}
 
 	return nil
-}
-
-func isValidDate(s string) bool {
-	return dates.IsValidDate(s)
-}
-
-func isValidDatetime(s string) bool {
-	return dates.IsValidDatetime(s)
 }
 
 // ValidateNameField checks that a type's name_field is valid.
