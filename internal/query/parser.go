@@ -505,7 +505,7 @@ func (p *Parser) parseRefsPredicate(negated bool) (Predicate, error) {
 func (p *Parser) parseContentPredicate(negated bool) (Predicate, error) {
 	// Expect a quoted string
 	if p.curr.Type != TokenString {
-		return nil, fmt.Errorf("expected quoted string after content:, got %v", p.curr.Type)
+		return nil, fmt.Errorf("content: requires a quoted string, e.g., content:\"search term\"")
 	}
 
 	searchTerm := p.curr.Value

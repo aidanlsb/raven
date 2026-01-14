@@ -44,7 +44,7 @@ func setupPipelineTestDB(t *testing.T) *sql.DB {
 		CREATE TABLE refs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			source_id TEXT NOT NULL,
-			target_id TEXT NOT NULL,
+			target_id TEXT,
 			target_raw TEXT NOT NULL,
 			display_text TEXT,
 			file_path TEXT NOT NULL,

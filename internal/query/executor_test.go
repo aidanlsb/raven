@@ -43,7 +43,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		CREATE TABLE refs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			source_id TEXT NOT NULL,
-			target_id TEXT NOT NULL,
+			target_id TEXT,
 			target_raw TEXT NOT NULL,
 			display_text TEXT,
 			file_path TEXT NOT NULL,
@@ -92,7 +92,9 @@ func setupTestDB(t *testing.T) *sql.DB {
 			-- Traits on nested sections for contains tests
 			('trait5', 'projects/website.md', 'projects/website#tasks', 'todo', 'todo', 'Build landing page', 25),
 			('trait6', 'projects/website.md', 'projects/website#tasks', 'priority', 'high', 'Build landing page', 25),
-			('trait7', 'projects/mobile.md', 'projects/mobile#tasks', 'todo', 'done', 'Setup CI/CD', 20);
+			('trait7', 'projects/mobile.md', 'projects/mobile#tasks', 'todo', 'done', 'Setup CI/CD', 20),
+			-- Test case for unresolved refs (target_id is NULL)
+			('trait8', 'projects/mobile.md', 'projects/mobile#tasks', 'todo', 'todo', 'Cross-project task [[projects/website]]', 30);
 
 		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number) VALUES
 			('daily/2025-02-01#standup', 'projects/website', 'projects/website', 'daily/2025-02-01.md', 12),
@@ -100,7 +102,9 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('daily/2025-02-01#standup', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 15),
 			('daily/2025-02-01#planning', 'projects/mobile', 'projects/mobile', 'daily/2025-02-01.md', 32),
 			('daily/2025-02-01#planning', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 33),
-			('projects/website', 'people/freya', 'people/freya', 'projects/website.md', 5);
+			('projects/website', 'people/freya', 'people/freya', 'projects/website.md', 5),
+			-- Unresolved ref (target_id is NULL) - tests fallback to target_raw matching
+			('projects/mobile#tasks', NULL, 'projects/website', 'projects/mobile.md', 30);
 
 		INSERT INTO fts_content (object_id, title, content, file_path) VALUES
 			('projects/website', 'Website Project', 'This is the website redesign project. Freya is a colleague working on this.', 'projects/website.md'),
@@ -265,7 +269,7 @@ func TestExecuteObjectQuery(t *testing.T) {
 		{
 			name:      "contains todo with value filter",
 			query:     "object:project contains:{trait:todo value==todo}",
-			wantCount: 1, // Only website has incomplete todo
+			wantCount: 2, // Both projects have incomplete todos (trait5 on website, trait8 on mobile)
 		},
 		{
 			name:      "contains todo value done",
@@ -351,7 +355,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 		{
 			name:      "trait value case insensitive",
 			query:     "trait:todo value==TODO",
-			wantCount: 1, // matches "todo" case-insensitively
+			wantCount: 2, // matches "todo" case-insensitively (trait5 and trait8)
 		},
 		{
 			name:      "trait value mixed case",
@@ -392,6 +396,17 @@ func TestExecuteTraitQuery(t *testing.T) {
 			name:      "refs to non-existent target",
 			query:     "trait:due refs:[[people/thor]]",
 			wantCount: 0, // No trait has refs to thor on same line
+		},
+		// Tests for unresolved refs (target_id is NULL, fallback to target_raw)
+		{
+			name:      "refs with NULL target_id (unresolved) using direct ref",
+			query:     "trait:todo refs:[[projects/website]]",
+			wantCount: 1, // trait8 has unresolved ref to projects/website on line 30
+		},
+		{
+			name:      "refs with NULL target_id (unresolved) using object subquery",
+			query:     "trait:todo refs:{object:project}",
+			wantCount: 1, // trait8 has unresolved ref to a project on line 30
 		},
 		// Content predicate tests
 		{
@@ -564,7 +579,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 		{
 			name:      "negated on target",
 			query:     "trait:todo !on:[[projects/website#tasks]]",
-			wantCount: 1, // mobile#tasks has a todo
+			wantCount: 2, // mobile#tasks has two todos (trait7 and trait8)
 		},
 	}
 
@@ -743,12 +758,12 @@ func TestOrAndGroupPredicates(t *testing.T) {
 		{
 			name:      "OR value filter",
 			query:     "trait:todo (value==todo | value==done)",
-			wantCount: 2, // trait5 (todo) and trait7 (done)
+			wantCount: 3, // trait5 (todo), trait7 (done), trait8 (todo)
 		},
 		{
 			name:      "grouped with value",
 			query:     "trait:todo (value==todo) on:{object:section}",
-			wantCount: 1, // trait5
+			wantCount: 2, // trait5 and trait8 (both have value==todo and are on sections)
 		},
 	}
 
@@ -1094,12 +1109,12 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 		{
 			name:      "on with field filter",
 			query:     "trait:todo on:{object:section .title==Tasks}",
-			wantCount: 2, // both tasks sections have todos
+			wantCount: 3, // trait5 on website#tasks, trait7 and trait8 on mobile#tasks
 		},
 		{
 			name:      "within paused project",
 			query:     "trait:todo within:{object:project .status==paused}",
-			wantCount: 1, // trait7 is within mobile (paused)
+			wantCount: 2, // trait7 and trait8 are within mobile (paused)
 		},
 		{
 			name:      "highlight within date",
