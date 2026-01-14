@@ -53,6 +53,10 @@ var Registry = map[string]Meta{
 		Description: "Create a new typed object",
 		LongDesc: `Creates a new note with the specified type.
 
+⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command to create new vault objects instead
+of writing files directly with 'echo', 'touch', or file writing tools. The raven_new
+command applies templates, validates against the schema, and ensures proper indexing.
+
 The type is required. If title is not provided, you will be prompted for it.
 Required fields (as defined in schema.yaml) will be prompted for interactively,
 or can be provided via --field flags.
@@ -80,9 +84,9 @@ to understand which fields are auto-populated.`,
 			"rvn new book \"The Prose Edda\" --field author=people/snorri --json",
 		},
 		UseCases: []string{
-			"Create a new person entry",
-			"Create a new project file",
-			"Create any typed object defined in schema",
+			"Create a new typed object (NEVER write vault files directly)",
+			"Create a new person entry with schema validation",
+			"Create a new project file with template applied",
 		},
 	},
 	"add": {
@@ -125,6 +129,13 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		Description: "Delete an object from the vault",
 		LongDesc: `Delete a file/object from the vault.
 
+⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'rm'.
+Using 'rm' directly will NOT warn about backlinks (other files that reference this one),
+potentially creating broken links throughout the vault. The raven_delete command:
+- Warns about incoming backlinks before deletion
+- Moves files to .trash/ for recovery (not permanent deletion)
+- Updates the index properly
+
 By default, files are moved to a trash directory (.trash/).
 Warns about backlinks (objects that reference the deleted item).
 
@@ -143,11 +154,21 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn delete people/freya --json",
 			"rvn delete projects/old --force --json",
 		},
+		UseCases: []string{
+			"Delete a file safely (NEVER use 'rm' shell command)",
+			"Remove objects while checking for broken links",
+			"Move files to trash with backlink warnings",
+		},
 	},
 	"move": {
 		Name:        "move",
 		Description: "Move or rename an object within the vault",
 		LongDesc: `Move or rename a file/object within the vault.
+
+⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
+Using 'mv' directly will NOT update references to the file, causing broken links
+throughout the vault. The raven_move command automatically updates all [[references]]
+that point to the moved file.
 
 SECURITY: Both source and destination must be within the vault.
 Files cannot be moved outside the vault, and external files cannot be moved in.
@@ -183,10 +204,10 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn move drafts/person.md people/freya.md --update-refs --json",
 		},
 		UseCases: []string{
-			"Rename a file in place",
-			"Move file to different directory",
-			"Reorganize vault structure",
-			"Archive old content",
+			"Rename a file in place (NEVER use 'mv' shell command)",
+			"Move file to different directory with reference updates",
+			"Reorganize vault structure while keeping links intact",
+			"Archive old content without breaking references",
 		},
 	},
 	"query": {
@@ -296,12 +317,22 @@ For bulk operations:
 	"read": {
 		Name:        "read",
 		Description: "Read raw file content",
+		LongDesc: `Read raw file content.
+
+For agents: Use this command instead of shell commands like 'cat', 'head', or 'tail'
+to read vault files. This ensures consistent behavior and proper path resolution
+within the vault.`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "File path relative to vault", Required: true},
 		},
 		Examples: []string{
 			"rvn read daily/2025-02-01.md --json",
 			"rvn read people/freya.md --json",
+		},
+		UseCases: []string{
+			"Read vault file content (use instead of 'cat', 'head', 'tail')",
+			"Inspect file before editing",
+			"Get full content after finding object via query",
 		},
 	},
 	"stats": {
@@ -679,6 +710,10 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		Description: "Surgical text replacement in vault files",
 		LongDesc: `Replace a unique string in a vault file with another string.
 
+⚠️ IMPORTANT FOR AGENTS: Use this command instead of shell tools like 'sed' or 'awk'
+to edit vault files. This ensures proper preview/confirm workflow and maintains
+file integrity within the vault.
+
 The string to replace must appear exactly once in the file to prevent 
 ambiguous edits.
 
@@ -700,11 +735,11 @@ For multi-line replacements, include newlines in both old_str and new_str.`,
 			`rvn edit "daily/2026-01-02.md" "- old task" "" --confirm --json`,
 		},
 		UseCases: []string{
+			"Edit vault files (use instead of 'sed', 'awk', or direct file writes)",
 			"Add wiki links to existing text",
 			"Fix typos in notes",
 			"Add traits to existing lines",
-			"Delete specific content",
-			"Make precise edits without overwriting files",
+			"Delete specific content with preview",
 		},
 	},
 	"search": {
