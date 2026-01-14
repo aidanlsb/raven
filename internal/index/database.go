@@ -883,18 +883,6 @@ func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
 	return resolver.NewWithAliases(objectIDs, aliases, dailyDir), nil
 }
 
-// ResolverSimple is a convenience wrapper for Resolver with just a daily directory.
-// Deprecated: Use Resolver(ResolverOptions{DailyDirectory: dir}) for new code.
-func (d *Database) ResolverSimple(dailyDirectory string) (*resolver.Resolver, error) {
-	return d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory})
-}
-
-// ResolverWithSchema is a convenience wrapper for Resolver with schema support.
-// Deprecated: Use Resolver(ResolverOptions{DailyDirectory: dir, Schema: sch}) for new code.
-func (d *Database) ResolverWithSchema(dailyDirectory string, sch *schema.Schema) (*resolver.Resolver, error) {
-	return d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory, Schema: sch})
-}
-
 // AllNameFieldValues returns a map from name_field values to object IDs.
 // It queries each type's name_field and extracts the corresponding field value.
 func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, error) {
@@ -948,12 +936,6 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, er
 	}
 
 	return nameFieldMap, rows.Err()
-}
-
-// ResolverWithExtraIDs is a convenience wrapper for Resolver with extra IDs.
-// Deprecated: Use Resolver(ResolverOptions{DailyDirectory: dir, ExtraIDs: ids}) for new code.
-func (d *Database) ResolverWithExtraIDs(dailyDirectory string, extraIDs ...string) (*resolver.Resolver, error) {
-	return d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory, ExtraIDs: extraIDs})
 }
 
 // DuplicateAlias represents multiple objects sharing the same alias.

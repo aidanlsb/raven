@@ -1,12 +1,6 @@
 package parser
 
 import (
-	"strings"
-
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/text"
-
 	"github.com/aidanlsb/raven/internal/slugs"
 )
 
@@ -15,56 +9,6 @@ type Heading struct {
 	Level int
 	Text  string
 	Line  int // 1-indexed
-}
-
-// ExtractHeadings extracts headings from markdown content using goldmark.
-func ExtractHeadings(content string, startLine int) []Heading {
-	var headings []Heading
-
-	md := goldmark.New()
-	reader := text.NewReader([]byte(content))
-	doc := md.Parser().Parse(reader)
-
-	// Pre-compute line numbers for byte offsets
-	lineStarts := computeLineStarts(content)
-
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-
-		if heading, ok := n.(*ast.Heading); ok {
-			// Get heading text
-			var textBuilder strings.Builder
-			for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
-				if textNode, ok := child.(*ast.Text); ok {
-					textBuilder.Write(textNode.Segment.Value([]byte(content)))
-				}
-			}
-
-			headingText := strings.TrimSpace(textBuilder.String())
-			if headingText == "" {
-				return ast.WalkContinue, nil
-			}
-
-			// Calculate line number
-			line := startLine
-			if heading.Lines().Len() > 0 {
-				offset := heading.Lines().At(0).Start
-				line = startLine + offsetToLine(lineStarts, offset)
-			}
-
-			headings = append(headings, Heading{
-				Level: heading.Level,
-				Text:  headingText,
-				Line:  line,
-			})
-		}
-
-		return ast.WalkContinue, nil
-	})
-
-	return headings
 }
 
 // Slugify converts a heading text to a URL-friendly slug.

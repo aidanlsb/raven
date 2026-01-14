@@ -254,7 +254,7 @@ var checkCmd = &cobra.Command{
 		// Check for stale index first and fetch aliases
 		staleWarningShown := false
 		var aliases map[string]string
-		var duplicateAliases []check.DuplicateAlias
+		var duplicateAliases []index.DuplicateAlias
 		db, err := index.Open(vaultPath)
 		if err == nil {
 			defer db.Close()
@@ -298,13 +298,7 @@ var checkCmd = &cobra.Command{
 			aliases, _ = db.AllAliases()
 
 			// Fetch duplicate aliases
-			dbDuplicates, _ := db.FindDuplicateAliases()
-			for _, dup := range dbDuplicates {
-				duplicateAliases = append(duplicateAliases, check.DuplicateAlias{
-					Alias:     dup.Alias,
-					ObjectIDs: dup.ObjectIDs,
-				})
-			}
+			duplicateAliases, _ = db.FindDuplicateAliases()
 		}
 
 		// Determine which files to walk based on scope

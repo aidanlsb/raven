@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -741,7 +742,7 @@ func TestAliasCollisionDetection(t *testing.T) {
 		}
 
 		v := NewValidatorWithAliases(s, objectIDs, aliases)
-		v.SetDuplicateAliases([]DuplicateAlias{
+		v.SetDuplicateAliases([]index.DuplicateAlias{
 			{
 				Alias:     "goddess",
 				ObjectIDs: []string{"people/freya", "people/frigg"},

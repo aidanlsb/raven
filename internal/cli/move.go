@@ -236,7 +236,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 			sourceID := vaultCfg.FilePathToObjectID(relSource)
 			destID := vaultCfg.FilePathToObjectID(destPath)
 			aliases, _ := db.AllAliases()
-			res, _ := db.ResolverWithExtraIDs(vaultCfg.DailyDirectory, destID)
+			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory, ExtraIDs: []string{destID}})
 			aliasSlugToID := make(map[string]string, len(aliases))
 			for a, oid := range aliases {
 				aliasSlugToID[pages.SlugifyPath(a)] = oid
@@ -487,7 +487,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 			destID := vaultCfg.FilePathToObjectID(destPath)
 			aliases, _ := db.AllAliases()
-			res, _ := db.ResolverWithExtraIDs(vaultCfg.DailyDirectory, destID)
+			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory, ExtraIDs: []string{destID}})
 			aliasSlugToID := make(map[string]string, len(aliases))
 			for a, oid := range aliases {
 				aliasSlugToID[pages.SlugifyPath(a)] = oid

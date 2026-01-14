@@ -513,42 +513,8 @@ func TestValidateNullValue(t *testing.T) {
 	}
 }
 
-func TestIsValidDate(t *testing.T) {
-	valid := []string{"2025-01-01", "2024-12-31", "2000-06-15"}
-	for _, d := range valid {
-		if !isValidDate(d) {
-			t.Errorf("expected %q to be valid", d)
-		}
-	}
-
-	invalid := []string{"2025/01/01", "01-01-2025", "2025-13-01", "2025-01-32", "not-a-date", ""}
-	for _, d := range invalid {
-		if isValidDate(d) {
-			t.Errorf("expected %q to be invalid", d)
-		}
-	}
-}
-
-func TestIsValidDatetime(t *testing.T) {
-	valid := []string{
-		"2025-01-01T10:30:00Z",
-		"2025-01-01T10:30",
-		"2025-01-01T10:30:45",
-		"2025-06-15T14:00:00+05:00",
-	}
-	for _, dt := range valid {
-		if !isValidDatetime(dt) {
-			t.Errorf("expected %q to be valid", dt)
-		}
-	}
-
-	invalid := []string{"2025-01-01", "10:30", "not-a-datetime", ""}
-	for _, dt := range invalid {
-		if isValidDatetime(dt) {
-			t.Errorf("expected %q to be invalid", dt)
-		}
-	}
-}
+// NOTE: Date/datetime validation tests are in the dates package.
+// See internal/dates/dates_test.go for IsValidDate and IsValidDatetime tests.
 
 func TestValidateNameField(t *testing.T) {
 	t.Run("no name_field is valid", func(t *testing.T) {
