@@ -13,6 +13,7 @@ func TestResolveReferences(t *testing.T) {
 		t.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
+	db.SetAutoResolveRefs(false)
 
 	sch := schema.NewSchema()
 
@@ -124,6 +125,7 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 		t.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
+	db.SetAutoResolveRefs(false)
 
 	sch := schema.NewSchema()
 
@@ -195,6 +197,7 @@ func TestResolveReferences_UnresolvedRef(t *testing.T) {
 		t.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
+	db.SetAutoResolveRefs(false)
 
 	sch := schema.NewSchema()
 

@@ -204,6 +204,7 @@ Examples:
 			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 		}
 		defer db.Close()
+		db.SetDailyDirectory(vaultCfg.DailyDirectory)
 
 		// Check staleness and optionally refresh
 		refresh, _ := cmd.Flags().GetBool("refresh")

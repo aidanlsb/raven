@@ -83,6 +83,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to open index: %w", err)
 	}
 	defer db.Close()
+	db.SetDailyDirectory(vaultCfg.DailyDirectory)
 
 	// Create watcher
 	w, err := watcher.New(watcher.Config{

@@ -55,17 +55,11 @@ func reindexFile(vaultPath, filePath string, vaultCfg *config.VaultConfig) error
 		return err
 	}
 	defer db.Close()
+	db.SetDailyDirectory(vaultCfg.DailyDirectory)
 
 	if err := db.IndexDocumentWithMtime(doc, sch, mtime); err != nil {
 		return err
 	}
-
-	// Resolve references for this file only (cheap enough for auto-reindex).
-	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
-		dailyDir = vaultCfg.DailyDirectory
-	}
-	_, _ = db.ResolveReferencesForFile(doc.FilePath, dailyDir)
 
 	return nil
 }

@@ -642,6 +642,7 @@ func TestAliasIndexing(t *testing.T) {
 	t.Run("resolve references using aliases", func(t *testing.T) {
 		// Clear database first
 		db.ClearAllData()
+		db.SetAutoResolveRefs(false)
 
 		// Index a document with an alias
 		doc1 := &parser.ParsedDocument{
@@ -935,6 +936,7 @@ func TestResolveReferencesBatched(t *testing.T) {
 		t.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
+	db.SetAutoResolveRefs(false)
 
 	sch := schema.NewSchema()
 

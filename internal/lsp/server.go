@@ -108,6 +108,7 @@ func (s *Server) initialize() error {
 	if err != nil {
 		return fmt.Errorf("failed to open index: %w", err)
 	}
+	db.SetDailyDirectory(cfg.DailyDirectory)
 	s.db = db
 
 	// Create watcher for reindexing (we don't start the file watcher,

@@ -468,6 +468,9 @@ func (s *Server) publishDiagnostics(uri string) {
 	// Run validator
 	objectIDs, _ := s.db.AllObjectIDs()
 	validator := check.NewValidator(s.schema, objectIDs)
+	if s.cfg != nil {
+		validator.SetDailyDirectory(s.cfg.DailyDirectory)
+	}
 	issues := validator.ValidateDocument(parsed)
 
 	// Convert to LSP diagnostics
