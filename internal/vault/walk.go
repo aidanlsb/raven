@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -8,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // WalkResult contains the result of processing a markdown file.
@@ -52,7 +53,12 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 
 	return filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil // Skip errors
+			relativePath, _ := filepath.Rel(vaultPath, path)
+			return handler(WalkResult{
+				Path:         path,
+				RelativePath: relativePath,
+				Error:        err,
+			})
 		}
 
 		// Skip directories, but skip .raven and .trash entirely
@@ -72,7 +78,12 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 		// Security: verify file is within vault
 		canonicalFile, err := filepath.Abs(path)
 		if err != nil {
-			return nil
+			relativePath, _ := filepath.Rel(vaultPath, path)
+			return handler(WalkResult{
+				Path:         path,
+				RelativePath: relativePath,
+				Error:        err,
+			})
 		}
 		if !strings.HasPrefix(canonicalFile, canonicalVault) {
 			return nil
@@ -175,7 +186,8 @@ func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string)
 	var foundPath string
 	err := filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil // Skip errors
+			// Best-effort: we still want to resolve if some files/dirs are unreadable.
+			return nil //nolint:nilerr
 		}
 		if d.IsDir() {
 			// Skip hidden directories
@@ -205,7 +217,7 @@ func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string)
 
 		return nil
 	})
-	if err != nil && err != filepath.SkipAll {
+	if err != nil && !errors.Is(err, filepath.SkipAll) {
 		return "", err
 	}
 	if foundPath != "" {

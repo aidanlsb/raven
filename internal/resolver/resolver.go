@@ -430,9 +430,9 @@ func isFileSectionCollisionOnly(ids []string) bool {
 
 // AliasCollision represents a collision where an alias conflicts with something else.
 type AliasCollision struct {
-	Alias       string   // The alias that collides
-	ObjectIDs   []string // Object IDs that share this alias (if multiple objects use same alias)
-	ConflictsWith string // What it conflicts with: "alias", "short_name", or "object_id"
+	Alias         string   // The alias that collides
+	ObjectIDs     []string // Object IDs that share this alias (if multiple objects use same alias)
+	ConflictsWith string   // What it conflicts with: "alias", "short_name", or "object_id"
 }
 
 // FindAliasCollisions finds alias conflicts:

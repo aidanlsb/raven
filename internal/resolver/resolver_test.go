@@ -157,8 +157,8 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 	// the resolver should prefer the parent file object.
 	t.Run("parent object is preferred over section with same short name", func(t *testing.T) {
 		objectIDs := []string{
-			"companies/cursor",         // parent file object
-			"companies/cursor#cursor",  // section "# Cursor" inside the file
+			"companies/cursor",        // parent file object
+			"companies/cursor#cursor", // section "# Cursor" inside the file
 		}
 
 		r := New(objectIDs)
@@ -193,7 +193,7 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 	t.Run("section with unique short name still works", func(t *testing.T) {
 		objectIDs := []string{
 			"companies/cursor",
-			"companies/cursor#notes",  // section with different short name
+			"companies/cursor#notes", // section with different short name
 		}
 
 		r := New(objectIDs)
@@ -340,10 +340,10 @@ func TestResolverAliases(t *testing.T) {
 	}
 
 	aliases := map[string]string{
-		"goddess":    "people/freya",
-		"thunder":    "people/thor",
-		"ACME":       "companies/acme-corp",
-		"Acme Corp":  "companies/acme-corp",
+		"goddess":   "people/freya",
+		"thunder":   "people/thor",
+		"ACME":      "companies/acme-corp",
+		"Acme Corp": "companies/acme-corp",
 	}
 
 	r := NewWithAliases(objectIDs, aliases, "daily")
@@ -671,9 +671,9 @@ func TestNameFieldResolution(t *testing.T) {
 
 	// Name field map: display name -> object ID
 	nameFieldMap := map[string]string{
-		"The Prose Edda":     "books/the-prose-edda",
-		"The Poetic Edda":    "books/the-poetic-edda",
-		"Snorri Sturluson":   "people/snorri-sturluson",
+		"The Prose Edda":   "books/the-prose-edda",
+		"The Poetic Edda":  "books/the-poetic-edda",
+		"Snorri Sturluson": "people/snorri-sturluson",
 	}
 
 	r := NewWithNameFields(objectIDs, nil, nameFieldMap, "daily")

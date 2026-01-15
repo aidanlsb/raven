@@ -71,7 +71,7 @@ func TestCandidateFilePaths(t *testing.T) {
 	got := CandidateFilePaths("people/freya", "objects/", "pages/")
 	// Always includes literal, objects-rooted, pages-rooted.
 	want := map[string]struct{}{
-		"people/freya.md":          {},
+		"people/freya.md":         {},
 		"objects/people/freya.md": {},
 		"pages/people/freya.md":   {},
 	}
@@ -84,4 +84,3 @@ func TestCandidateFilePaths(t *testing.T) {
 		}
 	}
 }
-

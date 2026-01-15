@@ -85,7 +85,11 @@ Examples:
 
 		// Display grouped results
 		for fieldName, fieldItems := range byField {
-			fmt.Printf("## %s: %s (%d)\n", strings.Title(fieldName), dateStr, len(fieldItems))
+			prettyField := fieldName
+			if prettyField != "" {
+				prettyField = strings.ToUpper(prettyField[:1]) + prettyField[1:]
+			}
+			fmt.Printf("## %s: %s (%d)\n", prettyField, dateStr, len(fieldItems))
 			for _, item := range fieldItems {
 				if item.SourceType == "trait" {
 					// Get trait content

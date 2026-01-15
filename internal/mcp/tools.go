@@ -3,8 +3,8 @@ package mcp
 
 import (
 	"fmt"
-	"strings"
 	"sort"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/commands"
 )

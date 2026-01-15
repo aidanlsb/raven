@@ -8,11 +8,11 @@ import (
 
 func TestBuildEditorURL(t *testing.T) {
 	tests := []struct {
-		name     string
-		editor   string
-		absPath  string
-		line     int
-		wantURL  string
+		name    string
+		editor  string
+		absPath string
+		line    int
+		wantURL string
 	}{
 		{
 			name:    "cursor editor",

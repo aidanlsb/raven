@@ -7,6 +7,7 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -74,7 +75,7 @@ func (s *Server) Run(ctx context.Context) error {
 			return ctx.Err()
 		default:
 			if err := s.handleNextMessage(); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					return nil
 				}
 				s.logDebug("Error handling message: %v", err)
@@ -119,10 +120,10 @@ func (s *Server) initialize() error {
 		}
 	}
 	w, err := watcher.New(watcher.Config{
-		VaultPath: s.vaultPath,
-		Database:  s.db,
-		Schema:    s.schema,
-		Debug:     s.debug,
+		VaultPath:    s.vaultPath,
+		Database:     s.db,
+		Schema:       s.schema,
+		Debug:        s.debug,
 		ParseOptions: parseOpts,
 	})
 	if err != nil {
@@ -305,11 +306,6 @@ func (s *Server) getResolver() *resolver.Resolver {
 		return resolver.NewWithDailyDir(objectIDs, dailyDir)
 	}
 	return res
-}
-
-func (s *Server) parseDocument(uri string, content string) (*parser.ParsedDocument, error) {
-	path := s.uriToPath(uri)
-	return parser.ParseDocument(content, path, s.vaultPath)
 }
 
 func mustMarshal(v interface{}) json.RawMessage {

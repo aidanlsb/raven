@@ -60,4 +60,3 @@ func TestParseDateArg(t *testing.T) {
 		t.Fatalf("expected error for invalid date arg")
 	}
 }
-

@@ -26,19 +26,19 @@ func TestExtractRefs(t *testing.T) {
 			want:    []string{"daily/2025-02-01#standup"},
 		},
 		{
-			name: "ignore refs inside fenced code blocks",
+			name:    "ignore refs inside fenced code blocks",
 			content: "Outside [[ok]]\n\n```go\nthis [[nope]] should not be indexed\n```\n\nAfter [[ok2]]",
-			want: []string{"ok", "ok2"},
+			want:    []string{"ok", "ok2"},
 		},
 		{
-			name: "ignore refs inside blockquoted fenced code blocks",
+			name:    "ignore refs inside blockquoted fenced code blocks",
 			content: "Outside [[ok]]\n\n> ```\n> [[nope]]\n> ```\n\nAfter [[ok2]]",
-			want: []string{"ok", "ok2"},
+			want:    []string{"ok", "ok2"},
 		},
 		{
-			name: "ignore refs inside tilde fences",
+			name:    "ignore refs inside tilde fences",
 			content: "Outside [[ok]]\n\n~~~\n[[nope]]\n~~~\n\nAfter [[ok2]]",
-			want: []string{"ok", "ok2"},
+			want:    []string{"ok", "ok2"},
 		},
 		{
 			name:    "ignore refs inside inline code",

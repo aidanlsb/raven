@@ -1,9 +1,9 @@
 // Package slugs provides canonical slugification helpers used across Raven.
 //
 // Important: There are *two* slugging strategies in Raven today:
-// - Heading slugs: used for section/fragment IDs generated from markdown headings.
-//   These are historically derived using a conservative, ASCII-ish transformation.
-// - Path slugs: used for filenames/object IDs and path matching, built on gosimple/slug.
+//   - Heading slugs: used for section/fragment IDs generated from markdown headings.
+//     These are historically derived using a conservative, ASCII-ish transformation.
+//   - Path slugs: used for filenames/object IDs and path matching, built on gosimple/slug.
 //
 // This package centralizes both strategies so their implementations are not duplicated.
 package slugs
@@ -75,4 +75,3 @@ func PathSlug(path string) string {
 	}
 	return strings.Join(parts, "/")
 }
-

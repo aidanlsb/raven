@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -221,7 +220,9 @@ Examples:
 		fmt.Printf("\n✓ Moved %d files\n", moved)
 
 		// Clean up empty directories
-		cleanEmptyDirs(vaultPath, vaultCfg)
+		if err := cleanEmptyDirs(vaultPath, vaultCfg); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to clean up empty directories: %v\n", err)
+		}
 
 		// Suggest reindex
 		fmt.Println("\nRun 'rvn reindex --full' to update the index.")
@@ -231,17 +232,17 @@ Examples:
 }
 
 // cleanEmptyDirs removes empty directories left after migration.
-func cleanEmptyDirs(vaultPath string, cfg *config.VaultConfig) {
+func cleanEmptyDirs(vaultPath string, cfg *config.VaultConfig) error {
 	dirs := cfg.GetDirectoriesConfig()
 	if dirs == nil {
-		return
+		return nil
 	}
 
 	// Walk and collect empty directories
 	var emptyDirs []string
-	filepath.Walk(vaultPath, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(vaultPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr
 		}
 		if !info.IsDir() {
 			return nil
@@ -268,14 +269,16 @@ func cleanEmptyDirs(vaultPath string, cfg *config.VaultConfig) {
 		// Check if directory is empty
 		entries, err := os.ReadDir(path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr
 		}
 		if len(entries) == 0 {
 			emptyDirs = append(emptyDirs, path)
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	// Remove empty directories (deepest first)
 	for i := len(emptyDirs) - 1; i >= 0; i-- {
@@ -284,18 +287,6 @@ func cleanEmptyDirs(vaultPath string, cfg *config.VaultConfig) {
 			fmt.Printf("  Removed empty directory: %s\n", relPath)
 		}
 	}
-}
-
-// reindexAfterMigration performs a full reindex after migration.
-func reindexAfterMigration(vaultPath string) error {
-	db, _, err := index.OpenWithRebuild(vaultPath)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// The actual reindexing would happen via the reindex command
-	// This is just a helper to trigger it
 	return nil
 }
 

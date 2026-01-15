@@ -236,6 +236,18 @@ func (fv FieldValue) IsRef() bool {
 	return ok
 }
 
+// IsDate returns true if this is a date value (YYYY-MM-DD).
+func (fv FieldValue) IsDate() bool {
+	_, ok := fv.value.(dateValue)
+	return ok
+}
+
+// IsDatetime returns true if this is a datetime value.
+func (fv FieldValue) IsDatetime() bool {
+	_, ok := fv.value.(datetimeValue)
+	return ok
+}
+
 // Raw returns the underlying raw value.
 func (fv FieldValue) Raw() interface{} {
 	switch v := fv.value.(type) {

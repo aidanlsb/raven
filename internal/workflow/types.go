@@ -35,7 +35,7 @@ type RenderResult struct {
 
 // ListItem represents a workflow in the list output.
 type ListItem struct {
-	Name        string                        `json:"name"`
-	Description string                        `json:"description"`
+	Name        string                           `json:"name"`
+	Description string                           `json:"description"`
 	Inputs      map[string]*config.WorkflowInput `json:"inputs,omitempty"`
 }

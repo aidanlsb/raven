@@ -166,7 +166,7 @@ func BuildEmbeddedSkipWarning(embedded []string) *Warning {
 
 // Warning codes for bulk operations
 const (
-	WarnEmbeddedSkipped = "embedded_skipped"
-	WarnObjectNotFound  = "object_not_found"
+	WarnEmbeddedSkipped  = "embedded_skipped"
+	WarnObjectNotFound   = "object_not_found"
 	WarnFieldNotInSchema = "field_not_in_schema"
 )

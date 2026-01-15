@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -162,7 +163,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -249,7 +250,7 @@ func addTrait(vaultPath, traitName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -290,14 +291,14 @@ var validFieldTypes = map[string]bool{
 
 // FieldTypeValidation holds the result of validating a field type specification
 type FieldTypeValidation struct {
-	Valid       bool
-	BaseType    string
-	IsArray     bool
-	Error       string
-	Suggestion  string
-	Examples    []string
-	ValidTypes  []string
-	TargetHint  string
+	Valid      bool
+	BaseType   string
+	IsArray    bool
+	Error      string
+	Suggestion string
+	Examples   []string
+	ValidTypes []string
+	TargetHint string
 }
 
 // validateFieldTypeSpec validates the --type and related flags for adding a field
@@ -403,7 +404,7 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 	// Warn if target is provided but type is not ref
 	if target != "" && baseType != "ref" {
 		result.Error = fmt.Sprintf("--target is only valid for ref fields, but type is '%s'", fieldType)
-		result.Suggestion = fmt.Sprintf("Either change --type to ref (or ref[]) or remove --target")
+		result.Suggestion = "Either change --type to ref (or ref[]) or remove --target"
 		result.Examples = []string{
 			fmt.Sprintf("--type ref --target %s  (single reference)", target),
 			fmt.Sprintf("--type ref[] --target %s  (array of references)", target),
@@ -546,7 +547,7 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -806,7 +807,7 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -888,7 +889,7 @@ func updateTrait(vaultPath, traitName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -950,7 +951,11 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 				for _, obj := range objects {
 					var fields map[string]interface{}
 					if obj.Fields != "" && obj.Fields != "{}" {
-						json.Unmarshal([]byte(obj.Fields), &fields)
+						if err := json.Unmarshal([]byte(obj.Fields), &fields); err != nil {
+							// If fields are malformed, treat as missing for integrity checks.
+							missing = append(missing, obj.ID)
+							continue
+						}
 					}
 					if _, hasField := fields[fieldName]; !hasField {
 						missing = append(missing, obj.ID)
@@ -1033,7 +1038,7 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -1169,7 +1174,7 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -1247,7 +1252,7 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -1341,7 +1346,7 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -1471,12 +1476,12 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	// 3. File changes - walk all markdown files
 	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 		if result.Error != nil {
-			return nil // Skip errors
+			return nil //nolint:nilerr // skip errors
 		}
 
 		content, err := os.ReadFile(result.Path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr
 		}
 		lines := strings.Split(string(content), "\n")
 
@@ -1606,19 +1611,19 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	if err != nil {
 		return handleError(ErrInternal, err, "")
 	}
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
 	// 2. Update markdown files
 	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 		if result.Error != nil {
-			return nil
+			return nil //nolint:nilerr
 		}
 
 		content, err := os.ReadFile(result.Path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr
 		}
 
 		originalContent := string(content)
@@ -1643,7 +1648,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		}
 
 		if modified {
-			if err := os.WriteFile(result.Path, []byte(newContent), 0644); err != nil {
+			if err := atomicfile.WriteFile(result.Path, []byte(newContent), 0o644); err != nil {
 				return err
 			}
 		}

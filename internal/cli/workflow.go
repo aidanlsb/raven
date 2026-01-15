@@ -47,7 +47,7 @@ var workflowListCmd = &cobra.Command{
 					"name":        item.Name,
 					"description": item.Description,
 				}
-				if item.Inputs != nil && len(item.Inputs) > 0 {
+				if len(item.Inputs) > 0 {
 					w["inputs"] = item.Inputs
 				}
 				workflows[i] = w
@@ -267,13 +267,15 @@ func makeReadFunc(vaultPath string) func(id string) (interface{}, error) {
 		}
 
 		// Parse the document to get metadata
-		doc, err := parser.ParseDocument(string(content), filePath, vaultPath)
-		if err != nil {
+		doc, parseErr := parser.ParseDocument(string(content), filePath, vaultPath)
+		if parseErr != nil {
 			// Even on parse error, return raw content
-			return map[string]interface{}{
-				"id":      id,
-				"content": string(content),
-			}, nil
+			res := map[string]interface{}{
+				"id":          id,
+				"content":     string(content),
+				"parse_error": parseErr.Error(),
+			}
+			return res, nil //nolint:nilerr
 		}
 
 		// Build result with parsed info
@@ -311,7 +313,7 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 		// Parse the query
 		q, err := query.Parse(queryStr)
 		if err != nil {
-			return nil, fmt.Errorf("parse error: %v", err)
+			return nil, fmt.Errorf("parse error: %w", err)
 		}
 
 		executor := query.NewExecutor(db.DB())

@@ -1,14 +1,15 @@
 // Package wikilink provides canonical parsing/scanning of Raven wikilinks.
 //
 // Wikilink grammar:
-//   [[target]]
-//   [[target|display text]]
+//
+//	[[target]]
+//	[[target|display text]]
 //
 // Notes:
-// - The target is trimmed of surrounding whitespace.
-// - The display text (if present) is also trimmed.
-// - This package intentionally does NOT understand markdown code fences; higher-level
-//   parsers decide whether scanning is enabled for a given region.
+//   - The target is trimmed of surrounding whitespace.
+//   - The display text (if present) is also trimmed.
+//   - This package intentionally does NOT understand markdown code fences; higher-level
+//     parsers decide whether scanning is enabled for a given region.
 package wikilink
 
 import (
@@ -116,4 +117,3 @@ func ScanAt(input string, start int) (end int, target string, literal string, ok
 	}
 	return 0, "", "", false
 }
-

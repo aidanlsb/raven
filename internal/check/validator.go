@@ -115,20 +115,20 @@ func (l IssueLevel) String() string {
 
 // Validator validates documents against a schema.
 type Validator struct {
-	schema          *schema.Schema
-	resolver        *resolver.Resolver
-	allIDs          map[string]struct{}
-	objectTypes     map[string]string          // Object ID -> type name (for target type validation)
-	aliases          map[string]string           // Alias -> object ID
+	schema           *schema.Schema
+	resolver         *resolver.Resolver
+	allIDs           map[string]struct{}
+	objectTypes      map[string]string          // Object ID -> type name (for target type validation)
+	aliases          map[string]string          // Alias -> object ID
 	duplicateAliases []index.DuplicateAlias     // Aliases used by multiple objects
-	missingRefs     map[string]*MissingRef     // Keyed by target path to dedupe
-	undefinedTraits map[string]*UndefinedTrait // Keyed by trait name to dedupe
-	usedTypes       map[string]struct{}        // Types actually used in documents
-	usedTraits      map[string]struct{}        // Traits actually used in documents
-	shortRefs       map[string]string          // Short ref -> full path (for suggestions)
-	usedShortNames  map[string]struct{}        // Short names actually used in references
-	objectsRoot     string                     // Directory prefix for typed objects (e.g., "objects/")
-	pagesRoot       string                     // Directory prefix for untyped pages (e.g., "pages/")
+	missingRefs      map[string]*MissingRef     // Keyed by target path to dedupe
+	undefinedTraits  map[string]*UndefinedTrait // Keyed by trait name to dedupe
+	usedTypes        map[string]struct{}        // Types actually used in documents
+	usedTraits       map[string]struct{}        // Traits actually used in documents
+	shortRefs        map[string]string          // Short ref -> full path (for suggestions)
+	usedShortNames   map[string]struct{}        // Short names actually used in references
+	objectsRoot      string                     // Directory prefix for typed objects (e.g., "objects/")
+	pagesRoot        string                     // Directory prefix for untyped pages (e.g., "pages/")
 }
 
 // ObjectInfo contains basic info about an object for validation.

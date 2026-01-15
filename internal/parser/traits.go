@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -106,13 +107,15 @@ func parseTraitValue(valueStr string) schema.FieldValue {
 		return schema.Ref(ref)
 	}
 
-	// Check for datetime (contains 'T')
-	if strings.Contains(valueStr, "T") && len(valueStr) >= 16 {
+	// Check for datetime.
+	// Use canonical validation rather than heuristics to avoid misclassifying random
+	// strings that happen to contain 'T' (and invalid dates like 2025-13-45).
+	if dates.IsValidDatetime(valueStr) {
 		return schema.Datetime(valueStr)
 	}
 
-	// Check for date (YYYY-MM-DD pattern)
-	if len(valueStr) == 10 && valueStr[4] == '-' && valueStr[7] == '-' {
+	// Check for date (YYYY-MM-DD).
+	if dates.IsValidDate(valueStr) {
 		return schema.Date(valueStr)
 	}
 

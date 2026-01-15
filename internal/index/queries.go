@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
 // TraitResult represents a trait query result.
@@ -171,18 +173,13 @@ func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]TraitR
 		return nil, nil
 	}
 
-	placeholders := make([]string, len(traitTypes))
-	args := make([]interface{}, len(traitTypes))
-	for i, t := range traitTypes {
-		placeholders[i] = "?"
-		args[i] = t
-	}
+	inClause, args := sqlutil.InClauseArgs(traitTypes)
 
 	query := fmt.Sprintf(`
 		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
 		FROM traits
 		WHERE trait_type IN (%s)
-	`, strings.Join(placeholders, ", "))
+	`, inClause)
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {

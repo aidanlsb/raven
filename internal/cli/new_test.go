@@ -196,4 +196,3 @@ types:
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrFileExists, resp.Error, out)
 	}
 }
-

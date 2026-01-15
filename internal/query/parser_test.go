@@ -497,11 +497,11 @@ func TestParseRefsPredicate(t *testing.T) {
 
 func TestParseContentPredicate(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantTerm   string
-		wantNeg    bool
-		wantErr    bool
+		name     string
+		input    string
+		wantTerm string
+		wantNeg  bool
+		wantErr  bool
 	}{
 		{
 			name:     "simple content search",
@@ -1200,4 +1200,3 @@ func TestParseSelfRefPredicates(t *testing.T) {
 		})
 	}
 }
-

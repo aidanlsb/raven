@@ -98,9 +98,6 @@ func runDeleteBulk(vaultPath string) error {
 
 // previewDeleteBulk shows a preview of bulk delete operations.
 func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	var previewItems []BulkPreviewItem
-	var skipped []BulkResult
-
 	deletionCfg := vaultCfg.GetDeletionConfig()
 
 	// Open database for backlink checks
@@ -110,16 +107,11 @@ func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vault
 	}
 	defer db.Close()
 
-	for _, id := range ids {
+	preview := buildBulkPreview("delete", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		objectID := vaultCfg.FilePathToObjectID(id)
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "object not found",
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
 
 		// Check for backlinks
@@ -142,49 +134,19 @@ func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vault
 
 		// Verify file exists
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "file not found",
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "file not found"}
 		}
 
-		previewItems = append(previewItems, item)
-	}
+		return &item, nil
+	})
 
-	preview := &BulkPreview{
-		Action:   "delete",
-		Items:    previewItems,
-		Skipped:  skipped,
-		Total:    len(ids),
-		Warnings: warnings,
-	}
-
-	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"preview":  true,
-			"action":   "delete",
-			"behavior": deletionCfg.Behavior,
-			"items":    previewItems,
-			"skipped":  skipped,
-			"total":    len(ids),
-			"warnings": warnings,
-		}, &Meta{Count: len(previewItems)})
-		return nil
-	}
-
-	PrintBulkPreview(preview)
-	return nil
+	return outputBulkPreview(preview, map[string]interface{}{
+		"behavior": deletionCfg.Behavior,
+	})
 }
 
 // applyDeleteBulk applies bulk delete operations.
 func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	var results []BulkResult
-	deleted := 0
-	skipped := 0
-	errors := 0
-
 	deletionCfg := vaultCfg.GetDeletionConfig()
 
 	// Open database for cleanup
@@ -194,9 +156,8 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 	}
 	defer db.Close()
 
-	for _, id := range ids {
+	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
-
 		// Canonicalize the object ID, but resolve the file using the original input
 		// (it may already include a rooted path).
 		objectID := vaultCfg.FilePathToObjectID(id)
@@ -204,9 +165,7 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
-			skipped++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Perform the deletion
@@ -216,9 +175,7 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 			if err := os.MkdirAll(trashDir, 0755); err != nil {
 				result.Status = "error"
 				result.Reason = fmt.Sprintf("failed to create trash dir: %v", err)
-				errors++
-				results = append(results, result)
-				continue
+				return result
 			}
 
 			// Preserve the file's actual directory structure in trash.
@@ -229,9 +186,7 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 			if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 				result.Status = "error"
 				result.Reason = fmt.Sprintf("failed to create parent dirs: %v", err)
-				errors++
-				results = append(results, result)
-				continue
+				return result
 			}
 
 			// If file already exists in trash, add timestamp
@@ -244,62 +199,34 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 			if err := os.Rename(filePath, destPath); err != nil {
 				result.Status = "error"
 				result.Reason = fmt.Sprintf("move failed: %v", err)
-				errors++
-				results = append(results, result)
-				continue
+				return result
 			}
 		} else {
 			// Permanent deletion
 			if err := os.Remove(filePath); err != nil {
 				result.Status = "error"
 				result.Reason = fmt.Sprintf("delete failed: %v", err)
-				errors++
-				results = append(results, result)
-				continue
+				return result
 			}
 		}
 
 		// Remove from index
-		db.RemoveDocument(objectID)
+		if err := db.RemoveDocument(objectID); err != nil {
+			warnings = append(warnings, Warning{
+				Code:    WarnIndexUpdateFailed,
+				Message: fmt.Sprintf("Failed to remove deleted object from index: %v", err),
+				Ref:     "Run 'rvn reindex' to rebuild the database",
+			})
+		}
 
 		result.Status = "deleted"
-		deleted++
-		results = append(results, result)
-	}
+		return result
+	})
 
-	summary := &BulkSummary{
-		Action:  "delete",
-		Results: results,
-		Total:   len(ids),
-		Deleted: deleted,
-		Skipped: skipped,
-		Errors:  errors,
-	}
-
-	if isJSONOutput() {
-		data := map[string]interface{}{
-			"ok":       errors == 0,
-			"action":   "delete",
-			"behavior": deletionCfg.Behavior,
-			"results":  results,
-			"total":    len(ids),
-			"deleted":  deleted,
-			"skipped":  skipped,
-			"errors":   errors,
-		}
-		if len(warnings) > 0 {
-			outputSuccessWithWarnings(data, warnings, &Meta{Count: deleted})
-		} else {
-			outputSuccess(data, &Meta{Count: deleted})
-		}
-		return nil
-	}
-
-	PrintBulkSummary(summary)
-	for _, w := range warnings {
-		fmt.Println(ui.Warning(w.Message))
-	}
-	return nil
+	summary := buildBulkSummary("delete", results, warnings)
+	return outputBulkSummary(summary, warnings, map[string]interface{}{
+		"behavior": deletionCfg.Behavior,
+	})
 }
 
 // deleteSingleObject deletes a single object (non-bulk mode).
@@ -354,24 +281,24 @@ func deleteSingleObject(vaultPath, reference string) error {
 
 	// In JSON mode or with --force, proceed without interactive confirmation
 	if !isJSONOutput() && !deleteForce {
-		fmt.Printf("Delete %s?\n", objectID)
+		fmt.Fprintf(os.Stderr, "Delete %s?\n", objectID)
 		if len(backlinks) > 0 {
-			fmt.Printf("  ⚠ Warning: Referenced by %d objects:\n", len(backlinks))
+			fmt.Fprintf(os.Stderr, "  ⚠ Warning: Referenced by %d objects:\n", len(backlinks))
 			for _, bl := range backlinks {
 				line := 0
 				if bl.Line != nil {
 					line = *bl.Line
 				}
-				fmt.Printf("    - %s (line %d)\n", bl.SourceID, line)
+				fmt.Fprintf(os.Stderr, "    - %s (line %d)\n", bl.SourceID, line)
 			}
 		}
-		fmt.Printf("\nBehavior: %s", deletionCfg.Behavior)
+		fmt.Fprintf(os.Stderr, "\nBehavior: %s", deletionCfg.Behavior)
 		if deletionCfg.Behavior == "trash" {
-			fmt.Printf(" (to %s/)\n", deletionCfg.TrashDir)
+			fmt.Fprintf(os.Stderr, " (to %s/)\n", deletionCfg.TrashDir)
 		} else {
-			fmt.Println()
+			fmt.Fprintln(os.Stderr)
 		}
-		fmt.Print("Confirm? [y/N]: ")
+		fmt.Fprint(os.Stderr, "Confirm? [y/N]: ")
 
 		reader := bufio.NewReader(os.Stdin)
 		response, err := reader.ReadString('\n')
@@ -380,7 +307,7 @@ func deleteSingleObject(vaultPath, reference string) error {
 		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
-			fmt.Println("Cancelled.")
+			fmt.Fprintln(os.Stderr, "Cancelled.")
 			return nil
 		}
 	}

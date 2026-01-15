@@ -145,8 +145,8 @@ alias: cursor-ai
 
 	// Now create projects with various ref styles to test resolution
 	testCases := []struct {
-		name        string
-		yaml        string // The frontmatter YAML (excluding --- markers)
+		name          string
+		yaml          string          // The frontmatter YAML (excluding --- markers)
 		wantBacklinks map[string]bool // target object ID → should have backlink
 	}{
 		{

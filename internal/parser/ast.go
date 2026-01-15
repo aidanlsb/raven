@@ -43,7 +43,7 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 	consumedNodes := make(map[ast.Node]bool)
 
 	// First pass: extract headings and detect type declarations
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -66,12 +66,14 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 		}
 
 		return ast.WalkContinue, nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 
 	// Second pass: extract traits and refs from non-code, non-consumed content.
 	// We process at the paragraph/list-item level because goldmark splits wikilinks
 	// like [[target]] across multiple Text nodes (due to [ being link syntax).
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -125,7 +127,9 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 		}
 
 		return ast.WalkContinue, nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 
 	return result, nil
 }

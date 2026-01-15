@@ -8,9 +8,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/template"
 )
 
@@ -206,7 +207,7 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	// (Headings create section objects which adds noise to the index)
 
 	// Write the file
-	if err := os.WriteFile(filePath, []byte(content.String()), 0644); err != nil {
+	if err := atomicfile.WriteFile(filePath, []byte(content.String()), 0o644); err != nil {
 		return nil, fmt.Errorf("failed to write file: %w", err)
 	}
 

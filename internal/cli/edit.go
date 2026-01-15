@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -111,13 +112,13 @@ var editCmd = &cobra.Command{
 		}
 
 		// Apply the edit
-		if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
 			return handleError("WRITE_ERROR", err, "")
 		}
 
 		// Auto-reindex if configured
 		if vaultCfg.IsAutoReindexEnabled() {
-			if err := reindexFile(vaultPath, filePath); err != nil {
+			if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
 				if !jsonOutput {
 					fmt.Printf("  (reindex failed: %v)\n", err)
 				}

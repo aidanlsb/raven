@@ -4,6 +4,7 @@ package index
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -314,19 +315,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	defer tx.Rollback()
 
 	// Delete existing data for this file
-	if _, err := tx.Exec("DELETE FROM objects WHERE file_path = ?", doc.FilePath); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM traits WHERE file_path = ?", doc.FilePath); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM refs WHERE file_path = ?", doc.FilePath); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM date_index WHERE file_path = ?", doc.FilePath); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM fts_content WHERE file_path = ?", doc.FilePath); err != nil {
+	if err := deleteByFilePath(tx, doc.FilePath); err != nil {
 		return err
 	}
 
@@ -570,22 +559,7 @@ func extractDateString(fv schema.FieldValue) string {
 
 // RemoveFile removes all data for a file.
 func (d *Database) RemoveFile(filePath string) error {
-	if _, err := d.db.Exec("DELETE FROM objects WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := d.db.Exec("DELETE FROM traits WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := d.db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := d.db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := d.db.Exec("DELETE FROM fts_content WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	return nil
+	return deleteByFilePath(d.db, filePath)
 }
 
 // ClearAllData removes all indexed data from the database.
@@ -625,19 +599,7 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 	}
 
 	pattern := pathPrefix + "%"
-	if _, err := d.db.Exec("DELETE FROM objects WHERE file_path LIKE ?", pattern); err != nil {
-		return 0, err
-	}
-	if _, err := d.db.Exec("DELETE FROM traits WHERE file_path LIKE ?", pattern); err != nil {
-		return 0, err
-	}
-	if _, err := d.db.Exec("DELETE FROM refs WHERE file_path LIKE ?", pattern); err != nil {
-		return 0, err
-	}
-	if _, err := d.db.Exec("DELETE FROM date_index WHERE file_path LIKE ?", pattern); err != nil {
-		return 0, err
-	}
-	if _, err := d.db.Exec("DELETE FROM fts_content WHERE file_path LIKE ?", pattern); err != nil {
+	if err := deleteByFilePathLike(d.db, pattern); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -1121,7 +1083,10 @@ func (d *Database) IsFileStale(vaultPath, filePath string) (bool, error) {
 	stat, err := os.Stat(fullPath)
 	if err != nil {
 		// File doesn't exist - consider stale (will be cleaned up)
-		return true, nil
+		if errors.Is(err, os.ErrNotExist) {
+			return true, nil
+		}
+		return false, err
 	}
 
 	return stat.ModTime().Unix() > indexedMtime, nil
@@ -1175,6 +1140,83 @@ func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutio
 	result.Total = len(refs)
 
 	// Resolve each reference
+	tx, err := d.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`UPDATE refs SET target_id = ? WHERE id = ?`)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	for _, ref := range refs {
+		resolved := res.Resolve(ref.targetRaw)
+		if resolved.Ambiguous {
+			result.Ambiguous++
+			result.Unresolved++
+		} else if resolved.TargetID != "" {
+			if _, err := stmt.Exec(resolved.TargetID, ref.id); err != nil {
+				return nil, err
+			}
+			result.Resolved++
+		} else {
+			result.Unresolved++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// ResolveReferencesForFile resolves unresolved references for a single file.
+//
+// This exists to support auto-reindex after CLI mutations without requiring a full
+// vault-wide reference resolution pass.
+func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*ReferenceResolutionResult, error) {
+	result := &ReferenceResolutionResult{}
+
+	res, err := d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory})
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := d.db.Query(`
+		SELECT id, target_raw FROM refs
+		WHERE target_id IS NULL AND file_path = ?
+	`, filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query refs: %w", err)
+	}
+	defer rows.Close()
+
+	type refToResolve struct {
+		id        int64
+		targetRaw string
+	}
+	var refs []refToResolve
+
+	for rows.Next() {
+		var r refToResolve
+		if err := rows.Scan(&r.id, &r.targetRaw); err != nil {
+			return nil, err
+		}
+		refs = append(refs, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result.Total = len(refs)
+	if result.Total == 0 {
+		return result, nil
+	}
+
 	tx, err := d.db.Begin()
 	if err != nil {
 		return nil, err

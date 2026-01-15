@@ -64,13 +64,14 @@ const (
 
 // Warning codes for non-fatal issues.
 const (
-	WarnRefNotFound      = "REF_NOT_FOUND"
-	WarnDeprecated       = "DEPRECATED"
-	WarnSchemaOutdated   = "SCHEMA_OUTDATED"
-	WarnDatabaseOutdated = "DATABASE_OUTDATED"
-	WarnMisuse           = "WRONG_COMMAND"
-	WarnMissingField     = "MISSING_REQUIRED_FIELD"
-	WarnBacklinks        = "HAS_BACKLINKS"
-	WarnUnknownField     = "UNKNOWN_FIELD"
-	WarnTypeMismatch     = "TYPE_DIRECTORY_MISMATCH"
+	WarnRefNotFound       = "REF_NOT_FOUND"
+	WarnDeprecated        = "DEPRECATED"
+	WarnSchemaOutdated    = "SCHEMA_OUTDATED"
+	WarnDatabaseOutdated  = "DATABASE_OUTDATED"
+	WarnIndexUpdateFailed = "INDEX_UPDATE_FAILED"
+	WarnMisuse            = "WRONG_COMMAND"
+	WarnMissingField      = "MISSING_REQUIRED_FIELD"
+	WarnBacklinks         = "HAS_BACKLINKS"
+	WarnUnknownField      = "UNKNOWN_FIELD"
+	WarnTypeMismatch      = "TYPE_DIRECTORY_MISMATCH"
 )

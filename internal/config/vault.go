@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -282,7 +283,7 @@ queries:
     description: "Projects with status active"
 `
 
-	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
+	if err := atomicfile.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {
 		return false, fmt.Errorf("failed to write vault config: %w", err)
 	}
 
@@ -298,7 +299,7 @@ func SaveVaultConfig(vaultPath string, cfg *VaultConfig) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	if err := atomicfile.WriteFile(configPath, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write raven.yaml: %w", err)
 	}
 

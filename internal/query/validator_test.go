@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -28,8 +29,8 @@ func TestValidator_UnknownType(t *testing.T) {
 		t.Fatal("expected validation error for unknown type")
 	}
 
-	ve, ok := err.(*ValidationError)
-	if !ok {
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
 		t.Fatalf("expected ValidationError, got %T", err)
 	}
 
@@ -63,8 +64,8 @@ func TestValidator_UnknownTrait(t *testing.T) {
 		t.Fatal("expected validation error for unknown trait")
 	}
 
-	ve, ok := err.(*ValidationError)
-	if !ok {
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
 		t.Fatalf("expected ValidationError, got %T", err)
 	}
 
@@ -102,8 +103,8 @@ func TestValidator_UnknownField(t *testing.T) {
 		t.Fatal("expected validation error for unknown field")
 	}
 
-	ve, ok := err.(*ValidationError)
-	if !ok {
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
 		t.Fatalf("expected ValidationError, got %T", err)
 	}
 
@@ -216,8 +217,8 @@ func TestValidator_NestedSubqueryValidation(t *testing.T) {
 		t.Fatal("expected validation error for unknown trait in subquery")
 	}
 
-	ve, ok := err.(*ValidationError)
-	if !ok {
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
 		t.Fatalf("expected ValidationError, got %T", err)
 	}
 

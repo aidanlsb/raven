@@ -140,4 +140,3 @@ func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
 
 	return out
 }
-

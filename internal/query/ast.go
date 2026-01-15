@@ -244,10 +244,10 @@ func (sf StringFuncType) String() string {
 type StringFuncPredicate struct {
 	basePredicate
 	FuncType      StringFuncType
-	Field         string    // Field name (without .) or "_" for array element
-	Value         string    // The string to match against
-	CaseSensitive bool      // If true, match is case-sensitive (default: false)
-	IsElementRef  bool      // True if Field is "_" (array element reference)
+	Field         string // Field name (without .) or "_" for array element
+	Value         string // The string to match against
+	CaseSensitive bool   // If true, match is case-sensitive (default: false)
+	IsElementRef  bool   // True if Field is "_" (array element reference)
 }
 
 func (StringFuncPredicate) predicateNode() {}
@@ -278,9 +278,9 @@ func (aq ArrayQuantifierType) String() string {
 // Syntax: any(.tags, _ == "urgent"), all(.tags, startswith(_, "feature-"))
 type ArrayQuantifierPredicate struct {
 	basePredicate
-	Quantifier   ArrayQuantifierType
-	Field        string    // The array field to iterate
-	ElementPred  Predicate // Predicate to test against each element (uses _ as element reference)
+	Quantifier  ArrayQuantifierType
+	Field       string    // The array field to iterate
+	ElementPred Predicate // Predicate to test against each element (uses _ as element reference)
 }
 
 func (ArrayQuantifierPredicate) predicateNode() {}
@@ -373,10 +373,10 @@ func (FilterStage) pipelineStageNode() {}
 
 // FilterExpr represents a filter expression like "todos > 5"
 type FilterExpr struct {
-	Left     string    // Variable name or field
-	Op       CompareOp // Comparison operator
-	Right    string    // Value to compare against
-	IsField  bool      // True if Left is a field reference (starts with .)
+	Left    string    // Variable name or field
+	Op      CompareOp // Comparison operator
+	Right   string    // Value to compare against
+	IsField bool      // True if Left is a field reference (starts with .)
 }
 
 // SortCriterion represents a single sort field with direction
