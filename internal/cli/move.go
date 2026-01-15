@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -228,9 +229,17 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		// Update index
 		sourceID := strings.TrimSuffix(id, ".md")
 		if err := db.RemoveDocument(sourceID); err != nil {
-			result.Status = "error"
-			result.Reason = fmt.Sprintf("failed to remove from index: %v", err)
-			return result
+			if errors.Is(err, index.ErrObjectNotFound) {
+				warnings = append(warnings, Warning{
+					Code:    WarnIndexUpdateFailed,
+					Message: "Object not found in index while updating move; consider running 'rvn reindex'",
+					Ref:     "Run 'rvn reindex' to rebuild the database",
+				})
+			} else {
+				result.Status = "error"
+				result.Reason = fmt.Sprintf("failed to remove from index: %v", err)
+				return result
+			}
 		}
 
 		// Reindex new location
@@ -485,9 +494,13 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		// Remove old entry
 		sourceID := vaultCfg.FilePathToObjectID(source)
 		if err := db.RemoveDocument(sourceID); err != nil {
+			warningMsg := fmt.Sprintf("Failed to remove old index entry: %v", err)
+			if errors.Is(err, index.ErrObjectNotFound) {
+				warningMsg = "Object not found in index while updating move; consider running 'rvn reindex'"
+			}
 			warnings = append(warnings, Warning{
 				Code:    WarnIndexUpdateFailed,
-				Message: fmt.Sprintf("Failed to remove old index entry: %v", err),
+				Message: warningMsg,
 				Ref:     "Run 'rvn reindex' to rebuild the database",
 			})
 		}

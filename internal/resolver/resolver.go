@@ -39,11 +39,9 @@ func NewWithAliases(objectIDs []string, aliases map[string]string, dailyDirector
 // The nameFieldMap maps name_field values to their object IDs (for semantic resolution).
 func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldMap map[string]string, dailyDirectory string) *Resolver {
 	r := &Resolver{
-		objectIDs:      make(map[string]struct{}),
-		shortMap:       make(map[string][]string),
-		slugMap:        make(map[string]string),
-		aliasMap:       make(map[string]string),
-		nameFieldMap:   make(map[string][]string),
+		objectIDs:      make(map[string]struct{}, len(objectIDs)),
+		shortMap:       make(map[string][]string, len(objectIDs)),
+		slugMap:        make(map[string]string, len(objectIDs)),
 		dailyDirectory: dailyDirectory,
 	}
 
@@ -60,6 +58,9 @@ func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldM
 	}
 
 	// Copy aliases (skip empty ones)
+	if len(aliases) > 0 {
+		r.aliasMap = make(map[string]string, len(aliases)*2)
+	}
 	for alias, targetID := range aliases {
 		if alias == "" {
 			continue
@@ -73,6 +74,9 @@ func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldM
 	}
 
 	// Build name_field map (both exact and slugified keys for case-insensitive matching)
+	if len(nameFieldMap) > 0 {
+		r.nameFieldMap = make(map[string][]string, len(nameFieldMap)*3)
+	}
 	for nameValue, objectID := range nameFieldMap {
 		if nameValue == "" {
 			continue

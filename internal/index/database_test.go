@@ -3,6 +3,9 @@ package index
 import (
 	"database/sql"
 	"errors"
+	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/parser"
@@ -349,6 +352,18 @@ func TestDatabase(t *testing.T) {
 			if n != 0 {
 				t.Fatalf("expected %s rows to be 0, got %d", tc.table, n)
 			}
+		}
+	})
+
+	t.Run("remove document returns not found when missing", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		if err := db.RemoveDocument("people/missing"); !errors.Is(err, ErrObjectNotFound) {
+			t.Fatalf("expected ErrObjectNotFound, got %v", err)
 		}
 	})
 
@@ -887,5 +902,94 @@ func TestAllIndexedFilePaths(t *testing.T) {
 		if !pathSet[f] {
 			t.Errorf("expected path %s to be in indexed paths", f)
 		}
+	}
+}
+
+func TestOpenWithRebuildLock(t *testing.T) {
+	vaultDir := t.TempDir()
+	dbDir := filepath.Join(vaultDir, ".raven")
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		t.Fatalf("failed to create db dir: %v", err)
+	}
+
+	lockPath := filepath.Join(dbDir, "index.lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("failed to open lock file: %v", err)
+	}
+	defer lockFile.Close()
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatalf("failed to acquire test lock: %v", err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+
+	if _, _, err := OpenWithRebuild(vaultDir); !errors.Is(err, ErrIndexLocked) {
+		t.Fatalf("expected ErrIndexLocked, got %v", err)
+	}
+}
+
+func TestResolveReferencesBatched(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	sch := schema.NewSchema()
+
+	targetDoc := &parser.ParsedDocument{
+		FilePath: "people/freya.md",
+		Objects: []*parser.ParsedObject{
+			{
+				ID:         "people/freya",
+				ObjectType: "person",
+				Fields:     map[string]schema.FieldValue{},
+				LineStart:  1,
+			},
+		},
+	}
+	if err := db.IndexDocument(targetDoc, sch); err != nil {
+		t.Fatalf("failed to index target doc: %v", err)
+	}
+
+	refCount := 800
+	refs := make([]*parser.ParsedRef, 0, refCount)
+	for i := 0; i < refCount; i++ {
+		refs = append(refs, &parser.ParsedRef{
+			SourceID:  "notes/meeting",
+			TargetRaw: "people/freya",
+			Line:      i + 1,
+		})
+	}
+
+	refDoc := &parser.ParsedDocument{
+		FilePath: "notes/meeting.md",
+		Objects: []*parser.ParsedObject{
+			{
+				ID:         "notes/meeting",
+				ObjectType: "page",
+				Fields:     map[string]schema.FieldValue{},
+				LineStart:  1,
+			},
+		},
+		Refs: refs,
+	}
+	if err := db.IndexDocument(refDoc, sch); err != nil {
+		t.Fatalf("failed to index ref doc: %v", err)
+	}
+
+	result, err := db.ResolveReferences("daily")
+	if err != nil {
+		t.Fatalf("failed to resolve references: %v", err)
+	}
+	if result.Total != refCount {
+		t.Fatalf("expected %d total refs, got %d", refCount, result.Total)
+	}
+	if result.Resolved != refCount {
+		t.Fatalf("expected %d resolved refs, got %d", refCount, result.Resolved)
+	}
+	if result.Unresolved != 0 {
+		t.Fatalf("expected 0 unresolved refs, got %d", result.Unresolved)
 	}
 }
