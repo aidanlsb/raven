@@ -85,22 +85,8 @@ func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDo
 
 // ParseDocumentWithOptions parses a markdown document with custom options.
 func ParseDocumentWithOptions(content string, filePath string, vaultPath string, opts *ParseOptions) (*ParsedDocument, error) {
-	relativePath := filePath
-	if vaultPath != "" {
-		if rel, err := filepath.Rel(vaultPath, filePath); err == nil {
-			relativePath = rel
-		}
-	}
-
-	// File ID is derived from the vault-relative file path.
-	// This is the canonical path->ID mapping, including directory roots.
-	objectsRoot := ""
-	pagesRoot := ""
-	if opts != nil {
-		objectsRoot = opts.ObjectsRoot
-		pagesRoot = opts.PagesRoot
-	}
-	fileID := paths.FilePathToObjectID(relativePath, objectsRoot, pagesRoot)
+	relativePath := vaultRelativePath(filePath, vaultPath)
+	fileID := filePathToID(relativePath, opts)
 
 	var objects []*ParsedObject
 	var traits []*ParsedTrait
@@ -112,30 +98,11 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		return nil, err
 	}
 
-	contentStartLine := 1
-	bodyContent := content
-	if frontmatter != nil {
-		contentStartLine = frontmatter.EndLine + 1
-		lines := strings.Split(content, "\n")
-		if frontmatter.EndLine < len(lines) {
-			bodyContent = strings.Join(lines[frontmatter.EndLine:], "\n")
-		} else {
-			bodyContent = ""
-		}
-	}
+	contentStartLine, bodyContent := frontmatterBody(content, frontmatter)
 
 	// Create file-level object
-	fileFields := make(map[string]schema.FieldValue)
-	if frontmatter != nil {
-		for k, v := range frontmatter.Fields {
-			fileFields[k] = v
-		}
-	}
-
-	fileType := "page"
-	if frontmatter != nil && frontmatter.ObjectType != "" {
-		fileType = frontmatter.ObjectType
-	}
+	fileFields := copyFrontmatterFields(frontmatter)
+	fileType := fileObjectType(frontmatter)
 
 	objects = append(objects, &ParsedObject{
 		ID:         fileID,
@@ -151,17 +118,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	// from `rvn backlinks`. Frontmatter content starts on line 2 (the line after
 	// the opening '---') and ends at frontmatter.EndLine-1.
 	if frontmatter != nil && frontmatter.Raw != "" {
-		fmRefs := ExtractRefs(frontmatter.Raw, 2)
-		for _, refItem := range fmRefs {
-			refs = append(refs, &ParsedRef{
-				SourceID:    fileID,
-				TargetRaw:   refItem.TargetRaw,
-				DisplayText: refItem.DisplayText,
-				Line:        refItem.Line,
-				Start:       refItem.Start,
-				End:         refItem.End,
-			})
-		}
+		refs = append(refs, frontmatterRefs(frontmatter, fileID)...)
 	}
 
 	// Use goldmark AST to extract all content from the body.
@@ -198,22 +155,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		if embedded, ok := typeDeclLines[heading.Line]; ok {
 			// Explicit type declaration
 			// Use explicit ID if provided, otherwise derive from slugified heading
-			var slug string
-			if embedded.ID != "" {
-				slug = embedded.ID
-			} else {
-				baseSlug := Slugify(heading.Text)
-				if baseSlug == "" {
-					baseSlug = embedded.TypeName
-				}
-
-				// Ensure unique ID using counter approach
-				slug = baseSlug
-				usedIDs[baseSlug]++
-				if usedIDs[baseSlug] > 1 {
-					slug = baseSlug + "-" + strconv.Itoa(usedIDs[baseSlug])
-				}
-			}
+			slug := embeddedHeadingSlug(embedded, heading.Text, usedIDs)
 
 			embeddedID := fileID + "#" + slug
 			headingText := heading.Text
@@ -237,17 +179,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 			parentStack = append(parentStack, parentEntry{id: embeddedID, level: heading.Level})
 		} else {
 			// No type declaration - create a "section" object
-			baseSlug := Slugify(heading.Text)
-			if baseSlug == "" {
-				baseSlug = "section"
-			}
-
-			// Ensure unique ID
-			slug := baseSlug
-			usedIDs[baseSlug]++
-			if usedIDs[baseSlug] > 1 {
-				slug = baseSlug + "-" + strconv.Itoa(usedIDs[baseSlug])
-			}
+			slug := sectionHeadingSlug(heading.Text, usedIDs)
 
 			sectionID := fileID + "#" + slug
 			headingText := heading.Text
@@ -312,6 +244,112 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		Traits:     traits,
 		Refs:       refs,
 	}, nil
+}
+
+func vaultRelativePath(filePath, vaultPath string) string {
+	relativePath := filePath
+	if vaultPath != "" {
+		if rel, err := filepath.Rel(vaultPath, filePath); err == nil {
+			relativePath = rel
+		}
+	}
+	return relativePath
+}
+
+func filePathToID(relativePath string, opts *ParseOptions) string {
+	// File ID is derived from the vault-relative file path.
+	// This is the canonical path->ID mapping, including directory roots.
+	objectsRoot := ""
+	pagesRoot := ""
+	if opts != nil {
+		objectsRoot = opts.ObjectsRoot
+		pagesRoot = opts.PagesRoot
+	}
+	return paths.FilePathToObjectID(relativePath, objectsRoot, pagesRoot)
+}
+
+func frontmatterBody(content string, frontmatter *Frontmatter) (contentStartLine int, bodyContent string) {
+	contentStartLine = 1
+	bodyContent = content
+	if frontmatter == nil {
+		return contentStartLine, bodyContent
+	}
+
+	contentStartLine = frontmatter.EndLine + 1
+	lines := strings.Split(content, "\n")
+	if frontmatter.EndLine < len(lines) {
+		bodyContent = strings.Join(lines[frontmatter.EndLine:], "\n")
+	} else {
+		bodyContent = ""
+	}
+	return contentStartLine, bodyContent
+}
+
+func copyFrontmatterFields(frontmatter *Frontmatter) map[string]schema.FieldValue {
+	fileFields := make(map[string]schema.FieldValue)
+	if frontmatter == nil {
+		return fileFields
+	}
+	for k, v := range frontmatter.Fields {
+		fileFields[k] = v
+	}
+	return fileFields
+}
+
+func fileObjectType(frontmatter *Frontmatter) string {
+	fileType := "page"
+	if frontmatter != nil && frontmatter.ObjectType != "" {
+		fileType = frontmatter.ObjectType
+	}
+	return fileType
+}
+
+func frontmatterRefs(frontmatter *Frontmatter, fileID string) []*ParsedRef {
+	if frontmatter == nil || frontmatter.Raw == "" {
+		return nil
+	}
+	fmRefs := ExtractRefs(frontmatter.Raw, 2)
+	refs := make([]*ParsedRef, 0, len(fmRefs))
+	for _, refItem := range fmRefs {
+		refs = append(refs, &ParsedRef{
+			SourceID:    fileID,
+			TargetRaw:   refItem.TargetRaw,
+			DisplayText: refItem.DisplayText,
+			Line:        refItem.Line,
+			Start:       refItem.Start,
+			End:         refItem.End,
+		})
+	}
+	return refs
+}
+
+func embeddedHeadingSlug(embedded *EmbeddedTypeInfo, headingText string, usedIDs map[string]int) string {
+	if embedded.ID != "" {
+		return embedded.ID
+	}
+	baseSlug := Slugify(headingText)
+	if baseSlug == "" {
+		baseSlug = embedded.TypeName
+	}
+	return uniqueSlug(baseSlug, usedIDs)
+}
+
+func sectionHeadingSlug(headingText string, usedIDs map[string]int) string {
+	baseSlug := Slugify(headingText)
+	if baseSlug == "" {
+		baseSlug = "section"
+	}
+	return uniqueSlug(baseSlug, usedIDs)
+}
+
+func uniqueSlug(baseSlug string, usedIDs map[string]int) string {
+	// Ensure unique ID using counter approach
+	slug := baseSlug
+	usedIDs[baseSlug]++
+	if usedIDs[baseSlug] > 1 {
+		slug = baseSlug + "-" + strconv.Itoa(usedIDs[baseSlug])
+	}
+	return slug
 }
 
 // findParentForLine finds the parent object ID for a given line number.

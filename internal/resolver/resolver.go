@@ -150,135 +150,25 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 	sluggedRef := pages.Slugify(ref)
 	lowerRef := strings.ToLower(ref)
 
-	// Collect all possible matches
-	var matches []string
-	matchSources := make(map[string]string) // id -> source (for debugging)
+	c := newMatchCollector()
 
-	// Check aliases (exact and slugified)
-	if targetID, ok := r.aliasMap[ref]; ok {
-		matches = append(matches, targetID)
-		matchSources[targetID] = "alias"
-	} else if targetID, ok := r.aliasMap[sluggedRef]; ok {
-		matches = append(matches, targetID)
-		matchSources[targetID] = "alias"
+	addAliasMatches(r, c, ref, sluggedRef)
+	addNameFieldMatches(r, c, ref, sluggedRef, lowerRef)
+
+	// Date references are special - they always resolve to the daily note path
+	// unless there are already other matches, in which case they participate
+	// in ambiguity detection.
+	if res, done := maybeResolveDateRef(r, c, ref); done {
+		return res
 	}
 
-	// Check name_field values (semantic matching by display name)
-	// This allows [[The Prose Edda]] to resolve even if the file is the-prose-edda.md
-	if nameMatches, ok := r.nameFieldMap[ref]; ok {
-		for _, id := range nameMatches {
-			if _, exists := matchSources[id]; !exists {
-				matches = append(matches, id)
-				matchSources[id] = "name_field"
-			}
-		}
-	} else if nameMatches, ok := r.nameFieldMap[sluggedRef]; ok {
-		for _, id := range nameMatches {
-			if _, exists := matchSources[id]; !exists {
-				matches = append(matches, id)
-				matchSources[id] = "name_field"
-			}
-		}
-	} else if nameMatches, ok := r.nameFieldMap[lowerRef]; ok {
-		for _, id := range nameMatches {
-			if _, exists := matchSources[id]; !exists {
-				matches = append(matches, id)
-				matchSources[id] = "name_field"
-			}
-		}
-	}
-
-	// Check if this is a date reference (YYYY-MM-DD)
-	if dates.IsValidDate(ref) {
-		// Convert date reference to daily note path
-		dateID := filepath.Join(r.dailyDirectory, ref)
-		// Date references are special - they always resolve to the daily note path
-		// Don't treat as ambiguous with aliases since dates are a distinct concept
-		if len(matches) == 0 {
-			return ResolveResult{
-				TargetID:     dateID,
-				MatchSources: map[string]string{dateID: "date"},
-			}
-		}
-		// If there's an alias that matches a date pattern, that's ambiguous
-		if _, exists := matchSources[dateID]; !exists {
-			matches = append(matches, dateID)
-			matchSources[dateID] = "date"
-		}
-	}
-
-	// If the ref contains a path separator, treat as full path
-	if strings.Contains(ref, "/") || strings.HasPrefix(ref, "#") {
-		// Check if it exists exactly
-		if _, ok := r.objectIDs[ref]; ok {
-			if _, exists := matchSources[ref]; !exists {
-				matches = append(matches, ref)
-				matchSources[ref] = "object_id"
-			}
-		}
-
-		// For embedded refs like "file#id", try without extension
-		if strings.Contains(ref, "#") {
-			parts := strings.SplitN(ref, "#", 2)
-			baseID := strings.TrimSuffix(parts[0], ".md")
-			fullID := baseID + "#" + parts[1]
-			if _, ok := r.objectIDs[fullID]; ok {
-				if _, exists := matchSources[fullID]; !exists {
-					matches = append(matches, fullID)
-					matchSources[fullID] = "object_id"
-				}
-			}
-		}
-
-		// Try slugified match: "people/Sif" -> "people/sif"
-		sluggedRefPath := pages.SlugifyPath(ref)
-		if originalID, ok := r.slugMap[sluggedRefPath]; ok {
-			if _, exists := matchSources[originalID]; !exists {
-				matches = append(matches, originalID)
-				matchSources[originalID] = "object_id"
-			}
-		}
-
-		// Try suffix matching: "companies/cursor" -> "objects/companies/cursor"
-		// This handles cases where a directories.objects prefix is used
-		if len(matches) == 0 {
-			suffix := "/" + ref
-			sluggedSuffix := "/" + sluggedRefPath
-			for id := range r.objectIDs {
-				if strings.HasSuffix(id, suffix) || strings.HasSuffix(id, sluggedSuffix) {
-					if _, exists := matchSources[id]; !exists {
-						matches = append(matches, id)
-						matchSources[id] = "suffix_match"
-					}
-				}
-			}
-		}
+	if isPathLikeRef(ref) {
+		addPathMatches(r, c, ref)
 	} else {
-		// Short reference - search for matches
-		shortMatches := r.shortMap[ref]
-		if len(shortMatches) == 0 {
-			shortMatches = r.shortMap[sluggedRef]
-		}
-
-		if len(shortMatches) == 0 {
-			// Try to find partial matches (including slugified)
-			for id := range r.objectIDs {
-				shortName := shortNameFromID(id)
-				if shortName == ref || shortName == sluggedRef ||
-					strings.HasSuffix(id, "/"+ref) || strings.HasSuffix(id, "/"+sluggedRef) {
-					shortMatches = append(shortMatches, id)
-				}
-			}
-		}
-
-		// Add short name matches (avoiding duplicates)
-		for _, id := range shortMatches {
-			if _, exists := matchSources[id]; !exists {
-				matches = append(matches, id)
-				matchSources[id] = "short_name"
-			}
-		}
+		addShortMatches(r, c, ref, sluggedRef)
 	}
+
+	matches := c.matches
 
 	// If we have multiple matches, try to disambiguate by preferring parent objects
 	// over their sections. E.g., if we match both "companies/cursor" and
@@ -287,8 +177,144 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 		matches = preferParentOverSections(matches)
 	}
 
-	matchSources = filterMatchSources(matchSources, matches)
+	matchSources := filterMatchSources(c.sources, matches)
+	return buildResolveResult(matches, matchSources)
+}
 
+type matchCollector struct {
+	matches []string
+	sources map[string]string // id -> source (for debugging)
+}
+
+func newMatchCollector() *matchCollector {
+	return &matchCollector{
+		sources: make(map[string]string),
+	}
+}
+
+func (c *matchCollector) add(id, source string) {
+	if id == "" {
+		return
+	}
+	if _, exists := c.sources[id]; exists {
+		return
+	}
+	c.matches = append(c.matches, id)
+	c.sources[id] = source
+}
+
+func addAliasMatches(r *Resolver, c *matchCollector, ref, sluggedRef string) {
+	// Check aliases (exact and slugified)
+	if targetID, ok := r.aliasMap[ref]; ok {
+		c.add(targetID, "alias")
+	} else if targetID, ok := r.aliasMap[sluggedRef]; ok {
+		c.add(targetID, "alias")
+	}
+}
+
+func addNameFieldMatches(r *Resolver, c *matchCollector, ref, sluggedRef, lowerRef string) {
+	// Check name_field values (semantic matching by display name)
+	// This allows [[The Prose Edda]] to resolve even if the file is the-prose-edda.md
+	var nameMatches []string
+	if m, ok := r.nameFieldMap[ref]; ok {
+		nameMatches = m
+	} else if m, ok := r.nameFieldMap[sluggedRef]; ok {
+		nameMatches = m
+	} else if m, ok := r.nameFieldMap[lowerRef]; ok {
+		nameMatches = m
+	}
+	for _, id := range nameMatches {
+		c.add(id, "name_field")
+	}
+}
+
+func maybeResolveDateRef(r *Resolver, c *matchCollector, ref string) (ResolveResult, bool) {
+	// Check if this is a date reference (YYYY-MM-DD)
+	if !dates.IsValidDate(ref) {
+		return ResolveResult{}, false
+	}
+
+	// Convert date reference to daily note path
+	dateID := filepath.Join(r.dailyDirectory, ref)
+
+	// Date references are special - they always resolve to the daily note path
+	// Don't treat as ambiguous with aliases since dates are a distinct concept
+	if len(c.matches) == 0 {
+		return ResolveResult{
+			TargetID:     dateID,
+			MatchSources: map[string]string{dateID: "date"},
+		}, true
+	}
+
+	// If there's an alias that matches a date pattern, that's ambiguous
+	c.add(dateID, "date")
+	return ResolveResult{}, false
+}
+
+func isPathLikeRef(ref string) bool {
+	return strings.Contains(ref, "/") || strings.HasPrefix(ref, "#")
+}
+
+func addPathMatches(r *Resolver, c *matchCollector, ref string) {
+	// Check if it exists exactly
+	if _, ok := r.objectIDs[ref]; ok {
+		c.add(ref, "object_id")
+	}
+
+	// For embedded refs like "file#id", try without extension
+	if strings.Contains(ref, "#") {
+		parts := strings.SplitN(ref, "#", 2)
+		baseID := strings.TrimSuffix(parts[0], ".md")
+		fullID := baseID + "#" + parts[1]
+		if _, ok := r.objectIDs[fullID]; ok {
+			c.add(fullID, "object_id")
+		}
+	}
+
+	// Try slugified match: "people/Sif" -> "people/sif"
+	sluggedRefPath := pages.SlugifyPath(ref)
+	if originalID, ok := r.slugMap[sluggedRefPath]; ok {
+		c.add(originalID, "object_id")
+	}
+
+	// Try suffix matching: "companies/cursor" -> "objects/companies/cursor"
+	// This handles cases where a directories.objects prefix is used
+	if len(c.matches) == 0 {
+		suffix := "/" + ref
+		sluggedSuffix := "/" + sluggedRefPath
+		for id := range r.objectIDs {
+			if strings.HasSuffix(id, suffix) || strings.HasSuffix(id, sluggedSuffix) {
+				c.add(id, "suffix_match")
+			}
+		}
+	}
+}
+
+func addShortMatches(r *Resolver, c *matchCollector, ref, sluggedRef string) {
+	// Short reference - search for matches
+	shortMatches := r.shortMap[ref]
+	if len(shortMatches) == 0 {
+		shortMatches = r.shortMap[sluggedRef]
+	}
+
+	if len(shortMatches) == 0 {
+		// Try to find partial matches (including slugified)
+		for id := range r.objectIDs {
+			shortName := shortNameFromID(id)
+			if shortName == ref || shortName == sluggedRef ||
+				strings.HasSuffix(id, "/"+ref) || strings.HasSuffix(id, "/"+sluggedRef) {
+				shortMatches = append(shortMatches, id)
+			}
+		}
+	}
+
+	// Add short name matches (avoiding duplicates)
+	for _, id := range shortMatches {
+		c.add(id, "short_name")
+	}
+}
+
+func buildResolveResult(matches []string, matchSources map[string]string) ResolveResult {
 	// Return result based on number of unique matches
 	switch len(matches) {
 	case 0:

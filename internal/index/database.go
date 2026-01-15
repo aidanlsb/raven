@@ -400,12 +400,46 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	now := time.Now().Unix()
 
 	// Use provided mtime or fall back to current time
+	mtime := indexedMtime(now, fileMtime)
+
+	if err := indexObjects(tx, doc, mtime, now); err != nil {
+		return err
+	}
+	if err := indexInlineTraits(tx, doc, sch, now); err != nil {
+		return err
+	}
+	if err := indexRefs(tx, doc, sch); err != nil {
+		return err
+	}
+	if err := indexDates(tx, doc, sch); err != nil {
+		return err
+	}
+	if err := indexFTS(tx, doc); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if d.autoResolveRefs && d.dailyDirectory != "" {
+		if _, err := d.ResolveReferencesForFile(doc.FilePath, d.dailyDirectory); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func indexedMtime(now, fileMtime int64) int64 {
 	mtime := fileMtime
 	if mtime == 0 {
 		mtime = now
 	}
+	return mtime
+}
 
-	// Insert objects
+func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64) error {
 	objStmt, err := tx.Prepare(`
 		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, alias, file_mtime, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -441,14 +475,17 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 			obj.ParentID,
 			alias,
 			mtime,
-			now,
+			indexedAt,
 		)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Insert traits (inline only - traits in content, not frontmatter)
+	return nil
+}
+
+func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema, indexedAt int64) error {
 	traitStmt, err := tx.Prepare(`
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -491,14 +528,17 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 			valueStr,
 			trait.Content,
 			trait.Line,
-			now,
+			indexedAt,
 		)
 		if execErr != nil {
 			return execErr
 		}
 	}
 
-	// Insert refs
+	return nil
+}
+
+func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
 	refStmt, err := tx.Prepare(`
 		INSERT INTO refs (source_id, target_id, target_raw, display_text, file_path, line_number, position_start, position_end)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -534,7 +574,10 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		}
 	}
 
-	// Index dates from object fields
+	return nil
+}
+
+func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
 	dateStmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO date_index (date, source_type, source_id, field_name, file_path)
 		VALUES (?, ?, ?, ?, ?)
@@ -575,7 +618,10 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		}
 	}
 
-	// Index content for full-text search
+	return nil
+}
+
+func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument) error {
 	ftsStmt, err := tx.Prepare(`
 		INSERT INTO fts_content (object_id, title, content, file_path)
 		VALUES (?, ?, ?, ?)
@@ -609,16 +655,6 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 
 		_, err = ftsStmt.Exec(obj.ID, title, content, doc.FilePath)
 		if err != nil {
-			return err
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	if d.autoResolveRefs && d.dailyDirectory != "" {
-		if _, err := d.ResolveReferencesForFile(doc.FilePath, d.dailyDirectory); err != nil {
 			return err
 		}
 	}
@@ -676,8 +712,7 @@ func (d *Database) ClearAllData() error {
 // Returns the number of files removed.
 func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 	// Count files that will be removed
-	var count int
-	err := d.db.QueryRow("SELECT COUNT(DISTINCT file_path) FROM objects WHERE file_path LIKE ?", pathPrefix+"%").Scan(&count)
+	count, err := countDistinctFilesWithPrefix(d.db, pathPrefix)
 	if err != nil {
 		return 0, err
 	}
@@ -688,6 +723,15 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 
 	pattern := pathPrefix + "%"
 	if err := deleteByFilePathLike(d.db, pattern); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func countDistinctFilesWithPrefix(db *sql.DB, pathPrefix string) (int, error) {
+	var count int
+	err := db.QueryRow("SELECT COUNT(DISTINCT file_path) FROM objects WHERE file_path LIKE ?", pathPrefix+"%").Scan(&count)
+	if err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -725,8 +769,7 @@ func (d *Database) RemoveDeletedFiles(vaultPath string) ([]string, error) {
 
 	var removed []string
 	for _, relPath := range indexedPaths {
-		fullPath := filepath.Join(vaultPath, relPath)
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		if fileMissing(filepath.Join(vaultPath, relPath)) {
 			// File was deleted - remove from index
 			if err := d.RemoveFile(relPath); err != nil {
 				return removed, fmt.Errorf("failed to remove %s: %w", relPath, err)
@@ -738,6 +781,11 @@ func (d *Database) RemoveDeletedFiles(vaultPath string) ([]string, error) {
 	return removed, nil
 }
 
+func fileMissing(fullPath string) bool {
+	_, err := os.Stat(fullPath)
+	return os.IsNotExist(err)
+}
+
 // RemoveDocument removes a document and all related data by its object ID.
 func (d *Database) RemoveDocument(objectID string) error {
 	// Objects can have IDs like "people/freya" or "daily/2025-02-01#meeting".
@@ -746,10 +794,7 @@ func (d *Database) RemoveDocument(objectID string) error {
 	// Callers may pass an embedded/section ID (with a '#'). In that case we still
 	// remove the whole document, since Raven cannot delete embedded objects from
 	// the markdown file without rewriting content.
-	baseID := objectID
-	if hash := strings.Index(baseID, "#"); hash >= 0 {
-		baseID = baseID[:hash]
-	}
+	baseID := baseDocumentID(objectID)
 
 	// Prefer the canonical file_path stored in the DB (important when directory
 	// roots are configured and object IDs do not match file paths).
@@ -773,16 +818,31 @@ func (d *Database) RemoveDocument(objectID string) error {
 	}
 
 	// Delete related data by file path
-	if _, err := d.db.Exec("DELETE FROM traits WHERE file_path = ?", filePath); err != nil {
+	if err := deleteRelatedByFilePath(d.db, filePath); err != nil {
 		return err
 	}
-	if _, err := d.db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
+	return nil
+}
+
+func baseDocumentID(objectID string) string {
+	baseID := objectID
+	if hash := strings.Index(baseID, "#"); hash >= 0 {
+		baseID = baseID[:hash]
+	}
+	return baseID
+}
+
+func deleteRelatedByFilePath(db *sql.DB, filePath string) error {
+	if _, err := db.Exec("DELETE FROM traits WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
-	if _, err := d.db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
+	if _, err := db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
-	if _, err := d.db.Exec("DELETE FROM fts_content WHERE file_path = ?", filePath); err != nil {
+	if _, err := db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := db.Exec("DELETE FROM fts_content WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
 	return nil
@@ -889,10 +949,7 @@ type ResolverOptions struct {
 //
 // Use this method for all resolver creation to ensure consistent behavior.
 func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
-	dailyDir := opts.DailyDirectory
-	if dailyDir == "" {
-		dailyDir = "daily"
-	}
+	dailyDir := defaultDailyDir(opts.DailyDirectory)
 
 	objectIDs, err := d.AllObjectIDs()
 	if err != nil {
@@ -905,20 +962,7 @@ func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
 	}
 
 	// Add extra IDs if provided (for hypothetical resolution)
-	if len(opts.ExtraIDs) > 0 {
-		seen := make(map[string]struct{}, len(objectIDs))
-		for _, id := range objectIDs {
-			seen[id] = struct{}{}
-		}
-		for _, id := range opts.ExtraIDs {
-			if id != "" {
-				if _, ok := seen[id]; !ok {
-					objectIDs = append(objectIDs, id)
-					seen[id] = struct{}{}
-				}
-			}
-		}
-	}
+	objectIDs = appendExtraIDs(objectIDs, opts.ExtraIDs)
 
 	// Include name_field values if schema is provided
 	if opts.Schema != nil {
@@ -932,6 +976,36 @@ func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
 	return resolver.NewWithAliases(objectIDs, aliases, dailyDir), nil
 }
 
+func defaultDailyDir(dailyDir string) string {
+	if dailyDir == "" {
+		return "daily"
+	}
+	return dailyDir
+}
+
+// appendExtraIDs appends extra IDs to objectIDs, preserving order and de-duplicating.
+// Empty extra IDs are ignored.
+func appendExtraIDs(objectIDs []string, extraIDs []string) []string {
+	if len(extraIDs) == 0 {
+		return objectIDs
+	}
+	seen := make(map[string]struct{}, len(objectIDs))
+	for _, id := range objectIDs {
+		seen[id] = struct{}{}
+	}
+	for _, id := range extraIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		objectIDs = append(objectIDs, id)
+		seen[id] = struct{}{}
+	}
+	return objectIDs
+}
+
 // AllNameFieldValues returns a map from name_field values to object IDs.
 // It queries each type's name_field and extracts the corresponding field value.
 func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, error) {
@@ -942,12 +1016,7 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, er
 	}
 
 	// Build a map of type -> name_field
-	typeNameFields := make(map[string]string)
-	for typeName, typeDef := range sch.Types {
-		if typeDef != nil && typeDef.NameField != "" {
-			typeNameFields[typeName] = typeDef.NameField
-		}
-	}
+	typeNameFields := buildTypeNameFields(sch)
 
 	if len(typeNameFields) == 0 {
 		return nameFieldMap, nil
@@ -961,30 +1030,61 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, er
 	defer rows.Close()
 
 	for rows.Next() {
-		var id, objType, fieldsJSON string
-		if err := rows.Scan(&id, &objType, &fieldsJSON); err != nil {
-			continue
-		}
-
-		nameField, ok := typeNameFields[objType]
+		id, objType, fieldsJSON, ok := scanNameFieldRow(rows)
 		if !ok {
 			continue
 		}
-
-		// Parse fields JSON and extract name_field value
-		var fields map[string]interface{}
-		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
+		nameStr, ok := extractNameFieldValue(typeNameFields, objType, fieldsJSON)
+		if !ok {
 			continue
 		}
-
-		if nameValue, ok := fields[nameField]; ok {
-			if nameStr, ok := nameValue.(string); ok && nameStr != "" {
-				nameFieldMap[nameStr] = id
-			}
-		}
+		// Preserve existing semantics: last assignment wins (query order unspecified).
+		nameFieldMap[nameStr] = id
 	}
 
 	return nameFieldMap, rows.Err()
+}
+
+func buildTypeNameFields(sch *schema.Schema) map[string]string {
+	typeNameFields := make(map[string]string)
+	if sch == nil {
+		return typeNameFields
+	}
+	for typeName, typeDef := range sch.Types {
+		if typeDef != nil && typeDef.NameField != "" {
+			typeNameFields[typeName] = typeDef.NameField
+		}
+	}
+	return typeNameFields
+}
+
+func scanNameFieldRow(rows *sql.Rows) (id string, objType string, fieldsJSON string, ok bool) {
+	if err := rows.Scan(&id, &objType, &fieldsJSON); err != nil {
+		return "", "", "", false
+	}
+	return id, objType, fieldsJSON, true
+}
+
+func extractNameFieldValue(typeNameFields map[string]string, objType string, fieldsJSON string) (string, bool) {
+	nameField, ok := typeNameFields[objType]
+	if !ok {
+		return "", false
+	}
+
+	// Parse fields JSON and extract name_field value
+	var fields map[string]interface{}
+	if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
+		return "", false
+	}
+	nameValue, ok := fields[nameField]
+	if !ok {
+		return "", false
+	}
+	nameStr, ok := nameValue.(string)
+	if !ok || nameStr == "" {
+		return "", false
+	}
+	return nameStr, true
 }
 
 // DuplicateAlias represents multiple objects sharing the same alias.
@@ -1088,47 +1188,74 @@ func (d *Database) CheckStaleness(vaultPath string) (*StalenessInfo, error) {
 	info := &StalenessInfo{}
 
 	// Get all unique file paths and their indexed mtimes
-	rows, err := d.db.Query(`
-		SELECT DISTINCT file_path, file_mtime 
-		FROM objects 
-		WHERE parent_id IS NULL
-	`)
+	rows, err := stalenessRows(d.db)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var filePath string
-		var indexedMtime sql.NullInt64
-
-		if err := rows.Scan(&filePath, &indexedMtime); err != nil {
+		filePath, indexedMtime, err := scanStalenessRow(rows)
+		if err != nil {
 			return nil, err
 		}
 
 		info.TotalFiles++
 
-		// Build full path and check current mtime
-		fullPath := filepath.Join(vaultPath, filePath)
-		stat, err := os.Stat(fullPath)
+		stale, checked, err := isFileStaleAgainstIndexedMtime(filepath.Join(vaultPath, filePath), indexedMtime)
 		if err != nil {
 			// File was deleted or moved - consider stale
 			info.StaleFiles = append(info.StaleFiles, filePath)
 			info.IsStale = true
 			continue
 		}
-
-		info.CheckedFiles++
-		currentMtime := stat.ModTime().Unix()
-
-		// If no indexed mtime or current > indexed, file is stale
-		if !indexedMtime.Valid || currentMtime > indexedMtime.Int64 {
+		if checked {
+			info.CheckedFiles++
+		}
+		if stale {
 			info.StaleFiles = append(info.StaleFiles, filePath)
 			info.IsStale = true
 		}
 	}
 
 	return info, rows.Err()
+}
+
+func stalenessRows(db *sql.DB) (*sql.Rows, error) {
+	return db.Query(`
+		SELECT DISTINCT file_path, file_mtime 
+		FROM objects 
+		WHERE parent_id IS NULL
+	`)
+}
+
+func scanStalenessRow(rows *sql.Rows) (string, sql.NullInt64, error) {
+	var filePath string
+	var indexedMtime sql.NullInt64
+	if err := rows.Scan(&filePath, &indexedMtime); err != nil {
+		return "", sql.NullInt64{}, err
+	}
+	return filePath, indexedMtime, nil
+}
+
+// isFileStaleAgainstIndexedMtime compares the current filesystem mtime to the indexed one.
+//
+// Returns:
+// - stale: whether file should be considered stale (including missing indexed mtime)
+// - checked: whether the file existed on disk (i.e., mtime was checked)
+// - err: non-nil when os.Stat fails (caller decides how to treat)
+func isFileStaleAgainstIndexedMtime(fullPath string, indexedMtime sql.NullInt64) (stale bool, checked bool, err error) {
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		return false, false, err
+	}
+	checked = true
+	currentMtime := stat.ModTime().Unix()
+	// If no indexed mtime or current > indexed, file is stale
+	if !indexedMtime.Valid || currentMtime > indexedMtime.Int64 {
+		return true, checked, nil
+	}
+	return false, checked, nil
 }
 
 // GetFileMtime returns the indexed mtime for a file, or 0 if not found.
