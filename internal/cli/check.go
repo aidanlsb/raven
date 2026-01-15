@@ -808,21 +808,8 @@ func buildCheckJSONWithScope(vaultPath string, scope *checkScope, fileCount, err
 	return buildCheckJSONInternal(result, issues, schemaIssues)
 }
 
-// buildCheckJSON creates the structured JSON output for check command (legacy, for compatibility)
-func buildCheckJSON(vaultPath string, fileCount, errorCount, warnCount int, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
-	result := CheckResultJSON{
-		VaultPath:  vaultPath,
-		FileCount:  fileCount,
-		ErrorCount: errorCount,
-		WarnCount:  warnCount,
-		Issues:     make([]CheckIssueJSON, 0, len(issues)+len(schemaIssues)),
-	}
-	return buildCheckJSONInternal(result, issues, schemaIssues)
-}
-
 // buildCheckJSONInternal is the shared implementation for building check JSON output
 func buildCheckJSONInternal(result CheckResultJSON, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
-
 	// Convert issues to JSON format
 	for _, issue := range issues {
 		result.Issues = append(result.Issues, CheckIssueJSON{

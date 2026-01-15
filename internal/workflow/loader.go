@@ -13,10 +13,10 @@ import (
 
 // externalWorkflowDef is used for parsing external workflow files.
 type externalWorkflowDef struct {
-	Description string                        `yaml:"description,omitempty"`
+	Description string                           `yaml:"description,omitempty"`
 	Inputs      map[string]*config.WorkflowInput `yaml:"inputs,omitempty"`
 	Context     map[string]*config.ContextQuery  `yaml:"context,omitempty"`
-	Prompt      string                        `yaml:"prompt"`
+	Prompt      string                           `yaml:"prompt"`
 }
 
 // LoadAll loads all workflows from the vault configuration.

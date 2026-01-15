@@ -67,7 +67,7 @@ Examples:
 			// Non-interactive mode: require title as argument
 			return handleErrorMsg(ErrMissingArgument, "title is required", "Usage: rvn new <type> <title> --json")
 		} else {
-			fmt.Printf("Title: ")
+			fmt.Fprintf(os.Stderr, "Title: ")
 			title, err = reader.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("failed to read input: %w", err)
@@ -136,7 +136,7 @@ Examples:
 						fieldDetails = append(fieldDetails, detail)
 					} else {
 						// Interactive: prompt for value
-						fmt.Printf("%s (required): ", fieldName)
+						fmt.Fprintf(os.Stderr, "%s (required): ", fieldName)
 						value, err := reader.ReadString('\n')
 						if err != nil {
 							return fmt.Errorf("failed to read input: %w", err)
@@ -227,7 +227,7 @@ Examples:
 
 		// Auto-reindex if configured (vaultCfg already loaded above)
 		if vaultCfg.IsAutoReindexEnabled() {
-			if err := reindexFile(vaultPath, result.FilePath); err != nil {
+			if err := reindexFile(vaultPath, result.FilePath, vaultCfg); err != nil {
 				if !isJSONOutput() {
 					fmt.Printf("  (reindex failed: %v)\n", err)
 				}

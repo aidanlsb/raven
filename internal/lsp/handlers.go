@@ -489,10 +489,12 @@ func (s *Server) publishDiagnostics(uri string) {
 		})
 	}
 
-	s.sendNotification("textDocument/publishDiagnostics", PublishDiagnosticsParams{
+	if err := s.sendNotification("textDocument/publishDiagnostics", PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
-	})
+	}); err != nil {
+		s.logDebug("Failed to publish diagnostics: %v", err)
+	}
 }
 
 // Reindexing

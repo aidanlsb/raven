@@ -28,33 +28,6 @@ func shouldEmitHyperlinks() bool {
 	return enabled
 }
 
-// formatLocationLink formats a file:line location as a clickable hyperlink.
-// If hyperlinks are not supported, returns the plain location string.
-// The output is styled with the accent color.
-//
-// The link URL is determined by the configured editor:
-//   - cursor, code (VS Code): cursor://file/path:line or vscode://file/path:line
-//   - subl (Sublime Text): subl://open?url=file:///path&line=N
-//   - idea, goland, etc: idea://open?file=/path&line=N
-//   - Others: file:///path (line number not supported)
-func formatLocationLink(cfg *config.Config, vaultPath, relPath string, line int) string {
-	location := fmt.Sprintf("%s:%d", relPath, line)
-
-	if !shouldEmitHyperlinks() {
-		return ui.Bold.Render(location)
-	}
-
-	// Build absolute path for URL
-	absPath := filepath.Join(vaultPath, relPath)
-
-	// Get the URL based on editor
-	url := buildEditorURL(cfg, absPath, line)
-
-	// OSC 8 hyperlink format: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
-	// Using \x07 (BEL) as terminator for broader compatibility
-	return ui.Bold.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
-}
-
 // buildEditorURL builds the appropriate URL for the configured editor.
 func buildEditorURL(cfg *config.Config, absPath string, line int) string {
 	editor := ""

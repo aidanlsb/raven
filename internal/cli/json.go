@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 )
 
 // Global JSON output flag
@@ -47,7 +46,7 @@ type Meta struct {
 func outputJSON(resp Response) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(resp)
+	_ = enc.Encode(resp)
 }
 
 // outputSuccess outputs a successful JSON response.
@@ -92,29 +91,6 @@ func isJSONOutput() bool {
 	return jsonOutput
 }
 
-// withTiming wraps a function and returns execution time in milliseconds.
-func withTiming(fn func() error) (int64, error) {
-	start := time.Now()
-	err := fn()
-	elapsed := time.Since(start).Milliseconds()
-	return elapsed, err
-}
-
-// printOrJSON outputs text if not in JSON mode, otherwise does nothing.
-// Use this for human-readable output that should be suppressed in JSON mode.
-func printOrJSON(format string, args ...interface{}) {
-	if !jsonOutput {
-		fmt.Printf(format, args...)
-	}
-}
-
-// printlnOrJSON outputs a line if not in JSON mode.
-func printlnOrJSON(a ...interface{}) {
-	if !jsonOutput {
-		fmt.Println(a...)
-	}
-}
-
 // handleError handles an error appropriately based on output mode.
 // In JSON mode, outputs a JSON error. In text mode, returns the error for Cobra.
 func handleError(code string, err error, suggestion string) error {
@@ -141,26 +117,4 @@ func handleErrorWithDetails(code, message, suggestion string, details interface{
 		return nil
 	}
 	return fmt.Errorf("%s", message)
-}
-
-// outputSuccessWithWarningsMap outputs success with warnings as map slice.
-func outputSuccessWithWarningsMap(data interface{}, warnings []map[string]interface{}, meta *Meta) {
-	// Convert map warnings to Warning structs
-	var warningStructs []Warning
-	for _, w := range warnings {
-		ws := Warning{}
-		if code, ok := w["code"].(string); ok {
-			ws.Code = code
-		}
-		if msg, ok := w["message"].(string); ok {
-			ws.Message = msg
-		}
-		warningStructs = append(warningStructs, ws)
-	}
-	outputJSON(Response{
-		OK:       true,
-		Data:     data,
-		Warnings: warningStructs,
-		Meta:     meta,
-	})
 }

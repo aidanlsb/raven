@@ -215,7 +215,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 				}
 			}
 
-				embeddedID := fileID + "#" + slug
+			embeddedID := fileID + "#" + slug
 			headingText := heading.Text
 			headingLevel := heading.Level
 

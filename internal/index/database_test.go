@@ -2,6 +2,7 @@ package index
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/parser"
@@ -342,7 +343,7 @@ func TestDatabase(t *testing.T) {
 				q = "SELECT COUNT(*) FROM " + tc.table + " WHERE file_path = ?"
 				err = db.db.QueryRow(q, "objects/people/freya.md").Scan(&n)
 			}
-			if err != nil && err != sql.ErrNoRows {
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				t.Fatalf("failed to query %s: %v", tc.table, err)
 			}
 			if n != 0 {

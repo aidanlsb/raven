@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -129,13 +130,6 @@ func truncateText(text string, maxLen int) string {
 		truncated = truncated[:lastSpace]
 	}
 	return truncated + "..."
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 var queryCmd = &cobra.Command{
@@ -437,14 +431,6 @@ func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings 
 	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
 }
 
-func runFullQuery(db *index.Database, queryStr string, start time.Time, dailyDir string) error {
-	return runFullQueryWithSchema(db, queryStr, start, nil, dailyDir)
-}
-
-func runFullQueryWithSchema(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, dailyDir string) error {
-	return runFullQueryWithOptions(db, queryStr, start, sch, false, dailyDir)
-}
-
 func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
@@ -456,7 +442,8 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	if sch != nil {
 		validator := query.NewValidator(sch)
 		if err := validator.Validate(q); err != nil {
-			if ve, ok := err.(*query.ValidationError); ok {
+			var ve *query.ValidationError
+			if errors.As(err, &ve) {
 				return handleErrorMsg(ErrQueryInvalid, ve.Message, ve.Suggestion)
 			}
 			return handleErrorMsg(ErrQueryInvalid, err.Error(), "")
@@ -655,10 +642,6 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 	return nil
 }
 
-func runSavedQueryWithJSON(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, dailyDir string) error {
-	return runSavedQueryWithOptions(db, q, name, start, sch, false, dailyDir)
-}
-
 func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
 	if q.Query == "" {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
@@ -666,51 +649,6 @@ func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name str
 
 	// Just run the query string through the normal query parser
 	return runFullQueryWithOptions(db, q.Query, start, sch, idsOnly, dailyDir)
-}
-
-func printTraitResults(results []index.TraitResult) {
-	// Group by content line to show all traits on same content
-	type contentKey struct {
-		filePath string
-		line     int
-	}
-
-	grouped := make(map[contentKey][]index.TraitResult)
-	var order []contentKey
-
-	for _, r := range results {
-		key := contentKey{r.FilePath, r.Line}
-		if _, exists := grouped[key]; !exists {
-			order = append(order, key)
-		}
-		grouped[key] = append(grouped[key], r)
-	}
-
-	// Build table rows
-	rows := make([]traitTableRow, 0, len(order))
-	for _, key := range order {
-		traits := grouped[key]
-		// Use content from first trait (they should be the same)
-		content := traits[0].Content
-
-		// Build trait summary with syntax highlighting
-		var traitStrs []string
-		for _, t := range traits {
-			value := ""
-			if t.Value != nil {
-				value = *t.Value
-			}
-			traitStrs = append(traitStrs, ui.Trait(t.TraitType, value))
-		}
-
-		rows = append(rows, traitTableRow{
-			content:  content,
-			traits:   strings.Join(traitStrs, " "),
-			location: formatLocationLinkSimple(key.filePath, key.line),
-		})
-	}
-
-	printTraitTable(rows)
 }
 
 var queryAddCmd = &cobra.Command{
@@ -863,7 +801,7 @@ func smartReindex(db *index.Database, vaultPath string) error {
 	var reindexed int
 	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 		if result.Error != nil {
-			return nil // Skip files with errors
+			return nil //nolint:nilerr // skip files with errors
 		}
 
 		// Check if file needs reindexing
@@ -874,7 +812,7 @@ func smartReindex(db *index.Database, vaultPath string) error {
 
 		// Reindex this file
 		if err := db.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); err != nil {
-			return nil // Skip files that fail to index
+			return nil //nolint:nilerr // skip files that fail to index
 		}
 
 		reindexed++

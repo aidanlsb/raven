@@ -158,14 +158,14 @@ func TestRemoveInlineCode(t *testing.T) {
 func TestListMarkerNotConfusedWithFence(t *testing.T) {
 	// A list item with content should NOT be detected as a fence
 	tests := []struct {
-		line     string
+		line      string
 		wantFence bool
 	}{
 		{"* This is just a list item", false},
 		{"- @todo regular trait", false},
 		{"+ some content", false},
-		{"* ```", true},  // This IS a fence
-		{"- ```python", true},  // This IS a fence
+		{"* ```", true},       // This IS a fence
+		{"- ```python", true}, // This IS a fence
 	}
 
 	for _, tt := range tests {

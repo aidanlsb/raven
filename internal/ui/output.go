@@ -161,7 +161,7 @@ func Badge(text string) string {
 
 // Metadata returns dot-separated metadata like "status: active · due: 2025-02-15"
 func Metadata(pairs ...string) string {
-	return Muted.Render(strings.Join(pairs, " " + SymbolDot + " "))
+	return Muted.Render(strings.Join(pairs, " "+SymbolDot+" "))
 }
 
 // MetadataItem returns a single "key: value" metadata item

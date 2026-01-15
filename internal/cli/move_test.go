@@ -111,4 +111,3 @@ func TestChooseReplacementRefBasePreservesAlias(t *testing.T) {
 		t.Fatalf("expected alias to remain %q, got %q", "goddess", got)
 	}
 }
-

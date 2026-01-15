@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
@@ -26,7 +27,6 @@ var (
 	moveSkipTypeCheck bool
 	moveStdin         bool
 	moveConfirm       bool
-	moveDestination   string
 )
 
 var moveCmd = &cobra.Command{
@@ -119,74 +119,33 @@ func runMoveBulk(args []string, vaultPath string) error {
 
 // previewMoveBulk shows a preview of bulk move operations.
 func previewMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	var previewItems []BulkPreviewItem
-	var skipped []BulkResult
-
-	for _, id := range ids {
+	preview := buildBulkPreview("move", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "object not found",
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
 
-		// Build destination path (directory + original filename)
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(destDir, filename)
-
-		// Check if destination already exists
 		fullDestPath := filepath.Join(vaultPath, destPath)
 		if _, err := os.Stat(fullDestPath); err == nil {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: fmt.Sprintf("destination already exists: %s", destPath),
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("destination already exists: %s", destPath)}
 		}
 
-		previewItems = append(previewItems, BulkPreviewItem{
+		return &BulkPreviewItem{
 			ID:      id,
 			Action:  "move",
 			Details: fmt.Sprintf("→ %s", destPath),
-		})
-	}
+		}, nil
+	})
 
-	preview := &BulkPreview{
-		Action:   "move",
-		Items:    previewItems,
-		Skipped:  skipped,
-		Total:    len(ids),
-		Warnings: warnings,
-	}
-
-	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"preview":     true,
-			"action":      "move",
-			"destination": destDir,
-			"items":       previewItems,
-			"skipped":     skipped,
-			"total":       len(ids),
-			"warnings":    warnings,
-		}, &Meta{Count: len(previewItems)})
-		return nil
-	}
-
-	PrintBulkPreview(preview)
-	return nil
+	return outputBulkPreview(preview, map[string]interface{}{
+		"destination": destDir,
+	})
 }
 
 // applyMoveBulk applies bulk move operations.
 func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	var results []BulkResult
-	moved := 0
-	skipped := 0
-	errors := 0
-
 	// Load schema for type checking
 	sch, _ := schema.Load(vaultPath)
 
@@ -203,16 +162,13 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		return handleError(ErrFileWriteError, err, "Failed to create destination directory")
 	}
 
-	for _, id := range ids {
+	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
-
 		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
-			skipped++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Build destination path
@@ -224,13 +180,10 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		if _, err := os.Stat(fullDestPath); err == nil {
 			result.Status = "skipped"
 			result.Reason = fmt.Sprintf("destination already exists: %s", destPath)
-			skipped++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Update references if enabled
-		var updatedRefs []string
 		if moveUpdateRefs {
 			relSource, _ := filepath.Rel(vaultPath, sourceFile)
 			sourceID := vaultCfg.FilePathToObjectID(relSource)
@@ -258,8 +211,9 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 				if bl.Line != nil {
 					line = *bl.Line
 				}
-				if err := updateReferenceAtLine(vaultPath, vaultCfg, bl.SourceID, line, base, repl); err == nil {
-					updatedRefs = append(updatedRefs, bl.SourceID)
+				if err := updateReferenceAtLine(vaultPath, vaultCfg, bl.SourceID, line, base, repl); err != nil {
+					// Best-effort: moving the file is the primary action; reference updates may fail.
+					continue
 				}
 			}
 		}
@@ -268,17 +222,24 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		if err := os.Rename(sourceFile, fullDestPath); err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("move failed: %v", err)
-			errors++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Update index
 		sourceID := strings.TrimSuffix(id, ".md")
-		db.RemoveDocument(sourceID)
+		if err := db.RemoveDocument(sourceID); err != nil {
+			result.Status = "error"
+			result.Reason = fmt.Sprintf("failed to remove from index: %v", err)
+			return result
+		}
 
 		// Reindex new location
-		newContent, _ := os.ReadFile(fullDestPath)
+		newContent, err := os.ReadFile(fullDestPath)
+		if err != nil {
+			result.Status = "error"
+			result.Reason = fmt.Sprintf("failed to read moved file: %v", err)
+			return result
+		}
 		var parseOpts *parser.ParseOptions
 		if vaultCfg.HasDirectoriesConfig() {
 			parseOpts = &parser.ParseOptions{
@@ -286,50 +247,34 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 				PagesRoot:   vaultCfg.GetPagesRoot(),
 			}
 		}
-		newDoc, _ := parser.ParseDocumentWithOptions(string(newContent), fullDestPath, vaultPath, parseOpts)
-		if newDoc != nil && sch != nil {
-			db.IndexDocument(newDoc, sch)
+		newDoc, err := parser.ParseDocumentWithOptions(string(newContent), fullDestPath, vaultPath, parseOpts)
+		if err != nil {
+			result.Status = "error"
+			result.Reason = fmt.Sprintf("failed to parse moved file: %v", err)
+			return result
+		}
+		if newDoc == nil {
+			result.Status = "error"
+			result.Reason = "failed to parse moved file: got nil document"
+			return result
+		}
+		if sch != nil {
+			if err := db.IndexDocument(newDoc, sch); err != nil {
+				result.Status = "error"
+				result.Reason = fmt.Sprintf("failed to index moved file: %v", err)
+				return result
+			}
 		}
 
 		result.Status = "moved"
 		result.Details = destPath
-		moved++
-		results = append(results, result)
-	}
+		return result
+	})
 
-	summary := &BulkSummary{
-		Action:  "move",
-		Results: results,
-		Total:   len(ids),
-		Moved:   moved,
-		Skipped: skipped,
-		Errors:  errors,
-	}
-
-	if isJSONOutput() {
-		data := map[string]interface{}{
-			"ok":          errors == 0,
-			"action":      "move",
-			"destination": destDir,
-			"results":     results,
-			"total":       len(ids),
-			"moved":       moved,
-			"skipped":     skipped,
-			"errors":      errors,
-		}
-		if len(warnings) > 0 {
-			outputSuccessWithWarnings(data, warnings, &Meta{Count: moved})
-		} else {
-			outputSuccess(data, &Meta{Count: moved})
-		}
-		return nil
-	}
-
-	PrintBulkSummary(summary)
-	for _, w := range warnings {
-		fmt.Printf("⚠ %s\n", w.Message)
-	}
-	return nil
+	summary := buildBulkSummary("move", results, warnings)
+	return outputBulkSummary(summary, warnings, map[string]interface{}{
+		"destination": destDir,
+	})
 }
 
 // moveSingleObject handles single move operation (non-bulk mode).
@@ -459,9 +404,9 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 		// Interactive confirmation
 		if !moveForce {
-			fmt.Printf("⚠ Warning: Moving to '%s/' which is the default directory for type '%s'\n", destDir, mismatchType)
-			fmt.Printf("  But this file has type '%s'\n\n", fileType)
-			fmt.Print("Proceed anyway? [y/N]: ")
+			fmt.Fprintf(os.Stderr, "⚠ Warning: Moving to '%s/' which is the default directory for type '%s'\n", destDir, mismatchType)
+			fmt.Fprintf(os.Stderr, "  But this file has type '%s'\n\n", fileType)
+			fmt.Fprint(os.Stderr, "Proceed anyway? [y/N]: ")
 
 			reader := bufio.NewReader(os.Stdin)
 			response, err := reader.ReadString('\n')
@@ -470,7 +415,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 			}
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "y" && response != "yes" {
-				fmt.Println("Cancelled.")
+				fmt.Fprintln(os.Stderr, "Cancelled.")
 				return nil
 			}
 		}
@@ -528,16 +473,56 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 	// Update index
 	db, err := index.Open(vaultPath)
-	if err == nil {
+	if err != nil {
+		warnings = append(warnings, Warning{
+			Code:    WarnIndexUpdateFailed,
+			Message: fmt.Sprintf("Failed to open index database for update: %v", err),
+			Ref:     "Run 'rvn reindex' to rebuild the database",
+		})
+	} else {
 		defer db.Close()
+
 		// Remove old entry
 		sourceID := vaultCfg.FilePathToObjectID(source)
-		db.RemoveDocument(sourceID)
+		if err := db.RemoveDocument(sourceID); err != nil {
+			warnings = append(warnings, Warning{
+				Code:    WarnIndexUpdateFailed,
+				Message: fmt.Sprintf("Failed to remove old index entry: %v", err),
+				Ref:     "Run 'rvn reindex' to rebuild the database",
+			})
+		}
+
 		// Index new location
-		newContent, _ := os.ReadFile(destFile)
-		newDoc, _ := parser.ParseDocumentWithOptions(string(newContent), destFile, vaultPath, parseOpts)
-		if newDoc != nil {
-			db.IndexDocument(newDoc, sch)
+		newContent, err := os.ReadFile(destFile)
+		if err != nil {
+			warnings = append(warnings, Warning{
+				Code:    WarnIndexUpdateFailed,
+				Message: fmt.Sprintf("Failed to read moved file for indexing: %v", err),
+				Ref:     "Run 'rvn reindex' to rebuild the database",
+			})
+		} else {
+			newDoc, err := parser.ParseDocumentWithOptions(string(newContent), destFile, vaultPath, parseOpts)
+			if err != nil {
+				warnings = append(warnings, Warning{
+					Code:    WarnIndexUpdateFailed,
+					Message: fmt.Sprintf("Failed to parse moved file for indexing: %v", err),
+					Ref:     "Run 'rvn reindex' to rebuild the database",
+				})
+			} else if newDoc == nil {
+				warnings = append(warnings, Warning{
+					Code:    WarnIndexUpdateFailed,
+					Message: "Failed to parse moved file for indexing: got nil document",
+					Ref:     "Run 'rvn reindex' to rebuild the database",
+				})
+			} else {
+				if err := db.IndexDocument(newDoc, sch); err != nil {
+					warnings = append(warnings, Warning{
+						Code:    WarnIndexUpdateFailed,
+						Message: fmt.Sprintf("Failed to index moved file: %v", err),
+						Ref:     "Run 'rvn reindex' to rebuild the database",
+					})
+				}
+			}
 		}
 	}
 
@@ -646,7 +631,7 @@ func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, o
 		return nil // No changes needed
 	}
 
-	return os.WriteFile(filePath, []byte(newContent), 0644)
+	return atomicfile.WriteFile(filePath, []byte(newContent), 0o644)
 }
 
 func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldRef, newRef string) error {
@@ -695,7 +680,7 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 	}
 	lines[idx] = updated
 
-	return os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0644)
+	return atomicfile.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
 func shortNameFromID(id string) string {

@@ -84,4 +84,3 @@ exit 1
 		t.Fatalf("expected error.details.output to be present; out=%s", out)
 	}
 }
-

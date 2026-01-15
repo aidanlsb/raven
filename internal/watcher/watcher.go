@@ -15,8 +15,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -191,7 +191,9 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 		// But watch new directories
 		if event.Op&fsnotify.Create != 0 {
 			if info, err := os.Stat(path); err == nil && info.IsDir() {
-				w.addWatchRecursive(path)
+				if err := w.addWatchRecursive(path); err != nil {
+					w.logDebug("Failed to watch directory %s: %v", path, err)
+				}
 			}
 		}
 		return
@@ -269,7 +271,7 @@ func (w *Watcher) processPending() {
 func (w *Watcher) addWatchRecursive(root string) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Skip errors
+			return err
 		}
 		if info.IsDir() {
 			// Skip ignored directories

@@ -144,6 +144,70 @@ func TestParseTraitAnnotations_InlineCode(t *testing.T) {
 	}
 }
 
+func TestParseTraitValue_Kinds(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantDate     bool
+		wantDatetime bool
+		wantRef      bool
+		wantString   string
+	}{
+		{
+			name:       "valid date",
+			input:      "2025-02-01",
+			wantDate:   true,
+			wantString: "2025-02-01",
+		},
+		{
+			name:         "valid datetime",
+			input:        "2025-02-05T09:00",
+			wantDatetime: true,
+			wantString:   "2025-02-05T09:00",
+		},
+		{
+			name:       "invalid date-looking string stays string",
+			input:      "2025-13-45",
+			wantString: "2025-13-45",
+		},
+		{
+			name:       "random T string stays string",
+			input:      "invalidTstring",
+			wantString: "invalidTstring",
+		},
+		{
+			name:       "ref",
+			input:      "[[people/freya]]",
+			wantRef:    true,
+			wantString: "people/freya",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fv := parseTraitValue(tt.input)
+
+			if got := fv.IsDate(); got != tt.wantDate {
+				t.Fatalf("IsDate() = %v, want %v", got, tt.wantDate)
+			}
+			if got := fv.IsDatetime(); got != tt.wantDatetime {
+				t.Fatalf("IsDatetime() = %v, want %v", got, tt.wantDatetime)
+			}
+			if got := fv.IsRef(); got != tt.wantRef {
+				t.Fatalf("IsRef() = %v, want %v", got, tt.wantRef)
+			}
+
+			s, ok := fv.AsString()
+			if !ok {
+				t.Fatalf("AsString() ok=false, want true")
+			}
+			if s != tt.wantString {
+				t.Fatalf("AsString() = %q, want %q", s, tt.wantString)
+			}
+		})
+	}
+}
+
 func TestIsRefOnTraitLine(t *testing.T) {
 	// This test documents the CONTENT SCOPE RULE:
 	// A reference is associated with a trait if and only if they are on the same line.

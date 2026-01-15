@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"testing"
 	"strings"
+	"testing"
 )
 
 func TestParseFrontmatter(t *testing.T) {
@@ -52,7 +52,7 @@ client: "[[clients/midgard|Midgard]]"
 ---
 
 Content here`,
-			wantType: "",
+			wantType:    "",
 			wantEndLine: 5,
 		},
 		{
@@ -63,7 +63,7 @@ date: 2025-02-01
 ---
 
 Content`,
-			wantType: "daily",
+			wantType:    "daily",
 			wantEndLine: 4,
 		},
 	}

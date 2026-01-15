@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
@@ -124,135 +124,63 @@ func runAddBulk(args []string, vaultPath string) error {
 
 // previewAddBulk shows a preview of bulk add operations.
 func previewAddBulk(vaultPath string, ids []string, line string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	var previewItems []BulkPreviewItem
-	var skipped []BulkResult
-
-	for _, id := range ids {
+	preview := buildBulkPreview("add", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "object not found",
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
-
-		// Verify file exists
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "file not found",
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "file not found"}
 		}
-
-		previewItems = append(previewItems, BulkPreviewItem{
+		return &BulkPreviewItem{
 			ID:      id,
 			Action:  "add",
 			Details: fmt.Sprintf("append: %s", line),
-		})
-	}
+		}, nil
+	})
 
-	preview := &BulkPreview{
-		Action:   "add",
-		Items:    previewItems,
-		Skipped:  skipped,
-		Total:    len(ids),
-		Warnings: warnings,
-	}
-
-	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"preview":  true,
-			"action":   "add",
-			"content":  line,
-			"items":    previewItems,
-			"skipped":  skipped,
-			"total":    len(ids),
-			"warnings": warnings,
-		}, &Meta{Count: len(previewItems)})
-		return nil
-	}
-
-	PrintBulkPreview(preview)
-	return nil
+	return outputBulkPreview(preview, map[string]interface{}{
+		"content": line,
+	})
 }
 
 // applyAddBulk applies bulk add operations.
 func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	var results []BulkResult
-	added := 0
-	skipped := 0
-	errors := 0
-
 	captureCfg := vaultCfg.GetCaptureConfig()
 
-	for _, id := range ids {
+	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
-
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
-			skipped++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Append to file (never create for bulk operations)
 		if err := appendToFile(vaultPath, filePath, line, captureCfg, vaultCfg, false); err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("append failed: %v", err)
-			errors++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Reindex if configured
 		if vaultCfg.IsAutoReindexEnabled() {
-			reindexFile(vaultPath, filePath)
+			if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
+				if !isJSONOutput() {
+					fmt.Printf("  (reindex failed: %v)\n", err)
+				}
+			}
 		}
 
 		result.Status = "added"
-		added++
-		results = append(results, result)
-	}
+		return result
+	})
 
-	summary := &BulkSummary{
-		Action:  "add",
-		Results: results,
-		Total:   len(ids),
-		Added:   added,
-		Skipped: skipped,
-		Errors:  errors,
-	}
-
-	if isJSONOutput() {
-		data := map[string]interface{}{
-			"ok":      errors == 0,
-			"action":  "add",
-			"content": line,
-			"results": results,
-			"total":   len(ids),
-			"added":   added,
-			"skipped": skipped,
-			"errors":  errors,
-		}
-		if len(warnings) > 0 {
-			outputSuccessWithWarnings(data, warnings, &Meta{Count: added})
-		} else {
-			outputSuccess(data, &Meta{Count: added})
-		}
-		return nil
-	}
-
-	PrintBulkSummary(summary)
-	for _, w := range warnings {
-		fmt.Printf("⚠ %s\n", w.Message)
-	}
-	return nil
+	summary := buildBulkSummary("add", results, warnings)
+	return outputBulkSummary(summary, warnings, map[string]interface{}{
+		"content": line,
+	})
 }
 
 // addSingleCapture handles single capture mode (non-bulk).
@@ -342,7 +270,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 
 	// Reindex if configured
 	if vaultCfg.IsAutoReindexEnabled() {
-		if err := reindexFile(vaultPath, destPath); err != nil {
+		if err := reindexFile(vaultPath, destPath, vaultCfg); err != nil {
 			if !isJSONOutput() {
 				fmt.Printf("  (reindex failed: %v)\n", err)
 			}
@@ -411,7 +339,6 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 			if _, err := pages.CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, vaultCfg.DailyTemplate); err != nil {
 				return fmt.Errorf("failed to create daily note: %w", err)
 			}
-			fileExists = true
 		} else {
 			// This shouldn't happen - we check earlier, but just in case
 			return fmt.Errorf("file does not exist: %s", destPath)
@@ -509,51 +436,7 @@ func appendUnderHeading(destPath, line, heading string) error {
 		newLines = append(newLines, lines[insertIdx:]...)
 	}
 
-	return os.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0644)
-}
-
-func reindexFile(vaultPath, filePath string) error {
-	// Load schema
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return err
-	}
-
-	// Read and parse the file
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	doc, err := parser.ParseDocument(string(content), filePath, vaultPath)
-	if err != nil {
-		return err
-	}
-
-	// Open database and index
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	return db.IndexDocument(doc, sch)
-}
-
-// readLastLine reads the last line of a file to check if it ends with newline
-func readLastLine(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	var lastLine string
-	for scanner.Scan() {
-		lastLine = scanner.Text()
-	}
-	return lastLine, scanner.Err()
+	return atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644)
 }
 
 // getFileLineCount returns the number of lines in a file.
@@ -631,7 +514,7 @@ func validateRefsWithoutDB(vaultPath string, refs []parser.Reference, sch *schem
 
 	// Collect existing object IDs by walking the vault
 	var objectIDs []string
-	vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+	_ = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 		if result.Document != nil {
 			for _, obj := range result.Document.Objects {
 				objectIDs = append(objectIDs, obj.ID)

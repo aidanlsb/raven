@@ -81,7 +81,7 @@ func (fs *FenceState) UpdateFenceState(line string) bool {
 
 // RemoveInlineCode removes inline code spans from a line, replacing them with spaces
 // to preserve character positions for other parsing operations.
-// Handles both single backticks (`code`) and double backticks (``code with `backtick` inside``).
+// Handles both single backticks (`code`) and double backticks (“code with `backtick` inside“).
 func RemoveInlineCode(line string) string {
 	result := []byte(line)
 	i := 0
@@ -126,6 +126,7 @@ func RemoveInlineCode(line string) string {
 		if !found {
 			// No matching close found, continue from after opening backticks
 			// (leave them as-is)
+			continue
 		}
 	}
 

@@ -68,4 +68,3 @@ func TestPathSlug(t *testing.T) {
 		})
 	}
 }
-

@@ -144,9 +144,9 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 		if len(typesWithoutNameField) > 0 {
 			sort.Strings(typesWithoutNameField)
 			result["hint"] = map[string]interface{}{
-				"message":                    "Some types have required string fields but no name_field configured. Setting name_field enables auto-population from the title argument in raven_new.",
-				"types_without_name_field":   typesWithoutNameField,
-				"fix_command":                "raven_schema_update_type with name-field parameter",
+				"message":                  "Some types have required string fields but no name_field configured. Setting name_field enables auto-population from the title argument in raven_new.",
+				"types_without_name_field": typesWithoutNameField,
+				"fix_command":              "raven_schema_update_type with name-field parameter",
 			}
 		}
 
@@ -430,7 +430,6 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 				}
 			}
 		}
-
 	}
 
 	return result

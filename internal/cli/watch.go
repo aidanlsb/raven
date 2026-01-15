@@ -86,11 +86,11 @@ func runWatch(cmd *cobra.Command, args []string) error {
 
 	// Create watcher
 	w, err := watcher.New(watcher.Config{
-		VaultPath: vaultPath,
-		Database:  db,
-		Schema:    sch,
+		VaultPath:    vaultPath,
+		Database:     db,
+		Schema:       sch,
 		ParseOptions: parseOpts,
-		Debug:     debug,
+		Debug:        debug,
 		OnReindex: func(path string, err error) {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error reindexing %s: %v\n", path, err)

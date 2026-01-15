@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -216,31 +217,34 @@ func (e *RefNotFoundError) Error() string {
 
 // IsAmbiguousRef returns true if the error is an ambiguous reference error.
 func IsAmbiguousRef(err error) bool {
-	_, ok := err.(*AmbiguousRefError)
-	return ok
+	var e *AmbiguousRefError
+	return errors.As(err, &e)
 }
 
 // IsRefNotFound returns true if the error is a reference not found error.
 func IsRefNotFound(err error) bool {
-	_, ok := err.(*RefNotFoundError)
-	return ok
+	var e *RefNotFoundError
+	return errors.As(err, &e)
 }
 
 // handleResolveError converts a resolve error to an appropriate CLI error output.
 // Returns the error code used.
 func handleResolveError(err error, reference string) error {
-	switch e := err.(type) {
-	case *AmbiguousRefError:
+	var ae *AmbiguousRefError
+	if errors.As(err, &ae) {
 		return handleErrorMsg(ErrRefAmbiguous,
-			e.Error(),
+			ae.Error(),
 			"Use a more specific path to disambiguate")
-	case *RefNotFoundError:
-		return handleErrorMsg(ErrRefNotFound,
-			e.Error(),
-			"Check the reference and try again")
-	default:
-		return handleErrorMsg(ErrInternal,
-			fmt.Sprintf("failed to resolve '%s': %v", reference, err),
-			"Run 'rvn reindex' if the database is out of date")
 	}
+
+	var nfe *RefNotFoundError
+	if errors.As(err, &nfe) {
+		return handleErrorMsg(ErrRefNotFound,
+			nfe.Error(),
+			"Check the reference and try again")
+	}
+
+	return handleErrorMsg(ErrInternal,
+		fmt.Sprintf("failed to resolve '%s': %v", reference, err),
+		"Run 'rvn reindex' if the database is out of date")
 }

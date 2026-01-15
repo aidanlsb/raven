@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -136,9 +137,6 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 
 // previewSetBulk shows a preview of bulk set operations.
 func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	var previewItems []BulkPreviewItem
-	var skipped []BulkResult
-
 	// Get parse options from vault config
 	var parseOpts *parser.ParseOptions
 	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
@@ -151,47 +149,26 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 		}
 	}
 
-	for _, id := range ids {
+	preview := buildBulkPreview("set", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		// Check if this is an embedded object
 		if IsEmbeddedID(id) {
-			item, skip := previewSetEmbedded(vaultPath, id, updates, vaultCfg, parseOpts)
-			if skip != nil {
-				skipped = append(skipped, *skip)
-			} else if item != nil {
-				previewItems = append(previewItems, *item)
-			}
-			continue
+			return previewSetEmbedded(vaultPath, id, updates, vaultCfg, parseOpts)
 		}
 
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "object not found",
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
 
 		// Read current values to show diff
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: fmt.Sprintf("read error: %v", err),
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
 		}
 
 		fm, err := parser.ParseFrontmatter(string(content))
 		if err != nil || fm == nil {
-			skipped = append(skipped, BulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "no frontmatter",
-			})
-			continue
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "no frontmatter"}
 		}
 
 		// Build change summary
@@ -206,45 +183,20 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 			changes[field] = fmt.Sprintf("%s (was: %s)", newVal, oldVal)
 		}
 
-		previewItems = append(previewItems, BulkPreviewItem{
+		return &BulkPreviewItem{
 			ID:      id,
 			Action:  "set",
 			Changes: changes,
-		})
-	}
+		}, nil
+	})
 
-	preview := &BulkPreview{
-		Action:   "set",
-		Items:    previewItems,
-		Skipped:  skipped,
-		Total:    len(ids),
-		Warnings: warnings,
-	}
-
-	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"preview":  true,
-			"action":   "set",
-			"fields":   updates,
-			"items":    previewItems,
-			"skipped":  skipped,
-			"total":    len(ids),
-			"warnings": warnings,
-		}, &Meta{Count: len(previewItems)})
-		return nil
-	}
-
-	PrintBulkPreview(preview)
-	return nil
+	return outputBulkPreview(preview, map[string]interface{}{
+		"fields": updates,
+	})
 }
 
 // applySetBulk applies bulk set operations.
 func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	var results []BulkResult
-	modified := 0
-	skipped := 0
-	errors := 0
-
 	// Get parse options from vault config
 	var parseOpts *parser.ParseOptions
 	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
@@ -257,49 +209,39 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 		}
 	}
 
-	for _, id := range ids {
+	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
-
 		// Check if this is an embedded object
 		if IsEmbeddedID(id) {
 			err := applySetEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
 			if err != nil {
 				result.Status = "error"
 				result.Reason = err.Error()
-				errors++
 			} else {
 				result.Status = "modified"
-				modified++
 			}
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
-			skipped++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("read error: %v", err)
-			errors++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		fm, err := parser.ParseFrontmatter(string(content))
 		if err != nil || fm == nil {
 			result.Status = "skipped"
 			result.Reason = "no frontmatter"
-			skipped++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Build updated frontmatter
@@ -307,63 +249,33 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 		if err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("update error: %v", err)
-			errors++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Write the file back
-		if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("write error: %v", err)
-			errors++
-			results = append(results, result)
-			continue
+			return result
 		}
 
 		// Auto-reindex if configured
 		if vaultCfg.IsAutoReindexEnabled() {
-			reindexFile(vaultPath, filePath)
+			if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
+				if !isJSONOutput() {
+					fmt.Printf("  (reindex failed: %v)\n", err)
+				}
+			}
 		}
 
 		result.Status = "modified"
-		modified++
-		results = append(results, result)
-	}
+		return result
+	})
 
-	summary := &BulkSummary{
-		Action:   "set",
-		Results:  results,
-		Total:    len(ids),
-		Modified: modified,
-		Skipped:  skipped,
-		Errors:   errors,
-	}
-
-	if isJSONOutput() {
-		data := map[string]interface{}{
-			"ok":       errors == 0,
-			"action":   "set",
-			"fields":   updates,
-			"results":  results,
-			"total":    len(ids),
-			"modified": modified,
-			"skipped":  skipped,
-			"errors":   errors,
-		}
-		if len(warnings) > 0 {
-			outputSuccessWithWarnings(data, warnings, &Meta{Count: modified})
-		} else {
-			outputSuccess(data, &Meta{Count: modified})
-		}
-		return nil
-	}
-
-	PrintBulkSummary(summary)
-	for _, w := range warnings {
-		fmt.Println(ui.Warning(w.Message))
-	}
-	return nil
+	summary := buildBulkSummary("set", results, warnings)
+	return outputBulkSummary(summary, warnings, map[string]interface{}{
+		"fields": updates,
+	})
 }
 
 // setSingleObject sets fields on a single object (non-bulk mode).
@@ -451,13 +363,13 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 	}
 
 	// Write the file back
-	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+	if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
 	// Auto-reindex if configured
 	if vaultCfg.IsAutoReindexEnabled() {
-		if err := reindexFile(vaultPath, filePath); err != nil {
+		if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
 			if !isJSONOutput() {
 				fmt.Printf("  (reindex failed: %v)\n", err)
 			}
@@ -764,13 +676,13 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 
 	// Write the file back
 	newContent := strings.Join(lines, "\n")
-	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+	if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
 	// Auto-reindex if configured
 	if vaultCfg.IsAutoReindexEnabled() {
-		if err := reindexFile(vaultPath, filePath); err != nil {
+		if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
 			if !isJSONOutput() {
 				fmt.Printf("  (reindex failed: %v)\n", err)
 			}
@@ -993,13 +905,17 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 
 	// Write the file back
 	newContent := strings.Join(lines, "\n")
-	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+	if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
 		return fmt.Errorf("write error: %w", err)
 	}
 
 	// Auto-reindex if configured
 	if vaultCfg.IsAutoReindexEnabled() {
-		reindexFile(vaultPath, filePath)
+		if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
+			if !isJSONOutput() {
+				fmt.Printf("  (reindex failed: %v)\n", err)
+			}
+		}
 	}
 
 	return nil

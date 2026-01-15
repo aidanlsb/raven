@@ -65,7 +65,7 @@ func (v *Validator) validatePipeline(p *Pipeline, queryType QueryType) error {
 			if err := v.validateAssignmentStage(s, queryType); err != nil {
 				return err
 			}
-		// FilterStage and SortStage don't contain subqueries, just computed/field references
+			// FilterStage and SortStage don't contain subqueries, just computed/field references
 		}
 	}
 	return nil

@@ -34,9 +34,9 @@ const (
 	TokenLte                  // <=
 	TokenGte                  // >=
 	TokenEq                   // =
-	TokenEqEq   // ==
-	TokenBangEq // !=
-	TokenComma  // ,
+	TokenEqEq                 // ==
+	TokenBangEq               // !=
+	TokenComma                // ,
 	TokenError                // error token
 )
 

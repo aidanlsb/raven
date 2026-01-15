@@ -81,4 +81,3 @@ func TestScanAt(t *testing.T) {
 		t.Fatalf("end=%d, want %d", end, 2+len(literal))
 	}
 }
-

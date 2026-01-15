@@ -18,13 +18,13 @@ import (
 // at index/resolve time, not at parse time. This test focuses on parsing.
 func TestFrontmatterRefParsing(t *testing.T) {
 	tests := []struct {
-		name        string
-		yaml        string
-		fieldName   string
-		wantType    string // "ref", "string", "array", or "null"
-		wantTarget  string // for ref type, the expected target
-		wantString  string // for string type, the expected value
-		wantArray   []interface{} // for array, expected elements (simplified)
+		name       string
+		yaml       string
+		fieldName  string
+		wantType   string        // "ref", "string", "array", or "null"
+		wantTarget string        // for ref type, the expected target
+		wantString string        // for string type, the expected value
+		wantArray  []interface{} // for array, expected elements (simplified)
 	}{
 		// === WIKILINK SYNTAX (with [[brackets]]) ===
 		{
@@ -56,10 +56,10 @@ func TestFrontmatterRefParsing(t *testing.T) {
 			wantTarget: "people/freya",
 		},
 		{
-			name:       "unquoted wikilink - YAML parses as array",
-			yaml:       `company: [[cursor]]`,
-			fieldName:  "company",
-			wantType:   "array", // YAML interprets [[x]] as nested array
+			name:      "unquoted wikilink - YAML parses as array",
+			yaml:      `company: [[cursor]]`,
+			fieldName: "company",
+			wantType:  "array", // YAML interprets [[x]] as nested array
 		},
 
 		// === BARE STRING SYNTAX (without [[brackets]]) ===
@@ -184,11 +184,11 @@ func TestFrontmatterRefParsing(t *testing.T) {
 // TestFrontmatterRefArrayParsing tests arrays of refs in frontmatter.
 func TestFrontmatterRefArrayParsing(t *testing.T) {
 	tests := []struct {
-		name       string
-		yaml       string
-		fieldName  string
-		wantRefs   []string // expected ref targets
-		wantMixed  bool     // true if array contains mixed types
+		name      string
+		yaml      string
+		fieldName string
+		wantRefs  []string // expected ref targets
+		wantMixed bool     // true if array contains mixed types
 	}{
 		{
 			name: "array of wikilinks",
@@ -199,8 +199,8 @@ func TestFrontmatterRefArrayParsing(t *testing.T) {
 			wantRefs:  []string{"people/freya", "people/thor"},
 		},
 		{
-			name: "inline array of wikilinks",
-			yaml: `owners: ["[[people/freya]]", "[[people/thor]]"]`,
+			name:      "inline array of wikilinks",
+			yaml:      `owners: ["[[people/freya]]", "[[people/thor]]"]`,
 			fieldName: "owners",
 			wantRefs:  []string{"people/freya", "people/thor"},
 		},
@@ -270,9 +270,9 @@ func TestFrontmatterRefArrayParsing(t *testing.T) {
 // from frontmatter for indexing (used by backlinks and query refs:[[target]]).
 func TestExtractRefsFromFrontmatter(t *testing.T) {
 	tests := []struct {
-		name       string
-		content    string
-		wantRefs   []string // expected TargetRaw values
+		name     string
+		content  string
+		wantRefs []string // expected TargetRaw values
 	}{
 		{
 			name: "wikilink in frontmatter is extracted",
@@ -470,7 +470,7 @@ func TestBareStringRefFieldsAtParseTime(t *testing.T) {
 		// Wikilink syntax → stored as ref at parse time
 		{`company: "[[cursor]]"`, "company", true, "cursor"},
 		{`company: "[[companies/cursor]]"`, "company", true, "companies/cursor"},
-		
+
 		// Bare string syntax → stored as string at parse time
 		// (but extracted as ref at index time when schema says it's a ref field)
 		{`company: cursor`, "company", false, "cursor"},
@@ -488,7 +488,7 @@ func TestBareStringRefFieldsAtParseTime(t *testing.T) {
 			}
 
 			field := fm.Fields[tt.fieldName]
-			
+
 			if tt.isRef {
 				target, ok := field.AsRef()
 				if !ok {
@@ -507,4 +507,3 @@ func TestBareStringRefFieldsAtParseTime(t *testing.T) {
 		})
 	}
 }
-

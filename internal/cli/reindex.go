@@ -37,6 +37,7 @@ Examples:
   rvn reindex --dry-run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
+		ctx := cmd.Context()
 		fullReindex, _ := cmd.Flags().GetBool("full")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
@@ -148,6 +149,12 @@ Examples:
 
 		walkOpts := &vault.WalkOptions{ParseOptions: parseOpts}
 		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			if result.Error != nil {
 				if !jsonOutput {
 					fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.RelativePath, result.Error)
