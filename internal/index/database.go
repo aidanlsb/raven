@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -23,6 +24,13 @@ import (
 type Database struct {
 	db *sql.DB
 }
+
+var (
+	// ErrObjectNotFound indicates the requested object ID is not in the index.
+	ErrObjectNotFound = errors.New("object not found in index")
+	// ErrIndexLocked indicates another process is rebuilding the index.
+	ErrIndexLocked = errors.New("index is locked for rebuild")
+)
 
 // DB returns the underlying sql.DB for advanced queries.
 func (d *Database) DB() *sql.DB {
@@ -57,6 +65,12 @@ func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
 	dbDir := filepath.Join(vaultPath, ".raven")
 	dbPath := filepath.Join(dbDir, "index.db")
 
+	lock, err := acquireIndexLock(dbDir)
+	if err != nil {
+		return nil, false, err
+	}
+	defer lock.Release()
+
 	// Try to open and check schema compatibility
 	if _, err := os.Stat(dbPath); err == nil {
 		db, err := sql.Open("sqlite", dbPath)
@@ -64,9 +78,9 @@ func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
 			if !isSchemaCompatible(db) {
 				db.Close()
 				// Schema incompatible - delete and recreate
-				os.Remove(dbPath)
-				os.Remove(dbPath + "-wal")
-				os.Remove(dbPath + "-shm")
+				if err := removeDatabaseFiles(dbPath); err != nil {
+					return nil, false, err
+				}
 				// Open fresh
 				freshDB, err := Open(vaultPath)
 				return freshDB, true, err
@@ -78,6 +92,54 @@ func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
 	// Open normally
 	db, err := Open(vaultPath)
 	return db, false, err
+}
+
+type indexLock struct {
+	file *os.File
+}
+
+func acquireIndexLock(dbDir string) (*indexLock, error) {
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .raven directory: %w", err)
+	}
+
+	lockPath := filepath.Join(dbDir, "index.lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open index lock: %w", err)
+	}
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		lockFile.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return nil, ErrIndexLocked
+		}
+		return nil, fmt.Errorf("failed to acquire index lock: %w", err)
+	}
+
+	return &indexLock{file: lockFile}, nil
+}
+
+func (l *indexLock) Release() error {
+	if l == nil || l.file == nil {
+		return nil
+	}
+	unlockErr := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
+	closeErr := l.file.Close()
+	if unlockErr != nil {
+		return unlockErr
+	}
+	return closeErr
+}
+
+func removeDatabaseFiles(dbPath string) error {
+	paths := []string{dbPath, dbPath + "-wal", dbPath + "-shm"}
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to remove %s: %w", p, err)
+		}
+	}
+	return nil
 }
 
 // isSchemaCompatible checks if the database schema matches expected structure.
@@ -673,8 +735,7 @@ func (d *Database) RemoveDocument(objectID string) error {
 	).Scan(&filePath)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// Best-effort fallback.
-			filePath = baseID + ".md"
+			return ErrObjectNotFound
 		} else {
 			return err
 		}
@@ -1111,63 +1172,7 @@ func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutio
 		return nil, err
 	}
 
-	// Get all unresolved references
-	rows, err := d.db.Query(`
-		SELECT id, target_raw FROM refs WHERE target_id IS NULL
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query refs: %w", err)
-	}
-	defer rows.Close()
-
-	type refToResolve struct {
-		id        int64
-		targetRaw string
-	}
-	var refs []refToResolve
-
-	for rows.Next() {
-		var r refToResolve
-		if err := rows.Scan(&r.id, &r.targetRaw); err != nil {
-			return nil, err
-		}
-		refs = append(refs, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	result.Total = len(refs)
-
-	// Resolve each reference
-	tx, err := d.db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.Prepare(`UPDATE refs SET target_id = ? WHERE id = ?`)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	for _, ref := range refs {
-		resolved := res.Resolve(ref.targetRaw)
-		if resolved.Ambiguous {
-			result.Ambiguous++
-			result.Unresolved++
-		} else if resolved.TargetID != "" {
-			if _, err := stmt.Exec(resolved.TargetID, ref.id); err != nil {
-				return nil, err
-			}
-			result.Resolved++
-		} else {
-			result.Unresolved++
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
+	if err := d.resolveReferencesInBatches(res, nil, result); err != nil {
 		return nil, err
 	}
 
@@ -1186,21 +1191,55 @@ func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*R
 		return nil, err
 	}
 
-	rows, err := d.db.Query(`
-		SELECT id, target_raw FROM refs
-		WHERE target_id IS NULL AND file_path = ?
-	`, filePath)
+	if err := d.resolveReferencesInBatches(res, &filePath, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+const resolveRefsBatchSize = 750
+
+type refToResolve struct {
+	id        int64
+	targetRaw string
+}
+
+func (d *Database) resolveReferencesInBatches(res *resolver.Resolver, filePath *string, result *ReferenceResolutionResult) error {
+	var lastID int64
+	for {
+		refs, err := d.fetchUnresolvedRefsBatch(filePath, lastID, resolveRefsBatchSize)
+		if err != nil {
+			return err
+		}
+		if len(refs) == 0 {
+			return nil
+		}
+
+		if err := d.resolveRefBatch(res, refs, result); err != nil {
+			return err
+		}
+
+		lastID = refs[len(refs)-1].id
+	}
+}
+
+func (d *Database) fetchUnresolvedRefsBatch(filePath *string, afterID int64, limit int) ([]refToResolve, error) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if filePath == nil {
+		rows, err = d.db.Query(`SELECT id, target_raw FROM refs WHERE target_id IS NULL AND id > ? ORDER BY id LIMIT ?`, afterID, limit)
+	} else {
+		rows, err = d.db.Query(`SELECT id, target_raw FROM refs WHERE target_id IS NULL AND file_path = ? AND id > ? ORDER BY id LIMIT ?`, *filePath, afterID, limit)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query refs: %w", err)
 	}
 	defer rows.Close()
 
-	type refToResolve struct {
-		id        int64
-		targetRaw string
-	}
-	var refs []refToResolve
-
+	refs := make([]refToResolve, 0, limit)
 	for rows.Next() {
 		var r refToResolve
 		if err := rows.Scan(&r.id, &r.targetRaw); err != nil {
@@ -1212,20 +1251,21 @@ func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*R
 		return nil, err
 	}
 
-	result.Total = len(refs)
-	if result.Total == 0 {
-		return result, nil
-	}
+	return refs, nil
+}
+
+func (d *Database) resolveRefBatch(res *resolver.Resolver, refs []refToResolve, result *ReferenceResolutionResult) error {
+	result.Total += len(refs)
 
 	tx, err := d.db.Begin()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`UPDATE refs SET target_id = ? WHERE id = ?`)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer stmt.Close()
 
@@ -1234,9 +1274,11 @@ func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*R
 		if resolved.Ambiguous {
 			result.Ambiguous++
 			result.Unresolved++
-		} else if resolved.TargetID != "" {
+			continue
+		}
+		if resolved.TargetID != "" {
 			if _, err := stmt.Exec(resolved.TargetID, ref.id); err != nil {
-				return nil, err
+				return err
 			}
 			result.Resolved++
 		} else {
@@ -1244,11 +1286,7 @@ func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*R
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return tx.Commit()
 }
 
 // extractRefsFromSchemaFields extracts refs from ref-typed fields that are bare strings.

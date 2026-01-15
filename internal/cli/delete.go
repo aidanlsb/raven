@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -212,9 +213,13 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 
 		// Remove from index
 		if err := db.RemoveDocument(objectID); err != nil {
+			warningMsg := fmt.Sprintf("Failed to remove deleted object from index: %v", err)
+			if errors.Is(err, index.ErrObjectNotFound) {
+				warningMsg = "Object not found in index; consider running 'rvn reindex'"
+			}
 			warnings = append(warnings, Warning{
 				Code:    WarnIndexUpdateFailed,
-				Message: fmt.Sprintf("Failed to remove deleted object from index: %v", err),
+				Message: warningMsg,
 				Ref:     "Run 'rvn reindex' to rebuild the database",
 			})
 		}
@@ -349,9 +354,17 @@ func deleteSingleObject(vaultPath, reference string) error {
 
 	// Remove from index
 	if err := db.RemoveDocument(objectID); err != nil {
-		// Log but don't fail - file is already deleted
+		warningMsg := fmt.Sprintf("Failed to remove deleted object from index: %v", err)
+		if errors.Is(err, index.ErrObjectNotFound) {
+			warningMsg = "Object not found in index; consider running 'rvn reindex'"
+		}
+		warnings = append(warnings, Warning{
+			Code:    WarnIndexUpdateFailed,
+			Message: warningMsg,
+			Ref:     "Run 'rvn reindex' to rebuild the database",
+		})
 		if !isJSONOutput() {
-			fmt.Printf("  (warning: failed to remove from index: %v)\n", err)
+			fmt.Printf("  (warning: %s)\n", warningMsg)
 		}
 	}
 
