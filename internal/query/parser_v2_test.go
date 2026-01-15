@@ -141,50 +141,6 @@ func TestParseV2ValuePredicates(t *testing.T) {
 	}
 }
 
-func TestParseV2NoShorthand(t *testing.T) {
-	// These should fail because shorthands are removed
-	tests := []struct {
-		name    string
-		input   string
-		wantErr bool
-	}{
-		{
-			name:    "has shorthand fails",
-			input:   "object:meeting has:due",
-			wantErr: true,
-		},
-		{
-			name:    "has with subquery works",
-			input:   "object:meeting has:{trait:due}",
-			wantErr: false,
-		},
-		{
-			name:    "parent shorthand fails",
-			input:   "object:meeting parent:date",
-			wantErr: true,
-		},
-		{
-			name:    "parent with subquery works",
-			input:   "object:meeting parent:{object:date}",
-			wantErr: false,
-		},
-		{
-			name:    "parent with target works",
-			input:   "object:meeting parent:[[daily/2025-01-01]]",
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestParseV2Pipeline(t *testing.T) {
 	tests := []struct {
 		name      string

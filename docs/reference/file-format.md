@@ -424,8 +424,8 @@ Traits are associated with the nearest containing object (the section or file th
 Query with `on:` (direct parent) or `within:` (any ancestor):
 
 ```
-trait:todo on:{object:section .title:"Tasks"}
-trait:highlight within:{object:project .status:active}
+trait:todo on:{object:section .title=="Tasks"}
+trait:highlight within:{object:project .status==active}
 ```
 
 ---

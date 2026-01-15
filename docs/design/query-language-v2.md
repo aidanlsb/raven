@@ -1,14 +1,4 @@
-# Query Language v2 — Design Spec
-
-This document specifies the redesigned Raven query language. Key changes from v1:
-
-1. **Operator-based equality**: `==` instead of `:` for value comparison
-2. **Function-style string matching**: `includes()`, `startswith()`, `endswith()`, `matches()`
-3. **Array quantifiers**: `any()`, `all()`, `none()` for array field matching
-4. **Pipeline operator**: `|>` separates selection from post-processing
-5. **Computed aggregations**: Assign results to named values for filtering/sorting
-6. **Extended navigation**: `child()`, `ancestors()`, `descendants()` functions
-7. **No shorthands**: All syntax is explicit (no `has:due` → `has:{trait:due}`)
+# Query Language — Design Spec
 
 ---
 
@@ -229,7 +219,7 @@ Processing steps are space-separated and execute in order.
 
 ## Post-Processing: Navigation Functions
 
-**Return single object** — usable in predicates:
+**Return single object** — usable in predicates and aggregation (via `count()`):
 
 | Function | Returns |
 |----------|---------|
@@ -256,6 +246,8 @@ Processing steps are space-separated and execute in order.
 | `count(refd(_))` | Count incoming references |
 | `count(ancestors(_))` | Count ancestors |
 | `count(descendants(_))` | Count descendants |
+| `count(parent(_))` | Count parent (0 or 1) |
+| `count(child(_))` | Count direct children |
 | `min({subquery})` | Minimum value of matching traits |
 | `max({subquery})` | Maximum value of matching traits |
 | `sum({subquery})` | Sum of values of matching traits |
@@ -362,48 +354,3 @@ object:person |>
   limit(20)
 ```
 
----
-
-## Migration from v1
-
-### Syntax Changes
-
-| v1 Syntax | v2 Syntax |
-|-----------|-----------|
-| `.status:active` | `.status==active` |
-| `.priority:>5` | `.priority>5` |
-| `.priority:>=5` | `.priority>=5` |
-| `value:past` | `value==past` |
-| `has:due` | `has:{trait:due}` |
-| `parent:date` | `parent:{object:date}` |
-| `on:meeting` | `on:{object:meeting}` |
-| `sort:_.value` | `\|> sort(_.value, asc)` |
-| `sort:min:{trait:due within:_}` | `\|> min_due = min({trait:due within:_}) sort(min_due, asc)` |
-| `group:_.parent` | (grouping redesign TBD) |
-| `limit:10` | `\|> limit(10)` |
-
-### Removed Shorthands
-
-All shorthands are removed for consistency:
-
-- `has:due` → `has:{trait:due}`
-- `contains:todo` → `contains:{trait:todo}`
-- `parent:date` → `parent:{object:date}`
-- `ancestor:project` → `ancestor:{object:project}`
-- `child:meeting` → `child:{object:meeting}`
-- `descendant:section` → `descendant:{object:section}`
-- `on:meeting` → `on:{object:meeting}`
-- `within:project` → `within:{object:project}`
-- `at:todo` → `at:{trait:todo}`
-- `refd:meeting` → `refd:{object:meeting}`
-
-### New Capabilities
-
-1. **Function-style string matching**: `includes()`, `startswith()`, `endswith()`, `matches()`
-2. **Array quantifiers**: `any()`, `all()`, `none()` for array field matching
-3. **Raw strings**: `r"..."` for regex patterns without escaping
-4. **Case sensitivity control**: Optional third argument for case-sensitive matching
-5. **Pipeline post-processing**: `|>` for clean separation
-6. **Computed aggregations**: Named values with `=`
-7. **Filter on computed values**: `filter(todos > 5)`
-8. **Extended navigation**: `ancestors(_)`, `descendants(_)` sets

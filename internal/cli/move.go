@@ -51,8 +51,8 @@ Examples:
   rvn move drafts/person.md people/freya.md --update-refs
 
 Bulk examples:
-  rvn query "object:project .status:archived" --ids | rvn move --stdin archive/projects/
-  rvn query "object:project .status:archived" --ids | rvn move --stdin archive/projects/ --confirm`,
+  rvn query "object:project .status==archived" --ids | rvn move --stdin archive/projects/
+  rvn query "object:project .status==archived" --ids | rvn move --stdin archive/projects/ --confirm`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()

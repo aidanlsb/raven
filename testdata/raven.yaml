@@ -1,10 +1,10 @@
 daily_directory: daily
 queries:
     active-projects:
-        query: object:project .status:active
+        query: object:project .status==active
         description: Active projects
     overdue:
-        query: trait:due value:past
+        query: trait:due value==past
         description: Overdue items
     people:
         query: object:person
@@ -50,7 +50,7 @@ workflows:
         description: "Filter by project status"
     context:
       projects:
-        query: "object:project .status:{{inputs.status}}"
+        query: "object:project .status=={{inputs.status}}"
     prompt: |
       Review the following projects and suggest prioritized next steps.
       

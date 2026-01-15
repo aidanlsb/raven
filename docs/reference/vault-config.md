@@ -33,10 +33,10 @@ deletion:
 # Saved queries
 queries:
   overdue:
-    query: "trait:due value:past"
+    query: "trait:due value==past"
     description: "Overdue items"
   active-projects:
-    query: "object:project .status:active"
+    query: "object:project .status==active"
     description: "Active projects"
 
 # Workflows (prompt templates)
@@ -261,11 +261,11 @@ Define saved queries that can be run with `rvn query <name>`.
 ```yaml
 queries:
   overdue:
-    query: "trait:due value:past"
+    query: "trait:due value==past"
     description: "Items past their due date"
 
   active-projects:
-    query: "object:project .status:active"
+    query: "object:project .status==active"
     description: "Projects with status active"
 
   reading-list:
@@ -350,15 +350,15 @@ queries:
     description: "All tasks with due dates"
 
   overdue:
-    query: "trait:due value:past"
+    query: "trait:due value==past"
     description: "Items past their due date"
 
   this-week:
-    query: "trait:due value:this-week"
+    query: "trait:due value==this-week"
     description: "Items due this week"
 
   active-projects:
-    query: "object:project .status:active"
+    query: "object:project .status==active"
     description: "Projects with status active"
 ```
 

@@ -43,8 +43,8 @@ Examples:
   rvn delete projects/old-project --json
 
 Bulk examples:
-  rvn query "object:project .status:archived" --ids | rvn delete --stdin
-  rvn query "object:project .status:archived" --ids | rvn delete --stdin --confirm`,
+  rvn query "object:project .status==archived" --ids | rvn delete --stdin
+  rvn query "object:project .status==archived" --ids | rvn delete --stdin --confirm`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()

@@ -21,7 +21,7 @@ func (p *Parser) parseSourcePredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseOnPredicate parses on:type, on:{object:type ...}, on:[[target]], or on:_
+// parseOnPredicate parses on:{object:type ...}, on:[[target]], or on:_
 func (p *Parser) parseOnPredicate(negated bool) (Predicate, error) {
 	// Check for self-reference _
 	if p.curr.Type == TokenUnderscore {
@@ -52,7 +52,7 @@ func (p *Parser) parseOnPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseWithinPredicate parses within:type, within:{object:type ...}, within:[[target]], or within:_
+// parseWithinPredicate parses within:{object:type ...}, within:[[target]], or within:_
 func (p *Parser) parseWithinPredicate(negated bool) (Predicate, error) {
 	// Check for self-reference _
 	if p.curr.Type == TokenUnderscore {

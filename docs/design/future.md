@@ -112,7 +112,6 @@ To place a type outside the objects root, use an absolute path (leading `/`):
 
 **Backward compatibility:**
 - If `directories` config is absent, behavior is unchanged (current flat structure)
-- Existing vaults can migrate using `rvn migrate directories`
 
 **Status**: ✅ Implemented.
 
@@ -215,7 +214,7 @@ The reverse operation—convert standalone object files back to inline traits.
 **Use case**: Over-structured. Every small task is a file. Want to simplify to inline `@todo` traits.
 
 ```bash
-rvn demote "object:task .status:done" --to-trait todo --delete-files
+rvn demote "object:task .status==done" --to-trait todo --delete-files
 
 # For each matching task object:
 # 1. Find all references [[tasks/review-pr]]
@@ -343,80 +342,6 @@ Agent:
 
 ---
 
-## Migrations
-
-The `rvn migrate` command provides subcommands for various vault restructuring operations. All migrations support `--dry-run` to preview changes before applying.
-
----
-
-### ~~Directory Migration~~ ✅ IMPLEMENTED
-
-Migrate an existing vault to use the new directory organization structure:
-
-```bash
-rvn migrate directories --dry-run  # Preview what would change
-rvn migrate directories            # Apply the migration
-```
-
-**What it does:**
-1. Reads the `directories` config from `raven.yaml`
-2. Moves files to their new locations:
-   - Typed objects → `objects/<type>/`
-   - Untyped pages → `pages/`
-   - Daily notes → `daily/` (unchanged)
-3. Object IDs remain the same (references don't need updating)
-4. Run `rvn reindex --full` after to rebuild the index
-
-**Example migration:**
-```
-Before:                          After:
-vault/                           vault/
-├── people/                      ├── objects/
-│   └── freya.md                 │   ├── people/
-├── projects/                    │   │   └── freya.md
-│   └── bifrost.md               │   └── projects/
-├── daily/                       │       └── bifrost.md
-├── random-note.md               ├── pages/
-└── raven.yaml                   │   └── random-note.md
-                                 ├── daily/
-                                 └── raven.yaml
-```
-
-**Reference behavior:**
-- References like `[[people/freya]]` remain unchanged (ID is preserved)
-- The physical path changes but the logical ID stays the same
-
-**Status**: ✅ Implemented.
-
----
-
-### Syntax Migration
-
-Automatically convert deprecated trait syntax:
-
-```bash
-rvn migrate syntax --dry-run  # Preview
-rvn migrate syntax            # Apply
-
-# Transforms:
-# @task(due=2025-02-01, priority=high) → @due(2025-02-01) @priority(high)
-# @remind(at=2025-02-01T09:00) → @remind(2025-02-01T09:00)
-```
-
-**Status**: Not implemented.
-
----
-
-### Future Migration Subcommands
-
-Other potential migrations that fit this pattern:
-
-- `rvn migrate type-rename <old> <new>` — rename a type across all files
-- `rvn migrate trait-rename <old> <new>` — rename a trait across all files
-- `rvn migrate field-rename <type> <old> <new>` — rename a field in frontmatter
-
----
-
 ## CLI Improvements
 
 ### Configurable Query Output Formatting
@@ -533,7 +458,7 @@ Extend the query language with projection:
 
 ```bash
 # Select specific fields
-rvn query "object:project .status:active SELECT name, status, lead, due"
+rvn query "object:project .status==active SELECT name, status, lead, due"
 
 # For traits, select from trait attributes
 rvn query "trait:due SELECT content, value AS due, parent.status"
@@ -714,9 +639,9 @@ SELECT * FROM objects WHERE id IN (SELECT id FROM reachable);
 ### ~~Date Range Queries~~ ✅ IMPLEMENTED
 Support relative date queries in filters:
 ```bash
-rvn query "trait:due value:this-week"
-rvn query "trait:due value:past"         # overdue items
-rvn query "trait:remind value:today"
+rvn query "trait:due value==this-week"
+rvn query "trait:due value==past"         # overdue items
+rvn query "trait:remind value==today"
 ```
 
 **Status**: ✅ Implemented with support for: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`, and specific `YYYY-MM-DD` dates.
@@ -1746,7 +1671,7 @@ Allow querying across all types when needed:
 
 ```bash
 # All objects with a due trait
-object:* has:due
+object:* has:{trait:due}
 
 # All objects referencing a person
 object:* refs:[[people/freya]]
@@ -1799,7 +1724,7 @@ pattern:task
 pattern:task on:{object:project}
 
 # Combined with value filters
-pattern:task value:past   # Overdue tasks
+pattern:task value==past   # Overdue tasks
 ```
 
 **Benefits:**
@@ -1835,7 +1760,7 @@ This already works today but:
 
 ### Query Semantics
 
-**Negation-as-failure vs. explicit negation**: `!has:due` matches objects with no indexed `@due` trait. If the index is stale, this may include false positives.
+**Negation-as-failure vs. explicit negation**: `!has:{trait:due}` matches objects with no indexed `@due` trait. If the index is stale, this may include false positives.
 
 - **Status**: Documented in consistency model. Users should run `rvn reindex` when needed.
 

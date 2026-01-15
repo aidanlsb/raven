@@ -194,7 +194,7 @@ context:
 
   # Run a query with field filter
   active_projects:
-    query: "object:project .status:active"
+    query: "object:project .status==active"
 
   # Find what references an object
   mentions:
@@ -466,11 +466,11 @@ workflows:
         description: Start of the week (Monday)
     context:
       completed:
-        query: "trait:todo value:done"
+        query: "trait:todo value==done"
       overdue:
-        query: "trait:due value:past"
+        query: "trait:due value==past"
       upcoming:
-        query: "trait:due value:this-week"
+        query: "trait:due value==this-week"
     prompt: |
       Generate my weekly review for the week of {{inputs.week_start}}.
 

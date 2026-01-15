@@ -17,8 +17,8 @@ func TestJoinQueryArgs(t *testing.T) {
 		},
 		{
 			name: "multiple args joined with space",
-			args: []string{"trait:due", "value:past"},
-			want: "trait:due value:past",
+			args: []string{"trait:due", "value==past"},
+			want: "trait:due value==past",
 		},
 		{
 			name: "content with shell-stripped quotes gets re-quoted",
@@ -42,8 +42,8 @@ func TestJoinQueryArgs(t *testing.T) {
 		},
 		{
 			name: "mixed predicates",
-			args: []string{"trait:due", "content:my task", "value:past"},
-			want: `trait:due content:"my task" value:past`,
+			args: []string{"trait:due", "content:my task", "value==past"},
+			want: `trait:due content:"my task" value==past`,
 		},
 	}
 

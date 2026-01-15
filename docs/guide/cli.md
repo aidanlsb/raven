@@ -35,7 +35,7 @@ rvn daily --edit
 rvn date today
 
 # Check overdue items
-rvn query "trait:due value:past"
+rvn query "trait:due value==past"
 ```
 
 ### Throughout the Day
@@ -117,13 +117,13 @@ Find objects of a specific type:
 rvn query "object:project"
 
 # Active projects
-rvn query "object:project .status:active"
+rvn query "object:project .status==active"
 
 # People with email
-rvn query "object:person .email:*"
+rvn query "object:person .email==*"
 
 # Projects without a status
-rvn query "object:project !.status:*"
+rvn query "object:project !.status==*"
 ```
 
 ### Trait Queries
@@ -135,13 +135,13 @@ Find trait annotations:
 rvn query "trait:due"
 
 # Overdue items
-rvn query "trait:due value:past"
+rvn query "trait:due value==past"
 
 # Due this week
-rvn query "trait:due value:this-week"
+rvn query "trait:due value==this-week"
 
 # Highlights in books
-rvn query "trait:highlight on:book"
+rvn query "trait:highlight on:{object:book}"
 ```
 
 ### Relationship Queries
@@ -151,10 +151,10 @@ rvn query "trait:highlight on:book"
 rvn query "object:meeting refs:[[people/freya]]"
 
 # Meetings in daily notes
-rvn query "object:meeting parent:date"
+rvn query "object:meeting parent:{object:date}"
 
 # Projects with any todos (including nested)
-rvn query "object:project contains:todo"
+rvn query "object:project contains:{trait:todo}"
 
 # Traits anywhere inside a specific project
 rvn query "trait:due within:[[projects/website]]"
@@ -177,7 +177,7 @@ Create shortcuts for queries you run often:
 
 ```bash
 # Add a saved query
-rvn query add overdue "trait:due value:past" --description "Overdue items"
+rvn query add overdue "trait:due value==past" --description "Overdue items"
 rvn query add tasks "trait:todo" --description "All tasks"
 
 # Run saved queries by name
@@ -201,26 +201,26 @@ All bulk operations preview by default. Add `--confirm` to apply.
 
 ```bash
 # Preview setting status on overdue items
-rvn query "trait:due value:past" --apply "set status=overdue"
+rvn query "trait:due value==past" --apply "set status=overdue"
 
 # Apply after reviewing
-rvn query "trait:due value:past" --apply "set status=overdue" --confirm
+rvn query "trait:due value==past" --apply "set status=overdue" --confirm
 ```
 
 ### Common Bulk Operations
 
 ```bash
 # Set a field on query results
-rvn query "object:project .status:active" --apply "set reviewed=true" --confirm
+rvn query "object:project .status==active" --apply "set reviewed=true" --confirm
 
 # Add text to matching files
-rvn query "object:project .status:active" --apply "add @reviewed(2025-02-01)" --confirm
+rvn query "object:project .status==active" --apply "add @reviewed(2025-02-01)" --confirm
 
 # Move to directory
-rvn query "object:project .status:archived" --apply "move archive/projects/" --confirm
+rvn query "object:project .status==archived" --apply "move archive/projects/" --confirm
 
 # Delete (moves to .trash/)
-rvn query "object:project .status:archived" --apply "delete" --confirm
+rvn query "object:project .status==archived" --apply "delete" --confirm
 ```
 
 ### Piping Workflow
@@ -229,10 +229,10 @@ For complex operations, pipe IDs between commands:
 
 ```bash
 # Get IDs for piping
-rvn query "object:project .status:active" --ids
+rvn query "object:project .status==active" --ids
 
 # Pipe to set
-rvn query "object:project .status:active" --ids | rvn set --stdin priority=high --confirm
+rvn query "object:project .status==active" --ids | rvn set --stdin priority=high --confirm
 ```
 
 ---
