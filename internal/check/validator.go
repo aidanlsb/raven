@@ -210,6 +210,22 @@ func (v *Validator) SetDirectoryRoots(objectsRoot, pagesRoot string) {
 	v.pagesRoot = paths.NormalizeDirRoot(pagesRoot)
 }
 
+// SetDailyDirectory updates the resolver's daily directory.
+func (v *Validator) SetDailyDirectory(dailyDir string) {
+	if dailyDir == "" {
+		dailyDir = "daily"
+	}
+	v.resolver = resolver.NewWithAliases(v.allIDList(), v.aliases, dailyDir)
+}
+
+func (v *Validator) allIDList() []string {
+	ids := make([]string, 0, len(v.allIDs))
+	for id := range v.allIDs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // displayID returns an object ID suitable for display (with directory prefix stripped).
 func (v *Validator) displayID(id string) string {
 	if v.objectsRoot != "" && strings.HasPrefix(id, v.objectsRoot) {
@@ -541,14 +557,16 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 	result := v.resolver.Resolve(ref.TargetRaw)
 
 	if result.Ambiguous {
+		message := formatAmbiguousRefMessage(ref.TargetRaw, result, v.displayID)
+		fixHint := formatAmbiguousRefFixHint(result, v.displayID)
 		issues = append(issues, Issue{
 			Level:    LevelError,
 			Type:     IssueAmbiguousReference,
 			FilePath: filePath,
 			Line:     ref.Line,
-			Message:  fmt.Sprintf("Reference [[%s]] is ambiguous (matches: %v)", ref.TargetRaw, result.Matches),
+			Message:  message,
 			Value:    ref.TargetRaw,
-			FixHint:  "Use a more specific path to disambiguate",
+			FixHint:  fixHint,
 		})
 	} else if result.TargetID == "" {
 		// Determine the fix command based on type inference
@@ -619,6 +637,62 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 	}
 
 	return issues
+}
+
+func formatAmbiguousRefMessage(raw string, result resolver.ResolveResult, displayID func(string) string) string {
+	if len(result.Matches) == 0 {
+		return fmt.Sprintf("Reference [[%s]] is ambiguous", raw)
+	}
+
+	matchDetails := make([]string, 0, len(result.Matches))
+	for _, match := range result.Matches {
+		source := result.MatchSources[match]
+		label := labelForMatchSource(source)
+		matchDetails = append(matchDetails, fmt.Sprintf("%s → %s", label, displayID(match)))
+	}
+
+	return fmt.Sprintf("Reference [[%s]] is ambiguous: %s", raw, strings.Join(matchDetails, "; "))
+}
+
+func formatAmbiguousRefFixHint(result resolver.ResolveResult, displayID func(string) string) string {
+	if len(result.Matches) == 0 {
+		return "Use a more specific path to disambiguate"
+	}
+
+	example := displayID(result.Matches[0])
+	hint := fmt.Sprintf("Use a more specific path (e.g., [[%s]])", example)
+	if hasSource(result.MatchSources, "alias") || hasSource(result.MatchSources, "short_name") || hasSource(result.MatchSources, "name_field") {
+		hint += " or rename the conflicting alias/short name"
+	}
+	return hint
+}
+
+func labelForMatchSource(source string) string {
+	switch source {
+	case "alias":
+		return "alias"
+	case "name_field":
+		return "name field"
+	case "object_id":
+		return "object id"
+	case "short_name":
+		return "short name"
+	case "suffix_match":
+		return "suffix match"
+	case "date":
+		return "date"
+	default:
+		return "match"
+	}
+}
+
+func hasSource(matchSources map[string]string, source string) bool {
+	for _, s := range matchSources {
+		if s == source {
+			return true
+		}
+	}
+	return false
 }
 
 // trackMissingRef records a missing reference with type inference.

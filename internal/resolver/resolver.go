@@ -128,6 +128,9 @@ type ResolveResult struct {
 	// Matches contains all matching IDs (for ambiguous refs).
 	Matches []string
 
+	// MatchSources maps matched IDs to their match source.
+	MatchSources map[string]string
+
 	// Error message if resolution failed.
 	Error string
 }
@@ -193,7 +196,8 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 		// Don't treat as ambiguous with aliases since dates are a distinct concept
 		if len(matches) == 0 {
 			return ResolveResult{
-				TargetID: dateID,
+				TargetID:     dateID,
+				MatchSources: map[string]string{dateID: "date"},
 			}
 		}
 		// If there's an alias that matches a date pattern, that's ambiguous
@@ -283,6 +287,8 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 		matches = preferParentOverSections(matches)
 	}
 
+	matchSources = filterMatchSources(matchSources, matches)
+
 	// Return result based on number of unique matches
 	switch len(matches) {
 	case 0:
@@ -290,14 +296,31 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 			Error: "reference not found",
 		}
 	case 1:
-		return ResolveResult{TargetID: matches[0]}
+		return ResolveResult{
+			TargetID:     matches[0],
+			MatchSources: matchSources,
+		}
 	default:
 		return ResolveResult{
-			Ambiguous: true,
-			Matches:   matches,
-			Error:     "ambiguous reference, multiple matches found",
+			Ambiguous:    true,
+			Matches:      matches,
+			MatchSources: matchSources,
+			Error:        "ambiguous reference, multiple matches found",
 		}
 	}
+}
+
+func filterMatchSources(matchSources map[string]string, matches []string) map[string]string {
+	if matchSources == nil || len(matches) == 0 {
+		return nil
+	}
+	filtered := make(map[string]string, len(matches))
+	for _, match := range matches {
+		if source, ok := matchSources[match]; ok {
+			filtered[match] = source
+		}
+	}
+	return filtered
 }
 
 // preferParentOverSections filters out section matches when their parent file

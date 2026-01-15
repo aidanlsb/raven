@@ -156,6 +156,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
 	defer db.Close()
+	db.SetDailyDirectory(vaultCfg.DailyDirectory)
 
 	// Create destination directory
 	fullDestDir := filepath.Join(vaultPath, destDir)
@@ -436,6 +437,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		db, err := index.Open(vaultPath)
 		if err == nil {
 			defer db.Close()
+			db.SetDailyDirectory(vaultCfg.DailyDirectory)
 			sourceID := vaultCfg.FilePathToObjectID(source)
 			backlinks, _ := db.Backlinks(sourceID)
 
@@ -490,6 +492,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		})
 	} else {
 		defer db.Close()
+		db.SetDailyDirectory(vaultCfg.DailyDirectory)
 
 		// Remove old entry
 		sourceID := vaultCfg.FilePathToObjectID(source)

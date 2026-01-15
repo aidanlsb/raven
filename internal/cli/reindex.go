@@ -83,6 +83,14 @@ Examples:
 
 		// Load vault config for directory roots
 		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		if vaultCfg == nil {
+			vaultCfg = &config.VaultConfig{}
+		}
+		db.SetDailyDirectory(vaultCfg.DailyDirectory)
+		dailyDir := vaultCfg.DailyDirectory
+		if dailyDir == "" {
+			dailyDir = "daily"
+		}
 
 		// Build parse options from vault config
 		var parseOpts *parser.ParseOptions
@@ -209,11 +217,6 @@ Examples:
 		// Resolve references after all files are indexed
 		var refResult *index.ReferenceResolutionResult
 		if !dryRun && fileCount > 0 {
-			dailyDir := vaultCfg.DailyDirectory
-			if dailyDir == "" {
-				dailyDir = "daily"
-			}
-
 			refResult, err = db.ResolveReferences(dailyDir)
 			if err != nil && !jsonOutput {
 				fmt.Fprintf(os.Stderr, "Warning: failed to resolve references: %v\n", err)

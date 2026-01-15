@@ -22,7 +22,9 @@ import (
 
 // Database is the SQLite database handle.
 type Database struct {
-	db *sql.DB
+	db              *sql.DB
+	dailyDirectory  string
+	autoResolveRefs bool
 }
 
 var (
@@ -50,7 +52,7 @@ func Open(vaultPath string) (*Database, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	d := &Database{db: db}
+	d := &Database{db: db, dailyDirectory: "daily", autoResolveRefs: true}
 	if err := d.initialize(); err != nil {
 		db.Close()
 		return nil, err
@@ -213,7 +215,7 @@ func OpenInMemory() (*Database, error) {
 		return nil, err
 	}
 
-	d := &Database{db: db}
+	d := &Database{db: db, dailyDirectory: "daily", autoResolveRefs: true}
 	if err := d.initialize(); err != nil {
 		db.Close()
 		return nil, err
@@ -225,6 +227,20 @@ func OpenInMemory() (*Database, error) {
 // Close closes the database.
 func (d *Database) Close() error {
 	return d.db.Close()
+}
+
+// SetDailyDirectory configures the daily notes directory for reference resolution.
+func (d *Database) SetDailyDirectory(dailyDir string) {
+	if dailyDir == "" {
+		d.dailyDirectory = "daily"
+		return
+	}
+	d.dailyDirectory = dailyDir
+}
+
+// SetAutoResolveRefs toggles resolve-on-write behavior.
+func (d *Database) SetAutoResolveRefs(enabled bool) {
+	d.autoResolveRefs = enabled
 }
 
 // Analyze runs SQLite's ANALYZE command to update query planner statistics.
@@ -597,7 +613,17 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if d.autoResolveRefs && d.dailyDirectory != "" {
+		if _, err := d.ResolveReferencesForFile(doc.FilePath, d.dailyDirectory); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // extractDateString extracts a date string from a field value if it's a date type.

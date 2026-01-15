@@ -243,6 +243,10 @@ var checkCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
+		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+		if vaultCfg == nil {
+			vaultCfg = &config.VaultConfig{}
+		}
 
 		var errorCount, warningCount, fileCount int
 		var allDocs []*parser.ParsedDocument
@@ -366,9 +370,10 @@ var checkCmd = &cobra.Command{
 		validator.SetDuplicateAliases(duplicateAliases)
 
 		// Set directory roots for cleaner path suggestions (e.g., [[people/freya]] instead of [[objects/people/freya]])
-		if vaultCfg, _ := config.LoadVaultConfig(vaultPath); vaultCfg.HasDirectoriesConfig() {
+		if vaultCfg.HasDirectoriesConfig() {
 			validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 		}
+		validator.SetDailyDirectory(vaultCfg.DailyDirectory)
 
 		for _, doc := range allDocs {
 			issues := validator.ValidateDocument(doc)
