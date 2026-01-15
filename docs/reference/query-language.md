@@ -263,12 +263,35 @@ Filter by trait value.
 
 For string matching on values, use `includes()`, `startswith()`, `endswith()`, or `matches()`.
 
+#### String Matching on Trait Values
+
+String matching in trait queries uses `.value` as the first argument:
+
+| Function | Meaning |
+|----------|---------|
+| `includes(.value, "str")` | Value contains substring |
+| `startswith(.value, "str")` | Value starts with |
+| `endswith(.value, "str")` | Value ends with |
+| `matches(.value, "pattern")` | Value matches regex |
+
+All string functions are **case-insensitive by default**. Add `true` as third argument for case-sensitive:
+```
+includes(.value, "API", true)
+```
+
+Use raw strings (`r"..."`) for regex patterns to avoid escaping:
+```
+matches(.value, r"^TODO.*$")
+```
+
 **Examples:**
 ```
 trait:due value==past
 trait:due !value==past
 trait:due value<2025-01-01
 trait:status includes(.value, "progress")
+trait:tag startswith(.value, "feat-")
+trait:note matches(.value, r"^TODO.*$")
 ```
 
 ### Object Association (`on:`, `within:`)
@@ -379,6 +402,8 @@ The pipeline operator separates selection (predicates) from post-processing.
 | `count(refd(_))` | Count incoming references |
 | `count(ancestors(_))` | Count ancestors |
 | `count(descendants(_))` | Count descendants |
+| `count(parent(_))` | Count parent (0 or 1) |
+| `count(child(_))` | Count direct children |
 | `min({trait:...})` | Minimum trait value |
 | `max({trait:...})` | Maximum trait value |
 | `min(.field, {object:...})` | Minimum field value on objects |

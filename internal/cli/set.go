@@ -43,8 +43,8 @@ Examples:
   rvn set projects/website --json
 
 Bulk examples:
-  rvn query "object:project .status:active" --ids | rvn set --stdin status=archived
-  rvn query "trait:due value:past" --ids | rvn set --stdin status=overdue --confirm`,
+  rvn query "object:project .status==active" --ids | rvn set --stdin status=archived
+  rvn query "trait:due value==past" --ids | rvn set --stdin status=overdue --confirm`,
 	Args: cobra.ArbitraryArgs,
 	RunE: runSet,
 }

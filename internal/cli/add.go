@@ -49,8 +49,8 @@ Examples:
   rvn add "Met with [[people/freya]]" --json
 
 Bulk examples:
-  rvn query "object:project .status:active" --ids | rvn add --stdin "Review scheduled for Q2"
-  rvn query "object:project .status:active" --ids | rvn add --stdin "@reviewed(2026-01-07)" --confirm
+  rvn query "object:project .status==active" --ids | rvn add --stdin "Review scheduled for Q2"
+  rvn query "object:project .status==active" --ids | rvn add --stdin "@reviewed(2026-01-07)" --confirm
 
 Configuration (raven.yaml):
   capture:

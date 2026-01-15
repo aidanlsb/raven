@@ -104,51 +104,44 @@ trait:<name> [predicates...]
 ### All Predicates
 
 **For object queries:**
-- `.field:value` — Field equals value (`.status:active`, `.priority:high`)
-- `.field:"value with spaces"` — Quoted value for spaces/special chars
-- `.field:<value` — Field less than value (`.priority:<5`)
-- `.field:>value` — Field greater than value (`.count:>10`)
-- `.field:<=value` — Field less than or equal to value
-- `.field:>=value` — Field greater than or equal to value
-- `.field:*` — Field exists (has any value)
-- `!.field:value` — Field does NOT equal value
-- `!.field:*` — Field does NOT exist
-- `has:trait` — Has trait directly on object (`has:due`, `has:priority`)
-- `has:{trait:X ...}` — Has trait matching sub-query (`has:{trait:due value:past}`)
-- `contains:trait` — Has trait anywhere in subtree (self or nested sections)
+- `.field==value` — Field equals value (`.status==active`, `.priority==high`)
+- `.field=="value with spaces"` — Quoted value for spaces/special chars
+- `.field<value` — Field less than value (`.priority<5`)
+- `.field>value` — Field greater than value (`.count>10`)
+- `.field<=value` — Field less than or equal to value
+- `.field>=value` — Field greater than or equal to value
+- `.field==*` — Field exists (has any value)
+- `!.field==value` — Field does NOT equal value
+- `!.field==*` — Field does NOT exist
+- `has:{trait:X ...}` — Has trait matching sub-query (`has:{trait:due value==past}`)
 - `contains:{trait:X ...}` — Has matching trait anywhere in subtree
 - `refs:[[target]]` — References specific target (`refs:[[people/freya]]`)
 - `refs:{object:X ...}` — References objects matching sub-query
 - `refd:[[source]]` — Referenced by specific source (inverse of `refs:`)
 - `refd:{object:X ...}` — Referenced by objects matching sub-query
-- `parent:type` — Direct parent is type (`parent:date` for meetings in daily notes)
 - `parent:{object:X ...}` — Direct parent matches sub-query
 - `parent:[[target]]` — Direct parent is specific object
-- `ancestor:type` — Any ancestor is type
 - `ancestor:{object:X ...}` — Any ancestor matches sub-query
 - `ancestor:[[target]]` — Specific object is an ancestor
-- `child:type` — Has direct child of type
 - `child:{object:X ...}` — Has direct child matching sub-query
-- `descendant:type` — Has descendant of type at any depth
+- `child:[[target]]` — Has direct child that is a specific object
 - `descendant:{object:X ...}` — Has descendant matching sub-query
+- `descendant:[[target]]` — Has descendant that is a specific object
 - `content:"term"` — Full-text search on object content
 
 **For trait queries:**
-- `value:X` — Trait value equals X (`value:past`, `value:high`, `value:todo`)
-- `value:<X` — Trait value less than X (`value:<2025-01-01`)
-- `value:>X` — Trait value greater than X (`value:>5`)
-- `value:<=X` — Trait value less than or equal to X
-- `value:>=X` — Trait value greater than or equal to X
-- `!value:X` — Trait value does NOT equal X
-- `on:type` — Trait's direct parent object is type (`on:meeting`, `on:book`)
+- `value==X` — Trait value equals X (`value==past`, `value==high`, `value==todo`)
+- `value<X` — Trait value less than X (`value<2025-01-01`)
+- `value>X` — Trait value greater than X (`value>5`)
+- `value<=X` — Trait value less than or equal to X
+- `value>=X` — Trait value greater than or equal to X
+- `!value==X` — Trait value does NOT equal X
 - `on:{object:X ...}` — Direct parent matches sub-query
 - `on:[[target]]` — Direct parent is specific object
-- `within:type` — Trait is inside an object of type (any ancestor)
 - `within:{object:X ...}` — Inside object matching sub-query
 - `within:[[target]]` — Inside specific object
 - `refs:[[target]]` — Trait's line references target
 - `refs:{object:X ...}` — Trait's line references matching objects
-- `at:trait` — Co-located with another trait (same line)
 - `at:{trait:X ...}` — Co-located with trait matching sub-query
 - `content:"term"` — Trait's line contains term
 
@@ -159,39 +152,27 @@ trait:<name> [predicates...]
 - `(...)` = grouping
 
 **Special date values for `trait:due`:**
-- `value:past` — Before today
-- `value:today` — Today
-- `value:tomorrow` — Tomorrow
-- `value:this-week` — This week
-- `value:next-week` — Next week
+- `value==past` — Before today
+- `value==today` — Today
+- `value==tomorrow` — Tomorrow
+- `value==this-week` — This week
+- `value==next-week` — Next week
 
-**Sorting and Grouping:**
+**Sorting and Limiting:**
 
-Queries can include `sort:` and `group:` clauses to control result ordering and grouping.
+Use pipeline stages for sorting and limiting results.
 
-- `sort:_.value` — Sort by trait's value
-- `sort:_.fieldname` — Sort by object's field
-- `sort:_.parent` — Sort by parent object ID
-- `sort:_.parent.fieldname` — Sort by field on parent
-- `sort:{trait:X}` — Sort by related trait's value
-- `sort:min:{trait:X}` — Sort by minimum value (for multiple matches)
-- `sort:max:{trait:X}` — Sort by maximum value
-- `sort:_.value:desc` — Sort descending
-- `group:_.parent` — Group by parent object
-- `group:_.refs:type` — Group by referenced object of type
+- `|> sort(.value, asc|desc)` — Sort by trait value
+- `|> sort(.field, asc|desc)` — Sort by object field
+- `|> limit(N)` — Return at most N results
 
-**Limiting results:**
-- `limit:N` — Return at most N results
-
-**Examples with sort/group/limit:**
+**Examples with sort/limit:**
 ```
-trait:todo sort:_.value                     # Sort todos by their value
-trait:due sort:_.value:desc                 # Sort due dates descending
-object:project sort:_.status                # Sort projects by status
-trait:todo group:_.parent                   # Group todos by parent object
-trait:todo group:_.refs:project sort:{trait:due}  # Group by project, sort by due
-trait:due limit:10                          # Get at most 10 due items
-object:project .status:active limit:5       # Get 5 active projects
+trait:todo |> sort(.value, asc)             # Sort todos by their value
+trait:due |> sort(.value, desc)             # Sort due dates descending
+object:project |> sort(.status, asc)        # Sort projects by status
+trait:due |> limit(10)                      # Get at most 10 due items
+object:project .status==active |> limit(5)  # Get 5 active projects
 ```
 
 ### Query Composition: Translating Requests to Queries
@@ -199,8 +180,8 @@ object:project .status:active limit:5       # Get 5 active projects
 When a user asks a question, decompose it into query components:
 
 1. **What am I looking for?** → `trait:X` or `object:X`
-2. **What value/state?** → `value:X` or `.field:X`
-3. **Where is it located?** → `within:X`, `on:X`, `parent:X`, `ancestor:X`
+2. **What value/state?** → `value==X` or `.field==X`
+3. **Where is it located?** → `within:{object:X}`, `on:{object:X}`, `parent:{object:X}`, `ancestor:{object:X}`
 4. **What does it reference?** → `refs:[[X]]` or `refs:{object:X ...}`
 
 **Example decomposition:**
@@ -208,11 +189,11 @@ When a user asks a question, decompose it into query components:
 User: "Find open todos from meetings about the growth project"
 
 1. What? → `trait:todo` (looking for todo traits)
-2. What value? → `value:todo` (open/incomplete)
-3. Where? → `within:meeting` (inside meeting objects)
+2. What value? → `value==todo` (open/incomplete)
+3. Where? → `within:{object:meeting}` (inside meeting objects)
 4. References? → `refs:[[projects/growth]]` (mentions the project)
 
-Query: `trait:todo value:todo within:meeting refs:[[projects/growth]]`
+Query: `trait:todo value==todo within:{object:meeting} refs:[[projects/growth]]`
 
 ### Compound Queries vs. Multiple Queries
 
@@ -240,22 +221,22 @@ Run the most likely interpretation first. If results seem incomplete, try variat
 
 ```
 # Overdue items assigned to a person
-trait:due value:past refs:[[people/freya]]
+trait:due value==past refs:[[people/freya]]
 
 # Highlights from books currently being read
-trait:highlight on:{object:book .status:reading}
+trait:highlight on:{object:book .status==reading}
 
 # Todos in meetings that reference active projects
-trait:todo within:meeting refs:{object:project .status:active}
+trait:todo within:{object:meeting} refs:{object:project .status==active}
 
 # Meetings in daily notes that mention a specific person
-object:meeting parent:date refs:[[people/thor]]
+object:meeting parent:{object:date} refs:[[people/thor]]
 
 # Projects that have any incomplete todos (anywhere in document)
-object:project contains:{trait:todo value:todo}
+object:project contains:{trait:todo value==todo}
 
 # Tasks due this week on active projects
-trait:due value:this-week within:{object:project .status:active}
+trait:due value==this-week within:{object:project .status==active}
 
 # Items referencing either of two people
 trait:due (refs:[[people/freya]] | refs:[[people/thor]])
@@ -264,10 +245,10 @@ trait:due (refs:[[people/freya]] | refs:[[people/thor]])
 object:section ancestor:[[projects/website]]
 
 # Meetings without any due items
-object:meeting !has:due
+object:meeting !has:{trait:due}
 
 # Active projects that reference a specific company
-object:project .status:active refs:[[companies/acme]]
+object:project .status==active refs:[[companies/acme]]
 ```
 
 ### Query vs. Search: When to Use Which
@@ -485,10 +466,10 @@ When users want to update many objects at once:
 1. Use `raven_query` with `--apply` to update query results in bulk:
    ```
    # Preview changes (default — changes NOT applied)
-   raven_query(query_string="trait:due value:past", apply="set status=overdue")
+   raven_query(query_string="trait:due value==past", apply="set status=overdue")
    
    # Apply changes after user confirmation
-   raven_query(query_string="trait:due value:past", apply="set status=overdue", confirm=true)
+   raven_query(query_string="trait:due value==past", apply="set status=overdue", confirm=true)
    ```
 
 2. Supported bulk operations:
@@ -499,7 +480,7 @@ When users want to update many objects at once:
 
 3. Alternative: Use `--ids` to get IDs for piping:
    ```
-   raven_query(query_string="object:project .status:archived", ids=true)
+   raven_query(query_string="object:project .status==archived", ids=true)
    # Returns just the IDs, one per line
    ```
 
@@ -611,7 +592,7 @@ Help users create reusable queries:
 
 1. Add a saved query:
    ```
-   raven_query_add(name="urgent", query_string="trait:due value:this-week|past", 
+   raven_query_add(name="urgent", query_string="trait:due value==this-week|past", 
                    description="Due soon or overdue")
    ```
 
@@ -750,7 +731,7 @@ Workflows are reusable prompt templates. **Proactively check for workflows** whe
      person:
        read: "{{inputs.person_id}}"     # Input substituted BEFORE read
      tasks:
-       query: "object:task .owner:{{inputs.person_id}}"  # Also substituted
+      query: "object:task .owner=={{inputs.person_id}}"  # Also substituted
    ```
 3. **Prompt** is rendered with both `{{inputs.X}}` and `{{context.X}}` substituted
 4. **Result** contains the rendered prompt + raw context data
@@ -968,20 +949,20 @@ raven_check(errors_only=true)
 
 **User**: "Find open todos from my experiment meetings"
 ```
-→ Compose query: trait:todo value:todo within:meeting refs:[[projects/experiments]]
-→ If unclear which project, also try: trait:todo value:todo within:meeting content:"experiment"
+→ Compose query: trait:todo value==todo within:{object:meeting} refs:[[projects/experiments]]
+→ If unclear which project, also try: trait:todo value==todo within:{object:meeting} content:"experiment"
 → Consolidate and present results
 ```
 
 **User**: "What do I have due this week?"
 ```
-→ raven_query(query_string="trait:due value:this-week")
+→ raven_query(query_string="trait:due value==this-week")
 → Summarize results for user
 ```
 
 **User**: "Show me highlights from the books I'm reading"
 ```
-→ raven_query(query_string="trait:highlight on:{object:book .status:reading}")
+→ raven_query(query_string="trait:highlight on:{object:book .status==reading}")
 → If no results, check: raven_schema(subcommand="type book") to verify status field exists
 ```
 
@@ -1105,13 +1086,13 @@ raven_check(errors_only=true)
 
 **User**: "Overdue items assigned to Freya"
 ```
-→ trait:due value:past refs:[[people/freya]]
+→ trait:due value==past refs:[[people/freya]]
 ```
 
 **User**: "Show my todos sorted by due date"
 ```
-→ trait:todo sort:{trait:due}
-→ Or sort by value: trait:todo sort:_.value
+→ trait:todo |> due = min({trait:due at:_}) sort(due, asc)
+→ Or sort by value: trait:todo |> sort(.value, asc)
 ```
 
 **User**: "Which projects are mentioned in meetings?"
@@ -1122,18 +1103,18 @@ raven_check(errors_only=true)
 
 **User**: "Find high-priority items that are also due soon"
 ```
-→ trait:due at:{trait:priority value:high}
+→ trait:due at:{trait:priority value==high}
 → Uses at: to find traits co-located on the same line
 ```
 
 **User**: "Group my todos by project"
 ```
-→ trait:todo group:_.refs:project
-→ Groups todos by which project they reference
+→ object:project |> todos = count({trait:todo refs:_}) sort(todos, desc)
+→ Counts todos per project and sorts by most todos
 ```
 
 **User**: "Sort projects by their earliest due date"
 ```
-→ object:project sort:min:{trait:due}
-→ Uses min: aggregation to find the earliest due date on each project
+→ object:project |> earliest_due = min({trait:due within:_}) sort(earliest_due, asc)
+→ Uses min aggregation to find the earliest due date on each project
 ```

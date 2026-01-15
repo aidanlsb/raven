@@ -110,10 +110,10 @@ Comprehensive security review of Midgard's infrastructure.
 
 ```bash
 # High-priority tasks for Midgard 
-rvn query "trait:priority value:high refs:[[clients/midgard]]"
+rvn query "trait:priority value==high refs:[[clients/midgard]]"
 
 # All meetings with Freya that had a highlight
-rvn query "object:meeting .attendees:[[Freya]] has:{trait:highlight}"
+rvn query "object:meeting .attendees==[[Freya]] has:{trait:highlight}"
 ```
 
 ### 4. Use AI to manage your vault

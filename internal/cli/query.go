@@ -142,19 +142,19 @@ Query types:
   trait:<name> [predicates]    Query traits by name
 
 Predicates for object queries:
-  .field:value     Field equals value
-  .field:*         Field exists
-  !.field:value    Field does not equal value
-  has:trait        Has a trait
-  parent:type      Direct parent is type
-  ancestor:type    Any ancestor is type
-  child:type       Has child of type
+  .field==value    Field equals value
+  .field==*        Field exists
+  !.field==value   Field does not equal value
+  has:{trait:...}  Has a trait matching subquery
+  parent:{object:...}   Direct parent matches subquery
+  ancestor:{object:...} Any ancestor matches subquery
+  child:{object:...}    Has child matching subquery
 
 Predicates for trait queries:
-  value:val        Trait value equals val
+  value==val       Trait value equals val
   source:inline    Only inline traits
-  on:type          Direct parent object is type
-  within:type      Any ancestor object is type
+  on:{object:...}      Direct parent matches subquery
+  within:{object:...}  Any ancestor matches subquery
 
 Boolean operators:
   !pred            NOT
@@ -162,15 +162,15 @@ Boolean operators:
   pred1 | pred2    OR
 
 Subqueries use curly braces:
-  has:{trait:due value:past}
-  on:{object:project .status:active}
+  has:{trait:due value==past}
+  on:{object:project .status==active}
 
 Examples:
-  rvn query "object:project .status:active"
-  rvn query "object:meeting has:due"
-  rvn query "trait:due value:past"
+  rvn query "object:project .status==active"
+  rvn query "object:meeting has:{trait:due}"
+  rvn query "trait:due value==past"
   rvn query trait:todo content:"my task"
-  rvn query "trait:highlight on:{object:book .status:reading}"
+  rvn query "trait:highlight on:{object:book .status==reading}"
   rvn query tasks                    # Run saved query
   rvn query --list                   # List saved queries`,
 	Args: cobra.ArbitraryArgs,
@@ -660,9 +660,9 @@ The query string uses the Raven query language (same as 'rvn query "..."').
 
 Examples:
   rvn query add tasks "trait:due"
-  rvn query add overdue "trait:due value:past"
-  rvn query add active-projects "object:project .status:active"
-  rvn query add urgent "trait:due value:this-week|past" --description "Due soon or overdue"`,
+  rvn query add overdue "trait:due value==past"
+  rvn query add active-projects "object:project .status==active"
+  rvn query add urgent "trait:due value==this-week|past" --description "Due soon or overdue"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()

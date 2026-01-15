@@ -79,9 +79,9 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 		},
 		{
 			toolName: "raven_query",
-			args:     map[string]interface{}{"query_string": "trait:due value:today"},
+			args:     map[string]interface{}{"query_string": "trait:due value==today"},
 			wantCmd:  "query",
-			wantArgs: []string{"trait:due value:today", "--json"},
+			wantArgs: []string{"trait:due value==today", "--json"},
 		},
 		{
 			toolName: "raven_new",

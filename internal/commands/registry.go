@@ -217,21 +217,21 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 
 Query syntax:
 - Object queries: object:<type> [predicates...]
-  Examples: object:project .status:active, object:meeting refs:[[people/freya]]
+  Examples: object:project .status==active, object:meeting refs:[[people/freya]]
 - Trait queries: trait:<name> [predicates...]
-  Examples: trait:due value:past, trait:highlight on:book
+  Examples: trait:due value==past, trait:highlight on:{object:book}
 
 Common predicates:
-- .field:value — Filter by field (.status:active, .priority:high)
-- has:trait — Has trait directly (has:due, has:priority)
+- .field==value — Filter by field (.status==active, .priority==high)
+- has:{trait:...} — Has trait matching subquery
 - refs:[[target]] — References target (refs:[[people/freya]])
-- refs:{object:type} — References objects matching subquery (refs:{object:project .status:active})
-- within:type — Trait is inside object type (within:meeting)
-- value:X — Trait value equals X (value:past, value:high)
+- refs:{object:type} — References objects matching subquery (refs:{object:project .status==active})
+- within:{object:type} — Trait is inside object type (within:{object:meeting})
+- value==X — Trait value equals X (value==past, value==high)
 - content:"text" — Full-text search within content (content:"meeting notes")
 
 Special date values for trait:due:
-- value:past, value:today, value:tomorrow, value:this-week, value:next-week
+- value==past, value==today, value==tomorrow, value==this-week, value==next-week
 
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --apply to run a bulk operation directly on query results.
@@ -240,7 +240,7 @@ For bulk operations:
 - Returns preview by default. Changes are NOT applied unless confirm=true.
 - Supported commands: set, delete, add, move`,
 		Args: []ArgMeta{
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status:active' or saved query name)", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name)", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
@@ -250,12 +250,12 @@ For bulk operations:
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn query 'object:project .status:active' --json",
-			"rvn query 'object:meeting has:due' --json",
-			"rvn query 'trait:due value:past' --json",
-			"rvn query 'trait:due value:past' --ids",
-			"rvn query 'trait:due value:past' --apply 'set status=overdue' --json",
-			"rvn query 'trait:due value:past' --apply 'set status=overdue' --confirm --json",
+			"rvn query 'object:project .status==active' --json",
+			"rvn query 'object:meeting has:{trait:due}' --json",
+			"rvn query 'trait:due value==past' --json",
+			"rvn query 'trait:due value==past' --ids",
+			"rvn query 'trait:due value==past' --apply 'set status=overdue' --json",
+			"rvn query 'trait:due value==past' --apply 'set status=overdue' --confirm --json",
 			"rvn query tasks --json",
 			"rvn query --list --json",
 		},
@@ -271,15 +271,15 @@ For bulk operations:
 		Description: "Add a saved query to raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name for the new query", Required: true},
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status:active' or 'trait:due value:past')", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or 'trait:due value==past')", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn query add tasks 'trait:due' --json",
-			"rvn query add overdue 'trait:due value:past' --json",
-			"rvn query add active-projects 'object:project .status:active' --json",
+			"rvn query add overdue 'trait:due value==past' --json",
+			"rvn query add active-projects 'object:project .status==active' --json",
 		},
 	},
 	"query_remove": {

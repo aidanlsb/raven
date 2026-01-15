@@ -34,10 +34,10 @@ rvn query "<query>" --apply "<command> [args...]" [--confirm]
 
 ```bash
 # Preview (default) - shows what would change
-rvn query "trait:due value:past" --apply "set status=overdue"
+rvn query "trait:due value==past" --apply "set status=overdue"
 
 # Apply - actually makes the changes
-rvn query "trait:due value:past" --apply "set status=overdue" --confirm
+rvn query "trait:due value==past" --apply "set status=overdue" --confirm
 ```
 
 ---
@@ -50,16 +50,16 @@ Update frontmatter fields on matching objects.
 
 ```bash
 # Set single field
-rvn query "object:project .status:active" --apply "set reviewed=true" --confirm
+rvn query "object:project .status==active" --apply "set reviewed=true" --confirm
 
 # Set multiple fields
-rvn query "object:person !.status:*" --apply "set status=active role=member" --confirm
+rvn query "object:person !.status==*" --apply "set status=active role=member" --confirm
 
 # Clear a field (set to empty)
-rvn query "object:project .status:archived" --apply "set priority=" --confirm
+rvn query "object:project .status==archived" --apply "set priority=" --confirm
 
 # Set on trait query results
-rvn query "trait:due value:past" --apply "set status=overdue" --confirm
+rvn query "trait:due value==past" --apply "set status=overdue" --confirm
 ```
 
 ### Behavior
@@ -78,10 +78,10 @@ Append text to the end of matching files.
 
 ```bash
 # Add a note
-rvn query "object:project .status:active" --apply "add ## Reviewed on $(date +%Y-%m-%d)" --confirm
+rvn query "object:project .status==active" --apply "add ## Reviewed on $(date +%Y-%m-%d)" --confirm
 
 # Add a trait
-rvn query "object:project .status:active" --apply "add @reviewed(2026-01-10)" --confirm
+rvn query "object:project .status==active" --apply "add @reviewed(2026-01-10)" --confirm
 
 # Add with reference
 rvn query "object:meeting" --apply "add See also: [[projects/website]]" --confirm
@@ -103,7 +103,7 @@ Delete matching objects (moves to trash by default).
 
 ```bash
 # Delete archived projects
-rvn query "object:project .status:archived" --apply "delete" --confirm
+rvn query "object:project .status==archived" --apply "delete" --confirm
 
 # Delete old daily notes (be careful!)
 rvn query "object:date" --ids | head -100 | rvn delete --stdin --confirm
@@ -119,7 +119,7 @@ rvn query "object:date" --ids | head -100 | rvn delete --stdin --confirm
 
 ```bash
 # Check what references these objects first
-for id in $(rvn query "object:project .status:archived" --ids); do
+for id in $(rvn query "object:project .status==archived" --ids); do
   echo "=== $id ==="
   rvn backlinks "$id"
 done
@@ -135,10 +135,10 @@ Move matching objects to a directory.
 
 ```bash
 # Archive old projects
-rvn query "object:project .status:archived" --apply "move archive/projects/" --confirm
+rvn query "object:project .status==archived" --apply "move archive/projects/" --confirm
 
 # Reorganize people
-rvn query "object:person .role:contractor" --apply "move contractors/" --confirm
+rvn query "object:person .role==contractor" --apply "move contractors/" --confirm
 ```
 
 ### Behavior
@@ -160,23 +160,23 @@ Outputs one ID per line for piping:
 
 ```bash
 # Object query - outputs object IDs
-rvn query "object:project .status:active" --ids
+rvn query "object:project .status==active" --ids
 
 # Trait query - outputs trait IDs
-rvn query "trait:due value:past" --ids
+rvn query "trait:due value==past" --ids
 ```
 
 ### Piping Examples
 
 ```bash
 # Set fields via pipe
-rvn query "object:project .status:active" --ids | rvn set --stdin priority=high --confirm
+rvn query "object:project .status==active" --ids | rvn set --stdin priority=high --confirm
 
 # Delete via pipe
-rvn query "object:project .status:archived" --ids | rvn delete --stdin --confirm
+rvn query "object:project .status==archived" --ids | rvn delete --stdin --confirm
 
 # Move via pipe
-rvn query "object:project .status:archived" --ids | rvn move --stdin archive/projects/ --confirm
+rvn query "object:project .status==archived" --ids | rvn move --stdin archive/projects/ --confirm
 ```
 
 ### Combining with Shell Tools
@@ -261,42 +261,42 @@ git checkout -- people/freya.md projects/website.md
 
 ```bash
 # Add a reviewed trait to all active projects
-rvn query "object:project .status:active" --apply "add @reviewed($(date +%Y-%m-%d))" --confirm
+rvn query "object:project .status==active" --apply "add @reviewed($(date +%Y-%m-%d))" --confirm
 ```
 
 ### Archive Old Content
 
 ```bash
 # Move archived projects to archive folder
-rvn query "object:project .status:archived" --apply "move archive/projects/" --confirm
+rvn query "object:project .status==archived" --apply "move archive/projects/" --confirm
 ```
 
 ### Fix Missing Fields
 
 ```bash
 # Find objects missing a field and set a default
-rvn query "object:person !.status:*" --apply "set status=active" --confirm
+rvn query "object:person !.status==*" --apply "set status=active" --confirm
 ```
 
 ### Update Enum Values After Schema Change
 
 ```bash
 # After adding "critical" to priority enum, update old "urgent" values
-rvn query "object:project .priority:urgent" --ids | rvn set --stdin priority=critical --confirm
+rvn query "object:project .priority==urgent" --ids | rvn set --stdin priority=critical --confirm
 ```
 
 ### Clean Up Overdue Items
 
 ```bash
 # Mark overdue items with a status (acts on containing objects)
-rvn query "trait:due value:past" --apply "set status=overdue" --confirm
+rvn query "trait:due value==past" --apply "set status=overdue" --confirm
 ```
 
 ### Batch Create Tags
 
 ```bash
 # Add a tag to all projects in a category
-rvn query "object:project .category:frontend" --ids | while read id; do
+rvn query "object:project .category==frontend" --ids | while read id; do
   current=$(rvn read "$id.md" --json | jq -r '.frontmatter.tags // []')
   # ... update tags ...
 done
@@ -317,7 +317,7 @@ Before running bulk operations:
 ```bash
 # Safe workflow
 git add -A && git commit -m "Before bulk update"
-rvn query "object:project .status:archived" --apply "move archive/" 
+rvn query "object:project .status==archived" --apply "move archive/" 
 # Review preview...
-rvn query "object:project .status:archived" --apply "move archive/" --confirm
+rvn query "object:project .status==archived" --apply "move archive/" --confirm
 ```
