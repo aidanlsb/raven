@@ -13,7 +13,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -243,10 +242,7 @@ var checkCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
-		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
-		if vaultCfg == nil {
-			vaultCfg = &config.VaultConfig{}
-		}
+		vaultCfg := loadVaultConfigSafe(vaultPath)
 
 		var errorCount, warningCount, fileCount int
 		var allDocs []*parser.ParsedDocument

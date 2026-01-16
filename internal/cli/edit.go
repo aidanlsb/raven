@@ -10,7 +10,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/commands"
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -28,10 +27,7 @@ var editCmd = &cobra.Command{
 		newStr := args[2]
 
 		// Load vault config
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			vaultCfg = &config.VaultConfig{}
-		}
+		vaultCfg := loadVaultConfigSafe(vaultPath)
 
 		// Resolve the reference using unified resolver
 		result, err := ResolveReference(reference, ResolveOptions{
@@ -117,13 +113,7 @@ var editCmd = &cobra.Command{
 		}
 
 		// Auto-reindex if configured
-		if vaultCfg.IsAutoReindexEnabled() {
-			if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
-				if !jsonOutput {
-					fmt.Printf("  (reindex failed: %v)\n", err)
-				}
-			}
-		}
+		maybeReindex(vaultPath, filePath, vaultCfg)
 
 		// Get context around the edit
 		newMatchIndex := strings.Index(newContent, newStr)

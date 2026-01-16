@@ -31,13 +31,7 @@ func reindexFile(vaultPath, filePath string, vaultCfg *config.VaultConfig) error
 	}
 
 	// Parse with directory roots when configured
-	var parseOpts *parser.ParseOptions
-	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
-		parseOpts = &parser.ParseOptions{
-			ObjectsRoot: vaultCfg.GetObjectsRoot(),
-			PagesRoot:   vaultCfg.GetPagesRoot(),
-		}
-	}
+	parseOpts := buildParseOptions(vaultCfg)
 	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
 	if err != nil {
 		return err

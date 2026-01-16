@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -35,10 +34,7 @@ Examples:
 		reference := args[0]
 
 		// Load vault config
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			vaultCfg = &config.VaultConfig{}
-		}
+		vaultCfg := loadVaultConfigSafe(vaultPath)
 
 		// Resolve the reference using unified resolver
 		result, err := ResolveReference(reference, ResolveOptions{

@@ -121,10 +121,7 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 	sch, _ := schema.Load(vaultPath)
 
 	// Load vault config (optional, used for roots + auto-reindex)
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil || vaultCfg == nil {
-		vaultCfg = &config.VaultConfig{}
-	}
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 
 	// If not confirming, show preview
 	if !setConfirm {
@@ -137,17 +134,7 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 
 // previewSetBulk shows a preview of bulk set operations.
 func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	// Get parse options from vault config
-	var parseOpts *parser.ParseOptions
-	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
-		dirs := vaultCfg.GetDirectoriesConfig()
-		if dirs != nil {
-			parseOpts = &parser.ParseOptions{
-				ObjectsRoot: dirs.Objects,
-				PagesRoot:   dirs.Pages,
-			}
-		}
-	}
+	parseOpts := buildParseOptions(vaultCfg)
 
 	preview := buildBulkPreview("set", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		// Check if this is an embedded object
@@ -197,17 +184,7 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 
 // applySetBulk applies bulk set operations.
 func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	// Get parse options from vault config
-	var parseOpts *parser.ParseOptions
-	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
-		dirs := vaultCfg.GetDirectoriesConfig()
-		if dirs != nil {
-			parseOpts = &parser.ParseOptions{
-				ObjectsRoot: dirs.Objects,
-				PagesRoot:   dirs.Pages,
-			}
-		}
-	}
+	parseOpts := buildParseOptions(vaultCfg)
 
 	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
@@ -260,13 +237,7 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 		}
 
 		// Auto-reindex if configured
-		if vaultCfg.IsAutoReindexEnabled() {
-			if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
-				if !isJSONOutput() {
-					fmt.Printf("  (reindex failed: %v)\n", err)
-				}
-			}
-		}
+		maybeReindex(vaultPath, filePath, vaultCfg)
 
 		result.Status = "modified"
 		return result
@@ -287,10 +258,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 	}
 
 	// Load vault config
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil || vaultCfg == nil {
-		vaultCfg = &config.VaultConfig{}
-	}
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 
 	// Resolve the reference using unified resolver
 	result, err := ResolveReference(reference, ResolveOptions{
@@ -368,13 +336,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 	}
 
 	// Auto-reindex if configured
-	if vaultCfg.IsAutoReindexEnabled() {
-		if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
-			if !isJSONOutput() {
-				fmt.Printf("  (reindex failed: %v)\n", err)
-			}
-		}
-	}
+	maybeReindex(vaultPath, filePath, vaultCfg)
 
 	relPath, _ := filepath.Rel(vaultPath, filePath)
 
@@ -562,16 +524,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 	}
 
 	// Get parse options from vault config
-	var parseOpts *parser.ParseOptions
-	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
-		dirs := vaultCfg.GetDirectoriesConfig()
-		if dirs != nil {
-			parseOpts = &parser.ParseOptions{
-				ObjectsRoot: dirs.Objects,
-				PagesRoot:   dirs.Pages,
-			}
-		}
-	}
+	parseOpts := buildParseOptions(vaultCfg)
 
 	// Parse the document to find the embedded object
 	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
@@ -681,13 +634,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 	}
 
 	// Auto-reindex if configured
-	if vaultCfg.IsAutoReindexEnabled() {
-		if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
-			if !isJSONOutput() {
-				fmt.Printf("  (reindex failed: %v)\n", err)
-			}
-		}
-	}
+	maybeReindex(vaultPath, filePath, vaultCfg)
 
 	relPath, _ := filepath.Rel(vaultPath, filePath)
 
@@ -910,13 +857,7 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 	}
 
 	// Auto-reindex if configured
-	if vaultCfg.IsAutoReindexEnabled() {
-		if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
-			if !isJSONOutput() {
-				fmt.Printf("  (reindex failed: %v)\n", err)
-			}
-		}
-	}
+	maybeReindex(vaultPath, filePath, vaultCfg)
 
 	return nil
 }

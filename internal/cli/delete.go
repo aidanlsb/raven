@@ -83,10 +83,7 @@ func runDeleteBulk(vaultPath string) error {
 	}
 
 	// Load vault config
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 
 	// If not confirming, show preview
 	if !deleteConfirm {
@@ -239,11 +236,7 @@ func deleteSingleObject(vaultPath, reference string) error {
 	start := time.Now()
 
 	// Load vault config for deletion settings and directory roots
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		// Config is optional; fall back to defaults.
-		vaultCfg = &config.VaultConfig{}
-	}
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 
 	// Resolve the reference using unified resolver
 	result, err := ResolveReference(reference, ResolveOptions{

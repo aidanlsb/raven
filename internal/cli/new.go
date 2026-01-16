@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -192,12 +191,9 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, "invalid title: cannot generate safe filename", "Provide a non-empty title")
 		}
 
-		// Load vault config for directory roots (optional)
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil || vaultCfg == nil {
-			vaultCfg = &config.VaultConfig{}
-		}
-		objectsRoot := vaultCfg.GetObjectsRoot()
+	// Load vault config for directory roots (optional)
+	vaultCfg := loadVaultConfigSafe(vaultPath)
+	objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
 
 		// Check if file exists (with full path resolution including directory roots)
@@ -225,16 +221,10 @@ Examples:
 			return handleError(ErrFileWriteError, err, "")
 		}
 
-		// Auto-reindex if configured (vaultCfg already loaded above)
-		if vaultCfg.IsAutoReindexEnabled() {
-			if err := reindexFile(vaultPath, result.FilePath, vaultCfg); err != nil {
-				if !isJSONOutput() {
-					fmt.Printf("  (reindex failed: %v)\n", err)
-				}
-			}
-		}
+	// Auto-reindex if configured (vaultCfg already loaded above)
+	maybeReindex(vaultPath, result.FilePath, vaultCfg)
 
-		if isJSONOutput() {
+	if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"file":  result.RelativePath,
 				"type":  typeName,
