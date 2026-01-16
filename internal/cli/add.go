@@ -100,11 +100,7 @@ func runAddBulk(args []string, vaultPath string) error {
 	}
 
 	// Load vault config
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 	captureCfg := vaultCfg.GetCaptureConfig()
 	if addTimestampFlag {
 		captureCfg.Timestamp = boolPtr(true)
@@ -165,13 +161,7 @@ func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warnin
 		}
 
 		// Reindex if configured
-		if vaultCfg.IsAutoReindexEnabled() {
-			if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
-				if !isJSONOutput() {
-					fmt.Printf("  (reindex failed: %v)\n", err)
-				}
-			}
-		}
+		maybeReindex(vaultPath, filePath, vaultCfg)
 
 		result.Status = "added"
 		return result
@@ -188,11 +178,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 	start := time.Now()
 
 	// Load vault config
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 	captureCfg := vaultCfg.GetCaptureConfig()
 
 	// Override timestamp if flag is set
@@ -269,13 +255,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 	}
 
 	// Reindex if configured
-	if vaultCfg.IsAutoReindexEnabled() {
-		if err := reindexFile(vaultPath, destPath, vaultCfg); err != nil {
-			if !isJSONOutput() {
-				fmt.Printf("  (reindex failed: %v)\n", err)
-			}
-		}
-	}
+	maybeReindex(vaultPath, destPath, vaultCfg)
 
 	elapsed := time.Since(start).Milliseconds()
 

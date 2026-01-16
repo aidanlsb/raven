@@ -9,9 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/watcher"
 )
@@ -65,17 +63,8 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load vault config (optional) to support directory roots.
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil || vaultCfg == nil {
-		vaultCfg = &config.VaultConfig{}
-	}
-	var parseOpts *parser.ParseOptions
-	if vaultCfg.HasDirectoriesConfig() {
-		parseOpts = &parser.ParseOptions{
-			ObjectsRoot: vaultCfg.GetObjectsRoot(),
-			PagesRoot:   vaultCfg.GetPagesRoot(),
-		}
-	}
+	vaultCfg := loadVaultConfigSafe(vaultPath)
+	parseOpts := buildParseOptions(vaultCfg)
 
 	// Open database
 	db, err := index.Open(vaultPath)

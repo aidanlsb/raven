@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -31,10 +30,7 @@ Examples:
 		start := time.Now()
 
 		// Load vault config
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			vaultCfg = &config.VaultConfig{}
-		}
+		vaultCfg := loadVaultConfigSafe(vaultPath)
 
 		// Resolve the reference to get the canonical object ID
 		result, err := ResolveReference(reference, ResolveOptions{

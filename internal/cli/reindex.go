@@ -7,9 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -82,10 +80,7 @@ Examples:
 		}
 
 		// Load vault config for directory roots
-		vaultCfg, _ := config.LoadVaultConfig(vaultPath)
-		if vaultCfg == nil {
-			vaultCfg = &config.VaultConfig{}
-		}
+		vaultCfg := loadVaultConfigSafe(vaultPath)
 		db.SetDailyDirectory(vaultCfg.DailyDirectory)
 		dailyDir := vaultCfg.DailyDirectory
 		if dailyDir == "" {
@@ -93,13 +88,7 @@ Examples:
 		}
 
 		// Build parse options from vault config
-		var parseOpts *parser.ParseOptions
-		if vaultCfg.HasDirectoriesConfig() {
-			parseOpts = &parser.ParseOptions{
-				ObjectsRoot: vaultCfg.GetObjectsRoot(),
-				PagesRoot:   vaultCfg.GetPagesRoot(),
-			}
-		}
+		parseOpts := buildParseOptions(vaultCfg)
 
 		// Clean up files in excluded directories (.trash/, etc.)
 		// These should never be in the index but might exist from before this check was added

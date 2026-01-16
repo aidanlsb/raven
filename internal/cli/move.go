@@ -104,10 +104,7 @@ func runMoveBulk(args []string, vaultPath string) error {
 	}
 
 	// Load vault config
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil || vaultCfg == nil {
-		vaultCfg = &config.VaultConfig{}
-	}
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 
 	// If not confirming, show preview
 	if !moveConfirm {
@@ -250,13 +247,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 			result.Reason = fmt.Sprintf("failed to read moved file: %v", err)
 			return result
 		}
-		var parseOpts *parser.ParseOptions
-		if vaultCfg.HasDirectoriesConfig() {
-			parseOpts = &parser.ParseOptions{
-				ObjectsRoot: vaultCfg.GetObjectsRoot(),
-				PagesRoot:   vaultCfg.GetPagesRoot(),
-			}
-		}
+		parseOpts := buildParseOptions(vaultCfg)
 		newDoc, err := parser.ParseDocumentWithOptions(string(newContent), fullDestPath, vaultPath, parseOpts)
 		if err != nil {
 			result.Status = "error"
@@ -292,10 +283,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	start := time.Now()
 
 	// Load vault config for directory roots
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil || vaultCfg == nil {
-		vaultCfg = &config.VaultConfig{}
-	}
+	vaultCfg := loadVaultConfigSafe(vaultPath)
 
 	// Normalize destination path (add .md if missing)
 	destination = normalizePath(destination)
@@ -354,13 +342,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	}
 
 	// Build parse options from vault config
-	var parseOpts *parser.ParseOptions
-	if vaultCfg.HasDirectoriesConfig() {
-		parseOpts = &parser.ParseOptions{
-			ObjectsRoot: vaultCfg.GetObjectsRoot(),
-			PagesRoot:   vaultCfg.GetPagesRoot(),
-		}
-	}
+	parseOpts := buildParseOptions(vaultCfg)
 
 	// Parse source file to get its type
 	content, err := os.ReadFile(sourceFile)

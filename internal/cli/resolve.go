@@ -60,11 +60,7 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 	// Load vault config if not provided
 	vaultCfg := opts.VaultConfig
 	if vaultCfg == nil {
-		var err error
-		vaultCfg, err = config.LoadVaultConfig(opts.VaultPath)
-		if err != nil {
-			vaultCfg = &config.VaultConfig{}
-		}
+		vaultCfg = loadVaultConfigSafe(opts.VaultPath)
 	}
 
 	// Fast path: try literal path first (most common case for explicit paths)
