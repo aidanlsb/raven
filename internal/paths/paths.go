@@ -1,15 +1,47 @@
-// Package paths provides canonical helpers for converting between:
-// - vault-relative markdown file paths (e.g. "objects/people/freya.md")
-// - Raven object IDs (e.g. "people/freya")
+// Package paths provides canonical helpers for:
+//   - Converting between vault-relative markdown file paths (e.g. "objects/people/freya.md")
+//     and Raven object IDs (e.g. "people/freya")
+//   - Validating paths are within the vault (security)
+//   - Parsing embedded object IDs (e.g. "file#section")
 //
 // It also centralizes directory-root handling (objects/pages roots) so that
 // parsing, CLI operations, watching, and resolution stay consistent.
 package paths
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 )
+
+// pathError is a simple error type for path-related errors.
+type pathError string
+
+func (e pathError) Error() string { return string(e) }
+
+// ErrPathOutsideVault is returned when a path is outside the vault.
+var ErrPathOutsideVault = errors.New("path is outside vault")
+
+// MDExtension is the markdown file extension.
+const MDExtension = ".md"
+
+// HasMDExtension returns true if the path ends with .md.
+func HasMDExtension(p string) bool {
+	return strings.HasSuffix(p, MDExtension)
+}
+
+// EnsureMDExtension adds .md extension if not already present.
+func EnsureMDExtension(p string) string {
+	if HasMDExtension(p) {
+		return p
+	}
+	return p + MDExtension
+}
+
+// TrimMDExtension removes the .md extension if present.
+func TrimMDExtension(p string) string {
+	return strings.TrimSuffix(p, MDExtension)
+}
 
 // NormalizeDirRoot normalizes a directory root to have:
 // - no leading slash
@@ -50,7 +82,7 @@ func normalizeRelPath(p string) string {
 // - strips the configured objects/pages root prefixes (objects first, then pages)
 func FilePathToObjectID(filePath, objectsRoot, pagesRoot string) string {
 	id := normalizeRelPath(filePath)
-	id = strings.TrimSuffix(id, ".md")
+	id = TrimMDExtension(id)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
 	pagesRoot = NormalizeDirRoot(pagesRoot)
@@ -76,17 +108,17 @@ func FilePathToObjectID(filePath, objectsRoot, pagesRoot string) string {
 // not add another prefix.
 func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) string {
 	id := normalizeRelPath(objectID)
-	id = strings.TrimSuffix(id, ".md")
+	id = TrimMDExtension(id)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
 	pagesRoot = NormalizeDirRoot(pagesRoot)
 
 	// If the caller already provided a rooted path-like ID, keep it.
 	if objectsRoot != "" && strings.HasPrefix(id, objectsRoot) {
-		return id + ".md"
+		return EnsureMDExtension(id)
 	}
 	if pagesRoot != "" && strings.HasPrefix(id, pagesRoot) {
-		return id + ".md"
+		return EnsureMDExtension(id)
 	}
 
 	root := ""
@@ -100,9 +132,22 @@ func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) strin
 	}
 
 	if root != "" {
-		return root + id + ".md"
+		return EnsureMDExtension(root + id)
 	}
-	return id + ".md"
+	return EnsureMDExtension(id)
+}
+
+// ParseEmbeddedID parses an object ID that may contain an embedded fragment.
+// For IDs like "file#section", it returns (fileID, fragment, true).
+// For IDs without a fragment, it returns (id, "", false).
+//
+// This is the canonical function for parsing embedded object IDs.
+// Use this instead of manually calling strings.SplitN(id, "#", 2).
+func ParseEmbeddedID(id string) (fileID, fragment string, isEmbedded bool) {
+	if idx := strings.Index(id, "#"); idx >= 0 {
+		return id[:idx], id[idx+1:], true
+	}
+	return id, "", false
 }
 
 // CandidateFilePaths returns vault-relative markdown paths to try for a reference.
@@ -111,7 +156,7 @@ func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) strin
 // ".md" suffix), plus rooted interpretations if roots are configured.
 func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
 	ref = normalizeRelPath(ref)
-	ref = strings.TrimSuffix(ref, ".md")
+	ref = TrimMDExtension(ref)
 
 	objectsRoot = NormalizeDirRoot(objectsRoot)
 	pagesRoot = NormalizeDirRoot(pagesRoot)
@@ -128,15 +173,57 @@ func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
 	var out []string
 
 	// 1) Treat as literal relative path from vault root.
-	add(ref+".md", &out)
+	add(EnsureMDExtension(ref), &out)
 
 	// 2) If roots are configured, also try rooted interpretations when ref is not already rooted.
 	if objectsRoot != "" && !strings.HasPrefix(ref, objectsRoot) {
-		add(objectsRoot+ref+".md", &out)
+		add(EnsureMDExtension(objectsRoot+ref), &out)
 	}
 	if pagesRoot != "" && !strings.HasPrefix(ref, pagesRoot) {
-		add(pagesRoot+ref+".md", &out)
+		add(EnsureMDExtension(pagesRoot+ref), &out)
 	}
 
 	return out
+}
+
+// ValidateWithinVault checks that a target path is within the vault directory.
+// Returns an error if the path would escape the vault (security check).
+//
+// This function:
+// - Resolves both paths to absolute paths
+// - Evaluates symlinks for security
+// - Handles paths that don't exist yet by checking parent directories
+func ValidateWithinVault(vaultPath, targetPath string) error {
+	absVault, err := filepath.Abs(vaultPath)
+	if err != nil {
+		return err
+	}
+
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return err
+	}
+
+	// Resolve any symlinks for security
+	realVault, err := filepath.EvalSymlinks(absVault)
+	if err != nil {
+		realVault = absVault
+	}
+
+	// For target, we may be checking a path that doesn't exist yet
+	// So check the parent directory
+	targetDir := filepath.Dir(absTarget)
+	realTargetDir, err := filepath.EvalSymlinks(targetDir)
+	if err != nil {
+		// Parent might not exist yet, check grandparent
+		realTargetDir = targetDir
+	}
+
+	// Ensure target is within vault
+	if !strings.HasPrefix(realTargetDir+string(filepath.Separator), realVault+string(filepath.Separator)) &&
+		realTargetDir != realVault {
+		return ErrPathOutsideVault
+	}
+
+	return nil
 }

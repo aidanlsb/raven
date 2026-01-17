@@ -15,6 +15,18 @@ import (
 	"time"
 )
 
+// Date format constants - use these instead of string literals.
+const (
+	// DateLayout is the Go time layout for YYYY-MM-DD dates.
+	DateLayout = "2006-01-02"
+
+	// DatetimeLayout is the Go time layout for YYYY-MM-DDTHH:MM datetimes.
+	DatetimeLayout = "2006-01-02T15:04"
+
+	// DatetimeSecondsLayout is the Go time layout for YYYY-MM-DDTHH:MM:SS datetimes.
+	DatetimeSecondsLayout = "2006-01-02T15:04:05"
+)
+
 var (
 	dateRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 )
@@ -24,7 +36,7 @@ func IsValidDate(s string) bool {
 	if !dateRegex.MatchString(s) {
 		return false
 	}
-	_, err := time.Parse("2006-01-02", s)
+	_, err := time.Parse(DateLayout, s)
 	return err == nil
 }
 
@@ -34,7 +46,7 @@ func ParseDate(s string) (time.Time, error) {
 	if !IsValidDate(s) {
 		return time.Time{}, fmt.Errorf("invalid date: %q", s)
 	}
-	return time.Parse("2006-01-02", s)
+	return time.Parse(DateLayout, s)
 }
 
 // IsValidDatetime checks if a string is a valid datetime.
@@ -57,8 +69,8 @@ func ParseDatetime(s string) (time.Time, error) {
 
 	formats := []string{
 		time.RFC3339,
-		"2006-01-02T15:04",
-		"2006-01-02T15:04:05",
+		DatetimeLayout,
+		DatetimeSecondsLayout,
 	}
 	for _, format := range formats {
 		if t, err := time.Parse(format, s); err == nil {

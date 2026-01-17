@@ -416,8 +416,7 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 	if target != "" && sch != nil {
 		if _, exists := sch.Types[target]; !exists {
 			// Check built-in types
-			builtins := map[string]bool{"page": true, "section": true, "date": true}
-			if !builtins[target] {
+			if !schema.IsBuiltinType(target) {
 				result.Error = fmt.Sprintf("target type '%s' does not exist in schema", target)
 				result.Suggestion = fmt.Sprintf("Either create the type first with 'rvn schema add type %s' or use an existing type", target)
 				if len(sch.Types) > 0 {

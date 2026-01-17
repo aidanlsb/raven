@@ -13,6 +13,8 @@ import (
 	"unicode"
 
 	goslug "github.com/gosimple/slug"
+
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // HeadingSlug converts a heading text to a URL-friendly slug.
@@ -66,9 +68,8 @@ func PathSlug(path string) string {
 	parts := strings.Split(path, "/")
 	for i, part := range parts {
 		// Handle embedded object IDs (file#id)
-		if strings.Contains(part, "#") {
-			subParts := strings.SplitN(part, "#", 2)
-			parts[i] = ComponentSlug(subParts[0]) + "#" + ComponentSlug(subParts[1])
+		if fileID, fragment, isEmbedded := paths.ParseEmbeddedID(part); isEmbedded {
+			parts[i] = ComponentSlug(fileID) + "#" + ComponentSlug(fragment)
 		} else {
 			parts[i] = ComponentSlug(part)
 		}

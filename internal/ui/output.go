@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/parser"
 )
 
 // ansiPattern matches ANSI escape sequences
@@ -187,9 +189,6 @@ func ResultCount(n int) string {
 	return Muted.Render(fmt.Sprintf("%d %s", n, pluralize("result", n)))
 }
 
-// traitPattern matches @trait or @trait(value) patterns
-var traitPattern = regexp.MustCompile(`@(\w+)(?:\(([^)]*)\))?`)
-
 // Trait formats a trait with styling.
 // The @ and trait name are bold, the value (if any) is muted.
 func Trait(traitType string, value string) string {
@@ -201,9 +200,10 @@ func Trait(traitType string, value string) string {
 
 // HighlightTraits highlights all @trait patterns in text.
 // Traits are bold, values are muted.
+// Uses parser.TraitHighlightPattern as the canonical pattern for trait matching.
 func HighlightTraits(text string) string {
-	return traitPattern.ReplaceAllStringFunc(text, func(match string) string {
-		parts := traitPattern.FindStringSubmatch(match)
+	return parser.TraitHighlightPattern.ReplaceAllStringFunc(text, func(match string) string {
+		parts := parser.TraitHighlightPattern.FindStringSubmatch(match)
 		if len(parts) < 2 {
 			return match
 		}

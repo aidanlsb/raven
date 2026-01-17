@@ -11,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -306,7 +307,7 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 			// Extract date from path and create using pages package
 			base := filepath.Base(destPath)
 			dateStr := strings.TrimSuffix(base, ".md")
-			t, err := time.Parse("2006-01-02", dateStr)
+			t, err := time.Parse(dates.DateLayout, dateStr)
 			if err != nil {
 				t = time.Now()
 				dateStr = vault.FormatDateISO(t)

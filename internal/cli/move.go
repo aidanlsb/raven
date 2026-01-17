@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -555,39 +556,9 @@ type MoveResult struct {
 }
 
 // validateWithinVault checks that a path is within the vault.
+// Delegates to paths.ValidateWithinVault for the canonical implementation.
 func validateWithinVault(vaultPath, targetPath string) error {
-	absVault, err := filepath.Abs(vaultPath)
-	if err != nil {
-		return err
-	}
-
-	absTarget, err := filepath.Abs(targetPath)
-	if err != nil {
-		return err
-	}
-
-	// Resolve any symlinks for security
-	realVault, err := filepath.EvalSymlinks(absVault)
-	if err != nil {
-		realVault = absVault
-	}
-
-	// For target, we may be checking a path that doesn't exist yet
-	// So check the parent directory
-	targetDir := filepath.Dir(absTarget)
-	realTargetDir, err := filepath.EvalSymlinks(targetDir)
-	if err != nil {
-		// Parent might not exist yet, check grandparent
-		realTargetDir = targetDir
-	}
-
-	// Ensure target is within vault
-	if !strings.HasPrefix(realTargetDir+string(filepath.Separator), realVault+string(filepath.Separator)) &&
-		realTargetDir != realVault {
-		return fmt.Errorf("path is outside vault")
-	}
-
-	return nil
+	return paths.ValidateWithinVault(vaultPath, targetPath)
 }
 
 // normalizePath ensures the path has a .md extension.

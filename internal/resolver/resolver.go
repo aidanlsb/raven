@@ -7,6 +7,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // Resolver resolves short references to full object IDs.
@@ -262,10 +263,9 @@ func addPathMatches(r *Resolver, c *matchCollector, ref string) {
 	}
 
 	// For embedded refs like "file#id", try without extension
-	if strings.Contains(ref, "#") {
-		parts := strings.SplitN(ref, "#", 2)
-		baseID := strings.TrimSuffix(parts[0], ".md")
-		fullID := baseID + "#" + parts[1]
+	if baseID, fragment, isEmbedded := paths.ParseEmbeddedID(ref); isEmbedded {
+		baseID = strings.TrimSuffix(baseID, ".md")
+		fullID := baseID + "#" + fragment
 		if _, ok := r.objectIDs[fullID]; ok {
 			c.add(fullID, "object_id")
 		}
@@ -369,13 +369,12 @@ func preferParentOverSections(matches []string) []string {
 	// Filter: keep non-sections, and only keep sections if their parent isn't matched
 	var filtered []string
 	for _, id := range matches {
-		if !strings.Contains(id, "#") {
+		parentID, _, isEmbedded := paths.ParseEmbeddedID(id)
+		if !isEmbedded {
 			// Keep parent objects
 			filtered = append(filtered, id)
 		} else {
 			// Only keep section if its parent file isn't also a match
-			parts := strings.SplitN(id, "#", 2)
-			parentID := parts[0]
 			if !parents[parentID] {
 				filtered = append(filtered, id)
 			}
@@ -467,10 +466,8 @@ func isFileSectionCollisionOnly(ids []string) bool {
 
 	// All section IDs must belong to this parent file
 	for _, id := range ids {
-		if strings.Contains(id, "#") {
-			// Extract parent from section ID
-			parts := strings.SplitN(id, "#", 2)
-			if parts[0] != parentFile {
+		if parent, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
+			if parent != parentFile {
 				// Section belongs to a different file - real collision
 				return false
 			}

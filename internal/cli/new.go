@@ -46,7 +46,7 @@ Examples:
 
 		// Check if type exists
 		typeDef, typeExists := s.Types[typeName]
-		if !typeExists && typeName != "page" && typeName != "section" && typeName != "date" {
+		if !typeExists && !schema.IsBuiltinType(typeName) {
 			// List available types
 			var typeNames []string
 			for name := range s.Types {
@@ -265,12 +265,12 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	vaultPath := getVaultPath()
 	if vaultPath == "" {
 		// Fall back to built-in types only
-		return []string{"page", "section", "date"}, cobra.ShellCompDirectiveNoFileComp
+		return schema.BuiltinTypeNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
 	s, err := schema.Load(vaultPath)
 	if err != nil {
-		return []string{"page", "section", "date"}, cobra.ShellCompDirectiveNoFileComp
+		return schema.BuiltinTypeNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
 	// Collect all type names
@@ -279,7 +279,7 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		types = append(types, name)
 	}
 	// Add built-in types
-	types = append(types, "page", "date")
+	types = append(types, schema.BuiltinTypeNames()...)
 
 	sort.Strings(types)
 	return types, cobra.ShellCompDirectiveNoFileComp

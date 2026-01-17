@@ -19,7 +19,7 @@ func ParseDateArg(arg string) (time.Time, error) {
 
 // FormatDateISO formats a time as YYYY-MM-DD.
 func FormatDateISO(t time.Time) string {
-	return t.Format("2006-01-02")
+	return t.Format(dates.DateLayout)
 }
 
 // FormatDateFriendly formats a time as "Monday, January 2, 2006".

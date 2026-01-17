@@ -208,6 +208,105 @@ func TestParseTraitValue_Kinds(t *testing.T) {
 	}
 }
 
+func TestStripTraitAnnotations(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{
+			name: "trait at end of line",
+			line: "Do something @due(2024-01-15)",
+			want: "Do something",
+		},
+		{
+			name: "trait at start of line",
+			line: "@due(2024-01-15) Do something",
+			want: "Do something",
+		},
+		{
+			name: "trait in middle of line",
+			line: "Must @due(2024-01-15) complete this",
+			want: "Must complete this",
+		},
+		{
+			name: "multiple traits",
+			line: "@priority(high) Do something @due(2024-01-15)",
+			want: "Do something",
+		},
+		{
+			name: "trait with list marker",
+			line: "- @todo Review the PR",
+			want: "- Review the PR",
+		},
+		{
+			name: "boolean trait at end",
+			line: "This is important @highlight",
+			want: "This is important",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StripTraitAnnotations(tt.line)
+			if got != tt.want {
+				t.Errorf("StripTraitAnnotations() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseTraitAnnotations_Content(t *testing.T) {
+	// This test verifies that traits capture the full line content,
+	// not just content after the trait annotation.
+	tests := []struct {
+		name        string
+		line        string
+		wantContent string
+	}{
+		{
+			name:        "trait at end captures content before",
+			line:        "Do something @due(2024-01-15)",
+			wantContent: "Do something",
+		},
+		{
+			name:        "trait at start captures content after",
+			line:        "@due(2024-01-15) Do something",
+			wantContent: "Do something",
+		},
+		{
+			name:        "trait in middle captures both sides",
+			line:        "Must @due(2024-01-15) complete this",
+			wantContent: "Must complete this",
+		},
+		{
+			name:        "boolean trait at end",
+			line:        "This is important @highlight",
+			wantContent: "This is important",
+		},
+		{
+			name:        "multiple traits - first trait gets full content",
+			line:        "@priority(high) Do something @due(2024-01-15)",
+			wantContent: "Do something",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			traits := ParseTraitAnnotations(tt.line, 1)
+			if len(traits) == 0 {
+				t.Fatal("expected at least one trait")
+			}
+
+			// All traits on a line should have the same content (the full line minus all traits)
+			got := traits[0].Content
+			if got != tt.wantContent {
+				t.Errorf("trait.Content = %q, want %q", got, tt.wantContent)
+			}
+		})
+	}
+}
+
 func TestIsRefOnTraitLine(t *testing.T) {
 	// This test documents the CONTENT SCOPE RULE:
 	// A reference is associated with a trait if and only if they are on the same line.

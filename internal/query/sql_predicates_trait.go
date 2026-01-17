@@ -27,7 +27,7 @@ func (e *Executor) buildTraitContentPredicateSQL(p *ContentPredicate, alias stri
 // buildTraitRefsPredicateSQL builds SQL for refs:[[target]] or refs:{object:...} predicates on traits.
 //
 // CONTENT SCOPE RULE: This matches refs that appear on the same line as the trait.
-// This is the same rule used by parser.IsRefOnTraitLine and parser.ExtractTraitContent -
+// This is the same rule used by parser.IsRefOnTraitLine and parser.StripTraitAnnotations -
 // a trait's associated content (including references) is defined as everything on the
 // same line as the trait annotation.
 func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (string, []interface{}, error) {
