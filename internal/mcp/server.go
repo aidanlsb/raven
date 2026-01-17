@@ -109,6 +109,30 @@ func NewServer(vaultPath string) *Server {
 	}
 }
 
+// NewServerWithExecutable creates a new MCP server with a custom executable path.
+// This is primarily used for testing with a built binary.
+func NewServerWithExecutable(vaultPath, executable string) *Server {
+	return &Server{
+		vaultPath:  vaultPath,
+		in:         os.Stdin,
+		out:        os.Stdout,
+		executable: executable,
+	}
+}
+
+// SetIO sets the input and output streams for the server.
+// This is primarily used for testing.
+func (s *Server) SetIO(in io.Reader, out io.Writer) {
+	s.in = in
+	s.out = out
+}
+
+// HandleRequest processes a single MCP request.
+// This is exported for testing purposes.
+func (s *Server) HandleRequest(req *Request) {
+	s.handleRequest(req)
+}
+
 // Run starts the MCP server's main loop.
 func (s *Server) Run() error {
 	scanner := bufio.NewScanner(s.in)

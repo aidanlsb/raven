@@ -1,4 +1,4 @@
-.PHONY: all build test lint fmt check clean install
+.PHONY: all build test test-integration test-all lint fmt check clean install
 
 # Default target
 all: check build
@@ -7,9 +7,16 @@ all: check build
 build:
 	go build -o rvn ./cmd/rvn
 
-# Run tests
+# Run unit tests (fast, no build required)
 test:
 	go test -race ./...
+
+# Run integration tests (slower, builds CLI binary)
+test-integration:
+	go test -race -tags=integration -v ./internal/cli ./internal/mcp
+
+# Run all tests (unit + integration)
+test-all: test test-integration
 
 # Run tests with coverage
 test-coverage:
