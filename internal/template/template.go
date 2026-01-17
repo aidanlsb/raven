@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/dates"
 )
 
 // Variables holds the available template variables for substitution.
@@ -41,8 +43,8 @@ func NewVariables(title, typeName, slug string, fields map[string]string) *Varia
 		Title:    title,
 		Slug:     slug,
 		Type:     typeName,
-		Date:     now.Format("2006-01-02"),
-		Datetime: now.Format("2006-01-02T15:04"),
+		Date:     now.Format(dates.DateLayout),
+		Datetime: now.Format(dates.DatetimeLayout),
 		Year:     now.Format("2006"),
 		Month:    now.Format("01"),
 		Day:      now.Format("02"),
@@ -54,11 +56,11 @@ func NewVariables(title, typeName, slug string, fields map[string]string) *Varia
 // NewDailyVariables creates Variables for a daily note with a specific date.
 func NewDailyVariables(date time.Time) *Variables {
 	return &Variables{
-		Title:    date.Format("2006-01-02"),
-		Slug:     date.Format("2006-01-02"),
+		Title:    date.Format(dates.DateLayout),
+		Slug:     date.Format(dates.DateLayout),
 		Type:     "date",
-		Date:     date.Format("2006-01-02"),
-		Datetime: date.Format("2006-01-02T15:04"),
+		Date:     date.Format(dates.DateLayout),
+		Datetime: date.Format(dates.DatetimeLayout),
 		Year:     date.Format("2006"),
 		Month:    date.Format("01"),
 		Day:      date.Format("02"),

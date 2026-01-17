@@ -13,7 +13,7 @@ type TraitAnnotation struct {
 	TraitName string
 	// Value is the single trait value (nil for boolean traits like @highlight)
 	Value       *schema.FieldValue
-	Content     string // Content after the trait on the same line
+	Content     string // Full line content with all trait annotations removed
 	Line        int
 	StartOffset int
 	EndOffset   int
@@ -35,9 +35,25 @@ func (t *TraitAnnotation) ValueString() string {
 	return ""
 }
 
-// traitRegex matches @trait_name or @trait_name(value)
-// The (?:^|[\s\-\*]) ensures @ is at start of line or after whitespace/list markers
+// traitRegex matches @trait_name or @trait_name(value) for parsing.
+// The (?:^|[\s\-\*]) ensures @ is at start of line or after whitespace/list markers.
+// This strict pattern prevents matching things like email addresses.
 var traitRegex = regexp.MustCompile(`(?:^|[\s\-\*])@(\w+)(?:\s*\(([^)]*)\))?`)
+
+// TraitHighlightPattern is a regex for highlighting traits in already-parsed content.
+// It's simpler than traitRegex because it doesn't need context validation - it's
+// used for display purposes on content that has already been parsed.
+// Capture groups: [1] = trait name, [2] = value (if present)
+var TraitHighlightPattern = regexp.MustCompile(`@(\w+)(?:\(([^)]*)\))?`)
+
+// StripTraitAnnotations removes all trait annotations from a line and returns
+// the remaining content.
+//
+// CONTENT SCOPE RULE: A trait's content consists of all text on the same line
+// as the trait annotation, with trait annotations removed.
+func StripTraitAnnotations(line string) string {
+	return strings.TrimSpace(traitRegex.ReplaceAllString(line, ""))
+}
 
 // ParseTraitAnnotations parses all trait annotations from a text segment.
 //
@@ -49,6 +65,10 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 	var traits []TraitAnnotation
 
 	matches := traitRegex.FindAllStringSubmatchIndex(line, -1)
+
+	// Compute the full line content once by removing ALL trait annotations.
+	// This ensures traits at any position (start, middle, end) get the same content.
+	lineContent := StripTraitAnnotations(line)
 
 	for _, match := range matches {
 		if len(match) < 4 {
@@ -68,16 +88,10 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 			}
 		}
 
-		// Extract content (everything after the trait annotation on the same line)
-		afterTrait := ""
-		if match[1] < len(line) {
-			afterTrait = strings.TrimSpace(line[match[1]:])
-		}
-
 		traits = append(traits, TraitAnnotation{
 			TraitName:   traitName,
 			Value:       value,
-			Content:     afterTrait,
+			Content:     lineContent,
 			Line:        lineNumber,
 			StartOffset: match[0],
 			EndOffset:   match[1],
@@ -121,24 +135,6 @@ func parseTraitValue(valueStr string) schema.FieldValue {
 
 	// Everything else is a string (enum values, plain strings, etc.)
 	return schema.String(valueStr)
-}
-
-// ExtractTraitContent extracts the full content for a trait.
-// Returns the content after removing all trait annotations from the line.
-//
-// CONTENT SCOPE RULE: A trait's content consists of all text on the same line
-// as the trait annotation. This same rule applies to determining which references
-// are associated with a trait - refs on the same line are considered part of the
-// trait's content. See IsRefOnTraitLine for the matching implementation.
-func ExtractTraitContent(lines []string, lineIdx int) string {
-	if lineIdx >= len(lines) {
-		return ""
-	}
-
-	line := lines[lineIdx]
-	// Remove the trait annotation itself, return remaining content
-	result := traitRegex.ReplaceAllString(line, "")
-	return strings.TrimSpace(result)
 }
 
 // IsRefOnTraitLine returns true if a reference is on the same line as a trait.

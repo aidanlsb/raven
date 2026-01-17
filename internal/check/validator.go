@@ -316,7 +316,7 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 
 	// Check if type is defined
 	typeDef, typeExists := v.schema.Types[obj.ObjectType]
-	if !typeExists && obj.ObjectType != "page" && obj.ObjectType != "section" && obj.ObjectType != "date" {
+	if !typeExists && !schema.IsBuiltinType(obj.ObjectType) {
 		issues = append(issues, Issue{
 			Level:      LevelError,
 			Type:       IssueUnknownType,
@@ -783,7 +783,7 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 	// Check for unused types (defined in schema but never used)
 	for typeName := range v.schema.Types {
 		// Skip built-in types
-		if typeName == "page" || typeName == "section" || typeName == "date" {
+		if schema.IsBuiltinType(typeName) {
 			continue
 		}
 		if _, used := v.usedTypes[typeName]; !used {
@@ -824,7 +824,7 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 				// Check if target type exists
 				if _, exists := v.schema.Types[fieldDef.Target]; !exists {
 					// Also check built-in types
-					if fieldDef.Target != "page" && fieldDef.Target != "section" && fieldDef.Target != "date" {
+					if !schema.IsBuiltinType(fieldDef.Target) {
 						issues = append(issues, SchemaIssue{
 							Level:      LevelError,
 							Type:       IssueMissingTargetType,

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -41,16 +42,7 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 	if len(ids) != 2 {
 		t.Fatalf("got %d results: %#v", len(ids), ids)
 	}
-	if !(contains(ids, "metric/a") && contains(ids, "metric/c")) {
+	if !(slices.Contains(ids, "metric/a") && slices.Contains(ids, "metric/c")) {
 		t.Fatalf("unexpected ids: %#v", ids)
 	}
-}
-
-func contains(xs []string, want string) bool {
-	for _, x := range xs {
-		if x == want {
-			return true
-		}
-	}
-	return false
 }

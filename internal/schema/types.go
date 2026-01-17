@@ -19,6 +19,15 @@ func IsBuiltinType(typeName string) bool {
 	return BuiltinTypes[typeName]
 }
 
+// BuiltinTypeNames returns a slice of all built-in type names.
+func BuiltinTypeNames() []string {
+	names := make([]string, 0, len(BuiltinTypes))
+	for name := range BuiltinTypes {
+		names = append(names, name)
+	}
+	return names
+}
+
 // Schema represents the complete schema definition loaded from schema.yaml.
 type Schema struct {
 	Version int                         `yaml:"version,omitempty"` // Schema format version

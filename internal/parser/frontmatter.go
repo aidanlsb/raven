@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
@@ -104,7 +105,7 @@ func yamlToFieldValue(value interface{}) schema.FieldValue {
 		return schema.Bool(v)
 	case time.Time:
 		// YAML parses dates as time.Time - convert to date string
-		return schema.Date(v.Format("2006-01-02"))
+		return schema.Date(v.Format(dates.DateLayout))
 	case []interface{}:
 		items := make([]schema.FieldValue, 0, len(v))
 		for _, item := range v {

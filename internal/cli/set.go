@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -315,7 +317,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 
 			// Validate enum values
 			if isField && fieldDef != nil && fieldDef.Type == schema.FieldTypeEnum && len(fieldDef.Values) > 0 {
-				if !contains(fieldDef.Values, value) {
+				if !slices.Contains(fieldDef.Values, value) {
 					return handleErrorMsg(ErrValidationFailed,
 						fmt.Sprintf("invalid value '%s' for field '%s'", value, fieldName),
 						fmt.Sprintf("Allowed values: %s", strings.Join(fieldDef.Values, ", ")))
@@ -491,25 +493,13 @@ func parseFieldValue(value string) interface{} {
 	return value
 }
 
-// contains checks if a slice contains a value.
-func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
-}
-
 // setEmbeddedObject sets fields on an embedded object.
 func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
 	// Parse the embedded ID: fileID#slug
-	parts := strings.SplitN(objectID, "#", 2)
-	if len(parts) != 2 {
+	fileID, slug, isEmbedded := paths.ParseEmbeddedID(objectID)
+	if !isEmbedded {
 		return handleErrorMsg(ErrInvalidInput, "invalid embedded object ID", "Expected format: file-id#embedded-id")
 	}
-	fileID := parts[0]
-	slug := parts[1]
 
 	// Resolve file ID to file path
 	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
@@ -572,7 +562,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 
 			// Validate enum values
 			if isField && fieldDef != nil && fieldDef.Type == schema.FieldTypeEnum && len(fieldDef.Values) > 0 {
-				if !contains(fieldDef.Values, value) {
+				if !slices.Contains(fieldDef.Values, value) {
 					return handleErrorMsg(ErrValidationFailed,
 						fmt.Sprintf("invalid value '%s' for field '%s'", value, fieldName),
 						fmt.Sprintf("Allowed values: %s", strings.Join(fieldDef.Values, ", ")))
@@ -702,11 +692,10 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 // previewSetEmbedded generates a preview for an embedded object.
 func previewSetEmbedded(vaultPath, id string, updates map[string]string, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) (*BulkPreviewItem, *BulkResult) {
 	// Parse the embedded ID
-	parts := strings.SplitN(id, "#", 2)
-	if len(parts) != 2 {
+	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
+	if !isEmbedded {
 		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "invalid embedded ID format"}
 	}
-	fileID := parts[0]
 
 	// Resolve file ID to file path
 	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
@@ -769,12 +758,10 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, vaultCf
 // applySetEmbedded applies a set operation to an embedded object.
 func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) error {
 	// Parse the embedded ID
-	parts := strings.SplitN(id, "#", 2)
-	if len(parts) != 2 {
+	fileID, slug, isEmbedded := paths.ParseEmbeddedID(id)
+	if !isEmbedded {
 		return fmt.Errorf("invalid embedded ID format")
 	}
-	fileID := parts[0]
-	slug := parts[1]
 
 	// Resolve file ID to file path
 	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)

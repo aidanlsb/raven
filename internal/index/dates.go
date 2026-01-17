@@ -20,18 +20,18 @@ import (
 //   - "YYYY-MM-DD" (exact date)
 func ParseDateFilter(filter string, fieldExpr string) (condition string, args []interface{}, err error) {
 	filter = strings.ToLower(strings.TrimSpace(filter))
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().Format(dates.DateLayout)
 
 	switch filter {
 	case "today":
 		return fieldExpr + " = ?", []interface{}{today}, nil
 
 	case "yesterday":
-		yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+		yesterday := time.Now().AddDate(0, 0, -1).Format(dates.DateLayout)
 		return fieldExpr + " = ?", []interface{}{yesterday}, nil
 
 	case "tomorrow":
-		tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+		tomorrow := time.Now().AddDate(0, 0, 1).Format(dates.DateLayout)
 		return fieldExpr + " = ?", []interface{}{tomorrow}, nil
 
 	case "this-week":
@@ -41,8 +41,8 @@ func ParseDateFilter(filter string, fieldExpr string) (condition string, args []
 		if weekday == 0 {
 			weekday = 7 // Sunday
 		}
-		startOfWeek := now.AddDate(0, 0, -(weekday - 1)).Format("2006-01-02")
-		endOfWeek := now.AddDate(0, 0, 7-weekday).Format("2006-01-02")
+		startOfWeek := now.AddDate(0, 0, -(weekday - 1)).Format(dates.DateLayout)
+		endOfWeek := now.AddDate(0, 0, 7-weekday).Format(dates.DateLayout)
 		return fieldExpr + " >= ? AND " + fieldExpr + " <= ?",
 			[]interface{}{startOfWeek, endOfWeek}, nil
 
@@ -52,8 +52,8 @@ func ParseDateFilter(filter string, fieldExpr string) (condition string, args []
 		if weekday == 0 {
 			weekday = 7
 		}
-		startOfNextWeek := now.AddDate(0, 0, 8-weekday).Format("2006-01-02")
-		endOfNextWeek := now.AddDate(0, 0, 14-weekday).Format("2006-01-02")
+		startOfNextWeek := now.AddDate(0, 0, 8-weekday).Format(dates.DateLayout)
+		endOfNextWeek := now.AddDate(0, 0, 14-weekday).Format(dates.DateLayout)
 		return fieldExpr + " >= ? AND " + fieldExpr + " <= ?",
 			[]interface{}{startOfNextWeek, endOfNextWeek}, nil
 

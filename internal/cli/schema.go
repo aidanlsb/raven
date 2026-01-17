@@ -222,8 +222,7 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	// Check for built-in types
-	switch typeName {
-	case "page", "section", "date":
+	if schema.IsBuiltinType(typeName) {
 		typeJSON := TypeSchema{Name: typeName, Builtin: true}
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{"type": typeJSON}, &Meta{QueryTimeMs: elapsed})
@@ -447,8 +446,10 @@ func buildTraitSchema(name string, traitDef *schema.TraitDefinition) TraitSchema
 	return result
 }
 
+// isBuiltinType is deprecated - use schema.IsBuiltinType instead.
+// Keeping for now to avoid breaking any internal callers.
 func isBuiltinType(name string) bool {
-	return name == "page" || name == "section" || name == "date"
+	return schema.IsBuiltinType(name)
 }
 
 func init() {

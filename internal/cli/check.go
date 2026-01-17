@@ -1278,7 +1278,7 @@ func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath str
 	schemaPath := filepath.Join(vaultPath, "schema.yaml")
 
 	// Check built-in types
-	if typeName == "page" || typeName == "section" || typeName == "date" {
+	if schema.IsBuiltinType(typeName) {
 		return fmt.Errorf("'%s' is a built-in type", typeName)
 	}
 
