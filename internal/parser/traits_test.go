@@ -181,6 +181,18 @@ func TestParseTraitValue_Kinds(t *testing.T) {
 			wantRef:    true,
 			wantString: "people/freya",
 		},
+		{
+			name:       "ref with display text alias is stripped",
+			input:      "[[people/freya|Lady Freya]]",
+			wantRef:    true,
+			wantString: "people/freya",
+		},
+		{
+			name:       "ref with display text only target returned",
+			input:      "[[cursor|Cursor Inc]]",
+			wantRef:    true,
+			wantString: "cursor",
+		},
 	}
 
 	for _, tt := range tests {

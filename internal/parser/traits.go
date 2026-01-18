@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // TraitAnnotation represents a parsed @trait() annotation.
@@ -115,10 +116,10 @@ func ParseTrait(line string, lineNumber int) *TraitAnnotation {
 func parseTraitValue(valueStr string) schema.FieldValue {
 	valueStr = strings.TrimSpace(valueStr)
 
-	// Check for reference syntax [[...]]
-	if strings.HasPrefix(valueStr, "[[") && strings.HasSuffix(valueStr, "]]") {
-		ref := valueStr[2 : len(valueStr)-2]
-		return schema.Ref(ref)
+	// Check for reference syntax [[target]] or [[target|display]]
+	// Use wikilink.ParseExact to correctly handle aliases
+	if target, _, ok := wikilink.ParseExact(valueStr); ok {
+		return schema.Ref(target)
 	}
 
 	// Check for datetime.

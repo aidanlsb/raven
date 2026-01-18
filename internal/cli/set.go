@@ -18,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 var (
@@ -861,9 +862,10 @@ func convertToSchemaFieldValue(v interface{}) schema.FieldValue {
 	case bool:
 		return schema.Bool(val)
 	case string:
-		// Check if it's a reference
-		if strings.HasPrefix(val, "[[") && strings.HasSuffix(val, "]]") {
-			return schema.Ref(val[2 : len(val)-2])
+		// Check if it's a reference [[target]] or [[target|display]]
+		// Use wikilink.ParseExact to correctly handle aliases
+		if target, _, ok := wikilink.ParseExact(val); ok {
+			return schema.Ref(target)
 		}
 		return schema.String(val)
 	case []interface{}:
