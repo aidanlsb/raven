@@ -250,6 +250,10 @@ func TestSerializeRoundTrip(t *testing.T) {
 			input: "::meeting(attendees=[[[people/freya]], [[people/thor]]], id=sync)",
 		},
 		{
+			name:  "with reference with display text - alias stripped",
+			input: "::task(assignee=[[people/freya|Freya]], status=active)",
+		},
+		{
 			name:  "boolean value",
 			input: "::task(done=true, id=cleanup)",
 		},

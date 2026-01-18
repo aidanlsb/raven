@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // TypeDeclaration represents a parsed ::type() declaration.
@@ -188,9 +189,12 @@ func parseValue(s string) schema.FieldValue {
 		return schema.Null()
 	}
 
-	// Reference [[...]] - exactly 2 opening and 2 closing brackets
-	if strings.HasPrefix(s, "[[") && !strings.HasPrefix(s, "[[[") && strings.HasSuffix(s, "]]") {
-		return schema.Ref(s[2 : len(s)-2])
+	// Reference [[target]] or [[target|display]] - exactly 2 opening and 2 closing brackets
+	// Use wikilink.ParseExact to correctly handle aliases
+	if !strings.HasPrefix(s, "[[[") {
+		if target, _, ok := wikilink.ParseExact(s); ok {
+			return schema.Ref(target)
+		}
 	}
 
 	// Array (including array of refs like [[[a]], [[b]]])
