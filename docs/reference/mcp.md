@@ -31,23 +31,35 @@ Replace `/path/to/rvn` with the actual binary path (find with `which rvn`).
 
 ## MCP Resources
 
-Raven exposes two MCP resources that agents can fetch:
+Raven exposes MCP resources that agents can fetch:
 
 | URI | Name | Description |
 |-----|------|-------------|
-| `raven://guide/agent` | Agent Guide | Comprehensive guide for AI agents on how to use Raven effectively |
+| `raven://guide/index` | Agent Guide Index | Overview of available agent guide topics |
 | `raven://schema/current` | Current Schema | The vault's `schema.yaml` defining types and traits |
 
-### Agent Guide Resource
+Additional topic resources are available under `raven://guide/<topic>`:
 
-The agent guide (`raven://guide/agent`) provides:
+- `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations
+- `raven://guide/getting-started` - First steps for orienting in a new vault
+- `raven://guide/core-concepts` - Types, traits, references, and file formats
+- `raven://guide/querying` - Raven Query Language (RQL) and query strategy
+- `raven://guide/key-workflows` - Common workflows and decision patterns
+- `raven://guide/error-handling` - How to respond to tool errors
+- `raven://guide/issue-types` - `raven_check` issue reference and fixes
+- `raven://guide/best-practices` - Operating principles and safety checks
+- `raven://guide/examples` - Example conversations and query translations
+
+### Agent Guide Resources
+
+The agent guide resources (`raven://guide/index` and `raven://guide/<topic>`) provide:
 - Getting started sequence for new vaults
 - Query language syntax and composition patterns
-- All key workflows (creating, editing, querying, bulk operations)
+- Key workflows (creating, editing, querying, bulk operations)
 - Error handling patterns
 - Best practices and example conversations
 
-Agents should fetch this resource when they need detailed guidance on Raven usage.
+Agents should fetch the index for discovery, then pull only the topic resources they need.
 
 ### Schema Resource
 
@@ -382,7 +394,7 @@ All tools return JSON with a consistent envelope:
 
 ## Agent Best Practices
 
-See [`internal/mcp/agent-guide.md`](../../internal/mcp/agent-guide.md) for comprehensive agent guidelines (also available via the `raven://guide/agent` MCP resource). Key points:
+See [`internal/mcp/agent-guide/index.md`](../../internal/mcp/agent-guide/index.md) for comprehensive agent guidelines (also available via the `raven://guide/index` and `raven://guide/<topic>` MCP resources). Key points:
 
 1. **Check schema first** — Use `raven_schema` to understand types and required fields before creating objects
 

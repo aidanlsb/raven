@@ -258,20 +258,13 @@ type ResourceContent struct {
 }
 
 func (s *Server) handleResourcesList(req *Request) {
-	resources := []Resource{
-		{
-			URI:         "raven://guide/agent",
-			Name:        "Agent Guide",
-			Description: "Comprehensive guide for AI agents on how to use Raven effectively. Includes workflows, best practices, and example conversations.",
-			MimeType:    "text/markdown",
-		},
-		{
-			URI:         "raven://schema/current",
-			Name:        "Current Schema",
-			Description: "The current schema.yaml defining types and traits for this vault.",
-			MimeType:    "text/yaml",
-		},
-	}
+	resources := append([]Resource{}, listAgentGuideResources()...)
+	resources = append(resources, Resource{
+		URI:         "raven://schema/current",
+		Name:        "Current Schema",
+		Description: "The current schema.yaml defining types and traits for this vault.",
+		MimeType:    "text/yaml",
+	})
 	s.sendResult(req.ID, map[string]interface{}{"resources": resources})
 }
 
@@ -289,11 +282,16 @@ func (s *Server) handleResourcesRead(req *Request) {
 
 	var content ResourceContent
 	switch params.URI {
-	case "raven://guide/agent":
+	case "raven://guide/index":
+		indexContent, ok := getAgentGuideIndex()
+		if !ok {
+			s.sendError(req.ID, -32602, "Resource not found", params.URI)
+			return
+		}
 		content = ResourceContent{
 			URI:      params.URI,
 			MimeType: "text/markdown",
-			Text:     getAgentGuide(),
+			Text:     indexContent,
 		}
 	case "raven://schema/current":
 		schemaContent, err := s.readSchemaFile()
@@ -307,6 +305,24 @@ func (s *Server) handleResourcesRead(req *Request) {
 			Text:     schemaContent,
 		}
 	default:
+		if strings.HasPrefix(params.URI, "raven://guide/") {
+			slug := strings.TrimPrefix(params.URI, "raven://guide/")
+			if slug == "" {
+				s.sendError(req.ID, -32602, "Resource not found", params.URI)
+				return
+			}
+			_, topicContent, ok := getAgentGuideTopic(slug)
+			if !ok {
+				s.sendError(req.ID, -32602, "Resource not found", params.URI)
+				return
+			}
+			content = ResourceContent{
+				URI:      params.URI,
+				MimeType: "text/markdown",
+				Text:     topicContent,
+			}
+			break
+		}
 		s.sendError(req.ID, -32602, "Resource not found", params.URI)
 		return
 	}
