@@ -167,7 +167,7 @@ rvn init /path/to/notes
 - [Bulk operations](docs/reference/bulk-operations.md)
 - [Workflows spec](docs/reference/workflows.md)
 - [MCP tools & agents](docs/reference/mcp.md)
-- [Agent guide](internal/mcp/agent-guide.md)
+- [Agent guide](internal/mcp/agent-guide/index.md)
 
 
 **Design docs:**
