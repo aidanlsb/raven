@@ -84,42 +84,77 @@ func (p *Parser) parseQuery() (*Query, error) {
 	return &query, nil
 }
 
-// parsePredicates parses a sequence of predicates.
+// parsePredicates parses a boolean expression of predicates.
 func (p *Parser) parsePredicates(qt QueryType) ([]Predicate, error) {
-	var predicates []Predicate
+	pred, err := p.parseOrPredicate(qt)
+	if err != nil {
+		return nil, err
+	}
+	if pred == nil {
+		return nil, nil
+	}
+	return []Predicate{pred}, nil
+}
+
+// parseOrPredicate parses OR expressions (lowest precedence).
+func (p *Parser) parseOrPredicate(qt QueryType) (Predicate, error) {
+	left, err := p.parseAndPredicate(qt)
+	if err != nil {
+		return nil, err
+	}
+	if left == nil {
+		return nil, nil
+	}
+
+	for p.curr.Type == TokenPipe {
+		p.advance()
+		right, err := p.parseAndPredicate(qt)
+		if err != nil {
+			return nil, err
+		}
+		if right == nil {
+			return nil, fmt.Errorf("expected predicate after '|'")
+		}
+		left = &OrPredicate{Left: left, Right: right}
+	}
+
+	return left, nil
+}
+
+// parseAndPredicate parses implicit AND expressions (middle precedence).
+func (p *Parser) parseAndPredicate(qt QueryType) (Predicate, error) {
+	var preds []Predicate
 
 	for {
-		// Stop at EOF, closing braces, closing parens, or pipeline
-		if p.curr.Type == TokenEOF || p.curr.Type == TokenRBrace || p.curr.Type == TokenRParen || p.curr.Type == TokenPipeline {
+		// Stop at EOF, closing braces, closing parens, pipeline, or OR operator
+		if p.curr.Type == TokenEOF || p.curr.Type == TokenRBrace || p.curr.Type == TokenRParen || p.curr.Type == TokenPipeline || p.curr.Type == TokenPipe {
 			break
 		}
 
-		pred, err := p.parsePredicate(qt)
+		pred, err := p.parseUnaryPredicate(qt)
 		if err != nil {
 			return nil, err
 		}
 		if pred == nil {
-			break
-		}
-
-		// Check for OR operator
-		if p.curr.Type == TokenPipe {
-			p.advance()
-			right, err := p.parsePredicate(qt)
-			if err != nil {
-				return nil, err
+			if p.curr.Type == TokenEOF || p.curr.Type == TokenRBrace || p.curr.Type == TokenRParen || p.curr.Type == TokenPipeline || p.curr.Type == TokenPipe {
+				break
 			}
-			pred = &OrPredicate{Left: pred, Right: right}
+			return nil, fmt.Errorf("unexpected token %v at pos %d", p.curr.Type, p.curr.Pos)
 		}
-
-		predicates = append(predicates, pred)
+		preds = append(preds, pred)
 	}
 
-	return predicates, nil
+	if len(preds) == 0 {
+		return nil, nil
+	}
+	if len(preds) == 1 {
+		return preds[0], nil
+	}
+	return &GroupPredicate{Predicates: preds}, nil
 }
 
-// parsePredicate parses a single predicate.
-func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
+// parseUnaryPredicate parses NOT and grouped predicates (highest precedence).
+func (p *Parser) parseUnaryPredicate(qt QueryType) (Predicate, error) {
 	// Check for negation
 	negated := false
 	if p.curr.Type == TokenBang {
@@ -130,16 +165,27 @@ func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
 	// Check for grouping parentheses
 	if p.curr.Type == TokenLParen {
 		p.advance()
-		preds, err := p.parsePredicates(qt)
+		pred, err := p.parseOrPredicate(qt)
 		if err != nil {
 			return nil, err
+		}
+		if pred == nil {
+			return nil, fmt.Errorf("expected predicate inside parentheses")
 		}
 		if err := p.expect(TokenRParen); err != nil {
 			return nil, fmt.Errorf("unclosed parenthesis: %w", err)
 		}
-		return &GroupPredicate{basePredicate: basePredicate{negated: negated}, Predicates: preds}, nil
+		if !negated {
+			return pred, nil
+		}
+		return &GroupPredicate{basePredicate: basePredicate{negated: true}, Predicates: []Predicate{pred}}, nil
 	}
 
+	return p.parseAtomicPredicate(qt, negated)
+}
+
+// parseAtomicPredicate parses a single predicate without boolean composition.
+func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, error) {
 	// Field predicate (starts with .)
 	if p.curr.Type == TokenDot {
 		p.advance()
@@ -211,8 +257,6 @@ func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
 		case "content":
 			return p.parseContentPredicate(negated)
 		// Trait predicates
-		case "source":
-			return p.parseSourcePredicate(negated)
 		case "on":
 			return p.parseOnPredicate(negated)
 		case "within":

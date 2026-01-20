@@ -1,25 +1,6 @@
 package query
 
-import (
-	"fmt"
-	"strings"
-)
-
-// parseSourcePredicate parses source:inline or source:frontmatter
-func (p *Parser) parseSourcePredicate(negated bool) (Predicate, error) {
-	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected 'inline' or 'frontmatter'")
-	}
-	source := strings.ToLower(p.curr.Value)
-	if source != "inline" && source != "frontmatter" {
-		return nil, fmt.Errorf("invalid source: %s (expected 'inline' or 'frontmatter')", source)
-	}
-	p.advance()
-	return &SourcePredicate{
-		basePredicate: basePredicate{negated: negated},
-		Source:        source,
-	}, nil
-}
+import "fmt"
 
 // parseOnPredicate parses on:{object:type ...}, on:[[target]], or on:_
 func (p *Parser) parseOnPredicate(negated bool) (Predicate, error) {

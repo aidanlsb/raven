@@ -10,6 +10,10 @@ const (
 )
 
 func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias string) (string, []interface{}, error) {
+	if predicateContainsSelfRef(pred) {
+		return "", nil, fmt.Errorf("self-reference '_' is only valid inside pipeline subqueries")
+	}
+
 	// Shared recursion wiring for OR/group.
 	recurse := func(p Predicate, alias string) (string, []interface{}, error) {
 		return e.buildPredicateSQL(kind, p, alias)
@@ -22,7 +26,10 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias s
 	case *GroupPredicate:
 		return e.buildGroupPredicateSQL(p, alias, recurse)
 	case *RefdPredicate:
-		return e.buildRefdPredicateSQL(p, alias, kind == predicateKindTrait)
+		if kind == predicateKindTrait {
+			return "", nil, fmt.Errorf("refd: predicate is only supported for object queries")
+		}
+		return e.buildRefdPredicateSQL(p, alias, false)
 	case *ContentPredicate:
 		if kind == predicateKindTrait {
 			return e.buildTraitContentPredicateSQL(p, alias)
@@ -87,11 +94,6 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias s
 			return "", nil, fmt.Errorf("unsupported object predicate type: %T", pred)
 		}
 		return e.buildValuePredicateSQL(p, alias)
-	case *SourcePredicate:
-		if kind != predicateKindTrait {
-			return "", nil, fmt.Errorf("unsupported object predicate type: %T", pred)
-		}
-		return e.buildSourcePredicateSQL(p, alias)
 	case *OnPredicate:
 		if kind != predicateKindTrait {
 			return "", nil, fmt.Errorf("unsupported object predicate type: %T", pred)

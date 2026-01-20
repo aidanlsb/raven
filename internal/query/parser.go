@@ -109,7 +109,7 @@ func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
 	case TokenIdent:
 		value = p.curr.Value
 	case TokenRef:
-		value = p.curr.Literal
+		value = p.curr.Value
 	case TokenString:
 		value = p.curr.Value
 	default:
@@ -157,12 +157,23 @@ func (p *Parser) parseStringFuncPredicate(negated bool, funcType StringFuncType)
 		return nil, err
 	}
 
-	// Parse second argument: string value
-	if p.curr.Type != TokenString {
+	// Parse second argument: string value (or /regex/ for matches)
+	switch p.curr.Type {
+	case TokenString:
+		pred.Value = p.curr.Value
+		p.advance()
+	case TokenRegex:
+		if funcType != StringFuncMatches {
+			return nil, fmt.Errorf("regex literal is only supported for matches()")
+		}
+		pred.Value = p.curr.Value
+		p.advance()
+	default:
+		if funcType == StringFuncMatches {
+			return nil, fmt.Errorf("expected string or /regex/ as second argument to %s()", funcType)
+		}
 		return nil, fmt.Errorf("expected string value as second argument to %s()", funcType)
 	}
-	pred.Value = p.curr.Value
-	p.advance()
 
 	// Check for optional third argument: case sensitivity (true = case-sensitive)
 	if p.curr.Type == TokenComma {
@@ -215,8 +226,8 @@ func (p *Parser) parseArrayQuantifierPredicate(negated bool, quantifier ArrayQua
 		return nil, err
 	}
 
-	// Parse second argument: element predicate (with possible OR)
-	elementPred, err := p.parseElementPredicateWithOr()
+	// Parse second argument: element predicate (supports AND/OR)
+	elementPred, err := p.parseElementOrPredicate()
 	if err != nil {
 		return nil, err
 	}
@@ -229,29 +240,61 @@ func (p *Parser) parseArrayQuantifierPredicate(negated bool, quantifier ArrayQua
 	return pred, nil
 }
 
-// parseElementPredicateWithOr parses an element predicate that may contain OR.
-func (p *Parser) parseElementPredicateWithOr() (Predicate, error) {
-	left, err := p.parseElementPredicate()
+// parseElementOrPredicate parses element predicates with OR (lowest precedence).
+func (p *Parser) parseElementOrPredicate() (Predicate, error) {
+	left, err := p.parseElementAndPredicate()
 	if err != nil {
 		return nil, err
 	}
+	if left == nil {
+		return nil, fmt.Errorf("expected element predicate")
+	}
 
-	// Check for OR
-	if p.curr.Type == TokenPipe {
+	for p.curr.Type == TokenPipe {
 		p.advance()
-		right, err := p.parseElementPredicateWithOr()
+		right, err := p.parseElementAndPredicate()
 		if err != nil {
 			return nil, err
 		}
-		return &OrPredicate{Left: left, Right: right}, nil
+		if right == nil {
+			return nil, fmt.Errorf("expected element predicate after '|'")
+		}
+		left = &OrPredicate{Left: left, Right: right}
 	}
 
 	return left, nil
 }
 
-// parseElementPredicate parses predicates used within array quantifiers.
+// parseElementAndPredicate parses element predicates with implicit AND.
+func (p *Parser) parseElementAndPredicate() (Predicate, error) {
+	var preds []Predicate
+
+	for {
+		if p.curr.Type == TokenRParen || p.curr.Type == TokenPipe {
+			break
+		}
+		pred, err := p.parseElementUnaryPredicate()
+		if err != nil {
+			return nil, err
+		}
+		if pred == nil {
+			return nil, fmt.Errorf("expected element predicate")
+		}
+		preds = append(preds, pred)
+	}
+
+	if len(preds) == 0 {
+		return nil, nil
+	}
+	if len(preds) == 1 {
+		return preds[0], nil
+	}
+	return &GroupPredicate{Predicates: preds}, nil
+}
+
+// parseElementUnaryPredicate parses element predicates used within array quantifiers.
 // Supports: _ == value, _ != value, includes(_, "str"), etc.
-func (p *Parser) parseElementPredicate() (Predicate, error) {
+func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 	// Check for negation
 	negated := false
 	if p.curr.Type == TokenBang {
@@ -259,14 +302,31 @@ func (p *Parser) parseElementPredicate() (Predicate, error) {
 		p.advance()
 	}
 
+	// Check for parenthesized group
+	if p.curr.Type == TokenLParen {
+		p.advance()
+		pred, err := p.parseElementOrPredicate()
+		if err != nil {
+			return nil, err
+		}
+		if pred == nil {
+			return nil, fmt.Errorf("expected element predicate inside parentheses")
+		}
+		if err := p.expect(TokenRParen); err != nil {
+			return nil, fmt.Errorf("unclosed parenthesis in element predicate: %w", err)
+		}
+		if negated {
+			return &GroupPredicate{
+				basePredicate: basePredicate{negated: true},
+				Predicates:    []Predicate{pred},
+			}, nil
+		}
+		return pred, nil
+	}
+
 	// Check for _ == value or _ != value
 	if p.curr.Type == TokenUnderscore {
 		return p.parseElementUnderscoreEquality(negated)
-	}
-
-	// Check for parenthesized group
-	if p.curr.Type == TokenLParen {
-		return p.parseElementGroup(negated)
 	}
 
 	// Check for function-style predicates: includes(_, "str"), etc.
@@ -318,36 +378,6 @@ func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error)
 		Value:         value,
 		CompareOp:     compareOp,
 	}, nil
-}
-
-func (p *Parser) parseElementGroup(negated bool) (Predicate, error) {
-	p.advance()
-	pred, err := p.parseElementPredicate()
-	if err != nil {
-		return nil, err
-	}
-
-	// Check for OR within the group
-	if p.curr.Type == TokenPipe {
-		p.advance()
-		right, err := p.parseElementPredicate()
-		if err != nil {
-			return nil, err
-		}
-		pred = &OrPredicate{Left: pred, Right: right}
-	}
-
-	if err := p.expect(TokenRParen); err != nil {
-		return nil, fmt.Errorf("unclosed parenthesis in element predicate: %w", err)
-	}
-
-	if negated {
-		return &GroupPredicate{
-			basePredicate: basePredicate{negated: true},
-			Predicates:    []Predicate{pred},
-		}, nil
-	}
-	return pred, nil
 }
 
 func (p *Parser) tryParseElementFuncPredicate(negated bool) (Predicate, bool, error) {

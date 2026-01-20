@@ -172,15 +172,6 @@ type ValuePredicate struct {
 
 func (ValuePredicate) predicateNode() {}
 
-// SourcePredicate filters traits by source location.
-// Syntax: source:inline, source:frontmatter
-type SourcePredicate struct {
-	basePredicate
-	Source string // "inline" or "frontmatter"
-}
-
-func (SourcePredicate) predicateNode() {}
-
 // OnPredicate filters traits by direct parent object.
 // Syntax: on:{object:type ...}, on:[[target]], on:_
 type OnPredicate struct {

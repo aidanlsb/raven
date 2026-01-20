@@ -152,7 +152,6 @@ Predicates for object queries:
 
 Predicates for trait queries:
   value==val       Trait value equals val
-  source:inline    Only inline traits
   on:{object:...}      Direct parent matches subquery
   within:{object:...}  Any ancestor matches subquery
 
@@ -564,7 +563,6 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 				"file_path":  r.FilePath,
 				"line":       r.Line,
 				"object_id":  r.ParentObjectID,
-				"source":     r.Source,
 			}
 			// Include computed values from pipeline if present
 			if len(r.Computed) > 0 {

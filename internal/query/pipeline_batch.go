@@ -63,50 +63,84 @@ func (e *Executor) extractSelfRefBinding(predicates []Predicate) (string, []Pred
 	var bindingType string
 	var remaining []Predicate
 
-	for _, pred := range predicates {
+	var visit func(Predicate)
+	visit = func(pred Predicate) {
 		switch p := pred.(type) {
+		case *GroupPredicate:
+			if p.Negated() {
+				remaining = append(remaining, pred)
+				return
+			}
+			for _, sub := range p.Predicates {
+				visit(sub)
+			}
+			return
+		case *OrPredicate:
+			// OR predicates are not supported for batching.
+			remaining = append(remaining, pred)
+			return
 		case *WithinPredicate:
 			if p.IsSelfRef {
-				bindingType = "within"
-				continue
+				if bindingType == "" {
+					bindingType = "within"
+					return
+				}
 			}
 		case *OnPredicate:
 			if p.IsSelfRef {
-				bindingType = "on"
-				continue
+				if bindingType == "" {
+					bindingType = "on"
+					return
+				}
 			}
 		case *ParentPredicate:
 			if p.IsSelfRef {
-				bindingType = "parent"
-				continue
+				if bindingType == "" {
+					bindingType = "parent"
+					return
+				}
 			}
 		case *AncestorPredicate:
 			if p.IsSelfRef {
-				bindingType = "ancestor"
-				continue
+				if bindingType == "" {
+					bindingType = "ancestor"
+					return
+				}
 			}
 		case *ChildPredicate:
 			if p.IsSelfRef {
-				bindingType = "child"
-				continue
+				if bindingType == "" {
+					bindingType = "child"
+					return
+				}
 			}
 		case *DescendantPredicate:
 			if p.IsSelfRef {
-				bindingType = "descendant"
-				continue
+				if bindingType == "" {
+					bindingType = "descendant"
+					return
+				}
 			}
 		case *RefsPredicate:
 			if p.IsSelfRef {
-				bindingType = "refs"
-				continue
+				if bindingType == "" {
+					bindingType = "refs"
+					return
+				}
 			}
 		case *RefdPredicate:
 			if p.IsSelfRef {
-				bindingType = "refd"
-				continue
+				if bindingType == "" {
+					bindingType = "refd"
+					return
+				}
 			}
 		}
 		remaining = append(remaining, pred)
+	}
+
+	for _, pred := range predicates {
+		visit(pred)
 	}
 
 	return bindingType, remaining
