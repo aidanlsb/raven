@@ -26,9 +26,9 @@ func compareOpToSQL(op CompareOp) string {
 func likeCond(expr string, wrapLower bool) string {
 	// Always include ESCAPE so callers can safely escape % and _.
 	if wrapLower {
-		return fmt.Sprintf("LOWER(%s) LIKE LOWER(?) ESCAPE '\\\\'", expr)
+		return fmt.Sprintf("LOWER(%s) LIKE LOWER(?) ESCAPE '\\'", expr)
 	}
-	return fmt.Sprintf("%s LIKE ? ESCAPE '\\\\'", expr)
+	return fmt.Sprintf("%s LIKE ? ESCAPE '\\'", expr)
 }
 
 func jsonFieldPath(field string) string {
