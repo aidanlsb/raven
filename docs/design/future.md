@@ -1572,7 +1572,6 @@ Areas identified for additional test coverage. These require more complex test f
 The following functions have limited or no coverage:
 - `buildAncestorPredicateSQL` (0%) - requires multi-level hierarchy fixtures
 - `buildChildPredicateSQL` (0%) - requires parent-child relationship fixtures
-- `buildSourcePredicateSQL` (0%) - requires frontmatter vs inline trait fixtures
 - `buildWithinPredicateSQL` (0%) - requires nested object fixtures
 - `buildOrPredicateSQL` (0%) - requires complex boolean query fixtures
 - `buildGroupPredicateSQL` (0%) - requires complex grouped query fixtures

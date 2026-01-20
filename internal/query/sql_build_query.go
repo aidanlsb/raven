@@ -54,11 +54,7 @@ func (e *Executor) buildTraitSQL(q *Query) (string, []interface{}, error) {
 	}
 
 	sqlStr := fmt.Sprintf(`
-		SELECT t.id, t.trait_type, t.value, t.content, t.file_path, t.line_number, t.parent_object_id,
-		       CASE WHEN t.value IS NULL AND EXISTS(
-		           SELECT 1 FROM objects o WHERE o.id = t.parent_object_id
-		           AND json_extract(o.fields, '$.' || t.trait_type) IS NOT NULL
-		       ) THEN 'frontmatter' ELSE 'inline' END as source
+		SELECT t.id, t.trait_type, t.value, t.content, t.file_path, t.line_number, t.parent_object_id
 		FROM traits t
 		WHERE %s
 		ORDER BY t.file_path, t.line_number

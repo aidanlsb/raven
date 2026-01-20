@@ -32,9 +32,6 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 			cond, condArgs := buildValueCondition(tp, "value")
 			traitConditions = append(traitConditions, cond)
 			args = append(args, condArgs...)
-		case *SourcePredicate:
-			// Source filtering would require more complex logic
-			// For now, we'll skip it in subqueries
 		}
 	}
 

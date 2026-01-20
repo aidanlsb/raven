@@ -164,6 +164,58 @@ func TestValidator_ValidQuery(t *testing.T) {
 	}
 }
 
+func TestValidator_SelfRefOutsidePipelineRejected(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {Fields: map[string]*schema.FieldDefinition{}},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"due": {},
+		},
+	}
+
+	v := NewValidator(sch)
+
+	q, err := Parse("object:project parent:_")
+	if err != nil {
+		t.Fatalf("failed to parse query: %v", err)
+	}
+
+	err = v.Validate(q)
+	if err == nil {
+		t.Fatal("expected validation error for self-reference outside pipeline")
+	}
+	if !strings.Contains(err.Error(), "self-reference '_'") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidator_TraitRefdRejected(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {Fields: map[string]*schema.FieldDefinition{}},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"due": {},
+		},
+	}
+
+	v := NewValidator(sch)
+
+	q, err := Parse("trait:due refd:[[projects/website]]")
+	if err != nil {
+		t.Fatalf("failed to parse query: %v", err)
+	}
+
+	err = v.Validate(q)
+	if err == nil {
+		t.Fatal("expected validation error for refd in trait query")
+	}
+	if !strings.Contains(err.Error(), "refd:") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestValidator_FieldNotTrait(t *testing.T) {
 	// Traits are NOT valid as field access - only actual fields are
 	sch := &schema.Schema{

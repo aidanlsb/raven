@@ -33,10 +33,19 @@ func NewValidator(sch *schema.Schema) *Validator {
 // Validate checks a parsed query against the schema.
 // Returns a ValidationError if the query references undefined types, traits, or fields.
 func (v *Validator) Validate(q *Query) error {
-	return v.validateQuery(q)
+	return v.validateQuery(q, false)
 }
 
-func (v *Validator) validateQuery(q *Query) error {
+func (v *Validator) validateQuery(q *Query, allowSelfRef bool) error {
+	if q == nil {
+		return nil
+	}
+	if !allowSelfRef && containsSelfRef(q) {
+		return &ValidationError{
+			Message:    "self-reference '_' is only valid inside pipeline subqueries (and array quantifiers)",
+			Suggestion: "Move '_' into a pipeline assignment subquery like count({trait:todo within:_})",
+		}
+	}
 	var err error
 	if q.Type == QueryTypeObject {
 		err = v.validateObjectQuery(q)
@@ -80,7 +89,7 @@ func (v *Validator) validateAssignmentStage(s *AssignmentStage, queryType QueryT
 
 	// Subqueries must contain a _ reference to be meaningful
 	if s.SubQuery != nil {
-		if err := v.validateQuery(s.SubQuery); err != nil {
+		if err := v.validateQuery(s.SubQuery, true); err != nil {
 			return &ValidationError{
 				Message:    fmt.Sprintf("invalid subquery in assignment '%s': %s", s.Name, err.Error()),
 				Suggestion: "Ensure the subquery references valid types/traits",
@@ -143,30 +152,38 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 	switch p := pred.(type) {
 	case *FieldPredicate:
 		return v.validateFieldPredicate(p, typeName, typeDef)
+	case *StringFuncPredicate:
+		return nil
+	case *ArrayQuantifierPredicate:
+		return nil
 	case *HasPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery, false)
+		}
 	case *ParentPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 		// Target-based predicate doesn't need schema validation
 	case *AncestorPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 	case *ChildPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 	case *DescendantPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 	case *ContainsPredicate:
-		return v.validateQuery(p.SubQuery)
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery, false)
+		}
 	case *RefsPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 	case *ContentPredicate:
 		// Content predicate just needs a non-empty search term
@@ -178,7 +195,22 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 		}
 	case *RefdPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
+		}
+	case *ValuePredicate:
+		return &ValidationError{
+			Message:    "value: predicate is only valid for trait queries",
+			Suggestion: "Use value==... in trait queries, or use .field==... for object fields",
+		}
+	case *OnPredicate:
+		return &ValidationError{
+			Message:    "on: predicate is only valid for trait queries",
+			Suggestion: "Use on:{object:...} in trait queries",
+		}
+	case *WithinPredicate:
+		return &ValidationError{
+			Message:    "within: predicate is only valid for trait queries",
+			Suggestion: "Use within:{object:...} in trait queries",
 		}
 	case *AtPredicate:
 		// at: is only valid for trait queries
@@ -203,18 +235,22 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 
 func (v *Validator) validateTraitPredicate(pred Predicate) error {
 	switch p := pred.(type) {
+	case *ValuePredicate:
+		return nil
+	case *StringFuncPredicate:
+		return nil
 	case *OnPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 		// Target-based predicate doesn't need schema validation
 	case *WithinPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 	case *RefsPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 	case *ContentPredicate:
 		// Content predicate just needs a non-empty search term
@@ -233,11 +269,52 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 					Suggestion: "Use at:{trait:name} to find traits co-located with other traits",
 				}
 			}
-			return v.validateQuery(p.SubQuery)
+			return v.validateQuery(p.SubQuery, false)
 		}
 	case *RefdPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
+		return &ValidationError{
+			Message:    "refd: predicate is only valid for object queries",
+			Suggestion: "Use refd: with object queries, or use refs: in trait queries",
+		}
+	case *FieldPredicate:
+		return &ValidationError{
+			Message:    "field predicates are only valid for object queries",
+			Suggestion: "Use .field==value in object queries, or value==... in trait queries",
+		}
+	case *ArrayQuantifierPredicate:
+		return &ValidationError{
+			Message:    "array predicates are only valid for object queries",
+			Suggestion: "Use any()/all()/none() on object array fields",
+		}
+	case *HasPredicate:
+		return &ValidationError{
+			Message:    "has: predicate is only valid for object queries",
+			Suggestion: "Use has:{trait:...} in object queries",
+		}
+	case *ContainsPredicate:
+		return &ValidationError{
+			Message:    "contains: predicate is only valid for object queries",
+			Suggestion: "Use contains:{trait:...} in object queries",
+		}
+	case *ParentPredicate:
+		return &ValidationError{
+			Message:    "parent: predicate is only valid for object queries",
+			Suggestion: "Use parent:{object:...} in object queries",
+		}
+	case *AncestorPredicate:
+		return &ValidationError{
+			Message:    "ancestor: predicate is only valid for object queries",
+			Suggestion: "Use ancestor:{object:...} in object queries",
+		}
+	case *ChildPredicate:
+		return &ValidationError{
+			Message:    "child: predicate is only valid for object queries",
+			Suggestion: "Use child:{object:...} in object queries",
+		}
+	case *DescendantPredicate:
+		return &ValidationError{
+			Message:    "descendant: predicate is only valid for object queries",
+			Suggestion: "Use descendant:{object:...} in object queries",
 		}
 	case *OrPredicate:
 		if err := v.validateTraitPredicate(p.Left); err != nil {
@@ -377,10 +454,16 @@ func predicateContainsSelfRef(pred Predicate) bool {
 			return true
 		}
 	case *HasPredicate:
+		if p.IsSelfRef {
+			return true
+		}
 		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
 			return true
 		}
 	case *ContainsPredicate:
+		if p.IsSelfRef {
+			return true
+		}
 		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
 			return true
 		}

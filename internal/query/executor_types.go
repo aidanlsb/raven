@@ -19,5 +19,4 @@ type TraitResult struct {
 	FilePath       string
 	Line           int
 	ParentObjectID string
-	Source         string // "inline" or "frontmatter"
 }

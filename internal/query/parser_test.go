@@ -294,16 +294,10 @@ func TestParseTraitPredicates(t *testing.T) {
 			wantValue: "very high",
 		},
 		{
-			name:      "source inline",
-			input:     "trait:due source:inline",
-			predType:  "source",
-			wantValue: "inline",
-		},
-		{
-			name:      "source frontmatter",
-			input:     "trait:due source:frontmatter",
-			predType:  "source",
-			wantValue: "frontmatter",
+			name:      "value predicate with ref",
+			input:     "trait:assignee value==[[people/freya]]",
+			predType:  "value",
+			wantValue: "people/freya",
 		},
 	}
 
@@ -324,13 +318,6 @@ func TestParseTraitPredicates(t *testing.T) {
 				}
 				if p.Value != tt.wantValue {
 					t.Errorf("Value = %v, want %v", p.Value, tt.wantValue)
-				}
-			case *SourcePredicate:
-				if tt.predType != "source" {
-					t.Fatalf("expected %s, got source", tt.predType)
-				}
-				if p.Source != tt.wantValue {
-					t.Errorf("Source = %v, want %v", p.Source, tt.wantValue)
 				}
 			default:
 				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
@@ -408,7 +395,7 @@ func TestParseBooleanComposition(t *testing.T) {
 		{
 			name:           "multiple predicates AND",
 			input:          "object:project .status==active has:{trait:due}",
-			wantPredicates: 2,
+			wantPredicates: 1,
 		},
 		{
 			name:           "OR predicate",
@@ -430,6 +417,12 @@ func TestParseBooleanComposition(t *testing.T) {
 			}
 			if len(q.Predicates) != tt.wantPredicates {
 				t.Errorf("got %d predicates, want %d", len(q.Predicates), tt.wantPredicates)
+			}
+			if tt.name == "multiple predicates AND" {
+				gp, ok := q.Predicates[0].(*GroupPredicate)
+				if !ok || len(gp.Predicates) != 2 {
+					t.Errorf("expected GroupPredicate with 2 predicates, got %T", q.Predicates[0])
+				}
 			}
 		})
 	}

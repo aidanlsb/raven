@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/index"
 )
 
 // buildTraitContentPredicateSQL builds SQL for content:"search terms" predicates on traits.
@@ -137,6 +139,20 @@ func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (stri
 // buildValueCondition builds a SQL condition for a ValuePredicate.
 // This is a helper for use in subqueries where we don't have the full executor context.
 func buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
+	// Date filters (today, past, this-week, YYYY-MM-DD, etc.)
+	if p.CompareOp == CompareEq || p.CompareOp == CompareNeq {
+		if cond, args, ok := buildDateFilterCondition(strings.TrimSpace(p.Value), column); ok {
+			negate := p.Negated()
+			if p.CompareOp == CompareNeq {
+				negate = !negate
+			}
+			if negate {
+				cond = "NOT (" + cond + ")"
+			}
+			return cond, args
+		}
+	}
+
 	// Pick operator for the predicate.
 	op := "="
 	switch p.CompareOp {
@@ -178,21 +194,15 @@ func buildValueCondition(p *ValuePredicate, column string) (string, []interface{
 	return cond, []interface{}{p.Value}
 }
 
-// buildSourcePredicateSQL builds SQL for source:inline predicates.
-func (e *Executor) buildSourcePredicateSQL(p *SourcePredicate, alias string) (string, []interface{}, error) {
-	// All traits are inline (in content). source:inline filters by line position.
-	var cond string
-	if p.Source == "frontmatter" {
-		cond = fmt.Sprintf("%s.line_number <= 1", alias)
-	} else {
-		cond = fmt.Sprintf("%s.line_number > 1", alias)
+func buildDateFilterCondition(value string, column string) (string, []interface{}, bool) {
+	if value == "" {
+		return "", nil, false
 	}
-
-	if p.Negated() {
-		cond = "NOT (" + cond + ")"
+	cond, args, err := index.ParseDateFilter(value, column)
+	if err != nil {
+		return "", nil, false
 	}
-
-	return cond, nil, nil
+	return cond, args, true
 }
 
 // buildOnPredicateSQL builds SQL for on:{object:...} or on:[[target]] predicates.

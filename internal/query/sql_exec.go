@@ -56,7 +56,7 @@ func (e *Executor) executeTraitQuery(q *Query) ([]TraitResult, error) {
 
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (TraitResult, error) {
 		var r TraitResult
-		if err := rows.Scan(&r.ID, &r.TraitType, &r.Value, &r.Content, &r.FilePath, &r.Line, &r.ParentObjectID, &r.Source); err != nil {
+		if err := rows.Scan(&r.ID, &r.TraitType, &r.Value, &r.Content, &r.FilePath, &r.Line, &r.ParentObjectID); err != nil {
 			return TraitResult{}, err
 		}
 		return r, nil

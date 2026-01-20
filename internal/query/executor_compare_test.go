@@ -3,6 +3,7 @@ package query
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCompareValues_DerefsStringPointers(t *testing.T) {
@@ -90,6 +91,42 @@ func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 	cond, _ := buildValueCondition(p, "t.value")
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
+	}
+}
+
+func TestBuildValueCondition_DateFilterPast(t *testing.T) {
+	p := &ValuePredicate{
+		Value:     "past",
+		CompareOp: CompareEq,
+	}
+	cond, args := buildValueCondition(p, "t.value")
+	if cond != "t.value < ? AND t.value IS NOT NULL" {
+		t.Fatalf("cond = %q", cond)
+	}
+	if len(args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(args))
+	}
+	today := time.Now().Format("2006-01-02")
+	if args[0] != today {
+		t.Fatalf("arg = %#v, want %q", args[0], today)
+	}
+}
+
+func TestBuildValueCondition_DateFilterPastNotEqual(t *testing.T) {
+	p := &ValuePredicate{
+		Value:     "past",
+		CompareOp: CompareNeq,
+	}
+	cond, args := buildValueCondition(p, "t.value")
+	if cond != "NOT (t.value < ? AND t.value IS NOT NULL)" {
+		t.Fatalf("cond = %q", cond)
+	}
+	if len(args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(args))
+	}
+	today := time.Now().Format("2006-01-02")
+	if args[0] != today {
+		t.Fatalf("arg = %#v, want %q", args[0], today)
 	}
 }
 
