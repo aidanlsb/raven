@@ -106,7 +106,7 @@ func TestLikeCond_EscapesWildcards(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if cond != "json_extract(o.fields, ?) LIKE ? ESCAPE '\\\\'" {
+	if cond != "json_extract(o.fields, ?) LIKE ? ESCAPE '\\'" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 2 {
