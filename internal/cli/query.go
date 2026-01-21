@@ -320,25 +320,90 @@ func formatFieldValue(key string, val interface{}) string {
 	}
 }
 
-// printTraitCards prints trait results in a card-style format with full content
-func printTraitCards(rows []traitTableRow) {
+// printTraitRows prints trait results in a compact row format with optional text wrapping
+func printTraitRows(rows []traitTableRow) {
 	if len(rows) == 0 {
 		return
 	}
 
+	// Calculate content width - leave room for metadata on the right
+	const contentWidth = 55
+
+	// Calculate max row width for consistent dividers
+	maxRowWidth := 0
 	for _, row := range rows {
-		// Content on first line (with trait highlighting)
+		// Estimate row width: content + gap + trait + " · " + location
+		traitLen := ui.VisibleLen(row.traits)
+		rowWidth := contentWidth + 2 + traitLen + 3 + len(row.location)
+		if rowWidth > maxRowWidth {
+			maxRowWidth = rowWidth
+		}
+	}
+	// Cap divider width to something reasonable
+	if maxRowWidth > 100 {
+		maxRowWidth = 100
+	}
+
+	for i, row := range rows {
 		content := row.content
 		if content == "" {
-			content = ui.Muted.Render("(no content)")
-		} else {
-			content = ui.HighlightTraits(content)
+			content = "(no content)"
 		}
-		fmt.Printf("  %s\n", content)
 
-		// Trait and location on second line (muted)
-		fmt.Printf("  %s %s %s\n\n", row.traits, ui.Muted.Render("·"), ui.Muted.Render(row.location))
+		// Build metadata string: "value · location"
+		metadata := row.traits + " " + ui.Muted.Render("·") + " " + ui.Muted.Render(row.location)
+
+		// Check if content fits on one line
+		if len(content) <= contentWidth {
+			// Single line - content left, metadata right
+			content = ui.HighlightTraits(content)
+			fmt.Printf("  %s  %s\n", ui.PadRight(content, contentWidth), metadata)
+		} else {
+			// Two lines - wrap content
+			line1, line2 := wrapText(content, contentWidth)
+			line1 = ui.HighlightTraits(line1)
+			line2 = ui.HighlightTraits(line2)
+			
+			// First line with metadata
+			fmt.Printf("  %s  %s\n", ui.PadRight(line1, contentWidth), metadata)
+			// Second line (indented, no metadata)
+			if line2 != "" {
+				fmt.Printf("    %s\n", line2)
+			}
+		}
+
+		// Add horizontal rule between entries (except after last)
+		if i < len(rows)-1 {
+			fmt.Println(ui.Muted.Render("  " + strings.Repeat("─", maxRowWidth)))
+		}
 	}
+}
+
+// wrapText wraps text at approximately maxLen, breaking at word boundaries.
+// Returns two lines (second may be empty if no wrap needed).
+func wrapText(text string, maxLen int) (string, string) {
+	if len(text) <= maxLen {
+		return text, ""
+	}
+
+	// Find a good break point (space) near maxLen
+	breakPoint := maxLen
+	for i := maxLen; i > maxLen/2; i-- {
+		if text[i] == ' ' {
+			breakPoint = i
+			break
+		}
+	}
+
+	line1 := strings.TrimSpace(text[:breakPoint])
+	line2 := strings.TrimSpace(text[breakPoint:])
+	
+	// Truncate line2 if still too long
+	if len(line2) > maxLen {
+		line2 = line2[:maxLen-3] + "..."
+	}
+
+	return line1, line2
 }
 
 // truncateText truncates text at a word boundary if possible
@@ -850,7 +915,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 			location: formatLocationLinkSimple(r.FilePath, r.Line),
 		}
 	}
-	printTraitCards(rows)
+	printTraitRows(rows)
 	return nil
 }
 
