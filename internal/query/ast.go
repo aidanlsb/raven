@@ -62,7 +62,7 @@ func (op CompareOp) String() string {
 }
 
 // FieldPredicate filters by object field value.
-// Syntax: .field==value, .field==*, .field>value
+// Syntax: .field==value, .field>value, notnull(.field), isnull(.field)
 // For string matching, use StringFuncPredicate (includes, startswith, endswith, matches).
 type FieldPredicate struct {
 	basePredicate
