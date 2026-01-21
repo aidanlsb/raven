@@ -228,7 +228,8 @@ func (p *Parser) parseFilterExpr() (*FilterExpr, error) {
 	return expr, nil
 }
 
-// parseSortStage parses: sort(field, asc) or sort(variable, desc)
+// parseSortStage parses: sort(field), sort(field, asc), or sort(field, desc)
+// Direction defaults to ascending if not specified.
 func (p *Parser) parseSortStage() (PipelineStage, error) {
 	p.advance() // consume 'sort'
 
@@ -254,23 +255,24 @@ func (p *Parser) parseSortStage() (PipelineStage, error) {
 		return nil, fmt.Errorf("expected field or variable name in sort")
 	}
 
-	// Comma and direction
-	if err := p.expect(TokenComma); err != nil {
-		return nil, err
-	}
+	// Optional: comma and direction (defaults to ascending)
+	if p.curr.Type == TokenComma {
+		p.advance()
 
-	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected 'asc' or 'desc'")
+		if p.curr.Type != TokenIdent {
+			return nil, fmt.Errorf("expected 'asc' or 'desc'")
+		}
+		switch strings.ToLower(p.curr.Value) {
+		case "asc":
+			criterion.Descending = false
+		case "desc":
+			criterion.Descending = true
+		default:
+			return nil, fmt.Errorf("expected 'asc' or 'desc', got '%s'", p.curr.Value)
+		}
+		p.advance()
 	}
-	switch strings.ToLower(p.curr.Value) {
-	case "asc":
-		criterion.Descending = false
-	case "desc":
-		criterion.Descending = true
-	default:
-		return nil, fmt.Errorf("expected 'asc' or 'desc', got '%s'", p.curr.Value)
-	}
-	p.advance()
+	// If no comma, default is ascending (Descending = false, which is the zero value)
 
 	if err := p.expect(TokenRParen); err != nil {
 		return nil, err

@@ -25,7 +25,7 @@
 | Array any | `any()` | `any(.tags, _ == "urgent")` |
 | Array all | `all()` | `all(.tags, startswith(_, "feat-"))` |
 | Subquery | `{...}` | `has:{trait:due}` |
-| Pipeline | `\|>` | `\|> sort(.name, asc)` |
+| Pipeline | `\|>` | `\|> sort(.name) limit(10)` |
 | Grouping | `(...)` | `(.status==active \| .status==done)` |
 | References | `[[...]]` | `[[people/freya]]` |
 | Null check | `isnull()`, `notnull()` | `notnull(.email)` |
@@ -472,18 +472,19 @@ filter(.status == active)
 
 ### Sort Expressions
 
-Sort by field or computed value:
+Sort by field or computed value. Direction is optional and defaults to ascending:
 
 ```
-sort(.name, asc)
-sort(todos, desc)
+sort(.name)           # ascending (default)
+sort(.name, asc)      # explicit ascending
+sort(todos, desc)     # descending
 ```
 
 ### Pipeline Examples
 
 ```
 # Simple sort and limit
-object:project .status==active |> sort(.name, asc) limit(10)
+object:project .status==active |> sort(.name) limit(10)
 
 # Count and filter
 object:project |> todos = count({trait:todo value==todo within:_}) filter(todos > 0)

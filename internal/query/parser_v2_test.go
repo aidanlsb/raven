@@ -206,6 +206,19 @@ func TestParseV2Pipeline(t *testing.T) {
 			},
 		},
 		{
+			name:  "sort default direction (ascending)",
+			input: "object:project |> sort(.name)",
+			checkFunc: func(t *testing.T, q *Query) {
+				ss := q.Pipeline.Stages[0].(*SortStage)
+				if ss.Criteria[0].Field != "name" {
+					t.Errorf("expected field 'name', got '%s'", ss.Criteria[0].Field)
+				}
+				if ss.Criteria[0].Descending {
+					t.Error("expected ascending sort (default)")
+				}
+			},
+		},
+		{
 			name:  "limit",
 			input: "object:project |> limit(10)",
 			checkFunc: func(t *testing.T, q *Query) {
