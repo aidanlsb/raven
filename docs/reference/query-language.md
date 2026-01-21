@@ -76,19 +76,21 @@ Filter by object frontmatter fields. Fields use dot prefix.
 |-----------|---------|
 | `.field==value` | Field equals value |
 | `.field!=value` | Field does NOT equal value |
-| `.field==*` | Field exists (has any value) |
-| `.field!=*` | Field does NOT exist |
+| `notnull(.field)` | Field exists (has any value) |
+| `isnull(.field)` | Field does NOT exist |
 | `.field>value` | Field is greater than value |
 | `.field<value` | Field is less than value |
 | `.field>=value` | Field is greater or equal |
 | `.field<=value` | Field is less or equal |
 
+> **Note:** `.field==*` and `.field!=*` are also supported for backwards compatibility but `notnull()` and `isnull()` are preferred.
+
 **Examples:**
 ```
 object:project .status==active
 object:project .title=="My Project"
-object:person .email==*
-object:person !.email==*
+object:person notnull(.email)
+object:person isnull(.email)
 object:project .priority>5
 object:project .created>=2025-01-01
 ```
