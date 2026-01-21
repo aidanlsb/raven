@@ -71,8 +71,6 @@ The `_` symbol represents the current element being tested.
 | `notnull(.field)` | Field exists |
 | `isnull(.field)` | Field does not exist |
 
-> **Note:** `.field==*` and `.field!=*` are also supported for backwards compatibility.
-
 ### String Matching on Fields
 
 | Syntax | Meaning |

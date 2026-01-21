@@ -42,16 +42,10 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 	}
 
 	var value string
-	isExists := false
 
 	switch p.curr.Type {
 	case TokenStar:
-		if compareOp != CompareEq && compareOp != CompareNeq {
-			return nil, fmt.Errorf("only == and != can be used with '*' (exists check)")
-		}
-		value = "*"
-		isExists = true
-		p.advance()
+		return nil, fmt.Errorf(".field==* is deprecated; use notnull(.field) or isnull(.field) instead")
 	case TokenIdent:
 		value = p.curr.Value
 		p.advance()
@@ -62,14 +56,14 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		value = p.curr.Value
 		p.advance()
 	default:
-		return nil, fmt.Errorf("expected field value, '*', or quoted string")
+		return nil, fmt.Errorf("expected field value or quoted string; for null checks use notnull(.field) or isnull(.field)")
 	}
 
 	return &FieldPredicate{
 		basePredicate: basePredicate{negated: negated},
 		Field:         field,
 		Value:         value,
-		IsExists:      isExists,
+		IsExists:      false,
 		CompareOp:     compareOp,
 	}, nil
 }

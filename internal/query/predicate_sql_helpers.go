@@ -37,7 +37,7 @@ func jsonFieldPath(field string) string {
 }
 
 func fieldExistsCond(alias string, jsonPath string, negated bool) (string, []interface{}) {
-	// .field==* means field exists, .field!=* means field doesn't exist
+	// notnull(.field) means field exists, isnull(.field) means field doesn't exist
 	if negated {
 		return fmt.Sprintf("json_extract(%s.fields, ?) IS NULL", alias), []interface{}{jsonPath}
 	}

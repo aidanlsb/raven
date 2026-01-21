@@ -432,10 +432,11 @@ Query types:
   trait:<name> [predicates]    Query traits by name
 
 Predicates for object queries:
-  .field==value    Field equals value
-  .field==*        Field exists
-  !.field==value   Field does not equal value
-  has:{trait:...}  Has a trait matching subquery
+  .field==value      Field equals value
+  notnull(.field)    Field exists (is not null)
+  isnull(.field)     Field does not exist (is null)
+  !.field==value     Field does not equal value
+  has:{trait:...}    Has a trait matching subquery
   parent:{object:...}   Direct parent matches subquery
   ancestor:{object:...} Any ancestor matches subquery
   child:{object:...}    Has child matching subquery

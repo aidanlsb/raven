@@ -165,8 +165,8 @@ func TestExecuteObjectQuery(t *testing.T) {
 			wantCount: 1, // matches "active" case-insensitively
 		},
 		{
-			name:      "field exists",
-			query:     "object:person .email==*",
+			name:      "field exists with notnull",
+			query:     "object:person notnull(.email)",
 			wantCount: 1,
 		},
 		{

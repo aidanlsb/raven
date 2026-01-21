@@ -57,27 +57,14 @@ func TestParseV2FieldPredicates(t *testing.T) {
 			},
 		},
 		{
-			name:  "exists",
-			input: "object:person .email==*",
-			checkFunc: func(t *testing.T, q *Query) {
-				fp := q.Predicates[0].(*FieldPredicate)
-				if !fp.IsExists {
-					t.Error("expected IsExists to be true")
-				}
-			},
+			name:    "star syntax deprecated",
+			input:   "object:person .email==*",
+			wantErr: true,
 		},
 		{
-			name:  "not exists",
-			input: "object:person .email!=*",
-			checkFunc: func(t *testing.T, q *Query) {
-				fp := q.Predicates[0].(*FieldPredicate)
-				if !fp.IsExists {
-					t.Error("expected IsExists to be true")
-				}
-				if fp.CompareOp != CompareNeq {
-					t.Errorf("expected CompareNeq, got %v", fp.CompareOp)
-				}
-			},
+			name:    "star not-equals syntax deprecated",
+			input:   "object:person .email!=*",
+			wantErr: true,
 		},
 		{
 			name:  "notnull function",

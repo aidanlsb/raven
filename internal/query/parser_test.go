@@ -74,24 +74,11 @@ func TestParseFieldPredicates(t *testing.T) {
 			wantValue: "active",
 		},
 		{
-			name:       "field exists",
-			input:      "object:person .email==*",
-			wantField:  "email",
-			wantExists: true,
-		},
-		{
 			name:      "negated field",
 			input:     "object:project !.status==done",
 			wantField: "status",
 			wantValue: "done",
 			wantNeg:   true,
-		},
-		{
-			name:       "negated exists",
-			input:      "object:person !.email==*",
-			wantField:  "email",
-			wantExists: true,
-			wantNeg:    true,
 		},
 		{
 			name:      "quoted string value",

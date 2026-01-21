@@ -28,7 +28,7 @@
 | Pipeline | `\|>` | `\|> sort(.name, asc)` |
 | Grouping | `(...)` | `(.status==active \| .status==done)` |
 | References | `[[...]]` | `[[people/freya]]` |
-| Exists | `*` | `.email==*` |
+| Null check | `isnull()`, `notnull()` | `notnull(.email)` |
 | Raw string | `r"..."` | `matches(.path, r"C:\Users\.*")` |
 
 ## Query Types
@@ -82,8 +82,6 @@ Filter by object frontmatter fields. Fields use dot prefix.
 | `.field<value` | Field is less than value |
 | `.field>=value` | Field is greater or equal |
 | `.field<=value` | Field is less or equal |
-
-> **Note:** `.field==*` and `.field!=*` are also supported for backwards compatibility but `notnull()` and `isnull()` are preferred.
 
 **Examples:**
 ```
