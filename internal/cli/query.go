@@ -82,26 +82,153 @@ func printTable(rows []tableRow) {
 	}
 }
 
-// printObjectCards prints object results in a card-style format with fields
-func printObjectCards(results []query.PipelineObjectResult, sch *schema.Schema) {
+// printObjectTable prints object results in a tabular format with field columns
+func printObjectTable(results []query.PipelineObjectResult, sch *schema.Schema) {
 	if len(results) == 0 {
 		return
 	}
 
-	for _, r := range results {
-		// Object name (bold)
-		name := filepath.Base(r.ID)
-		fmt.Printf("  %s\n", ui.Bold.Render(name))
+	// Get the type definition to determine columns
+	var typeDef *schema.TypeDefinition
+	var fieldColumns []string
+	nameField := ""
 
-		// Fields on second line (schema-driven if available)
-		fieldStrs := formatObjectFieldsWithSchema(r.Type, r.Fields, sch)
-		if len(fieldStrs) > 0 {
-			fmt.Printf("  %s\n", ui.Muted.Render(strings.Join(fieldStrs, " · ")))
+	if len(results) > 0 && sch != nil {
+		typeDef = sch.Types[results[0].Type]
+	}
+
+	if typeDef != nil {
+		nameField = typeDef.NameField
+		// Collect field names (excluding name field) in sorted order
+		for fieldName := range typeDef.Fields {
+			if fieldName != nameField {
+				fieldColumns = append(fieldColumns, fieldName)
+			}
+		}
+		sort.Strings(fieldColumns)
+	}
+
+	// Calculate column widths
+	nameWidth := 4 // "NAME"
+	fieldWidths := make(map[string]int)
+	locationWidth := 8 // "LOCATION"
+
+	for _, col := range fieldColumns {
+		fieldWidths[col] = len(col)
+	}
+
+	for _, r := range results {
+		name := filepath.Base(r.ID)
+		if len(name) > nameWidth {
+			nameWidth = len(name)
 		}
 
-		// Location on last line (always shown for easy navigation)
-		fmt.Printf("  %s\n\n", ui.Muted.Render(formatLocationLinkSimple(r.FilePath, r.LineStart)))
+		loc := formatLocationLinkSimple(r.FilePath, r.LineStart)
+		if len(loc) > locationWidth {
+			locationWidth = len(loc)
+		}
+
+		for _, col := range fieldColumns {
+			valStr := formatFieldValueSimple(r.Fields[col])
+			if len(valStr) > fieldWidths[col] {
+				fieldWidths[col] = len(valStr)
+			}
+		}
 	}
+
+	// Cap widths to prevent overly wide columns (except location)
+	if nameWidth > 25 {
+		nameWidth = 25
+	}
+	for col := range fieldWidths {
+		if fieldWidths[col] > 20 {
+			fieldWidths[col] = 20
+		}
+	}
+	// Don't cap location width - show full paths for navigation
+
+	// Print header
+	header := fmt.Sprintf("%-*s", nameWidth, "NAME")
+	divider := strings.Repeat("─", nameWidth)
+	for _, col := range fieldColumns {
+		header += "  " + fmt.Sprintf("%-*s", fieldWidths[col], strings.ToUpper(col))
+		divider += "  " + strings.Repeat("─", fieldWidths[col])
+	}
+	header += "  " + fmt.Sprintf("%-*s", locationWidth, "LOCATION")
+	divider += "  " + strings.Repeat("─", locationWidth)
+
+	fmt.Println(ui.Muted.Render(header))
+	fmt.Println(ui.Muted.Render(divider))
+
+	// Print rows
+	for _, r := range results {
+		name := filepath.Base(r.ID)
+		if len(name) > nameWidth {
+			name = name[:nameWidth-1] + "…"
+		}
+		row := fmt.Sprintf("%-*s", nameWidth, name)
+
+		for _, col := range fieldColumns {
+			valStr := formatFieldValueSimple(r.Fields[col])
+			if valStr == "" {
+				valStr = "-"
+			}
+			if len(valStr) > fieldWidths[col] {
+				valStr = valStr[:fieldWidths[col]-1] + "…"
+			}
+			row += "  " + fmt.Sprintf("%-*s", fieldWidths[col], valStr)
+		}
+
+		// Location is not truncated - show full path for easy navigation
+		loc := formatLocationLinkSimple(r.FilePath, r.LineStart)
+		row += "  " + ui.Muted.Render(loc)
+
+		fmt.Println(row)
+	}
+}
+
+// formatFieldValueSimple formats a field value as a simple string for table display
+func formatFieldValueSimple(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+	switch v := val.(type) {
+	case string:
+		return shortenRefIfNeeded(v)
+	case []interface{}:
+		strs := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				strs = append(strs, shortenRefIfNeeded(s))
+			}
+		}
+		return strings.Join(strs, ", ")
+	case bool:
+		if v {
+			return "yes"
+		}
+		return "no"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// shortenRefIfNeeded shortens a reference path to just the name if it looks like a ref.
+// For paths like "objects/companies/cursor" or "people/alice", returns just "cursor" or "alice".
+// Only shortens if the path has multiple segments (contains /).
+func shortenRefIfNeeded(s string) string {
+	// If it doesn't contain a slash, it's not a path - return as-is
+	if !strings.Contains(s, "/") {
+		return s
+	}
+	
+	// Get the last path component (the name)
+	name := filepath.Base(s)
+	
+	// Remove .md extension if present
+	name = strings.TrimSuffix(name, ".md")
+	
+	return name
 }
 
 // formatObjectFieldsWithSchema formats object fields using schema for ordering.
@@ -642,8 +769,8 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 
 		fmt.Printf("%s %s\n\n", ui.Header(q.TypeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
 
-		// Print object cards with fields (schema-driven)
-		printObjectCards(results, sch)
+		// Print object table with field columns (schema-driven)
+		printObjectTable(results, sch)
 		return nil
 	}
 
