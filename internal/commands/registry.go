@@ -236,9 +236,14 @@ Special date values for trait:due:
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --apply to run a bulk operation directly on query results.
 
-For bulk operations:
+For object queries (object:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
-- Supported commands: set, delete, add, move`,
+- Supported commands: set, delete, add, move
+
+For trait queries (trait:...):
+- Returns preview by default. Changes are NOT applied unless confirm=true.
+- Supported command: set value=<new_value> (updates trait values in-place)
+- Example: trait:todo value==todo --apply "set value=done" marks todos as done`,
 		Args: []ArgMeta{
 			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name)", Required: true},
 		},
@@ -254,8 +259,8 @@ For bulk operations:
 			"rvn query 'object:meeting has:{trait:due}' --json",
 			"rvn query 'trait:due value==past' --json",
 			"rvn query 'trait:due value==past' --ids",
-			"rvn query 'trait:due value==past' --apply 'set status=overdue' --json",
-			"rvn query 'trait:due value==past' --apply 'set status=overdue' --confirm --json",
+			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
+			"rvn query 'trait:todo value==todo' --apply 'set value=done' --confirm --json",
 			"rvn query tasks --json",
 			"rvn query --list --json",
 		},

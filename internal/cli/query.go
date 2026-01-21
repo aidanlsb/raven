@@ -266,56 +266,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 			"Queries must start with 'object:' or 'trait:', or be a saved query name.")
 	}
 
-	// Parse the query
-	q, err := query.Parse(actualQueryStr)
-	if err != nil {
-		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("parse error: %v", err), "")
-	}
-
-	// Execute the query to get IDs
-	executor := query.NewExecutor(db.DB())
-	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory}); err == nil {
-		executor.SetResolver(res)
-	}
-
-	var ids []string
-	if q.Type == query.QueryTypeObject {
-		results, err := executor.ExecuteObjectQueryWithPipeline(q)
-		if err != nil {
-			return handleError(ErrDatabaseError, err, "")
-		}
-		for _, r := range results {
-			ids = append(ids, r.ID)
-		}
-	} else {
-		results, err := executor.ExecuteTraitQueryWithPipeline(q)
-		if err != nil {
-			return handleError(ErrDatabaseError, err, "")
-		}
-		for _, r := range results {
-			// For trait queries, bulk operations act on the containing object.
-			ids = append(ids, r.ParentObjectID)
-		}
-	}
-	ids = dedupePreserveOrder(ids)
-
-	if len(ids) == 0 {
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"preview": !confirm,
-				"action":  applyArgs[0],
-				"items":   []interface{}{},
-				"total":   0,
-			}, &Meta{Count: 0})
-			return nil
-		}
-		fmt.Printf("No results found for query: %s\n", queryStr)
-		return nil
-	}
-
-	// Parse the apply command first to determine if we need to filter embedded IDs
-	// Format: --apply "set field=value" or --apply set --apply field=value
-	// We'll join all apply args and parse them
+	// Parse the apply command first to validate
 	applyStr := strings.Join(applyArgs, " ")
 	applyParts := strings.Fields(applyStr)
 
@@ -325,6 +276,48 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 	applyCmd := applyParts[0]
 	applyOperationArgs := applyParts[1:]
+
+	// Parse the query
+	q, err := query.Parse(actualQueryStr)
+	if err != nil {
+		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("parse error: %v", err), "")
+	}
+
+	// Execute the query
+	executor := query.NewExecutor(db.DB())
+	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory}); err == nil {
+		executor.SetResolver(res)
+	}
+
+	// Handle trait queries separately - they operate on traits, not objects
+	if q.Type == query.QueryTypeTrait {
+		return runTraitQueryWithApply(executor, vaultPath, queryStr, q, applyCmd, applyOperationArgs, sch, vaultCfg, confirm)
+	}
+
+	// Object query - collect object IDs
+	var ids []string
+	results, err := executor.ExecuteObjectQueryWithPipeline(q)
+	if err != nil {
+		return handleError(ErrDatabaseError, err, "")
+	}
+	for _, r := range results {
+		ids = append(ids, r.ID)
+	}
+	ids = dedupePreserveOrder(ids)
+
+	if len(ids) == 0 {
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"preview": !confirm,
+				"action":  applyCmd,
+				"items":   []interface{}{},
+				"total":   0,
+			}, &Meta{Count: 0})
+			return nil
+		}
+		fmt.Printf("No results found for query: %s\n", queryStr)
+		return nil
+	}
 
 	// Filter embedded IDs for operations that don't support them
 	// Note: "set" now supports embedded objects, so we pass all IDs to it
@@ -361,6 +354,44 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("unknown apply command: %s", applyCmd),
 			"Supported commands: set, delete, add, move")
+	}
+}
+
+// runTraitQueryWithApply handles --apply for trait queries.
+// Trait queries operate on traits, not objects.
+func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string, q *query.Query, applyCmd string, applyArgs []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+	// Execute the trait query
+	results, err := executor.ExecuteTraitQueryWithPipeline(q)
+	if err != nil {
+		return handleError(ErrDatabaseError, err, "")
+	}
+
+	if len(results) == 0 {
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"preview": !confirm,
+				"action":  applyCmd,
+				"items":   []interface{}{},
+				"total":   0,
+			}, &Meta{Count: 0})
+			return nil
+		}
+		fmt.Printf("No results found for query: %s\n", queryStr)
+		return nil
+	}
+
+	// Dispatch to trait-specific operations
+	switch applyCmd {
+	case "set":
+		return applySetTraitFromQuery(vaultPath, results, applyArgs, sch, vaultCfg, confirm)
+	case "delete", "add", "move":
+		return handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("'%s' is not supported for trait queries", applyCmd),
+			"For trait queries, use: --apply \"set value=<new_value>\"")
+	default:
+		return handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("unknown apply command: %s", applyCmd),
+			"For trait queries, use: --apply \"set value=<new_value>\"")
 	}
 }
 

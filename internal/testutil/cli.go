@@ -242,6 +242,21 @@ func (r *CLIResult) MustSucceed(t *testing.T) *CLIResult {
 	return r
 }
 
+// MustFailWithMessage fails the test if the CLI command succeeded, or if it failed
+// without an error message containing the expected substring.
+func (r *CLIResult) MustFailWithMessage(t *testing.T, msgSubstr string) *CLIResult {
+	t.Helper()
+	if r.OK {
+		t.Fatalf("expected command to fail, but it succeeded\nRaw output: %s", r.RawJSON)
+	}
+	if msgSubstr != "" && r.Error != nil {
+		if !strings.Contains(r.Error.Message, msgSubstr) && !strings.Contains(r.Error.Suggestion, msgSubstr) {
+			t.Errorf("expected error to contain %q, got: %s (suggestion: %s)", msgSubstr, r.Error.Message, r.Error.Suggestion)
+		}
+	}
+	return r
+}
+
 // MustFail fails the test if the CLI command did not fail with the expected code.
 func (r *CLIResult) MustFail(t *testing.T, expectedCode string) *CLIResult {
 	t.Helper()

@@ -204,6 +204,77 @@ func TestIntegration_BulkDelete(t *testing.T) {
 	v.AssertFileNotExists("projects/project-y.md")
 }
 
+// TestIntegration_TraitBulkSet tests bulk set on trait query results.
+func TestIntegration_TraitBulkSet(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+- @priority(low) Second task
+`).
+		WithFile("tasks/task2.md", `---
+type: page
+---
+# Task 2
+
+- @priority(medium) Third task
+`).
+		Build()
+
+	// Reindex to pick up the files
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// Preview bulk set on low priority traits (should not apply)
+	result := v.RunCLI("query", "trait:priority value==low", "--apply", "set value=high")
+	result.MustSucceed(t)
+
+	// Files should still have low priority since we didn't confirm
+	v.AssertFileContains("tasks/task1.md", "@priority(low) First task")
+	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+
+	// Now confirm the bulk operation
+	result = v.RunCLI("query", "trait:priority value==low", "--apply", "set value=high", "--confirm")
+	result.MustSucceed(t)
+
+	// Files should now have high priority
+	v.AssertFileContains("tasks/task1.md", "@priority(high) First task")
+	v.AssertFileContains("tasks/task1.md", "@priority(high) Second task")
+
+	// The medium priority task should be unchanged
+	v.AssertFileContains("tasks/task2.md", "@priority(medium) Third task")
+}
+
+// TestIntegration_TraitBulkSetObjectCommandsRejected tests that object commands are rejected for trait queries.
+func TestIntegration_TraitBulkSetObjectCommandsRejected(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+`).
+		Build()
+
+	// Reindex to pick up the files
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// Try to use object commands on trait query - should fail
+	result := v.RunCLI("query", "trait:priority", "--apply", "delete")
+	result.MustFailWithMessage(t, "not supported for trait queries")
+
+	result = v.RunCLI("query", "trait:priority", "--apply", "add some text")
+	result.MustFailWithMessage(t, "not supported for trait queries")
+
+	result = v.RunCLI("query", "trait:priority", "--apply", "move archive/")
+	result.MustFailWithMessage(t, "not supported for trait queries")
+}
+
 // TestIntegration_CheckValidation tests the check command for validation.
 func TestIntegration_CheckValidation(t *testing.T) {
 	v := testutil.NewTestVault(t).
