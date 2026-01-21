@@ -204,6 +204,7 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 
 		// Check for function-style predicates: func(...)
 		// String functions: includes, startswith, endswith, matches
+		// Null checks: isnull, notnull
 		// Array quantifiers: any, all, none
 		if p.peek.Type == TokenLParen {
 			switch keyword {
@@ -219,6 +220,12 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 			case "matches":
 				p.advance()
 				return p.parseStringFuncPredicate(negated, StringFuncMatches)
+			case "isnull":
+				p.advance()
+				return p.parseNullCheckPredicate(negated, true) // isnull = field IS null
+			case "notnull":
+				p.advance()
+				return p.parseNullCheckPredicate(negated, false) // notnull = field IS NOT null
 			case "any":
 				p.advance()
 				return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierAny)

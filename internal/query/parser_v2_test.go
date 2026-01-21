@@ -79,6 +79,38 @@ func TestParseV2FieldPredicates(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:  "notnull function",
+			input: "object:person notnull(.email)",
+			checkFunc: func(t *testing.T, q *Query) {
+				fp := q.Predicates[0].(*FieldPredicate)
+				if !fp.IsExists {
+					t.Error("expected IsExists to be true")
+				}
+				if fp.CompareOp != CompareEq {
+					t.Errorf("expected CompareEq for notnull, got %v", fp.CompareOp)
+				}
+				if fp.Field != "email" {
+					t.Errorf("expected field 'email', got '%s'", fp.Field)
+				}
+			},
+		},
+		{
+			name:  "isnull function",
+			input: "object:person isnull(.email)",
+			checkFunc: func(t *testing.T, q *Query) {
+				fp := q.Predicates[0].(*FieldPredicate)
+				if !fp.IsExists {
+					t.Error("expected IsExists to be true")
+				}
+				if fp.CompareOp != CompareNeq {
+					t.Errorf("expected CompareNeq for isnull, got %v", fp.CompareOp)
+				}
+				if fp.Field != "email" {
+					t.Errorf("expected field 'email', got '%s'", fp.Field)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -68,8 +68,10 @@ The `_` symbol represents the current element being tested.
 | `.field<value` | Field less than |
 | `.field>=value` | Field greater or equal |
 | `.field<=value` | Field less or equal |
-| `.field==*` | Field exists |
-| `.field!=*` | Field does not exist |
+| `notnull(.field)` | Field exists |
+| `isnull(.field)` | Field does not exist |
+
+> **Note:** `.field==*` and `.field!=*` are also supported for backwards compatibility.
 
 ### String Matching on Fields
 
