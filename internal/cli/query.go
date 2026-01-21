@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -81,38 +82,135 @@ func printTable(rows []tableRow) {
 	}
 }
 
-// printTraitTable prints trait results in a content-first format
-func printTraitTable(rows []traitTableRow) {
+// printObjectCards prints object results in a card-style format with fields
+func printObjectCards(results []query.PipelineObjectResult, sch *schema.Schema) {
+	if len(results) == 0 {
+		return
+	}
+
+	for _, r := range results {
+		// Object name (bold)
+		name := filepath.Base(r.ID)
+		fmt.Printf("  %s\n", ui.Bold.Render(name))
+
+		// Fields on second line (schema-driven if available)
+		fieldStrs := formatObjectFieldsWithSchema(r.Type, r.Fields, sch)
+		if len(fieldStrs) > 0 {
+			fmt.Printf("  %s\n", ui.Muted.Render(strings.Join(fieldStrs, " · ")))
+		}
+
+		// Location on last line (always shown for easy navigation)
+		fmt.Printf("  %s\n\n", ui.Muted.Render(formatLocationLinkSimple(r.FilePath, r.LineStart)))
+	}
+}
+
+// formatObjectFieldsWithSchema formats object fields using schema for ordering.
+// Falls back to showing all fields if type is not in schema.
+func formatObjectFieldsWithSchema(typeName string, fields map[string]interface{}, sch *schema.Schema) []string {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	// Try to get type definition from schema
+	var typeDef *schema.TypeDefinition
+	if sch != nil {
+		typeDef = sch.Types[typeName]
+	}
+
+	if typeDef == nil {
+		// Fallback: show all fields in arbitrary order (skip name/title)
+		return formatObjectFieldsFallback(fields)
+	}
+
+	// Schema-driven: show only schema-defined fields
+	var result []string
+	
+	// Get the name field for this type (to skip it in output)
+	nameField := typeDef.NameField
+
+	// Collect schema field names and sort for consistent ordering
+	var schemaFields []string
+	for fieldName := range typeDef.Fields {
+		schemaFields = append(schemaFields, fieldName)
+	}
+	sort.Strings(schemaFields)
+
+	// Show fields in sorted order
+	for _, fieldName := range schemaFields {
+		// Skip the name field (it's shown as the object name)
+		if fieldName == nameField {
+			continue
+		}
+		
+		if val, ok := fields[fieldName]; ok && val != nil {
+			result = append(result, formatFieldValue(fieldName, val))
+		}
+	}
+
+	return result
+}
+
+// formatObjectFieldsFallback formats fields when no schema is available
+func formatObjectFieldsFallback(fields map[string]interface{}) []string {
+	var result []string
+	for key, val := range fields {
+		if val == nil {
+			continue
+		}
+		// Skip name/title fields as they're usually shown as the object name
+		if key == "name" || key == "title" {
+			continue
+		}
+		result = append(result, formatFieldValue(key, val))
+	}
+	return result
+}
+
+// formatFieldValue formats a single field value for display
+func formatFieldValue(key string, val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		return fmt.Sprintf("%s: %s", key, v)
+	case []interface{}:
+		// Array of values (e.g., tags, refs)
+		strs := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				strs = append(strs, s)
+			}
+		}
+		if len(strs) > 3 {
+			return fmt.Sprintf("%s: %s +%d more", key, strings.Join(strs[:3], ", "), len(strs)-3)
+		}
+		return fmt.Sprintf("%s: %s", key, strings.Join(strs, ", "))
+	case bool:
+		if v {
+			return key
+		}
+		return fmt.Sprintf("%s: false", key)
+	default:
+		return fmt.Sprintf("%s: %v", key, val)
+	}
+}
+
+// printTraitCards prints trait results in a card-style format with full content
+func printTraitCards(rows []traitTableRow) {
 	if len(rows) == 0 {
 		return
 	}
 
-	// Fixed column widths for consistent readable output
-	const contentWidth = 55
-	const traitWidth = 18
-
-	// Print header
-	fmt.Printf("%s  %s  %s\n",
-		ui.Muted.Render(fmt.Sprintf("%-*s", contentWidth, "CONTENT")),
-		ui.Muted.Render(fmt.Sprintf("%-*s", traitWidth, "TRAITS")),
-		ui.Muted.Render("LOCATION"))
-	fmt.Printf("%s  %s  %s\n",
-		ui.Muted.Render(strings.Repeat("─", contentWidth)),
-		ui.Muted.Render(strings.Repeat("─", traitWidth)),
-		ui.Muted.Render(strings.Repeat("─", 30)))
-
-	// Print rows
 	for _, row := range rows {
-		content := truncateText(row.content, contentWidth)
-		// Highlight any traits in the content
-		content = ui.HighlightTraits(content)
-		traits := row.traits
+		// Content on first line (with trait highlighting)
+		content := row.content
+		if content == "" {
+			content = ui.Muted.Render("(no content)")
+		} else {
+			content = ui.HighlightTraits(content)
+		}
+		fmt.Printf("  %s\n", content)
 
-		// Use PadRight to handle ANSI escape codes correctly
-		fmt.Printf("%s  %s  %s\n",
-			ui.PadRight(content, contentWidth),
-			ui.PadRight(traits, traitWidth),
-			row.location)
+		// Trait and location on second line (muted)
+		fmt.Printf("  %s %s %s\n\n", row.traits, ui.Muted.Render("·"), ui.Muted.Render(row.location))
 	}
 }
 
@@ -544,17 +642,8 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 
 		fmt.Printf("%s %s\n\n", ui.Header(q.TypeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
 
-		// Build table rows
-		rows := make([]tableRow, len(results))
-		for i, r := range results {
-			// Use the filename without extension as the name
-			name := filepath.Base(r.ID)
-			rows[i] = tableRow{
-				name:     name,
-				location: formatLocationLinkSimple(r.FilePath, r.LineStart),
-			}
-		}
-		printTable(rows)
+		// Print object cards with fields (schema-driven)
+		printObjectCards(results, sch)
 		return nil
 	}
 
@@ -617,12 +706,13 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 
 	fmt.Printf("%s %s\n\n", ui.Header("@"+q.TypeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
 
-	// Build table rows
+	// Build rows for card display
 	rows := make([]traitTableRow, len(results))
 	for i, r := range results {
 		// Build trait string with syntax highlighting
+		// Hide value if it matches the trait name (e.g., @todo with value "todo")
 		value := ""
-		if r.Value != nil {
+		if r.Value != nil && *r.Value != r.TraitType {
 			value = *r.Value
 		}
 		traitStr := ui.Trait(r.TraitType, value)
@@ -633,7 +723,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 			location: formatLocationLinkSimple(r.FilePath, r.Line),
 		}
 	}
-	printTraitTable(rows)
+	printTraitCards(rows)
 	return nil
 }
 
