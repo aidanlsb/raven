@@ -516,7 +516,7 @@ Fix with:
 rvn check
 
 # Update them
-rvn query "trait:priority value==urgent" --apply "set priority=critical" --confirm
+rvn query "trait:priority .value==urgent" --apply "set priority=critical" --confirm
 ```
 
 ### After Schema Changes

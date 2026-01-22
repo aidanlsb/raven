@@ -145,7 +145,7 @@ func TestValidator_ValidQuery(t *testing.T) {
 		"object:person .name==Freya",
 		"object:project .status==active",
 		"trait:due",
-		"trait:due value==past",
+		"trait:due .value==past",
 		"object:person has:{trait:due}",
 		"trait:due on:{object:project}",
 	}
@@ -332,12 +332,12 @@ func TestValidator_PipelineSubqueriesMustReferenceSelf(t *testing.T) {
 		},
 		{
 			name:        "max without self-ref",
-			query:       "object:project |> latest = max({trait:due})",
+			query:       "object:project |> latest = max(.value, {trait:due})",
 			wantContain: "must reference _",
 		},
 		{
 			name:        "min without self-ref",
-			query:       "object:project |> earliest = min({trait:due})",
+			query:       "object:project |> earliest = min(.value, {trait:due})",
 			wantContain: "must reference _",
 		},
 		{

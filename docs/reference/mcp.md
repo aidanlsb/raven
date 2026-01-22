@@ -190,10 +190,10 @@ Bulk operations preview by default. Pass `confirm=true` to apply:
 
 ```
 # Preview (default)
-raven_query(query_string="trait:due value==past", apply="set status=overdue")
+raven_query(query_string="trait:due .value==past", apply="set status=overdue")
 
 # Apply
-raven_query(query_string="trait:due value==past", apply="set status=overdue", confirm=true)
+raven_query(query_string="trait:due .value==past", apply="set status=overdue", confirm=true)
 ```
 
 ---
@@ -247,7 +247,7 @@ raven_query(query_string="object:project .status==active")
 raven_query(query_string="object:person .email==*")
 
 # Trait queries
-raven_query(query_string="trait:due value==past")
+raven_query(query_string="trait:due .value==past")
 raven_query(query_string="trait:highlight on:{object:book}")
 
 # Saved queries
@@ -273,10 +273,10 @@ raven_edit(path="projects/website.md", old_str="Status: draft", new_str="Status:
 
 ```python
 # Preview changes
-raven_query(query_string="trait:due value==past", apply="set status=overdue")
+raven_query(query_string="trait:due .value==past", apply="set status=overdue")
 
 # Apply after user confirmation
-raven_query(query_string="trait:due value==past", apply="set status=overdue", confirm=true)
+raven_query(query_string="trait:due .value==past", apply="set status=overdue", confirm=true)
 
 # Other bulk operations
 raven_query(query_string="object:project .status==archived", apply="move archive/")

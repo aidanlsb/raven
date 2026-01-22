@@ -141,12 +141,12 @@ any(.tags, _ == "urgent" | _ == "critical")
 
 | Syntax | Meaning |
 |--------|---------|
-| `value==val` | Value equals |
-| `value!=val` | Value not equals |
-| `value>val` | Value greater than |
-| `value<val` | Value less than |
-| `value>=val` | Value greater or equal |
-| `value<=val` | Value less or equal |
+| `.value==val` | Value equals |
+| `.value!=val` | Value not equals |
+| `.value>val` | Value greater than |
+| `.value<val` | Value less than |
+| `.value>=val` | Value greater or equal |
+| `.value<=val` | Value less or equal |
 
 ### Association Predicates
 
@@ -319,18 +319,18 @@ object:project all(.tags, startswith(_, "feature-"))
 object:project (.status==active | .status==backlog) !.archived==true
 
 # With sub-query
-object:meeting has:{trait:due value==past}
+object:meeting has:{trait:due .value==past}
 
 # Trait query
-trait:todo value==todo within:{object:project .status==active}
+trait:todo .value==todo within:{object:project .status==active}
 
 # Simple pipeline
 object:project .status==active |> sort(.name, asc) limit(10)
 
 # Aggregation with filtering
 object:project .status==active |>
-  todos = count({trait:todo value==todo ancestor:_})
-  overdue = count({trait:due value==past ancestor:_})
+  todos = count({trait:todo .value==todo ancestor:_})
+  overdue = count({trait:due .value==past ancestor:_})
   filter(todos > 0)
   sort(overdue, desc)
   limit(10)

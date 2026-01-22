@@ -34,10 +34,10 @@ rvn query "<query>" --apply "<command> [args...]" [--confirm]
 
 ```bash
 # Preview (default) - shows what would change
-rvn query "trait:due value==past" --apply "set status=overdue"
+rvn query "trait:due .value==past" --apply "set status=overdue"
 
 # Apply - actually makes the changes
-rvn query "trait:due value==past" --apply "set status=overdue" --confirm
+rvn query "trait:due .value==past" --apply "set status=overdue" --confirm
 ```
 
 ---
@@ -59,7 +59,7 @@ rvn query "object:person !.status==*" --apply "set status=active role=member" --
 rvn query "object:project .status==archived" --apply "set priority=" --confirm
 
 # Set on trait query results
-rvn query "trait:due value==past" --apply "set status=overdue" --confirm
+rvn query "trait:due .value==past" --apply "set status=overdue" --confirm
 ```
 
 ### Behavior
@@ -163,7 +163,7 @@ Outputs one ID per line for piping:
 rvn query "object:project .status==active" --ids
 
 # Trait query - outputs trait IDs
-rvn query "trait:due value==past" --ids
+rvn query "trait:due .value==past" --ids
 ```
 
 ### Piping Examples
@@ -289,7 +289,7 @@ rvn query "object:project .priority==urgent" --ids | rvn set --stdin priority=cr
 
 ```bash
 # Mark overdue items with a status (acts on containing objects)
-rvn query "trait:due value==past" --apply "set status=overdue" --confirm
+rvn query "trait:due .value==past" --apply "set status=overdue" --confirm
 ```
 
 ### Batch Create Tags

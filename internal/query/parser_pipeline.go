@@ -59,9 +59,11 @@ func (p *Parser) parsePipelineStage() (PipelineStage, error) {
 // parseAssignment parses:
 //   - name = count({subquery})
 //   - name = count(navfunc(_))
-//   - name = min({trait:...})           -- min of trait values
+//   - name = min(.value, {trait:...})   -- min of trait values (requires .value)
 //   - name = min(.field, {object:...})  -- min of field values on objects
+//   - name = max(.value, {trait:...})   -- max of trait values (requires .value)
 //   - name = max(.field, {object:...})  -- max of field values on objects
+//   - name = sum(.value, {trait:...})   -- sum of trait values (requires .value)
 //   - name = sum(.field, {object:...})  -- sum of field values on objects
 func (p *Parser) parseAssignment() (PipelineStage, error) {
 	name := p.curr.Value

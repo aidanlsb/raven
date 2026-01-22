@@ -268,17 +268,17 @@ func TestExecuteObjectQuery(t *testing.T) {
 		},
 		{
 			name:      "contains todo with value filter",
-			query:     "object:project contains:{trait:todo value==todo}",
+			query:     "object:project contains:{trait:todo .value==todo}",
 			wantCount: 2, // Both projects have incomplete todos (trait5 on website, trait8 on mobile)
 		},
 		{
 			name:      "contains todo value done",
-			query:     "object:project contains:{trait:todo value==done}",
+			query:     "object:project contains:{trait:todo .value==done}",
 			wantCount: 1, // Only mobile has completed todo
 		},
 		{
 			name:      "contains priority high",
-			query:     "object:project contains:{trait:priority value==high}",
+			query:     "object:project contains:{trait:priority .value==high}",
 			wantCount: 1, // Only website has high priority in subtree
 		},
 		{
@@ -349,17 +349,17 @@ func TestExecuteTraitQuery(t *testing.T) {
 		},
 		{
 			name:      "trait with value filter",
-			query:     "trait:due value==2025-06-30",
+			query:     "trait:due .value==2025-06-30",
 			wantCount: 1,
 		},
 		{
 			name:      "trait value case insensitive",
-			query:     "trait:todo value==TODO",
+			query:     "trait:todo .value==TODO",
 			wantCount: 2, // matches "todo" case-insensitively (trait5 and trait8)
 		},
 		{
 			name:      "trait value mixed case",
-			query:     "trait:priority value==HIGH",
+			query:     "trait:priority .value==HIGH",
 			wantCount: 1, // matches "high" case-insensitively
 		},
 		{
@@ -431,8 +431,8 @@ func TestExecuteTraitQuery(t *testing.T) {
 		},
 		{
 			name:      "content combined with value",
-			query:     `trait:todo content:"landing page" value==todo`,
-			wantCount: 1, // trait5 has "Build landing page" with value==todo
+			query:     `trait:todo content:"landing page" .value==todo`,
+			wantCount: 1, // trait5 has "Build landing page" with .value==todo
 		},
 		{
 			name:      "content combined with on",
@@ -692,13 +692,13 @@ func TestOrAndGroupPredicates(t *testing.T) {
 		},
 		{
 			name:      "OR value filter",
-			query:     "trait:todo (value==todo | value==done)",
+			query:     "trait:todo (.value==todo | .value==done)",
 			wantCount: 3, // trait5 (todo), trait7 (done), trait8 (todo)
 		},
 		{
 			name:      "grouped with value",
-			query:     "trait:todo (value==todo) on:{object:section}",
-			wantCount: 2, // trait5 and trait8 (both have value==todo and are on sections)
+			query:     "trait:todo (.value==todo) on:{object:section}",
+			wantCount: 2, // trait5 and trait8 (both have .value==todo and are on sections)
 		},
 	}
 
@@ -860,22 +860,22 @@ func TestComparisonOperators(t *testing.T) {
 	}{
 		{
 			name:      "value less than",
-			query:     "trait:due value<2025-03-01",
+			query:     "trait:due .value<2025-03-01",
 			wantCount: 2, // trait2 (2025-02-03) and trait4 (2025-02-01)
 		},
 		{
 			name:      "value greater than",
-			query:     "trait:due value>2025-03-01",
+			query:     "trait:due .value>2025-03-01",
 			wantCount: 1, // trait1 (2025-06-30)
 		},
 		{
 			name:      "value less than or equal",
-			query:     "trait:due value<=2025-02-03",
+			query:     "trait:due .value<=2025-02-03",
 			wantCount: 2, // trait2 and trait4
 		},
 		{
 			name:      "value greater than or equal",
-			query:     "trait:due value>=2025-02-03",
+			query:     "trait:due .value>=2025-02-03",
 			wantCount: 2, // trait1 and trait2
 		},
 	}

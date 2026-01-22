@@ -15,7 +15,7 @@
 | Element | Syntax | Example |
 |---------|--------|---------|
 | Field access | `.` prefix | `.status==active` |
-| Equality | `==` | `.status==active`, `value==past` |
+| Equality | `==` | `.status==active`, `.value==past` |
 | Not equals | `!=` | `.status!=done` |
 | Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
 | Contains | `includes()` | `includes(.name, "website")` |
@@ -45,7 +45,7 @@ object:<type> [<predicates>...] [|> <pipeline>]
 ```
 object:project
 object:project .status==active
-object:meeting has:{trait:due value==past}
+object:meeting has:{trait:due .value==past}
 object:project .status==active |> sort(.name, asc) limit(10)
 ```
 
@@ -60,7 +60,7 @@ trait:<name> [<predicates>...] [|> <pipeline>]
 **Examples:**
 ```
 trait:due
-trait:due value==past
+trait:due .value==past
 trait:highlight on:{object:book .status==reading}
 ```
 
@@ -155,8 +155,8 @@ Filter by whether object contains matching traits.
 **Examples:**
 ```
 object:project has:{trait:due}
-object:meeting has:{trait:due value==past}
-object:meeting !has:{trait:due value==past}
+object:meeting has:{trait:due .value==past}
+object:meeting !has:{trait:due .value==past}
 ```
 
 ### Hierarchy Predicates
@@ -192,8 +192,8 @@ Filter by whether object has matching traits anywhere in its subtree.
 **Examples:**
 ```
 object:project contains:{trait:todo}
-object:project contains:{trait:todo value==todo}
-object:date contains:{trait:due value==past}
+object:project contains:{trait:todo .value==todo}
+object:date contains:{trait:due .value==past}
 ```
 
 ### References (`refs:`)
@@ -254,12 +254,12 @@ Filter by trait value.
 
 | Predicate | Meaning |
 |-----------|---------|
-| `value==val` | Value equals val |
-| `value!=val` | Value does NOT equal val |
-| `value>val` | Value greater than |
-| `value<val` | Value less than |
-| `value>=val` | Value greater or equal |
-| `value<=val` | Value less or equal |
+| `.value==val` | Value equals val |
+| `.value!=val` | Value does NOT equal val |
+| `.value>val` | Value greater than |
+| `.value<val` | Value less than |
+| `.value>=val` | Value greater or equal |
+| `.value<=val` | Value less or equal |
 
 For string matching on values, use `includes()`, `startswith()`, `endswith()`, or `matches()`.
 
@@ -286,9 +286,9 @@ matches(.value, r"^TODO.*$")
 
 **Examples:**
 ```
-trait:due value==past
-trait:due !value==past
-trait:due value<2025-01-01
+trait:due .value==past
+trait:due !.value==past
+trait:due .value<2025-01-01
 trait:status includes(.value, "progress")
 trait:tag startswith(.value, "feat-")
 trait:note matches(.value, r"^TODO.*$")
@@ -323,7 +323,7 @@ Filter traits by co-location (same file and line).
 **Examples:**
 ```
 trait:due at:{trait:todo}
-trait:priority at:{trait:due value==past}
+trait:priority at:{trait:due .value==past}
 ```
 
 ### References (`refs:`)
@@ -371,7 +371,7 @@ trait:highlight content:"important"
 ```
 object:project .status==active has:{trait:due}
 object:project (.status==active | .status==backlog) !.archived==true
-object:meeting (has:{trait:due value==past} | has:{trait:remind value==past})
+object:meeting (has:{trait:due .value==past} | has:{trait:remind .value==past})
 ```
 
 ---
@@ -404,12 +404,12 @@ The pipeline operator separates selection (predicates) from post-processing.
 | `count(descendants(_))` | Count descendants |
 | `count(parent(_))` | Count parent (0 or 1) |
 | `count(child(_))` | Count direct children |
-| `min({trait:...})` | Minimum trait value |
-| `max({trait:...})` | Maximum trait value |
+| `min(.value, {trait:...})` | Minimum trait value |
+| `max(.value, {trait:...})` | Maximum trait value |
 | `min(.field, {object:...})` | Minimum field value on objects |
 | `max(.field, {object:...})` | Maximum field value on objects |
 | `sum(.field, {object:...})` | Sum of field values on objects |
-| `sum({trait:...})` | Sum of numeric trait values |
+| `sum(.value, {trait:...})` | Sum of numeric trait values |
 
 **Important**: All subqueries in pipeline assignments **must** contain a `_` reference to connect to the current result. Subqueries without `_` are invalid because they would produce the same value for every result:
 
@@ -487,12 +487,12 @@ sort(todos, desc)     # descending
 object:project .status==active |> sort(.name) limit(10)
 
 # Count and filter
-object:project |> todos = count({trait:todo value==todo within:_}) filter(todos > 0)
+object:project |> todos = count({trait:todo .value==todo within:_}) filter(todos > 0)
 
 # Full pipeline
 object:project .status==active |>
-  todos = count({trait:todo value==todo within:_})
-  overdue = count({trait:due value==past within:_})
+  todos = count({trait:todo .value==todo within:_})
+  overdue = count({trait:due .value==past within:_})
   filter(todos > 0)
   sort(overdue, desc)
   limit(10)
@@ -512,7 +512,7 @@ object:person |>
 ```
 # Simple queries
 object:project .status==active
-trait:due value==past
+trait:due .value==past
 
 # String matching
 object:project includes(.name, "api") endswith(.name, "-service")
@@ -526,10 +526,10 @@ object:project all(.tags, startswith(_, "feature-"))
 object:project (.status==active | .status==backlog) !.archived==true
 
 # With sub-query
-object:meeting has:{trait:due value==past}
+object:meeting has:{trait:due .value==past}
 
 # Trait query with hierarchy
-trait:todo value==todo within:{object:project .status==active}
+trait:todo .value==todo within:{object:project .status==active}
 
 # Content search
 object:project content:"api design"
@@ -541,7 +541,7 @@ object:project refd:{object:meeting}
 
 # Pipeline with aggregation
 object:project .status==active |>
-  todos = count({trait:todo value==todo within:_})
+  todos = count({trait:todo .value==todo within:_})
   filter(todos > 0)
   sort(todos, desc)
   limit(10)
@@ -556,7 +556,7 @@ object:project .status==active |>
 | Predicate | Object Query | Trait Query |
 |-----------|--------------|-------------|
 | `.field==value` | ✅ Frontmatter fields | ❌ |
-| `value==val` | ❌ | ✅ Trait value |
+| `.value==val` | ❌ | ✅ Trait value |
 | `has:{trait:...}` | ✅ Has matching trait | ❌ |
 | `contains:{trait:...}` | ✅ Has trait in subtree | ❌ |
 | `parent:` | ✅ Direct parent matches | ❌ |

@@ -32,6 +32,13 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 			cond, condArgs := buildValueCondition(tp, "value")
 			traitConditions = append(traitConditions, cond)
 			args = append(args, condArgs...)
+		case *FieldPredicate:
+			// Handle .value predicate for traits
+			if tp.Field == "value" {
+				cond, condArgs := buildCompareCondition(tp.Value, tp.CompareOp, tp.Negated(), "value")
+				traitConditions = append(traitConditions, cond)
+				args = append(args, condArgs...)
+			}
 		}
 	}
 
@@ -285,6 +292,13 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 			cond, condArgs := buildValueCondition(tp, "t.value")
 			traitConditions = append(traitConditions, cond)
 			args = append(args, condArgs...)
+		case *FieldPredicate:
+			// Handle .value predicate for traits
+			if tp.Field == "value" {
+				cond, condArgs := buildCompareCondition(tp.Value, tp.CompareOp, tp.Negated(), "t.value")
+				traitConditions = append(traitConditions, cond)
+				args = append(args, condArgs...)
+			}
 		}
 	}
 

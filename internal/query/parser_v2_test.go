@@ -123,24 +123,30 @@ func TestParseV2ValuePredicates(t *testing.T) {
 	}{
 		{
 			name:  "equals",
-			input: "trait:due value==past",
+			input: "trait:due .value==past",
 			checkFunc: func(t *testing.T, q *Query) {
-				vp := q.Predicates[0].(*ValuePredicate)
-				if vp.Value != "past" {
-					t.Errorf("expected value 'past', got '%s'", vp.Value)
+				fp := q.Predicates[0].(*FieldPredicate)
+				if fp.Field != "value" {
+					t.Errorf("expected field 'value', got '%s'", fp.Field)
 				}
-				if vp.CompareOp != CompareEq {
-					t.Errorf("expected CompareEq, got %v", vp.CompareOp)
+				if fp.Value != "past" {
+					t.Errorf("expected value 'past', got '%s'", fp.Value)
+				}
+				if fp.CompareOp != CompareEq {
+					t.Errorf("expected CompareEq, got %v", fp.CompareOp)
 				}
 			},
 		},
 		{
 			name:  "less than date",
-			input: "trait:due value<2025-01-01",
+			input: "trait:due .value<2025-01-01",
 			checkFunc: func(t *testing.T, q *Query) {
-				vp := q.Predicates[0].(*ValuePredicate)
-				if vp.CompareOp != CompareLt {
-					t.Errorf("expected CompareLt, got %v", vp.CompareOp)
+				fp := q.Predicates[0].(*FieldPredicate)
+				if fp.Field != "value" {
+					t.Errorf("expected field 'value', got '%s'", fp.Field)
+				}
+				if fp.CompareOp != CompareLt {
+					t.Errorf("expected CompareLt, got %v", fp.CompareOp)
 				}
 			},
 		},
@@ -369,7 +375,7 @@ func TestParseV2Pipeline(t *testing.T) {
 
 func TestParseV2ComplexQuery(t *testing.T) {
 	// Test a complex query from the spec
-	input := `object:project .status==active has:{trait:due value==past} |> todos = count({trait:todo value==todo ancestor:_}) filter(todos > 0) sort(todos, desc) limit(10)`
+	input := `object:project .status==active has:{trait:due .value==past} |> todos = count({trait:todo .value==todo ancestor:_}) filter(todos > 0) sort(todos, desc) limit(10)`
 
 	q, err := Parse(input)
 	if err != nil {

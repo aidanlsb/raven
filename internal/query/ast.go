@@ -162,8 +162,10 @@ type ContentPredicate struct {
 func (ContentPredicate) predicateNode() {}
 
 // ValuePredicate filters traits by value.
-// Syntax: value==val, value<val, value>val
-// For string matching, use StringFuncPredicate (includes, startswith, endswith, matches).
+//
+// Deprecated: Use FieldPredicate with Field="value" instead.
+// The parser now creates FieldPredicate for .value== syntax.
+// This type is retained for internal SQL generation helpers.
 type ValuePredicate struct {
 	basePredicate
 	Value     string

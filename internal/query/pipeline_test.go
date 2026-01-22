@@ -109,7 +109,7 @@ func TestPipelineCount(t *testing.T) {
 	}{
 		{
 			name:  "count todos in descendants",
-			query: "object:project .status==active |> todos = count({trait:todo value==todo within:_})",
+			query: "object:project .status==active |> todos = count({trait:todo .value==todo within:_})",
 			wantCounts: map[string]int{
 				"projects/alpha": 2, // 2 incomplete todos
 				"projects/beta":  1, // 1 incomplete todo
@@ -189,12 +189,12 @@ func TestPipelineFilter(t *testing.T) {
 	}{
 		{
 			name:    "filter by computed count > 0",
-			query:   "object:project |> todos = count({trait:todo value==todo within:_}) filter(todos > 0)",
+			query:   "object:project |> todos = count({trait:todo .value==todo within:_}) filter(todos > 0)",
 			wantIDs: []string{"projects/alpha", "projects/beta"},
 		},
 		{
 			name:    "filter by computed count >= 2",
-			query:   "object:project |> todos = count({trait:todo value==todo within:_}) filter(todos >= 2)",
+			query:   "object:project |> todos = count({trait:todo .value==todo within:_}) filter(todos >= 2)",
 			wantIDs: []string{"projects/alpha"},
 		},
 		{
@@ -248,7 +248,7 @@ func TestPipelineSort(t *testing.T) {
 	}{
 		{
 			name:    "sort by computed count descending",
-			query:   "object:project .status==active |> todos = count({trait:todo value==todo within:_}) sort(todos, desc)",
+			query:   "object:project .status==active |> todos = count({trait:todo .value==todo within:_}) sort(todos, desc)",
 			wantIDs: []string{"projects/alpha", "projects/beta"}, // alpha=2, beta=1
 		},
 		{
@@ -352,7 +352,7 @@ func TestPipelineMinMaxOnTraits(t *testing.T) {
 	executor := NewExecutor(db)
 
 	// min/max should work on trait queries - get earliest due date
-	q, err := Parse("object:project |> earliest = min({trait:due within:_})")
+	q, err := Parse("object:project |> earliest = min(.value, {trait:due within:_})")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -474,7 +474,7 @@ func TestPipelineFullExample(t *testing.T) {
 	executor := NewExecutor(db)
 
 	// Complex pipeline: count todos, filter, sort, limit
-	q, err := Parse("object:project |> todos = count({trait:todo value==todo within:_}) filter(todos > 0) sort(todos, desc) limit(5)")
+	q, err := Parse("object:project |> todos = count({trait:todo .value==todo within:_}) filter(todos > 0) sort(todos, desc) limit(5)")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -970,9 +970,9 @@ func TestTraitPipelineMinMax(t *testing.T) {
 
 	executor := NewExecutor(db)
 
-	t.Run("min on trait subquery works without field", func(t *testing.T) {
-		// This uses trait subquery - should work without field specifier
-		q, err := Parse("object:project |> earliest = min({trait:due within:_})")
+	t.Run("min on trait subquery with .value field", func(t *testing.T) {
+		// Trait subqueries require .value field specifier
+		q, err := Parse("object:project |> earliest = min(.value, {trait:due within:_})")
 		if err != nil {
 			t.Fatalf("failed to parse query: %v", err)
 		}
@@ -1002,7 +1002,7 @@ func TestTraitPipelineMinMax(t *testing.T) {
 	})
 
 	t.Run("max on trait subquery", func(t *testing.T) {
-		q, err := Parse("object:project |> latest = max({trait:due within:_})")
+		q, err := Parse("object:project |> latest = max(.value, {trait:due within:_})")
 		if err != nil {
 			t.Fatalf("failed to parse query: %v", err)
 		}

@@ -264,25 +264,25 @@ func TestParseTraitPredicates(t *testing.T) {
 	}{
 		{
 			name:      "value predicate",
-			input:     "trait:due value==past",
+			input:     "trait:due .value==past",
 			predType:  "value",
 			wantValue: "past",
 		},
 		{
 			name:      "value predicate with quoted string",
-			input:     `trait:status value=="in progress"`,
+			input:     `trait:status .value=="in progress"`,
 			predType:  "value",
 			wantValue: "in progress",
 		},
 		{
 			name:      "value predicate with spaces",
-			input:     `trait:priority value=="very high"`,
+			input:     `trait:priority .value=="very high"`,
 			predType:  "value",
 			wantValue: "very high",
 		},
 		{
 			name:      "value predicate with ref",
-			input:     "trait:assignee value==[[people/freya]]",
+			input:     "trait:assignee .value==[[people/freya]]",
 			predType:  "value",
 			wantValue: "people/freya",
 		},
@@ -299,9 +299,12 @@ func TestParseTraitPredicates(t *testing.T) {
 			}
 
 			switch p := q.Predicates[0].(type) {
-			case *ValuePredicate:
+			case *FieldPredicate:
 				if tt.predType != "value" {
-					t.Fatalf("expected %s, got value", tt.predType)
+					t.Fatalf("expected %s, got field", tt.predType)
+				}
+				if p.Field != "value" {
+					t.Errorf("Field = %v, want value", p.Field)
 				}
 				if p.Value != tt.wantValue {
 					t.Errorf("Value = %v, want %v", p.Value, tt.wantValue)
@@ -576,7 +579,7 @@ func TestParseDescendantContains(t *testing.T) {
 		},
 		{
 			name:         "contains with value",
-			input:        "object:project contains:{trait:todo value==done}",
+			input:        "object:project contains:{trait:todo .value==done}",
 			predType:     "contains",
 			wantTypeName: "todo",
 		},
@@ -636,7 +639,7 @@ func TestParseComplexQueries(t *testing.T) {
 	}{
 		{
 			name:  "nested has with value",
-			input: "object:meeting has:{trait:due value==past}",
+			input: "object:meeting has:{trait:due .value==past}",
 		},
 		{
 			name:  "on with field",
@@ -656,7 +659,7 @@ func TestParseComplexQueries(t *testing.T) {
 		},
 		{
 			name:  "contains with value predicate",
-			input: "object:project contains:{trait:todo value==todo}",
+			input: "object:project contains:{trait:todo .value==todo}",
 		},
 		{
 			name:  "descendant with field predicate",
@@ -706,7 +709,7 @@ func TestParseAtPredicate(t *testing.T) {
 		},
 		{
 			name:          "at with trait subquery and value",
-			input:         "trait:due at:{trait:priority value==high}",
+			input:         "trait:due at:{trait:priority .value==high}",
 			wantTraitName: "priority",
 		},
 		{
@@ -809,31 +812,31 @@ func TestParseComparisonOperators(t *testing.T) {
 	}{
 		{
 			name:          "value less than",
-			input:         "trait:due value<2025-01-01",
+			input:         "trait:due .value<2025-01-01",
 			wantCompareOp: CompareLt,
 			wantValue:     "2025-01-01",
 		},
 		{
 			name:          "value greater than",
-			input:         "trait:priority value>5",
+			input:         "trait:priority .value>5",
 			wantCompareOp: CompareGt,
 			wantValue:     "5",
 		},
 		{
 			name:          "value less than or equal",
-			input:         "trait:due value<=2025-12-31",
+			input:         "trait:due .value<=2025-12-31",
 			wantCompareOp: CompareLte,
 			wantValue:     "2025-12-31",
 		},
 		{
 			name:          "value greater than or equal",
-			input:         "trait:score value>=100",
+			input:         "trait:score .value>=100",
 			wantCompareOp: CompareGte,
 			wantValue:     "100",
 		},
 		{
 			name:          "value equals (default)",
-			input:         "trait:status value==active",
+			input:         "trait:status .value==active",
 			wantCompareOp: CompareEq,
 			wantValue:     "active",
 		},
@@ -848,15 +851,18 @@ func TestParseComparisonOperators(t *testing.T) {
 			if len(q.Predicates) != 1 {
 				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
 			}
-			vp, ok := q.Predicates[0].(*ValuePredicate)
+			fp, ok := q.Predicates[0].(*FieldPredicate)
 			if !ok {
-				t.Fatalf("expected ValuePredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected FieldPredicate, got %T", q.Predicates[0])
 			}
-			if vp.CompareOp != tt.wantCompareOp {
-				t.Errorf("CompareOp = %v, want %v", vp.CompareOp, tt.wantCompareOp)
+			if fp.Field != "value" {
+				t.Errorf("Field = %v, want value", fp.Field)
 			}
-			if vp.Value != tt.wantValue {
-				t.Errorf("Value = %v, want %v", vp.Value, tt.wantValue)
+			if fp.CompareOp != tt.wantCompareOp {
+				t.Errorf("CompareOp = %v, want %v", fp.CompareOp, tt.wantCompareOp)
+			}
+			if fp.Value != tt.wantValue {
+				t.Errorf("Value = %v, want %v", fp.Value, tt.wantValue)
 			}
 		})
 	}
