@@ -35,7 +35,7 @@ rvn daily --edit
 rvn date today
 
 # Check overdue items
-rvn query "trait:due value==past"
+rvn query "trait:due .value==past"
 ```
 
 ### Throughout the Day
@@ -135,10 +135,10 @@ Find trait annotations:
 rvn query "trait:due"
 
 # Overdue items
-rvn query "trait:due value==past"
+rvn query "trait:due .value==past"
 
 # Due this week
-rvn query "trait:due value==this-week"
+rvn query "trait:due .value==this-week"
 
 # Highlights in books
 rvn query "trait:highlight on:{object:book}"
@@ -177,7 +177,7 @@ Create shortcuts for queries you run often:
 
 ```bash
 # Add a saved query
-rvn query add overdue "trait:due value==past" --description "Overdue items"
+rvn query add overdue "trait:due .value==past" --description "Overdue items"
 rvn query add tasks "trait:todo" --description "All tasks"
 
 # Run saved queries by name
@@ -201,10 +201,10 @@ All bulk operations preview by default. Add `--confirm` to apply.
 
 ```bash
 # Preview setting status on overdue items
-rvn query "trait:due value==past" --apply "set status=overdue"
+rvn query "trait:due .value==past" --apply "set status=overdue"
 
 # Apply after reviewing
-rvn query "trait:due value==past" --apply "set status=overdue" --confirm
+rvn query "trait:due .value==past" --apply "set status=overdue" --confirm
 ```
 
 ### Common Bulk Operations

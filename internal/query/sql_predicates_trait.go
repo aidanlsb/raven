@@ -139,11 +139,17 @@ func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (stri
 // buildValueCondition builds a SQL condition for a ValuePredicate.
 // This is a helper for use in subqueries where we don't have the full executor context.
 func buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
+	return buildCompareCondition(p.Value, p.CompareOp, p.Negated(), column)
+}
+
+// buildCompareCondition builds a SQL condition for comparing a column to a value.
+// This is the core comparison logic shared by ValuePredicate and FieldPredicate(.value).
+func buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}) {
 	// Date filters (today, past, this-week, YYYY-MM-DD, etc.)
-	if p.CompareOp == CompareEq || p.CompareOp == CompareNeq {
-		if cond, args, ok := buildDateFilterCondition(strings.TrimSpace(p.Value), column); ok {
-			negate := p.Negated()
-			if p.CompareOp == CompareNeq {
+	if compareOp == CompareEq || compareOp == CompareNeq {
+		if cond, args, ok := buildDateFilterCondition(strings.TrimSpace(value), column); ok {
+			negate := negated
+			if compareOp == CompareNeq {
 				negate = !negate
 			}
 			if negate {
@@ -155,7 +161,7 @@ func buildValueCondition(p *ValuePredicate, column string) (string, []interface{
 
 	// Pick operator for the predicate.
 	op := "="
-	switch p.CompareOp {
+	switch compareOp {
 	case CompareNeq:
 		op = "!="
 	case CompareLt:
@@ -169,9 +175,9 @@ func buildValueCondition(p *ValuePredicate, column string) (string, []interface{
 	}
 
 	// Prefer numeric comparisons when RHS parses as a number.
-	if n, err := strconv.ParseFloat(strings.TrimSpace(p.Value), 64); err == nil {
+	if n, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
 		cond := fmt.Sprintf("CAST(%s AS REAL) %s ?", column, op)
-		if p.Negated() {
+		if negated {
 			cond = "NOT (" + cond + ")"
 		}
 		return cond, []interface{}{n}
@@ -187,11 +193,18 @@ func buildValueCondition(p *ValuePredicate, column string) (string, []interface{
 		cond = fmt.Sprintf("%s %s ?", column, op)
 	}
 
-	if p.Negated() {
+	if negated {
 		cond = "NOT (" + cond + ")"
 	}
 
-	return cond, []interface{}{p.Value}
+	return cond, []interface{}{value}
+}
+
+// buildTraitValueFieldPredicateSQL builds SQL for .value==val predicates on traits.
+// This is the newer syntax that replaces the bare value== syntax.
+func (e *Executor) buildTraitValueFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
+	cond, args := buildCompareCondition(p.Value, p.CompareOp, p.Negated(), fmt.Sprintf("%s.value", alias))
+	return cond, args, nil
 }
 
 func buildDateFilterCondition(value string, column string) (string, []interface{}, bool) {

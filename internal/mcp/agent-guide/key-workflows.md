@@ -176,10 +176,10 @@ When users want to update many objects at once:
 1. Use `raven_query` with `--apply` to update query results in bulk:
    ```
    # Preview changes (default — changes NOT applied)
-   raven_query(query_string="trait:due value==past", apply="set status=overdue")
+   raven_query(query_string="trait:due .value==past", apply="set status=overdue")
    
    # Apply changes after user confirmation
-   raven_query(query_string="trait:due value==past", apply="set status=overdue", confirm=true)
+   raven_query(query_string="trait:due .value==past", apply="set status=overdue", confirm=true)
    ```
 
 2. Supported bulk operations:
@@ -302,7 +302,7 @@ Help users create reusable queries:
 
 1. Add a saved query:
    ```
-   raven_query_add(name="urgent", query_string="trait:due value==this-week|past", 
+   raven_query_add(name="urgent", query_string="trait:due .value==this-week|past", 
                    description="Due soon or overdue")
    ```
 

@@ -198,9 +198,10 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 			return v.validateQuery(p.SubQuery, false)
 		}
 	case *ValuePredicate:
+		// ValuePredicate is deprecated; the parser now uses FieldPredicate with Field="value"
 		return &ValidationError{
-			Message:    "value: predicate is only valid for trait queries",
-			Suggestion: "Use value==... in trait queries, or use .field==... for object fields",
+			Message:    "value predicate is only valid for trait queries",
+			Suggestion: "Use .value==X in trait queries, or use .field==X for object fields",
 		}
 	case *OnPredicate:
 		return &ValidationError{
@@ -277,9 +278,13 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 			Suggestion: "Use refd: with object queries, or use refs: in trait queries",
 		}
 	case *FieldPredicate:
+		// Allow .value for traits (the trait's value field)
+		if p.Field == "value" {
+			return nil
+		}
 		return &ValidationError{
-			Message:    "field predicates are only valid for object queries",
-			Suggestion: "Use .field==value in object queries, or value==... in trait queries",
+			Message:    "field predicates other than .value are only valid for object queries",
+			Suggestion: "Use .value==X for trait values, or .field==X in object queries",
 		}
 	case *ArrayQuantifierPredicate:
 		return &ValidationError{

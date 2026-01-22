@@ -46,10 +46,14 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias s
 		}
 		return e.buildStringFuncPredicateSQL(p, alias)
 
-	// Object-only predicate nodes.
+	// Object-only predicate nodes (except .value is allowed for traits).
 	case *FieldPredicate:
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
+		if kind == predicateKindTrait {
+			// Allow .value for traits
+			if p.Field == "value" {
+				return e.buildTraitValueFieldPredicateSQL(p, alias)
+			}
+			return "", nil, fmt.Errorf("unsupported trait field predicate: .%s (only .value is allowed for traits)", p.Field)
 		}
 		return e.buildFieldPredicateSQL(p, alias)
 	case *ArrayQuantifierPredicate:

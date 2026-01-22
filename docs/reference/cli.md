@@ -265,12 +265,12 @@ rvn query <query_string> [flags]
 ```bash
 rvn query "object:project .status==active"
 rvn query "object:meeting has:{trait:due}"
-rvn query "trait:due value==past"
+rvn query "trait:due .value==past"
 rvn query tasks                              # Run saved query
 rvn query --list                             # List saved queries
-rvn query "trait:due value==past" --ids       # For piping
-rvn query "trait:due value==past" --apply "set status=overdue"
-rvn query "trait:due value==past" --apply "set status=overdue" --confirm
+rvn query "trait:due .value==past" --ids       # For piping
+rvn query "trait:due .value==past" --apply "set status=overdue"
+rvn query "trait:due .value==past" --apply "set status=overdue" --confirm
 ```
 
 See `reference/query-language.md` for the full query language.
@@ -298,7 +298,7 @@ rvn query add <name> <query_string> [--description "..."]
 
 ```bash
 rvn query add tasks "trait:due"
-rvn query add overdue "trait:due value==past" --description "Overdue items"
+rvn query add overdue "trait:due .value==past" --description "Overdue items"
 rvn query add active-projects "object:project .status==active"
 ```
 

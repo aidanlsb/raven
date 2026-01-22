@@ -196,12 +196,6 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 	if p.curr.Type == TokenIdent {
 		keyword := strings.ToLower(p.curr.Value)
 
-		// v2: 'value' uses operators directly (==, !=, <, >, etc.) instead of :
-		if keyword == "value" {
-			p.advance()
-			return p.parseValuePredicate(negated)
-		}
-
 		// Check for function-style predicates: func(...)
 		// String functions: includes, startswith, endswith, matches
 		// Null checks: isnull, notnull

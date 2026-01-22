@@ -2,14 +2,14 @@
 
 **User**: "Find open todos from my experiment meetings"
 ```
-→ Compose query: trait:todo value==todo within:{object:meeting} refs:[[projects/experiments]]
-→ If unclear which project, also try: trait:todo value==todo within:{object:meeting} content:"experiment"
+→ Compose query: trait:todo .value==todo within:{object:meeting} refs:[[projects/experiments]]
+→ If unclear which project, also try: trait:todo .value==todo within:{object:meeting} content:"experiment"
 → Consolidate and present results
 ```
 
 **User**: "What do I have due this week?"
 ```
-→ raven_query(query_string="trait:due value==this-week")
+→ raven_query(query_string="trait:due .value==this-week")
 → Summarize results for user
 ```
 
@@ -139,12 +139,12 @@
 
 **User**: "Overdue items assigned to Freya"
 ```
-→ trait:due value==past refs:[[people/freya]]
+→ trait:due .value==past refs:[[people/freya]]
 ```
 
 **User**: "Show my todos sorted by due date"
 ```
-→ trait:todo |> due = min({trait:due at:_}) sort(due, asc)
+→ trait:todo |> due = min(.value, {trait:due at:_}) sort(due, asc)
 → Or sort by value: trait:todo |> sort(.value, asc)
 ```
 
@@ -156,7 +156,7 @@
 
 **User**: "Find high-priority items that are also due soon"
 ```
-→ trait:due at:{trait:priority value==high}
+→ trait:due at:{trait:priority .value==high}
 → Uses at: to find traits co-located on the same line
 ```
 
@@ -168,6 +168,6 @@
 
 **User**: "Sort projects by their earliest due date"
 ```
-→ object:project |> earliest_due = min({trait:due within:_}) sort(earliest_due, asc)
+→ object:project |> earliest_due = min(.value, {trait:due within:_}) sort(earliest_due, asc)
 → Uses min aggregation to find the earliest due date on each project
 ```

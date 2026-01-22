@@ -162,7 +162,7 @@ func (e *Executor) computeSubqueryAggregationForObject(obj *ObjectResult, subQue
 		if err != nil {
 			return 0, err
 		}
-		return e.aggregateTraitResults(results, agg)
+		return e.aggregateTraitResults(results, agg, field)
 	}
 
 	return 0, nil
@@ -189,7 +189,7 @@ func (e *Executor) computeSubqueryAggregationForTrait(trait *TraitResult, subQue
 		if err != nil {
 			return 0, err
 		}
-		return e.aggregateTraitResults(results, agg)
+		return e.aggregateTraitResults(results, agg, field)
 	}
 
 	return 0, nil
@@ -473,12 +473,18 @@ func (e *Executor) aggregateObjectResults(results []ObjectResult, agg Aggregatio
 }
 
 // aggregateTraitResults computes an aggregate value from trait results.
-// For traits, min/max/sum operate on the trait's Value field.
-func (e *Executor) aggregateTraitResults(results []TraitResult, agg AggregationType) (interface{}, error) {
+// For min/max/sum, the field must be specified (use ".value" for trait values).
+func (e *Executor) aggregateTraitResults(results []TraitResult, agg AggregationType, field string) (interface{}, error) {
 	switch agg {
 	case AggCount:
 		return len(results), nil
 	case AggMin:
+		if field == "" {
+			return nil, fmt.Errorf("min() on trait query requires a field: use min(.value, {trait:...})")
+		}
+		if field != "value" {
+			return nil, fmt.Errorf("min() on trait query only supports .value field, got .%s", field)
+		}
 		if len(results) == 0 {
 			return nil, nil
 		}
@@ -493,6 +499,12 @@ func (e *Executor) aggregateTraitResults(results []TraitResult, agg AggregationT
 		}
 		return minVal, nil
 	case AggMax:
+		if field == "" {
+			return nil, fmt.Errorf("max() on trait query requires a field: use max(.value, {trait:...})")
+		}
+		if field != "value" {
+			return nil, fmt.Errorf("max() on trait query only supports .value field, got .%s", field)
+		}
 		if len(results) == 0 {
 			return nil, nil
 		}
@@ -507,6 +519,12 @@ func (e *Executor) aggregateTraitResults(results []TraitResult, agg AggregationT
 		}
 		return maxVal, nil
 	case AggSum:
+		if field == "" {
+			return nil, fmt.Errorf("sum() on trait query requires a field: use sum(.value, {trait:...})")
+		}
+		if field != "value" {
+			return nil, fmt.Errorf("sum() on trait query only supports .value field, got .%s", field)
+		}
 		var sum float64
 		for _, r := range results {
 			if r.Value != nil {

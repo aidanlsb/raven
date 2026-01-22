@@ -26,7 +26,7 @@ trait:<name> [predicates...]
 - `.field==*` — Field exists (has any value)
 - `!.field==value` — Field does NOT equal value
 - `!.field==*` — Field does NOT exist
-- `has:{trait:X ...}` — Has trait matching sub-query (`has:{trait:due value==past}`)
+- `has:{trait:X ...}` — Has trait matching sub-query (`has:{trait:due .value==past}`)
 - `contains:{trait:X ...}` — Has matching trait anywhere in subtree
 - `refs:[[target]]` — References specific target (`refs:[[people/freya]]`)
 - `refs:{object:X ...}` — References objects matching sub-query
@@ -43,12 +43,12 @@ trait:<name> [predicates...]
 - `content:"term"` — Full-text search on object content
 
 **For trait queries:**
-- `value==X` — Trait value equals X (`value==past`, `value==high`, `value==todo`)
-- `value<X` — Trait value less than X (`value<2025-01-01`)
-- `value>X` — Trait value greater than X (`value>5`)
-- `value<=X` — Trait value less than or equal to X
-- `value>=X` — Trait value greater than or equal to X
-- `!value==X` — Trait value does NOT equal X
+- `.value==X` — Trait value equals X (`.value==past`, `.value==high`, `.value==todo`)
+- `.value<X` — Trait value less than X (`.value<2025-01-01`)
+- `.value>X` — Trait value greater than X (`.value>5`)
+- `.value<=X` — Trait value less than or equal to X
+- `.value>=X` — Trait value greater than or equal to X
+- `!.value==X` — Trait value does NOT equal X
 - `on:{object:X ...}` — Direct parent matches sub-query
 - `on:[[target]]` — Direct parent is specific object
 - `within:{object:X ...}` — Inside object matching sub-query
@@ -65,11 +65,11 @@ trait:<name> [predicates...]
 - `(...)` = grouping
 
 **Special date values for `trait:due`:**
-- `value==past` — Before today
-- `value==today` — Today
-- `value==tomorrow` — Tomorrow
-- `value==this-week` — This week
-- `value==next-week` — Next week
+- `.value==past` — Before today
+- `.value==today` — Today
+- `.value==tomorrow` — Tomorrow
+- `.value==this-week` — This week
+- `.value==next-week` — Next week
 
 **Sorting and Limiting:**
 
@@ -93,7 +93,7 @@ object:project .status==active |> limit(5)  # Get 5 active projects
 When a user asks a question, decompose it into query components:
 
 1. **What am I looking for?** → `trait:X` or `object:X`
-2. **What value/state?** → `value==X` or `.field==X`
+2. **What value/state?** → `.value==X` or `.field==X`
 3. **Where is it located?** → `within:{object:X}`, `on:{object:X}`, `parent:{object:X}`, `ancestor:{object:X}`
 4. **What does it reference?** → `refs:[[X]]` or `refs:{object:X ...}`
 
@@ -102,11 +102,11 @@ When a user asks a question, decompose it into query components:
 User: "Find open todos from meetings about the growth project"
 
 1. What? → `trait:todo` (looking for todo traits)
-2. What value? → `value==todo` (open/incomplete)
+2. What value? → `.value==todo` (open/incomplete)
 3. Where? → `within:{object:meeting}` (inside meeting objects)
 4. References? → `refs:[[projects/growth]]` (mentions the project)
 
-Query: `trait:todo value==todo within:{object:meeting} refs:[[projects/growth]]`
+Query: `trait:todo .value==todo within:{object:meeting} refs:[[projects/growth]]`
 
 ### Compound Queries vs. Multiple Queries
 
@@ -134,7 +134,7 @@ Run the most likely interpretation first. If results seem incomplete, try variat
 
 ```
 # Overdue items assigned to a person
-trait:due value==past refs:[[people/freya]]
+trait:due .value==past refs:[[people/freya]]
 
 # Highlights from books currently being read
 trait:highlight on:{object:book .status==reading}
@@ -146,10 +146,10 @@ trait:todo within:{object:meeting} refs:{object:project .status==active}
 object:meeting parent:{object:date} refs:[[people/thor]]
 
 # Projects that have any incomplete todos (anywhere in document)
-object:project contains:{trait:todo value==todo}
+object:project contains:{trait:todo .value==todo}
 
 # Tasks due this week on active projects
-trait:due value==this-week within:{object:project .status==active}
+trait:due .value==this-week within:{object:project .status==active}
 
 # Items referencing either of two people
 trait:due (refs:[[people/freya]] | refs:[[people/thor]])

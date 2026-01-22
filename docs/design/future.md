@@ -639,9 +639,9 @@ SELECT * FROM objects WHERE id IN (SELECT id FROM reachable);
 ### ~~Date Range Queries~~ ✅ IMPLEMENTED
 Support relative date queries in filters:
 ```bash
-rvn query "trait:due value==this-week"
-rvn query "trait:due value==past"         # overdue items
-rvn query "trait:remind value==today"
+rvn query "trait:due .value==this-week"
+rvn query "trait:due .value==past"         # overdue items
+rvn query "trait:remind .value==today"
 ```
 
 **Status**: ✅ Implemented with support for: `today`, `yesterday`, `tomorrow`, `this-week`, `next-week`, `past`, `future`, and specific `YYYY-MM-DD` dates.
@@ -1723,7 +1723,7 @@ pattern:task
 pattern:task on:{object:project}
 
 # Combined with value filters
-pattern:task value==past   # Overdue tasks
+pattern:task .value==past   # Overdue tasks
 ```
 
 **Benefits:**
