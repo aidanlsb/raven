@@ -168,6 +168,10 @@ collaborators:                           # ref array
 ---
 ```
 
+**Datetime normalization:** YAML treats unquoted timestamps as dates/datetimes. Raven preserves
+them as dates (`YYYY-MM-DD`) or normalizes datetimes to RFC3339-ish values (e.g.,
+`2026-01-10T09:00:00Z`). If you need to preserve the exact literal string, quote the value.
+
 ### `alias`
 
 The `alias` field enables alternative reference resolution. It's a reserved key, so any object can have an alias without needing to declare it in the schema:
@@ -396,6 +400,8 @@ Traits can appear anywhere on a line:
 - Task description @due(2026-02-15)
 - Task @priority(high) with @due(tomorrow) multiple traits
 ```
+
+Traits inside inline code spans (`` `like this` ``) are ignored.
 
 ### Trait Values
 

@@ -2,6 +2,7 @@
 package pages
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,16 +110,11 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	}
 
 	// Security: verify path is within vault
-	absVault, err := filepath.Abs(opts.VaultPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve vault path: %w", err)
-	}
-	absFile, err := filepath.Abs(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve file path: %w", err)
-	}
-	if !strings.HasPrefix(absFile, absVault+string(filepath.Separator)) && absFile != absVault {
-		return nil, fmt.Errorf("cannot create file outside vault")
+	if err := paths.ValidateWithinVault(opts.VaultPath, filePath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideVault) {
+			return nil, fmt.Errorf("cannot create file outside vault")
+		}
+		return nil, fmt.Errorf("failed to validate vault path: %w", err)
 	}
 
 	// Create parent directories

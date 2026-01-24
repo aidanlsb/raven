@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -218,16 +220,11 @@ func addSingleCapture(vaultPath string, args []string) error {
 	}
 
 	// Security: verify path is within vault
-	absVault, err := filepath.Abs(vaultPath)
-	if err != nil {
+	if err := paths.ValidateWithinVault(vaultPath, destPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideVault) {
+			return handleErrorMsg(ErrFileOutsideVault, fmt.Sprintf("cannot capture outside vault: %s", destPath), "")
+		}
 		return handleError(ErrInternal, err, "")
-	}
-	absDest, err := filepath.Abs(destPath)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-	if !strings.HasPrefix(absDest, absVault+string(filepath.Separator)) && absDest != absVault {
-		return handleErrorMsg(ErrFileOutsideVault, fmt.Sprintf("cannot capture outside vault: %s", destPath), "")
 	}
 
 	// Create parent directories if needed

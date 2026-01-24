@@ -356,6 +356,32 @@ func TestValidateFieldValueDatetime(t *testing.T) {
 	})
 }
 
+func TestValidateFieldValueDatetimeArray(t *testing.T) {
+	defs := map[string]*FieldDefinition{
+		"times": {Type: FieldTypeDatetimeArray},
+	}
+
+	t.Run("valid datetime array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"times": Array([]FieldValue{Datetime("2025-01-15T10:30"), Datetime("2025-01-15T10:30:45")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors, got %v", errors)
+		}
+	})
+
+	t.Run("invalid datetime array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"times": Array([]FieldValue{String("not-a-datetime")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(errors))
+		}
+	})
+}
+
 func TestValidateFieldValueEnum(t *testing.T) {
 	defs := map[string]*FieldDefinition{
 		"status": {Type: FieldTypeEnum, Values: []string{"active", "paused", "done"}},
@@ -397,6 +423,45 @@ func TestValidateFieldValueEnum(t *testing.T) {
 	})
 }
 
+func TestValidateFieldValueEnumArray(t *testing.T) {
+	defs := map[string]*FieldDefinition{
+		"states": {Type: FieldTypeEnumArray, Values: []string{"low", "medium", "high"}},
+	}
+
+	t.Run("valid enum array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"states": Array([]FieldValue{String("low"), String("high")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors, got %v", errors)
+		}
+	})
+
+	t.Run("invalid enum value in array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"states": Array([]FieldValue{String("critical")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(errors))
+		}
+	})
+
+	t.Run("enum array missing values definition", func(t *testing.T) {
+		defsNoValues := map[string]*FieldDefinition{
+			"states": {Type: FieldTypeEnumArray}, // No Values
+		}
+		fields := map[string]FieldValue{
+			"states": Array([]FieldValue{String("low")}),
+		}
+		errors := ValidateFields(fields, defsNoValues, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error for missing values, got %d", len(errors))
+		}
+	})
+}
+
 func TestValidateFieldValueBool(t *testing.T) {
 	defs := map[string]*FieldDefinition{
 		"active": {Type: FieldTypeBool},
@@ -427,6 +492,32 @@ func TestValidateFieldValueBool(t *testing.T) {
 	})
 }
 
+func TestValidateFieldValueBoolArray(t *testing.T) {
+	defs := map[string]*FieldDefinition{
+		"flags": {Type: FieldTypeBoolArray},
+	}
+
+	t.Run("valid bool array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"flags": Array([]FieldValue{Bool(true), Bool(false)}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors, got %v", errors)
+		}
+	})
+
+	t.Run("invalid bool array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"flags": Array([]FieldValue{String("true")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(errors))
+		}
+	})
+}
+
 func TestValidateFieldValueRef(t *testing.T) {
 	defs := map[string]*FieldDefinition{
 		"person": {Type: FieldTypeRef, Target: "person"},
@@ -445,6 +536,16 @@ func TestValidateFieldValueRef(t *testing.T) {
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {
 			t.Errorf("expected no errors for string as ref, got %v", errors)
+		}
+	})
+
+	t.Run("nested array from YAML is valid as ref", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"person": Array([]FieldValue{Array([]FieldValue{String("people/freya")})}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors for nested array ref, got %v", errors)
 		}
 	})
 
@@ -475,6 +576,19 @@ func TestValidateFieldValueRefArray(t *testing.T) {
 	t.Run("string array also valid as ref array", func(t *testing.T) {
 		fields := map[string]FieldValue{
 			"attendees": Array([]FieldValue{String("people/freya"), String("people/thor")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors, got %v", errors)
+		}
+	})
+
+	t.Run("nested arrays from YAML are valid ref array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"attendees": Array([]FieldValue{
+				Array([]FieldValue{String("people/freya")}),
+				Array([]FieldValue{String("people/thor")}),
+			}),
 		}
 		errors := ValidateFields(fields, defs, nil)
 		if len(errors) != 0 {

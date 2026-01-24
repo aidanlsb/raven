@@ -10,6 +10,7 @@ package paths
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -210,20 +211,63 @@ func ValidateWithinVault(vaultPath, targetPath string) error {
 		realVault = absVault
 	}
 
-	// For target, we may be checking a path that doesn't exist yet
-	// So check the parent directory
-	targetDir := filepath.Dir(absTarget)
-	realTargetDir, err := filepath.EvalSymlinks(targetDir)
+	resolvedTarget, err := resolveTargetPath(absTarget)
 	if err != nil {
-		// Parent might not exist yet, check grandparent
-		realTargetDir = targetDir
+		return err
 	}
 
 	// Ensure target is within vault
-	if !strings.HasPrefix(realTargetDir+string(filepath.Separator), realVault+string(filepath.Separator)) &&
-		realTargetDir != realVault {
+	if !isWithinPath(realVault, resolvedTarget) {
 		return ErrPathOutsideVault
 	}
 
 	return nil
+}
+
+// resolveTargetPath resolves symlinks for the nearest existing ancestor of absTarget,
+// then reconstructs the full path. This prevents symlink escapes when the final
+// path doesn't exist yet.
+func resolveTargetPath(absTarget string) (string, error) {
+	existing := absTarget
+	for {
+		if _, err := os.Lstat(existing); err == nil {
+			break
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+
+		parent := filepath.Dir(existing)
+		if parent == existing {
+			break
+		}
+		existing = parent
+	}
+
+	realExisting, err := filepath.EvalSymlinks(existing)
+	if err != nil {
+		return "", err
+	}
+
+	rel, err := filepath.Rel(existing, absTarget)
+	if err != nil {
+		return "", err
+	}
+	if rel == "." {
+		return realExisting, nil
+	}
+	return filepath.Join(realExisting, rel), nil
+}
+
+func isWithinPath(base, target string) bool {
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return !strings.HasPrefix(rel, "..")
 }

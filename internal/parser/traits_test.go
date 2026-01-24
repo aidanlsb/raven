@@ -40,6 +40,12 @@ func TestParseTraitAnnotations(t *testing.T) {
 			wantCount:  1,
 			wantTraits: []string{"remind"},
 		},
+		{
+			name:       "hyphenated trait name in parens",
+			line:       "(@to-read) Finish the book",
+			wantCount:  1,
+			wantTraits: []string{"to-read"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -110,6 +116,11 @@ func TestParseTraitAnnotations_InlineCode(t *testing.T) {
 		{
 			name:      "trait inside inline code ignored",
 			line:      "use `@decorator` for Python",
+			wantCount: 0,
+		},
+		{
+			name:      "inline code with whitespace before trait ignored",
+			line:      "use `see @decorator` for Python",
 			wantCount: 0,
 		},
 		{
@@ -255,6 +266,11 @@ func TestStripTraitAnnotations(t *testing.T) {
 			name: "boolean trait at end",
 			line: "This is important @highlight",
 			want: "This is important",
+		},
+		{
+			name: "trait wrapped in parentheses",
+			line: "(@due(2024-01-15)) Do something",
+			want: "() Do something",
 		},
 	}
 

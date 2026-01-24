@@ -41,11 +41,6 @@ func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) 
 
 // WalkMarkdownFilesWithOptions walks all markdown files with custom options.
 func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler func(result WalkResult) error) error {
-	canonicalVault, err := filepath.Abs(vaultPath)
-	if err != nil {
-		canonicalVault = vaultPath
-	}
-
 	var parseOpts *parser.ParseOptions
 	if opts != nil {
 		parseOpts = opts.ParseOptions
@@ -76,17 +71,16 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 		}
 
 		// Security: verify file is within vault
-		canonicalFile, err := filepath.Abs(path)
-		if err != nil {
+		if err := paths.ValidateWithinVault(vaultPath, path); err != nil {
+			if errors.Is(err, paths.ErrPathOutsideVault) {
+				return nil
+			}
 			relativePath, _ := filepath.Rel(vaultPath, path)
 			return handler(WalkResult{
 				Path:         path,
 				RelativePath: relativePath,
 				Error:        err,
 			})
-		}
-		if !strings.HasPrefix(canonicalFile, canonicalVault) {
-			return nil
 		}
 
 		relativePath, _ := filepath.Rel(vaultPath, path)

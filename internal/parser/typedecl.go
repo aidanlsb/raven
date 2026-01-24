@@ -26,11 +26,11 @@ type EmbeddedTypeInfo struct {
 	Fields   map[string]schema.FieldValue
 }
 
-// typeDeclWithArgsRegex matches ::typename(args...)
-var typeDeclWithArgsRegex = regexp.MustCompile(`^::(\w+)\s*\(([^)]*)\)\s*$`)
+// typeDeclWithArgsRegex matches ::type-name(args...)
+var typeDeclWithArgsRegex = regexp.MustCompile(`^::([\w-]+)\s*\(([^)]*)\)\s*$`)
 
-// typeDeclNoArgsRegex matches ::typename without parentheses (shorthand for ::typename())
-var typeDeclNoArgsRegex = regexp.MustCompile(`^::(\w+)\s*$`)
+// typeDeclNoArgsRegex matches ::type-name without parentheses (shorthand for ::typename())
+var typeDeclNoArgsRegex = regexp.MustCompile(`^::([\w-]+)\s*$`)
 
 // ParseEmbeddedType parses an embedded type declaration from a line.
 // Returns nil if the line is not a type declaration.

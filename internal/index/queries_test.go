@@ -38,10 +38,10 @@ func TestParseFilterExpression(t *testing.T) {
 			wantArgsCount: 2,
 		},
 		{
-			name:          "OR with NOT",
+			name:          "NOT list uses AND",
 			filter:        "!done|!cancelled",
 			fieldExpr:     "value",
-			wantCondition: "(value != ? OR value != ?)",
+			wantCondition: "(value != ? AND value != ?)",
 			wantArgsCount: 2,
 		},
 		{
@@ -212,10 +212,9 @@ func TestQueryTraitsWithFilterExpressions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("query failed: %v", err)
 		}
-		// This means: value != 'done' OR value != 'cancelled'
-		// Which matches everything (since every value is either not-done or not-cancelled)
-		if len(results) != 4 {
-			t.Errorf("expected 4 results, got %d", len(results))
+		// This means: value != 'done' AND value != 'cancelled'
+		if len(results) != 2 {
+			t.Errorf("expected 2 results (todo, in-progress), got %d", len(results))
 		}
 	})
 

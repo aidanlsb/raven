@@ -160,7 +160,7 @@ func runSchemaMigration(vaultPath string, dryRun bool) (bool, error) {
 	fmt.Println("    2. Convert trait fields to single-value format")
 	fmt.Println("    3. Move CLI aliases to queries in raven.yaml")
 
-	return true, nil
+	return false, fmt.Errorf("schema migration not yet implemented; see manual steps above")
 }
 
 func runSyntaxMigration(vaultPath string, dryRun bool) (bool, error) {
@@ -178,7 +178,7 @@ func runSyntaxMigration(vaultPath string, dryRun bool) (bool, error) {
 	fmt.Println("    Find: @task(due=DATE, priority=LEVEL)")
 	fmt.Println("    Replace: @due(DATE) @priority(LEVEL)")
 
-	return false, nil
+	return false, fmt.Errorf("syntax migration not yet implemented; see manual steps above")
 }
 
 func init() {

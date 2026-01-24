@@ -104,8 +104,14 @@ func yamlToFieldValue(value interface{}) schema.FieldValue {
 	case bool:
 		return schema.Bool(v)
 	case time.Time:
-		// YAML parses dates as time.Time - convert to date string
-		return schema.Date(v.Format(dates.DateLayout))
+		// YAML parses dates/datetimes as time.Time - preserve time if present.
+		if v.Hour() == 0 && v.Minute() == 0 && v.Second() == 0 && v.Nanosecond() == 0 {
+			return schema.Date(v.Format(dates.DateLayout))
+		}
+		if v.Second() == 0 && v.Nanosecond() == 0 {
+			return schema.Datetime(v.Format(dates.DatetimeLayout))
+		}
+		return schema.Datetime(v.Format(dates.DatetimeSecondsLayout))
 	case []interface{}:
 		items := make([]schema.FieldValue, 0, len(v))
 		for _, item := range v {

@@ -66,6 +66,17 @@ Content`,
 			wantType:    "daily",
 			wantEndLine: 4,
 		},
+		{
+			name: "datetime in frontmatter",
+			content: `---
+type: meeting
+starts_at: 2025-02-01T10:30:00Z
+---
+
+Content`,
+			wantType:    "meeting",
+			wantEndLine: 4,
+		},
 	}
 
 	for _, tt := range tests {
@@ -98,6 +109,18 @@ Content`,
 				}
 				if ref, ok := v.AsRef(); !ok || ref != "clients/midgard" {
 					t.Fatalf("expected client to be ref clients/midgard, got %v", v)
+				}
+			}
+			if strings.Contains(tt.content, "starts_at:") {
+				v, ok := fm.Fields["starts_at"]
+				if !ok {
+					t.Fatalf("expected starts_at field to be present")
+				}
+				if !v.IsDatetime() {
+					t.Fatalf("expected starts_at to be datetime, got %v", v)
+				}
+				if s, ok := v.AsString(); !ok || s != "2025-02-01T10:30" {
+					t.Fatalf("expected starts_at to be 2025-02-01T10:30, got %v", v)
 				}
 			}
 
