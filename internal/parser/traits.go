@@ -36,16 +36,17 @@ func (t *TraitAnnotation) ValueString() string {
 	return ""
 }
 
-// traitRegex matches @trait_name or @trait_name(value) for parsing.
-// The (?:^|[\s\-\*]) ensures @ is at start of line or after whitespace/list markers.
-// This strict pattern prevents matching things like email addresses.
-var traitRegex = regexp.MustCompile(`(?:^|[\s\-\*])@(\w+)(?:\s*\(([^)]*)\))?`)
+// traitRegex matches @trait-name or @trait-name(value) for parsing.
+// The (^|[\s\-\*\(\[\{>]) ensures @ is at start of line or after common delimiters
+// (whitespace/list markers/parentheses/brackets). This strict pattern prevents
+// matching things like email addresses.
+var traitRegex = regexp.MustCompile(`(^|[\s\-\*\(\[\{>])@([\w-]+)(?:\s*\(([^)]*)\))?`)
 
 // TraitHighlightPattern is a regex for highlighting traits in already-parsed content.
 // It's simpler than traitRegex because it doesn't need context validation - it's
 // used for display purposes on content that has already been parsed.
 // Capture groups: [1] = trait name, [2] = value (if present)
-var TraitHighlightPattern = regexp.MustCompile(`@(\w+)(?:\(([^)]*)\))?`)
+var TraitHighlightPattern = regexp.MustCompile(`@([\w-]+)(?:\(([^)]*)\))?`)
 
 // StripTraitAnnotations removes all trait annotations from a line and returns
 // the remaining content.
@@ -53,7 +54,9 @@ var TraitHighlightPattern = regexp.MustCompile(`@(\w+)(?:\(([^)]*)\))?`)
 // CONTENT SCOPE RULE: A trait's content consists of all text on the same line
 // as the trait annotation, with trait annotations removed.
 func StripTraitAnnotations(line string) string {
-	return strings.TrimSpace(traitRegex.ReplaceAllString(line, ""))
+	replaced := traitRegex.ReplaceAllString(line, "$1")
+	// Collapse any double spaces introduced by removal.
+	return strings.Join(strings.Fields(replaced), " ")
 }
 
 // ParseTraitAnnotations parses all trait annotations from a text segment.
@@ -65,24 +68,25 @@ func StripTraitAnnotations(line string) string {
 func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 	var traits []TraitAnnotation
 
-	matches := traitRegex.FindAllStringSubmatchIndex(line, -1)
+	sanitizedLine := RemoveInlineCode(line)
+	matches := traitRegex.FindAllStringSubmatchIndex(sanitizedLine, -1)
 
 	// Compute the full line content once by removing ALL trait annotations.
 	// This ensures traits at any position (start, middle, end) get the same content.
-	lineContent := StripTraitAnnotations(line)
+	lineContent := StripTraitAnnotations(sanitizedLine)
 
 	for _, match := range matches {
-		if len(match) < 4 {
+		if len(match) < 8 {
 			continue
 		}
 
-		// match[2:4] is the trait name capture group
-		traitName := line[match[2]:match[3]]
+		// match[4:6] is the trait name capture group
+		traitName := sanitizedLine[match[4]:match[5]]
 
-		// match[4:6] is the value capture group (may be -1 if not present)
+		// match[6:8] is the value capture group (may be -1 if not present)
 		var value *schema.FieldValue
-		if match[4] >= 0 && match[5] >= 0 {
-			valueStr := strings.TrimSpace(line[match[4]:match[5]])
+		if match[6] >= 0 && match[7] >= 0 {
+			valueStr := strings.TrimSpace(sanitizedLine[match[6]:match[7]])
 			if valueStr != "" {
 				fv := parseTraitValue(valueStr)
 				value = &fv

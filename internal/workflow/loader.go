@@ -1,14 +1,15 @@
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // externalWorkflowDef is used for parsing external workflow files.
@@ -71,16 +72,11 @@ func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
 func loadFromFile(vaultPath, name, filePath string) (*Workflow, error) {
 	// Security: ensure path is within vault
 	fullPath := filepath.Join(vaultPath, filePath)
-	absVault, err := filepath.Abs(vaultPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve vault path: %w", err)
-	}
-	absFile, err := filepath.Abs(fullPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve file path: %w", err)
-	}
-	if !strings.HasPrefix(absFile, absVault+string(filepath.Separator)) {
-		return nil, fmt.Errorf("workflow file must be within vault")
+	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideVault) {
+			return nil, fmt.Errorf("workflow file must be within vault")
+		}
+		return nil, fmt.Errorf("failed to validate workflow file: %w", err)
 	}
 
 	// Read and parse file

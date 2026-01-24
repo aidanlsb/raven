@@ -2,6 +2,7 @@
 package template
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // Variables holds the available template variables for substitution.
@@ -116,16 +118,11 @@ func loadFromFile(vaultPath, templatePath string) (string, error) {
 	fullPath := filepath.Join(vaultPath, templatePath)
 
 	// Security check: ensure path is within vault
-	absVault, err := filepath.Abs(vaultPath)
-	if err != nil {
+	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideVault) {
+			return "", nil // Silent fail for security - return empty
+		}
 		return "", err
-	}
-	absTemplate, err := filepath.Abs(fullPath)
-	if err != nil {
-		return "", err
-	}
-	if !strings.HasPrefix(absTemplate, absVault+string(filepath.Separator)) {
-		return "", nil // Silent fail for security - return empty
 	}
 
 	content, err := os.ReadFile(fullPath)

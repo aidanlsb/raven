@@ -49,6 +49,12 @@ func TestParseTypeDeclaration(t *testing.T) {
 			wantType: "section",
 			wantID:   "",
 		},
+	{
+		name:     "type name with hyphen",
+		line:     "::team-sync(id=weekly)",
+		wantType: "team-sync",
+		wantID:   "weekly",
+	},
 	}
 
 	for _, tt := range tests {
@@ -117,6 +123,12 @@ func TestParseEmbeddedType(t *testing.T) {
 			wantType: "task",
 			wantID:   "",
 		},
+	{
+		name:     "embedded type name with hyphen",
+		line:     "::team-sync(id=weekly)",
+		wantType: "team-sync",
+		wantID:   "weekly",
+	},
 	}
 
 	for _, tt := range tests {

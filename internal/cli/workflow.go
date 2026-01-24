@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
@@ -245,16 +247,11 @@ func makeReadFunc(vaultPath string) func(id string) (interface{}, error) {
 		fullPath := filepath.Join(vaultPath, filePath)
 
 		// Security: verify path is within vault
-		absVault, err := filepath.Abs(vaultPath)
-		if err != nil {
+		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
+			if errors.Is(err, paths.ErrPathOutsideVault) {
+				return nil, fmt.Errorf("path '%s' is outside vault", id)
+			}
 			return nil, err
-		}
-		absFile, err := filepath.Abs(fullPath)
-		if err != nil {
-			return nil, err
-		}
-		if !strings.HasPrefix(absFile, absVault+string(filepath.Separator)) && absFile != absVault {
-			return nil, fmt.Errorf("path '%s' is outside vault", id)
 		}
 
 		// Read and parse file

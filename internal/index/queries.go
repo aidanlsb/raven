@@ -92,7 +92,12 @@ func parseFilterExpression(filter string, fieldExpr string) (condition string, a
 	// Split on | for OR logic
 	parts := strings.Split(filter, "|")
 
-	var conditions []string
+	type filterPart struct {
+		cond    string
+		args    []interface{}
+		negated bool
+	}
+	var parsed []filterPart
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -111,20 +116,44 @@ func parseFilterExpression(filter string, fieldExpr string) (condition string, a
 		if buildErr != nil {
 			return "", nil, buildErr
 		}
-		conditions = append(conditions, partCondition)
-		args = append(args, partArgs...)
+
+		parsed = append(parsed, filterPart{
+			cond:    partCondition,
+			args:    partArgs,
+			negated: isNegated,
+		})
 	}
 
-	if len(conditions) == 0 {
+	if len(parsed) == 0 {
 		return "1=1", nil, nil // No filter, match all
 	}
 
-	if len(conditions) == 1 {
-		return conditions[0], args, nil
+	if len(parsed) == 1 {
+		return parsed[0].cond, parsed[0].args, nil
 	}
 
-	// Multiple conditions → OR them together
-	return "(" + strings.Join(conditions, " OR ") + ")", args, nil
+	allNegated := true
+	for _, p := range parsed {
+		if !p.negated {
+			allNegated = false
+			break
+		}
+	}
+
+	// Multiple conditions → OR them together, unless all are negated.
+	// For negated filters, "!a|!b" means "not a AND not b" (not-in semantics).
+	joiner := " OR "
+	if allNegated {
+		joiner = " AND "
+	}
+
+	var conditions []string
+	for _, p := range parsed {
+		conditions = append(conditions, p.cond)
+		args = append(args, p.args...)
+	}
+
+	return "(" + strings.Join(conditions, joiner) + ")", args, nil
 }
 
 // buildSingleFilterCondition builds a SQL condition for a single filter value.

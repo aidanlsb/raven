@@ -1,6 +1,12 @@
 package paths
 
-import "testing"
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
+)
 
 func TestNormalizeDirRoot(t *testing.T) {
 	tests := []struct {
@@ -82,5 +88,41 @@ func TestCandidateFilePaths(t *testing.T) {
 		if _, ok := want[p]; !ok {
 			t.Fatalf("unexpected candidate %q (got=%#v)", p, got)
 		}
+	}
+}
+
+func TestValidateWithinVault_AllowsInside(t *testing.T) {
+	vaultDir := t.TempDir()
+	target := filepath.Join(vaultDir, "notes", "new.md")
+	if err := ValidateWithinVault(vaultDir, target); err != nil {
+		t.Fatalf("ValidateWithinVault() = %v, want nil", err)
+	}
+}
+
+func TestValidateWithinVault_SymlinkEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink tests are not reliable on windows")
+	}
+
+	rootDir := t.TempDir()
+	vaultDir := filepath.Join(rootDir, "vault")
+	outsideDir := filepath.Join(rootDir, "outside")
+
+	if err := os.MkdirAll(vaultDir, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
+		t.Fatalf("mkdir outside: %v", err)
+	}
+
+	linkPath := filepath.Join(vaultDir, "link")
+	if err := os.Symlink(outsideDir, linkPath); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	target := filepath.Join(linkPath, "new.md")
+	err := ValidateWithinVault(vaultDir, target)
+	if !errors.Is(err, ErrPathOutsideVault) {
+		t.Fatalf("ValidateWithinVault() = %v, want ErrPathOutsideVault", err)
 	}
 }

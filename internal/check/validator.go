@@ -3,6 +3,7 @@ package check
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
@@ -23,6 +24,7 @@ const (
 	IssueUnknownFrontmatter      IssueType = "unknown_frontmatter_key"
 	IssueDuplicateID             IssueType = "duplicate_object_id"
 	IssueMissingRequiredField    IssueType = "missing_required_field"
+	IssueInvalidFieldValue       IssueType = "invalid_field_value"
 	IssueMissingRequiredTrait    IssueType = "missing_required_trait"
 	IssueInvalidEnumValue        IssueType = "invalid_enum_value"
 	IssueAmbiguousReference      IssueType = "ambiguous_reference"
@@ -337,13 +339,19 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 	if typeDef != nil {
 		fieldErrors := schema.ValidateFields(obj.Fields, typeDef.Fields, v.schema)
 		for _, err := range fieldErrors {
+			issueType := IssueInvalidFieldValue
+			fixHint := "Fix or remove the invalid field value"
+			if err.Message == "Required field is missing" {
+				issueType = IssueMissingRequiredField
+				fixHint = "Add the required field to the file's frontmatter"
+			}
 			issues = append(issues, Issue{
 				Level:    LevelError,
-				Type:     IssueMissingRequiredField,
+				Type:     issueType,
 				FilePath: filePath,
 				Line:     obj.LineStart,
 				Message:  err.Error(),
-				FixHint:  "Add the required field to the file's frontmatter",
+				FixHint:  fixHint,
 			})
 		}
 
@@ -514,6 +522,17 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 
 			// Validate enum value
 			if traitDef.Type == schema.FieldTypeEnum {
+				if len(traitDef.Values) == 0 {
+					issues = append(issues, Issue{
+						Level:    LevelError,
+						Type:     IssueInvalidEnumValue,
+						FilePath: filePath,
+						Line:     trait.Line,
+						Message:  fmt.Sprintf("Trait '@%s' is enum but has no allowed values", trait.TraitType),
+						Value:    trait.TraitType,
+						FixHint:  fmt.Sprintf("Define allowed values for trait '@%s' in schema", trait.TraitType),
+					})
+				}
 				validValue := false
 				for _, allowed := range traitDef.Values {
 					if allowed == valueStr {
@@ -533,10 +552,56 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 					})
 				}
 			}
+
+			// Validate numeric traits
+			if traitDef.Type == schema.FieldTypeNumber {
+				if _, ok := parseTraitNumber(trait.Value); !ok {
+					issues = append(issues, Issue{
+						Level:    LevelError,
+						Type:     IssueInvalidTraitValue,
+						FilePath: filePath,
+						Line:     trait.Line,
+						Message:  fmt.Sprintf("Invalid number value '%s' for trait '@%s'", valueStr, trait.TraitType),
+						Value:    valueStr,
+						FixHint:  "Use a numeric value (e.g., @score(5) or @score(3.5))",
+					})
+				}
+			}
+
+			// Validate ref traits (allow bare strings or [[ref]])
+			if traitDef.Type == schema.FieldTypeRef {
+				if valueStr == "" {
+					issues = append(issues, Issue{
+						Level:    LevelError,
+						Type:     IssueInvalidTraitValue,
+						FilePath: filePath,
+						Line:     trait.Line,
+						Message:  fmt.Sprintf("Trait '@%s' expects a reference value", trait.TraitType),
+						Value:    trait.TraitType,
+						FixHint:  fmt.Sprintf("Use @%s([[target]]) or @%s(target)", trait.TraitType, trait.TraitType),
+					})
+				}
+			}
 		}
 	}
 
 	return issues
+}
+
+func parseTraitNumber(value *schema.FieldValue) (float64, bool) {
+	if value == nil || value.IsNull() {
+		return 0, false
+	}
+	if n, ok := value.AsNumber(); ok {
+		return n, true
+	}
+	if s, ok := value.AsString(); ok {
+		n, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+		if err == nil {
+			return n, true
+		}
+	}
+	return 0, false
 }
 
 func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {

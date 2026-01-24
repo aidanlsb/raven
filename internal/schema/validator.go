@@ -131,6 +131,18 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 			return fmt.Errorf("invalid datetime format")
 		}
 
+	case FieldTypeDatetimeArray:
+		arr, ok := value.AsArray()
+		if !ok {
+			return fmt.Errorf("expected array of datetimes")
+		}
+		for _, v := range arr {
+			s, ok := v.AsString()
+			if !ok || !dates.IsValidDatetime(s) {
+				return fmt.Errorf("expected array of datetimes")
+			}
+		}
+
 	case FieldTypeEnum:
 		s, ok := value.AsString()
 		if !ok {
@@ -150,17 +162,51 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 			return fmt.Errorf("invalid enum value '%s', expected one of: %v", s, def.Values)
 		}
 
+	case FieldTypeEnumArray:
+		arr, ok := value.AsArray()
+		if !ok {
+			return fmt.Errorf("expected array of enum values")
+		}
+		if def.Values == nil {
+			return fmt.Errorf("enum type missing 'values' definition")
+		}
+		for _, v := range arr {
+			s, ok := v.AsString()
+			if !ok {
+				return fmt.Errorf("expected array of enum values")
+			}
+			found := false
+			for _, allowed := range def.Values {
+				if s == allowed {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("invalid enum value '%s', expected one of: %v", s, def.Values)
+			}
+		}
+
 	case FieldTypeBool:
 		if _, ok := value.AsBool(); !ok {
 			return fmt.Errorf("expected boolean")
 		}
 
-	case FieldTypeRef:
-		// Allow both ref and string as ref
-		if _, ok := value.AsRef(); !ok {
-			if _, ok := value.AsString(); !ok {
-				return fmt.Errorf("expected reference")
+	case FieldTypeBoolArray:
+		arr, ok := value.AsArray()
+		if !ok {
+			return fmt.Errorf("expected array of booleans")
+		}
+		for _, v := range arr {
+			if _, ok := v.AsBool(); !ok {
+				return fmt.Errorf("expected array of booleans")
 			}
+		}
+
+	case FieldTypeRef:
+		// Allow ref, string, or YAML nested array for [[ref]]
+		if _, ok := refTargetFromFieldValue(value); !ok {
+			return fmt.Errorf("expected reference")
 		}
 
 	case FieldTypeRefArray:
@@ -169,15 +215,33 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 			return fmt.Errorf("expected array of references")
 		}
 		for _, v := range arr {
-			if !v.IsRef() {
-				if _, ok := v.AsString(); !ok {
-					return fmt.Errorf("expected array of references")
-				}
+			if _, ok := refTargetFromFieldValue(v); !ok {
+				return fmt.Errorf("expected array of references")
 			}
 		}
 	}
 
 	return nil
+}
+
+func refTargetFromFieldValue(value FieldValue) (string, bool) {
+	if r, ok := value.AsRef(); ok && r != "" {
+		return r, true
+	}
+	if s, ok := value.AsString(); ok && s != "" {
+		return s, true
+	}
+	if arr, ok := value.AsArray(); ok && len(arr) == 1 {
+		if s, ok := arr[0].AsString(); ok && s != "" {
+			return s, true
+		}
+		if innerArr, ok := arr[0].AsArray(); ok && len(innerArr) == 1 {
+			if s, ok := innerArr[0].AsString(); ok && s != "" {
+				return s, true
+			}
+		}
+	}
+	return "", false
 }
 
 // ValidateNameField checks that a type's name_field is valid.

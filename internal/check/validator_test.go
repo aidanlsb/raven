@@ -180,6 +180,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 				Type:   schema.FieldTypeEnum,
 				Values: []string{"low", "medium", "high"},
 			},
+			"score": {Type: schema.FieldTypeNumber},
 		},
 	}
 
@@ -277,6 +278,67 @@ func TestValidatorTraitValidation(t *testing.T) {
 		}
 		if !hasEnumError {
 			t.Errorf("Expected invalid enum error, got: %v", issues)
+		}
+	})
+
+	t.Run("valid numeric trait", func(t *testing.T) {
+		scoreValue := schema.String("5")
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "notes/test",
+					ObjectType: "page",
+				},
+			},
+			Traits: []*parser.ParsedTrait{
+				{
+					TraitType:      "score",
+					Value:          &scoreValue,
+					ParentObjectID: "notes/test",
+					Line:           5,
+				},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidTraitValue && strings.Contains(issue.Message, "score") {
+				t.Errorf("Numeric trait should be valid, got: %v", issue)
+			}
+		}
+	})
+
+	t.Run("invalid numeric trait", func(t *testing.T) {
+		scoreValue := schema.String("not-a-number")
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/test.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "notes/test",
+					ObjectType: "page",
+				},
+			},
+			Traits: []*parser.ParsedTrait{
+				{
+					TraitType:      "score",
+					Value:          &scoreValue,
+					ParentObjectID: "notes/test",
+					Line:           5,
+				},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		hasNumberError := false
+		for _, issue := range issues {
+			if issue.Type == IssueInvalidTraitValue && strings.Contains(issue.Message, "number") {
+				hasNumberError = true
+				break
+			}
+		}
+		if !hasNumberError {
+			t.Errorf("Expected invalid number error, got: %v", issues)
 		}
 	})
 }
