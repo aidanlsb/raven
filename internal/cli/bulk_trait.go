@@ -381,11 +381,17 @@ func ReadTraitIDsFromStdin() (ids []string, err error) {
 		if line == "" {
 			continue
 		}
+
+		id := extractIDFromPipeLine(line)
+		if id == "" {
+			continue
+		}
+
 		// Trait IDs contain ":trait:" in them
-		if !strings.Contains(line, ":trait:") {
+		if !strings.Contains(id, ":trait:") {
 			continue // Skip non-trait IDs
 		}
-		ids = append(ids, line)
+		ids = append(ids, id)
 	}
 
 	if err := scanner.Err(); err != nil {

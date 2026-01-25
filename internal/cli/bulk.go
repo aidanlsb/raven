@@ -66,13 +66,18 @@ func ReadIDsFromStdin() (ids []string, embedded []string, err error) {
 			continue
 		}
 
-		// Check for embedded object IDs (contain #)
-		if strings.Contains(line, "#") {
-			embedded = append(embedded, line)
+		id := extractIDFromPipeLine(line)
+		if id == "" {
 			continue
 		}
 
-		ids = append(ids, line)
+		// Check for embedded object IDs (contain #)
+		if strings.Contains(id, "#") {
+			embedded = append(embedded, id)
+			continue
+		}
+
+		ids = append(ids, id)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -80,6 +85,22 @@ func ReadIDsFromStdin() (ids []string, embedded []string, err error) {
 	}
 
 	return ids, embedded, nil
+}
+
+// extractIDFromPipeLine extracts an ID from pipe-friendly list output.
+// Expected format: num<TAB>id<TAB>content<TAB>location
+// Falls back to the full line if no tabs are present.
+func extractIDFromPipeLine(line string) string {
+	if strings.Contains(line, "\t") {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) >= 2 {
+			id := strings.TrimSpace(parts[1])
+			if id != "" {
+				return id
+			}
+		}
+	}
+	return line
 }
 
 // IsEmbeddedID checks if an ID is an embedded object ID (contains #).
