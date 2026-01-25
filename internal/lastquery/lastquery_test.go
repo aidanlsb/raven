@@ -19,7 +19,7 @@ func TestWriteAndRead(t *testing.T) {
 
 	// Create a LastQuery
 	lq := &LastQuery{
-		Query:     "trait:todo value==todo",
+		Query:     "trait:todo .value==todo",
 		Timestamp: time.Now(),
 		Type:      "trait",
 		Results: []ResultEntry{

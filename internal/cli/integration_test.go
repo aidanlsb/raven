@@ -110,7 +110,7 @@ type: page
 	result.AssertResultCount(t, "items", 1)
 
 	// Query for priority traits - uses == for equality
-	result = v.RunCLI("query", "trait:priority value==high")
+	result = v.RunCLI("query", "trait:priority .value==high")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 1)
 }
@@ -229,7 +229,7 @@ type: page
 	v.RunCLI("reindex").MustSucceed(t)
 
 	// Preview bulk set on low priority traits (should not apply)
-	result := v.RunCLI("query", "trait:priority value==low", "--apply", "set value=high")
+	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "set value=high")
 	result.MustSucceed(t)
 
 	// Files should still have low priority since we didn't confirm
@@ -237,7 +237,7 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 
 	// Now confirm the bulk operation
-	result = v.RunCLI("query", "trait:priority value==low", "--apply", "set value=high", "--confirm")
+	result = v.RunCLI("query", "trait:priority .value==low", "--apply", "set value=high", "--confirm")
 	result.MustSucceed(t)
 
 	// Files should now have high priority
