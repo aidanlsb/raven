@@ -100,6 +100,7 @@ type tableRow struct {
 
 // traitTableRow represents a row for trait output (content-first)
 type traitTableRow struct {
+	num      int    // 1-indexed result number for reference
 	content  string // The task/content text
 	traits   string // Trait annotations like @due(2025-01-01)
 	location string // File path and line number
@@ -165,6 +166,12 @@ func printObjectTable(results []query.PipelineObjectResult, sch *schema.Schema) 
 		sort.Strings(fieldColumns)
 	}
 
+	// Calculate number column width
+	numWidth := len(fmt.Sprintf("%d", len(results)))
+	if numWidth < 2 {
+		numWidth = 2
+	}
+
 	// Calculate column widths
 	nameWidth := 4 // "NAME"
 	fieldWidths := make(map[string]int)
@@ -204,9 +211,11 @@ func printObjectTable(results []query.PipelineObjectResult, sch *schema.Schema) 
 	}
 	// Don't cap location width - show full paths for navigation
 
-	// Print header
-	header := fmt.Sprintf("%-*s", nameWidth, "NAME")
-	divider := strings.Repeat("─", nameWidth)
+	// Print header with # column
+	header := fmt.Sprintf("%*s", numWidth, "#")
+	divider := strings.Repeat("─", numWidth)
+	header += "  " + fmt.Sprintf("%-*s", nameWidth, "NAME")
+	divider += "  " + strings.Repeat("─", nameWidth)
 	for _, col := range fieldColumns {
 		header += "  " + fmt.Sprintf("%-*s", fieldWidths[col], strings.ToUpper(col))
 		divider += "  " + strings.Repeat("─", fieldWidths[col])
@@ -217,13 +226,14 @@ func printObjectTable(results []query.PipelineObjectResult, sch *schema.Schema) 
 	fmt.Println(ui.Muted.Render(header))
 	fmt.Println(ui.Muted.Render(divider))
 
-	// Print rows
-	for _, r := range results {
+	// Print rows with numbers
+	for i, r := range results {
+		numStr := fmt.Sprintf("%*d", numWidth, i+1)
 		name := filepath.Base(r.ID)
 		if len(name) > nameWidth {
 			name = name[:nameWidth-1] + "…"
 		}
-		row := fmt.Sprintf("%-*s", nameWidth, name)
+		row := ui.Muted.Render(numStr) + "  " + fmt.Sprintf("%-*s", nameWidth, name)
 
 		for _, col := range fieldColumns {
 			valStr := formatFieldValueSimple(r.Fields[col])
@@ -383,15 +393,27 @@ func printTraitRows(rows []traitTableRow) {
 		return
 	}
 
-	// Calculate content width - leave room for metadata on the right
-	const contentWidth = 55
+	// Calculate number column width based on max result number
+	maxNum := 0
+	for _, row := range rows {
+		if row.num > maxNum {
+			maxNum = row.num
+		}
+	}
+	numWidth := len(fmt.Sprintf("%d", maxNum))
+	if numWidth < 2 {
+		numWidth = 2
+	}
+
+	// Calculate content width - leave room for number and metadata on the right
+	const contentWidth = 52
 
 	// Calculate max row width for consistent dividers
 	maxRowWidth := 0
 	for _, row := range rows {
-		// Estimate row width: content + gap + trait + " · " + location
+		// Estimate row width: num + content + gap + trait + " · " + location
 		traitLen := ui.VisibleLen(row.traits)
-		rowWidth := contentWidth + 2 + traitLen + 3 + len(row.location)
+		rowWidth := numWidth + 2 + contentWidth + 2 + traitLen + 3 + len(row.location)
 		if rowWidth > maxRowWidth {
 			maxRowWidth = rowWidth
 		}
@@ -407,25 +429,29 @@ func printTraitRows(rows []traitTableRow) {
 			content = "(no content)"
 		}
 
+		// Format number
+		numStr := fmt.Sprintf("%*d", numWidth, row.num)
+
 		// Build metadata string: "value · location"
 		metadata := row.traits + " " + ui.Muted.Render("·") + " " + ui.Muted.Render(row.location)
 
 		// Check if content fits on one line
 		if len(content) <= contentWidth {
-			// Single line - content left, metadata right
+			// Single line - number, content left, metadata right
 			content = ui.HighlightTraits(content)
-			fmt.Printf("  %s  %s\n", ui.PadRight(content, contentWidth), metadata)
+			fmt.Printf("  %s  %s  %s\n", ui.Muted.Render(numStr), ui.PadRight(content, contentWidth), metadata)
 		} else {
 			// Two lines - wrap content
 			line1, line2 := wrapText(content, contentWidth)
 			line1 = ui.HighlightTraits(line1)
 			line2 = ui.HighlightTraits(line2)
 			
-			// First line with metadata
-			fmt.Printf("  %s  %s\n", ui.PadRight(line1, contentWidth), metadata)
-			// Second line (indented, no metadata)
+			// First line with number and metadata
+			fmt.Printf("  %s  %s  %s\n", ui.Muted.Render(numStr), ui.PadRight(line1, contentWidth), metadata)
+			// Second line (indented past number, no metadata)
 			if line2 != "" {
-				fmt.Printf("    %s\n", line2)
+				padding := strings.Repeat(" ", numWidth+2)
+				fmt.Printf("  %s%s\n", padding, line2)
 			}
 		}
 
@@ -524,6 +550,15 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		start := time.Now()
+
+		// Handle --pipe/--no-pipe flags
+		if pipeFlag, _ := cmd.Flags().GetBool("pipe"); pipeFlag {
+			t := true
+			SetPipeFormat(&t)
+		} else if noPipeFlag, _ := cmd.Flags().GetBool("no-pipe"); noPipeFlag {
+			f := false
+			SetPipeFormat(&f)
+		}
 
 		// Load vault config for saved queries
 		vaultCfg, err := config.LoadVaultConfig(vaultPath)
@@ -895,6 +930,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 			pipeItems := make([]PipeableItem, len(results))
 			for i, r := range results {
 				pipeItems[i] = PipeableItem{
+					Num:      i + 1,
 					ID:       r.ID,
 					Content:  filepath.Base(r.ID),
 					Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
@@ -979,6 +1015,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 		pipeItems := make([]PipeableItem, len(results))
 		for i, r := range results {
 			pipeItems[i] = PipeableItem{
+				Num:      i + 1,
 				ID:       r.ID,
 				Content:  TruncateContent(r.Content, 60),
 				Location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
@@ -1008,6 +1045,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 		traitStr := ui.Trait(r.TraitType, value)
 
 		rows[i] = traitTableRow{
+			num:      i + 1, // 1-indexed for user reference
 			content:  r.Content,
 			traits:   traitStr,
 			location: formatLocationLinkSimple(r.FilePath, r.Line),
@@ -1279,6 +1317,8 @@ func init() {
 	queryCmd.Flags().Bool("ids", false, "Output only object/trait IDs, one per line (for piping)")
 	queryCmd.Flags().StringArray("apply", nil, "Apply a bulk operation to query results (format: command args...)")
 	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
+	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output format")
+	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
 
 	// query add flags
 	queryAddCmd.Flags().String("description", "", "Human-readable description")

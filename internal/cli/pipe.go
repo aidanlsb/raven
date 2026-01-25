@@ -14,6 +14,7 @@ import (
 // PipeableItem represents an item that can be output in pipe-friendly format.
 // Commands that return lists should use this for consistent pipe/fzf integration.
 type PipeableItem struct {
+	Num      int    // 1-indexed result number for reference
 	ID       string // The unique identifier (used by downstream commands)
 	Content  string // Human-readable description
 	Location string // Short location hint (e.g., "daily/2026-01-25:42")
@@ -53,8 +54,9 @@ func ShouldUsePipeFormat() bool {
 }
 
 // WritePipeableList writes items in pipe-friendly tab-separated format.
-// Format: ID<tab>Content<tab>Location
+// Format: Num<tab>ID<tab>Content<tab>Location
 // This format works well with fzf and cut for downstream processing.
+// The number prefix allows users to reference results by number.
 func WritePipeableList(w io.Writer, items []PipeableItem) {
 	for _, item := range items {
 		// Sanitize content - remove tabs and newlines
@@ -63,7 +65,7 @@ func WritePipeableList(w io.Writer, items []PipeableItem) {
 
 		location := strings.ReplaceAll(item.Location, "\t", " ")
 
-		fmt.Fprintf(w, "%s\t%s\t%s\n", item.ID, content, location)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", item.Num, item.ID, content, location)
 	}
 }
 

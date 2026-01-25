@@ -138,8 +138,9 @@ func displayLastQuery(lq *lastquery.LastQuery, applyStr string, confirm bool, va
 	// Check for pipe mode - output pipe format for fzf integration
 	if ShouldUsePipeFormat() {
 		pipeItems := make([]PipeableItem, len(lq.Results))
-		for i, r := range lq.Results {
-			pipeItems[i] = PipeableItem{
+		for _, r := range lq.Results {
+			pipeItems[r.Num-1] = PipeableItem{
+				Num:      r.Num,
 				ID:       r.ID,
 				Content:  TruncateContent(r.Content, 60),
 				Location: r.Location,

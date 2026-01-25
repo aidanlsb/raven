@@ -8,9 +8,9 @@ import (
 
 func TestWritePipeableList(t *testing.T) {
 	items := []PipeableItem{
-		{ID: "id1", Content: "First item", Location: "file1.md:10"},
-		{ID: "id2", Content: "Second item", Location: "file2.md:20"},
-		{ID: "id3", Content: "Third item", Location: "file3.md:30"},
+		{Num: 1, ID: "id1", Content: "First item", Location: "file1.md:10"},
+		{Num: 2, ID: "id2", Content: "Second item", Location: "file2.md:20"},
+		{Num: 3, ID: "id3", Content: "Third item", Location: "file3.md:30"},
 	}
 
 	var buf bytes.Buffer
@@ -23,39 +23,43 @@ func TestWritePipeableList(t *testing.T) {
 		t.Errorf("Expected 3 lines, got %d", len(lines))
 	}
 
-	// Check format: ID<tab>Content<tab>Location
+	// Check format: Num<tab>ID<tab>Content<tab>Location
 	expected := []struct {
+		num      string
 		id       string
 		content  string
 		location string
 	}{
-		{"id1", "First item", "file1.md:10"},
-		{"id2", "Second item", "file2.md:20"},
-		{"id3", "Third item", "file3.md:30"},
+		{"1", "id1", "First item", "file1.md:10"},
+		{"2", "id2", "Second item", "file2.md:20"},
+		{"3", "id3", "Third item", "file3.md:30"},
 	}
 
 	for i, line := range lines {
 		parts := strings.Split(line, "\t")
-		if len(parts) != 3 {
-			t.Errorf("Line %d: expected 3 tab-separated parts, got %d", i, len(parts))
+		if len(parts) != 4 {
+			t.Errorf("Line %d: expected 4 tab-separated parts, got %d", i, len(parts))
 			continue
 		}
-		if parts[0] != expected[i].id {
-			t.Errorf("Line %d: ID = %q, want %q", i, parts[0], expected[i].id)
+		if parts[0] != expected[i].num {
+			t.Errorf("Line %d: Num = %q, want %q", i, parts[0], expected[i].num)
 		}
-		if parts[1] != expected[i].content {
-			t.Errorf("Line %d: Content = %q, want %q", i, parts[1], expected[i].content)
+		if parts[1] != expected[i].id {
+			t.Errorf("Line %d: ID = %q, want %q", i, parts[1], expected[i].id)
 		}
-		if parts[2] != expected[i].location {
-			t.Errorf("Line %d: Location = %q, want %q", i, parts[2], expected[i].location)
+		if parts[2] != expected[i].content {
+			t.Errorf("Line %d: Content = %q, want %q", i, parts[2], expected[i].content)
+		}
+		if parts[3] != expected[i].location {
+			t.Errorf("Line %d: Location = %q, want %q", i, parts[3], expected[i].location)
 		}
 	}
 }
 
 func TestWritePipeableListSanitizesContent(t *testing.T) {
 	items := []PipeableItem{
-		{ID: "id1", Content: "Has\ttab", Location: "file.md:1"},
-		{ID: "id2", Content: "Has\nnewline", Location: "file.md:2"},
+		{Num: 1, ID: "id1", Content: "Has\ttab", Location: "file.md:1"},
+		{Num: 2, ID: "id2", Content: "Has\nnewline", Location: "file.md:2"},
 	}
 
 	var buf bytes.Buffer
@@ -64,20 +68,20 @@ func TestWritePipeableListSanitizesContent(t *testing.T) {
 	output := buf.String()
 	
 	// Should not contain tabs within content (only as separators)
-	// Each line should have exactly 2 tabs (3 fields)
+	// Each line should have exactly 3 tabs (4 fields)
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	for i, line := range lines {
 		tabCount := strings.Count(line, "\t")
-		if tabCount != 2 {
-			t.Errorf("Line %d has %d tabs, expected 2 (content should be sanitized)", i, tabCount)
+		if tabCount != 3 {
+			t.Errorf("Line %d has %d tabs, expected 3 (content should be sanitized)", i, tabCount)
 		}
 	}
 }
 
 func TestWritePipeableIDs(t *testing.T) {
 	items := []PipeableItem{
-		{ID: "id1", Content: "First", Location: "loc1"},
-		{ID: "id2", Content: "Second", Location: "loc2"},
+		{Num: 1, ID: "id1", Content: "First", Location: "loc1"},
+		{Num: 2, ID: "id2", Content: "Second", Location: "loc2"},
 	}
 
 	var buf bytes.Buffer
