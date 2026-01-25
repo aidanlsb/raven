@@ -296,13 +296,13 @@ func shortenRefIfNeeded(s string) string {
 	if !strings.Contains(s, "/") {
 		return s
 	}
-	
+
 	// Get the last path component (the name)
 	name := filepath.Base(s)
-	
+
 	// Remove .md extension if present
 	name = strings.TrimSuffix(name, ".md")
-	
+
 	return name
 }
 
@@ -326,7 +326,7 @@ func formatObjectFieldsWithSchema(typeName string, fields map[string]interface{}
 
 	// Schema-driven: show only schema-defined fields
 	var result []string
-	
+
 	// Get the name field for this type (to skip it in output)
 	nameField := typeDef.NameField
 
@@ -343,7 +343,7 @@ func formatObjectFieldsWithSchema(typeName string, fields map[string]interface{}
 		if fieldName == nameField {
 			continue
 		}
-		
+
 		if val, ok := fields[fieldName]; ok && val != nil {
 			result = append(result, formatFieldValue(fieldName, val))
 		}
@@ -453,7 +453,7 @@ func printTraitRows(rows []traitTableRow) {
 			line1, line2 := wrapText(content, contentWidth)
 			line1 = ui.HighlightTraits(line1)
 			line2 = ui.HighlightTraits(line2)
-			
+
 			// First line with number and metadata
 			fmt.Printf("  %s  %s  %s\n", ui.Muted.Render(numStr), ui.PadRight(line1, contentWidth), metadata)
 			// Second line (indented past number, no metadata)
@@ -488,7 +488,7 @@ func wrapText(text string, maxLen int) (string, string) {
 
 	line1 := strings.TrimSpace(text[:breakPoint])
 	line2 := strings.TrimSpace(text[breakPoint:])
-	
+
 	// Truncate line2 if still too long
 	if len(line2) > maxLen {
 		line2 = line2[:maxLen-3] + "..."
@@ -773,16 +773,16 @@ func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string
 
 	// Dispatch to trait-specific operations
 	switch applyCmd {
-	case "set":
-		return applySetTraitFromQuery(vaultPath, results, applyArgs, sch, vaultCfg, confirm)
-	case "delete", "add", "move":
+	case "update":
+		return applyUpdateTraitFromQuery(vaultPath, results, applyArgs, sch, vaultCfg, confirm)
+	case "delete", "add", "move", "set":
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("'%s' is not supported for trait queries", applyCmd),
-			"For trait queries, use: --apply \"set value=<new_value>\"")
+			"For trait queries, use: --apply \"update value=<new_value>\"")
 	default:
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("unknown apply command: %s", applyCmd),
-			"For trait queries, use: --apply \"set value=<new_value>\"")
+			"For trait queries, use: --apply \"update value=<new_value>\"")
 	}
 }
 
