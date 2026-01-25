@@ -219,7 +219,7 @@ Query syntax:
 - Object queries: object:<type> [predicates...]
   Examples: object:project .status==active, object:meeting refs:[[people/freya]]
 - Trait queries: trait:<name> [predicates...]
-  Examples: trait:due value==past, trait:highlight on:{object:book}
+  Examples: trait:due .value==past, trait:highlight on:{object:book}
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
@@ -227,11 +227,11 @@ Common predicates:
 - refs:[[target]] — References target (refs:[[people/freya]])
 - refs:{object:type} — References objects matching subquery (refs:{object:project .status==active})
 - within:{object:type} — Trait is inside object type (within:{object:meeting})
-- value==X — Trait value equals X (value==past, value==high)
+- .value==X — Trait value equals X (.value==past, .value==high)
 - content:"text" — Full-text search within content (content:"meeting notes")
 
 Special date values for trait:due:
-- value==past, value==today, value==tomorrow, value==this-week, value==next-week
+- .value==past, .value==today, .value==tomorrow, .value==this-week, .value==next-week
 
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --apply to run a bulk operation directly on query results.
@@ -243,7 +243,7 @@ For object queries (object:...):
 For trait queries (trait:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
 - Supported command: set value=<new_value> (updates trait values in-place)
-- Example: trait:todo value==todo --apply "set value=done" marks todos as done`,
+- Example: trait:todo .value==todo --apply "set value=done" marks todos as done`,
 		Args: []ArgMeta{
 			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name)", Required: true},
 		},
@@ -257,10 +257,10 @@ For trait queries (trait:...):
 		Examples: []string{
 			"rvn query 'object:project .status==active' --json",
 			"rvn query 'object:meeting has:{trait:due}' --json",
-			"rvn query 'trait:due value==past' --json",
-			"rvn query 'trait:due value==past' --ids",
+			"rvn query 'trait:due .value==past' --json",
+			"rvn query 'trait:due .value==past' --ids",
 			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
-			"rvn query 'trait:todo value==todo' --apply 'set value=done' --confirm --json",
+			"rvn query 'trait:todo .value==todo' --apply 'set value=done' --confirm --json",
 			"rvn query tasks --json",
 			"rvn query --list --json",
 		},
@@ -276,14 +276,14 @@ For trait queries (trait:...):
 		Description: "Add a saved query to raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name for the new query", Required: true},
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or 'trait:due value==past')", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or 'trait:due .value==past')", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn query add tasks 'trait:due' --json",
-			"rvn query add overdue 'trait:due value==past' --json",
+			"rvn query add overdue 'trait:due .value==past' --json",
 			"rvn query add active-projects 'object:project .status==active' --json",
 		},
 	},

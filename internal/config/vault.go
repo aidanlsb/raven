@@ -186,7 +186,7 @@ func boolPtr(b bool) *bool {
 // SavedQuery defines a saved query using the Raven query language.
 type SavedQuery struct {
 	// Query is the query string using Raven query language
-	// e.g., "object:project .status==active" or "trait:due value==past"
+	// e.g., "object:project .status==active" or "trait:due .value==past"
 	Query string `yaml:"query"`
 
 	// Description for help text
@@ -269,12 +269,12 @@ queries:
 
   # Overdue items
   overdue:
-    query: "trait:due value==past"
+    query: "trait:due .value==past"
     description: "Items past their due date"
 
   # Items due this week
   this-week:
-    query: "trait:due value==this-week"
+    query: "trait:due .value==this-week"
     description: "Items due this week"
 
   # Active projects

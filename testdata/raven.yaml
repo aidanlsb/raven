@@ -4,7 +4,7 @@ queries:
         query: object:project .status==active
         description: Active projects
     overdue:
-        query: trait:due value==past
+        query: trait:due .value==past
         description: Overdue items
     people:
         query: object:person

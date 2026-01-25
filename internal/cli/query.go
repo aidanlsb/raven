@@ -499,7 +499,7 @@ Predicates for object queries:
   child:{object:...}    Has child matching subquery
 
 Predicates for trait queries:
-  value==val       Trait value equals val
+  .value==val      Trait value equals val
   on:{object:...}      Direct parent matches subquery
   within:{object:...}  Any ancestor matches subquery
 
@@ -509,13 +509,13 @@ Boolean operators:
   pred1 | pred2    OR
 
 Subqueries use curly braces:
-  has:{trait:due value==past}
+  has:{trait:due .value==past}
   on:{object:project .status==active}
 
 Examples:
   rvn query "object:project .status==active"
   rvn query "object:meeting has:{trait:due}"
-  rvn query "trait:due value==past"
+  rvn query "trait:due .value==past"
   rvn query trait:todo content:"my task"
   rvn query "trait:highlight on:{object:book .status==reading}"
   rvn query tasks                    # Run saved query
@@ -1070,9 +1070,9 @@ The query string uses the Raven query language (same as 'rvn query "..."').
 
 Examples:
   rvn query add tasks "trait:due"
-  rvn query add overdue "trait:due value==past"
+  rvn query add overdue "trait:due .value==past"
   rvn query add active-projects "object:project .status==active"
-  rvn query add urgent "trait:due value==this-week|past" --description "Due soon or overdue"`,
+  rvn query add urgent "trait:due .value==this-week|past" --description "Due soon or overdue"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
