@@ -894,4 +894,40 @@ The returned prompt and context are ready for an agent to execute.`,
 			"Gather context before running a complex task",
 		},
 	},
+	"last": {
+		Name:        "last",
+		Description: "Show or select results from the last query",
+		LongDesc: `Show or select results from the most recent query.
+
+Without arguments, displays all results from the last query with their numbers.
+With number arguments, outputs the selected IDs for piping to other commands.
+
+Number formats:
+  1         Single result
+  1,3,5     Multiple results (comma-separated)  
+  1-5       Range of results
+  1,3-5,7   Mixed format
+
+The last query is saved to .raven/last-query.json whenever you run a query.
+Results include a 'num' field that can be used to reference specific items.
+
+With --apply, applies an operation directly to selected results without piping.`,
+		Args: []ArgMeta{
+			{Name: "nums", Description: "Result numbers to select (e.g., '1,3,5' or '1-5')", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "apply", Description: "Apply an operation to selected results (e.g., 'set value=done')", Type: FlagTypeString},
+			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn last --json",
+			"rvn last 1,3 --json",
+			"rvn last 1-5 --apply \"set value=done\" --confirm --json",
+		},
+		UseCases: []string{
+			"View results from the most recent query",
+			"Select specific items from query results for bulk operations",
+			"Mark specific todos done without re-running the query",
+		},
+	},
 }

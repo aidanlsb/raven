@@ -13,11 +13,68 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/lastquery"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
+
+// saveLastQueryFromTraits builds and saves a LastQuery from trait query results.
+// Returns the built LastQuery for use in output formatting.
+func saveLastQueryFromTraits(vaultPath, queryStr string, results []query.PipelineTraitResult) *lastquery.LastQuery {
+	lq := &lastquery.LastQuery{
+		Query:     queryStr,
+		Timestamp: time.Now(),
+		Type:      "trait",
+		Results:   make([]lastquery.ResultEntry, len(results)),
+	}
+
+	for i, r := range results {
+		location := fmt.Sprintf("%s:%d", r.FilePath, r.Line)
+		lq.Results[i] = lastquery.ResultEntry{
+			Num:      i + 1, // 1-indexed
+			ID:       r.ID,
+			Type:     "trait",
+			Content:  r.Content,
+			Location: location,
+		}
+	}
+
+	// Save to disk (best-effort, don't fail the query on save error)
+	_ = lastquery.Write(vaultPath, lq)
+
+	return lq
+}
+
+// saveLastQueryFromObjects builds and saves a LastQuery from object query results.
+// Returns the built LastQuery for use in output formatting.
+func saveLastQueryFromObjects(vaultPath, queryStr string, results []query.PipelineObjectResult) *lastquery.LastQuery {
+	lq := &lastquery.LastQuery{
+		Query:     queryStr,
+		Timestamp: time.Now(),
+		Type:      "object",
+		Results:   make([]lastquery.ResultEntry, len(results)),
+	}
+
+	for i, r := range results {
+		location := fmt.Sprintf("%s:%d", r.FilePath, r.LineStart)
+		// Use the object name/slug as content
+		content := filepath.Base(r.ID)
+		lq.Results[i] = lastquery.ResultEntry{
+			Num:      i + 1, // 1-indexed
+			ID:       r.ID,
+			Type:     "object",
+			Content:  content,
+			Location: location,
+		}
+	}
+
+	// Save to disk (best-effort, don't fail the query on save error)
+	_ = lastquery.Write(vaultPath, lq)
+
+	return lq
+}
 
 func dedupePreserveOrder(ids []string) []string {
 	seen := make(map[string]struct{}, len(ids))
@@ -528,12 +585,12 @@ Examples:
 
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithOptions(db, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
+			return runFullQueryWithOptions(db, vaultPath, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
 		}
 
 		// Check if this is a saved query
 		if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
-			return runSavedQueryWithOptions(db, savedQuery, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
+			return runSavedQueryWithOptions(db, vaultPath, savedQuery, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
 		}
 
 		// Unknown query - provide helpful error
@@ -753,7 +810,7 @@ func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings 
 	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
 }
 
-func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
+func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
 	if err != nil {
@@ -785,6 +842,11 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 			return handleError(ErrDatabaseError, err, "")
 		}
 
+		// Save last query for numbered references (skip for --ids mode)
+		if !idsOnly && len(results) > 0 {
+			saveLastQueryFromObjects(vaultPath, queryStr, results)
+		}
+
 		// --ids mode: output just IDs, one per line
 		if idsOnly {
 			if isJSONOutput() {
@@ -807,6 +869,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 			items := make([]map[string]interface{}, len(results))
 			for i, r := range results {
 				item := map[string]interface{}{
+					"num":       i + 1, // 1-indexed for user reference
 					"id":        r.ID,
 					"type":      r.Type,
 					"fields":    r.Fields,
@@ -827,6 +890,20 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 			return nil
 		}
 
+		// Check for pipe mode
+		if ShouldUsePipeFormat() {
+			pipeItems := make([]PipeableItem, len(results))
+			for i, r := range results {
+				pipeItems[i] = PipeableItem{
+					ID:       r.ID,
+					Content:  filepath.Base(r.ID),
+					Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
+				}
+			}
+			WritePipeableList(os.Stdout, pipeItems)
+			return nil
+		}
+
 		// Human-readable output
 		if len(results) == 0 {
 			fmt.Println(ui.Starf("No objects found for: %s", queryStr))
@@ -844,6 +921,11 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 	results, err := executor.ExecuteTraitQueryWithPipeline(q)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "")
+	}
+
+	// Save last query for numbered references (skip for --ids mode)
+	if !idsOnly && len(results) > 0 {
+		saveLastQueryFromTraits(vaultPath, queryStr, results)
 	}
 
 	// --ids mode: output just trait IDs, one per line
@@ -869,6 +951,7 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 		items := make([]map[string]interface{}, len(results))
 		for i, r := range results {
 			item := map[string]interface{}{
+				"num":        i + 1, // 1-indexed for user reference
 				"id":         r.ID,
 				"trait_type": r.TraitType,
 				"value":      r.Value,
@@ -888,6 +971,20 @@ func runFullQueryWithOptions(db *index.Database, queryStr string, start time.Tim
 			"trait":      q.TypeName,
 			"items":      items,
 		}, &Meta{Count: len(items), QueryTimeMs: elapsed})
+		return nil
+	}
+
+	// Check for pipe mode
+	if ShouldUsePipeFormat() {
+		pipeItems := make([]PipeableItem, len(results))
+		for i, r := range results {
+			pipeItems[i] = PipeableItem{
+				ID:       r.ID,
+				Content:  TruncateContent(r.Content, 60),
+				Location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
+			}
+		}
+		WritePipeableList(os.Stdout, pipeItems)
 		return nil
 	}
 
@@ -955,13 +1052,13 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 	return nil
 }
 
-func runSavedQueryWithOptions(db *index.Database, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
+func runSavedQueryWithOptions(db *index.Database, vaultPath string, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
 	if q.Query == "" {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
 	}
 
 	// Just run the query string through the normal query parser
-	return runFullQueryWithOptions(db, q.Query, start, sch, idsOnly, dailyDir)
+	return runFullQueryWithOptions(db, vaultPath, q.Query, start, sch, idsOnly, dailyDir)
 }
 
 var queryAddCmd = &cobra.Command{
