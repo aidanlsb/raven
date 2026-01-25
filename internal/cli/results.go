@@ -2,41 +2,21 @@
 // This file defines shared JSON result types for consistent CLI output.
 package cli
 
+import "github.com/aidanlsb/raven/internal/model"
+
 // =============================================================================
 // Core Result Types - Used across multiple commands
 // =============================================================================
 
-// ObjectResult represents an object in query results.
-// Used by: type, query, backlinks
-type ObjectResult struct {
-	ID        string                 `json:"id"`
-	Type      string                 `json:"type"`
-	FilePath  string                 `json:"file_path"`
-	LineStart int                    `json:"line_start"`
-	Fields    map[string]interface{} `json:"fields,omitempty"`
-}
+// ObjectResult is now defined in model.Object.
+// Use model.Object directly for object instances.
 
-// TraitResult represents a trait in query results.
-// Used by: trait, query
-type TraitResult struct {
-	ID          string  `json:"id"`
-	TraitType   string  `json:"trait_type"`
-	Value       *string `json:"value,omitempty"`
-	Content     string  `json:"content"`
-	ContentText string  `json:"content_text"`
-	ObjectID    string  `json:"object_id"`
-	FilePath    string  `json:"file_path"`
-	Line        int     `json:"line"`
-}
+// TraitResult is now defined in model.Trait.
+// This type alias is kept for reference in documentation.
+// Use model.Trait directly for trait instances.
 
-// BacklinkResult represents a backlink.
-// Used by: backlinks
-type BacklinkResult struct {
-	SourceID    string  `json:"source_id"`
-	FilePath    string  `json:"file_path"`
-	Line        *int    `json:"line,omitempty"`
-	DisplayText *string `json:"display_text,omitempty"`
-}
+// BacklinkResult is now defined in model.Reference.
+// Use model.Reference directly for reference/backlink instances.
 
 // =============================================================================
 // Summary Types - For --list style commands
@@ -117,13 +97,13 @@ type SavedQueryInfo struct {
 type QueryResult struct {
 	QueryName string            `json:"query_name"`
 	Types     []TypeQueryResult `json:"types,omitempty"`
-	Traits    []TraitResult     `json:"traits,omitempty"`
+	Traits    []model.Trait     `json:"traits,omitempty"`
 }
 
 // TypeQueryResult represents objects of a type in query results.
 type TypeQueryResult struct {
 	Type  string         `json:"type"`
-	Items []ObjectResult `json:"items"`
+	Items []model.Object `json:"items"`
 }
 
 // =============================================================================

@@ -23,9 +23,9 @@ func TestWriteAndRead(t *testing.T) {
 		Timestamp: time.Now(),
 		Type:      "trait",
 		Results: []ResultEntry{
-			{Num: 1, ID: "daily/2026-01-25.md:trait:0", Type: "trait", Content: "Fix bug", Location: "daily/2026-01-25.md:42"},
-			{Num: 2, ID: "daily/2026-01-25.md:trait:1", Type: "trait", Content: "Write tests", Location: "daily/2026-01-25.md:43"},
-			{Num: 3, ID: "projects/raven.md:trait:0", Type: "trait", Content: "Update docs", Location: "projects/raven.md:15"},
+			{Num: 1, ID: "daily/2026-01-25.md:trait:0", Kind: "trait", Content: "Fix bug", Location: "daily/2026-01-25.md:42"},
+			{Num: 2, ID: "daily/2026-01-25.md:trait:1", Kind: "trait", Content: "Write tests", Location: "daily/2026-01-25.md:43"},
+			{Num: 3, ID: "projects/raven.md:trait:0", Kind: "trait", Content: "Update docs", Location: "projects/raven.md:15"},
 		},
 	}
 
@@ -81,11 +81,11 @@ func TestGetByNumbers(t *testing.T) {
 		Query: "trait:todo",
 		Type:  "trait",
 		Results: []ResultEntry{
-			{Num: 1, ID: "id1", Type: "trait", Content: "First"},
-			{Num: 2, ID: "id2", Type: "trait", Content: "Second"},
-			{Num: 3, ID: "id3", Type: "trait", Content: "Third"},
-			{Num: 4, ID: "id4", Type: "trait", Content: "Fourth"},
-			{Num: 5, ID: "id5", Type: "trait", Content: "Fifth"},
+			{Num: 1, ID: "id1", Kind: "trait", Content: "First"},
+			{Num: 2, ID: "id2", Kind: "trait", Content: "Second"},
+			{Num: 3, ID: "id3", Kind: "trait", Content: "Third"},
+			{Num: 4, ID: "id4", Kind: "trait", Content: "Fourth"},
+			{Num: 5, ID: "id5", Kind: "trait", Content: "Fifth"},
 		},
 	}
 

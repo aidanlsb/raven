@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -33,7 +34,7 @@ var searchCmd = &cobra.Command{
 		query := strings.Join(args, " ")
 
 		// Perform search
-		var results []index.SearchResult
+		var results []model.SearchMatch
 		if searchType != "" {
 			results, err = db.SearchWithType(query, searchType, searchLimit)
 		} else {
@@ -77,7 +78,7 @@ var searchCmd = &cobra.Command{
 	},
 }
 
-func formatSearchResults(results []index.SearchResult) []map[string]interface{} {
+func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {
 	formatted := make([]map[string]interface{}, len(results))
 	for i, r := range results {
 		formatted[i] = map[string]interface{}{
