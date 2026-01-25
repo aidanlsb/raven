@@ -242,8 +242,8 @@ For object queries (object:...):
 
 For trait queries (trait:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
-- Supported command: set value=<new_value> (updates trait values in-place)
-- Example: trait:todo .value==todo --apply "set value=done" marks todos as done`,
+- Supported command: update value=<new_value> (updates trait values in-place)
+- Example: trait:todo .value==todo --apply "update value=done" marks todos as done`,
 		Args: []ArgMeta{
 			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name)", Required: true},
 		},
@@ -251,7 +251,7 @@ For trait queries (trait:...):
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
 			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
 			{Name: "ids", Description: "Output only object/trait IDs, one per line (for piping)", Type: FlagTypeBool},
-			{Name: "apply", Description: "Apply bulk operation to results (e.g., 'set status=done', 'delete', 'add @reviewed')", Type: FlagTypeString},
+			{Name: "apply", Description: "Apply bulk operation to results (e.g., 'set status=done', 'delete', 'add @reviewed', 'update value=done')", Type: FlagTypeString},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
@@ -260,7 +260,7 @@ For trait queries (trait:...):
 			"rvn query 'trait:due .value==past' --json",
 			"rvn query 'trait:due .value==past' --ids",
 			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
-			"rvn query 'trait:todo .value==todo' --apply 'set value=done' --confirm --json",
+			"rvn query 'trait:todo .value==todo' --apply 'update value=done' --confirm --json",
 			"rvn query tasks --json",
 			"rvn query --list --json",
 		},
@@ -712,6 +712,35 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"Bulk update multiple objects via --stdin",
 		},
 	},
+	"update": {
+		Name:        "update",
+		Description: "Update a trait's value",
+		LongDesc: `Update the value of a trait annotation.
+
+Trait IDs look like "path/file.md:trait:N" and can be obtained via:
+  - rvn query "trait:todo" --ids
+  - rvn last <nums>
+
+Bulk operations:
+Use --stdin to read trait IDs from stdin (one per line).
+IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
+		Args: []ArgMeta{
+			{Name: "trait_id", Description: "Trait ID to update (e.g., daily/2026-01-25.md:trait:0)", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "value", Description: "New trait value (positional key=value)", Type: FlagTypePosKeyValue, Examples: []string{`{"value": "done"}`}},
+			{Name: "stdin", Description: "Read trait IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn update daily/2026-01-25.md:trait:0 value=done --json",
+			"rvn query 'trait:todo' --ids | rvn update --stdin value=done --confirm --json",
+		},
+		UseCases: []string{
+			"Update a specific trait by ID",
+			"Bulk update trait values via --stdin",
+		},
+	},
 	"edit": {
 		Name:        "edit",
 		Description: "Surgical text replacement in vault files",
@@ -916,13 +945,13 @@ With --apply, applies an operation directly to selected results without piping.`
 			{Name: "nums", Description: "Result numbers to select (e.g., '1,3,5' or '1-5')", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "apply", Description: "Apply an operation to selected results (e.g., 'set value=done')", Type: FlagTypeString},
+			{Name: "apply", Description: "Apply an operation to selected results (e.g., 'update value=done')", Type: FlagTypeString},
 			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn last --json",
 			"rvn last 1,3 --json",
-			"rvn last 1-5 --apply \"set value=done\" --confirm --json",
+			"rvn last 1-5 --apply \"update value=done\" --confirm --json",
 		},
 		UseCases: []string{
 			"View results from the most recent query",

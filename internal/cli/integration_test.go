@@ -204,8 +204,8 @@ func TestIntegration_BulkDelete(t *testing.T) {
 	v.AssertFileNotExists("projects/project-y.md")
 }
 
-// TestIntegration_TraitBulkSet tests bulk set on trait query results.
-func TestIntegration_TraitBulkSet(t *testing.T) {
+// TestIntegration_TraitBulkUpdate tests bulk update on trait query results.
+func TestIntegration_TraitBulkUpdate(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
@@ -228,8 +228,8 @@ type: page
 	// Reindex to pick up the files
 	v.RunCLI("reindex").MustSucceed(t)
 
-	// Preview bulk set on low priority traits (should not apply)
-	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "set value=high")
+	// Preview bulk update on low priority traits (should not apply)
+	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "update value=high")
 	result.MustSucceed(t)
 
 	// Files should still have low priority since we didn't confirm
@@ -237,7 +237,7 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 
 	// Now confirm the bulk operation
-	result = v.RunCLI("query", "trait:priority .value==low", "--apply", "set value=high", "--confirm")
+	result = v.RunCLI("query", "trait:priority .value==low", "--apply", "update value=high", "--confirm")
 	result.MustSucceed(t)
 
 	// Files should now have high priority
@@ -248,8 +248,37 @@ type: page
 	v.AssertFileContains("tasks/task2.md", "@priority(medium) Third task")
 }
 
-// TestIntegration_TraitBulkSetObjectCommandsRejected tests that object commands are rejected for trait queries.
-func TestIntegration_TraitBulkSetObjectCommandsRejected(t *testing.T) {
+// TestIntegration_TraitUpdateCommand tests the update command for trait IDs.
+func TestIntegration_TraitUpdateCommand(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+- @priority(low) Second task
+`).
+		Build()
+
+	// Reindex to pick up the files
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// Single update by trait ID
+	result := v.RunCLI("update", "tasks/task1.md:trait:0", "value=high")
+	result.MustSucceed(t)
+	v.AssertFileContains("tasks/task1.md", "@priority(high) First task")
+	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+
+	// Bulk update by stdin
+	result = v.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "value=done", "--confirm")
+	result.MustSucceed(t)
+	v.AssertFileContains("tasks/task1.md", "@priority(done) Second task")
+}
+
+// TestIntegration_TraitBulkUpdateObjectCommandsRejected tests that object commands are rejected for trait queries.
+func TestIntegration_TraitBulkUpdateObjectCommandsRejected(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---

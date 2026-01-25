@@ -8,7 +8,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -63,8 +65,8 @@ type TraitBulkSummary struct {
 	Errors   int               `json:"errors"`
 }
 
-// applySetTraitFromQuery applies set operation to trait query results.
-func applySetTraitFromQuery(vaultPath string, traits []query.PipelineTraitResult, args []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+// applyUpdateTraitFromQuery applies update operation to trait query results.
+func applyUpdateTraitFromQuery(vaultPath string, traits []query.PipelineTraitResult, args []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
 	// Parse value=X argument
 	var newValue string
 	for _, arg := range args {
@@ -77,23 +79,23 @@ func applySetTraitFromQuery(vaultPath string, traits []query.PipelineTraitResult
 		if parts[0] != "value" {
 			return handleErrorMsg(ErrInvalidInput,
 				fmt.Sprintf("unknown field for trait: %s", parts[0]),
-				"For trait queries, only 'value' can be set. Example: --apply \"set value=done\"")
+				"For trait queries, only 'value' can be updated. Example: --apply \"update value=done\"")
 		}
 		newValue = parts[1]
 	}
 
 	if newValue == "" {
-		return handleErrorMsg(ErrMissingArgument, "no value specified", "Usage: --apply \"set value=<new_value>\"")
+		return handleErrorMsg(ErrMissingArgument, "no value specified", "Usage: --apply \"update value=<new_value>\"")
 	}
 
 	if !confirm {
-		return previewSetTraitBulk(vaultPath, traits, newValue, sch)
+		return previewUpdateTraitBulk(vaultPath, traits, newValue, sch, nil)
 	}
-	return applySetTraitBulk(vaultPath, traits, newValue, sch)
+	return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, nil)
 }
 
-// previewSetTraitBulk shows a preview of trait set operations.
-func previewSetTraitBulk(vaultPath string, traits []query.PipelineTraitResult, newValue string, sch *schema.Schema) error {
+// previewUpdateTraitBulk shows a preview of trait update operations.
+func previewUpdateTraitBulk(vaultPath string, traits []query.PipelineTraitResult, newValue string, sch *schema.Schema, extraSkipped []TraitBulkResult) error {
 	var items []TraitBulkPreviewItem
 	var skipped []TraitBulkResult
 
@@ -128,9 +130,12 @@ func previewSetTraitBulk(vaultPath string, traits []query.PipelineTraitResult, n
 			NewValue:  newValue,
 		})
 	}
+	if len(extraSkipped) > 0 {
+		skipped = append(skipped, extraSkipped...)
+	}
 
 	preview := TraitBulkPreview{
-		Action:  "set-trait",
+		Action:  "update-trait",
 		Items:   items,
 		Skipped: skipped,
 		Total:   len(items),
@@ -155,46 +160,56 @@ func previewSetTraitBulk(vaultPath string, traits []query.PipelineTraitResult, n
 func printTraitBulkPreview(preview *TraitBulkPreview) {
 	if len(preview.Items) == 0 {
 		fmt.Println("No traits to update.")
-		return
+	} else {
+		fmt.Printf("\nPreview: %d trait(s) will be updated\n\n", len(preview.Items))
 	}
 
-	fmt.Printf("\nPreview: %d trait(s) will be updated\n\n", len(preview.Items))
-
-	for _, item := range preview.Items {
-		fmt.Printf("  %s:%d\n", item.FilePath, item.Line)
-		fmt.Printf("    @%s: %s → %s\n", item.TraitType, item.OldValue, item.NewValue)
-		if item.Content != "" {
-			// Truncate content for display
-			content := item.Content
-			if len(content) > 50 {
-				content = content[:47] + "..."
+	if len(preview.Items) > 0 {
+		for _, item := range preview.Items {
+			fmt.Printf("  %s:%d\n", item.FilePath, item.Line)
+			fmt.Printf("    @%s: %s → %s\n", item.TraitType, item.OldValue, item.NewValue)
+			if item.Content != "" {
+				// Truncate content for display
+				content := item.Content
+				if len(content) > 50 {
+					content = content[:47] + "..."
+				}
+				fmt.Printf("    content: %s\n", content)
 			}
-			fmt.Printf("    content: %s\n", content)
 		}
 	}
 
 	if len(preview.Skipped) > 0 {
 		fmt.Printf("\nSkipped %d trait(s):\n", len(preview.Skipped))
 		for _, skip := range preview.Skipped {
-			fmt.Printf("  %s:%d - %s\n", skip.FilePath, skip.Line, skip.Reason)
+			path := skip.FilePath
+			if path == "" {
+				path = skip.ID
+			}
+			fmt.Printf("  %s:%d - %s\n", path, skip.Line, skip.Reason)
 		}
 	}
 
 	fmt.Printf("\nRun with --confirm to apply changes.\n")
 }
 
-// applySetTraitBulk applies set operations to traits.
-func applySetTraitBulk(vaultPath string, traits []query.PipelineTraitResult, newValue string, sch *schema.Schema) error {
+// applyUpdateTraitBulk applies update operations to traits.
+func applyUpdateTraitBulk(vaultPath string, traits []query.PipelineTraitResult, newValue string, sch *schema.Schema, vaultCfg *config.VaultConfig, extraSkipped []TraitBulkResult) error {
 	// Group traits by file for efficient file I/O
 	traitsByFile := make(map[string][]query.PipelineTraitResult)
 	for _, t := range traits {
 		traitsByFile[t.FilePath] = append(traitsByFile[t.FilePath], t)
 	}
 
-	var results []TraitBulkResult
+	results := make([]TraitBulkResult, 0, len(traits)+len(extraSkipped))
 	modified := 0
 	skipped := 0
 	errors := 0
+
+	if len(extraSkipped) > 0 {
+		results = append(results, extraSkipped...)
+		skipped += len(extraSkipped)
+	}
 
 	for filePath, fileTraits := range traitsByFile {
 		fullPath := filePath
@@ -287,7 +302,7 @@ func applySetTraitBulk(vaultPath string, traits []query.PipelineTraitResult, new
 		// Write the file back if modified
 		if fileModified {
 			newContent := strings.Join(lines, "\n")
-			if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
+			if err := atomicfile.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
 				// Mark all modified traits in this file as errors
 				for i, r := range results {
 					if r.FilePath == filePath && r.Status == "modified" {
@@ -297,14 +312,16 @@ func applySetTraitBulk(vaultPath string, traits []query.PipelineTraitResult, new
 						errors++
 					}
 				}
+				continue
 			}
+			maybeReindex(vaultPath, fullPath, vaultCfg)
 		}
 	}
 
 	summary := TraitBulkSummary{
-		Action:   "set-trait",
+		Action:   "update-trait",
 		Results:  results,
-		Total:    len(traits),
+		Total:    len(traits) + len(extraSkipped),
 		Modified: modified,
 		Skipped:  skipped,
 		Errors:   errors,
@@ -376,4 +393,68 @@ func ReadTraitIDsFromStdin() (ids []string, err error) {
 	}
 
 	return ids, nil
+}
+
+// applyUpdateTraitsByID updates traits identified by IDs, with preview/confirm behavior.
+func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string, confirm bool, vaultCfg *config.VaultConfig) error {
+	// Load schema for defaults (optional)
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		sch = nil
+	}
+
+	db, err := openDatabaseWithConfig(vaultPath, vaultCfg)
+	if err != nil {
+		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
+	}
+	defer db.Close()
+
+	traits, skipped, err := resolveTraitIDs(db, traitIDs)
+	if err != nil {
+		return handleError(ErrDatabaseError, err, "")
+	}
+
+	if !confirm {
+		return previewUpdateTraitBulk(vaultPath, traits, newValue, sch, skipped)
+	}
+	return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, skipped)
+}
+
+// resolveTraitIDs resolves trait IDs to concrete trait results using the index.
+func resolveTraitIDs(db *index.Database, ids []string) ([]query.PipelineTraitResult, []TraitBulkResult, error) {
+	results := make([]query.PipelineTraitResult, 0, len(ids))
+	var skipped []TraitBulkResult
+
+	for _, id := range ids {
+		if !strings.Contains(id, ":trait:") {
+			skipped = append(skipped, TraitBulkResult{
+				ID:     id,
+				Status: "skipped",
+				Reason: "invalid trait ID format",
+			})
+			continue
+		}
+
+		trait, err := db.GetTrait(id)
+		if err != nil {
+			return nil, nil, err
+		}
+		if trait == nil {
+			filePath := strings.SplitN(id, ":trait:", 2)[0]
+			skipped = append(skipped, TraitBulkResult{
+				ID:       id,
+				FilePath: filePath,
+				Status:   "skipped",
+				Reason:   "trait not found in index",
+			})
+			continue
+		}
+
+		results = append(results, query.PipelineTraitResult{
+			Trait:    *trait,
+			Computed: make(map[string]interface{}),
+		})
+	}
+
+	return results, skipped, nil
 }
