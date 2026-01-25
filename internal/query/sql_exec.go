@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
 // executeObjectQuery executes an object query and returns matching objects.
 // This is internal - external callers should use ExecuteObjectQueryWithPipeline.
-func (e *Executor) executeObjectQuery(q *Query) ([]ObjectResult, error) {
+func (e *Executor) executeObjectQuery(q *Query) ([]model.Object, error) {
 	if q.Type != QueryTypeObject {
 		return nil, fmt.Errorf("expected object query, got trait query")
 	}
@@ -24,11 +25,11 @@ func (e *Executor) executeObjectQuery(q *Query) ([]ObjectResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
 	}
-	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (ObjectResult, error) {
-		var r ObjectResult
+	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Object, error) {
+		var r model.Object
 		var fieldsJSON string
 		if err := rows.Scan(&r.ID, &r.Type, &fieldsJSON, &r.FilePath, &r.LineStart, &r.ParentID); err != nil {
-			return ObjectResult{}, err
+			return model.Object{}, err
 		}
 		if err := json.Unmarshal([]byte(fieldsJSON), &r.Fields); err != nil {
 			r.Fields = make(map[string]interface{})
@@ -39,7 +40,7 @@ func (e *Executor) executeObjectQuery(q *Query) ([]ObjectResult, error) {
 
 // executeTraitQuery executes a trait query and returns matching traits.
 // This is internal - external callers should use ExecuteTraitQueryWithPipeline.
-func (e *Executor) executeTraitQuery(q *Query) ([]TraitResult, error) {
+func (e *Executor) executeTraitQuery(q *Query) ([]model.Trait, error) {
 	if q.Type != QueryTypeTrait {
 		return nil, fmt.Errorf("expected trait query, got object query")
 	}
@@ -54,10 +55,10 @@ func (e *Executor) executeTraitQuery(q *Query) ([]TraitResult, error) {
 		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
 	}
 
-	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (TraitResult, error) {
-		var r TraitResult
+	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Trait, error) {
+		var r model.Trait
 		if err := rows.Scan(&r.ID, &r.TraitType, &r.Value, &r.Content, &r.FilePath, &r.Line, &r.ParentObjectID); err != nil {
-			return TraitResult{}, err
+			return model.Trait{}, err
 		}
 		return r, nil
 	})

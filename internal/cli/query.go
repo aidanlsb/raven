@@ -33,11 +33,15 @@ func saveLastQueryFromTraits(vaultPath, queryStr string, results []query.Pipelin
 	for i, r := range results {
 		location := fmt.Sprintf("%s:%d", r.FilePath, r.Line)
 		lq.Results[i] = lastquery.ResultEntry{
-			Num:      i + 1, // 1-indexed
-			ID:       r.ID,
-			Type:     "trait",
-			Content:  r.Content,
-			Location: location,
+			Num:        i + 1, // 1-indexed
+			ID:         r.ID,
+			Kind:       "trait",
+			Content:    r.Content,
+			Location:   location,
+			FilePath:   r.FilePath,
+			Line:       r.Line,
+			TraitType:  r.TraitType,
+			TraitValue: r.Value,
 		}
 	}
 
@@ -62,11 +66,15 @@ func saveLastQueryFromObjects(vaultPath, queryStr string, results []query.Pipeli
 		// Use the object name/slug as content
 		content := filepath.Base(r.ID)
 		lq.Results[i] = lastquery.ResultEntry{
-			Num:      i + 1, // 1-indexed
-			ID:       r.ID,
-			Type:     "object",
-			Content:  content,
-			Location: location,
+			Num:        i + 1, // 1-indexed
+			ID:         r.ID,
+			Kind:       "object",
+			Content:    content,
+			Location:   location,
+			FilePath:   r.FilePath,
+			Line:       r.LineStart,
+			ObjectType: r.Type,
+			Fields:     r.Fields,
 		}
 	}
 

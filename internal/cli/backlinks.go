@@ -56,19 +56,10 @@ Examples:
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
-			items := make([]BacklinkResult, len(links))
-			for i, link := range links {
-				items[i] = BacklinkResult{
-					SourceID:    link.SourceID,
-					FilePath:    link.FilePath,
-					Line:        link.Line,
-					DisplayText: link.DisplayText,
-				}
-			}
 			outputSuccess(map[string]interface{}{
 				"target": target,
-				"items":  items,
-			}, &Meta{Count: len(items), QueryTimeMs: elapsed})
+				"items":  links,
+			}, &Meta{Count: len(links), QueryTimeMs: elapsed})
 			return nil
 		}
 

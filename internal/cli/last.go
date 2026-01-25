@@ -94,7 +94,7 @@ With --apply, applies an operation directly to selected results:
 				items[i] = map[string]interface{}{
 					"num":      e.Num,
 					"id":       e.ID,
-					"type":     e.Type,
+					"kind":     e.Kind,
 					"content":  e.Content,
 					"location": e.Location,
 				}
@@ -121,7 +121,7 @@ func displayLastQuery(lq *lastquery.LastQuery, applyStr string, confirm bool, va
 			items[i] = map[string]interface{}{
 				"num":      r.Num,
 				"id":       r.ID,
-				"type":     r.Type,
+				"kind":     r.Kind,
 				"content":  r.Content,
 				"location": r.Location,
 			}
@@ -178,13 +178,14 @@ func displayLastQuery(lq *lastquery.LastQuery, applyStr string, confirm bool, va
 }
 
 // printLastQueryTraitResults prints trait results with numbers.
+// Matches the format used by printTraitRows in query.go.
 func printLastQueryTraitResults(results []lastquery.ResultEntry) {
 	// Column widths
 	numWidth := len(fmt.Sprintf("%d", len(results)))
 	if numWidth < 2 {
 		numWidth = 2
 	}
-	contentWidth := 55
+	contentWidth := 52
 
 	for i, r := range results {
 		numStr := fmt.Sprintf("%*d", numWidth, r.Num)
@@ -197,14 +198,25 @@ func printLastQueryTraitResults(results []lastquery.ResultEntry) {
 		// Highlight traits in content
 		content = ui.HighlightTraits(content)
 		
+		// Build trait string (e.g., "@todo(done)")
+		// Hide value if it matches the trait type
+		value := ""
+		if r.TraitValue != nil && *r.TraitValue != r.TraitType {
+			value = *r.TraitValue
+		}
+		traitStr := ui.Trait(r.TraitType, value)
+		
+		// Build metadata string: "trait · location"
+		metadata := traitStr + " " + ui.Muted.Render("·") + " " + ui.Muted.Render(r.Location)
+		
 		fmt.Printf("  %s  %s  %s\n",
-			ui.Bold.Render(numStr),
+			ui.Muted.Render(numStr),
 			ui.PadRight(content, contentWidth),
-			ui.Muted.Render(r.Location))
+			metadata)
 		
 		// Separator between items (except last)
 		if i < len(results)-1 {
-			fmt.Println(ui.Muted.Render("     " + strings.Repeat("─", 70)))
+			fmt.Println(ui.Muted.Render("  " + strings.Repeat("─", 90)))
 		}
 	}
 }

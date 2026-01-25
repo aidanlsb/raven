@@ -21,12 +21,23 @@ type LastQuery struct {
 }
 
 // ResultEntry represents a single result from the query.
+// Contains all data needed for display and operations.
 type ResultEntry struct {
 	Num      int    `json:"num"`      // 1-indexed number for user reference
 	ID       string `json:"id"`       // Unique identifier (trait ID or object ID)
-	Type     string `json:"type"`     // "trait" or "object"
+	Kind     string `json:"kind"`     // "trait", "object", "reference", or "search"
 	Content  string `json:"content"`  // Human-readable description
 	Location string `json:"location"` // Short location (e.g., "daily/2026-01-25:42")
+	FilePath string `json:"file_path"` // Full file path
+	Line     int    `json:"line"`     // Line number
+
+	// Trait-specific fields (nil/empty for non-traits)
+	TraitType  string  `json:"trait_type,omitempty"`
+	TraitValue *string `json:"trait_value,omitempty"`
+
+	// Object-specific fields (nil/empty for non-objects)
+	ObjectType string                 `json:"object_type,omitempty"`
+	Fields     map[string]interface{} `json:"fields,omitempty"`
 }
 
 // Errors

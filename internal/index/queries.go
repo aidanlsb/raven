@@ -5,19 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
-// TraitResult represents a trait query result.
-type TraitResult struct {
-	ID        string
-	TraitType string
-	Value     *string // Single value (NULL for boolean traits)
-	Content   string
-	FilePath  string
-	Line      int
-	ParentID  string
-}
 
 // ObjectResult represents an object query result.
 type ObjectResult struct {
@@ -28,15 +19,6 @@ type ObjectResult struct {
 	LineStart int
 }
 
-// BacklinkResult represents a backlink query result.
-type BacklinkResult struct {
-	SourceID    string
-	SourceType  string
-	TargetRaw   string
-	FilePath    string
-	Line        *int
-	DisplayText *string
-}
 
 // QueryTraits queries traits by type with optional value filter.
 // Filter syntax supports:
@@ -45,7 +27,7 @@ type BacklinkResult struct {
 //   - NOT with bang: "!done" → value != 'done'
 //   - Combined: "!done|!cancelled" → value not in (done, cancelled)
 //   - Date filters: "today", "this-week", "past", etc. (also work with | and !)
-func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitResult, error) {
+func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.Trait, error) {
 	query := `
 		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
 		FROM traits
@@ -70,10 +52,10 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]TraitRe
 	}
 	defer rows.Close()
 
-	var results []TraitResult
+	var results []model.Trait
 	for rows.Next() {
-		var result TraitResult
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID); err != nil {
+		var result model.Trait
+		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID); err != nil {
 			return nil, err
 		}
 		results = append(results, result)
@@ -197,7 +179,7 @@ func isDateFilter(filter string) bool {
 
 // QueryTraitsMultiple queries multiple trait types at once.
 // Useful for compound queries like "items with @due AND @status".
-func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]TraitResult, error) {
+func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]model.Trait, error) {
 	if len(traitTypes) == 0 {
 		return nil, nil
 	}
@@ -216,10 +198,10 @@ func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]TraitR
 	}
 	defer rows.Close()
 
-	results := make(map[string][]TraitResult)
+	results := make(map[string][]model.Trait)
 	for rows.Next() {
-		var result TraitResult
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID); err != nil {
+		var result model.Trait
+		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID); err != nil {
 			return nil, err
 		}
 		results[result.TraitType] = append(results[result.TraitType], result)
@@ -229,7 +211,7 @@ func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]TraitR
 }
 
 // QueryTraitsOnContent finds all traits on the same content (by file and line).
-func (d *Database) QueryTraitsOnContent(filePath string, line int) ([]TraitResult, error) {
+func (d *Database) QueryTraitsOnContent(filePath string, line int) ([]model.Trait, error) {
 	query := `
 		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
 		FROM traits
@@ -242,10 +224,10 @@ func (d *Database) QueryTraitsOnContent(filePath string, line int) ([]TraitResul
 	}
 	defer rows.Close()
 
-	var results []TraitResult
+	var results []model.Trait
 	for rows.Next() {
-		var result TraitResult
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID); err != nil {
+		var result model.Trait
+		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID); err != nil {
 			return nil, err
 		}
 		results = append(results, result)
@@ -278,7 +260,7 @@ func (d *Database) QueryObjects(objectType string) ([]ObjectResult, error) {
 }
 
 // Backlinks returns all objects that reference the given target.
-func (d *Database) Backlinks(targetID string) ([]BacklinkResult, error) {
+func (d *Database) Backlinks(targetID string) ([]model.Reference, error) {
 	// Support both exact match and date shorthand
 	query := `
 		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.display_text
@@ -296,9 +278,9 @@ func (d *Database) Backlinks(targetID string) ([]BacklinkResult, error) {
 	}
 	defer rows.Close()
 
-	var results []BacklinkResult
+	var results []model.Reference
 	for rows.Next() {
-		var result BacklinkResult
+		var result model.Reference
 		var sourceType sql.NullString
 		if err := rows.Scan(&result.SourceID, &sourceType, &result.TargetRaw, &result.FilePath, &result.Line, &result.DisplayText); err != nil {
 			return nil, err
@@ -331,12 +313,12 @@ func (d *Database) GetObject(id string) (*ObjectResult, error) {
 }
 
 // GetTrait retrieves a single trait by ID.
-func (d *Database) GetTrait(id string) (*TraitResult, error) {
-	var result TraitResult
+func (d *Database) GetTrait(id string) (*model.Trait, error) {
+	var result model.Trait
 	err := d.db.QueryRow(
 		"SELECT id, trait_type, value, content, file_path, line_number, parent_object_id FROM traits WHERE id = ?",
 		id,
-	).Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentID)
+	).Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -402,14 +384,6 @@ func (d *Database) UntypedPages() ([]string, error) {
 	return results, rows.Err()
 }
 
-// SearchResult represents a full-text search result.
-type SearchResult struct {
-	ObjectID string
-	Title    string
-	FilePath string
-	Snippet  string  // Matched snippet with context
-	Rank     float64 // FTS5 ranking score (lower is better match)
-}
 
 // Search performs a full-text search across all content in the vault.
 // The query supports FTS5 query syntax:
@@ -419,7 +393,7 @@ type SearchResult struct {
 //   - Prefix: "meet*"
 //
 // Results are ranked by relevance (best matches first).
-func (d *Database) Search(query string, limit int) ([]SearchResult, error) {
+func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -443,9 +417,9 @@ func (d *Database) Search(query string, limit int) ([]SearchResult, error) {
 	}
 	defer rows.Close()
 
-	var results []SearchResult
+	var results []model.SearchMatch
 	for rows.Next() {
-		var result SearchResult
+		var result model.SearchMatch
 		if err := rows.Scan(&result.ObjectID, &result.Title, &result.FilePath, &result.Snippet, &result.Rank); err != nil {
 			return nil, err
 		}
@@ -456,7 +430,7 @@ func (d *Database) Search(query string, limit int) ([]SearchResult, error) {
 }
 
 // SearchWithType performs a full-text search filtered by object type.
-func (d *Database) SearchWithType(query string, objectType string, limit int) ([]SearchResult, error) {
+func (d *Database) SearchWithType(query string, objectType string, limit int) ([]model.SearchMatch, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -479,9 +453,9 @@ func (d *Database) SearchWithType(query string, objectType string, limit int) ([
 	}
 	defer rows.Close()
 
-	var results []SearchResult
+	var results []model.SearchMatch
 	for rows.Next() {
-		var result SearchResult
+		var result model.SearchMatch
 		if err := rows.Scan(&result.ObjectID, &result.Title, &result.FilePath, &result.Snippet, &result.Rank); err != nil {
 			return nil, err
 		}

@@ -1,6 +1,10 @@
 package query
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/aidanlsb/raven/internal/model"
+)
 
 // executeAssignmentForObjects computes an aggregation for each object result.
 // Uses batched queries when possible to avoid N+1 query patterns.
@@ -27,7 +31,7 @@ func (e *Executor) executeAssignmentForObjects(results []PipelineObjectResult, s
 
 	// Fallback: N+1 execution (for complex cases)
 	for i := range results {
-		value, err := e.computeAggregationForObject(&results[i].ObjectResult, stage)
+		value, err := e.computeAggregationForObject(&results[i].Object, stage)
 		if err != nil {
 			return err
 		}
@@ -53,7 +57,7 @@ func (e *Executor) executeAssignmentForTraits(results []PipelineTraitResult, sta
 
 	// Fallback: N+1 execution (for subqueries and complex cases)
 	for i := range results {
-		value, err := e.computeAggregationForTrait(&results[i].TraitResult, stage)
+		value, err := e.computeAggregationForTrait(&results[i].Trait, stage)
 		if err != nil {
 			return err
 		}
@@ -63,7 +67,7 @@ func (e *Executor) executeAssignmentForTraits(results []PipelineTraitResult, sta
 }
 
 // computeAggregationForObject computes an aggregation value for a single object.
-func (e *Executor) computeAggregationForObject(obj *ObjectResult, stage *AssignmentStage) (interface{}, error) {
+func (e *Executor) computeAggregationForObject(obj *model.Object, stage *AssignmentStage) (interface{}, error) {
 	// Handle navigation functions
 	if stage.NavFunc != nil {
 		return e.computeNavFuncForObject(obj, stage.NavFunc, stage.Aggregation)
@@ -78,7 +82,7 @@ func (e *Executor) computeAggregationForObject(obj *ObjectResult, stage *Assignm
 }
 
 // computeAggregationForTrait computes an aggregation value for a single trait.
-func (e *Executor) computeAggregationForTrait(trait *TraitResult, stage *AssignmentStage) (interface{}, error) {
+func (e *Executor) computeAggregationForTrait(trait *model.Trait, stage *AssignmentStage) (interface{}, error) {
 	// Handle navigation functions
 	if stage.NavFunc != nil {
 		return e.computeNavFuncForTrait(trait, stage.NavFunc, stage.Aggregation)
@@ -93,7 +97,7 @@ func (e *Executor) computeAggregationForTrait(trait *TraitResult, stage *Assignm
 }
 
 // computeNavFuncForObject computes a navigation function result for an object.
-func (e *Executor) computeNavFuncForObject(obj *ObjectResult, navFunc *NavFunc, agg AggregationType) (interface{}, error) {
+func (e *Executor) computeNavFuncForObject(obj *model.Object, navFunc *NavFunc, agg AggregationType) (interface{}, error) {
 	var count int
 	var err error
 
@@ -129,7 +133,7 @@ func (e *Executor) computeNavFuncForObject(obj *ObjectResult, navFunc *NavFunc, 
 }
 
 // computeNavFuncForTrait computes a navigation function result for a trait.
-func (e *Executor) computeNavFuncForTrait(trait *TraitResult, navFunc *NavFunc, agg AggregationType) (interface{}, error) {
+func (e *Executor) computeNavFuncForTrait(trait *model.Trait, navFunc *NavFunc, agg AggregationType) (interface{}, error) {
 	// For traits, navigation functions typically operate on the parent object
 	switch navFunc.Name {
 	case "refs":
@@ -144,7 +148,7 @@ func (e *Executor) computeNavFuncForTrait(trait *TraitResult, navFunc *NavFunc, 
 }
 
 // computeSubqueryAggregationForObject executes a subquery with _ bound to the object.
-func (e *Executor) computeSubqueryAggregationForObject(obj *ObjectResult, subQuery *Query, agg AggregationType, field string) (interface{}, error) {
+func (e *Executor) computeSubqueryAggregationForObject(obj *model.Object, subQuery *Query, agg AggregationType, field string) (interface{}, error) {
 	// Build the subquery SQL with _ bound to the current object
 	// We need to replace ancestor:_ or within:_ predicates with the current object ID
 	boundQuery := e.bindObjectToQuery(obj.ID, subQuery)
@@ -169,7 +173,7 @@ func (e *Executor) computeSubqueryAggregationForObject(obj *ObjectResult, subQue
 }
 
 // computeSubqueryAggregationForTrait executes a subquery with _ bound to the trait.
-func (e *Executor) computeSubqueryAggregationForTrait(trait *TraitResult, subQuery *Query, agg AggregationType, field string) (interface{}, error) {
+func (e *Executor) computeSubqueryAggregationForTrait(trait *model.Trait, subQuery *Query, agg AggregationType, field string) (interface{}, error) {
 	// Bind _ to the trait - this may error if predicates expect objects
 	boundQuery, err := e.bindTraitToQuery(trait, subQuery)
 	if err != nil {
@@ -295,7 +299,7 @@ type TraitBinding struct {
 // bindTraitToQuery creates a copy of the query with _ references resolved to the trait.
 // IMPORTANT: _ ALWAYS represents the trait itself. Predicates that expect objects
 // (like on:, within:) will error when given a trait reference.
-func (e *Executor) bindTraitToQuery(trait *TraitResult, q *Query) (*Query, error) {
+func (e *Executor) bindTraitToQuery(trait *model.Trait, q *Query) (*Query, error) {
 	bound := &Query{
 		Type:     q.Type,
 		TypeName: q.TypeName,
@@ -415,7 +419,7 @@ func (e *Executor) bindPredicateToTrait(trait *TraitBinding, pred Predicate) (Pr
 
 // aggregateObjectResults computes an aggregate value from object results.
 // For min/max/sum, a field name must be provided.
-func (e *Executor) aggregateObjectResults(results []ObjectResult, agg AggregationType, field string) (interface{}, error) {
+func (e *Executor) aggregateObjectResults(results []model.Object, agg AggregationType, field string) (interface{}, error) {
 	switch agg {
 	case AggCount:
 		return len(results), nil
@@ -474,7 +478,7 @@ func (e *Executor) aggregateObjectResults(results []ObjectResult, agg Aggregatio
 
 // aggregateTraitResults computes an aggregate value from trait results.
 // For min/max/sum, the field must be specified (use ".value" for trait values).
-func (e *Executor) aggregateTraitResults(results []TraitResult, agg AggregationType, field string) (interface{}, error) {
+func (e *Executor) aggregateTraitResults(results []model.Trait, agg AggregationType, field string) (interface{}, error) {
 	switch agg {
 	case AggCount:
 		return len(results), nil

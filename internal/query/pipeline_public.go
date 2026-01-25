@@ -1,16 +1,20 @@
 package query
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/aidanlsb/raven/internal/model"
+)
 
 // PipelineObjectResult represents an object with computed values from pipeline.
 type PipelineObjectResult struct {
-	ObjectResult
+	model.Object
 	Computed map[string]interface{} // Computed values from assignments
 }
 
 // PipelineTraitResult represents a trait with computed values from pipeline.
 type PipelineTraitResult struct {
-	TraitResult
+	model.Trait
 	Computed map[string]interface{} // Computed values from assignments
 }
 
@@ -30,7 +34,7 @@ func (e *Executor) ExecuteObjectQueryWithPipeline(q *Query) ([]PipelineObjectRes
 	if q.Pipeline == nil || len(q.Pipeline.Stages) == 0 {
 		results := make([]PipelineObjectResult, len(baseResults))
 		for i, r := range baseResults {
-			results[i] = PipelineObjectResult{ObjectResult: r, Computed: make(map[string]interface{})}
+			results[i] = PipelineObjectResult{Object: r, Computed: make(map[string]interface{})}
 		}
 		return results, nil
 	}
@@ -55,7 +59,7 @@ func (e *Executor) ExecuteTraitQueryWithPipeline(q *Query) ([]PipelineTraitResul
 	if q.Pipeline == nil || len(q.Pipeline.Stages) == 0 {
 		results := make([]PipelineTraitResult, len(baseResults))
 		for i, r := range baseResults {
-			results[i] = PipelineTraitResult{TraitResult: r, Computed: make(map[string]interface{})}
+			results[i] = PipelineTraitResult{Trait: r, Computed: make(map[string]interface{})}
 		}
 		return results, nil
 	}
@@ -100,11 +104,11 @@ func mergeSortStages(stages []PipelineStage) []PipelineStage {
 }
 
 // executePipelineForObjects executes pipeline stages on object results.
-func (e *Executor) executePipelineForObjects(results []ObjectResult, pipeline *Pipeline) ([]PipelineObjectResult, error) {
+func (e *Executor) executePipelineForObjects(results []model.Object, pipeline *Pipeline) ([]PipelineObjectResult, error) {
 	// Initialize results with computed maps
 	pResults := make([]PipelineObjectResult, len(results))
 	for i, r := range results {
-		pResults[i] = PipelineObjectResult{ObjectResult: r, Computed: make(map[string]interface{})}
+		pResults[i] = PipelineObjectResult{Object: r, Computed: make(map[string]interface{})}
 	}
 
 	// Merge consecutive sort stages
@@ -134,11 +138,11 @@ func (e *Executor) executePipelineForObjects(results []ObjectResult, pipeline *P
 }
 
 // executePipelineForTraits executes pipeline stages on trait results.
-func (e *Executor) executePipelineForTraits(results []TraitResult, pipeline *Pipeline) ([]PipelineTraitResult, error) {
+func (e *Executor) executePipelineForTraits(results []model.Trait, pipeline *Pipeline) ([]PipelineTraitResult, error) {
 	// Initialize results with computed maps
 	pResults := make([]PipelineTraitResult, len(results))
 	for i, r := range results {
-		pResults[i] = PipelineTraitResult{TraitResult: r, Computed: make(map[string]interface{})}
+		pResults[i] = PipelineTraitResult{Trait: r, Computed: make(map[string]interface{})}
 	}
 
 	// Merge consecutive sort stages
