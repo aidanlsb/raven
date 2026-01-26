@@ -7,7 +7,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/ui"
+	"github.com/aidanlsb/raven/internal/lastresults"
+	"github.com/aidanlsb/raven/internal/model"
 )
 
 var backlinksCmd = &cobra.Command{
@@ -53,6 +54,8 @@ Examples:
 			return handleError(ErrDatabaseError, err, "")
 		}
 
+		saveLastBacklinksResults(vaultPath, target, links)
+
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
@@ -64,28 +67,22 @@ Examples:
 		}
 
 		// Human-readable output
-		if len(links) == 0 {
-			fmt.Println(ui.Starf("No backlinks found for '%s'", target))
-			return nil
-		}
-
-		fmt.Printf("%s %s\n\n", ui.Header("Backlinks to "+target), ui.Hint(fmt.Sprintf("(%d)", len(links))))
-		for _, link := range links {
-			display := link.SourceID
-			if link.DisplayText != nil {
-				display = *link.DisplayText
-			}
-
-			line := 0
-			if link.Line != nil {
-				line = *link.Line
-			}
-
-			fmt.Printf("  %s %s %s\n", ui.SymbolAttention, display, formatLocationLinkSimple(link.FilePath, line))
-		}
+		printBacklinksResults(target, links)
 
 		return nil
 	},
+}
+
+func saveLastBacklinksResults(vaultPath, target string, links []model.Reference) {
+	modelResults := make([]model.Result, len(links))
+	for i, link := range links {
+		modelResults[i] = link
+	}
+	lr, err := lastresults.NewFromResults(lastresults.SourceBacklinks, "", target, modelResults)
+	if err != nil {
+		return
+	}
+	_ = lastresults.Write(vaultPath, lr)
 }
 
 func init() {

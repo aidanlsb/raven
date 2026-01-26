@@ -13,75 +13,46 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/lastquery"
+	"github.com/aidanlsb/raven/internal/lastresults"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-// saveLastQueryFromTraits builds and saves a LastQuery from trait query results.
-// Returns the built LastQuery for use in output formatting.
-func saveLastQueryFromTraits(vaultPath, queryStr string, results []query.PipelineTraitResult) *lastquery.LastQuery {
-	lq := &lastquery.LastQuery{
-		Query:     queryStr,
-		Timestamp: time.Now(),
-		Type:      "trait",
-		Results:   make([]lastquery.ResultEntry, len(results)),
-	}
-
+// saveLastResultsFromTraits builds and saves a LastResults from trait query results.
+// Returns the built LastResults for use in output formatting.
+func saveLastResultsFromTraits(vaultPath, queryStr string, results []query.PipelineTraitResult) *lastresults.LastResults {
+	modelResults := make([]model.Result, len(results))
 	for i, r := range results {
-		location := fmt.Sprintf("%s:%d", r.FilePath, r.Line)
-		lq.Results[i] = lastquery.ResultEntry{
-			Num:        i + 1, // 1-indexed
-			ID:         r.ID,
-			Kind:       "trait",
-			Content:    r.Content,
-			Location:   location,
-			FilePath:   r.FilePath,
-			Line:       r.Line,
-			TraitType:  r.TraitType,
-			TraitValue: r.Value,
-		}
+		modelResults[i] = r.Trait
 	}
 
-	// Save to disk (best-effort, don't fail the query on save error)
-	_ = lastquery.Write(vaultPath, lq)
+	lr, err := lastresults.NewFromResults(lastresults.SourceQuery, queryStr, "", modelResults)
+	if err != nil {
+		return nil
+	}
 
-	return lq
+	_ = lastresults.Write(vaultPath, lr)
+	return lr
 }
 
-// saveLastQueryFromObjects builds and saves a LastQuery from object query results.
-// Returns the built LastQuery for use in output formatting.
-func saveLastQueryFromObjects(vaultPath, queryStr string, results []query.PipelineObjectResult) *lastquery.LastQuery {
-	lq := &lastquery.LastQuery{
-		Query:     queryStr,
-		Timestamp: time.Now(),
-		Type:      "object",
-		Results:   make([]lastquery.ResultEntry, len(results)),
-	}
-
+// saveLastResultsFromObjects builds and saves a LastResults from object query results.
+// Returns the built LastResults for use in output formatting.
+func saveLastResultsFromObjects(vaultPath, queryStr string, results []query.PipelineObjectResult) *lastresults.LastResults {
+	modelResults := make([]model.Result, len(results))
 	for i, r := range results {
-		location := fmt.Sprintf("%s:%d", r.FilePath, r.LineStart)
-		// Use the object name/slug as content
-		content := filepath.Base(r.ID)
-		lq.Results[i] = lastquery.ResultEntry{
-			Num:        i + 1, // 1-indexed
-			ID:         r.ID,
-			Kind:       "object",
-			Content:    content,
-			Location:   location,
-			FilePath:   r.FilePath,
-			Line:       r.LineStart,
-			ObjectType: r.Type,
-			Fields:     r.Fields,
-		}
+		modelResults[i] = r.Object
 	}
 
-	// Save to disk (best-effort, don't fail the query on save error)
-	_ = lastquery.Write(vaultPath, lq)
+	lr, err := lastresults.NewFromResults(lastresults.SourceQuery, queryStr, "", modelResults)
+	if err != nil {
+		return nil
+	}
 
-	return lq
+	_ = lastresults.Write(vaultPath, lr)
+	return lr
 }
 
 func dedupePreserveOrder(ids []string) []string {
@@ -885,9 +856,9 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 			return handleError(ErrDatabaseError, err, "")
 		}
 
-		// Save last query for numbered references (skip for --ids mode)
-		if !idsOnly && len(results) > 0 {
-			saveLastQueryFromObjects(vaultPath, queryStr, results)
+		// Save last results for numbered references (skip for --ids mode)
+		if !idsOnly {
+			saveLastResultsFromObjects(vaultPath, queryStr, results)
 		}
 
 		// --ids mode: output just IDs, one per line
@@ -935,29 +906,12 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 
 		// Check for pipe mode
 		if ShouldUsePipeFormat() {
-			pipeItems := make([]PipeableItem, len(results))
-			for i, r := range results {
-				pipeItems[i] = PipeableItem{
-					Num:      i + 1,
-					ID:       r.ID,
-					Content:  filepath.Base(r.ID),
-					Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
-				}
-			}
-			WritePipeableList(os.Stdout, pipeItems)
+			WritePipeableList(os.Stdout, pipeItemsForObjectResults(results))
 			return nil
 		}
 
 		// Human-readable output
-		if len(results) == 0 {
-			fmt.Println(ui.Starf("No objects found for: %s", queryStr))
-			return nil
-		}
-
-		fmt.Printf("%s %s\n\n", ui.Header(q.TypeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
-
-		// Print object table with field columns (schema-driven)
-		printObjectTable(results, sch)
+		printQueryObjectResults(queryStr, q.TypeName, results, sch)
 		return nil
 	}
 
@@ -967,9 +921,9 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 		return handleError(ErrDatabaseError, err, "")
 	}
 
-	// Save last query for numbered references (skip for --ids mode)
-	if !idsOnly && len(results) > 0 {
-		saveLastQueryFromTraits(vaultPath, queryStr, results)
+	// Save last results for numbered references (skip for --ids mode)
+	if !idsOnly {
+		saveLastResultsFromTraits(vaultPath, queryStr, results)
 	}
 
 	// --ids mode: output just trait IDs, one per line
@@ -1020,46 +974,12 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 
 	// Check for pipe mode
 	if ShouldUsePipeFormat() {
-		pipeItems := make([]PipeableItem, len(results))
-		for i, r := range results {
-			pipeItems[i] = PipeableItem{
-				Num:      i + 1,
-				ID:       r.ID,
-				Content:  TruncateContent(r.Content, 60),
-				Location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
-			}
-		}
-		WritePipeableList(os.Stdout, pipeItems)
+		WritePipeableList(os.Stdout, pipeItemsForTraitResults(results))
 		return nil
 	}
 
 	// Human-readable output
-	if len(results) == 0 {
-		fmt.Println(ui.Starf("No traits found for: %s", queryStr))
-		return nil
-	}
-
-	fmt.Printf("%s %s\n\n", ui.Header("@"+q.TypeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
-
-	// Build rows for card display
-	rows := make([]traitTableRow, len(results))
-	for i, r := range results {
-		// Build trait string with syntax highlighting
-		// Hide value if it matches the trait name (e.g., @todo with value "todo")
-		value := ""
-		if r.Value != nil && *r.Value != r.TraitType {
-			value = *r.Value
-		}
-		traitStr := ui.Trait(r.TraitType, value)
-
-		rows[i] = traitTableRow{
-			num:      i + 1, // 1-indexed for user reference
-			content:  r.Content,
-			traits:   traitStr,
-			location: formatLocationLinkSimple(r.FilePath, r.Line),
-		}
-	}
-	printTraitRows(rows)
+	printQueryTraitResults(queryStr, q.TypeName, results)
 	return nil
 }
 

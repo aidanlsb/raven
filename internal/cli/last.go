@@ -4,21 +4,24 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/lastquery"
-	"github.com/aidanlsb/raven/internal/ui"
+	"github.com/aidanlsb/raven/internal/lastresults"
+	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 var lastCmd = &cobra.Command{
 	Use:   "last [numbers...]",
-	Short: "Show or select results from the last query",
-	Long: `Show or select results from the most recent query.
+	Short: "Show or select results from the last retrieval",
+	Long: `Show or select results from the most recent retrieval (query, search, backlinks).
 
-Without arguments, displays all results from the last query with their numbers.
+Without arguments, displays all results from the last retrieval with their numbers.
 With number arguments, outputs the selected IDs for piping to other commands.
 
 Number formats:
@@ -33,7 +36,7 @@ Examples:
   rvn last 1-5 | rvn update --stdin value=done   # Pipe to update command
   rvn last | fzf --multi | rvn update --stdin value=done  # Interactive selection
 
-With --apply, applies an operation directly to selected results:
+With --apply, applies an operation directly to selected query results:
   rvn last 1,3 --apply "update value=done"
   rvn last 1-5 --apply "set status=archived"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -48,13 +51,13 @@ With --apply, applies an operation directly to selected results:
 			SetPipeFormat(&f)
 		}
 
-		// Load the last query
-		lq, err := lastquery.Read(vaultPath)
+		// Load the last results
+		lr, err := lastresults.Read(vaultPath)
 		if err != nil {
-			if err == lastquery.ErrNoLastQuery {
+			if err == lastresults.ErrNoLastResults {
 				return handleErrorMsg(ErrMissingArgument,
-					"no query results available",
-					"Run a query first, then use 'rvn last' to see or select results")
+					"no results available",
+					"Run a query, search, or backlinks command first, then use 'rvn last'")
 			}
 			return handleError(ErrInternal, err, "")
 		}
@@ -65,26 +68,26 @@ With --apply, applies an operation directly to selected results:
 
 		// If no number args, display all results
 		if len(args) == 0 {
-			return displayLastQuery(lq, applyStr, confirmApply, vaultPath)
+			return displayLastResults(lr, applyStr, confirmApply, vaultPath)
 		}
 
 		// Parse the number arguments
 		nums, err := lastquery.ParseNumberArgs(args)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(),
-				fmt.Sprintf("Valid range: 1-%d", len(lq.Results)))
+				fmt.Sprintf("Valid range: 1-%d", len(lr.Results)))
 		}
 
 		// Get the selected entries
-		entries, err := lq.GetByNumbers(nums)
+		entries, err := lr.GetByNumbers(nums)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(),
-				fmt.Sprintf("Last query returned %d results", len(lq.Results)))
+				fmt.Sprintf("Last results returned %d results", len(lr.Results)))
 		}
 
 		// If --apply is set, apply the operation
 		if applyStr != "" {
-			return applyToEntries(vaultPath, entries, applyStr, confirmApply, lq.Type)
+			return applyFromLastResults(vaultPath, lr, entries, applyStr, confirmApply)
 		}
 
 		// Output selected IDs (for piping)
@@ -92,11 +95,11 @@ With --apply, applies an operation directly to selected results:
 			items := make([]map[string]interface{}, len(entries))
 			for i, e := range entries {
 				items[i] = map[string]interface{}{
-					"num":      e.Num,
-					"id":       e.ID,
-					"kind":     e.Kind,
-					"content":  e.Content,
-					"location": e.Location,
+					"num":      nums[i],
+					"id":       e.GetID(),
+					"kind":     e.GetKind(),
+					"content":  resultContentForOutput(e),
+					"location": e.GetLocation(),
 				}
 			}
 			outputSuccess(map[string]interface{}{
@@ -107,139 +110,201 @@ With --apply, applies an operation directly to selected results:
 
 		// Plain output: one ID per line for piping
 		for _, e := range entries {
-			fmt.Println(e.ID)
+			fmt.Println(e.GetID())
 		}
 		return nil
 	},
 }
 
-// displayLastQuery shows the last query results in human-readable format.
-func displayLastQuery(lq *lastquery.LastQuery, applyStr string, confirm bool, vaultPath string) error {
+// displayLastResults shows the last results in the appropriate format.
+func displayLastResults(lr *lastresults.LastResults, applyStr string, confirm bool, vaultPath string) error {
+	// If --apply is set without numbers, apply to all
+	if applyStr != "" {
+		results, err := lr.DecodeAll()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		return applyFromLastResults(vaultPath, lr, results, applyStr, confirm)
+	}
+
 	if isJSONOutput() {
-		items := make([]map[string]interface{}, len(lq.Results))
-		for i, r := range lq.Results {
+		results, err := lr.DecodeAll()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		items := make([]map[string]interface{}, len(results))
+		for i, r := range results {
 			items[i] = map[string]interface{}{
-				"num":      r.Num,
-				"id":       r.ID,
-				"kind":     r.Kind,
-				"content":  r.Content,
-				"location": r.Location,
+				"num":      i + 1,
+				"id":       r.GetID(),
+				"kind":     r.GetKind(),
+				"content":  resultContentForOutput(r),
+				"location": r.GetLocation(),
 			}
 		}
 		outputSuccess(map[string]interface{}{
-			"query":     lq.Query,
-			"timestamp": lq.Timestamp,
-			"type":      lq.Type,
+			"source":    lr.Source,
+			"query":     lr.Query,
+			"target":    lr.Target,
+			"timestamp": lr.Timestamp,
 			"items":     items,
 		}, &Meta{Count: len(items)})
 		return nil
 	}
 
-	// Check for pipe mode - output pipe format for fzf integration
 	if ShouldUsePipeFormat() {
-		pipeItems := make([]PipeableItem, len(lq.Results))
-		for _, r := range lq.Results {
-			pipeItems[r.Num-1] = PipeableItem{
-				Num:      r.Num,
-				ID:       r.ID,
-				Content:  TruncateContent(r.Content, 60),
-				Location: r.Location,
+		return writeLastResultsPipe(lr)
+	}
+
+	return renderLastResultsHuman(lr, vaultPath)
+}
+
+func renderLastResultsHuman(lr *lastresults.LastResults, vaultPath string) error {
+	switch lr.Source {
+	case lastresults.SourceQuery:
+		return renderLastQueryResults(lr, vaultPath)
+	case lastresults.SourceSearch:
+		results, err := lr.DecodeSearchMatches()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		printSearchResults(lr.Query, results)
+		return nil
+	case lastresults.SourceBacklinks:
+		results, err := lr.DecodeReferences()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		printBacklinksResults(lr.Target, results)
+		return nil
+	default:
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown result source: %s", lr.Source), "")
+	}
+}
+
+func renderLastQueryResults(lr *lastresults.LastResults, vaultPath string) error {
+	kind := ""
+	typeName := ""
+
+	if len(lr.Results) > 0 {
+		kind = lr.Results[0].Kind
+	}
+
+	if lr.Query != "" {
+		parsedKind, parsedName, err := queryTypeFromString(lr.Query)
+		if err == nil {
+			if kind == "" {
+				kind = parsedKind
+			}
+			if typeName == "" {
+				typeName = parsedName
+			}
+		}
+	}
+
+	switch kind {
+	case "trait":
+		traits, err := lr.DecodeTraits()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		if typeName == "" && len(traits) > 0 {
+			typeName = traits[0].TraitType
+		}
+		if typeName == "" {
+			typeName = "trait"
+		}
+		printQueryTraitResults(lr.Query, typeName, pipelineTraitResultsFromTraits(traits))
+		return nil
+	case "object":
+		objects, err := lr.DecodeObjects()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		if typeName == "" && len(objects) > 0 {
+			typeName = objects[0].Type
+		}
+		if typeName == "" {
+			typeName = "object"
+		}
+		var sch *schema.Schema
+		if loaded, err := schema.Load(vaultPath); err == nil {
+			sch = loaded
+		}
+		printQueryObjectResults(lr.Query, typeName, pipelineObjectResultsFromObjects(objects), sch)
+		return nil
+	default:
+		return handleErrorMsg(ErrInvalidInput, "last results are not from a query", "")
+	}
+}
+
+func writeLastResultsPipe(lr *lastresults.LastResults) error {
+	switch lr.Source {
+	case lastresults.SourceQuery:
+		kind := ""
+		if len(lr.Results) > 0 {
+			kind = lr.Results[0].Kind
+		}
+		if kind == "" && lr.Query != "" {
+			parsedKind, _, err := queryTypeFromString(lr.Query)
+			if err == nil {
+				kind = parsedKind
+			}
+		}
+
+		switch kind {
+		case "trait":
+			traits, err := lr.DecodeTraits()
+			if err != nil {
+				return handleError(ErrInternal, err, "")
+			}
+			WritePipeableList(os.Stdout, pipeItemsForTraitResults(pipelineTraitResultsFromTraits(traits)))
+			return nil
+		case "object":
+			objects, err := lr.DecodeObjects()
+			if err != nil {
+				return handleError(ErrInternal, err, "")
+			}
+			WritePipeableList(os.Stdout, pipeItemsForObjectResults(pipelineObjectResultsFromObjects(objects)))
+			return nil
+		default:
+			return handleErrorMsg(ErrInvalidInput, "last results are not from a query", "")
+		}
+	default:
+		results, err := lr.DecodeAll()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		pipeItems := make([]PipeableItem, len(results))
+		for i, r := range results {
+			pipeItems[i] = PipeableItem{
+				Num:      i + 1,
+				ID:       r.GetID(),
+				Content:  TruncateContent(resultContentForOutput(r), 60),
+				Location: r.GetLocation(),
 			}
 		}
 		WritePipeableList(os.Stdout, pipeItems)
 		return nil
 	}
-
-	// If --apply is set without numbers, apply to all
-	if applyStr != "" {
-		return applyToEntries(vaultPath, lq.Results, applyStr, confirm, lq.Type)
-	}
-
-	// Human-readable display
-	if len(lq.Results) == 0 {
-		fmt.Println(ui.Starf("Last query returned no results"))
-		fmt.Printf("Query: %s\n", lq.Query)
-		return nil
-	}
-
-	// Header with query info
-	ago := formatTimeAgo(lq.Timestamp)
-	fmt.Printf("%s %s\n", ui.Header("Last Query"), ui.Hint(fmt.Sprintf("(%s)", ago)))
-	fmt.Printf("%s\n\n", ui.Muted.Render(lq.Query))
-
-	// Results table
-	if lq.Type == "trait" {
-		printLastQueryTraitResults(lq.Results)
-	} else {
-		printLastQueryObjectResults(lq.Results)
-	}
-
-	return nil
 }
 
-// printLastQueryTraitResults prints trait results with numbers.
-// Matches the format used by printTraitRows in query.go.
-func printLastQueryTraitResults(results []lastquery.ResultEntry) {
-	// Column widths
-	numWidth := len(fmt.Sprintf("%d", len(results)))
-	if numWidth < 2 {
-		numWidth = 2
+func applyFromLastResults(vaultPath string, lr *lastresults.LastResults, results []model.Result, applyStr string, confirm bool) error {
+	if lr.Source != lastresults.SourceQuery {
+		return handleErrorMsg(ErrInvalidInput,
+			"--apply is only supported for query results",
+			"Run 'rvn query --apply ...' for query operations")
 	}
-	contentWidth := 52
 
-	for i, r := range results {
-		numStr := fmt.Sprintf("%*d", numWidth, r.Num)
-
-		content := r.Content
-		if len(content) > contentWidth {
-			content = content[:contentWidth-3] + "..."
-		}
-
-		// Highlight traits in content
-		content = ui.HighlightTraits(content)
-
-		// Build trait string (e.g., "@todo(done)")
-		// Hide value if it matches the trait type
-		value := ""
-		if r.TraitValue != nil && *r.TraitValue != r.TraitType {
-			value = *r.TraitValue
-		}
-		traitStr := ui.Trait(r.TraitType, value)
-
-		// Build metadata string: "trait · location"
-		metadata := traitStr + " " + ui.Muted.Render("·") + " " + ui.Muted.Render(r.Location)
-
-		fmt.Printf("  %s  %s  %s\n",
-			ui.Muted.Render(numStr),
-			ui.PadRight(content, contentWidth),
-			metadata)
-
-		// Separator between items (except last)
-		if i < len(results)-1 {
-			fmt.Println(ui.Muted.Render("  " + strings.Repeat("─", 90)))
-		}
+	queryType, err := queryTypeFromResults(lr, results)
+	if err != nil {
+		return handleError(ErrInvalidInput, err, "")
 	}
+	return applyToResults(vaultPath, results, applyStr, confirm, queryType)
 }
 
-// printLastQueryObjectResults prints object results with numbers.
-func printLastQueryObjectResults(results []lastquery.ResultEntry) {
-	numWidth := len(fmt.Sprintf("%d", len(results)))
-	if numWidth < 2 {
-		numWidth = 2
-	}
-
-	for _, r := range results {
-		numStr := fmt.Sprintf("%*d", numWidth, r.Num)
-		fmt.Printf("  %s  %-30s  %s\n",
-			ui.Bold.Render(numStr),
-			r.Content,
-			ui.Muted.Render(r.Location))
-	}
-}
-
-// applyToEntries applies an operation to the given entries.
-func applyToEntries(vaultPath string, entries []lastquery.ResultEntry, applyStr string, confirm bool, queryType string) error {
-	if len(entries) == 0 {
+func applyToResults(vaultPath string, results []model.Result, applyStr string, confirm bool, queryType string) error {
+	if len(results) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no entries to apply operation to", "")
 	}
 
@@ -254,9 +319,9 @@ func applyToEntries(vaultPath string, entries []lastquery.ResultEntry, applyStr 
 	applyArgs := parts[1:]
 
 	// Collect IDs
-	ids := make([]string, len(entries))
-	for i, e := range entries {
-		ids[i] = e.ID
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.GetID()
 	}
 
 	// Load vault config for operations
@@ -307,31 +372,42 @@ func applyToEntries(vaultPath string, entries []lastquery.ResultEntry, applyStr 
 	}
 }
 
-// formatTimeAgo formats a timestamp as a human-readable "X ago" string.
-func formatTimeAgo(t time.Time) string {
-	diff := time.Since(t)
-
-	if diff < time.Minute {
-		return "just now"
-	} else if diff < time.Hour {
-		mins := int(diff.Minutes())
-		if mins == 1 {
-			return "1 minute ago"
+func queryTypeFromResults(lr *lastresults.LastResults, results []model.Result) (string, error) {
+	if len(results) > 0 {
+		kind := results[0].GetKind()
+		if kind == "trait" || kind == "object" {
+			return kind, nil
 		}
-		return fmt.Sprintf("%d minutes ago", mins)
-	} else if diff < 24*time.Hour {
-		hours := int(diff.Hours())
-		if hours == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", hours)
 	}
 
-	days := int(diff.Hours() / 24)
-	if days == 1 {
-		return "1 day ago"
+	if lr.Query == "" {
+		return "", fmt.Errorf("missing query string for last results")
 	}
-	return fmt.Sprintf("%d days ago", days)
+
+	kind, _, err := queryTypeFromString(lr.Query)
+	return kind, err
+}
+
+func queryTypeFromString(queryStr string) (string, string, error) {
+	q, err := query.Parse(queryStr)
+	if err != nil {
+		return "", "", err
+	}
+	if q.Type == query.QueryTypeTrait {
+		return "trait", q.TypeName, nil
+	}
+	return "object", q.TypeName, nil
+}
+
+func resultContentForOutput(result model.Result) string {
+	switch r := result.(type) {
+	case model.Object:
+		return filepath.Base(r.ID)
+	case *model.Object:
+		return filepath.Base(r.ID)
+	default:
+		return result.GetContent()
+	}
 }
 
 func init() {
