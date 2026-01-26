@@ -20,19 +20,19 @@ var migrateDirectoriesCmd = &cobra.Command{
 
 This command reads the 'directories' configuration from raven.yaml and moves
 files to their new locations:
-- Typed objects → objects/<type>/
-- Untyped pages → pages/
+- Typed objects → object/<type>/
+- Untyped pages → page/
 - Daily notes → as configured (usually unchanged)
 
 All [[references]] throughout the vault remain valid because object IDs don't change.
-The physical file paths change, but the logical IDs (people/freya, projects/website)
+The physical file paths change, but the logical IDs (person/freya, project/website)
 stay the same.
 
 Before running, ensure your raven.yaml has a 'directories' section:
 
   directories:
-    objects: objects/
-    pages: pages/
+    object: object/
+    page: page/
 
 Run with --dry-run first to preview changes.
 
@@ -51,10 +51,10 @@ Examples:
 
 		// Check if directories are configured
 		dirs := vaultCfg.GetDirectoriesConfig()
-		if dirs == nil || (dirs.Objects == "" && dirs.Pages == "") {
+		if dirs == nil || (dirs.Object == "" && dirs.Page == "") {
 			return handleErrorMsg(ErrValidationFailed,
 				"No directories configuration found in raven.yaml",
-				"Add a 'directories' section with 'objects' and/or 'pages' keys")
+				"Add a 'directories' section with 'object' and/or 'page' keys")
 		}
 
 		// Load schema for type information
@@ -69,11 +69,11 @@ Examples:
 		}
 
 		fmt.Printf("Migrating vault: %s\n", vaultPath)
-		if dirs.Objects != "" {
-			fmt.Printf("  Objects root: %s\n", dirs.Objects)
+		if dirs.Object != "" {
+			fmt.Printf("  Object root: %s\n", dirs.Object)
 		}
-		if dirs.Pages != "" {
-			fmt.Printf("  Pages root: %s\n", dirs.Pages)
+		if dirs.Page != "" {
+			fmt.Printf("  Page root: %s\n", dirs.Page)
 		}
 		fmt.Println()
 
@@ -93,10 +93,10 @@ Examples:
 			relPath := result.RelativePath
 
 			// Skip files already in target directories
-			if dirs.Objects != "" && strings.HasPrefix(relPath, dirs.Objects) {
+			if dirs.Object != "" && strings.HasPrefix(relPath, dirs.Object) {
 				return nil
 			}
-			if dirs.Pages != "" && strings.HasPrefix(relPath, dirs.Pages) {
+			if dirs.Page != "" && strings.HasPrefix(relPath, dirs.Page) {
 				return nil
 			}
 
@@ -117,10 +117,10 @@ Examples:
 			var newPath string
 			if objType == "page" || objType == "" {
 				// Untyped page
-				if dirs.Pages != "" {
-					newPath = filepath.Join(dirs.Pages, relPath)
-				} else if dirs.Objects != "" {
-					newPath = filepath.Join(dirs.Objects, relPath)
+				if dirs.Page != "" {
+					newPath = filepath.Join(dirs.Page, relPath)
+				} else if dirs.Object != "" {
+					newPath = filepath.Join(dirs.Object, relPath)
 				}
 			} else {
 				// Typed object - check if it has a default_path in schema
@@ -128,21 +128,21 @@ Examples:
 					// File is in a type's default_path directory
 					defaultPath := strings.TrimSuffix(typeDef.DefaultPath, "/")
 					if strings.HasPrefix(relPath, defaultPath+"/") {
-						// Already in correct type directory, just add objects root
-						if dirs.Objects != "" {
-							newPath = filepath.Join(dirs.Objects, relPath)
+						// Already in correct type directory, just add object root
+						if dirs.Object != "" {
+							newPath = filepath.Join(dirs.Object, relPath)
 						}
 					} else {
 						// File is typed but not in its default directory
-						// Move to objects root, keeping current structure
-						if dirs.Objects != "" {
-							newPath = filepath.Join(dirs.Objects, relPath)
+						// Move to object root, keeping current structure
+						if dirs.Object != "" {
+							newPath = filepath.Join(dirs.Object, relPath)
 						}
 					}
 				} else {
 					// Typed but no default_path in schema
-					if dirs.Objects != "" {
-						newPath = filepath.Join(dirs.Objects, relPath)
+					if dirs.Object != "" {
+						newPath = filepath.Join(dirs.Object, relPath)
 					}
 				}
 			}
@@ -256,10 +256,10 @@ func cleanEmptyDirs(vaultPath string, cfg *config.VaultConfig) error {
 
 		// Skip target directories
 		relPath, _ := filepath.Rel(vaultPath, path)
-		if dirs.Objects != "" && strings.HasPrefix(relPath, strings.TrimSuffix(dirs.Objects, "/")) {
+		if dirs.Object != "" && strings.HasPrefix(relPath, strings.TrimSuffix(dirs.Object, "/")) {
 			return nil
 		}
-		if dirs.Pages != "" && strings.HasPrefix(relPath, strings.TrimSuffix(dirs.Pages, "/")) {
+		if dirs.Page != "" && strings.HasPrefix(relPath, strings.TrimSuffix(dirs.Page, "/")) {
 			return nil
 		}
 		if strings.HasPrefix(relPath, cfg.DailyDirectory) {

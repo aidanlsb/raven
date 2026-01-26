@@ -156,8 +156,8 @@ func ResolveObjectToFileWithConfig(vaultPath, ref string, vaultCfg *config.Vault
 	pagesRoot := ""
 	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
 		if dirs := vaultCfg.GetDirectoriesConfig(); dirs != nil {
-			objectsRoot = dirs.Objects
-			pagesRoot = dirs.Pages
+			objectsRoot = dirs.Object
+			pagesRoot = dirs.Page
 		}
 	}
 	return ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot)

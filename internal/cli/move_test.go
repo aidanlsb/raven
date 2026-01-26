@@ -191,6 +191,91 @@ func TestUpdateReferenceAtLineUpdatesRefsOnTraitLines(t *testing.T) {
 	}
 }
 
+func TestReplaceAllRefVariants(t *testing.T) {
+	tests := []struct {
+		name       string
+		content    string
+		oldID      string
+		newRef     string
+		objectRoot string
+		pageRoot   string
+		want       string
+	}{
+		{
+			name:       "basic ref",
+			content:    "See [[people/tido]] for details",
+			oldID:      "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "See [[person/tido]] for details",
+		},
+		{
+			name:       "ref with display text",
+			content:    "Ask [[people/tido|Tido]] about this",
+			oldID:      "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "Ask [[person/tido|Tido]] about this",
+		},
+		{
+			name:       "ref with fragment",
+			content:    "See [[people/tido#notes]] for context",
+			oldID:      "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "See [[person/tido#notes]] for context",
+		},
+		{
+			name:       "ref with directory prefix",
+			content:    "See [[objects/people/tido]] for details",
+			oldID:      "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "objects/",
+			pageRoot:   "",
+			want:       "See [[person/tido]] for details",
+		},
+		{
+			name:       "multiple variants on same line",
+			content:    "[[people/tido]] and [[objects/people/tido|Tido]]",
+			oldID:      "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "objects/",
+			pageRoot:   "",
+			want:       "[[person/tido]] and [[person/tido|Tido]]",
+		},
+		{
+			name:       "ref on trait line",
+			content:    "- @todo(done) Check with [[people/tido]] about this",
+			oldID:      "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "- @todo(done) Check with [[person/tido]] about this",
+		},
+		{
+			name:       "ref with pages root",
+			content:    "See [[pages/my-note]] for details",
+			oldID:      "my-note",
+			newRef:     "notes/my-note",
+			objectRoot: "objects/",
+			pageRoot:   "pages/",
+			want:       "See [[notes/my-note]] for details",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := replaceAllRefVariants(tt.content, tt.oldID, tt.newRef, tt.objectRoot, tt.pageRoot)
+			if got != tt.want {
+				t.Errorf("replaceAllRefVariants() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUpdateReferenceAtLineWithSectionSourceID(t *testing.T) {
 	// This tests the real-world case where the backlink's source_id includes a section
 	// fragment (e.g., "daily/2026-01-05#meeting-notes"), which is what happens when

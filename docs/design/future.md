@@ -20,14 +20,16 @@ Configuration in `raven.yaml` for directory organization:
 # raven.yaml
 directories:
   # Root for typed objects (type default_path is relative to this)
-  objects: objects/
+  object: object/
   
   # Where untyped pages go
-  pages: pages/
+  page: page/
   
   # Daily notes (already exists as daily_directory, would move here)
   daily: daily/
 ```
+
+Uses singular keys (`object`, `page`) to encourage singular directory names, leading to more natural reference syntax like `[[person/freya]]`.
 
 **Key behavior**: Directory roots are **stripped from object IDs**, keeping references short.
 

@@ -45,34 +45,64 @@ type VaultConfig struct {
 
 // DirectoriesConfig configures directory organization for the vault.
 // This allows nesting type folders under a common root while keeping reference paths short.
+//
+// Uses singular keys (object, page) to encourage singular directory names,
+// which leads to more natural reference syntax like [[person/freya]] instead of [[people/freya]].
 type DirectoriesConfig struct {
-	// Objects is the root directory for typed objects (e.g., "objects/").
+	// Object is the root directory for typed objects (e.g., "object/").
 	// Type default_path values are relative to this.
-	// Object IDs strip this prefix, so "objects/people/freya" becomes "people/freya".
+	// Object IDs strip this prefix, so "object/person/freya" becomes "person/freya".
+	Object string `yaml:"object,omitempty"`
+
+	// Page is the root directory for untyped pages (e.g., "page/").
+	// Pages get bare IDs without the directory prefix.
+	// If empty, defaults to the same as Object.
+	Page string `yaml:"page,omitempty"`
+
+	// Deprecated: use Object instead. Kept for backwards compatibility.
 	Objects string `yaml:"objects,omitempty"`
 
-	// Pages is the root directory for untyped pages (e.g., "pages/").
-	// Pages get bare IDs without the directory prefix.
-	// If empty, defaults to the same as Objects.
+	// Deprecated: use Page instead. Kept for backwards compatibility.
 	Pages string `yaml:"pages,omitempty"`
 }
 
 // GetDirectoriesConfig returns the directories config with defaults applied.
 // Returns nil if directories are not configured (flat vault structure).
+// Handles backwards compatibility: if old plural keys (objects, pages) are set
+// but new singular keys (object, page) are not, uses the old values.
 func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	if vc.Directories == nil {
 		return nil
 	}
 	cfg := *vc.Directories
+
+	// Backwards compatibility: prefer new singular keys, fall back to old plural keys
+	if cfg.Object == "" && cfg.Objects != "" {
+		cfg.Object = cfg.Objects
+	}
+	if cfg.Page == "" && cfg.Pages != "" {
+		cfg.Page = cfg.Pages
+	}
+
 	// Normalize paths: ensure trailing slash and no leading slash.
-	cfg.Objects = paths.NormalizeDirRoot(cfg.Objects)
-	cfg.Pages = paths.NormalizeDirRoot(cfg.Pages)
+	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
+	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
+
+	// Clear deprecated fields after normalization to avoid confusion
+	cfg.Objects = ""
+	cfg.Pages = ""
+
 	return &cfg
 }
 
 // HasDirectoriesConfig returns true if directory organization is configured.
 func (vc *VaultConfig) HasDirectoriesConfig() bool {
-	return vc.Directories != nil && (vc.Directories.Objects != "" || vc.Directories.Pages != "")
+	if vc.Directories == nil {
+		return false
+	}
+	// Check both new singular keys and old plural keys for backwards compatibility
+	return vc.Directories.Object != "" || vc.Directories.Page != "" ||
+		vc.Directories.Objects != "" || vc.Directories.Pages != ""
 }
 
 // WorkflowRef is a reference to a workflow definition.
@@ -318,30 +348,30 @@ func (vc *VaultConfig) DailyNoteID(date string) string {
 
 // FilePathToObjectID converts a file path (relative to vault) to an object ID.
 // If directories are configured, the appropriate root prefix is stripped.
-// For example, with objects: "objects/", the path "objects/people/freya.md" becomes "people/freya".
+// For example, with object: "object/", the path "object/person/freya.md" becomes "person/freya".
 func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return paths.FilePathToObjectID(filePath, "", "")
 	}
-	return paths.FilePathToObjectID(filePath, dirs.Objects, dirs.Pages)
+	return paths.FilePathToObjectID(filePath, dirs.Object, dirs.Page)
 }
 
 // ObjectIDToFilePath converts an object ID to a file path (relative to vault).
 // If directories are configured, the appropriate root prefix is added.
-// The typeName helps determine which root to use (objects vs pages).
-// If typeName is empty or "page", uses the pages root; otherwise uses objects root.
+// The typeName helps determine which root to use (object vs page).
+// If typeName is empty or "page", uses the page root; otherwise uses object root.
 func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return paths.ObjectIDToFilePath(objectID, typeName, "", "")
 	}
-	return paths.ObjectIDToFilePath(objectID, typeName, dirs.Objects, dirs.Pages)
+	return paths.ObjectIDToFilePath(objectID, typeName, dirs.Object, dirs.Page)
 }
 
 // ResolveReferenceToFilePath resolves a reference (object ID) to a file path.
 // This handles the logic of checking whether the reference looks like a typed object
-// (has a directory prefix like "people/freya") or an untyped page ("my-note").
+// (has a directory prefix like "person/freya") or an untyped page ("my-note").
 // Returns the relative file path within the vault.
 func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
 	dirs := vc.GetDirectoriesConfig()
@@ -350,57 +380,57 @@ func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
 	}
 
 	// If the reference contains a slash, it's likely a typed object path
-	// e.g., "people/freya" -> "objects/people/freya.md"
+	// e.g., "person/freya" -> "object/person/freya.md"
 	if strings.Contains(ref, "/") {
-		if dirs.Objects != "" {
-			return dirs.Objects + ref + ".md"
+		if dirs.Object != "" {
+			return dirs.Object + ref + ".md"
 		}
 		return ref + ".md"
 	}
 
 	// No slash - it's a bare name, treat as an untyped page
-	// e.g., "my-note" -> "pages/my-note.md"
-	if dirs.Pages != "" {
-		return dirs.Pages + ref + ".md"
+	// e.g., "my-note" -> "page/my-note.md"
+	if dirs.Page != "" {
+		return dirs.Page + ref + ".md"
 	}
-	if dirs.Objects != "" {
-		return dirs.Objects + ref + ".md"
+	if dirs.Object != "" {
+		return dirs.Object + ref + ".md"
 	}
 	return ref + ".md"
 }
 
-// IsInObjectsRoot checks if a file path is under the objects root directory.
+// IsInObjectsRoot checks if a file path is under the object root directory.
 func (vc *VaultConfig) IsInObjectsRoot(filePath string) bool {
 	dirs := vc.GetDirectoriesConfig()
-	if dirs == nil || dirs.Objects == "" {
+	if dirs == nil || dirs.Object == "" {
 		return false
 	}
-	return strings.HasPrefix(filepath.ToSlash(filePath), dirs.Objects)
+	return strings.HasPrefix(filepath.ToSlash(filePath), dirs.Object)
 }
 
-// IsInPagesRoot checks if a file path is under the pages root directory.
+// IsInPagesRoot checks if a file path is under the page root directory.
 func (vc *VaultConfig) IsInPagesRoot(filePath string) bool {
 	dirs := vc.GetDirectoriesConfig()
-	if dirs == nil || dirs.Pages == "" {
+	if dirs == nil || dirs.Page == "" {
 		return false
 	}
-	return strings.HasPrefix(filepath.ToSlash(filePath), dirs.Pages)
+	return strings.HasPrefix(filepath.ToSlash(filePath), dirs.Page)
 }
 
-// GetObjectsRoot returns the objects root directory, or empty string if not configured.
+// GetObjectsRoot returns the object root directory, or empty string if not configured.
 func (vc *VaultConfig) GetObjectsRoot() string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return ""
 	}
-	return dirs.Objects
+	return dirs.Object
 }
 
-// GetPagesRoot returns the pages root directory, or empty string if not configured.
+// GetPagesRoot returns the page root directory, or empty string if not configured.
 func (vc *VaultConfig) GetPagesRoot() string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return ""
 	}
-	return dirs.Pages
+	return dirs.Page
 }

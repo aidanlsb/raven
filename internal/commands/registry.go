@@ -503,6 +503,16 @@ Common patterns:
   Tags/keywords:        --type string[]
   Status field:         --type enum --values active,paused,done
 
+IMPORTANT - Common mistakes to avoid:
+  ✗ --type array              (WRONG: 'array' is not a type)
+  ✓ --type string[]           (RIGHT: use [] suffix for arrays)
+  
+  ✗ --type ref[]              (WRONG: missing --target)
+  ✓ --type ref[] --target person  (RIGHT: ref types need --target)
+  
+  ✗ --type list               (WRONG: 'list' is not a type)
+  ✓ --type string[]           (RIGHT: use string[] for text lists)
+
 The command validates inputs and provides helpful suggestions if the syntax is incorrect.`,
 		Args: []ArgMeta{
 			{Name: "type_name", Description: "Type to add field to", Required: true},
