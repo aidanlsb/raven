@@ -8,8 +8,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/lastresults"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var searchLimit int
@@ -44,6 +44,8 @@ var searchCmd = &cobra.Command{
 			return fmt.Errorf("search failed: %w", err)
 		}
 
+		saveLastSearchResults(vaultPath, query, results)
+
 		// Output results
 		if jsonOutput {
 			outputSuccess(map[string]interface{}{
@@ -53,29 +55,22 @@ var searchCmd = &cobra.Command{
 			return nil
 		}
 
-		if len(results) == 0 {
-			fmt.Println(ui.Starf("No results found for: %s", query))
-			return nil
-		}
-
-		fmt.Printf("%s %s\n\n", ui.Header(query), ui.Hint(fmt.Sprintf("(%d results)", len(results))))
-		for i, result := range results {
-			fmt.Printf("%s %s\n", ui.Bold.Render(fmt.Sprintf("%d.", i+1)), result.Title)
-			fmt.Printf("   %s\n", formatLocationLinkSimple(result.FilePath, 1))
-			if result.Snippet != "" {
-				// Clean up snippet for display
-				snippet := strings.ReplaceAll(result.Snippet, "\n", " ")
-				snippet = strings.TrimSpace(snippet)
-				if len(snippet) > 120 {
-					snippet = snippet[:120] + "..."
-				}
-				fmt.Printf("   %s\n", snippet)
-			}
-			fmt.Println()
-		}
+		printSearchResults(query, results)
 
 		return nil
 	},
+}
+
+func saveLastSearchResults(vaultPath, query string, results []model.SearchMatch) {
+	modelResults := make([]model.Result, len(results))
+	for i, r := range results {
+		modelResults[i] = r
+	}
+	lr, err := lastresults.NewFromResults(lastresults.SourceSearch, query, "", modelResults)
+	if err != nil {
+		return
+	}
+	_ = lastresults.Write(vaultPath, lr)
 }
 
 func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {
