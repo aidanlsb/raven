@@ -571,7 +571,15 @@ func normalizePath(p string) string {
 
 // updateReference updates a reference in a source file.
 func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldRef, newRef string) error {
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, sourceID, vaultCfg)
+	// Strip section fragment from sourceID before resolving to file path.
+	// Backlinks from embedded objects have IDs like "daily/2026-01-05#meeting-notes",
+	// but the file is just "daily/2026-01-05.md".
+	fileSourceID := sourceID
+	if idx := strings.Index(sourceID, "#"); idx >= 0 {
+		fileSourceID = sourceID[:idx]
+	}
+
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
 	if err != nil {
 		return err
 	}
@@ -609,7 +617,15 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 		return updateReference(vaultPath, vaultCfg, sourceID, oldRef, newRef)
 	}
 
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, sourceID, vaultCfg)
+	// Strip section fragment from sourceID before resolving to file path.
+	// Backlinks from embedded objects have IDs like "daily/2026-01-05#meeting-notes",
+	// but the file is just "daily/2026-01-05.md".
+	fileSourceID := sourceID
+	if idx := strings.Index(sourceID, "#"); idx >= 0 {
+		fileSourceID = sourceID[:idx]
+	}
+
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
 	if err != nil {
 		return err
 	}
