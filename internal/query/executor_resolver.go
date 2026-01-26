@@ -56,7 +56,7 @@ func (e *Executor) getResolver() (*resolver.Resolver, error) {
 	aliasRows, err := e.db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
 	if err != nil {
 		// Fall back to resolver without aliases
-		e.resolver = resolver.New(objectIDs)
+		e.resolver = resolver.New(objectIDs, resolver.Options{DailyDirectory: e.dailyDirectory})
 		return e.resolver, nil
 	}
 	defer aliasRows.Close()
@@ -73,15 +73,14 @@ func (e *Executor) getResolver() (*resolver.Resolver, error) {
 	}
 	if err := aliasRows.Err(); err != nil {
 		// Fall back to resolver without aliases (avoid partial/incorrect alias maps)
-		e.resolver = resolver.New(objectIDs)
+		e.resolver = resolver.New(objectIDs, resolver.Options{DailyDirectory: e.dailyDirectory})
 		return e.resolver, nil
 	}
 
-	dailyDir := e.dailyDirectory
-	if dailyDir == "" {
-		dailyDir = "daily"
-	}
-	e.resolver = resolver.NewWithAliases(objectIDs, aliases, dailyDir)
+	e.resolver = resolver.New(objectIDs, resolver.Options{
+		DailyDirectory: e.dailyDirectory,
+		Aliases:        aliases,
+	})
 	return e.resolver, nil
 }
 

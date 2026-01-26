@@ -20,30 +20,32 @@ type Resolver struct {
 	dailyDirectory string              // Directory for daily notes (e.g., "daily")
 }
 
-// New creates a new Resolver with the given object IDs.
-func New(objectIDs []string) *Resolver {
-	return NewWithDailyDir(objectIDs, "daily")
+// Options configures the resolver.
+type Options struct {
+	// DailyDirectory is the directory for daily notes (default: "daily").
+	DailyDirectory string
+
+	// Aliases maps alias strings to their target object IDs.
+	// For example: {"The Queen": "people/freya"}
+	Aliases map[string]string
+
+	// NameFieldMap maps name_field values to object IDs for semantic resolution.
+	// For example: {"The Prose Edda": "books/the-prose-edda"}
+	NameFieldMap map[string]string
 }
 
-// NewWithDailyDir creates a new Resolver with the given object IDs and daily directory.
-func NewWithDailyDir(objectIDs []string, dailyDirectory string) *Resolver {
-	return NewWithAliases(objectIDs, nil, dailyDirectory)
-}
+// New creates a new Resolver with the given object IDs and options.
+func New(objectIDs []string, opts Options) *Resolver {
+	dailyDir := opts.DailyDirectory
+	if dailyDir == "" {
+		dailyDir = "daily"
+	}
 
-// NewWithAliases creates a new Resolver with object IDs, aliases, and daily directory.
-// The aliases map maps alias strings to their target object IDs.
-func NewWithAliases(objectIDs []string, aliases map[string]string, dailyDirectory string) *Resolver {
-	return NewWithNameFields(objectIDs, aliases, nil, dailyDirectory)
-}
-
-// NewWithNameFields creates a new Resolver with object IDs, aliases, name field values, and daily directory.
-// The nameFieldMap maps name_field values to their object IDs (for semantic resolution).
-func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldMap map[string]string, dailyDirectory string) *Resolver {
 	r := &Resolver{
 		objectIDs:      make(map[string]struct{}, len(objectIDs)),
 		shortMap:       make(map[string][]string, len(objectIDs)),
 		slugMap:        make(map[string]string, len(objectIDs)),
-		dailyDirectory: dailyDirectory,
+		dailyDirectory: dailyDir,
 	}
 
 	for _, id := range objectIDs {
@@ -59,10 +61,10 @@ func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldM
 	}
 
 	// Copy aliases (skip empty ones)
-	if len(aliases) > 0 {
-		r.aliasMap = make(map[string]string, len(aliases)*2)
+	if len(opts.Aliases) > 0 {
+		r.aliasMap = make(map[string]string, len(opts.Aliases)*2)
 	}
-	for alias, targetID := range aliases {
+	for alias, targetID := range opts.Aliases {
 		if alias == "" {
 			continue
 		}
@@ -75,10 +77,10 @@ func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldM
 	}
 
 	// Build name_field map (both exact and slugified keys for case-insensitive matching)
-	if len(nameFieldMap) > 0 {
-		r.nameFieldMap = make(map[string][]string, len(nameFieldMap)*3)
+	if len(opts.NameFieldMap) > 0 {
+		r.nameFieldMap = make(map[string][]string, len(opts.NameFieldMap)*3)
 	}
-	for nameValue, objectID := range nameFieldMap {
+	for nameValue, objectID := range opts.NameFieldMap {
 		if nameValue == "" {
 			continue
 		}
@@ -96,26 +98,6 @@ func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldM
 	}
 
 	return r
-}
-
-// ResolverConfig contains configuration for the resolver.
-type ResolverConfig struct {
-	DailyDirectory string            // Directory for daily notes
-	ObjectsRoot    string            // Root directory for typed objects (e.g., "objects/")
-	PagesRoot      string            // Root directory for untyped pages (e.g., "pages/")
-	Aliases        map[string]string // Map from alias to object ID
-	NameFieldMap   map[string]string // Map from name_field value to object ID (e.g., "The Prose Edda" -> "books/the-prose-edda")
-}
-
-// NewWithConfig creates a new Resolver with full configuration.
-// This is the preferred constructor when directory organization is enabled.
-func NewWithConfig(objectIDs []string, cfg ResolverConfig) *Resolver {
-	dailyDir := cfg.DailyDirectory
-	if dailyDir == "" {
-		dailyDir = "daily"
-	}
-
-	return NewWithNameFields(objectIDs, cfg.Aliases, cfg.NameFieldMap, dailyDir)
 }
 
 // ResolveResult represents the result of a reference resolution.

@@ -501,8 +501,8 @@ func validateRefsWithoutDB(vaultPath string, refs []parser.Reference, sch *schem
 		return nil
 	})
 
-	// Build resolver with existing objects (no alias support)
-	res := resolver.NewWithDailyDir(objectIDs, dailyDir)
+	// Build resolver with existing objects (no alias support needed for validation)
+	res := resolver.New(objectIDs, resolver.Options{DailyDirectory: dailyDir})
 
 	for _, ref := range refs {
 		// Try to resolve the reference

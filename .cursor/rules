@@ -182,9 +182,9 @@ Keep functionality in the right package:
 
 ### Resolver Creation: Use the Database Factory
 
-**NEVER create resolvers directly using `resolver.New*()` functions in production code.**
+**NEVER create resolvers directly using `resolver.New()` in production code when a database is available.**
 
-The `resolver` package has multiple constructors (`New`, `NewWithAliases`, `NewWithDailyDir`, `NewWithNameFields`), but using them directly leads to inconsistent behavior—especially missing alias resolution.
+The `resolver` package has a single constructor `New(objectIDs, Options)`, but using it directly leads to inconsistent behavior—especially missing alias resolution.
 
 **Always use the unified database factory:**
 
@@ -196,9 +196,8 @@ res, err := db.Resolver(index.ResolverOptions{
     ExtraIDs:       ids,  // Optional: for hypothetical resolution (move command)
 })
 
-// ❌ WRONG: Direct resolver creation misses aliases
-res := resolver.New(objectIDs)
-res := resolver.NewWithDailyDir(objectIDs, "daily")
+// ❌ WRONG: Direct resolver creation misses aliases from the index
+res := resolver.New(objectIDs, resolver.Options{})
 ```
 
 **Why this matters:**
