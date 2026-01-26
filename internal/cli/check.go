@@ -31,6 +31,8 @@ var (
 	checkIssues        string
 	checkExclude       string
 	checkErrorsOnly    bool
+	checkFix           bool
+	checkConfirm       bool
 )
 
 // CheckIssueJSON represents an issue in JSON output
@@ -322,7 +324,13 @@ var checkCmd = &cobra.Command{
 
 		// First pass: parse all documents in the vault to collect object IDs
 		// (needed for reference validation even when checking a subset)
-		err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+		walkOpts := &vault.WalkOptions{
+			ParseOptions: &parser.ParseOptions{
+				ObjectsRoot: vaultCfg.GetObjectsRoot(),
+				PagesRoot:   vaultCfg.GetPagesRoot(),
+			},
+		}
+		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
 			if result.Error != nil {
 				// Only count files in scope
 				if isFileInScope(result.Path, scope, walkPath, targetFileSet) {
@@ -489,6 +497,23 @@ var checkCmd = &cobra.Command{
 					added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
 					if added > 0 {
 						fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
+					}
+				}
+			}
+
+			// Handle --fix: auto-fix simple issues
+			if checkFix {
+				shortRefMap := validator.ShortRefs()
+				fixableIssues := collectFixableIssues(allIssues, shortRefMap, s)
+
+				if len(fixableIssues) == 0 {
+					fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
+				} else {
+					fixed, err := handleAutoFix(vaultPath, fixableIssues, checkConfirm)
+					if err != nil {
+						fmt.Printf("\n%s\n", ui.Errorf("Fix failed: %v", err))
+					} else if checkConfirm {
+						fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", fixed.issueCount, fixed.fileCount))
 					}
 				}
 			}
@@ -1344,6 +1369,232 @@ func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName 
 	return err
 }
 
+// fixType describes how to apply a fix
+type fixType string
+
+const (
+	fixTypeWikilink fixType = "wikilink" // Replace [[old]] with [[new]]
+	fixTypeTrait    fixType = "trait"    // Replace @trait(old) with @trait(new)
+)
+
+// fixableIssue represents an issue that can be auto-fixed
+type fixableIssue struct {
+	filePath    string
+	line        int
+	issueType   check.IssueType
+	fixType     fixType
+	oldValue    string // The current value (e.g., short ref)
+	newValue    string // The replacement value (e.g., full path)
+	traitName   string // For trait fixes, the trait name
+	description string // Human-readable description
+}
+
+// fixResult tracks the result of fix operations
+type fixResult struct {
+	fileCount  int
+	issueCount int
+}
+
+// collectFixableIssues identifies issues that can be auto-fixed.
+// Only truly unambiguous fixes are included - we never guess about user intent.
+func collectFixableIssues(issues []check.Issue, shortRefMap map[string]string, s *schema.Schema) []fixableIssue {
+	var fixable []fixableIssue
+
+	for _, issue := range issues {
+		switch issue.Type {
+		case check.IssueShortRefCouldBeFullPath:
+			// Look up the full path for this short ref
+			if fullPath, ok := shortRefMap[issue.Value]; ok {
+				fixable = append(fixable, fixableIssue{
+					filePath:    issue.FilePath,
+					line:        issue.Line,
+					issueType:   issue.Type,
+					fixType:     fixTypeWikilink,
+					oldValue:    issue.Value,
+					newValue:    fullPath,
+					description: fmt.Sprintf("[[%s]] → [[%s]]", issue.Value, fullPath),
+				})
+			}
+
+		case check.IssueInvalidEnumValue:
+			// Check if the value is quoted and the unquoted value is valid
+			if fix := tryFixQuotedEnumValue(issue, s); fix != nil {
+				fixable = append(fixable, *fix)
+			}
+
+		// Note: We intentionally do NOT auto-fix missing references.
+		// Even "obvious" typos like project/ → projects/ are ambiguous -
+		// we can't know if the user meant the singular or plural form.
+		}
+	}
+
+	return fixable
+}
+
+// tryFixQuotedEnumValue checks if an invalid enum value is just quoted
+// and the unquoted value is valid.
+func tryFixQuotedEnumValue(issue check.Issue, s *schema.Schema) *fixableIssue {
+	value := issue.Value
+
+	// Check for single or double quotes
+	var unquoted string
+	if len(value) >= 2 {
+		if (value[0] == '\'' && value[len(value)-1] == '\'') ||
+			(value[0] == '"' && value[len(value)-1] == '"') {
+			unquoted = value[1 : len(value)-1]
+		}
+	}
+
+	if unquoted == "" {
+		return nil
+	}
+
+	// Extract trait name from the message
+	// Message format: "Invalid value 'X' for trait '@traitname' (allowed: [...])"
+	traitName := extractTraitNameFromMessage(issue.Message)
+	if traitName == "" {
+		return nil
+	}
+
+	// Check if unquoted value is valid for this trait
+	traitDef, exists := s.Traits[traitName]
+	if !exists || traitDef.Type != schema.FieldTypeEnum {
+		return nil
+	}
+
+	for _, allowed := range traitDef.Values {
+		if allowed == unquoted {
+			return &fixableIssue{
+				filePath:    issue.FilePath,
+				line:        issue.Line,
+				issueType:   issue.Type,
+				fixType:     fixTypeTrait,
+				oldValue:    value,
+				newValue:    unquoted,
+				traitName:   traitName,
+				description: fmt.Sprintf("@%s(%s) → @%s(%s)", traitName, value, traitName, unquoted),
+			}
+		}
+	}
+
+	return nil
+}
+
+// extractTraitNameFromMessage extracts the trait name from an error message.
+func extractTraitNameFromMessage(msg string) string {
+	// Look for pattern: "for trait '@traitname'"
+	const prefix = "for trait '@"
+	idx := strings.Index(msg, prefix)
+	if idx == -1 {
+		return ""
+	}
+	start := idx + len(prefix)
+	end := strings.Index(msg[start:], "'")
+	if end == -1 {
+		return ""
+	}
+	return msg[start : start+end]
+}
+
+
+// handleAutoFix applies auto-fixes to the vault
+func handleAutoFix(vaultPath string, fixes []fixableIssue, confirm bool) (fixResult, error) {
+	result := fixResult{}
+
+	// Group fixes by file
+	fixesByFile := make(map[string][]fixableIssue)
+	for _, fix := range fixes {
+		fixesByFile[fix.filePath] = append(fixesByFile[fix.filePath], fix)
+	}
+
+	// Sort files for consistent output
+	var filePaths []string
+	for fp := range fixesByFile {
+		filePaths = append(filePaths, fp)
+	}
+	sort.Strings(filePaths)
+
+	if !confirm {
+		// Preview mode
+		fmt.Printf("\n%s\n", ui.SectionHeader("Auto-fixable Issues"))
+		fmt.Println(ui.Hint("Use --confirm to apply these fixes."))
+		fmt.Println()
+
+		for _, filePath := range filePaths {
+			fileFixest := fixesByFile[filePath]
+			fmt.Printf("%s %s\n", ui.FilePath(filePath), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(fileFixest), pluralize(len(fileFixest)))))
+			for _, fix := range fileFixest {
+				fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", fix.line)), fix.description)
+			}
+		}
+		fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", len(fixes), len(filePaths))))
+		return result, nil
+	}
+
+	// Apply mode
+	fmt.Printf("\n%s\n", ui.SectionHeader("Applying Fixes"))
+
+	for _, filePath := range filePaths {
+		fileFixes := fixesByFile[filePath]
+		fullPath := filepath.Join(vaultPath, filePath)
+
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			return result, fmt.Errorf("failed to read %s: %w", filePath, err)
+		}
+
+		newContent := string(content)
+		fixedCount := 0
+
+		// Apply each fix
+		// Sort by line descending so we don't mess up line numbers as we edit
+		sort.Slice(fileFixes, func(i, j int) bool {
+			return fileFixes[i].line > fileFixes[j].line
+		})
+
+		for _, fix := range fileFixes {
+			var oldPattern, newPattern string
+
+			switch fix.fixType {
+			case fixTypeWikilink:
+				oldPattern = "[[" + fix.oldValue + "]]"
+				newPattern = "[[" + fix.newValue + "]]"
+			case fixTypeTrait:
+				// Replace @trait(oldValue) with @trait(newValue)
+				oldPattern = "@" + fix.traitName + "(" + fix.oldValue + ")"
+				newPattern = "@" + fix.traitName + "(" + fix.newValue + ")"
+			default:
+				continue
+			}
+
+			// Replace in content
+			if strings.Contains(newContent, oldPattern) {
+				newContent = strings.ReplaceAll(newContent, oldPattern, newPattern)
+				fixedCount++
+			}
+		}
+
+		if fixedCount > 0 {
+			if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
+				return result, fmt.Errorf("failed to write %s: %w", filePath, err)
+			}
+			fmt.Printf("%s %s\n", ui.SymbolCheck, ui.FilePath(filePath))
+			result.fileCount++
+			result.issueCount += fixedCount
+		}
+	}
+
+	return result, nil
+}
+
+// pluralize returns "es" for counts != 1
+func pluralize(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "es"
+}
+
 func init() {
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
 	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Interactively create missing referenced pages")
@@ -1354,5 +1605,7 @@ func init() {
 	checkCmd.Flags().StringVar(&checkIssues, "issues", "", "Only check these issue types (comma-separated)")
 	checkCmd.Flags().StringVar(&checkExclude, "exclude", "", "Exclude these issue types (comma-separated)")
 	checkCmd.Flags().BoolVar(&checkErrorsOnly, "errors-only", false, "Only report errors, skip warnings")
+	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Auto-fix simple issues (short refs → full paths)")
+	checkCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes (without this flag, shows preview only)")
 	rootCmd.AddCommand(checkCmd)
 }
