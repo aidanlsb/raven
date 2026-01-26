@@ -83,10 +83,22 @@ func buildEditorURL(cfg *config.Config, absPath string, line int) string {
 // formatLocationLinkSimple formats a location using only the relative path (no vault context).
 // This is useful when vault path is not easily available.
 func formatLocationLinkSimple(relPath string, line int) string {
+	return formatLocationLinkSimpleStyled(relPath, line, ui.Bold.Render)
+}
+
+func formatLocationLinkSimpleStyled(relPath string, line int, render func(...string) string) string {
 	location := fmt.Sprintf("%s:%d", relPath, line)
+	if render == nil {
+		render = func(strs ...string) string {
+			if len(strs) == 0 {
+				return ""
+			}
+			return strs[0]
+		}
+	}
 
 	if !shouldEmitHyperlinks() {
-		return ui.Bold.Render(location)
+		return render(location)
 	}
 
 	// Get vault path and config
@@ -94,11 +106,11 @@ func formatLocationLinkSimple(relPath string, line int) string {
 	cfg := getConfig()
 
 	if vaultPath == "" {
-		return ui.Bold.Render(location)
+		return render(location)
 	}
 
 	absPath := filepath.Join(vaultPath, relPath)
 	url := buildEditorURL(cfg, absPath, line)
 
-	return ui.Bold.Render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
+	return render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))
 }

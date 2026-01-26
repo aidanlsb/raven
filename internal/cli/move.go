@@ -652,14 +652,6 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 	return atomicfile.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
-func shortNameFromID(id string) string {
-	id = strings.TrimSuffix(id, ".md")
-	if i := strings.LastIndex(id, "/"); i >= 0 && i+1 < len(id) {
-		return id[i+1:]
-	}
-	return id
-}
-
 func chooseReplacementRefBase(oldBase, sourceID, destID string, aliasSlugToID map[string]string, res *resolver.Resolver) string {
 	// If the original reference was explicit (contains a path), keep it explicit.
 	if strings.Contains(oldBase, "/") {
@@ -676,7 +668,7 @@ func chooseReplacementRefBase(oldBase, sourceID, destID string, aliasSlugToID ma
 
 	// Otherwise, this is a short ref. Prefer keeping it short *if* the new short name
 	// resolves uniquely to the destination ID.
-	candidate := shortNameFromID(destID)
+	candidate := paths.ShortNameFromID(destID)
 	if candidate != "" && res != nil {
 		r := res.Resolve(candidate)
 		if !r.Ambiguous && r.TargetID == destID {

@@ -2,22 +2,13 @@ package index
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
-
-
-// ObjectResult represents an object query result.
-type ObjectResult struct {
-	ID        string
-	Type      string
-	Fields    string // JSON
-	FilePath  string
-	LineStart int
-}
 
 
 // QueryTraits queries traits by type with optional value filter.
@@ -237,9 +228,9 @@ func (d *Database) QueryTraitsOnContent(filePath string, line int) ([]model.Trai
 }
 
 // QueryObjects queries objects by type.
-func (d *Database) QueryObjects(objectType string) ([]ObjectResult, error) {
+func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 	rows, err := d.db.Query(
-		"SELECT id, type, fields, file_path, line_start FROM objects WHERE type = ?",
+		"SELECT id, type, fields, file_path, line_start, parent_id FROM objects WHERE type = ?",
 		objectType,
 	)
 	if err != nil {
@@ -247,11 +238,15 @@ func (d *Database) QueryObjects(objectType string) ([]ObjectResult, error) {
 	}
 	defer rows.Close()
 
-	var results []ObjectResult
+	var results []model.Object
 	for rows.Next() {
-		var result ObjectResult
-		if err := rows.Scan(&result.ID, &result.Type, &result.Fields, &result.FilePath, &result.LineStart); err != nil {
+		var result model.Object
+		var fieldsJSON string
+		if err := rows.Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart, &result.ParentID); err != nil {
 			return nil, err
+		}
+		if err := json.Unmarshal([]byte(fieldsJSON), &result.Fields); err != nil || result.Fields == nil {
+			result.Fields = make(map[string]interface{})
 		}
 		results = append(results, result)
 	}
@@ -295,18 +290,23 @@ func (d *Database) Backlinks(targetID string) ([]model.Reference, error) {
 }
 
 // GetObject retrieves a single object by ID.
-func (d *Database) GetObject(id string) (*ObjectResult, error) {
-	var result ObjectResult
+func (d *Database) GetObject(id string) (*model.Object, error) {
+	var result model.Object
+	var fieldsJSON string
 	err := d.db.QueryRow(
-		"SELECT id, type, fields, file_path, line_start FROM objects WHERE id = ?",
+		"SELECT id, type, fields, file_path, line_start, parent_id FROM objects WHERE id = ?",
 		id,
-	).Scan(&result.ID, &result.Type, &result.Fields, &result.FilePath, &result.LineStart)
+	).Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart, &result.ParentID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if err := json.Unmarshal([]byte(fieldsJSON), &result.Fields); err != nil || result.Fields == nil {
+		result.Fields = make(map[string]interface{})
 	}
 
 	return &result, nil
@@ -399,6 +399,7 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 	}
 
 	// Use FTS5 match query with BM25 ranking
+	// Restrict search to content column only (not object_id or title)
 	// The snippet function extracts matching content with context
 	rows, err := d.db.Query(`
 		SELECT 
@@ -408,7 +409,7 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 			snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
 			bm25(fts_content) as rank
 		FROM fts_content
-		WHERE fts_content MATCH ?
+		WHERE fts_content MATCH 'content: ' || ?
 		ORDER BY rank
 		LIMIT ?
 	`, query, limit)
@@ -444,7 +445,7 @@ func (d *Database) SearchWithType(query string, objectType string, limit int) ([
 			bm25(fts_content) as rank
 		FROM fts_content f
 		JOIN objects o ON f.object_id = o.id
-		WHERE fts_content MATCH ? AND o.type = ?
+		WHERE fts_content MATCH 'content: ' || ? AND o.type = ?
 		ORDER BY rank
 		LIMIT ?
 	`, query, objectType, limit)

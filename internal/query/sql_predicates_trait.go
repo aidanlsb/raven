@@ -94,32 +94,9 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 func (e *Executor) buildTraitStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
 	fieldExpr := fmt.Sprintf("%s.value", alias)
 
-	var cond string
-	var args []interface{}
-
-	wrapLower := !p.CaseSensitive
-
-	switch p.FuncType {
-	case StringFuncIncludes:
-		cond = likeCond(fieldExpr, wrapLower)
-		args = append(args, "%"+escapeLikePattern(p.Value)+"%")
-
-	case StringFuncStartsWith:
-		cond = likeCond(fieldExpr, wrapLower)
-		args = append(args, escapeLikePattern(p.Value)+"%")
-
-	case StringFuncEndsWith:
-		cond = likeCond(fieldExpr, wrapLower)
-		args = append(args, "%"+escapeLikePattern(p.Value))
-
-	case StringFuncMatches:
-		if wrapLower {
-			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
-			args = append(args, "(?i)"+p.Value)
-		} else {
-			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
-			args = append(args, p.Value)
-		}
+	cond, args, err := buildStringFuncCondition(p.FuncType, fieldExpr, p.Value, p.CaseSensitive)
+	if err != nil {
+		return "", nil, err
 	}
 
 	if p.Negated() {

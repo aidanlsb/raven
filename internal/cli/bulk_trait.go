@@ -89,7 +89,13 @@ func applyUpdateTraitFromQuery(vaultPath string, traits []query.PipelineTraitRes
 	}
 
 	if !confirm {
-		return previewUpdateTraitBulk(vaultPath, traits, newValue, sch, nil)
+		if err := previewUpdateTraitBulk(vaultPath, traits, newValue, sch, nil); err != nil {
+			return err
+		}
+		if promptForConfirm("Apply changes?") {
+			return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, nil)
+		}
+		return nil
 	}
 	return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, nil)
 }
@@ -402,7 +408,7 @@ func ReadTraitIDsFromStdin() (ids []string, err error) {
 }
 
 // applyUpdateTraitsByID updates traits identified by IDs, with preview/confirm behavior.
-func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string, confirm bool, vaultCfg *config.VaultConfig) error {
+func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string, confirm bool, prompt bool, vaultCfg *config.VaultConfig) error {
 	// Load schema for defaults (optional)
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
@@ -421,7 +427,13 @@ func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string,
 	}
 
 	if !confirm {
-		return previewUpdateTraitBulk(vaultPath, traits, newValue, sch, skipped)
+		if err := previewUpdateTraitBulk(vaultPath, traits, newValue, sch, skipped); err != nil {
+			return err
+		}
+		if prompt && promptForConfirm("Apply changes?") {
+			return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, skipped)
+		}
+		return nil
 	}
 	return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, skipped)
 }

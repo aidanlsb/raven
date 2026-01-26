@@ -399,25 +399,16 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 func updateFrontmatter(content string, fm *parser.Frontmatter, updates map[string]string) (string, error) {
 	lines := strings.Split(content, "\n")
 
-	// Find frontmatter boundaries
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+	startLine, endLine, ok := parser.FrontmatterBounds(lines)
+	if !ok {
 		return "", fmt.Errorf("no frontmatter found")
 	}
-
-	endLine := -1
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSpace(lines[i]) == "---" {
-			endLine = i
-			break
-		}
-	}
-
 	if endLine == -1 {
 		return "", fmt.Errorf("unclosed frontmatter")
 	}
 
 	// Parse existing frontmatter as a map to preserve order and unknown fields
-	frontmatterContent := strings.Join(lines[1:endLine], "\n")
+	frontmatterContent := strings.Join(lines[startLine+1:endLine], "\n")
 	var yamlData map[string]interface{}
 	if err := yaml.Unmarshal([]byte(frontmatterContent), &yamlData); err != nil {
 		return "", fmt.Errorf("failed to parse frontmatter: %w", err)

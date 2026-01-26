@@ -32,9 +32,7 @@ const (
 	SymbolError     = "✗"
 	SymbolWarning   = "!"
 	SymbolInfo      = "*"
-	SymbolUnchecked = "□"
-	SymbolChecked   = "☑"
-	SymbolDot       = "·"
+	SymbolDot       = "•"
 	SymbolDash      = "—"
 	SymbolAttention = "»"
 )
@@ -92,6 +90,11 @@ func Infof(format string, args ...interface{}) string {
 // Header returns a styled section header
 func Header(msg string) string {
 	return Bold.Render(msg)
+}
+
+// SectionHeader returns a styled section header with a leading symbol.
+func SectionHeader(msg string) string {
+	return Header(SymbolStar + " " + msg)
 }
 
 // FilePath returns a styled file path
@@ -171,12 +174,9 @@ func MetadataItem(key, value string) string {
 	return key + ": " + value
 }
 
-// Checkbox returns a checkbox symbol based on checked state
-func Checkbox(checked bool) string {
-	if checked {
-		return SymbolChecked
-	}
-	return SymbolUnchecked
+// Bullet returns a bullet-prefixed item string.
+func Bullet(msg string) string {
+	return fmt.Sprintf("%s %s", Muted.Render(SymbolDot), msg)
 }
 
 // Indent returns a string indented by n spaces

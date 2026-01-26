@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -948,13 +947,9 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 			if err == nil && len(objects) > 0 {
 				var missing []string
 				for _, obj := range objects {
-					var fields map[string]interface{}
-					if obj.Fields != "" && obj.Fields != "{}" {
-						if err := json.Unmarshal([]byte(obj.Fields), &fields); err != nil {
-							// If fields are malformed, treat as missing for integrity checks.
-							missing = append(missing, obj.ID)
-							continue
-						}
+					fields := obj.Fields
+					if fields == nil {
+						fields = map[string]interface{}{}
 					}
 					if _, hasField := fields[fieldName]; !hasField {
 						missing = append(missing, obj.ID)

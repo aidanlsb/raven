@@ -28,25 +28,32 @@ type Frontmatter struct {
 	EndLine int
 }
 
+// FrontmatterBounds returns the opening and closing frontmatter line indices.
+// It only detects frontmatter when the first line is '---'.
+// If frontmatter is present but unclosed, endLine is -1.
+func FrontmatterBounds(lines []string) (startLine int, endLine int, ok bool) {
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return 0, -1, false
+	}
+
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			return 0, i, true
+		}
+	}
+
+	return 0, -1, true
+}
+
 // ParseFrontmatter parses YAML frontmatter from markdown content.
 // Returns nil if no frontmatter is found.
 func ParseFrontmatter(content string) (*Frontmatter, error) {
 	lines := strings.Split(content, "\n")
 
-	// Check for opening ---
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+	_, endLine, ok := FrontmatterBounds(lines)
+	if !ok {
 		return nil, nil
 	}
-
-	// Find closing ---
-	endLine := -1
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSpace(lines[i]) == "---" {
-			endLine = i
-			break
-		}
-	}
-
 	if endLine == -1 {
 		return nil, nil // No closing ---
 	}

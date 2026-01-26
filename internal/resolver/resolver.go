@@ -50,7 +50,7 @@ func NewWithNameFields(objectIDs []string, aliases map[string]string, nameFieldM
 		r.objectIDs[id] = struct{}{}
 
 		// Build short name map
-		shortName := shortNameFromID(id)
+		shortName := paths.ShortNameFromID(id)
 		r.shortMap[shortName] = append(r.shortMap[shortName], id)
 
 		// Build slugified map for fuzzy matching
@@ -300,7 +300,7 @@ func addShortMatches(r *Resolver, c *matchCollector, ref, sluggedRef string) {
 	if len(shortMatches) == 0 {
 		// Try to find partial matches (including slugified)
 		for id := range r.objectIDs {
-			shortName := shortNameFromID(id)
+			shortName := paths.ShortNameFromID(id)
 			if shortName == ref || shortName == sluggedRef ||
 				strings.HasSuffix(id, "/"+ref) || strings.HasSuffix(id, "/"+sluggedRef) {
 				shortMatches = append(shortMatches, id)
@@ -388,20 +388,6 @@ func preferParentOverSections(matches []string) []string {
 func (r *Resolver) Exists(id string) bool {
 	_, ok := r.objectIDs[id]
 	return ok
-}
-
-// shortNameFromID extracts the short name from an object ID.
-// For "people/freya" -> "freya"
-// For "daily/2025-02-01#standup" -> "standup"
-func shortNameFromID(id string) string {
-	// Handle embedded IDs
-	if idx := strings.LastIndex(id, "#"); idx >= 0 {
-		return id[idx+1:]
-	}
-
-	// Get filename without path
-	base := filepath.Base(id)
-	return strings.TrimSuffix(base, ".md")
 }
 
 // ResolveAll resolves all references and returns a map from raw ref to result.

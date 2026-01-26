@@ -47,36 +47,11 @@ func (e *Executor) buildStringFuncPredicateSQL(p *StringFuncPredicate, alias str
 	jsonPath := jsonFieldPath(p.Field)
 	fieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
 
-	var cond string
-	var args []interface{}
-	args = append(args, jsonPath)
-
-	// Determine case handling
-	wrapLower := !p.CaseSensitive
-
-	switch p.FuncType {
-	case StringFuncIncludes:
-		cond = likeCond(fieldExpr, wrapLower)
-		args = append(args, "%"+escapeLikePattern(p.Value)+"%")
-
-	case StringFuncStartsWith:
-		cond = likeCond(fieldExpr, wrapLower)
-		args = append(args, escapeLikePattern(p.Value)+"%")
-
-	case StringFuncEndsWith:
-		cond = likeCond(fieldExpr, wrapLower)
-		args = append(args, "%"+escapeLikePattern(p.Value))
-
-	case StringFuncMatches:
-		if wrapLower {
-			// For case-insensitive regex, we use (?i) prefix in the pattern
-			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
-			args = append(args, "(?i)"+p.Value)
-		} else {
-			cond = fmt.Sprintf("%s REGEXP ?", fieldExpr)
-			args = append(args, p.Value)
-		}
+	cond, funcArgs, err := buildStringFuncCondition(p.FuncType, fieldExpr, p.Value, p.CaseSensitive)
+	if err != nil {
+		return "", nil, err
 	}
+	args := append([]interface{}{jsonPath}, funcArgs...)
 
 	if p.Negated() {
 		cond = "NOT (" + cond + ")"
@@ -202,32 +177,9 @@ func (e *Executor) buildElementEqualitySQL(p *ElementEqualityPredicate) (string,
 
 // buildElementStringFuncSQL builds SQL for string functions on array elements.
 func (e *Executor) buildElementStringFuncSQL(p *StringFuncPredicate) (string, []interface{}, error) {
-	var cond string
-	var args []interface{}
-
-	wrapLower := !p.CaseSensitive
-
-	switch p.FuncType {
-	case StringFuncIncludes:
-		cond = likeCond("json_each.value", wrapLower)
-		args = append(args, "%"+escapeLikePattern(p.Value)+"%")
-
-	case StringFuncStartsWith:
-		cond = likeCond("json_each.value", wrapLower)
-		args = append(args, escapeLikePattern(p.Value)+"%")
-
-	case StringFuncEndsWith:
-		cond = likeCond("json_each.value", wrapLower)
-		args = append(args, "%"+escapeLikePattern(p.Value))
-
-	case StringFuncMatches:
-		if wrapLower {
-			cond = "json_each.value REGEXP ?"
-			args = append(args, "(?i)"+p.Value)
-		} else {
-			cond = "json_each.value REGEXP ?"
-			args = append(args, p.Value)
-		}
+	cond, args, err := buildStringFuncCondition(p.FuncType, "json_each.value", p.Value, p.CaseSensitive)
+	if err != nil {
+		return "", nil, err
 	}
 
 	if p.Negated() {

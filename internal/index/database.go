@@ -631,6 +631,9 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument) error {
 	}
 	defer ftsStmt.Close()
 
+	// Pre-split content into lines for section extraction
+	lines := strings.Split(doc.RawContent, "\n")
+
 	for _, obj := range doc.Objects {
 		// Get title from fields or heading
 		title := ""
@@ -645,12 +648,14 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument) error {
 			title = obj.ID
 		}
 
-		// Get content - for now we index the whole file content for file-level objects
-		// For embedded objects, we'd need to extract their section content
+		// Get content for this object
 		content := ""
 		if obj.ParentID == nil {
-			// File-level object - index full body
-			content = doc.RawContent
+			// File-level object - index body content (excludes frontmatter)
+			content = doc.Body
+		} else {
+			// Embedded object - extract section content between LineStart and LineEnd
+			content = extractSectionContent(lines, obj.LineStart, obj.LineEnd)
 		}
 
 		_, err = ftsStmt.Exec(obj.ID, title, content, doc.FilePath)
@@ -660,6 +665,27 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument) error {
 	}
 
 	return nil
+}
+
+// extractSectionContent extracts content for an embedded object from the given line range.
+// lineStart and lineEnd are 1-indexed. If lineEnd is nil, extracts to end of file.
+func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
+	if lineStart < 1 || lineStart > len(lines) {
+		return ""
+	}
+
+	// Convert to 0-indexed
+	start := lineStart - 1
+	end := len(lines)
+	if lineEnd != nil && *lineEnd <= len(lines) {
+		end = *lineEnd // lineEnd is exclusive (the next section starts here)
+	}
+
+	if start >= end {
+		return ""
+	}
+
+	return strings.Join(lines[start:end], "\n")
 }
 
 // extractDateString extracts a date string from a field value if it's a date type.

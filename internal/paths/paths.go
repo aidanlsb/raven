@@ -151,6 +151,19 @@ func ParseEmbeddedID(id string) (fileID, fragment string, isEmbedded bool) {
 	return id, "", false
 }
 
+// ShortNameFromID extracts the short name from an object ID.
+// For "people/freya" -> "freya"
+// For "daily/2025-02-01#standup" -> "standup"
+func ShortNameFromID(id string) string {
+	fileID, fragment, isEmbedded := ParseEmbeddedID(id)
+	if isEmbedded {
+		return TrimMDExtension(fragment)
+	}
+
+	id = TrimMDExtension(fileID)
+	return filepath.Base(id)
+}
+
 // CandidateFilePaths returns vault-relative markdown paths to try for a reference.
 //
 // It always includes the "literal" interpretation (ref + ".md" after stripping any
