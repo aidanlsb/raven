@@ -991,15 +991,19 @@ func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
 	objectIDs = appendExtraIDs(objectIDs, opts.ExtraIDs)
 
 	// Include name_field values if schema is provided
+	resolverOpts := resolver.Options{
+		DailyDirectory: dailyDir,
+		Aliases:        aliases,
+	}
 	if opts.Schema != nil {
 		nameFieldMap, err := d.AllNameFieldValues(opts.Schema)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get name field values: %w", err)
 		}
-		return resolver.NewWithNameFields(objectIDs, aliases, nameFieldMap, dailyDir), nil
+		resolverOpts.NameFieldMap = nameFieldMap
 	}
 
-	return resolver.NewWithAliases(objectIDs, aliases, dailyDir), nil
+	return resolver.New(objectIDs, resolverOpts), nil
 }
 
 func defaultDailyDir(dailyDir string) string {

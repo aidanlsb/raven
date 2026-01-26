@@ -67,8 +67,7 @@ func TestChooseReplacementRefBaseKeepsShortWhenUnique(t *testing.T) {
 		"projects/new-site",
 		"people/freya",
 	}
-	aliases := map[string]string{}
-	res := resolver.NewWithAliases(ids, aliases, "daily")
+	res := resolver.New(ids, resolver.Options{})
 
 	aliasSlugToID := map[string]string{}
 	got := chooseReplacementRefBase("website", "projects/website", "projects/new-site", aliasSlugToID, res)
@@ -83,8 +82,7 @@ func TestChooseReplacementRefBaseFallsBackToFullWhenAmbiguous(t *testing.T) {
 		"projects/new-site",
 		"notes/new-site", // makes [[new-site]] ambiguous
 	}
-	aliases := map[string]string{}
-	res := resolver.NewWithAliases(ids, aliases, "daily")
+	res := resolver.New(ids, resolver.Options{})
 
 	aliasSlugToID := map[string]string{}
 	got := chooseReplacementRefBase("website", "projects/website", "projects/new-site", aliasSlugToID, res)
@@ -336,7 +334,7 @@ func TestChooseReplacementRefBasePreservesAlias(t *testing.T) {
 	aliases := map[string]string{
 		"goddess": "projects/website",
 	}
-	res := resolver.NewWithAliases(ids, aliases, "daily")
+	res := resolver.New(ids, resolver.Options{Aliases: aliases})
 
 	aliasSlugToID := map[string]string{
 		pages.SlugifyPath("goddess"): "projects/website",

@@ -153,7 +153,7 @@ func NewValidatorWithAliases(s *schema.Schema, objectIDs []string, aliases map[s
 
 	return &Validator{
 		schema:          s,
-		resolver:        resolver.NewWithAliases(objectIDs, aliases, "daily"),
+		resolver:        resolver.New(objectIDs, resolver.Options{Aliases: aliases}),
 		allIDs:          allIDs,
 		objectTypes:     make(map[string]string),
 		aliases:         aliases,
@@ -186,7 +186,7 @@ func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo,
 
 	return &Validator{
 		schema:          s,
-		resolver:        resolver.NewWithAliases(ids, aliases, "daily"),
+		resolver:        resolver.New(ids, resolver.Options{Aliases: aliases}),
 		allIDs:          allIDs,
 		objectTypes:     objectTypes,
 		aliases:         aliases,
@@ -214,10 +214,10 @@ func (v *Validator) SetDirectoryRoots(objectsRoot, pagesRoot string) {
 
 // SetDailyDirectory updates the resolver's daily directory.
 func (v *Validator) SetDailyDirectory(dailyDir string) {
-	if dailyDir == "" {
-		dailyDir = "daily"
-	}
-	v.resolver = resolver.NewWithAliases(v.allIDList(), v.aliases, dailyDir)
+	v.resolver = resolver.New(v.allIDList(), resolver.Options{
+		DailyDirectory: dailyDir,
+		Aliases:        v.aliases,
+	})
 }
 
 func (v *Validator) allIDList() []string {

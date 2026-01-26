@@ -13,7 +13,7 @@ func TestResolver(t *testing.T) {
 		"daily/2025-02-01#standup",
 	}
 
-	r := New(objectIDs)
+	r := New(objectIDs, Options{})
 
 	t.Run("resolve full path", func(t *testing.T) {
 		result := r.Resolve("people/freya")
@@ -64,7 +64,7 @@ func TestResolverAmbiguous(t *testing.T) {
 		"clients/freya",
 	}
 
-	r := New(objectIDs)
+	r := New(objectIDs, Options{})
 
 	result := r.Resolve("freya")
 	if !result.Ambiguous {
@@ -85,7 +85,7 @@ func TestResolverSuffixMatching(t *testing.T) {
 			"objects/people/freya",
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		// "companies/cursor" should resolve to "objects/companies/cursor"
 		result := r.Resolve("companies/cursor")
@@ -103,7 +103,7 @@ func TestResolverSuffixMatching(t *testing.T) {
 			"objects/companies/cursor#cursor",
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		// "cursor" should still resolve via short name matching
 		result := r.Resolve("cursor")
@@ -121,7 +121,7 @@ func TestResolverSuffixMatching(t *testing.T) {
 			"companies/cursor", // Also exists as a standalone
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		// "companies/cursor" should resolve to the exact match
 		result := r.Resolve("companies/cursor")
@@ -139,7 +139,7 @@ func TestResolverSuffixMatching(t *testing.T) {
 			"pages/companies/cursor", // Two different prefixes with same suffix
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		// "companies/cursor" matches both, should be ambiguous
 		result := r.Resolve("companies/cursor")
@@ -161,7 +161,7 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 			"companies/cursor#cursor", // section "# Cursor" inside the file
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		// [[cursor]] should resolve to companies/cursor, not be ambiguous
 		result := r.Resolve("cursor")
@@ -179,7 +179,7 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 			"companies/cursor#cursor",
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		result := r.Resolve("companies/cursor#cursor")
 		if result.Ambiguous {
@@ -196,7 +196,7 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 			"companies/cursor#notes", // section with different short name
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		// [[notes]] should resolve to the section
 		result := r.Resolve("notes")
@@ -214,7 +214,7 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 			"people/freya#notes",
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		result := r.Resolve("notes")
 		if !result.Ambiguous {
@@ -233,7 +233,7 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 			"companies/cursor#history",
 		}
 
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		// [[cursor]] should resolve to companies/cursor
 		result := r.Resolve("cursor")
@@ -252,7 +252,7 @@ func TestResolverDateShorthand(t *testing.T) {
 		"people/freya",
 	}
 
-	r := NewWithDailyDir(objectIDs, "daily")
+	r := New(objectIDs, Options{})
 
 	t.Run("date reference to existing daily note", func(t *testing.T) {
 		result := r.Resolve("2025-02-01")
@@ -270,7 +270,7 @@ func TestResolverDateShorthand(t *testing.T) {
 	})
 
 	t.Run("custom daily directory", func(t *testing.T) {
-		r2 := NewWithDailyDir([]string{"journal/2025-02-01"}, "journal")
+		r2 := New([]string{"journal/2025-02-01"}, Options{DailyDirectory: "journal"})
 		result := r2.Resolve("2025-02-01")
 		if result.TargetID != "journal/2025-02-01" {
 			t.Errorf("got %q, want %q", result.TargetID, "journal/2025-02-01")
@@ -293,7 +293,7 @@ func TestResolverSlugifiedMatching(t *testing.T) {
 		"projects/my-awesome-project",
 	}
 
-	r := New(objectIDs)
+	r := New(objectIDs, Options{})
 
 	t.Run("proper noun resolves to slugified file", func(t *testing.T) {
 		// User writes [[people/Sif]] but file is sif.md
@@ -346,7 +346,7 @@ func TestResolverAliases(t *testing.T) {
 		"Acme Corp": "companies/acme-corp",
 	}
 
-	r := NewWithAliases(objectIDs, aliases, "daily")
+	r := New(objectIDs, Options{Aliases: aliases})
 
 	t.Run("resolve by alias", func(t *testing.T) {
 		result := r.Resolve("goddess")
@@ -398,20 +398,20 @@ func TestResolverAliases(t *testing.T) {
 	})
 }
 
-func TestResolverWithConfig(t *testing.T) {
+func TestResolverWithOptions(t *testing.T) {
 	objectIDs := []string{
 		"people/freya",
 		"projects/bifrost",
 	}
 
-	cfg := ResolverConfig{
+	opts := Options{
 		DailyDirectory: "journal",
 		Aliases: map[string]string{
 			"goddess": "people/freya",
 		},
 	}
 
-	r := NewWithConfig(objectIDs, cfg)
+	r := New(objectIDs, opts)
 
 	t.Run("alias works with config", func(t *testing.T) {
 		result := r.Resolve("goddess")
@@ -446,7 +446,7 @@ func TestAliasConflicts(t *testing.T) {
 			"thor": "people/freya", // alias "thor" points to freya, but thor also exists!
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 
 		// Should be ambiguous - not silently resolved
 		result := r.Resolve("thor")
@@ -477,7 +477,7 @@ func TestAliasConflicts(t *testing.T) {
 			"people/thor": "people/freya", // alias "people/thor" points to freya!
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 
 		// Should be ambiguous
 		result := r.Resolve("people/thor")
@@ -498,7 +498,7 @@ func TestAliasConflicts(t *testing.T) {
 			"thor": "people/freya", // conflicts with people/thor's short name
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 		collisions := r.FindAliasCollisions()
 
 		if len(collisions) != 1 {
@@ -523,7 +523,7 @@ func TestAliasConflicts(t *testing.T) {
 			"people/thor": "people/freya", // conflicts with actual object ID
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 		collisions := r.FindAliasCollisions()
 
 		found := false
@@ -548,7 +548,7 @@ func TestAliasConflicts(t *testing.T) {
 			"thunder": "people/thor",  // unique alias
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 		collisions := r.FindAliasCollisions()
 
 		if len(collisions) != 0 {
@@ -574,7 +574,7 @@ func TestAliasConflicts(t *testing.T) {
 			"goddess": "people/freya", // unique - no object named "goddess"
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 
 		result := r.Resolve("goddess")
 		if result.Ambiguous {
@@ -594,7 +594,7 @@ func TestAliasEdgeCases(t *testing.T) {
 			"goddess": "people/freya",
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 
 		// Empty string should not resolve
 		result := r.Resolve("")
@@ -615,7 +615,7 @@ func TestAliasEdgeCases(t *testing.T) {
 			"ACME Inc.": "companies/acme-corp",
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 
 		// Exact match should work
 		result := r.Resolve("ACME Inc.")
@@ -636,7 +636,7 @@ func TestAliasEdgeCases(t *testing.T) {
 			"ghost": "people/nonexistent", // target doesn't exist
 		}
 
-		r := NewWithAliases(objectIDs, aliases, "daily")
+		r := New(objectIDs, Options{Aliases: aliases})
 
 		// Alias should still resolve to the target even if target doesn't exist in objectIDs
 		// (the alias map is independent - validation of target existence should happen elsewhere)
@@ -652,7 +652,7 @@ func TestAliasEdgeCases(t *testing.T) {
 	t.Run("nil aliases map is handled", func(t *testing.T) {
 		objectIDs := []string{"people/freya"}
 
-		r := NewWithAliases(objectIDs, nil, "daily")
+		r := New(objectIDs, Options{})
 
 		// Should still resolve by short name
 		result := r.Resolve("freya")
@@ -676,7 +676,7 @@ func TestNameFieldResolution(t *testing.T) {
 		"Snorri Sturluson": "people/snorri-sturluson",
 	}
 
-	r := NewWithNameFields(objectIDs, nil, nameFieldMap, "daily")
+	r := New(objectIDs, Options{NameFieldMap: nameFieldMap})
 
 	t.Run("resolve by name_field value - exact match", func(t *testing.T) {
 		result := r.Resolve("The Prose Edda")
@@ -716,7 +716,7 @@ func TestNameFieldResolution(t *testing.T) {
 	})
 
 	t.Run("nil name_field map is handled", func(t *testing.T) {
-		r := NewWithNameFields(objectIDs, nil, nil, "daily")
+		r := New(objectIDs, Options{})
 
 		// Should still resolve by short name
 		result := r.Resolve("the-prose-edda")
@@ -735,7 +735,7 @@ func TestFindCollisions(t *testing.T) {
 			"people/freya#freya",
 			"people/freya#notes",
 		}
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		collisions := r.FindCollisions()
 
@@ -755,7 +755,7 @@ func TestFindCollisions(t *testing.T) {
 			"people/thor",
 			"people/thor#notes",
 		}
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		collisions := r.FindCollisions()
 
@@ -779,7 +779,7 @@ func TestFindCollisions(t *testing.T) {
 			"people/alex",
 			"companies/alex",
 		}
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		collisions := r.FindCollisions()
 
@@ -799,7 +799,7 @@ func TestFindCollisions(t *testing.T) {
 			"projects/overview",
 			"docs/readme#overview",
 		}
-		r := New(objectIDs)
+		r := New(objectIDs, Options{})
 
 		collisions := r.FindCollisions()
 
