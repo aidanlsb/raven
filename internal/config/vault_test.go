@@ -93,10 +93,43 @@ func TestVaultConfigPaths(t *testing.T) {
 }
 
 func TestDirectoriesConfig(t *testing.T) {
-	t.Run("loads directories config", func(t *testing.T) {
+	t.Run("loads directories config with singular keys", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
 
+		content := `
+daily_directory: daily
+directories:
+  object: object/
+  page: page/
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !cfg.HasDirectoriesConfig() {
+			t.Error("expected HasDirectoriesConfig to return true")
+		}
+
+		dirs := cfg.GetDirectoriesConfig()
+		if dirs.Object != "object/" {
+			t.Errorf("expected object 'object/', got %q", dirs.Object)
+		}
+		if dirs.Page != "page/" {
+			t.Errorf("expected page 'page/', got %q", dirs.Page)
+		}
+	})
+
+	t.Run("backwards compatibility with plural keys", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		// Old plural key format should still work
 		content := `
 daily_directory: daily
 directories:
@@ -117,11 +150,43 @@ directories:
 		}
 
 		dirs := cfg.GetDirectoriesConfig()
-		if dirs.Objects != "objects/" {
-			t.Errorf("expected objects 'objects/', got %q", dirs.Objects)
+		// Should be normalized to the new singular field names
+		if dirs.Object != "objects/" {
+			t.Errorf("expected object 'objects/' (from plural key), got %q", dirs.Object)
 		}
-		if dirs.Pages != "pages/" {
-			t.Errorf("expected pages 'pages/', got %q", dirs.Pages)
+		if dirs.Page != "pages/" {
+			t.Errorf("expected page 'pages/' (from plural key), got %q", dirs.Page)
+		}
+	})
+
+	t.Run("singular keys take precedence over plural", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		// Both singular and plural keys - singular should win
+		content := `
+daily_directory: daily
+directories:
+  object: new-object/
+  objects: old-objects/
+  page: new-page/
+  pages: old-pages/
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		dirs := cfg.GetDirectoriesConfig()
+		if dirs.Object != "new-object/" {
+			t.Errorf("expected singular 'new-object/' to take precedence, got %q", dirs.Object)
+		}
+		if dirs.Page != "new-page/" {
+			t.Errorf("expected singular 'new-page/' to take precedence, got %q", dirs.Page)
 		}
 	})
 
@@ -140,8 +205,8 @@ directories:
 		cfg := &VaultConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
-				Objects: "objects/",
-				Pages:   "pages/",
+				Object: "object/",
+				Page:   "page/",
 			},
 		}
 
@@ -149,10 +214,10 @@ directories:
 			filePath string
 			expected string
 		}{
-			{"objects/people/freya.md", "people/freya"},
-			{"objects/projects/website.md", "projects/website"},
-			{"pages/my-note.md", "my-note"},
-			{"daily/2025-01-01.md", "daily/2025-01-01"}, // Not in objects or pages
+			{"object/person/freya.md", "person/freya"},
+			{"object/project/website.md", "project/website"},
+			{"page/my-note.md", "my-note"},
+			{"daily/2025-01-01.md", "daily/2025-01-01"}, // Not in object or page
 		}
 
 		for _, tc := range tests {
@@ -167,8 +232,8 @@ directories:
 		cfg := &VaultConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
-				Objects: "objects/",
-				Pages:   "pages/",
+				Object: "object/",
+				Page:   "page/",
 			},
 		}
 
@@ -177,10 +242,10 @@ directories:
 			typeName string
 			expected string
 		}{
-			{"people/freya", "person", "objects/people/freya.md"},
-			{"projects/website", "project", "objects/projects/website.md"},
-			{"my-note", "page", "pages/my-note.md"},
-			{"random-note", "", "pages/random-note.md"},
+			{"person/freya", "person", "object/person/freya.md"},
+			{"project/website", "project", "object/project/website.md"},
+			{"my-note", "page", "page/my-note.md"},
+			{"random-note", "", "page/random-note.md"},
 		}
 
 		for _, tc := range tests {
@@ -195,8 +260,8 @@ directories:
 		cfg := &VaultConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
-				Objects: "objects/",
-				Pages:   "pages/",
+				Object: "object/",
+				Page:   "page/",
 			},
 		}
 
@@ -204,9 +269,9 @@ directories:
 			ref      string
 			expected string
 		}{
-			{"people/freya", "objects/people/freya.md"},
-			{"projects/website", "objects/projects/website.md"},
-			{"my-note", "pages/my-note.md"},
+			{"person/freya", "object/person/freya.md"},
+			{"project/website", "object/project/website.md"},
+			{"my-note", "page/my-note.md"},
 		}
 
 		for _, tc := range tests {

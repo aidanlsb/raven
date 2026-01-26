@@ -16,8 +16,8 @@ auto_reindex: true
 
 # Directory organization (optional)
 directories:
-  objects: objects/      # Root for typed objects
-  pages: pages/          # Root for untyped pages
+  object: object/        # Root for typed objects
+  page: page/            # Root for untyped pages
 
 # Quick capture settings
 capture:
@@ -139,31 +139,33 @@ When enabled, commands like `rvn add`, `rvn new`, `rvn set`, and `rvn edit` auto
 
 Configure directory organization for the vault. When set, typed objects are nested under one root, untyped pages under another.
 
+Uses singular keys (`object`, `page`) to encourage singular directory names, which leads to more natural reference syntax like `[[person/freya]]` instead of `[[people/freya]]`.
+
 | Property | Type | Description |
 |----------|------|-------------|
-| `objects` | string | Root directory for typed objects |
-| `pages` | string | Root directory for untyped pages |
+| `object` | string | Root directory for typed objects |
+| `page` | string | Root directory for untyped pages |
 
 ```yaml
 directories:
-  objects: objects/
-  pages: pages/
+  object: object/
+  page: page/
 ```
 
 **How it works:**
 
-- Type `default_path` values are relative to `objects`
+- Type `default_path` values are relative to `object`
 - Object IDs strip the directory prefix for shorter references
-- Example: `objects/people/freya.md` → ID is `people/freya`
+- Example: `object/person/freya.md` → ID is `person/freya`
 
 **Without directories configured:**
 
 ```
 vault/
-├── people/
-│   └── freya.md          # ID: people/freya
-├── projects/
-│   └── website.md        # ID: projects/website
+├── person/
+│   └── freya.md          # ID: person/freya
+├── project/
+│   └── website.md        # ID: project/website
 └── random-note.md        # ID: random-note
 ```
 
@@ -171,14 +173,16 @@ vault/
 
 ```
 vault/
-├── objects/
-│   ├── people/
-│   │   └── freya.md      # ID: people/freya
-│   └── projects/
-│       └── website.md    # ID: projects/website
-└── pages/
+├── object/
+│   ├── person/
+│   │   └── freya.md      # ID: person/freya
+│   └── project/
+│       └── website.md    # ID: project/website
+└── page/
     └── random-note.md    # ID: random-note
 ```
+
+**Backwards compatibility:** The old plural keys (`objects`, `pages`) are still supported but deprecated. New vaults should use singular keys.
 
 ---
 

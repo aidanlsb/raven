@@ -256,18 +256,45 @@ func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 
 // Backlinks returns all objects that reference the given target.
 func (d *Database) Backlinks(targetID string) ([]model.Reference, error) {
-	// Support both exact match and date shorthand
+	return d.BacklinksWithRoots(targetID, "", "")
+}
+
+// BacklinksWithRoots returns all objects that reference the given target,
+// including refs that use directory-prefixed paths (e.g., [[objects/people/freya]]).
+// This is important for move operations to find all variants of a reference.
+func (d *Database) BacklinksWithRoots(targetID, objectRoot, pageRoot string) ([]model.Reference, error) {
+	// Build list of target patterns to search for
+	patterns := []string{targetID}
+
+	// Add directory-prefixed variants
+	if objectRoot != "" {
+		patterns = append(patterns, objectRoot+targetID)
+	}
+	if pageRoot != "" && pageRoot != objectRoot {
+		patterns = append(patterns, pageRoot+targetID)
+	}
+
+	// Build query with all patterns
+	var conditions []string
+	var args []interface{}
+
+	for _, pattern := range patterns {
+		conditions = append(conditions,
+			"r.target_raw = ?",
+			"r.target_raw LIKE ?",
+			"r.target_id = ?",
+			"r.target_id LIKE ?",
+		)
+		args = append(args, pattern, pattern+"#%", pattern, pattern+"#%")
+	}
+
 	query := `
 		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.display_text
 		FROM refs r
 		LEFT JOIN objects o ON r.source_id = o.id
-		WHERE r.target_raw = ?
-		   OR r.target_raw LIKE ?
-		   OR r.target_id = ?
-		   OR r.target_id LIKE ?
-	`
+		WHERE ` + strings.Join(conditions, " OR ")
 
-	rows, err := d.db.Query(query, targetID, targetID+"#%", targetID, targetID+"#%")
+	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

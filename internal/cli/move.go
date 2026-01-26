@@ -195,7 +195,11 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 				aliasSlugToID[pages.SlugifyPath(a)] = oid
 			}
 
-			backlinks, _ := db.Backlinks(sourceID)
+			// Get directory roots for expanded backlinks search
+			objectRoot := vaultCfg.GetObjectsRoot()
+			pageRoot := vaultCfg.GetPagesRoot()
+			backlinks, _ := db.BacklinksWithRoots(sourceID, objectRoot, pageRoot)
+
 			for _, bl := range backlinks {
 				oldRaw := strings.TrimSpace(bl.TargetRaw)
 				oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[") // tolerate bracketed legacy data
@@ -211,7 +215,8 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 				if bl.Line != nil {
 					line = *bl.Line
 				}
-				if err := updateReferenceAtLine(vaultPath, vaultCfg, bl.SourceID, line, base, repl); err != nil {
+				// Update all variants of the reference on this line
+				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, repl, objectRoot, pageRoot); err != nil {
 					// Best-effort: moving the file is the primary action; reference updates may fail.
 					continue
 				}
@@ -422,7 +427,11 @@ func moveSingleObject(vaultPath, source, destination string) error {
 			defer db.Close()
 			db.SetDailyDirectory(vaultCfg.DailyDirectory)
 			sourceID := vaultCfg.FilePathToObjectID(source)
-			backlinks, _ := db.Backlinks(sourceID)
+
+			// Get directory roots for expanded backlinks search
+			objectRoot := vaultCfg.GetObjectsRoot()
+			pageRoot := vaultCfg.GetPagesRoot()
+			backlinks, _ := db.BacklinksWithRoots(sourceID, objectRoot, pageRoot)
 
 			destID := vaultCfg.FilePathToObjectID(destPath)
 			aliases, _ := db.AllAliases()
@@ -447,7 +456,8 @@ func moveSingleObject(vaultPath, source, destination string) error {
 				if bl.Line != nil {
 					line = *bl.Line
 				}
-				if err := updateReferenceAtLine(vaultPath, vaultCfg, bl.SourceID, line, base, repl); err == nil {
+				// Update all variants of the reference on this line
+				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, repl, objectRoot, pageRoot); err == nil {
 					updatedRefs = append(updatedRefs, bl.SourceID)
 				}
 			}
@@ -666,6 +676,103 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 	lines[idx] = updated
 
 	return atomicfile.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+// updateAllRefVariantsAtLine updates all variants of a reference on a specific line.
+// This handles cases where the same object might be referenced as:
+// - [[person/freya]] (canonical ID)
+// - [[object/person/freya]] (with directory root)
+// - [[person/freya|Freya]] (with display text)
+// - [[person/freya#notes]] (with fragment)
+func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldID, newRef, objectRoot, pageRoot string) error {
+	if line <= 0 {
+		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, newRef, objectRoot, pageRoot)
+	}
+
+	// Strip section fragment from sourceID before resolving to file path.
+	fileSourceID := sourceID
+	if idx := strings.Index(sourceID, "#"); idx >= 0 {
+		fileSourceID = sourceID[:idx]
+	}
+
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
+	if err != nil {
+		return err
+	}
+
+	contentBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(contentBytes), "\n")
+	idx := line - 1 // 1-indexed in DB
+	if idx < 0 || idx >= len(lines) {
+		return nil
+	}
+
+	orig := lines[idx]
+	updated := replaceAllRefVariants(orig, oldID, newRef, objectRoot, pageRoot)
+
+	if updated == orig {
+		return nil
+	}
+	lines[idx] = updated
+
+	return atomicfile.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+// updateAllRefVariants updates all variants of a reference in an entire file.
+func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldID, newRef, objectRoot, pageRoot string) error {
+	fileSourceID := sourceID
+	if idx := strings.Index(sourceID, "#"); idx >= 0 {
+		fileSourceID = sourceID[:idx]
+	}
+
+	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
+	if err != nil {
+		return err
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	newContent := replaceAllRefVariants(string(content), oldID, newRef, objectRoot, pageRoot)
+
+	if newContent == string(content) {
+		return nil
+	}
+
+	return atomicfile.WriteFile(filePath, []byte(newContent), 0o644)
+}
+
+// replaceAllRefVariants replaces all variants of a reference in content.
+// Handles: bare ID, directory-prefixed, with display text, with fragments.
+func replaceAllRefVariants(content, oldID, newRef, objectRoot, pageRoot string) string {
+	// Build list of old patterns to search for
+	oldPatterns := []string{oldID}
+	if objectRoot != "" {
+		oldPatterns = append(oldPatterns, objectRoot+oldID)
+	}
+	if pageRoot != "" && pageRoot != objectRoot {
+		oldPatterns = append(oldPatterns, pageRoot+oldID)
+	}
+
+	result := content
+	for _, oldPattern := range oldPatterns {
+		// Replace exact matches: [[old]] -> [[new]]
+		result = strings.ReplaceAll(result, "[["+oldPattern+"]]", "[["+newRef+"]]")
+
+		// Replace with display text: [[old|text]] -> [[new|text]]
+		result = strings.ReplaceAll(result, "[["+oldPattern+"|", "[["+newRef+"|")
+
+		// Replace with fragment: [[old#section]] -> [[new#section]]
+		result = strings.ReplaceAll(result, "[["+oldPattern+"#", "[["+newRef+"#")
+	}
+
+	return result
 }
 
 func chooseReplacementRefBase(oldBase, sourceID, destID string, aliasSlugToID map[string]string, res *resolver.Resolver) string {
