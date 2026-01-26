@@ -863,18 +863,25 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 The reference can be a short reference (cursor), a partial path (companies/cursor),
 or a full path (objects/companies/cursor.md).
 
-The editor is determined by the 'editor' setting in config.toml or $EDITOR.`,
+The editor is determined by the 'editor' setting in config.toml or $EDITOR.
+
+Use --stdin to read object IDs from stdin (one per line) and open them all.
+This is useful for piping query results to open multiple files at once.`,
 		Args: []ArgMeta{
-			{Name: "reference", Description: "Reference to the file (short name, partial path, or full path)", Required: true},
+			{Name: "reference", Description: "Reference to the file (short name, partial path, or full path)", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "stdin", Description: "Read object IDs from stdin for bulk open", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn open cursor --json",
 			"rvn open companies/cursor --json",
-			"rvn open people/freya --json",
+			"rvn query 'object:project .status==active' --ids | rvn open --stdin --json",
 		},
 		UseCases: []string{
 			"Quickly open a file by its short name",
 			"Open files using references without knowing full paths",
+			"Open multiple files from query results",
 		},
 	},
 	"workflow_list": {

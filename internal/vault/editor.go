@@ -47,6 +47,40 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
+// OpenFilesInEditor opens multiple files in the user's configured editor.
+// Returns true if the editor was launched, false otherwise.
+// The process is started in the background (non-blocking).
+func OpenFilesInEditor(cfg *config.Config, filePaths []string) bool {
+	if cfg == nil || len(filePaths) == 0 {
+		return false
+	}
+
+	editor := cfg.GetEditor()
+	if editor == "" {
+		return false
+	}
+
+	var cmd *exec.Cmd
+
+	// If editor contains spaces, it's a compound command like "open -a Cursor"
+	// Execute via shell to handle this correctly
+	if strings.Contains(editor, " ") {
+		quotedPaths := make([]string, len(filePaths))
+		for i, p := range filePaths {
+			quotedPaths[i] = shellQuote(p)
+		}
+		cmd = exec.Command("sh", "-c", editor+" "+strings.Join(quotedPaths, " "))
+	} else {
+		cmd = exec.Command(editor, filePaths...)
+	}
+
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("Warning: failed to open editor '%s': %v\n", editor, err)
+		return false
+	}
+	return true
+}
+
 // OpenInEditorOrPrintPath opens a file in the editor, or prints the path if no editor is configured.
 func OpenInEditorOrPrintPath(cfg *config.Config, filePath string) {
 	if !OpenInEditor(cfg, filePath) {
