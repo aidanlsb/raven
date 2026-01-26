@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -54,7 +55,8 @@ Examples:
 		}
 		defer db.Close()
 
-		fmt.Printf("# %s (%s)\n\n", dateStr, dayOfWeek)
+		display := ui.NewDisplayContext()
+		fmt.Printf("%s %s\n\n", ui.SectionHeader(dateStr), ui.Hint(fmt.Sprintf("(%s)", dayOfWeek)))
 
 		// Check for daily note
 		dailyNoteID := vaultCfg.DailyNoteID(dateStr)
@@ -63,12 +65,11 @@ Examples:
 			return fmt.Errorf("failed to query daily note: %w", err)
 		}
 
+		fmt.Println(ui.Divider("Daily Note", display.TermWidth))
 		if dailyNote != nil {
-			fmt.Printf("## Daily Note\n")
-			fmt.Printf("  %s\n\n", dailyNote.FilePath)
+			fmt.Printf("%s\n\n", ui.Bullet(ui.FilePath(dailyNote.FilePath)))
 		} else {
-			fmt.Printf("## Daily Note\n")
-			fmt.Printf("  (not created yet - use 'rvn daily %s' to create)\n\n", dateStr)
+			fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", dateStr))))
 		}
 
 		// Query date index for this date
@@ -89,7 +90,8 @@ Examples:
 			if prettyField != "" {
 				prettyField = strings.ToUpper(prettyField[:1]) + prettyField[1:]
 			}
-			fmt.Printf("## %s: %s (%d)\n", prettyField, dateStr, len(fieldItems))
+			label := fmt.Sprintf("%s: %s (%d)", prettyField, dateStr, len(fieldItems))
+			fmt.Println(ui.Divider(label, display.TermWidth))
 			for _, item := range fieldItems {
 				if item.SourceType == "trait" {
 					// Get trait content
@@ -97,16 +99,21 @@ Examples:
 					if err == nil && trait != nil {
 						valueStr := ""
 						if trait.Value != nil && *trait.Value != "" {
-							valueStr = fmt.Sprintf(" (%s)", *trait.Value)
+							valueStr = *trait.Value
 						}
-						fmt.Printf("  @%s%s %s\n", trait.TraitType, valueStr, trait.Content)
-						fmt.Printf("    %s\n", trait.FilePath)
+						line := fmt.Sprintf("%s %s", ui.Trait(trait.TraitType, valueStr), trait.Content)
+						fmt.Println(ui.Bullet(line))
+						fmt.Println(ui.Indent(2, ui.Hint(trait.FilePath)))
 					}
 				} else {
 					// Object
 					obj, err := db.GetObject(item.SourceID)
 					if err == nil && obj != nil {
-						fmt.Printf("  %s (%s)\n", item.SourceID, obj.Type)
+						meta := ""
+						if obj.Type != "" {
+							meta = ui.Hint(fmt.Sprintf("(%s)", obj.Type))
+						}
+						fmt.Println(ui.Bullet(strings.TrimSpace(fmt.Sprintf("%s %s", item.SourceID, meta))))
 					}
 				}
 			}
@@ -120,13 +127,13 @@ Examples:
 		}
 
 		if len(backlinks) > 0 {
-			fmt.Printf("## References (%d)\n", len(backlinks))
+			fmt.Println(ui.Divider(fmt.Sprintf("References (%d)", len(backlinks)), display.TermWidth))
 			for _, bl := range backlinks {
-				lineInfo := ""
+				location := bl.FilePath
 				if bl.Line != nil {
-					lineInfo = fmt.Sprintf(":%d", *bl.Line)
+					location = fmt.Sprintf("%s:%d", bl.FilePath, *bl.Line)
 				}
-				fmt.Printf("  %s%s\n", bl.FilePath, lineInfo)
+				fmt.Println(ui.Bullet(ui.Hint(location)))
 			}
 		}
 

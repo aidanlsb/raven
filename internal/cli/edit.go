@@ -96,7 +96,7 @@ var editCmd = &cobra.Command{
 				return nil
 			}
 
-			fmt.Printf("%s %s\n\n", ui.Header("Preview edit"), ui.FilePath(fmt.Sprintf("%s:%d", relPath, lineNumber)))
+			fmt.Printf("%s %s\n\n", ui.SectionHeader("Preview edit"), ui.FilePath(fmt.Sprintf("%s:%d", relPath, lineNumber)))
 			fmt.Println(ui.Muted.Render("BEFORE:"))
 			fmt.Println(indent(beforeContext, "  "))
 			fmt.Println()

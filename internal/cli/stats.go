@@ -46,11 +46,11 @@ Examples:
 		}
 
 		// Human-readable output
-		fmt.Println(ui.Header("Vault Statistics"))
-		fmt.Printf("%s  %s\n", ui.Muted.Render("Files:     "), ui.Bold.Render(fmt.Sprintf("%d", stats.FileCount)))
-		fmt.Printf("%s  %s\n", ui.Muted.Render("Objects:   "), ui.Bold.Render(fmt.Sprintf("%d", stats.ObjectCount)))
-		fmt.Printf("%s  %s\n", ui.Muted.Render("Traits:    "), ui.Bold.Render(fmt.Sprintf("%d", stats.TraitCount)))
-		fmt.Printf("%s  %s\n", ui.Muted.Render("References:"), ui.Bold.Render(fmt.Sprintf("%d", stats.RefCount)))
+		fmt.Println(ui.SectionHeader("Vault Statistics"))
+		fmt.Println(ui.Bullet(ui.Muted.Render("Files: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.FileCount))))
+		fmt.Println(ui.Bullet(ui.Muted.Render("Objects: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.ObjectCount))))
+		fmt.Println(ui.Bullet(ui.Muted.Render("Traits: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.TraitCount))))
+		fmt.Println(ui.Bullet(ui.Muted.Render("References: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.RefCount))))
 
 		return nil
 	},

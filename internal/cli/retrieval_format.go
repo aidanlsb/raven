@@ -17,7 +17,7 @@ func printQueryObjectResults(queryStr, typeName string, results []query.Pipeline
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", ui.Header(typeName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
+	fmt.Printf("%s %s\n\n", ui.SectionHeader(typeName), ui.Badge(fmt.Sprintf("%d", len(results))))
 	printObjectTable(results, sch)
 }
 
@@ -27,7 +27,7 @@ func printQueryTraitResults(queryStr, traitName string, results []query.Pipeline
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", ui.Header("@"+traitName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
+	fmt.Printf("%s %s\n\n", ui.SectionHeader("@"+traitName), ui.Badge(fmt.Sprintf("%d", len(results))))
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.TraitLayout)
@@ -57,7 +57,7 @@ func printQueryTraitResults(queryStr, traitName string, results []query.Pipeline
 		// Highlight traits in content
 		content = ui.HighlightTraits(content)
 
-		location := formatLocationLinkSimple(r.FilePath, r.Line)
+		location := formatLocationLinkSimpleStyled(r.FilePath, r.Line, ui.Muted.Render)
 
 		table.AddRow(ui.ResultRow{
 			Num:      i + 1,
@@ -123,7 +123,7 @@ func printSearchResults(queryStr string, results []model.SearchMatch) {
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", ui.Header(queryStr), ui.Hint(fmt.Sprintf("(%d results)", len(results))))
+	fmt.Printf("%s %s\n\n", ui.SectionHeader(queryStr), ui.Badge(fmt.Sprintf("%d results", len(results))))
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.SearchLayout)
@@ -283,7 +283,7 @@ func printBacklinksResults(target string, links []model.Reference) {
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", ui.Header("Backlinks to "+target), ui.Hint(fmt.Sprintf("(%d)", len(links))))
+	fmt.Printf("%s %s\n\n", ui.SectionHeader("Backlinks to "+target), ui.Badge(fmt.Sprintf("%d", len(links))))
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.BacklinksLayout)

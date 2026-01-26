@@ -52,6 +52,31 @@ func (e *Executor) buildGroupPredicateSQL(p *GroupPredicate, alias string,
 	return cond, args, nil
 }
 
+// buildStringFuncCondition builds SQL for string function predicates against a field expression.
+func buildStringFuncCondition(funcType StringFuncType, fieldExpr string, value string, caseSensitive bool) (string, []interface{}, error) {
+	wrapLower := !caseSensitive
+
+	switch funcType {
+	case StringFuncIncludes:
+		return likeCond(fieldExpr, wrapLower), []interface{}{"%" + escapeLikePattern(value) + "%"}, nil
+
+	case StringFuncStartsWith:
+		return likeCond(fieldExpr, wrapLower), []interface{}{escapeLikePattern(value) + "%"}, nil
+
+	case StringFuncEndsWith:
+		return likeCond(fieldExpr, wrapLower), []interface{}{"%" + escapeLikePattern(value)}, nil
+
+	case StringFuncMatches:
+		cond := fmt.Sprintf("%s REGEXP ?", fieldExpr)
+		if wrapLower {
+			return cond, []interface{}{"(?i)" + value}, nil
+		}
+		return cond, []interface{}{value}, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported string function: %v", funcType)
+	}
+}
+
 // buildRefdPredicateSQL builds SQL for refd:{...} predicates.
 // Matches objects/traits that are referenced by the subquery matches.
 // isTrait indicates if we're building for a trait query (uses different columns).

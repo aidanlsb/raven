@@ -54,7 +54,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			return handleErrorMsg(ErrMissingArgument, "no trait IDs provided via stdin", "Pipe trait IDs to stdin, one per line")
 		}
 
-		return applyUpdateTraitsByID(vaultPath, ids, newValue, updateConfirm, vaultCfg)
+		return applyUpdateTraitsByID(vaultPath, ids, newValue, updateConfirm, false, vaultCfg)
 	}
 
 	if len(args) < 2 {
@@ -72,7 +72,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Single update applies immediately (no preview/confirm)
-	return applyUpdateTraitsByID(vaultPath, []string{traitID}, newValue, true, vaultCfg)
+	return applyUpdateTraitsByID(vaultPath, []string{traitID}, newValue, true, false, vaultCfg)
 }
 
 func parseTraitValueArgs(args []string) (string, error) {

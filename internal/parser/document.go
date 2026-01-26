@@ -14,7 +14,8 @@ import (
 // ParsedDocument represents a fully parsed document.
 type ParsedDocument struct {
 	FilePath   string          // File path relative to vault
-	RawContent string          // Raw markdown content (for full-text search indexing)
+	RawContent string          // Raw markdown content
+	Body       string          // Content without frontmatter (for full-text search indexing)
 	Objects    []*ParsedObject // All objects in this document
 	Traits     []*ParsedTrait  // All traits in this document
 	Refs       []*ParsedRef    // All references in this document
@@ -240,6 +241,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	return &ParsedDocument{
 		FilePath:   relativePath,
 		RawContent: content,
+		Body:       bodyContent,
 		Objects:    objects,
 		Traits:     traits,
 		Refs:       refs,

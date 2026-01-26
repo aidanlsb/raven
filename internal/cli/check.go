@@ -929,7 +929,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	sortRefs(inferred)
 	sortRefs(unknown)
 
-	fmt.Printf("\n%s\n", ui.Header("--- Missing References ---"))
+	fmt.Printf("\n%s\n", ui.SectionHeader("Missing References"))
 	reader := bufio.NewReader(os.Stdin)
 	created := 0
 
@@ -942,10 +942,11 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 				source = ref.SourceFile
 			}
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
-			fmt.Printf("  • %s → %s %s\n",
+			item := fmt.Sprintf("%s → %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
 				ui.Muted.Render(fmt.Sprintf("(from %s.%s)", source, ref.FieldSource)))
+			fmt.Println(ui.Bullet(item))
 		}
 
 		fmt.Printf("\nCreate these pages? %s ", ui.Muted.Render("[Y/n]"))
@@ -969,10 +970,11 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		fmt.Printf("\n%s\n", ui.Bold.Render("Inferred (from path matching default_path):"))
 		for _, ref := range inferred {
 			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
-			fmt.Printf("  ? %s → %s %s\n",
+			item := fmt.Sprintf("? %s → %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
 				ui.Muted.Render(fmt.Sprintf("(type: %s)", ref.InferredType)))
+			fmt.Println(ui.Bullet(item))
 		}
 
 		for _, ref := range inferred {
@@ -995,9 +997,10 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	if len(unknown) > 0 {
 		fmt.Printf("\n%s\n", ui.Bold.Render("Unknown type (please specify):"))
 		for _, ref := range unknown {
-			fmt.Printf("  ? %s %s\n",
+			item := fmt.Sprintf("? %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.Muted.Render(fmt.Sprintf("(referenced in %s:%d)", ref.SourceFile, ref.Line)))
+			fmt.Println(ui.Bullet(item))
 		}
 
 		// List available types
@@ -1049,16 +1052,17 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		return traits[i].UsageCount > traits[j].UsageCount
 	})
 
-	fmt.Printf("\n%s\n", ui.Header("--- Undefined Traits ---"))
+	fmt.Printf("\n%s\n", ui.SectionHeader("Undefined Traits"))
 	fmt.Println("\nThe following traits are used but not defined in schema.yaml:")
 	for _, trait := range traits {
 		valueInfo := "no value"
 		if trait.HasValue {
 			valueInfo = "with value"
 		}
-		fmt.Printf("  • %s %s\n",
+		item := fmt.Sprintf("%s %s",
 			ui.Bold.Render("@"+trait.TraitName),
 			ui.Muted.Render(fmt.Sprintf("(%d usages, %s)", trait.UsageCount, valueInfo)))
+		fmt.Println(ui.Bullet(item))
 		for _, loc := range trait.Locations {
 			fmt.Printf("      %s\n", ui.Muted.Render(loc))
 		}

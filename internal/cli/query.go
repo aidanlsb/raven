@@ -521,7 +521,13 @@ func applySetFromQuery(vaultPath string, ids []string, args []string, warnings [
 	}
 
 	if !confirm {
-		return previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
+		if err := previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg); err != nil {
+			return err
+		}
+		if promptForConfirm("Apply changes?") {
+			return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
+		}
+		return nil
 	}
 	return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
 }
@@ -529,7 +535,13 @@ func applySetFromQuery(vaultPath string, ids []string, args []string, warnings [
 // applyDeleteFromQuery applies delete operation from query results.
 func applyDeleteFromQuery(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
 	if !confirm {
-		return previewDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+		if err := previewDeleteBulk(vaultPath, ids, warnings, vaultCfg); err != nil {
+			return err
+		}
+		if promptForConfirm("Apply changes?") {
+			return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+		}
+		return nil
 	}
 	return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
 }
@@ -545,7 +557,13 @@ func applyAddFromQuery(vaultPath string, ids []string, args []string, warnings [
 	line := formatCaptureLine(text, captureCfg)
 
 	if !confirm {
-		return previewAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+		if err := previewAddBulk(vaultPath, ids, line, warnings, vaultCfg); err != nil {
+			return err
+		}
+		if promptForConfirm("Apply changes?") {
+			return applyAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+		}
+		return nil
 	}
 	return applyAddBulk(vaultPath, ids, line, warnings, vaultCfg)
 }
@@ -564,7 +582,13 @@ func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings 
 	}
 
 	if !confirm {
-		return previewMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+		if err := previewMoveBulk(vaultPath, ids, destination, warnings, vaultCfg); err != nil {
+			return err
+		}
+		if promptForConfirm("Apply changes?") {
+			return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+		}
+		return nil
 	}
 	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
 }

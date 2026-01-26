@@ -352,7 +352,7 @@ func applyToResults(vaultPath string, results []model.Result, applyStr string, c
 			return handleErrorMsg(ErrInvalidInput, "update is only supported for trait results",
 				"Use: --apply \"set field=value\" for object results")
 		}
-		return applyUpdateTraitsByID(vaultPath, ids, traitValue, confirm, vaultCfg)
+		return applyUpdateTraitsByID(vaultPath, ids, traitValue, confirm, true, vaultCfg)
 	case "delete":
 		if queryType == "trait" {
 			return handleErrorMsg(ErrInvalidInput, "cannot delete traits directly",

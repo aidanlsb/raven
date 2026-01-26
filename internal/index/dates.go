@@ -20,22 +20,15 @@ import (
 //   - "YYYY-MM-DD" (exact date)
 func ParseDateFilter(filter string, fieldExpr string) (condition string, args []interface{}, err error) {
 	filter = strings.ToLower(strings.TrimSpace(filter))
-	today := time.Now().Format(dates.DateLayout)
+	if filter == "" {
+		return "", nil, fmt.Errorf("invalid date filter: %q", filter)
+	}
+
+	now := time.Now()
+	today := now.Format(dates.DateLayout)
 
 	switch filter {
-	case "today":
-		return fieldExpr + " = ?", []interface{}{today}, nil
-
-	case "yesterday":
-		yesterday := time.Now().AddDate(0, 0, -1).Format(dates.DateLayout)
-		return fieldExpr + " = ?", []interface{}{yesterday}, nil
-
-	case "tomorrow":
-		tomorrow := time.Now().AddDate(0, 0, 1).Format(dates.DateLayout)
-		return fieldExpr + " = ?", []interface{}{tomorrow}, nil
-
 	case "this-week":
-		now := time.Now()
 		// Find start of week (Monday)
 		weekday := int(now.Weekday())
 		if weekday == 0 {
@@ -47,7 +40,6 @@ func ParseDateFilter(filter string, fieldExpr string) (condition string, args []
 			[]interface{}{startOfWeek, endOfWeek}, nil
 
 	case "next-week":
-		now := time.Now()
 		weekday := int(now.Weekday())
 		if weekday == 0 {
 			weekday = 7
@@ -66,36 +58,11 @@ func ParseDateFilter(filter string, fieldExpr string) (condition string, args []
 			[]interface{}{today}, nil
 
 	default:
-		// Require an actual valid YYYY-MM-DD date.
-		if !dates.IsValidDate(filter) {
+		parsed, parseErr := dates.ParseDateArg(filter, now)
+		if parseErr != nil {
 			return "", nil, fmt.Errorf("invalid date filter: %q", filter)
 		}
-		return fieldExpr + " = ?", []interface{}{filter}, nil
+		return fieldExpr + " = ?", []interface{}{parsed.Format(dates.DateLayout)}, nil
 	}
 }
 
-// QueryByDate queries the date_index for items on a specific date or date range.
-func (d *Database) QueryByDate(dateFilter string) ([]DateIndexResult, error) {
-	condition, args, err := ParseDateFilter(dateFilter, "date")
-	if err != nil {
-		return nil, err
-	}
-
-	query := "SELECT date, source_type, source_id, field_name, file_path FROM date_index WHERE " + condition
-	rows, err := d.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []DateIndexResult
-	for rows.Next() {
-		var result DateIndexResult
-		if err := rows.Scan(&result.Date, &result.SourceType, &result.SourceID, &result.FieldName, &result.FilePath); err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-
-	return results, rows.Err()
-}
