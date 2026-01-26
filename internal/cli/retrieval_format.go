@@ -29,7 +29,14 @@ func printQueryTraitResults(queryStr, traitName string, results []query.Pipeline
 
 	fmt.Printf("%s %s\n\n", ui.Header("@"+traitName), ui.Hint(fmt.Sprintf("(%d)", len(results))))
 
-	rows := make([]traitTableRow, len(results))
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.TraitLayout)
+
+	// Get the calculated content width for dynamic content sizing
+	// Use 2x width to allow for two-line content
+	contentWidth := table.ContentWidth("content")
+	maxContentLen := contentWidth * 2
+
 	for i, r := range results {
 		value := ""
 		if r.Value != nil && *r.Value != r.TraitType {
@@ -37,14 +44,29 @@ func printQueryTraitResults(queryStr, traitName string, results []query.Pipeline
 		}
 		traitStr := ui.Trait(r.TraitType, value)
 
-		rows[i] = traitTableRow{
-			num:      i + 1, // 1-indexed for user reference
-			content:  r.Content,
-			traits:   traitStr,
-			location: formatLocationLinkSimple(r.FilePath, r.Line),
+		content := r.Content
+		if content == "" {
+			content = "(no content)"
 		}
+
+		// Truncate content to fit two lines if needed
+		if len(content) > maxContentLen {
+			content = ui.TruncateWithEllipsis(content, maxContentLen)
+		}
+
+		// Highlight traits in content
+		content = ui.HighlightTraits(content)
+
+		location := formatLocationLinkSimple(r.FilePath, r.Line)
+
+		table.AddRow(ui.ResultRow{
+			Num:      i + 1,
+			Cells:    []string{ui.FormatRowNum(i+1, len(results)), content, traitStr, location},
+			Location: fmt.Sprintf("%s:%d", r.FilePath, r.Line),
+		})
 	}
-	printTraitRows(rows)
+
+	fmt.Println(table.Render())
 }
 
 func pipeItemsForObjectResults(results []query.PipelineObjectResult) []PipeableItem {
@@ -95,26 +117,164 @@ func pipelineTraitResultsFromTraits(traits []model.Trait) []query.PipelineTraitR
 	return results
 }
 
-func printSearchResults(query string, results []model.SearchMatch) {
+func printSearchResults(queryStr string, results []model.SearchMatch) {
 	if len(results) == 0 {
-		fmt.Println(ui.Starf("No results found for: %s", query))
+		fmt.Println(ui.Starf("No results found for: %s", queryStr))
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", ui.Header(query), ui.Hint(fmt.Sprintf("(%d results)", len(results))))
+	fmt.Printf("%s %s\n\n", ui.Header(queryStr), ui.Hint(fmt.Sprintf("(%d results)", len(results))))
+
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.SearchLayout)
+
+	// Get the calculated content width for dynamic snippet sizing
+	// Use 2x width to allow for two-line content
+	contentWidth := table.ContentWidth("content")
+	maxSnippetLen := contentWidth * 2 // two lines of content
+
 	for i, result := range results {
-		fmt.Printf("%s %s\n", ui.Bold.Render(fmt.Sprintf("%d.", i+1)), result.Title)
-		fmt.Printf("   %s\n", formatLocationLinkSimple(result.FilePath, 1))
-		if result.Snippet != "" {
-			snippet := strings.ReplaceAll(result.Snippet, "\n", " ")
-			snippet = strings.TrimSpace(snippet)
-			if len(snippet) > 120 {
-				snippet = snippet[:120] + "..."
-			}
-			fmt.Printf("   %s\n", snippet)
+		// Content/snippet - clean and prepare with dynamic sizing
+		snippet := cleanSearchSnippetDynamic(result.Snippet, maxSnippetLen)
+		if snippet == "" {
+			snippet = "(no match preview)"
 		}
-		fmt.Println()
+		// Remove the match markers
+		snippet = strings.ReplaceAll(snippet, "»", "")
+		snippet = strings.ReplaceAll(snippet, "«", "")
+
+		// Parent/title - use meta column width
+		metaWidth := table.ContentWidth("meta")
+		title := result.Title
+		if len(title) > metaWidth-3 {
+			title = title[:metaWidth-6] + "..."
+		}
+
+		// File path (just filename) - use file column width
+		fileWidth := table.ContentWidth("file")
+		filePath := filepath.Base(result.FilePath)
+		if len(filePath) > fileWidth-3 {
+			filePath = filePath[:fileWidth-6] + "..."
+		}
+
+		table.AddRow(ui.ResultRow{
+			Num:      i + 1,
+			Cells:    []string{ui.FormatRowNum(i+1, len(results)), snippet, title, filePath},
+			Location: fmt.Sprintf("%s:%d", result.FilePath, 1),
+		})
 	}
+
+	fmt.Println(table.Render())
+}
+
+// cleanSearchSnippetDynamic removes frontmatter, cleans up, and centers a search snippet around the match.
+// Uses maxLen to determine how much context to show (typically 2x content column width for two-line display).
+func cleanSearchSnippetDynamic(snippet string, maxLen int) string {
+	if snippet == "" {
+		return ""
+	}
+
+	s := cleanRawSnippet(snippet)
+	if s == "" {
+		return ""
+	}
+
+	// Find match markers
+	matchStart := strings.Index(s, "»")
+	if matchStart == -1 {
+		return ""
+	}
+	matchEnd := strings.Index(s, "«")
+	if matchEnd == -1 {
+		matchEnd = matchStart + 10
+	}
+	matchLen := matchEnd - matchStart
+
+	// Calculate context before/after based on maxLen
+	// We want to center the match and use available space efficiently
+	availableContext := maxLen - matchLen
+	if availableContext < 0 {
+		availableContext = 0
+	}
+	// Distribute context: slightly more after than before
+	contextBefore := availableContext * 2 / 5
+	contextAfter := availableContext - contextBefore
+
+	return extractSnippetWindow(s, matchStart, matchEnd, contextBefore, contextAfter)
+}
+
+// cleanRawSnippet removes frontmatter, collapses whitespace, and returns clean text.
+func cleanRawSnippet(snippet string) string {
+	s := snippet
+
+	// Remove YAML frontmatter (---\n...\n---)
+	for {
+		startIdx := strings.Index(s, "---")
+		if startIdx == -1 {
+			break
+		}
+		rest := s[startIdx+3:]
+		endIdx := strings.Index(rest, "---")
+		if endIdx == -1 {
+			s = strings.TrimSpace(rest)
+			break
+		}
+		s = s[:startIdx] + rest[endIdx+3:]
+	}
+
+	// Collapse multiple spaces/newlines
+	s = strings.ReplaceAll(s, "\n", " ")
+	for strings.Contains(s, "  ") {
+		s = strings.ReplaceAll(s, "  ", " ")
+	}
+	s = strings.TrimSpace(s)
+
+	// Remove leading # from markdown headers
+	for strings.HasPrefix(s, "# ") {
+		s = strings.TrimPrefix(s, "# ")
+	}
+
+	return s
+}
+
+// extractSnippetWindow extracts a window around the match with context before/after.
+func extractSnippetWindow(s string, matchStart, matchEnd, contextBefore, contextAfter int) string {
+	windowStart := matchStart - contextBefore
+	windowEnd := matchEnd + contextAfter
+
+	// Clamp to string bounds
+	if windowStart < 0 {
+		windowStart = 0
+	}
+	if windowEnd > len(s) {
+		windowEnd = len(s)
+	}
+
+	// Adjust to word boundaries (don't cut words in half)
+	if windowStart > 0 {
+		spaceIdx := strings.Index(s[windowStart:], " ")
+		if spaceIdx != -1 && spaceIdx < 10 {
+			windowStart += spaceIdx + 1
+		}
+	}
+	if windowEnd < len(s) {
+		lastSpace := strings.LastIndex(s[:windowEnd], " ")
+		if lastSpace > matchEnd+5 {
+			windowEnd = lastSpace
+		}
+	}
+
+	result := s[windowStart:windowEnd]
+
+	// Add ellipsis if truncated
+	if windowStart > 0 {
+		result = "..." + result
+	}
+	if windowEnd < len(s) {
+		result = result + "..."
+	}
+
+	return strings.TrimSpace(result)
 }
 
 func printBacklinksResults(target string, links []model.Reference) {
@@ -124,10 +284,14 @@ func printBacklinksResults(target string, links []model.Reference) {
 	}
 
 	fmt.Printf("%s %s\n\n", ui.Header("Backlinks to "+target), ui.Hint(fmt.Sprintf("(%d)", len(links))))
-	for _, link := range links {
-		display := link.SourceID
+
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.BacklinksLayout)
+
+	for i, link := range links {
+		displayText := link.SourceID
 		if link.DisplayText != nil {
-			display = *link.DisplayText
+			displayText = *link.DisplayText
 		}
 
 		line := 0
@@ -135,6 +299,14 @@ func printBacklinksResults(target string, links []model.Reference) {
 			line = *link.Line
 		}
 
-		fmt.Printf("  %s %s %s\n", ui.SymbolAttention, display, formatLocationLinkSimple(link.FilePath, line))
+		location := formatLocationLinkSimple(link.FilePath, line)
+
+		table.AddRow(ui.ResultRow{
+			Num:      i + 1,
+			Cells:    []string{ui.FormatRowNum(i+1, len(links)), displayText, location},
+			Location: fmt.Sprintf("%s:%d", link.FilePath, line),
+		})
 	}
+
+	fmt.Println(table.Render())
 }
