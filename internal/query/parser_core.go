@@ -220,6 +220,9 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 			case "notnull":
 				p.advance()
 				return p.parseNullCheckPredicate(negated, false) // notnull = field IS NOT null
+			case "in":
+				p.advance()
+				return p.parseInPredicate(negated)
 			case "any":
 				p.advance()
 				return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierAny)

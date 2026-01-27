@@ -23,6 +23,7 @@ trait:<name> [predicates...]
 - `.field>value` — Field greater than value (`.count>10`)
 - `.field<=value` — Field less than or equal to value
 - `.field>=value` — Field greater than or equal to value
+- `in(.field, [a,b])` — Field is one of a list of values (scalar membership)
 - `.field==*` — Field exists (has any value)
 - `!.field==value` — Field does NOT equal value
 - `!.field==*` — Field does NOT exist
@@ -48,6 +49,7 @@ trait:<name> [predicates...]
 - `.value>X` — Trait value greater than X (`.value>5`)
 - `.value<=X` — Trait value less than or equal to X
 - `.value>=X` — Trait value greater than or equal to X
+- `in(.value, [a,b])` — Trait value is one of a list of values (use this for “value in list”)
 - `!.value==X` — Trait value does NOT equal X
 - `on:{object:X ...}` — Direct parent matches sub-query
 - `on:[[target]]` — Direct parent is specific object
@@ -63,6 +65,10 @@ trait:<name> [predicates...]
 - `|` = OR (use parentheses for grouping)
 - `!` = NOT (prefix)
 - `(...)` = grouping
+
+**Note on `in()` vs `any()`:**
+- Use `in(.value, [a,b])` for **scalar** membership (trait `.value` is scalar).
+- Use `any(.tags, _ == "x")` for **array fields** on objects.
 
 **Special date values for `trait:due`:**
 - `.value==past` — Before today
@@ -129,6 +135,16 @@ This could mean:
 - Todos in meetings about the project: `trait:todo within:{object:meeting refs:[[projects/website]]}`
 
 Run the most likely interpretation first. If results seem incomplete, try variations.
+
+### Common Pattern: “value is one of these”
+
+Users often mean “open statuses” / “one of these states”. Use `in()`:
+
+```
+trait:todo in(.value, [todo,blocked,doing])
+trait:todo !in(.value, [done,cancelled])
+object:project in(.status, [active,backlog])
+```
 
 ### Complex Query Examples
 

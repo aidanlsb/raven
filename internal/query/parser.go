@@ -68,6 +68,131 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
+// parseValueList parses a bracketed list of scalar values: [a, "b", [[ref]]]
+// Callers should ensure p.curr.Type == TokenLBracket.
+func (p *Parser) parseValueList() ([]string, error) {
+	if err := p.expect(TokenLBracket); err != nil {
+		return nil, err
+	}
+
+	var values []string
+	for {
+		// End of list
+		if p.curr.Type == TokenRBracket {
+			p.advance()
+			break
+		}
+		if p.curr.Type == TokenEOF {
+			return nil, fmt.Errorf("unclosed value list: expected ']'")
+		}
+
+		var v string
+		switch p.curr.Type {
+		case TokenIdent:
+			v = p.curr.Value
+			p.advance()
+		case TokenString:
+			v = p.curr.Value
+			p.advance()
+		case TokenRef:
+			v = p.curr.Value
+			p.advance()
+		default:
+			return nil, fmt.Errorf("expected list value (identifier, string, or reference), got %v", p.curr.Type)
+		}
+		values = append(values, v)
+
+		// After a value, expect comma or closing bracket
+		if p.curr.Type == TokenComma {
+			p.advance()
+			// Disallow trailing comma before ]
+			if p.curr.Type == TokenRBracket {
+				return nil, fmt.Errorf("trailing comma in value list is not allowed")
+			}
+			continue
+		}
+		if p.curr.Type == TokenRBracket {
+			p.advance()
+			break
+		}
+		return nil, fmt.Errorf("expected ',' or ']' in value list, got %v", p.curr.Type)
+	}
+
+	return values, nil
+}
+
+// parseInPredicate parses: in(.field, [a,b,"c"])
+// This is useful for scalar membership checks like trait:due in(.value, [past,today]).
+func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
+	if err := p.expect(TokenLParen); err != nil {
+		return nil, err
+	}
+
+	// First arg: .field
+	if p.curr.Type != TokenDot {
+		return nil, fmt.Errorf("expected .field as first argument to in()")
+	}
+	p.advance()
+	if p.curr.Type != TokenIdent {
+		return nil, fmt.Errorf("expected field name after '.'")
+	}
+	field := p.curr.Value
+	p.advance()
+
+	if err := p.expect(TokenComma); err != nil {
+		return nil, err
+	}
+
+	if p.curr.Type != TokenLBracket {
+		return nil, fmt.Errorf("expected '[' to start value list as second argument to in()")
+	}
+	values, err := p.parseValueList()
+	if err != nil {
+		return nil, err
+	}
+	if len(values) == 0 {
+		return nil, fmt.Errorf("value list cannot be empty")
+	}
+
+	if err := p.expect(TokenRParen); err != nil {
+		return nil, err
+	}
+
+	// Single value: just a field predicate.
+	if len(values) == 1 {
+		return &FieldPredicate{
+			basePredicate: basePredicate{negated: negated},
+			Field:         field,
+			Value:         values[0],
+			IsExists:      false,
+			CompareOp:     CompareEq,
+		}, nil
+	}
+
+	// Multiple values: OR chain of == predicates.
+	var left Predicate = &FieldPredicate{
+		Field:     field,
+		Value:     values[0],
+		IsExists:  false,
+		CompareOp: CompareEq,
+	}
+	for _, v := range values[1:] {
+		right := &FieldPredicate{
+			Field:     field,
+			Value:     v,
+			IsExists:  false,
+			CompareOp: CompareEq,
+		}
+		left = &OrPredicate{Left: left, Right: right}
+	}
+	// Apply overall negation at the root (so !in(...) works correctly).
+	if op, ok := left.(*OrPredicate); ok {
+		op.basePredicate = basePredicate{negated: negated}
+		return op, nil
+	}
+	return &GroupPredicate{basePredicate: basePredicate{negated: negated}, Predicates: []Predicate{left}}, nil
+}
+
 // parseValuePredicate parses value==val, value<val, value>val, etc.
 // For string matching, use function-style predicates: includes(), startswith(), etc.
 func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
