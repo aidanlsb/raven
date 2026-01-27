@@ -22,6 +22,7 @@
 | Starts with | `startswith()` | `startswith(.name, "My")` |
 | Ends with | `endswith()` | `endswith(.name, ".md")` |
 | Regex | `matches()` | `matches(.name, "^api.*$")` |
+| Membership (scalar) | `in()` | `in(.status, [active,backlog])`, `in(.value, [past,today])` |
 | Array any | `any()` | `any(.tags, _ == "urgent")` |
 | Array all | `all()` | `all(.tags, startswith(_, "feat-"))` |
 | Subquery | `{...}` | `has:{trait:due}` |
@@ -133,6 +134,25 @@ For array fields, use quantifier functions:
 | `none(.field, predicate)` | No element matches predicate |
 
 The `_` symbol represents the current element being tested.
+
+### Scalar Membership (`in()`)
+
+Use `in()` when you want to match a **scalar field** against a set of allowed values.
+
+This is especially useful for trait values (where `.value` is a scalar), and is **not the same** as `any()` (which quantifies over array fields).
+
+**Syntax:**
+```
+in(.field, [a,b,"c"])
+!in(.field, [a,b])   # NOT IN
+```
+
+**Examples:**
+```
+object:project in(.status, [active,backlog])
+trait:due in(.value, [past,today,tomorrow])
+trait:todo !in(.value, [done,cancelled])
+```
 
 **Examples:**
 ```
@@ -289,6 +309,7 @@ matches(.value, r"^TODO.*$")
 trait:due .value==past
 trait:due !.value==past
 trait:due .value<2025-01-01
+trait:due in(.value, [past,today])
 trait:status includes(.value, "progress")
 trait:tag startswith(.value, "feat-")
 trait:note matches(.value, r"^TODO.*$")

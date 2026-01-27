@@ -13,6 +13,12 @@
 → Summarize results for user
 ```
 
+**User**: "Show me due items that are past OR today"
+```
+→ Use membership rather than array quantifiers:
+  raven_query(query_string="trait:due in(.value, [past,today])")
+```
+
 **User**: "Show me highlights from the books I'm reading"
 ```
 → raven_query(query_string="trait:highlight on:{object:book .status==reading}")

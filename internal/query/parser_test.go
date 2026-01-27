@@ -868,6 +868,65 @@ func TestParseComparisonOperators(t *testing.T) {
 	}
 }
 
+func TestParseInPredicates(t *testing.T) {
+	t.Run("trait value in list", func(t *testing.T) {
+		q, err := Parse(`trait:todo in(.value, [todo,done])`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(q.Predicates) != 1 {
+			t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+		}
+		if _, ok := q.Predicates[0].(*OrPredicate); !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicates[0])
+		}
+	})
+
+	t.Run("trait value not in list via negation", func(t *testing.T) {
+		q, err := Parse(`trait:todo !in(.value, [todo,done])`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(q.Predicates) != 1 {
+			t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+		}
+		op, ok := q.Predicates[0].(*OrPredicate)
+		if !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicates[0])
+		}
+		if !op.Negated() {
+			t.Fatal("expected negated predicate")
+		}
+	})
+
+	t.Run("object field in list", func(t *testing.T) {
+		q, err := Parse(`object:project in(.status, [active,backlog])`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(q.Predicates) != 1 {
+			t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+		}
+		if _, ok := q.Predicates[0].(*OrPredicate); !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicates[0])
+		}
+	})
+
+	t.Run("in() errors on empty list", func(t *testing.T) {
+		_, err := Parse(`trait:todo in(.value, [])`)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("bracket list is not valid after ==", func(t *testing.T) {
+		_, err := Parse(`trait:todo .value==[todo,done]`)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
 func TestParseFieldComparisonOperators(t *testing.T) {
 	tests := []struct {
 		name          string
