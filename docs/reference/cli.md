@@ -909,6 +909,48 @@ rvn schema rename type event meeting --confirm
 
 ---
 
+### `rvn schema rename field`
+
+Rename a field on a specific type and update all downstream uses.
+
+```bash
+rvn schema rename field <type> <old_field> <new_field> [--confirm]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `type` | Type containing the field |
+| `old_field` | Current field name |
+| `new_field` | New field name |
+
+| Flag | Description |
+|------|-------------|
+| `--confirm` | Apply the rename (default: preview only) |
+
+**What it updates:**
+1. The field definition key in `schema.yaml` for the target type
+2. `name_field` if it matches the old field name
+3. Type templates that reference `{{field.<old_field>}}`
+4. Frontmatter keys for files with `type: <type>`
+5. Keys inside embedded `::type(...)` declarations for that type
+6. Saved queries in `raven.yaml` that parse as `object:<type>` (best-effort)
+
+**Examples:**
+
+```bash
+# Preview changes
+rvn schema rename field person email email_address
+
+# Apply changes
+rvn schema rename field person email email_address --confirm
+```
+
+**Notes:**
+- The operation is blocked if any file/declaration already contains both the old and new field keys
+- Always run `rvn reindex --full` after renaming to update the index
+
+---
+
 ### `rvn schema validate`
 
 Validate the schema for correctness.

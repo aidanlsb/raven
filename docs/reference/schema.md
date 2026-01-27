@@ -610,6 +610,10 @@ rvn schema update field person email --required=true
 rvn schema rename type event meeting          # Preview
 rvn schema rename type event meeting --confirm # Apply
 
+# Rename a field on a type (updates all downstream uses)
+rvn schema rename field person email email_address          # Preview
+rvn schema rename field person email email_address --confirm # Apply
+
 # Remove from schema
 rvn schema remove type old-type
 rvn schema remove trait old-trait

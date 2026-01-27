@@ -117,6 +117,8 @@ func CLICommandName(toolName string) string {
 		return "schema remove field"
 	case "schema_rename_type":
 		return "schema rename type"
+	case "schema_rename_field":
+		return "schema rename field"
 	case "query_add":
 		return "query add"
 	case "query_remove":
