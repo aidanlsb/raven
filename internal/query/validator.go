@@ -82,8 +82,20 @@ func (v *Validator) validatePipeline(p *Pipeline, queryType QueryType) error {
 
 // validateAssignmentStage validates that assignment subqueries contain _ references.
 func (v *Validator) validateAssignmentStage(s *AssignmentStage, queryType QueryType) error {
-	// Navigation functions like refs(_), refd(_) are always connected
+	// Navigation functions like refs(_), refd(_) are always connected, but only support count().
 	if s.NavFunc != nil {
+		if s.AggField != "" {
+			return &ValidationError{
+				Message:    fmt.Sprintf("count() does not accept a field argument (got .%s) for navigation function %s(_)", s.AggField, s.NavFunc.Name),
+				Suggestion: fmt.Sprintf("Use %s = count(%s(_))", s.Name, s.NavFunc.Name),
+			}
+		}
+		if s.Aggregation != AggCount {
+			return &ValidationError{
+				Message:    fmt.Sprintf("navigation functions only support count(), not %s()", aggNameForType(s.Aggregation)),
+				Suggestion: fmt.Sprintf("Use %s = count(%s(_))", s.Name, s.NavFunc.Name),
+			}
+		}
 		return nil
 	}
 
@@ -102,9 +114,113 @@ func (v *Validator) validateAssignmentStage(s *AssignmentStage, queryType QueryT
 				Suggestion: "Use predicates like within:_, on:_, refs:_, at:_ to relate the subquery to each result. Example: count({trait:todo within:_})",
 			}
 		}
+
+		// Aggregation-specific typing rules
+		switch s.Aggregation {
+		case AggCount:
+			// count({subquery}) should not take a field arg
+			if s.AggField != "" {
+				return &ValidationError{
+					Message:    fmt.Sprintf("count() does not accept a field argument (got .%s)", s.AggField),
+					Suggestion: "Use count({object:...}) or count({trait:...}) without a field argument",
+				}
+			}
+		case AggMin, AggMax, AggSum:
+			if s.AggField == "" {
+				return &ValidationError{
+					Message:    fmt.Sprintf("%s() requires a field argument", aggNameForType(s.Aggregation)),
+					Suggestion: "Use min(.field, {object:...}) or min(.value, {trait:...}) (similarly for max/sum)",
+				}
+			}
+
+			switch s.SubQuery.Type {
+			case QueryTypeTrait:
+				// Trait aggregates only support .value
+				if s.AggField != "value" {
+					return &ValidationError{
+						Message:    fmt.Sprintf("%s() on trait subqueries only supports .value (got .%s)", aggNameForType(s.Aggregation), s.AggField),
+						Suggestion: fmt.Sprintf("Use %s(.value, {trait:%s ...})", aggNameForType(s.Aggregation), s.SubQuery.TypeName),
+					}
+				}
+				td := v.schema.Traits[s.SubQuery.TypeName]
+				if td == nil || td.IsBoolean() {
+					return &ValidationError{
+						Message:    fmt.Sprintf("cannot use %s() on boolean trait '%s' (it has no value)", aggNameForType(s.Aggregation), s.SubQuery.TypeName),
+						Suggestion: "Use count({trait:...}) instead, or choose a valued trait",
+					}
+				}
+				if s.Aggregation == AggSum {
+					if td.Type != schema.FieldTypeNumber {
+						return &ValidationError{
+							Message:    fmt.Sprintf("sum() on trait subqueries requires a numeric trait (trait '%s' is type '%s')", s.SubQuery.TypeName, td.Type),
+							Suggestion: "Use a numeric trait, or use count()/min()/max() instead",
+						}
+					}
+				}
+
+			case QueryTypeObject:
+				typeDef := v.schema.Types[s.SubQuery.TypeName]
+				if typeDef == nil || typeDef.Fields == nil {
+					return &ValidationError{
+						Message:    fmt.Sprintf("type '%s' has no defined fields (cannot aggregate .%s)", s.SubQuery.TypeName, s.AggField),
+						Suggestion: fmt.Sprintf("Add the field to type '%s' in schema.yaml, or choose an existing field", s.SubQuery.TypeName),
+					}
+				}
+				fd, ok := typeDef.Fields[s.AggField]
+				if !ok || fd == nil {
+					available := v.availableFields(typeDef)
+					return &ValidationError{
+						Message:    fmt.Sprintf("type '%s' has no field '%s' for %s()", s.SubQuery.TypeName, s.AggField, aggNameForType(s.Aggregation)),
+						Suggestion: fmt.Sprintf("Available fields: %s", strings.Join(available, ", ")),
+					}
+				}
+				if !isAllowedAggregateFieldType(fd.Type, s.Aggregation) {
+					return &ValidationError{
+						Message:    fmt.Sprintf("cannot use %s() on field '%s.%s' of type '%s'", aggNameForType(s.Aggregation), s.SubQuery.TypeName, s.AggField, fd.Type),
+						Suggestion: "Use count() for non-scalar fields, or aggregate a comparable scalar (string/number/date/datetime/enum) and sum() only on number",
+					}
+				}
+			}
+		}
 	}
 
 	return nil
+}
+
+func aggNameForType(a AggregationType) string {
+	switch a {
+	case AggMin:
+		return "min"
+	case AggMax:
+		return "max"
+	case AggSum:
+		return "sum"
+	default:
+		return "count"
+	}
+}
+
+func isAllowedAggregateFieldType(ft schema.FieldType, agg AggregationType) bool {
+	// Disallow arrays for all aggregates (including min/max) - ambiguous semantics.
+	if strings.HasSuffix(string(ft), "[]") {
+		return false
+	}
+	// Disallow refs and booleans
+	switch ft {
+	case schema.FieldTypeRef, schema.FieldTypeBool:
+		return false
+	}
+	// sum requires number
+	if agg == AggSum {
+		return ft == schema.FieldTypeNumber
+	}
+	// min/max allow comparable scalars (including enum)
+	switch ft {
+	case schema.FieldTypeString, schema.FieldTypeNumber, schema.FieldTypeDate, schema.FieldTypeDatetime, schema.FieldTypeEnum:
+		return true
+	default:
+		return false
+	}
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {

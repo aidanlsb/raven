@@ -366,6 +366,124 @@ func TestValidator_PipelineSubqueriesMustReferenceSelf(t *testing.T) {
 	}
 }
 
+func TestValidator_PipelineAggregationTyping(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"priority": {Type: schema.FieldTypeNumber},
+					"name":     {Type: schema.FieldTypeString},
+					"tags":     {Type: schema.FieldTypeStringArray},
+					"owner":    {Type: schema.FieldTypeRef, Target: "person"},
+				},
+			},
+			"person": {
+				Fields: map[string]*schema.FieldDefinition{
+					"name": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"due":   {Type: schema.FieldTypeDate},
+			"score": {Type: schema.FieldTypeNumber},
+			"flag":  {Type: schema.FieldTypeBool}, // boolean trait (no value)
+		},
+	}
+
+	v := NewValidator(sch)
+
+	valid := []string{
+		"object:project |> todos = count({trait:due within:_})",
+		"object:project |> earliest = min(.value, {trait:due within:_})",
+		"object:project |> maxPriority = max(.priority, {object:project refs:_})",
+		"trait:due |> refs = count(refs(_))",
+	}
+	for _, qs := range valid {
+		t.Run("valid: "+qs, func(t *testing.T) {
+			q, err := Parse(qs)
+			if err != nil {
+				t.Fatalf("failed to parse: %v", err)
+			}
+			if err := v.Validate(q); err != nil {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
+	}
+
+	invalid := []struct {
+		name        string
+		query       string
+		wantContain string
+	}{
+		{
+			name:        "nav function only supports count",
+			query:       "object:project |> x = max(refs(_))",
+			wantContain: "navigation functions only support count()",
+		},
+		{
+			name:        "count does not accept field arg",
+			query:       "object:project |> x = count(.priority, {object:project refs:_})",
+			wantContain: "count() does not accept a field argument",
+		},
+		{
+			name:        "min requires field arg",
+			query:       "object:project |> x = min({trait:due within:_})",
+			wantContain: "requires a field argument",
+		},
+		{
+			name:        "trait aggregates require .value",
+			query:       "object:project |> x = max(.priority, {trait:due within:_})",
+			wantContain: "only supports .value",
+		},
+		{
+			name:        "sum on non-numeric trait is rejected",
+			query:       "object:project |> x = sum(.value, {trait:due within:_})",
+			wantContain: "requires a numeric trait",
+		},
+		{
+			name:        "min/max on boolean trait is rejected",
+			query:       "object:project |> x = max(.value, {trait:flag within:_})",
+			wantContain: "boolean trait",
+		},
+		{
+			name:        "object aggregates reject array fields",
+			query:       "object:project |> x = min(.tags, {object:project refs:_})",
+			wantContain: "cannot use min()",
+		},
+		{
+			name:        "object aggregates reject ref fields",
+			query:       "object:project |> x = max(.owner, {object:project refs:_})",
+			wantContain: "cannot use max()",
+		},
+		{
+			name:        "object aggregates validate field exists",
+			query:       "object:project |> x = max(.missing, {object:project refs:_})",
+			wantContain: "has no field 'missing'",
+		},
+		{
+			name:        "sum on object requires numeric field type",
+			query:       "object:project |> x = sum(.name, {object:project refs:_})",
+			wantContain: "cannot use sum()",
+		},
+	}
+
+	for _, tc := range invalid {
+		t.Run("invalid: "+tc.name, func(t *testing.T) {
+			q, err := Parse(tc.query)
+			if err != nil {
+				t.Fatalf("failed to parse: %v", err)
+			}
+			err = v.Validate(q)
+			if err == nil {
+				t.Fatalf("expected validation error")
+			}
+			if !strings.Contains(err.Error(), tc.wantContain) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantContain, err)
+			}
+		})
+	}
+}
+
 func TestValidator_DirectTargetPredicates(t *testing.T) {
 	// Test that [[target]] predicates don't panic and validate correctly
 	// This is a regression test for the nil pointer dereference when SubQuery is nil
