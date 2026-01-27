@@ -24,6 +24,9 @@ type EmbeddedTypeInfo struct {
 	TypeName string
 	ID       string
 	Fields   map[string]schema.FieldValue
+	// Line is the 1-indexed line number of the ::type(...) declaration in the file.
+	// This is the declaration line (not the heading line).
+	Line int
 }
 
 // typeDeclWithArgsRegex matches ::type-name(args...)
@@ -50,6 +53,7 @@ func ParseEmbeddedType(line string, lineNumber int) *EmbeddedTypeInfo {
 		TypeName: decl.TypeName,
 		ID:       decl.ID,
 		Fields:   decl.Fields,
+		Line:     decl.Line,
 	}
 }
 

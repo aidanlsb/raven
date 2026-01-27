@@ -687,6 +687,40 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 			"Migrate from old naming conventions",
 		},
 	},
+	"schema_rename_field": {
+		Name:        "schema rename field",
+		Description: "Rename a field on a type and update all downstream uses",
+		LongDesc: `Rename a field on a specific type and update all downstream places that use that field.
+
+This command:
+1. Renames types.<type>.fields.<old_field> -> <new_field> in schema.yaml
+2. If name_field == <old_field>, updates it to <new_field>
+3. Updates type templates that reference {{field.<old_field>}} (inline schema template or template file)
+4. Renames frontmatter keys in files whose type matches the target type
+5. Renames keys inside ::type(...) declarations (only for the target type)
+6. Updates saved queries in raven.yaml that parse as object:<type> (best-effort)
+
+IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
+
+For agents: After renaming, run raven_reindex(full=true) to update the index.`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type containing the field", Required: true, DynamicComp: "types"},
+			{Name: "old_field", Description: "Current field name", Required: true},
+			{Name: "new_field", Description: "New field name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "confirm", Description: "Apply the rename (default: preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema rename field person email email_address --json",
+			"rvn schema rename field person email email_address --confirm --json",
+		},
+		UseCases: []string{
+			"Rename a field on a type safely with preview/confirm",
+			"Refactor schema field names while keeping files consistent",
+			"Update embedded ::type(...) declarations and saved queries after field rename",
+		},
+	},
 	"set": {
 		Name:        "set",
 		Description: "Set frontmatter fields on an object",
