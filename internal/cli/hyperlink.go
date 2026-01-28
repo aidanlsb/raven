@@ -16,6 +16,15 @@ import (
 // Hyperlinks are only emitted to TTY terminals, not JSON output or pipes.
 var hyperlinkEnabled *bool
 
+// hyperlinksDisabled forces hyperlinks off for the current run (e.g. --no-links).
+var hyperlinksDisabled bool
+
+func setHyperlinksDisabled(disabled bool) {
+	hyperlinksDisabled = disabled
+	// Reset cached decision so changes take effect immediately.
+	hyperlinkEnabled = nil
+}
+
 // shouldEmitHyperlinks returns true if we should emit OSC 8 hyperlinks.
 func shouldEmitHyperlinks() bool {
 	if hyperlinkEnabled != nil {
@@ -23,7 +32,7 @@ func shouldEmitHyperlinks() bool {
 	}
 
 	// Don't emit hyperlinks for JSON output or non-TTY
-	enabled := !jsonOutput && isatty.IsTerminal(os.Stdout.Fd())
+	enabled := !jsonOutput && isatty.IsTerminal(os.Stdout.Fd()) && !hyperlinksDisabled
 	hyperlinkEnabled = &enabled
 	return enabled
 }
