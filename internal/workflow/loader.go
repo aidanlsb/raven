@@ -16,8 +16,7 @@ import (
 type externalWorkflowDef struct {
 	Description string                           `yaml:"description,omitempty"`
 	Inputs      map[string]*config.WorkflowInput `yaml:"inputs,omitempty"`
-	Context     map[string]*config.ContextQuery  `yaml:"context,omitempty"`
-	Prompt      string                           `yaml:"prompt"`
+	Steps       []*config.WorkflowStep           `yaml:"steps,omitempty"`
 }
 
 // LoadAll loads all workflows from the vault configuration.
@@ -45,27 +44,39 @@ func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
 	}
 
 	// Check for conflicting definition
-	if ref.File != "" && ref.Prompt != "" {
-		return nil, fmt.Errorf("workflow has both 'file' and inline definition; use one or the other")
+	// Allow a top-level description alongside file-backed workflows for convenience,
+	// but disallow mixing file-backed workflows with inline inputs/steps.
+	if ref.File != "" && (len(ref.Inputs) > 0 || len(ref.Steps) > 0) {
+		return nil, fmt.Errorf("workflow has both 'file' and inline fields; use one or the other")
 	}
 
 	// Load from external file if specified
 	if ref.File != "" {
-		return loadFromFile(vaultPath, name, ref.File)
+		wf, err := loadFromFile(vaultPath, name, ref.File)
+		if err != nil {
+			return nil, err
+		}
+		if ref.Description != "" {
+			wf.Description = ref.Description
+		}
+		return wf, nil
 	}
 
 	// Use inline definition
-	if ref.Prompt == "" {
-		return nil, fmt.Errorf("workflow must have either 'file' or 'prompt'")
+	if len(ref.Steps) == 0 {
+		return nil, fmt.Errorf("workflow must have either 'file' or 'steps'")
 	}
 
-	return &Workflow{
+	wf := &Workflow{
 		Name:        name,
 		Description: ref.Description,
 		Inputs:      ref.Inputs,
-		Context:     ref.Context,
-		Prompt:      ref.Prompt,
-	}, nil
+		Steps:       ref.Steps,
+	}
+	if err := validateWorkflow(wf); err != nil {
+		return nil, err
+	}
+	return wf, nil
 }
 
 // loadFromFile loads a workflow from an external YAML file.
@@ -90,17 +101,92 @@ func loadFromFile(vaultPath, name, filePath string) (*Workflow, error) {
 		return nil, fmt.Errorf("failed to parse workflow file: %w", err)
 	}
 
-	if def.Prompt == "" {
-		return nil, fmt.Errorf("workflow file must have 'prompt' field")
+	if len(def.Steps) == 0 {
+		return nil, fmt.Errorf("workflow file must have 'steps' field")
 	}
 
-	return &Workflow{
+	wf := &Workflow{
 		Name:        name,
 		Description: def.Description,
 		Inputs:      def.Inputs,
-		Context:     def.Context,
-		Prompt:      def.Prompt,
-	}, nil
+		Steps:       def.Steps,
+	}
+	if err := validateWorkflow(wf); err != nil {
+		return nil, err
+	}
+	return wf, nil
+}
+
+func validateWorkflow(wf *Workflow) error {
+	if wf == nil {
+		return fmt.Errorf("workflow is nil")
+	}
+	if len(wf.Steps) == 0 {
+		return fmt.Errorf("workflow has no steps")
+	}
+
+	seen := make(map[string]struct{}, len(wf.Steps))
+	for i, s := range wf.Steps {
+		if s == nil {
+			return fmt.Errorf("step %d is nil", i)
+		}
+		if s.ID == "" {
+			return fmt.Errorf("step %d is missing id", i)
+		}
+		if _, ok := seen[s.ID]; ok {
+			return fmt.Errorf("duplicate step id: %s", s.ID)
+		}
+		seen[s.ID] = struct{}{}
+
+		if s.Type == "" {
+			return fmt.Errorf("step '%s' is missing type", s.ID)
+		}
+		switch s.Type {
+		case "query":
+			if s.RQL == "" {
+				return fmt.Errorf("step '%s' (query) missing rql", s.ID)
+			}
+		case "read":
+			if s.Ref == "" {
+				return fmt.Errorf("step '%s' (read) missing ref", s.ID)
+			}
+		case "search":
+			if s.Term == "" {
+				return fmt.Errorf("step '%s' (search) missing term", s.ID)
+			}
+		case "backlinks":
+			if s.Target == "" {
+				return fmt.Errorf("step '%s' (backlinks) missing target", s.ID)
+			}
+		case "prompt":
+			if s.Template == "" {
+				return fmt.Errorf("step '%s' (prompt) missing template", s.ID)
+			}
+			if len(s.Outputs) == 0 {
+				return fmt.Errorf("step '%s' (prompt) missing outputs", s.ID)
+			}
+			for name, out := range s.Outputs {
+				if name == "" {
+					return fmt.Errorf("step '%s' (prompt) has empty output name", s.ID)
+				}
+				if out == nil {
+					return fmt.Errorf("step '%s' (prompt) output '%s' is nil", s.ID, name)
+				}
+				switch out.Type {
+				case "markdown", "plan":
+				default:
+					return fmt.Errorf("step '%s' (prompt) output '%s' has unknown type '%s'", s.ID, name, out.Type)
+				}
+			}
+		case "apply":
+			if s.From == "" {
+				return fmt.Errorf("step '%s' (apply) missing from", s.ID)
+			}
+		default:
+			return fmt.Errorf("step '%s' has unknown type '%s'", s.ID, s.Type)
+		}
+	}
+	return nil
 }
 
 // Get retrieves a workflow by name from the vault configuration.

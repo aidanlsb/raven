@@ -1,4 +1,4 @@
-// Package workflow provides workflow definition, loading, and rendering.
+// Package workflow provides workflow definition, loading, and running.
 package workflow
 
 import "github.com/aidanlsb/raven/internal/config"
@@ -14,23 +14,24 @@ type Workflow struct {
 	// Inputs defines the parameters the workflow accepts.
 	Inputs map[string]*config.WorkflowInput
 
-	// Context defines data to gather before rendering the prompt.
-	Context map[string]*config.ContextQuery
-
-	// Prompt is the task description with interpolated context.
-	Prompt string
+	// Steps are executed in order.
+	Steps []*config.WorkflowStep
 }
 
-// RenderResult contains the rendered workflow ready for an agent.
-type RenderResult struct {
-	// Name is the workflow identifier.
-	Name string `json:"name"`
+// PromptRequest is emitted when a workflow reaches a prompt step.
+type PromptRequest struct {
+	StepID   string                                  `json:"step_id"`
+	Prompt   string                                  `json:"prompt"`
+	Outputs  map[string]*config.WorkflowPromptOutput `json:"outputs"`
+	Template string                                  `json:"template,omitempty"`
+}
 
-	// Prompt is the rendered prompt text with variables substituted.
-	Prompt string `json:"prompt"`
-
-	// Context contains the gathered data from context queries.
-	Context map[string]interface{} `json:"context"`
+// RunResult is the output of running a workflow until a prompt step or completion.
+type RunResult struct {
+	Name   string                 `json:"name"`
+	Inputs map[string]string      `json:"inputs"`
+	Steps  map[string]interface{} `json:"steps"`
+	Next   *PromptRequest         `json:"next,omitempty"`
 }
 
 // ListItem represents a workflow in the list output.

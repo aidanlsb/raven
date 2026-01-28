@@ -443,7 +443,7 @@ rvn untyped
 
 ## Workflows
 
-Workflows are reusable prompt templates. See `guide/workflows.md` for details.
+Workflows are reusable multi-step pipelines. See `guide/workflows.md` for details.
 
 ```bash
 # List available workflows
@@ -452,8 +452,11 @@ rvn workflow list
 # See workflow details
 rvn workflow show meeting-prep
 
-# Run a workflow
-rvn workflow render meeting-prep --input meeting_id=meetings/team-sync
+# Run deterministic steps until prompt step
+rvn workflow run meeting-prep --input meeting_id=meetings/team-sync
+
+# Apply an agent-produced plan (preview by default)
+rvn workflow apply-plan meeting-prep --plan plan.json
 ```
 
 ---

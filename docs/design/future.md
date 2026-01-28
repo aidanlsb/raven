@@ -1174,10 +1174,10 @@ that gather context from the vault and render structured prompts for AI agents.
 **Key features:**
 - Define workflows in `raven.yaml` (inline or file-based)
 - Input parameters with types, defaults, and validation
-- Context queries: `read`, `query`, `backlinks`, `search`
-- Simple `{{var}}` template substitution
-- CLI: `rvn workflow list`, `rvn workflow show`, `rvn workflow render`
-- MCP tools: `raven_workflow_list`, `raven_workflow_show`, `raven_workflow_render`
+- Ordered steps: `query`, `read`, `search`, `backlinks`, `prompt`
+- `{{inputs.*}}` and `{{steps.*}}` interpolation
+- CLI: `rvn workflow list`, `rvn workflow show`, `rvn workflow run`, `rvn workflow apply-plan`
+- MCP tools: `raven_workflow_list`, `raven_workflow_show`, `raven_workflow_run`, `raven_workflow_apply_plan`
 
 ---
 

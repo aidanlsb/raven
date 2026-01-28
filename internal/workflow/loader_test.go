@@ -19,33 +19,38 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("conflicting file and prompt", func(t *testing.T) {
-		_, err := Load(vaultDir, "x", &config.WorkflowRef{File: "wf.yaml", Prompt: "hi"})
-		if err == nil || !strings.Contains(err.Error(), "both 'file' and inline definition") {
+	t.Run("conflicting file and inline fields", func(t *testing.T) {
+		_, err := Load(vaultDir, "x", &config.WorkflowRef{
+			File:  "wf.yaml",
+			Steps: []*config.WorkflowStep{{ID: "q", Type: "query", RQL: "object:project"}},
+		})
+		if err == nil || !strings.Contains(err.Error(), "both 'file' and inline") {
 			t.Fatalf("expected conflict error, got %v", err)
 		}
 	})
 
-	t.Run("missing prompt for inline workflow", func(t *testing.T) {
+	t.Run("missing steps for inline workflow", func(t *testing.T) {
 		_, err := Load(vaultDir, "x", &config.WorkflowRef{Description: "d"})
-		if err == nil || !strings.Contains(err.Error(), "must have either 'file' or 'prompt'") {
-			t.Fatalf("expected missing prompt error, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "must have either 'file' or 'steps'") {
+			t.Fatalf("expected missing steps error, got %v", err)
 		}
 	})
 
 	t.Run("inline workflow loads", func(t *testing.T) {
 		ref := &config.WorkflowRef{
 			Description: "desc",
-			Prompt:      "Hello",
 			Inputs: map[string]*config.WorkflowInput{
 				"name": {Type: "string", Required: true},
+			},
+			Steps: []*config.WorkflowStep{
+				{ID: "q", Type: "query", RQL: "object:project"},
 			},
 		}
 		wf, err := Load(vaultDir, "greet", ref)
 		if err != nil {
 			t.Fatalf("Load error: %v", err)
 		}
-		if wf.Name != "greet" || wf.Description != "desc" || wf.Prompt != "Hello" {
+		if wf.Name != "greet" || wf.Description != "desc" || len(wf.Steps) != 1 {
 			t.Fatalf("unexpected workflow: %+v", wf)
 		}
 		if wf.Inputs == nil || wf.Inputs["name"] == nil || wf.Inputs["name"].Type != "string" {
@@ -62,7 +67,7 @@ func TestLoad_FromFile(t *testing.T) {
 
 	t.Run("loads from file", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "w1.yaml")
-		if err := os.WriteFile(path, []byte("description: test\nprompt: |\n  Hello\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: query\n    rql: object:project\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
@@ -70,7 +75,7 @@ func TestLoad_FromFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Load error: %v", err)
 		}
-		if wf.Name != "w1" || wf.Description != "test" || !strings.Contains(wf.Prompt, "Hello") {
+		if wf.Name != "w1" || wf.Description != "test" || len(wf.Steps) != 1 {
 			t.Fatalf("unexpected workflow: %+v", wf)
 		}
 	})
@@ -94,8 +99,8 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 
 		_, err := Load(vaultDir, "noprompt", &config.WorkflowRef{File: "workflows/noprompt.yaml"})
-		if err == nil || !strings.Contains(err.Error(), "must have 'prompt' field") {
-			t.Fatalf("expected missing prompt error, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "must have 'steps' field") {
+			t.Fatalf("expected missing steps error, got %v", err)
 		}
 	})
 }
@@ -113,7 +118,7 @@ func TestGetAndList(t *testing.T) {
 	t.Run("Get fails when workflow missing", func(t *testing.T) {
 		vc := &config.VaultConfig{
 			Workflows: map[string]*config.WorkflowRef{
-				"a": {Prompt: "hi"},
+				"a": {Steps: []*config.WorkflowStep{{ID: "q", Type: "query", RQL: "object:project"}}},
 			},
 		}
 		_, err := Get(vaultDir, "missing", vc)
@@ -125,7 +130,7 @@ func TestGetAndList(t *testing.T) {
 	t.Run("List includes errors in description rather than failing", func(t *testing.T) {
 		vc := &config.VaultConfig{
 			Workflows: map[string]*config.WorkflowRef{
-				"good": {Prompt: "Hello"},
+				"good": {Steps: []*config.WorkflowStep{{ID: "q", Type: "query", RQL: "object:project"}}},
 				"bad":  {File: "workflows/does-not-exist.yaml"},
 			},
 		}
@@ -149,4 +154,3 @@ func TestGetAndList(t *testing.T) {
 		}
 	})
 }
-
