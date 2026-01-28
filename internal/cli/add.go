@@ -87,20 +87,20 @@ func runAddBulk(args []string, vaultPath string) error {
 	text := strings.Join(args, " ")
 
 	// Read IDs from stdin
-	ids, embedded, err := ReadIDsFromStdin()
+	fileIDs, embeddedIDs, err := ReadIDsFromStdin()
 	if err != nil {
 		return handleError(ErrInternal, err, "")
 	}
 
-	if len(ids) == 0 && len(embedded) == 0 {
+	// Combine all IDs - bulk add supports embedded objects (sections) as targets.
+	ids := append(fileIDs, embeddedIDs...)
+
+	if len(ids) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 	}
 
-	// Build warnings for embedded objects
+	// Warnings are kept for parity with other bulk ops; add supports embedded targets so no special warning.
 	var warnings []Warning
-	if w := BuildEmbeddedSkipWarning(embedded); w != nil {
-		warnings = append(warnings, *w)
-	}
 
 	// Load vault config
 	vaultCfg := loadVaultConfigSafe(vaultPath)
@@ -123,18 +123,52 @@ func runAddBulk(args []string, vaultPath string) error {
 
 // previewAddBulk shows a preview of bulk add operations.
 func previewAddBulk(vaultPath string, ids []string, line string, warnings []Warning, vaultCfg *config.VaultConfig) error {
+	parseOpts := buildParseOptions(vaultCfg)
+
 	preview := buildBulkPreview("add", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		// Resolve to a file path. For embedded IDs, resolve their parent file.
+		fileID := id
+		if baseID, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
+			fileID = baseID
+		}
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
 		if err != nil {
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "file not found"}
 		}
+
+		// For embedded IDs, ensure the target section exists in the file.
+		if IsEmbeddedID(id) {
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
+			}
+			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+			if err != nil {
+				return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
+			}
+			found := false
+			for _, obj := range doc.Objects {
+				if obj != nil && obj.ID == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, &BulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
+			}
+		}
+
+		details := fmt.Sprintf("append: %s", line)
+		if IsEmbeddedID(id) {
+			details = fmt.Sprintf("append within %s: %s", id, line)
+		}
 		return &BulkPreviewItem{
 			ID:      id,
 			Action:  "add",
-			Details: fmt.Sprintf("append: %s", line),
+			Details: details,
 		}, nil
 	})
 
@@ -149,7 +183,16 @@ func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warnin
 
 	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		// Resolve to a file path. For embedded IDs, resolve their parent file and
+		// pass the embedded ID through so appendToFile can target the correct section.
+		fileID := id
+		targetObjectID := ""
+		if baseID, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
+			fileID = baseID
+			targetObjectID = id
+		}
+
+		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -157,7 +200,7 @@ func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warnin
 		}
 
 		// Append to file (never create for bulk operations)
-		if err := appendToFile(vaultPath, filePath, line, captureCfg, vaultCfg, false); err != nil {
+		if err := appendToFile(vaultPath, filePath, line, captureCfg, vaultCfg, false, targetObjectID); err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("append failed: %v", err)
 			return result
@@ -195,13 +238,18 @@ func addSingleCapture(vaultPath string, args []string) error {
 	// Determine destination file
 	var destPath string
 	var isDailyNote bool
+	var targetObjectID string
 	if addToFlag != "" {
-		// Resolve --to flag using unified resolver
-		resolvedPath, err := resolveToPath(vaultPath, addToFlag, vaultCfg)
+		// Resolve --to flag using unified resolver (supports section refs like file#section)
+		result, err := ResolveReference(addToFlag, ResolveOptions{
+			VaultPath:   vaultPath,
+			VaultConfig: vaultCfg,
+		})
 		if err != nil {
 			return handleResolveError(err, addToFlag)
 		}
-		destPath = resolvedPath
+		destPath = result.FilePath
+		targetObjectID = result.ObjectID
 	} else if captureCfg.Destination == "daily" {
 		// Use today's daily note (auto-created if needed)
 		today := vault.FormatDateISO(time.Now())
@@ -236,7 +284,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 	line := formatCaptureLine(text, captureCfg)
 
 	// Append to file (create if daily note)
-	if err := appendToFile(vaultPath, destPath, line, captureCfg, vaultCfg, isDailyNote); err != nil {
+	if err := appendToFile(vaultPath, destPath, line, captureCfg, vaultCfg, isDailyNote, targetObjectID); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
@@ -291,7 +339,7 @@ func formatCaptureLine(text string, cfg *config.CaptureConfig) string {
 	return "- " + strings.Join(parts, " ")
 }
 
-func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool) error {
+func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool, targetObjectID string) error {
 	// Check if file exists
 	fileExists := true
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
@@ -323,6 +371,12 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 		}
 	}
 
+	// If a specific embedded/section object is targeted, append within that object's range.
+	// This overrides capture.heading behavior for this operation.
+	if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
+		return appendWithinObject(vaultPath, destPath, line, targetObjectID, vaultCfg)
+	}
+
 	// If heading is configured, find or create it
 	if cfg.Heading != "" {
 		return appendUnderHeading(destPath, line, cfg.Heading)
@@ -352,6 +406,75 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 	}
 
 	return nil
+}
+
+func appendWithinObject(vaultPath, destPath, line, objectID string, vaultCfg *config.VaultConfig) error {
+	contentBytes, err := os.ReadFile(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+	content := string(contentBytes)
+	lines := strings.Split(content, "\n")
+
+	var opts *parser.ParseOptions
+	if vaultCfg != nil {
+		opts = &parser.ParseOptions{
+			ObjectsRoot: vaultCfg.GetObjectsRoot(),
+			PagesRoot:   vaultCfg.GetPagesRoot(),
+		}
+	}
+
+	doc, err := parser.ParseDocumentWithOptions(content, destPath, vaultPath, opts)
+	if err != nil {
+		return fmt.Errorf("failed to parse document: %w", err)
+	}
+
+	var target *parser.ParsedObject
+	for _, obj := range doc.Objects {
+		if obj != nil && obj.ID == objectID {
+			target = obj
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("target section not found: %s", objectID)
+	}
+
+	// Insertion point is just before the next object's heading (or EOF).
+	// LineEnd is 1-indexed (inclusive); inserting before the next heading corresponds
+	// to inserting at index == LineEnd (since slice indices are 0-indexed).
+	insertIdx := len(lines)
+	if target.LineEnd != nil {
+		insertIdx = *target.LineEnd
+		if insertIdx < 0 {
+			insertIdx = 0
+		}
+		if insertIdx > len(lines) {
+			insertIdx = len(lines)
+		}
+	}
+
+	// Avoid inserting above the heading itself. LineStart is 1-indexed; the earliest
+	// valid insertion point is the line after the heading: index == LineStart.
+	minInsertIdx := target.LineStart
+	if minInsertIdx < 0 {
+		minInsertIdx = 0
+	}
+	if minInsertIdx > len(lines) {
+		minInsertIdx = len(lines)
+	}
+
+	// Insert before trailing empty lines at the boundary (mirrors appendUnderHeading behavior).
+	for insertIdx > minInsertIdx && strings.TrimSpace(lines[insertIdx-1]) == "" {
+		insertIdx--
+	}
+
+	newLines := make([]string, 0, len(lines)+1)
+	newLines = append(newLines, lines[:insertIdx]...)
+	newLines = append(newLines, line)
+	newLines = append(newLines, lines[insertIdx:]...)
+
+	return atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644)
 }
 
 func appendUnderHeading(destPath, line, heading string) error {
