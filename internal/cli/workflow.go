@@ -176,7 +176,7 @@ This command:
 
 		// Create renderer with query functions
 		renderer := workflow.NewRenderer(vaultPath, vaultCfg)
-		renderer.ReadFunc = makeReadFunc(vaultPath)
+		renderer.ReadFunc = makeReadFunc(vaultPath, vaultCfg)
 		renderer.QueryFunc = makeQueryFunc(vaultPath)
 		renderer.BacklinksFunc = makeBacklinksFunc(vaultPath)
 		renderer.SearchFunc = makeSearchFunc(vaultPath)
@@ -237,13 +237,22 @@ func describeContextQuery(q *config.ContextQuery) string {
 
 // makeReadFunc creates a function that reads a single object.
 // This reads and parses the actual file to get full content.
-func makeReadFunc(vaultPath string) func(id string) (interface{}, error) {
+func makeReadFunc(vaultPath string, vaultCfg *config.VaultConfig) func(id string) (interface{}, error) {
 	return func(id string) (interface{}, error) {
-		// Build file path
+		// Resolve reference to a vault-relative file path.
+		//
+		// Backwards compatibility: if the caller already provided an explicit
+		// markdown file path (ending in .md), treat it as a relative path.
+		// Otherwise, resolve via the vault's canonical reference rules.
 		filePath := id
 		if !strings.HasSuffix(filePath, ".md") {
-			filePath = filePath + ".md"
+			if vaultCfg != nil {
+				filePath = vaultCfg.ResolveReferenceToFilePath(id)
+			} else {
+				filePath = id + ".md"
+			}
 		}
+
 		fullPath := filepath.Join(vaultPath, filePath)
 
 		// Security: verify path is within vault
