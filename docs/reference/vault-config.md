@@ -39,7 +39,7 @@ queries:
     query: "object:project .status==active"
     description: "Active projects"
 
-# Workflows (prompt templates)
+# Workflows
 workflows:
   meeting-prep:
     file: workflows/meeting-prep.yaml
@@ -49,15 +49,31 @@ workflows:
       question:
         type: string
         required: true
-    context:
-      results:
-        search: "{{inputs.question}}"
-    prompt: |
-      Answer this question based on my notes:
-      {{inputs.question}}
+    steps:
+      - id: results
+        type: search
+        term: "{{inputs.question}}"
+        limit: 10
+      - id: prompt
+        type: prompt
+        outputs:
+          markdown:
+            type: markdown
+            required: true
+        template: |
+          Return JSON: { "outputs": { "markdown": "..." } }
 
-      ## Relevant notes
-      {{context.results}}
+          Answer this question based on my notes:
+          {{inputs.question}}
+
+          ## Relevant notes
+          {{steps.results.results}}
+
+# Additional protected/system prefixes (additive).
+# Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
+# protected_prefixes:
+#   - templates/
+#   - private/
 ```
 
 ---

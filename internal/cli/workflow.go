@@ -22,7 +22,7 @@ import (
 var workflowCmd = &cobra.Command{
 	Use:   "workflow",
 	Short: "Manage and run workflows",
-	Long:  `Workflows are reusable prompt templates for agents.`,
+	Long:  `Workflows are multi-step pipelines with deterministic Raven steps and agent prompt steps.`,
 }
 
 var workflowListCmd = &cobra.Command{
@@ -101,8 +101,7 @@ var workflowShowCmd = &cobra.Command{
 				"name":        wf.Name,
 				"description": wf.Description,
 				"inputs":      wf.Inputs,
-				"context":     formatContextQueries(wf.Context),
-				"prompt":      wf.Prompt,
+				"steps":       wf.Steps,
 			}, nil)
 			return nil
 		}
@@ -126,10 +125,34 @@ var workflowShowCmd = &cobra.Command{
 			}
 		}
 
-		if len(wf.Context) > 0 {
-			fmt.Println("\ncontext:")
-			for name, query := range wf.Context {
-				fmt.Printf("  %s: %s\n", name, describeContextQuery(query))
+		if len(wf.Steps) > 0 {
+			fmt.Println("\nsteps:")
+			for i, step := range wf.Steps {
+				if step == nil {
+					fmt.Printf("  %d. (nil)\n", i+1)
+					continue
+				}
+				fmt.Printf("  %d. %s (%s)\n", i+1, step.ID, step.Type)
+				if step.Description != "" {
+					fmt.Printf("     %s\n", step.Description)
+				}
+				switch step.Type {
+				case "query":
+					fmt.Printf("     rql: %s\n", step.RQL)
+				case "read":
+					fmt.Printf("     ref: %s\n", step.Ref)
+				case "search":
+					fmt.Printf("     term: %s\n", step.Term)
+					if step.Limit > 0 {
+						fmt.Printf("     limit: %d\n", step.Limit)
+					}
+				case "backlinks":
+					fmt.Printf("     target: %s\n", step.Target)
+				case "prompt":
+					fmt.Printf("     outputs: %d\n", len(step.Outputs))
+				case "apply":
+					fmt.Printf("     from: %s\n", step.From)
+				}
 			}
 		}
 
@@ -138,19 +161,13 @@ var workflowShowCmd = &cobra.Command{
 }
 
 var workflowInputFlags []string
+var workflowPlanFile string
+var workflowApplyConfirm bool
 
-var workflowRenderCmd = &cobra.Command{
-	Use:   "render <name>",
-	Short: "Render a workflow with context",
-	Long: `Renders a workflow and returns the prompt with pre-gathered context.
-
-This command:
-1. Loads the workflow definition
-2. Validates inputs
-3. Runs all context queries
-4. Renders the template
-5. Outputs the complete prompt with context`,
-	Args: cobra.ExactArgs(1),
+var workflowRunCmd = &cobra.Command{
+	Use:   "run <name>",
+	Short: "Run a workflow until it reaches a prompt step",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		name := args[0]
@@ -165,7 +182,6 @@ This command:
 			return handleError(ErrQueryNotFound, err, "Use 'rvn workflow list' to see available workflows")
 		}
 
-		// Parse --input flags
 		inputs := make(map[string]string)
 		for _, f := range workflowInputFlags {
 			parts := strings.SplitN(f, "=", 2)
@@ -174,15 +190,13 @@ This command:
 			}
 		}
 
-		// Create renderer with query functions
-		renderer := workflow.NewRenderer(vaultPath, vaultCfg)
-		renderer.ReadFunc = makeReadFunc(vaultPath, vaultCfg)
-		renderer.QueryFunc = makeQueryFunc(vaultPath)
-		renderer.BacklinksFunc = makeBacklinksFunc(vaultPath)
-		renderer.SearchFunc = makeSearchFunc(vaultPath)
+		runner := workflow.NewRunner(vaultPath, vaultCfg)
+		runner.ReadFunc = makeReadFunc(vaultPath, vaultCfg)
+		runner.QueryFunc = makeQueryFunc(vaultPath)
+		runner.BacklinksFunc = makeBacklinksFunc(vaultPath)
+		runner.SearchFunc = makeSearchFunc(vaultPath)
 
-		// Render the workflow
-		result, err := renderer.Render(wf, inputs)
+		result, err := runner.Run(wf, inputs)
 		if err != nil {
 			return handleError(ErrInvalidInput, err, "")
 		}
@@ -192,48 +206,26 @@ This command:
 			return nil
 		}
 
-		fmt.Println("=== PROMPT ===")
-		fmt.Println(result.Prompt)
-		fmt.Println()
-		fmt.Println("=== CONTEXT ===")
-		contextJSON, _ := json.MarshalIndent(result.Context, "", "  ")
-		fmt.Println(string(contextJSON))
+		if result.Next != nil {
+			fmt.Println("=== PROMPT ===")
+			fmt.Println(result.Next.Prompt)
+			fmt.Println()
+			fmt.Println("=== OUTPUTS ===")
+			outputJSON, _ := json.MarshalIndent(result.Next.Outputs, "", "  ")
+			fmt.Println(string(outputJSON))
+			return nil
+		}
 
+		fmt.Println("Workflow completed (no prompt steps).")
+		fmt.Println()
+		fmt.Println("=== STEPS ===")
+		stepsJSON, _ := json.MarshalIndent(result.Steps, "", "  ")
+		fmt.Println(string(stepsJSON))
 		return nil
 	},
 }
 
-// formatContextQueries converts context queries to a JSON-friendly format.
-func formatContextQueries(queries map[string]*config.ContextQuery) map[string]interface{} {
-	if queries == nil {
-		return nil
-	}
-	result := make(map[string]interface{})
-	for name, q := range queries {
-		result[name] = describeContextQuery(q)
-	}
-	return result
-}
-
-// describeContextQuery returns a string description of a context query.
-func describeContextQuery(q *config.ContextQuery) string {
-	if q.Read != "" {
-		return fmt.Sprintf("read: %s", q.Read)
-	}
-	if q.Query != "" {
-		return fmt.Sprintf("query: %s", q.Query)
-	}
-	if q.Backlinks != "" {
-		return fmt.Sprintf("backlinks: %s", q.Backlinks)
-	}
-	if q.Search != "" {
-		if q.Limit > 0 {
-			return fmt.Sprintf("search: %s (limit: %d)", q.Search, q.Limit)
-		}
-		return fmt.Sprintf("search: %s", q.Search)
-	}
-	return "unknown"
-}
+// workflow apply-plan is implemented in workflow_apply.go
 
 // makeReadFunc creates a function that reads a single object.
 // This reads and parses the actual file to get full content.
@@ -440,10 +432,11 @@ func makeSearchFunc(vaultPath string) func(term string, limit int) (interface{},
 }
 
 func init() {
-	workflowRenderCmd.Flags().StringArrayVar(&workflowInputFlags, "input", nil, "Set input value (can be repeated): --input name=value")
+	workflowRunCmd.Flags().StringArrayVar(&workflowInputFlags, "input", nil, "Set input value (can be repeated): --input name=value")
 
 	workflowCmd.AddCommand(workflowListCmd)
 	workflowCmd.AddCommand(workflowShowCmd)
-	workflowCmd.AddCommand(workflowRenderCmd)
+	workflowCmd.AddCommand(workflowRunCmd)
+	workflowCmd.AddCommand(workflowApplyPlanCmd)
 	rootCmd.AddCommand(workflowCmd)
 }

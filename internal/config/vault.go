@@ -36,6 +36,14 @@ type VaultConfig struct {
 	// Can be inline definitions or references to external files.
 	Workflows map[string]*WorkflowRef `yaml:"workflows,omitempty"`
 
+	// ProtectedPrefixes are additional vault-relative path prefixes that Raven should
+	// treat as protected/system-managed. Workflows and other automation features
+	// should refuse to read/write/move/edit/delete within these prefixes.
+	//
+	// Critical protected prefixes are hardcoded in code (e.g., .raven/, .trash/, .git/).
+	// This config is additive.
+	ProtectedPrefixes []string `yaml:"protected_prefixes,omitempty"`
+
 	// Capture configures quick capture behavior
 	Capture *CaptureConfig `yaml:"capture,omitempty"`
 
@@ -114,8 +122,7 @@ type WorkflowRef struct {
 	// Inline definition fields
 	Description string                    `yaml:"description,omitempty"`
 	Inputs      map[string]*WorkflowInput `yaml:"inputs,omitempty"`
-	Context     map[string]*ContextQuery  `yaml:"context,omitempty"`
-	Prompt      string                    `yaml:"prompt,omitempty"`
+	Steps       []*WorkflowStep           `yaml:"steps,omitempty"`
 }
 
 // WorkflowInput defines a workflow input parameter.
@@ -127,13 +134,39 @@ type WorkflowInput struct {
 	Target      string `yaml:"target,omitempty" json:"target,omitempty"`
 }
 
-// ContextQuery defines a query to run for gathering context.
-type ContextQuery struct {
-	Read      string `yaml:"read,omitempty"`
-	Query     string `yaml:"query,omitempty"`
-	Backlinks string `yaml:"backlinks,omitempty"`
-	Search    string `yaml:"search,omitempty"`
-	Limit     int    `yaml:"limit,omitempty"`
+// WorkflowStep defines a single step in a workflow.
+//
+// This is a configuration-level type (parsed from YAML). Runtime behavior is
+// implemented in internal/workflow.
+type WorkflowStep struct {
+	ID          string `yaml:"id" json:"id"`
+	Type        string `yaml:"type" json:"type"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+
+	// query
+	RQL string `yaml:"rql,omitempty" json:"rql,omitempty"`
+
+	// read
+	Ref string `yaml:"ref,omitempty" json:"ref,omitempty"`
+
+	// search
+	Term  string `yaml:"term,omitempty" json:"term,omitempty"`
+	Limit int    `yaml:"limit,omitempty" json:"limit,omitempty"`
+
+	// backlinks
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
+
+	// prompt
+	Template string                           `yaml:"template,omitempty" json:"template,omitempty"`
+	Outputs  map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty" json:"outputs,omitempty"`
+
+	// apply
+	From string `yaml:"from,omitempty" json:"from,omitempty"`
+}
+
+type WorkflowPromptOutput struct {
+	Type     string `yaml:"type" json:"type"`
+	Required bool   `yaml:"required,omitempty" json:"required,omitempty"`
 }
 
 // DeletionConfig configures how file deletion is handled.
@@ -272,6 +305,13 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 
 # Where daily notes are stored
 daily_directory: daily
+
+# Additional protected/system prefixes (additive).
+# Workflows and other automation features refuse to operate on protected paths.
+# Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
+# protected_prefixes:
+#   - templates/
+#   - private/
 
 # Auto-reindex after CLI operations that modify files (default: true)
 # When enabled, commands like 'rvn add', 'rvn new', 'rvn set', 'rvn edit'

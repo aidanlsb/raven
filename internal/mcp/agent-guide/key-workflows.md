@@ -412,7 +412,7 @@ For modifying existing schema elements:
 
 ### 14. Workflows
 
-Workflows are reusable prompt templates. **Proactively check for workflows** when a user asks for complex analysis — a workflow may already exist for their request.
+Workflows are reusable multi-step pipelines. **Proactively check for workflows** when a user asks for complex analysis — a workflow may already exist for their request.
 
 1. List available workflows:
    ```
@@ -423,38 +423,32 @@ Workflows are reusable prompt templates. **Proactively check for workflows** whe
    ```
    raven_workflow_show(name="meeting-prep")
    ```
-   Returns inputs required, context queries, and prompt template
+   Returns inputs and steps.
 
-3. Render a workflow with inputs:
+3. Run a workflow with inputs:
    ```
-   raven_workflow_render(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
-   raven_workflow_render(name="research", input={"question": "How does auth work?"})
+   raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
+   raven_workflow_run(name="research", input={"question": "How does auth work?"})
    ```
-   Returns rendered prompt with gathered context. Use the prompt to guide your response to the user.
+   Returns the rendered prompt plus step outputs gathered so far. Use the prompt to guide your response to the user.
 
 **How workflows work:**
 
 1. **Inputs** are validated (required fields checked, defaults applied)
-2. **Context queries** execute with `{{inputs.X}}` substituted first:
-   ```yaml
-   context:
-     person:
-       read: "{{inputs.person_id}}"     # Input substituted BEFORE read
-     tasks:
-       query: "object:task .owner=={{inputs.person_id}}"  # Also substituted
-   ```
-3. **Prompt** is rendered with both `{{inputs.X}}` and `{{context.X}}` substituted
-4. **Result** contains the rendered prompt + raw context data
+2. **Steps** execute in order, with `{{inputs.X}}` and `{{steps.<id>...}}` interpolated as needed
+3. When a **prompt** step is reached, Raven returns the prompt plus the declared prompt `outputs` schema
+4. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
+5. If the agent produced `outputs.plan`, apply it with `raven_workflow_apply_plan` (preview by default)
 
-**Prompt variable patterns:**
+**Variable patterns:**
 
 | Pattern | What It Returns |
 |---------|-----------------|
 | `{{inputs.name}}` | Raw input value |
-| `{{context.X}}` | Auto-formatted result (readable for prompts) |
-| `{{context.X.content}}` | Document content (for `read:` results) |
-| `{{context.X.id}}` | Object ID |
-| `{{context.X.fields.name}}` | Specific field value |
+| `{{steps.stepId}}` | Entire step output |
+| `{{steps.stepId.results}}` | Results array for steps like `query/search/backlinks` |
+| `{{steps.readStep.content}}` | Document content for `read` steps |
+| `{{steps.readStep.fields.name}}` | Frontmatter field values for `read` steps |
 
 **When to use workflows:**
 - User asks for a complex, multi-step analysis

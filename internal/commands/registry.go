@@ -933,7 +933,7 @@ This is useful for piping query results to open multiple files at once.`,
 	"workflow_show": {
 		Name:        "workflow show",
 		Description: "Show workflow details",
-		LongDesc:    `Shows the full definition of a workflow including inputs, context queries, and prompt.`,
+		LongDesc:    `Shows the full definition of a workflow including inputs and steps.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Workflow name", Required: true},
 		},
@@ -945,19 +945,17 @@ This is useful for piping query results to open multiple files at once.`,
 			"Understand what a workflow does before running it",
 		},
 	},
-	"workflow_render": {
-		Name:        "workflow render",
-		Description: "Render a workflow with context",
-		LongDesc: `Renders a workflow and returns the prompt with pre-gathered context.
+	"workflow_run": {
+		Name:        "workflow run",
+		Description: "Run a workflow until a prompt step",
+		LongDesc: `Runs a workflow's deterministic steps (query/read/search/backlinks) in order until it reaches a prompt step.
 
-This command:
-1. Loads the workflow definition
-2. Validates inputs
-3. Runs all context queries (read, query, backlinks, search)
-4. Renders the template with input and context substitution
-5. Returns the complete prompt and gathered context
+When a prompt step is reached, this command returns:
+- the rendered prompt string
+- the declared prompt outputs (e.g., markdown, plan)
+- the accumulated step outputs so far
 
-The returned prompt and context are ready for an agent to execute.`,
+Agents can then execute the prompt, produce a JSON envelope output, and apply the plan via 'workflow apply-plan'.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Workflow name", Required: true},
 		},
@@ -965,13 +963,39 @@ The returned prompt and context are ready for an agent to execute.`,
 			{Name: "input", Description: "Set input value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"meeting_id=meetings/alice-1on1", "question=How does auth work?"}},
 		},
 		Examples: []string{
-			"rvn workflow render meeting-prep --input meeting_id=meetings/alice-1on1 --json",
-			"rvn workflow render research --input question=\"How does the auth system work?\" --json",
+			"rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1 --json",
 		},
 		UseCases: []string{
-			"Execute a workflow with specific inputs",
-			"Get a pre-formatted prompt for agent execution",
-			"Gather context before running a complex task",
+			"Get a pre-formatted prompt and grounded context for agent execution",
+			"Run deterministic pre-processing before an agent step",
+		},
+	},
+	"workflow_apply_plan": {
+		Name:        "workflow apply-plan",
+		Description: "Apply a workflow plan (preview by default)",
+		LongDesc: `Applies a workflow patch plan (preview by default).
+
+The input JSON may be:
+- a prompt output envelope: { "outputs": { "plan": { plan_version: 1, ops: [...] } } }
+- or a raw plan object: { "plan_version": 1, "ops": [...] }
+
+Safety:
+- Refuses to operate on protected/system paths (hardcoded: .raven/, .trash/, .git/, raven.yaml, schema.yaml)
+- Allows users to add additional protected prefixes via raven.yaml (protected_prefixes)
+- Previews changes unless --confirm is provided`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Workflow name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "plan", Description: "Path to JSON plan/envelope (or '-' for stdin)", Type: FlagTypeString},
+			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn workflow apply-plan daily-todo-triage --plan plan.json",
+			"rvn workflow apply-plan daily-todo-triage --plan plan.json --confirm",
+		},
+		UseCases: []string{
+			"Safely apply agent-produced plans back into the vault",
 		},
 	},
 	"last": {

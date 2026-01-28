@@ -284,3 +284,49 @@ func isWithinPath(base, target string) bool {
 	}
 	return !strings.HasPrefix(rel, "..")
 }
+
+// ProtectedPathConfig controls which vault-relative paths are considered
+// system-managed and should not be modified by automation features.
+//
+// Callers should treat IsProtectedRelPath as an additional guardrail on top of
+// ValidateWithinVault; it is not a security boundary, but it prevents foot-guns.
+var hardProtectedPrefixes = []string{
+	".raven/",
+	".trash/",
+	".git/",
+}
+
+var hardProtectedFiles = map[string]struct{}{
+	"raven.yaml":  {},
+	"schema.yaml": {},
+}
+
+// IsProtectedRelPath returns true if relPath (vault-relative) is protected.
+//
+// extraPrefixes are additional user-configured protected prefixes (vault-relative).
+// They are treated as directory prefixes (normalized with NormalizeDirRoot).
+func IsProtectedRelPath(relPath string, extraPrefixes []string) bool {
+	p := normalizeRelPath(relPath)
+
+	if _, ok := hardProtectedFiles[p]; ok {
+		return true
+	}
+
+	for _, pref := range hardProtectedPrefixes {
+		if strings.HasPrefix(p, pref) {
+			return true
+		}
+	}
+
+	for _, raw := range extraPrefixes {
+		n := NormalizeDirRoot(raw)
+		if n == "" {
+			continue
+		}
+		if strings.HasPrefix(p, n) {
+			return true
+		}
+	}
+
+	return false
+}

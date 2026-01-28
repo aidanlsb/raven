@@ -985,16 +985,16 @@ Show workflow details.
 rvn workflow show <name>
 ```
 
-Shows the full definition including inputs, context queries, and prompt template.
+Shows the full definition including inputs and steps.
 
 ---
 
-### `rvn workflow render`
+### `rvn workflow run`
 
-Render a workflow with context.
+Run a workflow until it reaches a prompt step.
 
 ```bash
-rvn workflow render <name> [--input key=value...]
+rvn workflow run <name> [--input key=value...]
 ```
 
 | Argument | Description |
@@ -1008,11 +1008,36 @@ rvn workflow render <name> [--input key=value...]
 **Examples:**
 
 ```bash
-rvn workflow render meeting-prep --input meeting_id=meetings/alice-1on1
-rvn workflow render research --input question="How does the auth system work?"
+rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1
 ```
 
-Returns the complete prompt with pre-gathered context.
+Returns the rendered prompt (for the prompt step), declared prompt outputs schema, and step outputs gathered so far.
+
+---
+
+### `rvn workflow apply-plan`
+
+Apply an agent-produced workflow plan (preview by default).
+
+```bash
+rvn workflow apply-plan <name> --plan <file.json> [--confirm]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Workflow name |
+
+| Flag | Description |
+|------|-------------|
+| `--plan` | Path to JSON prompt output envelope (with `outputs.plan`) or a raw plan object; use `-` for stdin |
+| `--confirm` | Apply changes (without this flag, shows preview only) |
+
+**Examples:**
+
+```bash
+rvn workflow apply-plan daily-todo-triage --plan plan.json
+rvn workflow apply-plan daily-todo-triage --plan plan.json --confirm
+```
 
 ---
 

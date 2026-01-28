@@ -1,59 +1,30 @@
 # Workflows
 
-Workflows are reusable prompt templates stored in your vault (`raven.yaml`). Raven renders them by:
-1. validating inputs
-2. gathering context (`read`, `query`, `backlinks`, `search`)
-3. substituting variables into a prompt template
+Workflows are ordered pipelines (`steps:`) defined in `raven.yaml`.
 
-## Define a workflow
+They’re designed for agent usage:
+1. Raven runs deterministic steps to gather structured context
+2. Raven renders a `prompt` step and tells the agent what outputs are required
+3. The agent responds with a JSON envelope `{ "outputs": { ... } }`
+4. If the agent produced a `plan`, you can preview/apply it back into the vault
 
-Inline in `raven.yaml`:
-
-```yaml
-workflows:
-  meeting-prep:
-    description: Prep for a meeting
-    inputs:
-      meeting_id:
-        type: ref
-        target: meeting
-        required: true
-    context:
-      meeting:
-        read: "{{inputs.meeting_id}}"
-      mentions:
-        backlinks: "{{inputs.meeting_id}}"
-    prompt: |
-      Prepare me for this meeting.
-
-      ## Meeting
-      {{context.meeting}}
-
-      ## Mentions
-      {{context.mentions}}
-```
-
-Or reference a file:
-
-```yaml
-workflows:
-  meeting-prep:
-    file: workflows/meeting-prep.yaml
-```
-
-## Run workflows
+## Run a workflow
 
 ```bash
 rvn workflow list
 rvn workflow show meeting-prep
-rvn workflow render meeting-prep --input meeting_id=meetings/alice-1on1
+rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1
+```
+
+## Apply a plan
+
+```bash
+# Preview
+rvn workflow apply-plan daily-todo-triage --plan plan.json
+
+# Apply
+rvn workflow apply-plan daily-todo-triage --plan plan.json --confirm
 ```
 
 Reference: `reference/workflows.md`.
-
-## Next steps
-
-- See `reference/workflows.md` for complete workflow configuration
-- See `reference/query-language.md` for context query syntax
-- See `reference/mcp.md` for using workflows with MCP agents
 

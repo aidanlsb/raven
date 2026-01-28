@@ -116,8 +116,8 @@
 **User**: "Run the meeting prep workflow for my 1:1 with Freya"
 ```
 → raven_workflow_list()  # Check if meeting-prep exists
-→ raven_workflow_render(name="meeting-prep", input={"person_id": "people/freya"})
-→ Use the rendered prompt and context to provide a comprehensive meeting prep
+→ raven_workflow_run(name="meeting-prep", input={"person_id": "people/freya"})
+→ Use the returned prompt (and step outputs) to provide a comprehensive meeting prep
 ```
 
 **User**: "I want to save a query for finding all my reading list items"
