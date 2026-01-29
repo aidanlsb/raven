@@ -1015,32 +1015,6 @@ Returns the rendered prompt (for the prompt step), declared prompt outputs schem
 
 ---
 
-### `rvn workflow apply-plan`
-
-Apply an agent-produced workflow plan (preview by default).
-
-```bash
-rvn workflow apply-plan <name> --plan <file.json> [--confirm]
-```
-
-| Argument | Description |
-|----------|-------------|
-| `name` | Workflow name |
-
-| Flag | Description |
-|------|-------------|
-| `--plan` | Path to JSON prompt output envelope (with `outputs.plan`) or a raw plan object; use `-` for stdin |
-| `--confirm` | Apply changes (without this flag, shows preview only) |
-
-**Examples:**
-
-```bash
-rvn workflow apply-plan daily-todo-triage --plan plan.json
-rvn workflow apply-plan daily-todo-triage --plan plan.json --confirm
-```
-
----
-
 ## Server Commands
 
 ### `rvn serve`

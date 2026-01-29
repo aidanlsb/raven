@@ -129,8 +129,6 @@ func CLICommandName(toolName string) string {
 		return "workflow show"
 	case "workflow_run":
 		return "workflow run"
-	case "workflow_apply_plan":
-		return "workflow apply-plan"
 	}
 
 	return toolName

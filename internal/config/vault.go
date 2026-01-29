@@ -122,7 +122,67 @@ type WorkflowRef struct {
 	// Inline definition fields
 	Description string                    `yaml:"description,omitempty"`
 	Inputs      map[string]*WorkflowInput `yaml:"inputs,omitempty"`
-	Steps       []*WorkflowStep           `yaml:"steps,omitempty"`
+
+	// Simplified prompt workflows (v2-style).
+	//
+	// A workflow can either be defined as a prompt + optional context (recommended),
+	// or as an explicit steps pipeline (legacy/advanced).
+	//
+	// If a context item is a scalar string, it's treated as a query string.
+	Context map[string]*WorkflowContextItem  `yaml:"context,omitempty"`
+	Prompt  string                           `yaml:"prompt,omitempty"`
+	Outputs map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty"`
+
+	Steps []*WorkflowStep `yaml:"steps,omitempty"`
+}
+
+// WorkflowContextItem defines one prefetch item for prompt workflows.
+//
+// YAML forms:
+//
+//	context:
+//	  meetings: "object:meeting .date=={{inputs.date}}"   # shorthand => query
+//	  projects:
+//	    query: "object:project .status==active"
+//	  person:
+//	    read: "{{inputs.person_id}}"
+//	  mentions:
+//	    backlinks: "{{inputs.person_id}}"
+//	  results:
+//	    search: "{{inputs.question}}"
+//	    limit: 10
+type WorkflowContextItem struct {
+	Query     string `yaml:"query,omitempty" json:"query,omitempty"`
+	Read      string `yaml:"read,omitempty" json:"read,omitempty"`
+	Backlinks string `yaml:"backlinks,omitempty" json:"backlinks,omitempty"`
+	Search    string `yaml:"search,omitempty" json:"search,omitempty"`
+	Limit     int    `yaml:"limit,omitempty" json:"limit,omitempty"`
+}
+
+func (w *WorkflowContextItem) UnmarshalYAML(value *yaml.Node) error {
+	if w == nil {
+		return fmt.Errorf("workflow context item is nil")
+	}
+	switch value.Kind {
+	case yaml.ScalarNode:
+		// Shorthand: scalar string means query.
+		var s string
+		if err := value.Decode(&s); err != nil {
+			return err
+		}
+		*w = WorkflowContextItem{Query: s}
+		return nil
+	case yaml.MappingNode:
+		type plain WorkflowContextItem
+		var p plain
+		if err := value.Decode(&p); err != nil {
+			return err
+		}
+		*w = WorkflowContextItem(p)
+		return nil
+	default:
+		return fmt.Errorf("invalid workflow context item (expected string or mapping)")
+	}
 }
 
 // WorkflowInput defines a workflow input parameter.
