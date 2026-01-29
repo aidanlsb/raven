@@ -19,7 +19,7 @@ import (
 var lastCmd = &cobra.Command{
 	Use:   "last [numbers...]",
 	Short: "Show or select results from the last retrieval",
-	Long: `Show or select results from the most recent retrieval (query, search, backlinks).
+	Long: `Show or select results from the most recent retrieval (query, search, backlinks, outlinks).
 
 Without arguments, displays all results from the last retrieval with their numbers.
 With number arguments, outputs the selected IDs for piping to other commands.
@@ -176,6 +176,13 @@ func renderLastResultsHuman(lr *lastresults.LastResults, vaultPath string) error
 			return handleError(ErrInternal, err, "")
 		}
 		printBacklinksResults(lr.Target, results)
+		return nil
+	case lastresults.SourceOutlinks:
+		results, err := lr.DecodeReferences()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		printOutlinksResults(lr.Target, results)
 		return nil
 	default:
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown result source: %s", lr.Source), "")

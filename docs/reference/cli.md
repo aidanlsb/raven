@@ -369,6 +369,27 @@ rvn backlinks projects/website
 
 ---
 
+### `rvn outlinks`
+
+Find references made by an object.
+
+```bash
+rvn outlinks <source>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `source` | Source object ID (e.g., `projects/bifrost`) |
+
+**Examples:**
+
+```bash
+rvn outlinks projects/bifrost
+rvn outlinks daily/2025-02-01
+```
+
+---
+
 ## Daily Notes & Dates
 
 ### `rvn daily`

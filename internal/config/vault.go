@@ -127,8 +127,6 @@ type WorkflowRef struct {
 	//
 	// A workflow can either be defined as a prompt + optional context (recommended),
 	// or as an explicit steps pipeline (legacy/advanced).
-	//
-	// If a context item is a scalar string, it's treated as a query string.
 	Context map[string]*WorkflowContextItem  `yaml:"context,omitempty"`
 	Prompt  string                           `yaml:"prompt,omitempty"`
 	Outputs map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty"`
@@ -141,7 +139,6 @@ type WorkflowRef struct {
 // YAML forms:
 //
 //	context:
-//	  meetings: "object:meeting .date=={{inputs.date}}"   # shorthand => query
 //	  projects:
 //	    query: "object:project .status==active"
 //	  person:
@@ -164,14 +161,6 @@ func (w *WorkflowContextItem) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("workflow context item is nil")
 	}
 	switch value.Kind {
-	case yaml.ScalarNode:
-		// Shorthand: scalar string means query.
-		var s string
-		if err := value.Decode(&s); err != nil {
-			return err
-		}
-		*w = WorkflowContextItem{Query: s}
-		return nil
 	case yaml.MappingNode:
 		type plain WorkflowContextItem
 		var p plain
@@ -181,7 +170,7 @@ func (w *WorkflowContextItem) UnmarshalYAML(value *yaml.Node) error {
 		*w = WorkflowContextItem(p)
 		return nil
 	default:
-		return fmt.Errorf("invalid workflow context item (expected string or mapping)")
+		return fmt.Errorf("invalid workflow context item (expected mapping)")
 	}
 }
 

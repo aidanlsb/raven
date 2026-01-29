@@ -310,3 +310,37 @@ func printBacklinksResults(target string, links []model.Reference) {
 
 	fmt.Println(table.Render())
 }
+
+func printOutlinksResults(source string, links []model.Reference) {
+	if len(links) == 0 {
+		fmt.Println(ui.Starf("No outlinks found for '%s'", source))
+		return
+	}
+
+	fmt.Printf("%s %s\n\n", ui.SectionHeader("Outlinks from "+source), ui.Badge(fmt.Sprintf("%d", len(links))))
+
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.BacklinksLayout)
+
+	for i, link := range links {
+		target := link.TargetRaw
+		if link.DisplayText != nil && *link.DisplayText != "" && *link.DisplayText != link.TargetRaw {
+			target = fmt.Sprintf("%s (%s)", *link.DisplayText, link.TargetRaw)
+		}
+
+		line := 0
+		if link.Line != nil {
+			line = *link.Line
+		}
+
+		location := formatLocationLinkSimple(link.FilePath, line)
+
+		table.AddRow(ui.ResultRow{
+			Num:      i + 1,
+			Cells:    []string{ui.FormatRowNum(i+1, len(links)), target, location},
+			Location: fmt.Sprintf("%s:%d", link.FilePath, line),
+		})
+	}
+
+	fmt.Println(table.Render())
+}

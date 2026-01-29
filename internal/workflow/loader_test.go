@@ -121,6 +121,18 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 	})
 
+	t.Run("context items must be explicit (no scalar shorthand)", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "shorthand.yaml")
+		// Scalar context item should fail YAML unmarshalling.
+		if err := os.WriteFile(path, []byte("description: test\ncontext:\n  projects: \"object:project\"\nprompt: hi\n"), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		_, err := Load(vaultDir, "shorthand", &config.WorkflowRef{File: "workflows/shorthand.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "expected mapping") {
+			t.Fatalf("expected explicit context error, got %v", err)
+		}
+	})
+
 	t.Run("file must be within vault", func(t *testing.T) {
 		outside := filepath.Join(filepath.Dir(vaultDir), "outside.yaml")
 		if err := os.WriteFile(outside, []byte("prompt: hi\n"), 0o644); err != nil {
