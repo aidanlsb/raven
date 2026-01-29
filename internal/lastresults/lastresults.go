@@ -21,6 +21,7 @@ const (
 	SourceQuery     Source = "query"
 	SourceSearch    Source = "search"
 	SourceBacklinks Source = "backlinks"
+	SourceOutlinks  Source = "outlinks"
 )
 
 // LastResults stores the results of the most recent retrieval command.

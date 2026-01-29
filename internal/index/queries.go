@@ -10,7 +10,6 @@ import (
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
-
 // QueryTraits queries traits by type with optional value filter.
 // Filter syntax supports:
 //   - Simple value: "done" → value = 'done'
@@ -259,6 +258,40 @@ func (d *Database) Backlinks(targetID string) ([]model.Reference, error) {
 	return d.BacklinksWithRoots(targetID, "", "")
 }
 
+// Outlinks returns all references made by the given source object.
+//
+// Includes refs whose source_id is a section of the source (source_id LIKE '<source>#%').
+func (d *Database) Outlinks(sourceID string) ([]model.Reference, error) {
+	query := `
+		SELECT r.source_id, o.type, r.target_raw, r.file_path, r.line_number, r.display_text
+		FROM refs r
+		LEFT JOIN objects o ON r.source_id = o.id
+		WHERE r.source_id = ? OR r.source_id LIKE ?
+		ORDER BY r.file_path, r.line_number, r.position_start
+	`
+
+	rows, err := d.db.Query(query, sourceID, sourceID+"#%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.Reference
+	for rows.Next() {
+		var result model.Reference
+		var sourceType sql.NullString
+		if err := rows.Scan(&result.SourceID, &sourceType, &result.TargetRaw, &result.FilePath, &result.Line, &result.DisplayText); err != nil {
+			return nil, err
+		}
+		if sourceType.Valid {
+			result.SourceType = sourceType.String
+		}
+		results = append(results, result)
+	}
+
+	return results, rows.Err()
+}
+
 // BacklinksWithRoots returns all objects that reference the given target,
 // including refs that use directory-prefixed paths (e.g., [[objects/people/freya]]).
 // This is important for move operations to find all variants of a reference.
@@ -410,7 +443,6 @@ func (d *Database) UntypedPages() ([]string, error) {
 
 	return results, rows.Err()
 }
-
 
 // Search performs a full-text search across all content in the vault.
 // The query supports FTS5 query syntax:

@@ -307,6 +307,16 @@ For trait queries (trait:...):
 			"rvn backlinks people/freya --json",
 		},
 	},
+	"outlinks": {
+		Name:        "outlinks",
+		Description: "Find links referenced by an object",
+		Args: []ArgMeta{
+			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true},
+		},
+		Examples: []string{
+			"rvn outlinks projects/bifrost --json",
+		},
+	},
 	"date": {
 		Name:        "date",
 		Description: "Date hub - all activity for a date",

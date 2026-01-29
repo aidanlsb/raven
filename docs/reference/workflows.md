@@ -98,8 +98,6 @@ Supported forms:
 - `search`: term string (+ optional `limit`, default 20)
 - `backlinks`: target reference/object id
 
-Shorthand: if a context value is a scalar string, it is treated as `query: "<string>"`.
-
 The prompt can reference prefetched values via `{{context.<name>}}` and `{{context.<name>.<path>}}`.
 
 ## Prompt Rendering
@@ -113,9 +111,6 @@ outputs:
   markdown:
     type: markdown
     required: true
-  plan:
-    type: plan
-    required: false
 ```
 
 #### Prompt output envelope

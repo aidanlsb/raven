@@ -290,6 +290,58 @@ func TestBacklinks(t *testing.T) {
 	})
 }
 
+func TestOutlinks(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test objects
+	_, err = db.db.Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields)
+		VALUES
+			('people/freya', 'people/freya.md', 'person', 1, '{}'),
+			('daily/2025-02-01', 'daily/2025-02-01.md', 'date', 1, '{}'),
+			('projects/bifrost', 'projects/bifrost.md', 'project', 1, '{}')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test objects: %v", err)
+	}
+
+	// Insert test refs (including a section outlink via source_id LIKE 'projects/bifrost#%').
+	_, err = db.db.Exec(`
+		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number, position_start)
+		VALUES
+			('daily/2025-02-01', 'people/freya', 'people/freya', 'daily/2025-02-01.md', 5, 1),
+			('projects/bifrost', 'people/freya', 'freya', 'projects/bifrost.md', 10, 1),
+			('projects/bifrost#notes', 'people/freya', 'freya', 'projects/bifrost.md', 11, 1)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test refs: %v", err)
+	}
+
+	t.Run("find outlinks from object (includes section outlinks)", func(t *testing.T) {
+		results, err := db.Outlinks("projects/bifrost")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("expected 2 outlinks, got %d", len(results))
+		}
+	})
+
+	t.Run("find outlinks from daily note", func(t *testing.T) {
+		results, err := db.Outlinks("daily/2025-02-01")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("expected 1 outlink, got %d", len(results))
+		}
+	})
+}
+
 func TestGetObject(t *testing.T) {
 	db, err := OpenInMemory()
 	if err != nil {
