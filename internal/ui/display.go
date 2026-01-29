@@ -7,7 +7,7 @@ import (
 )
 
 // DefaultTermWidth is the fallback terminal width when detection fails.
-const DefaultTermWidth = 80
+const DefaultTermWidth = 120
 
 // DisplayContext holds display parameters, auto-detecting terminal width.
 // It is the single source of truth for display settings.
