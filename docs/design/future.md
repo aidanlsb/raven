@@ -1176,8 +1176,8 @@ that gather context from the vault and render structured prompts for AI agents.
 - Input parameters with types, defaults, and validation
 - Ordered steps: `query`, `read`, `search`, `backlinks`, `prompt`
 - `{{inputs.*}}` and `{{steps.*}}` interpolation
-- CLI: `rvn workflow list`, `rvn workflow show`, `rvn workflow run`, `rvn workflow apply-plan`
-- MCP tools: `raven_workflow_list`, `raven_workflow_show`, `raven_workflow_run`, `raven_workflow_apply_plan`
+- CLI: `rvn workflow list`, `rvn workflow show`, `rvn workflow run`
+- MCP tools: `raven_workflow_list`, `raven_workflow_show`, `raven_workflow_run`
 
 ---
 

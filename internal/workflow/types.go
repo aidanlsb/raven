@@ -14,6 +14,14 @@ type Workflow struct {
 	// Inputs defines the parameters the workflow accepts.
 	Inputs map[string]*config.WorkflowInput
 
+	// Simplified prompt workflow fields (if defined as prompt/context).
+	//
+	// These are preserved for display/debugging, but at runtime we compile
+	// prompt workflows into Steps so the runner stays generic.
+	Context map[string]*config.WorkflowContextItem
+	Prompt  string
+	Outputs map[string]*config.WorkflowPromptOutput
+
 	// Steps are executed in order.
 	Steps []*config.WorkflowStep
 }
@@ -23,6 +31,7 @@ type PromptRequest struct {
 	StepID   string                                  `json:"step_id"`
 	Prompt   string                                  `json:"prompt"`
 	Outputs  map[string]*config.WorkflowPromptOutput `json:"outputs"`
+	Example  map[string]interface{}                  `json:"example,omitempty"`
 	Template string                                  `json:"template,omitempty"`
 }
 

@@ -97,12 +97,26 @@ var workflowShowCmd = &cobra.Command{
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
+			out := map[string]interface{}{
 				"name":        wf.Name,
 				"description": wf.Description,
-				"inputs":      wf.Inputs,
-				"steps":       wf.Steps,
-			}, nil)
+			}
+			if len(wf.Inputs) > 0 {
+				out["inputs"] = wf.Inputs
+			}
+			// Prefer showing simplified workflow shape when present.
+			if wf.Prompt != "" {
+				if len(wf.Context) > 0 {
+					out["context"] = wf.Context
+				}
+				out["prompt"] = wf.Prompt
+				if len(wf.Outputs) > 0 {
+					out["outputs"] = wf.Outputs
+				}
+			} else if len(wf.Steps) > 0 {
+				out["steps"] = wf.Steps
+			}
+			outputSuccess(out, nil)
 			return nil
 		}
 
@@ -125,7 +139,63 @@ var workflowShowCmd = &cobra.Command{
 			}
 		}
 
-		if len(wf.Steps) > 0 {
+		if wf.Prompt != "" {
+			if len(wf.Context) > 0 {
+				fmt.Println("\ncontext:")
+				keys := make([]string, 0, len(wf.Context))
+				for k := range wf.Context {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
+					item := wf.Context[k]
+					if item == nil {
+						fmt.Printf("  %s: (nil)\n", k)
+						continue
+					}
+					switch {
+					case item.Query != "":
+						fmt.Printf("  %s: query: %s\n", k, item.Query)
+					case item.Read != "":
+						fmt.Printf("  %s: read: %s\n", k, item.Read)
+					case item.Backlinks != "":
+						fmt.Printf("  %s: backlinks: %s\n", k, item.Backlinks)
+					case item.Search != "":
+						if item.Limit > 0 {
+							fmt.Printf("  %s: search: %s (limit %d)\n", k, item.Search, item.Limit)
+						} else {
+							fmt.Printf("  %s: search: %s\n", k, item.Search)
+						}
+					default:
+						fmt.Printf("  %s: (empty)\n", k)
+					}
+				}
+			}
+
+			if len(wf.Outputs) > 0 {
+				fmt.Println("\noutputs:")
+				keys := make([]string, 0, len(wf.Outputs))
+				for k := range wf.Outputs {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
+					out := wf.Outputs[k]
+					if out == nil {
+						fmt.Printf("  %s: (nil)\n", k)
+						continue
+					}
+					req := ""
+					if out.Required {
+						req = " (required)"
+					}
+					fmt.Printf("  %s: %s%s\n", k, out.Type, req)
+				}
+			}
+
+			fmt.Println("\nprompt:")
+			fmt.Println(wf.Prompt)
+		} else if len(wf.Steps) > 0 {
 			fmt.Println("\nsteps:")
 			for i, step := range wf.Steps {
 				if step == nil {
@@ -150,8 +220,6 @@ var workflowShowCmd = &cobra.Command{
 					fmt.Printf("     target: %s\n", step.Target)
 				case "prompt":
 					fmt.Printf("     outputs: %d\n", len(step.Outputs))
-				case "apply":
-					fmt.Printf("     from: %s\n", step.From)
 				}
 			}
 		}
@@ -161,8 +229,6 @@ var workflowShowCmd = &cobra.Command{
 }
 
 var workflowInputFlags []string
-var workflowPlanFile string
-var workflowApplyConfirm bool
 
 var workflowRunCmd = &cobra.Command{
 	Use:   "run <name>",
@@ -224,8 +290,6 @@ var workflowRunCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// workflow apply-plan is implemented in workflow_apply.go
 
 // makeReadFunc creates a function that reads a single object.
 // This reads and parses the actual file to get full content.
@@ -325,7 +389,7 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 				return nil, err
 			}
 			// Convert to generic format
-			var items []map[string]interface{}
+			items := make([]map[string]interface{}, 0, len(results))
 			for _, r := range results {
 				item := map[string]interface{}{
 					"id":     r.ID,
@@ -344,7 +408,7 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 				return nil, err
 			}
 			// Convert to generic format
-			var items []map[string]interface{}
+			items := make([]map[string]interface{}, 0, len(results))
 			for _, r := range results {
 				item := map[string]interface{}{
 					"id":        r.ID,
@@ -383,7 +447,7 @@ func makeBacklinksFunc(vaultPath string) func(target string) (interface{}, error
 		}
 
 		// Convert to generic format
-		var items []map[string]interface{}
+		items := make([]map[string]interface{}, 0, len(backlinks))
 		for _, link := range backlinks {
 			item := map[string]interface{}{
 				"source_id": link.SourceID,
@@ -417,7 +481,7 @@ func makeSearchFunc(vaultPath string) func(term string, limit int) (interface{},
 		}
 
 		// Convert to generic format
-		var items []map[string]interface{}
+		items := make([]map[string]interface{}, 0, len(results))
 		for _, r := range results {
 			items = append(items, map[string]interface{}{
 				"object_id": r.ObjectID,
@@ -437,6 +501,5 @@ func init() {
 	workflowCmd.AddCommand(workflowListCmd)
 	workflowCmd.AddCommand(workflowShowCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
-	workflowCmd.AddCommand(workflowApplyPlanCmd)
 	rootCmd.AddCommand(workflowCmd)
 }

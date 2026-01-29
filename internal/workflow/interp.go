@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -88,7 +87,17 @@ func resolveExpr(expr string, inputs map[string]string, steps map[string]interfa
 		if !ok {
 			return "", false, nil
 		}
-		return stringify(val), true, nil
+		return formatForPrompt(val), true, nil
+	}
+
+	// context.* is an alias for steps.* used by simplified prompt workflows.
+	if strings.HasPrefix(expr, "context.") {
+		path := strings.TrimPrefix(expr, "context.")
+		val, ok := resolveStepPath(steps, path)
+		if !ok {
+			return "", false, nil
+		}
+		return formatForPrompt(val), true, nil
 	}
 
 	return "", false, nil
@@ -124,32 +133,4 @@ func resolveStepPath(steps map[string]interface{}, path string) (interface{}, bo
 	return cur, true
 }
 
-func stringify(v interface{}) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
-			return "true"
-		}
-		return "false"
-	case float64:
-		// json.Unmarshal uses float64 for numbers.
-		if t == float64(int64(t)) {
-			return fmt.Sprintf("%d", int64(t))
-		}
-		return fmt.Sprintf("%v", t)
-	case int:
-		return fmt.Sprintf("%d", t)
-	case int64:
-		return fmt.Sprintf("%d", t)
-	default:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return fmt.Sprintf("%v", t)
-		}
-		return string(b)
-	}
-}
+// stringify was replaced by formatForPrompt in format.go.

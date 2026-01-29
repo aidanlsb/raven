@@ -31,7 +31,7 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 
 	t.Run("missing steps for inline workflow", func(t *testing.T) {
 		_, err := Load(vaultDir, "x", &config.WorkflowRef{Description: "d"})
-		if err == nil || !strings.Contains(err.Error(), "must have either 'file' or 'steps'") {
+		if err == nil || !strings.Contains(err.Error(), "must have either 'file' or 'prompt' or 'steps'") {
 			t.Fatalf("expected missing steps error, got %v", err)
 		}
 	})
@@ -55,6 +55,47 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 		}
 		if wf.Inputs == nil || wf.Inputs["name"] == nil || wf.Inputs["name"].Type != "string" {
 			t.Fatalf("expected inputs to be preserved, got %+v", wf.Inputs)
+		}
+	})
+
+	t.Run("inline prompt workflow loads and compiles context", func(t *testing.T) {
+		ref := &config.WorkflowRef{
+			Description: "desc",
+			Inputs: map[string]*config.WorkflowInput{
+				"q": {Type: "string", Required: true},
+			},
+			Context: map[string]*config.WorkflowContextItem{
+				"results": {Search: "{{inputs.q}}", Limit: 3},
+			},
+			Prompt: "Question: {{inputs.q}}\n{{context.results}}\n",
+		}
+		wf, err := Load(vaultDir, "research", ref)
+		if err != nil {
+			t.Fatalf("Load error: %v", err)
+		}
+		if wf.Prompt == "" || wf.Context == nil {
+			t.Fatalf("expected prompt workflow fields to be preserved")
+		}
+		if len(wf.Steps) != 2 {
+			t.Fatalf("expected 2 compiled steps (context + prompt), got %d", len(wf.Steps))
+		}
+		if wf.Steps[0].ID != "results" || wf.Steps[0].Type != "search" {
+			t.Fatalf("unexpected compiled context step: %+v", wf.Steps[0])
+		}
+		if wf.Steps[1].ID != "prompt" || wf.Steps[1].Type != "prompt" {
+			t.Fatalf("unexpected compiled prompt step: %+v", wf.Steps[1])
+		}
+	})
+
+	t.Run("context key 'prompt' is reserved", func(t *testing.T) {
+		_, err := Load(vaultDir, "bad", &config.WorkflowRef{
+			Prompt: "hi",
+			Context: map[string]*config.WorkflowContextItem{
+				"prompt": {Query: "object:project"},
+			},
+		})
+		if err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Fatalf("expected reserved context key error, got %v", err)
 		}
 	})
 }
@@ -99,7 +140,7 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 
 		_, err := Load(vaultDir, "noprompt", &config.WorkflowRef{File: "workflows/noprompt.yaml"})
-		if err == nil || !strings.Contains(err.Error(), "must have 'steps' field") {
+		if err == nil || !strings.Contains(err.Error(), "must have either 'file' or 'prompt' or 'steps'") {
 			t.Fatalf("expected missing steps error, got %v", err)
 		}
 	})

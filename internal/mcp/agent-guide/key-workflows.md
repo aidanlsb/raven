@@ -438,7 +438,7 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
 2. **Steps** execute in order, with `{{inputs.X}}` and `{{steps.<id>...}}` interpolated as needed
 3. When a **prompt** step is reached, Raven returns the prompt plus the declared prompt `outputs` schema
 4. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
-5. If the agent produced `outputs.plan`, apply it with `raven_workflow_apply_plan` (preview by default)
+5. If changes are needed, use normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
 
 **Variable patterns:**
 

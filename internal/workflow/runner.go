@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -112,10 +113,18 @@ func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error)
 			if err != nil {
 				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
 			}
+			example := buildPromptOutputExample(step.Outputs)
+			promptWithContract := prompt
+			if len(step.Outputs) > 0 {
+				if contract := renderOutputContract(example); contract != "" {
+					promptWithContract = contract + "\n\n" + prompt
+				}
+			}
 			// Store prompt metadata in step state (useful for callers).
 			steps[step.ID] = map[string]interface{}{
-				"prompt":  prompt,
+				"prompt":  promptWithContract,
 				"outputs": step.Outputs,
+				"example": example,
 				"raw":     "",
 			}
 
@@ -125,15 +134,12 @@ func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error)
 				Steps:  steps,
 				Next: &PromptRequest{
 					StepID:   step.ID,
-					Prompt:   prompt,
+					Prompt:   promptWithContract,
 					Outputs:  step.Outputs,
+					Example:  example,
 					Template: step.Template,
 				},
 			}, nil
-
-		case "apply":
-			// Apply steps are executed by a separate command (`workflow apply-plan`) in v1.
-			return nil, fmt.Errorf("step '%s': apply steps are not supported by Run yet; use workflow apply-plan", step.ID)
 
 		default:
 			return nil, fmt.Errorf("step '%s': unknown step type '%s'", step.ID, step.Type)
@@ -145,6 +151,40 @@ func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error)
 		Inputs: resolvedInputs,
 		Steps:  steps,
 	}, nil
+}
+
+func buildPromptOutputExample(outputs map[string]*config.WorkflowPromptOutput) map[string]interface{} {
+	if len(outputs) == 0 {
+		return nil
+	}
+
+	out := make(map[string]interface{}, len(outputs))
+	for name, def := range outputs {
+		if def == nil {
+			continue
+		}
+		switch def.Type {
+		case "markdown":
+			out[name] = "..."
+		default:
+			out[name] = nil
+		}
+	}
+
+	return map[string]interface{}{
+		"outputs": out,
+	}
+}
+
+func renderOutputContract(example map[string]interface{}) string {
+	if example == nil {
+		return ""
+	}
+	b, err := json.MarshalIndent(example, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("Return ONLY valid JSON with this shape:\n\n```json\n%s\n```", string(b))
 }
 
 func validateInputs(wf *Workflow, inputs map[string]string) error {

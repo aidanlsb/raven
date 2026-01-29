@@ -952,10 +952,9 @@ This is useful for piping query results to open multiple files at once.`,
 
 When a prompt step is reached, this command returns:
 - the rendered prompt string
-- the declared prompt outputs (e.g., markdown, plan)
+- the declared prompt outputs (e.g., markdown)
 - the accumulated step outputs so far
-
-Agents can then execute the prompt, produce a JSON envelope output, and apply the plan via 'workflow apply-plan'.`,
+`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Workflow name", Required: true},
 		},
@@ -968,34 +967,6 @@ Agents can then execute the prompt, produce a JSON envelope output, and apply th
 		UseCases: []string{
 			"Get a pre-formatted prompt and grounded context for agent execution",
 			"Run deterministic pre-processing before an agent step",
-		},
-	},
-	"workflow_apply_plan": {
-		Name:        "workflow apply-plan",
-		Description: "Apply a workflow plan (preview by default)",
-		LongDesc: `Applies a workflow patch plan (preview by default).
-
-The input JSON may be:
-- a prompt output envelope: { "outputs": { "plan": { plan_version: 1, ops: [...] } } }
-- or a raw plan object: { "plan_version": 1, "ops": [...] }
-
-Safety:
-- Refuses to operate on protected/system paths (hardcoded: .raven/, .trash/, .git/, raven.yaml, schema.yaml)
-- Allows users to add additional protected prefixes via raven.yaml (protected_prefixes)
-- Previews changes unless --confirm is provided`,
-		Args: []ArgMeta{
-			{Name: "name", Description: "Workflow name", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "plan", Description: "Path to JSON plan/envelope (or '-' for stdin)", Type: FlagTypeString},
-			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn workflow apply-plan daily-todo-triage --plan plan.json",
-			"rvn workflow apply-plan daily-todo-triage --plan plan.json --confirm",
-		},
-		UseCases: []string{
-			"Safely apply agent-produced plans back into the vault",
 		},
 	},
 	"last": {

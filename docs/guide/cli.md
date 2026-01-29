@@ -454,9 +454,6 @@ rvn workflow show meeting-prep
 
 # Run deterministic steps until prompt step
 rvn workflow run meeting-prep --input meeting_id=meetings/team-sync
-
-# Apply an agent-produced plan (preview by default)
-rvn workflow apply-plan meeting-prep --plan plan.json
 ```
 
 ---
