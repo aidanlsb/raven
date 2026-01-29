@@ -80,6 +80,26 @@ var (
 		Align:      AlignLeft,
 		Style:      Muted,
 	}
+
+	// ColBacklinksMeta is a wider metadata/content column used for backlinks/outlinks.
+	ColBacklinksMeta = ColumnDef{
+		Name:       "meta",
+		WidthRatio: 0.70,
+		MinWidth:   30,
+		MaxWidth:   120,
+		Align:      AlignLeft,
+		Style:      Muted,
+	}
+
+	// ColBacklinksFile is a wider file column used for backlinks/outlinks.
+	ColBacklinksFile = ColumnDef{
+		Name:       "file",
+		WidthRatio: 0.30,
+		MinWidth:   18,
+		MaxWidth:   60,
+		Align:      AlignLeft,
+		Style:      Muted,
+	}
 )
 
 // Standard layouts for each retrieval type.
@@ -91,7 +111,7 @@ var (
 	TraitLayout = []ColumnDef{ColNum, ColContent, ColMeta, ColFile}
 
 	// BacklinksLayout is used for backlinks: [num, meta, file]
-	BacklinksLayout = []ColumnDef{ColNum, ColMeta, ColFile}
+	BacklinksLayout = []ColumnDef{ColNum, ColBacklinksMeta, ColBacklinksFile}
 )
 
 // NewResultsTable creates a new ResultsTable with the given display context and column layout.
