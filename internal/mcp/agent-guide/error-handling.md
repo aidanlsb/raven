@@ -9,6 +9,7 @@ When tools return errors, here's how to handle them:
 | `ambiguous_reference` | Short reference matches multiple objects | Show user the matches, ask which one they meant. Use full path. |
 | `data_integrity` | Operation blocked to protect data | Explain the safety concern to user, ask for confirmation. |
 | `parse_error` | YAML/markdown syntax error | Read the file, identify the syntax issue, offer to fix it. |
+| `database_error` | SQLite/FTS query failed (often search query syntax) | Treat it as “query syntax”, not “missing data”. Quote special tokens (especially hyphenated ones) and retry; prefer `raven_query` over `raven_search` for structured filtering. |
 
 **Validation error recovery:**
 

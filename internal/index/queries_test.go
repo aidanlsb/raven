@@ -141,6 +141,47 @@ func TestParseFilterExpression(t *testing.T) {
 	}
 }
 
+func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
+	q := BuildFTSContentQuery(`michael-truell OR "Michael Truell"`)
+	if q != `content: ("michael-truell" OR "Michael Truell")` {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, `content: ("michael-truell" OR "Michael Truell")`)
+	}
+}
+
+func TestSearch_AllowsHyphenatedTokenWithOR(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert a minimal object row for SearchWithType joins (and good hygiene).
+	_, err = db.db.Exec(`INSERT INTO objects (id, file_path, type, line_start, fields) VALUES ('people/michael-truell', 'people/michael-truell.md', 'person', 1, '{}')`)
+	if err != nil {
+		t.Fatalf("failed to insert object: %v", err)
+	}
+
+	// Index a search row. FTS tokenization will split on '-', which is fine.
+	_, err = db.db.Exec(`INSERT INTO fts_content (object_id, title, content, file_path) VALUES (?, ?, ?, ?)`,
+		"people/michael-truell",
+		"Michael Truell",
+		`::meeting(with=[[michael-truell]])`,
+		"daily/2026-01-29.md",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert fts row: %v", err)
+	}
+
+	// This used to fail with "no such column: truell" due to FTS parsing.
+	results, err := db.Search(`michael-truell OR "Michael Truell"`, 10)
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatalf("expected at least one result")
+	}
+}
+
 func TestQueryTraitsWithFilterExpressions(t *testing.T) {
 	// Integration tests with actual database
 	db, err := OpenInMemory()

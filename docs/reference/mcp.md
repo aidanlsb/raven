@@ -108,6 +108,10 @@ rvn schema commands --json
 | `raven_backlinks` | Find objects that reference a target |
 | `raven_read` | Read a file (raw or enriched) |
 
+**Full-text search note:** if you see SQLite/FTS errors (e.g. `SQL logic error: no such column: ...`) when using `raven_search`, quote special/hyphenated tokens:
+
+`"michael-truell" OR "Michael Truell"`
+
 ### Navigation
 
 | Tool | Description |

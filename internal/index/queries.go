@@ -457,6 +457,8 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 		limit = 20
 	}
 
+	ftsQuery := BuildFTSContentQuery(query)
+
 	// Use FTS5 match query with BM25 ranking
 	// Restrict search to content column only (not object_id or title)
 	// The snippet function extracts matching content with context
@@ -468,10 +470,10 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 			snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
 			bm25(fts_content) as rank
 		FROM fts_content
-		WHERE fts_content MATCH 'content: ' || ?
+		WHERE fts_content MATCH ?
 		ORDER BY rank
 		LIMIT ?
-	`, query, limit)
+	`, ftsQuery, limit)
 	if err != nil {
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
@@ -495,6 +497,8 @@ func (d *Database) SearchWithType(query string, objectType string, limit int) ([
 		limit = 20
 	}
 
+	ftsQuery := BuildFTSContentQuery(query)
+
 	rows, err := d.db.Query(`
 		SELECT 
 			f.object_id,
@@ -504,10 +508,10 @@ func (d *Database) SearchWithType(query string, objectType string, limit int) ([
 			bm25(fts_content) as rank
 		FROM fts_content f
 		JOIN objects o ON f.object_id = o.id
-		WHERE fts_content MATCH 'content: ' || ? AND o.type = ?
+		WHERE fts_content MATCH ? AND o.type = ?
 		ORDER BY rank
 		LIMIT ?
-	`, query, objectType, limit)
+	`, ftsQuery, objectType, limit)
 	if err != nil {
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
