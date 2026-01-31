@@ -174,6 +174,10 @@ object:project .status==active refs:[[companies/acme]]
 
 **Note:** `raven_query` supports `content("term")` for text search within typed queries. Use this when you want to combine text search with type/field filtering.
 
+**If you see SQLite/FTS errors during full-text search** (e.g., `SQL logic error: no such column: ...`), treat it as a query-syntax issue. A reliable workaround is to quote special/hyphenated tokens:
+
+`"michael-truell" OR "Michael Truell"`
+
 ### Query Strategy
 
 1. **Understand the schema first** if unsure what types/traits exist:

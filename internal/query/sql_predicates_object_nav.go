@@ -3,6 +3,8 @@ package query
 import (
 	"fmt"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/index"
 )
 
 // buildHasPredicateSQL builds SQL for has:{trait:...} predicates.
@@ -360,5 +362,5 @@ func (e *Executor) buildContentPredicateSQL(p *ContentPredicate, alias string) (
 		cond = "NOT " + cond
 	}
 
-	return cond, []interface{}{p.SearchTerm}, nil
+	return cond, []interface{}{index.BuildFTSContentQuery(p.SearchTerm)}, nil
 }

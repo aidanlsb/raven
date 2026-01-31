@@ -2,6 +2,9 @@ package cli
 
 import (
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/index"
+	"strings"
 )
 
 func TestJoinQueryArgs(t *testing.T) {
@@ -34,5 +37,35 @@ func TestJoinQueryArgs(t *testing.T) {
 				t.Errorf("joinQueryArgs(%q) = %q, want %q", tt.args, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildUnknownQuerySuggestion_IncludesReadOpenForResolvableRefs(t *testing.T) {
+	// Use the real vault via local DB open; this test should stay stable because it uses
+	// an in-memory index rather than relying on a specific vault.
+	//
+	// Create an in-memory DB and insert a known object ID so the resolver can resolve the short name.
+	db, err := index.OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.DB().Exec(`INSERT INTO objects (id, file_path, type, line_start, fields) VALUES (?, ?, ?, ?, '{}')`,
+		"project/growth-experiments",
+		"objects/project/growth-experiments.md",
+		"project",
+		1,
+	)
+	if err != nil {
+		t.Fatalf("failed to insert object: %v", err)
+	}
+
+	s := buildUnknownQuerySuggestion(db, "growth-experiments", "daily", nil)
+	if s == "" {
+		t.Fatalf("expected suggestion")
+	}
+	if !strings.Contains(s, "rvn read") || !strings.Contains(s, "rvn open") {
+		t.Fatalf("expected read/open hint, got: %q", s)
 	}
 }

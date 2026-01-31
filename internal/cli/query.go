@@ -360,9 +360,10 @@ Examples:
 		}
 
 		// Unknown query - provide helpful error
+		suggestion := buildUnknownQuerySuggestion(db, queryStr, vaultCfg.DailyDirectory, sch)
 		return handleErrorMsg(ErrQueryInvalid,
 			fmt.Sprintf("unknown query: %s", queryStr),
-			"Queries must start with 'object:' or 'trait:', or be a saved query name. Run 'rvn query --list' to see saved queries.")
+			suggestion)
 	},
 }
 
