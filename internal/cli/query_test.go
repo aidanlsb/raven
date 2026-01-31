@@ -12,8 +12,8 @@ func TestJoinQueryArgs(t *testing.T) {
 	}{
 		{
 			name: "single arg unchanged",
-			args: []string{`trait:due content:"hello world"`},
-			want: `trait:due content:"hello world"`,
+			args: []string{`trait:due content("hello world")`},
+			want: `trait:due content("hello world")`,
 		},
 		{
 			name: "multiple args joined with space",
@@ -21,29 +21,9 @@ func TestJoinQueryArgs(t *testing.T) {
 			want: "trait:due .value==past",
 		},
 		{
-			name: "content with shell-stripped quotes gets re-quoted",
-			args: []string{"trait:due", "content:hello world"},
-			want: `trait:due content:"hello world"`,
-		},
-		{
-			name: "negated content with shell-stripped quotes gets re-quoted",
-			args: []string{"trait:due", "!content:hello world"},
-			want: `trait:due !content:"hello world"`,
-		},
-		{
-			name: "content already quoted stays quoted",
-			args: []string{"trait:due", `content:"hello world"`},
-			want: `trait:due content:"hello world"`,
-		},
-		{
-			name: "content with single word gets quoted",
-			args: []string{"trait:due", "content:hello"},
-			want: `trait:due content:"hello"`,
-		},
-		{
 			name: "mixed predicates",
-			args: []string{"trait:due", "content:my task", ".value==past"},
-			want: `trait:due content:"my task" .value==past`,
+			args: []string{"trait:due", `content("my task")`, ".value==past"},
+			want: `trait:due content("my task") .value==past`,
 		},
 	}
 

@@ -105,6 +105,10 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		}
 
 		// Referenced by a specific source
+		sourceID, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
+		}
 		cond := fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
 			WHERE r.source_id = ?
@@ -113,7 +117,7 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
-		return cond, []interface{}{p.Target}, nil
+		return cond, []interface{}{sourceID}, nil
 	}
 
 	// Subquery - referenced by objects/traits matching the subquery

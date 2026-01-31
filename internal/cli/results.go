@@ -65,6 +65,19 @@ type FileResult struct {
 	Path      string `json:"path"`
 	Content   string `json:"content"`
 	LineCount int    `json:"line_count"`
+
+	// Optional range output (1-indexed, inclusive). When omitted, Content is the full file.
+	StartLine int `json:"start_line,omitempty"`
+	EndLine   int `json:"end_line,omitempty"`
+
+	// Optional structured lines for copy-paste-safe editing.
+	Lines []FileLine `json:"lines,omitempty"`
+}
+
+// FileLine represents one line of file content (without trailing '\n').
+type FileLine struct {
+	Num  int    `json:"num"`
+	Text string `json:"text"`
 }
 
 // =============================================================================

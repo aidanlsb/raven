@@ -33,19 +33,14 @@ func NewValidator(sch *schema.Schema) *Validator {
 // Validate checks a parsed query against the schema.
 // Returns a ValidationError if the query references undefined types, traits, or fields.
 func (v *Validator) Validate(q *Query) error {
-	return v.validateQuery(q, false)
+	return v.validateQuery(q)
 }
 
-func (v *Validator) validateQuery(q *Query, allowSelfRef bool) error {
+func (v *Validator) validateQuery(q *Query) error {
 	if q == nil {
 		return nil
 	}
-	if !allowSelfRef && containsSelfRef(q) {
-		return &ValidationError{
-			Message:    "self-reference '_' is only valid inside pipeline subqueries (and array quantifiers)",
-			Suggestion: "Move '_' into a pipeline assignment subquery like count({trait:todo within:_})",
-		}
-	}
+
 	var err error
 	if q.Type == QueryTypeObject {
 		err = v.validateObjectQuery(q)
@@ -56,171 +51,7 @@ func (v *Validator) validateQuery(q *Query, allowSelfRef bool) error {
 		return err
 	}
 
-	// Validate pipeline stages
-	if q.Pipeline != nil {
-		if err := v.validatePipeline(q.Pipeline, q.Type); err != nil {
-			return err
-		}
-	}
-
 	return nil
-}
-
-// validatePipeline validates all stages in a pipeline.
-func (v *Validator) validatePipeline(p *Pipeline, queryType QueryType) error {
-	for _, stage := range p.Stages {
-		switch s := stage.(type) {
-		case *AssignmentStage:
-			if err := v.validateAssignmentStage(s, queryType); err != nil {
-				return err
-			}
-			// FilterStage and SortStage don't contain subqueries, just computed/field references
-		}
-	}
-	return nil
-}
-
-// validateAssignmentStage validates that assignment subqueries contain _ references.
-func (v *Validator) validateAssignmentStage(s *AssignmentStage, queryType QueryType) error {
-	// Navigation functions like refs(_), refd(_) are always connected, but only support count().
-	if s.NavFunc != nil {
-		if s.AggField != "" {
-			return &ValidationError{
-				Message:    fmt.Sprintf("count() does not accept a field argument (got .%s) for navigation function %s(_)", s.AggField, s.NavFunc.Name),
-				Suggestion: fmt.Sprintf("Use %s = count(%s(_))", s.Name, s.NavFunc.Name),
-			}
-		}
-		if s.Aggregation != AggCount {
-			return &ValidationError{
-				Message:    fmt.Sprintf("navigation functions only support count(), not %s()", aggNameForType(s.Aggregation)),
-				Suggestion: fmt.Sprintf("Use %s = count(%s(_))", s.Name, s.NavFunc.Name),
-			}
-		}
-		return nil
-	}
-
-	// Subqueries must contain a _ reference to be meaningful
-	if s.SubQuery != nil {
-		if err := v.validateQuery(s.SubQuery, true); err != nil {
-			return &ValidationError{
-				Message:    fmt.Sprintf("invalid subquery in assignment '%s': %s", s.Name, err.Error()),
-				Suggestion: "Ensure the subquery references valid types/traits",
-			}
-		}
-
-		if !containsSelfRef(s.SubQuery) {
-			return &ValidationError{
-				Message:    fmt.Sprintf("pipeline subquery in '%s' must reference _ to connect to the query result", s.Name),
-				Suggestion: "Use predicates like within:_, on:_, refs:_, at:_ to relate the subquery to each result. Example: count({trait:todo within:_})",
-			}
-		}
-
-		// Aggregation-specific typing rules
-		switch s.Aggregation {
-		case AggCount:
-			// count({subquery}) should not take a field arg
-			if s.AggField != "" {
-				return &ValidationError{
-					Message:    fmt.Sprintf("count() does not accept a field argument (got .%s)", s.AggField),
-					Suggestion: "Use count({object:...}) or count({trait:...}) without a field argument",
-				}
-			}
-		case AggMin, AggMax, AggSum:
-			if s.AggField == "" {
-				return &ValidationError{
-					Message:    fmt.Sprintf("%s() requires a field argument", aggNameForType(s.Aggregation)),
-					Suggestion: "Use min(.field, {object:...}) or min(.value, {trait:...}) (similarly for max/sum)",
-				}
-			}
-
-			switch s.SubQuery.Type {
-			case QueryTypeTrait:
-				// Trait aggregates only support .value
-				if s.AggField != "value" {
-					return &ValidationError{
-						Message:    fmt.Sprintf("%s() on trait subqueries only supports .value (got .%s)", aggNameForType(s.Aggregation), s.AggField),
-						Suggestion: fmt.Sprintf("Use %s(.value, {trait:%s ...})", aggNameForType(s.Aggregation), s.SubQuery.TypeName),
-					}
-				}
-				td := v.schema.Traits[s.SubQuery.TypeName]
-				if td == nil || td.IsBoolean() {
-					return &ValidationError{
-						Message:    fmt.Sprintf("cannot use %s() on boolean trait '%s' (it has no value)", aggNameForType(s.Aggregation), s.SubQuery.TypeName),
-						Suggestion: "Use count({trait:...}) instead, or choose a valued trait",
-					}
-				}
-				if s.Aggregation == AggSum {
-					if td.Type != schema.FieldTypeNumber {
-						return &ValidationError{
-							Message:    fmt.Sprintf("sum() on trait subqueries requires a numeric trait (trait '%s' is type '%s')", s.SubQuery.TypeName, td.Type),
-							Suggestion: "Use a numeric trait, or use count()/min()/max() instead",
-						}
-					}
-				}
-
-			case QueryTypeObject:
-				typeDef := v.schema.Types[s.SubQuery.TypeName]
-				if typeDef == nil || typeDef.Fields == nil {
-					return &ValidationError{
-						Message:    fmt.Sprintf("type '%s' has no defined fields (cannot aggregate .%s)", s.SubQuery.TypeName, s.AggField),
-						Suggestion: fmt.Sprintf("Add the field to type '%s' in schema.yaml, or choose an existing field", s.SubQuery.TypeName),
-					}
-				}
-				fd, ok := typeDef.Fields[s.AggField]
-				if !ok || fd == nil {
-					available := v.availableFields(typeDef)
-					return &ValidationError{
-						Message:    fmt.Sprintf("type '%s' has no field '%s' for %s()", s.SubQuery.TypeName, s.AggField, aggNameForType(s.Aggregation)),
-						Suggestion: fmt.Sprintf("Available fields: %s", strings.Join(available, ", ")),
-					}
-				}
-				if !isAllowedAggregateFieldType(fd.Type, s.Aggregation) {
-					return &ValidationError{
-						Message:    fmt.Sprintf("cannot use %s() on field '%s.%s' of type '%s'", aggNameForType(s.Aggregation), s.SubQuery.TypeName, s.AggField, fd.Type),
-						Suggestion: "Use count() for non-scalar fields, or aggregate a comparable scalar (string/number/date/datetime/enum) and sum() only on number",
-					}
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-func aggNameForType(a AggregationType) string {
-	switch a {
-	case AggMin:
-		return "min"
-	case AggMax:
-		return "max"
-	case AggSum:
-		return "sum"
-	default:
-		return "count"
-	}
-}
-
-func isAllowedAggregateFieldType(ft schema.FieldType, agg AggregationType) bool {
-	// Disallow arrays for all aggregates (including min/max) - ambiguous semantics.
-	if strings.HasSuffix(string(ft), "[]") {
-		return false
-	}
-	// Disallow refs and booleans
-	switch ft {
-	case schema.FieldTypeRef, schema.FieldTypeBool:
-		return false
-	}
-	// sum requires number
-	if agg == AggSum {
-		return ft == schema.FieldTypeNumber
-	}
-	// min/max allow comparable scalars (including enum)
-	switch ft {
-	case schema.FieldTypeString, schema.FieldTypeNumber, schema.FieldTypeDate, schema.FieldTypeDatetime, schema.FieldTypeEnum:
-		return true
-	default:
-		return false
-	}
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {
@@ -274,44 +105,44 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 		return nil
 	case *HasPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *ParentPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 		// Target-based predicate doesn't need schema validation
 	case *AncestorPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *ChildPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *DescendantPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *ContainsPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *RefsPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *ContentPredicate:
 		// Content predicate just needs a non-empty search term
 		if p.SearchTerm == "" {
 			return &ValidationError{
 				Message:    "content search term cannot be empty",
-				Suggestion: "Provide a search term: content:\"search terms\"",
+				Suggestion: `Provide a search term: content("search terms")`,
 			}
 		}
 	case *RefdPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *ValuePredicate:
 		// ValuePredicate is deprecated; the parser now uses FieldPredicate with Field="value"
@@ -322,18 +153,18 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 	case *OnPredicate:
 		return &ValidationError{
 			Message:    "on: predicate is only valid for trait queries",
-			Suggestion: "Use on:{object:...} in trait queries",
+			Suggestion: "Use on(object:...) in trait queries",
 		}
 	case *WithinPredicate:
 		return &ValidationError{
 			Message:    "within: predicate is only valid for trait queries",
-			Suggestion: "Use within:{object:...} in trait queries",
+			Suggestion: "Use within(object:...) in trait queries",
 		}
 	case *AtPredicate:
 		// at: is only valid for trait queries
 		return &ValidationError{
 			Message:    "at: predicate is only valid for trait queries",
-			Suggestion: "Use at: to find traits co-located with other traits",
+			Suggestion: "Use at(trait:...) to find traits co-located with other traits",
 		}
 	case *OrPredicate:
 		if err := v.validateObjectPredicate(p.Left, typeName, typeDef); err != nil {
@@ -358,23 +189,23 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 		return nil
 	case *OnPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 		// Target-based predicate doesn't need schema validation
 	case *WithinPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *RefsPredicate:
 		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *ContentPredicate:
 		// Content predicate just needs a non-empty search term
 		if p.SearchTerm == "" {
 			return &ValidationError{
 				Message:    "content search term cannot be empty",
-				Suggestion: "Provide a search term: content:\"search terms\"",
+				Suggestion: `Provide a search term: content("search terms")`,
 			}
 		}
 	case *AtPredicate:
@@ -383,10 +214,10 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 			if p.SubQuery.Type != QueryTypeTrait {
 				return &ValidationError{
 					Message:    "at: requires a trait subquery",
-					Suggestion: "Use at:{trait:name} to find traits co-located with other traits",
+					Suggestion: "Use at(trait:name) to find traits co-located with other traits",
 				}
 			}
-			return v.validateQuery(p.SubQuery, false)
+			return v.validateQuery(p.SubQuery)
 		}
 	case *RefdPredicate:
 		return &ValidationError{
@@ -410,32 +241,32 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 	case *HasPredicate:
 		return &ValidationError{
 			Message:    "has: predicate is only valid for object queries",
-			Suggestion: "Use has:{trait:...} in object queries",
+			Suggestion: "Use has(trait:...) in object queries",
 		}
 	case *ContainsPredicate:
 		return &ValidationError{
 			Message:    "contains: predicate is only valid for object queries",
-			Suggestion: "Use contains:{trait:...} in object queries",
+			Suggestion: "Use encloses(trait:...) in object queries",
 		}
 	case *ParentPredicate:
 		return &ValidationError{
 			Message:    "parent: predicate is only valid for object queries",
-			Suggestion: "Use parent:{object:...} in object queries",
+			Suggestion: "Use parent(object:...) in object queries",
 		}
 	case *AncestorPredicate:
 		return &ValidationError{
 			Message:    "ancestor: predicate is only valid for object queries",
-			Suggestion: "Use ancestor:{object:...} in object queries",
+			Suggestion: "Use ancestor(object:...) in object queries",
 		}
 	case *ChildPredicate:
 		return &ValidationError{
 			Message:    "child: predicate is only valid for object queries",
-			Suggestion: "Use child:{object:...} in object queries",
+			Suggestion: "Use child(object:...) in object queries",
 		}
 	case *DescendantPredicate:
 		return &ValidationError{
 			Message:    "descendant: predicate is only valid for object queries",
-			Suggestion: "Use descendant:{object:...} in object queries",
+			Suggestion: "Use descendant(object:...) in object queries",
 		}
 	case *OrPredicate:
 		if err := v.validateTraitPredicate(p.Left); err != nil {
@@ -496,108 +327,4 @@ func (v *Validator) availableFields(typeDef *schema.TypeDefinition) []string {
 		}
 	}
 	return fields
-}
-
-// containsSelfRef checks if a query contains any _ (self-reference) predicates.
-func containsSelfRef(q *Query) bool {
-	for _, pred := range q.Predicates {
-		if predicateContainsSelfRef(pred) {
-			return true
-		}
-	}
-	return false
-}
-
-// predicateContainsSelfRef checks if a predicate or its subqueries contain _ references.
-func predicateContainsSelfRef(pred Predicate) bool {
-	switch p := pred.(type) {
-	case *OnPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *WithinPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *AtPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *RefsPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *RefdPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *ParentPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *AncestorPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *ChildPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *DescendantPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *HasPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *ContainsPredicate:
-		if p.IsSelfRef {
-			return true
-		}
-		if p.SubQuery != nil && containsSelfRef(p.SubQuery) {
-			return true
-		}
-	case *OrPredicate:
-		if predicateContainsSelfRef(p.Left) || predicateContainsSelfRef(p.Right) {
-			return true
-		}
-	case *GroupPredicate:
-		for _, subPred := range p.Predicates {
-			if predicateContainsSelfRef(subPred) {
-				return true
-			}
-		}
-	}
-	return false
 }

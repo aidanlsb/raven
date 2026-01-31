@@ -11,7 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -66,7 +66,7 @@ type TraitBulkSummary struct {
 }
 
 // applyUpdateTraitFromQuery applies update operation to trait query results.
-func applyUpdateTraitFromQuery(vaultPath string, traits []query.PipelineTraitResult, args []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+func applyUpdateTraitFromQuery(vaultPath string, traits []model.Trait, args []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
 	// Parse value=X argument
 	var newValue string
 	for _, arg := range args {
@@ -101,7 +101,7 @@ func applyUpdateTraitFromQuery(vaultPath string, traits []query.PipelineTraitRes
 }
 
 // previewUpdateTraitBulk shows a preview of trait update operations.
-func previewUpdateTraitBulk(vaultPath string, traits []query.PipelineTraitResult, newValue string, sch *schema.Schema, extraSkipped []TraitBulkResult) error {
+func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue string, sch *schema.Schema, extraSkipped []TraitBulkResult) error {
 	var items []TraitBulkPreviewItem
 	var skipped []TraitBulkResult
 
@@ -200,9 +200,9 @@ func printTraitBulkPreview(preview *TraitBulkPreview) {
 }
 
 // applyUpdateTraitBulk applies update operations to traits.
-func applyUpdateTraitBulk(vaultPath string, traits []query.PipelineTraitResult, newValue string, sch *schema.Schema, vaultCfg *config.VaultConfig, extraSkipped []TraitBulkResult) error {
+func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue string, sch *schema.Schema, vaultCfg *config.VaultConfig, extraSkipped []TraitBulkResult) error {
 	// Group traits by file for efficient file I/O
-	traitsByFile := make(map[string][]query.PipelineTraitResult)
+	traitsByFile := make(map[string][]model.Trait)
 	for _, t := range traits {
 		traitsByFile[t.FilePath] = append(traitsByFile[t.FilePath], t)
 	}
@@ -439,8 +439,8 @@ func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string,
 }
 
 // resolveTraitIDs resolves trait IDs to concrete trait results using the index.
-func resolveTraitIDs(db *index.Database, ids []string) ([]query.PipelineTraitResult, []TraitBulkResult, error) {
-	results := make([]query.PipelineTraitResult, 0, len(ids))
+func resolveTraitIDs(db *index.Database, ids []string) ([]model.Trait, []TraitBulkResult, error) {
+	results := make([]model.Trait, 0, len(ids))
 	var skipped []TraitBulkResult
 
 	for _, id := range ids {
@@ -468,10 +468,7 @@ func resolveTraitIDs(db *index.Database, ids []string) ([]query.PipelineTraitRes
 			continue
 		}
 
-		results = append(results, query.PipelineTraitResult{
-			Trait:    *trait,
-			Computed: make(map[string]interface{}),
-		})
+		results = append(results, *trait)
 	}
 
 	return results, skipped, nil

@@ -46,6 +46,18 @@ func TestResolver(t *testing.T) {
 		}
 	})
 
+	t.Run("short name with embedded fragment resolves", func(t *testing.T) {
+		// Should resolve via suffix matching: "website#tasks" -> "projects/website#tasks"
+		r2 := New([]string{"projects/website#tasks"}, Options{})
+		result := r2.Resolve("website#tasks")
+		if result.TargetID != "projects/website#tasks" {
+			t.Errorf("got %q, want %q", result.TargetID, "projects/website#tasks")
+		}
+		if result.Ambiguous {
+			t.Errorf("expected not ambiguous, got matches: %v", result.Matches)
+		}
+	})
+
 	t.Run("not found", func(t *testing.T) {
 		result := r.Resolve("nonexistent")
 		if result.TargetID != "" {

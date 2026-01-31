@@ -27,7 +27,7 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	results, err := e.ExecuteObjectQueryWithPipeline(q)
+	results, err := e.ExecuteObjectQuery(q)
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}

@@ -7,6 +7,12 @@
 - **References**: Wiki-style links between notes (`[[people/freya]]`)
 - **Schema**: User-defined in `schema.yaml` — types and traits must be defined here to be queryable
 
+**Built-in types:**
+
+- `page`: freeform note objects (use this when a new note doesn’t fit a schema type)
+- `date`: daily notes
+- `section`: embedded objects inside a file
+
 ### File Format Quick Reference
 
 **Frontmatter** (YAML at top of file):

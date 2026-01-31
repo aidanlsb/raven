@@ -106,7 +106,7 @@ rvn schema commands --json
 | `raven_query` | Query objects or traits using RQL |
 | `raven_search` | Full-text search across vault |
 | `raven_backlinks` | Find objects that reference a target |
-| `raven_read` | Read raw file content |
+| `raven_read` | Read a file (raw or enriched) |
 
 ### Navigation
 
@@ -154,7 +154,7 @@ rvn schema commands --json
 |------|-------------|
 | `raven_workflow_list` | List available workflows |
 | `raven_workflow_show` | Show workflow details |
-| `raven_workflow_render` | Render a workflow with context |
+| `raven_workflow_run` | Run a workflow until a prompt step |
 
 ---
 
@@ -226,6 +226,31 @@ raven_new(type="person", title="Freya")
 raven_schema(subcommand="type person")
 ```
 
+### Creating a new file + adding body content (recommended agent flow)
+
+Raven is intentionally **not** a free-form file writer. The recommended pattern is:
+
+1. **Create the file via schema** (`raven_new`) so frontmatter/templates are applied
+2. **Append content** (`raven_add`) to the created file
+
+```python
+# 1) Create
+create = raven_new(type="project", title="Website Redesign")
+
+# 2) Append (use the returned relative path)
+# create.data.file will look like "projects/website-redesign.md"
+raven_add(text="## Notes\n- Kickoff next week", to=create.data.file)
+```
+
+### Freeform notes (use built-in `page` type)
+
+If a user asks for a new note that **does not fit an existing schema type**, create a built-in `page` object and then append content as needed:
+
+```python
+create = raven_new(type="page", title="Quick Note")
+raven_add(text="## Notes\n- ...", to=create.data.file)
+```
+
 ### Quick Capture
 
 ```python
@@ -256,6 +281,25 @@ raven_query(query_string="overdue")  # Run by name
 
 # Full-text search
 raven_search(query="meeting notes")
+```
+
+### Getting file paths (for editing/navigation)
+
+- **From `raven_new`**: the response includes `data.file` (vault-relative path) and `data.id` (object ID).
+- **From `raven_query`**:
+  - Object queries include `items[].file_path` and `items[].line`
+  - Trait queries include `items[].file_path` and `items[].line`
+
+### Reading long files for safe edits
+
+For long files, prefer raw reads with line ranges and/or structured lines to avoid transcription errors when preparing `raven_edit(old_str=...)`:
+
+```python
+# Raw slice of a file (1-indexed inclusive lines)
+raven_read(path="projects/website.md", raw=true, start_line=10, end_line=40)
+
+# Structured lines (copy-paste-safe anchors)
+raven_read(path="projects/website.md", raw=true, lines=true, start_line=10, end_line=40)
 ```
 
 ### Updating Objects
@@ -349,22 +393,24 @@ raven_workflow_list()
 # Show details
 raven_workflow_show(name="meeting-prep")
 
-# Render with inputs
-raven_workflow_render(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
+# Run with inputs
+raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
 ```
 
 ---
 
 ## Response Format
 
-All tools return JSON with a consistent envelope:
+All Raven tools return JSON with a consistent envelope in their stdout:
 
 ### Success Response
 
 ```json
 {
-  "success": true,
-  "data": { ... }
+  "ok": true,
+  "data": { ... },
+  "warnings": [ ... ],
+  "meta": { ... }
 }
 ```
 
@@ -372,23 +418,25 @@ All tools return JSON with a consistent envelope:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "type": "validation_error",
-    "message": "Missing required field: name",
-    "details": { ... }
-  }
+  "ok": false,
+  "error": { "code": "MISSING_ARGUMENT", "message": "title is required" }
 }
 ```
 
-### Common Error Types
+### Notes for MCP clients/agents
 
-| Type | Description |
+- The MCP server returns tool output as **text**; that text is the Raven JSON envelope shown above.
+- Many mutation commands **preview by default** and require `confirm=true` to apply (`raven_edit`, `raven_query(apply=..., confirm=true)`, and bulk `--stdin` modes).
+
+### Common Error Codes
+
+| Code | Description |
 |------|-------------|
-| `validation_error` | Invalid input or schema validation failure |
-| `not_found` | Object or file not found |
-| `ambiguous_reference` | Reference matches multiple objects |
-| `data_integrity` | Operation blocked to protect data integrity |
+| `MISSING_ARGUMENT` | Missing required argument (common in non-interactive/MCP mode) |
+| `TYPE_NOT_FOUND` | Unknown type (check `raven_schema(subcommand="types")`) |
+| `REF_NOT_FOUND` | Reference/path doesn't resolve |
+| `REF_AMBIGUOUS` | Short reference matches multiple objects |
+| `REQUIRED_FIELD_MISSING` | Missing required schema field(s); see `error.details.retry_with` when present |
 
 ---
 

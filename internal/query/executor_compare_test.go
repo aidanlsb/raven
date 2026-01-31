@@ -38,34 +38,6 @@ func TestCompareValues_Temporal(t *testing.T) {
 	}
 }
 
-func TestEvaluateFilterExpr_UsesSharedComparison(t *testing.T) {
-	e := &Executor{}
-
-	ok, err := e.evaluateFilterExpr(
-		map[string]interface{}{"n": 10},
-		nil,
-		&FilterExpr{Left: "n", Op: CompareGt, Right: "2", IsField: false},
-	)
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected 10 > 2")
-	}
-
-	ok, err = e.evaluateFilterExpr(
-		map[string]interface{}{"d": "2025-02-01"},
-		nil,
-		&FilterExpr{Left: "d", Op: CompareGt, Right: "2025-01-01", IsField: false},
-	)
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected date comparison to work")
-	}
-}
-
 func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 	p := &ValuePredicate{
 		Value:     "10",

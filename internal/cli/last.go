@@ -221,7 +221,7 @@ func renderLastQueryResults(lr *lastresults.LastResults, vaultPath string) error
 		if typeName == "" {
 			typeName = "trait"
 		}
-		printQueryTraitResults(lr.Query, typeName, pipelineTraitResultsFromTraits(traits))
+		printQueryTraitResults(lr.Query, typeName, traits)
 		return nil
 	case "object":
 		objects, err := lr.DecodeObjects()
@@ -238,7 +238,7 @@ func renderLastQueryResults(lr *lastresults.LastResults, vaultPath string) error
 		if loaded, err := schema.Load(vaultPath); err == nil {
 			sch = loaded
 		}
-		printQueryObjectResults(lr.Query, typeName, pipelineObjectResultsFromObjects(objects), sch)
+		printQueryObjectResults(lr.Query, typeName, objects, sch)
 		return nil
 	default:
 		return handleErrorMsg(ErrInvalidInput, "last results are not from a query", "")
@@ -265,14 +265,14 @@ func writeLastResultsPipe(lr *lastresults.LastResults) error {
 			if err != nil {
 				return handleError(ErrInternal, err, "")
 			}
-			WritePipeableList(os.Stdout, pipeItemsForTraitResults(pipelineTraitResultsFromTraits(traits)))
+			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
 			return nil
 		case "object":
 			objects, err := lr.DecodeObjects()
 			if err != nil {
 				return handleError(ErrInternal, err, "")
 			}
-			WritePipeableList(os.Stdout, pipeItemsForObjectResults(pipelineObjectResultsFromObjects(objects)))
+			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
 			return nil
 		default:
 			return handleErrorMsg(ErrInvalidInput, "last results are not from a query", "")

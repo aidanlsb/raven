@@ -6,7 +6,7 @@ import (
 )
 
 // parseFieldPredicate parses .field==value, .field!=value, .field>value, etc.
-// For string matching, use function-style predicates: includes(.field, "str"), startswith(...), etc.
+// For string matching, use function-style predicates: contains(.field, "str"), startswith(...), etc.
 func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected field name after '.'")
@@ -38,14 +38,14 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		compareOp = CompareGte
 		p.advance()
 	default:
-		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after field name; for string matching use includes(), startswith(), endswith(), or matches()")
+		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after field name; for string matching use contains(), startswith(), endswith(), or matches()")
 	}
 
 	var value string
 
 	switch p.curr.Type {
 	case TokenStar:
-		return nil, fmt.Errorf(".field==* is deprecated; use notnull(.field) or isnull(.field) instead")
+		return nil, fmt.Errorf(".field==* is no longer supported; use exists(.field) or !exists(.field) instead")
 	case TokenIdent:
 		value = p.curr.Value
 		p.advance()
@@ -56,7 +56,7 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		value = p.curr.Value
 		p.advance()
 	default:
-		return nil, fmt.Errorf("expected field value or quoted string; for null checks use notnull(.field) or isnull(.field)")
+		return nil, fmt.Errorf("expected field value or quoted string; for field presence use exists(.field)")
 	}
 
 	return &FieldPredicate{
@@ -194,7 +194,7 @@ func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
 }
 
 // parseValuePredicate parses value==val, value<val, value>val, etc.
-// For string matching, use function-style predicates: includes(), startswith(), etc.
+// For string matching, use function-style predicates: contains(), startswith(), etc.
 func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
 	// Determine the operator
 	var compareOp CompareOp
@@ -219,7 +219,7 @@ func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
 		compareOp = CompareGte
 		p.advance()
 	default:
-		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after 'value'; for string matching use includes(), startswith(), endswith(), or matches()")
+		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after 'value'; for string matching use contains(), startswith(), endswith(), or matches()")
 	}
 
 	var value string
@@ -243,8 +243,8 @@ func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-// parseStringFuncPredicate parses: includes(.field, "value"), startswith(.field, "value"), etc.
-// Also supports: includes(_, "value") for use within array quantifiers.
+// parseStringFuncPredicate parses: contains(.field, "value"), startswith(.field, "value"), etc.
+// Also supports: contains(_, "value") for use within array quantifiers.
 func (p *Parser) parseStringFuncPredicate(negated bool, funcType StringFuncType) (Predicate, error) {
 	if err := p.expect(TokenLParen); err != nil {
 		return nil, err
@@ -463,7 +463,7 @@ func (p *Parser) parseElementAndPredicate() (Predicate, error) {
 }
 
 // parseElementUnaryPredicate parses element predicates used within array quantifiers.
-// Supports: _ == value, _ != value, includes(_, "str"), etc.
+// Supports: _ == value, _ != value, contains(_, "str"), etc.
 func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 	// Check for negation
 	negated := false
@@ -499,14 +499,14 @@ func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 		return p.parseElementUnderscoreEquality(negated)
 	}
 
-	// Check for function-style predicates: includes(_, "str"), etc.
+	// Check for function-style predicates: contains(_, "str"), etc.
 	if p.curr.Type == TokenIdent {
 		if pred, ok, err := p.tryParseElementFuncPredicate(negated); ok || err != nil {
 			return pred, err
 		}
 	}
 
-	return nil, fmt.Errorf("expected element predicate: _ == value, _ != value, or a function like includes(_, \"str\")")
+	return nil, fmt.Errorf("expected element predicate: _ == value, _ != value, or a function like contains(_, \"str\")")
 }
 
 func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error) {
@@ -556,7 +556,7 @@ func (p *Parser) tryParseElementFuncPredicate(negated bool) (Predicate, bool, er
 	}
 	funcName := strings.ToLower(p.curr.Value)
 	switch funcName {
-	case "includes":
+	case "contains":
 		p.advance()
 		pred, err := p.parseStringFuncPredicate(negated, StringFuncIncludes)
 		return pred, true, err

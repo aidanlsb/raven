@@ -145,17 +145,17 @@ func TestParseHasPredicate(t *testing.T) {
 	}{
 		{
 			name:          "shorthand has",
-			input:         "object:meeting has:{trait:due}",
+			input:         "object:meeting has(trait:due)",
 			wantTraitName: "due",
 		},
 		{
 			name:          "full has subquery",
-			input:         "object:meeting has:{trait:due}",
+			input:         "object:meeting has(trait:due)",
 			wantTraitName: "due",
 		},
 		{
 			name:          "negated has",
-			input:         "object:meeting !has:{trait:due}",
+			input:         "object:meeting !has(trait:due)",
 			wantTraitName: "due",
 			wantNeg:       true,
 		},
@@ -193,25 +193,25 @@ func TestParseParentAncestorChild(t *testing.T) {
 	}{
 		{
 			name:         "parent shorthand",
-			input:        "object:meeting parent:{object:date}",
+			input:        "object:meeting parent(object:date)",
 			predType:     "parent",
 			wantTypeName: "date",
 		},
 		{
 			name:         "parent full",
-			input:        "object:meeting parent:{object:date}",
+			input:        "object:meeting parent(object:date)",
 			predType:     "parent",
 			wantTypeName: "date",
 		},
 		{
 			name:         "ancestor shorthand",
-			input:        "object:meeting ancestor:{object:date}",
+			input:        "object:meeting ancestor(object:date)",
 			predType:     "ancestor",
 			wantTypeName: "date",
 		},
 		{
 			name:         "child shorthand",
-			input:        "object:date child:{object:meeting}",
+			input:        "object:date child(object:meeting)",
 			predType:     "child",
 			wantTypeName: "meeting",
 		},
@@ -325,19 +325,19 @@ func TestParseOnWithin(t *testing.T) {
 	}{
 		{
 			name:         "on shorthand",
-			input:        "trait:due on:{object:meeting}",
+			input:        "trait:due on(object:meeting)",
 			predType:     "on",
 			wantTypeName: "meeting",
 		},
 		{
 			name:         "on full",
-			input:        "trait:due on:{object:meeting}",
+			input:        "trait:due on(object:meeting)",
 			predType:     "on",
 			wantTypeName: "meeting",
 		},
 		{
 			name:         "within shorthand",
-			input:        "trait:highlight within:{object:date}",
+			input:        "trait:highlight within(object:date)",
 			predType:     "within",
 			wantTypeName: "date",
 		},
@@ -384,7 +384,7 @@ func TestParseBooleanComposition(t *testing.T) {
 	}{
 		{
 			name:           "multiple predicates AND",
-			input:          "object:project .status==active has:{trait:due}",
+			input:          "object:project .status==active has(trait:due)",
 			wantPredicates: 1,
 		},
 		{
@@ -428,23 +428,23 @@ func TestParseRefsPredicate(t *testing.T) {
 	}{
 		{
 			name:       "refs with target",
-			input:      "object:meeting refs:[[projects/website]]",
+			input:      "object:meeting refs([[projects/website]])",
 			wantTarget: "projects/website",
 		},
 		{
 			name:     "refs with subquery",
-			input:    "object:meeting refs:{object:project}",
+			input:    "object:meeting refs(object:project)",
 			wantSubQ: true,
 		},
 		{
 			name:       "negated refs",
-			input:      "object:meeting !refs:[[projects/website]]",
+			input:      "object:meeting !refs([[projects/website]])",
 			wantTarget: "projects/website",
 			wantNeg:    true,
 		},
 		{
 			name:     "refs with complex subquery",
-			input:    "object:meeting refs:{object:project .status==active}",
+			input:    "object:meeting refs(object:project .status==active)",
 			wantSubQ: true,
 		},
 	}
@@ -488,23 +488,23 @@ func TestParseContentPredicate(t *testing.T) {
 	}{
 		{
 			name:     "simple content search",
-			input:    `object:person content:"colleague"`,
+			input:    `object:person content("colleague")`,
 			wantTerm: "colleague",
 		},
 		{
 			name:     "content with multiple words",
-			input:    `object:project content:"api design"`,
+			input:    `object:project content("api design")`,
 			wantTerm: "api design",
 		},
 		{
 			name:     "negated content search",
-			input:    `object:person !content:"contractor"`,
+			input:    `object:person !content("contractor")`,
 			wantTerm: "contractor",
 			wantNeg:  true,
 		},
 		{
 			name:    "content without quotes",
-			input:   `object:person content:colleague`,
+			input:   `object:person content(colleague)`,
 			wantErr: true, // requires quoted string
 		},
 	}
@@ -548,45 +548,45 @@ func TestParseDescendantContains(t *testing.T) {
 	}{
 		{
 			name:         "descendant shorthand",
-			input:        "object:project descendant:{object:section}",
+			input:        "object:project descendant(object:section)",
 			predType:     "descendant",
 			wantTypeName: "section",
 		},
 		{
 			name:         "descendant full",
-			input:        "object:project descendant:{object:section}",
+			input:        "object:project descendant(object:section)",
 			predType:     "descendant",
 			wantTypeName: "section",
 		},
 		{
 			name:         "negated descendant",
-			input:        "object:project !descendant:{object:section}",
+			input:        "object:project !descendant(object:section)",
 			predType:     "descendant",
 			wantTypeName: "section",
 			wantNeg:      true,
 		},
 		{
-			name:         "contains shorthand",
-			input:        "object:project contains:{trait:todo}",
-			predType:     "contains",
+			name:         "encloses shorthand",
+			input:        "object:project encloses(trait:todo)",
+			predType:     "encloses",
 			wantTypeName: "todo",
 		},
 		{
-			name:         "contains full",
-			input:        "object:project contains:{trait:todo}",
-			predType:     "contains",
+			name:         "encloses full",
+			input:        "object:project encloses(trait:todo)",
+			predType:     "encloses",
 			wantTypeName: "todo",
 		},
 		{
-			name:         "contains with value",
-			input:        "object:project contains:{trait:todo .value==done}",
-			predType:     "contains",
+			name:         "encloses with value",
+			input:        "object:project encloses(trait:todo .value==done)",
+			predType:     "encloses",
 			wantTypeName: "todo",
 		},
 		{
-			name:         "negated contains",
-			input:        "object:project !contains:{trait:todo}",
-			predType:     "contains",
+			name:         "negated encloses",
+			input:        "object:project !encloses(trait:todo)",
+			predType:     "encloses",
 			wantTypeName: "todo",
 			wantNeg:      true,
 		},
@@ -612,8 +612,8 @@ func TestParseDescendantContains(t *testing.T) {
 				subQuery = p.SubQuery
 				negated = p.Negated()
 			case *ContainsPredicate:
-				if tt.predType != "contains" {
-					t.Fatalf("expected %s, got contains", tt.predType)
+				if tt.predType != "encloses" {
+					t.Fatalf("expected %s, got encloses", tt.predType)
 				}
 				subQuery = p.SubQuery
 				negated = p.Negated()
@@ -639,35 +639,35 @@ func TestParseComplexQueries(t *testing.T) {
 	}{
 		{
 			name:  "nested has with value",
-			input: "object:meeting has:{trait:due .value==past}",
+			input: "object:meeting has(trait:due .value==past)",
 		},
 		{
 			name:  "on with field",
-			input: "trait:highlight on:{object:book .status==reading}",
+			input: "trait:highlight on(object:book .status==reading)",
 		},
 		{
 			name:  "ancestor chain",
-			input: "object:topic ancestor:{object:meeting ancestor:{object:date}}",
+			input: "object:topic ancestor(object:meeting ancestor(object:date))",
 		},
 		{
 			name:  "complex with OR",
-			input: "trait:highlight (on:{object:book .status==reading} | on:{object:article .status==reading})",
+			input: "trait:highlight (on(object:book .status==reading) | on(object:article .status==reading))",
 		},
 		{
 			name:  "multiple field predicates",
 			input: "object:project .status==active .priority==high",
 		},
 		{
-			name:  "contains with value predicate",
-			input: "object:project contains:{trait:todo .value==todo}",
+			name:  "encloses with value predicate",
+			input: "object:project encloses(trait:todo .value==todo)",
 		},
 		{
 			name:  "descendant with field predicate",
-			input: "object:project descendant:{object:section .title==Tasks}",
+			input: "object:project descendant(object:section .title==Tasks)",
 		},
 		{
 			name:  "combined contains and field",
-			input: "object:project .status==active contains:{trait:todo}",
+			input: "object:project .status==active encloses(trait:todo)",
 		},
 	}
 
@@ -699,22 +699,22 @@ func TestParseAtPredicate(t *testing.T) {
 	}{
 		{
 			name:          "at with shorthand trait",
-			input:         "trait:due at:{trait:todo}",
+			input:         "trait:due at(trait:todo)",
 			wantTraitName: "todo",
 		},
 		{
 			name:          "at with full trait subquery",
-			input:         "trait:due at:{trait:todo}",
+			input:         "trait:due at(trait:todo)",
 			wantTraitName: "todo",
 		},
 		{
 			name:          "at with trait subquery and value",
-			input:         "trait:due at:{trait:priority .value==high}",
+			input:         "trait:due at(trait:priority .value==high)",
 			wantTraitName: "priority",
 		},
 		{
 			name:          "negated at",
-			input:         "trait:due !at:{trait:todo}",
+			input:         "trait:due !at(trait:todo)",
 			wantTraitName: "todo",
 			wantNeg:       true,
 		},
@@ -753,23 +753,23 @@ func TestParseRefdPredicate(t *testing.T) {
 	}{
 		{
 			name:       "refd with target",
-			input:      "object:project refd:[[meetings/standup]]",
+			input:      "object:project refd([[meetings/standup]])",
 			wantTarget: "meetings/standup",
 		},
 		{
 			name:     "refd with object subquery",
-			input:    "object:project refd:{object:meeting}",
+			input:    "object:project refd(object:meeting)",
 			wantSubQ: true,
 		},
 		{
 			name:       "negated refd",
-			input:      "object:project !refd:[[meetings/standup]]",
+			input:      "object:project !refd([[meetings/standup]])",
 			wantTarget: "meetings/standup",
 			wantNeg:    true,
 		},
 		{
 			name:     "refd with complex subquery",
-			input:    "object:person refd:{object:project .status==active}",
+			input:    "object:person refd(object:project .status==active)",
 			wantSubQ: true,
 		},
 	}
@@ -992,7 +992,7 @@ func TestParseRefdShorthand(t *testing.T) {
 	}{
 		{
 			name:         "refd shorthand",
-			input:        "object:project refd:{object:meeting}",
+			input:        "object:project refd(object:meeting)",
 			wantTypeName: "meeting",
 		},
 	}
@@ -1030,50 +1030,50 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 	}{
 		{
 			name:       "parent with direct target",
-			input:      "object:section parent:[[projects/website]]",
+			input:      "object:section parent([[projects/website]])",
 			predType:   "parent",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "ancestor with direct target",
-			input:      "object:section ancestor:[[projects/website]]",
+			input:      "object:section ancestor([[projects/website]])",
 			predType:   "ancestor",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "child with direct target",
-			input:      "object:project child:[[projects/website#overview]]",
+			input:      "object:project child([[projects/website#overview]])",
 			predType:   "child",
 			wantTarget: "projects/website#overview",
 		},
 		{
 			name:       "descendant with direct target",
-			input:      "object:project descendant:[[projects/website#tasks]]",
+			input:      "object:project descendant([[projects/website#tasks]])",
 			predType:   "descendant",
 			wantTarget: "projects/website#tasks",
 		},
 		{
 			name:       "on with direct target (trait query)",
-			input:      "trait:todo on:[[projects/website]]",
+			input:      "trait:todo on([[projects/website]])",
 			predType:   "on",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "within with direct target (trait query)",
-			input:      "trait:todo within:[[projects/website]]",
+			input:      "trait:todo within([[projects/website]])",
 			predType:   "within",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "negated parent with direct target",
-			input:      "object:section !parent:[[projects/website]]",
+			input:      "object:section !parent([[projects/website]])",
 			predType:   "parent",
 			wantTarget: "projects/website",
 			wantNeg:    true,
 		},
 		{
 			name:       "short reference",
-			input:      "trait:todo within:[[website]]",
+			input:      "trait:todo within([[website]])",
 			predType:   "within",
 			wantTarget: "website",
 		},
@@ -1137,110 +1137,6 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 			}
 			if negated != tt.wantNeg {
 				t.Errorf("Negated = %v, want %v", negated, tt.wantNeg)
-			}
-		})
-	}
-}
-
-func TestParseSelfRefPredicates(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		predType string
-	}{
-		{
-			name:     "on:_ in trait query",
-			input:    "trait:due on:_",
-			predType: "on",
-		},
-		{
-			name:     "within:_ in trait query",
-			input:    "trait:due within:_",
-			predType: "within",
-		},
-		{
-			name:     "at:_ in trait query",
-			input:    "trait:due at:_",
-			predType: "at",
-		},
-		{
-			name:     "refs:_ in trait query",
-			input:    "trait:due refs:_",
-			predType: "refs",
-		},
-		{
-			name:     "refd:_ in trait query",
-			input:    "trait:due refd:_",
-			predType: "refd",
-		},
-		{
-			name:     "parent:_ in object query",
-			input:    "object:section parent:_",
-			predType: "parent",
-		},
-		{
-			name:     "ancestor:_ in object query",
-			input:    "object:section ancestor:_",
-			predType: "ancestor",
-		},
-		{
-			name:     "child:_ in object query",
-			input:    "object:project child:_",
-			predType: "child",
-		},
-		{
-			name:     "descendant:_ in object query",
-			input:    "object:project descendant:_",
-			predType: "descendant",
-		},
-		{
-			name:     "refs:_ in object query",
-			input:    "object:meeting refs:_",
-			predType: "refs",
-		},
-		{
-			name:     "refd:_ in object query",
-			input:    "object:project refd:_",
-			predType: "refd",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			q, err := Parse(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
-			}
-
-			var isSelfRef bool
-			switch p := q.Predicates[0].(type) {
-			case *OnPredicate:
-				isSelfRef = p.IsSelfRef
-			case *WithinPredicate:
-				isSelfRef = p.IsSelfRef
-			case *AtPredicate:
-				isSelfRef = p.IsSelfRef
-			case *RefsPredicate:
-				isSelfRef = p.IsSelfRef
-			case *RefdPredicate:
-				isSelfRef = p.IsSelfRef
-			case *ParentPredicate:
-				isSelfRef = p.IsSelfRef
-			case *AncestorPredicate:
-				isSelfRef = p.IsSelfRef
-			case *ChildPredicate:
-				isSelfRef = p.IsSelfRef
-			case *DescendantPredicate:
-				isSelfRef = p.IsSelfRef
-			default:
-				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
-			}
-
-			if !isSelfRef {
-				t.Error("expected IsSelfRef to be true")
 			}
 		})
 	}

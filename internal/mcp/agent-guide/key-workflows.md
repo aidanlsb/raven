@@ -76,6 +76,22 @@ When users want to create notes:
    raven_add(text="@due(tomorrow) Follow up with Odin")
    raven_add(text="Meeting notes", to="cursor")  # Resolves to companies/cursor.md
    ```
+
+**Recommended agent flow for “create a new note and then add content”:**
+
+Raven is intentionally **not** a free-form file writer. The intended pattern is:
+
+1. Create the file with `raven_new`
+2. Append content to that file with `raven_add(to=...)`
+
+```
+create = raven_new(type="project", title="Website Redesign")
+# Use the returned file path (vault-relative)
+raven_add(text="## Notes\n- Kickoff next week", to=create.data.file)
+```
+
+Notes:
+- `raven_add` can auto-create **daily notes**; for other targets the file must already exist.
    
 3. If a required field is missing, ask the user for the value
 
@@ -147,6 +163,8 @@ When users want to modify existing notes:
 
 3. Use `raven_read` first to understand the file content
 
+**Tip for reliable edits:** Prefer `raven_read(path="...", raw=true)` before building `old_str` so the match is exact (no rendered links/backlink sections). For long files, use `start-line`/`end-line` (both are **1-indexed, inclusive**) and/or `lines=true` to get copy-paste-safe anchors without transcription.
+
 **Important:** `raven_edit` returns a preview by default. Changes are NOT applied unless you set `confirm=true`.
 
 ### 5. Moving and Renaming Files
@@ -193,6 +211,11 @@ When users want to update many objects at once:
    raven_query(query_string="object:project .status==archived", ids=true)
    # Returns just the IDs, one per line
    ```
+
+**Getting file paths from query results (for editing/navigation):**
+
+- Object queries include `items[].file_path` and `items[].line`
+- Trait queries include `items[].file_path` and `items[].line`
 
 4. Commands with `--stdin` read IDs from standard input:
    ```
