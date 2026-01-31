@@ -1,5 +1,7 @@
 # Query Language — Design Spec
 
+> **Note:** This document describes the historical v2 design. Raven’s current query syntax is documented in `docs/reference/query-language.md` and removes pipeline (`|>`) and brace subqueries (`{...}`).
+
 ---
 
 ## Query Types

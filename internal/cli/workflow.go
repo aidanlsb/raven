@@ -384,7 +384,7 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 		}
 
 		if q.Type == query.QueryTypeObject {
-			results, err := executor.ExecuteObjectQueryWithPipeline(q)
+			results, err := executor.ExecuteObjectQuery(q)
 			if err != nil {
 				return nil, err
 			}
@@ -396,14 +396,11 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 					"type":   r.Type,
 					"fields": r.Fields,
 				}
-				if len(r.Computed) > 0 {
-					item["computed"] = r.Computed
-				}
 				items = append(items, item)
 			}
 			return items, nil
 		} else if q.Type == query.QueryTypeTrait {
-			results, err := executor.ExecuteTraitQueryWithPipeline(q)
+			results, err := executor.ExecuteTraitQuery(q)
 			if err != nil {
 				return nil, err
 			}
@@ -419,9 +416,6 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 				}
 				if r.Value != nil {
 					item["value"] = *r.Value
-				}
-				if len(r.Computed) > 0 {
-					item["computed"] = r.Computed
 				}
 				items = append(items, item)
 			}

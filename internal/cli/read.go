@@ -13,6 +13,9 @@ import (
 var (
 	readRawFlag     bool
 	readNoLinksFlag bool
+	readLinesFlag   bool
+	readStartLine   int
+	readEndLine     int
 )
 
 var readCmd = &cobra.Command{
@@ -31,6 +34,8 @@ Examples:
   rvn read people/freya
   rvn read daily/2025-02-01.md
   rvn read people/freya --raw
+  rvn read people/freya --raw --lines
+  rvn read people/freya --raw --start-line 10 --end-line 40
   rvn read people/freya --raw --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -73,18 +78,76 @@ Examples:
 			lineCount++ // Account for last line without newline
 		}
 
+		// If the caller requested line-based output/ranges, force raw mode so the content is stable.
+		if readLinesFlag || readStartLine > 0 || readEndLine > 0 {
+			readRawFlag = true
+		}
+
 		if readRawFlag {
+			contentStr := string(content)
+			startLine := 1
+			endLine := lineCount
+			if readStartLine > 0 {
+				startLine = readStartLine
+			}
+			if readEndLine > 0 {
+				endLine = readEndLine
+			}
+
+			if startLine < 1 || endLine < 1 || startLine > endLine || endLine > lineCount {
+				return handleErrorMsg(ErrInvalidInput,
+					fmt.Sprintf("invalid line range: start_line=%d end_line=%d (file has %d lines)", startLine, endLine, lineCount),
+					"Use 1-indexed inclusive line numbers within the file's line_count")
+			}
+
+			// Build exact byte ranges for each line so we can return a substring without transcription risk.
+			type rng struct {
+				start int
+				end   int // exclusive, includes trailing '\n' if present
+			}
+			ranges := make([]rng, 0, lineCount)
+			lineStart := 0
+			for i := 0; i < len(contentStr) && len(ranges) < lineCount; i++ {
+				if contentStr[i] == '\n' {
+					ranges = append(ranges, rng{start: lineStart, end: i + 1})
+					lineStart = i + 1
+				}
+			}
+			// If file doesn't end with '\n', record the last line.
+			if len(ranges) < lineCount {
+				ranges = append(ranges, rng{start: lineStart, end: len(contentStr)})
+			}
+
+			rangeStart := ranges[startLine-1].start
+			rangeEnd := ranges[endLine-1].end
+			contentRange := contentStr[rangeStart:rangeEnd]
+
 			if isJSONOutput() {
-				outputSuccess(FileResult{
+				res := FileResult{
 					Path:      relPath,
-					Content:   string(content),
+					Content:   contentRange,
 					LineCount: lineCount,
-				}, &Meta{QueryTimeMs: elapsed})
+				}
+				// Only include range metadata when it's not the full file, or when lines are requested.
+				if startLine != 1 || endLine != lineCount || readLinesFlag {
+					res.StartLine = startLine
+					res.EndLine = endLine
+				}
+				if readLinesFlag {
+					lines := make([]FileLine, 0, endLine-startLine+1)
+					for n := startLine; n <= endLine; n++ {
+						seg := contentStr[ranges[n-1].start:ranges[n-1].end]
+						seg = strings.TrimSuffix(seg, "\n")
+						lines = append(lines, FileLine{Num: n, Text: seg})
+					}
+					res.Lines = lines
+				}
+				outputSuccess(res, &Meta{QueryTimeMs: elapsed})
 				return nil
 			}
 
 			// Human-readable: just output the content
-			fmt.Print(string(content))
+			fmt.Print(contentRange)
 			return nil
 		}
 
@@ -106,5 +169,8 @@ Examples:
 func init() {
 	readCmd.Flags().BoolVar(&readRawFlag, "raw", false, "Output only raw file content (no backlinks, no rendered links)")
 	readCmd.Flags().BoolVar(&readNoLinksFlag, "no-links", false, "Disable clickable hyperlinks in terminal output")
+	readCmd.Flags().BoolVar(&readLinesFlag, "lines", false, "Include structured lines with line numbers (requires --raw)")
+	readCmd.Flags().IntVar(&readStartLine, "start-line", 0, "Start line (1-indexed, inclusive) for raw output")
+	readCmd.Flags().IntVar(&readEndLine, "end-line", 0, "End line (1-indexed, inclusive) for raw output")
 	rootCmd.AddCommand(readCmd)
 }

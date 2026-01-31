@@ -6,12 +6,11 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-func printQueryObjectResults(queryStr, typeName string, results []query.PipelineObjectResult, sch *schema.Schema) {
+func printQueryObjectResults(queryStr, typeName string, results []model.Object, sch *schema.Schema) {
 	if len(results) == 0 {
 		fmt.Println(ui.Starf("No objects found for: %s", queryStr))
 		return
@@ -21,7 +20,7 @@ func printQueryObjectResults(queryStr, typeName string, results []query.Pipeline
 	printObjectTable(results, sch)
 }
 
-func printQueryTraitResults(queryStr, traitName string, results []query.PipelineTraitResult) {
+func printQueryTraitResults(queryStr, traitName string, results []model.Trait) {
 	if len(results) == 0 {
 		fmt.Println(ui.Starf("No traits found for: %s", queryStr))
 		return
@@ -69,7 +68,7 @@ func printQueryTraitResults(queryStr, traitName string, results []query.Pipeline
 	fmt.Println(table.Render())
 }
 
-func pipeItemsForObjectResults(results []query.PipelineObjectResult) []PipeableItem {
+func pipeItemsForObjectResults(results []model.Object) []PipeableItem {
 	pipeItems := make([]PipeableItem, len(results))
 	for i, r := range results {
 		pipeItems[i] = PipeableItem{
@@ -82,7 +81,7 @@ func pipeItemsForObjectResults(results []query.PipelineObjectResult) []PipeableI
 	return pipeItems
 }
 
-func pipeItemsForTraitResults(results []query.PipelineTraitResult) []PipeableItem {
+func pipeItemsForTraitResults(results []model.Trait) []PipeableItem {
 	pipeItems := make([]PipeableItem, len(results))
 	for i, r := range results {
 		pipeItems[i] = PipeableItem{
@@ -93,28 +92,6 @@ func pipeItemsForTraitResults(results []query.PipelineTraitResult) []PipeableIte
 		}
 	}
 	return pipeItems
-}
-
-func pipelineObjectResultsFromObjects(objects []model.Object) []query.PipelineObjectResult {
-	results := make([]query.PipelineObjectResult, len(objects))
-	for i, obj := range objects {
-		results[i] = query.PipelineObjectResult{
-			Object:   obj,
-			Computed: make(map[string]interface{}),
-		}
-	}
-	return results
-}
-
-func pipelineTraitResultsFromTraits(traits []model.Trait) []query.PipelineTraitResult {
-	results := make([]query.PipelineTraitResult, len(traits))
-	for i, trait := range traits {
-		results[i] = query.PipelineTraitResult{
-			Trait:    trait,
-			Computed: make(map[string]interface{}),
-		}
-	}
-	return results
 }
 
 func printSearchResults(queryStr string, results []model.SearchMatch) {

@@ -23,10 +23,10 @@ import (
 
 // saveLastResultsFromTraits builds and saves a LastResults from trait query results.
 // Returns the built LastResults for use in output formatting.
-func saveLastResultsFromTraits(vaultPath, queryStr string, results []query.PipelineTraitResult) *lastresults.LastResults {
+func saveLastResultsFromTraits(vaultPath, queryStr string, results []model.Trait) *lastresults.LastResults {
 	modelResults := make([]model.Result, len(results))
 	for i, r := range results {
-		modelResults[i] = r.Trait
+		modelResults[i] = r
 	}
 
 	lr, err := lastresults.NewFromResults(lastresults.SourceQuery, queryStr, "", modelResults)
@@ -40,10 +40,10 @@ func saveLastResultsFromTraits(vaultPath, queryStr string, results []query.Pipel
 
 // saveLastResultsFromObjects builds and saves a LastResults from object query results.
 // Returns the built LastResults for use in output formatting.
-func saveLastResultsFromObjects(vaultPath, queryStr string, results []query.PipelineObjectResult) *lastresults.LastResults {
+func saveLastResultsFromObjects(vaultPath, queryStr string, results []model.Object) *lastresults.LastResults {
 	modelResults := make([]model.Result, len(results))
 	for i, r := range results {
-		modelResults[i] = r.Object
+		modelResults[i] = r
 	}
 
 	lr, err := lastresults.NewFromResults(lastresults.SourceQuery, queryStr, "", modelResults)
@@ -72,7 +72,7 @@ func dedupePreserveOrder(ids []string) []string {
 }
 
 // printObjectTable prints object results in a tabular format with field columns
-func printObjectTable(results []query.PipelineObjectResult, sch *schema.Schema) {
+func printObjectTable(results []model.Object, sch *schema.Schema) {
 	if len(results) == 0 {
 		return
 	}
@@ -240,34 +240,41 @@ Query types:
 
 Predicates for object queries:
   .field==value      Field equals value
-  notnull(.field)    Field exists (is not null)
-  isnull(.field)     Field does not exist (is null)
+  exists(.field)     Field exists (has a value)
   !.field==value     Field does not equal value
-  has:{trait:...}    Has a trait matching subquery
-  parent:{object:...}   Direct parent matches subquery
-  ancestor:{object:...} Any ancestor matches subquery
-  child:{object:...}    Has child matching subquery
+  has(trait:...)        Has a trait matching nested trait query
+  encloses(trait:...)   Has a trait in subtree (self or descendants)
+  parent(object:...)    Direct parent matches nested object query
+  ancestor(object:...)  Any ancestor matches nested object query
+  child(object:...)     Has child matching nested object query
+  descendant(object:...) Has descendant matching nested object query
+  refs([[target]])      References a specific target
+  refs(object:...)      References an object matching nested object query
+  refd([[source]])      Referenced by a specific source
+  refd(object:...)      Referenced by an object matching nested object query
+  refd(trait:...)       Referenced by a trait matching nested trait query
+  content("term")       Full-text search on object content
 
 Predicates for trait queries:
   .value==val      Trait value equals val
-  on:{object:...}      Direct parent matches subquery
-  within:{object:...}  Any ancestor matches subquery
+  on(object:...)       Direct parent matches nested object query
+  within(object:...)   Any ancestor matches nested object query
+  at(trait:...)        Co-located with trait matching nested trait query
+  refs([[target]])     Line contains reference to target
+  refs(object:...)     Line references an object matching nested object query
+  content("term")      Line content contains term
 
 Boolean operators:
   !pred            NOT
   pred1 pred2      AND (space-separated)
   pred1 | pred2    OR
 
-Subqueries use curly braces:
-  has:{trait:due .value==past}
-  on:{object:project .status==active}
-
 Examples:
   rvn query "object:project .status==active"
-  rvn query "object:meeting has:{trait:due}"
+  rvn query "object:meeting has(trait:due)"
   rvn query "trait:due .value==past"
-  rvn query trait:todo content:"my task"
-  rvn query "trait:highlight on:{object:book .status==reading}"
+  rvn query "trait:todo content(\"my task\")"
+  rvn query "trait:highlight on(object:book .status==reading)"
   rvn query tasks                    # Run saved query
   rvn query --list                   # List saved queries`,
 	Args: cobra.ArbitraryArgs,
@@ -403,7 +410,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 	// Object query - collect object IDs
 	var ids []string
-	results, err := executor.ExecuteObjectQueryWithPipeline(q)
+	results, err := executor.ExecuteObjectQuery(q)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "")
 	}
@@ -468,7 +475,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 // Trait queries operate on traits, not objects.
 func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string, q *query.Query, applyCmd string, applyArgs []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
 	// Execute the trait query
-	results, err := executor.ExecuteTraitQueryWithPipeline(q)
+	results, err := executor.ExecuteTraitQuery(q)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "")
 	}
@@ -620,7 +627,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 	elapsed := time.Since(start).Milliseconds()
 
 	if q.Type == query.QueryTypeObject {
-		results, err := executor.ExecuteObjectQueryWithPipeline(q)
+		results, err := executor.ExecuteObjectQuery(q)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "")
 		}
@@ -659,10 +666,6 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 					"file_path": r.FilePath,
 					"line":      r.LineStart,
 				}
-				// Include computed values from pipeline if present
-				if len(r.Computed) > 0 {
-					item["computed"] = r.Computed
-				}
 				items[i] = item
 			}
 			outputSuccess(map[string]interface{}{
@@ -685,7 +688,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 	}
 
 	// Trait query
-	results, err := executor.ExecuteTraitQueryWithPipeline(q)
+	results, err := executor.ExecuteTraitQuery(q)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "")
 	}
@@ -726,10 +729,6 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 				"file_path":  r.FilePath,
 				"line":       r.Line,
 				"object_id":  r.ParentObjectID,
-			}
-			// Include computed values from pipeline if present
-			if len(r.Computed) > 0 {
-				item["computed"] = r.Computed
 			}
 			items[i] = item
 		}
@@ -976,36 +975,12 @@ func smartReindex(db *index.Database, vaultPath string) error {
 }
 
 // joinQueryArgs joins command-line arguments into a single query string.
-// It handles the case where the shell has already processed quotes, e.g.:
-//
-//	rvn query trait:todo content:"my task"
-//
-// becomes args ["trait:todo", "content:my task"] after shell processing.
-// We need to re-quote the content value so the parser sees content:"my task".
 func joinQueryArgs(args []string) string {
 	if len(args) == 1 {
 		return args[0]
 	}
 
-	result := make([]string, len(args))
-	for i, arg := range args {
-		// Check if this arg is content: with an unquoted value containing spaces
-		// Shell would have processed content:"foo bar" into content:foo bar
-		if strings.HasPrefix(arg, "content:") || strings.HasPrefix(arg, "!content:") {
-			prefix := "content:"
-			if strings.HasPrefix(arg, "!") {
-				prefix = "!content:"
-			}
-			value := strings.TrimPrefix(arg, prefix)
-			// If value doesn't start with a quote but contains content, re-quote it
-			if value != "" && !strings.HasPrefix(value, "\"") {
-				arg = prefix + "\"" + value + "\""
-			}
-		}
-		result[i] = arg
-	}
-
-	return strings.Join(result, " ")
+	return strings.Join(args, " ")
 }
 
 func init() {

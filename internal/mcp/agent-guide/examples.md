@@ -2,8 +2,8 @@
 
 **User**: "Find open todos from my experiment meetings"
 ```
-→ Compose query: trait:todo .value==todo within:{object:meeting} refs:[[projects/experiments]]
-→ If unclear which project, also try: trait:todo .value==todo within:{object:meeting} content:"experiment"
+→ Compose query: trait:todo .value==todo within(object:meeting) refs([[projects/experiments]])
+→ If unclear which project, also try: trait:todo .value==todo within(object:meeting) content("experiment")
 → Consolidate and present results
 ```
 
@@ -21,7 +21,7 @@
 
 **User**: "Show me highlights from the books I'm reading"
 ```
-→ raven_query(query_string="trait:highlight on:{object:book .status==reading}")
+→ raven_query(query_string="trait:highlight on(object:book .status==reading)")
 → If no results, check: raven_schema(subcommand="type book") to verify status field exists
 ```
 
@@ -139,7 +139,7 @@
 
 **User**: "Meetings where we discussed the API"
 ```
-→ Try: object:meeting content:"API"
+→ Try: object:meeting content("API")
 → Or: object:meeting refs:[[projects/api]] if there's an API project
 ```
 
@@ -150,30 +150,30 @@
 
 **User**: "Show my todos sorted by due date"
 ```
-→ trait:todo |> due = min(.value, {trait:due at:_}) sort(due, asc)
-→ Or sort by value: trait:todo |> sort(.value, asc)
+→ Sorting/grouping is not supported in the query language.
+→ Run a query (e.g. trait:todo .value==todo) and sort client-side if needed.
 ```
 
 **User**: "Which projects are mentioned in meetings?"
 ```
-→ object:project refd:{object:meeting}
+→ object:project refd(object:meeting)
 → This uses the refd: predicate to find projects referenced by meetings
 ```
 
 **User**: "Find high-priority items that are also due soon"
 ```
-→ trait:due at:{trait:priority .value==high}
+→ trait:due at(trait:priority .value==high)
 → Uses at: to find traits co-located on the same line
 ```
 
 **User**: "Group my todos by project"
 ```
-→ object:project |> todos = count({trait:todo refs:_}) sort(todos, desc)
-→ Counts todos per project and sorts by most todos
+→ Grouping is not supported in the query language.
+→ Use multiple queries or client-side aggregation after fetching results.
 ```
 
 **User**: "Sort projects by their earliest due date"
 ```
-→ object:project |> earliest_due = min(.value, {trait:due within:_}) sort(earliest_due, asc)
-→ Uses min aggregation to find the earliest due date on each project
+→ Sorting is not supported in the query language.
+→ Fetch projects and due traits separately, then compute/sort client-side.
 ```

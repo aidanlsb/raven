@@ -333,22 +333,38 @@ For trait queries (trait:...):
 	},
 	"read": {
 		Name:        "read",
-		Description: "Read raw file content",
-		LongDesc: `Read raw file content.
+		Description: "Read a file (raw or enriched)",
+		LongDesc: `Read and output a file from the vault.
 
-For agents: Use this command instead of shell commands like 'cat', 'head', or 'tail'
-to read vault files. This ensures consistent behavior and proper path resolution
-within the vault.`,
+The reference can be a short reference (freya), partial path (people/freya),
+or full path (people/freya.md).
+
+By default, this command returns enriched output (rendered wikilinks + backlinks).
+Use --raw to output only the raw file content (recommended for agents preparing precise edits).
+
+For long files, you can request a specific range with --start-line/--end-line, and/or
+ask for structured line output with --lines for copy-paste-safe anchors.`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "File path relative to vault", Required: true},
+			{Name: "path", Description: "Reference to read (short ref, partial path, or full path)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "raw", Description: "Output only raw file content (no backlinks, no rendered links)", Type: FlagTypeBool},
+			{Name: "no-links", Description: "Disable clickable hyperlinks in terminal output", Type: FlagTypeBool},
+			{Name: "lines", Description: "Include structured lines with line numbers (recommended for agents)", Type: FlagTypeBool},
+			{Name: "start-line", Description: "Start line (1-indexed, inclusive) for raw output", Type: FlagTypeInt},
+			{Name: "end-line", Description: "End line (1-indexed, inclusive) for raw output", Type: FlagTypeInt},
 		},
 		Examples: []string{
 			"rvn read daily/2025-02-01.md --json",
 			"rvn read people/freya.md --json",
+			"rvn read people/freya --raw --json",
+			"rvn read people/freya --raw --start-line 10 --end-line 40 --json",
+			"rvn read people/freya --raw --lines --json",
 		},
 		UseCases: []string{
 			"Read vault file content (use instead of 'cat', 'head', 'tail')",
-			"Inspect file before editing",
+			"Inspect file before editing (prefer --raw for exact string matching)",
+			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
 			"Get full content after finding object via query",
 		},
 	},

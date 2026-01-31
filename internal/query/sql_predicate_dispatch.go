@@ -10,10 +10,6 @@ const (
 )
 
 func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias string) (string, []interface{}, error) {
-	if predicateContainsSelfRef(pred) {
-		return "", nil, fmt.Errorf("self-reference '_' is only valid inside pipeline subqueries")
-	}
-
 	// Shared recursion wiring for OR/group.
 	recurse := func(p Predicate, alias string) (string, []interface{}, error) {
 		return e.buildPredicateSQL(kind, p, alias)

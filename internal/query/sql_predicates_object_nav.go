@@ -7,18 +7,6 @@ import (
 
 // buildHasPredicateSQL builds SQL for has:{trait:...} predicates.
 func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, []interface{}, error) {
-	// Handle bound trait ID (from has:_ in trait pipeline)
-	if p.TraitID != "" {
-		cond := fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM traits
-			WHERE parent_object_id = %s.id AND id = ?
-		)`, alias)
-		if p.Negated() {
-			cond = "NOT " + cond
-		}
-		return cond, []interface{}{p.TraitID}, nil
-	}
-
 	// Build subquery conditions for the trait
 	var traitConditions []string
 	var args []interface{}
@@ -261,25 +249,6 @@ func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias str
 // buildContainsPredicateSQL builds SQL for contains:{trait:...} predicates.
 // Finds objects that have a matching trait anywhere in their subtree (self or descendants).
 func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string) (string, []interface{}, error) {
-	// Handle bound trait ID (from contains:_ in trait pipeline)
-	if p.TraitID != "" {
-		// Find objects that have this specific trait in their subtree
-		cond := fmt.Sprintf(`EXISTS (
-			WITH RECURSIVE subtree AS (
-				SELECT id FROM objects WHERE id = %s.id
-				UNION ALL
-				SELECT o.id FROM objects o
-				JOIN subtree s ON o.parent_id = s.id
-			)
-			SELECT 1 FROM traits t
-			WHERE t.parent_object_id IN (SELECT id FROM subtree) AND t.id = ?
-		)`, alias)
-		if p.Negated() {
-			cond = "NOT " + cond
-		}
-		return cond, []interface{}{p.TraitID}, nil
-	}
-
 	var traitConditions []string
 	var args []interface{}
 
@@ -330,9 +299,9 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 	if p.Target != "" {
 		// Direct reference to specific target
 		// Resolve the target to its canonical object ID (like backlinks does)
-		resolvedTarget := p.Target
-		if resolved, err := e.resolveTarget(p.Target); err == nil && resolved != "" {
-			resolvedTarget = resolved
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
 		}
 
 		// Match against resolved target_id, OR fall back to target_raw for unresolved refs

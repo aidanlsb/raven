@@ -14,9 +14,6 @@ type Query struct {
 	Type       QueryType
 	TypeName   string      // Object type or trait name
 	Predicates []Predicate // Filters to apply
-
-	// Pipeline (after |>)
-	Pipeline *Pipeline
 }
 
 // Predicate represents a filter condition in a query.
@@ -62,8 +59,8 @@ func (op CompareOp) String() string {
 }
 
 // FieldPredicate filters by object field value.
-// Syntax: .field==value, .field>value, notnull(.field), isnull(.field)
-// For string matching, use StringFuncPredicate (includes, startswith, endswith, matches).
+// Syntax: .field==value, .field>value, exists(.field)
+// For string matching, use StringFuncPredicate (contains, startswith, endswith, matches).
 type FieldPredicate struct {
 	basePredicate
 	Field     string
@@ -75,12 +72,10 @@ type FieldPredicate struct {
 func (FieldPredicate) predicateNode() {}
 
 // HasPredicate filters objects by whether they contain matching traits.
-// Syntax: has:{trait:name value==...}, has:_
+// Syntax: has(trait:name .value==...)
 type HasPredicate struct {
 	basePredicate
-	SubQuery  *Query // A trait query (mutually exclusive with IsSelfRef)
-	IsSelfRef bool   // True if has:_ (in trait pipeline: objects that have this trait)
-	TraitID   string // Bound trait ID when IsSelfRef is resolved
+	SubQuery *Query // A trait query
 }
 
 func (HasPredicate) predicateNode() {}
@@ -89,9 +84,8 @@ func (HasPredicate) predicateNode() {}
 // Syntax: parent:{object:type ...}, parent:[[target]], parent:_
 type ParentPredicate struct {
 	basePredicate
-	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
-	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
-	IsSelfRef bool   // True if parent:_ (binds to current result in sort/group context)
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (ParentPredicate) predicateNode() {}
@@ -100,9 +94,8 @@ func (ParentPredicate) predicateNode() {}
 // Syntax: ancestor:{object:type ...}, ancestor:[[target]], ancestor:_
 type AncestorPredicate struct {
 	basePredicate
-	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
-	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
-	IsSelfRef bool   // True if ancestor:_ (binds to current result in sort/group context)
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (AncestorPredicate) predicateNode() {}
@@ -111,9 +104,8 @@ func (AncestorPredicate) predicateNode() {}
 // Syntax: child:{object:type ...}, child:[[target]], child:_
 type ChildPredicate struct {
 	basePredicate
-	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
-	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
-	IsSelfRef bool   // True if child:_ (binds to current result in sort/group context)
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (ChildPredicate) predicateNode() {}
@@ -122,38 +114,34 @@ func (ChildPredicate) predicateNode() {}
 // Syntax: descendant:{object:type ...}, descendant:[[target]], descendant:_
 type DescendantPredicate struct {
 	basePredicate
-	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
-	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
-	IsSelfRef bool   // True if descendant:_ (binds to current result in sort/group context)
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (DescendantPredicate) predicateNode() {}
 
 // ContainsPredicate filters objects by whether they contain matching traits anywhere
 // in their subtree (self or any descendant object).
-// Syntax: contains:{trait:name ...}, contains:_
+// Syntax: encloses(trait:name ...)
 type ContainsPredicate struct {
 	basePredicate
-	SubQuery  *Query // A trait query (mutually exclusive with IsSelfRef)
-	IsSelfRef bool   // True if contains:_ (in trait pipeline: objects that contain this trait)
-	TraitID   string // Bound trait ID when IsSelfRef is resolved
+	SubQuery *Query // A trait query
 }
 
 func (ContainsPredicate) predicateNode() {}
 
 // RefsPredicate filters objects by what they reference.
-// Syntax: refs:[[target]], refs:{object:type ...}, refs:_
+// Syntax: refs([[target]]), refs(object:type ...)
 type RefsPredicate struct {
 	basePredicate
-	Target    string // Specific target like "projects/website" (mutually exclusive with SubQuery and IsSelfRef)
-	SubQuery  *Query // Subquery to match targets (mutually exclusive with Target and IsSelfRef)
-	IsSelfRef bool   // True if refs:_ (binds to current result in sort/group context)
+	Target   string // Specific target like "projects/website" (mutually exclusive with SubQuery)
+	SubQuery *Query // Subquery to match targets (mutually exclusive with Target)
 }
 
 func (RefsPredicate) predicateNode() {}
 
 // ContentPredicate filters objects by full-text search on their content.
-// Syntax: content:"search terms", content:"exact phrase"
+// Syntax: content("search terms"), content("exact phrase")
 type ContentPredicate struct {
 	basePredicate
 	SearchTerm string // The search term or phrase
@@ -178,9 +166,8 @@ func (ValuePredicate) predicateNode() {}
 // Syntax: on:{object:type ...}, on:[[target]], on:_
 type OnPredicate struct {
 	basePredicate
-	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
-	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
-	IsSelfRef bool   // True if on:_ (binds to current result in sort/group context)
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (OnPredicate) predicateNode() {}
@@ -189,9 +176,8 @@ func (OnPredicate) predicateNode() {}
 // Syntax: within:{object:type ...}, within:[[target]], within:_
 type WithinPredicate struct {
 	basePredicate
-	Target    string // Specific target ID (mutually exclusive with SubQuery and IsSelfRef)
-	SubQuery  *Query // An object query (mutually exclusive with Target and IsSelfRef)
-	IsSelfRef bool   // True if within:_ (binds to current result in sort/group context)
+	Target   string // Specific target ID (mutually exclusive with SubQuery)
+	SubQuery *Query // An object query (mutually exclusive with Target)
 }
 
 func (WithinPredicate) predicateNode() {}
@@ -210,7 +196,7 @@ func (OrPredicate) predicateNode() {}
 type StringFuncType int
 
 const (
-	StringFuncIncludes   StringFuncType = iota // includes(.field, "str") - contains substring
+	StringFuncIncludes   StringFuncType = iota // contains(.field, "str") - substring match
 	StringFuncStartsWith                       // startswith(.field, "str")
 	StringFuncEndsWith                         // endswith(.field, "str")
 	StringFuncMatches                          // matches(.field, "pattern") - regex match
@@ -219,7 +205,7 @@ const (
 func (sf StringFuncType) String() string {
 	switch sf {
 	case StringFuncIncludes:
-		return "includes"
+		return "contains"
 	case StringFuncStartsWith:
 		return "startswith"
 	case StringFuncEndsWith:
@@ -232,7 +218,7 @@ func (sf StringFuncType) String() string {
 }
 
 // StringFuncPredicate represents a string function predicate.
-// Syntax: includes(.field, "value"), startswith(.field, "value"), etc.
+// Syntax: contains(.field, "value"), startswith(.field, "value"), etc.
 // Can also be used with _ as the field for array element context.
 type StringFuncPredicate struct {
 	basePredicate
@@ -304,7 +290,6 @@ type AtPredicate struct {
 	basePredicate
 	Target    string // Specific trait ID (if referencing a known trait)
 	SubQuery  *Query // A trait query to match against
-	IsSelfRef bool   // True if at:_ (binds to current result in sort/group context)
 }
 
 func (AtPredicate) predicateNode() {}
@@ -313,82 +298,8 @@ func (AtPredicate) predicateNode() {}
 // Syntax: refd:{object:type ...}, refd:{trait:name ...}, refd:[[target]], refd:_
 type RefdPredicate struct {
 	basePredicate
-	Target    string // Specific source ID
-	SubQuery  *Query // Query matching the sources that reference this
-	IsSelfRef bool   // True if refd:_ (binds to current result in sort/group context)
+	Target   string // Specific source ID
+	SubQuery *Query // Query matching the sources that reference this
 }
 
 func (RefdPredicate) predicateNode() {}
-
-// AggregationType represents how to aggregate multiple values.
-type AggregationType int
-
-const (
-	AggFirst AggregationType = iota // Default: first by position
-	AggMin                          // Minimum value
-	AggMax                          // Maximum value
-	AggCount                        // Count of matches
-	AggSum                          // Sum of values
-)
-
-// Pipeline represents the post-processing stages after |>
-type Pipeline struct {
-	Stages []PipelineStage
-}
-
-// PipelineStage represents a single stage in the pipeline
-type PipelineStage interface {
-	pipelineStageNode()
-}
-
-// AssignmentStage represents name = aggregation(...)
-type AssignmentStage struct {
-	Name        string          // Variable name being assigned
-	Aggregation AggregationType // count, min, max, sum
-	AggField    string          // For min/max/sum on objects: the field to aggregate (e.g., "priority")
-	SubQuery    *Query          // Subquery for aggregation
-	NavFunc     *NavFunc        // Navigation function like refs(_), refd(_)
-}
-
-func (AssignmentStage) pipelineStageNode() {}
-
-// NavFunc represents a navigation function like refs(_), refd(_), ancestors(_), descendants(_)
-type NavFunc struct {
-	Name string // "refs", "refd", "parent", "child", "ancestors", "descendants"
-}
-
-// FilterStage represents filter(expr)
-type FilterStage struct {
-	Expr *FilterExpr
-}
-
-func (FilterStage) pipelineStageNode() {}
-
-// FilterExpr represents a filter expression like "todos > 5"
-type FilterExpr struct {
-	Left    string    // Variable name or field
-	Op      CompareOp // Comparison operator
-	Right   string    // Value to compare against
-	IsField bool      // True if Left is a field reference (starts with .)
-}
-
-// SortCriterion represents a single sort field with direction
-type SortCriterion struct {
-	Field      string // Field name or computed variable
-	IsField    bool   // True if sorting by object field (starts with .)
-	Descending bool
-}
-
-// SortStage represents sort(field, asc/desc) - can have multiple criteria
-type SortStage struct {
-	Criteria []SortCriterion
-}
-
-func (SortStage) pipelineStageNode() {}
-
-// LimitStage represents limit(n)
-type LimitStage struct {
-	N int
-}
-
-func (LimitStage) pipelineStageNode() {}

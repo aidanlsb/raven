@@ -24,24 +24,24 @@ trait:<name> [predicates...]
 - `.field<=value` — Field less than or equal to value
 - `.field>=value` — Field greater than or equal to value
 - `in(.field, [a,b])` — Field is one of a list of values (scalar membership)
-- `.field==*` — Field exists (has any value)
+- `exists(.field)` — Field exists (has a value)
 - `!.field==value` — Field does NOT equal value
-- `!.field==*` — Field does NOT exist
-- `has:{trait:X ...}` — Has trait matching sub-query (`has:{trait:due .value==past}`)
-- `contains:{trait:X ...}` — Has matching trait anywhere in subtree
-- `refs:[[target]]` — References specific target (`refs:[[people/freya]]`)
-- `refs:{object:X ...}` — References objects matching sub-query
-- `refd:[[source]]` — Referenced by specific source (inverse of `refs:`)
-- `refd:{object:X ...}` — Referenced by objects matching sub-query
-- `parent:{object:X ...}` — Direct parent matches sub-query
+- `!exists(.field)` — Field does NOT exist
+- `has(trait:X ...)` — Has trait matching nested trait query (`has(trait:due .value==past)`)
+- `encloses(trait:X ...)` — Has matching trait anywhere in subtree (self or descendants)
+- `refs([[target]])` — References specific target (`refs([[people/freya]])`)
+- `refs(object:X ...)` — References objects matching nested object query
+- `refd([[source]])` — Referenced by specific source (inverse of `refs()`)
+- `refd(object:X ...)` — Referenced by objects matching nested object query
+- `parent(object:X ...)` — Direct parent matches nested object query
 - `parent:[[target]]` — Direct parent is specific object
-- `ancestor:{object:X ...}` — Any ancestor matches sub-query
+- `ancestor(object:X ...)` — Any ancestor matches nested object query
 - `ancestor:[[target]]` — Specific object is an ancestor
-- `child:{object:X ...}` — Has direct child matching sub-query
+- `child(object:X ...)` — Has direct child matching nested object query
 - `child:[[target]]` — Has direct child that is a specific object
-- `descendant:{object:X ...}` — Has descendant matching sub-query
+- `descendant(object:X ...)` — Has descendant matching nested object query
 - `descendant:[[target]]` — Has descendant that is a specific object
-- `content:"term"` — Full-text search on object content
+- `content("term")` — Full-text search on object content
 
 **For trait queries:**
 - `.value==X` — Trait value equals X (`.value==past`, `.value==high`, `.value==todo`)
@@ -51,14 +51,14 @@ trait:<name> [predicates...]
 - `.value>=X` — Trait value greater than or equal to X
 - `in(.value, [a,b])` — Trait value is one of a list of values (use this for “value in list”)
 - `!.value==X` — Trait value does NOT equal X
-- `on:{object:X ...}` — Direct parent matches sub-query
+- `on(object:X ...)` — Direct parent matches nested object query
 - `on:[[target]]` — Direct parent is specific object
-- `within:{object:X ...}` — Inside object matching sub-query
+- `within(object:X ...)` — Inside object matching nested object query
 - `within:[[target]]` — Inside specific object
-- `refs:[[target]]` — Trait's line references target
-- `refs:{object:X ...}` — Trait's line references matching objects
-- `at:{trait:X ...}` — Co-located with trait matching sub-query
-- `content:"term"` — Trait's line contains term
+- `refs([[target]])` — Trait's line references target
+- `refs(object:X ...)` — Trait's line references matching objects
+- `at(trait:X ...)` — Co-located with trait matching nested trait query
+- `content("term")` — Trait's line contains term
 
 **Boolean operators:**
 - Space between predicates = AND
@@ -77,31 +77,14 @@ trait:<name> [predicates...]
 - `.value==this-week` — This week
 - `.value==next-week` — Next week
 
-**Sorting and Limiting:**
-
-Use pipeline stages for sorting and limiting results.
-
-- `|> sort(.value, asc|desc)` — Sort by trait value
-- `|> sort(.field, asc|desc)` — Sort by object field
-- `|> limit(N)` — Return at most N results
-
-**Examples with sort/limit:**
-```
-trait:todo |> sort(.value, asc)             # Sort todos by their value
-trait:due |> sort(.value, desc)             # Sort due dates descending
-object:project |> sort(.status, asc)        # Sort projects by status
-trait:due |> limit(10)                      # Get at most 10 due items
-object:project .status==active |> limit(5)  # Get 5 active projects
-```
-
 ### Query Composition: Translating Requests to Queries
 
 When a user asks a question, decompose it into query components:
 
 1. **What am I looking for?** → `trait:X` or `object:X`
 2. **What value/state?** → `.value==X` or `.field==X`
-3. **Where is it located?** → `within:{object:X}`, `on:{object:X}`, `parent:{object:X}`, `ancestor:{object:X}`
-4. **What does it reference?** → `refs:[[X]]` or `refs:{object:X ...}`
+3. **Where is it located?** → `within(object:X)`, `on(object:X)`, `parent(object:X)`, `ancestor(object:X)`
+4. **What does it reference?** → `refs([[X]])` or `refs(object:X ...)`
 
 **Example decomposition:**
 
@@ -109,10 +92,10 @@ User: "Find open todos from meetings about the growth project"
 
 1. What? → `trait:todo` (looking for todo traits)
 2. What value? → `.value==todo` (open/incomplete)
-3. Where? → `within:{object:meeting}` (inside meeting objects)
+3. Where? → `within(object:meeting)` (inside meeting objects)
 4. References? → `refs:[[projects/growth]]` (mentions the project)
 
-Query: `trait:todo .value==todo within:{object:meeting} refs:[[projects/growth]]`
+Query: `trait:todo .value==todo within(object:meeting) refs([[projects/growth]])`
 
 ### Compound Queries vs. Multiple Queries
 
@@ -132,7 +115,7 @@ User: "Todos related to the website project"
 This could mean:
 - Todos that reference the project: `trait:todo refs:[[projects/website]]`
 - Todos inside the project file: `trait:todo within:[[projects/website]]`
-- Todos in meetings about the project: `trait:todo within:{object:meeting refs:[[projects/website]]}`
+- Todos in meetings about the project: `trait:todo within(object:meeting refs([[projects/website]]))`
 
 Run the most likely interpretation first. If results seem incomplete, try variations.
 
@@ -153,19 +136,19 @@ object:project in(.status, [active,backlog])
 trait:due .value==past refs:[[people/freya]]
 
 # Highlights from books currently being read
-trait:highlight on:{object:book .status==reading}
+trait:highlight on(object:book .status==reading)
 
 # Todos in meetings that reference active projects
-trait:todo within:{object:meeting} refs:{object:project .status==active}
+trait:todo within(object:meeting) refs(object:project .status==active)
 
 # Meetings in daily notes that mention a specific person
-object:meeting parent:{object:date} refs:[[people/thor]]
+object:meeting parent(object:date) refs([[people/thor]])
 
 # Projects that have any incomplete todos (anywhere in document)
-object:project contains:{trait:todo .value==todo}
+object:project encloses(trait:todo .value==todo)
 
 # Tasks due this week on active projects
-trait:due .value==this-week within:{object:project .status==active}
+trait:due .value==this-week within(object:project .status==active)
 
 # Items referencing either of two people
 trait:due (refs:[[people/freya]] | refs:[[people/thor]])
@@ -174,7 +157,7 @@ trait:due (refs:[[people/freya]] | refs:[[people/thor]])
 object:section ancestor:[[projects/website]]
 
 # Meetings without any due items
-object:meeting !has:{trait:due}
+object:meeting !has(trait:due)
 
 # Active projects that reference a specific company
 object:project .status==active refs:[[companies/acme]]
@@ -189,7 +172,7 @@ object:project .status==active refs:[[companies/acme]]
 | You need relationship predicates | User asks "find mentions of X" |
 | You want structured results | You want relevance-ranked results |
 
-**Note:** `raven_query` supports `content:"term"` for text search within typed queries. Use this when you want to combine text search with type/field filtering.
+**Note:** `raven_query` supports `content("term")` for text search within typed queries. Use this when you want to combine text search with type/field filtering.
 
 ### Query Strategy
 

@@ -10,7 +10,7 @@ import (
 )
 
 // executeObjectQuery executes an object query and returns matching objects.
-// This is internal - external callers should use ExecuteObjectQueryWithPipeline.
+// External callers should use ExecuteObjectQuery.
 func (e *Executor) executeObjectQuery(q *Query) ([]model.Object, error) {
 	if q.Type != QueryTypeObject {
 		return nil, fmt.Errorf("expected object query, got trait query")
@@ -39,7 +39,7 @@ func (e *Executor) executeObjectQuery(q *Query) ([]model.Object, error) {
 }
 
 // executeTraitQuery executes a trait query and returns matching traits.
-// This is internal - external callers should use ExecuteTraitQueryWithPipeline.
+// External callers should use ExecuteTraitQuery.
 func (e *Executor) executeTraitQuery(q *Query) ([]model.Trait, error) {
 	if q.Type != QueryTypeTrait {
 		return nil, fmt.Errorf("expected trait query, got object query")
@@ -62,4 +62,14 @@ func (e *Executor) executeTraitQuery(q *Query) ([]model.Trait, error) {
 		}
 		return r, nil
 	})
+}
+
+// ExecuteObjectQuery executes an object query and returns matching objects.
+func (e *Executor) ExecuteObjectQuery(q *Query) ([]model.Object, error) {
+	return e.executeObjectQuery(q)
+}
+
+// ExecuteTraitQuery executes a trait query and returns matching traits.
+func (e *Executor) ExecuteTraitQuery(q *Query) ([]model.Trait, error) {
+	return e.executeTraitQuery(q)
 }

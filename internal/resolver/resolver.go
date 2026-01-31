@@ -235,7 +235,9 @@ func maybeResolveDateRef(r *Resolver, c *matchCollector, ref string) (ResolveRes
 }
 
 func isPathLikeRef(ref string) bool {
-	return strings.Contains(ref, "/") || strings.HasPrefix(ref, "#")
+	// Treat embedded refs like "file#section" as path-like so they can resolve via
+	// slugified/suffix matching and embedded-ID logic.
+	return strings.Contains(ref, "/") || strings.HasPrefix(ref, "#") || strings.Contains(ref, "#")
 }
 
 func addPathMatches(r *Resolver, c *matchCollector, ref string) {

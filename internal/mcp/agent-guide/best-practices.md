@@ -25,9 +25,14 @@
 
 5. **Preview before applying**: Operations like `raven_edit`, `raven_query --apply`, and bulk operations preview by default. Changes are NOT applied unless `confirm=true`.
 
+   - For `raven_edit`, the default output *is* a dry-run preview (includes before/after context and line number). Only run again with `confirm=true` to apply.
+   - When preparing an edit, prefer reading raw content first: `raven_read(path="...", raw=true)` so you can copy an exact `old_str`.
+
 6. **Use the schema as source of truth**: If something isn't in the schema, it won't be indexed or queryable. Guide users to define their types and traits.
 
 7. **Prefer structured queries over search**: Use `raven_query` with the query language before falling back to `raven_search`.
+
+   - Object/trait query results include `file_path` (and often `line`) in JSON output—use those paths for `raven_read` and `raven_edit`.
 
 8. **Check before creating**: Use `raven_backlinks` or `raven_search` to see if something already exists before creating duplicates.
 

@@ -39,9 +39,9 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 	if p.Target != "" {
 		// Direct reference to specific target
 		// Resolve the target to its canonical object ID (like backlinks does)
-		resolvedTarget := p.Target
-		if resolved, err := e.resolveTarget(p.Target); err == nil && resolved != "" {
-			resolvedTarget = resolved
+		resolvedTarget, err := e.resolveTarget(p.Target)
+		if err != nil {
+			return "", nil, err
 		}
 
 		// Match refs on the same line as the trait
