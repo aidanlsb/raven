@@ -106,7 +106,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "to", Description: "Target EXISTING file path (must exist)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md"}},
+			{Name: "to", Description: "Target file path or daily note date (today/tomorrow/yesterday/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
 			{Name: "timestamp", Description: "Prefix with current time (HH:MM)", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
@@ -115,6 +115,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn add \"Quick thought\" --json",
 			"rvn add \"@priority(high) Urgent task\" --json",
 			"rvn add \"Note\" --to projects/website.md --json",
+			"rvn add \"Plan\" --to tomorrow --json",
 			"rvn add \"Call Odin\" --timestamp --json",
 		},
 		UseCases: []string{

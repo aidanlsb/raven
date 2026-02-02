@@ -60,11 +60,11 @@ Examples:
 
 		reference := args[0]
 
-		// Resolve the reference using unified resolver
-		result, err := ResolveReference(reference, ResolveOptions{
+		// Resolve the reference using unified resolver, then dynamic date keywords.
+		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
 			VaultPath:   vaultPath,
 			VaultConfig: vaultCfg,
-		})
+		}, false)
 		if err != nil {
 			return handleResolveError(err, reference)
 		}

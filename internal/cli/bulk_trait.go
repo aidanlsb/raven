@@ -106,6 +106,12 @@ func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue str
 	var skipped []TraitBulkResult
 
 	for _, t := range traits {
+		var traitDef *schema.TraitDefinition
+		if sch != nil {
+			traitDef = sch.Traits[t.TraitType]
+		}
+		resolvedNewValue := resolveDateKeywordForTraitValue(newValue, traitDef)
+
 		oldValue := ""
 		if t.Value != nil {
 			oldValue = *t.Value
@@ -115,7 +121,7 @@ func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue str
 		}
 
 		// Skip if value is already the target
-		if oldValue == newValue {
+		if oldValue == resolvedNewValue {
 			skipped = append(skipped, TraitBulkResult{
 				ID:       t.ID,
 				FilePath: t.FilePath,
@@ -133,7 +139,7 @@ func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue str
 			TraitType: t.TraitType,
 			Content:   t.Content,
 			OldValue:  oldValue,
-			NewValue:  newValue,
+			NewValue:  resolvedNewValue,
 		})
 	}
 	if len(extraSkipped) > 0 {
@@ -243,6 +249,12 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 		fileModified := false
 
 		for _, t := range fileTraits {
+			var traitDef *schema.TraitDefinition
+			if sch != nil {
+				traitDef = sch.Traits[t.TraitType]
+			}
+			resolvedNewValue := resolveDateKeywordForTraitValue(newValue, traitDef)
+
 			// Lines are 1-indexed
 			lineIdx := t.Line - 1
 			if lineIdx < 0 || lineIdx >= len(lines) {
@@ -265,7 +277,7 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 			}
 
 			// Skip if already target value
-			if oldValue == newValue {
+			if oldValue == resolvedNewValue {
 				results = append(results, TraitBulkResult{
 					ID:       t.ID,
 					FilePath: t.FilePath,
@@ -279,7 +291,7 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 
 			// Rewrite the trait on this line
 			oldLine := lines[lineIdx]
-			newLine, ok := rewriteTraitValue(oldLine, t.TraitType, newValue)
+			newLine, ok := rewriteTraitValue(oldLine, t.TraitType, resolvedNewValue)
 			if !ok {
 				results = append(results, TraitBulkResult{
 					ID:       t.ID,

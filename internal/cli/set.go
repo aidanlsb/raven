@@ -141,7 +141,7 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 	preview := buildBulkPreview("set", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		// Check if this is an embedded object
 		if IsEmbeddedID(id) {
-			return previewSetEmbedded(vaultPath, id, updates, vaultCfg, parseOpts)
+			return previewSetEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
 		}
 
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
@@ -161,15 +161,17 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 		}
 
 		// Build change summary
+		fieldDefs := fieldDefsForObjectType(sch, fm.ObjectType)
 		changes := make(map[string]string)
 		for field, newVal := range updates {
+			resolvedVal := resolveDateKeywordForFieldValue(newVal, fieldDefs[field])
 			oldVal := "<unset>"
 			if fm.Fields != nil {
 				if v, ok := fm.Fields[field]; ok {
 					oldVal = fmt.Sprintf("%v", v)
 				}
 			}
-			changes[field] = fmt.Sprintf("%s (was: %s)", newVal, oldVal)
+			changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
 		}
 
 		return &BulkPreviewItem{
@@ -223,8 +225,11 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 			return result
 		}
 
+		fieldDefs := fieldDefsForObjectType(sch, fm.ObjectType)
+		resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
+
 		// Build updated frontmatter
-		newContent, err := updateFrontmatter(string(content), fm, updates)
+		newContent, err := updateFrontmatter(string(content), fm, resolvedUpdates)
 		if err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("update error: %v", err)
@@ -326,8 +331,11 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 		}
 	}
 
+	fieldDefs := fieldDefsForObjectType(sch, objectType)
+	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
+
 	// Build updated frontmatter
-	newContent, err := updateFrontmatter(string(content), fm, updates)
+	newContent, err := updateFrontmatter(string(content), fm, resolvedUpdates)
 	if err != nil {
 		return handleError(ErrFileWriteError, err, "Failed to update frontmatter")
 	}
@@ -348,7 +356,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 			"file":           relPath,
 			"object_id":      objectID,
 			"type":           objectType,
-			"updated_fields": updates,
+			"updated_fields": resolvedUpdates,
 		}
 		if len(validationWarnings) > 0 {
 			var warnings []Warning
@@ -368,7 +376,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 	// Human-readable output with diff-style changes
 	fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relPath)))
 	var fieldNames []string
-	for name := range updates {
+	for name := range resolvedUpdates {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
@@ -379,12 +387,12 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 				oldVal = fmt.Sprintf("%v", v)
 			}
 		}
-		if oldVal != "" && oldVal != updates[name] {
-			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, updates[name]))
+		if oldVal != "" && oldVal != resolvedUpdates[name] {
+			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, resolvedUpdates[name]))
 		} else if oldVal == "" {
-			fmt.Printf("  %s\n", ui.FieldAdd(name, updates[name]))
+			fmt.Printf("  %s\n", ui.FieldAdd(name, resolvedUpdates[name]))
 		} else {
-			fmt.Printf("  %s\n", ui.FieldSet(name, updates[name]))
+			fmt.Printf("  %s\n", ui.FieldSet(name, resolvedUpdates[name]))
 		}
 	}
 	for _, warning := range validationWarnings {
@@ -392,6 +400,32 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 	}
 
 	return nil
+}
+
+func fieldDefsForObjectType(sch *schema.Schema, objectType string) map[string]*schema.FieldDefinition {
+	if sch == nil {
+		return nil
+	}
+	if objectType == "" {
+		objectType = "page"
+	}
+	typeDef, ok := sch.Types[objectType]
+	if !ok || typeDef == nil {
+		return nil
+	}
+	return typeDef.Fields
+}
+
+func resolveDateKeywordsForUpdates(updates map[string]string, fieldDefs map[string]*schema.FieldDefinition) map[string]string {
+	if fieldDefs == nil {
+		return updates
+	}
+
+	resolved := make(map[string]string, len(updates))
+	for field, value := range updates {
+		resolved[field] = resolveDateKeywordForFieldValue(value, fieldDefs[field])
+	}
+	return resolved
 }
 
 // updateFrontmatter updates the frontmatter in the content with new field values.
@@ -562,6 +596,9 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 		}
 	}
 
+	fieldDefs := fieldDefsForObjectType(sch, objectType)
+	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
+
 	// Find the type declaration line (line after the heading)
 	typeDeclLine := targetObj.LineStart + 1
 
@@ -588,7 +625,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 	}
 
 	// Apply updates (parse the string values into FieldValues)
-	for fieldName, value := range updates {
+	for fieldName, value := range resolvedUpdates {
 		newFields[fieldName] = parseFieldValueToSchema(value)
 	}
 
@@ -626,7 +663,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 			"object_id":      objectID,
 			"type":           objectType,
 			"embedded":       true,
-			"updated_fields": updates,
+			"updated_fields": resolvedUpdates,
 		}
 		if len(validationWarnings) > 0 {
 			var warnings []Warning
@@ -646,7 +683,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 	// Human-readable output with diff-style changes
 	fmt.Println(ui.Checkf("Updated %s %s", ui.FilePath(relPath), ui.Hint("(embedded: "+slug+")")))
 	var fieldNames []string
-	for name := range updates {
+	for name := range resolvedUpdates {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
@@ -665,12 +702,12 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 				}
 			}
 		}
-		if oldVal != "" && oldVal != updates[name] {
-			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, updates[name]))
+		if oldVal != "" && oldVal != resolvedUpdates[name] {
+			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, resolvedUpdates[name]))
 		} else if oldVal == "" {
-			fmt.Printf("  %s\n", ui.FieldAdd(name, updates[name]))
+			fmt.Printf("  %s\n", ui.FieldAdd(name, resolvedUpdates[name]))
 		} else {
-			fmt.Printf("  %s\n", ui.FieldSet(name, updates[name]))
+			fmt.Printf("  %s\n", ui.FieldSet(name, resolvedUpdates[name]))
 		}
 	}
 	for _, warning := range validationWarnings {
@@ -681,7 +718,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 }
 
 // previewSetEmbedded generates a preview for an embedded object.
-func previewSetEmbedded(vaultPath, id string, updates map[string]string, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) (*BulkPreviewItem, *BulkResult) {
+func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) (*BulkPreviewItem, *BulkResult) {
 	// Parse the embedded ID
 	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
 	if !isEmbedded {
@@ -720,8 +757,10 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, vaultCf
 	}
 
 	// Build change summary
+	fieldDefs := fieldDefsForObjectType(sch, targetObj.ObjectType)
 	changes := make(map[string]string)
 	for field, newVal := range updates {
+		resolvedVal := resolveDateKeywordForFieldValue(newVal, fieldDefs[field])
 		oldVal := "<unset>"
 		if targetObj.Fields != nil {
 			if v, ok := targetObj.Fields[field]; ok {
@@ -736,7 +775,7 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, vaultCf
 				}
 			}
 		}
-		changes[field] = fmt.Sprintf("%s (was: %s)", newVal, oldVal)
+		changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
 	}
 
 	return &BulkPreviewItem{
@@ -810,8 +849,10 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 		newFields[k] = v
 	}
 
+	fieldDefs := fieldDefsForObjectType(sch, targetObj.ObjectType)
 	for fieldName, value := range updates {
-		newFields[fieldName] = parseFieldValueToSchema(value)
+		resolvedValue := resolveDateKeywordForFieldValue(value, fieldDefs[fieldName])
+		newFields[fieldName] = parseFieldValueToSchema(resolvedValue)
 	}
 
 	// Preserve leading whitespace
