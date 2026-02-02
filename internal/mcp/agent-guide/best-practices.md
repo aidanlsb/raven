@@ -40,4 +40,4 @@
 
 10. **Reindex after schema changes**: If you add types or traits, run `raven_reindex(full=true)` so all files are re-parsed with the new schema.
 
-11. **Check for workflows proactively**: When a user asks for complex analysis, check `raven_workflow_list()` first — there may be a workflow designed for their request.
+11. **Check for workflows proactively**: When a user asks for complex analysis, check `raven://workflows/list` or `raven_workflow_list()` first — there may be a workflow designed for their request.

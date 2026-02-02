@@ -8,6 +8,7 @@ It is split into topic resources so agents can fetch only what they need.
 
 - Start with `raven://guide/critical-rules` and `raven://guide/getting-started`
 - Use `raven://schema/current` for the live schema
+- Use `raven://queries/saved` and `raven://workflows/list` for quick discovery
 - Fetch a single topic resource when you need focused guidance
 
 ## Topics
