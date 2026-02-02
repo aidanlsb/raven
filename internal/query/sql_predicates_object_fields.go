@@ -13,25 +13,50 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 
 	var cond string
 	var args []interface{}
+	value := p.Value
+	altValue := ""
+
+	if p.IsRefValue && !p.IsExists && (p.CompareOp == CompareEq || p.CompareOp == CompareNeq) {
+		resolved, alt, err := e.resolveRefValue(p.Value)
+		if err != nil {
+			return "", nil, err
+		}
+		value = resolved
+		altValue = alt
+	}
 
 	if p.IsExists {
 		cond, args = fieldExistsCond(alias, jsonPath, p.CompareOp == CompareNeq)
 	} else if p.CompareOp == CompareNeq {
-		cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, p.Value, true)
+		if altValue != "" {
+			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true)
+			cond2, args2 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, altValue, true)
+			cond = "(" + cond1 + " AND " + cond2 + ")"
+			args = append(args1, args2...)
+		} else {
+			cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true)
+		}
 	} else if p.CompareOp != CompareEq {
 		// Comparison operators: <, >, <=, >=
 		op := compareOpToSQL(p.CompareOp)
 		// Prefer numeric comparisons when RHS parses as a number. This avoids
 		// lexicographic comparisons like "10" < "2".
-		if n, err := strconv.ParseFloat(strings.TrimSpace(p.Value), 64); err == nil {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
 			cond = fmt.Sprintf("CAST(json_extract(%s.fields, ?) AS REAL) %s ?", alias, op)
 			args = append(args, jsonPath, n)
 		} else {
 			cond = fmt.Sprintf("json_extract(%s.fields, ?) %s ?", alias, op)
-			args = append(args, jsonPath, p.Value)
+			args = append(args, jsonPath, value)
 		}
 	} else {
-		cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, p.Value, false)
+		if altValue != "" {
+			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, false)
+			cond2, args2 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, altValue, false)
+			cond = "(" + cond1 + " OR " + cond2 + ")"
+			args = append(args1, args2...)
+		} else {
+			cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, false)
+		}
 	}
 
 	if p.Negated() {
@@ -39,6 +64,19 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 	}
 
 	return cond, args, nil
+}
+
+// resolveRefValue resolves a reference token and returns a canonical value plus a
+// fallback value (original input) when they differ.
+func (e *Executor) resolveRefValue(value string) (resolved string, fallback string, err error) {
+	resolved, err = e.resolveTarget(value)
+	if err != nil {
+		return "", "", err
+	}
+	if resolved != value {
+		return resolved, value, nil
+	}
+	return resolved, "", nil
 }
 
 // buildStringFuncPredicateSQL builds SQL for string function predicates.
@@ -166,12 +204,40 @@ func (e *Executor) buildElementEqualitySQL(p *ElementEqualityPredicate) (string,
 	// Reuse the same value-comparison SQL semantics as value predicates:
 	// - numeric RHS => numeric compare via CAST(... AS REAL)
 	// - string equality => case-insensitive
-	vp := &ValuePredicate{
-		basePredicate: p.basePredicate,
-		Value:         p.Value,
-		CompareOp:     p.CompareOp,
+	value := p.Value
+	altValue := ""
+
+	if p.IsRefValue && (p.CompareOp == CompareEq || p.CompareOp == CompareNeq) {
+		resolved, alt, err := e.resolveRefValue(p.Value)
+		if err != nil {
+			return "", nil, err
+		}
+		value = resolved
+		altValue = alt
 	}
-	cond, args := buildValueCondition(vp, "json_each.value")
+
+	condFor := func(v string) (string, []interface{}) {
+		vp := &ValuePredicate{
+			Value:     v,
+			CompareOp: p.CompareOp,
+		}
+		return buildValueCondition(vp, "json_each.value")
+	}
+
+	cond, args := condFor(value)
+	if altValue != "" && (p.CompareOp == CompareEq || p.CompareOp == CompareNeq) {
+		cond2, args2 := condFor(altValue)
+		if p.CompareOp == CompareEq {
+			cond = "(" + cond + " OR " + cond2 + ")"
+		} else {
+			cond = "(" + cond + " AND " + cond2 + ")"
+		}
+		args = append(args, args2...)
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
 	return cond, args, nil
 }
 

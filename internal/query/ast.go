@@ -63,10 +63,11 @@ func (op CompareOp) String() string {
 // For string matching, use StringFuncPredicate (contains, startswith, endswith, matches).
 type FieldPredicate struct {
 	basePredicate
-	Field     string
-	Value     string    // "*" means "exists"
-	IsExists  bool      // true if Value is "*"
-	CompareOp CompareOp // comparison operator (==, !=, <, >, <=, >=)
+	Field      string
+	Value      string    // "*" means "exists"
+	IsExists   bool      // true if Value is "*"
+	CompareOp  CompareOp // comparison operator (==, !=, <, >, <=, >=)
+	IsRefValue bool      // true if the value came from a [[ref]] token
 }
 
 func (FieldPredicate) predicateNode() {}
@@ -268,8 +269,9 @@ func (ArrayQuantifierPredicate) predicateNode() {}
 // Syntax: _ == "urgent", _ != "deprecated"
 type ElementEqualityPredicate struct {
 	basePredicate
-	Value     string
-	CompareOp CompareOp // == or !=
+	Value      string
+	CompareOp  CompareOp // == or !=
+	IsRefValue bool      // true if the value came from a [[ref]] token
 }
 
 func (ElementEqualityPredicate) predicateNode() {}
@@ -288,8 +290,8 @@ func (GroupPredicate) predicateNode() {}
 // For traits only - matches traits at the same file and line.
 type AtPredicate struct {
 	basePredicate
-	Target    string // Specific trait ID (if referencing a known trait)
-	SubQuery  *Query // A trait query to match against
+	Target   string // Specific trait ID (if referencing a known trait)
+	SubQuery *Query // A trait query to match against
 }
 
 func (AtPredicate) predicateNode() {}

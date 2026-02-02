@@ -42,6 +42,7 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 	}
 
 	var value string
+	isRefValue := false
 
 	switch p.curr.Type {
 	case TokenStar:
@@ -51,6 +52,7 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		p.advance()
 	case TokenRef:
 		value = p.curr.Value
+		isRefValue = true
 		p.advance()
 	case TokenString:
 		value = p.curr.Value
@@ -65,17 +67,23 @@ func (p *Parser) parseFieldPredicate(negated bool) (Predicate, error) {
 		Value:         value,
 		IsExists:      false,
 		CompareOp:     compareOp,
+		IsRefValue:    isRefValue,
 	}, nil
+}
+
+type parsedValue struct {
+	Value string
+	IsRef bool
 }
 
 // parseValueList parses a bracketed list of scalar values: [a, "b", [[ref]]]
 // Callers should ensure p.curr.Type == TokenLBracket.
-func (p *Parser) parseValueList() ([]string, error) {
+func (p *Parser) parseValueList() ([]parsedValue, error) {
 	if err := p.expect(TokenLBracket); err != nil {
 		return nil, err
 	}
 
-	var values []string
+	var values []parsedValue
 	for {
 		// End of list
 		if p.curr.Type == TokenRBracket {
@@ -86,16 +94,17 @@ func (p *Parser) parseValueList() ([]string, error) {
 			return nil, fmt.Errorf("unclosed value list: expected ']'")
 		}
 
-		var v string
+		var v parsedValue
 		switch p.curr.Type {
 		case TokenIdent:
-			v = p.curr.Value
+			v.Value = p.curr.Value
 			p.advance()
 		case TokenString:
-			v = p.curr.Value
+			v.Value = p.curr.Value
 			p.advance()
 		case TokenRef:
-			v = p.curr.Value
+			v.Value = p.curr.Value
+			v.IsRef = true
 			p.advance()
 		default:
 			return nil, fmt.Errorf("expected list value (identifier, string, or reference), got %v", p.curr.Type)
@@ -163,25 +172,28 @@ func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
 		return &FieldPredicate{
 			basePredicate: basePredicate{negated: negated},
 			Field:         field,
-			Value:         values[0],
+			Value:         values[0].Value,
 			IsExists:      false,
 			CompareOp:     CompareEq,
+			IsRefValue:    values[0].IsRef,
 		}, nil
 	}
 
 	// Multiple values: OR chain of == predicates.
 	var left Predicate = &FieldPredicate{
-		Field:     field,
-		Value:     values[0],
-		IsExists:  false,
-		CompareOp: CompareEq,
+		Field:      field,
+		Value:      values[0].Value,
+		IsExists:   false,
+		CompareOp:  CompareEq,
+		IsRefValue: values[0].IsRef,
 	}
 	for _, v := range values[1:] {
 		right := &FieldPredicate{
-			Field:     field,
-			Value:     v,
-			IsExists:  false,
-			CompareOp: CompareEq,
+			Field:      field,
+			Value:      v.Value,
+			IsExists:   false,
+			CompareOp:  CompareEq,
+			IsRefValue: v.IsRef,
 		}
 		left = &OrPredicate{Left: left, Right: right}
 	}
@@ -533,13 +545,17 @@ func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error)
 
 	// Get the value
 	var value string
+	isRefValue := false
 	switch p.curr.Type {
 	case TokenIdent:
 		value = p.curr.Value
 	case TokenString:
 		value = p.curr.Value
+	case TokenRef:
+		value = p.curr.Value
+		isRefValue = true
 	default:
-		return nil, fmt.Errorf("expected value after comparison operator")
+		return nil, fmt.Errorf("expected value after comparison operator (identifier, string, or reference)")
 	}
 	p.advance()
 
@@ -547,6 +563,7 @@ func (p *Parser) parseElementUnderscoreEquality(negated bool) (Predicate, error)
 		basePredicate: basePredicate{negated: negated},
 		Value:         value,
 		CompareOp:     compareOp,
+		IsRefValue:    isRefValue,
 	}, nil
 }
 
