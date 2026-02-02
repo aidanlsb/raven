@@ -40,6 +40,12 @@ var guideTopics = []GuideTopic{
 		Path:        "agent-guide/querying.md",
 	},
 	{
+		Slug:        "query-cheatsheet",
+		Name:        "Query Cheatsheet",
+		Description: "Fast patterns for common RQL queries.",
+		Path:        "agent-guide/query-cheatsheet.md",
+	},
+	{
 		Slug:        "key-workflows",
 		Name:        "Key Workflows",
 		Description: "Common workflows for creation, editing, and maintenance.",

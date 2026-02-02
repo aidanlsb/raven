@@ -9,6 +9,7 @@ It is split into topic resources so agents can fetch only what they need.
 - Start with `raven://guide/critical-rules` and `raven://guide/getting-started`
 - Use `raven://schema/current` for the live schema
 - Use `raven://queries/saved` and `raven://workflows/list` for quick discovery
+- Use `raven://guide/query-cheatsheet` for common query patterns
 - Fetch a single topic resource when you need focused guidance
 
 ## Topics
@@ -17,6 +18,7 @@ It is split into topic resources so agents can fetch only what they need.
 - `raven://guide/getting-started` - First steps for orienting in a new vault
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/querying` - Raven Query Language (RQL) and query strategy
+- `raven://guide/query-cheatsheet` - Common query patterns and shortcuts
 - `raven://guide/key-workflows` - Common workflows and decision patterns
 - `raven://guide/error-handling` - How to respond to tool errors
 - `raven://guide/issue-types` - `raven_check` issue reference and fixes
