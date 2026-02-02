@@ -267,6 +267,18 @@ func (s *Server) handleResourcesList(req *Request) {
 		Description: "The current schema.yaml defining types and traits for this vault.",
 		MimeType:    "text/yaml",
 	})
+	resources = append(resources, Resource{
+		URI:         "raven://queries/saved",
+		Name:        "Saved Queries",
+		Description: "Saved queries defined in raven.yaml.",
+		MimeType:    "application/json",
+	})
+	resources = append(resources, Resource{
+		URI:         "raven://workflows/list",
+		Name:        "Workflows",
+		Description: "List of workflows defined in raven.yaml. Use raven://workflows/<name> for details.",
+		MimeType:    "application/json",
+	})
 	s.sendResult(req.ID, map[string]interface{}{"resources": resources})
 }
 
@@ -306,7 +318,47 @@ func (s *Server) handleResourcesRead(req *Request) {
 			MimeType: "text/yaml",
 			Text:     schemaContent,
 		}
+	case "raven://queries/saved":
+		queriesContent, err := s.readSavedQueriesResource()
+		if err != nil {
+			s.sendError(req.ID, -32603, "Failed to read saved queries", err.Error())
+			return
+		}
+		content = ResourceContent{
+			URI:      params.URI,
+			MimeType: "application/json",
+			Text:     queriesContent,
+		}
+	case "raven://workflows/list":
+		workflowsContent, err := s.readWorkflowsListResource()
+		if err != nil {
+			s.sendError(req.ID, -32603, "Failed to read workflows", err.Error())
+			return
+		}
+		content = ResourceContent{
+			URI:      params.URI,
+			MimeType: "application/json",
+			Text:     workflowsContent,
+		}
 	default:
+		if strings.HasPrefix(params.URI, "raven://workflows/") {
+			name := strings.TrimPrefix(params.URI, "raven://workflows/")
+			if name == "" {
+				s.sendError(req.ID, -32602, "Resource not found", params.URI)
+				return
+			}
+			workflowContent, err := s.readWorkflowResource(name)
+			if err != nil {
+				s.sendError(req.ID, -32603, "Failed to read workflow", err.Error())
+				return
+			}
+			content = ResourceContent{
+				URI:      params.URI,
+				MimeType: "application/json",
+				Text:     workflowContent,
+			}
+			break
+		}
 		if strings.HasPrefix(params.URI, "raven://guide/") {
 			slug := strings.TrimPrefix(params.URI, "raven://guide/")
 			if slug == "" {
