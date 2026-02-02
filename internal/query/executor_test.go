@@ -150,6 +150,16 @@ func TestExecuteObjectQuery(t *testing.T) {
 			wantCount: 1, // standup has attendees including freya
 		},
 		{
+			name:      "array field membership (short ref token resolves)",
+			query:     "object:meeting .attendees==[[freya]]",
+			wantCount: 1, // standup has attendees including freya
+		},
+		{
+			name:      "array quantifier membership (short ref token resolves)",
+			query:     "object:meeting any(.attendees, _ == [[freya]])",
+			wantCount: 1, // standup has attendees including freya
+		},
+		{
 			name:      "negated field filter",
 			query:     "object:project !.status==active",
 			wantCount: 1,
