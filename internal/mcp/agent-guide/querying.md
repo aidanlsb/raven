@@ -2,6 +2,8 @@
 
 The query language is powerful and can answer complex questions in a single query. Master it to serve users efficiently.
 
+For a quick pattern reference, fetch `raven://guide/query-cheatsheet`.
+
 ### Query Types
 
 **Object queries** return objects of a type:

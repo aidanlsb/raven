@@ -6,6 +6,7 @@ When first interacting with a Raven vault, follow this discovery sequence:
 2. **Get vault overview**: `raven_stats()` to see object counts and structure
 3. **Check saved queries**: `raven://queries/saved` or `raven_query(list=true)`
 4. **Discover workflows**: `raven://workflows/list` or `raven_workflow_list()`
+5. **Grab the query cheatsheet**: `raven://guide/query-cheatsheet` for common patterns
 
 You can also fetch the `raven://schema/current` MCP resource for the complete schema.yaml.
 
