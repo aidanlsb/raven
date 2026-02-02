@@ -41,6 +41,7 @@ const (
 	IssueIDCollision             IssueType = "id_collision"
 	IssueDuplicateAlias          IssueType = "duplicate_alias"
 	IssueAliasCollision          IssueType = "alias_collision"
+	IssueStaleFragment           IssueType = "stale_fragment"
 )
 
 // Issue represents a validation issue.
@@ -634,6 +635,23 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			FixHint:  fixHint,
 		})
 	} else if result.TargetID == "" {
+		// Check if this is a stale fragment reference (file exists but section doesn't)
+		if baseID, fragment, isEmbedded := paths.ParseEmbeddedID(ref.TargetRaw); isEmbedded && fragment != "" {
+			baseResult := v.resolver.Resolve(baseID)
+			if baseResult.TargetID != "" {
+				issues = append(issues, Issue{
+					Level:    LevelWarning,
+					Type:     IssueStaleFragment,
+					FilePath: filePath,
+					Line:     ref.Line,
+					Message:  fmt.Sprintf("Fragment reference [[%s]] not found — '%s' exists but has no section '#%s'", ref.TargetRaw, v.displayID(baseResult.TargetID), fragment),
+					Value:    ref.TargetRaw,
+					FixHint:  "The heading may have been renamed. Update the fragment or use ::type(id=...) for a stable ID",
+				})
+				return issues
+			}
+		}
+
 		// Determine the fix command based on type inference
 		fixCmd := ""
 		fixHint := ""

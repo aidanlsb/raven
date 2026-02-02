@@ -891,3 +891,114 @@ func TestAliasCollisionDetection(t *testing.T) {
 		}
 	})
 }
+
+func TestValidatorStaleFragment(t *testing.T) {
+	s := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"page": {},
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"title": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{},
+	}
+
+	t.Run("stale fragment detected when file exists but section missing", func(t *testing.T) {
+		// The file "projects/website" exists, but "projects/website#old-heading" does not
+		objectIDs := []string{"projects/website", "projects/website#current-section"}
+		v := NewValidator(s, objectIDs)
+
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/roadmap.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/roadmap", ObjectType: "page"},
+			},
+			Refs: []*parser.ParsedRef{
+				{SourceID: "notes/roadmap", TargetRaw: "projects/website#old-heading", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		hasStaleFragment := false
+		for _, issue := range issues {
+			if issue.Type == IssueStaleFragment {
+				hasStaleFragment = true
+				if issue.Level != LevelWarning {
+					t.Errorf("Expected warning level, got: %v", issue.Level)
+				}
+				if !strings.Contains(issue.Message, "old-heading") {
+					t.Errorf("Expected message to mention fragment 'old-heading', got: %s", issue.Message)
+				}
+				if !strings.Contains(issue.Message, "projects/website") {
+					t.Errorf("Expected message to mention base file, got: %s", issue.Message)
+				}
+				if !strings.Contains(issue.FixHint, "heading may have been renamed") {
+					t.Errorf("Expected fix hint about renamed heading, got: %s", issue.FixHint)
+				}
+				break
+			}
+		}
+		if !hasStaleFragment {
+			t.Errorf("Expected stale fragment warning, got: %v", issues)
+		}
+	})
+
+	t.Run("stale fragment not emitted when file also missing", func(t *testing.T) {
+		// Neither "projects/deleted" nor "projects/deleted#section" exist
+		objectIDs := []string{"projects/website"}
+		v := NewValidator(s, objectIDs)
+
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/roadmap.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/roadmap", ObjectType: "page"},
+			},
+			Refs: []*parser.ParsedRef{
+				{SourceID: "notes/roadmap", TargetRaw: "projects/deleted#section", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueStaleFragment {
+				t.Errorf("Should not report stale fragment when base file is also missing, got: %v", issue)
+			}
+		}
+		// Should still report as missing reference
+		hasMissing := false
+		for _, issue := range issues {
+			if issue.Type == IssueMissingReference {
+				hasMissing = true
+				break
+			}
+		}
+		if !hasMissing {
+			t.Errorf("Expected missing reference error, got: %v", issues)
+		}
+	})
+
+	t.Run("valid fragment reference produces no issues", func(t *testing.T) {
+		// Both "projects/website" and "projects/website#overview" exist
+		objectIDs := []string{"projects/website", "projects/website#overview"}
+		v := NewValidator(s, objectIDs)
+
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/roadmap.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/roadmap", ObjectType: "page"},
+			},
+			Refs: []*parser.ParsedRef{
+				{SourceID: "notes/roadmap", TargetRaw: "projects/website#overview", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueStaleFragment || issue.Type == IssueMissingReference {
+				t.Errorf("Should not have fragment or missing issues for valid ref, got: %v", issue)
+			}
+		}
+	})
+}
