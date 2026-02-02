@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
@@ -185,8 +186,25 @@ func parseArguments(args string) (map[string]schema.FieldValue, error) {
 	return fields, nil
 }
 
+type valueParseOptions struct {
+	strictDates   bool
+	parseBooleans bool
+	parseNumbers  bool
+	parseArrays   bool
+	stripQuotes   bool
+}
+
 // parseValue parses a single value.
 func parseValue(s string) schema.FieldValue {
+	return parseValueWithOptions(s, valueParseOptions{
+		parseBooleans: true,
+		parseNumbers:  true,
+		parseArrays:   true,
+		stripQuotes:   true,
+	})
+}
+
+func parseValueWithOptions(s string, opts valueParseOptions) schema.FieldValue {
 	s = strings.TrimSpace(s)
 
 	if s == "" {
@@ -202,32 +220,43 @@ func parseValue(s string) schema.FieldValue {
 	}
 
 	// Array (including array of refs like [[[a]], [[b]]])
-	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+	if opts.parseArrays && strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
 		inner := s[1 : len(s)-1]
-		items := parseArrayItems(inner)
+		items := parseArrayItems(inner, opts)
 		return schema.Array(items)
 	}
 
 	// Quoted string
-	if strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) && len(s) >= 2 {
+	if opts.stripQuotes && strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) && len(s) >= 2 {
 		return schema.String(s[1 : len(s)-1])
 	}
 
 	// Boolean
-	if s == "true" {
-		return schema.Bool(true)
-	}
-	if s == "false" {
-		return schema.Bool(false)
+	if opts.parseBooleans {
+		if s == "true" {
+			return schema.Bool(true)
+		}
+		if s == "false" {
+			return schema.Bool(false)
+		}
 	}
 
 	// Number
-	if n, err := strconv.ParseFloat(s, 64); err == nil {
-		return schema.Number(n)
+	if opts.parseNumbers {
+		if n, err := strconv.ParseFloat(s, 64); err == nil {
+			return schema.Number(n)
+		}
 	}
 
 	// Date (YYYY-MM-DD) or datetime (YYYY-MM-DDTHH:MM)
-	if len(s) >= 10 && s[0] >= '0' && s[0] <= '9' {
+	if opts.strictDates {
+		if dates.IsValidDatetime(s) {
+			return schema.Datetime(s)
+		}
+		if dates.IsValidDate(s) {
+			return schema.Date(s)
+		}
+	} else if len(s) >= 10 && s[0] >= '0' && s[0] <= '9' {
 		if strings.Contains(s, "T") {
 			return schema.Datetime(s)
 		}
@@ -245,8 +274,23 @@ func parseValue(s string) schema.FieldValue {
 	return schema.String(s)
 }
 
+// ParseFieldValue parses a single field value using the same rules as ::type() declarations.
+func ParseFieldValue(s string) schema.FieldValue {
+	return parseValueWithOptions(s, valueParseOptions{
+		parseBooleans: true,
+		parseNumbers:  true,
+		parseArrays:   true,
+		stripQuotes:   true,
+	})
+}
+
+// ParseTraitValue parses a trait value using strict date/datetime validation.
+func ParseTraitValue(s string) schema.FieldValue {
+	return parseValueWithOptions(s, valueParseOptions{strictDates: true})
+}
+
 // parseArrayItems parses array items, handling nested references.
-func parseArrayItems(s string) []schema.FieldValue {
+func parseArrayItems(s string, opts valueParseOptions) []schema.FieldValue {
 	var items []schema.FieldValue
 	var current strings.Builder
 	bracketDepth := 0
@@ -272,7 +316,7 @@ func parseArrayItems(s string) []schema.FieldValue {
 
 		case ',':
 			if !inQuotes && bracketDepth == 0 {
-				item := parseValue(strings.TrimSpace(current.String()))
+				item := parseValueWithOptions(strings.TrimSpace(current.String()), opts)
 				if !item.IsNull() {
 					items = append(items, item)
 				}
@@ -288,7 +332,7 @@ func parseArrayItems(s string) []schema.FieldValue {
 
 	// Handle last item
 	if current.Len() > 0 {
-		item := parseValue(strings.TrimSpace(current.String()))
+		item := parseValueWithOptions(strings.TrimSpace(current.String()), opts)
 		if !item.IsNull() {
 			items = append(items, item)
 		}

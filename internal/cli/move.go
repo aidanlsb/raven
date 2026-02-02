@@ -292,7 +292,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	vaultCfg := loadVaultConfigSafe(vaultPath)
 
 	// Normalize destination path (add .md if missing)
-	destination = normalizePath(destination)
+	destination = paths.EnsureMDExtension(destination)
 
 	// Resolve source using unified resolver (supports short names, aliases, etc.)
 	sourceResult, err := ResolveReference(source, ResolveOptions{
@@ -305,7 +305,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	sourceFile := sourceResult.FilePath
 
 	// Security: Validate source is within vault
-	if err := validateWithinVault(vaultPath, sourceFile); err != nil {
+	if err := paths.ValidateWithinVault(vaultPath, sourceFile); err != nil {
 		return handleErrorMsg(ErrValidationFailed,
 			"Source path is outside vault",
 			"Files can only be moved within the vault")
@@ -320,7 +320,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	destFile := filepath.Join(vaultPath, destPath)
 
 	// Security: Validate destination is within vault
-	if err := validateWithinVault(vaultPath, destFile); err != nil {
+	if err := paths.ValidateWithinVault(vaultPath, destFile); err != nil {
 		return handleErrorMsg(ErrValidationFailed,
 			"Destination path is outside vault",
 			"Files can only be moved within the vault")
@@ -563,20 +563,6 @@ type MoveResult struct {
 	UpdatedRefs  []string `json:"updated_refs,omitempty"`
 	NeedsConfirm bool     `json:"needs_confirm,omitempty"`
 	Reason       string   `json:"reason,omitempty"`
-}
-
-// validateWithinVault checks that a path is within the vault.
-// Delegates to paths.ValidateWithinVault for the canonical implementation.
-func validateWithinVault(vaultPath, targetPath string) error {
-	return paths.ValidateWithinVault(vaultPath, targetPath)
-}
-
-// normalizePath ensures the path has a .md extension.
-func normalizePath(p string) string {
-	if !strings.HasSuffix(p, ".md") {
-		return p + ".md"
-	}
-	return p
 }
 
 // updateReference updates a reference in a source file.

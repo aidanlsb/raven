@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -107,7 +108,7 @@ func checkMigrationNeeds(vaultPath string) error {
 }
 
 func runSchemaMigration(vaultPath string, dryRun bool) (bool, error) {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Check if schema exists
 	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {

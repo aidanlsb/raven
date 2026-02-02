@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // Server is an MCP server that wraps Raven CLI commands.
@@ -333,7 +335,7 @@ func (s *Server) handleResourcesRead(req *Request) {
 }
 
 func (s *Server) readSchemaFile() (string, error) {
-	schemaPath := s.vaultPath + "/schema.yaml"
+	schemaPath := paths.SchemaPath(s.vaultPath)
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return "", err

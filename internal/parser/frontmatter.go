@@ -86,15 +86,15 @@ func ParseFrontmatter(content string) (*Frontmatter, error) {
 				fm.ObjectType = s
 			}
 		default:
-			fm.Fields[key] = yamlToFieldValue(value)
+			fm.Fields[key] = FieldValueFromYAML(value)
 		}
 	}
 
 	return fm, nil
 }
 
-// yamlToFieldValue converts a YAML value to a FieldValue.
-func yamlToFieldValue(value interface{}) schema.FieldValue {
+// FieldValueFromYAML converts a YAML value to a FieldValue.
+func FieldValueFromYAML(value interface{}) schema.FieldValue {
 	switch v := value.(type) {
 	case string:
 		// Check if it's a reference
@@ -122,7 +122,7 @@ func yamlToFieldValue(value interface{}) schema.FieldValue {
 	case []interface{}:
 		items := make([]schema.FieldValue, 0, len(v))
 		for _, item := range v {
-			items = append(items, yamlToFieldValue(item))
+			items = append(items, FieldValueFromYAML(item))
 		}
 		return schema.Array(items)
 	case nil:

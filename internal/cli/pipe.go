@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/mattn/go-isatty"
+
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 // PipeableItem represents an item that can be output in pipe-friendly format.
@@ -80,15 +82,5 @@ func WritePipeableIDs(w io.Writer, items []PipeableItem) {
 // TruncateContent truncates content to a maximum length, adding "..." if truncated.
 // Tries to break at word boundaries.
 func TruncateContent(content string, maxLen int) string {
-	if len(content) <= maxLen {
-		return content
-	}
-
-	// Try to truncate at a word boundary
-	truncated := content[:maxLen-3]
-	lastSpace := strings.LastIndex(truncated, " ")
-	if lastSpace > maxLen/2 {
-		truncated = truncated[:lastSpace]
-	}
-	return truncated + "..."
+	return ui.TruncateWithEllipsis(content, maxLen)
 }
