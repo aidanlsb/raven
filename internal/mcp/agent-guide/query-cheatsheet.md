@@ -32,6 +32,20 @@ Nest queries inside predicates to filter by related objects or traits:
 - `has(trait:due .value == past)`
 - `on(object:project .status == active)`
 
+## Boolean logic
+
+Combine predicates with boolean operators:
+
+- Space between predicates = AND
+- `|` = OR (use parentheses for grouping)
+- `!` = NOT (prefix)
+- `(...)` = grouping
+
+Example:
+- `trait:todo (.value == todo | .value == doing) !refs([[project/legacy]])`
+
+This can be very useful to provide lots of information to the user. If a question is vague, err on the side of running a few different versions of a query that could match the description and returning all the results to the user.
+
 ## Examples
 
 - Open todos for a project page:
