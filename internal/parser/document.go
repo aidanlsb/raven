@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // ParsedDocument represents a fully parsed document.
@@ -419,35 +418,16 @@ func extractRefsFromFields(fields map[string]schema.FieldValue, sourceID string,
 func extractRefsFromFieldValue(fv schema.FieldValue, sourceID string, line int) []*ParsedRef {
 	var refs []*ParsedRef
 
-	// Ref type - already parsed, just extract the target
-	if target, ok := fv.AsRef(); ok {
+	for _, match := range ExtractRefsFromFieldValue(fv, RefExtractOptions{
+		AllowWikilinksInString: true,
+		AllowTripleBrackets:    true,
+	}) {
 		refs = append(refs, &ParsedRef{
-			SourceID:  sourceID,
-			TargetRaw: target,
-			Line:      line,
+			SourceID:    sourceID,
+			TargetRaw:   match.TargetRaw,
+			DisplayText: match.DisplayText,
+			Line:        line,
 		})
-		return refs
-	}
-
-	// Array type - recurse into each element
-	if arr, ok := fv.AsArray(); ok {
-		for _, item := range arr {
-			refs = append(refs, extractRefsFromFieldValue(item, sourceID, line)...)
-		}
-		return refs
-	}
-
-	// String type - scan for wikilinks (handles edge cases like wikilinks in string values)
-	if s, ok := fv.AsString(); ok {
-		matches := wikilink.FindAllInLine(s, true) // allowTriple=true to handle array contexts
-		for _, match := range matches {
-			refs = append(refs, &ParsedRef{
-				SourceID:    sourceID,
-				TargetRaw:   match.Target,
-				DisplayText: match.DisplayText,
-				Line:        line,
-			})
-		}
 	}
 
 	return refs

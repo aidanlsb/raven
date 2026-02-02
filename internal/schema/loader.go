@@ -3,9 +3,11 @@ package schema
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // SchemaWarning represents a non-fatal schema issue.
@@ -31,7 +33,7 @@ func Load(vaultPath string) (*Schema, error) {
 
 // LoadWithWarnings loads the schema and returns any migration warnings.
 func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 	result := &LoadResult{Warnings: []SchemaWarning{}}
 
 	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
@@ -103,7 +105,7 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 // CreateDefault creates a default schema.yaml file in the vault.
 // Returns true if a new file was created, false if one already existed.
 func CreateDefault(vaultPath string) (bool, error) {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Skip if file already exists
 	if _, err := os.Stat(schemaPath); err == nil {
@@ -196,7 +198,7 @@ traits:
     type: boolean
 `
 
-	if err := os.WriteFile(schemaPath, []byte(defaultSchema), 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, []byte(defaultSchema), 0o644); err != nil {
 		return false, fmt.Errorf("failed to write schema file: %w", err)
 	}
 

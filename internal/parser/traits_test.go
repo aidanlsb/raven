@@ -208,7 +208,7 @@ func TestParseTraitValue_Kinds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fv := parseTraitValue(tt.input)
+			fv := ParseTraitValue(tt.input)
 
 			if got := fv.IsDate(); got != tt.wantDate {
 				t.Fatalf("IsDate() = %v, want %v", got, tt.wantDate)

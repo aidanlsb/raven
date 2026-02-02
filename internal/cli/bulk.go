@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/paths"
 )
 
 // BulkOperation represents the type of bulk operation.
@@ -105,7 +107,8 @@ func extractIDFromPipeLine(line string) string {
 
 // IsEmbeddedID checks if an ID is an embedded object ID (contains #).
 func IsEmbeddedID(id string) bool {
-	return strings.Contains(id, "#")
+	_, _, ok := paths.ParseEmbeddedID(id)
+	return ok
 }
 
 // PrintBulkPreview prints a human-readable preview of bulk operations.

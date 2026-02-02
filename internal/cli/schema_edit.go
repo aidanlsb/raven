@@ -94,7 +94,7 @@ Examples:
 }
 
 func addType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Load existing schema
 	sch, err := schema.Load(vaultPath)
@@ -198,7 +198,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 }
 
 func addTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Load existing schema
 	sch, err := schema.Load(vaultPath)
@@ -441,7 +441,7 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 }
 
 func addField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Load existing schema
 	sch, err := schema.Load(vaultPath)
@@ -674,7 +674,7 @@ Examples:
 }
 
 func updateType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Check built-in types
 	if schema.IsBuiltinType(typeName) {
@@ -833,7 +833,7 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 }
 
 func updateTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Load existing schema
 	sch, err := schema.Load(vaultPath)
@@ -915,7 +915,7 @@ func updateTrait(vaultPath, traitName string, start time.Time) error {
 }
 
 func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Load existing schema
 	sch, err := schema.Load(vaultPath)
@@ -1103,7 +1103,7 @@ Examples:
 }
 
 func removeType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Check built-in types
 	if schema.IsBuiltinType(typeName) {
@@ -1193,7 +1193,7 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 }
 
 func removeTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Load existing schema
 	sch, err := schema.Load(vaultPath)
@@ -1271,7 +1271,7 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 }
 
 func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Load existing schema
 	sch, err := schema.Load(vaultPath)
@@ -1575,7 +1575,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 
 	// 1) schema.yaml
 	if len(plan.SchemaYAML) > 0 {
-		schemaPath := filepath.Join(vaultPath, "schema.yaml")
+		schemaPath := paths.SchemaPath(vaultPath)
 		if err := atomicfile.WriteFile(schemaPath, plan.SchemaYAML, 0o644); err != nil {
 			return handleError(ErrFileWriteError, err, "")
 		}
@@ -1646,18 +1646,18 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	tokenNew := "{{field." + newField + "}}"
 
 	plan := &fieldRenamePlan{
-		TemplateFiles:         make(map[string][]byte),
-		TemplateFileRelPaths:  make(map[string]string),
-		MarkdownFiles:         make(map[string][]byte),
-		MarkdownFileRelPaths:  make(map[string]string),
-		Changes:               []FieldRenameChange{},
-		Conflicts:             []FieldRenameConflict{},
+		TemplateFiles:        make(map[string][]byte),
+		TemplateFileRelPaths: make(map[string]string),
+		MarkdownFiles:        make(map[string][]byte),
+		MarkdownFileRelPaths: make(map[string]string),
+		Changes:              []FieldRenameChange{},
+		Conflicts:            []FieldRenameConflict{},
 	}
 
 	// -------------------------------------------------------------------------
 	// 1) schema.yaml updates (field key, name_field, inline template)
 	// -------------------------------------------------------------------------
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 	schemaData, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, handleError(ErrFileReadError, err, "")
@@ -2038,7 +2038,7 @@ func looksLikeTemplatePath(s string) bool {
 }
 
 func renameType(vaultPath, oldName, newName string, start time.Time) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Validate names
 	if oldName == "" || newName == "" {

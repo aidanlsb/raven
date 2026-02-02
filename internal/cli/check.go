@@ -12,10 +12,12 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -1193,7 +1195,7 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 
 // createNewTrait adds a new trait to schema.yaml.
 func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType string, enumValues []string, defaultValue string) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Read current schema file
 	data, err := os.ReadFile(schemaPath)
@@ -1243,7 +1245,7 @@ func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType str
 		return fmt.Errorf("failed to marshal schema: %w", err)
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return fmt.Errorf("failed to write schema: %w", err)
 	}
 
@@ -1304,7 +1306,7 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 
 // createNewType adds a new type to schema.yaml.
 func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath string) error {
-	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	schemaPath := paths.SchemaPath(vaultPath)
 
 	// Check built-in types
 	if schema.IsBuiltinType(typeName) {
@@ -1344,7 +1346,7 @@ func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath str
 		return fmt.Errorf("failed to marshal schema: %w", err)
 	}
 
-	if err := os.WriteFile(schemaPath, output, 0644); err != nil {
+	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return fmt.Errorf("failed to write schema: %w", err)
 	}
 
@@ -1422,9 +1424,9 @@ func collectFixableIssues(issues []check.Issue, shortRefMap map[string]string, s
 				fixable = append(fixable, *fix)
 			}
 
-		// Note: We intentionally do NOT auto-fix missing references.
-		// Even "obvious" typos like project/ → projects/ are ambiguous -
-		// we can't know if the user meant the singular or plural form.
+			// Note: We intentionally do NOT auto-fix missing references.
+			// Even "obvious" typos like project/ → projects/ are ambiguous -
+			// we can't know if the user meant the singular or plural form.
 		}
 	}
 
@@ -1495,7 +1497,6 @@ func extractTraitNameFromMessage(msg string) string {
 	}
 	return msg[start : start+end]
 }
-
 
 // handleAutoFix applies auto-fixes to the vault
 func handleAutoFix(vaultPath string, fixes []fixableIssue, confirm bool) (fixResult, error) {

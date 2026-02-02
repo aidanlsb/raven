@@ -4,9 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 // TraitAnnotation represents a parsed @trait() annotation.
@@ -88,7 +86,7 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 		if match[6] >= 0 && match[7] >= 0 {
 			valueStr := strings.TrimSpace(sanitizedLine[match[6]:match[7]])
 			if valueStr != "" {
-				fv := parseTraitValue(valueStr)
+				fv := ParseTraitValue(valueStr)
 				value = &fv
 			}
 		}
@@ -113,33 +111,6 @@ func ParseTrait(line string, lineNumber int) *TraitAnnotation {
 		return nil
 	}
 	return &traits[0]
-}
-
-// parseTraitValue parses a single trait value.
-// Values can be: date, datetime, string, reference, or enum value.
-func parseTraitValue(valueStr string) schema.FieldValue {
-	valueStr = strings.TrimSpace(valueStr)
-
-	// Check for reference syntax [[target]] or [[target|display]]
-	// Use wikilink.ParseExact to correctly handle aliases
-	if target, _, ok := wikilink.ParseExact(valueStr); ok {
-		return schema.Ref(target)
-	}
-
-	// Check for datetime.
-	// Use canonical validation rather than heuristics to avoid misclassifying random
-	// strings that happen to contain 'T' (and invalid dates like 2025-13-45).
-	if dates.IsValidDatetime(valueStr) {
-		return schema.Datetime(valueStr)
-	}
-
-	// Check for date (YYYY-MM-DD).
-	if dates.IsValidDate(valueStr) {
-		return schema.Date(valueStr)
-	}
-
-	// Everything else is a string (enum values, plain strings, etc.)
-	return schema.String(valueStr)
 }
 
 // IsRefOnTraitLine returns true if a reference is on the same line as a trait.

@@ -1479,6 +1479,7 @@ func (d *Database) resolveRefBatch(res *resolver.Resolver, refs []refToResolve, 
 // At index time, we use the schema to identify ref-typed fields and extract their values as refs.
 func extractRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema, filePath string) []*parser.ParsedRef {
 	var refs []*parser.ParsedRef
+	opts := parser.RefExtractOptions{AllowBareStrings: true}
 
 	for _, obj := range objects {
 		// Get type definition from schema
@@ -1497,66 +1498,31 @@ func extractRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Sch
 			switch fieldDef.Type {
 			case schema.FieldTypeRef:
 				// Single ref field - extract target from string value
-				if target := extractRefTarget(fieldValue); target != "" {
+				if targets := parser.ExtractRefsFromFieldValue(fieldValue, opts); len(targets) > 0 {
 					refs = append(refs, &parser.ParsedRef{
 						SourceID:  obj.ID,
-						TargetRaw: target,
+						TargetRaw: targets[0].TargetRaw,
 						Line:      obj.LineStart,
 					})
 				}
 
 			case schema.FieldTypeRefArray:
 				// Array of refs - extract targets from each element
-				if arr, ok := fieldValue.AsArray(); ok {
-					for _, item := range arr {
-						if target := extractRefTarget(item); target != "" {
-							refs = append(refs, &parser.ParsedRef{
-								SourceID:  obj.ID,
-								TargetRaw: target,
-								Line:      obj.LineStart,
-							})
-						}
+				for _, target := range parser.ExtractRefsFromFieldValue(fieldValue, opts) {
+					if target.TargetRaw == "" {
+						continue
 					}
+					refs = append(refs, &parser.ParsedRef{
+						SourceID:  obj.ID,
+						TargetRaw: target.TargetRaw,
+						Line:      obj.LineStart,
+					})
 				}
 			}
 		}
 	}
 
 	return refs
-}
-
-// extractRefTarget extracts the ref target from a FieldValue.
-// Returns the target string for both ref types (already parsed [[target]])
-// and bare string values (needs to be treated as a ref).
-//
-// Also handles the case where YAML parsed `[[target]]` as a nested array.
-func extractRefTarget(fv schema.FieldValue) string {
-	// If already a ref type, return the target
-	if target, ok := fv.AsRef(); ok {
-		return target
-	}
-
-	// If a bare string, use it as the target
-	if s, ok := fv.AsString(); ok && s != "" {
-		// Skip strings that look like they contain wikilinks - those are already extracted
-		// by the parser's raw YAML scanning
-		if !strings.Contains(s, "[[") {
-			return s
-		}
-	}
-
-	// Handle YAML parsing `[[target]]` as nested array: [[target]] -> [["target"]]
-	// This happens when users write `company: [[cursor]]` without quotes.
-	// YAML interprets this as an array containing an array containing "cursor".
-	if arr, ok := fv.AsArray(); ok && len(arr) == 1 {
-		if innerArr, ok := arr[0].AsArray(); ok && len(innerArr) == 1 {
-			if s, ok := innerArr[0].AsString(); ok && s != "" {
-				return s
-			}
-		}
-	}
-
-	return ""
 }
 
 // mergeRefs merges two ref slices, deduplicating by (sourceID, targetRaw) pairs.

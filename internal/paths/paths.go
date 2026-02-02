@@ -26,6 +26,9 @@ var ErrPathOutsideVault = errors.New("path is outside vault")
 // MDExtension is the markdown file extension.
 const MDExtension = ".md"
 
+// SchemaFilename is the vault schema filename.
+const SchemaFilename = "schema.yaml"
+
 // HasMDExtension returns true if the path ends with .md.
 func HasMDExtension(p string) bool {
 	return strings.HasSuffix(p, MDExtension)
@@ -37,6 +40,11 @@ func EnsureMDExtension(p string) string {
 		return p
 	}
 	return p + MDExtension
+}
+
+// SchemaPath returns the absolute path to schema.yaml in a vault.
+func SchemaPath(vaultPath string) string {
+	return filepath.Join(vaultPath, SchemaFilename)
 }
 
 // TrimMDExtension removes the .md extension if present.

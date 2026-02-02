@@ -18,7 +18,6 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
-	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 var (
@@ -843,31 +842,7 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 
 // parseFieldValueToSchema converts a string value to schema.FieldValue.
 func parseFieldValueToSchema(value string) schema.FieldValue {
-	parsed := parseFieldValue(value)
-	return convertToSchemaFieldValue(parsed)
-}
-
-// convertToSchemaFieldValue converts an interface{} to schema.FieldValue.
-func convertToSchemaFieldValue(v interface{}) schema.FieldValue {
-	switch val := v.(type) {
-	case bool:
-		return schema.Bool(val)
-	case string:
-		// Check if it's a reference [[target]] or [[target|display]]
-		// Use wikilink.ParseExact to correctly handle aliases
-		if target, _, ok := wikilink.ParseExact(val); ok {
-			return schema.Ref(target)
-		}
-		return schema.String(val)
-	case []interface{}:
-		var items []schema.FieldValue
-		for _, item := range val {
-			items = append(items, convertToSchemaFieldValue(item))
-		}
-		return schema.Array(items)
-	default:
-		return schema.String(fmt.Sprintf("%v", v))
-	}
+	return parser.ParseFieldValue(value)
 }
 
 func init() {
