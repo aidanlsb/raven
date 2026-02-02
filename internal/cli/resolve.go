@@ -223,6 +223,89 @@ func IsRefNotFound(err error) bool {
 	return errors.As(err, &e)
 }
 
+func resolveReferenceWithDynamicDates(reference string, opts ResolveOptions, allowDynamicMissing bool) (*ResolveResult, error) {
+	result, err := ResolveReference(reference, opts)
+	if err == nil {
+		return result, nil
+	}
+	if !IsRefNotFound(err) {
+		return nil, err
+	}
+
+	vaultCfg := opts.VaultConfig
+	if vaultCfg == nil {
+		vaultCfg = loadVaultConfigSafe(opts.VaultPath)
+	}
+
+	dynResult, handled, dynErr := resolveDynamicDateReference(reference, opts.VaultPath, vaultCfg, allowDynamicMissing)
+	if !handled {
+		return nil, err
+	}
+	if dynErr != nil {
+		return nil, dynErr
+	}
+	return dynResult, nil
+}
+
+func resolveDynamicDateReference(reference, vaultPath string, vaultCfg *config.VaultConfig, allowMissing bool) (*ResolveResult, bool, error) {
+	ref := strings.TrimSpace(reference)
+	if ref == "" {
+		return nil, false, nil
+	}
+
+	baseRef := ref
+	fragment := ""
+	if parts := strings.SplitN(ref, "#", 2); len(parts) == 2 {
+		baseRef = parts[0]
+		fragment = parts[1]
+	}
+	if baseRef == "" {
+		return nil, false, nil
+	}
+
+	keyword := strings.ToLower(strings.TrimSpace(baseRef))
+	switch keyword {
+	case "today", "tomorrow", "yesterday":
+	default:
+		return nil, false, nil
+	}
+
+	if vaultCfg == nil {
+		vaultCfg = loadVaultConfigSafe(vaultPath)
+	}
+
+	parsed, err := vault.ParseDateArg(keyword)
+	if err != nil {
+		return nil, true, err
+	}
+	dateStr := vault.FormatDateISO(parsed)
+	fileObjectID := vaultCfg.DailyNoteID(dateStr)
+	objectID := fileObjectID
+	if fragment != "" {
+		objectID = fileObjectID + "#" + fragment
+	}
+	filePath := vaultCfg.DailyNotePath(vaultPath, dateStr)
+
+	if !allowMissing {
+		if _, err := os.Stat(filePath); err != nil {
+			if os.IsNotExist(err) {
+				return nil, true, &RefNotFoundError{
+					Reference: reference,
+					Detail:    fmt.Sprintf("resolved to '%s' but file not found", objectID),
+				}
+			}
+			return nil, true, err
+		}
+	}
+
+	return &ResolveResult{
+		ObjectID:     objectID,
+		FilePath:     filePath,
+		IsSection:    fragment != "",
+		FileObjectID: fileObjectID,
+	}, true, nil
+}
+
 // handleResolveError converts a resolve error to an appropriate CLI error output.
 // Returns the error code used.
 func handleResolveError(err error, reference string) error {

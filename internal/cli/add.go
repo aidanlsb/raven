@@ -46,6 +46,7 @@ Bulk operations:
 Examples:
   rvn add "Call Odin about the Bifrost"
   rvn add "@due(tomorrow) Send the estimate"
+  rvn add "Plan for tomorrow" --to tomorrow
   rvn add "Project idea" --to inbox.md
   rvn add "Meeting notes" --to cursor       # Resolves to companies/cursor.md
   rvn add "Call Odin" --timestamp           # Includes time prefix
@@ -219,6 +220,28 @@ func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warnin
 	})
 }
 
+func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
+	if objectID == "" {
+		return false
+	}
+
+	baseID := objectID
+	if parts := strings.SplitN(objectID, "#", 2); len(parts) == 2 {
+		baseID = parts[0]
+	}
+
+	dailyDir := "daily"
+	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
+		dailyDir = vaultCfg.DailyDirectory
+	}
+	if !strings.HasPrefix(baseID, dailyDir+"/") {
+		return false
+	}
+
+	dateStr := strings.TrimPrefix(baseID, dailyDir+"/")
+	return dates.IsValidDate(dateStr)
+}
+
 // addSingleCapture handles single capture mode (non-bulk).
 func addSingleCapture(vaultPath string, args []string) error {
 	start := time.Now()
@@ -240,16 +263,19 @@ func addSingleCapture(vaultPath string, args []string) error {
 	var isDailyNote bool
 	var targetObjectID string
 	if addToFlag != "" {
-		// Resolve --to flag using unified resolver (supports section refs like file#section)
-		result, err := ResolveReference(addToFlag, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-		})
+		// Resolve --to flag using unified resolver (supports section refs like file#section).
+		// If not found, fall back to dynamic date keywords (today/tomorrow/yesterday).
+		result, err := resolveReferenceWithDynamicDates(addToFlag, ResolveOptions{
+			VaultPath:    vaultPath,
+			VaultConfig:  vaultCfg,
+			AllowMissing: true,
+		}, true)
 		if err != nil {
 			return handleResolveError(err, addToFlag)
 		}
 		destPath = result.FilePath
 		targetObjectID = result.ObjectID
+		isDailyNote = isDailyNoteObjectID(result.FileObjectID, vaultCfg)
 	} else if captureCfg.Destination == "daily" {
 		// Use today's daily note (auto-created if needed)
 		today := vault.FormatDateISO(time.Now())
