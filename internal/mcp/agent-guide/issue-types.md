@@ -20,6 +20,8 @@ When `raven_check` returns issues, here's how to fix them:
 | `missing_target_type` | Ref field's target type doesn't exist | Add the target type to schema |
 | `duplicate_alias` | Multiple objects use same alias | Rename one of the aliases |
 | `alias_collision` | Alias conflicts with object ID/short name | Rename the alias |
+| `invalid_field_value` | Field value fails validation | Fix the value to match field type constraints |
+| `invalid_trait_value` | Trait value is wrong type | Fix value (e.g., boolean expects true/false, number expects numeric) |
 
 **Warnings (optional to fix):**
 
@@ -32,6 +34,7 @@ When `raven_check` returns issues, here's how to fix them:
 | `short_ref_could_be_full_path` | Short ref could be clearer | Consider using full path |
 | `id_collision` | Short name matches multiple objects | Use full paths in references |
 | `self_referential_required` | Type has required ref to itself | Make field optional or add default |
+| `stale_fragment` | File exists but section/heading is missing | Update the fragment or remove the `#section` from reference |
 
 **Using issue types for filtering:**
 
