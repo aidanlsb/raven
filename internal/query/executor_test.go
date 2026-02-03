@@ -738,6 +738,65 @@ func TestOrAndGroupPredicates(t *testing.T) {
 	}
 }
 
+func TestBooleanEdgeCasesExecution(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	executor := NewExecutor(db)
+
+	tests := []struct {
+		name      string
+		query     string
+		wantCount int
+	}{
+		{
+			name:      "chained OR: A | B | C",
+			query:     "object:project (.status==active | .status==paused | .status==nonexistent)",
+			wantCount: 2, // website (active) + mobile (paused)
+		},
+		{
+			name:      "AND of two OR groups",
+			query:     "object:project (.status==active | .status==paused) (.priority==high | .priority==medium)",
+			wantCount: 2, // website (active+high), mobile (paused+medium)
+		},
+		{
+			name:      "negated OR via NotPredicate",
+			query:     "object:project !(.status==active | .status==paused)",
+			wantCount: 0, // all match the OR
+		},
+		{
+			name:      "in() as flat OR",
+			query:     "object:project in(.status, [active,paused])",
+			wantCount: 2,
+		},
+		{
+			name:      "negated in()",
+			query:     "object:project !in(.status, [active,paused])",
+			wantCount: 0, // all match
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			results, err := executor.executeObjectQuery(q)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(results) != tt.wantCount {
+				t.Errorf("got %d results, want %d", len(results), tt.wantCount)
+				for _, r := range results {
+					t.Logf("  - %s (%s)", r.ID, r.Type)
+				}
+			}
+		})
+	}
+}
+
 func TestAtPredicate(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()

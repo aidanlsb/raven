@@ -11,9 +11,9 @@ const (
 
 // Query represents a parsed query.
 type Query struct {
-	Type       QueryType
-	TypeName   string      // Object type or trait name
-	Predicates []Predicate // Filters to apply
+	Type      QueryType
+	TypeName  string    // Object type or trait name
+	Predicate Predicate // Filter to apply (may be nil)
 }
 
 // Predicate represents a filter condition in a query.
@@ -183,15 +183,24 @@ type WithinPredicate struct {
 
 func (WithinPredicate) predicateNode() {}
 
-// OrPredicate represents an OR combination of predicates.
-// Syntax: (pred1 | pred2)
+// OrPredicate represents an OR combination of two or more predicates.
+// Syntax: (pred1 | pred2 | pred3)
 type OrPredicate struct {
 	basePredicate
-	Left  Predicate
-	Right Predicate
+	Predicates []Predicate
 }
 
 func (OrPredicate) predicateNode() {}
+
+// NotPredicate represents the negation of a predicate.
+// Syntax: !(pred), !pred
+type NotPredicate struct {
+	basePredicate
+	Inner Predicate
+}
+
+func (NotPredicate) predicateNode() {}
+func (NotPredicate) Negated() bool  { return true }
 
 // StringFuncType represents the type of string function.
 type StringFuncType int

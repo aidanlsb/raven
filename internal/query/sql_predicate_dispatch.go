@@ -19,6 +19,8 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias s
 	// Shared predicate nodes (exist in both object and trait query contexts).
 	case *OrPredicate:
 		return e.buildOrPredicateSQL(p, alias, recurse)
+	case *NotPredicate:
+		return e.buildNotPredicateSQL(p, alias, recurse)
 	case *GroupPredicate:
 		return e.buildGroupPredicateSQL(p, alias, recurse)
 	case *RefdPredicate:

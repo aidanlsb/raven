@@ -179,30 +179,22 @@ func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
 		}, nil
 	}
 
-	// Multiple values: OR chain of == predicates.
-	var left Predicate = &FieldPredicate{
-		Field:      field,
-		Value:      values[0].Value,
-		IsExists:   false,
-		CompareOp:  CompareEq,
-		IsRefValue: values[0].IsRef,
-	}
-	for _, v := range values[1:] {
-		right := &FieldPredicate{
+	// Multiple values: OR of == predicates.
+	var preds []Predicate
+	for _, v := range values {
+		preds = append(preds, &FieldPredicate{
 			Field:      field,
 			Value:      v.Value,
 			IsExists:   false,
 			CompareOp:  CompareEq,
 			IsRefValue: v.IsRef,
-		}
-		left = &OrPredicate{Left: left, Right: right}
+		})
 	}
-	// Apply overall negation at the root (so !in(...) works correctly).
-	if op, ok := left.(*OrPredicate); ok {
-		op.basePredicate = basePredicate{negated: negated}
-		return op, nil
+	var result Predicate = &OrPredicate{Predicates: preds}
+	if negated {
+		result = &NotPredicate{Inner: result}
 	}
-	return &GroupPredicate{basePredicate: basePredicate{negated: negated}, Predicates: []Predicate{left}}, nil
+	return result, nil
 }
 
 // parseValuePredicate parses value==val, value<val, value>val, etc.
@@ -424,27 +416,32 @@ func (p *Parser) parseArrayQuantifierPredicate(negated bool, quantifier ArrayQua
 
 // parseElementOrPredicate parses element predicates with OR (lowest precedence).
 func (p *Parser) parseElementOrPredicate() (Predicate, error) {
-	left, err := p.parseElementAndPredicate()
+	first, err := p.parseElementAndPredicate()
 	if err != nil {
 		return nil, err
 	}
-	if left == nil {
+	if first == nil {
 		return nil, fmt.Errorf("expected element predicate")
 	}
 
+	if p.curr.Type != TokenPipe {
+		return first, nil
+	}
+
+	preds := []Predicate{first}
 	for p.curr.Type == TokenPipe {
 		p.advance()
-		right, err := p.parseElementAndPredicate()
+		next, err := p.parseElementAndPredicate()
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
+		if next == nil {
 			return nil, fmt.Errorf("expected element predicate after '|'")
 		}
-		left = &OrPredicate{Left: left, Right: right}
+		preds = append(preds, next)
 	}
 
-	return left, nil
+	return &OrPredicate{Predicates: preds}, nil
 }
 
 // parseElementAndPredicate parses element predicates with implicit AND.
@@ -498,10 +495,7 @@ func (p *Parser) parseElementUnaryPredicate() (Predicate, error) {
 			return nil, fmt.Errorf("unclosed parenthesis in element predicate: %w", err)
 		}
 		if negated {
-			return &GroupPredicate{
-				basePredicate: basePredicate{negated: true},
-				Predicates:    []Predicate{pred},
-			}, nil
+			return &NotPredicate{Inner: pred}, nil
 		}
 		return pred, nil
 	}
