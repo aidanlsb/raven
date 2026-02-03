@@ -119,6 +119,51 @@ Imports should be grouped in this order (enforced by `goimports`):
 2. Third-party packages
 3. Local packages (`github.com/aidanlsb/raven/...`)
 
+## Documentation
+
+Keep documentation in sync with code. There are three main documentation surfaces:
+
+### Command Registry (single source of truth)
+
+`internal/commands/registry.go` defines all command metadata: descriptions, arguments, flags, examples, and agent use cases. This registry drives both the CLI (`--help`) and MCP tool schemas — update it once, and both stay in sync.
+
+When adding or modifying a command:
+1. Update the `Registry` map in `internal/commands/registry.go`
+2. MCP tools are regenerated automatically from the registry
+
+### MCP Agent Guide
+
+`internal/mcp/agent-guide/` contains markdown files that are embedded at compile time and served as MCP resources (`raven://guide/*`). These provide agent-specific guidance:
+
+| File | Purpose |
+|------|---------|
+| `index.md` | Navigation and topic discovery |
+| `critical-rules.md` | Safety rules agents must follow |
+| `getting-started.md` | First steps in a new vault |
+| `core-concepts.md` | Types, traits, references explained |
+| `querying.md` | RQL reference and query strategy |
+| `query-cheatsheet.md` | Common query patterns |
+| `key-workflows.md` | Creation, editing, bulk operations |
+| `error-handling.md` | Interpreting tool errors |
+| `issue-types.md` | `raven_check` issue reference |
+| `best-practices.md` | Operating principles |
+| `examples.md` | Example agent conversations |
+
+When adding a new guide topic:
+1. Create the markdown file in `internal/mcp/agent-guide/`
+2. Add an entry to `guideTopics` in `internal/mcp/agent_guide.go`
+3. Rebuild — files are embedded at compile time
+
+### User Documentation
+
+`docs/` contains user-facing documentation:
+
+- `docs/guide/` — getting started, CLI usage, workflows
+- `docs/reference/` — schema format, query language, MCP API
+- `docs/design/` — architecture and design decisions
+
+When making significant changes, check if `docs/reference/` needs updating (especially `mcp.md` for MCP changes, `cli.md` for CLI changes).
+
 ## What to Check Before Submitting
 
 1. `make fmt` — code must be formatted
@@ -127,3 +172,5 @@ Imports should be grouped in this order (enforced by `goimports`):
 4. If you changed CLI commands or flags, verify `internal/commands/registry.go` is updated to match
 5. If you added a new package, make sure it doesn't introduce circular imports
 6. If you touched parsing, indexing, or query execution, run `make test-integration`
+7. If you changed command behavior, check if `internal/mcp/agent-guide/` docs need updating
+8. If you added MCP resources or changed tool schemas, update `docs/reference/mcp.md`
