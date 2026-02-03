@@ -91,17 +91,24 @@ to understand which fields are auto-populated.`,
 	},
 	"add": {
 		Name:        "add",
-		Description: "Append content to existing file or daily note",
+		Description: "Quick capture - append text to daily note or inbox",
 		LongDesc: `Quickly capture a thought, task, or note.
 
-By default, appends to today's daily note. 
+By default, appends to today's daily note. Configure destination in raven.yaml.
 Only works on files that already exist (daily notes are auto-created).
 Timestamps are OFF by default; use --timestamp to include the current time.
+Auto-reindex is ON by default; configure via auto_reindex in raven.yaml.
 For creating NEW typed objects, use 'rvn new' instead.
 
 Bulk operations:
-Use --stdin to read object IDs from stdin (one per line).
-IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
+Use --stdin to read object IDs from stdin and append text to each.
+Bulk operations preview changes by default; use --confirm to apply.
+
+Configuration (raven.yaml):
+  capture:
+    destination: daily      # "daily" or a file path
+    heading: "## Captured"  # Optional heading to append under
+    timestamp: false        # Prefix with time (default: false)`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
@@ -252,8 +259,10 @@ For trait queries (trait:...):
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
 			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
 			{Name: "ids", Description: "Output only object/trait IDs, one per line (for piping)", Type: FlagTypeBool},
-			{Name: "apply", Description: "Apply bulk operation to results (e.g., 'set status=done', 'delete', 'add @reviewed', 'update value=done')", Type: FlagTypeString},
+			{Name: "apply", Description: "Apply bulk operation to results (e.g., 'set status=done', 'delete', 'add @reviewed', 'update value=done')", Type: FlagTypeStringSlice},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "pipe", Description: "Force pipe-friendly output format", Type: FlagTypeBool},
+			{Name: "no-pipe", Description: "Force human-readable output format", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn query 'object:project .status==active' --json",
@@ -273,7 +282,7 @@ For trait queries (trait:...):
 		},
 	},
 	"query_add": {
-		Name:        "query_add",
+		Name:        "query add",
 		Description: "Add a saved query to raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name for the new query", Required: true},
@@ -289,7 +298,7 @@ For trait queries (trait:...):
 		},
 	},
 	"query_remove": {
-		Name:        "query_remove",
+		Name:        "query remove",
 		Description: "Remove a saved query from raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the query to remove", Required: true, DynamicComp: "queries"},

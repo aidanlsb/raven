@@ -90,6 +90,7 @@ Either:
 
 // Execute runs the CLI.
 func Execute() error {
+	syncRegistryMetadata(rootCmd)
 	return rootCmd.Execute()
 }
 
