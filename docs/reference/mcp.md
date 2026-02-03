@@ -37,6 +37,9 @@ Raven exposes MCP resources that agents can fetch:
 |-----|------|-------------|
 | `raven://guide/index` | Agent Guide Index | Overview of available agent guide topics |
 | `raven://schema/current` | Current Schema | The vault's `schema.yaml` defining types and traits |
+| `raven://queries/saved` | Saved Queries | List of saved queries defined in `raven.yaml` |
+| `raven://workflows/list` | Workflows List | List of workflows defined in `raven.yaml` |
+| `raven://workflows/<name>` | Workflow Details | Details for a specific workflow |
 
 Additional topic resources are available under `raven://guide/<topic>`:
 
@@ -44,6 +47,7 @@ Additional topic resources are available under `raven://guide/<topic>`:
 - `raven://guide/getting-started` - First steps for orienting in a new vault
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/querying` - Raven Query Language (RQL) and query strategy
+- `raven://guide/query-cheatsheet` - Common query patterns and shortcuts
 - `raven://guide/key-workflows` - Common workflows and decision patterns
 - `raven://guide/error-handling` - How to respond to tool errors
 - `raven://guide/issue-types` - `raven_check` issue reference and fixes
