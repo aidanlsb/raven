@@ -65,9 +65,9 @@ func (v *Validator) validateObjectQuery(q *Query) error {
 		}
 	}
 
-	// Validate predicates
-	for _, pred := range q.Predicates {
-		if err := v.validateObjectPredicate(pred, q.TypeName, typeDef); err != nil {
+	// Validate predicate
+	if q.Predicate != nil {
+		if err := v.validateObjectPredicate(q.Predicate, q.TypeName, typeDef); err != nil {
 			return err
 		}
 	}
@@ -85,9 +85,9 @@ func (v *Validator) validateTraitQuery(q *Query) error {
 		}
 	}
 
-	// Validate predicates
-	for _, pred := range q.Predicates {
-		if err := v.validateTraitPredicate(pred); err != nil {
+	// Validate predicate
+	if q.Predicate != nil {
+		if err := v.validateTraitPredicate(q.Predicate); err != nil {
 			return err
 		}
 	}
@@ -167,10 +167,13 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 			Suggestion: "Use at(trait:...) to find traits co-located with other traits",
 		}
 	case *OrPredicate:
-		if err := v.validateObjectPredicate(p.Left, typeName, typeDef); err != nil {
-			return err
+		for _, subPred := range p.Predicates {
+			if err := v.validateObjectPredicate(subPred, typeName, typeDef); err != nil {
+				return err
+			}
 		}
-		return v.validateObjectPredicate(p.Right, typeName, typeDef)
+	case *NotPredicate:
+		return v.validateObjectPredicate(p.Inner, typeName, typeDef)
 	case *GroupPredicate:
 		for _, subPred := range p.Predicates {
 			if err := v.validateObjectPredicate(subPred, typeName, typeDef); err != nil {
@@ -269,10 +272,13 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 			Suggestion: "Use descendant(object:...) in object queries",
 		}
 	case *OrPredicate:
-		if err := v.validateTraitPredicate(p.Left); err != nil {
-			return err
+		for _, subPred := range p.Predicates {
+			if err := v.validateTraitPredicate(subPred); err != nil {
+				return err
+			}
 		}
-		return v.validateTraitPredicate(p.Right)
+	case *NotPredicate:
+		return v.validateTraitPredicate(p.Inner)
 	case *GroupPredicate:
 		for _, subPred := range p.Predicates {
 			if err := v.validateTraitPredicate(subPred); err != nil {

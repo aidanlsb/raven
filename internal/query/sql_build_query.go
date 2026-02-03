@@ -14,9 +14,9 @@ func (e *Executor) buildObjectSQL(q *Query) (string, []interface{}, error) {
 	conditions = append(conditions, "o.type = ?")
 	args = append(args, q.TypeName)
 
-	// Build predicate conditions
-	for _, pred := range q.Predicates {
-		cond, predArgs, err := e.buildObjectPredicateSQL(pred, "o")
+	// Build predicate condition
+	if q.Predicate != nil {
+		cond, predArgs, err := e.buildObjectPredicateSQL(q.Predicate, "o")
 		if err != nil {
 			return "", nil, err
 		}
@@ -43,9 +43,9 @@ func (e *Executor) buildTraitSQL(q *Query) (string, []interface{}, error) {
 	conditions = append(conditions, "t.trait_type = ?")
 	args = append(args, q.TypeName)
 
-	// Build predicate conditions
-	for _, pred := range q.Predicates {
-		cond, predArgs, err := e.buildTraitPredicateSQL(pred, "t")
+	// Build predicate condition
+	if q.Predicate != nil {
+		cond, predArgs, err := e.buildTraitPredicateSQL(q.Predicate, "t")
 		if err != nil {
 			return "", nil, err
 		}

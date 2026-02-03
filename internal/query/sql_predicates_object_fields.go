@@ -163,19 +163,24 @@ func (e *Executor) buildElementPredicateSQL(pred Predicate) (string, []interface
 		return e.buildElementStringFuncSQL(p)
 
 	case *OrPredicate:
-		leftCond, leftArgs, err := e.buildElementPredicateSQL(p.Left)
+		var conditions []string
+		var args []interface{}
+		for _, subPred := range p.Predicates {
+			cond, predArgs, err := e.buildElementPredicateSQL(subPred)
+			if err != nil {
+				return "", nil, err
+			}
+			conditions = append(conditions, cond)
+			args = append(args, predArgs...)
+		}
+		return "(" + strings.Join(conditions, " OR ") + ")", args, nil
+
+	case *NotPredicate:
+		cond, args, err := e.buildElementPredicateSQL(p.Inner)
 		if err != nil {
 			return "", nil, err
 		}
-		rightCond, rightArgs, err := e.buildElementPredicateSQL(p.Right)
-		if err != nil {
-			return "", nil, err
-		}
-		cond := fmt.Sprintf("(%s OR %s)", leftCond, rightCond)
-		if p.Negated() {
-			cond = "NOT " + cond
-		}
-		return cond, append(leftArgs, rightArgs...), nil
+		return "NOT (" + cond + ")", args, nil
 
 	case *GroupPredicate:
 		var conditions []string
@@ -188,11 +193,7 @@ func (e *Executor) buildElementPredicateSQL(pred Predicate) (string, []interface
 			conditions = append(conditions, cond)
 			args = append(args, predArgs...)
 		}
-		cond := "(" + strings.Join(conditions, " AND ") + ")"
-		if p.Negated() {
-			cond = "NOT " + cond
-		}
-		return cond, args, nil
+		return "(" + strings.Join(conditions, " AND ") + ")", args, nil
 
 	default:
 		return "", nil, fmt.Errorf("unsupported element predicate type: %T", pred)

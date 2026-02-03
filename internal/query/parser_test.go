@@ -113,12 +113,12 @@ func TestParseFieldPredicates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			fp, ok := q.Predicates[0].(*FieldPredicate)
+			fp, ok := q.Predicate.(*FieldPredicate)
 			if !ok {
-				t.Fatalf("expected FieldPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected FieldPredicate, got %T", q.Predicate)
 			}
 			if fp.Field != tt.wantField {
 				t.Errorf("Field = %v, want %v", fp.Field, tt.wantField)
@@ -167,12 +167,12 @@ func TestParseHasPredicate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			hp, ok := q.Predicates[0].(*HasPredicate)
+			hp, ok := q.Predicate.(*HasPredicate)
 			if !ok {
-				t.Fatalf("expected HasPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected HasPredicate, got %T", q.Predicate)
 			}
 			if hp.SubQuery.TypeName != tt.wantTraitName {
 				t.Errorf("trait name = %v, want %v", hp.SubQuery.TypeName, tt.wantTraitName)
@@ -223,12 +223,12 @@ func TestParseParentAncestorChild(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
 
 			var subQuery *Query
-			switch p := q.Predicates[0].(type) {
+			switch p := q.Predicate.(type) {
 			case *ParentPredicate:
 				if tt.predType != "parent" {
 					t.Fatalf("expected %s, got parent", tt.predType)
@@ -245,7 +245,7 @@ func TestParseParentAncestorChild(t *testing.T) {
 				}
 				subQuery = p.SubQuery
 			default:
-				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+				t.Fatalf("unexpected predicate type: %T", q.Predicate)
 			}
 
 			if subQuery.TypeName != tt.wantTypeName {
@@ -294,11 +294,11 @@ func TestParseTraitPredicates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
 
-			switch p := q.Predicates[0].(type) {
+			switch p := q.Predicate.(type) {
 			case *FieldPredicate:
 				if tt.predType != "value" {
 					t.Fatalf("expected %s, got field", tt.predType)
@@ -310,7 +310,7 @@ func TestParseTraitPredicates(t *testing.T) {
 					t.Errorf("Value = %v, want %v", p.Value, tt.wantValue)
 				}
 			default:
-				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+				t.Fatalf("unexpected predicate type: %T", q.Predicate)
 			}
 		})
 	}
@@ -349,12 +349,12 @@ func TestParseOnWithin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
 
 			var subQuery *Query
-			switch p := q.Predicates[0].(type) {
+			switch p := q.Predicate.(type) {
 			case *OnPredicate:
 				if tt.predType != "on" {
 					t.Fatalf("expected %s, got on", tt.predType)
@@ -366,7 +366,7 @@ func TestParseOnWithin(t *testing.T) {
 				}
 				subQuery = p.SubQuery
 			default:
-				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+				t.Fatalf("unexpected predicate type: %T", q.Predicate)
 			}
 
 			if subQuery.TypeName != tt.wantTypeName {
@@ -378,24 +378,20 @@ func TestParseOnWithin(t *testing.T) {
 
 func TestParseBooleanComposition(t *testing.T) {
 	tests := []struct {
-		name           string
-		input          string
-		wantPredicates int
+		name  string
+		input string
 	}{
 		{
-			name:           "multiple predicates AND",
-			input:          "object:project .status==active has(trait:due)",
-			wantPredicates: 1,
+			name:  "multiple predicates AND",
+			input: "object:project .status==active has(trait:due)",
 		},
 		{
-			name:           "OR predicate",
-			input:          "object:project .status==active | .status==done",
-			wantPredicates: 1, // Becomes single OrPredicate
+			name:  "OR predicate",
+			input: "object:project .status==active | .status==done",
 		},
 		{
-			name:           "grouped predicates",
-			input:          "object:project (.status==active | .status==done)",
-			wantPredicates: 1, // Becomes single GroupPredicate
+			name:  "grouped predicates",
+			input: "object:project (.status==active | .status==done)",
 		},
 	}
 
@@ -405,13 +401,13 @@ func TestParseBooleanComposition(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != tt.wantPredicates {
-				t.Errorf("got %d predicates, want %d", len(q.Predicates), tt.wantPredicates)
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
 			if tt.name == "multiple predicates AND" {
-				gp, ok := q.Predicates[0].(*GroupPredicate)
+				gp, ok := q.Predicate.(*GroupPredicate)
 				if !ok || len(gp.Predicates) != 2 {
-					t.Errorf("expected GroupPredicate with 2 predicates, got %T", q.Predicates[0])
+					t.Errorf("expected GroupPredicate with 2 predicates, got %T", q.Predicate)
 				}
 			}
 		})
@@ -455,12 +451,12 @@ func TestParseRefsPredicate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			rp, ok := q.Predicates[0].(*RefsPredicate)
+			rp, ok := q.Predicate.(*RefsPredicate)
 			if !ok {
-				t.Fatalf("expected RefsPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected RefsPredicate, got %T", q.Predicate)
 			}
 			if tt.wantTarget != "" && rp.Target != tt.wantTarget {
 				t.Errorf("Target = %v, want %v", rp.Target, tt.wantTarget)
@@ -521,12 +517,12 @@ func TestParseContentPredicate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			cp, ok := q.Predicates[0].(*ContentPredicate)
+			cp, ok := q.Predicate.(*ContentPredicate)
 			if !ok {
-				t.Fatalf("expected ContentPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected ContentPredicate, got %T", q.Predicate)
 			}
 			if cp.SearchTerm != tt.wantTerm {
 				t.Errorf("SearchTerm = %q, want %q", cp.SearchTerm, tt.wantTerm)
@@ -598,13 +594,13 @@ func TestParseDescendantContains(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
 
 			var subQuery *Query
 			var negated bool
-			switch p := q.Predicates[0].(type) {
+			switch p := q.Predicate.(type) {
 			case *DescendantPredicate:
 				if tt.predType != "descendant" {
 					t.Fatalf("expected %s, got descendant", tt.predType)
@@ -618,7 +614,7 @@ func TestParseDescendantContains(t *testing.T) {
 				subQuery = p.SubQuery
 				negated = p.Negated()
 			default:
-				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+				t.Fatalf("unexpected predicate type: %T", q.Predicate)
 			}
 
 			if subQuery.TypeName != tt.wantTypeName {
@@ -726,12 +722,12 @@ func TestParseAtPredicate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			ap, ok := q.Predicates[0].(*AtPredicate)
+			ap, ok := q.Predicate.(*AtPredicate)
 			if !ok {
-				t.Fatalf("expected AtPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected AtPredicate, got %T", q.Predicate)
 			}
 			if ap.SubQuery.TypeName != tt.wantTraitName {
 				t.Errorf("trait name = %v, want %v", ap.SubQuery.TypeName, tt.wantTraitName)
@@ -780,12 +776,12 @@ func TestParseRefdPredicate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			rp, ok := q.Predicates[0].(*RefdPredicate)
+			rp, ok := q.Predicate.(*RefdPredicate)
 			if !ok {
-				t.Fatalf("expected RefdPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected RefdPredicate, got %T", q.Predicate)
 			}
 			if tt.wantTarget != "" && rp.Target != tt.wantTarget {
 				t.Errorf("Target = %v, want %v", rp.Target, tt.wantTarget)
@@ -848,12 +844,12 @@ func TestParseComparisonOperators(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			fp, ok := q.Predicates[0].(*FieldPredicate)
+			fp, ok := q.Predicate.(*FieldPredicate)
 			if !ok {
-				t.Fatalf("expected FieldPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected FieldPredicate, got %T", q.Predicate)
 			}
 			if fp.Field != "value" {
 				t.Errorf("Field = %v, want value", fp.Field)
@@ -874,11 +870,11 @@ func TestParseInPredicates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(q.Predicates) != 1 {
-			t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+		if q.Predicate == nil {
+			t.Fatal("expected predicate, got nil")
 		}
-		if _, ok := q.Predicates[0].(*OrPredicate); !ok {
-			t.Fatalf("expected OrPredicate, got %T", q.Predicates[0])
+		if _, ok := q.Predicate.(*OrPredicate); !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicate)
 		}
 	})
 
@@ -887,15 +883,15 @@ func TestParseInPredicates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(q.Predicates) != 1 {
-			t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+		if q.Predicate == nil {
+			t.Fatal("expected predicate, got nil")
 		}
-		op, ok := q.Predicates[0].(*OrPredicate)
+		np, ok := q.Predicate.(*NotPredicate)
 		if !ok {
-			t.Fatalf("expected OrPredicate, got %T", q.Predicates[0])
+			t.Fatalf("expected NotPredicate, got %T", q.Predicate)
 		}
-		if !op.Negated() {
-			t.Fatal("expected negated predicate")
+		if _, ok := np.Inner.(*OrPredicate); !ok {
+			t.Fatalf("expected NotPredicate wrapping OrPredicate, got %T", np.Inner)
 		}
 	})
 
@@ -904,11 +900,11 @@ func TestParseInPredicates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(q.Predicates) != 1 {
-			t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+		if q.Predicate == nil {
+			t.Fatal("expected predicate, got nil")
 		}
-		if _, ok := q.Predicates[0].(*OrPredicate); !ok {
-			t.Fatalf("expected OrPredicate, got %T", q.Predicates[0])
+		if _, ok := q.Predicate.(*OrPredicate); !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicate)
 		}
 	})
 
@@ -964,12 +960,12 @@ func TestParseFieldComparisonOperators(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			fp, ok := q.Predicates[0].(*FieldPredicate)
+			fp, ok := q.Predicate.(*FieldPredicate)
 			if !ok {
-				t.Fatalf("expected FieldPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected FieldPredicate, got %T", q.Predicate)
 			}
 			if fp.Field != tt.wantField {
 				t.Errorf("Field = %v, want %v", fp.Field, tt.wantField)
@@ -1003,12 +999,12 @@ func TestParseRefdShorthand(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
-			rp, ok := q.Predicates[0].(*RefdPredicate)
+			rp, ok := q.Predicate.(*RefdPredicate)
 			if !ok {
-				t.Fatalf("expected RefdPredicate, got %T", q.Predicates[0])
+				t.Fatalf("expected RefdPredicate, got %T", q.Predicate)
 			}
 			if rp.SubQuery == nil {
 				t.Fatal("expected SubQuery, got nil")
@@ -1085,13 +1081,13 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(q.Predicates) != 1 {
-				t.Fatalf("expected 1 predicate, got %d", len(q.Predicates))
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
 			}
 
 			var target string
 			var negated bool
-			switch p := q.Predicates[0].(type) {
+			switch p := q.Predicate.(type) {
 			case *ParentPredicate:
 				if tt.predType != "parent" {
 					t.Fatalf("expected %s, got parent", tt.predType)
@@ -1129,7 +1125,7 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 				target = p.Target
 				negated = p.Negated()
 			default:
-				t.Fatalf("unexpected predicate type: %T", q.Predicates[0])
+				t.Fatalf("unexpected predicate type: %T", q.Predicate)
 			}
 
 			if target != tt.wantTarget {
@@ -1140,4 +1136,113 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseBooleanEdgeCases(t *testing.T) {
+	t.Run("chained OR produces flat OrPredicate", func(t *testing.T) {
+		q, err := Parse("object:project .status==active | .status==paused | .status==done | .status==archived")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		op, ok := q.Predicate.(*OrPredicate)
+		if !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicate)
+		}
+		if len(op.Predicates) != 4 {
+			t.Errorf("expected 4 OR branches, got %d", len(op.Predicates))
+		}
+	})
+
+	t.Run("AND of two OR groups", func(t *testing.T) {
+		q, err := Parse("object:project (.status==active | .status==paused) (.priority==high | .priority==medium)")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		gp, ok := q.Predicate.(*GroupPredicate)
+		if !ok {
+			t.Fatalf("expected GroupPredicate, got %T", q.Predicate)
+		}
+		if len(gp.Predicates) != 2 {
+			t.Fatalf("expected 2 AND branches, got %d", len(gp.Predicates))
+		}
+		or1, ok1 := gp.Predicates[0].(*OrPredicate)
+		or2, ok2 := gp.Predicates[1].(*OrPredicate)
+		if !ok1 || !ok2 {
+			t.Fatalf("expected both branches to be OrPredicate, got %T and %T", gp.Predicates[0], gp.Predicates[1])
+		}
+		if len(or1.Predicates) != 2 || len(or2.Predicates) != 2 {
+			t.Errorf("expected 2 branches in each OR, got %d and %d", len(or1.Predicates), len(or2.Predicates))
+		}
+	})
+
+	t.Run("negated AND inside OR", func(t *testing.T) {
+		q, err := Parse("object:project .status==active | !(.status==paused .priority==low)")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		op, ok := q.Predicate.(*OrPredicate)
+		if !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicate)
+		}
+		if len(op.Predicates) != 2 {
+			t.Fatalf("expected 2 OR branches, got %d", len(op.Predicates))
+		}
+		np, ok := op.Predicates[1].(*NotPredicate)
+		if !ok {
+			t.Fatalf("expected NotPredicate as second OR branch, got %T", op.Predicates[1])
+		}
+		gp, ok := np.Inner.(*GroupPredicate)
+		if !ok {
+			t.Fatalf("expected GroupPredicate inside NotPredicate, got %T", np.Inner)
+		}
+		if len(gp.Predicates) != 2 {
+			t.Errorf("expected 2 AND branches inside negation, got %d", len(gp.Predicates))
+		}
+	})
+
+	t.Run("negated single predicate", func(t *testing.T) {
+		q, err := Parse("object:project !.status==done")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		fp, ok := q.Predicate.(*FieldPredicate)
+		if !ok {
+			t.Fatalf("expected FieldPredicate, got %T", q.Predicate)
+		}
+		if !fp.Negated() {
+			t.Error("expected negated predicate")
+		}
+	})
+
+	t.Run("NotPredicate from negated group", func(t *testing.T) {
+		q, err := Parse("object:project !(.status==active | .status==paused)")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		np, ok := q.Predicate.(*NotPredicate)
+		if !ok {
+			t.Fatalf("expected NotPredicate, got %T", q.Predicate)
+		}
+		op, ok := np.Inner.(*OrPredicate)
+		if !ok {
+			t.Fatalf("expected OrPredicate inside NotPredicate, got %T", np.Inner)
+		}
+		if len(op.Predicates) != 2 {
+			t.Errorf("expected 2 OR branches, got %d", len(op.Predicates))
+		}
+	})
+
+	t.Run("in() produces flat OrPredicate", func(t *testing.T) {
+		q, err := Parse("object:project in(.status, [active,paused,done])")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		op, ok := q.Predicate.(*OrPredicate)
+		if !ok {
+			t.Fatalf("expected OrPredicate, got %T", q.Predicate)
+		}
+		if len(op.Predicates) != 3 {
+			t.Errorf("expected 3 OR branches from in(), got %d", len(op.Predicates))
+		}
+	})
 }
