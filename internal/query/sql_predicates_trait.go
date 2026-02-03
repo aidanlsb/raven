@@ -58,8 +58,8 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 		targetConditions = append(targetConditions, "target_obj.type = ?")
 		args = append(args, p.SubQuery.TypeName)
 
-		for _, pred := range p.SubQuery.Predicates {
-			predCond, predArgs, err := e.buildObjectPredicateSQL(pred, "target_obj")
+		if p.SubQuery.Predicate != nil {
+			predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "target_obj")
 			if err != nil {
 				return "", nil, err
 			}
@@ -217,8 +217,8 @@ func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []
 	objConditions = append(objConditions, "type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		cond, predArgs, err := e.buildObjectPredicateSQL(pred, "parent_obj")
+	if p.SubQuery.Predicate != nil {
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "parent_obj")
 		if err != nil {
 			return "", nil, err
 		}
@@ -268,9 +268,9 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (st
 	ancestorConditions = append(ancestorConditions, "anc.type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	// Process predicates from the subquery
-	for _, pred := range p.SubQuery.Predicates {
-		predCond, predArgs, err := e.buildObjectPredicateSQL(pred, "anc")
+	// Process predicate from the subquery
+	if p.SubQuery.Predicate != nil {
+		predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "anc")
 		if err != nil {
 			return "", nil, err
 		}
@@ -334,9 +334,9 @@ func (e *Executor) buildAtPredicateSQL(p *AtPredicate, alias string) (string, []
 	traitConditions = append(traitConditions, "co.trait_type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		// Build predicate conditions for the co-located traits
-		cond, predArgs, err := e.buildTraitPredicateSQL(pred, "co")
+	if p.SubQuery.Predicate != nil {
+		// Build predicate condition for the co-located traits
+		cond, predArgs, err := e.buildTraitPredicateSQL(p.SubQuery.Predicate, "co")
 		if err != nil {
 			return "", nil, err
 		}
