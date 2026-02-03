@@ -8,24 +8,29 @@ import (
 // buildOrPredicateSQL builds SQL for OR predicates.
 func (e *Executor) buildOrPredicateSQL(p *OrPredicate, alias string,
 	buildFn func(Predicate, string) (string, []interface{}, error)) (string, []interface{}, error) {
-	leftCond, leftArgs, err := buildFn(p.Left, alias)
+	var conditions []string
+	var args []interface{}
+
+	for _, pred := range p.Predicates {
+		cond, predArgs, err := buildFn(pred, alias)
+		if err != nil {
+			return "", nil, err
+		}
+		conditions = append(conditions, cond)
+		args = append(args, predArgs...)
+	}
+
+	return "(" + strings.Join(conditions, " OR ") + ")", args, nil
+}
+
+// buildNotPredicateSQL builds SQL for NOT predicates.
+func (e *Executor) buildNotPredicateSQL(p *NotPredicate, alias string,
+	buildFn func(Predicate, string) (string, []interface{}, error)) (string, []interface{}, error) {
+	cond, args, err := buildFn(p.Inner, alias)
 	if err != nil {
 		return "", nil, err
 	}
-
-	rightCond, rightArgs, err := buildFn(p.Right, alias)
-	if err != nil {
-		return "", nil, err
-	}
-
-	cond := fmt.Sprintf("(%s OR %s)", leftCond, rightCond)
-	args := append(leftArgs, rightArgs...)
-
-	if p.Negated() {
-		cond = "NOT " + cond
-	}
-
-	return cond, args, nil
+	return "NOT (" + cond + ")", args, nil
 }
 
 // buildGroupPredicateSQL builds SQL for grouped predicates.
@@ -43,13 +48,7 @@ func (e *Executor) buildGroupPredicateSQL(p *GroupPredicate, alias string,
 		args = append(args, predArgs...)
 	}
 
-	cond := "(" + strings.Join(conditions, " AND ") + ")"
-
-	if p.Negated() {
-		cond = "NOT " + cond
-	}
-
-	return cond, args, nil
+	return "(" + strings.Join(conditions, " AND ") + ")", args, nil
 }
 
 // buildStringFuncCondition builds SQL for string function predicates against a field expression.
@@ -128,8 +127,8 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		sourceConditions = append(sourceConditions, "src.type = ?")
 		args = append(args, p.SubQuery.TypeName)
 
-		for _, pred := range p.SubQuery.Predicates {
-			cond, predArgs, err := e.buildObjectPredicateSQL(pred, "src")
+		if p.SubQuery.Predicate != nil {
+			cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "src")
 			if err != nil {
 				return "", nil, err
 			}
@@ -154,8 +153,8 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 	sourceConditions = append(sourceConditions, "src_t.trait_type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		cond, predArgs, err := e.buildTraitPredicateSQL(pred, "src_t")
+	if p.SubQuery.Predicate != nil {
+		cond, predArgs, err := e.buildTraitPredicateSQL(p.SubQuery.Predicate, "src_t")
 		if err != nil {
 			return "", nil, err
 		}

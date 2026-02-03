@@ -16,8 +16,8 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 	traitConditions = append(traitConditions, "trait_type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		switch tp := pred.(type) {
+	if p.SubQuery.Predicate != nil {
+		switch tp := p.SubQuery.Predicate.(type) {
 		case *ValuePredicate:
 			cond, condArgs := buildValueCondition(tp, "value")
 			traitConditions = append(traitConditions, cond)
@@ -66,8 +66,8 @@ func (e *Executor) buildParentPredicateSQL(p *ParentPredicate, alias string) (st
 	parentConditions = append(parentConditions, "type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		cond, predArgs, err := e.buildObjectPredicateSQL(pred, "parent_obj")
+	if p.SubQuery.Predicate != nil {
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "parent_obj")
 		if err != nil {
 			return "", nil, err
 		}
@@ -117,9 +117,9 @@ func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string)
 	ancestorConditions = append(ancestorConditions, "anc.type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	// Process predicates from the subquery
-	for _, pred := range p.SubQuery.Predicates {
-		predCond, predArgs, err := e.buildObjectPredicateSQL(pred, "anc")
+	// Process predicate from the subquery
+	if p.SubQuery.Predicate != nil {
+		predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "anc")
 		if err != nil {
 			return "", nil, err
 		}
@@ -169,8 +169,8 @@ func (e *Executor) buildChildPredicateSQL(p *ChildPredicate, alias string) (stri
 	childConditions = append(childConditions, "type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		cond, predArgs, err := e.buildObjectPredicateSQL(pred, "child_obj")
+	if p.SubQuery.Predicate != nil {
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "child_obj")
 		if err != nil {
 			return "", nil, err
 		}
@@ -221,8 +221,8 @@ func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias str
 	descendantConditions = append(descendantConditions, "desc_obj.type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		cond, predArgs, err := e.buildObjectPredicateSQL(pred, "desc_obj")
+	if p.SubQuery.Predicate != nil {
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "desc_obj")
 		if err != nil {
 			return "", nil, err
 		}
@@ -257,8 +257,8 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 	traitConditions = append(traitConditions, "t.trait_type = ?")
 	args = append(args, p.SubQuery.TypeName)
 
-	for _, pred := range p.SubQuery.Predicates {
-		switch tp := pred.(type) {
+	if p.SubQuery.Predicate != nil {
+		switch tp := p.SubQuery.Predicate.(type) {
 		case *ValuePredicate:
 			cond, condArgs := buildValueCondition(tp, "t.value")
 			traitConditions = append(traitConditions, cond)
@@ -318,8 +318,8 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 		targetConditions = append(targetConditions, "target_obj.type = ?")
 		args = append(args, p.SubQuery.TypeName)
 
-		for _, pred := range p.SubQuery.Predicates {
-			predCond, predArgs, err := e.buildObjectPredicateSQL(pred, "target_obj")
+		if p.SubQuery.Predicate != nil {
+			predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "target_obj")
 			if err != nil {
 				return "", nil, err
 			}

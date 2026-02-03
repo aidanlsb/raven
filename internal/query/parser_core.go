@@ -65,11 +65,11 @@ func (p *Parser) parseQuery() (*Query, error) {
 	query.TypeName = typeName
 
 	// Parse predicates
-	predicates, err := p.parsePredicates(query.Type)
+	pred, err := p.parsePredicate(query.Type)
 	if err != nil {
 		return nil, err
 	}
-	query.Predicates = predicates
+	query.Predicate = pred
 
 	// Pipeline (|>) was removed from the query language.
 	if p.curr.Type == TokenPipeline {
@@ -79,41 +79,39 @@ func (p *Parser) parseQuery() (*Query, error) {
 	return &query, nil
 }
 
-// parsePredicates parses a boolean expression of predicates.
-func (p *Parser) parsePredicates(qt QueryType) ([]Predicate, error) {
-	pred, err := p.parseOrPredicate(qt)
-	if err != nil {
-		return nil, err
-	}
-	if pred == nil {
-		return nil, nil
-	}
-	return []Predicate{pred}, nil
+// parsePredicate parses a boolean expression of predicates.
+func (p *Parser) parsePredicate(qt QueryType) (Predicate, error) {
+	return p.parseOrPredicate(qt)
 }
 
 // parseOrPredicate parses OR expressions (lowest precedence).
 func (p *Parser) parseOrPredicate(qt QueryType) (Predicate, error) {
-	left, err := p.parseAndPredicate(qt)
+	first, err := p.parseAndPredicate(qt)
 	if err != nil {
 		return nil, err
 	}
-	if left == nil {
+	if first == nil {
 		return nil, nil
 	}
 
+	if p.curr.Type != TokenPipe {
+		return first, nil
+	}
+
+	preds := []Predicate{first}
 	for p.curr.Type == TokenPipe {
 		p.advance()
-		right, err := p.parseAndPredicate(qt)
+		next, err := p.parseAndPredicate(qt)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
+		if next == nil {
 			return nil, fmt.Errorf("expected predicate after '|'")
 		}
-		left = &OrPredicate{Left: left, Right: right}
+		preds = append(preds, next)
 	}
 
-	return left, nil
+	return &OrPredicate{Predicates: preds}, nil
 }
 
 // parseAndPredicate parses implicit AND expressions (middle precedence).
@@ -173,7 +171,7 @@ func (p *Parser) parseUnaryPredicate(qt QueryType) (Predicate, error) {
 		if !negated {
 			return pred, nil
 		}
-		return &GroupPredicate{basePredicate: basePredicate{negated: true}, Predicates: []Predicate{pred}}, nil
+		return &NotPredicate{Inner: pred}, nil
 	}
 
 	return p.parseAtomicPredicate(qt, negated)
