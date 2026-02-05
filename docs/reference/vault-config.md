@@ -293,10 +293,20 @@ queries:
     description: "Books and articles to read"
 ```
 
+Saved queries can accept positional inputs via `{{inputs.<name>}}` placeholders:
+
+```yaml
+queries:
+  project-todos:
+    query: "trait:todo (within([[{{inputs.project}}]]) | refs([[{{inputs.project}}]]))"
+    description: "Todos tied to a project"
+```
+
 **Usage:**
 
 ```bash
 rvn query overdue              # Run the saved query
+rvn query project-todos project=projects/raven
 rvn query --list               # List all saved queries
 rvn query add new-query "..."  # Add via CLI
 rvn query remove old-query     # Remove via CLI

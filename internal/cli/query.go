@@ -19,6 +19,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/workflow"
 )
 
 // saveLastResultsFromTraits builds and saves a LastResults from trait query results.
@@ -269,6 +270,8 @@ Boolean operators:
   pred1 pred2      AND (space-separated)
   pred1 | pred2    OR
 
+Saved queries can accept positional key=value inputs; use {{inputs.<name>}} in the saved query string.
+
 Examples:
   rvn query "object:project .status==active"
   rvn query "object:meeting has(trait:due)"
@@ -276,6 +279,7 @@ Examples:
   rvn query "trait:todo content(\"my task\")"
   rvn query "trait:highlight on(object:book .status==reading)"
   rvn query tasks                    # Run saved query
+  rvn query project-todos project=projects/raven
   rvn query --list                   # List saved queries`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -307,10 +311,26 @@ Examples:
 			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query --list' to see saved queries")
 		}
 
-		// Join multiple args with spaces - allows running without quoting the whole query
-		// e.g., `rvn query trait:todo content:"my task"` works the same as
-		//       `rvn query 'trait:todo content:"my task"'`
-		queryStr := joinQueryArgs(args)
+		queryName := args[0]
+		queryStr := ""
+		isSavedQuery := false
+
+		if savedQuery, ok := vaultCfg.Queries[queryName]; ok {
+			isSavedQuery = true
+			inputs, err := parseSavedQueryInputs(args[1:])
+			if err != nil {
+				return err
+			}
+			queryStr, err = resolveSavedQueryQueryString(queryName, savedQuery, inputs)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Join multiple args with spaces - allows running without quoting the whole query
+			// e.g., `rvn query trait:todo content:"my task"` works the same as
+			//       `rvn query 'trait:todo content:"my task"'`
+			queryStr = joinQueryArgs(args)
+		}
 
 		db, err := index.Open(vaultPath)
 		if err != nil {
@@ -354,9 +374,8 @@ Examples:
 			return runFullQueryWithOptions(db, vaultPath, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
 		}
 
-		// Check if this is a saved query
-		if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
-			return runSavedQueryWithOptions(db, vaultPath, savedQuery, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
+		if isSavedQuery {
+			return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'object:' or 'trait:'", queryName), "")
 		}
 
 		// Unknown query - provide helpful error
@@ -369,13 +388,7 @@ Examples:
 
 // runQueryWithApply runs a query and applies a bulk operation to the results.
 func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg *config.VaultConfig, sch *schema.Schema, applyArgs []string, confirm bool, start time.Time) error {
-	// Resolve the query string (could be saved query)
-	actualQueryStr := queryStr
-	if savedQuery, ok := vaultCfg.Queries[queryStr]; ok {
-		actualQueryStr = savedQuery.Query
-	}
-
-	if !strings.HasPrefix(actualQueryStr, "object:") && !strings.HasPrefix(actualQueryStr, "trait:") {
+	if !strings.HasPrefix(queryStr, "object:") && !strings.HasPrefix(queryStr, "trait:") {
 		return handleErrorMsg(ErrQueryInvalid,
 			fmt.Sprintf("unknown query: %s", queryStr),
 			"Queries must start with 'object:' or 'trait:', or be a saved query name.")
@@ -393,7 +406,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 	applyOperationArgs := applyParts[1:]
 
 	// Parse the query
-	q, err := query.Parse(actualQueryStr)
+	q, err := query.Parse(queryStr)
 	if err != nil {
 		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("parse error: %v", err), "")
 	}
@@ -789,15 +802,6 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 	return nil
 }
 
-func runSavedQueryWithOptions(db *index.Database, vaultPath string, q *config.SavedQuery, name string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
-	if q.Query == "" {
-		return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
-	}
-
-	// Just run the query string through the normal query parser
-	return runFullQueryWithOptions(db, vaultPath, q.Query, start, sch, idsOnly, dailyDir)
-}
-
 var queryAddCmd = &cobra.Command{
 	Use:   "add <name> <query-string>",
 	Short: "Add a saved query to raven.yaml",
@@ -809,6 +813,7 @@ Examples:
   rvn query add tasks "trait:due"
   rvn query add overdue "trait:due .value==past"
   rvn query add active-projects "object:project .status==active"
+  rvn query add project-todos "trait:todo refs([[{{inputs.project}}]])" --description "Todos tied to a project"
   rvn query add urgent "trait:due .value==this-week|past" --description "Due soon or overdue"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -817,10 +822,12 @@ Examples:
 		queryStr := args[1]
 		description, _ := cmd.Flags().GetString("description")
 
-		// Validate the query string by parsing it
-		_, err := query.Parse(queryStr)
-		if err != nil {
-			return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("invalid query: %v", err), "")
+		// Validate the query string by parsing it (skip templates)
+		if !hasTemplateVars(queryStr) {
+			_, err := query.Parse(queryStr)
+			if err != nil {
+				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("invalid query: %v", err), "")
+			}
 		}
 
 		// Load existing config
@@ -984,6 +991,42 @@ func joinQueryArgs(args []string) string {
 	}
 
 	return strings.Join(args, " ")
+}
+
+func parseSavedQueryInputs(args []string) (map[string]string, error) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+
+	inputs := make(map[string]string, len(args))
+	for _, arg := range args {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 || parts[0] == "" {
+			return nil, handleErrorMsg(ErrInvalidInput,
+				fmt.Sprintf("invalid input argument: %s", arg),
+				"Use format: key=value")
+		}
+		inputs[parts[0]] = parts[1]
+	}
+
+	return inputs, nil
+}
+
+func resolveSavedQueryQueryString(name string, q *config.SavedQuery, inputs map[string]string) (string, error) {
+	if q == nil || q.Query == "" {
+		return "", handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
+	}
+
+	queryStr, err := workflow.Interpolate(q.Query, inputs, nil)
+	if err != nil {
+		return "", handleErrorMsg(ErrInvalidInput, fmt.Sprintf("failed to resolve saved query '%s': %v", name, err), "")
+	}
+
+	return queryStr, nil
+}
+
+func hasTemplateVars(s string) bool {
+	return strings.Contains(s, "{{") && strings.Contains(s, "}}")
 }
 
 func init() {

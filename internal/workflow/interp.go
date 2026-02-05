@@ -6,6 +6,15 @@ import (
 	"strings"
 )
 
+// Interpolate replaces {{inputs.*}} and {{steps.*}} references inside s.
+//
+// Rules:
+// - Escaping: \{{ and \}} produce literal braces.
+// - Unknown variables are errors (to avoid silent typos).
+func Interpolate(s string, inputs map[string]string, steps map[string]interface{}) (string, error) {
+	return interpolate(s, inputs, steps)
+}
+
 // interpolate replaces {{inputs.*}} and {{steps.*}} references inside s.
 //
 // Rules:

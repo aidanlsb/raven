@@ -241,6 +241,8 @@ Common predicates:
 Special date values for trait:due:
 - .value==past, .value==today, .value==tomorrow, .value==this-week, .value==next-week
 
+Saved queries can accept positional key=value inputs; use {{inputs.<name>}} in the saved query string.
+
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --apply to run a bulk operation directly on query results.
 
@@ -253,7 +255,7 @@ For trait queries (trait:...):
 - Supported command: update value=<new_value> (updates trait values in-place)
 - Example: trait:todo .value==todo --apply "update value=done" marks todos as done`,
 		Args: []ArgMeta{
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name)", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name) optionally followed by key=value inputs", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
@@ -263,6 +265,7 @@ For trait queries (trait:...):
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 			{Name: "pipe", Description: "Force pipe-friendly output format", Type: FlagTypeBool},
 			{Name: "no-pipe", Description: "Force human-readable output format", Type: FlagTypeBool},
+			{Name: "inputs", Description: "Saved query inputs (positional key=value pairs)", Type: FlagTypePosKeyValue, Examples: []string{`{"project": "projects/raven"}`}},
 		},
 		Examples: []string{
 			"rvn query 'object:project .status==active' --json",
@@ -272,6 +275,7 @@ For trait queries (trait:...):
 			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
 			"rvn query 'trait:todo .value==todo' --apply 'update value=done' --confirm --json",
 			"rvn query tasks --json",
+			"rvn query project-todos project=projects/raven --json",
 			"rvn query --list --json",
 		},
 		UseCases: []string{
@@ -295,6 +299,7 @@ For trait queries (trait:...):
 			"rvn query add tasks 'trait:due' --json",
 			"rvn query add overdue 'trait:due .value==past' --json",
 			"rvn query add active-projects 'object:project .status==active' --json",
+			"rvn query add project-todos 'trait:todo refs([[{{inputs.project}}]])' --json",
 		},
 	},
 	"query_remove": {
