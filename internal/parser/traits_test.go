@@ -317,6 +317,11 @@ func TestParseTraitAnnotations_Content(t *testing.T) {
 			line:        "@priority(high) Do something @due(2024-01-15)",
 			wantContent: "Do something",
 		},
+		{
+			name:        "inline code preserved in content",
+			line:        "@todo Use `foo()` when calling",
+			wantContent: "Use `foo()` when calling",
+		},
 	}
 
 	for _, tt := range tests {

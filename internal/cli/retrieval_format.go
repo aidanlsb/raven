@@ -48,10 +48,22 @@ func printQueryTraitResults(queryStr, traitName string, results []model.Trait) {
 			content = "(no content)"
 		}
 
+		truncated := false
 		// Truncate content to fit two lines if needed
 		if len(content) > maxContentLen {
-			content = ui.TruncateWithEllipsis(content, maxContentLen)
+			if snippetHasCodeBlock(content) {
+				maxCodeLen := maxContentLen * 3
+				if len(content) > maxCodeLen {
+					content = ui.TruncateWithEllipsis(content, maxCodeLen)
+					truncated = true
+				}
+			} else {
+				content = ui.TruncateWithEllipsis(content, maxContentLen)
+				truncated = true
+			}
 		}
+
+		content = normalizeInlineCodeSnippet(content, truncated)
 
 		// Highlight traits in content
 		content = ui.HighlightTraits(content)
@@ -119,6 +131,7 @@ func printSearchResults(queryStr string, results []model.SearchMatch) {
 		// Remove the match markers
 		snippet = strings.ReplaceAll(snippet, "»", "")
 		snippet = strings.ReplaceAll(snippet, "«", "")
+		snippet = normalizeInlineCodeSnippet(snippet, snippetHasEllipsis(snippet))
 
 		// Parent/title - use meta column width
 		metaWidth := table.ContentWidth("meta")
@@ -151,7 +164,13 @@ func cleanSearchSnippetDynamic(snippet string, maxLen int) string {
 		return ""
 	}
 
-	s := cleanRawSnippet(snippet)
+	preserveWhitespace := snippetHasCodeBlock(snippet)
+	if preserveWhitespace {
+		// Allow more context so code blocks have a chance to display.
+		maxLen *= 3
+	}
+
+	s := cleanRawSnippet(snippet, preserveWhitespace)
 	if s == "" {
 		return ""
 	}
@@ -177,12 +196,17 @@ func cleanSearchSnippetDynamic(snippet string, maxLen int) string {
 	contextBefore := availableContext * 2 / 5
 	contextAfter := availableContext - contextBefore
 
-	return extractSnippetWindow(s, matchStart, matchEnd, contextBefore, contextAfter)
+	result := extractSnippetWindow(s, matchStart, matchEnd, contextBefore, contextAfter)
+	if preserveWhitespace {
+		result = limitSnippetLines(result, 8)
+	}
+	return result
 }
 
-// cleanRawSnippet removes frontmatter, collapses whitespace, and returns clean text.
-func cleanRawSnippet(snippet string) string {
-	s := snippet
+// cleanRawSnippet removes frontmatter and returns clean text.
+// When preserveWhitespace is true, newlines and indentation are retained.
+func cleanRawSnippet(snippet string, preserveWhitespace bool) string {
+	s := strings.ReplaceAll(snippet, "\r\n", "\n")
 
 	// Remove YAML frontmatter (---\n...\n---)
 	for {
@@ -197,6 +221,10 @@ func cleanRawSnippet(snippet string) string {
 			break
 		}
 		s = s[:startIdx] + rest[endIdx+3:]
+	}
+
+	if preserveWhitespace {
+		return strings.Trim(s, "\n")
 	}
 
 	// Collapse multiple spaces/newlines
@@ -252,6 +280,107 @@ func extractSnippetWindow(s string, matchStart, matchEnd, contextBefore, context
 	}
 
 	return strings.TrimSpace(result)
+}
+
+func snippetHasCodeBlock(snippet string) bool {
+	if strings.Contains(snippet, "```") {
+		return true
+	}
+	lines := strings.Split(snippet, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "\t") || strings.HasPrefix(line, "    ") {
+			return true
+		}
+	}
+	return false
+}
+
+func limitSnippetLines(snippet string, maxLines int) string {
+	if maxLines <= 0 {
+		return snippet
+	}
+	lines := strings.Split(snippet, "\n")
+	if len(lines) <= maxLines {
+		return snippet
+	}
+	trimmed := strings.Join(lines[:maxLines], "\n")
+	return trimmed + "\n..."
+}
+
+func normalizeInlineCodeSnippet(snippet string, truncated bool) string {
+	if !truncated || !strings.Contains(snippet, "`") {
+		return snippet
+	}
+	if countUnescapedBackticks(snippet)%2 == 0 {
+		return snippet
+	}
+
+	out := snippet
+	if strings.HasPrefix(strings.TrimLeft(out, " \t\n"), "...") {
+		out = removeFirstUnescapedBacktick(out)
+	}
+	if countUnescapedBackticks(out)%2 == 0 {
+		return out
+	}
+	if snippetHasEllipsis(out) {
+		return insertBacktickBeforeSuffixEllipsis(out)
+	}
+	return removeLastUnescapedBacktick(out)
+}
+
+func snippetHasEllipsis(snippet string) bool {
+	trimmed := strings.TrimRight(snippet, " \t")
+	return strings.HasSuffix(trimmed, "...") || strings.HasSuffix(trimmed, "\n...")
+}
+
+func countUnescapedBackticks(s string) int {
+	count := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '`' && !isEscapedBacktick(s, i) {
+			count++
+		}
+	}
+	return count
+}
+
+func removeFirstUnescapedBacktick(s string) string {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '`' && !isEscapedBacktick(s, i) {
+			return s[:i] + s[i+1:]
+		}
+	}
+	return s
+}
+
+func removeLastUnescapedBacktick(s string) string {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == '`' && !isEscapedBacktick(s, i) {
+			return s[:i] + s[i+1:]
+		}
+	}
+	return s
+}
+
+func insertBacktickBeforeSuffixEllipsis(s string) string {
+	trimmed := strings.TrimRight(s, " \t")
+	suffixIdx := -1
+	if strings.HasSuffix(trimmed, "\n...") {
+		suffixIdx = len(trimmed) - len("...")
+	} else if strings.HasSuffix(trimmed, "...") {
+		suffixIdx = len(trimmed) - len("...")
+	}
+	if suffixIdx == -1 {
+		return s + "`"
+	}
+	tail := s[len(trimmed):]
+	return trimmed[:suffixIdx] + "`" + trimmed[suffixIdx:] + tail
+}
+
+func isEscapedBacktick(s string, idx int) bool {
+	if idx <= 0 {
+		return false
+	}
+	return s[idx-1] == '\\'
 }
 
 func printBacklinksResults(target string, links []model.Reference) {

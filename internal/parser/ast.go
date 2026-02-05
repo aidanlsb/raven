@@ -204,7 +204,8 @@ func extractTypeDeclFromParagraph(para *ast.Paragraph, content []byte, lineStart
 func extractRefsFromText(textStr string, line int) []Reference {
 	var refs []Reference
 
-	matches := wikilink.FindAllInLine(textStr, false)
+	sanitized := RemoveInlineCode(textStr)
+	matches := wikilink.FindAllInLine(sanitized, false)
 	for _, match := range matches {
 		refs = append(refs, Reference{
 			TargetRaw:   match.Target,
@@ -224,7 +225,7 @@ type textSegment struct {
 	start int
 }
 
-// collectTextSegments collects all text from a node, grouping by line and skipping code spans.
+// collectTextSegments collects all text from a node, grouping by line.
 // This is needed because goldmark splits text at special characters like '['.
 func collectTextSegments(node ast.Node, content []byte) []textSegment {
 	var segments []textSegment
@@ -235,10 +236,19 @@ func collectTextSegments(node ast.Node, content []byte) []textSegment {
 
 	localLineStarts := computeLineStarts(string(content))
 
+	ensureLineBuilder := func(line int, startOffset int) *strings.Builder {
+		if _, ok := lineTexts[line]; !ok {
+			lineTexts[line] = &strings.Builder{}
+			lineStarts[line] = startOffset
+		}
+		return lineTexts[line]
+	}
+
 	var walkNode func(n ast.Node)
 	walkNode = func(n ast.Node) {
-		// Skip code spans
-		if _, ok := n.(*ast.CodeSpan); ok {
+		// Preserve inline code spans in the collected text.
+		if codeSpan, ok := n.(*ast.CodeSpan); ok {
+			appendInlineCodeSpan(codeSpan, content, localLineStarts, lineTexts, lineStarts)
 			return
 		}
 
@@ -248,11 +258,7 @@ func collectTextSegments(node ast.Node, content []byte) []textSegment {
 			text := string(segment.Value(content))
 			line := offsetToLine(localLineStarts, segment.Start)
 
-			if _, ok := lineTexts[line]; !ok {
-				lineTexts[line] = &strings.Builder{}
-				lineStarts[line] = segment.Start
-			}
-			lineTexts[line].WriteString(text)
+			ensureLineBuilder(line, segment.Start).WriteString(text)
 		}
 
 		// Recurse into children
@@ -272,4 +278,82 @@ func collectTextSegments(node ast.Node, content []byte) []textSegment {
 	}
 
 	return segments
+}
+
+func appendInlineCodeSpan(
+	node *ast.CodeSpan,
+	content []byte,
+	lineStarts []int,
+	lineTexts map[int]*strings.Builder,
+	lineOffsets map[int]int,
+) {
+	code, startLine, ok := extractCodeSpanText(node, content, lineStarts)
+	if !ok {
+		return
+	}
+
+	wrapped := wrapInlineCode(code)
+	lines := strings.Split(wrapped, "\n")
+	for i, lineText := range lines {
+		lineNum := startLine + i
+		startOffset := 0
+		if lineNum >= 0 && lineNum < len(lineStarts) {
+			startOffset = lineStarts[lineNum]
+		}
+		if _, ok := lineTexts[lineNum]; !ok {
+			lineTexts[lineNum] = &strings.Builder{}
+			lineOffsets[lineNum] = startOffset
+		}
+		lineTexts[lineNum].WriteString(lineText)
+	}
+}
+
+func extractCodeSpanText(node *ast.CodeSpan, content []byte, lineStarts []int) (string, int, bool) {
+	var b strings.Builder
+	startLine := -1
+
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		textNode, ok := child.(*ast.Text)
+		if !ok {
+			continue
+		}
+		segment := textNode.Segment
+		if startLine == -1 {
+			startLine = offsetToLine(lineStarts, segment.Start)
+		}
+		b.Write(segment.Value(content))
+	}
+
+	if startLine == -1 {
+		return "", 0, false
+	}
+
+	return b.String(), startLine, true
+}
+
+func wrapInlineCode(code string) string {
+	if code == "" {
+		return "``"
+	}
+
+	maxRun := 0
+	current := 0
+	for i := 0; i < len(code); i++ {
+		if code[i] == '`' {
+			current++
+			if current > maxRun {
+				maxRun = current
+			}
+		} else {
+			current = 0
+		}
+	}
+
+	delimiterLen := maxRun + 1
+	if delimiterLen < 1 {
+		delimiterLen = 1
+	}
+
+	delim := strings.Repeat("`", delimiterLen)
+	return delim + code + delim
 }

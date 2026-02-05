@@ -59,10 +59,9 @@ func StripTraitAnnotations(line string) string {
 
 // ParseTraitAnnotations parses all trait annotations from a text segment.
 //
-// Note: This function does NOT filter out inline code. When used with the AST-based
-// parser (ExtractFromAST), code filtering is handled by the AST walker which skips
-// CodeSpan nodes entirely. The text passed to this function should already be from
-// a non-code AST node.
+// Note: This function ignores inline code for matching by removing code spans
+// before running the trait regex. This keeps @traits inside inline code from
+// being parsed while preserving the original line content for display.
 func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 	var traits []TraitAnnotation
 
@@ -71,7 +70,7 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 
 	// Compute the full line content once by removing ALL trait annotations.
 	// This ensures traits at any position (start, middle, end) get the same content.
-	lineContent := StripTraitAnnotations(sanitizedLine)
+	lineContent := stripTraitAnnotationsFromLine(line, matches)
 
 	for _, match := range matches {
 		if len(match) < 8 {
@@ -102,6 +101,38 @@ func ParseTraitAnnotations(line string, lineNumber int) []TraitAnnotation {
 	}
 
 	return traits
+}
+
+func stripTraitAnnotationsFromLine(line string, matches [][]int) string {
+	if len(matches) == 0 {
+		return strings.Join(strings.Fields(line), " ")
+	}
+
+	var b strings.Builder
+	last := 0
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		start, end := match[0], match[1]
+		if start < 0 || end < 0 || start > len(line) || end > len(line) || start < last {
+			continue
+		}
+
+		b.WriteString(line[last:start])
+
+		// Preserve the leading delimiter (if any) so list markers/spacing remain intact.
+		if len(match) >= 4 && match[2] >= 0 && match[3] >= 0 && match[2] <= match[3] && match[3] <= len(line) {
+			b.WriteString(line[match[2]:match[3]])
+		}
+
+		last = end
+	}
+	if last < len(line) {
+		b.WriteString(line[last:])
+	}
+
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 // ParseTrait parses a single trait from a line (returns first match).
