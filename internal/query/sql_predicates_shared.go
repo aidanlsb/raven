@@ -128,7 +128,7 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		args = append(args, p.SubQuery.TypeName)
 
 		if p.SubQuery.Predicate != nil {
-			cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "src")
+			cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "src", p.SubQuery.TypeName)
 			if err != nil {
 				return "", nil, err
 			}

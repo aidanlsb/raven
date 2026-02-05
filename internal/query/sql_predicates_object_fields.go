@@ -1,22 +1,38 @@
 package query
 
 import (
+	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // buildFieldPredicateSQL builds SQL for .field==value predicates.
 // Comparisons are case-insensitive for equality, but case-sensitive for ordering comparisons.
-func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
+func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName string) (string, []interface{}, error) {
 	jsonPath := jsonFieldPath(p.Field)
+
+	if p.IsExists {
+		cond, args := fieldExistsCond(alias, jsonPath, p.CompareOp == CompareNeq)
+		if p.Negated() {
+			cond = "NOT (" + cond + ")"
+		}
+		return cond, args, nil
+	}
+
+	if e.isRefField(typeName, p.Field) {
+		return e.buildRefFieldPredicateSQL(p, alias, typeName)
+	}
 
 	var cond string
 	var args []interface{}
 	value := p.Value
 	altValue := ""
 
-	if p.IsRefValue && !p.IsExists && (p.CompareOp == CompareEq || p.CompareOp == CompareNeq) {
+	if p.IsRefValue && (p.CompareOp == CompareEq || p.CompareOp == CompareNeq) {
 		resolved, alt, err := e.resolveRefValue(p.Value)
 		if err != nil {
 			return "", nil, err
@@ -25,9 +41,7 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias string) (stri
 		altValue = alt
 	}
 
-	if p.IsExists {
-		cond, args = fieldExistsCond(alias, jsonPath, p.CompareOp == CompareNeq)
-	} else if p.CompareOp == CompareNeq {
+	if p.CompareOp == CompareNeq {
 		if altValue != "" {
 			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true)
 			cond2, args2 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, altValue, true)
@@ -79,6 +93,214 @@ func (e *Executor) resolveRefValue(value string) (resolved string, fallback stri
 	return resolved, "", nil
 }
 
+func (e *Executor) isRefField(typeName, fieldName string) bool {
+	if e.schema == nil || typeName == "" {
+		return false
+	}
+	typeDef := e.schema.Types[typeName]
+	if typeDef == nil {
+		return false
+	}
+	fieldDef := typeDef.Fields[fieldName]
+	if fieldDef == nil {
+		return false
+	}
+	return fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray
+}
+
+func (e *Executor) isRefArrayField(typeName, fieldName string) bool {
+	if e.schema == nil || typeName == "" {
+		return false
+	}
+	typeDef := e.schema.Types[typeName]
+	if typeDef == nil {
+		return false
+	}
+	fieldDef := typeDef.Fields[fieldName]
+	if fieldDef == nil {
+		return false
+	}
+	return fieldDef.Type == schema.FieldTypeRefArray
+}
+
+func fieldRefMatchCond(alias string) string {
+	return fmt.Sprintf("(%s.target_id = ? OR (%s.target_id IS NULL AND %s.target_raw = ?))", alias, alias, alias)
+}
+
+func (e *Executor) checkAmbiguousFieldRefs(typeName, fieldName, rawValue, resolvedTarget string) error {
+	if e.schema == nil || typeName == "" || e.db == nil {
+		return nil
+	}
+	candidates := []string{rawValue}
+	if resolvedTarget != "" {
+		shortName := paths.ShortNameFromID(resolvedTarget)
+		if shortName != "" && shortName != rawValue {
+			candidates = append(candidates, shortName)
+		}
+	}
+
+	candidates = dedupeStrings(candidates)
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	placeholders := strings.Repeat("?,", len(candidates))
+	placeholders = strings.TrimSuffix(placeholders, ",")
+	query := fmt.Sprintf(`
+		SELECT 1
+		FROM field_refs fr
+		JOIN objects o ON fr.source_id = o.id
+		WHERE o.type = ?
+		  AND fr.field_name = ?
+		  AND fr.resolution_status = 'ambiguous'
+		  AND fr.target_raw IN (%s)
+		LIMIT 1
+	`, placeholders)
+
+	args := []interface{}{typeName, fieldName}
+	for _, candidate := range candidates {
+		args = append(args, candidate)
+	}
+
+	var exists int
+	err := e.db.QueryRow(query, args...).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("ambiguous reference in field '%s' for value '%s' (disambiguate the field value before querying)", fieldName, rawValue)
+}
+
+func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName string) (string, []interface{}, error) {
+	if p.CompareOp != CompareEq && p.CompareOp != CompareNeq {
+		return "", nil, fmt.Errorf("unsupported comparison for ref field '.%s' (use == or !=)", p.Field)
+	}
+
+	resolved, _, err := e.resolveRefValue(p.Value)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if err := e.checkAmbiguousFieldRefs(typeName, p.Field, p.Value, resolved); err != nil {
+		return "", nil, err
+	}
+
+	matchCond := fieldRefMatchCond("fr")
+	if p.CompareOp == CompareNeq {
+		cond := fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM field_refs fr
+			WHERE fr.source_id = %s.id AND fr.field_name = ?
+		) AND NOT EXISTS (
+			SELECT 1 FROM field_refs fr
+			WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+		)`, alias, alias, matchCond)
+		args := []interface{}{p.Field, p.Field, resolved, p.Value}
+		if p.Negated() {
+			cond = "NOT (" + cond + ")"
+		}
+		return cond, args, nil
+	}
+
+	cond := fmt.Sprintf(`EXISTS (
+		SELECT 1 FROM field_refs fr
+		WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+	)`, alias, matchCond)
+	args := []interface{}{p.Field, resolved, p.Value}
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+	return cond, args, nil
+}
+
+func (e *Executor) buildRefArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, elem *ElementEqualityPredicate, alias, typeName string) (string, []interface{}, error) {
+	if elem.CompareOp != CompareEq && elem.CompareOp != CompareNeq {
+		return "", nil, fmt.Errorf("unsupported comparison for ref array field '.%s' (use == or !=)", p.Field)
+	}
+
+	resolved, _, err := e.resolveRefValue(elem.Value)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if err := e.checkAmbiguousFieldRefs(typeName, p.Field, elem.Value, resolved); err != nil {
+		return "", nil, err
+	}
+
+	matchCond := fieldRefMatchCond("fr")
+	notMatchCond := "NOT " + matchCond
+
+	var cond string
+	var args []interface{}
+
+	switch p.Quantifier {
+	case ArrayQuantifierAny:
+		if elem.CompareOp == CompareEq {
+			cond = fmt.Sprintf(`EXISTS (
+				SELECT 1 FROM field_refs fr
+				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+			)`, alias, matchCond)
+			args = []interface{}{p.Field, resolved, elem.Value}
+		} else {
+			cond = fmt.Sprintf(`EXISTS (
+				SELECT 1 FROM field_refs fr
+				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+			)`, alias, notMatchCond)
+			args = []interface{}{p.Field, resolved, elem.Value}
+		}
+	case ArrayQuantifierNone:
+		if elem.CompareOp == CompareEq {
+			cond = fmt.Sprintf(`NOT EXISTS (
+				SELECT 1 FROM field_refs fr
+				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+			)`, alias, matchCond)
+			args = []interface{}{p.Field, resolved, elem.Value}
+		} else {
+			cond = fmt.Sprintf(`NOT EXISTS (
+				SELECT 1 FROM field_refs fr
+				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+			)`, alias, notMatchCond)
+			args = []interface{}{p.Field, resolved, elem.Value}
+		}
+	case ArrayQuantifierAll:
+		if elem.CompareOp == CompareEq {
+			cond = fmt.Sprintf(`NOT EXISTS (
+				SELECT 1 FROM field_refs fr
+				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+			)`, alias, notMatchCond)
+			args = []interface{}{p.Field, resolved, elem.Value}
+		} else {
+			cond = fmt.Sprintf(`NOT EXISTS (
+				SELECT 1 FROM field_refs fr
+				WHERE fr.source_id = %s.id AND fr.field_name = ? AND %s
+			)`, alias, matchCond)
+			args = []interface{}{p.Field, resolved, elem.Value}
+		}
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+	return cond, args, nil
+}
+
+func dedupeStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
 // buildStringFuncPredicateSQL builds SQL for string function predicates.
 // Handles: includes(.field, "str"), startswith(.field, "str"), endswith(.field, "str"), matches(.field, "pattern")
 func (e *Executor) buildStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
@@ -100,7 +322,13 @@ func (e *Executor) buildStringFuncPredicateSQL(p *StringFuncPredicate, alias str
 
 // buildArrayQuantifierPredicateSQL builds SQL for array quantifier predicates.
 // Handles: any(.tags, _ == "urgent"), all(.tags, startswith(_, "feature-")), none(.tags, _ == "deprecated")
-func (e *Executor) buildArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, alias string) (string, []interface{}, error) {
+func (e *Executor) buildArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, alias, typeName string) (string, []interface{}, error) {
+	if e.isRefArrayField(typeName, p.Field) {
+		if elem, ok := p.ElementPred.(*ElementEqualityPredicate); ok {
+			return e.buildRefArrayQuantifierPredicateSQL(p, elem, alias, typeName)
+		}
+	}
+
 	jsonPath := fmt.Sprintf("$.%s", p.Field)
 
 	var cond string

@@ -16,7 +16,7 @@ func (e *Executor) buildObjectSQL(q *Query) (string, []interface{}, error) {
 
 	// Build predicate condition
 	if q.Predicate != nil {
-		cond, predArgs, err := e.buildObjectPredicateSQL(q.Predicate, "o")
+		cond, predArgs, err := e.buildObjectPredicateSQL(q.Predicate, "o", q.TypeName)
 		if err != nil {
 			return "", nil, err
 		}

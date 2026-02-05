@@ -509,7 +509,16 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
 	}
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected [[target]] or object subquery in refs()")
+		return nil, fmt.Errorf("expected target or object subquery in refs()")
+	}
+	ident := strings.ToLower(p.curr.Value)
+	if ident != "object" || p.peek.Type != TokenColon {
+		target := p.curr.Value
+		p.advance()
+		if err := p.expect(TokenRParen); err != nil {
+			return nil, err
+		}
+		return &RefsPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
 	}
 	subq, err := p.parseQuery()
 	if err != nil {
@@ -544,7 +553,16 @@ func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
 		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
 	}
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected [[source]] or subquery in refd()")
+		return nil, fmt.Errorf("expected source or subquery in refd()")
+	}
+	ident := strings.ToLower(p.curr.Value)
+	if (ident != "object" && ident != "trait") || p.peek.Type != TokenColon {
+		target := p.curr.Value
+		p.advance()
+		if err := p.expect(TokenRParen); err != nil {
+			return nil, err
+		}
+		return &RefdPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
 	}
 	subq, err := p.parseQuery()
 	if err != nil {

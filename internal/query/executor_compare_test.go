@@ -137,7 +137,7 @@ func TestBuildFieldPredicateSQL_ScalarOrArrayCaseInsensitiveEquality(t *testing.
 		CompareOp: CompareEq,
 	}
 
-	cond, args, err := e.buildFieldPredicateSQL(p, "o")
+	cond, args, err := e.buildFieldPredicateSQL(p, "o", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestBuildFieldPredicateSQL_ScalarOrArrayCaseInsensitiveNotEquals(t *testing
 		CompareOp: CompareNeq,
 	}
 
-	cond, args, err := e.buildFieldPredicateSQL(p, "o")
+	cond, args, err := e.buildFieldPredicateSQL(p, "o", "")
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

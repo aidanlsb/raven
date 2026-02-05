@@ -717,4 +717,20 @@ func TestValidateSchema(t *testing.T) {
 			t.Errorf("expected 1 issue, got %d", len(issues))
 		}
 	})
+
+	t.Run("unknown field type in schema", func(t *testing.T) {
+		sch := &Schema{
+			Types: map[string]*TypeDefinition{
+				"person": {
+					Fields: map[string]*FieldDefinition{
+						"company": {Type: FieldType("reference")},
+					},
+				},
+			},
+		}
+		issues := ValidateSchema(sch)
+		if len(issues) == 0 {
+			t.Fatal("expected issues for unknown field type")
+		}
+	})
 }

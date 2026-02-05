@@ -38,6 +38,7 @@ const (
 	IssueUnusedTrait             IssueType = "unused_trait"
 	IssueMissingTargetType       IssueType = "missing_target_type"
 	IssueSelfReferentialRequired IssueType = "self_referential_required"
+	IssueUnknownFieldType        IssueType = "unknown_field_type"
 	IssueIDCollision             IssueType = "id_collision"
 	IssueDuplicateAlias          IssueType = "duplicate_alias"
 	IssueAliasCollision          IssueType = "alias_collision"
@@ -901,6 +902,15 @@ func (v *Validator) ValidateSchema() []SchemaIssue {
 		for fieldName, fieldDef := range typeDef.Fields {
 			if fieldDef == nil {
 				continue
+			}
+			if !schema.IsValidFieldType(fieldDef.Type) {
+				issues = append(issues, SchemaIssue{
+					Level:   LevelWarning,
+					Type:    IssueUnknownFieldType,
+					Message: fmt.Sprintf("Field '%s.%s' has unknown field type '%s'", typeName, fieldName, fieldDef.Type),
+					Value:   string(fieldDef.Type),
+					FixHint: fmt.Sprintf("Use one of: %s", schema.ValidFieldTypes()),
+				})
 			}
 			// Check ref and ref[] fields with target constraints
 			if (fieldDef.Type == schema.FieldTypeRef || fieldDef.Type == schema.FieldTypeRefArray) && fieldDef.Target != "" {

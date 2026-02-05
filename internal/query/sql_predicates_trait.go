@@ -59,7 +59,7 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 		args = append(args, p.SubQuery.TypeName)
 
 		if p.SubQuery.Predicate != nil {
-			predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "target_obj")
+			predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "target_obj", p.SubQuery.TypeName)
 			if err != nil {
 				return "", nil, err
 			}
@@ -218,7 +218,7 @@ func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []
 	args = append(args, p.SubQuery.TypeName)
 
 	if p.SubQuery.Predicate != nil {
-		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "parent_obj")
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "parent_obj", p.SubQuery.TypeName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -270,7 +270,7 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (st
 
 	// Process predicate from the subquery
 	if p.SubQuery.Predicate != nil {
-		predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "anc")
+		predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "anc", p.SubQuery.TypeName)
 		if err != nil {
 			return "", nil, err
 		}

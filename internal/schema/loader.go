@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -96,10 +97,27 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		if typeDef.Fields == nil {
 			typeDef.Fields = make(map[string]*FieldDefinition)
 		}
+		for _, fieldDef := range typeDef.Fields {
+			if fieldDef == nil {
+				continue
+			}
+			fieldDef.Type = normalizeFieldType(fieldDef.Type)
+		}
 	}
 
 	result.Schema = &schema
 	return result, nil
+}
+
+func normalizeFieldType(fieldType FieldType) FieldType {
+	switch strings.ToLower(string(fieldType)) {
+	case "reference":
+		return FieldTypeRef
+	case "reference[]":
+		return FieldTypeRefArray
+	default:
+		return fieldType
+	}
 }
 
 // CreateDefault creates a default schema.yaml file in the vault.

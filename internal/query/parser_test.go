@@ -428,6 +428,11 @@ func TestParseRefsPredicate(t *testing.T) {
 			wantTarget: "projects/website",
 		},
 		{
+			name:       "refs with shorthand target",
+			input:      "object:meeting refs(cursor)",
+			wantTarget: "cursor",
+		},
+		{
 			name:     "refs with subquery",
 			input:    "object:meeting refs(object:project)",
 			wantSubQ: true,
@@ -751,6 +756,11 @@ func TestParseRefdPredicate(t *testing.T) {
 			name:       "refd with target",
 			input:      "object:project refd([[meetings/standup]])",
 			wantTarget: "meetings/standup",
+		},
+		{
+			name:       "refd with shorthand target",
+			input:      "object:project refd(cursor)",
+			wantTarget: "cursor",
 		},
 		{
 			name:     "refd with object subquery",
