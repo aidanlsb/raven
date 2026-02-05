@@ -34,8 +34,9 @@ Examples:
 
 		// Resolve the reference to get the canonical object ID
 		result, err := ResolveReference(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
+			VaultPath:    vaultPath,
+			VaultConfig:  vaultCfg,
+			AllowMissing: true,
 		})
 		if err != nil {
 			return handleResolveError(err, reference)
