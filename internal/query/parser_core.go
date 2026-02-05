@@ -405,13 +405,37 @@ func (p *Parser) parseObjectNavFuncPredicate(negated bool, kind string) (Predica
 		}
 	}
 
+	// Shorthand target (single word without brackets)
+	if p.curr.Type == TokenIdent {
+		ident := strings.ToLower(p.curr.Value)
+		if ident != "object" || p.peek.Type != TokenColon {
+			target := p.curr.Value
+			p.advance()
+			if err := p.expect(TokenRParen); err != nil {
+				return nil, err
+			}
+			switch kind {
+			case "parent":
+				return &ParentPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
+			case "ancestor":
+				return &AncestorPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
+			case "child":
+				return &ChildPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
+			case "descendant":
+				return &DescendantPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
+			default:
+				return nil, fmt.Errorf("unknown navigation predicate: %s()", kind)
+			}
+		}
+	}
+
 	if p.curr.Type == TokenUnderscore {
 		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
 	}
 
 	// Nested object query
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected object query or [[target]] in %s()", kind)
+		return nil, fmt.Errorf("expected object query or target in %s()", kind)
 	}
 	subq, err := p.parseQuery()
 	if err != nil {
@@ -462,12 +486,32 @@ func (p *Parser) parseTraitNavFuncPredicate(negated bool, kind string) (Predicat
 		}
 	}
 
+	// Shorthand target (single word without brackets)
+	if p.curr.Type == TokenIdent {
+		ident := strings.ToLower(p.curr.Value)
+		if ident != "object" || p.peek.Type != TokenColon {
+			target := p.curr.Value
+			p.advance()
+			if err := p.expect(TokenRParen); err != nil {
+				return nil, err
+			}
+			switch kind {
+			case "on":
+				return &OnPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
+			case "within":
+				return &WithinPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
+			default:
+				return nil, fmt.Errorf("unknown trait navigation predicate: %s()", kind)
+			}
+		}
+	}
+
 	if p.curr.Type == TokenUnderscore {
 		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
 	}
 
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected object query or [[target]] in %s()", kind)
+		return nil, fmt.Errorf("expected object query or target in %s()", kind)
 	}
 	subq, err := p.parseQuery()
 	if err != nil {

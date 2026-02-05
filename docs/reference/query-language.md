@@ -127,10 +127,10 @@ object:project none(.tags, _ == "deprecated")
 |-----------|---------|
 | `has(trait:...)` | Object has matching trait directly on the object |
 | `encloses(trait:...)` | Object has matching trait on self or any descendant object |
-| `parent(object:...)` | Direct parent matches |
-| `ancestor(object:...)` | Some ancestor matches |
-| `child(object:...)` | Has direct child matching |
-| `descendant(object:...)` | Has descendant matching |
+| `parent(object:...)` / `parent([[target]])` / `parent(target)` | Direct parent matches |
+| `ancestor(object:...)` / `ancestor([[target]])` / `ancestor(target)` | Some ancestor matches |
+| `child(object:...)` / `child([[target]])` / `child(target)` | Has direct child matching |
+| `descendant(object:...)` / `descendant([[target]])` / `descendant(target)` | Has descendant matching |
 | `refs([[target]])` / `refs(target)` / `refs(object:...)` | Outgoing references |
 | `refd([[source]])` / `refd(source)` / `refd(object:...)` / `refd(trait:...)` | Incoming references |
 | `content("term")` | Full-text search over object content |
@@ -168,8 +168,8 @@ For string matching on values, use `contains()`, `startswith()`, `endswith()`, o
 
 | Predicate | Meaning |
 |-----------|---------|
-| `on(object:...)` / `on([[target]])` | Trait is directly on object |
-| `within(object:...)` / `within([[target]])` | Trait is within object subtree |
+| `on(object:...)` / `on([[target]])` / `on(target)` | Trait is directly on object |
+| `within(object:...)` / `within([[target]])` / `within(target)` | Trait is within object subtree |
 | `at(trait:...)` | Co-located traits (same file+line) |
 | `refs([[target]])` / `refs(target)` / `refs(object:...)` | Line references target |
 | `content("term")` | Line content contains term |

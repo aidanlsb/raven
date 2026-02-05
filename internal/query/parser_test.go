@@ -255,6 +255,97 @@ func TestParseParentAncestorChild(t *testing.T) {
 	}
 }
 
+func TestParseParentAncestorChildTarget(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		predType   string
+		wantTarget string
+	}{
+		{
+			name:       "parent target",
+			input:      "object:meeting parent(website)",
+			predType:   "parent",
+			wantTarget: "website",
+		},
+		{
+			name:       "ancestor target",
+			input:      "object:meeting ancestor(projects/website)",
+			predType:   "ancestor",
+			wantTarget: "projects/website",
+		},
+		{
+			name:       "child target",
+			input:      "object:date child(meeting)",
+			predType:   "child",
+			wantTarget: "meeting",
+		},
+		{
+			name:       "descendant target",
+			input:      "object:project descendant(tasks)",
+			predType:   "descendant",
+			wantTarget: "tasks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
+			}
+
+			switch p := q.Predicate.(type) {
+			case *ParentPredicate:
+				if tt.predType != "parent" {
+					t.Fatalf("expected %s, got parent", tt.predType)
+				}
+				if p.Target != tt.wantTarget {
+					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
+				}
+				if p.SubQuery != nil {
+					t.Error("expected no SubQuery")
+				}
+			case *AncestorPredicate:
+				if tt.predType != "ancestor" {
+					t.Fatalf("expected %s, got ancestor", tt.predType)
+				}
+				if p.Target != tt.wantTarget {
+					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
+				}
+				if p.SubQuery != nil {
+					t.Error("expected no SubQuery")
+				}
+			case *ChildPredicate:
+				if tt.predType != "child" {
+					t.Fatalf("expected %s, got child", tt.predType)
+				}
+				if p.Target != tt.wantTarget {
+					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
+				}
+				if p.SubQuery != nil {
+					t.Error("expected no SubQuery")
+				}
+			case *DescendantPredicate:
+				if tt.predType != "descendant" {
+					t.Fatalf("expected %s, got descendant", tt.predType)
+				}
+				if p.Target != tt.wantTarget {
+					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
+				}
+				if p.SubQuery != nil {
+					t.Error("expected no SubQuery")
+				}
+			default:
+				t.Fatalf("unexpected predicate type: %T", q.Predicate)
+			}
+		})
+	}
+}
+
 func TestParseTraitPredicates(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -371,6 +462,65 @@ func TestParseOnWithin(t *testing.T) {
 
 			if subQuery.TypeName != tt.wantTypeName {
 				t.Errorf("TypeName = %v, want %v", subQuery.TypeName, tt.wantTypeName)
+			}
+		})
+	}
+}
+
+func TestParseOnWithinTarget(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		predType   string
+		wantTarget string
+	}{
+		{
+			name:       "on target",
+			input:      "trait:due on(website)",
+			predType:   "on",
+			wantTarget: "website",
+		},
+		{
+			name:       "within target",
+			input:      "trait:highlight within(projects/website)",
+			predType:   "within",
+			wantTarget: "projects/website",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if q.Predicate == nil {
+				t.Fatal("expected predicate, got nil")
+			}
+
+			switch p := q.Predicate.(type) {
+			case *OnPredicate:
+				if tt.predType != "on" {
+					t.Fatalf("expected %s, got on", tt.predType)
+				}
+				if p.Target != tt.wantTarget {
+					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
+				}
+				if p.SubQuery != nil {
+					t.Error("expected no SubQuery")
+				}
+			case *WithinPredicate:
+				if tt.predType != "within" {
+					t.Fatalf("expected %s, got within", tt.predType)
+				}
+				if p.Target != tt.wantTarget {
+					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
+				}
+				if p.SubQuery != nil {
+					t.Error("expected no SubQuery")
+				}
+			default:
+				t.Fatalf("unexpected predicate type: %T", q.Predicate)
 			}
 		})
 	}
