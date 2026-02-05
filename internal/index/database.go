@@ -180,6 +180,13 @@ func isSchemaCompatible(db *sql.DB) bool {
 		return false
 	}
 
+	// Check if field_refs table exists (v9+)
+	var fieldRefsTableName string
+	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='field_refs'").Scan(&fieldRefsTableName)
+	if err != nil {
+		return false
+	}
+
 	// Check if objects table has required columns (v6+: indexed_at, v8+: alias)
 	rows2, err := db.Query("PRAGMA table_info(objects)")
 	if err != nil {
@@ -253,7 +260,8 @@ func (d *Database) Analyze() error {
 // CurrentDBVersion is the current database schema version.
 // v7: Added composite indexes for trait refs matching and performance PRAGMAs
 // v8: Added alias column to objects table for reference aliasing
-const CurrentDBVersion = 8
+// v9: Added field_refs table for ref-typed fields
+const CurrentDBVersion = 9
 
 // initialize creates the database schema.
 func (d *Database) initialize() error {
@@ -313,6 +321,18 @@ func (d *Database) initialize() error {
 			position_start INTEGER,
 			position_end INTEGER
 		);
+
+		-- References from ref-typed fields (schema-aware)
+		CREATE TABLE IF NOT EXISTS field_refs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source_id TEXT NOT NULL,
+			field_name TEXT NOT NULL,
+			target_id TEXT,
+			target_raw TEXT NOT NULL,
+			resolution_status TEXT NOT NULL, -- resolved | ambiguous | missing
+			file_path TEXT NOT NULL,
+			line_number INTEGER
+		);
 		
 		-- Indexes for fast queries
 		CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);
@@ -327,6 +347,12 @@ func (d *Database) initialize() error {
 		CREATE INDEX IF NOT EXISTS idx_refs_source ON refs(source_id);
 		CREATE INDEX IF NOT EXISTS idx_refs_target ON refs(target_id);
 		CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file_path);
+
+		CREATE INDEX IF NOT EXISTS idx_field_refs_source_field ON field_refs(source_id, field_name);
+		CREATE INDEX IF NOT EXISTS idx_field_refs_field_target ON field_refs(field_name, target_id);
+		CREATE INDEX IF NOT EXISTS idx_field_refs_field_raw ON field_refs(field_name, target_raw);
+		CREATE INDEX IF NOT EXISTS idx_field_refs_status ON field_refs(resolution_status);
+		CREATE INDEX IF NOT EXISTS idx_field_refs_file ON field_refs(file_path);
 		
 		-- Composite indexes for trait refs matching (content scope rule)
 		CREATE INDEX IF NOT EXISTS idx_traits_file_line ON traits(file_path, line_number);
@@ -409,6 +435,9 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 		return err
 	}
 	if err := indexRefs(tx, doc, sch); err != nil {
+		return err
+	}
+	if err := indexFieldRefs(tx, doc, sch); err != nil {
 		return err
 	}
 	if err := indexDates(tx, doc, sch); err != nil {
@@ -577,6 +606,53 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 	return nil
 }
 
+type fieldRefToIndex struct {
+	SourceID  string
+	FieldName string
+	TargetRaw string
+	Line      int
+}
+
+func indexFieldRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
+	if sch == nil {
+		return nil
+	}
+
+	fieldRefs := extractFieldRefsFromSchemaFields(doc.Objects, sch)
+	if len(fieldRefs) == 0 {
+		return nil
+	}
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO field_refs (source_id, field_name, target_raw, target_id, resolution_status, file_path, line_number)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, ref := range fieldRefs {
+		if ref.TargetRaw == "" {
+			continue
+		}
+		_, err = stmt.Exec(
+			ref.SourceID,
+			ref.FieldName,
+			ref.TargetRaw,
+			nil,
+			"missing",
+			doc.FilePath,
+			ref.Line,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
 	dateStmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO date_index (date, source_type, source_id, field_name, file_path)
@@ -724,6 +800,9 @@ func (d *Database) ClearAllData() error {
 	if _, err := d.db.Exec("DELETE FROM refs"); err != nil {
 		return err
 	}
+	if _, err := d.db.Exec("DELETE FROM field_refs"); err != nil {
+		return err
+	}
 	if _, err := d.db.Exec("DELETE FROM date_index"); err != nil {
 		return err
 	}
@@ -863,6 +942,9 @@ func deleteRelatedByFilePath(db *sql.DB, filePath string) error {
 		return err
 	}
 	if _, err := db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
+		return err
+	}
+	if _, err := db.Exec("DELETE FROM field_refs WHERE file_path = ?", filePath); err != nil {
 		return err
 	}
 	if _, err := db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
@@ -1342,6 +1424,11 @@ type ReferenceResolutionResult struct {
 	Unresolved int // Number of references that couldn't be resolved
 	Ambiguous  int // Number of ambiguous references (multiple matches)
 	Total      int // Total number of references processed
+
+	FieldResolved   int // Number of field refs successfully resolved
+	FieldUnresolved int // Number of field refs that couldn't be resolved
+	FieldAmbiguous  int // Number of ambiguous field refs (multiple matches)
+	FieldTotal      int // Total number of field refs processed
 }
 
 // ResolveReferences resolves all unresolved references in the refs table.
@@ -1356,6 +1443,9 @@ func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutio
 	}
 
 	if err := d.resolveReferencesInBatches(res, nil, result); err != nil {
+		return nil, err
+	}
+	if err := d.resolveFieldRefsInBatches(res, nil, result); err != nil {
 		return nil, err
 	}
 
@@ -1377,6 +1467,9 @@ func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*R
 	if err := d.resolveReferencesInBatches(res, &filePath, result); err != nil {
 		return nil, err
 	}
+	if err := d.resolveFieldRefsInBatches(res, &filePath, result); err != nil {
+		return nil, err
+	}
 
 	return result, nil
 }
@@ -1384,6 +1477,11 @@ func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*R
 const resolveRefsBatchSize = 750
 
 type refToResolve struct {
+	id        int64
+	targetRaw string
+}
+
+type fieldRefToResolve struct {
 	id        int64
 	targetRaw string
 }
@@ -1400,6 +1498,25 @@ func (d *Database) resolveReferencesInBatches(res *resolver.Resolver, filePath *
 		}
 
 		if err := d.resolveRefBatch(res, refs, result); err != nil {
+			return err
+		}
+
+		lastID = refs[len(refs)-1].id
+	}
+}
+
+func (d *Database) resolveFieldRefsInBatches(res *resolver.Resolver, filePath *string, result *ReferenceResolutionResult) error {
+	var lastID int64
+	for {
+		refs, err := d.fetchUnresolvedFieldRefsBatch(filePath, lastID, resolveRefsBatchSize)
+		if err != nil {
+			return err
+		}
+		if len(refs) == 0 {
+			return nil
+		}
+
+		if err := d.resolveFieldRefBatch(res, refs, result); err != nil {
 			return err
 		}
 
@@ -1425,6 +1542,36 @@ func (d *Database) fetchUnresolvedRefsBatch(filePath *string, afterID int64, lim
 	refs := make([]refToResolve, 0, limit)
 	for rows.Next() {
 		var r refToResolve
+		if err := rows.Scan(&r.id, &r.targetRaw); err != nil {
+			return nil, err
+		}
+		refs = append(refs, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return refs, nil
+}
+
+func (d *Database) fetchUnresolvedFieldRefsBatch(filePath *string, afterID int64, limit int) ([]fieldRefToResolve, error) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if filePath == nil {
+		rows, err = d.db.Query(`SELECT id, target_raw FROM field_refs WHERE target_id IS NULL AND id > ? ORDER BY id LIMIT ?`, afterID, limit)
+	} else {
+		rows, err = d.db.Query(`SELECT id, target_raw FROM field_refs WHERE target_id IS NULL AND file_path = ? AND id > ? ORDER BY id LIMIT ?`, *filePath, afterID, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query field refs: %w", err)
+	}
+	defer rows.Close()
+
+	refs := make([]fieldRefToResolve, 0, limit)
+	for rows.Next() {
+		var r fieldRefToResolve
 		if err := rows.Scan(&r.id, &r.targetRaw); err != nil {
 			return nil, err
 		}
@@ -1466,6 +1613,47 @@ func (d *Database) resolveRefBatch(res *resolver.Resolver, refs []refToResolve, 
 			result.Resolved++
 		} else {
 			result.Unresolved++
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (d *Database) resolveFieldRefBatch(res *resolver.Resolver, refs []fieldRefToResolve, result *ReferenceResolutionResult) error {
+	result.FieldTotal += len(refs)
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`UPDATE field_refs SET target_id = ?, resolution_status = ? WHERE id = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, ref := range refs {
+		resolved := res.Resolve(ref.targetRaw)
+		if resolved.Ambiguous {
+			result.FieldAmbiguous++
+			result.FieldUnresolved++
+			if _, err := stmt.Exec(nil, "ambiguous", ref.id); err != nil {
+				return err
+			}
+			continue
+		}
+		if resolved.TargetID != "" {
+			if _, err := stmt.Exec(resolved.TargetID, "resolved", ref.id); err != nil {
+				return err
+			}
+			result.FieldResolved++
+		} else {
+			if _, err := stmt.Exec(nil, "missing", ref.id); err != nil {
+				return err
+			}
+			result.FieldUnresolved++
 		}
 	}
 
@@ -1514,6 +1702,51 @@ func extractRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Sch
 					}
 					refs = append(refs, &parser.ParsedRef{
 						SourceID:  obj.ID,
+						TargetRaw: target.TargetRaw,
+						Line:      obj.LineStart,
+					})
+				}
+			}
+		}
+	}
+
+	return refs
+}
+
+func extractFieldRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema) []fieldRefToIndex {
+	var refs []fieldRefToIndex
+	opts := parser.RefExtractOptions{AllowBareStrings: true}
+
+	for _, obj := range objects {
+		typeDef := sch.Types[obj.ObjectType]
+		if typeDef == nil {
+			continue
+		}
+
+		for fieldName, fieldValue := range obj.Fields {
+			fieldDef := typeDef.Fields[fieldName]
+			if fieldDef == nil {
+				continue
+			}
+
+			switch fieldDef.Type {
+			case schema.FieldTypeRef:
+				if targets := parser.ExtractRefsFromFieldValue(fieldValue, opts); len(targets) > 0 {
+					refs = append(refs, fieldRefToIndex{
+						SourceID:  obj.ID,
+						FieldName: fieldName,
+						TargetRaw: targets[0].TargetRaw,
+						Line:      obj.LineStart,
+					})
+				}
+			case schema.FieldTypeRefArray:
+				for _, target := range parser.ExtractRefsFromFieldValue(fieldValue, opts) {
+					if target.TargetRaw == "" {
+						continue
+					}
+					refs = append(refs, fieldRefToIndex{
+						SourceID:  obj.ID,
+						FieldName: fieldName,
 						TargetRaw: target.TargetRaw,
 						Line:      obj.LineStart,
 					})

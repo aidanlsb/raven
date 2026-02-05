@@ -403,6 +403,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory}); err == nil {
 		executor.SetResolver(res)
 	}
+	executor.SetSchema(sch)
 
 	// Handle trait queries separately - they operate on traits, not objects
 	if q.Type == query.QueryTypeTrait {
@@ -624,6 +625,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir}); err == nil {
 		executor.SetResolver(res)
 	}
+	executor.SetSchema(sch)
 
 	elapsed := time.Since(start).Milliseconds()
 

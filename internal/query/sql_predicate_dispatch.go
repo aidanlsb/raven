@@ -9,10 +9,10 @@ const (
 	predicateKindTrait
 )
 
-func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias string) (string, []interface{}, error) {
+func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, typeName string) (string, []interface{}, error) {
 	// Shared recursion wiring for OR/group.
 	recurse := func(p Predicate, alias string) (string, []interface{}, error) {
-		return e.buildPredicateSQL(kind, p, alias)
+		return e.buildPredicateSQL(kind, p, alias, typeName)
 	}
 
 	switch p := pred.(type) {
@@ -53,12 +53,12 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias s
 			}
 			return "", nil, fmt.Errorf("unsupported trait field predicate: .%s (only .value is allowed for traits)", p.Field)
 		}
-		return e.buildFieldPredicateSQL(p, alias)
+		return e.buildFieldPredicateSQL(p, alias, typeName)
 	case *ArrayQuantifierPredicate:
 		if kind != predicateKindObject {
 			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
 		}
-		return e.buildArrayQuantifierPredicateSQL(p, alias)
+		return e.buildArrayQuantifierPredicateSQL(p, alias, typeName)
 	case *HasPredicate:
 		if kind != predicateKindObject {
 			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
@@ -121,11 +121,11 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias s
 }
 
 // buildObjectPredicateSQL builds SQL for an object predicate.
-func (e *Executor) buildObjectPredicateSQL(pred Predicate, alias string) (string, []interface{}, error) {
-	return e.buildPredicateSQL(predicateKindObject, pred, alias)
+func (e *Executor) buildObjectPredicateSQL(pred Predicate, alias, typeName string) (string, []interface{}, error) {
+	return e.buildPredicateSQL(predicateKindObject, pred, alias, typeName)
 }
 
 // buildTraitPredicateSQL builds SQL for a trait predicate.
 func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string, []interface{}, error) {
-	return e.buildPredicateSQL(predicateKindTrait, pred, alias)
+	return e.buildPredicateSQL(predicateKindTrait, pred, alias, "")
 }

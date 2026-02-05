@@ -52,6 +52,17 @@ func setupTestDB(t *testing.T) *sql.DB {
 			position_end INTEGER
 		);
 
+		CREATE TABLE field_refs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source_id TEXT NOT NULL,
+			field_name TEXT NOT NULL,
+			target_id TEXT,
+			target_raw TEXT NOT NULL,
+			resolution_status TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			line_number INTEGER
+		);
+
 		CREATE VIRTUAL TABLE fts_content USING fts5(
 			object_id,
 			title,

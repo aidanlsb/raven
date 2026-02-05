@@ -132,7 +132,7 @@ type ContainsPredicate struct {
 func (ContainsPredicate) predicateNode() {}
 
 // RefsPredicate filters objects by what they reference.
-// Syntax: refs([[target]]), refs(object:type ...)
+// Syntax: refs([[target]]), refs(target), refs(object:type ...)
 type RefsPredicate struct {
 	basePredicate
 	Target   string // Specific target like "projects/website" (mutually exclusive with SubQuery)
@@ -306,7 +306,7 @@ type AtPredicate struct {
 func (AtPredicate) predicateNode() {}
 
 // RefdPredicate filters objects/traits by what references them (inverse of refs:).
-// Syntax: refd:{object:type ...}, refd:{trait:name ...}, refd:[[target]], refd:_
+// Syntax: refd(object:type ...), refd(trait:name ...), refd([[target]]), refd(target)
 type RefdPredicate struct {
 	basePredicate
 	Target   string // Specific source ID

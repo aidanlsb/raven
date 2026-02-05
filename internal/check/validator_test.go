@@ -624,6 +624,33 @@ func TestValidatorSchemaIntegrity(t *testing.T) {
 		}
 	})
 
+	t.Run("unknown field type", func(t *testing.T) {
+		s := &schema.Schema{
+			Types: map[string]*schema.TypeDefinition{
+				"person": {
+					Fields: map[string]*schema.FieldDefinition{
+						"company": {Type: schema.FieldType("reference")},
+					},
+				},
+			},
+			Traits: map[string]*schema.TraitDefinition{},
+		}
+
+		v := NewValidatorWithTypes(s, []ObjectInfo{})
+		schemaIssues := v.ValidateSchema()
+
+		hasUnknownField := false
+		for _, issue := range schemaIssues {
+			if issue.Type == IssueUnknownFieldType {
+				hasUnknownField = true
+				break
+			}
+		}
+		if !hasUnknownField {
+			t.Errorf("Expected unknown field type warning, got: %v", schemaIssues)
+		}
+	})
+
 	t.Run("self-referential required field", func(t *testing.T) {
 		s := &schema.Schema{
 			Types: map[string]*schema.TypeDefinition{

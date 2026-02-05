@@ -80,6 +80,10 @@ Filter by object frontmatter fields. Fields use dot prefix.
 | `.field>=value` | Field is greater or equal |
 | `.field<=value` | Field is less or equal |
 
+For fields typed as `ref` or `ref[]` in the schema, values are treated as reference targets. You can use unbracketed values (e.g. `.company==cursor`), and comparisons resolve to canonical IDs. If a ref-typed field contains an ambiguous value, queries on that field return an error until the value is disambiguated.
+
+Wikilinks inside **string** fields still produce backlinks, but string field comparisons remain literal.
+
 **Examples:**
 
 ```
@@ -127,8 +131,8 @@ object:project none(.tags, _ == "deprecated")
 | `ancestor(object:...)` | Some ancestor matches |
 | `child(object:...)` | Has direct child matching |
 | `descendant(object:...)` | Has descendant matching |
-| `refs([[target]])` / `refs(object:...)` | Outgoing references |
-| `refd([[source]])` / `refd(object:...)` / `refd(trait:...)` | Incoming references |
+| `refs([[target]])` / `refs(target)` / `refs(object:...)` | Outgoing references |
+| `refd([[source]])` / `refd(source)` / `refd(object:...)` / `refd(trait:...)` | Incoming references |
 | `content("term")` | Full-text search over object content |
 
 **Examples:**
@@ -167,7 +171,7 @@ For string matching on values, use `contains()`, `startswith()`, `endswith()`, o
 | `on(object:...)` / `on([[target]])` | Trait is directly on object |
 | `within(object:...)` / `within([[target]])` | Trait is within object subtree |
 | `at(trait:...)` | Co-located traits (same file+line) |
-| `refs([[target]])` / `refs(object:...)` | Line references target |
+| `refs([[target]])` / `refs(target)` / `refs(object:...)` | Line references target |
 | `content("term")` | Line content contains term |
 
 **Examples:**

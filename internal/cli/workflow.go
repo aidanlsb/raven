@@ -16,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -381,6 +382,9 @@ func makeQueryFunc(vaultPath string) func(queryStr string) (interface{}, error) 
 		executor := query.NewExecutor(db.DB())
 		if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir}); err == nil {
 			executor.SetResolver(res)
+		}
+		if sch, err := schema.Load(vaultPath); err == nil {
+			executor.SetSchema(sch)
 		}
 
 		if q.Type == query.QueryTypeObject {

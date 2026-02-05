@@ -9,7 +9,7 @@ type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-var filePathTables = []string{"objects", "traits", "refs", "date_index", "fts_content"}
+var filePathTables = []string{"objects", "traits", "refs", "field_refs", "date_index", "fts_content"}
 
 func deleteByFilePath(e execer, filePath string) error {
 	for _, table := range filePathTables {

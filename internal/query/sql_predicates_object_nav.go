@@ -67,7 +67,7 @@ func (e *Executor) buildParentPredicateSQL(p *ParentPredicate, alias string) (st
 	args = append(args, p.SubQuery.TypeName)
 
 	if p.SubQuery.Predicate != nil {
-		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "parent_obj")
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "parent_obj", p.SubQuery.TypeName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -119,7 +119,7 @@ func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string)
 
 	// Process predicate from the subquery
 	if p.SubQuery.Predicate != nil {
-		predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "anc")
+		predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "anc", p.SubQuery.TypeName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -170,7 +170,7 @@ func (e *Executor) buildChildPredicateSQL(p *ChildPredicate, alias string) (stri
 	args = append(args, p.SubQuery.TypeName)
 
 	if p.SubQuery.Predicate != nil {
-		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "child_obj")
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "child_obj", p.SubQuery.TypeName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -222,7 +222,7 @@ func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias str
 	args = append(args, p.SubQuery.TypeName)
 
 	if p.SubQuery.Predicate != nil {
-		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "desc_obj")
+		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "desc_obj", p.SubQuery.TypeName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -319,7 +319,7 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 		args = append(args, p.SubQuery.TypeName)
 
 		if p.SubQuery.Predicate != nil {
-			predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "target_obj")
+			predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "target_obj", p.SubQuery.TypeName)
 			if err != nil {
 				return "", nil, err
 			}

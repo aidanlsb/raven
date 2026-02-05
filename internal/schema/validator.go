@@ -267,6 +267,7 @@ func ValidateNameField(typeDef *TypeDefinition) error {
 // Returns a list of issues found.
 func ValidateSchema(sch *Schema) []string {
 	var issues []string
+	validTypes := ValidFieldTypes()
 
 	for typeName, typeDef := range sch.Types {
 		// Skip built-in types
@@ -282,6 +283,9 @@ func ValidateSchema(sch *Schema) []string {
 		// Validate ref field targets
 		if typeDef.Fields != nil {
 			for fieldName, fieldDef := range typeDef.Fields {
+				if fieldDef != nil && !IsValidFieldType(fieldDef.Type) {
+					issues = append(issues, fmt.Sprintf("Type '%s' field '%s' has unknown field type '%s' (expected one of: %s)", typeName, fieldName, fieldDef.Type, validTypes))
+				}
 				if fieldDef != nil && (fieldDef.Type == FieldTypeRef || fieldDef.Type == FieldTypeRefArray) && fieldDef.Target != "" {
 					if _, exists := sch.Types[fieldDef.Target]; !exists {
 						issues = append(issues, fmt.Sprintf("Type '%s' field '%s' references unknown type '%s'", typeName, fieldName, fieldDef.Target))
@@ -292,4 +296,30 @@ func ValidateSchema(sch *Schema) []string {
 	}
 
 	return issues
+}
+
+func IsValidFieldType(fieldType FieldType) bool {
+	switch fieldType {
+	case FieldTypeString,
+		FieldTypeStringArray,
+		FieldTypeNumber,
+		FieldTypeNumberArray,
+		FieldTypeDate,
+		FieldTypeDateArray,
+		FieldTypeDatetime,
+		FieldTypeDatetimeArray,
+		FieldTypeEnum,
+		FieldTypeEnumArray,
+		FieldTypeBool,
+		FieldTypeBoolArray,
+		FieldTypeRef,
+		FieldTypeRefArray:
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidFieldTypes() string {
+	return "string, string[], number, number[], date, date[], datetime, datetime[], enum, enum[], bool, bool[], ref, ref[]"
 }
