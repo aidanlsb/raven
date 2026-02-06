@@ -457,10 +457,10 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 		limit = 20
 	}
 
-	ftsQuery := BuildFTSContentQuery(query)
+	ftsQuery := BuildFTSSearchQuery(query)
 
 	// Use FTS5 match query with BM25 ranking
-	// Restrict search to content column only (not object_id or title)
+	// Search both title and content columns
 	// The snippet function extracts matching content with context
 	rows, err := d.db.Query(`
 		SELECT 
@@ -497,7 +497,7 @@ func (d *Database) SearchWithType(query string, objectType string, limit int) ([
 		limit = 20
 	}
 
-	ftsQuery := BuildFTSContentQuery(query)
+	ftsQuery := BuildFTSSearchQuery(query)
 
 	rows, err := d.db.Query(`
 		SELECT 

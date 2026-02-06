@@ -2,12 +2,25 @@ package index
 
 import "strings"
 
+// BuildFTSSearchQuery builds a safe FTS5 MATCH query that searches both the
+// `title` and `content` columns. It is intended for rvn search (the general
+// full-text search command) where users expect to find results by title as well
+// as body content.
+//
+// The returned string is meant to be passed as the RHS of `fts_content MATCH ?`.
+func BuildFTSSearchQuery(userQuery string) string {
+	q := strings.TrimSpace(userQuery)
+	if q == "" {
+		return `{title content}:""`
+	}
+	return "{title content}: (" + sanitizeFTSQuery(q) + ")"
+}
+
 // BuildFTSContentQuery builds a safe FTS5 MATCH query that scopes to the `content`
 // column and avoids common parser footguns with hyphenated tokens.
 //
-// It is intended for:
-// - Database.Search / Database.SearchWithType
-// - Query language `content("...")` predicates
+// It is intended for the query language `content("...")` predicate, which
+// explicitly searches body content only (not titles).
 //
 // The returned string is meant to be passed as the RHS of `fts_content MATCH ?`.
 func BuildFTSContentQuery(userQuery string) string {
