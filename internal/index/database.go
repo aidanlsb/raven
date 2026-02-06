@@ -443,7 +443,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if err := indexDates(tx, doc, sch); err != nil {
 		return err
 	}
-	if err := indexFTS(tx, doc); err != nil {
+	if err := indexFTS(tx, doc, sch); err != nil {
 		return err
 	}
 
@@ -697,7 +697,7 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 	return nil
 }
 
-func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument) error {
+func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
 	ftsStmt, err := tx.Prepare(`
 		INSERT INTO fts_content (object_id, title, content, file_path)
 		VALUES (?, ?, ?, ?)
@@ -711,15 +711,28 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument) error {
 	lines := strings.Split(doc.RawContent, "\n")
 
 	for _, obj := range doc.Objects {
-		// Get title from fields or heading
+		// Get title: check schema name_field first, then "title" field, then heading, then object ID
 		title := ""
-		if titleField, ok := obj.Fields["title"]; ok {
-			if s, ok := titleField.AsString(); ok {
-				title = s
+		if sch != nil && obj.ObjectType != "" {
+			if typeDef, ok := sch.Types[obj.ObjectType]; ok && typeDef.NameField != "" {
+				if nameVal, ok := obj.Fields[typeDef.NameField]; ok {
+					if s, ok := nameVal.AsString(); ok {
+						title = s
+					}
+				}
 			}
-		} else if obj.Heading != nil {
+		}
+		if title == "" {
+			if titleField, ok := obj.Fields["title"]; ok {
+				if s, ok := titleField.AsString(); ok {
+					title = s
+				}
+			}
+		}
+		if title == "" && obj.Heading != nil {
 			title = *obj.Heading
-		} else {
+		}
+		if title == "" {
 			// Use object ID as title for file-level objects
 			title = obj.ID
 		}

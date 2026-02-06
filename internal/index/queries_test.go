@@ -148,6 +148,26 @@ func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
 	}
 }
 
+func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
+	q := BuildFTSSearchQuery("hello world")
+	want := `{title content}: (hello world)`
+	if q != want {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
+	}
+
+	q = BuildFTSSearchQuery(`michael-truell OR "Michael Truell"`)
+	want = `{title content}: ("michael-truell" OR "Michael Truell")`
+	if q != want {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
+	}
+
+	q = BuildFTSSearchQuery("")
+	want = `{title content}:""`
+	if q != want {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
+	}
+}
+
 func TestSearch_AllowsHyphenatedTokenWithOR(t *testing.T) {
 	db, err := OpenInMemory()
 	if err != nil {
@@ -179,6 +199,42 @@ func TestSearch_AllowsHyphenatedTokenWithOR(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatalf("expected at least one result")
+	}
+}
+
+func TestSearch_MatchesTitle(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.db.Exec(`INSERT INTO objects (id, file_path, type, line_start, fields) VALUES ('project/raven', 'project/raven.md', 'project', 1, '{}')`)
+	if err != nil {
+		t.Fatalf("failed to insert object: %v", err)
+	}
+
+	// Index with a distinctive title but no matching content
+	_, err = db.db.Exec(`INSERT INTO fts_content (object_id, title, content, file_path) VALUES (?, ?, ?, ?)`,
+		"project/raven",
+		"Raven Knowledge Base",
+		"This is a project about structured notes.",
+		"project/raven.md",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert fts row: %v", err)
+	}
+
+	// Search for a term that only appears in the title
+	results, err := db.Search("Knowledge", 10)
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatalf("expected search to match title, got no results")
+	}
+	if results[0].ObjectID != "project/raven" {
+		t.Fatalf("expected object_id 'project/raven', got %q", results[0].ObjectID)
 	}
 }
 
