@@ -469,6 +469,7 @@ In `~/.config/raven/config.toml`:
 ```toml
 default_vault = "work"
 editor = "code"
+editor_mode = "auto"
 
 [vaults]
 work = "/path/to/work-notes"

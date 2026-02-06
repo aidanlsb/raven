@@ -407,11 +407,17 @@ Global config (`config.toml`) is for cross-vault settings:
 ```toml
 default_vault = "work"
 editor = "code"
+editor_mode = "auto"
 
 [vaults]
 work = "/path/to/work-notes"
 personal = "/path/to/personal-notes"
 ```
+
+`editor_mode` controls how the editor is launched:
+- `auto` (default): detect common terminal editors
+- `terminal`: always run in the foreground with TTY attached
+- `gui`: always run in the background (non-blocking)
 
 Vault config (`raven.yaml`) is for per-vault behavior:
 

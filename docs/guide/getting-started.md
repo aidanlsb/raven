@@ -24,6 +24,7 @@ Raven looks for a global config at `~/.config/raven/config.toml` (or your OS con
 ```toml
 default_vault = "work"
 editor = "code"
+editor_mode = "auto"
 
 [vaults]
 work = "/path/to/notes"
