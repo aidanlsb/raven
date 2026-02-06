@@ -3,7 +3,7 @@
 Raven uses:
 - `schema.yaml` — types + traits (structure)
 - `raven.yaml` — vault settings + saved queries + workflows (behavior)
-- `~/.config/raven/config.toml` — global settings (default vault, editor)
+- `~/.config/raven/config.toml` — global settings (default vault, editor, editor mode)
 
 ## `schema.yaml` (types + traits)
 

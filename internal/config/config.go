@@ -23,6 +23,9 @@ type Config struct {
 
 	// Editor is the editor to use for opening files (defaults to $EDITOR).
 	Editor string `toml:"editor"`
+
+	// EditorMode controls how the editor is launched: auto, terminal, or gui.
+	EditorMode string `toml:"editor_mode"`
 }
 
 // GetVaultPath returns the path for a named vault.
@@ -156,6 +159,12 @@ func CreateDefault() (string, error) {
 
 # Editor for opening files (defaults to $EDITOR)
 # editor = "code"
+#
+# How to launch the editor:
+#   auto     - detect common terminal editors
+#   terminal - always run in the foreground with TTY attached
+#   gui      - always run in the background (non-blocking)
+# editor_mode = "auto"
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
