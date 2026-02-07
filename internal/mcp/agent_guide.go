@@ -22,6 +22,12 @@ var guideTopics = []GuideTopic{
 		Path:        "agent-guide/critical-rules.md",
 	},
 	{
+		Slug:        "onboarding",
+		Name:        "Vault Onboarding",
+		Description: "Guide for helping users set up a new vault interactively.",
+		Path:        "agent-guide/onboarding.md",
+	},
+	{
 		Slug:        "getting-started",
 		Name:        "Getting Started",
 		Description: "Discovery sequence and first steps in a new vault.",
