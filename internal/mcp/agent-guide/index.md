@@ -15,6 +15,7 @@ It is split into topic resources so agents can fetch only what they need.
 ## Topics
 
 - `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations
+- `raven://guide/onboarding` - Interactive vault setup for new users
 - `raven://guide/getting-started` - First steps for orienting in a new vault
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/querying` - Raven Query Language (RQL) and query strategy
