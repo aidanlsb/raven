@@ -82,6 +82,12 @@ func (v *TestVault) writeFile(relPath, content string) {
 	}
 }
 
+// WriteFile writes a file to the vault, creating directories as needed.
+func (v *TestVault) WriteFile(relPath, content string) {
+	v.t.Helper()
+	v.writeFile(relPath, content)
+}
+
 // ReadFile reads a file from the vault.
 // Returns the content as a string.
 func (v *TestVault) ReadFile(relPath string) string {

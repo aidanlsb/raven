@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
@@ -26,6 +29,9 @@ type ResolveResult struct {
 
 	// FileObjectID is the parent file's object ID (for sections, this differs from ObjectID)
 	FileObjectID string
+
+	// MatchSource describes how the reference was matched (e.g., "literal_path", "short_name", "alias", "name_field", "object_id", "date", "suffix_match")
+	MatchSource string
 }
 
 // ResolveOptions configures reference resolution behavior.
@@ -95,8 +101,9 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 
 	if resolved.Ambiguous {
 		return nil, &AmbiguousRefError{
-			Reference: reference,
-			Matches:   resolved.Matches,
+			Reference:    reference,
+			Matches:      resolved.Matches,
+			MatchSources: resolved.MatchSources,
 		}
 	}
 
@@ -105,8 +112,13 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 	}
 
 	// Build the result
+	matchSource := ""
+	if resolved.MatchSources != nil {
+		matchSource = resolved.MatchSources[resolved.TargetID]
+	}
 	result := &ResolveResult{
-		ObjectID: resolved.TargetID,
+		ObjectID:    resolved.TargetID,
+		MatchSource: matchSource,
 	}
 
 	// Handle section references
@@ -161,6 +173,7 @@ func tryLiteralPath(reference string, vaultPath string, vaultCfg *config.VaultCo
 				FilePath:     fullPath,
 				IsSection:    false,
 				FileObjectID: objectID,
+				MatchSource:  "literal_path",
 			}
 		}
 	}
@@ -190,8 +203,9 @@ func ResolveReferenceToObjectID(reference string, opts ResolveOptions) (string, 
 
 // AmbiguousRefError is returned when a reference matches multiple objects.
 type AmbiguousRefError struct {
-	Reference string
-	Matches   []string
+	Reference    string
+	Matches      []string
+	MatchSources map[string]string
 }
 
 func (e *AmbiguousRefError) Error() string {
@@ -303,6 +317,7 @@ func resolveDynamicDateReference(reference, vaultPath string, vaultCfg *config.V
 		FilePath:     filePath,
 		IsSection:    fragment != "",
 		FileObjectID: fileObjectID,
+		MatchSource:  "date",
 	}, true, nil
 }
 
@@ -326,4 +341,151 @@ func handleResolveError(err error, reference string) error {
 	return handleErrorMsg(ErrInternal,
 		fmt.Sprintf("failed to resolve '%s': %v", reference, err),
 		"Run 'rvn reindex' if the database is out of date")
+}
+
+// =============================================================================
+// RESOLVE COMMAND
+// =============================================================================
+
+var resolveCmd = &cobra.Command{
+	Use:   "resolve <reference>",
+	Short: "Resolve a reference to its target object",
+	Long: `Resolve a reference (short name, alias, path, date, etc.) and return
+information about the target object.
+
+This is a pure query — it does not modify anything.
+
+Examples:
+  rvn resolve freya --json
+  rvn resolve people/freya --json
+  rvn resolve today --json
+  rvn resolve "The Prose Edda" --json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		start := time.Now()
+		reference := args[0]
+
+		vaultCfg := loadVaultConfigSafe(vaultPath)
+
+		// Attempt resolution (including dynamic date keywords like "today")
+		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
+			VaultPath:   vaultPath,
+			VaultConfig: vaultCfg,
+		}, true) // allowDynamicMissing=true so "today" resolves even without a file
+
+		elapsed := time.Since(start).Milliseconds()
+
+		// Handle ambiguous reference
+		var ae *AmbiguousRefError
+		if errors.As(err, &ae) {
+			matches := make([]map[string]interface{}, 0, len(ae.Matches))
+			for _, m := range ae.Matches {
+				entry := map[string]interface{}{
+					"object_id": m,
+				}
+				if ae.MatchSources != nil {
+					if src, ok := ae.MatchSources[m]; ok {
+						entry["match_source"] = src
+					}
+				}
+				matches = append(matches, entry)
+			}
+
+			if isJSONOutput() {
+				outputSuccess(map[string]interface{}{
+					"resolved":  false,
+					"ambiguous": true,
+					"reference": reference,
+					"matches":   matches,
+				}, &Meta{QueryTimeMs: elapsed})
+				return nil
+			}
+
+			fmt.Printf("Reference '%s' is ambiguous. Matches:\n", reference)
+			for _, m := range matches {
+				src := ""
+				if s, ok := m["match_source"].(string); ok {
+					src = fmt.Sprintf(" (%s)", s)
+				}
+				fmt.Printf("  %s%s\n", m["object_id"], src)
+			}
+			return nil
+		}
+
+		// Handle not found
+		if err != nil {
+			if isJSONOutput() {
+				outputSuccess(map[string]interface{}{
+					"resolved":  false,
+					"reference": reference,
+				}, &Meta{QueryTimeMs: elapsed})
+				return nil
+			}
+
+			fmt.Printf("Reference '%s' not found.\n", reference)
+			return nil
+		}
+
+		// Successful resolution — enrich with type from the index
+		objectType := ""
+		relFilePath := ""
+
+		if result.FilePath != "" {
+			rel, relErr := filepath.Rel(vaultPath, result.FilePath)
+			if relErr == nil {
+				relFilePath = rel
+			} else {
+				relFilePath = result.FilePath
+			}
+		}
+
+		// Look up the object type from the database
+		db, dbErr := index.Open(vaultPath)
+		if dbErr == nil {
+			defer db.Close()
+			obj, objErr := db.GetObject(result.ObjectID)
+			if objErr == nil && obj != nil {
+				objectType = obj.Type
+			}
+		}
+
+		if isJSONOutput() {
+			data := map[string]interface{}{
+				"resolved":   true,
+				"object_id":  result.ObjectID,
+				"file_path":  relFilePath,
+				"is_section": result.IsSection,
+			}
+			if objectType != "" {
+				data["type"] = objectType
+			}
+			if result.MatchSource != "" {
+				data["match_source"] = result.MatchSource
+			}
+			if result.IsSection {
+				data["file_object_id"] = result.FileObjectID
+			}
+			outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+			return nil
+		}
+
+		// Human-readable output
+		fmt.Printf("Resolved: %s\n", result.ObjectID)
+		if objectType != "" {
+			fmt.Printf("  Type: %s\n", objectType)
+		}
+		fmt.Printf("  File: %s\n", relFilePath)
+		if result.IsSection {
+			fmt.Printf("  Parent: %s\n", result.FileObjectID)
+		}
+		if result.MatchSource != "" {
+			fmt.Printf("  Matched via: %s\n", result.MatchSource)
+		}
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(resolveCmd)
 }

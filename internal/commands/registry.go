@@ -762,6 +762,111 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 			"Update embedded ::type(...) declarations and saved queries after field rename",
 		},
 	},
+	"schema_template_get": {
+		Name:        "schema template get",
+		Description: "Get the template for a type",
+		LongDesc: `Show the template configured for a type.
+
+Returns the template specification (inline content or file path), the source type
+("inline", "file", or "none"), and the resolved template content.
+
+For file-based templates, the content is loaded from the referenced file.
+If the file doesn't exist, content will be empty.`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type to get template for (e.g., meeting, project)", Required: true, DynamicComp: "types"},
+		},
+		Examples: []string{
+			"rvn schema template get meeting --json",
+			"rvn schema template get project --json",
+		},
+		UseCases: []string{
+			"View the current template for a type",
+			"Check if a type has a template configured",
+			"Inspect template content before editing",
+		},
+	},
+	"schema_template_set": {
+		Name:        "schema template set",
+		Description: "Set or update the template for a type",
+		LongDesc: `Set the template for a type in schema.yaml.
+
+Use --content to set an inline template, or --file to reference a template file
+(path relative to vault root). These flags are mutually exclusive.
+
+Inline templates are stored directly in schema.yaml. File-based templates store
+just the path reference, and the file content is loaded at render time.
+
+Template variables: {{title}}, {{slug}}, {{type}}, {{date}}, {{datetime}},
+{{year}}, {{month}}, {{day}}, {{weekday}}, {{field.<name>}}`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type to set template for (e.g., meeting, project)", Required: true, DynamicComp: "types"},
+		},
+		Flags: []FlagMeta{
+			{Name: "content", Description: "Inline template content (mutually exclusive with --file)", Type: FlagTypeString},
+			{Name: "file", Description: "Path to template file relative to vault root (mutually exclusive with --content)", Type: FlagTypeString, Examples: []string{"templates/meeting.md", "templates/project.md"}},
+		},
+		Examples: []string{
+			`rvn schema template set meeting --content "# {{title}}\n\n**Date:** {{date}}\n\n## Attendees\n\n## Notes\n\n## Action Items" --json`,
+			"rvn schema template set meeting --file templates/meeting.md --json",
+			`rvn schema template set project --content "# {{title}}\n\n## Overview\n\n## Goals\n\n## Timeline" --json`,
+		},
+		UseCases: []string{
+			"Set an inline template for a type",
+			"Point a type to a template file",
+			"Update an existing template",
+		},
+	},
+	"schema_template_remove": {
+		Name:        "schema template remove",
+		Description: "Remove the template from a type",
+		LongDesc: `Remove the template configuration from a type in schema.yaml.
+
+This clears the template field from the type definition. The type will no longer
+use a template when creating new objects with 'rvn new'.
+
+Note: This does not delete template files from disk. If the type uses a file-based
+template, the file will remain in the vault.`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type to remove template from (e.g., meeting, project)", Required: true, DynamicComp: "types"},
+		},
+		Examples: []string{
+			"rvn schema template remove meeting --json",
+			"rvn schema template remove project --json",
+		},
+		UseCases: []string{
+			"Remove a template from a type",
+			"Clear template configuration",
+		},
+	},
+	"schema_template_render": {
+		Name:        "schema template render",
+		Description: "Preview a type's template with variables applied",
+		LongDesc: `Render a type's template with variable substitution applied.
+
+This is useful for previewing what a template will look like before creating objects.
+If --title is not provided, a sample title is used. Field variables can be supplied
+with --field flags.
+
+Template variables: {{title}}, {{slug}}, {{type}}, {{date}}, {{datetime}},
+{{year}}, {{month}}, {{day}}, {{weekday}}, {{field.<name>}}`,
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type whose template to render (e.g., meeting, project)", Required: true, DynamicComp: "types"},
+		},
+		Flags: []FlagMeta{
+			{Name: "title", Description: "Title to use for rendering (default: sample title)", Type: FlagTypeString},
+			{Name: "field", Description: "Set field value for rendering (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"attendees": "Alice, Bob"}`, `{"status": "active"}`}},
+		},
+		Examples: []string{
+			"rvn schema template render meeting --json",
+			"rvn schema template render meeting --title \"Weekly Standup\" --json",
+			`rvn schema template render meeting --title "1:1 with Alice" --field attendees="Alice, Bob" --json`,
+		},
+		UseCases: []string{
+			"Preview what a template looks like with variables filled in",
+			"Verify template syntax and variable substitution",
+			"Test template changes before committing them",
+		},
+	},
 	"set": {
 		Name:        "set",
 		Description: "Set frontmatter fields on an object",
@@ -1044,6 +1149,42 @@ With --apply, applies an operation directly to selected results without piping.`
 			"View results from the most recent query",
 			"Select specific items from query results for bulk operations",
 			"Mark specific todos done without re-running the query",
+		},
+	},
+	"resolve": {
+		Name:        "resolve",
+		Description: "Resolve a reference to its target object",
+		LongDesc: `Resolve a reference (short name, alias, path, date, etc.) and return
+information about the target object.
+
+This is a pure query — it does not modify anything. The result always returns
+"resolved": true/false to indicate whether the reference was successfully resolved.
+
+Supports all reference formats:
+- Short names: "freya" → people/freya
+- Full paths: "people/freya" or "people/freya.md"
+- Aliases: "The Queen" → people/freya
+- Name field values: "The Prose Edda" → books/the-prose-edda
+- Date references: "2025-02-01" → daily/2025-02-01
+- Dynamic dates: "today", "yesterday", "tomorrow"
+- Section references: "projects/website#tasks"
+
+If the reference is ambiguous (matches multiple objects), returns all matches
+with their match sources.`,
+		Args: []ArgMeta{
+			{Name: "reference", Description: "Reference to resolve (short name, path, alias, date, etc.)", Required: true},
+		},
+		Examples: []string{
+			"rvn resolve freya --json",
+			"rvn resolve people/freya --json",
+			"rvn resolve today --json",
+			"rvn resolve \"The Prose Edda\" --json",
+		},
+		UseCases: []string{
+			"Check if a reference resolves before using it",
+			"Discover the full object ID and type for a short name",
+			"Disambiguate references that might match multiple objects",
+			"Validate references without side effects",
 		},
 	},
 }

@@ -452,3 +452,183 @@ Bob is a software engineer.
 		t.Errorf("expected content in read result, got empty string")
 	}
 }
+
+// TestIntegration_Resolve tests the resolve command.
+func TestIntegration_Resolve(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", `---
+type: person
+name: Freya
+---
+# Freya
+`).
+		WithFile("people/thor.md", `---
+type: person
+name: Thor
+---
+# Thor
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	t.Run("resolve by literal path", func(t *testing.T) {
+		result := v.RunCLI("resolve", "people/freya")
+		result.MustSucceed(t)
+
+		if result.DataString("object_id") != "people/freya" {
+			t.Errorf("expected object_id 'people/freya', got %q", result.DataString("object_id"))
+		}
+		if result.Data["resolved"] != true {
+			t.Errorf("expected resolved=true")
+		}
+		if result.DataString("type") != "person" {
+			t.Errorf("expected type 'person', got %q", result.DataString("type"))
+		}
+		if result.DataString("match_source") != "literal_path" {
+			t.Errorf("expected match_source 'literal_path', got %q", result.DataString("match_source"))
+		}
+	})
+
+	t.Run("resolve by short name", func(t *testing.T) {
+		result := v.RunCLI("resolve", "thor")
+		result.MustSucceed(t)
+
+		if result.Data["resolved"] != true {
+			t.Errorf("expected resolved=true")
+		}
+		if result.DataString("object_id") != "people/thor" {
+			t.Errorf("expected object_id 'people/thor', got %q", result.DataString("object_id"))
+		}
+	})
+
+	t.Run("resolve not found", func(t *testing.T) {
+		result := v.RunCLI("resolve", "nonexistent")
+		result.MustSucceed(t)
+
+		if result.Data["resolved"] != false {
+			t.Errorf("expected resolved=false for not-found ref")
+		}
+	})
+
+	t.Run("resolve with .md extension", func(t *testing.T) {
+		result := v.RunCLI("resolve", "people/freya.md")
+		result.MustSucceed(t)
+
+		if result.Data["resolved"] != true {
+			t.Errorf("expected resolved=true")
+		}
+		if result.DataString("object_id") != "people/freya" {
+			t.Errorf("expected object_id 'people/freya', got %q", result.DataString("object_id"))
+		}
+	})
+}
+
+// TestIntegration_SchemaTemplate tests the schema template commands.
+func TestIntegration_SchemaTemplate(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	t.Run("get with no template", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "get", "person")
+		result.MustSucceed(t)
+
+		if result.DataString("source") != "none" {
+			t.Errorf("expected source 'none', got %q", result.DataString("source"))
+		}
+	})
+
+	t.Run("set inline template", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "set", "person", "--content", "# {{title}}\n\nEmail: {{field.email}}")
+		result.MustSucceed(t)
+
+		if result.DataString("source") != "inline" {
+			t.Errorf("expected source 'inline', got %q", result.DataString("source"))
+		}
+	})
+
+	t.Run("get after set", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "get", "person")
+		result.MustSucceed(t)
+
+		if result.DataString("source") != "inline" {
+			t.Errorf("expected source 'inline', got %q", result.DataString("source"))
+		}
+		if result.DataString("content") == "" {
+			t.Errorf("expected non-empty template content")
+		}
+	})
+
+	t.Run("render template", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "render", "person", "--title", "Alice")
+		result.MustSucceed(t)
+
+		rendered := result.DataString("rendered")
+		if !strings.Contains(rendered, "# Alice") {
+			t.Errorf("expected rendered to contain '# Alice', got %q", rendered)
+		}
+	})
+
+	t.Run("set file-based template", func(t *testing.T) {
+		// Create a template file first
+		v.AssertDirExists(".")
+		templateContent := "# {{title}}\n\n**Type:** {{type}}\n\n## Notes\n"
+		v.WriteFile("templates/person.md", templateContent)
+
+		result := v.RunCLI("schema", "template", "set", "person", "--file", "templates/person.md")
+		result.MustSucceed(t)
+
+		if result.DataString("source") != "file" {
+			t.Errorf("expected source 'file', got %q", result.DataString("source"))
+		}
+		if result.DataString("spec") != "templates/person.md" {
+			t.Errorf("expected spec 'templates/person.md', got %q", result.DataString("spec"))
+		}
+	})
+
+	t.Run("get file-based template resolves content", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "get", "person")
+		result.MustSucceed(t)
+
+		if result.DataString("source") != "file" {
+			t.Errorf("expected source 'file', got %q", result.DataString("source"))
+		}
+		if result.DataString("content") == "" {
+			t.Errorf("expected non-empty content for file-based template")
+		}
+	})
+
+	t.Run("remove template", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "remove", "person")
+		result.MustSucceed(t)
+
+		if result.Data["removed"] != true {
+			t.Errorf("expected removed=true")
+		}
+	})
+
+	t.Run("get after remove", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "get", "person")
+		result.MustSucceed(t)
+
+		if result.DataString("source") != "none" {
+			t.Errorf("expected source 'none' after remove, got %q", result.DataString("source"))
+		}
+	})
+
+	t.Run("error on built-in type", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "get", "page")
+		if result.OK {
+			t.Errorf("expected error for built-in type")
+		}
+	})
+
+	t.Run("error on unknown type", func(t *testing.T) {
+		result := v.RunCLI("schema", "template", "get", "nonexistent")
+		if result.OK {
+			t.Errorf("expected error for unknown type")
+		}
+	})
+}

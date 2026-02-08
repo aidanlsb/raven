@@ -480,31 +480,25 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
 
 ### 15. Setting Up Templates
 
-Templates provide default content when users create new notes. Help users set up templates by editing their schema and creating template files.
+Templates provide default content when users create new notes. Use the template CLI commands to manage them.
 
-**Adding a template to a type (schema.yaml):**
+**Managing templates with CLI commands:**
 
-Templates are defined using the `template` field on a type definition. You can help users by:
-
-1. Reading the current schema: `raven_read(path="schema.yaml")`
-2. Using `raven_edit` to add a template field to a type
-
-**Example: Adding a meeting template**
-
-```yaml
-# In schema.yaml, add template field to the meeting type:
-types:
-  meeting:
-    default_path: meetings/
-    template: templates/meeting.md    # File-based template
-    fields:
-      time: { type: datetime }
-      attendees: { type: string }
 ```
+# Check current template
+raven_schema_template_get(type_name="meeting")
 
-Then create the template file:
-```
-raven_add(text="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Agenda\n\n## Notes\n\n## Action Items", to="templates/meeting.md")
+# Set an inline template
+raven_schema_template_set(type_name="meeting", content="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Notes\n\n## Action Items")
+
+# Set a file-based template (file must exist)
+raven_schema_template_set(type_name="meeting", file="templates/meeting.md")
+
+# Preview with variables
+raven_schema_template_render(type_name="meeting", title="Weekly Standup")
+
+# Remove a template
+raven_schema_template_remove(type_name="meeting")
 ```
 
 **Template Variables:**
@@ -522,20 +516,10 @@ raven_add(text="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Ag
 | `{{weekday}}` | Day name | "Monday" |
 | `{{field.X}}` | Value of field X from `--field` | Value provided at creation |
 
-**Inline templates (for simple cases):**
+**Inline vs file-based templates:**
 
-For short templates, use inline YAML instead of a file:
-
-```yaml
-types:
-  quick-note:
-    template: |
-      # {{title}}
-      
-      Created: {{date}}
-      
-      ## Notes
-```
+- **Inline** (`--content`): Best for short templates. Stored directly in `schema.yaml`.
+- **File-based** (`--file`): Best for complex templates. Stores a path reference; content loaded at render time.
 
 **Daily note templates (raven.yaml):**
 
@@ -565,6 +549,29 @@ daily_template: |
 1. Ask what type of notes they want templates for
 2. Check the schema to see if the type exists: `raven_schema(subcommand="type meeting")`
 3. Ask what sections/structure they want in new notes
-4. Create the template file: `raven_add(text="...", to="templates/[type].md")`
-5. Edit schema.yaml to add the template field: `raven_edit(path="schema.yaml", ...)`
+4. Set the template: `raven_schema_template_set(type_name="meeting", content="...")`
+5. Preview it: `raven_schema_template_render(type_name="meeting", title="Test")`
 6. Test it: `raven_new(type="meeting", title="Test Meeting")`
+
+### 16. Resolving References
+
+Use `raven_resolve` to check if a reference resolves before using it. This is a pure read operation with no side effects.
+
+```
+# Check if a short name resolves
+raven_resolve(reference="freya")
+
+# Resolve a dynamic date
+raven_resolve(reference="today")
+
+# Validate a reference before linking
+raven_resolve(reference="The Prose Edda")
+```
+
+**Response fields:**
+- `resolved: true/false` — whether resolution succeeded
+- `object_id` — canonical object ID (when resolved)
+- `file_path` — file path relative to vault (when resolved)
+- `type` — object type (when resolved)
+- `match_source` — how it was matched (`literal_path`, `short_name`, `alias`, `name_field`, `date`, etc.)
+- `ambiguous: true` with `matches` array — when multiple objects match

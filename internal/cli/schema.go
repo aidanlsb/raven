@@ -252,6 +252,9 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	if typeDef.NameField != "" {
 		fmt.Printf("  Name field: %s\n", typeDef.NameField)
 	}
+	if typeDef.Template != "" {
+		fmt.Printf("  Template: %s\n", typeDef.Template)
+	}
 	if len(typeDef.Fields) > 0 {
 		fmt.Println("  Fields:")
 		for name, field := range typeDef.Fields {
@@ -410,6 +413,7 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 	if typeDef != nil {
 		result.DefaultPath = typeDef.DefaultPath
 		result.NameField = typeDef.NameField
+		result.Template = typeDef.Template
 
 		if len(typeDef.Fields) > 0 {
 			result.Fields = make(map[string]FieldSchema)
@@ -453,5 +457,6 @@ func isBuiltinType(name string) bool {
 }
 
 func init() {
+	schemaCmd.AddCommand(schemaTemplateCmd)
 	rootCmd.AddCommand(schemaCmd)
 }
