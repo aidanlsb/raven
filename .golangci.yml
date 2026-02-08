@@ -69,9 +69,14 @@ linters:
         linters:
           - errcheck
 
-      # Internal SQLite index uses database/sql without context - acceptable for
+      # Internal SQLite code uses database/sql without context - acceptable for
       # local embedded database. Refactoring to context-aware calls is tracked separately.
-      - path: internal/index/
+      - path: internal/(index|query)/
+        linters:
+          - noctx
+
+      # Test utilities use exec.Command without context - acceptable for tests
+      - path: internal/testutil/
         linters:
           - noctx
 

@@ -191,9 +191,9 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, "invalid title: cannot generate safe filename", "Provide a non-empty title")
 		}
 
-	// Load vault config for directory roots (optional)
-	vaultCfg := loadVaultConfigSafe(vaultPath)
-	objectsRoot := vaultCfg.GetObjectsRoot()
+		// Load vault config for directory roots (optional)
+		vaultCfg := loadVaultConfigSafe(vaultPath)
+		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
 
 		// Check if file exists (with full path resolution including directory roots)
@@ -221,10 +221,10 @@ Examples:
 			return handleError(ErrFileWriteError, err, "")
 		}
 
-	// Auto-reindex if configured (vaultCfg already loaded above)
-	maybeReindex(vaultPath, result.FilePath, vaultCfg)
+		// Auto-reindex if configured (vaultCfg already loaded above)
+		maybeReindex(vaultPath, result.FilePath, vaultCfg)
 
-	if isJSONOutput() {
+		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"file":  result.RelativePath,
 				"type":  typeName,

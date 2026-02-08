@@ -704,7 +704,6 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-
 func init() {
 	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
 	addCmd.Flags().BoolVar(&addTimestampFlag, "timestamp", false, "Prefix with current time (HH:MM)")
