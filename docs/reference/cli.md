@@ -494,6 +494,43 @@ rvn read people/freya.md
 
 ---
 
+### `rvn resolve`
+
+Resolve a reference to its target object.
+
+```bash
+rvn resolve <reference>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `reference` | Reference to resolve (short name, path, alias, date, etc.) |
+
+**Supports all reference formats:**
+- Short names: `freya` → `people/freya`
+- Full paths: `people/freya` or `people/freya.md`
+- Aliases and name field values
+- Date references: `2025-02-01` → `daily/2025-02-01`
+- Dynamic dates: `today`, `yesterday`, `tomorrow`
+- Section references: `projects/website#tasks`
+
+**Examples:**
+
+```bash
+rvn resolve freya --json          # Resolve short name
+rvn resolve people/freya --json   # Resolve full path
+rvn resolve today --json          # Resolve dynamic date
+rvn resolve "The Prose Edda"      # Resolve name field value
+```
+
+**JSON output:**
+
+- `resolved: true` with `object_id`, `file_path`, `type`, `match_source`
+- `resolved: false` when not found
+- `resolved: false, ambiguous: true` with `matches` array when ambiguous
+
+---
+
 ## Vault Management
 
 ### `rvn reindex`
@@ -981,6 +1018,107 @@ rvn schema validate
 ```
 
 Checks for internal consistency issues in `schema.yaml`.
+
+---
+
+### `rvn schema template get`
+
+Show the template configured for a type.
+
+```bash
+rvn schema template get <type>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `type` | Type to get template for (e.g., `meeting`, `project`) |
+
+Returns the template spec, source type (`inline`, `file`, or `none`), and resolved content.
+
+**Examples:**
+
+```bash
+rvn schema template get meeting --json
+rvn schema template get project --json
+```
+
+---
+
+### `rvn schema template set`
+
+Set or update the template for a type.
+
+```bash
+rvn schema template set <type> --content "..." 
+rvn schema template set <type> --file <path>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `type` | Type to set template for |
+
+| Flag | Description |
+|------|-------------|
+| `--content` | Inline template content (mutually exclusive with `--file`) |
+| `--file` | Path to template file relative to vault root (mutually exclusive with `--content`) |
+
+**Template variables:** `{{title}}`, `{{slug}}`, `{{type}}`, `{{date}}`, `{{datetime}}`, `{{year}}`, `{{month}}`, `{{day}}`, `{{weekday}}`, `{{field.<name>}}`
+
+**Examples:**
+
+```bash
+rvn schema template set meeting --content "# {{title}}\n\n## Notes\n" --json
+rvn schema template set meeting --file templates/meeting.md --json
+```
+
+---
+
+### `rvn schema template remove`
+
+Remove the template from a type.
+
+```bash
+rvn schema template remove <type>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `type` | Type to remove template from |
+
+Clears the template field from the type definition. Does not delete template files from disk.
+
+**Examples:**
+
+```bash
+rvn schema template remove meeting --json
+```
+
+---
+
+### `rvn schema template render`
+
+Preview a type's template with variables applied.
+
+```bash
+rvn schema template render <type> [--title "..."] [--field key=value]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `type` | Type whose template to render |
+
+| Flag | Description |
+|------|-------------|
+| `--title` | Title to use for rendering (default: sample title) |
+| `--field` | Set field value for rendering (repeatable) |
+
+**Examples:**
+
+```bash
+rvn schema template render meeting --json
+rvn schema template render meeting --title "Weekly Standup" --json
+rvn schema template render meeting --title "1:1" --field attendees="Alice, Bob" --json
+```
 
 ---
 

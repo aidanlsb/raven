@@ -111,6 +111,7 @@ rvn schema commands --json
 | `raven_search` | Full-text search across vault |
 | `raven_backlinks` | Find objects that reference a target |
 | `raven_read` | Read a file (raw or enriched) |
+| `raven_resolve` | Resolve a reference to its target object |
 
 **Full-text search note:** if you see SQLite/FTS errors (e.g. `SQL logic error: no such column: ...`) when using `raven_search`, quote special/hyphenated tokens:
 
@@ -147,6 +148,11 @@ rvn schema commands --json
 | `raven_schema_remove_trait` | Remove a trait |
 | `raven_schema_remove_field` | Remove a field |
 | `raven_schema_rename_type` | Rename a type and update all references |
+| `raven_schema_rename_field` | Rename a field and update all references |
+| `raven_schema_template_get` | Get the template for a type |
+| `raven_schema_template_set` | Set or update a type's template |
+| `raven_schema_template_remove` | Remove a type's template |
+| `raven_schema_template_render` | Preview a template with variables applied |
 | `raven_schema_validate` | Validate schema correctness |
 
 ### Saved Queries
@@ -354,6 +360,17 @@ raven_schema_update_type(name="person", name_field="name")
 raven_schema_rename_type(old_name="event", new_name="meeting")  # Preview
 raven_schema_rename_type(old_name="event", new_name="meeting", confirm=true)  # Apply
 raven_reindex(full=true)  # Always reindex after rename
+
+# Manage templates
+raven_schema_template_get(type_name="meeting")
+raven_schema_template_set(type_name="meeting", content="# {{title}}\n\n## Notes\n")
+raven_schema_template_set(type_name="meeting", file="templates/meeting.md")
+raven_schema_template_render(type_name="meeting", title="Weekly Standup")
+raven_schema_template_remove(type_name="meeting")
+
+# Resolve references
+raven_resolve(reference="freya")         # Short name → people/freya
+raven_resolve(reference="today")         # Dynamic date → daily/2026-02-07
 ```
 
 ### Vault Health
