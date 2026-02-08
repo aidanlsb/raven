@@ -11,7 +11,7 @@
 
 ---
 
-Markdown notes with schema, powerful queries, a CLI, and MCP integration.
+Markdown notes with a schema and queries, CLI, and MCP integration.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ rvn daily  # Open today's note
 
 ---
 
-## See It In Action
+## Example Usage
 
 ### 1. Create a typed note
 
@@ -641,6 +641,3 @@ The MCP server also exposes guidance resources at `raven://guide/*` that help ag
 
 ---
 
-## License
-
-MIT
