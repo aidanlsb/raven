@@ -4,4 +4,3 @@ package query
 // These types have been moved to the model package:
 // - model.Object (was ObjectResult)
 // - model.Trait (was TraitResult)
-

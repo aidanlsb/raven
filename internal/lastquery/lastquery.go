@@ -23,13 +23,13 @@ type LastQuery struct {
 // ResultEntry represents a single result from the query.
 // Contains all data needed for display and operations.
 type ResultEntry struct {
-	Num      int    `json:"num"`      // 1-indexed number for user reference
-	ID       string `json:"id"`       // Unique identifier (trait ID or object ID)
-	Kind     string `json:"kind"`     // "trait", "object", "reference", or "search"
-	Content  string `json:"content"`  // Human-readable description
-	Location string `json:"location"` // Short location (e.g., "daily/2026-01-25:42")
+	Num      int    `json:"num"`       // 1-indexed number for user reference
+	ID       string `json:"id"`        // Unique identifier (trait ID or object ID)
+	Kind     string `json:"kind"`      // "trait", "object", "reference", or "search"
+	Content  string `json:"content"`   // Human-readable description
+	Location string `json:"location"`  // Short location (e.g., "daily/2026-01-25:42")
 	FilePath string `json:"file_path"` // Full file path
-	Line     int    `json:"line"`     // Line number
+	Line     int    `json:"line"`      // Line number
 
 	// Trait-specific fields (nil/empty for non-traits)
 	TraitType  string  `json:"trait_type,omitempty"`
@@ -42,8 +42,8 @@ type ResultEntry struct {
 
 // Errors
 var (
-	ErrNoLastQuery    = errors.New("no last query available")
-	ErrInvalidNumber  = errors.New("invalid result number")
+	ErrNoLastQuery      = errors.New("no last query available")
+	ErrInvalidNumber    = errors.New("invalid result number")
 	ErrNumberOutOfRange = errors.New("result number out of range")
 )
 
@@ -79,7 +79,7 @@ func Write(vaultPath string, lq *LastQuery) error {
 // Returns ErrNoLastQuery if no last query file exists.
 func Read(vaultPath string) (*LastQuery, error) {
 	path := Path(vaultPath)
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -101,7 +101,7 @@ func Read(vaultPath string) (*LastQuery, error) {
 // Returns an error if any number is out of range.
 func (lq *LastQuery) GetByNumbers(nums []int) ([]ResultEntry, error) {
 	results := make([]ResultEntry, 0, len(nums))
-	
+
 	for _, num := range nums {
 		if num < 1 || num > len(lq.Results) {
 			return nil, fmt.Errorf("%w: %d (valid range: 1-%d)", ErrNumberOutOfRange, num, len(lq.Results))
@@ -109,7 +109,7 @@ func (lq *LastQuery) GetByNumbers(nums []int) ([]ResultEntry, error) {
 		// Convert 1-indexed to 0-indexed
 		results = append(results, lq.Results[num-1])
 	}
-	
+
 	return results, nil
 }
 
