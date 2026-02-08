@@ -33,11 +33,12 @@ Examples:
 		vaultCfg := loadVaultConfigSafe(vaultPath)
 
 		// Resolve the reference to get the canonical object ID
-		result, err := ResolveReference(reference, ResolveOptions{
+		// Use dynamic date resolution so "today", "yesterday", etc. work.
+		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
 			VaultPath:    vaultPath,
 			VaultConfig:  vaultCfg,
 			AllowMissing: true,
-		})
+		}, true)
 		if err != nil {
 			return handleResolveError(err, reference)
 		}
