@@ -154,13 +154,13 @@ func TestUpdateReferenceAtLineUpdatesRefsOnTraitLines(t *testing.T) {
 	}
 
 	before := strings.Join([]string{
-		"# Daily",                                                    // Line 1
-		"",                                                           // Line 2
-		"- @todo(done) Check with [[projects/old]] about this",       // Line 3
-		"- @todo Follow up on [[projects/old|Old Project]] status",   // Line 4
-		"- @highlight Important note about [[projects/old#tasks]]",   // Line 5
-		"- Regular text with [[projects/old]]",                       // Line 6
-		"",                                                           // Line 7
+		"# Daily", // Line 1
+		"",        // Line 2
+		"- @todo(done) Check with [[projects/old]] about this",     // Line 3
+		"- @todo Follow up on [[projects/old|Old Project]] status", // Line 4
+		"- @highlight Important note about [[projects/old#tasks]]", // Line 5
+		"- Regular text with [[projects/old]]",                     // Line 6
+		"",                                                         // Line 7
 	}, "\n")
 	if err := os.WriteFile(sourceAbs, []byte(before), 0644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -288,15 +288,15 @@ func TestUpdateReferenceAtLineWithSectionSourceID(t *testing.T) {
 	}
 
 	before := strings.Join([]string{
-		"---",                                                                    // Line 1
-		"type: date",                                                             // Line 2
-		"---",                                                                    // Line 3
-		"",                                                                       // Line 4
-		"# meeting-notes",                                                        // Line 5
-		"::meeting",                                                              // Line 6
-		"- @todo(done) Check the [[projects/old]] status",                        // Line 7
-		"- @todo Follow up on [[projects/old|Old Project]]",                      // Line 8
-		"",                                                                       // Line 9
+		"---",             // Line 1
+		"type: date",      // Line 2
+		"---",             // Line 3
+		"",                // Line 4
+		"# meeting-notes", // Line 5
+		"::meeting",       // Line 6
+		"- @todo(done) Check the [[projects/old]] status",   // Line 7
+		"- @todo Follow up on [[projects/old|Old Project]]", // Line 8
+		"", // Line 9
 	}, "\n")
 	if err := os.WriteFile(sourceAbs, []byte(before), 0644); err != nil {
 		t.Fatalf("write: %v", err)

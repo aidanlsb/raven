@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -72,7 +73,7 @@ func interpolate(s string, inputs map[string]string, steps map[string]interface{
 	}
 
 	if len(errs) > 0 {
-		return out.String(), fmt.Errorf(strings.Join(errs, "; "))
+		return out.String(), errors.New(strings.Join(errs, "; "))
 	}
 	return out.String(), nil
 }

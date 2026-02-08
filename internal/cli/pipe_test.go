@@ -66,7 +66,7 @@ func TestWritePipeableListSanitizesContent(t *testing.T) {
 	WritePipeableList(&buf, items)
 
 	output := buf.String()
-	
+
 	// Should not contain tabs within content (only as separators)
 	// Each line should have exactly 3 tabs (4 fields)
 	lines := strings.Split(strings.TrimSpace(output), "\n")

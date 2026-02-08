@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ With --apply, applies an operation directly to selected query results:
 		// Load the last results
 		lr, err := lastresults.Read(vaultPath)
 		if err != nil {
-			if err == lastresults.ErrNoLastResults {
+			if errors.Is(err, lastresults.ErrNoLastResults) {
 				return handleErrorMsg(ErrMissingArgument,
 					"no results available",
 					"Run a query, search, or backlinks command first, then use 'rvn last'")

@@ -289,4 +289,3 @@ func TestAllNameFieldValues(t *testing.T) {
 		t.Fatalf("nameFieldMap[%q] = %q, want %q", "The Prose Edda", got, "books/the-prose-edda")
 	}
 }
-

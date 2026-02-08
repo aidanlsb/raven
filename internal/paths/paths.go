@@ -15,11 +15,6 @@ import (
 	"strings"
 )
 
-// pathError is a simple error type for path-related errors.
-type pathError string
-
-func (e pathError) Error() string { return string(e) }
-
 // ErrPathOutsideVault is returned when a path is outside the vault.
 var ErrPathOutsideVault = errors.New("path is outside vault")
 
