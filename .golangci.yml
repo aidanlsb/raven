@@ -37,6 +37,11 @@ linters:
 
   exclusions:
     generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
       # Test files can have longer functions and shadowing predeclared identifiers
       - path: _test\.go
