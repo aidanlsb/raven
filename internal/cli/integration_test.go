@@ -5,6 +5,7 @@ package cli_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/testutil"
 )
@@ -630,5 +631,56 @@ func TestIntegration_SchemaTemplate(t *testing.T) {
 		if result.OK {
 			t.Errorf("expected error for unknown type")
 		}
+	})
+}
+
+// TestIntegration_BacklinksOutlinksDynamicDates tests that backlinks and outlinks
+// resolve dynamic date keywords like "today" and "yesterday".
+func TestIntegration_BacklinksOutlinksDynamicDates(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML("daily_directory: daily\n").
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+# Alice
+`).
+		WithFile("daily/"+today+".md", `---
+type: page
+---
+# Daily Note
+
+Met with [[people/alice]] today.
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	t.Run("backlinks with dynamic date today", func(t *testing.T) {
+		// "today" should resolve to daily/<today> and alice should have a backlink from it
+		result := v.RunCLI("backlinks", "alice")
+		result.MustSucceed(t)
+		result.AssertResultCount(t, "items", 1)
+
+		// Now test that "today" resolves as a target for backlinks
+		result = v.RunCLI("backlinks", "today")
+		result.MustSucceed(t)
+
+		if result.DataString("target") != "daily/"+today {
+			t.Errorf("expected target 'daily/%s', got %q", today, result.DataString("target"))
+		}
+	})
+
+	t.Run("outlinks with dynamic date today", func(t *testing.T) {
+		result := v.RunCLI("outlinks", "today")
+		result.MustSucceed(t)
+
+		if result.DataString("source") != "daily/"+today {
+			t.Errorf("expected source 'daily/%s', got %q", today, result.DataString("source"))
+		}
+		result.AssertResultCount(t, "items", 1)
 	})
 }
