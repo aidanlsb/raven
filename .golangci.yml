@@ -64,6 +64,22 @@ linters:
         linters:
           - errcheck
 
+      # Deferred lock.Release() is idiomatic - same pattern as defer f.Close()
+      - text: "Error return value of `lock.Release`"
+        linters:
+          - errcheck
+
+      # Internal SQLite index uses database/sql without context - acceptable for
+      # local embedded database. Refactoring to context-aware calls is tracked separately.
+      - path: internal/index/
+        linters:
+          - noctx
+
+      # QF (quick fix) suggestions from staticcheck are style hints, not errors
+      - text: "^QF"
+        linters:
+          - staticcheck
+
 formatters:
   enable:
     - gofmt         # Check if code is gofmt-ed

@@ -197,56 +197,6 @@ func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
 	return result, nil
 }
 
-// parseValuePredicate parses value==val, value<val, value>val, etc.
-// For string matching, use function-style predicates: contains(), startswith(), etc.
-func (p *Parser) parseValuePredicate(negated bool) (Predicate, error) {
-	// Determine the operator
-	var compareOp CompareOp
-
-	switch p.curr.Type {
-	case TokenEqEq:
-		compareOp = CompareEq
-		p.advance()
-	case TokenBangEq:
-		compareOp = CompareNeq
-		p.advance()
-	case TokenLt:
-		compareOp = CompareLt
-		p.advance()
-	case TokenGt:
-		compareOp = CompareGt
-		p.advance()
-	case TokenLte:
-		compareOp = CompareLte
-		p.advance()
-	case TokenGte:
-		compareOp = CompareGte
-		p.advance()
-	default:
-		return nil, fmt.Errorf("expected comparison operator (==, !=, <, >, <=, >=) after 'value'; for string matching use contains(), startswith(), endswith(), or matches()")
-	}
-
-	var value string
-
-	switch p.curr.Type {
-	case TokenIdent:
-		value = p.curr.Value
-	case TokenRef:
-		value = p.curr.Value
-	case TokenString:
-		value = p.curr.Value
-	default:
-		return nil, fmt.Errorf("expected value or quoted string")
-	}
-	p.advance()
-
-	return &ValuePredicate{
-		basePredicate: basePredicate{negated: negated},
-		Value:         value,
-		CompareOp:     compareOp,
-	}, nil
-}
-
 // parseStringFuncPredicate parses: contains(.field, "value"), startswith(.field, "value"), etc.
 // Also supports: contains(_, "value") for use within array quantifiers.
 func (p *Parser) parseStringFuncPredicate(negated bool, funcType StringFuncType) (Predicate, error) {
@@ -320,57 +270,6 @@ func (p *Parser) parseStringFuncPredicate(negated bool, funcType StringFuncType)
 	}
 
 	return pred, nil
-}
-
-// parseNullCheckPredicate parses: isnull(.field), notnull(.field)
-// isNull=true means we're parsing isnull(), isNull=false means notnull()
-func (p *Parser) parseNullCheckPredicate(negated bool, isNull bool) (Predicate, error) {
-	if err := p.expect(TokenLParen); err != nil {
-		return nil, err
-	}
-
-	// Parse argument: .field
-	if p.curr.Type != TokenDot {
-		funcName := "notnull"
-		if isNull {
-			funcName = "isnull"
-		}
-		return nil, fmt.Errorf("expected .field as argument to %s()", funcName)
-	}
-	p.advance()
-
-	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected field name after '.'")
-	}
-	field := p.curr.Value
-	p.advance()
-
-	if err := p.expect(TokenRParen); err != nil {
-		return nil, err
-	}
-
-	// The SQL generator uses CompareOp to determine exists vs not exists:
-	// - CompareEq with IsExists=true -> field IS NOT NULL (exists)
-	// - CompareNeq with IsExists=true -> field IS NULL (not exists)
-	//
-	// Truth table:
-	// isnull(.field)   -> CompareNeq (field IS NULL)
-	// !isnull(.field)  -> negate the whole predicate
-	// notnull(.field)  -> CompareEq (field IS NOT NULL)
-	// !notnull(.field) -> negate the whole predicate
-
-	compareOp := CompareEq // notnull = field exists
-	if isNull {
-		compareOp = CompareNeq // isnull = field does not exist
-	}
-
-	return &FieldPredicate{
-		basePredicate: basePredicate{negated: negated},
-		Field:         field,
-		Value:         "*",
-		IsExists:      true,
-		CompareOp:     compareOp,
-	}, nil
 }
 
 // parseArrayQuantifierPredicate parses: any(.field, predicate), all(.field, predicate), none(.field, predicate)

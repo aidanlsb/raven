@@ -122,4 +122,3 @@ func TestResolveObjectToFileWithRoots_NotFound(t *testing.T) {
 		t.Fatalf("expected not found error, got %v", err)
 	}
 }
-

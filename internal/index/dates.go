@@ -65,4 +65,3 @@ func ParseDateFilter(filter string, fieldExpr string) (condition string, args []
 		return fieldExpr + " = ?", []interface{}{parsed.Format(dates.DateLayout)}, nil
 	}
 }
-

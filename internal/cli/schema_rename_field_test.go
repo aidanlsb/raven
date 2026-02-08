@@ -190,4 +190,3 @@ type: page
 		t.Fatalf("expected file unchanged when conflicts exist")
 	}
 }
-

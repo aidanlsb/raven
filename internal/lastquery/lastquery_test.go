@@ -1,6 +1,7 @@
 package lastquery
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -71,7 +72,7 @@ func TestReadNoFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	
 	_, err := Read(tmpDir)
-	if err != ErrNoLastQuery {
+	if !errors.Is(err, ErrNoLastQuery) {
 		t.Errorf("Expected ErrNoLastQuery, got %v", err)
 	}
 }
