@@ -32,7 +32,7 @@ linters:
   settings:
     misspell:
       locale: US
-      ignore-words:
+      ignore-rules:
         - cancelled
 
   exclusions:
