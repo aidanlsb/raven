@@ -195,7 +195,6 @@ func (OrPredicate) predicateNode() {}
 // NotPredicate represents the negation of a predicate.
 // Syntax: !(pred), !pred
 type NotPredicate struct {
-	basePredicate
 	Inner Predicate
 }
 

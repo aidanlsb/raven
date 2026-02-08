@@ -1,6 +1,7 @@
 package lastquery
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,7 +11,7 @@ import (
 func TestWriteAndRead(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
-	
+
 	// Create .raven directory
 	ravenDir := filepath.Join(tmpDir, ".raven")
 	if err := os.MkdirAll(ravenDir, 0755); err != nil {
@@ -69,9 +70,9 @@ func TestWriteAndRead(t *testing.T) {
 
 func TestReadNoFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	_, err := Read(tmpDir)
-	if err != ErrNoLastQuery {
+	if !errors.Is(err, ErrNoLastQuery) {
 		t.Errorf("Expected ErrNoLastQuery, got %v", err)
 	}
 }
@@ -163,7 +164,7 @@ func TestGetAllIDs(t *testing.T) {
 	if len(ids) != 3 {
 		t.Errorf("GetAllIDs() returned %d IDs, want 3", len(ids))
 	}
-	
+
 	expected := []string{"id1", "id2", "id3"}
 	for i, id := range ids {
 		if id != expected[i] {

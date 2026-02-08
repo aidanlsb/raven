@@ -95,7 +95,7 @@ func Read(vaultPath string) (*LastResults, error) {
 	// Fallback: legacy last-query.json
 	lq, err := lastquery.Read(vaultPath)
 	if err != nil {
-		if err == lastquery.ErrNoLastQuery {
+		if errors.Is(err, lastquery.ErrNoLastQuery) {
 			return nil, ErrNoLastResults
 		}
 		return nil, fmt.Errorf("failed to read last query: %w", err)

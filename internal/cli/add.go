@@ -704,14 +704,6 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-// resolveToPath resolves the --to flag value to a file path using the unified resolver.
-func resolveToPath(vaultPath, toValue string, vaultCfg *config.VaultConfig) (string, error) {
-	return ResolveReferenceToFile(toValue, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-	})
-}
-
 func init() {
 	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
 	addCmd.Flags().BoolVar(&addTimestampFlag, "timestamp", false, "Prefix with current time (HH:MM)")

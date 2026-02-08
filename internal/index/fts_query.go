@@ -113,4 +113,3 @@ func sanitizeFTSQuery(q string) string {
 
 	return b.String()
 }
-
