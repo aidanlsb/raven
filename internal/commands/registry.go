@@ -1187,4 +1187,67 @@ with their match sources.`,
 			"Validate references without side effects",
 		},
 	},
+	"import": {
+		Name:        "import",
+		Description: "Import objects from JSON data",
+		LongDesc: `Import objects from external JSON data into the vault.
+
+Reads a JSON array (or single object) and creates or updates vault objects
+by mapping input fields to a schema type's fields.
+
+Input can come from stdin or a file (--file). Field mappings can be specified
+inline (--map) or via a YAML mapping file (--mapping).
+
+For homogeneous imports (single type), specify the type as a positional argument
+or in the mapping file. For heterogeneous imports (mixed types), use a mapping
+file with type_field and per-type mappings.
+
+By default, import performs an upsert: creates new objects and updates existing
+ones. Use --create-only or --update-only to restrict behavior.
+
+Mapping file format (homogeneous):
+  type: person
+  key: name
+  map:
+    full_name: name
+    mail: email
+
+Mapping file format (heterogeneous):
+  type_field: kind
+  types:
+    contact:
+      type: person
+      key: name
+      map:
+        full_name: name
+    task:
+      type: project
+      map:
+        title: name`,
+		Args: []ArgMeta{
+			{Name: "type", Description: "Target Raven type (for homogeneous imports)", Required: false, DynamicComp: "types"},
+		},
+		Flags: []FlagMeta{
+			{Name: "file", Description: "Read JSON from file instead of stdin", Type: FlagTypeString},
+			{Name: "mapping", Description: "Path to YAML mapping file", Type: FlagTypeString},
+			{Name: "map", Description: "Field mapping: external_key=schema_field (repeatable)", Type: FlagTypeStringSlice},
+			{Name: "key", Description: "Field used for matching existing objects (default: type's name_field)", Type: FlagTypeString},
+			{Name: "dry-run", Description: "Preview changes without writing", Type: FlagTypeBool},
+			{Name: "create-only", Description: "Only create new objects, skip updates", Type: FlagTypeBool},
+			{Name: "update-only", Description: "Only update existing objects, skip creation", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply changes", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			`echo '[{"name": "Freya"}]' | rvn import person --json`,
+			`echo '[{"full_name": "Thor"}]' | rvn import person --map full_name=name --json`,
+			"rvn import --mapping contacts.yaml --file contacts.json --json",
+			"rvn import --mapping migration.yaml --file dump.json --dry-run --json",
+		},
+		UseCases: []string{
+			"Import contacts, events, or tasks from external tools",
+			"Migrate data from another note-taking app",
+			"Bulk-create objects from structured data",
+			"Sync external data sources into the vault",
+		},
+	},
 }
