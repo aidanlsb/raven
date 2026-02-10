@@ -190,18 +190,18 @@ func TestResolveItemMapping_Homogeneous(t *testing.T) {
 
 	item := map[string]interface{}{"full_name": "Freya", "email": "f@a.realm"}
 
-	typeName, fieldMap, matchKey, err := resolveItemMapping(item, cfg, sch)
+	itemCfg, err := resolveItemMapping(item, cfg, sch)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if typeName != "person" {
-		t.Errorf("typeName: got %q, want %q", typeName, "person")
+	if itemCfg.TypeName != "person" {
+		t.Errorf("TypeName: got %q, want %q", itemCfg.TypeName, "person")
 	}
-	if fieldMap["full_name"] != "name" {
-		t.Errorf("fieldMap: got %v", fieldMap)
+	if itemCfg.FieldMap["full_name"] != "name" {
+		t.Errorf("FieldMap: got %v", itemCfg.FieldMap)
 	}
-	if matchKey != "name" {
-		t.Errorf("matchKey: got %q, want %q", matchKey, "name")
+	if itemCfg.MatchKey != "name" {
+		t.Errorf("MatchKey: got %q, want %q", itemCfg.MatchKey, "name")
 	}
 }
 
@@ -239,43 +239,43 @@ func TestResolveItemMapping_Heterogeneous(t *testing.T) {
 
 	// Test contact item
 	contactItem := map[string]interface{}{"kind": "contact", "full_name": "Freya"}
-	typeName, fieldMap, matchKey, err := resolveItemMapping(contactItem, cfg, sch)
+	itemCfg, err := resolveItemMapping(contactItem, cfg, sch)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if typeName != "person" {
-		t.Errorf("typeName: got %q, want %q", typeName, "person")
+	if itemCfg.TypeName != "person" {
+		t.Errorf("TypeName: got %q, want %q", itemCfg.TypeName, "person")
 	}
-	if fieldMap["full_name"] != "name" {
-		t.Errorf("fieldMap: got %v", fieldMap)
+	if itemCfg.FieldMap["full_name"] != "name" {
+		t.Errorf("FieldMap: got %v", itemCfg.FieldMap)
 	}
-	if matchKey != "name" {
-		t.Errorf("matchKey: got %q, want %q", matchKey, "name")
+	if itemCfg.MatchKey != "name" {
+		t.Errorf("MatchKey: got %q, want %q", itemCfg.MatchKey, "name")
 	}
 
 	// Test task item
 	taskItem := map[string]interface{}{"kind": "task", "title": "Bifrost"}
-	typeName, fieldMap, matchKey, err = resolveItemMapping(taskItem, cfg, sch)
+	itemCfg, err = resolveItemMapping(taskItem, cfg, sch)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if typeName != "project" {
-		t.Errorf("typeName: got %q, want %q", typeName, "project")
+	if itemCfg.TypeName != "project" {
+		t.Errorf("TypeName: got %q, want %q", itemCfg.TypeName, "project")
 	}
-	if fieldMap["title"] != "name" {
-		t.Errorf("fieldMap: got %v", fieldMap)
+	if itemCfg.FieldMap["title"] != "name" {
+		t.Errorf("FieldMap: got %v", itemCfg.FieldMap)
 	}
 
 	// Test unknown source type
 	unknownItem := map[string]interface{}{"kind": "unknown", "title": "X"}
-	_, _, _, err = resolveItemMapping(unknownItem, cfg, sch)
+	_, err = resolveItemMapping(unknownItem, cfg, sch)
 	if err == nil {
 		t.Error("expected error for unknown source type")
 	}
 
 	// Test missing type field
 	missingItem := map[string]interface{}{"title": "X"}
-	_, _, _, err = resolveItemMapping(missingItem, cfg, sch)
+	_, err = resolveItemMapping(missingItem, cfg, sch)
 	if err == nil {
 		t.Error("expected error for missing type field")
 	}
@@ -302,12 +302,12 @@ func TestResolveItemMapping_ExplicitKey(t *testing.T) {
 
 	item := map[string]interface{}{"name": "Freya", "email": "f@a.realm"}
 
-	_, _, matchKey, err := resolveItemMapping(item, cfg, sch)
+	itemCfg, err := resolveItemMapping(item, cfg, sch)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if matchKey != "email" {
-		t.Errorf("matchKey: got %q, want %q", matchKey, "email")
+	if itemCfg.MatchKey != "email" {
+		t.Errorf("MatchKey: got %q, want %q", itemCfg.MatchKey, "email")
 	}
 }
 
@@ -559,5 +559,196 @@ map:
 	}
 	if cfg.Map["mail"] != "email" {
 		t.Errorf("Map[mail] from CLI: got %q, want %q", cfg.Map["mail"], "email")
+	}
+}
+
+func TestExtractContentField(t *testing.T) {
+	// String content field
+	mapped := map[string]interface{}{"name": "Freya", "bio": "Goddess of love"}
+	got := extractContentField(mapped, "bio")
+	if got != "Goddess of love" {
+		t.Errorf("got %q, want %q", got, "Goddess of love")
+	}
+	if _, exists := mapped["bio"]; exists {
+		t.Error("bio should have been deleted from mapped")
+	}
+	if mapped["name"] != "Freya" {
+		t.Error("other fields should be unchanged")
+	}
+
+	// Missing content field
+	mapped2 := map[string]interface{}{"name": "Thor"}
+	got2 := extractContentField(mapped2, "bio")
+	if got2 != "" {
+		t.Errorf("got %q, want empty string", got2)
+	}
+
+	// Empty content field name (no-op)
+	mapped3 := map[string]interface{}{"name": "Loki", "notes": "trickster"}
+	got3 := extractContentField(mapped3, "")
+	if got3 != "" {
+		t.Errorf("got %q, want empty string for empty field name", got3)
+	}
+	if _, exists := mapped3["notes"]; !exists {
+		t.Error("notes should not have been deleted")
+	}
+}
+
+func TestReplaceBodyContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		file     string
+		newBody  string
+		want     string
+	}{
+		{
+			name:    "replaces body after frontmatter",
+			file:    "---\ntype: person\nname: Freya\n---\n\nOld content here.\n",
+			newBody: "New biography content.",
+			want:    "---\ntype: person\nname: Freya\n---\n\nNew biography content.\n",
+		},
+		{
+			name:    "handles empty existing body",
+			file:    "---\ntype: person\n---\n",
+			newBody: "Brand new content.",
+			want:    "---\ntype: person\n---\n\nBrand new content.\n",
+		},
+		{
+			name:    "adds trailing newline",
+			file:    "---\ntype: person\n---\n\nold",
+			newBody: "new",
+			want:    "---\ntype: person\n---\n\nnew\n",
+		},
+		{
+			name:    "preserves trailing newline in body",
+			file:    "---\ntype: person\n---\n",
+			newBody: "content with newline\n",
+			want:    "---\ntype: person\n---\n\ncontent with newline\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := replaceBodyContent(tt.file, tt.newBody)
+			if got != tt.want {
+				t.Errorf("got:\n%s\nwant:\n%s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveItemMapping_ContentField(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"person": {
+				NameField: "name",
+				Fields: map[string]*schema.FieldDefinition{
+					"name": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+	}
+
+	// Homogeneous with content_field
+	cfg := &importMappingConfig{
+		Type:         "person",
+		ContentField: "bio",
+		Map:          map[string]string{},
+	}
+
+	item := map[string]interface{}{"name": "Freya", "bio": "Goddess of love"}
+	itemCfg, err := resolveItemMapping(item, cfg, sch)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if itemCfg.ContentField != "bio" {
+		t.Errorf("ContentField: got %q, want %q", itemCfg.ContentField, "bio")
+	}
+
+	// Heterogeneous with per-type content_field
+	heteroCfg := &importMappingConfig{
+		TypeField: "kind",
+		Types: map[string]importTypeMapping{
+			"contact": {
+				Type:         "person",
+				Map:          map[string]string{},
+				ContentField: "notes",
+			},
+		},
+	}
+
+	contactItem := map[string]interface{}{"kind": "contact", "name": "Thor", "notes": "God of thunder"}
+	itemCfg, err = resolveItemMapping(contactItem, heteroCfg, sch)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if itemCfg.ContentField != "notes" {
+		t.Errorf("ContentField: got %q, want %q", itemCfg.ContentField, "notes")
+	}
+}
+
+func TestBuildMappingConfig_ContentFieldFromCLI(t *testing.T) {
+	origMapping := importMapping
+	origMapFlags := importMapFlags
+	origKey := importKey
+	origContentField := importContentField
+	defer func() {
+		importMapping = origMapping
+		importMapFlags = origMapFlags
+		importKey = origKey
+		importContentField = origContentField
+	}()
+
+	importMapping = ""
+	importMapFlags = nil
+	importKey = ""
+	importContentField = "bio"
+
+	cfg, err := buildMappingConfig([]string{"person"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.ContentField != "bio" {
+		t.Errorf("ContentField: got %q, want %q", cfg.ContentField, "bio")
+	}
+}
+
+func TestBuildMappingConfig_ContentFieldFromFile(t *testing.T) {
+	origMapping := importMapping
+	origMapFlags := importMapFlags
+	origKey := importKey
+	origContentField := importContentField
+	defer func() {
+		importMapping = origMapping
+		importMapFlags = origMapFlags
+		importKey = origKey
+		importContentField = origContentField
+	}()
+
+	dir := t.TempDir()
+	mappingFile := filepath.Join(dir, "mapping.yaml")
+	content := `type: person
+key: name
+content_field: bio
+map:
+  full_name: name
+`
+	if err := os.WriteFile(mappingFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write mapping file: %v", err)
+	}
+
+	importMapping = mappingFile
+	importMapFlags = nil
+	importKey = ""
+	importContentField = ""
+
+	cfg, err := buildMappingConfig([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.ContentField != "bio" {
+		t.Errorf("ContentField: got %q, want %q", cfg.ContentField, "bio")
 	}
 }
