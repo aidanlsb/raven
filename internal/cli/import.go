@@ -19,14 +19,15 @@ import (
 )
 
 var (
-	importFile       string
-	importMapping    string
-	importMapFlags   []string
-	importKey        string
-	importDryRun     bool
-	importCreateOnly bool
-	importUpdateOnly bool
-	importConfirm    bool
+	importFile         string
+	importMapping      string
+	importMapFlags     []string
+	importKey          string
+	importContentField string
+	importDryRun       bool
+	importCreateOnly   bool
+	importUpdateOnly   bool
+	importConfirm      bool
 )
 
 var importCmd = &cobra.Command{
@@ -60,6 +61,9 @@ Examples:
   # Dry run to preview changes
   echo '[{"name": "Loki"}]' | rvn import person --dry-run
 
+  # Import with content (page body) from a JSON field
+  echo '[{"name": "Freya", "bio": "Goddess of love"}]' | rvn import person --content-field bio
+
   # Heterogeneous import with mapping file
   rvn import --mapping migration.yaml --file dump.json`,
 	Args: cobra.MaximumNArgs(1),
@@ -69,9 +73,10 @@ Examples:
 // importMappingConfig represents a parsed mapping configuration.
 type importMappingConfig struct {
 	// Homogeneous: single type
-	Type string            `yaml:"type"`
-	Key  string            `yaml:"key"`
-	Map  map[string]string `yaml:"map"`
+	Type         string            `yaml:"type"`
+	Key          string            `yaml:"key"`
+	Map          map[string]string `yaml:"map"`
+	ContentField string            `yaml:"content_field"`
 
 	// Heterogeneous: multiple types
 	TypeField string                       `yaml:"type_field"`
@@ -80,9 +85,10 @@ type importMappingConfig struct {
 
 // importTypeMapping defines the mapping for one source type.
 type importTypeMapping struct {
-	Type string            `yaml:"type"` // Raven type name
-	Key  string            `yaml:"key"`
-	Map  map[string]string `yaml:"map"`
+	Type         string            `yaml:"type"` // Raven type name
+	Key          string            `yaml:"key"`
+	Map          map[string]string `yaml:"map"`
+	ContentField string            `yaml:"content_field"`
 }
 
 // importResult tracks the outcome for one item.
@@ -132,7 +138,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 	for i, item := range items {
 		// Resolve which type and field mapping apply to this item
-		typeName, fieldMap, matchKey, err := resolveItemMapping(item, mappingCfg, sch)
+		itemCfg, err := resolveItemMapping(item, mappingCfg, sch)
 		if err != nil {
 			results = append(results, importResult{
 				ID:     fmt.Sprintf("item[%d]", i),
@@ -143,15 +149,21 @@ func runImport(cmd *cobra.Command, args []string) error {
 		}
 
 		// Apply field mappings
-		mapped := applyFieldMappings(item, fieldMap)
+		mapped := applyFieldMappings(item, itemCfg.FieldMap)
+
+		// Extract content field (remove from fields so it doesn't become frontmatter)
+		var contentValue string
+		if itemCfg.ContentField != "" {
+			contentValue = extractContentField(mapped, itemCfg.ContentField)
+		}
 
 		// Determine match key value for upsert
-		matchValue, ok := matchKeyValue(mapped, matchKey)
+		matchValue, ok := matchKeyValue(mapped, itemCfg.MatchKey)
 		if !ok {
 			results = append(results, importResult{
 				ID:     fmt.Sprintf("item[%d]", i),
 				Action: "skipped",
-				Reason: fmt.Sprintf("missing match key '%s'", matchKey),
+				Reason: fmt.Sprintf("missing match key '%s'", itemCfg.MatchKey),
 			})
 			continue
 		}
@@ -159,7 +171,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 		// Resolve target path
 		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
-		targetPath := pages.ResolveTargetPathWithRoots(matchValue, typeName, sch, objectsRoot, pagesRoot)
+		targetPath := pages.ResolveTargetPathWithRoots(matchValue, itemCfg.TypeName, sch, objectsRoot, pagesRoot)
 		exists := pages.Exists(vaultPath, targetPath)
 
 		if exists && importCreateOnly {
@@ -195,12 +207,12 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 		if exists {
 			// Update existing object
-			result, w := importUpdateObject(vaultPath, targetPath, typeName, mapped, sch, vaultCfg)
+			result, w := importUpdateObject(vaultPath, targetPath, itemCfg.TypeName, mapped, contentValue, sch, vaultCfg)
 			results = append(results, result)
 			warnings = append(warnings, w...)
 		} else {
 			// Create new object
-			result, w := importCreateObject(vaultPath, targetPath, typeName, matchValue, mapped, sch, vaultCfg)
+			result, w := importCreateObject(vaultPath, targetPath, itemCfg.TypeName, matchValue, mapped, contentValue, sch, vaultCfg)
 			results = append(results, result)
 			warnings = append(warnings, w...)
 		}
@@ -243,6 +255,11 @@ func buildMappingConfig(args []string) (*importMappingConfig, error) {
 	// CLI --key flag overrides mapping file key
 	if importKey != "" {
 		cfg.Key = importKey
+	}
+
+	// CLI --content-field flag overrides mapping file content_field
+	if importContentField != "" {
+		cfg.ContentField = importContentField
 	}
 
 	// Validate: must have either a type or type_field
@@ -307,51 +324,63 @@ func readJSONInput() ([]map[string]interface{}, error) {
 	return nil, fmt.Errorf("input is not valid JSON (expected array or object)")
 }
 
-// resolveItemMapping determines the Raven type, field map, and match key for an item.
-func resolveItemMapping(item map[string]interface{}, cfg *importMappingConfig, sch *schema.Schema) (typeName string, fieldMap map[string]string, matchKey string, err error) {
+// importItemConfig holds the resolved mapping for a single item.
+type importItemConfig struct {
+	TypeName     string
+	FieldMap     map[string]string
+	MatchKey     string
+	ContentField string
+}
+
+// resolveItemMapping determines the Raven type, field map, match key, and content field for an item.
+func resolveItemMapping(item map[string]interface{}, cfg *importMappingConfig, sch *schema.Schema) (*importItemConfig, error) {
+	result := &importItemConfig{}
+
 	if cfg.TypeField != "" {
 		// Heterogeneous: look up type from item field
 		sourceType, ok := item[cfg.TypeField]
 		if !ok {
-			return "", nil, "", fmt.Errorf("missing type field '%s'", cfg.TypeField)
+			return nil, fmt.Errorf("missing type field '%s'", cfg.TypeField)
 		}
 		sourceTypeStr, ok := sourceType.(string)
 		if !ok {
-			return "", nil, "", fmt.Errorf("type field '%s' is not a string", cfg.TypeField)
+			return nil, fmt.Errorf("type field '%s' is not a string", cfg.TypeField)
 		}
 
 		typeMapping, ok := cfg.Types[sourceTypeStr]
 		if !ok {
-			return "", nil, "", fmt.Errorf("no mapping for source type '%s'", sourceTypeStr)
+			return nil, fmt.Errorf("no mapping for source type '%s'", sourceTypeStr)
 		}
 
-		typeName = typeMapping.Type
-		fieldMap = typeMapping.Map
-		matchKey = typeMapping.Key
+		result.TypeName = typeMapping.Type
+		result.FieldMap = typeMapping.Map
+		result.MatchKey = typeMapping.Key
+		result.ContentField = typeMapping.ContentField
 	} else {
 		// Homogeneous: single type
-		typeName = cfg.Type
-		fieldMap = cfg.Map
-		matchKey = cfg.Key
+		result.TypeName = cfg.Type
+		result.FieldMap = cfg.Map
+		result.MatchKey = cfg.Key
+		result.ContentField = cfg.ContentField
 	}
 
 	// Default match key to the type's name_field
-	if matchKey == "" {
-		if typeDef, ok := sch.Types[typeName]; ok && typeDef != nil && typeDef.NameField != "" {
-			matchKey = typeDef.NameField
+	if result.MatchKey == "" {
+		if typeDef, ok := sch.Types[result.TypeName]; ok && typeDef != nil && typeDef.NameField != "" {
+			result.MatchKey = typeDef.NameField
 		}
 	}
 
 	// If still no match key, error
-	if matchKey == "" {
-		return "", nil, "", fmt.Errorf("no match key: set --key or configure name_field for type '%s'", typeName)
+	if result.MatchKey == "" {
+		return nil, fmt.Errorf("no match key: set --key or configure name_field for type '%s'", result.TypeName)
 	}
 
-	if fieldMap == nil {
-		fieldMap = make(map[string]string)
+	if result.FieldMap == nil {
+		result.FieldMap = make(map[string]string)
 	}
 
-	return typeName, fieldMap, matchKey, nil
+	return result, nil
 }
 
 // applyFieldMappings renames input keys according to the field map.
@@ -393,7 +422,7 @@ func matchKeyValue(mapped map[string]interface{}, matchKey string) (string, bool
 }
 
 // importCreateObject creates a new vault object from imported data.
-func importCreateObject(vaultPath, targetPath, typeName, title string, fields map[string]interface{}, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
+func importCreateObject(vaultPath, targetPath, typeName, title string, fields map[string]interface{}, content string, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
 	var warnings []Warning
 
 	// Convert fields to string map for pages.Create
@@ -423,6 +452,17 @@ func importCreateObject(vaultPath, targetPath, typeName, title string, fields ma
 		}, warnings
 	}
 
+	// Append content to the file if provided
+	if content != "" {
+		if err := appendContentToFile(createResult.FilePath, content); err != nil {
+			return importResult{
+				ID:     targetPath,
+				Action: "error",
+				Reason: fmt.Sprintf("failed to write content: %v", err),
+			}, warnings
+		}
+	}
+
 	// Auto-reindex
 	maybeReindex(vaultPath, createResult.FilePath, vaultCfg)
 
@@ -434,7 +474,7 @@ func importCreateObject(vaultPath, targetPath, typeName, title string, fields ma
 }
 
 // importUpdateObject updates an existing vault object with imported data.
-func importUpdateObject(vaultPath, targetPath, typeName string, fields map[string]interface{}, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
+func importUpdateObject(vaultPath, targetPath, typeName string, fields map[string]interface{}, newContent string, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
 	var warnings []Warning
 
 	slugPath := pages.SlugifyPath(targetPath)
@@ -444,7 +484,7 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 	}
 
 	// Read existing file
-	content, err := os.ReadFile(filePath)
+	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		return importResult{
 			ID:     targetPath,
@@ -454,7 +494,7 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 	}
 
 	// Parse frontmatter
-	fm, err := parser.ParseFrontmatter(string(content))
+	fm, err := parser.ParseFrontmatter(string(fileData))
 	if err != nil || fm == nil {
 		return importResult{
 			ID:     targetPath,
@@ -472,7 +512,7 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
 
 	// Update frontmatter
-	newContent, err := updateFrontmatter(string(content), fm, resolvedUpdates)
+	updatedFile, err := updateFrontmatter(string(fileData), fm, resolvedUpdates)
 	if err != nil {
 		return importResult{
 			ID:     targetPath,
@@ -481,8 +521,13 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 		}, warnings
 	}
 
+	// Replace body content if content field was provided
+	if newContent != "" {
+		updatedFile = replaceBodyContent(updatedFile, newContent)
+	}
+
 	// Write back
-	if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
+	if err := atomicfile.WriteFile(filePath, []byte(updatedFile), 0o644); err != nil {
 		return importResult{
 			ID:     targetPath,
 			Action: "error",
@@ -619,11 +664,83 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 	return nil
 }
 
+// extractContentField removes the content field from the mapped item and returns its value as a string.
+func extractContentField(mapped map[string]interface{}, contentField string) string {
+	val, ok := mapped[contentField]
+	if !ok {
+		return ""
+	}
+	delete(mapped, contentField)
+
+	switch v := val.(type) {
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// appendContentToFile appends markdown content to an existing file.
+func appendContentToFile(filePath, content string) error {
+	existing, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	var result strings.Builder
+	result.Write(existing)
+
+	// Ensure there's a blank line before content
+	existingStr := string(existing)
+	if !strings.HasSuffix(existingStr, "\n\n") {
+		if strings.HasSuffix(existingStr, "\n") {
+			result.WriteString("\n")
+		} else {
+			result.WriteString("\n\n")
+		}
+	}
+
+	result.WriteString(content)
+	if !strings.HasSuffix(content, "\n") {
+		result.WriteString("\n")
+	}
+
+	return atomicfile.WriteFile(filePath, []byte(result.String()), 0o644)
+}
+
+// replaceBodyContent replaces everything after the frontmatter with new content.
+func replaceBodyContent(fileContent, newBody string) string {
+	lines := strings.Split(fileContent, "\n")
+
+	_, endLine, ok := parser.FrontmatterBounds(lines)
+	if !ok || endLine == -1 {
+		// No frontmatter found — just return the new body
+		return newBody
+	}
+
+	// Keep frontmatter + closing ---
+	var result strings.Builder
+	for i := 0; i <= endLine; i++ {
+		result.WriteString(lines[i])
+		result.WriteString("\n")
+	}
+
+	// Add blank line + new content
+	result.WriteString("\n")
+	result.WriteString(newBody)
+	if !strings.HasSuffix(newBody, "\n") {
+		result.WriteString("\n")
+	}
+
+	return result.String()
+}
+
 func init() {
 	importCmd.Flags().StringVar(&importFile, "file", "", "Read JSON from file instead of stdin")
 	importCmd.Flags().StringVar(&importMapping, "mapping", "", "Path to YAML mapping file")
 	importCmd.Flags().StringArrayVar(&importMapFlags, "map", nil, "Field mapping: external_key=schema_field (repeatable)")
 	importCmd.Flags().StringVar(&importKey, "key", "", "Field used for matching existing objects (default: type's name_field)")
+	importCmd.Flags().StringVar(&importContentField, "content-field", "", "JSON field to use as page body content")
 	importCmd.Flags().BoolVar(&importDryRun, "dry-run", false, "Preview changes without writing")
 	importCmd.Flags().BoolVar(&importCreateOnly, "create-only", false, "Only create new objects, skip updates")
 	importCmd.Flags().BoolVar(&importUpdateOnly, "update-only", false, "Only update existing objects, skip creation")
