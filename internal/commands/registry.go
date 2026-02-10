@@ -1232,6 +1232,7 @@ Mapping file format (heterogeneous):
 			{Name: "mapping", Description: "Path to YAML mapping file", Type: FlagTypeString},
 			{Name: "map", Description: "Field mapping: external_key=schema_field (repeatable)", Type: FlagTypeStringSlice},
 			{Name: "key", Description: "Field used for matching existing objects (default: type's name_field)", Type: FlagTypeString},
+			{Name: "content-field", Description: "JSON field to use as page body content", Type: FlagTypeString},
 			{Name: "dry-run", Description: "Preview changes without writing", Type: FlagTypeBool},
 			{Name: "create-only", Description: "Only create new objects, skip updates", Type: FlagTypeBool},
 			{Name: "update-only", Description: "Only update existing objects, skip creation", Type: FlagTypeBool},
