@@ -619,7 +619,7 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 
 	// Human-readable output
 	if importDryRun {
-		fmt.Println(ui.Bold("Dry run — no changes made:"))
+		fmt.Println(ui.Bold.Render("Dry run — no changes made:"))
 	}
 
 	for _, r := range results {
@@ -627,11 +627,11 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 		case "created":
 			fmt.Println(ui.Checkf("Created %s", ui.FilePath(r.File)))
 		case "create":
-			fmt.Printf("  %s %s\n", ui.Bold("create"), ui.FilePath(r.File))
+			fmt.Printf("  %s %s\n", ui.Bold.Render("create"), ui.FilePath(r.File))
 		case "updated":
 			fmt.Println(ui.Checkf("Updated %s", ui.FilePath(r.File)))
 		case "update":
-			fmt.Printf("  %s %s\n", ui.Bold("update"), ui.FilePath(r.File))
+			fmt.Printf("  %s %s\n", ui.Bold.Render("update"), ui.FilePath(r.File))
 		case "skipped":
 			fmt.Printf("  %s %s: %s\n", ui.Warning("skip"), r.ID, r.Reason)
 		case "error":
