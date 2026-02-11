@@ -80,14 +80,14 @@ raven_schema_add_type(
 raven_schema_add_field(
   type_name="book",
   field_name="author",
-  field_type="string"
+  type="string"
 )
 
 raven_schema_add_field(
   type_name="book",
   field_name="status",
-  field_type="enum",
-  enum_values=["to-read", "reading", "finished", "abandoned"]
+  type="enum",
+  values="to-read,reading,finished,abandoned"
 )
 ```
 
@@ -97,9 +97,7 @@ Add custom traits if needed:
 # Add a trait for ratings
 raven_schema_add_trait(
   name="rating",
-  trait_type="number",
-  min=1,
-  max=5
+  type="number"
 )
 ```
 
@@ -124,6 +122,16 @@ raven_set(
 )
 ```
 
+If they already have structured JSON exports, offer import instead of manual re-entry:
+
+```
+# Preview import first
+raven_import(type="project", file="projects.json", dry_run=true)
+
+# Apply after user confirmation
+raven_import(type="project", file="projects.json", confirm=true)
+```
+
 ### Phase 5: Demonstrate Value
 
 Run a query to show immediate value:
@@ -141,7 +149,7 @@ Offer to save useful queries:
 ```
 raven_query_add(
   name="active",
-  query="object:project .status==active",
+  query_string="object:project .status==active",
   description="All active projects"
 )
 ```
