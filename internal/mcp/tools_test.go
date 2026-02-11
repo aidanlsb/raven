@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -184,6 +185,29 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildCLIArgs_PreservesEmptyPositionalArgs(t *testing.T) {
+	cliArgs := BuildCLIArgs("raven_edit", map[string]interface{}{
+		"path":    "daily/2026-01-02.md",
+		"old_str": "- old task",
+		"new_str": "",
+		"confirm": true,
+	})
+
+	want := []string{
+		"edit",
+		"--confirm",
+		"--json",
+		"--",
+		"daily/2026-01-02.md",
+		"- old task",
+		"",
+	}
+
+	if !reflect.DeepEqual(cliArgs, want) {
+		t.Fatalf("BuildCLIArgs() = %#v, want %#v", cliArgs, want)
 	}
 }
 

@@ -187,6 +187,36 @@ func TestMCPIntegration_SetFields(t *testing.T) {
 	v.AssertFileContains("people/carol.md", "email: carol@example.com")
 }
 
+// TestMCPIntegration_EditDeleteWithEmptyString tests deleting text via raven_edit with empty new_str.
+func TestMCPIntegration_EditDeleteWithEmptyString(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("daily/2026-01-02.md", `---
+type: page
+---
+# Daily
+
+- old task
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	result := server.callTool("raven_edit", map[string]interface{}{
+		"path":    "daily/2026-01-02.md",
+		"old_str": "- old task",
+		"new_str": "",
+		"confirm": true,
+	})
+
+	if result.IsError {
+		t.Fatalf("edit delete failed: %s", result.Text)
+	}
+
+	v.AssertFileNotContains("daily/2026-01-02.md", "- old task")
+}
+
 // TestMCPIntegration_DeleteObject tests deleting an object via MCP tool call.
 func TestMCPIntegration_DeleteObject(t *testing.T) {
 	v := testutil.NewTestVault(t).
