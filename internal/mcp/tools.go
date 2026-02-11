@@ -235,7 +235,8 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	// Step 5: Add positional arguments in registry-defined order
 	for _, arg := range meta.Args {
 		if val, ok := normalizedArgs[arg.Name]; ok {
-			if strVal, ok := val.(string); ok && strVal != "" {
+			// Preserve empty strings for positional args (e.g., `edit` new_str="" for deletion).
+			if strVal, ok := val.(string); ok {
 				cliArgs = append(cliArgs, strVal)
 			}
 		}
