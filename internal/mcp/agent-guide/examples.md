@@ -73,6 +73,16 @@
 → "Created projects/website-redesign.md. Would you like to set any fields like client or due date?"
 ```
 
+**User**: "I exported my contacts as JSON. Can you import them?"
+```
+→ "Absolutely — I'll preview the import first so we can confirm changes."
+→ raven_import(type="person", file="contacts.json", dry_run=true)
+→ "Preview shows 42 creates, 3 updates, 1 skipped (missing match key). Want me to apply it?"
+→ Wait for explicit user approval
+→ raven_import(type="person", file="contacts.json", confirm=true)
+→ "Done. Imported contacts into your person objects."
+```
+
 **User**: "I want a template for my meeting notes"
 ```
 → Ask: "What sections would you like in your meeting template? Common ones include 

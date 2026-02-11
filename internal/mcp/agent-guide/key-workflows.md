@@ -575,3 +575,29 @@ raven_resolve(reference="The Prose Edda")
 - `type` — object type (when resolved)
 - `match_source` — how it was matched (`literal_path`, `short_name`, `alias`, `name_field`, `date`, etc.)
 - `ambiguous: true` with `matches` array — when multiple objects match
+
+### 17. Importing Structured Data
+
+When users want to migrate or sync JSON data from other tools:
+
+1. Use `raven_import` for batch create/update from JSON:
+   ```
+   raven_import(type="person", file="contacts.json", dry_run=true)
+   ```
+
+2. Always preview first with `dry_run=true`, then ask the user before applying with `confirm=true`:
+   ```
+   raven_import(type="person", file="contacts.json", confirm=true)
+   ```
+
+3. For mixed source records, use a mapping file with `type_field` and per-type maps:
+   ```
+   raven_import(mapping="migration.yaml", file="dump.json", dry_run=true)
+   raven_import(mapping="migration.yaml", file="dump.json", confirm=true)
+   ```
+
+4. Use `content_field` when a JSON field should become markdown body content instead of frontmatter.
+
+5. If the user only wants creates or only wants updates, use mode flags:
+   - `create_only=true` to skip existing objects
+   - `update_only=true` to skip missing objects

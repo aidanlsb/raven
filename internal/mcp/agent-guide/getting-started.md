@@ -7,8 +7,21 @@ When first interacting with a Raven vault, follow this discovery sequence:
 3. **Check saved queries**: `raven://queries/saved` or `raven_query(list=true)`
 4. **Discover workflows**: `raven://workflows/list` or `raven_workflow_list()`
 5. **Grab the query cheatsheet**: `raven://guide/query-cheatsheet` for common patterns
+6. **Ask about existing data**: if they have JSON exports, use `raven_import` to seed the vault quickly
 
 You can also fetch the `raven://schema/current` MCP resource for the complete schema.yaml.
+
+## Fast start from existing JSON
+
+If the user already has structured data from another tool, prefer import over manual re-entry:
+
+```
+# Preview first
+raven_import(type="project", file="projects.json", dry_run=true)
+
+# Apply after user confirmation
+raven_import(type="project", file="projects.json", confirm=true)
+```
 
 ## Creating new notes (recommended flow)
 

@@ -44,6 +44,7 @@ Raven exposes MCP resources that agents can fetch:
 Additional topic resources are available under `raven://guide/<topic>`:
 
 - `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations
+- `raven://guide/onboarding` - Interactive vault setup for new users
 - `raven://guide/getting-started` - First steps for orienting in a new vault
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/querying` - Raven Query Language (RQL) and query strategy
@@ -58,6 +59,7 @@ Additional topic resources are available under `raven://guide/<topic>`:
 
 The agent guide resources (`raven://guide/index` and `raven://guide/<topic>`) provide:
 - Getting started sequence for new vaults
+- Onboarding flow for first-time vault setup
 - Query language syntax and composition patterns
 - Key workflows (creating, editing, querying, bulk operations)
 - Error handling patterns
@@ -91,6 +93,7 @@ rvn schema commands --json
 | Tool | Description |
 |------|-------------|
 | `raven_new` | Create a new typed object |
+| `raven_import` | Import objects from JSON data (create/update) |
 | `raven_add` | Append content to existing file or daily note |
 | `raven_daily` | Open or create a daily note |
 
@@ -277,6 +280,27 @@ raven_add(text="@priority(high) Urgent task")
 # To specific file
 raven_add(text="Meeting notes", to="projects/website.md")
 ```
+
+### Importing Structured Data
+
+Use `raven_import` when a user already has structured JSON data (exports, API dumps, migrations).
+
+```python
+# Preview a homogeneous import (single type)
+raven_import(type="person", file="contacts.json", dry_run=true)
+
+# Apply after user confirmation
+raven_import(type="person", file="contacts.json", confirm=true)
+
+# Heterogeneous import via mapping file (mixed source types)
+raven_import(mapping="migration.yaml", file="dump.json", dry_run=true)
+raven_import(mapping="migration.yaml", file="dump.json", confirm=true)
+```
+
+Notes:
+- Prefer `dry_run=true` first, then show the preview and ask before `confirm=true`.
+- In MCP usage, `file` + `mapping` is usually better than stdin pipelines.
+- Use `content_field` (or mapping `content_field`) when JSON should become page body content.
 
 ### Querying
 
