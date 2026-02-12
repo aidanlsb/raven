@@ -11,7 +11,7 @@
 
 ---
 
-Markdown notes with a schema and queries, CLI, and MCP integration.
+Markdown notes with schema, queries, CLI, and MCP integration.
 
 ## Quick Start
 
@@ -593,7 +593,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
   "mcpServers": {
     "raven": {
       "command": "rvn",
-      "args": ["mcp", "--vault", "/path/to/your/vault"]
+      "args": ["serve", "--vault-path", "/path/to/your/vault"]
     }
   }
 }
@@ -608,7 +608,7 @@ Add to `.cursor/mcp.json` in your project:
   "mcpServers": {
     "raven": {
       "command": "rvn",
-      "args": ["mcp", "--vault", "/path/to/your/vault"]
+      "args": ["serve", "--vault-path", "/path/to/your/vault"]
     }
   }
 }

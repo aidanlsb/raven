@@ -264,7 +264,7 @@ rvn query <query_string> [flags]
 
 ```bash
 rvn query "object:project .status==active"
-rvn query "object:meeting has:{trait:due}"
+rvn query "object:meeting has(trait:due)"
 rvn query "trait:due .value==past"
 rvn query tasks                              # Run saved query
 rvn query --list                             # List saved queries

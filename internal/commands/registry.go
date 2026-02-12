@@ -225,18 +225,18 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 
 Query syntax:
 - Object queries: object:<type> [predicates...]
-  Examples: object:project .status==active, object:meeting refs:[[people/freya]]
+  Examples: object:project .status==active, object:meeting refs([[people/freya]])
 - Trait queries: trait:<name> [predicates...]
-  Examples: trait:due .value==past, trait:highlight on:{object:book}
+  Examples: trait:due .value==past, trait:highlight on(object:book)
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
-- has:{trait:...} — Has trait matching subquery
-- refs:[[target]] — References target (refs:[[people/freya]])
-- refs:{object:type} — References objects matching subquery (refs:{object:project .status==active})
-- within:{object:type} — Trait is inside object type (within:{object:meeting})
+- has(trait:...) — Has trait matching subquery
+- refs([[target]]) — References target (refs([[people/freya]]))
+- refs(object:type) — References objects matching subquery (refs(object:project .status==active))
+- within(object:type) — Trait is inside object type (within(object:meeting))
 - .value==X — Trait value equals X (.value==past, .value==high)
-- content:"text" — Full-text search within content (content:"meeting notes")
+- content("text") — Full-text search within content (content("meeting notes"))
 
 Special date values for trait:due:
 - .value==past, .value==today, .value==tomorrow, .value==this-week, .value==next-week
@@ -269,7 +269,7 @@ For trait queries (trait:...):
 		},
 		Examples: []string{
 			"rvn query 'object:project .status==active' --json",
-			"rvn query 'object:meeting has:{trait:due}' --json",
+			"rvn query 'object:meeting has(trait:due)' --json",
 			"rvn query 'trait:due .value==past' --json",
 			"rvn query 'trait:due .value==past' --ids",
 			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
@@ -440,11 +440,16 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			{Name: "path", Description: "File, directory, or reference to check (optional, defaults to entire vault)", Required: false},
 		},
 		Flags: []FlagMeta{
+			{Name: "strict", Description: "Treat warnings as errors", Type: FlagTypeBool},
 			{Name: "type", Short: "t", Description: "Check only objects of this type", Type: FlagTypeString},
 			{Name: "trait", Description: "Check only usages of this trait", Type: FlagTypeString},
 			{Name: "issues", Description: "Only check these issue types (comma-separated)", Type: FlagTypeString},
 			{Name: "exclude", Description: "Exclude these issue types (comma-separated)", Type: FlagTypeString},
 			{Name: "errors-only", Description: "Only report errors, skip warnings", Type: FlagTypeBool},
+			{Name: "by-file", Description: "Group issues by file path", Type: FlagTypeBool},
+			{Name: "verbose", Short: "V", Description: "Show all issues with full details", Type: FlagTypeBool},
+			{Name: "fix", Description: "Auto-fix simple issues (short refs -> full paths)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply fixes (without this flag, shows preview only)", Type: FlagTypeBool},
 			{Name: "create-missing", Description: "Interactively create missing pages (CLI only, not for agents)", Type: FlagTypeBool},
 		},
 		Examples: []string{

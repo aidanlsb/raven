@@ -427,11 +427,11 @@ Traits are associated with the nearest containing object (the section or file th
 - @highlight Key insight     ← Associated with "file#notes" section
 ```
 
-Query with `on:` (direct parent) or `within:` (any ancestor):
+Query with `on(...)` (direct parent) or `within(...)` (any ancestor):
 
 ```
-trait:todo on:{object:section .title=="Tasks"}
-trait:highlight within:{object:project .status==active}
+trait:todo on(object:section .title=="Tasks")
+trait:highlight within(object:project .status==active)
 ```
 
 ---

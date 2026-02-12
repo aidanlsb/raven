@@ -311,7 +311,7 @@ raven_query(query_string="object:person .email==*")
 
 # Trait queries
 raven_query(query_string="trait:due .value==past")
-raven_query(query_string="trait:highlight on:{object:book}")
+raven_query(query_string="trait:highlight on(object:book)")
 
 # Saved queries
 raven_query(list=true)  # List available

@@ -141,23 +141,23 @@ rvn query "trait:due .value==past"
 rvn query "trait:due .value==this-week"
 
 # Highlights in books
-rvn query "trait:highlight on:{object:book}"
+rvn query "trait:highlight on(object:book)"
 ```
 
 ### Relationship Queries
 
 ```bash
 # Meetings mentioning Freya
-rvn query "object:meeting refs:[[people/freya]]"
+rvn query "object:meeting refs([[people/freya]])"
 
 # Meetings in daily notes
-rvn query "object:meeting parent:{object:date}"
+rvn query "object:meeting parent(object:date)"
 
 # Projects with any todos (including nested)
-rvn query "object:project contains:{trait:todo}"
+rvn query "object:project encloses(trait:todo)"
 
 # Traits anywhere inside a specific project
-rvn query "trait:due within:[[projects/website]]"
+rvn query "trait:due within([[projects/website]])"
 ```
 
 ### Full-Text Search
@@ -535,17 +535,17 @@ rvn stats --json | jq '.object_count'
 
 ```bash
 # ✅ Correct - single quotes
-rvn query 'trait:todo refs:{object:project .status=="active"}'
+rvn query 'trait:todo refs(object:project .status=="active")'
 
-# ❌ Problematic - the shell interprets {} and other special characters
-rvn query trait:todo refs:{object:project}
+# ❌ Problematic - special characters are interpreted by the shell
+rvn query trait:todo refs(object:project)
 
 # ❌ Problematic - double quotes require escaping
-rvn query "trait:todo refs:{object:project .status==\"active\"}"
+rvn query "trait:todo refs(object:project .status==\"active\")"
 ```
 
 Characters that shells interpret:
-- `{}` — brace expansion (bash/zsh)
+- `()` — subshell/grouping syntax in many shells
 - `!` — history expansion (bash)
 - `|` — pipe (all shells)
 - `$` — variable expansion

@@ -95,7 +95,7 @@ User: "Find open todos from meetings about the growth project"
 1. What? → `trait:todo` (looking for todo traits)
 2. What value? → `.value==todo` (open/incomplete)
 3. Where? → `within(object:meeting)` (inside meeting objects)
-4. References? → `refs:[[projects/growth]]` (mentions the project)
+4. References? → `refs([[projects/growth]])` (mentions the project)
 
 Query: `trait:todo .value==todo within(object:meeting) refs([[projects/growth]])`
 
@@ -115,8 +115,8 @@ Query: `trait:todo .value==todo within(object:meeting) refs([[projects/growth]])
 User: "Todos related to the website project"
 
 This could mean:
-- Todos that reference the project: `trait:todo refs:[[projects/website]]`
-- Todos inside the project file: `trait:todo within:[[projects/website]]`
+- Todos that reference the project: `trait:todo refs([[projects/website]])`
+- Todos inside the project file: `trait:todo within([[projects/website]])`
 - Todos in meetings about the project: `trait:todo within(object:meeting refs([[projects/website]]))`
 
 Run the most likely interpretation first. If results seem incomplete, try variations.
@@ -135,7 +135,7 @@ object:project in(.status, [active,backlog])
 
 ```
 # Overdue items assigned to a person
-trait:due .value==past refs:[[people/freya]]
+trait:due .value==past refs([[people/freya]])
 
 # Highlights from books currently being read
 trait:highlight on(object:book .status==reading)
@@ -153,7 +153,7 @@ object:project encloses(trait:todo .value==todo)
 trait:due .value==this-week within(object:project .status==active)
 
 # Items referencing either of two people
-trait:due (refs:[[people/freya]] | refs:[[people/thor]])
+trait:due (refs([[people/freya]]) | refs([[people/thor]]))
 
 # Sections inside a specific project
 object:section ancestor:[[projects/website]]
@@ -162,7 +162,7 @@ object:section ancestor:[[projects/website]]
 object:meeting !has(trait:due)
 
 # Active projects that reference a specific company
-object:project .status==active refs:[[companies/acme]]
+object:project .status==active refs([[companies/acme]])
 ```
 
 ### Query vs. Search: When to Use Which
