@@ -164,7 +164,7 @@ type ValuePredicate struct {
 func (ValuePredicate) predicateNode() {}
 
 // OnPredicate filters traits by direct parent object.
-// Syntax: on:{object:type ...}, on:[[target]], on:_
+// Syntax: on(object:type ...), on([[target]]), on(_)
 type OnPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
@@ -174,7 +174,7 @@ type OnPredicate struct {
 func (OnPredicate) predicateNode() {}
 
 // WithinPredicate filters traits by any ancestor object.
-// Syntax: within:{object:type ...}, within:[[target]], within:_
+// Syntax: within(object:type ...), within([[target]]), within(_)
 type WithinPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)

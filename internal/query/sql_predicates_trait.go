@@ -238,9 +238,9 @@ func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []
 	return cond, args, nil
 }
 
-// buildWithinPredicateSQL builds SQL for within:{object:...} or within:[[target]] predicates.
+// buildWithinPredicateSQL builds SQL for within(object:...) or within([[target]]) predicates.
 func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (string, []interface{}, error) {
-	// Handle direct target reference: within:[[target]]
+	// Handle direct target reference: within([[target]])
 	if p.Target != "" {
 		resolvedTarget, err := e.resolveTarget(p.Target)
 		if err != nil {

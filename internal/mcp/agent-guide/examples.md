@@ -28,8 +28,8 @@
 **User**: "Tasks related to the website project"
 ```
 → Try multiple interpretations:
-  - trait:todo refs:[[projects/website]] (todos that reference it)
-  - trait:todo within:[[projects/website]] (todos inside it)
+  - trait:todo refs([[projects/website]]) (todos that reference it)
+  - trait:todo within([[projects/website]]) (todos inside it)
 → Consolidate results from both
 ```
 
@@ -150,12 +150,12 @@
 **User**: "Meetings where we discussed the API"
 ```
 → Try: object:meeting content("API")
-→ Or: object:meeting refs:[[projects/api]] if there's an API project
+→ Or: object:meeting refs([[projects/api]]) if there's an API project
 ```
 
 **User**: "Overdue items assigned to Freya"
 ```
-→ trait:due .value==past refs:[[people/freya]]
+→ trait:due .value==past refs([[people/freya]])
 ```
 
 **User**: "Show my todos sorted by due date"
