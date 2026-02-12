@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/glamour"
+
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
@@ -39,12 +41,11 @@ type readBacklinkGroup struct {
 }
 
 func readEnriched(opts readEnrichedOptions) error {
-	// Build rendered content + reference list
-	rendered, refs := renderContentWithWikilinkHyperlinks(
-		opts.content,
-		opts.vaultPath,
-		opts.vaultCfg,
-	)
+	// Split content into frontmatter and body
+	frontmatter, body := splitFrontmatterBody(opts.content)
+
+	// Pre-process wikilinks in body: convert [[links]] to markdown links
+	processedBody, refs := preprocessWikilinks(body, opts.vaultPath, opts.vaultCfg)
 
 	// Fetch backlinks and extract context lines
 	backlinkGroups, backlinksCount, err := readBacklinksWithContext(opts.vaultPath, opts.vaultCfg, opts.objectID)
@@ -69,12 +70,31 @@ func readEnriched(opts readEnrichedOptions) error {
 		width = ui.DefaultTermWidth
 	}
 
+	// Render body through glamour when outputting to a TTY
+	renderedBody := processedBody
+	if display.IsTTY {
+		if rendered, renderErr := renderMarkdown(processedBody, width); renderErr == nil {
+			renderedBody = rendered
+		}
+	}
+
 	fmt.Println(ui.Divider(opts.fileRelPath, width))
 	fmt.Println()
-	fmt.Print(rendered)
-	if !strings.HasSuffix(rendered, "\n") {
+
+	// Print frontmatter as-is (raw YAML)
+	if frontmatter != "" {
+		fmt.Print(frontmatter)
+		if !strings.HasSuffix(frontmatter, "\n") {
+			fmt.Println()
+		}
+	}
+
+	// Print rendered body
+	fmt.Print(renderedBody)
+	if !strings.HasSuffix(renderedBody, "\n") {
 		fmt.Println()
 	}
+
 	fmt.Println()
 	fmt.Println(ui.Divider(fmt.Sprintf("Backlinks (%d)", backlinksCount), width))
 	fmt.Println()
@@ -97,8 +117,28 @@ func readEnriched(opts readEnrichedOptions) error {
 	return nil
 }
 
-func renderContentWithWikilinkHyperlinks(content string, vaultPath string, vaultCfg *config.VaultConfig) (string, []readReference) {
+// splitFrontmatterBody splits file content into the raw frontmatter block
+// (including --- delimiters) and the body that follows it.
+func splitFrontmatterBody(content string) (frontmatter string, body string) {
 	lines := strings.Split(content, "\n")
+	_, endLine, ok := parser.FrontmatterBounds(lines)
+	if !ok || endLine == -1 {
+		return "", content
+	}
+	// Include everything up to and including the closing ---
+	frontmatter = strings.Join(lines[:endLine+1], "\n") + "\n"
+	// Body starts after the closing ---
+	if endLine+1 < len(lines) {
+		body = strings.Join(lines[endLine+1:], "\n")
+	}
+	return frontmatter, body
+}
+
+// preprocessWikilinks converts [[wikilinks]] in the body to standard markdown
+// links for glamour rendering. Resolved links become [text](editor-url),
+// unresolved links are left as [[target]] literal text.
+func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultConfig) (string, []readReference) {
+	lines := strings.Split(body, "\n")
 	outLines := make([]string, 0, len(lines))
 	var refs []readReference
 
@@ -132,24 +172,31 @@ func renderContentWithWikilinkHyperlinks(content string, vaultPath string, vault
 
 			b.WriteString(line[last:m.Start])
 
-			literal := line[m.Start:m.End] // includes [[...]] exactly as written
 			refs = append(refs, readReference{Text: m.Target})
 
-			// Attempt to resolve to a file so we can hyperlink it
+			// Determine display text
+			displayText := m.Target
+			if m.DisplayText != nil {
+				displayText = *m.DisplayText
+			}
+
+			// Attempt to resolve to a file so we can create a markdown link
 			path, ok := resolveTargetToRelPath(m.Target, vaultPath, vaultCfg)
 			if ok {
-				// Update last appended reference to include resolved path
 				refs[len(refs)-1].Path = &path
 
 				if shouldEmitHyperlinks() {
 					abs := filepath.Join(vaultPath, path)
 					url := buildEditorURL(getConfig(), abs, 1)
-					b.WriteString(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, literal))
+					// Convert to standard markdown link for glamour to render
+					b.WriteString(fmt.Sprintf("[%s](%s)", displayText, url))
 				} else {
-					b.WriteString(literal)
+					// No hyperlinks: render as bold text so it stands out
+					b.WriteString(fmt.Sprintf("**%s**", displayText))
 				}
 			} else {
-				b.WriteString(literal)
+				// Unresolved: leave as [[target]] literal
+				b.WriteString(line[m.Start:m.End])
 			}
 
 			last = m.End
@@ -159,6 +206,27 @@ func renderContentWithWikilinkHyperlinks(content string, vaultPath string, vault
 	}
 
 	return strings.Join(outLines, "\n"), refs
+}
+
+// renderMarkdown renders a markdown string for terminal display using glamour.
+func renderMarkdown(content string, width int) (string, error) {
+	r, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	rendered, err := r.Render(content)
+	if err != nil {
+		return "", err
+	}
+
+	// glamour adds trailing newlines; normalize to a single trailing newline
+	rendered = strings.TrimRight(rendered, "\n") + "\n"
+
+	return rendered, nil
 }
 
 func resolveTargetToRelPath(target string, vaultPath string, vaultCfg *config.VaultConfig) (string, bool) {
