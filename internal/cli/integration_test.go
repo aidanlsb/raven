@@ -77,7 +77,7 @@ func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 	v.AssertBacklinks("people/alice", 1)
 
 	// Query for projects that reference Alice - results are in "items" field
-	result := v.RunCLI("query", "object:project refs:[[people/alice]]")
+	result := v.RunCLI("query", "object:project refs([[people/alice]])")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 1)
 }
@@ -364,10 +364,12 @@ type: page
 	result := v.RunCLI("search", "quarterly")
 	result.MustSucceed(t)
 
-	// Should find both files
+	// Should find both files (may return more than 2 results because section
+	// objects are also indexed — e.g. "# Team Meeting Notes" produces both a
+	// page-level and a section-level FTS entry).
 	results := result.DataList("results")
-	if len(results) != 2 {
-		t.Errorf("expected 2 search results, got %d", len(results))
+	if len(results) < 2 {
+		t.Errorf("expected at least 2 search results, got %d", len(results))
 	}
 }
 
