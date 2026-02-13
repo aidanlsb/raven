@@ -528,6 +528,78 @@ owner: "[[people/freya]]"
 	})
 }
 
+// TestTraitIDConsistency is a regression test for the bug where indexDates used
+// the raw loop index (idx) while indexInlineTraits used a counter that only
+// incremented for defined traits. When undefined traits preceded defined ones,
+// the two functions produced different IDs for the same physical trait, causing
+// date queries to reference non-existent trait IDs.
+func TestTraitIDConsistency(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Schema defines "due" but NOT "undefined" — so "undefined" must be skipped.
+	testSchema := schema.NewSchema()
+	testSchema.Traits["due"] = &schema.TraitDefinition{
+		Type: schema.FieldTypeDate,
+	}
+
+	dueValue := schema.Date("2025-03-15")
+	doc := &parser.ParsedDocument{
+		FilePath: "test.md",
+		Objects: []*parser.ParsedObject{
+			{
+				ID:         "test",
+				ObjectType: "page",
+				Fields:     make(map[string]schema.FieldValue),
+				LineStart:  1,
+			},
+		},
+		Traits: []*parser.ParsedTrait{
+			{
+				// raw index 0 — undefined, must be skipped
+				TraitType:      "undefined",
+				Value:          nil,
+				Content:        "some note",
+				Line:           3,
+				ParentObjectID: "test",
+			},
+			{
+				// raw index 1, but first defined trait → traitIdx=0 in both functions
+				TraitType:      "due",
+				Value:          &dueValue,
+				Content:        "finish by",
+				Line:           4,
+				ParentObjectID: "test",
+			},
+		},
+	}
+
+	if err := db.IndexDocument(doc, testSchema); err != nil {
+		t.Fatalf("failed to index document: %v", err)
+	}
+
+	// The "due" trait should be stored with ID "test.md:trait:0" in the traits table.
+	var traitID string
+	if err := db.db.QueryRow(`SELECT id FROM traits WHERE trait_type = 'due'`).Scan(&traitID); err != nil {
+		t.Fatalf("failed to query traits table: %v", err)
+	}
+	if traitID != "test.md:trait:0" {
+		t.Errorf("traits table: got id %q, want %q", traitID, "test.md:trait:0")
+	}
+
+	// The date_index entry for the same trait must reference the same ID.
+	var dateSourceID string
+	if err := db.db.QueryRow(`SELECT source_id FROM date_index WHERE source_type = 'trait'`).Scan(&dateSourceID); err != nil {
+		t.Fatalf("failed to query date_index table: %v", err)
+	}
+	if dateSourceID != traitID {
+		t.Errorf("date_index source_id %q does not match traits.id %q — trait ID mismatch bug", dateSourceID, traitID)
+	}
+}
+
 func TestAliasIndexing(t *testing.T) {
 	db, err := OpenInMemory()
 	if err != nil {
