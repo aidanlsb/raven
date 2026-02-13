@@ -293,12 +293,14 @@ queries:
     description: "Books and articles to read"
 ```
 
-Saved queries can accept positional inputs via `{{inputs.<name>}}` placeholders:
+Saved queries can accept inputs via `{{args.<name>}}` placeholders.
+When using `{{args.*}}`, declare `args` explicitly to define accepted inputs and positional order:
 
 ```yaml
 queries:
   project-todos:
-    query: "trait:todo (within([[{{inputs.project}}]]) | refs([[{{inputs.project}}]]))"
+    query: "trait:todo (within([[{{args.project}}]]) | refs([[{{args.project}}]]))"
+    args: [project]
     description: "Todos tied to a project"
 ```
 
@@ -306,7 +308,8 @@ queries:
 
 ```bash
 rvn query overdue              # Run the saved query
-rvn query project-todos project=projects/raven
+rvn query project-todos projects/raven        # Positional (args order)
+rvn query project-todos project=projects/raven # key=value (order independent)
 rvn query --list               # List all saved queries
 rvn query add new-query "..."  # Add via CLI
 rvn query remove old-query     # Remove via CLI

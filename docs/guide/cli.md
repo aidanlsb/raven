@@ -179,11 +179,12 @@ Create shortcuts for queries you run often:
 # Add a saved query
 rvn query add overdue "trait:due .value==past" --description "Overdue items"
 rvn query add tasks "trait:todo" --description "All tasks"
-rvn query add project-todos 'trait:todo refs([[{{inputs.project}}]])' --description "Todos tied to a project"
+rvn query add project-todos 'trait:todo refs([[{{args.project}}]])' --arg project --description "Todos tied to a project"
 
 # Run saved queries by name
 rvn query overdue
 rvn query tasks
+rvn query project-todos projects/raven
 rvn query project-todos project=projects/raven
 
 # List saved queries

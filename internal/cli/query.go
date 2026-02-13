@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -270,7 +272,8 @@ Boolean operators:
   pred1 pred2      AND (space-separated)
   pred1 | pred2    OR
 
-Saved queries can accept positional key=value inputs; use {{inputs.<name>}} in the saved query string.
+Saved query inputs must be declared with args: in raven.yaml when using {{args.<name>}}.
+You can then pass inputs either by position (following args order) or as key=value pairs.
 
 Examples:
   rvn query "object:project .status==active"
@@ -279,6 +282,7 @@ Examples:
   rvn query "trait:todo content(\"my task\")"
   rvn query "trait:highlight on(object:book .status==reading)"
   rvn query tasks                    # Run saved query
+  rvn query project-todos raven      # Positional input (args: [project])
   rvn query project-todos project=projects/raven
   rvn query --list                   # List saved queries`,
 	Args: cobra.ArbitraryArgs,
@@ -311,13 +315,24 @@ Examples:
 			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query --list' to see saved queries")
 		}
 
+		// MCP sends query_string as a single positional arg. Support
+		// "saved-query-name <inputs...>" in that single string.
+		args = maybeSplitInlineSavedQueryArgs(args, vaultCfg.Queries)
+
 		queryName := args[0]
 		queryStr := ""
 		isSavedQuery := false
 
 		if savedQuery, ok := vaultCfg.Queries[queryName]; ok {
 			isSavedQuery = true
-			inputs, err := parseSavedQueryInputs(args[1:])
+			declaredArgs, err := normalizeSavedQueryArgs(queryName, savedQuery.Args)
+			if err != nil {
+				return err
+			}
+			if err := validateSavedQueryInputDeclarations(queryName, savedQuery.Query, declaredArgs); err != nil {
+				return err
+			}
+			inputs, err := parseSavedQueryInputs(queryName, args[1:], declaredArgs)
 			if err != nil {
 				return err
 			}
@@ -776,6 +791,7 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 			queries = append(queries, SavedQueryInfo{
 				Name:        name,
 				Query:       q.Query,
+				Args:        q.Args,
 				Description: q.Description,
 			})
 		}
@@ -797,6 +813,10 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 		if desc == "" {
 			desc = q.Query
 		}
+		if len(q.Args) > 0 {
+			fmt.Printf("  %-16s %s (args: %s)\n", name, desc, strings.Join(q.Args, ", "))
+			continue
+		}
 		fmt.Printf("  %-16s %s\n", name, desc)
 	}
 	return nil
@@ -809,11 +829,14 @@ var queryAddCmd = &cobra.Command{
 
 The query string uses the Raven query language (same as 'rvn query "..."').
 
+If the query uses {{args.<name>}}, declare accepted input names with --arg
+(repeatable). The order of --arg values defines positional input order.
+
 Examples:
   rvn query add tasks "trait:due"
   rvn query add overdue "trait:due .value==past"
   rvn query add active-projects "object:project .status==active"
-  rvn query add project-todos "trait:todo refs([[{{inputs.project}}]])" --description "Todos tied to a project"
+  rvn query add project-todos "trait:todo refs([[{{args.project}}]])" --arg project --description "Todos tied to a project"
   rvn query add urgent "trait:due .value==this-week|past" --description "Due soon or overdue"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -821,6 +844,10 @@ Examples:
 		queryName := args[0]
 		queryStr := args[1]
 		description, _ := cmd.Flags().GetString("description")
+		declaredArgs, err := normalizeSavedQueryArgsForCommand(cmd, queryName)
+		if err != nil {
+			return err
+		}
 
 		// Validate the query string by parsing it (skip templates)
 		if !hasTemplateVars(queryStr) {
@@ -828,6 +855,9 @@ Examples:
 			if err != nil {
 				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("invalid query: %v", err), "")
 			}
+		}
+		if err := validateSavedQueryInputDeclarations(queryName, queryStr, declaredArgs); err != nil {
+			return err
 		}
 
 		// Load existing config
@@ -844,6 +874,7 @@ Examples:
 		// Build new query
 		newQuery := config.SavedQuery{
 			Query:       queryStr,
+			Args:        declaredArgs,
 			Description: description,
 		}
 
@@ -862,6 +893,7 @@ Examples:
 			outputSuccess(map[string]interface{}{
 				"name":        queryName,
 				"query":       queryStr,
+				"args":        declaredArgs,
 				"description": description,
 			}, nil)
 		} else {
@@ -993,23 +1025,268 @@ func joinQueryArgs(args []string) string {
 	return strings.Join(args, " ")
 }
 
-func parseSavedQueryInputs(args []string) (map[string]string, error) {
+func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.SavedQuery) []string {
+	if len(args) != 1 || len(queries) == 0 {
+		return args
+	}
+
+	inline := strings.TrimSpace(args[0])
+	if inline == "" {
+		return args
+	}
+
+	// Full query strings should continue through the normal path untouched.
+	if strings.HasPrefix(inline, "object:") || strings.HasPrefix(inline, "trait:") {
+		return args
+	}
+
+	if !strings.ContainsAny(inline, " \t\r\n") {
+		return args
+	}
+
+	parts, ok := splitInlineSavedQueryInvocation(inline)
+	if !ok || len(parts) < 2 {
+		return args
+	}
+
+	if _, exists := queries[parts[0]]; !exists {
+		return args
+	}
+
+	return parts
+}
+
+// splitInlineSavedQueryInvocation tokenizes one inline query string like:
+// "proj-todos raven" or `proj-todos project="raven app"`
+// into ["proj-todos", "raven"] / ["proj-todos", "project=raven app"].
+//
+// Quotes are removed and backslash escapes are resolved (outside single quotes).
+// Returns ok=false for invalid quoting/escaping.
+func splitInlineSavedQueryInvocation(s string) ([]string, bool) {
+	var out []string
+	var b strings.Builder
+
+	flush := func() {
+		if b.Len() == 0 {
+			return
+		}
+		out = append(out, b.String())
+		b.Reset()
+	}
+
+	inSingle := false
+	inDouble := false
+	escaped := false
+
+	for _, r := range s {
+		if escaped {
+			b.WriteRune(r)
+			escaped = false
+			continue
+		}
+
+		if inSingle {
+			if r == '\'' {
+				inSingle = false
+				continue
+			}
+			b.WriteRune(r)
+			continue
+		}
+
+		if inDouble {
+			if r == '"' {
+				inDouble = false
+				continue
+			}
+			if r == '\\' {
+				escaped = true
+				continue
+			}
+			b.WriteRune(r)
+			continue
+		}
+
+		switch {
+		case r == '\\':
+			escaped = true
+		case r == '\'':
+			inSingle = true
+		case r == '"':
+			inDouble = true
+		case unicode.IsSpace(r):
+			flush()
+		default:
+			b.WriteRune(r)
+		}
+	}
+
+	if escaped || inSingle || inDouble {
+		return nil, false
+	}
+
+	flush()
+	return out, true
+}
+
+var savedQueryInputRefPattern = regexp.MustCompile(`\{\{\s*(args|inputs)\.([A-Za-z0-9_-]+)\s*\}\}`)
+var savedQueryArgsRefPattern = regexp.MustCompile(`\{\{\s*args\.([A-Za-z0-9_-]+)\s*\}\}`)
+
+func parseSavedQueryInputs(queryName string, args []string, declaredArgs []string) (map[string]string, error) {
 	if len(args) == 0 {
 		return nil, nil
 	}
 
-	inputs := make(map[string]string, len(args))
-	for _, arg := range args {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 || parts[0] == "" {
-			return nil, handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("invalid input argument: %s", arg),
-				"Use format: key=value")
-		}
-		inputs[parts[0]] = parts[1]
+	if len(declaredArgs) == 0 {
+		return nil, handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("saved query '%s' does not declare args", queryName),
+			"Declare args in raven.yaml (args: [name, ...]) or remove input arguments")
 	}
 
+	declaredSet := make(map[string]struct{}, len(declaredArgs))
+	for _, name := range declaredArgs {
+		declaredSet[name] = struct{}{}
+	}
+
+	keyValues := make(map[string]string, len(args))
+	positional := make([]string, 0, len(args))
+	for _, arg := range args {
+		if strings.Contains(arg, "=") {
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) != 2 || parts[0] == "" {
+				return nil, handleErrorMsg(ErrInvalidInput,
+					fmt.Sprintf("invalid input argument: %s", arg),
+					"Use format: key=value or positional values matching args order")
+			}
+			key := parts[0]
+			if _, ok := declaredSet[key]; !ok {
+				return nil, handleErrorMsg(ErrInvalidInput,
+					fmt.Sprintf("unknown input key for saved query '%s': %s", queryName, key),
+					fmt.Sprintf("Declared args: %s", strings.Join(declaredArgs, ", ")))
+			}
+			if _, exists := keyValues[key]; exists {
+				return nil, handleErrorMsg(ErrInvalidInput,
+					fmt.Sprintf("duplicate input key: %s", key),
+					"Provide each input at most once")
+			}
+			keyValues[key] = parts[1]
+			continue
+		}
+		positional = append(positional, arg)
+	}
+
+	remaining := make([]string, 0, len(declaredArgs))
+	for _, name := range declaredArgs {
+		if _, provided := keyValues[name]; !provided {
+			remaining = append(remaining, name)
+		}
+	}
+
+	if len(positional) > len(remaining) {
+		return nil, handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("too many positional inputs for saved query '%s' (got %d, expected at most %d)", queryName, len(positional), len(remaining)),
+			fmt.Sprintf("Declared args: %s", strings.Join(declaredArgs, ", ")))
+	}
+
+	inputs := make(map[string]string, len(keyValues)+len(positional))
+	for k, v := range keyValues {
+		inputs[k] = v
+	}
+	for i, v := range positional {
+		inputs[remaining[i]] = v
+	}
 	return inputs, nil
+}
+
+func normalizeSavedQueryArgsForCommand(cmd *cobra.Command, queryName string) ([]string, error) {
+	rawArgs, err := cmd.Flags().GetStringArray("arg")
+	if err != nil {
+		return nil, handleError(ErrInternal, err, "")
+	}
+	return normalizeSavedQueryArgs(queryName, rawArgs)
+}
+
+func normalizeSavedQueryArgs(queryName string, args []string) ([]string, error) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+
+	normalized := make([]string, 0, len(args))
+	seen := make(map[string]struct{}, len(args))
+	for _, arg := range args {
+		name := strings.TrimSpace(arg)
+		if name == "" {
+			return nil, handleErrorMsg(ErrInvalidInput,
+				fmt.Sprintf("saved query '%s' has an empty arg name", queryName),
+				"Use non-empty arg names, e.g. args: [project]")
+		}
+		if _, exists := seen[name]; exists {
+			return nil, handleErrorMsg(ErrInvalidInput,
+				fmt.Sprintf("saved query '%s' declares duplicate arg: %s", queryName, name),
+				"Each arg name must be unique")
+		}
+		seen[name] = struct{}{}
+		normalized = append(normalized, name)
+	}
+	return normalized, nil
+}
+
+func validateSavedQueryInputDeclarations(name, queryStr string, declaredArgs []string) error {
+	usedInputs := extractSavedQueryInputRefs(queryStr)
+	if len(usedInputs) == 0 {
+		return nil
+	}
+	if len(declaredArgs) == 0 {
+		return handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("saved query '%s' uses {{args.*}} but does not declare args", name),
+			fmt.Sprintf("Declare args in raven.yaml, e.g. args: [%s]", strings.Join(usedInputs, ", ")))
+	}
+
+	declaredSet := make(map[string]struct{}, len(declaredArgs))
+	for _, arg := range declaredArgs {
+		declaredSet[arg] = struct{}{}
+	}
+
+	var missing []string
+	for _, input := range usedInputs {
+		if _, ok := declaredSet[input]; !ok {
+			missing = append(missing, input)
+		}
+	}
+	if len(missing) > 0 {
+		return handleErrorMsg(ErrInvalidInput,
+			fmt.Sprintf("saved query '%s' is missing arg declarations for: %s", name, strings.Join(missing, ", ")),
+			fmt.Sprintf("Declare args in raven.yaml, e.g. args: [%s]", strings.Join(usedInputs, ", ")))
+	}
+	return nil
+}
+
+func extractSavedQueryInputRefs(queryStr string) []string {
+	if queryStr == "" {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	var inputs []string
+	for _, match := range savedQueryInputRefPattern.FindAllStringSubmatchIndex(queryStr, -1) {
+		if len(match) < 6 {
+			continue
+		}
+
+		// Skip escaped refs like \{{args.project}}.
+		start := match[0]
+		if start > 0 && queryStr[start-1] == '\\' {
+			continue
+		}
+
+		name := queryStr[match[4]:match[5]]
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		inputs = append(inputs, name)
+	}
+	return inputs
 }
 
 func resolveSavedQueryQueryString(name string, q *config.SavedQuery, inputs map[string]string) (string, error) {
@@ -1017,12 +1294,57 @@ func resolveSavedQueryQueryString(name string, q *config.SavedQuery, inputs map[
 		return "", handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "")
 	}
 
-	queryStr, err := workflow.Interpolate(q.Query, inputs, nil)
+	queryStr, err := workflow.Interpolate(normalizeSavedQueryTemplateVars(q.Query), inputs, nil)
 	if err != nil {
-		return "", handleErrorMsg(ErrInvalidInput, fmt.Sprintf("failed to resolve saved query '%s': %v", name, err), "")
+		errMsg := strings.ReplaceAll(err.Error(), "inputs.", "args.")
+		return "", handleErrorMsg(ErrInvalidInput, fmt.Sprintf("failed to resolve saved query '%s': %s", name, errMsg), "")
 	}
 
 	return queryStr, nil
+}
+
+// normalizeSavedQueryTemplateVars rewrites {{args.X}} to {{inputs.X}} so saved queries
+// can use args terminology while reusing workflow interpolation.
+// Escaped refs (e.g., \{{args.project}}) are left untouched.
+func normalizeSavedQueryTemplateVars(queryStr string) string {
+	if queryStr == "" {
+		return queryStr
+	}
+
+	matches := savedQueryArgsRefPattern.FindAllStringSubmatchIndex(queryStr, -1)
+	if len(matches) == 0 {
+		return queryStr
+	}
+
+	var b strings.Builder
+	b.Grow(len(queryStr))
+
+	last := 0
+	for _, m := range matches {
+		if len(m) < 4 {
+			continue
+		}
+		start := m[0]
+		end := m[1]
+
+		// Keep escaped refs literal.
+		if start > 0 && queryStr[start-1] == '\\' {
+			continue
+		}
+
+		argName := queryStr[m[2]:m[3]]
+		b.WriteString(queryStr[last:start])
+		b.WriteString("{{inputs.")
+		b.WriteString(argName)
+		b.WriteString("}}")
+		last = end
+	}
+
+	if last == 0 {
+		return queryStr
+	}
+	b.WriteString(queryStr[last:])
+	return b.String()
 }
 
 func hasTemplateVars(s string) bool {
@@ -1040,6 +1362,7 @@ func init() {
 
 	// query add flags
 	queryAddCmd.Flags().String("description", "", "Human-readable description")
+	queryAddCmd.Flags().StringArray("arg", nil, "Declare saved query input name (repeatable, sets args order)")
 
 	queryCmd.AddCommand(queryAddCmd)
 	queryCmd.AddCommand(queryRemoveCmd)
