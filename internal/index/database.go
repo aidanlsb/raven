@@ -674,15 +674,18 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 		}
 	}
 
-	for idx, trait := range doc.Traits {
-		// Skip undefined traits - schema is source of truth
+	traitIdx := 0
+	for _, trait := range doc.Traits {
+		// Skip undefined traits - schema is source of truth.
+		// traitIdx must only increment for defined traits to match indexInlineTraits.
 		if sch != nil {
 			if _, defined := sch.Traits[trait.TraitType]; !defined {
 				continue
 			}
 		}
 
-		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, idx)
+		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, traitIdx)
+		traitIdx++
 		// For single-value traits, check if the value is a date
 		if trait.Value != nil {
 			if dateStr := extractDateString(*trait.Value); dateStr != "" {

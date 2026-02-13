@@ -1,5 +1,7 @@
 package model
 
+import "strconv"
+
 // Reference represents a wikilink reference from one location to another.
 // This is used for both backlinks (who references X?) and outlinks (what does X reference?).
 type Reference struct {
@@ -40,7 +42,7 @@ func (r Reference) GetContent() string {
 // GetLocation returns a short location string (file:line).
 func (r Reference) GetLocation() string {
 	if r.Line != nil {
-		return r.FilePath + ":" + itoa(*r.Line)
+		return r.FilePath + ":" + strconv.Itoa(*r.Line)
 	}
 	return r.FilePath
 }

@@ -1,5 +1,7 @@
 package model
 
+import "strconv"
+
 // Object represents an instance of a typed object in the vault.
 // Objects are markdown files with frontmatter that defines their type and fields.
 type Object struct {
@@ -37,5 +39,5 @@ func (o Object) GetContent() string { return o.ID }
 
 // GetLocation returns a short location string (file:line).
 func (o Object) GetLocation() string {
-	return o.FilePath + ":" + itoa(o.LineStart)
+	return o.FilePath + ":" + strconv.Itoa(o.LineStart)
 }

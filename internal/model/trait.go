@@ -3,6 +3,8 @@
 // database, query execution, CLI output, and MCP tools.
 package model
 
+import "strconv"
+
 // Trait represents an instance of a trait annotation in the vault.
 // Examples: @todo, @todo(done), @due(2025-01-25), @highlight
 type Trait struct {
@@ -43,23 +45,5 @@ func (t Trait) GetContent() string { return t.Content }
 
 // GetLocation returns a short location string (file:line).
 func (t Trait) GetLocation() string {
-	return t.FilePath + ":" + itoa(t.Line)
-}
-
-// itoa is a simple int to string conversion without importing strconv.
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	if i < 0 {
-		return "-" + itoa(-i)
-	}
-	var buf [20]byte
-	n := len(buf)
-	for i > 0 {
-		n--
-		buf[n] = byte('0' + i%10)
-		i /= 10
-	}
-	return string(buf[n:])
+	return t.FilePath + ":" + strconv.Itoa(t.Line)
 }
