@@ -121,9 +121,9 @@ func printObjectTable(results []model.Object, sch *schema.Schema) {
 			nameWidth = len(name)
 		}
 
-		loc := formatLocationLinkSimple(r.FilePath, r.LineStart)
-		if len(loc) > locationWidth {
-			locationWidth = len(loc)
+		loc := formatLocationLinkSimpleStyled(r.FilePath, r.LineStart, ui.Muted.Render)
+		if visible := ui.VisibleLen(loc); visible > locationWidth {
+			locationWidth = visible
 		}
 
 		for _, col := range fieldColumns {
@@ -181,8 +181,8 @@ func printObjectTable(results []model.Object, sch *schema.Schema) {
 		}
 
 		// Location is not truncated - show full path for easy navigation
-		loc := formatLocationLinkSimple(r.FilePath, r.LineStart)
-		row += "  " + ui.Muted.Render(loc)
+		loc := formatLocationLinkSimpleStyled(r.FilePath, r.LineStart, ui.Muted.Render)
+		row += "  " + loc
 
 		fmt.Println(row)
 	}

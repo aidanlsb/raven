@@ -405,7 +405,7 @@ func printBacklinksResults(target string, links []model.Reference) {
 			line = *link.Line
 		}
 
-		location := formatLocationLinkSimple(link.FilePath, line)
+		location := formatLocationLinkSimpleStyled(link.FilePath, line, ui.Muted.Render)
 
 		table.AddRow(ui.ResultRow{
 			Num:      i + 1,
@@ -439,7 +439,7 @@ func printOutlinksResults(source string, links []model.Reference) {
 			line = *link.Line
 		}
 
-		location := formatLocationLinkSimple(link.FilePath, line)
+		location := formatLocationLinkSimpleStyled(link.FilePath, line, ui.Muted.Render)
 
 		table.AddRow(ui.ResultRow{
 			Num:      i + 1,
