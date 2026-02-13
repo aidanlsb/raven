@@ -301,6 +301,10 @@ type SavedQuery struct {
 	// e.g., "object:project .status==active" or "trait:due .value==past"
 	Query string `yaml:"query"`
 
+	// Args declares accepted saved-query input names and their positional order.
+	// Example: args: [project, status]
+	Args []string `yaml:"args,omitempty"`
+
 	// Description for help text
 	Description string `yaml:"description,omitempty"`
 }

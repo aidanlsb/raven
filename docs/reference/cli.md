@@ -245,7 +245,7 @@ rvn move drafts/person.md people/freya.md --update-refs
 Query objects or traits using the Raven query language.
 
 ```bash
-rvn query <query_string> [flags]
+rvn query <query_string> [saved-query-inputs...] [flags]
 ```
 
 | Argument | Description |
@@ -267,11 +267,16 @@ rvn query "object:project .status==active"
 rvn query "object:meeting has(trait:due)"
 rvn query "trait:due .value==past"
 rvn query tasks                              # Run saved query
+rvn query project-todos projects/raven      # Positional input (args: [project])
+rvn query project-todos project=projects/raven
 rvn query --list                             # List saved queries
 rvn query "trait:due .value==past" --ids       # For piping
 rvn query "trait:due .value==past" --apply "set status=overdue"
 rvn query "trait:due .value==past" --apply "set status=overdue" --confirm
 ```
+
+For saved queries that use `{{args.<name>}}`, declare inputs with `args` in `raven.yaml`.
+Inputs can then be passed positionally (in `args` order) or with `key=value`.
 
 See `reference/query-language.md` for the full query language.
 
@@ -282,7 +287,7 @@ See `reference/query-language.md` for the full query language.
 Add a saved query to `raven.yaml`.
 
 ```bash
-rvn query add <name> <query_string> [--description "..."]
+rvn query add <name> <query_string> [--description "..."] [--arg name...]
 ```
 
 | Argument | Description |
@@ -293,6 +298,7 @@ rvn query add <name> <query_string> [--description "..."]
 | Flag | Description |
 |------|-------------|
 | `--description` | Human-readable description |
+| `--arg` | Declare saved query input name (repeatable; sets positional order) |
 
 **Examples:**
 
@@ -300,6 +306,7 @@ rvn query add <name> <query_string> [--description "..."]
 rvn query add tasks "trait:due"
 rvn query add overdue "trait:due .value==past" --description "Overdue items"
 rvn query add active-projects "object:project .status==active"
+rvn query add project-todos "trait:todo refs([[{{args.project}}]])" --arg project
 ```
 
 ---

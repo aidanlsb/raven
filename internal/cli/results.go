@@ -100,9 +100,10 @@ type StatsResult struct {
 // SavedQueryInfo represents a saved query definition.
 // Used by: query --list
 type SavedQueryInfo struct {
-	Name        string `json:"name"`
-	Query       string `json:"query"`
-	Description string `json:"description,omitempty"`
+	Name        string   `json:"name"`
+	Query       string   `json:"query"`
+	Args        []string `json:"args,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 // QueryResult represents results from running a saved query.

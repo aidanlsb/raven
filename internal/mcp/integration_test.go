@@ -121,6 +121,57 @@ func TestMCPIntegration_QueryObjects(t *testing.T) {
 	}
 }
 
+// TestMCPIntegration_QuerySavedQueryInlineArgs tests MCP query_string containing
+// "<saved-query-name> <inputs...>" in a single string argument.
+func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`queries:
+  project-by-status:
+    query: "object:project .status=={{args.status}}"
+    args: [status]
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	// Create some objects first
+	server.callTool("raven_new", map[string]interface{}{
+		"type":  "project",
+		"title": "Project A",
+		"field": map[string]interface{}{"status": "active"},
+	})
+	server.callTool("raven_new", map[string]interface{}{
+		"type":  "project",
+		"title": "Project B",
+		"field": map[string]interface{}{"status": "done"},
+	})
+
+	// MCP passes query_string as one arg; ensure saved query + inline input works.
+	result := server.callTool("raven_query", map[string]interface{}{
+		"query_string": "project-by-status active",
+	})
+
+	if result.IsError {
+		t.Fatalf("query failed: %s", result.Text)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []interface{} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if len(resp.Data.Items) != 1 {
+		t.Errorf("expected 1 result, got %d", len(resp.Data.Items))
+	}
+}
+
 // TestMCPIntegration_ReadObject tests reading an object via MCP tool call.
 func TestMCPIntegration_ReadObject(t *testing.T) {
 	v := testutil.NewTestVault(t).
