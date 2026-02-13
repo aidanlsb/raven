@@ -204,6 +204,9 @@ editor = "code"
 [vaults]
 work = "/path/to/work"
 personal = "/path/to/personal"
+
+[ui]
+accent = "39"
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -222,6 +225,9 @@ personal = "/path/to/personal"
 	}
 	if len(cfg.Vaults) != 2 {
 		t.Errorf("expected 2 vaults, got %d: %v", len(cfg.Vaults), cfg.Vaults)
+	}
+	if cfg.UI.Accent != "39" {
+		t.Errorf("expected ui.accent '39', got %q", cfg.UI.Accent)
 	}
 }
 

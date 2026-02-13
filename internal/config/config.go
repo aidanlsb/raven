@@ -26,6 +26,16 @@ type Config struct {
 
 	// EditorMode controls how the editor is launched: auto, terminal, or gui.
 	EditorMode string `toml:"editor_mode"`
+
+	// UI controls optional CLI theming preferences.
+	UI UIConfig `toml:"ui"`
+}
+
+// UIConfig represents optional CLI theming preferences.
+type UIConfig struct {
+	// Accent is an optional accent color for CLI output and markdown rendering.
+	// Supported values are ANSI color codes ("0" to "255") or hex colors ("#RRGGBB").
+	Accent string `toml:"accent"`
 }
 
 // GetVaultPath returns the path for a named vault.
@@ -165,6 +175,11 @@ func CreateDefault() (string, error) {
 #   terminal - always run in the foreground with TTY attached
 #   gui      - always run in the background (non-blocking)
 # editor_mode = "auto"
+#
+# Optional UI accent color for headers/links in terminal output.
+# Supports ANSI color codes (0-255) or hex (#RRGGBB).
+# [ui]
+# accent = "39"
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {

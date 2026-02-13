@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/ansi"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
@@ -40,6 +41,8 @@ type readBacklinkGroup struct {
 	Lines  []string `json:"lines"`
 }
 
+const readRenderMargin = 2
+
 func readEnriched(opts readEnrichedOptions) error {
 	// Split content into frontmatter and body
 	frontmatter, body := splitFrontmatterBody(opts.content)
@@ -69,6 +72,11 @@ func readEnriched(opts readEnrichedOptions) error {
 	if width <= 0 {
 		width = ui.DefaultTermWidth
 	}
+	margin := 0
+	if display.IsTTY {
+		margin = readRenderMargin
+	}
+	marginPrefix := strings.Repeat(" ", margin)
 
 	// Render body through glamour when outputting to a TTY
 	renderedBody := processedBody
@@ -76,15 +84,21 @@ func readEnriched(opts readEnrichedOptions) error {
 		if rendered, renderErr := renderMarkdown(processedBody, width); renderErr == nil {
 			renderedBody = rendered
 		}
+		renderedBody = renderTraitsMuted(renderedBody)
 	}
 
-	fmt.Println(ui.Divider(opts.fileRelPath, width))
+	fmt.Println(marginPrefix + ui.DividerWithAccentLabel(opts.fileRelPath, width))
 	fmt.Println()
 
 	// Print frontmatter as-is (raw YAML)
 	if frontmatter != "" {
-		fmt.Print(frontmatter)
-		if !strings.HasSuffix(frontmatter, "\n") {
+		renderedFrontmatter := frontmatter
+		if display.IsTTY {
+			renderedFrontmatter = ui.Muted.Render(frontmatter)
+		}
+		renderedFrontmatter = indentBlock(renderedFrontmatter, margin)
+		fmt.Print(renderedFrontmatter)
+		if !strings.HasSuffix(renderedFrontmatter, "\n") {
 			fmt.Println()
 		}
 	}
@@ -96,11 +110,11 @@ func readEnriched(opts readEnrichedOptions) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.Divider(fmt.Sprintf("Backlinks (%d)", backlinksCount), width))
+	fmt.Println(marginPrefix + ui.DividerWithAccentLabel(fmt.Sprintf("Backlinks (%d)", backlinksCount), width))
 	fmt.Println()
 
 	if backlinksCount == 0 {
-		fmt.Println(ui.Muted.Render("(none)"))
+		fmt.Println(marginPrefix + ui.Muted.Render("(none)"))
 		return nil
 	}
 
@@ -108,9 +122,9 @@ func readEnriched(opts readEnrichedOptions) error {
 		if i > 0 {
 			fmt.Println()
 		}
-		fmt.Println(ui.Muted.Render(ui.SymbolAttention) + " " + formatFileLink(g.Source))
+		fmt.Println(marginPrefix + ui.Muted.Render(ui.SymbolAttention) + " " + formatFileLink(g.Source))
 		for _, line := range g.Lines {
-			fmt.Println(ui.Indent(2, ui.Bullet(line)))
+			fmt.Println(marginPrefix + ui.Indent(2, ui.Bullet(line)))
 		}
 	}
 
@@ -134,9 +148,8 @@ func splitFrontmatterBody(content string) (frontmatter string, body string) {
 	return frontmatter, body
 }
 
-// preprocessWikilinks converts [[wikilinks]] in the body to standard markdown
-// links for glamour rendering. Resolved links become [text](editor-url),
-// unresolved links are left as [[target]] literal text.
+// preprocessWikilinks collects wikilink reference metadata from the body while
+// preserving the original [[wikilink]] text for display.
 func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultConfig) (string, []readReference) {
 	lines := strings.Split(body, "\n")
 	outLines := make([]string, 0, len(lines))
@@ -162,47 +175,16 @@ func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultCo
 			continue
 		}
 
-		var b strings.Builder
-		last := 0
 		for _, m := range matches {
-			// Defensive bounds check
-			if m.Start < 0 || m.End > len(line) || m.Start < last || m.Start >= m.End {
-				continue
-			}
-
-			b.WriteString(line[last:m.Start])
-
 			refs = append(refs, readReference{Text: m.Target})
 
-			// Determine display text
-			displayText := m.Target
-			if m.DisplayText != nil {
-				displayText = *m.DisplayText
-			}
-
-			// Attempt to resolve to a file so we can create a markdown link
+			// Resolve to file path for JSON metadata/backlinks context.
 			path, ok := resolveTargetToRelPath(m.Target, vaultPath, vaultCfg)
 			if ok {
 				refs[len(refs)-1].Path = &path
-
-				if shouldEmitHyperlinks() {
-					abs := filepath.Join(vaultPath, path)
-					url := buildEditorURL(getConfig(), abs, 1)
-					// Convert to standard markdown link for glamour to render
-					b.WriteString(fmt.Sprintf("[%s](%s)", displayText, url))
-				} else {
-					// No hyperlinks: render as bold text so it stands out
-					b.WriteString(fmt.Sprintf("**%s**", displayText))
-				}
-			} else {
-				// Unresolved: leave as [[target]] literal
-				b.WriteString(line[m.Start:m.End])
 			}
-
-			last = m.End
 		}
-		b.WriteString(line[last:])
-		outLines = append(outLines, b.String())
+		outLines = append(outLines, line)
 	}
 
 	return strings.Join(outLines, "\n"), refs
@@ -211,7 +193,7 @@ func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultCo
 // renderMarkdown renders a markdown string for terminal display using glamour.
 func renderMarkdown(content string, width int) (string, error) {
 	r, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStyles(ravenMarkdownStyle()),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
@@ -228,6 +210,162 @@ func renderMarkdown(content string, width int) (string, error) {
 
 	return rendered, nil
 }
+
+func renderTraitsMuted(content string) string {
+	return parser.TraitHighlightPattern.ReplaceAllStringFunc(content, func(match string) string {
+		return ui.Muted.Render(match)
+	})
+}
+
+func indentBlock(content string, spaces int) string {
+	if spaces <= 0 || content == "" {
+		return content
+	}
+	prefix := strings.Repeat(" ", spaces)
+	parts := strings.SplitAfter(content, "\n")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = prefix + part
+	}
+	return strings.Join(parts, "")
+}
+
+func ravenMarkdownStyle() ansi.StyleConfig {
+	muted := mdStringPtr("8")
+	var accent *string
+	if color, ok := ui.AccentColor(); ok {
+		accent = mdStringPtr(color)
+	}
+
+	return ansi.StyleConfig{
+		Document: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockPrefix: "\n",
+				BlockSuffix: "\n",
+			},
+			Margin: mdUintPtr(readRenderMargin),
+		},
+		BlockQuote: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: muted,
+			},
+			Indent:      mdUintPtr(1),
+			IndentToken: mdStringPtr("│ "),
+		},
+		Paragraph: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{},
+		},
+		List: ansi.StyleList{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{},
+			},
+			LevelIndent: 2,
+		},
+		Heading: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockSuffix: "\n",
+				Color:       accent,
+				Bold:        mdBoolPtr(true),
+			},
+		},
+		H1: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "# ",
+			},
+		},
+		H2: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "## ",
+			},
+		},
+		H3: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "### ",
+			},
+		},
+		H4: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "#### ",
+			},
+		},
+		H5: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "##### ",
+			},
+		},
+		H6: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "###### ",
+				Bold:   mdBoolPtr(false),
+			},
+		},
+		Strikethrough: ansi.StylePrimitive{
+			CrossedOut: mdBoolPtr(true),
+		},
+		Emph: ansi.StylePrimitive{
+			Italic: mdBoolPtr(true),
+		},
+		Strong: ansi.StylePrimitive{
+			Bold: mdBoolPtr(true),
+		},
+		HorizontalRule: ansi.StylePrimitive{
+			Color:  muted,
+			Format: "\n--------\n",
+		},
+		Item: ansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Enumeration: ansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
+		Task: ansi.StyleTask{
+			Ticked:   "[x] ",
+			Unticked: "[ ] ",
+		},
+		Link: ansi.StylePrimitive{
+			Color:     muted,
+			Underline: mdBoolPtr(true),
+		},
+		LinkText: ansi.StylePrimitive{
+			Color: muted,
+			Bold:  mdBoolPtr(true),
+		},
+		Image: ansi.StylePrimitive{
+			Underline: mdBoolPtr(true),
+		},
+		ImageText: ansi.StylePrimitive{
+			Color:  muted,
+			Format: "Image: {{.text}} ->",
+		},
+		Code: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Prefix: "`",
+				Suffix: "`",
+			},
+		},
+		CodeBlock: ansi.StyleCodeBlock{
+			StyleBlock: ansi.StyleBlock{
+				StylePrimitive: ansi.StylePrimitive{},
+			},
+		},
+		Table: ansi.StyleTable{
+			CenterSeparator: mdStringPtr("│"),
+			ColumnSeparator: mdStringPtr("│"),
+			RowSeparator:    mdStringPtr("─"),
+		},
+		DefinitionDescription: ansi.StylePrimitive{
+			BlockPrefix: "\n- ",
+		},
+	}
+}
+
+func mdBoolPtr(v bool) *bool { return &v }
+
+func mdStringPtr(v string) *string { return &v }
+
+func mdUintPtr(v uint) *uint { return &v }
 
 func resolveTargetToRelPath(target string, vaultPath string, vaultCfg *config.VaultConfig) (string, bool) {
 	res, err := ResolveReference(target, ResolveOptions{

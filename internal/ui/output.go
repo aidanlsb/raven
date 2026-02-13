@@ -89,7 +89,7 @@ func Infof(format string, args ...interface{}) string {
 
 // Header returns a styled section header
 func Header(msg string) string {
-	return Bold.Render(msg)
+	return Accent.Render(msg)
 }
 
 // SectionHeader returns a styled section header with a leading symbol.
@@ -147,8 +147,42 @@ func pluralize(singular string, count int) string {
 
 // Divider returns a section divider like "— tasks ————————————————"
 func Divider(label string, width int) string {
+	return dividerWithRender(label, width, Muted.Render)
+}
+
+// AccentDivider returns a section divider rendered with the accent style.
+func AccentDivider(label string, width int) string {
+	return dividerWithRender(label, width, Accent.Render)
+}
+
+// DividerWithAccentLabel renders a divider with muted dashes and an accent label.
+func DividerWithAccentLabel(label string, width int) string {
 	if label == "" {
 		return Muted.Render(strings.Repeat(SymbolDash, width))
+	}
+
+	// Format: "— " + accent(label) + " ————————"
+	left := SymbolDash + " "
+	rightPrefix := " "
+	remaining := width - len(left) - len(label) - len(rightPrefix)
+	if remaining < 3 {
+		remaining = 3
+	}
+
+	return Muted.Render(left) + Accent.Render(label) + Muted.Render(rightPrefix+strings.Repeat(SymbolDash, remaining))
+}
+
+func dividerWithRender(label string, width int, render func(...string) string) string {
+	if render == nil {
+		render = func(parts ...string) string {
+			if len(parts) == 0 {
+				return ""
+			}
+			return parts[0]
+		}
+	}
+	if label == "" {
+		return render(strings.Repeat(SymbolDash, width))
 	}
 	// Format: "— label ————————"
 	prefix := SymbolDash + " " + label + " "
@@ -156,7 +190,7 @@ func Divider(label string, width int) string {
 	if remaining < 3 {
 		remaining = 3
 	}
-	return Muted.Render(prefix + strings.Repeat(SymbolDash, remaining))
+	return render(prefix + strings.Repeat(SymbolDash, remaining))
 }
 
 // Badge returns a styled badge/pill like "[today]" or "(3)"

@@ -56,7 +56,7 @@ func (s *Spinner) Start() {
 				frame := s.frames[s.current%len(s.frames)]
 				s.current++
 				s.mu.Unlock()
-				fmt.Printf("\r%s %s %s", Bold.Render(frame), s.message, Muted.Render(""))
+				fmt.Printf("\r%s %s %s", Accent.Render(frame), s.message, Muted.Render(""))
 			}
 		}
 	}()

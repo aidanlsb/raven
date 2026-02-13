@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var (
@@ -54,6 +55,7 @@ who gathered knowledge from across the world.`,
 		if cfg == nil {
 			cfg = &config.Config{}
 		}
+		ui.ConfigureTheme(cfg.UI.Accent)
 
 		// Resolve vault path: explicit path > named vault > default
 		if vaultPathFlag != "" {
