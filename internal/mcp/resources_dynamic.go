@@ -87,16 +87,7 @@ func (s *Server) readWorkflowResource(name string) (string, error) {
 	if len(wf.Inputs) > 0 {
 		out["inputs"] = wf.Inputs
 	}
-	// Prefer showing simplified workflow shape when present.
-	if wf.Prompt != "" {
-		if len(wf.Context) > 0 {
-			out["context"] = wf.Context
-		}
-		out["prompt"] = wf.Prompt
-		if len(wf.Outputs) > 0 {
-			out["outputs"] = wf.Outputs
-		}
-	} else if len(wf.Steps) > 0 {
+	if len(wf.Steps) > 0 {
 		out["steps"] = wf.Steps
 	}
 

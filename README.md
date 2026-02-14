@@ -17,6 +17,7 @@ Markdown notes with schema, queries, CLI, and MCP integration.
 
 ```bash
 go install github.com/aidanlsb/raven/cmd/rvn@latest
+rvn version  # Verify which binary/version is on PATH
 rvn init ~/notes && cd ~/notes
 rvn daily  # Open today's note
 ```
@@ -123,6 +124,7 @@ Raven requires Go 1.22+.
 
 ```bash
 go install github.com/aidanlsb/raven/cmd/rvn@latest
+rvn version
 ```
 
 ### Initialize a Vault

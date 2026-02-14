@@ -6,20 +6,22 @@ inputs:
     description: "What to focus the review on"
 steps:
   - id: relevant
-    type: search
-    term: "{{inputs.topic}}"
-    limit: 5
+    type: tool
+    tool: raven_search
+    arguments:
+      query: "{{inputs.topic}}"
+      limit: 5
 
-  - id: prompt
-    type: prompt
+  - id: compose
+    type: agent
     outputs:
       markdown:
         type: markdown
         required: true
-    template: |
+    prompt: |
       Conduct a focused code review on the topic: {{inputs.topic}}
 
       ## Relevant Context
-      {{steps.relevant.results}}
+      {{steps.relevant.data.results}}
 
       Provide constructive feedback and suggestions for improvement.

@@ -1,12 +1,12 @@
 # Workflows
 
-Workflows are reusable prompt templates (with optional deterministic `context:` prefetch) defined in `raven.yaml`.
+Workflows are reusable, steps-based pipelines defined in `raven.yaml`.
 
 They’re designed for agent usage:
-1. Raven runs deterministic context prefetch (optional)
-2. Raven renders a prompt (it does not call an LLM)
-3. If the workflow declares `outputs:`, the agent responds with a JSON envelope `{ "outputs": { ... } }`
-4. Apply any desired changes via normal Raven commands (e.g., `add`, `set`, `query --apply`)
+1. Raven executes deterministic `tool` steps in order
+2. Raven stops at the first `agent` step and returns its rendered prompt
+3. If the `agent` step declares `outputs`, the agent responds with `{ "outputs": { ... } }`
+4. Use additional `tool` steps (for example `raven_upsert`) for deterministic persistence
 
 ## Run a workflow
 

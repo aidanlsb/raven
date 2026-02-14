@@ -38,6 +38,19 @@ Creates:
 
 ---
 
+### `rvn version`
+
+Show the running binary's version and build metadata.
+
+```bash
+rvn version
+rvn version --json
+```
+
+Useful for confirming which `rvn` binary is active on PATH after an upgrade.
+
+---
+
 ### `rvn new`
 
 Create a new typed object.
@@ -101,6 +114,38 @@ rvn add "Call Odin" --timestamp
 **Notes:**
 - Default destination is today's daily note
 - Target file must already exist (use `rvn new` to create new files)
+
+---
+
+### `rvn upsert`
+
+Create or update a typed object idempotently.
+
+```bash
+rvn upsert <type> <title> [--field key=value...] [--content markdown]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `type` | Object type (for example `brief`, `report`) |
+| `title` | Stable object identity key |
+
+| Flag | Description |
+|------|-------------|
+| `--field` | Set/update frontmatter fields (repeatable) |
+| `--content` | Replace body content (full-body idempotent mode) |
+
+**Examples:**
+
+```bash
+rvn upsert brief "Daily Brief 2026-02-14" --content "# Daily Brief"
+rvn upsert report "Q1 Status" --field owner=people/freya --field status=draft
+```
+
+**Notes:**
+- Returns status: `created`, `updated`, or `unchanged`
+- Use this for canonical generated artifacts (briefs/reports/summaries)
+- Unlike `rvn add`, reruns converge to one current state instead of appending history
 
 ---
 
@@ -1157,7 +1202,7 @@ Shows the full definition including inputs and steps.
 
 ### `rvn workflow run`
 
-Run a workflow until it reaches a prompt step.
+Run a workflow until it reaches an agent step.
 
 ```bash
 rvn workflow run <name> [--input key=value...]
@@ -1177,7 +1222,7 @@ rvn workflow run <name> [--input key=value...]
 rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1
 ```
 
-Returns the rendered prompt (for the prompt step), declared prompt outputs schema, and step outputs gathered so far.
+Runs deterministic tool steps, then returns the rendered agent prompt, declared agent outputs schema, and step outputs gathered so far.
 
 ---
 

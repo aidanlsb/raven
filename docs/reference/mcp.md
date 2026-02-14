@@ -93,6 +93,7 @@ rvn schema commands --json
 | Tool | Description |
 |------|-------------|
 | `raven_new` | Create a new typed object |
+| `raven_upsert` | Create or update a typed object idempotently |
 | `raven_import` | Import objects from JSON data (create/update) |
 | `raven_add` | Append content to existing file or daily note |
 | `raven_daily` | Open or create a daily note |
@@ -171,7 +172,7 @@ rvn schema commands --json
 |------|-------------|
 | `raven_workflow_list` | List available workflows |
 | `raven_workflow_show` | Show workflow details |
-| `raven_workflow_run` | Run a workflow until a prompt step |
+| `raven_workflow_run` | Run a workflow until an agent step |
 
 ---
 

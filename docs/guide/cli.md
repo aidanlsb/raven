@@ -455,8 +455,11 @@ rvn workflow list
 # See workflow details
 rvn workflow show meeting-prep
 
-# Run deterministic steps until prompt step
+# Run deterministic steps until agent step
 rvn workflow run meeting-prep --input meeting_id=meetings/team-sync
+
+# Persist generated output idempotently
+rvn upsert brief "Daily Brief 2026-02-14" --content "# Daily Brief"
 ```
 
 ---

@@ -11,18 +11,22 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
+var dailyEdit bool
+
 var dailyCmd = &cobra.Command{
 	Use:   "daily [date]",
 	Short: "Open or create a daily note",
-	Long: `Creates a daily note if it doesn't exist, then opens it in your editor.
+	Long: `Creates a daily note if it doesn't exist.
 
 If no date is provided, defaults to today.
+Use --edit to open it in your editor.
 
 Examples:
   rvn daily              # Today's note
   rvn daily yesterday    # Yesterday's note
-  rvn daily tomorrow     # Tomorrow's note  
-  rvn daily 2025-02-01   # Specific date`,
+  rvn daily tomorrow     # Tomorrow's note
+  rvn daily 2025-02-01   # Specific date
+  rvn daily --edit       # Open in editor`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
@@ -63,19 +67,48 @@ Examples:
 				return fmt.Errorf("failed to create daily note: %w", err)
 			}
 
-			fmt.Printf("✓ Created %s\n", result.RelativePath)
+			if !isJSONOutput() {
+				fmt.Printf("Created %s\n", result.RelativePath)
+			}
 			dailyPath = result.FilePath
 			created = true
 		}
 
 		// Open in editor using shared logic
 		relPath, _ := filepath.Rel(vaultPath, dailyPath)
-		openFileInEditor(dailyPath, relPath, created)
+
+		if isJSONOutput() {
+			editor := ""
+			if cfg := getConfig(); cfg != nil {
+				editor = cfg.GetEditor()
+			}
+
+			opened := false
+			if dailyEdit {
+				opened = vault.OpenInEditor(getConfig(), dailyPath)
+			}
+
+			outputSuccess(map[string]interface{}{
+				"file":    relPath,
+				"date":    dateStr,
+				"created": created,
+				"opened":  opened,
+				"editor":  editor,
+			}, nil)
+			return nil
+		}
+
+		if dailyEdit {
+			openFileInEditor(dailyPath, relPath, created)
+		} else {
+			fmt.Printf("File: %s\n", relPath)
+		}
 
 		return nil
 	},
 }
 
 func init() {
+	dailyCmd.Flags().BoolVarP(&dailyEdit, "edit", "e", false, "Open the note in the configured editor")
 	rootCmd.AddCommand(dailyCmd)
 }

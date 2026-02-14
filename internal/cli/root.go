@@ -34,7 +34,7 @@ who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip vault resolution for commands that don't need it
 		switch cmd.Name() {
-		case "init", "vaults", "completion", "help":
+		case "init", "vaults", "completion", "help", "version":
 			return nil
 		}
 		// Also skip for completion subcommands (bash, zsh, fish, powershell)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"gopkg.in/yaml.v3"
 
@@ -15,12 +14,9 @@ import (
 
 // externalWorkflowDef is used for parsing external workflow files.
 type externalWorkflowDef struct {
-	Description string                                  `yaml:"description,omitempty"`
-	Inputs      map[string]*config.WorkflowInput        `yaml:"inputs,omitempty"`
-	Context     map[string]*config.WorkflowContextItem  `yaml:"context,omitempty"`
-	Prompt      string                                  `yaml:"prompt,omitempty"`
-	Outputs     map[string]*config.WorkflowPromptOutput `yaml:"outputs,omitempty"`
-	Steps       []*config.WorkflowStep                  `yaml:"steps,omitempty"`
+	Description string                           `yaml:"description,omitempty"`
+	Inputs      map[string]*config.WorkflowInput `yaml:"inputs,omitempty"`
+	Steps       []*config.WorkflowStep           `yaml:"steps,omitempty"`
 }
 
 // LoadAll loads all workflows from the vault configuration.
@@ -50,7 +46,7 @@ func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
 	// Check for conflicting definition
 	// Allow a top-level description alongside file-backed workflows for convenience,
 	// but disallow mixing file-backed workflows with any inline definition fields.
-	if ref.File != "" && (len(ref.Inputs) > 0 || len(ref.Steps) > 0 || len(ref.Context) > 0 || ref.Prompt != "" || len(ref.Outputs) > 0) {
+	if ref.File != "" && (len(ref.Inputs) > 0 || len(ref.Steps) > 0) {
 		return nil, fmt.Errorf("workflow has both 'file' and inline fields; use one or the other")
 	}
 
@@ -67,7 +63,7 @@ func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
 	}
 
 	// Use inline definition
-	wf, err := buildWorkflow(name, ref.Description, ref.Inputs, ref.Context, ref.Prompt, ref.Outputs, ref.Steps)
+	wf, err := buildWorkflow(name, ref.Description, ref.Inputs, ref.Steps)
 	if err != nil {
 		return nil, err
 	}
@@ -88,18 +84,29 @@ func loadFromFile(vaultPath, name, filePath string) (*Workflow, error) {
 		return nil, fmt.Errorf("failed to validate workflow file: %w", err)
 	}
 
-	// Read and parse file
+	// Read file
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read workflow file: %w", err)
 	}
 
-	var def externalWorkflowDef
-	if err := yaml.Unmarshal(data, &def); err != nil {
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
 		return nil, fmt.Errorf("failed to parse workflow file: %w", err)
 	}
+	if len(root.Content) == 0 {
+		return nil, fmt.Errorf("failed to parse workflow file: empty document")
+	}
+	if err := rejectLegacyTopLevelKeys(root.Content[0]); err != nil {
+		return nil, err
+	}
 
-	wf, err := buildWorkflow(name, def.Description, def.Inputs, def.Context, def.Prompt, def.Outputs, def.Steps)
+	var def externalWorkflowDef
+	if err := root.Content[0].Decode(&def); err != nil {
+		return nil, fmt.Errorf("failed to decode workflow file: %w", err)
+	}
+
+	wf, err := buildWorkflow(name, def.Description, def.Inputs, def.Steps)
 	if err != nil {
 		return nil, err
 	}
@@ -113,39 +120,17 @@ func buildWorkflow(
 	name string,
 	description string,
 	inputs map[string]*config.WorkflowInput,
-	ctx map[string]*config.WorkflowContextItem,
-	prompt string,
-	outputs map[string]*config.WorkflowPromptOutput,
 	steps []*config.WorkflowStep,
 ) (*Workflow, error) {
-	// Prefer explicit steps if present (legacy/advanced).
-	if len(steps) > 0 {
-		return &Workflow{
-			Name:        name,
-			Description: description,
-			Inputs:      inputs,
-			Steps:       steps,
-		}, nil
-	}
-
-	// Otherwise, simplified prompt workflow.
-	if prompt == "" {
-		return nil, fmt.Errorf("workflow must have either 'file' or 'prompt' or 'steps'")
-	}
-
-	compiled, err := compilePromptWorkflow(ctx, prompt, outputs)
-	if err != nil {
-		return nil, err
+	if len(steps) == 0 {
+		return nil, fmt.Errorf("workflow must define 'steps'; top-level context/prompt/outputs were removed in workflow v3")
 	}
 
 	return &Workflow{
 		Name:        name,
 		Description: description,
 		Inputs:      inputs,
-		Context:     ctx,
-		Prompt:      prompt,
-		Outputs:     outputs,
-		Steps:       compiled,
+		Steps:       steps,
 	}, nil
 }
 
@@ -174,40 +159,26 @@ func validateWorkflow(wf *Workflow) error {
 			return fmt.Errorf("step '%s' is missing type", s.ID)
 		}
 		switch s.Type {
-		case "query":
-			if s.RQL == "" {
-				return fmt.Errorf("step '%s' (query) missing rql", s.ID)
-			}
-		case "read":
-			if s.Ref == "" {
-				return fmt.Errorf("step '%s' (read) missing ref", s.ID)
-			}
-		case "search":
-			if s.Term == "" {
-				return fmt.Errorf("step '%s' (search) missing term", s.ID)
-			}
-		case "backlinks":
-			if s.Target == "" {
-				return fmt.Errorf("step '%s' (backlinks) missing target", s.ID)
-			}
-		case "prompt":
-			if s.Template == "" {
-				return fmt.Errorf("step '%s' (prompt) missing template", s.ID)
+		case "agent":
+			if s.Prompt == "" {
+				return fmt.Errorf("step '%s' (agent) missing prompt", s.ID)
 			}
 			if len(s.Outputs) > 0 {
 				for name, out := range s.Outputs {
 					if name == "" {
-						return fmt.Errorf("step '%s' (prompt) has empty output name", s.ID)
+						return fmt.Errorf("step '%s' (agent) has empty output name", s.ID)
 					}
 					if out == nil {
-						return fmt.Errorf("step '%s' (prompt) output '%s' is nil", s.ID, name)
+						return fmt.Errorf("step '%s' (agent) output '%s' is nil", s.ID, name)
 					}
-					switch out.Type {
-					case "markdown":
-					default:
-						return fmt.Errorf("step '%s' (prompt) output '%s' has unknown type '%s'", s.ID, name, out.Type)
+					if !isValidOutputType(out.Type) {
+						return fmt.Errorf("step '%s' (agent) output '%s' has unknown type '%s'", s.ID, name, out.Type)
 					}
 				}
+			}
+		case "tool":
+			if s.Tool == "" {
+				return fmt.Errorf("step '%s' (tool) missing tool", s.ID)
 			}
 		default:
 			return fmt.Errorf("step '%s' has unknown type '%s'", s.ID, s.Type)
@@ -216,74 +187,32 @@ func validateWorkflow(wf *Workflow) error {
 	return nil
 }
 
-func compilePromptWorkflow(
-	ctx map[string]*config.WorkflowContextItem,
-	prompt string,
-	outputs map[string]*config.WorkflowPromptOutput,
-) ([]*config.WorkflowStep, error) {
-	var steps []*config.WorkflowStep
-
-	if len(ctx) > 0 {
-		keys := make([]string, 0, len(ctx))
-		for k := range ctx {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-
-		for _, id := range keys {
-			if id == "" {
-				return nil, fmt.Errorf("context key cannot be empty")
-			}
-			if id == "prompt" {
-				return nil, fmt.Errorf("context key 'prompt' is reserved")
-			}
-			item := ctx[id]
-			if item == nil {
-				return nil, fmt.Errorf("context item '%s' is nil", id)
-			}
-
-			set := 0
-			if item.Query != "" {
-				set++
-			}
-			if item.Read != "" {
-				set++
-			}
-			if item.Backlinks != "" {
-				set++
-			}
-			if item.Search != "" {
-				set++
-			}
-			if set != 1 {
-				return nil, fmt.Errorf("context item '%s' must set exactly one of query/read/backlinks/search", id)
-			}
-
-			switch {
-			case item.Query != "":
-				steps = append(steps, &config.WorkflowStep{ID: id, Type: "query", RQL: item.Query})
-			case item.Read != "":
-				steps = append(steps, &config.WorkflowStep{ID: id, Type: "read", Ref: item.Read})
-			case item.Backlinks != "":
-				steps = append(steps, &config.WorkflowStep{ID: id, Type: "backlinks", Target: item.Backlinks})
-			case item.Search != "":
-				st := &config.WorkflowStep{ID: id, Type: "search", Term: item.Search}
-				if item.Limit > 0 {
-					st.Limit = item.Limit
-				}
-				steps = append(steps, st)
-			}
+func rejectLegacyTopLevelKeys(root *yaml.Node) error {
+	if root == nil {
+		return fmt.Errorf("failed to parse workflow file: empty document")
+	}
+	if root.Kind != yaml.MappingNode {
+		return fmt.Errorf("failed to parse workflow file: expected mapping at document root")
+	}
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		switch root.Content[i].Value {
+		case "context", "prompt", "outputs":
+			return fmt.Errorf(
+				"workflow file uses legacy top-level key '%s': workflows are steps-only in v3; migrate to explicit 'steps' with 'agent' and 'tool' steps",
+				root.Content[i].Value,
+			)
 		}
 	}
+	return nil
+}
 
-	steps = append(steps, &config.WorkflowStep{
-		ID:       "prompt",
-		Type:     "prompt",
-		Template: prompt,
-		Outputs:  outputs,
-	})
-
-	return steps, nil
+func isValidOutputType(outputType string) bool {
+	switch outputType {
+	case "markdown", "string", "number", "bool", "object", "array":
+		return true
+	default:
+		return false
+	}
 }
 
 // Get retrieves a workflow by name from the vault configuration.

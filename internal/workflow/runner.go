@@ -9,17 +9,14 @@ import (
 
 // Runner executes workflows step-by-step.
 //
-// It is intentionally generic: deterministic steps are executed via function
-// hooks provided by the caller (CLI/MCP), and prompt steps only render prompts
-// (they do not call an LLM).
+// It is intentionally generic: deterministic tool steps are executed via a
+// caller-provided function hook, and agent steps only render prompts (they do
+// not call an LLM).
 type Runner struct {
 	vaultPath string
 	vaultCfg  *config.VaultConfig
 
-	QueryFunc     func(query string) (interface{}, error)
-	ReadFunc      func(ref string) (interface{}, error)
-	BacklinksFunc func(target string) (interface{}, error)
-	SearchFunc    func(term string, limit int) (interface{}, error)
+	ToolFunc func(tool string, args map[string]interface{}) (interface{}, error)
 }
 
 func NewRunner(vaultPath string, vaultCfg *config.VaultConfig) *Runner {
@@ -29,7 +26,7 @@ func NewRunner(vaultPath string, vaultCfg *config.VaultConfig) *Runner {
 	}
 }
 
-// Run executes wf until it reaches a prompt step (returning Next) or completes.
+// Run executes wf until it reaches an agent step (returning Next) or completes.
 func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error) {
 	if wf == nil {
 		return nil, fmt.Errorf("workflow is nil")
@@ -48,72 +45,12 @@ func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error)
 		}
 
 		switch step.Type {
-		case "query":
-			q, err := interpolate(step.RQL, resolvedInputs, steps)
+		case "agent":
+			prompt, err := interpolate(step.Prompt, resolvedInputs, steps)
 			if err != nil {
 				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
 			}
-			if r.QueryFunc == nil {
-				return nil, fmt.Errorf("step '%s': query function not configured", step.ID)
-			}
-			result, err := r.QueryFunc(q)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			steps[step.ID] = map[string]interface{}{"results": result}
-
-		case "read":
-			ref, err := interpolate(step.Ref, resolvedInputs, steps)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			if r.ReadFunc == nil {
-				return nil, fmt.Errorf("step '%s': read function not configured", step.ID)
-			}
-			result, err := r.ReadFunc(ref)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			steps[step.ID] = result
-
-		case "search":
-			term, err := interpolate(step.Term, resolvedInputs, steps)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			if r.SearchFunc == nil {
-				return nil, fmt.Errorf("step '%s': search function not configured", step.ID)
-			}
-			limit := step.Limit
-			if limit == 0 {
-				limit = 20
-			}
-			result, err := r.SearchFunc(term, limit)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			steps[step.ID] = map[string]interface{}{"results": result}
-
-		case "backlinks":
-			target, err := interpolate(step.Target, resolvedInputs, steps)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			if r.BacklinksFunc == nil {
-				return nil, fmt.Errorf("step '%s': backlinks function not configured", step.ID)
-			}
-			result, err := r.BacklinksFunc(target)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			steps[step.ID] = map[string]interface{}{"results": result}
-
-		case "prompt":
-			prompt, err := interpolate(step.Template, resolvedInputs, steps)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			example := buildPromptOutputExample(step.Outputs)
+			example := buildOutputExample(step.Outputs)
 			promptWithContract := prompt
 			if len(step.Outputs) > 0 {
 				if contract := renderOutputContract(example); contract != "" {
@@ -132,14 +69,27 @@ func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error)
 				Name:   wf.Name,
 				Inputs: resolvedInputs,
 				Steps:  steps,
-				Next: &PromptRequest{
-					StepID:   step.ID,
-					Prompt:   promptWithContract,
-					Outputs:  step.Outputs,
-					Example:  example,
-					Template: step.Template,
+				Next: &AgentRequest{
+					StepID:  step.ID,
+					Prompt:  promptWithContract,
+					Outputs: step.Outputs,
+					Example: example,
 				},
 			}, nil
+
+		case "tool":
+			if r.ToolFunc == nil {
+				return nil, fmt.Errorf("step '%s': tool function not configured", step.ID)
+			}
+			args, err := interpolateObject(step.Arguments, resolvedInputs, steps)
+			if err != nil {
+				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
+			}
+			result, err := r.ToolFunc(step.Tool, args)
+			if err != nil {
+				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
+			}
+			steps[step.ID] = result
 
 		default:
 			return nil, fmt.Errorf("step '%s': unknown step type '%s'", step.ID, step.Type)
@@ -153,7 +103,7 @@ func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error)
 	}, nil
 }
 
-func buildPromptOutputExample(outputs map[string]*config.WorkflowPromptOutput) map[string]interface{} {
+func buildOutputExample(outputs map[string]*config.WorkflowPromptOutput) map[string]interface{} {
 	if len(outputs) == 0 {
 		return nil
 	}
@@ -166,6 +116,16 @@ func buildPromptOutputExample(outputs map[string]*config.WorkflowPromptOutput) m
 		switch def.Type {
 		case "markdown":
 			out[name] = "..."
+		case "string":
+			out[name] = ""
+		case "number":
+			out[name] = 0
+		case "bool":
+			out[name] = false
+		case "object":
+			out[name] = map[string]interface{}{}
+		case "array":
+			out[name] = []interface{}{}
 		default:
 			out[name] = nil
 		}

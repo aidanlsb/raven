@@ -132,6 +132,44 @@ Configuration (raven.yaml):
 			"Log timestamped events with --timestamp",
 		},
 	},
+	"upsert": {
+		Name:        "upsert",
+		Description: "Create or update a typed object idempotently",
+		LongDesc: `Create or update a typed object deterministically.
+
+This command is the canonical idempotent write primitive for generated artifacts.
+It creates a new object when missing, or updates the existing one in place.
+
+Semantics:
+- Identity is derived from <type> + <title> (same routing/slug logic as 'new')
+- Frontmatter fields provided via --field are merged/updated
+- If --content is provided, the body is fully replaced (idempotent reruns)
+- Returns status: created, updated, or unchanged
+
+Boundary with add:
+- add: append-only capture/logging, intentionally non-idempotent
+- upsert: canonical state write, idempotent convergence target
+
+Use this for workflow outputs like briefs/reports/summaries where reruns should
+converge to one current state rather than append history.`,
+		Args: []ArgMeta{
+			{Name: "type", Description: "Object type (e.g., brief, report)", Required: true, DynamicComp: "types"},
+			{Name: "title", Description: "Title/name for the object (stable identity key)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "field", Description: "Set/update frontmatter fields (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
+			{Name: "content", Description: "Replace body content (full-body idempotent mode)", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn upsert brief \"Daily Brief 2026-02-14\" --content \"# Daily Brief\" --json",
+			"rvn upsert report \"Q1 Status\" --field owner=people/freya --field status=draft --json",
+		},
+		UseCases: []string{
+			"Idempotently persist generated workflow outputs",
+			"Create-or-update canonical report/brief objects",
+			"Replace an object's body deterministically on reruns",
+		},
+	},
 	"delete": {
 		Name:        "delete",
 		Description: "Delete an object from the vault",
@@ -391,6 +429,23 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 		Description: "Show vault statistics",
 		Examples: []string{
 			"rvn stats --json",
+		},
+	},
+	"version": {
+		Name:        "version",
+		Description: "Show Raven version and build information",
+		LongDesc: `Shows version and build metadata for the currently running rvn binary.
+
+Useful for confirming which binary is on PATH after upgrades, especially when
+multiple installs exist on the system.`,
+		Examples: []string{
+			"rvn version",
+			"rvn version --json",
+		},
+		UseCases: []string{
+			"Confirm the installed rvn binary version after go install",
+			"Diagnose PATH conflicts when multiple rvn binaries exist",
+			"Collect build metadata for bug reports",
 		},
 	},
 	"reindex": {
@@ -1101,12 +1156,12 @@ This is useful for piping query results to open multiple files at once.`,
 	},
 	"workflow_run": {
 		Name:        "workflow run",
-		Description: "Run a workflow until a prompt step",
-		LongDesc: `Runs a workflow's deterministic steps (query/read/search/backlinks) in order until it reaches a prompt step.
+		Description: "Run a workflow until an agent step",
+		LongDesc: `Runs a workflow's deterministic tool steps in order until it reaches an agent step.
 
-When a prompt step is reached, this command returns:
-- the rendered prompt string
-- the declared prompt outputs (e.g., markdown)
+When an agent step is reached, this command returns:
+- the rendered agent prompt string
+- the declared agent outputs (e.g., markdown)
 - the accumulated step outputs so far
 `,
 		Args: []ArgMeta{
