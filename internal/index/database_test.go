@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/parser"
@@ -992,10 +991,10 @@ func TestOpenWithRebuildLock(t *testing.T) {
 	}
 	defer lockFile.Close()
 
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockFileExclusiveNonBlocking(lockFile); err != nil {
 		t.Fatalf("failed to acquire test lock: %v", err)
 	}
-	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+	defer unlockFile(lockFile)
 
 	if _, _, err := OpenWithRebuild(vaultDir); !errors.Is(err, ErrIndexLocked) {
 		t.Fatalf("expected ErrIndexLocked, got %v", err)
