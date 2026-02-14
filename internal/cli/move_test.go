@@ -194,6 +194,7 @@ func TestReplaceAllRefVariants(t *testing.T) {
 		name       string
 		content    string
 		oldID      string
+		oldBase    string
 		newRef     string
 		objectRoot string
 		pageRoot   string
@@ -203,6 +204,7 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			name:       "basic ref",
 			content:    "See [[people/tido]] for details",
 			oldID:      "people/tido",
+			oldBase:    "people/tido",
 			newRef:     "person/tido",
 			objectRoot: "",
 			pageRoot:   "",
@@ -212,6 +214,7 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			name:       "ref with display text",
 			content:    "Ask [[people/tido|Tido]] about this",
 			oldID:      "people/tido",
+			oldBase:    "people/tido",
 			newRef:     "person/tido",
 			objectRoot: "",
 			pageRoot:   "",
@@ -221,6 +224,7 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			name:       "ref with fragment",
 			content:    "See [[people/tido#notes]] for context",
 			oldID:      "people/tido",
+			oldBase:    "people/tido",
 			newRef:     "person/tido",
 			objectRoot: "",
 			pageRoot:   "",
@@ -230,6 +234,7 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			name:       "ref with directory prefix",
 			content:    "See [[objects/people/tido]] for details",
 			oldID:      "people/tido",
+			oldBase:    "objects/people/tido",
 			newRef:     "person/tido",
 			objectRoot: "objects/",
 			pageRoot:   "",
@@ -239,6 +244,7 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			name:       "multiple variants on same line",
 			content:    "[[people/tido]] and [[objects/people/tido|Tido]]",
 			oldID:      "people/tido",
+			oldBase:    "people/tido",
 			newRef:     "person/tido",
 			objectRoot: "objects/",
 			pageRoot:   "",
@@ -248,6 +254,7 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			name:       "ref on trait line",
 			content:    "- @todo(done) Check with [[people/tido]] about this",
 			oldID:      "people/tido",
+			oldBase:    "people/tido",
 			newRef:     "person/tido",
 			objectRoot: "",
 			pageRoot:   "",
@@ -257,16 +264,67 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			name:       "ref with pages root",
 			content:    "See [[pages/my-note]] for details",
 			oldID:      "my-note",
+			oldBase:    "pages/my-note",
 			newRef:     "notes/my-note",
 			objectRoot: "objects/",
 			pageRoot:   "pages/",
 			want:       "See [[notes/my-note]] for details",
 		},
+		{
+			name:       "short wikilink ref",
+			content:    "See [[tido]] for details",
+			oldID:      "people/tido",
+			oldBase:    "tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "See [[person/tido]] for details",
+		},
+		{
+			name:       "bare frontmatter ref scalar",
+			content:    "---\ntype: project\nowner: people/tido\n---\n",
+			oldID:      "people/tido",
+			oldBase:    "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "---\ntype: project\nowner: person/tido\n---\n",
+		},
+		{
+			name:       "bare frontmatter ref in inline array",
+			content:    "---\ntype: project\nowners: [people/tido, \"people/thor\"]\n---\n",
+			oldID:      "people/tido",
+			oldBase:    "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "---\ntype: project\nowners: [person/tido, \"people/thor\"]\n---\n",
+		},
+		{
+			name:       "bare type declaration ref scalar",
+			content:    "# Notes\n::project(owner=people/tido)\n",
+			oldID:      "people/tido",
+			oldBase:    "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "# Notes\n::project(owner=person/tido)\n",
+		},
+		{
+			name:       "bare type declaration ref in inline array",
+			content:    "# Notes\n::project(owners=[people/tido, \"people/thor\"])\n",
+			oldID:      "people/tido",
+			oldBase:    "people/tido",
+			newRef:     "person/tido",
+			objectRoot: "",
+			pageRoot:   "",
+			want:       "# Notes\n::project(owners=[person/tido, \"people/thor\"])\n",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := replaceAllRefVariants(tt.content, tt.oldID, tt.newRef, tt.objectRoot, tt.pageRoot)
+			got := replaceAllRefVariants(tt.content, tt.oldID, tt.oldBase, tt.newRef, tt.objectRoot, tt.pageRoot)
 			if got != tt.want {
 				t.Errorf("replaceAllRefVariants() = %q, want %q", got, tt.want)
 			}
