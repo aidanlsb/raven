@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -216,7 +217,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 					line = *bl.Line
 				}
 				// Update all variants of the reference on this line
-				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, repl, objectRoot, pageRoot); err != nil {
+				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err != nil {
 					// Best-effort: moving the file is the primary action; reference updates may fail.
 					continue
 				}
@@ -310,6 +311,11 @@ func moveSingleObject(vaultPath, source, destination string) error {
 			"Source path is outside vault",
 			"Files can only be moved within the vault")
 	}
+	sourceRelPath, err := filepath.Rel(vaultPath, sourceFile)
+	if err != nil {
+		return handleError(ErrInternal, err, "Failed to resolve source path")
+	}
+	sourceID := vaultCfg.FilePathToObjectID(sourceRelPath)
 
 	// Build destination path - apply directory roots if configured
 	destPath := destination
@@ -426,7 +432,6 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		if err == nil {
 			defer db.Close()
 			db.SetDailyDirectory(vaultCfg.DailyDirectory)
-			sourceID := vaultCfg.FilePathToObjectID(source)
 
 			// Get directory roots for expanded backlinks search
 			objectRoot := vaultCfg.GetObjectsRoot()
@@ -457,7 +462,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 					line = *bl.Line
 				}
 				// Update all variants of the reference on this line
-				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, repl, objectRoot, pageRoot); err == nil {
+				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err == nil {
 					updatedRefs = append(updatedRefs, bl.SourceID)
 				}
 			}
@@ -488,7 +493,6 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		db.SetDailyDirectory(vaultCfg.DailyDirectory)
 
 		// Remove old entry
-		sourceID := vaultCfg.FilePathToObjectID(source)
 		if err := db.RemoveDocument(sourceID); err != nil {
 			warningMsg := fmt.Sprintf("Failed to remove old index entry: %v", err)
 			if errors.Is(err, index.ErrObjectNotFound) {
@@ -539,7 +543,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 	if isJSONOutput() {
 		result := MoveResult{
-			Source:      vaultCfg.FilePathToObjectID(source),
+			Source:      sourceID,
 			Destination: vaultCfg.FilePathToObjectID(destPath),
 			UpdatedRefs: updatedRefs,
 		}
@@ -547,8 +551,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		return nil
 	}
 
-	relSource, _ := filepath.Rel(vaultPath, sourceFile)
-	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(relSource), ui.FilePath(destination)))
+	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(sourceRelPath), ui.FilePath(destination)))
 	if len(updatedRefs) > 0 {
 		fmt.Printf("  Updated %d references\n", len(updatedRefs))
 	}
@@ -670,9 +673,9 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 // - [[object/person/freya]] (with directory root)
 // - [[person/freya|Freya]] (with display text)
 // - [[person/freya#notes]] (with fragment)
-func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldID, newRef, objectRoot, pageRoot string) error {
+func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
 	if line <= 0 {
-		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, newRef, objectRoot, pageRoot)
+		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
 	}
 
 	// Strip section fragment from sourceID before resolving to file path.
@@ -698,10 +701,12 @@ func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, 
 	}
 
 	orig := lines[idx]
-	updated := replaceAllRefVariants(orig, oldID, newRef, objectRoot, pageRoot)
+	updated := replaceAllRefVariants(orig, oldID, oldBase, newRef, objectRoot, pageRoot)
 
 	if updated == orig {
-		return nil
+		// Some refs (notably schema-typed bare frontmatter refs) may have imprecise
+		// line metadata. Fall back to full-file replacement.
+		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
 	}
 	lines[idx] = updated
 
@@ -709,7 +714,7 @@ func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, 
 }
 
 // updateAllRefVariants updates all variants of a reference in an entire file.
-func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldID, newRef, objectRoot, pageRoot string) error {
+func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
 	fileSourceID := sourceID
 	if idx := strings.Index(sourceID, "#"); idx >= 0 {
 		fileSourceID = sourceID[:idx]
@@ -725,7 +730,7 @@ func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, source
 		return err
 	}
 
-	newContent := replaceAllRefVariants(string(content), oldID, newRef, objectRoot, pageRoot)
+	newContent := replaceAllRefVariants(string(content), oldID, oldBase, newRef, objectRoot, pageRoot)
 
 	if newContent == string(content) {
 		return nil
@@ -736,14 +741,32 @@ func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, source
 
 // replaceAllRefVariants replaces all variants of a reference in content.
 // Handles: bare ID, directory-prefixed, with display text, with fragments.
-func replaceAllRefVariants(content, oldID, newRef, objectRoot, pageRoot string) string {
-	// Build list of old patterns to search for
-	oldPatterns := []string{oldID}
+func replaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
+	// Build list of old patterns to search for:
+	// - canonical object ID (people/freya)
+	// - directory-prefixed canonical IDs (objects/people/freya, pages/...)
+	// - raw base as originally written (e.g., short ref "freya")
+	oldPatterns := make([]string, 0, 6)
+	seen := make(map[string]struct{}, 6)
+	addPattern := func(p string) {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			return
+		}
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		oldPatterns = append(oldPatterns, p)
+	}
+
+	addPattern(oldID)
+	addPattern(oldBase)
 	if objectRoot != "" {
-		oldPatterns = append(oldPatterns, objectRoot+oldID)
+		addPattern(objectRoot + oldID)
 	}
 	if pageRoot != "" && pageRoot != objectRoot {
-		oldPatterns = append(oldPatterns, pageRoot+oldID)
+		addPattern(pageRoot + oldID)
 	}
 
 	result := content
@@ -757,6 +780,124 @@ func replaceAllRefVariants(content, oldID, newRef, objectRoot, pageRoot string) 
 		// Replace with fragment: [[old#section]] -> [[new#section]]
 		result = strings.ReplaceAll(result, "[["+oldPattern+"#", "[["+newRef+"#")
 	}
+
+	// Also update bare scalar refs in YAML frontmatter (e.g. owner: people/freya).
+	result = replaceFrontmatterBareRefVariants(result, oldPatterns, newRef)
+	// And in ::type(...) declaration field values.
+	result = replaceTypeDeclBareRefVariants(result, oldPatterns, newRef)
+
+	return result
+}
+
+func replaceFrontmatterBareRefVariants(content string, oldPatterns []string, newRef string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return content
+	}
+
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			end = i
+			break
+		}
+	}
+	if end == -1 {
+		return content
+	}
+
+	frontmatter := strings.Join(lines[1:end], "\n")
+	updatedFrontmatter := frontmatter
+	for _, oldPattern := range oldPatterns {
+		updatedFrontmatter = replaceFrontmatterBareRef(updatedFrontmatter, oldPattern, newRef)
+	}
+	if updatedFrontmatter == frontmatter {
+		return content
+	}
+
+	var updatedLines []string
+	if updatedFrontmatter != "" {
+		updatedLines = strings.Split(updatedFrontmatter, "\n")
+	}
+
+	rebuilt := make([]string, 0, 1+len(updatedLines)+len(lines[end:]))
+	rebuilt = append(rebuilt, lines[0])
+	rebuilt = append(rebuilt, updatedLines...)
+	rebuilt = append(rebuilt, lines[end:]...)
+
+	return strings.Join(rebuilt, "\n")
+}
+
+func replaceFrontmatterBareRef(frontmatter, oldPattern, newRef string) string {
+	oldPattern = strings.TrimSpace(oldPattern)
+	if oldPattern == "" || oldPattern == newRef {
+		return frontmatter
+	}
+
+	escapedOld := regexp.QuoteMeta(oldPattern)
+	escapedNew := strings.ReplaceAll(newRef, "$", "$$")
+	result := frontmatter
+
+	// Key-value scalar replacements.
+	result = regexp.MustCompile(`(?m)^(\s*[^:\n#]+:\s*)"`+escapedOld+`"(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
+	result = regexp.MustCompile(`(?m)^(\s*[^:\n#]+:\s*)'`+escapedOld+`'(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
+	result = regexp.MustCompile(`(?m)^(\s*[^:\n#]+:\s*)`+escapedOld+`(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
+
+	// Block list item replacements.
+	result = regexp.MustCompile(`(?m)^(\s*-\s*)"`+escapedOld+`"(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
+	result = regexp.MustCompile(`(?m)^(\s*-\s*)'`+escapedOld+`'(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
+	result = regexp.MustCompile(`(?m)^(\s*-\s*)`+escapedOld+`(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
+
+	// Inline array element replacements (quoted and unquoted).
+	result = regexp.MustCompile(`([\[,]\s*)"`+escapedOld+`"(\s*(?:,|\]))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
+	result = regexp.MustCompile(`([\[,]\s*)'`+escapedOld+`'(\s*(?:,|\]))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
+	result = regexp.MustCompile(`([\[,]\s*)`+escapedOld+`(\s*(?:,|\]))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
+
+	return result
+}
+
+func replaceTypeDeclBareRefVariants(content string, oldPatterns []string, newRef string) string {
+	lines := strings.Split(content, "\n")
+	changed := false
+	for i, line := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(line), "::") {
+			continue
+		}
+
+		updated := line
+		for _, oldPattern := range oldPatterns {
+			updated = replaceTypeDeclBareRef(updated, oldPattern, newRef)
+		}
+		if updated != line {
+			lines[i] = updated
+			changed = true
+		}
+	}
+	if !changed {
+		return content
+	}
+	return strings.Join(lines, "\n")
+}
+
+func replaceTypeDeclBareRef(line, oldPattern, newRef string) string {
+	oldPattern = strings.TrimSpace(oldPattern)
+	if oldPattern == "" || oldPattern == newRef {
+		return line
+	}
+
+	escapedOld := regexp.QuoteMeta(oldPattern)
+	escapedNew := strings.ReplaceAll(newRef, "$", "$$")
+	result := line
+
+	// Single field values: owner=people/freya (or quoted).
+	result = regexp.MustCompile(`(=\s*)"`+escapedOld+`"(\s*(?:,|\)))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
+	result = regexp.MustCompile(`(=\s*)'`+escapedOld+`'(\s*(?:,|\)))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
+	result = regexp.MustCompile(`(=\s*)`+escapedOld+`(\s*(?:,|\)))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
+
+	// Inline arrays: owners=[people/freya, "people/thor"]
+	result = regexp.MustCompile(`([\[,]\s*)"`+escapedOld+`"(\s*(?:,|\]))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
+	result = regexp.MustCompile(`([\[,]\s*)'`+escapedOld+`'(\s*(?:,|\]))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
+	result = regexp.MustCompile(`([\[,]\s*)`+escapedOld+`(\s*(?:,|\]))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
 
 	return result
 }

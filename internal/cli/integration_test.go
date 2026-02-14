@@ -140,6 +140,50 @@ func TestIntegration_MoveWithReferenceUpdate(t *testing.T) {
 	v.AssertFileContains("projects/website.md", "[[people/alice-archived]]")
 }
 
+// TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef verifies that
+// schema-typed ref fields written as bare YAML strings are also updated.
+func TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	// Create a person.
+	v.RunCLI("new", "person", "Alice").MustSucceed(t)
+
+	// Create a project with a bare frontmatter ref (not [[wikilink]] syntax).
+	v.RunCLI("new", "project", "Website", "--field", "owner=people/alice").MustSucceed(t)
+
+	// Move Alice within the people directory (rename).
+	result := v.RunCLI("move", "people/alice", "people/alice-archived")
+	result.MustSucceed(t)
+
+	// Verify the move happened.
+	v.AssertFileNotExists("people/alice.md")
+	v.AssertFileExists("people/alice-archived.md")
+
+	// The bare frontmatter ref should be rewritten too.
+	v.AssertFileContains("projects/website.md", "owner: people/alice-archived")
+}
+
+// TestIntegration_MoveWithShortSourceReference ensures source refs are resolved
+// before backlink/index updates (e.g. `rvn move alice people/alice-archived`).
+func TestIntegration_MoveWithShortSourceReference(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Alice").MustSucceed(t)
+	v.RunCLI("new", "project", "Website", "--field", "owner=[[people/alice]]").MustSucceed(t)
+
+	// Move using short reference as source.
+	result := v.RunCLI("move", "alice", "people/alice-archived")
+	result.MustSucceed(t)
+
+	v.AssertFileNotExists("people/alice.md")
+	v.AssertFileExists("people/alice-archived.md")
+	v.AssertFileContains("projects/website.md", "[[people/alice-archived]]")
+}
+
 // TestIntegration_SchemaValidationErrors tests that schema validation errors are properly reported.
 func TestIntegration_SchemaValidationErrors(t *testing.T) {
 	v := testutil.NewTestVault(t).
