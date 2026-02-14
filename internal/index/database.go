@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -111,9 +110,9 @@ func acquireIndexLock(dbDir string) (*indexLock, error) {
 		return nil, fmt.Errorf("failed to open index lock: %w", err)
 	}
 
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockFileExclusiveNonBlocking(lockFile); err != nil {
 		lockFile.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		if isWouldBlockError(err) {
 			return nil, ErrIndexLocked
 		}
 		return nil, fmt.Errorf("failed to acquire index lock: %w", err)
@@ -126,7 +125,7 @@ func (l *indexLock) Release() error {
 	if l == nil || l.file == nil {
 		return nil
 	}
-	unlockErr := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
+	unlockErr := unlockFile(l.file)
 	closeErr := l.file.Close()
 	if unlockErr != nil {
 		return unlockErr
