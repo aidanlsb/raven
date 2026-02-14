@@ -51,23 +51,25 @@ workflows:
         required: true
     steps:
       - id: results
-        type: search
-        term: "{{inputs.question}}"
-        limit: 10
-      - id: prompt
-        type: prompt
+        type: tool
+        tool: raven_search
+        arguments:
+          query: "{{inputs.question}}"
+          limit: 10
+      - id: compose
+        type: agent
         outputs:
           markdown:
             type: markdown
             required: true
-        template: |
+        prompt: |
           Return JSON: { "outputs": { "markdown": "..." } }
 
           Answer this question based on my notes:
           {{inputs.question}}
 
           ## Relevant notes
-          {{steps.results.results}}
+          {{steps.results.data.results}}
 
 # Additional protected/system prefixes (additive).
 # Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
@@ -321,7 +323,7 @@ See `reference/query-language.md` for query syntax.
 
 ### `workflows`
 
-Define reusable prompt templates for agents.
+Define reusable steps-based workflows for agents.
 
 Workflows can be defined inline or reference external files:
 
@@ -336,19 +338,32 @@ workflows:
         type: ref
         target: meeting
         required: true
-    context:
-      meeting:
-        read: "{{inputs.meeting_id}}"
-      mentions:
-        backlinks: "{{inputs.meeting_id}}"
-    prompt: |
-      Prepare me for this meeting.
+    steps:
+      - id: meeting
+        type: tool
+        tool: raven_read
+        arguments:
+          path: "{{inputs.meeting_id}}"
+          raw: true
+      - id: mentions
+        type: tool
+        tool: raven_backlinks
+        arguments:
+          target: "{{inputs.meeting_id}}"
+      - id: compose
+        type: agent
+        outputs:
+          markdown:
+            type: markdown
+            required: true
+        prompt: |
+          Prepare me for this meeting.
 
-      ## Meeting
-      {{context.meeting}}
+          ## Meeting
+          {{steps.meeting.data.content}}
 
-      ## Mentions
-      {{context.mentions}}
+          ## Mentions
+          {{steps.mentions.data.results}}
 ```
 
 **File reference:**
@@ -358,6 +373,8 @@ workflows:
   meeting-prep:
     file: workflows/meeting-prep.yaml
 ```
+
+Legacy top-level workflow keys (`context`, `prompt`, `outputs`) are not supported in workflow v3.
 
 See `reference/workflows.md` for complete workflow documentation.
 

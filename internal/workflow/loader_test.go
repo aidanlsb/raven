@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 func TestLoad_InlineAndErrors(t *testing.T) {
@@ -22,7 +23,7 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 	t.Run("conflicting file and inline fields", func(t *testing.T) {
 		_, err := Load(vaultDir, "x", &config.WorkflowRef{
 			File:  "wf.yaml",
-			Steps: []*config.WorkflowStep{{ID: "q", Type: "query", RQL: "object:project"}},
+			Steps: []*config.WorkflowStep{{ID: "q", Type: "tool", Tool: "raven_query"}},
 		})
 		if err == nil || !strings.Contains(err.Error(), "both 'file' and inline") {
 			t.Fatalf("expected conflict error, got %v", err)
@@ -31,7 +32,7 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 
 	t.Run("missing steps for inline workflow", func(t *testing.T) {
 		_, err := Load(vaultDir, "x", &config.WorkflowRef{Description: "d"})
-		if err == nil || !strings.Contains(err.Error(), "must have either 'file' or 'prompt' or 'steps'") {
+		if err == nil || !strings.Contains(err.Error(), "must define 'steps'") {
 			t.Fatalf("expected missing steps error, got %v", err)
 		}
 	})
@@ -43,7 +44,7 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 				"name": {Type: "string", Required: true},
 			},
 			Steps: []*config.WorkflowStep{
-				{ID: "q", Type: "query", RQL: "object:project"},
+				{ID: "q", Type: "tool", Tool: "raven_query"},
 			},
 		}
 		wf, err := Load(vaultDir, "greet", ref)
@@ -58,44 +59,11 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("inline prompt workflow loads and compiles context", func(t *testing.T) {
-		ref := &config.WorkflowRef{
-			Description: "desc",
-			Inputs: map[string]*config.WorkflowInput{
-				"q": {Type: "string", Required: true},
-			},
-			Context: map[string]*config.WorkflowContextItem{
-				"results": {Search: "{{inputs.q}}", Limit: 3},
-			},
-			Prompt: "Question: {{inputs.q}}\n{{context.results}}\n",
-		}
-		wf, err := Load(vaultDir, "research", ref)
-		if err != nil {
-			t.Fatalf("Load error: %v", err)
-		}
-		if wf.Prompt == "" || wf.Context == nil {
-			t.Fatalf("expected prompt workflow fields to be preserved")
-		}
-		if len(wf.Steps) != 2 {
-			t.Fatalf("expected 2 compiled steps (context + prompt), got %d", len(wf.Steps))
-		}
-		if wf.Steps[0].ID != "results" || wf.Steps[0].Type != "search" {
-			t.Fatalf("unexpected compiled context step: %+v", wf.Steps[0])
-		}
-		if wf.Steps[1].ID != "prompt" || wf.Steps[1].Type != "prompt" {
-			t.Fatalf("unexpected compiled prompt step: %+v", wf.Steps[1])
-		}
-	})
-
-	t.Run("context key 'prompt' is reserved", func(t *testing.T) {
-		_, err := Load(vaultDir, "bad", &config.WorkflowRef{
-			Prompt: "hi",
-			Context: map[string]*config.WorkflowContextItem{
-				"prompt": {Query: "object:project"},
-			},
-		})
-		if err == nil || !strings.Contains(err.Error(), "reserved") {
-			t.Fatalf("expected reserved context key error, got %v", err)
+	t.Run("legacy top-level keys are rejected in inline definitions", func(t *testing.T) {
+		var ref config.WorkflowRef
+		err := yaml.Unmarshal([]byte("description: d\nprompt: hi\n"), &ref)
+		if err == nil || !strings.Contains(err.Error(), "legacy top-level key 'prompt'") {
+			t.Fatalf("expected legacy prompt key error, got %v", err)
 		}
 	})
 }
@@ -108,7 +76,7 @@ func TestLoad_FromFile(t *testing.T) {
 
 	t.Run("loads from file", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "w1.yaml")
-		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: query\n    rql: object:project\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
@@ -121,15 +89,14 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 	})
 
-	t.Run("context items must be explicit (no scalar shorthand)", func(t *testing.T) {
+	t.Run("legacy top-level keys are rejected in workflow files", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "shorthand.yaml")
-		// Scalar context item should fail YAML unmarshalling.
-		if err := os.WriteFile(path, []byte("description: test\ncontext:\n  projects: \"object:project\"\nprompt: hi\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("description: test\nprompt: hi\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 		_, err := Load(vaultDir, "shorthand", &config.WorkflowRef{File: "workflows/shorthand.yaml"})
-		if err == nil || !strings.Contains(err.Error(), "expected mapping") {
-			t.Fatalf("expected explicit context error, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "legacy top-level key 'prompt'") {
+			t.Fatalf("expected legacy key error, got %v", err)
 		}
 	})
 
@@ -145,14 +112,14 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 	})
 
-	t.Run("file must include prompt", func(t *testing.T) {
+	t.Run("file must include steps", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "noprompt.yaml")
 		if err := os.WriteFile(path, []byte("description: x\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
 		_, err := Load(vaultDir, "noprompt", &config.WorkflowRef{File: "workflows/noprompt.yaml"})
-		if err == nil || !strings.Contains(err.Error(), "must have either 'file' or 'prompt' or 'steps'") {
+		if err == nil || !strings.Contains(err.Error(), "must define 'steps'") {
 			t.Fatalf("expected missing steps error, got %v", err)
 		}
 	})
@@ -171,7 +138,7 @@ func TestGetAndList(t *testing.T) {
 	t.Run("Get fails when workflow missing", func(t *testing.T) {
 		vc := &config.VaultConfig{
 			Workflows: map[string]*config.WorkflowRef{
-				"a": {Steps: []*config.WorkflowStep{{ID: "q", Type: "query", RQL: "object:project"}}},
+				"a": {Steps: []*config.WorkflowStep{{ID: "q", Type: "tool", Tool: "raven_query"}}},
 			},
 		}
 		_, err := Get(vaultDir, "missing", vc)
@@ -183,7 +150,7 @@ func TestGetAndList(t *testing.T) {
 	t.Run("List includes errors in description rather than failing", func(t *testing.T) {
 		vc := &config.VaultConfig{
 			Workflows: map[string]*config.WorkflowRef{
-				"good": {Steps: []*config.WorkflowStep{{ID: "q", Type: "query", RQL: "object:project"}}},
+				"good": {Steps: []*config.WorkflowStep{{ID: "q", Type: "tool", Tool: "raven_query"}}},
 				"bad":  {File: "workflows/does-not-exist.yaml"},
 			},
 		}

@@ -32,7 +32,7 @@ type VaultConfig struct {
 	// Queries defines saved queries that can be run with `rvn query <name>`
 	Queries map[string]*SavedQuery `yaml:"queries,omitempty"`
 
-	// Workflows defines reusable prompt templates for agents.
+	// Workflows defines reusable multi-step workflows.
 	// Can be inline definitions or references to external files.
 	Workflows map[string]*WorkflowRef `yaml:"workflows,omitempty"`
 
@@ -123,55 +123,34 @@ type WorkflowRef struct {
 	Description string                    `yaml:"description,omitempty"`
 	Inputs      map[string]*WorkflowInput `yaml:"inputs,omitempty"`
 
-	// Simplified prompt workflows (v2-style).
-	//
-	// A workflow can either be defined as a prompt + optional context (recommended),
-	// or as an explicit steps pipeline (legacy/advanced).
-	Context map[string]*WorkflowContextItem  `yaml:"context,omitempty"`
-	Prompt  string                           `yaml:"prompt,omitempty"`
-	Outputs map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty"`
-
 	Steps []*WorkflowStep `yaml:"steps,omitempty"`
 }
 
-// WorkflowContextItem defines one prefetch item for prompt workflows.
-//
-// YAML forms:
-//
-//	context:
-//	  projects:
-//	    query: "object:project .status==active"
-//	  person:
-//	    read: "{{inputs.person_id}}"
-//	  mentions:
-//	    backlinks: "{{inputs.person_id}}"
-//	  results:
-//	    search: "{{inputs.question}}"
-//	    limit: 10
-type WorkflowContextItem struct {
-	Query     string `yaml:"query,omitempty" json:"query,omitempty"`
-	Read      string `yaml:"read,omitempty" json:"read,omitempty"`
-	Backlinks string `yaml:"backlinks,omitempty" json:"backlinks,omitempty"`
-	Search    string `yaml:"search,omitempty" json:"search,omitempty"`
-	Limit     int    `yaml:"limit,omitempty" json:"limit,omitempty"`
-}
-
-func (w *WorkflowContextItem) UnmarshalYAML(value *yaml.Node) error {
+func (w *WorkflowRef) UnmarshalYAML(value *yaml.Node) error {
 	if w == nil {
-		return fmt.Errorf("workflow context item is nil")
+		return fmt.Errorf("workflow reference is nil")
 	}
-	switch value.Kind {
-	case yaml.MappingNode:
-		type plain WorkflowContextItem
-		var p plain
-		if err := value.Decode(&p); err != nil {
-			return err
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("invalid workflow definition (expected mapping)")
+	}
+
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		switch value.Content[i].Value {
+		case "context", "prompt", "outputs":
+			return fmt.Errorf(
+				"workflow uses legacy top-level key '%s': workflows are steps-only in v3; migrate to explicit 'steps' with 'agent' and 'tool' steps",
+				value.Content[i].Value,
+			)
 		}
-		*w = WorkflowContextItem(p)
-		return nil
-	default:
-		return fmt.Errorf("invalid workflow context item (expected mapping)")
 	}
+
+	type plain WorkflowRef
+	var p plain
+	if err := value.Decode(&p); err != nil {
+		return err
+	}
+	*w = WorkflowRef(p)
+	return nil
 }
 
 // WorkflowInput defines a workflow input parameter.
@@ -205,12 +184,13 @@ type WorkflowStep struct {
 	// backlinks
 	Target string `yaml:"target,omitempty" json:"target,omitempty"`
 
-	// prompt
-	Template string                           `yaml:"template,omitempty" json:"template,omitempty"`
-	Outputs  map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty" json:"outputs,omitempty"`
+	// agent
+	Prompt  string                           `yaml:"prompt,omitempty" json:"prompt,omitempty"`
+	Outputs map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty" json:"outputs,omitempty"`
 
-	// apply
-	From string `yaml:"from,omitempty" json:"from,omitempty"`
+	// tool
+	Tool      string                 `yaml:"tool,omitempty" json:"tool,omitempty"`
+	Arguments map[string]interface{} `yaml:"arguments,omitempty" json:"arguments,omitempty"`
 }
 
 type WorkflowPromptOutput struct {
@@ -405,65 +385,72 @@ queries:
     query: "object:project .status==active"
     description: "Projects with status active"
 
-# Workflows - reusable prompt templates for agents
+# Workflows - reusable steps-based workflows for agents
 # Run with 'rvn workflow run <name>' or via MCP raven_workflow_run
 workflows:
   # Interactive vault setup wizard
   # Guides agents through personalizing the schema and creating initial content
   onboard:
     description: "Interactive vault setup and onboarding"
-    prompt: |
-      You are helping the user set up their Raven vault. This is a fresh vault with default configuration.
+    steps:
+      - id: onboard-agent
+        type: agent
+        outputs:
+          markdown:
+            type: markdown
+            required: true
+        prompt: |
+          You are helping the user set up their Raven vault. This is a fresh vault with default configuration.
 
-      Your goal is to understand what they want to track and customize the schema accordingly.
+          Your goal is to understand what they want to track and customize the schema accordingly.
 
-      ## Interview Questions
+          ## Interview Questions
 
-      Ask these questions conversationally (not all at once):
+          Ask these questions conversationally (not all at once):
 
-      1. **What do you want to use this vault for?**
-         Examples: work projects, personal tasks, reading notes, meeting notes, research, recipes, contacts, etc.
+          1. **What do you want to use this vault for?**
+             Examples: work projects, personal tasks, reading notes, meeting notes, research, recipes, contacts, etc.
 
-      2. **What kinds of things do you want to track?**
-         These become types. Listen for nouns: projects, people, books, articles, meetings, decisions, etc.
+          2. **What kinds of things do you want to track?**
+             These become types. Listen for nouns: projects, people, books, articles, meetings, decisions, etc.
 
-      3. **What metadata matters to you?**
-         These become fields or traits. Listen for: deadlines, priorities, status, tags, ratings, etc.
+          3. **What metadata matters to you?**
+             These become fields or traits. Listen for: deadlines, priorities, status, tags, ratings, etc.
 
-      4. **Do you want daily notes?**
-         The vault already supports these. Ask if they want to use them for journaling, standups, logs, etc.
+          4. **Do you want daily notes?**
+             The vault already supports these. Ask if they want to use them for journaling, standups, logs, etc.
 
-      5. **What are 2-3 concrete things you're working on right now?**
-         Use these to create seed content that makes the vault immediately useful.
+          5. **What are 2-3 concrete things you're working on right now?**
+             Use these to create seed content that makes the vault immediately useful.
 
-      ## Actions to Take
+          ## Actions to Take
 
-      Based on their answers:
+          Based on their answers:
 
-      1. **Create types** using raven_schema_add_type for each kind of object they want to track
-         - Set appropriate name_field and default_path
-         - Add relevant fields
+          1. **Create types** using raven_schema_add_type for each kind of object they want to track
+             - Set appropriate name_field and default_path
+             - Add relevant fields
 
-      2. **Create traits** using raven_schema_add_trait for cross-cutting annotations
-         - @due, @priority, @status are already in the default schema
-         - Add custom ones based on their needs (e.g., @rating, @context, @energy)
+          2. **Create traits** using raven_schema_add_trait for cross-cutting annotations
+             - @due, @priority, @status are already in the default schema
+             - Add custom ones based on their needs (e.g., @rating, @context, @energy)
 
-      3. **Create 2-3 seed objects** using raven_new based on what they're currently working on
-         - This demonstrates the system and gives them something to query
+          3. **Create 2-3 seed objects** using raven_new based on what they're currently working on
+             - This demonstrates the system and gives them something to query
 
-      4. **Show a sample query** using raven_query to demonstrate immediate value
-         - Query something they just created
+          4. **Show a sample query** using raven_query to demonstrate immediate value
+             - Query something they just created
 
-      5. **Suggest useful saved queries** and offer to add them with raven_query_add
+          5. **Suggest useful saved queries** and offer to add them with raven_query_add
 
-      ## Important Guidelines
+          ## Important Guidelines
 
-      - Be conversational, not robotic. This is a dialogue, not a form.
-      - Start simple. Don't overwhelm with options - let complexity emerge from their needs.
-      - Explain as you go. Help them understand why you're creating each type/trait.
-      - The default schema already has: person, project types and due, priority, status, highlight, pinned, archived traits.
-      - Build on defaults rather than replacing them unless they ask.
-      - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
+          - Be conversational, not robotic. This is a dialog, not a form.
+          - Start simple. Don't overwhelm with options - let complexity emerge from their needs.
+          - Explain as you go. Help them understand why you're creating each type/trait.
+          - The default schema already has: person, project types and due, priority, status, highlight, pinned, archived traits.
+          - Build on defaults rather than replacing them unless they ask.
+          - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
 `
 
 	if err := atomicfile.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {

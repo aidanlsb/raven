@@ -1,5 +1,8 @@
 .PHONY: all build test test-integration test-all lint fmt check clean install
 
+GOLANGCI_LINT_VERSION ?= v2.9.0
+GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+
 # Default target
 all: check build
 
@@ -23,9 +26,17 @@ test-coverage:
 	go test -race -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 
-# Run linter (requires: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+# Run linter with golangci-lint v2.
+# Uses local v2 binary when available, otherwise runs pinned version via go run.
 lint:
-	golangci-lint run
+	@version="$$(golangci-lint --version 2>/dev/null || true)"; \
+	case "$$version" in \
+		*"version v2."*|*"version 2."*) golangci-lint run ;; \
+		*) \
+			echo "golangci-lint v2 not found in PATH; running $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION)"; \
+			go run $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION) run; \
+			;; \
+	esac
 
 # Format code
 fmt:
@@ -49,7 +60,7 @@ install:
 
 # Install development tools
 tools:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION)
 	go install golang.org/x/tools/cmd/goimports@latest
 
 # Tidy go.mod

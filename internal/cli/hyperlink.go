@@ -9,7 +9,6 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/ui"
 )
 
 // hyperlinkEnabled caches whether we should emit hyperlinks.
@@ -87,12 +86,6 @@ func buildEditorURL(cfg *config.Config, absPath string, line int) string {
 		// Default: file:// URL (most terminals will open with default app)
 		return fmt.Sprintf("file://%s", absPath)
 	}
-}
-
-// formatLocationLinkSimple formats a location using only the relative path (no vault context).
-// This is useful when vault path is not easily available.
-func formatLocationLinkSimple(relPath string, line int) string {
-	return formatLocationLinkSimpleStyled(relPath, line, ui.Bold.Render)
 }
 
 func formatLocationLinkSimpleStyled(relPath string, line int, render func(...string) string) string {

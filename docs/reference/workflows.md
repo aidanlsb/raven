@@ -1,18 +1,18 @@
 # Workflows Reference
 
-Workflows are reusable **prompt templates** (with optional deterministic context prefetch) defined in `raven.yaml`.
+Workflows are reusable **steps-based pipelines** defined in `raven.yaml`.
 
-They are designed for agent-driven automation:
-- Deterministic context prefetch gathers structured context (`query`, `read`, `search`, `backlinks`)
-- Raven renders a prompt (it does **not** call an LLM)
-- Optionally, workflows can declare output contracts (`outputs:`) for agents
-- Apply any desired changes via normal Raven commands (e.g., `add`, `set`, `query --apply`)
+Workflow v3 uses a breaking, steps-only model:
+- top-level `context` / `prompt` / `outputs` are removed
+- deterministic work happens in `type: tool` steps
+- agent handoff happens at the first `type: agent` step
+
+Raven executes deterministic steps only. It does not call an LLM.
 
 ## Definition Location
 
 Workflows live under `workflows:` in `raven.yaml` and are keyed by name.
-
-Workflows can be defined inline or via `file:`.
+Definitions can be inline or file-backed (`file:`).
 
 ### Inline Definition
 
@@ -25,25 +25,34 @@ workflows:
         type: ref
         target: meeting
         required: true
-        description: Meeting object ID
-    context:
-      meeting:
-        read: "{{inputs.meeting_id}}"
-      mentions:
-        backlinks: "{{inputs.meeting_id}}"
-    # Optional output contract for agents (omit for “just render a prompt” workflows)
-    outputs:
-      markdown:
-        type: markdown
-        required: true
-    prompt: |
-      Prepare me for this meeting.
+    steps:
+      - id: meeting
+        type: tool
+        tool: raven_read
+        arguments:
+          path: "{{inputs.meeting_id}}"
+          raw: true
 
-      ## Meeting
-      {{context.meeting.content}}
+      - id: mentions
+        type: tool
+        tool: raven_backlinks
+        arguments:
+          target: "{{inputs.meeting_id}}"
 
-      ## Mentions
-      {{context.mentions}}
+      - id: compose
+        type: agent
+        outputs:
+          markdown:
+            type: markdown
+            required: true
+        prompt: |
+          Prepare me for this meeting.
+
+          ## Meeting
+          {{steps.meeting.data.content}}
+
+          ## Mentions
+          {{steps.mentions.data.results}}
 ```
 
 ### File-Backed Definition
@@ -54,81 +63,137 @@ workflows:
     file: workflows/meeting-prep.yaml
 ```
 
-External workflow file (same fields, without the workflow name key):
+External file (same fields, without the workflow name key):
 
 ```yaml
-# workflows/meeting-prep.yaml
 description: Prepare a brief for a meeting
 inputs:
   meeting_id:
     type: ref
     target: meeting
     required: true
-context:
-  meeting:
-    read: "{{inputs.meeting_id}}"
-outputs:
-  markdown:
-    type: markdown
-    required: true
-prompt: |
-  Prepare me for this meeting.
-  {{context.meeting.content}}
+steps:
+  - id: meeting
+    type: tool
+    tool: raven_read
+    arguments:
+      path: "{{inputs.meeting_id}}"
+      raw: true
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Prepare me for this meeting.
+      {{steps.meeting.data.content}}
 ```
+
+## Step Types
+
+- `type: tool`
+  - `tool`: Raven MCP tool name (for example `raven_query`, `raven_read`, `raven_upsert`)
+  - `arguments`: map passed to the tool
+- `type: agent`
+  - `prompt`: rendered prompt string
+  - `outputs`: optional typed output contract for the agent response
 
 ## Inputs
 
-Inputs are values provided when running the workflow.
+Inputs are provided at run-time via `--input key=value`.
 
-Input properties:
-- `type`: `string`, `ref`, `date`, `boolean` (inputs are passed as strings; type is for validation/presentation)
+Input fields:
+- `type`: `string`, `ref`, `date`, `boolean` (validated as strings at run-time)
 - `required`: boolean
 - `default`: string
 - `description`: string
-- `target`: string (for `ref` type)
+- `target`: string (for `ref` inputs)
 
-## Context Prefetch
+## Interpolation
 
-`context:` is an optional map of prefetch items.
+Interpolation is supported in prompts and tool arguments:
+- `{{inputs.name}}`
+- `{{steps.step_id}}`
+- `{{steps.step_id.data.results}}`
 
-Supported forms:
+Interpolation behavior:
+- agent prompts always interpolate to strings
+- tool arguments preserve native types when the value is exactly `{{...}}` (array/object/bool/number/string)
 
-- `query`: Raven query language string
-- `read`: reference/object id (resolved canonically)
-- `search`: term string (+ optional `limit`, default 20)
-- `backlinks`: target reference/object id
+## Agent Output Envelope
 
-The prompt can reference prefetched values via `{{context.<name>}}` and `{{context.<name>.<path>}}`.
-
-## Prompt Rendering
-
-Workflows only render a prompt; they do not call an LLM.
-
-If `outputs:` is provided, Raven prepends a strict JSON “return shape” contract to the rendered prompt.
-
-```yaml
-outputs:
-  markdown:
-    type: markdown
-    required: true
-```
-
-#### Prompt output envelope
-
-When `outputs:` is present, prompt output must be a JSON envelope:
+When an `agent` step declares `outputs`, Raven prepends a strict JSON return contract.
+Agent responses should use:
 
 ```json
 { "outputs": { "markdown": "..." } }
 ```
 
-Output types:
-- `markdown`: JSON string
+Supported output types:
+- `markdown`
+- `string`
+- `number`
+- `bool`
+- `object`
+- `array`
 
-## Legacy `steps:` workflows
+## Runtime Behavior
 
-For advanced use cases, workflows may be defined as explicit ordered `steps:` pipelines (with step interpolation via `{{steps.<id>...}}`).
+`rvn workflow run`:
+- validates inputs
+- executes tool steps in order
+- stops at the first agent step
+- returns `next.prompt`, declared `next.outputs`, and accumulated `steps` output
 
-## Protected paths
+## Migrating Legacy Workflows
+
+Workflow v3 rejects legacy top-level keys: `context`, `prompt`, `outputs`.
+
+Migration map:
+- `context.<id>.query` -> `steps: - id: <id>, type: tool, tool: raven_query, arguments.query_string: ...`
+- `context.<id>.read` -> `tool: raven_read, arguments.path: ...`
+- `context.<id>.search` -> `tool: raven_search, arguments.query: ...`
+- `context.<id>.backlinks` -> `tool: raven_backlinks, arguments.target: ...`
+- top-level `prompt` -> `steps: - type: agent, prompt: ...`
+- top-level `outputs` -> `agent.outputs`
+
+Example migration:
+
+```yaml
+# before (legacy)
+context:
+  results:
+    query: "object:project .status==active"
+prompt: |
+  Summarize:
+  {{context.results}}
+outputs:
+  markdown:
+    type: markdown
+    required: true
+```
+
+```yaml
+# after (v3)
+steps:
+  - id: results
+    type: tool
+    tool: raven_query
+    arguments:
+      query_string: "object:project .status==active"
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Summarize:
+      {{steps.results.data.results}}
+```
+
+## Protected Paths
 
 Workflows and plan application refuse to operate on protected/system-managed paths.
 
@@ -136,19 +201,14 @@ Hardcoded:
 - `.raven/`, `.trash/`, `.git/`
 - `raven.yaml`, `schema.yaml`
 
-User-configurable (additive) via `raven.yaml`:
+Configurable in `raven.yaml`:
 - `protected_prefixes: ["templates/", "private/"]`
 
 ## CLI Commands
 
 ```bash
-# List workflows
 rvn workflow list
-
-# Show workflow definition
 rvn workflow show <name>
-
-# Run deterministic steps until first prompt step (returns prompt + output schema)
 rvn workflow run <name> --input key=value --input key2=value2
 ```
 

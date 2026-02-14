@@ -596,10 +596,10 @@ func TestExtractContentField(t *testing.T) {
 
 func TestReplaceBodyContent(t *testing.T) {
 	tests := []struct {
-		name     string
-		file     string
-		newBody  string
-		want     string
+		name    string
+		file    string
+		newBody string
+		want    string
 	}{
 		{
 			name:    "replaces body after frontmatter",

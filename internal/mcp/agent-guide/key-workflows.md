@@ -453,15 +453,15 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
    raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
    raven_workflow_run(name="research", input={"question": "How does auth work?"})
    ```
-   Returns the rendered prompt plus step outputs gathered so far. Use the prompt to guide your response to the user.
+   Returns the rendered agent prompt plus step outputs gathered so far. Use the prompt to guide your response to the user.
 
 **How workflows work:**
 
 1. **Inputs** are validated (required fields checked, defaults applied)
 2. **Steps** execute in order, with `{{inputs.X}}` and `{{steps.<id>...}}` interpolated as needed
-3. When a **prompt** step is reached, Raven returns the prompt plus the declared prompt `outputs` schema
+3. When an **agent** step is reached, Raven returns the prompt plus the declared `outputs` schema
 4. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
-5. If changes are needed, use normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
+5. If changes are needed, use explicit `tool` steps or normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
 
 **Variable patterns:**
 
@@ -469,9 +469,9 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
 |---------|-----------------|
 | `{{inputs.name}}` | Raw input value |
 | `{{steps.stepId}}` | Entire step output |
-| `{{steps.stepId.results}}` | Results array for steps like `query/search/backlinks` |
-| `{{steps.readStep.content}}` | Document content for `read` steps |
-| `{{steps.readStep.fields.name}}` | Frontmatter field values for `read` steps |
+| `{{steps.queryStep.data.results}}` | Result rows from a `tool: raven_query` step |
+| `{{steps.readStep.data.content}}` | Raw file content from a `tool: raven_read` step |
+| `{{steps.toolStep.ok}}` | Tool success boolean from any `tool` step |
 
 **When to use workflows:**
 - User asks for a complex, multi-step analysis

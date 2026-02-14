@@ -4,6 +4,7 @@
 
 ```bash
 go install github.com/aidanlsb/raven/cmd/rvn@latest
+rvn version
 ```
 
 ## Create a vault

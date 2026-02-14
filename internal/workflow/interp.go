@@ -16,6 +16,14 @@ func Interpolate(s string, inputs map[string]string, steps map[string]interface{
 	return interpolate(s, inputs, steps)
 }
 
+// InterpolateObject applies interpolation recursively across a JSON-like object.
+//
+// If a string value is exactly a single interpolation expression like "{{steps.x}}",
+// the resolved value is preserved as its native type (object/array/bool/number/string).
+func InterpolateObject(obj map[string]interface{}, inputs map[string]string, steps map[string]interface{}) (map[string]interface{}, error) {
+	return interpolateObject(obj, inputs, steps)
+}
+
 // interpolate replaces {{inputs.*}} and {{steps.*}} references inside s.
 //
 // Rules:
@@ -79,14 +87,22 @@ func interpolate(s string, inputs map[string]string, steps map[string]interface{
 }
 
 func resolveExpr(expr string, inputs map[string]string, steps map[string]interface{}) (string, bool, error) {
+	raw, ok, err := resolveExprRaw(expr, inputs, steps)
+	if err != nil || !ok {
+		return "", ok, err
+	}
+	return formatForPrompt(raw), true, nil
+}
+
+func resolveExprRaw(expr string, inputs map[string]string, steps map[string]interface{}) (interface{}, bool, error) {
 	if strings.HasPrefix(expr, "inputs.") {
 		key := strings.TrimPrefix(expr, "inputs.")
 		if key == "" {
-			return "", false, fmt.Errorf("invalid inputs reference: %s", expr)
+			return nil, false, fmt.Errorf("invalid inputs reference: %s", expr)
 		}
 		v, ok := inputs[key]
 		if !ok {
-			return "", false, nil
+			return nil, false, nil
 		}
 		return v, true, nil
 	}
@@ -95,22 +111,12 @@ func resolveExpr(expr string, inputs map[string]string, steps map[string]interfa
 		path := strings.TrimPrefix(expr, "steps.")
 		val, ok := resolveStepPath(steps, path)
 		if !ok {
-			return "", false, nil
+			return nil, false, nil
 		}
-		return formatForPrompt(val), true, nil
+		return val, true, nil
 	}
 
-	// context.* is an alias for steps.* used by simplified prompt workflows.
-	if strings.HasPrefix(expr, "context.") {
-		path := strings.TrimPrefix(expr, "context.")
-		val, ok := resolveStepPath(steps, path)
-		if !ok {
-			return "", false, nil
-		}
-		return formatForPrompt(val), true, nil
-	}
-
-	return "", false, nil
+	return nil, false, nil
 }
 
 func resolveStepPath(steps map[string]interface{}, path string) (interface{}, bool) {
@@ -143,4 +149,60 @@ func resolveStepPath(steps map[string]interface{}, path string) (interface{}, bo
 	return cur, true
 }
 
-// stringify was replaced by formatForPrompt in format.go.
+func interpolateObject(obj map[string]interface{}, inputs map[string]string, steps map[string]interface{}) (map[string]interface{}, error) {
+	if obj == nil {
+		return nil, nil
+	}
+	out := make(map[string]interface{}, len(obj))
+	for k, v := range obj {
+		nv, err := interpolateValue(v, inputs, steps)
+		if err != nil {
+			return nil, err
+		}
+		out[k] = nv
+	}
+	return out, nil
+}
+
+func interpolateValue(v interface{}, inputs map[string]string, steps map[string]interface{}) (interface{}, error) {
+	switch t := v.(type) {
+	case string:
+		if expr, ok := extractExactInterpolationExpr(t); ok {
+			raw, exists, err := resolveExprRaw(expr, inputs, steps)
+			if err != nil {
+				return nil, err
+			}
+			if !exists {
+				return nil, fmt.Errorf("unknown variable: %s", expr)
+			}
+			return raw, nil
+		}
+		return interpolate(t, inputs, steps)
+	case map[string]interface{}:
+		return interpolateObject(t, inputs, steps)
+	case []interface{}:
+		arr := make([]interface{}, len(t))
+		for i, item := range t {
+			nv, err := interpolateValue(item, inputs, steps)
+			if err != nil {
+				return nil, err
+			}
+			arr[i] = nv
+		}
+		return arr, nil
+	default:
+		return v, nil
+	}
+}
+
+func extractExactInterpolationExpr(s string) (string, bool) {
+	trimmed := strings.TrimSpace(s)
+	if !strings.HasPrefix(trimmed, "{{") || !strings.HasSuffix(trimmed, "}}") {
+		return "", false
+	}
+	inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "{{"), "}}"))
+	if inner == "" {
+		return "", false
+	}
+	return inner, true
+}
