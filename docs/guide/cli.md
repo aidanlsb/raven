@@ -23,6 +23,20 @@ rvn query "object:person"
 
 ---
 
+## Built-in Lessons
+
+Use lessons for a guided path through Raven concepts and workflows:
+
+```bash
+rvn learn             # Overview of lessons and completion
+rvn learn next        # Suggested next lesson
+rvn learn open objects
+```
+
+Treat lessons as orientation and refreshers, and use this guide/reference docs for complete command detail.
+
+---
+
 ## Daily Workflow
 
 ### Morning Routine

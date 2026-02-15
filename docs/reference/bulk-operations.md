@@ -246,11 +246,15 @@ Updated: projects/gamma (status=invalid-value) [ERROR: invalid enum value]
 Raven doesn't have built-in rollback. Use git:
 
 ```bash
-# Undo all changes since last commit
-git checkout .
+# Inspect what changed
+git status
+git diff
 
-# Or restore specific files
-git checkout -- people/freya.md projects/website.md
+# Restore specific files
+git restore people/freya.md projects/website.md
+
+# Restore all tracked files in the working tree (use with care)
+git restore .
 ```
 
 ---
