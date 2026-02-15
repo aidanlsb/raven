@@ -19,6 +19,9 @@ func TestLoadVaultConfig(t *testing.T) {
 		if cfg.DailyDirectory != "daily" {
 			t.Errorf("expected daily_directory 'daily', got %q", cfg.DailyDirectory)
 		}
+		if cfg.GetWorkflowDirectory() != "workflows/" {
+			t.Errorf("expected default directories.workflow 'workflows/', got %q", cfg.GetWorkflowDirectory())
+		}
 	})
 
 	t.Run("loads custom config", func(t *testing.T) {
@@ -37,6 +40,9 @@ func TestLoadVaultConfig(t *testing.T) {
 
 		if cfg.DailyDirectory != "journal" {
 			t.Errorf("expected daily_directory 'journal', got %q", cfg.DailyDirectory)
+		}
+		if cfg.GetWorkflowDirectory() != "workflows/" {
+			t.Errorf("expected default directories.workflow 'workflows/', got %q", cfg.GetWorkflowDirectory())
 		}
 	})
 
@@ -57,6 +63,45 @@ func TestLoadVaultConfig(t *testing.T) {
 
 		if cfg.DailyDirectory != "daily" {
 			t.Errorf("expected daily_directory 'daily', got %q", cfg.DailyDirectory)
+		}
+		if cfg.GetWorkflowDirectory() != "workflows/" {
+			t.Errorf("expected default directories.workflow 'workflows/', got %q", cfg.GetWorkflowDirectory())
+		}
+	})
+
+	t.Run("normalizes directories.workflow", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := "directories:\n  workflow: ./automation/workflows\n"
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetWorkflowDirectory(); got != "automation/workflows/" {
+			t.Errorf("expected normalized directories.workflow 'automation/workflows/', got %q", got)
+		}
+	})
+
+	t.Run("supports legacy top-level workflow_directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := "workflow_directory: automation/workflows\n"
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetWorkflowDirectory(); got != "automation/workflows/" {
+			t.Errorf("expected normalized legacy workflow_directory to map to directories.workflow, got %q", got)
 		}
 	})
 }
@@ -217,6 +262,45 @@ directories:
 		}
 	})
 
+	t.Run("workflow key uses singular and falls back to plural", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := `
+daily_directory: daily
+directories:
+  workflow: automation/workflows
+  workflows: old/workflows
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetWorkflowDirectory(); got != "automation/workflows/" {
+			t.Errorf("expected singular workflow to take precedence, got %q", got)
+		}
+
+		content = `
+daily_directory: daily
+directories:
+  workflows: old/workflows
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+		cfg, err = LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetWorkflowDirectory(); got != "old/workflows/" {
+			t.Errorf("expected plural workflows fallback, got %q", got)
+		}
+	})
+
 	t.Run("nil when not configured", func(t *testing.T) {
 		cfg := &VaultConfig{DailyDirectory: "daily"}
 
@@ -335,6 +419,13 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 
 	if cfg.DailyDirectory != "daily" {
 		t.Errorf("expected daily_directory 'daily', got %q", cfg.DailyDirectory)
+	}
+	if cfg.GetWorkflowDirectory() != "workflows/" {
+		t.Errorf("expected default directories.workflow 'workflows/', got %q", cfg.GetWorkflowDirectory())
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "workflows", "onboard.yaml")); os.IsNotExist(err) {
+		t.Error("expected default onboard workflow file to be created")
 	}
 
 	// Calling again should NOT overwrite - returns false

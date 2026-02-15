@@ -13,8 +13,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mcp"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -149,6 +151,438 @@ var workflowShowCmd = &cobra.Command{
 			}
 		}
 
+		return nil
+	},
+}
+
+var workflowAddFile string
+var workflowScaffoldFile string
+var workflowScaffoldDescription string
+var workflowScaffoldForce bool
+
+func validateWorkflowCreateName(name string) error {
+	if name == "runs" {
+		return handleErrorMsg(
+			ErrInvalidInput,
+			"workflow name 'runs' is reserved for workflows.runs config",
+			"Choose a different workflow name",
+		)
+	}
+	return nil
+}
+
+func normalizeWorkflowFileRef(raw string) string {
+	ref := filepath.ToSlash(filepath.Clean(strings.TrimSpace(raw)))
+	ref = strings.TrimPrefix(ref, "./")
+	ref = strings.TrimPrefix(ref, "/")
+	if ref == "." || ref == ".." || strings.HasPrefix(ref, "../") {
+		return ""
+	}
+	return ref
+}
+
+func validateWorkflowFileLocation(fileRef, workflowDir string) error {
+	if workflowDir == "" {
+		return nil
+	}
+	if !strings.HasPrefix(fileRef, workflowDir) {
+		return fmt.Errorf("workflow file must be under directories.workflow %q", workflowDir)
+	}
+	return nil
+}
+
+func registerWorkflowInConfig(
+	vaultPath string,
+	vaultCfg *config.VaultConfig,
+	name string,
+	ref *config.WorkflowRef,
+) (*workflow.Workflow, string, error) {
+	if ref == nil {
+		return nil, ErrWorkflowInvalid, fmt.Errorf("workflow reference is nil")
+	}
+
+	if vaultCfg == nil {
+		loadedCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return nil, ErrInternal, err
+		}
+		vaultCfg = loadedCfg
+	}
+	if vaultCfg.Workflows == nil {
+		vaultCfg.Workflows = make(map[string]*config.WorkflowRef)
+	}
+	if _, exists := vaultCfg.Workflows[name]; exists {
+		return nil, ErrDuplicateName, fmt.Errorf("workflow '%s' already exists", name)
+	}
+
+	loaded, err := workflow.LoadWithConfig(vaultPath, name, ref, vaultCfg)
+	if err != nil {
+		return nil, ErrWorkflowInvalid, err
+	}
+
+	vaultCfg.Workflows[name] = ref
+	if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
+		return nil, ErrInternal, err
+	}
+
+	return loaded, "", nil
+}
+
+var workflowAddCmd = &cobra.Command{
+	Use:   "add <name>",
+	Short: "Add a workflow to raven.yaml",
+	Long: `Add a workflow definition to raven.yaml.
+
+Workflow declarations are file references only.
+The referenced file must exist under directories.workflow (default: workflows/).
+
+Examples:
+  rvn workflow add meeting-prep --file workflows/meeting-prep.yaml`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		name := strings.TrimSpace(args[0])
+		if name == "" {
+			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
+		}
+		if err := validateWorkflowCreateName(name); err != nil {
+			return err
+		}
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		workflowDir := vaultCfg.GetWorkflowDirectory()
+
+		fileRef := normalizeWorkflowFileRef(workflowAddFile)
+		if fileRef == "" {
+			return handleErrorMsg(ErrMissingArgument, "--file is required", "Use --file <workflow YAML path>")
+		}
+		if err := validateWorkflowFileLocation(fileRef, workflowDir); err != nil {
+			return handleErrorMsg(
+				ErrInvalidInput,
+				err.Error(),
+				fmt.Sprintf("Use a file path like %s<name>.yaml", workflowDir),
+			)
+		}
+
+		ref := &config.WorkflowRef{
+			File: fileRef,
+		}
+		loaded, errCode, err := registerWorkflowInConfig(vaultPath, vaultCfg, name, ref)
+		if err != nil {
+			if errCode == ErrDuplicateName {
+				return handleErrorMsg(errCode, err.Error(), fmt.Sprintf("Use 'rvn workflow remove %s' first to replace it", name))
+			}
+			return handleError(errCode, err, "")
+		}
+
+		if isJSONOutput() {
+			out := map[string]interface{}{
+				"name":        loaded.Name,
+				"description": loaded.Description,
+				"source":      "file",
+				"file":        ref.File,
+			}
+			if len(loaded.Inputs) > 0 {
+				out["inputs"] = loaded.Inputs
+			}
+			if len(loaded.Steps) > 0 {
+				out["steps"] = loaded.Steps
+			}
+			outputSuccess(out, nil)
+			return nil
+		}
+
+		fmt.Printf("Added workflow '%s'.\n", name)
+		fmt.Printf("Run with: rvn workflow run %s\n", name)
+		return nil
+	},
+}
+
+func buildWorkflowScaffoldYAML(name, description string) string {
+	desc := strings.TrimSpace(description)
+	if desc == "" {
+		desc = fmt.Sprintf("Scaffolded workflow: %s", name)
+	}
+
+	return fmt.Sprintf(`description: %q
+inputs:
+  topic:
+    type: string
+    required: true
+    description: "Question or topic to analyze"
+steps:
+  - id: context
+    type: tool
+    tool: raven_search
+    arguments:
+      query: "{{inputs.topic}}"
+      limit: 10
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Return JSON: {"outputs":{"markdown":"..."}}
+
+      Answer this request using my notes:
+      {{inputs.topic}}
+
+      ## Relevant context
+      {{steps.context.data.results}}
+`, desc)
+}
+
+var workflowScaffoldCmd = &cobra.Command{
+	Use:   "scaffold <name>",
+	Short: "Scaffold a starter workflow file and config entry",
+	Long: `Create a starter workflow file and register it in raven.yaml.
+
+By default this creates <directories.workflow>/<name>.yaml and adds:
+  workflows:
+    <name>:
+      file: <directories.workflow>/<name>.yaml
+
+Use --file to choose a different file path and --force to overwrite an
+existing scaffold file.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		name := strings.TrimSpace(args[0])
+		if name == "" {
+			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
+		}
+		if err := validateWorkflowCreateName(name); err != nil {
+			return err
+		}
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		workflowDir := vaultCfg.GetWorkflowDirectory()
+
+		fileRef := strings.TrimSpace(workflowScaffoldFile)
+		if fileRef == "" {
+			fileRef = fmt.Sprintf("%s%s.yaml", workflowDir, name)
+		}
+		fileRef = normalizeWorkflowFileRef(fileRef)
+		if fileRef == "" {
+			return handleErrorMsg(ErrInvalidInput, "invalid workflow file path", "")
+		}
+		if err := validateWorkflowFileLocation(fileRef, workflowDir); err != nil {
+			return handleErrorMsg(
+				ErrInvalidInput,
+				err.Error(),
+				fmt.Sprintf("Use a file path like %s<name>.yaml", workflowDir),
+			)
+		}
+
+		fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
+		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
+			return handleError(ErrFileOutsideVault, err, "Workflow files must be within the vault")
+		}
+
+		if _, err := os.Stat(fullPath); err == nil && !workflowScaffoldForce {
+			return handleErrorMsg(
+				ErrFileExists,
+				fmt.Sprintf("workflow file already exists: %s", fileRef),
+				"Use --force to overwrite, or choose a different --file path",
+			)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			return handleError(ErrFileWriteError, err, "")
+		}
+
+		content := buildWorkflowScaffoldYAML(name, workflowScaffoldDescription)
+		if err := atomicfile.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+			return handleError(ErrFileWriteError, err, "")
+		}
+
+		ref := &config.WorkflowRef{File: fileRef}
+		loaded, errCode, err := registerWorkflowInConfig(vaultPath, vaultCfg, name, ref)
+		if err != nil {
+			if errCode == ErrDuplicateName {
+				return handleErrorMsg(
+					errCode,
+					err.Error(),
+					fmt.Sprintf("A scaffold file was written to %s. Remove the existing workflow first or use a different name.", fileRef),
+				)
+			}
+			return handleError(errCode, err, "")
+		}
+
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"name":        loaded.Name,
+				"description": loaded.Description,
+				"file":        fileRef,
+				"source":      "file",
+				"scaffolded":  true,
+			}, nil)
+			return nil
+		}
+
+		fmt.Printf("Scaffolded workflow '%s' at %s\n", name, fileRef)
+		fmt.Printf("Run with: rvn workflow run %s --input topic=\"...\"\n", name)
+		return nil
+	},
+}
+
+var workflowRemoveCmd = &cobra.Command{
+	Use:   "remove <name>",
+	Short: "Remove a workflow from raven.yaml",
+	Long: `Remove a workflow definition from raven.yaml.
+
+Examples:
+  rvn workflow remove meeting-prep
+  rvn workflow remove daily-brief`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		name := strings.TrimSpace(args[0])
+		if name == "" {
+			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
+		}
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		if vaultCfg.Workflows == nil {
+			return handleErrorMsg(
+				ErrWorkflowNotFound,
+				fmt.Sprintf("workflow '%s' not found", name),
+				"Run 'rvn workflow list' to see available workflows",
+			)
+		}
+		if _, exists := vaultCfg.Workflows[name]; !exists {
+			return handleErrorMsg(
+				ErrWorkflowNotFound,
+				fmt.Sprintf("workflow '%s' not found", name),
+				"Run 'rvn workflow list' to see available workflows",
+			)
+		}
+
+		delete(vaultCfg.Workflows, name)
+		if len(vaultCfg.Workflows) == 0 {
+			vaultCfg.Workflows = nil
+		}
+		if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"name":    name,
+				"removed": true,
+			}, nil)
+			return nil
+		}
+
+		fmt.Printf("Removed workflow '%s'.\n", name)
+		return nil
+	},
+}
+
+type workflowValidationItem struct {
+	Name  string `json:"name"`
+	Valid bool   `json:"valid"`
+	Error string `json:"error,omitempty"`
+}
+
+var workflowValidateCmd = &cobra.Command{
+	Use:   "validate [name]",
+	Short: "Validate workflow definitions",
+	Long: `Validate one workflow or all workflows defined in raven.yaml.
+
+Examples:
+  rvn workflow validate
+  rvn workflow validate meeting-prep`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		if vaultCfg.Workflows == nil || len(vaultCfg.Workflows) == 0 {
+			if isJSONOutput() {
+				outputSuccess(map[string]interface{}{
+					"valid":   true,
+					"checked": 0,
+					"results": []workflowValidationItem{},
+				}, &Meta{Count: 0})
+				return nil
+			}
+			fmt.Println("No workflows defined in raven.yaml")
+			return nil
+		}
+
+		var names []string
+		if len(args) == 1 {
+			name := strings.TrimSpace(args[0])
+			if _, ok := vaultCfg.Workflows[name]; !ok {
+				return handleErrorMsg(
+					ErrWorkflowNotFound,
+					fmt.Sprintf("workflow '%s' not found", name),
+					"Run 'rvn workflow list' to see available workflows",
+				)
+			}
+			names = []string{name}
+		} else {
+			names = make([]string, 0, len(vaultCfg.Workflows))
+			for name := range vaultCfg.Workflows {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+		}
+
+		results := make([]workflowValidationItem, 0, len(names))
+		invalidCount := 0
+		for _, name := range names {
+			_, loadErr := workflow.LoadWithConfig(vaultPath, name, vaultCfg.Workflows[name], vaultCfg)
+			item := workflowValidationItem{
+				Name:  name,
+				Valid: loadErr == nil,
+			}
+			if loadErr != nil {
+				item.Error = loadErr.Error()
+				invalidCount++
+			}
+			results = append(results, item)
+		}
+
+		payload := map[string]interface{}{
+			"valid":   invalidCount == 0,
+			"checked": len(results),
+			"invalid": invalidCount,
+			"results": results,
+		}
+
+		if invalidCount > 0 {
+			return handleErrorWithDetails(
+				ErrWorkflowInvalid,
+				fmt.Sprintf("%d workflow(s) invalid", invalidCount),
+				"Use 'rvn workflow show <name>' to inspect a workflow definition",
+				payload,
+			)
+		}
+
+		if isJSONOutput() {
+			outputSuccess(payload, &Meta{Count: len(results)})
+			return nil
+		}
+
+		fmt.Printf("All %d workflow(s) are valid.\n", len(results))
 		return nil
 	},
 }
@@ -723,6 +1157,11 @@ func runStateErrorDetails(state *workflow.WorkflowRunState, failedStepID string)
 }
 
 func init() {
+	workflowAddCmd.Flags().StringVar(&workflowAddFile, "file", "", "Path to external workflow YAML file (relative to vault root)")
+	workflowScaffoldCmd.Flags().StringVar(&workflowScaffoldFile, "file", "", "Path for the scaffolded workflow YAML file (relative to vault root)")
+	workflowScaffoldCmd.Flags().StringVar(&workflowScaffoldDescription, "description", "", "Description for the scaffolded workflow")
+	workflowScaffoldCmd.Flags().BoolVar(&workflowScaffoldForce, "force", false, "Overwrite scaffold file if it already exists")
+
 	workflowRunCmd.Flags().StringArrayVar(&workflowInputFlags, "input", nil, "Set input value (can be repeated): --input name=value")
 	workflowRunCmd.Flags().StringVar(&workflowInputJSON, "input-json", "", "Set workflow inputs as a JSON object")
 	workflowRunCmd.Flags().StringVar(&workflowInputFile, "input-file", "", "Read workflow inputs from JSON file")
@@ -739,6 +1178,10 @@ func init() {
 	workflowRunsPruneCmd.Flags().BoolVar(&workflowRunsPruneConfirm, "confirm", false, "Apply deletion (without this flag, preview only)")
 
 	workflowCmd.AddCommand(workflowListCmd)
+	workflowCmd.AddCommand(workflowAddCmd)
+	workflowCmd.AddCommand(workflowScaffoldCmd)
+	workflowCmd.AddCommand(workflowRemoveCmd)
+	workflowCmd.AddCommand(workflowValidateCmd)
 	workflowCmd.AddCommand(workflowShowCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
 	workflowCmd.AddCommand(workflowContinueCmd)

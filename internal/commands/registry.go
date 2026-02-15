@@ -1236,6 +1236,87 @@ This is useful for piping query results to open multiple files at once.`,
 			"See what inputs each workflow requires",
 		},
 	},
+	"workflow_add": {
+		Name:        "workflow add",
+		Description: "Add a workflow definition to raven.yaml",
+		LongDesc: `Creates a workflow entry in raven.yaml without manual file editing.
+
+Workflow declarations are file references only. The referenced file must be
+under directories.workflow (default: workflows/). The command validates the file
+before saving so agents get immediate feedback for migration and syntax issues.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Workflow name to create", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "file", Description: "Path to external workflow YAML file (relative to vault root)", Type: FlagTypeString, Examples: []string{"workflows/meeting-prep.yaml"}},
+		},
+		Examples: []string{
+			"rvn workflow add meeting-prep --file workflows/meeting-prep.yaml --json",
+		},
+		UseCases: []string{
+			"Register an existing workflow file in raven.yaml",
+			"Validate workflow policy and syntax before persisting to config",
+		},
+	},
+	"workflow_scaffold": {
+		Name:        "workflow scaffold",
+		Description: "Scaffold a starter workflow file and config entry",
+		LongDesc: `Creates a starter workflow YAML file and registers it in raven.yaml.
+
+By default, writes <directories.workflow>/<name>.yaml and adds:
+  workflows:
+    <name>:
+      file: <directories.workflow>/<name>.yaml
+
+Use this when bootstrapping a first workflow from MCP or CLI without manually
+editing raven.yaml.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Workflow name to scaffold", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "file", Description: "Path for scaffolded workflow YAML (must be under directories.workflow)", Type: FlagTypeString, Examples: []string{"workflows/daily-brief.yaml"}},
+			{Name: "description", Description: "Description for the scaffolded workflow", Type: FlagTypeString},
+			{Name: "force", Description: "Overwrite scaffold file if it already exists", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn workflow scaffold daily-brief --json",
+			"rvn workflow scaffold meeting-prep --file workflows/meeting-prep.yaml --description \"Prepare for meetings\" --json",
+		},
+		UseCases: []string{
+			"Bootstrap a valid workflow quickly",
+			"Create first workflow via MCP without manual YAML editing",
+		},
+	},
+	"workflow_remove": {
+		Name:        "workflow remove",
+		Description: "Remove a workflow definition from raven.yaml",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Workflow name to remove", Required: true},
+		},
+		Examples: []string{
+			"rvn workflow remove meeting-prep --json",
+		},
+		UseCases: []string{
+			"Delete obsolete workflows from config",
+		},
+	},
+	"workflow_validate": {
+		Name:        "workflow validate",
+		Description: "Validate workflow definitions in raven.yaml",
+		LongDesc: `Validates one workflow or all workflows defined in raven.yaml.
+Reports migration, directory-policy, and file syntax errors.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Optional workflow name to validate (validates all when omitted)", Required: false},
+		},
+		Examples: []string{
+			"rvn workflow validate --json",
+			"rvn workflow validate meeting-prep --json",
+		},
+		UseCases: []string{
+			"Debug workflow syntax errors quickly",
+			"Check all workflows after editing definitions",
+		},
+	},
 	"workflow_show": {
 		Name:        "workflow show",
 		Description: "Show workflow details",

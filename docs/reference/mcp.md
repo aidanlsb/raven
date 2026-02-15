@@ -182,8 +182,15 @@ rvn schema commands --json
 | Tool | Description |
 |------|-------------|
 | `raven_workflow_list` | List available workflows |
+| `raven_workflow_add` | Add a workflow definition to `raven.yaml` |
+| `raven_workflow_scaffold` | Scaffold a starter workflow file and config entry |
+| `raven_workflow_remove` | Remove a workflow definition from `raven.yaml` |
+| `raven_workflow_validate` | Validate workflow definitions |
 | `raven_workflow_show` | Show workflow details |
 | `raven_workflow_run` | Run a workflow until an agent step |
+| `raven_workflow_continue` | Continue a paused workflow run |
+| `raven_workflow_runs_list` | List persisted workflow runs |
+| `raven_workflow_runs_prune` | Prune persisted workflow runs |
 
 ---
 
@@ -452,12 +459,28 @@ raven_stats()
 # List available
 raven_workflow_list()
 
+# Scaffold a starter workflow (recommended first step)
+raven_workflow_scaffold(name="daily-brief")
+
+# Register a workflow file (MCP-safe; no manual raven.yaml editing)
+raven_workflow_add(
+  name="daily-brief",
+  file="workflows/daily-brief.yaml"
+)
+
+# Validate syntax
+raven_workflow_validate(name="daily-brief")
+
 # Show details
 raven_workflow_show(name="meeting-prep")
 
 # Run with inputs
 raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
 ```
+
+Notes:
+- `raven_workflow_add` is file-only; inline definitions are not supported
+- Workflow files must be under `directories.workflow` (default `workflows/`)
 
 ---
 

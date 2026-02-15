@@ -568,6 +568,130 @@ func TestIntegration_NewPageRespectsPagesRoot(t *testing.T) {
 	v.AssertFileContains("pages/quick-note.md", "type: page")
 }
 
+func TestIntegration_WorkflowManagementCommands(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	// Add a file-backed workflow.
+	v.WriteFile("workflows/inline-brief.yaml", `description: File workflow
+steps:
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Return JSON: {"outputs":{"markdown":"ok"}}
+`)
+	result := v.RunCLI("workflow", "add", "inline-brief", "--file", "workflows/inline-brief.yaml")
+	result.MustSucceed(t)
+
+	// Files outside directories.workflow are rejected.
+	v.WriteFile("automation/outside.yaml", `description: Outside workflow
+steps:
+  - id: compose
+    type: agent
+    prompt: test
+`)
+	v.RunCLI("workflow", "add", "outside", "--file", "automation/outside.yaml").MustFail(t, "INVALID_INPUT")
+
+	// Validate all workflows.
+	result = v.RunCLI("workflow", "validate")
+	result.MustSucceed(t)
+	if valid, _ := result.Data["valid"].(bool); !valid {
+		t.Fatalf("expected workflow validate to return valid=true, got: %v", result.RawJSON)
+	}
+
+	// Add a file-backed workflow.
+	v.WriteFile("workflows/file-brief.yaml", `description: File workflow
+steps:
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Return JSON: {"outputs":{"markdown":"ok"}}
+`)
+	result = v.RunCLI("workflow", "add", "file-brief", "--file", "workflows/file-brief.yaml")
+	result.MustSucceed(t)
+
+	// Confirm list includes both workflows.
+	result = v.RunCLI("workflow", "list")
+	result.MustSucceed(t)
+	items := result.DataList("workflows")
+	if len(items) != 2 {
+		t.Fatalf("expected 2 workflows, got %d\nRaw: %s", len(items), result.RawJSON)
+	}
+
+	// Remove one workflow and ensure it is gone.
+	v.RunCLI("workflow", "remove", "inline-brief").MustSucceed(t)
+	result = v.RunCLI("workflow", "show", "inline-brief")
+	result.MustFail(t, "QUERY_NOT_FOUND")
+}
+
+func TestIntegration_WorkflowScaffold(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	// Existing file should block scaffold without --force.
+	v.WriteFile("workflows/custom.yaml", "description: existing\nsteps:\n  - id: compose\n    type: agent\n    prompt: existing\n")
+	result := v.RunCLI("workflow", "scaffold", "starter", "--file", "workflows/custom.yaml")
+	result.MustFail(t, "FILE_EXISTS")
+
+	// --force allows overwrite and registration in raven.yaml.
+	result = v.RunCLI("workflow", "scaffold", "starter", "--file", "workflows/custom.yaml", "--force")
+	result.MustSucceed(t)
+	v.AssertFileExists("workflows/custom.yaml")
+	v.AssertFileContains("workflows/custom.yaml", "type: tool")
+	v.AssertFileContains("workflows/custom.yaml", "type: agent")
+
+	// Scaffolded workflow should be valid and runnable via workflow commands.
+	v.RunCLI("workflow", "validate", "starter").MustSucceed(t)
+	v.RunCLI("workflow", "show", "starter").MustSucceed(t)
+
+	// Enforce configured directories.workflow for custom file paths.
+	v.RunCLI("workflow", "scaffold", "bad", "--file", "automation/outside.yaml").MustFail(t, "INVALID_INPUT")
+}
+
+func TestIntegration_WorkflowScaffold_CustomWorkflowDirectory(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML(`directories:
+  workflow: automation/workflows/
+`).
+		Build()
+
+	result := v.RunCLI("workflow", "scaffold", "starter")
+	result.MustSucceed(t)
+
+	v.AssertFileExists("automation/workflows/starter.yaml")
+	v.RunCLI("workflow", "show", "starter").MustSucceed(t)
+}
+
+func TestIntegration_WorkflowValidateReportsInvalidDefinitions(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML(`workflows:
+  broken:
+    description: Broken workflow
+    steps:
+      - type: tool
+        tool: raven_query
+`).
+		Build()
+
+	result := v.RunCLI("workflow", "validate")
+	result.MustFail(t, "WORKFLOW_INVALID")
+	if result.Error == nil || !strings.Contains(result.Error.Message, "invalid") {
+		t.Fatalf("expected workflow validation failure message, got: %s", result.RawJSON)
+	}
+}
+
 // TestIntegration_Search tests full-text search.
 func TestIntegration_Search(t *testing.T) {
 	v := testutil.NewTestVault(t).

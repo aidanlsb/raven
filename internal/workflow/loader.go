@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -27,7 +28,7 @@ func LoadAll(vaultPath string, vaultCfg *config.VaultConfig) ([]*Workflow, error
 
 	var workflows []*Workflow
 	for name, ref := range vaultCfg.Workflows {
-		wf, err := Load(vaultPath, name, ref)
+		wf, err := LoadWithConfig(vaultPath, name, ref, vaultCfg)
 		if err != nil {
 			return nil, fmt.Errorf("workflow '%s': %w", name, err)
 		}
@@ -37,40 +38,63 @@ func LoadAll(vaultPath string, vaultCfg *config.VaultConfig) ([]*Workflow, error
 	return workflows, nil
 }
 
-// Load loads a single workflow by name.
-func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
+// LoadWithConfig loads a single workflow by name using vault-level workflow policy.
+func LoadWithConfig(vaultPath, name string, ref *config.WorkflowRef, vaultCfg *config.VaultConfig) (*Workflow, error) {
 	if ref == nil {
 		return nil, fmt.Errorf("workflow reference is nil")
 	}
-
-	// Check for conflicting definition
-	// Allow a top-level description alongside file-backed workflows for convenience,
-	// but disallow mixing file-backed workflows with any inline definition fields.
-	if ref.File != "" && (len(ref.Inputs) > 0 || len(ref.Steps) > 0) {
-		return nil, fmt.Errorf("workflow has both 'file' and inline fields; use one or the other")
+	if strings.TrimSpace(ref.File) == "" {
+		return nil, fmt.Errorf(
+			"inline workflow definitions are not supported: set workflows.%s.file and move the definition to a workflow file",
+			name,
+		)
+	}
+	if ref.Description != "" || len(ref.Inputs) > 0 || len(ref.Steps) > 0 {
+		return nil, fmt.Errorf(
+			"workflow declarations must contain only 'file': move description/inputs/steps into %q",
+			ref.File,
+		)
 	}
 
-	// Load from external file if specified
-	if ref.File != "" {
-		wf, err := loadFromFile(vaultPath, name, ref.File)
-		if err != nil {
-			return nil, err
-		}
-		if ref.Description != "" {
-			wf.Description = ref.Description
-		}
-		return wf, nil
+	workflowDir := config.DefaultVaultConfig().GetWorkflowDirectory()
+	if vaultCfg != nil {
+		workflowDir = vaultCfg.GetWorkflowDirectory()
 	}
-
-	// Use inline definition
-	wf, err := buildWorkflow(name, ref.Description, ref.Inputs, ref.Steps)
+	fileRef, err := normalizeWorkflowFileRef(ref.File)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateWorkflow(wf); err != nil {
+	if !strings.HasPrefix(fileRef, workflowDir) {
+		return nil, fmt.Errorf(
+			"workflow file must be under directories.workflow %q: got %q",
+			workflowDir,
+			fileRef,
+		)
+	}
+
+	wf, err := loadFromFile(vaultPath, name, fileRef)
+	if err != nil {
 		return nil, err
 	}
 	return wf, nil
+}
+
+// Load loads a single workflow by name with default config policy.
+func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
+	return LoadWithConfig(vaultPath, name, ref, config.DefaultVaultConfig())
+}
+
+func normalizeWorkflowFileRef(filePath string) (string, error) {
+	normalized := filepath.ToSlash(filepath.Clean(strings.TrimSpace(filePath)))
+	normalized = strings.TrimPrefix(normalized, "./")
+	normalized = strings.TrimPrefix(normalized, "/")
+	if normalized == "" || normalized == "." {
+		return "", fmt.Errorf("workflow declaration must include a non-empty file path")
+	}
+	if normalized == ".." || strings.HasPrefix(normalized, "../") {
+		return "", fmt.Errorf("workflow file path cannot escape the vault")
+	}
+	return normalized, nil
 }
 
 // loadFromFile loads a workflow from an external YAML file.
@@ -226,7 +250,7 @@ func Get(vaultPath, name string, vaultCfg *config.VaultConfig) (*Workflow, error
 		return nil, fmt.Errorf("workflow '%s' not found", name)
 	}
 
-	return Load(vaultPath, name, ref)
+	return LoadWithConfig(vaultPath, name, ref, vaultCfg)
 }
 
 // List returns all workflow names and descriptions.
@@ -242,7 +266,7 @@ func List(vaultPath string, vaultCfg *config.VaultConfig) ([]*ListItem, error) {
 		}
 
 		// Load to get full definition (handles file references)
-		wf, err := Load(vaultPath, name, ref)
+		wf, err := LoadWithConfig(vaultPath, name, ref, vaultCfg)
 		if err != nil {
 			// Include error in description rather than failing
 			item.Description = fmt.Sprintf("(error: %v)", err)
