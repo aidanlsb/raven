@@ -125,6 +125,33 @@ directories:
 		}
 	})
 
+	t.Run("defaults page root to object root when omitted", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := `
+daily_directory: daily
+directories:
+  object: objects/
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		dirs := cfg.GetDirectoriesConfig()
+		if dirs.Object != "objects/" {
+			t.Errorf("expected object root 'objects/', got %q", dirs.Object)
+		}
+		if dirs.Page != "objects/" {
+			t.Errorf("expected page root to default to object root 'objects/', got %q", dirs.Page)
+		}
+	})
+
 	t.Run("backwards compatibility with plural keys", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")

@@ -75,6 +75,32 @@ func TestMCPIntegration_CreateObject(t *testing.T) {
 	v.AssertFileContains("people/alice.md", "name: Alice")
 }
 
+// TestMCPIntegration_CreatePageWithObjectRootFallback verifies that when
+// directories.page is omitted, it defaults to directories.object for creation.
+func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	result := server.callTool("raven_new", map[string]interface{}{
+		"type":  "page",
+		"title": "Scratch Note",
+	})
+
+	if result.IsError {
+		t.Fatalf("tool call failed: %s", result.Text)
+	}
+
+	v.AssertFileExists("objects/scratch-note.md")
+	v.AssertFileNotExists("scratch-note.md")
+}
+
 // TestMCPIntegration_QueryObjects tests querying objects via MCP tool call.
 func TestMCPIntegration_QueryObjects(t *testing.T) {
 	v := testutil.NewTestVault(t).
@@ -449,6 +475,44 @@ References [[nonexistent/page]] which doesn't exist.
 	if !strings.Contains(result.Text, "missing_reference") {
 		t.Errorf("expected check output to include 'missing_reference' issue\nText: %s", result.Text)
 	}
+}
+
+// TestMCPIntegration_CheckCreateMissingWithConfirm verifies non-interactive
+// create-missing behavior via MCP (JSON mode + confirm=true).
+func TestMCPIntegration_CheckCreateMissingWithConfirm(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  meeting:
+    default_path: meeting/
+  project:
+    default_path: projects/
+    fields:
+      meeting:
+        type: ref
+        target: meeting
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		WithFile("projects/weekly.md", `---
+type: project
+meeting: "[[meeting/all-hands]]"
+---
+# Weekly
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	_ = server.callTool("raven_check", map[string]interface{}{
+		"create-missing": true,
+		"confirm":        true,
+	})
+
+	v.AssertFileExists("objects/meeting/all-hands.md")
+	v.AssertFileNotExists("meeting/all-hands.md")
 }
 
 // TestMCPIntegration_ErrorHandling tests that MCP errors are properly surfaced.

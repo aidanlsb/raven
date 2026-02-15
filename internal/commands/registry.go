@@ -508,8 +508,8 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			{Name: "by-file", Description: "Group issues by file path", Type: FlagTypeBool},
 			{Name: "verbose", Short: "V", Description: "Show all issues with full details", Type: FlagTypeBool},
 			{Name: "fix", Description: "Auto-fix simple issues (short refs -> full paths)", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply fixes (without this flag, shows preview only)", Type: FlagTypeBool},
-			{Name: "create-missing", Description: "Interactively create missing pages (CLI only, not for agents)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply fixes/create-missing in non-interactive mode (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "create-missing", Description: "Create missing referenced pages (interactive by default; with --json requires --confirm)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn check --json",

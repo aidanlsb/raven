@@ -156,6 +156,14 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
 
+	// If page root is omitted, default it to object root.
+	// This keeps "all notes under one root" configs simple:
+	// directories:
+	//   object: objects/
+	if cfg.Page == "" && cfg.Object != "" {
+		cfg.Page = cfg.Object
+	}
+
 	// Clear deprecated fields after normalization to avoid confusion
 	cfg.Objects = ""
 	cfg.Pages = ""

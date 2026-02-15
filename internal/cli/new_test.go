@@ -196,3 +196,64 @@ types:
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrFileExists, resp.Error, out)
 	}
 }
+
+func TestNewPageUsesObjectRootWhenPageRootOmitted(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  person:
+    default_path: people/
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	ravenYAML := strings.TrimSpace(`
+directories:
+  object: objects/
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte(ravenYAML), 0o644); err != nil {
+		t.Fatalf("write raven.yaml: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+
+	out := captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"page", "Quick Note"}); err != nil {
+			t.Fatalf("newCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			File string `json:"file"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true; out=%s", out)
+	}
+	if resp.Data.File != "objects/quick-note.md" {
+		t.Fatalf("expected file path under objects root, got %q", resp.Data.File)
+	}
+
+	if _, err := os.Stat(filepath.Join(vaultPath, "objects", "quick-note.md")); err != nil {
+		t.Fatalf("expected created page file in objects root: %v", err)
+	}
+}

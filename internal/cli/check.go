@@ -450,6 +450,13 @@ var checkCmd = &cobra.Command{
 		}
 
 		// JSON output mode
+		if jsonOutput && checkCreateMissing && scope.scopeType == "full" && checkConfirm {
+			missingRefs := validator.MissingRefs()
+			if len(missingRefs) > 0 {
+				createMissingRefsNonInteractive(vaultPath, s, missingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
+			}
+		}
+
 		if jsonOutput {
 			result := buildCheckJSONWithScope(vaultPath, scope, fileCount, errorCount, warningCount, allIssues, schemaIssues)
 			out, _ := json.MarshalIndent(result, "", "  ")
@@ -488,7 +495,7 @@ var checkCmd = &cobra.Command{
 			if checkCreateMissing && scope.scopeType == "full" {
 				missingRefs := validator.MissingRefs()
 				if len(missingRefs) > 0 {
-					created := handleMissingRefs(vaultPath, s, missingRefs)
+					created := handleMissingRefs(vaultPath, s, missingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 					if created > 0 {
 						fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 					}
@@ -932,7 +939,7 @@ func buildCheckJSONInternal(result CheckResultJSON, issues []check.Issue, schema
 	return result
 }
 
-func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef) int {
+func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot string) int {
 	// Categorize refs by confidence
 	var certain, inferred, unknown []*check.MissingRef
 	for _, ref := range refs {
@@ -959,6 +966,9 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	fmt.Printf("\n%s\n", ui.SectionHeader("Missing References"))
 	reader := bufio.NewReader(os.Stdin)
 	created := 0
+	resolvePath := func(targetPath, typeName string) string {
+		return pages.SlugifyPath(pages.ResolveTargetPathWithRoots(targetPath, typeName, s, objectsRoot, pagesRoot))
+	}
 
 	// Handle certain refs (from typed fields)
 	if len(certain) > 0 {
@@ -968,7 +978,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			if source == "" {
 				source = ref.SourceFile
 			}
-			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
+			resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
 			item := fmt.Sprintf("%s → %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
@@ -981,8 +991,8 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range certain {
-				resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
-				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
+				resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
+				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -996,7 +1006,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	if len(inferred) > 0 {
 		fmt.Printf("\n%s\n", ui.Bold.Render("Inferred (from path matching default_path):"))
 		for _, ref := range inferred {
-			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
+			resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
 			item := fmt.Sprintf("? %s → %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
@@ -1005,12 +1015,12 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		}
 
 		for _, ref := range inferred {
-			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, ref.InferredType, s))
+			resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
 			fmt.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
-				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType); err != nil {
+				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -1050,17 +1060,53 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 			// Validate type exists, offer to create if not
 			if _, exists := s.Types[response]; !exists {
-				created += handleNewTypeCreation(vaultPath, s, ref, response, reader)
+				created += handleNewTypeCreation(vaultPath, s, ref, response, reader, objectsRoot, pagesRoot)
 				continue
 			}
 
-			resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, response, s))
-			if err := createMissingPage(vaultPath, s, ref.TargetPath, response); err != nil {
+			resolvedPath := resolvePath(ref.TargetPath, response)
+			if err := createMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot); err != nil {
 				fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 			} else {
 				fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
 				created++
 			}
+		}
+	}
+
+	return created
+}
+
+// createMissingRefsNonInteractive creates missing refs deterministically for agent/json mode.
+// It only creates refs with a known type and skips unknown-type refs that require user input.
+func createMissingRefsNonInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot string) int {
+	created := 0
+	seen := make(map[string]struct{})
+
+	for _, ref := range refs {
+		typeName := ref.InferredType
+		if typeName == "" {
+			// Unknown type requires user input; skip in non-interactive mode.
+			continue
+		}
+		if _, exists := s.Types[typeName]; !exists && !schema.IsBuiltinType(typeName) {
+			// Defensive check: skip refs whose inferred type isn't currently known.
+			continue
+		}
+
+		resolvedPath := pages.ResolveTargetPathWithRoots(ref.TargetPath, typeName, s, objectsRoot, pagesRoot)
+		slugPath := pages.SlugifyPath(resolvedPath)
+		if _, alreadyHandled := seen[slugPath]; alreadyHandled {
+			continue
+		}
+		seen[slugPath] = struct{}{}
+
+		if pages.Exists(vaultPath, resolvedPath) {
+			continue
+		}
+
+		if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot); err == nil {
+			created++
 		}
 	}
 
@@ -1267,7 +1313,7 @@ func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType str
 
 // handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
 // Returns the number of pages created (0 or 1).
-func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader) int {
+func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader, objectsRoot, pagesRoot string) int {
 	fmt.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
 		ui.Bold.Render("'"+typeName+"'"),
 		ui.Muted.Render("[y/N]"))
@@ -1295,8 +1341,8 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 	}
 
 	// Now create the page with the new type (resolving path with new default_path)
-	resolvedPath := pages.SlugifyPath(pages.ResolveTargetPath(ref.TargetPath, typeName, s))
-	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName); err != nil {
+	resolvedPath := pages.SlugifyPath(pages.ResolveTargetPathWithRoots(ref.TargetPath, typeName, s, objectsRoot, pagesRoot))
+	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot); err != nil {
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
 	}
@@ -1360,13 +1406,15 @@ func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath str
 
 // createMissingPage creates a new page file using the pages package.
 // pages.Create handles default_path resolution automatically via the schema.
-func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName string) error {
+func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot string) error {
 	_, err := pages.Create(pages.CreateOptions{
 		VaultPath:                   vaultPath,
 		TypeName:                    typeName,
 		TargetPath:                  targetPath,
 		Schema:                      s,
 		IncludeRequiredPlaceholders: true,
+		ObjectsRoot:                 objectsRoot,
+		PagesRoot:                   pagesRoot,
 	})
 	return err
 }
@@ -1598,7 +1646,7 @@ func pluralize(n int) string {
 
 func init() {
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
-	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Interactively create missing referenced pages")
+	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Create missing referenced pages (interactive by default; with --json requires --confirm)")
 	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
 	checkCmd.Flags().BoolVarP(&checkVerbose, "verbose", "V", false, "Show all issues with full details")
 	checkCmd.Flags().StringVarP(&checkType, "type", "t", "", "Check only objects of this type")
@@ -1607,6 +1655,6 @@ func init() {
 	checkCmd.Flags().StringVar(&checkExclude, "exclude", "", "Exclude these issue types (comma-separated)")
 	checkCmd.Flags().BoolVar(&checkErrorsOnly, "errors-only", false, "Only report errors, skip warnings")
 	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Auto-fix simple issues (short refs → full paths)")
-	checkCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes (without this flag, shows preview only)")
+	checkCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes/create-missing in non-interactive mode (without this flag, shows preview only)")
 	rootCmd.AddCommand(checkCmd)
 }
