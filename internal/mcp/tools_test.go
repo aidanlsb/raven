@@ -170,6 +170,15 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantCmd:  "schema",
 			wantArgs: []string{"add", "type", "event", "--default-path", "events/", "--json"},
 		},
+		{
+			toolName: "raven_schema_add_type",
+			args: map[string]interface{}{
+				"name":        "event",
+				"description": "Calendar events",
+			},
+			wantCmd:  "schema",
+			wantArgs: []string{"add", "type", "event", "--description", "Calendar events", "--json"},
+		},
 		// Test that underscore variants of flag names also work (MCP clients may normalize names)
 		{
 			toolName: "raven_schema_add_type",

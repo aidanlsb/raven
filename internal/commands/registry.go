@@ -551,6 +551,7 @@ serves as the display name for objects of this type. The title argument to
 'rvn new' will auto-populate this field.
 
 If the name_field doesn't exist, it will be auto-created as a required string field.
+Use --description to add optional context for humans and agents.
 
 For agents: When helping users create types, ask what field should be used as the
 display name. Common choices are 'name' (for people, companies) or 'title' 
@@ -561,9 +562,11 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 		Flags: []FlagMeta{
 			{Name: "default-path", Description: "Default directory for files of this type", Type: FlagTypeString, Examples: []string{"people/", "projects/"}},
 			{Name: "name-field", Description: "Field to use as display name (auto-created if doesn't exist)", Type: FlagTypeString, Examples: []string{"name", "title"}},
+			{Name: "description", Description: "Optional description for this type", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn schema add type person --name-field name --default-path people/ --json",
+			"rvn schema add type person --description \"People and contacts\" --json",
 			"rvn schema add type project --name-field title --default-path projects/ --json",
 		},
 		UseCases: []string{
@@ -628,9 +631,11 @@ The command validates inputs and provides helpful suggestions if the syntax is i
 			{Name: "required", Description: "Mark field as required", Type: FlagTypeBool},
 			{Name: "target", Description: "Target type for ref/ref[] fields (required for references)", Type: FlagTypeString},
 			{Name: "values", Description: "Allowed values for enum/enum[] fields (comma-separated)", Type: FlagTypeString},
+			{Name: "description", Description: "Optional description for this field", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn schema add field person email --type string --required --json",
+			"rvn schema add field person email --description \"Primary contact email\" --json",
 			"rvn schema add field person tags --type string[] --json",
 			"rvn schema add field project owner --type ref --target person --json",
 			"rvn schema add field team members --type ref[] --target person --json",
@@ -658,6 +663,8 @@ The command validates inputs and provides helpful suggestions if the syntax is i
 
 Use --name-field to set or change which field serves as the display name.
 If the field doesn't exist, it will be auto-created as a required string field.
+Use --description to set optional context for this type.
+Use --description="-" to remove an existing description.
 Use --name-field="-" to remove the name_field setting.`,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the type to update", Required: true},
@@ -665,12 +672,14 @@ Use --name-field="-" to remove the name_field setting.`,
 		Flags: []FlagMeta{
 			{Name: "default-path", Description: "Update default directory for files", Type: FlagTypeString},
 			{Name: "name-field", Description: "Set/update display name field (use '-' to remove)", Type: FlagTypeString, Examples: []string{"name", "title", "-"}},
+			{Name: "description", Description: "Set/update description (use '-' to remove)", Type: FlagTypeString},
 			{Name: "add-trait", Description: "Add a trait to this type", Type: FlagTypeString},
 			{Name: "remove-trait", Description: "Remove a trait from this type", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn schema update type person --name-field name --json",
 			"rvn schema update type person --default-path people/ --json",
+			"rvn schema update type person --description \"People and contacts\" --json",
 			"rvn schema update type meeting --add-trait due --json",
 		},
 	},
@@ -695,7 +704,9 @@ Use --name-field="-" to remove the name_field setting.`,
 		LongDesc: `Update an existing field's properties.
 
 Note: Making a field required will be blocked if any objects lack that field.
-Add the field to all objects first, then make it required.`,
+Add the field to all objects first, then make it required.
+Use --description to set optional context for this field.
+Use --description="-" to remove an existing description.`,
 		Args: []ArgMeta{
 			{Name: "type_name", Description: "Type containing the field", Required: true},
 			{Name: "field_name", Description: "Field to update", Required: true},
@@ -705,10 +716,12 @@ Add the field to all objects first, then make it required.`,
 			{Name: "required", Description: "Update required status (true/false)", Type: FlagTypeString},
 			{Name: "default", Description: "Update default value", Type: FlagTypeString},
 			{Name: "target", Description: "Update target type for ref fields", Type: FlagTypeString},
+			{Name: "description", Description: "Set/update description (use '-' to remove)", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn schema update field person email --required=true --json",
 			"rvn schema update field project status --default=active --json",
+			"rvn schema update field person email --description \"Primary contact email\" --json",
 		},
 	},
 	"schema_remove_type": {

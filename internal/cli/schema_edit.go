@@ -27,6 +27,7 @@ import (
 var (
 	schemaAddDefaultPath string
 	schemaAddNameField   string
+	schemaAddDescription string
 	schemaAddFieldType   string
 	schemaAddRequired    bool
 	schemaAddDefault     string
@@ -38,6 +39,7 @@ var (
 var (
 	schemaUpdateDefaultPath string
 	schemaUpdateNameField   string
+	schemaUpdateDescription string
 	schemaUpdateFieldType   string
 	schemaUpdateRequired    string // "true", "false", or "" (no change)
 	schemaUpdateDefault     string
@@ -145,6 +147,9 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	if schemaAddDefaultPath != "" {
 		newType["default_path"] = schemaAddDefaultPath
 	}
+	if schemaAddDescription != "" {
+		newType["description"] = schemaAddDescription
+	}
 
 	// Handle name_field - auto-create the field if it doesn't exist
 	if nameField != "" {
@@ -179,6 +184,9 @@ func addType(vaultPath, typeName string, start time.Time) error {
 			"name":         typeName,
 			"default_path": schemaAddDefaultPath,
 		}
+		if schemaAddDescription != "" {
+			result["description"] = schemaAddDescription
+		}
 		if nameField != "" {
 			result["name_field"] = nameField
 			result["auto_created_field"] = nameField
@@ -190,6 +198,9 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	fmt.Printf("✓ Added type '%s' to schema.yaml\n", typeName)
 	if schemaAddDefaultPath != "" {
 		fmt.Printf("  default_path: %s\n", schemaAddDefaultPath)
+	}
+	if schemaAddDescription != "" {
+		fmt.Printf("  description: %s\n", schemaAddDescription)
 	}
 	if nameField != "" {
 		fmt.Printf("  name_field: %s (auto-created as required string)\n", nameField)
@@ -541,6 +552,9 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 	if schemaAddTarget != "" {
 		newField["target"] = schemaAddTarget
 	}
+	if schemaAddDescription != "" {
+		newField["description"] = schemaAddDescription
+	}
 
 	fields[fieldName] = newField
 
@@ -564,6 +578,9 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 			"field_type": fieldType,
 			"required":   schemaAddRequired,
 		}
+		if schemaAddDescription != "" {
+			result["description"] = schemaAddDescription
+		}
 		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
@@ -572,6 +589,9 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 	fmt.Printf("  type: %s\n", fieldType)
 	if schemaAddRequired {
 		fmt.Println("  required: true")
+	}
+	if schemaAddDescription != "" {
+		fmt.Printf("  description: %s\n", schemaAddDescription)
 	}
 	return nil
 }
@@ -718,6 +738,15 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 		typeNode["default_path"] = schemaUpdateDefaultPath
 		changes = append(changes, fmt.Sprintf("default_path=%s", schemaUpdateDefaultPath))
 	}
+	if schemaUpdateDescription != "" {
+		if schemaUpdateDescription == "-" || schemaUpdateDescription == "none" || schemaUpdateDescription == "\"\"" {
+			delete(typeNode, "description")
+			changes = append(changes, "removed description")
+		} else {
+			typeNode["description"] = schemaUpdateDescription
+			changes = append(changes, fmt.Sprintf("description=%s", schemaUpdateDescription))
+		}
+	}
 
 	// Handle name_field update
 	if schemaUpdateNameField != "" {
@@ -801,7 +830,7 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	if len(changes) == 0 {
-		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --default-path, --name-field, --add-trait, --remove-trait")
+		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --default-path, --description, --name-field, --add-trait, --remove-trait")
 	}
 
 	// Write back
@@ -1026,9 +1055,18 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 		fieldNode["target"] = schemaUpdateTarget
 		changes = append(changes, fmt.Sprintf("target=%s", schemaUpdateTarget))
 	}
+	if schemaUpdateDescription != "" {
+		if schemaUpdateDescription == "-" || schemaUpdateDescription == "none" || schemaUpdateDescription == "\"\"" {
+			delete(fieldNode, "description")
+			changes = append(changes, "removed description")
+		} else {
+			fieldNode["description"] = schemaUpdateDescription
+			changes = append(changes, fmt.Sprintf("description=%s", schemaUpdateDescription))
+		}
+	}
 
 	if len(changes) == 0 {
-		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --type, --required, --default")
+		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --type, --required, --default, --description")
 	}
 
 	// Write back
@@ -2312,6 +2350,7 @@ func init() {
 	// Add flags to schema add command
 	schemaAddCmd.Flags().StringVar(&schemaAddDefaultPath, "default-path", "", "Default path for new type files")
 	schemaAddCmd.Flags().StringVar(&schemaAddNameField, "name-field", "", "Field to use as display name (auto-created if doesn't exist)")
+	schemaAddCmd.Flags().StringVar(&schemaAddDescription, "description", "", "Optional description for the type or field")
 	schemaAddCmd.Flags().StringVar(&schemaAddFieldType, "type", "", "Field/trait type (string, date, enum, ref, bool)")
 	schemaAddCmd.Flags().BoolVar(&schemaAddRequired, "required", false, "Mark field as required")
 	schemaAddCmd.Flags().StringVar(&schemaAddDefault, "default", "", "Default value")
@@ -2321,6 +2360,7 @@ func init() {
 	// Add flags to schema update command
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDefaultPath, "default-path", "", "Update default path for type")
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateNameField, "name-field", "", "Set/update display name field (use '-' to remove)")
+	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDescription, "description", "", "Set/update description (use '-' to remove)")
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateFieldType, "type", "", "Update field/trait type")
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateRequired, "required", "", "Update required status (true/false)")
 	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDefault, "default", "", "Update default value")

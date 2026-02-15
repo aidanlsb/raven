@@ -374,12 +374,13 @@ raven_schema(subcommand="types")
 raven_schema(subcommand="type person")
 
 # Add to schema
-raven_schema_add_type(name="book", default_path="books/", name_field="title")
+raven_schema_add_type(name="book", default_path="books/", name_field="title", description="Books and long-form reading material")
 raven_schema_add_trait(name="priority", type="enum", values="high,medium,low")
-raven_schema_add_field(type_name="person", field_name="company", type="ref", target="company")
+raven_schema_add_field(type_name="person", field_name="company", type="ref", target="company", description="Employer or organization")
 
 # Update schema
 raven_schema_update_type(name="person", name_field="name")
+raven_schema_update_field(type_name="person", field_name="company", description="-")  # Remove description
 
 # Rename a type (preview first, then confirm)
 raven_schema_rename_type(old_name="event", new_name="meeting")  # Preview
@@ -541,4 +542,23 @@ raven_new(type="person", title="Freya")
 
 # Without name_field (must provide field explicitly)
 raven_new(type="person", title="Freya", field={"name": "Freya"})
+```
+
+---
+
+## description Feature
+
+Types and fields can include optional `description` values for extra context.
+
+```python
+# Set descriptions
+raven_schema_add_type(name="book", description="Books and long-form reading material")
+raven_schema_add_field(type_name="book", field_name="author", type="ref", target="person", description="Primary author")
+
+# Update/remove descriptions
+raven_schema_update_type(name="book", description="Reading and reference materials")
+raven_schema_update_field(type_name="book", field_name="author", description="-")  # Remove
+
+# Read descriptions in schema introspection output
+raven_schema(subcommand="type book")
 ```

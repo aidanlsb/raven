@@ -70,6 +70,8 @@ func NewSchema() *Schema {
 type TypeDefinition struct {
 	Fields      map[string]*FieldDefinition `yaml:"fields"`
 	DefaultPath string                      `yaml:"default_path,omitempty"`
+	// Description provides optional context for humans/agents about this type's purpose.
+	Description string `yaml:"description,omitempty"`
 	// NameField specifies which field serves as the display name for this type.
 	// When set, the title argument to `rvn new` will auto-populate this field.
 	// The field must be a string type. If the field doesn't exist, it will be
@@ -101,15 +103,17 @@ func (td *TraitDefinition) IsBoolean() bool {
 
 // FieldDefinition defines a field within a type or trait.
 type FieldDefinition struct {
-	Type       FieldType   `yaml:"type"`
-	Required   bool        `yaml:"required,omitempty"`
-	Default    interface{} `yaml:"default,omitempty"`
-	Values     []string    `yaml:"values,omitempty"`     // For enum types
-	Target     string      `yaml:"target,omitempty"`     // For ref types
-	Min        *float64    `yaml:"min,omitempty"`        // For number types
-	Max        *float64    `yaml:"max,omitempty"`        // For number types
-	Derived    string      `yaml:"derived,omitempty"`    // How to compute value
-	Positional bool        `yaml:"positional,omitempty"` // For traits: positional argument
+	Type     FieldType   `yaml:"type"`
+	Required bool        `yaml:"required,omitempty"`
+	Default  interface{} `yaml:"default,omitempty"`
+	Values   []string    `yaml:"values,omitempty"` // For enum types
+	Target   string      `yaml:"target,omitempty"` // For ref types
+	// Description provides optional context for humans/agents about this field.
+	Description string   `yaml:"description,omitempty"`
+	Min         *float64 `yaml:"min,omitempty"`        // For number types
+	Max         *float64 `yaml:"max,omitempty"`        // For number types
+	Derived     string   `yaml:"derived,omitempty"`    // How to compute value
+	Positional  bool     `yaml:"positional,omitempty"` // For traits: positional argument
 }
 
 // FieldType represents the type of a field.
