@@ -9,6 +9,7 @@
 package slugs
 
 import (
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -64,6 +65,7 @@ func ComponentSlug(s string) string {
 func PathSlug(path string) string {
 	// Remove .md extension if present
 	path = strings.TrimSuffix(path, ".md")
+	path = strings.ReplaceAll(filepath.ToSlash(path), "\\", "/")
 
 	parts := strings.Split(path, "/")
 	for i, part := range parts {

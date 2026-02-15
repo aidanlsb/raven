@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -208,6 +209,7 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	}
 
 	relPath, _ := filepath.Rel(opts.VaultPath, filePath)
+	relPath = filepath.ToSlash(relPath)
 
 	return &CreateResult{
 		FilePath:      filePath,
@@ -227,6 +229,15 @@ func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema
 	// Normalize roots
 	objectsRoot = paths.NormalizeDirRoot(objectsRoot)
 	pagesRoot = paths.NormalizeDirRoot(pagesRoot)
+	targetPath = strings.ReplaceAll(filepath.ToSlash(targetPath), "\\", "/")
+
+	joinWithRoot := func(root, rel string) string {
+		root = strings.TrimSuffix(root, "/")
+		if root == "" {
+			return rel
+		}
+		return path.Join(root, rel)
+	}
 
 	// If target already has a directory component, just add the appropriate root
 	if strings.Contains(targetPath, "/") {
@@ -236,7 +247,7 @@ func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema
 		}
 		// Has directory - add objects root if configured
 		if objectsRoot != "" {
-			return filepath.Join(objectsRoot, targetPath)
+			return joinWithRoot(objectsRoot, targetPath)
 		}
 		return targetPath
 	}
@@ -245,10 +256,9 @@ func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema
 	var defaultPath string
 	if sch != nil {
 		if typeDef, ok := sch.Types[typeName]; ok && typeDef != nil && typeDef.DefaultPath != "" {
-			defaultPath = typeDef.DefaultPath
+			defaultPath = strings.ReplaceAll(filepath.ToSlash(filepath.Clean(typeDef.DefaultPath)), "\\", "/")
 			// Security: validate default_path doesn't escape vault
-			defaultPath = filepath.Clean(defaultPath)
-			if strings.Contains(defaultPath, "..") || filepath.IsAbs(defaultPath) {
+			if defaultPath == "." || strings.Contains(defaultPath, "..") || filepath.IsAbs(typeDef.DefaultPath) || strings.HasPrefix(defaultPath, "/") {
 				defaultPath = ""
 			}
 		}
@@ -256,21 +266,22 @@ func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema
 
 	if defaultPath != "" {
 		// Type has a default_path - nest under objects root
+		withDefaultPath := path.Join(defaultPath, targetPath)
 		if objectsRoot != "" {
-			return filepath.Join(objectsRoot, defaultPath, targetPath)
+			return joinWithRoot(objectsRoot, withDefaultPath)
 		}
-		return filepath.Join(defaultPath, targetPath)
+		return withDefaultPath
 	}
 
 	// No default_path - use pages root for untyped pages, or objects root for typed objects
 	if typeName == "" || typeName == "page" {
 		if pagesRoot != "" {
-			return filepath.Join(pagesRoot, targetPath)
+			return joinWithRoot(pagesRoot, targetPath)
 		}
 	} else {
 		// Typed but no default_path - put in objects root
 		if objectsRoot != "" {
-			return filepath.Join(objectsRoot, targetPath)
+			return joinWithRoot(objectsRoot, targetPath)
 		}
 	}
 
