@@ -1,6 +1,6 @@
 # Workflows Reference
 
-Workflows are reusable **steps-based pipelines** defined in `raven.yaml`.
+Workflows are reusable **steps-based pipelines** defined in workflow YAML files and registered in `raven.yaml`.
 
 Workflow v3 uses a breaking, steps-only model:
 - top-level `context` / `prompt` / `outputs` are removed
@@ -11,53 +11,28 @@ Raven executes deterministic steps only. It does not call an LLM.
 
 ## Definition Location
 
-Workflows live under `workflows:` in `raven.yaml` and are keyed by name.
-Definitions can be inline or file-backed (`file:`).
+Workflows are explicitly registered under `workflows:` in `raven.yaml` and keyed by name.
+Each declaration is a file reference (`file:`). Inline workflow bodies in `raven.yaml` are not supported.
 
-### Inline Definition
+Workflow files must live under `directories.workflow` (default `workflows/`).
 
-```yaml
-workflows:
-  meeting-prep:
-    description: Prepare a brief for a meeting
-    inputs:
-      meeting_id:
-        type: ref
-        target: meeting
-        required: true
-    steps:
-      - id: meeting
-        type: tool
-        tool: raven_read
-        arguments:
-          path: "{{inputs.meeting_id}}"
-          raw: true
+### Creating via CLI/MCP (recommended for agents)
 
-      - id: mentions
-        type: tool
-        tool: raven_backlinks
-        arguments:
-          target: "{{inputs.meeting_id}}"
+Instead of editing `raven.yaml` directly, agents can create workflows with:
 
-      - id: compose
-        type: agent
-        outputs:
-          markdown:
-            type: markdown
-            required: true
-        prompt: |
-          Prepare me for this meeting.
-
-          ## Meeting
-          {{steps.meeting.data.content}}
-
-          ## Mentions
-          {{steps.mentions.data.results}}
+```bash
+rvn workflow scaffold <name>
+rvn workflow add <name> --file <directories.workflow>/<name>.yaml
+rvn workflow validate [name]
 ```
 
-### File-Backed Definition
+This gives immediate validation feedback and avoids YAML indentation mistakes.
+
+### File-Backed Declaration
 
 ```yaml
+directories:
+  workflow: workflows/
 workflows:
   meeting-prep:
     file: workflows/meeting-prep.yaml
@@ -169,6 +144,20 @@ Workflow run records are kept using `workflows.runs` settings in `raven.yaml`:
 
 ## Migrating Legacy Workflows
 
+If you have inline workflow definitions in `raven.yaml`, migrate them to files first:
+
+1. Set `directories.workflow` in `raven.yaml` if needed (default `workflows/`)
+2. Move each inline workflow body into `<directories.workflow>/<name>.yaml`
+3. Replace inline bodies with file references:
+
+```yaml
+directories:
+  workflow: workflows/
+workflows:
+  daily-brief:
+    file: workflows/daily-brief.yaml
+```
+
 Workflow v3 rejects legacy top-level keys: `context`, `prompt`, `outputs`.
 
 Migration map:
@@ -229,6 +218,10 @@ Configurable in `raven.yaml`:
 
 ```bash
 rvn workflow list
+rvn workflow scaffold <name>
+rvn workflow add <name> --file workflows/meeting-prep.yaml
+rvn workflow remove <name>
+rvn workflow validate [name]
 rvn workflow show <name>
 rvn workflow run <name> --input key=value
 rvn workflow run <name> --input-json '{"date":"2026-02-14"}'

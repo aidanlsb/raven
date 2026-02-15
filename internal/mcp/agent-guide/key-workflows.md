@@ -442,13 +442,33 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
    raven_workflow_list()
    ```
 
-2. Show workflow details:
+2. For first-time setup, scaffold a valid starter workflow:
+   ```
+   raven_workflow_scaffold(name="daily-brief")
+   raven_workflow_validate(name="daily-brief")
+   ```
+
+3. Create custom workflows without editing `raven.yaml` directly:
+   ```
+   # First scaffold a valid file under directories.workflow (default workflows/)
+   raven_workflow_scaffold(name="daily-brief")
+
+   # Then register an existing file path
+   raven_workflow_add(name="daily-brief", file="workflows/daily-brief.yaml")
+   raven_workflow_validate(name="daily-brief")
+   ```
+
+   Notes:
+   - `raven_workflow_add` is file-only (no inline definition JSON)
+   - Files must be under `directories.workflow` in `raven.yaml`
+
+4. Show workflow details:
    ```
    raven_workflow_show(name="meeting-prep")
    ```
    Returns inputs and steps.
 
-3. Run a workflow with inputs:
+5. Run a workflow with inputs:
    ```
    raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
    raven_workflow_run(name="research", input={"question": "How does auth work?"})

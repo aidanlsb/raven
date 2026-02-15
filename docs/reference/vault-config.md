@@ -18,6 +18,7 @@ auto_reindex: true
 directories:
   object: object/        # Root for typed objects
   page: page/            # Root for untyped pages
+  workflow: workflows/   # Root for workflow definition files
 
 # Quick capture settings
 capture:
@@ -39,37 +40,12 @@ queries:
     query: "object:project .status==active"
     description: "Active projects"
 
-# Workflows
+# Workflows registry (file references only)
 workflows:
   meeting-prep:
     file: workflows/meeting-prep.yaml
   research:
-    description: Research a topic
-    inputs:
-      question:
-        type: string
-        required: true
-    steps:
-      - id: results
-        type: tool
-        tool: raven_search
-        arguments:
-          query: "{{inputs.question}}"
-          limit: 10
-      - id: compose
-        type: agent
-        outputs:
-          markdown:
-            type: markdown
-            required: true
-        prompt: |
-          Return JSON: { "outputs": { "markdown": "..." } }
-
-          Answer this question based on my notes:
-          {{inputs.question}}
-
-          ## Relevant notes
-          {{steps.results.data.results}}
+    file: workflows/research.yaml
 
   # Workflow run checkpoint retention
   runs:
@@ -331,58 +307,48 @@ See `reference/query-language.md` for query syntax.
 
 ---
 
-### `workflows`
+### `directories.workflow`
 
-Define reusable steps-based workflows for agents.
+Workflow file root under the `directories` config block.
 
-Workflows can be defined inline or reference external files:
-
-**Inline definition:**
+| Type | Default |
+|------|---------|
+| string | `"workflows/"` |
 
 ```yaml
-workflows:
-  meeting-prep:
-    description: Prepare for a meeting
-    inputs:
-      meeting_id:
-        type: ref
-        target: meeting
-        required: true
-    steps:
-      - id: meeting
-        type: tool
-        tool: raven_read
-        arguments:
-          path: "{{inputs.meeting_id}}"
-          raw: true
-      - id: mentions
-        type: tool
-        tool: raven_backlinks
-        arguments:
-          target: "{{inputs.meeting_id}}"
-      - id: compose
-        type: agent
-        outputs:
-          markdown:
-            type: markdown
-            required: true
-        prompt: |
-          Prepare me for this meeting.
-
-          ## Meeting
-          {{steps.meeting.data.content}}
-
-          ## Mentions
-          {{steps.mentions.data.results}}
+directories:
+  workflow: workflows/
 ```
 
-**File reference:**
+Workflow files referenced in `workflows.<name>.file` must live under this directory.
+Set this when you want a different workflow root (for example `automation/workflows/`).
+
+---
+
+### `workflows`
+
+Define reusable workflow declarations as a name -> file registry.
+
+For agent-friendly creation (without manual YAML edits), use:
+- `rvn workflow scaffold <name>`
+- `rvn workflow add <name> --file <directories.workflow>/<name>.yaml`
+- `rvn workflow validate [name]`
+
+Declarations are file references only:
 
 ```yaml
+directories:
+  workflow: workflows/
 workflows:
   meeting-prep:
     file: workflows/meeting-prep.yaml
 ```
+
+Inline workflow bodies in `raven.yaml` are not supported.
+
+Migration note:
+- Move each inline workflow body into its own YAML file under `directories.workflow`
+- Keep only `workflows.<name>.file` entries in `raven.yaml`
 
 Legacy top-level workflow keys (`context`, `prompt`, `outputs`) are not supported in workflow v3.
 
@@ -448,6 +414,15 @@ queries:
   active-projects:
     query: "object:project .status==active"
     description: "Projects with status active"
+
+# Optional directories
+# directories:
+#   workflow: workflows/
+
+# Workflows registry
+workflows:
+  onboard:
+    file: workflows/onboard.yaml
 ```
 
 ---

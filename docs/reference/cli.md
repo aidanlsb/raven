@@ -1240,6 +1240,109 @@ Lists all workflows defined in `raven.yaml` with their descriptions and required
 
 ---
 
+### `rvn workflow add`
+
+Add a workflow definition to `raven.yaml`.
+
+```bash
+rvn workflow add <name> --file <directories.workflow>/name.yaml
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Workflow name to create |
+
+| Flag | Description |
+|------|-------------|
+| `--file` | Path to an external workflow YAML file (vault-relative, must be under `directories.workflow`) |
+
+**Examples:**
+
+```bash
+rvn workflow add meeting-prep --file workflows/meeting-prep.yaml
+```
+
+**Notes:**
+- Workflow declarations are file references only
+- The referenced file must be under `directories.workflow` (default: `workflows/`)
+- The workflow file is validated before being saved
+- This is the recommended MCP-safe way to create workflows without direct file editing
+
+---
+
+### `rvn workflow scaffold`
+
+Scaffold a starter workflow file and register it in `raven.yaml`.
+
+```bash
+rvn workflow scaffold <name> [--file <directories.workflow>/name.yaml] [--description "..."] [--force]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Workflow name to scaffold |
+
+| Flag | Description |
+|------|-------------|
+| `--file` | Path for scaffolded workflow file (vault-relative, must be under `directories.workflow`). Default: `<directories.workflow>/<name>.yaml` |
+| `--description` | Description for the scaffolded workflow |
+| `--force` | Overwrite scaffold file if it already exists |
+
+**Examples:**
+
+```bash
+rvn workflow scaffold daily-brief
+rvn workflow scaffold meeting-prep --file workflows/meeting-prep.yaml --description "Prepare for meetings"
+```
+
+**Notes:**
+- Creates a valid steps-based v3 workflow template with one `tool` step and one `agent` step
+- Automatically adds `workflows.<name>.file` to `raven.yaml`
+- Honors `directories.workflow` from `raven.yaml` when choosing defaults and validating paths
+- Good default for first-time workflow setup in MCP environments
+
+---
+
+### `rvn workflow remove`
+
+Remove a workflow definition from `raven.yaml`.
+
+```bash
+rvn workflow remove <name>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Workflow name to remove |
+
+---
+
+### `rvn workflow validate`
+
+Validate one workflow or all workflows defined in `raven.yaml`.
+
+```bash
+rvn workflow validate [name]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Optional workflow name (omit to validate all workflows) |
+
+**Examples:**
+
+```bash
+rvn workflow validate
+rvn workflow validate meeting-prep
+```
+
+Reports policy and syntax issues, including:
+- inline declarations that should be migrated to files
+- workflow files outside configured `directories.workflow`
+- invalid workflow YAML structure
+
+---
+
 ### `rvn workflow show`
 
 Show workflow details.

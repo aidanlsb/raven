@@ -33,7 +33,7 @@ type VaultConfig struct {
 	Queries map[string]*SavedQuery `yaml:"queries,omitempty"`
 
 	// Workflows defines reusable multi-step workflows.
-	// Can be inline definitions or references to external files.
+	// Declarations are file references keyed by workflow name.
 	Workflows map[string]*WorkflowRef `yaml:"workflows,omitempty"`
 
 	// WorkflowRuns configures persisted workflow run checkpoints and retention.
@@ -69,6 +69,21 @@ func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
 	for i := 0; i < len(value.Content)-1; i += 2 {
 		key := value.Content[i]
 		val := value.Content[i+1]
+
+		// Backwards compatibility: migrate top-level workflow_directory into directories.workflow.
+		if key.Value == "workflow_directory" {
+			legacyDir := strings.TrimSpace(val.Value)
+			if legacyDir != "" {
+				if vc.Directories == nil {
+					vc.Directories = &DirectoriesConfig{}
+				}
+				if vc.Directories.Workflow == "" && vc.Directories.Workflows == "" {
+					vc.Directories.Workflow = legacyDir
+				}
+			}
+			continue
+		}
+
 		if key.Value != "workflows" || val.Kind != yaml.MappingNode {
 			continue
 		}
@@ -127,11 +142,19 @@ type DirectoriesConfig struct {
 	// If empty, defaults to the same as Object.
 	Page string `yaml:"page,omitempty"`
 
+	// Workflow is the root directory for workflow definition files
+	// referenced by workflows.<name>.file declarations.
+	// If empty, defaults to "workflows/".
+	Workflow string `yaml:"workflow,omitempty"`
+
 	// Deprecated: use Object instead. Kept for backwards compatibility.
 	Objects string `yaml:"objects,omitempty"`
 
 	// Deprecated: use Page instead. Kept for backwards compatibility.
 	Pages string `yaml:"pages,omitempty"`
+
+	// Deprecated: use Workflow instead. Kept for backwards compatibility.
+	Workflows string `yaml:"workflows,omitempty"`
 }
 
 // GetDirectoriesConfig returns the directories config with defaults applied.
@@ -151,10 +174,14 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	if cfg.Page == "" && cfg.Pages != "" {
 		cfg.Page = cfg.Pages
 	}
+	if cfg.Workflow == "" && cfg.Workflows != "" {
+		cfg.Workflow = cfg.Workflows
+	}
 
 	// Normalize paths: ensure trailing slash and no leading slash.
 	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
+	cfg.Workflow = paths.NormalizeDirRoot(cfg.Workflow)
 
 	// If page root is omitted, default it to object root.
 	// This keeps "all notes under one root" configs simple:
@@ -167,6 +194,7 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	// Clear deprecated fields after normalization to avoid confusion
 	cfg.Objects = ""
 	cfg.Pages = ""
+	cfg.Workflows = ""
 
 	return &cfg
 }
@@ -382,6 +410,8 @@ func intPtr(i int) *int {
 	return &i
 }
 
+const defaultWorkflowDirectory = "workflows/"
+
 // GetWorkflowRunsConfig returns workflow run checkpoint settings with defaults applied.
 func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
 	defaults := ResolvedWorkflowRunsConfig{
@@ -426,6 +456,34 @@ func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
 		defaults.PreserveLatestPerWorkflow = *cfg.PreserveLatestPerWorkflow
 	}
 	return defaults
+}
+
+// GetWorkflowDirectory returns the configured workflow directory with defaults applied.
+// The result is always normalized as a vault-relative directory with trailing slash.
+func (vc *VaultConfig) GetWorkflowDirectory() string {
+	dir := defaultWorkflowDirectory
+	if vc != nil && vc.Directories != nil {
+		raw := vc.Directories.Workflow
+		if raw == "" {
+			raw = vc.Directories.Workflows
+		}
+		if raw != "" {
+			dir = raw
+		}
+	}
+
+	normalized := paths.NormalizeDirRoot(dir)
+	if normalized == "" {
+		return defaultWorkflowDirectory
+	}
+
+	cleaned := filepath.ToSlash(filepath.Clean(normalized))
+	cleaned = strings.TrimPrefix(cleaned, "./")
+	cleaned = strings.TrimPrefix(cleaned, "/")
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return defaultWorkflowDirectory
+	}
+	return paths.NormalizeDirRoot(cleaned)
 }
 
 // SavedQuery defines a saved query using the Raven query language.
@@ -538,72 +596,17 @@ queries:
     query: "object:project .status==active"
     description: "Projects with status active"
 
-# Workflows - reusable steps-based workflows for agents
-# Run with 'rvn workflow run <name>' or via MCP raven_workflow_run
+# Optional directory settings
+# directories:
+#   object: object/
+#   page: page/
+#   workflow: workflows/
+
+# Workflows registry - declarations are file references only
+# Workflow definitions live in directories.workflow (default: workflows/)
 workflows:
-  # Interactive vault setup wizard
-  # Guides agents through personalizing the schema and creating initial content
   onboard:
-    description: "Interactive vault setup and onboarding"
-    steps:
-      - id: onboard-agent
-        type: agent
-        outputs:
-          markdown:
-            type: markdown
-            required: true
-        prompt: |
-          You are helping the user set up their Raven vault. This is a fresh vault with default configuration.
-
-          Your goal is to understand what they want to track and customize the schema accordingly.
-
-          ## Interview Questions
-
-          Ask these questions conversationally (not all at once):
-
-          1. **What do you want to use this vault for?**
-             Examples: work projects, personal tasks, reading notes, meeting notes, research, recipes, contacts, etc.
-
-          2. **What kinds of things do you want to track?**
-             These become types. Listen for nouns: projects, people, books, articles, meetings, decisions, etc.
-
-          3. **What metadata matters to you?**
-             These become fields or traits. Listen for: deadlines, priorities, status, tags, ratings, etc.
-
-          4. **Do you want daily notes?**
-             The vault already supports these. Ask if they want to use them for journaling, standups, logs, etc.
-
-          5. **What are 2-3 concrete things you're working on right now?**
-             Use these to create seed content that makes the vault immediately useful.
-
-          ## Actions to Take
-
-          Based on their answers:
-
-          1. **Create types** using raven_schema_add_type for each kind of object they want to track
-             - Set appropriate name_field and default_path
-             - Add relevant fields
-
-          2. **Create traits** using raven_schema_add_trait for cross-cutting annotations
-             - @due, @priority, @status are already in the default schema
-             - Add custom ones based on their needs (e.g., @rating, @context, @energy)
-
-          3. **Create 2-3 seed objects** using raven_new based on what they're currently working on
-             - This demonstrates the system and gives them something to query
-
-          4. **Show a sample query** using raven_query to demonstrate immediate value
-             - Query something they just created
-
-          5. **Suggest useful saved queries** and offer to add them with raven_query_add
-
-          ## Important Guidelines
-
-          - Be conversational, not robotic. This is a dialog, not a form.
-          - Start simple. Don't overwhelm with options - let complexity emerge from their needs.
-          - Explain as you go. Help them understand why you're creating each type/trait.
-          - The default schema already has: person, project types and due, priority, status, highlight, pinned, archived traits.
-          - Build on defaults rather than replacing them unless they ask.
-          - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
+    file: workflows/onboard.yaml
 
 # Workflow run checkpoint retention
 # Add this under the top-level workflows block
@@ -619,6 +622,77 @@ workflows:
 
 	if err := atomicfile.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {
 		return false, fmt.Errorf("failed to write vault config: %w", err)
+	}
+
+	workflowDir := filepath.Join(vaultPath, "workflows")
+	if err := os.MkdirAll(workflowDir, 0o755); err != nil {
+		return false, fmt.Errorf("failed to create default workflow directory: %w", err)
+	}
+
+	defaultOnboardWorkflow := `description: "Interactive vault setup and onboarding"
+steps:
+  - id: onboard-agent
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      You are helping the user set up their Raven vault. This is a fresh vault with default configuration.
+
+      Your goal is to understand what they want to track and customize the schema accordingly.
+
+      ## Interview Questions
+
+      Ask these questions conversationally (not all at once):
+
+      1. **What do you want to use this vault for?**
+         Examples: work projects, personal tasks, reading notes, meeting notes, research, recipes, contacts, etc.
+
+      2. **What kinds of things do you want to track?**
+         These become types. Listen for nouns: projects, people, books, articles, meetings, decisions, etc.
+
+      3. **What metadata matters to you?**
+         These become fields or traits. Listen for: deadlines, priorities, status, tags, ratings, etc.
+
+      4. **Do you want daily notes?**
+         The vault already supports these. Ask if they want to use them for journaling, standups, logs, etc.
+
+      5. **What are 2-3 concrete things you're working on right now?**
+         Use these to create seed content that makes the vault immediately useful.
+
+      ## Actions to Take
+
+      Based on their answers:
+
+      1. **Create types** using raven_schema_add_type for each kind of object they want to track
+         - Set appropriate name_field and default_path
+         - Add relevant fields
+
+      2. **Create traits** using raven_schema_add_trait for cross-cutting annotations
+         - @due, @priority, @status are already in the default schema
+         - Add custom ones based on their needs (e.g., @rating, @context, @energy)
+
+      3. **Create 2-3 seed objects** using raven_new based on what they're currently working on
+         - This demonstrates the system and gives them something to query
+
+      4. **Show a sample query** using raven_query to demonstrate immediate value
+         - Query something they just created
+
+      5. **Suggest useful saved queries** and offer to add them with raven_query_add
+
+      ## Important Guidelines
+
+      - Be conversational, not robotic. This is a dialog, not a form.
+      - Start simple. Don't overwhelm with options - let complexity emerge from their needs.
+      - Explain as you go. Help them understand why you're creating each type/trait.
+      - The default schema already has: person, project types and due, priority, status, highlight, pinned, archived traits.
+      - Build on defaults rather than replacing them unless they ask.
+      - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
+`
+	onboardPath := filepath.Join(workflowDir, "onboard.yaml")
+	if err := atomicfile.WriteFile(onboardPath, []byte(defaultOnboardWorkflow), 0o644); err != nil {
+		return false, fmt.Errorf("failed to write default onboard workflow: %w", err)
 	}
 
 	return true, nil

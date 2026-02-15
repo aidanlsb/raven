@@ -258,6 +258,40 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantCmd:  "workflow",
 			wantArgs: []string{"continue", "wrf_abc123", "--agent-output-json", "--expected-revision", "2", "--json"},
 		},
+		{
+			toolName: "raven_workflow_add",
+			args: map[string]interface{}{
+				"name": "daily-brief",
+				"file": "workflows/daily-brief.yaml",
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"add", "daily-brief", "--file", "workflows/daily-brief.yaml", "--json"},
+		},
+		{
+			toolName: "raven_workflow_scaffold",
+			args: map[string]interface{}{
+				"name":        "daily-brief",
+				"description": "Daily brief scaffold",
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"scaffold", "daily-brief", "--description", "Daily brief scaffold", "--json"},
+		},
+		{
+			toolName: "raven_workflow_remove",
+			args: map[string]interface{}{
+				"name": "daily-brief",
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"remove", "daily-brief", "--json"},
+		},
+		{
+			toolName: "raven_workflow_validate",
+			args: map[string]interface{}{
+				"name": "daily-brief",
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"validate", "daily-brief", "--json"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -319,6 +353,10 @@ func TestCLICommandNameConversion(t *testing.T) {
 		{"raven_schema_add_trait", "schema add trait"},
 		{"raven_schema_add_field", "schema add field"},
 		{"raven_schema_validate", "schema validate"},
+		{"raven_workflow_add", "workflow add"},
+		{"raven_workflow_scaffold", "workflow scaffold"},
+		{"raven_workflow_remove", "workflow remove"},
+		{"raven_workflow_validate", "workflow validate"},
 		{"raven_workflow_continue", "workflow continue"},
 		{"raven_workflow_runs_list", "workflow runs list"},
 	}
