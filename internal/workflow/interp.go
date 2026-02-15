@@ -13,7 +13,7 @@ import (
 // - Escaping: \{{ and \}} produce literal braces.
 // - Unknown variables are errors (to avoid silent typos).
 func Interpolate(s string, inputs map[string]string, steps map[string]interface{}) (string, error) {
-	return interpolate(s, inputs, steps)
+	return interpolateWithTypedInputs(s, stringInputsToAny(inputs), steps)
 }
 
 // InterpolateObject applies interpolation recursively across a JSON-like object.
@@ -21,7 +21,18 @@ func Interpolate(s string, inputs map[string]string, steps map[string]interface{
 // If a string value is exactly a single interpolation expression like "{{steps.x}}",
 // the resolved value is preserved as its native type (object/array/bool/number/string).
 func InterpolateObject(obj map[string]interface{}, inputs map[string]string, steps map[string]interface{}) (map[string]interface{}, error) {
-	return interpolateObject(obj, inputs, steps)
+	return interpolateObjectWithTypedInputs(obj, stringInputsToAny(inputs), steps)
+}
+
+func stringInputsToAny(inputs map[string]string) map[string]interface{} {
+	if inputs == nil {
+		return map[string]interface{}{}
+	}
+	out := make(map[string]interface{}, len(inputs))
+	for k, v := range inputs {
+		out[k] = v
+	}
+	return out
 }
 
 // interpolate replaces {{inputs.*}} and {{steps.*}} references inside s.
@@ -29,7 +40,7 @@ func InterpolateObject(obj map[string]interface{}, inputs map[string]string, ste
 // Rules:
 // - Escaping: \{{ and \}} produce literal braces.
 // - Unknown variables are errors (to avoid silent typos).
-func interpolate(s string, inputs map[string]string, steps map[string]interface{}) (string, error) {
+func interpolateWithTypedInputs(s string, inputs map[string]interface{}, steps map[string]interface{}) (string, error) {
 	var out strings.Builder
 	out.Grow(len(s))
 
@@ -61,7 +72,7 @@ func interpolate(s string, inputs map[string]string, steps map[string]interface{
 			expr := strings.TrimSpace(s[i+2 : end])
 			i = end + 2
 
-			val, ok, err := resolveExpr(expr, inputs, steps)
+			val, ok, err := resolveExprTyped(expr, inputs, steps)
 			if err != nil {
 				errs = append(errs, err.Error())
 				out.WriteString("{{" + expr + "}}")
@@ -87,6 +98,15 @@ func interpolate(s string, inputs map[string]string, steps map[string]interface{
 }
 
 func resolveExpr(expr string, inputs map[string]string, steps map[string]interface{}) (string, bool, error) {
+	typed := stringInputsToAny(inputs)
+	raw, ok, err := resolveExprRaw(expr, typed, steps)
+	if err != nil || !ok {
+		return "", ok, err
+	}
+	return formatForPrompt(raw), true, nil
+}
+
+func resolveExprTyped(expr string, inputs map[string]interface{}, steps map[string]interface{}) (string, bool, error) {
 	raw, ok, err := resolveExprRaw(expr, inputs, steps)
 	if err != nil || !ok {
 		return "", ok, err
@@ -94,7 +114,7 @@ func resolveExpr(expr string, inputs map[string]string, steps map[string]interfa
 	return formatForPrompt(raw), true, nil
 }
 
-func resolveExprRaw(expr string, inputs map[string]string, steps map[string]interface{}) (interface{}, bool, error) {
+func resolveExprRaw(expr string, inputs map[string]interface{}, steps map[string]interface{}) (interface{}, bool, error) {
 	if strings.HasPrefix(expr, "inputs.") {
 		key := strings.TrimPrefix(expr, "inputs.")
 		if key == "" {
@@ -149,7 +169,7 @@ func resolveStepPath(steps map[string]interface{}, path string) (interface{}, bo
 	return cur, true
 }
 
-func interpolateObject(obj map[string]interface{}, inputs map[string]string, steps map[string]interface{}) (map[string]interface{}, error) {
+func interpolateObjectWithTypedInputs(obj map[string]interface{}, inputs map[string]interface{}, steps map[string]interface{}) (map[string]interface{}, error) {
 	if obj == nil {
 		return nil, nil
 	}
@@ -164,7 +184,7 @@ func interpolateObject(obj map[string]interface{}, inputs map[string]string, ste
 	return out, nil
 }
 
-func interpolateValue(v interface{}, inputs map[string]string, steps map[string]interface{}) (interface{}, error) {
+func interpolateValue(v interface{}, inputs map[string]interface{}, steps map[string]interface{}) (interface{}, error) {
 	switch t := v.(type) {
 	case string:
 		if expr, ok := extractExactInterpolationExpr(t); ok {
@@ -177,9 +197,9 @@ func interpolateValue(v interface{}, inputs map[string]string, steps map[string]
 			}
 			return raw, nil
 		}
-		return interpolate(t, inputs, steps)
+		return interpolateWithTypedInputs(t, inputs, steps)
 	case map[string]interface{}:
-		return interpolateObject(t, inputs, steps)
+		return interpolateObjectWithTypedInputs(t, inputs, steps)
 	case []interface{}:
 		arr := make([]interface{}, len(t))
 		for i, item := range t {
