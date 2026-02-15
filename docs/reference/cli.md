@@ -189,6 +189,7 @@ rvn learn next
 **Notes:**
 - Prerequisites are advisory only (never blocking)
 - Use `rvn learn open <lesson_id>` to revisit content any time
+- Lesson authoring and mapping conventions: `reference/lessons.md`
 
 ---
 

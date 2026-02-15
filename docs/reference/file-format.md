@@ -2,6 +2,11 @@
 
 Raven files are plain markdown with optional YAML frontmatter and optional embedded type declarations.
 
+## Related Lessons
+
+- `objects` - Open with `rvn learn open objects`
+- `refs` - Open with `rvn learn open refs`
+
 ## File Structure Overview
 
 ```markdown

@@ -2,6 +2,9 @@
 title: Linking with Refs
 prereqs:
   - objects
+docs:
+  - docs/reference/file-format.md#references
+  - docs/reference/query-language.md#object-query-predicates
 ---
 
 # Linking with Refs

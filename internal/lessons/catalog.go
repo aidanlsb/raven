@@ -38,6 +38,7 @@ type Lesson struct {
 	ID      string
 	Title   string
 	Prereqs []string
+	Docs    []string
 	Content string
 }
 
@@ -54,6 +55,7 @@ type syllabusSection struct {
 type lessonFrontmatter struct {
 	Title   string   `yaml:"title"`
 	Prereqs []string `yaml:"prereqs"`
+	Docs    []string `yaml:"docs"`
 }
 
 // LoadCatalog loads the embedded lessons catalog.
@@ -190,6 +192,7 @@ func parseLessonMarkdown(lessonID, raw string) (Lesson, error) {
 		ID:      lessonID,
 		Title:   title,
 		Prereqs: normalizeLessonIDs(fm.Prereqs),
+		Docs:    normalizeLessonDocLinks(fm.Docs),
 		Content: body,
 	}, nil
 }
@@ -204,6 +207,20 @@ func normalizeLessonIDs(ids []string) []string {
 		}
 		seen[id] = true
 		out = append(out, id)
+	}
+	return out
+}
+
+func normalizeLessonDocLinks(docs []string) []string {
+	out := make([]string, 0, len(docs))
+	seen := map[string]bool{}
+	for _, raw := range docs {
+		doc := strings.TrimSpace(raw)
+		if doc == "" || seen[doc] {
+			continue
+		}
+		seen[doc] = true
+		out = append(out, doc)
 	}
 	return out
 }

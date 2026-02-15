@@ -87,12 +87,17 @@ var learnOpenCmd = &cobra.Command{
 		prereqs := buildLearnPrereqViews(catalog, progress, lesson)
 
 		if isJSONOutput() {
+			lessonData := map[string]interface{}{
+				"id":      lesson.ID,
+				"title":   lesson.Title,
+				"content": lesson.Content,
+			}
+			if len(lesson.Docs) > 0 {
+				lessonData["docs"] = lesson.Docs
+			}
+
 			outputSuccess(map[string]interface{}{
-				"lesson": map[string]interface{}{
-					"id":      lesson.ID,
-					"title":   lesson.Title,
-					"content": lesson.Content,
-				},
+				"lesson":  lessonData,
 				"prereqs": prereqs,
 			}, nil)
 			return nil
@@ -102,6 +107,14 @@ var learnOpenCmd = &cobra.Command{
 		fmt.Print(lesson.Content)
 		if lesson.Content != "" && !strings.HasSuffix(lesson.Content, "\n") {
 			fmt.Println()
+		}
+
+		if len(lesson.Docs) > 0 {
+			fmt.Println()
+			fmt.Println("Further reading:")
+			for _, doc := range lesson.Docs {
+				fmt.Printf("- %s\n", doc)
+			}
 		}
 
 		if len(prereqs) > 0 {

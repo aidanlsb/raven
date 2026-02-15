@@ -92,3 +92,49 @@ prereqs:
 		t.Fatalf("expected unknown prerequisite error, got: %v", err)
 	}
 }
+
+func TestLoadCatalogParsesAndNormalizesDocsFrontmatter(t *testing.T) {
+	fsys := fstest.MapFS{
+		"defaults/syllabus.yaml": {
+			Data: []byte(`sections:
+  - id: foundations
+    title: Foundations
+    lessons:
+      - objects
+`),
+		},
+		"defaults/lessons/objects.md": {
+			Data: []byte(`---
+title: Objects
+docs:
+  - docs/guide/core-concepts.md#files-are-objects
+  - " docs/reference/file-format.md#frontmatter "
+  - docs/guide/core-concepts.md#files-are-objects
+  - ""
+---
+
+# Objects
+`),
+		},
+	}
+
+	catalog, err := loadCatalogFromFS(fsys)
+	if err != nil {
+		t.Fatalf("loadCatalogFromFS() error = %v", err)
+	}
+
+	lesson, ok := catalog.LessonByID("objects")
+	if !ok {
+		t.Fatalf("expected objects lesson")
+	}
+
+	if len(lesson.Docs) != 2 {
+		t.Fatalf("expected 2 unique docs, got %d: %#v", len(lesson.Docs), lesson.Docs)
+	}
+	if lesson.Docs[0] != "docs/guide/core-concepts.md#files-are-objects" {
+		t.Fatalf("unexpected first docs link: %q", lesson.Docs[0])
+	}
+	if lesson.Docs[1] != "docs/reference/file-format.md#frontmatter" {
+		t.Fatalf("unexpected second docs link: %q", lesson.Docs[1])
+	}
+}
