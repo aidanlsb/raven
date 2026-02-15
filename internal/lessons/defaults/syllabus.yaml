@@ -1,0 +1,6 @@
+sections:
+  - id: foundations
+    title: Foundations
+    lessons:
+      - objects
+      - refs
