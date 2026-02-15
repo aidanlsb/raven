@@ -93,6 +93,9 @@ func GenerateCobraCommand(name string, handler Handler) *cobra.Command {
 		case FlagTypeStringSlice:
 			// StringArray for repeatable string flags
 			cmd.Flags().StringArray(flag.Name, nil, flag.Description)
+		case FlagTypeJSON:
+			// JSON payloads are passed as string flags.
+			cmd.Flags().String(flag.Name, flag.Default, flag.Description)
 		case FlagTypePosKeyValue:
 			// Positional key=value args are not Cobra flags.
 			// (This exists in the registry primarily for MCP schema generation.)
@@ -138,6 +141,9 @@ func GenerateCobraCommand(name string, handler Handler) *cobra.Command {
 					flags[flag.Name] = val
 				case FlagTypeStringSlice:
 					val, _ := cmd.Flags().GetStringArray(flag.Name)
+					flags[flag.Name] = val
+				case FlagTypeJSON:
+					val, _ := cmd.Flags().GetString(flag.Name)
 					flags[flag.Name] = val
 				case FlagTypePosKeyValue:
 					// Positional key=value args are in args, not flags.

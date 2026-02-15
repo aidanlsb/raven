@@ -44,6 +44,7 @@ const (
 	FlagTypeKeyValue    FlagType = "key=value"     // For repeatable flags: --field name=value, --input name=value
 	FlagTypePosKeyValue FlagType = "pos-key=value" // For positional key=value args (e.g., `set <id> field=value...`)
 	FlagTypeStringSlice FlagType = "stringSlice"   // For repeatable string flags
+	FlagTypeJSON        FlagType = "json"          // JSON object payloads
 )
 
 // Registry holds all registered commands.
@@ -1169,13 +1170,70 @@ When an agent step is reached, this command returns:
 		},
 		Flags: []FlagMeta{
 			{Name: "input", Description: "Set input value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"meeting_id=meetings/alice-1on1", "question=How does auth work?"}},
+			{Name: "input-json", Description: "Set workflow inputs as a JSON object", Type: FlagTypeJSON, Examples: []string{`{"meeting_id":"meetings/alice-1on1","focus":"decisions"}`}},
+			{Name: "input-file", Description: "Read workflow inputs from JSON file", Type: FlagTypeString, Examples: []string{"./inputs.json"}},
 		},
 		Examples: []string{
 			"rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1 --json",
+			"rvn workflow run meeting-prep --input-json '{\"meeting_id\":\"meetings/alice-1on1\"}' --json",
 		},
 		UseCases: []string{
 			"Get a pre-formatted prompt and grounded context for agent execution",
 			"Run deterministic pre-processing before an agent step",
+		},
+	},
+	"workflow_continue": {
+		Name:        "workflow continue",
+		Description: "Continue a paused workflow run",
+		LongDesc: `Continues a paused workflow run by validating and applying agent output JSON,
+then executing subsequent deterministic steps until the next agent step or completion.`,
+		Args: []ArgMeta{
+			{Name: "run-id", Description: "Workflow run ID to continue", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "agent-output-json", Description: "Agent output JSON object with required top-level 'outputs' key", Type: FlagTypeJSON, Examples: []string{`{"outputs":{"markdown":"..."}}`}},
+			{Name: "agent-output-file", Description: "Read agent output JSON from file", Type: FlagTypeString, Examples: []string{"./agent-output.json"}},
+			{Name: "expected-revision", Description: "Expected run revision for optimistic concurrency", Type: FlagTypeInt},
+		},
+		Examples: []string{
+			"rvn workflow continue wrf_abcd1234 --agent-output-json '{\"outputs\":{\"markdown\":\"...\"}}' --json",
+		},
+		UseCases: []string{
+			"Resume a workflow after external agent execution",
+			"Enforce optimistic concurrency when multiple workers may continue the same run",
+		},
+	},
+	"workflow_runs_list": {
+		Name:        "workflow runs list",
+		Description: "List persisted workflow runs",
+		LongDesc:    `Lists workflow run checkpoints from storage, optionally filtered by workflow name and status.`,
+		Flags: []FlagMeta{
+			{Name: "workflow", Description: "Filter by workflow name", Type: FlagTypeString},
+			{Name: "status", Description: "Filter by status (comma-separated)", Type: FlagTypeString, Examples: []string{"awaiting_agent", "completed,failed"}},
+		},
+		Examples: []string{
+			"rvn workflow runs list --status awaiting_agent --json",
+		},
+		UseCases: []string{
+			"Find paused runs waiting for agent output",
+			"Inspect run history and status",
+		},
+	},
+	"workflow_runs_prune": {
+		Name:        "workflow runs prune",
+		Description: "Prune persisted workflow runs",
+		LongDesc:    `Prunes workflow run checkpoints by status and age. Preview-only by default; use --confirm to apply deletions.`,
+		Flags: []FlagMeta{
+			{Name: "status", Description: "Prune only statuses (comma-separated)", Type: FlagTypeString, Examples: []string{"completed", "completed,failed"}},
+			{Name: "older-than", Description: "Prune records older than duration (e.g., 72h, 14d)", Type: FlagTypeString},
+			{Name: "confirm", Description: "Apply deletion (without this flag, previews only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn workflow runs prune --status completed --older-than 14d --confirm --json",
+		},
+		UseCases: []string{
+			"Clean up stale workflow runs",
+			"Manually enforce storage limits",
 		},
 	},
 	"last": {

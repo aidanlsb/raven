@@ -177,6 +177,25 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantCmd:  "schema",
 			wantArgs: []string{"add", "type", "meeting", "--default-path", "meetings/", "--json"},
 		},
+		{
+			toolName: "raven_workflow_run",
+			args: map[string]interface{}{
+				"name":       "daily-brief",
+				"input-json": map[string]interface{}{"date": "2026-02-14"},
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"run", "daily-brief", "--input-json", "--json"},
+		},
+		{
+			toolName: "raven_workflow_continue",
+			args: map[string]interface{}{
+				"run-id":            "wrf_abc123",
+				"agent-output-json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "done"}},
+				"expected-revision": float64(2),
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"continue", "wrf_abc123", "--agent-output-json", "--expected-revision", "2", "--json"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -238,6 +257,8 @@ func TestCLICommandNameConversion(t *testing.T) {
 		{"raven_schema_add_trait", "schema add trait"},
 		{"raven_schema_add_field", "schema add field"},
 		{"raven_schema_validate", "schema validate"},
+		{"raven_workflow_continue", "workflow continue"},
+		{"raven_workflow_runs_list", "workflow runs list"},
 	}
 
 	for _, tt := range tests {

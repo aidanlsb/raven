@@ -71,6 +71,16 @@ workflows:
           ## Relevant notes
           {{steps.results.data.results}}
 
+  # Workflow run checkpoint retention
+  runs:
+    storage_path: .raven/workflow-runs
+    auto_prune: true
+    keep_completed_for_days: 7
+    keep_failed_for_days: 14
+    keep_awaiting_for_days: 30
+    max_runs: 1000
+    preserve_latest_per_workflow: 5
+
 # Additional protected/system prefixes (additive).
 # Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
 # protected_prefixes:
@@ -377,6 +387,34 @@ workflows:
 Legacy top-level workflow keys (`context`, `prompt`, `outputs`) are not supported in workflow v3.
 
 See `reference/workflows.md` for complete workflow documentation.
+
+---
+
+### `workflows.runs`
+
+Configure persisted workflow run checkpoints and retention.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `storage_path` | string | `.raven/workflow-runs` | Vault-relative directory for run records |
+| `auto_prune` | boolean | `true` | Prune records on `workflow run` / `workflow continue` |
+| `keep_completed_for_days` | integer | `7` | TTL for completed runs |
+| `keep_failed_for_days` | integer | `14` | TTL for failed runs |
+| `keep_awaiting_for_days` | integer | `30` | TTL for awaiting-agent runs |
+| `max_runs` | integer | `1000` | Hard cap on total stored runs |
+| `preserve_latest_per_workflow` | integer | `5` | Keep newest N per workflow when pruning for cap |
+
+```yaml
+workflows:
+  runs:
+    storage_path: .raven/workflow-runs
+    auto_prune: true
+    keep_completed_for_days: 7
+    keep_failed_for_days: 14
+    keep_awaiting_for_days: 30
+    max_runs: 1000
+    preserve_latest_per_workflow: 5
+```
 
 ---
 

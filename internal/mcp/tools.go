@@ -2,6 +2,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -52,6 +53,8 @@ func GenerateToolSchemas() []Tool {
 				prop["type"] = "boolean"
 			case commands.FlagTypeInt:
 				prop["type"] = "integer"
+			case commands.FlagTypeJSON:
+				prop["type"] = "object"
 			case commands.FlagTypeKeyValue, commands.FlagTypePosKeyValue:
 				prop["type"] = "object"
 				prop["description"] = flag.Description + " (key-value object)"
@@ -137,6 +140,12 @@ func CLICommandName(toolName string) string {
 		return "workflow show"
 	case "workflow_run":
 		return "workflow run"
+	case "workflow_continue":
+		return "workflow continue"
+	case "workflow_runs_list":
+		return "workflow runs list"
+	case "workflow_runs_prune":
+		return "workflow runs prune"
 	}
 
 	return toolName
@@ -207,6 +216,18 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 					if item != "" {
 						cliArgs = append(cliArgs, "--"+flag.Name, item)
 					}
+				}
+			}
+		case commands.FlagTypeJSON:
+			switch typed := val.(type) {
+			case string:
+				if strings.TrimSpace(typed) != "" {
+					cliArgs = append(cliArgs, "--"+flag.Name, typed)
+				}
+			default:
+				b, err := json.Marshal(typed)
+				if err == nil {
+					cliArgs = append(cliArgs, "--"+flag.Name, string(b))
 				}
 			}
 		case commands.FlagTypeKeyValue:

@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -151,6 +154,8 @@ var workflowShowCmd = &cobra.Command{
 }
 
 var workflowInputFlags []string
+var workflowInputJSON string
+var workflowInputFile string
 
 var workflowRunCmd = &cobra.Command{
 	Use:   "run <name>",
@@ -167,29 +172,47 @@ var workflowRunCmd = &cobra.Command{
 
 		wf, err := workflow.Get(vaultPath, name, vaultCfg)
 		if err != nil {
-			return handleError(ErrQueryNotFound, err, "Use 'rvn workflow list' to see available workflows")
+			return handleError(ErrWorkflowNotFound, err, "Use 'rvn workflow list' to see available workflows")
 		}
 
-		inputs := make(map[string]string)
-		for _, f := range workflowInputFlags {
-			parts := strings.SplitN(f, "=", 2)
-			if len(parts) == 2 {
-				inputs[parts[0]] = parts[1]
-			}
+		inputs, err := parseWorkflowInputs(workflowInputFile, workflowInputJSON, workflowInputFlags)
+		if err != nil {
+			return handleError(ErrWorkflowInputInvalid, err, "")
 		}
 
 		runner := workflow.NewRunner(vaultPath, vaultCfg)
 		runner.ToolFunc = makeToolFunc(vaultPath)
 
-		result, err := runner.Run(wf, inputs)
+		runCfg := vaultCfg.GetWorkflowRunsConfig()
+		_, _ = workflow.AutoPruneRunStates(vaultPath, runCfg)
+
+		state, err := workflow.NewRunState(wf, inputs)
 		if err != nil {
-			return handleError(ErrInvalidInput, err, "")
+			return handleError(ErrWorkflowInvalid, err, "")
+		}
+
+		result, err := runner.RunWithState(wf, state)
+		if err != nil {
+			errCode, stepID := classifyRunnerError(err)
+			markRunFailed(state, errCode, stepID, err)
+			workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
+			_ = workflow.SaveRunState(vaultPath, runCfg, state)
+			return handleErrorWithDetails(errCode, err.Error(), "", runStateErrorDetails(state, stepID))
+		}
+
+		workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
+		if err := workflow.SaveRunState(vaultPath, runCfg, state); err != nil {
+			return handleError(ErrInternal, err, "")
 		}
 
 		if isJSONOutput() {
 			outputSuccess(result, nil)
 			return nil
 		}
+
+		fmt.Printf("run_id: %s\n", result.RunID)
+		fmt.Printf("status: %s\n", result.Status)
+		fmt.Printf("revision: %d\n\n", result.Revision)
 
 		if result.Next != nil {
 			fmt.Println("=== AGENT ===")
@@ -208,6 +231,227 @@ var workflowRunCmd = &cobra.Command{
 		fmt.Println(string(stepsJSON))
 		return nil
 	},
+}
+
+var workflowContinueOutputJSON string
+var workflowContinueOutputFile string
+var workflowContinueExpectedRevision int
+
+var workflowContinueCmd = &cobra.Command{
+	Use:   "continue <run-id>",
+	Short: "Continue a paused workflow run with agent output JSON",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		runID := args[0]
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		runCfg := vaultCfg.GetWorkflowRunsConfig()
+
+		_, _ = workflow.AutoPruneRunStates(vaultPath, runCfg)
+
+		state, err := workflow.LoadRunState(vaultPath, runCfg, runID)
+		if err != nil {
+			code := ErrWorkflowRunNotFound
+			if strings.Contains(err.Error(), "parse run state") {
+				code = ErrWorkflowStateCorrupt
+			}
+			return handleError(code, err, "")
+		}
+
+		if workflowContinueExpectedRevision > 0 && state.Revision != workflowContinueExpectedRevision {
+			return handleErrorWithDetails(
+				ErrWorkflowConflict,
+				fmt.Sprintf("revision mismatch: expected %d, got %d", workflowContinueExpectedRevision, state.Revision),
+				"Fetch latest run state and retry",
+				map[string]interface{}{
+					"run_id":            state.RunID,
+					"workflow_name":     state.WorkflowName,
+					"expected_revision": workflowContinueExpectedRevision,
+					"revision":          state.Revision,
+				},
+			)
+		}
+
+		wf, err := workflow.Get(vaultPath, state.WorkflowName, vaultCfg)
+		if err != nil {
+			return handleError(ErrWorkflowNotFound, err, "")
+		}
+
+		currentHash, err := workflow.WorkflowHash(wf)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		if state.WorkflowHash != "" && currentHash != state.WorkflowHash {
+			return handleErrorMsg(
+				ErrWorkflowChanged,
+				"workflow definition changed since run started",
+				"Start a new run to use the latest workflow definition",
+			)
+		}
+
+		outputEnv, err := parseAgentOutputEnvelope(workflowContinueOutputFile, workflowContinueOutputJSON)
+		if err != nil {
+			return handleError(ErrWorkflowAgentOutputInvalid, err, "")
+		}
+
+		if err := workflow.ApplyAgentOutputs(wf, state, outputEnv); err != nil {
+			code := classifyContinueValidationError(state, err)
+			return handleErrorWithDetails(code, err.Error(), "", runStateErrorDetails(state, ""))
+		}
+
+		state.Revision++
+		runner := workflow.NewRunner(vaultPath, vaultCfg)
+		runner.ToolFunc = makeToolFunc(vaultPath)
+
+		result, err := runner.RunWithState(wf, state)
+		if err != nil {
+			errCode, stepID := classifyRunnerError(err)
+			markRunFailed(state, errCode, stepID, err)
+			state.Revision++
+			workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
+			_ = workflow.SaveRunState(vaultPath, runCfg, state)
+			return handleErrorWithDetails(errCode, err.Error(), "", runStateErrorDetails(state, stepID))
+		}
+
+		workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
+		if err := workflow.SaveRunState(vaultPath, runCfg, state); err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		if isJSONOutput() {
+			outputSuccess(result, nil)
+			return nil
+		}
+
+		fmt.Printf("run_id: %s\n", result.RunID)
+		fmt.Printf("status: %s\n", result.Status)
+		fmt.Printf("revision: %d\n\n", result.Revision)
+
+		if result.Next != nil {
+			fmt.Println("=== AGENT ===")
+			fmt.Println(result.Next.Prompt)
+			fmt.Println()
+			fmt.Println("=== OUTPUTS ===")
+			outputJSON, _ := json.MarshalIndent(result.Next.Outputs, "", "  ")
+			fmt.Println(string(outputJSON))
+			return nil
+		}
+
+		fmt.Println("Workflow completed.")
+		fmt.Println()
+		fmt.Println("=== STEPS ===")
+		stepsJSON, _ := json.MarshalIndent(result.Steps, "", "  ")
+		fmt.Println(string(stepsJSON))
+		return nil
+	},
+}
+
+var workflowRunsStatus string
+var workflowRunsWorkflow string
+
+var workflowRunsListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List persisted workflow runs",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		statuses, err := parseRunStatusFilter(workflowRunsStatus)
+		if err != nil {
+			return handleError(ErrInvalidInput, err, "")
+		}
+
+		runs, err := workflow.ListRunStates(vaultPath, vaultCfg.GetWorkflowRunsConfig(), workflow.RunListFilter{
+			Workflow: workflowRunsWorkflow,
+			Statuses: statuses,
+		})
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"runs": runs,
+			}, &Meta{Count: len(runs)})
+			return nil
+		}
+
+		if len(runs) == 0 {
+			fmt.Println("No workflow runs.")
+			return nil
+		}
+		for _, run := range runs {
+			fmt.Printf("%s  %-18s %-14s rev=%d updated=%s\n",
+				run.RunID,
+				run.WorkflowName,
+				run.Status,
+				run.Revision,
+				run.UpdatedAt.Format(time.RFC3339),
+			)
+		}
+		return nil
+	},
+}
+
+var workflowRunsPruneStatus string
+var workflowRunsPruneOlderThan string
+var workflowRunsPruneConfirm bool
+
+var workflowRunsPruneCmd = &cobra.Command{
+	Use:   "prune",
+	Short: "Prune persisted workflow runs",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		statuses, err := parseRunStatusFilter(workflowRunsPruneStatus)
+		if err != nil {
+			return handleError(ErrInvalidInput, err, "")
+		}
+		olderThan, err := parseOlderThan(workflowRunsPruneOlderThan)
+		if err != nil {
+			return handleError(ErrInvalidInput, err, "")
+		}
+
+		result, err := workflow.PruneRunStates(vaultPath, vaultCfg.GetWorkflowRunsConfig(), workflow.RunPruneOptions{
+			Statuses:  statuses,
+			OlderThan: olderThan,
+			Apply:     workflowRunsPruneConfirm,
+		})
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"dry_run": !workflowRunsPruneConfirm,
+				"prune":   result,
+			}, nil)
+			return nil
+		}
+
+		if workflowRunsPruneConfirm {
+			fmt.Printf("Deleted %d runs (matched %d of %d scanned).\n", result.Deleted, result.Matched, result.Scanned)
+		} else {
+			fmt.Printf("Would delete %d runs (scanned %d). Use --confirm to apply.\n", result.Matched, result.Scanned)
+		}
+		return nil
+	},
+}
+
+var workflowRunsCmd = &cobra.Command{
+	Use:   "runs",
+	Short: "Manage persisted workflow run records",
 }
 
 // makeToolFunc executes workflow tool steps through the same registry-driven
@@ -250,11 +494,256 @@ func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{
 	}
 }
 
+func parseWorkflowInputs(inputFile, inputJSON string, kvFlags []string) (map[string]interface{}, error) {
+	inputs := map[string]interface{}{}
+
+	if inputFile != "" {
+		obj, err := readJSONFileObject(inputFile)
+		if err != nil {
+			return nil, fmt.Errorf("parse --input-file: %w", err)
+		}
+		mergeObject(inputs, obj)
+	}
+	if strings.TrimSpace(inputJSON) != "" {
+		obj, err := parseJSONObject(inputJSON)
+		if err != nil {
+			return nil, fmt.Errorf("parse --input-json: %w", err)
+		}
+		mergeObject(inputs, obj)
+	}
+	for _, f := range kvFlags {
+		parts := strings.SplitN(f, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid --input value: %s (expected key=value)", f)
+		}
+		k := strings.TrimSpace(parts[0])
+		if k == "" {
+			return nil, fmt.Errorf("input key cannot be empty")
+		}
+		inputs[k] = parts[1]
+	}
+	return inputs, nil
+}
+
+func parseAgentOutputEnvelope(outputFile, outputJSON string) (workflow.AgentOutputEnvelope, error) {
+	if outputFile == "" && strings.TrimSpace(outputJSON) == "" {
+		return workflow.AgentOutputEnvelope{}, fmt.Errorf("provide --agent-output-json or --agent-output-file")
+	}
+
+	var obj map[string]interface{}
+	var err error
+	if outputFile != "" {
+		obj, err = readJSONFileObject(outputFile)
+		if err != nil {
+			return workflow.AgentOutputEnvelope{}, err
+		}
+	}
+	if strings.TrimSpace(outputJSON) != "" {
+		obj, err = parseJSONObject(outputJSON)
+		if err != nil {
+			return workflow.AgentOutputEnvelope{}, err
+		}
+	}
+
+	rawOutputs, ok := obj["outputs"]
+	if !ok {
+		return workflow.AgentOutputEnvelope{}, fmt.Errorf("agent output must contain an 'outputs' key")
+	}
+	outputs, ok := rawOutputs.(map[string]interface{})
+	if !ok {
+		return workflow.AgentOutputEnvelope{}, fmt.Errorf("'outputs' must be an object")
+	}
+	return workflow.AgentOutputEnvelope{Outputs: outputs}, nil
+}
+
+func parseJSONObject(raw string) (map[string]interface{}, error) {
+	var obj map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
+		return nil, err
+	}
+	if obj == nil {
+		return nil, fmt.Errorf("expected JSON object")
+	}
+	return obj, nil
+}
+
+func readJSONFileObject(path string) (map[string]interface{}, error) {
+	absPath := path
+	if !filepath.IsAbs(path) {
+		absPath = filepath.Clean(path)
+	}
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+	var obj map[string]interface{}
+	if err := json.Unmarshal(content, &obj); err != nil {
+		return nil, err
+	}
+	if obj == nil {
+		return nil, fmt.Errorf("expected JSON object")
+	}
+	return obj, nil
+}
+
+func mergeObject(dst, src map[string]interface{}) {
+	for k, v := range src {
+		dst[k] = v
+	}
+}
+
+func parseRunStatusFilter(raw string) (map[workflow.RunStatus]bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	statuses := map[workflow.RunStatus]bool{}
+	for _, part := range strings.Split(raw, ",") {
+		s := workflow.RunStatus(strings.TrimSpace(part))
+		switch s {
+		case workflow.RunStatusRunning, workflow.RunStatusAwaitingAgent, workflow.RunStatusCompleted, workflow.RunStatusFailed, workflow.RunStatusCancelled:
+			statuses[s] = true
+		default:
+			return nil, fmt.Errorf("unknown status: %s", part)
+		}
+	}
+	return statuses, nil
+}
+
+func parseOlderThan(raw string) (*time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	if strings.HasSuffix(raw, "d") {
+		days, err := strconv.Atoi(strings.TrimSuffix(raw, "d"))
+		if err != nil {
+			return nil, fmt.Errorf("invalid days duration: %s", raw)
+		}
+		dur := time.Duration(days) * 24 * time.Hour
+		return &dur, nil
+	}
+	dur, err := time.ParseDuration(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &dur, nil
+}
+
+func markRunFailed(state *workflow.WorkflowRunState, code, stepID string, runErr error) {
+	if state == nil {
+		return
+	}
+	now := time.Now().UTC()
+	state.Status = workflow.RunStatusFailed
+	state.Failure = &workflow.RunFailure{
+		Code:    code,
+		Message: runErr.Error(),
+		StepID:  stepID,
+		At:      now,
+	}
+	state.CompletedAt = &now
+	state.UpdatedAt = now
+	state.AwaitingStep = ""
+}
+
+func classifyRunnerError(err error) (code string, stepID string) {
+	if err == nil {
+		return ErrWorkflowInvalid, ""
+	}
+	msg := err.Error()
+	stepID = extractStepID(msg)
+	switch {
+	case strings.Contains(msg, "unknown variable:"),
+		strings.Contains(msg, "invalid inputs reference"):
+		return ErrWorkflowInterpolationError, stepID
+	case strings.Contains(msg, "tool '"),
+		strings.Contains(msg, "tool function not configured"):
+		return ErrWorkflowToolExecutionFailed, stepID
+	case strings.Contains(msg, "missing required inputs"),
+		strings.Contains(msg, "unknown workflow input"),
+		strings.Contains(msg, "workflow input '"):
+		return ErrWorkflowInputInvalid, stepID
+	default:
+		return ErrWorkflowInvalid, stepID
+	}
+}
+
+func classifyContinueValidationError(state *workflow.WorkflowRunState, err error) string {
+	if state != nil {
+		switch state.Status {
+		case workflow.RunStatusCompleted, workflow.RunStatusFailed, workflow.RunStatusCancelled:
+			return ErrWorkflowTerminalState
+		}
+	}
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	if strings.Contains(msg, "not awaiting agent output") {
+		return ErrWorkflowNotAwaitingAgent
+	}
+	return ErrWorkflowAgentOutputInvalid
+}
+
+func extractStepID(msg string) string {
+	const marker = "step '"
+	start := strings.Index(msg, marker)
+	if start < 0 {
+		return ""
+	}
+	rest := msg[start+len(marker):]
+	end := strings.Index(rest, "'")
+	if end <= 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
+func runStateErrorDetails(state *workflow.WorkflowRunState, failedStepID string) map[string]interface{} {
+	if state == nil {
+		return nil
+	}
+	details := map[string]interface{}{
+		"run_id":        state.RunID,
+		"workflow_name": state.WorkflowName,
+		"status":        state.Status,
+		"revision":      state.Revision,
+		"cursor":        state.Cursor,
+		"steps":         state.Steps,
+		"updated_at":    state.UpdatedAt.Format(time.RFC3339),
+	}
+	if failedStepID != "" {
+		details["failed_step_id"] = failedStepID
+	}
+	if state.Failure != nil {
+		details["failure"] = state.Failure
+	}
+	return details
+}
+
 func init() {
 	workflowRunCmd.Flags().StringArrayVar(&workflowInputFlags, "input", nil, "Set input value (can be repeated): --input name=value")
+	workflowRunCmd.Flags().StringVar(&workflowInputJSON, "input-json", "", "Set workflow inputs as a JSON object")
+	workflowRunCmd.Flags().StringVar(&workflowInputFile, "input-file", "", "Read workflow inputs from JSON file")
+
+	workflowContinueCmd.Flags().StringVar(&workflowContinueOutputJSON, "agent-output-json", "", "Agent output JSON object")
+	workflowContinueCmd.Flags().StringVar(&workflowContinueOutputFile, "agent-output-file", "", "Path to JSON file containing agent output")
+	workflowContinueCmd.Flags().IntVar(&workflowContinueExpectedRevision, "expected-revision", 0, "Expected run revision for optimistic concurrency")
+
+	workflowRunsListCmd.Flags().StringVar(&workflowRunsStatus, "status", "", "Filter by status (comma-separated)")
+	workflowRunsListCmd.Flags().StringVar(&workflowRunsWorkflow, "workflow", "", "Filter by workflow name")
+
+	workflowRunsPruneCmd.Flags().StringVar(&workflowRunsPruneStatus, "status", "", "Prune only statuses (comma-separated)")
+	workflowRunsPruneCmd.Flags().StringVar(&workflowRunsPruneOlderThan, "older-than", "", "Prune records older than duration (e.g. 72h, 14d)")
+	workflowRunsPruneCmd.Flags().BoolVar(&workflowRunsPruneConfirm, "confirm", false, "Apply deletion (without this flag, preview only)")
 
 	workflowCmd.AddCommand(workflowListCmd)
 	workflowCmd.AddCommand(workflowShowCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
+	workflowCmd.AddCommand(workflowContinueCmd)
+	workflowRunsCmd.AddCommand(workflowRunsListCmd)
+	workflowRunsCmd.AddCommand(workflowRunsPruneCmd)
+	workflowCmd.AddCommand(workflowRunsCmd)
 	rootCmd.AddCommand(workflowCmd)
 }

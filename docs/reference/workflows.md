@@ -101,12 +101,15 @@ steps:
 
 ## Inputs
 
-Inputs are provided at run-time via `--input key=value`.
+Inputs are provided at run-time via:
+- `--input key=value` (string values)
+- `--input-json '{...}'` (typed JSON object)
+- `--input-file ./inputs.json` (typed JSON object from file)
 
 Input fields:
-- `type`: `string`, `ref`, `date`, `boolean` (validated as strings at run-time)
+- `type`: `string`, `markdown`, `ref`, `date`, `datetime`, `number`, `bool`, `object`, `array`
 - `required`: boolean
-- `default`: string
+- `default`: any JSON/YAML scalar/object/array compatible with `type`
 - `description`: string
 - `target`: string (for `ref` inputs)
 
@@ -144,7 +147,25 @@ Supported output types:
 - validates inputs
 - executes tool steps in order
 - stops at the first agent step
-- returns `next.prompt`, declared `next.outputs`, and accumulated `steps` output
+- persists a run checkpoint under `.raven/workflow-runs/`
+- returns `run_id`, `status`, `revision`, `next.prompt`, declared `next.outputs`, and accumulated `steps` output
+
+`rvn workflow continue`:
+- loads a persisted run by `run_id`
+- validates `{"outputs": ...}` against the awaiting agent step output contract
+- resumes deterministic steps after the agent boundary
+- pauses again at the next agent step or marks the run `completed`
+
+### Run Retention
+
+Workflow run records are kept using `workflows.runs` settings in `raven.yaml`:
+- `storage_path` (default `.raven/workflow-runs`)
+- `auto_prune` (default `true`)
+- `keep_completed_for_days` (default `7`)
+- `keep_failed_for_days` (default `14`)
+- `keep_awaiting_for_days` (default `30`)
+- `max_runs` (default `1000`)
+- `preserve_latest_per_workflow` (default `5`)
 
 ## Migrating Legacy Workflows
 
@@ -209,6 +230,10 @@ Configurable in `raven.yaml`:
 ```bash
 rvn workflow list
 rvn workflow show <name>
-rvn workflow run <name> --input key=value --input key2=value2
+rvn workflow run <name> --input key=value
+rvn workflow run <name> --input-json '{"date":"2026-02-14"}'
+rvn workflow continue <run-id> --agent-output-json '{"outputs":{"markdown":"..."}}'
+rvn workflow runs list --status awaiting_agent
+rvn workflow runs prune --status completed --older-than 14d --confirm
 ```
 

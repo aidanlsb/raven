@@ -36,6 +36,9 @@ type VaultConfig struct {
 	// Can be inline definitions or references to external files.
 	Workflows map[string]*WorkflowRef `yaml:"workflows,omitempty"`
 
+	// WorkflowRuns configures persisted workflow run checkpoints and retention.
+	WorkflowRuns *WorkflowRunsConfig `yaml:"workflow_runs,omitempty"`
+
 	// ProtectedPrefixes are additional vault-relative path prefixes that Raven should
 	// treat as protected/system-managed. Workflows and other automation features
 	// should refuse to read/write/move/edit/delete within these prefixes.
@@ -49,6 +52,63 @@ type VaultConfig struct {
 
 	// Deletion configures file deletion behavior
 	Deletion *DeletionConfig `yaml:"deletion,omitempty"`
+}
+
+func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
+	type plain VaultConfig
+	var p plain
+	if err := value.Decode(&p); err != nil {
+		return err
+	}
+	*vc = VaultConfig(p)
+
+	if value.Kind != yaml.MappingNode {
+		return nil
+	}
+
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		key := value.Content[i]
+		val := value.Content[i+1]
+		if key.Value != "workflows" || val.Kind != yaml.MappingNode {
+			continue
+		}
+
+		for j := 0; j < len(val.Content)-1; j += 2 {
+			wfKey := val.Content[j]
+			wfVal := val.Content[j+1]
+			if wfKey.Value != "runs" || wfVal.Kind != yaml.MappingNode {
+				continue
+			}
+			if !isWorkflowRunsConfigNode(wfVal) {
+				continue
+			}
+
+			var runs WorkflowRunsConfig
+			if err := wfVal.Decode(&runs); err != nil {
+				return fmt.Errorf("invalid workflows.runs config: %w", err)
+			}
+			vc.WorkflowRuns = &runs
+			if vc.Workflows != nil {
+				delete(vc.Workflows, "runs")
+			}
+		}
+	}
+	return nil
+}
+
+func isWorkflowRunsConfigNode(node *yaml.Node) bool {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		switch node.Content[i].Value {
+		case "storage_path", "auto_prune", "keep_completed_for_days",
+			"keep_failed_for_days", "keep_awaiting_for_days",
+			"max_runs", "preserve_latest_per_workflow":
+			return true
+		}
+	}
+	return false
 }
 
 // DirectoriesConfig configures directory organization for the vault.
@@ -155,11 +215,11 @@ func (w *WorkflowRef) UnmarshalYAML(value *yaml.Node) error {
 
 // WorkflowInput defines a workflow input parameter.
 type WorkflowInput struct {
-	Type        string `yaml:"type" json:"type"`
-	Required    bool   `yaml:"required,omitempty" json:"required,omitempty"`
-	Default     string `yaml:"default,omitempty" json:"default,omitempty"`
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	Target      string `yaml:"target,omitempty" json:"target,omitempty"`
+	Type        string      `yaml:"type" json:"type"`
+	Required    bool        `yaml:"required,omitempty" json:"required,omitempty"`
+	Default     interface{} `yaml:"default,omitempty" json:"default,omitempty"`
+	Description string      `yaml:"description,omitempty" json:"description,omitempty"`
+	Target      string      `yaml:"target,omitempty" json:"target,omitempty"`
 }
 
 // WorkflowStep defines a single step in a workflow.
@@ -196,6 +256,41 @@ type WorkflowStep struct {
 type WorkflowPromptOutput struct {
 	Type     string `yaml:"type" json:"type"`
 	Required bool   `yaml:"required,omitempty" json:"required,omitempty"`
+}
+
+// WorkflowRunsConfig configures persisted workflow run checkpoints and pruning.
+type WorkflowRunsConfig struct {
+	// StoragePath is the vault-relative directory for workflow run checkpoints.
+	StoragePath string `yaml:"storage_path,omitempty"`
+
+	// AutoPrune runs retention cleanup on workflow run/continue.
+	AutoPrune *bool `yaml:"auto_prune,omitempty"`
+
+	// KeepCompletedForDays keeps completed runs for this many days.
+	KeepCompletedForDays *int `yaml:"keep_completed_for_days,omitempty"`
+
+	// KeepFailedForDays keeps failed runs for this many days.
+	KeepFailedForDays *int `yaml:"keep_failed_for_days,omitempty"`
+
+	// KeepAwaitingForDays keeps awaiting-agent runs for this many days.
+	KeepAwaitingForDays *int `yaml:"keep_awaiting_for_days,omitempty"`
+
+	// MaxRuns is the hard cap for stored run records.
+	MaxRuns *int `yaml:"max_runs,omitempty"`
+
+	// PreserveLatestPerWorkflow preserves the newest N runs per workflow.
+	PreserveLatestPerWorkflow *int `yaml:"preserve_latest_per_workflow,omitempty"`
+}
+
+// ResolvedWorkflowRunsConfig is WorkflowRunsConfig with defaults applied.
+type ResolvedWorkflowRunsConfig struct {
+	StoragePath               string
+	AutoPrune                 bool
+	KeepCompletedForDays      int
+	KeepFailedForDays         int
+	KeepAwaitingForDays       int
+	MaxRuns                   int
+	PreserveLatestPerWorkflow int
 }
 
 // DeletionConfig configures how file deletion is handled.
@@ -273,6 +368,56 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
+// GetWorkflowRunsConfig returns workflow run checkpoint settings with defaults applied.
+func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
+	defaults := ResolvedWorkflowRunsConfig{
+		StoragePath:               ".raven/workflow-runs",
+		AutoPrune:                 true,
+		KeepCompletedForDays:      7,
+		KeepFailedForDays:         14,
+		KeepAwaitingForDays:       30,
+		MaxRuns:                   1000,
+		PreserveLatestPerWorkflow: 5,
+	}
+
+	if vc.WorkflowRuns == nil {
+		return defaults
+	}
+
+	cfg := vc.WorkflowRuns
+	if cfg.StoragePath != "" {
+		normalized := filepath.ToSlash(filepath.Clean(cfg.StoragePath))
+		normalized = strings.TrimPrefix(normalized, "./")
+		normalized = strings.TrimPrefix(normalized, "/")
+		if normalized != "." && normalized != "" && !strings.HasPrefix(normalized, "..") {
+			defaults.StoragePath = normalized
+		}
+	}
+	if cfg.AutoPrune != nil {
+		defaults.AutoPrune = *cfg.AutoPrune
+	}
+	if cfg.KeepCompletedForDays != nil {
+		defaults.KeepCompletedForDays = *cfg.KeepCompletedForDays
+	}
+	if cfg.KeepFailedForDays != nil {
+		defaults.KeepFailedForDays = *cfg.KeepFailedForDays
+	}
+	if cfg.KeepAwaitingForDays != nil {
+		defaults.KeepAwaitingForDays = *cfg.KeepAwaitingForDays
+	}
+	if cfg.MaxRuns != nil {
+		defaults.MaxRuns = *cfg.MaxRuns
+	}
+	if cfg.PreserveLatestPerWorkflow != nil {
+		defaults.PreserveLatestPerWorkflow = *cfg.PreserveLatestPerWorkflow
+	}
+	return defaults
 }
 
 // SavedQuery defines a saved query using the Raven query language.
@@ -451,6 +596,17 @@ workflows:
           - The default schema already has: person, project types and due, priority, status, highlight, pinned, archived traits.
           - Build on defaults rather than replacing them unless they ask.
           - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
+
+# Workflow run checkpoint retention
+# Add this under the top-level workflows block
+#   runs:
+#     storage_path: .raven/workflow-runs
+#     auto_prune: true
+#     keep_completed_for_days: 7
+#     keep_failed_for_days: 14
+#     keep_awaiting_for_days: 30
+#     max_runs: 1000
+#     preserve_latest_per_workflow: 5
 `
 
 	if err := atomicfile.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {

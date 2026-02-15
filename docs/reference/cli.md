@@ -1205,7 +1205,7 @@ Shows the full definition including inputs and steps.
 Run a workflow until it reaches an agent step.
 
 ```bash
-rvn workflow run <name> [--input key=value...]
+rvn workflow run <name> [--input key=value...] [--input-json '{...}'] [--input-file ./inputs.json]
 ```
 
 | Argument | Description |
@@ -1215,14 +1215,75 @@ rvn workflow run <name> [--input key=value...]
 | Flag | Description |
 |------|-------------|
 | `--input` | Set input value (repeatable) |
+| `--input-json` | Set typed inputs from a JSON object |
+| `--input-file` | Read typed inputs from a JSON file |
 
 **Examples:**
 
 ```bash
 rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1
+rvn workflow run daily-brief --input-json '{"date":"2026-02-14"}'
 ```
 
-Runs deterministic tool steps, then returns the rendered agent prompt, declared agent outputs schema, and step outputs gathered so far.
+Runs deterministic tool steps, then returns the rendered agent prompt, declared agent outputs schema, step outputs gathered so far, and a persisted `run_id`.
+
+---
+
+### `rvn workflow continue`
+
+Continue a paused workflow run with agent output JSON.
+
+```bash
+rvn workflow continue <run-id> [--agent-output-json '{...}'] [--agent-output-file ./output.json] [--expected-revision N]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `run-id` | Workflow run ID returned from `workflow run` |
+
+| Flag | Description |
+|------|-------------|
+| `--agent-output-json` | Agent output payload with top-level `outputs` object |
+| `--agent-output-file` | Read agent output payload from file |
+| `--expected-revision` | Enforce optimistic concurrency on run state |
+
+**Examples:**
+
+```bash
+rvn workflow continue wrf_abc123 --agent-output-json '{"outputs":{"markdown":"..."}}'
+rvn workflow continue wrf_abc123 --agent-output-file ./agent-output.json --expected-revision 2
+```
+
+---
+
+### `rvn workflow runs list`
+
+List persisted workflow runs.
+
+```bash
+rvn workflow runs list [--workflow name] [--status completed,failed]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--workflow` | Filter by workflow name |
+| `--status` | Filter by comma-separated statuses |
+
+---
+
+### `rvn workflow runs prune`
+
+Prune persisted workflow runs.
+
+```bash
+rvn workflow runs prune [--status completed] [--older-than 14d] [--confirm]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--status` | Prune only matching statuses |
+| `--older-than` | Prune records older than duration (e.g. `72h`, `14d`) |
+| `--confirm` | Apply deletion (preview-only without this flag) |
 
 ---
 
