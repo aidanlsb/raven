@@ -19,12 +19,33 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
-	// Build CLI to ensure we have a binary
-	_ = testutil.BuildCLI(t)
+	binary := testutil.BuildCLI(t)
+	server := mcp.NewServerWithExecutable(v.Path, binary)
 
-	// Create a server and get its tools
-	tools := mcp.GenerateToolSchemas()
+	request := mcp.Request{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/list",
+	}
 
+	var output bytes.Buffer
+	server.SetIO(strings.NewReader(""), &output)
+	server.HandleRequest(&request)
+
+	var response struct {
+		Result struct {
+			Tools []mcp.Tool `json:"tools"`
+		} `json:"result"`
+		Error *mcp.RPCError `json:"error,omitempty"`
+	}
+	if err := json.NewDecoder(&output).Decode(&response); err != nil {
+		t.Fatalf("failed to parse tools/list response: %v", err)
+	}
+	if response.Error != nil {
+		t.Fatalf("tools/list returned error: %s", response.Error.Message)
+	}
+
+	tools := response.Result.Tools
 	if len(tools) == 0 {
 		t.Fatal("expected at least one tool, got none")
 	}
@@ -32,8 +53,10 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 	// Verify some expected tools exist
 	expectedTools := []string{"raven_new", "raven_query", "raven_search", "raven_read", "raven_set", "raven_delete"}
 	foundTools := make(map[string]bool)
+	toolByName := make(map[string]mcp.Tool)
 	for _, tool := range tools {
 		foundTools[tool.Name] = true
+		toolByName[tool.Name] = tool
 	}
 
 	for _, expected := range expectedTools {
@@ -42,8 +65,24 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 		}
 	}
 
-	// Reference vault path to avoid unused variable warning
-	_ = v.Path
+	// Verify schema field tools expose description in JSON-RPC tools/list output.
+	for _, toolName := range []string{"raven_schema_add_field", "raven_schema_update_field"} {
+		tool, ok := toolByName[toolName]
+		if !ok {
+			t.Fatalf("expected tool %s in tools/list response", toolName)
+		}
+		prop, ok := tool.InputSchema.Properties["description"]
+		if !ok {
+			t.Fatalf("expected %s to include description property", toolName)
+		}
+		propMap, ok := prop.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected %s description property to be an object, got %T", toolName, prop)
+		}
+		if got := propMap["type"]; got != "string" {
+			t.Fatalf("expected %s description property type=string, got %#v", toolName, got)
+		}
+	}
 }
 
 // TestMCPIntegration_CreateObject tests creating an object via MCP tool call.
@@ -442,6 +481,52 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 	if !strings.Contains(result.Text, "person") || !strings.Contains(result.Text, "project") {
 		t.Errorf("expected schema to include person and project types, got: %s", result.Text)
 	}
+}
+
+// TestMCPIntegration_SchemaFieldDescriptionsViaToolCall verifies schema field
+// descriptions can be added/updated/removed through MCP tools/call.
+func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	// Add a new field with a description.
+	addFieldResult := server.callTool("raven_schema_add_field", map[string]interface{}{
+		"type_name":   "person",
+		"field_name":  "website",
+		"type":        "string",
+		"description": "Primary website URL",
+	})
+	if addFieldResult.IsError {
+		t.Fatalf("schema add field failed: %s", addFieldResult.Text)
+	}
+	v.AssertFileContains("schema.yaml", "website:")
+	v.AssertFileContains("schema.yaml", "description: Primary website URL")
+
+	// Update existing field description.
+	updateFieldResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+		"type_name":   "person",
+		"field_name":  "email",
+		"description": "Primary contact email",
+	})
+	if updateFieldResult.IsError {
+		t.Fatalf("schema update field failed: %s", updateFieldResult.Text)
+	}
+	v.AssertFileContains("schema.yaml", "description: Primary contact email")
+
+	// Remove the description with "-" sentinel.
+	removeDescriptionResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+		"type_name":   "person",
+		"field_name":  "email",
+		"description": "-",
+	})
+	if removeDescriptionResult.IsError {
+		t.Fatalf("schema update field remove description failed: %s", removeDescriptionResult.Text)
+	}
+	v.AssertFileNotContains("schema.yaml", "description: Primary contact email")
 }
 
 // TestMCPIntegration_Check tests vault check via MCP tool call.

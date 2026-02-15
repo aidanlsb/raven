@@ -64,6 +64,38 @@ func TestMCPToolsMatchRegistry(t *testing.T) {
 	}
 }
 
+func TestSchemaFieldDescriptionFlagsPresentInMCP(t *testing.T) {
+	tools := GenerateToolSchemas()
+	toolMap := make(map[string]Tool, len(tools))
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	tests := []string{
+		"raven_schema_add_field",
+		"raven_schema_update_field",
+	}
+
+	for _, toolName := range tests {
+		tool, ok := toolMap[toolName]
+		if !ok {
+			t.Fatalf("expected tool %q to exist", toolName)
+		}
+		prop, ok := tool.InputSchema.Properties["description"]
+		if !ok {
+			t.Fatalf("expected tool %q to expose description flag", toolName)
+		}
+
+		propMap, ok := prop.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected description property for %q to be an object, got %T", toolName, prop)
+		}
+		if got := propMap["type"]; got != "string" {
+			t.Fatalf("expected description property type=string for %q, got %#v", toolName, got)
+		}
+	}
+}
+
 // TestBuildCLIArgsRoundtrip verifies that BuildCLIArgs produces valid CLI commands.
 func TestBuildCLIArgsRoundtrip(t *testing.T) {
 	tests := []struct {
@@ -178,6 +210,27 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			},
 			wantCmd:  "schema",
 			wantArgs: []string{"add", "type", "event", "--description", "Calendar events", "--json"},
+		},
+		{
+			toolName: "raven_schema_add_field",
+			args: map[string]interface{}{
+				"type_name":   "person",
+				"field_name":  "email",
+				"type":        "string",
+				"description": "Primary contact email",
+			},
+			wantCmd:  "schema",
+			wantArgs: []string{"add", "field", "person", "email", "--type", "string", "--description", "Primary contact email", "--json"},
+		},
+		{
+			toolName: "raven_schema_update_field",
+			args: map[string]interface{}{
+				"type_name":   "person",
+				"field_name":  "email",
+				"description": "Primary contact email",
+			},
+			wantCmd:  "schema",
+			wantArgs: []string{"update", "field", "person", "email", "--description", "Primary contact email", "--json"},
 		},
 		// Test that underscore variants of flag names also work (MCP clients may normalize names)
 		{
