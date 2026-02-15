@@ -940,6 +940,8 @@ func buildCheckJSONInternal(result CheckResultJSON, issues []check.Issue, schema
 }
 
 func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot string) int {
+	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
+
 	// Categorize refs by confidence
 	var certain, inferred, unknown []*check.MissingRef
 	for _, ref := range refs {
@@ -967,7 +969,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	reader := bufio.NewReader(os.Stdin)
 	created := 0
 	resolvePath := func(targetPath, typeName string) string {
-		return pages.SlugifyPath(pages.ResolveTargetPathWithRoots(targetPath, typeName, s, objectsRoot, pagesRoot))
+		return creator.resolveAndSlugifyTargetPath(targetPath, typeName)
 	}
 
 	// Handle certain refs (from typed fields)
@@ -1080,6 +1082,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 // createMissingRefsNonInteractive creates missing refs deterministically for agent/json mode.
 // It only creates refs with a known type and skips unknown-type refs that require user input.
 func createMissingRefsNonInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot string) int {
+	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
 	created := 0
 	seen := make(map[string]struct{})
 
@@ -1094,14 +1097,14 @@ func createMissingRefsNonInteractive(vaultPath string, s *schema.Schema, refs []
 			continue
 		}
 
-		resolvedPath := pages.ResolveTargetPathWithRoots(ref.TargetPath, typeName, s, objectsRoot, pagesRoot)
+		resolvedPath := creator.resolveTargetPath(ref.TargetPath, typeName)
 		slugPath := pages.SlugifyPath(resolvedPath)
 		if _, alreadyHandled := seen[slugPath]; alreadyHandled {
 			continue
 		}
 		seen[slugPath] = struct{}{}
 
-		if pages.Exists(vaultPath, resolvedPath) {
+		if creator.exists(ref.TargetPath, typeName) {
 			continue
 		}
 
@@ -1341,7 +1344,8 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 	}
 
 	// Now create the page with the new type (resolving path with new default_path)
-	resolvedPath := pages.SlugifyPath(pages.ResolveTargetPathWithRoots(ref.TargetPath, typeName, s, objectsRoot, pagesRoot))
+	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
+	resolvedPath := creator.resolveAndSlugifyTargetPath(ref.TargetPath, typeName)
 	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot); err != nil {
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
@@ -1407,14 +1411,11 @@ func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath str
 // createMissingPage creates a new page file using the pages package.
 // pages.Create handles default_path resolution automatically via the schema.
 func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot string) error {
-	_, err := pages.Create(pages.CreateOptions{
-		VaultPath:                   vaultPath,
-		TypeName:                    typeName,
-		TargetPath:                  targetPath,
-		Schema:                      s,
-		IncludeRequiredPlaceholders: true,
-		ObjectsRoot:                 objectsRoot,
-		PagesRoot:                   pagesRoot,
+	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
+	_, err := creator.create(objectCreateParams{
+		typeName:                    typeName,
+		targetPath:                  targetPath,
+		includeRequiredPlaceholders: true,
 	})
 	return err
 }
