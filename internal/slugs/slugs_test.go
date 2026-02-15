@@ -58,6 +58,8 @@ func TestPathSlug(t *testing.T) {
 		{"file.md", "file"},
 		{"path/to/file.md", "path/to/file"},
 		{"daily/2025-02-01#Team Sync", "daily/2025-02-01#team-sync"},
+		{`game-notes\Competitions`, "game-notes/competitions"},
+		{`daily\2025-02-01#Team Sync`, "daily/2025-02-01#team-sync"},
 	}
 
 	for _, tt := range tests {

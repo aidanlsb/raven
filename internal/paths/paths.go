@@ -56,7 +56,7 @@ func TrimMDExtension(p string) string {
 // - "objects"   -> "objects/"
 // - ""          -> ""
 func NormalizeDirRoot(root string) string {
-	root = filepath.ToSlash(root)
+	root = strings.ReplaceAll(filepath.ToSlash(root), "\\", "/")
 	root = strings.Trim(root, "/")
 	if root == "" {
 		return ""
@@ -69,7 +69,7 @@ func NormalizeDirRoot(root string) string {
 // - trims leading "./" and leading "/"
 // - collapses repeated '/'
 func normalizeRelPath(p string) string {
-	p = filepath.ToSlash(p)
+	p = strings.ReplaceAll(filepath.ToSlash(p), "\\", "/")
 	p = strings.TrimPrefix(p, "./")
 	p = strings.TrimPrefix(p, "/")
 	for strings.Contains(p, "//") {

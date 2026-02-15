@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestSlugify(t *testing.T) {
@@ -41,6 +43,7 @@ func TestSlugifyPath(t *testing.T) {
 		{"projects/My Project/docs", "projects/my-project/docs"},
 		{"file.md", "file"},
 		{"path/to/file.md", "path/to/file"},
+		{`game-notes\Competitions`, "game-notes/competitions"},
 	}
 
 	for _, tt := range tests {
@@ -48,6 +51,72 @@ func TestSlugifyPath(t *testing.T) {
 			result := SlugifyPath(tt.input)
 			if result != tt.expected {
 				t.Errorf("SlugifyPath(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveDefaultPathWithRoots(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"game_notes": {
+				DefaultPath: "game-notes/",
+			},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		targetPath string
+		typeName   string
+		objects    string
+		pages      string
+		want       string
+	}{
+		{
+			name:       "applies type default path",
+			targetPath: "Competitions",
+			typeName:   "game_notes",
+			want:       "game-notes/Competitions",
+		},
+		{
+			name:       "nests default path under objects root",
+			targetPath: "Competitions",
+			typeName:   "game_notes",
+			objects:    "objects/",
+			want:       "objects/game-notes/Competitions",
+		},
+		{
+			name:       "normalizes windows separator in explicit path",
+			targetPath: `notes\Today`,
+			typeName:   "page",
+			objects:    "objects/",
+			pages:      "pages/",
+			want:       "objects/notes/Today",
+		},
+		{
+			name:       "uses pages root for untyped page title",
+			targetPath: "Quick Note",
+			typeName:   "page",
+			objects:    "objects/",
+			pages:      "pages/",
+			want:       "pages/Quick Note",
+		},
+		{
+			name:       "uses objects root for typed object without default path",
+			targetPath: "Freya",
+			typeName:   "person",
+			objects:    "objects/",
+			pages:      "pages/",
+			want:       "objects/Freya",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveDefaultPathWithRoots(tt.targetPath, tt.typeName, sch, tt.objects, tt.pages)
+			if got != tt.want {
+				t.Fatalf("resolveDefaultPathWithRoots(%q, %q) = %q, want %q", tt.targetPath, tt.typeName, got, tt.want)
 			}
 		})
 	}
@@ -117,6 +186,27 @@ func TestCreate(t *testing.T) {
 		content, _ := os.ReadFile(result.FilePath)
 		if strings.Contains(string(content), "# Sif") {
 			t.Error("File should NOT have a default heading")
+		}
+	})
+
+	t.Run("windows-style target path keeps directory structure", func(t *testing.T) {
+		result, err := Create(CreateOptions{
+			VaultPath:  tmpDir,
+			TypeName:   "note",
+			Title:      "Competitions",
+			TargetPath: `game-notes\Competitions`,
+		})
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+
+		if result.RelativePath != "game-notes/competitions.md" {
+			t.Errorf("RelativePath = %q, want %q", result.RelativePath, "game-notes/competitions.md")
+		}
+
+		createdPath := filepath.Join(tmpDir, "game-notes", "competitions.md")
+		if _, err := os.Stat(createdPath); os.IsNotExist(err) {
+			t.Errorf("expected file at %q, but it was not created", createdPath)
 		}
 	})
 
