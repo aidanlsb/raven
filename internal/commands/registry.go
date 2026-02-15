@@ -171,6 +171,89 @@ converge to one current state rather than append history.`,
 			"Replace an object's body deterministically on reruns",
 		},
 	},
+	"learn": {
+		Name:        "learn",
+		Description: "Browse and track built-in Raven lessons",
+		LongDesc: `Learn core Raven concepts through embedded lessons.
+
+The base command shows a sectioned overview of available lessons and completion
+status. Use subcommands to open lesson content, mark lessons complete, and get
+the next suggested lesson.
+
+Prerequisites are advisory only: lessons are never blocked.`,
+		Examples: []string{
+			"rvn learn --json",
+			"rvn learn list --json",
+			"rvn learn open refs --json",
+			"rvn learn done refs --date 2026-02-15 --json",
+			"rvn learn next --json",
+		},
+		UseCases: []string{
+			"List built-in lessons grouped by section",
+			"Open lesson content by ID",
+			"Track lesson completion progress",
+			"Get the next suggested lesson",
+		},
+	},
+	"learn_list": {
+		Name:        "learn list",
+		Description: "List lesson sections, statuses, and next suggestion",
+		Examples: []string{
+			"rvn learn list --json",
+		},
+	},
+	"learn_open": {
+		Name:        "learn open",
+		Description: "Open lesson content and advisory prerequisites",
+		Args: []ArgMeta{
+			{Name: "lesson_id", Description: "Lesson ID from the syllabus (e.g., objects, refs)", Required: true},
+		},
+		Examples: []string{
+			"rvn learn open objects --json",
+			"rvn learn open refs --json",
+		},
+	},
+	"learn_done": {
+		Name:        "learn done",
+		Description: "Mark a lesson complete",
+		Args: []ArgMeta{
+			{Name: "lesson_id", Description: "Lesson ID to mark complete", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "date", Description: "Completion date (today/yesterday/tomorrow/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"2026-02-15", "today"}},
+		},
+		Examples: []string{
+			"rvn learn done objects --json",
+			"rvn learn done refs --date 2026-02-15 --json",
+		},
+	},
+	"learn_next": {
+		Name:        "learn next",
+		Description: "Show the next suggested lesson",
+		Examples: []string{
+			"rvn learn next --json",
+		},
+	},
+	"learn_validate": {
+		Name:        "learn validate",
+		Description: "Validate lesson catalog integrity",
+		LongDesc: `Validate embedded lessons content and syllabus integrity.
+
+Checks include:
+- Syllabus and lesson parse validity
+- Lesson references and prerequisites resolving to known lessons
+- Advisory prerequisite cycle detection
+- Lesson files that exist but are not listed in syllabus`,
+		Examples: []string{
+			"rvn learn validate --json",
+		},
+		UseCases: []string{
+			"Validate lessons before release",
+			"Catch missing prerequisite references",
+			"Detect prerequisite cycles",
+			"Find orphan lesson files not in syllabus",
+		},
+	},
 	"delete": {
 		Name:        "delete",
 		Description: "Delete an object from the vault",

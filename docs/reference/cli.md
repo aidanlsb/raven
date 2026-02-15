@@ -149,6 +149,49 @@ rvn upsert report "Q1 Status" --field owner=people/freya --field status=draft
 
 ---
 
+### `rvn learn`
+
+Browse and track built-in Raven lessons.
+
+```bash
+rvn learn                      # Alias of `rvn learn list`
+rvn learn list
+rvn learn open <lesson_id>
+rvn learn done <lesson_id> [--date DATE]
+rvn learn next
+rvn learn validate
+```
+
+Lessons are grouped by section in syllabus order. Completion is stored at
+`.raven/learn/progress.yaml`.
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | Show sectioned lesson overview with completion state |
+| `open` | Render lesson content plus advisory prerequisite status |
+| `done` | Mark a lesson complete (idempotent) |
+| `next` | Return the next suggested lesson |
+| `validate` | Validate syllabus/lesson consistency (refs, prereqs, cycles, orphan lesson files) |
+
+| Flag | Description |
+|------|-------------|
+| `--date` | Completion date for `done` (`today`, `yesterday`, `tomorrow`, or `YYYY-MM-DD`) |
+
+**Examples:**
+
+```bash
+rvn learn
+rvn learn open objects
+rvn learn done objects --date 2026-02-15
+rvn learn next
+```
+
+**Notes:**
+- Prerequisites are advisory only (never blocking)
+- Use `rvn learn open <lesson_id>` to revisit content any time
+
+---
+
 ### `rvn set`
 
 Set frontmatter fields on an object.

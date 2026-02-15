@@ -128,6 +128,17 @@ rvn schema commands --json
 | `raven_open` | Open a file in the editor |
 | `raven_date` | Date hub - all activity for a date |
 
+### Learning
+
+| Tool | Description |
+|------|-------------|
+| `raven_learn` | Browse lesson overview and completion state |
+| `raven_learn_list` | Explicit lesson list/overview |
+| `raven_learn_open` | Open lesson content and advisory prerequisites |
+| `raven_learn_done` | Mark a lesson complete |
+| `raven_learn_next` | Get the next suggested lesson |
+| `raven_learn_validate` | Validate lesson catalog integrity |
+
 ### Vault Management
 
 | Tool | Description |
