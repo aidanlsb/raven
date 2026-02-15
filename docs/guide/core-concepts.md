@@ -27,7 +27,7 @@ If there’s no frontmatter `type:`, the file is treated as type `page`.
 Every markdown heading creates a **section object** automatically. This provides hierarchy for:
 - where traits/refs “belong”
 - `#fragment` references like `[[projects/website#tasks]]`
-- hierarchical queries (`parent:`, `ancestor:`, `contains:`, etc.)
+- hierarchical queries (`parent(...)`, `ancestor(...)`, `encloses(...)`, etc.)
 
 ## Embedded (typed) objects
 

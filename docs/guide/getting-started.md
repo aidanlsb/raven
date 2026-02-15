@@ -35,6 +35,7 @@ personal = "/path/to/personal-notes"
 ## First commands
 
 ```bash
+rvn learn              # optional guided tour of core concepts
 rvn daily              # open/create today’s daily note
 rvn add "Quick note"   # append to capture destination (default: today)
 rvn reindex            # build/update the index
@@ -43,6 +44,8 @@ rvn query --list       # list saved queries from raven.yaml
 
 ## Next steps
 
+- Run `rvn learn next` to continue the built-in lesson sequence
+- Use `rvn learn open <lesson_id>` when you want a focused refresher
 - Read `core-concepts.md` to understand types, traits, and references
 - See `core-concepts.md` section **Agent-friendly descriptions** for writing useful schema context
 - See `cli.md` for common patterns and workflows

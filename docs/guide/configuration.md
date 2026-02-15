@@ -19,7 +19,7 @@ Use this for:
 - daily notes directory/template
 - saved queries (short names for RQL queries)
 - workflows
-- directory roots (`directories.objects`, `directories.pages`)
+- directory roots (`directories.object`, `directories.page`)
 - auto-reindex and capture settings
 
 Start here: `reference/vault-config.md`.
