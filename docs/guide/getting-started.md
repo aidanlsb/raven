@@ -44,6 +44,7 @@ rvn query --list       # list saved queries from raven.yaml
 ## Next steps
 
 - Read `core-concepts.md` to understand types, traits, and references
+- See `core-concepts.md` section **Agent-friendly descriptions** for writing useful schema context
 - See `cli.md` for common patterns and workflows
 - Keep `reference/cli.md` open for the complete command reference
 - Explore `reference/query-language.md` for powerful querying

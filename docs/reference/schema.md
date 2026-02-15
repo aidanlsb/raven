@@ -13,11 +13,12 @@ version: 2
 
 types:
   person:
+    description: People and contacts
     name_field: name
     default_path: people/
     fields:
-      name: { type: string, required: true }
-      email: { type: string }
+      name: { type: string, required: true, description: Full name used for display and references }
+      email: { type: string, description: Primary contact email }
       company: { type: ref, target: company }
       tags: { type: string[] }
 
@@ -124,6 +125,7 @@ type: date
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `description` | string | Optional human/agent context for the type |
 | `name_field` | string | Field that serves as the display name |
 | `default_path` | string | Directory where new files are created |
 | `template` | string | Template file path or inline content |
@@ -225,6 +227,7 @@ types:
 | Property | Type | Description | Applies to |
 |----------|------|-------------|------------|
 | `type` | string | Field type (see below) | All |
+| `description` | string | Optional human/agent context for the field | All |
 | `required` | boolean | Whether field must be present | All |
 | `default` | any | Default value | All |
 | `values` | string[] | Allowed values | enum, enum[] |
@@ -598,13 +601,17 @@ rvn schema trait due
 
 # Add to schema
 rvn schema add type book --name-field title --default-path books/
+rvn schema add type book --description "Books and long-form reading material"
 rvn schema add trait priority --type enum --values high,medium,low
 rvn schema add field person email --type string --required
+rvn schema add field person email --description "Primary contact email"
 
 # Update schema
 rvn schema update type person --name-field name
+rvn schema update type person --description "People and contacts"
 rvn schema update trait priority --values critical,high,medium,low
 rvn schema update field person email --required=true
+rvn schema update field person email --description -
 
 # Rename a type (updates all files)
 rvn schema rename type event meeting          # Preview

@@ -766,7 +766,7 @@ rvn schema trait due
 Add a new type to the schema.
 
 ```bash
-rvn schema add type <name> [--default-path PATH] [--name-field FIELD]
+rvn schema add type <name> [--default-path PATH] [--name-field FIELD] [--description TEXT]
 ```
 
 | Argument | Description |
@@ -777,12 +777,14 @@ rvn schema add type <name> [--default-path PATH] [--name-field FIELD]
 |------|-------------|
 | `--default-path` | Default directory for files of this type |
 | `--name-field` | Field to use as display name (auto-created if doesn't exist) |
+| `--description` | Optional description for this type |
 
 **Examples:**
 
 ```bash
 rvn schema add type person --name-field name --default-path people/
 rvn schema add type project --name-field title --default-path projects/
+rvn schema add type book --description "Books and long-form reading material"
 ```
 
 ---
@@ -819,7 +821,7 @@ rvn schema add trait highlight --type bool
 Add a field to an existing type.
 
 ```bash
-rvn schema add field <type_name> <field_name> [--type TYPE] [--required] [--target TYPE]
+rvn schema add field <type_name> <field_name> [--type TYPE] [--required] [--target TYPE] [--description TEXT]
 ```
 
 | Argument | Description |
@@ -832,12 +834,14 @@ rvn schema add field <type_name> <field_name> [--type TYPE] [--required] [--targ
 | `--type` | Field type: string, date, enum, ref, bool (default: string) |
 | `--required` | Mark field as required |
 | `--target` | Target type for ref fields |
+| `--description` | Optional description for this field |
 
 **Examples:**
 
 ```bash
 rvn schema add field person email --type string --required
 rvn schema add field book author --type ref --target person
+rvn schema add field person email --description "Primary contact email"
 ```
 
 ---
@@ -858,6 +862,7 @@ rvn schema update type <name> [flags]
 |------|-------------|
 | `--default-path` | Update default directory |
 | `--name-field` | Set/update display name field (use `-` to remove) |
+| `--description` | Set/update description (use `-` to remove) |
 | `--add-trait` | Add a trait to this type |
 | `--remove-trait` | Remove a trait from this type |
 
@@ -866,6 +871,7 @@ rvn schema update type <name> [flags]
 ```bash
 rvn schema update type person --name-field name
 rvn schema update type person --default-path people/
+rvn schema update type person --description "People and contacts"
 rvn schema update type meeting --add-trait due
 ```
 
@@ -916,6 +922,7 @@ rvn schema update field <type_name> <field_name> [flags]
 | `--required` | Update required status (true/false) |
 | `--default` | Update default value |
 | `--target` | Update target type for ref fields |
+| `--description` | Set/update description (use `-` to remove) |
 
 **Notes:**
 - Making a field required is blocked if any objects lack that field
@@ -926,6 +933,7 @@ rvn schema update field <type_name> <field_name> [flags]
 ```bash
 rvn schema update field person email --required=true
 rvn schema update field project status --default=active
+rvn schema update field person email --description -
 ```
 
 ---

@@ -64,6 +64,45 @@ traits:
 		}
 	})
 
+	t.Run("load optional type and field descriptions", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		schemaContent := `
+types:
+  person:
+    description: People and contacts
+    fields:
+      name:
+        type: string
+        description: Full display name
+`
+		err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0644)
+		if err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		schema, err := Load(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		person := schema.Types["person"]
+		if person == nil {
+			t.Fatal("expected 'person' type to exist")
+		}
+		if person.Description != "People and contacts" {
+			t.Fatalf("expected type description %q, got %q", "People and contacts", person.Description)
+		}
+
+		nameField := person.Fields["name"]
+		if nameField == nil {
+			t.Fatal("expected 'name' field to exist")
+		}
+		if nameField.Description != "Full display name" {
+			t.Fatalf("expected field description %q, got %q", "Full display name", nameField.Description)
+		}
+	})
+
 	t.Run("normalizes reference field types", func(t *testing.T) {
 		tmpDir := t.TempDir()
 

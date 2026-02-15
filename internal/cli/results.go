@@ -137,6 +137,7 @@ type TypeSchema struct {
 	Name        string                 `json:"name"`
 	Builtin     bool                   `json:"builtin"`
 	DefaultPath string                 `json:"default_path,omitempty"`
+	Description string                 `json:"description,omitempty"`
 	NameField   string                 `json:"name_field,omitempty"`
 	Template    string                 `json:"template,omitempty"`
 	Fields      map[string]FieldSchema `json:"fields,omitempty"`
@@ -144,11 +145,12 @@ type TypeSchema struct {
 
 // FieldSchema represents a field definition.
 type FieldSchema struct {
-	Type     string   `json:"type"`
-	Required bool     `json:"required"`
-	Default  string   `json:"default,omitempty"`
-	Values   []string `json:"values,omitempty"`
-	Target   string   `json:"target,omitempty"`
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Default     string   `json:"default,omitempty"`
+	Values      []string `json:"values,omitempty"`
+	Target      string   `json:"target,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 // TraitSchema represents a trait definition.

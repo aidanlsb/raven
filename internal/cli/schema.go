@@ -246,6 +246,9 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 
 	// Human-readable output
 	fmt.Printf("Type: %s\n", typeName)
+	if typeDef.Description != "" {
+		fmt.Printf("  Description: %s\n", typeDef.Description)
+	}
 	if typeDef.DefaultPath != "" {
 		fmt.Printf("  Default path: %s\n", typeDef.DefaultPath)
 	}
@@ -270,7 +273,11 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 			if name == typeDef.NameField {
 				isNameField = " [name_field]"
 			}
-			fmt.Printf("    %s: %s%s%s\n", name, fieldType, required, isNameField)
+			fieldDescription := ""
+			if field != nil && field.Description != "" {
+				fieldDescription = " - " + field.Description
+			}
+			fmt.Printf("    %s: %s%s%s%s\n", name, fieldType, required, isNameField, fieldDescription)
 		}
 	}
 
@@ -413,6 +420,7 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 
 	if typeDef != nil {
 		result.DefaultPath = typeDef.DefaultPath
+		result.Description = typeDef.Description
 		result.NameField = typeDef.NameField
 		result.Template = typeDef.Template
 
@@ -425,11 +433,12 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 						defaultStr = fmt.Sprintf("%v", fieldDef.Default)
 					}
 					result.Fields[fieldName] = FieldSchema{
-						Type:     string(fieldDef.Type),
-						Required: fieldDef.Required,
-						Default:  defaultStr,
-						Values:   fieldDef.Values,
-						Target:   fieldDef.Target,
+						Type:        string(fieldDef.Type),
+						Required:    fieldDef.Required,
+						Default:     defaultStr,
+						Values:      fieldDef.Values,
+						Target:      fieldDef.Target,
+						Description: fieldDef.Description,
 					}
 				}
 			}

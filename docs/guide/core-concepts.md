@@ -51,6 +51,25 @@ Traits are inline, single-valued annotations:
 
 Traits must be defined in `schema.yaml` to be indexed/queryable.
 
+## Agent-friendly descriptions
+
+Add optional `description` text to types and fields in `schema.yaml` to give extra context to both humans and agents.
+
+Good descriptions focus on intent and constraints, not just repeating the field name.
+
+```yaml
+types:
+  experiment:
+    description: Controlled product change with hypothesis and measured outcome
+    fields:
+      hypothesis:
+        type: string
+        description: Falsifiable statement of expected behavior change
+      run_date:
+        type: date
+        description: Planned launch date (YYYY-MM-DD)
+```
+
 ## Querying
 
 Raven queries are type-constrained:

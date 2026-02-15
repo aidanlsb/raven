@@ -145,9 +145,11 @@ version: 2  # Schema format version (do not change manually)
 #
 # name_field: When set, 'rvn new <type> <title>' auto-populates this field
 # with the title argument. Makes object creation more intuitive.
+# description: Optional context for humans/agents (types and fields).
 
 types:
   person:
+    description: People and contacts
     default_path: people/
     name_field: name
     fields:
@@ -156,6 +158,7 @@ types:
         required: true
       email:
         type: string
+        description: Primary contact email
 
   project:
     default_path: projects/
