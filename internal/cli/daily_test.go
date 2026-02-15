@@ -176,3 +176,49 @@ func TestDailyJSONOpensEditorWhenEditEnabled(t *testing.T) {
 		t.Fatalf("expected editor marker file to exist: %v", err)
 	}
 }
+
+func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
+	vaultPath := t.TempDir()
+	const date = "2026-02-16"
+	relPath := filepath.Join("daily", date+".md")
+	absPath := filepath.Join(vaultPath, relPath)
+
+	markerPath := filepath.Join(vaultPath, "editor-called.marker")
+	editorPath := filepath.Join(vaultPath, "fake-editor.sh")
+	editorScript := "#!/bin/sh\necho opened > \"" + markerPath + "\"\n"
+	if err := os.WriteFile(editorPath, []byte(editorScript), 0o755); err != nil {
+		t.Fatalf("write fake editor: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevCfg := cfg
+	prevEdit := dailyEdit
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		cfg = prevCfg
+		dailyEdit = prevEdit
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = false
+	cfg = &config.Config{
+		Editor:     editorPath,
+		EditorMode: "terminal",
+	}
+	dailyEdit = false
+
+	captureStdout(t, func() {
+		if err := dailyCmd.RunE(dailyCmd, []string{date}); err != nil {
+			t.Fatalf("dailyCmd.RunE: %v", err)
+		}
+	})
+
+	if _, err := os.Stat(markerPath); err != nil {
+		t.Fatalf("expected editor marker file to exist: %v", err)
+	}
+	if _, err := os.Stat(absPath); err != nil {
+		t.Fatalf("daily note does not exist at %s: %v", absPath, err)
+	}
+}
