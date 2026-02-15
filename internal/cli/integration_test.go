@@ -3,6 +3,7 @@
 package cli_test
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -378,6 +379,144 @@ See [[nonexistent/page]] for details.
 	if !strings.Contains(result.RawJSON, "missing_reference") {
 		t.Errorf("expected check output to include 'missing_reference' issue\nRaw: %s", result.RawJSON)
 	}
+}
+
+// TestIntegration_CheckCreateMissingRespectsDirectoryRoots verifies that
+// `check --create-missing` creates typed objects under configured directory roots.
+func TestIntegration_CheckCreateMissingRespectsDirectoryRoots(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  meeting:
+    default_path: meeting/
+  project:
+    default_path: projects/
+    fields:
+      meeting:
+        type: ref
+        target: meeting
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		WithFile("projects/kickoff.md", `---
+type: project
+meeting: "[[meeting/all-hands]]"
+---
+# Kickoff
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// check --create-missing is interactive and non-JSON; accept default "yes"
+	// for "Certain (from typed fields)" prompts by sending an empty line.
+	binary := testutil.BuildCLI(t)
+	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "--create-missing")
+	cmd.Stdin = strings.NewReader("\n")
+	output, _ := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Ensure the missing-reference workflow ran.
+	if !strings.Contains(outputStr, "Missing References") {
+		t.Fatalf("expected check output to include missing reference prompt, got:\n%s", outputStr)
+	}
+
+	// Regression assertion: created file must be nested under objects root.
+	v.AssertFileExists("objects/meeting/all-hands.md")
+	v.AssertFileNotExists("meeting/all-hands.md")
+	v.AssertFileContains("objects/meeting/all-hands.md", "type: meeting")
+}
+
+// TestIntegration_CheckCreateMissingUnknownTypeRespectsDirectoryRoots verifies
+// the unknown-type interactive flow:
+// 1) user provides a new type name
+// 2) check creates the type in schema.yaml
+// 3) missing page is created under configured objects root
+func TestIntegration_CheckCreateMissingUnknownTypeRespectsDirectoryRoots(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  project:
+    default_path: projects/
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		WithFile("projects/launch.md", `---
+type: project
+---
+# Launch
+
+See [[meeting/all-hands]] for notes.
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// Interactive inputs:
+	// - Type for meeting/all-hands: meeting
+	// - Create new type meeting?: y
+	// - Default path for meeting: meeting/
+	binary := testutil.BuildCLI(t)
+	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "--create-missing")
+	cmd.Stdin = strings.NewReader("meeting\ny\nmeeting/\n")
+	output, _ := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Ensure the unknown-type flow ran.
+	if !strings.Contains(outputStr, "Unknown type (please specify)") {
+		t.Fatalf("expected check output to include unknown type prompt, got:\n%s", outputStr)
+	}
+	if !strings.Contains(outputStr, "Created type 'meeting' in schema.yaml") {
+		t.Fatalf("expected check output to include type creation message, got:\n%s", outputStr)
+	}
+
+	// Regression assertion: created page must be nested under objects root.
+	v.AssertFileExists("objects/meeting/all-hands.md")
+	v.AssertFileNotExists("meeting/all-hands.md")
+	v.AssertFileContains("objects/meeting/all-hands.md", "type: meeting")
+
+	// Verify schema was updated with the new type/default_path.
+	v.AssertFileContains("schema.yaml", "meeting:")
+	v.AssertFileContains("schema.yaml", "default_path: meeting/")
+}
+
+// TestIntegration_CheckCreateMissingJSONConfirmRespectsDirectoryRoots verifies
+// non-interactive create-missing in JSON mode (agent-style invocation).
+func TestIntegration_CheckCreateMissingJSONConfirmRespectsDirectoryRoots(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  meeting:
+    default_path: meeting/
+  project:
+    default_path: projects/
+    fields:
+      meeting:
+        type: ref
+        target: meeting
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		WithFile("projects/weekly.md", `---
+type: project
+meeting: "[[meeting/all-hands]]"
+---
+# Weekly
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// Agent-style call: JSON mode + create-missing + confirm.
+	binary := testutil.BuildCLI(t)
+	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "--create-missing", "--confirm")
+	_, _ = cmd.CombinedOutput() // check may exit non-zero due validation issues; side effects are what we validate.
+
+	v.AssertFileExists("objects/meeting/all-hands.md")
+	v.AssertFileNotExists("meeting/all-hands.md")
 }
 
 // TestIntegration_Search tests full-text search.
