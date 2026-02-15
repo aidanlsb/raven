@@ -36,6 +36,18 @@ func TestIntegration_LearnListOpenDoneNext(t *testing.T) {
 
 	openRefs := v.RunCLI("learn", "open", "refs")
 	openRefs.MustSucceed(t)
+	lessonData, ok := openRefs.Data["lesson"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected lesson object in open output")
+	}
+	docs, ok := lessonData["docs"].([]interface{})
+	if !ok {
+		t.Fatalf("expected docs list in lesson output")
+	}
+	if len(docs) != 2 {
+		t.Fatalf("expected 2 docs links for refs lesson, got %d", len(docs))
+	}
+
 	prereqs := openRefs.DataList("prereqs")
 	if len(prereqs) != 1 {
 		t.Fatalf("expected 1 prereq for refs, got %d", len(prereqs))
