@@ -519,6 +519,55 @@ meeting: "[[meeting/all-hands]]"
 	v.AssertFileNotExists("meeting/all-hands.md")
 }
 
+// TestIntegration_ImportRespectsDirectoryRootsOnCreate verifies that imports
+// create new objects through the canonical path resolution logic, including
+// configured directory roots.
+func TestIntegration_ImportRespectsDirectoryRootsOnCreate(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		Build()
+
+	result := v.RunCLIWithStdin(`[{"name":"Freya"}]`, "import", "person")
+	result.MustSucceed(t)
+
+	v.AssertFileExists("objects/people/freya.md")
+	v.AssertFileNotExists("people/freya.md")
+	v.AssertFileNotExists("objects/objects/people/freya.md")
+	v.AssertFileContains("objects/people/freya.md", "type: person")
+	v.AssertFileContains("objects/people/freya.md", "name: Freya")
+}
+
+// TestIntegration_NewPageRespectsPagesRoot verifies that creating a page type
+// uses the configured pages root directory.
+func TestIntegration_NewPageRespectsPagesRoot(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML(`directories:
+  object: objects/
+  page: pages/
+`).
+		Build()
+
+	result := v.RunCLI("new", "page", "Quick Note")
+	result.MustSucceed(t)
+
+	v.AssertFileExists("pages/quick-note.md")
+	v.AssertFileNotExists("quick-note.md")
+	v.AssertFileNotExists("objects/quick-note.md")
+	v.AssertFileContains("pages/quick-note.md", "type: page")
+}
+
 // TestIntegration_Search tests full-text search.
 func TestIntegration_Search(t *testing.T) {
 	v := testutil.NewTestVault(t).

@@ -110,6 +110,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 	// Load vault config
 	vaultCfg := loadVaultConfigSafe(vaultPath)
+	creator := newObjectCreationContext(vaultPath, sch, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 
 	// Build the mapping config from flags and/or mapping file
 	mappingCfg, err := buildMappingConfig(args)
@@ -169,10 +170,8 @@ func runImport(cmd *cobra.Command, args []string) error {
 		}
 
 		// Resolve target path
-		objectsRoot := vaultCfg.GetObjectsRoot()
-		pagesRoot := vaultCfg.GetPagesRoot()
-		targetPath := pages.ResolveTargetPathWithRoots(matchValue, itemCfg.TypeName, sch, objectsRoot, pagesRoot)
-		exists := pages.Exists(vaultPath, targetPath)
+		targetPath := creator.resolveTargetPath(matchValue, itemCfg.TypeName)
+		exists := creator.exists(matchValue, itemCfg.TypeName)
 
 		if exists && importCreateOnly {
 			results = append(results, importResult{
@@ -212,7 +211,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 			warnings = append(warnings, w...)
 		} else {
 			// Create new object
-			result, w := importCreateObject(vaultPath, targetPath, itemCfg.TypeName, matchValue, mapped, contentValue, sch, vaultCfg)
+			result, w := importCreateObject(creator, matchValue, targetPath, itemCfg.TypeName, matchValue, mapped, contentValue, vaultCfg)
 			results = append(results, result)
 			warnings = append(warnings, w...)
 		}
@@ -422,7 +421,7 @@ func matchKeyValue(mapped map[string]interface{}, matchKey string) (string, bool
 }
 
 // importCreateObject creates a new vault object from imported data.
-func importCreateObject(vaultPath, targetPath, typeName, title string, fields map[string]interface{}, content string, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
+func importCreateObject(creator objectCreationContext, targetPath, resolvedTargetPath, typeName, title string, fields map[string]interface{}, content string, vaultCfg *config.VaultConfig) (importResult, []Warning) {
 	var warnings []Warning
 
 	// Convert fields to string map for pages.Create
@@ -431,22 +430,15 @@ func importCreateObject(vaultPath, targetPath, typeName, title string, fields ma
 	// Remove the type field from frontmatter data (it's set by the type system)
 	delete(stringFields, "type")
 
-	objectsRoot := vaultCfg.GetObjectsRoot()
-	pagesRoot := vaultCfg.GetPagesRoot()
-
-	createResult, err := pages.Create(pages.CreateOptions{
-		VaultPath:   vaultPath,
-		TypeName:    typeName,
-		Title:       title,
-		TargetPath:  targetPath,
-		Fields:      stringFields,
-		Schema:      sch,
-		ObjectsRoot: objectsRoot,
-		PagesRoot:   pagesRoot,
+	createResult, err := creator.create(objectCreateParams{
+		typeName:   typeName,
+		title:      title,
+		targetPath: targetPath,
+		fields:     stringFields,
 	})
 	if err != nil {
 		return importResult{
-			ID:     targetPath,
+			ID:     resolvedTargetPath,
 			Action: "error",
 			Reason: err.Error(),
 		}, warnings
@@ -456,7 +448,7 @@ func importCreateObject(vaultPath, targetPath, typeName, title string, fields ma
 	if content != "" {
 		if err := appendContentToFile(createResult.FilePath, content); err != nil {
 			return importResult{
-				ID:     targetPath,
+				ID:     resolvedTargetPath,
 				Action: "error",
 				Reason: fmt.Sprintf("failed to write content: %v", err),
 			}, warnings
@@ -464,7 +456,7 @@ func importCreateObject(vaultPath, targetPath, typeName, title string, fields ma
 	}
 
 	// Auto-reindex
-	maybeReindex(vaultPath, createResult.FilePath, vaultCfg)
+	maybeReindex(creator.vaultPath, createResult.FilePath, vaultCfg)
 
 	return importResult{
 		ID:     vaultCfg.FilePathToObjectID(createResult.RelativePath),

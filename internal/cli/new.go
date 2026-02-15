@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -195,27 +194,24 @@ Examples:
 		vaultCfg := loadVaultConfigSafe(vaultPath)
 		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
+		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
 
 		// Check if file exists (with full path resolution including directory roots)
-		resolvedPath := pages.ResolveTargetPathWithRoots(targetPath, typeName, s, objectsRoot, pagesRoot)
-		if pages.Exists(vaultPath, resolvedPath) {
+		resolvedSlugPath := creator.resolveAndSlugifyTargetPath(targetPath, typeName)
+		if creator.exists(targetPath, typeName) {
 			return handleErrorMsg(
 				ErrFileExists,
-				fmt.Sprintf("file already exists: %s.md", pages.SlugifyPath(resolvedPath)),
+				fmt.Sprintf("file already exists: %s.md", resolvedSlugPath),
 				"Choose a different title, or use `raven_open` to open the existing object",
 			)
 		}
 
-		// Create the page - pages.Create handles default_path and directory roots
-		result, err := pages.Create(pages.CreateOptions{
-			VaultPath:   vaultPath,
-			TypeName:    typeName,
-			Title:       title,
-			TargetPath:  targetPath,
-			Fields:      fieldValues,
-			Schema:      s,
-			ObjectsRoot: objectsRoot,
-			PagesRoot:   pagesRoot,
+		// Create the page through the shared object creator.
+		result, err := creator.create(objectCreateParams{
+			typeName:   typeName,
+			title:      title,
+			targetPath: targetPath,
+			fields:     fieldValues,
 		})
 		if err != nil {
 			return handleError(ErrFileWriteError, err, "")

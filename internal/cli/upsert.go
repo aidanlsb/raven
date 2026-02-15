@@ -11,7 +11,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/commands"
-	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -67,8 +66,8 @@ var upsertCmd = &cobra.Command{
 		vaultCfg := loadVaultConfigSafe(vaultPath)
 		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
-		resolvedTarget := pages.ResolveTargetPathWithRoots(title, typeName, s, objectsRoot, pagesRoot)
-		slugified := pages.SlugifyPath(resolvedTarget)
+		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
+		slugified := creator.resolveAndSlugifyTargetPath(title, typeName)
 		if !strings.HasSuffix(slugified, ".md") {
 			slugified += ".md"
 		}
@@ -96,15 +95,11 @@ var upsertCmd = &cobra.Command{
 				return handleErrorMsg(ErrRequiredField, msg, "Provide missing fields with --field")
 			}
 
-			createResult, err := pages.Create(pages.CreateOptions{
-				VaultPath:   vaultPath,
-				TypeName:    typeName,
-				Title:       title,
-				TargetPath:  title,
-				Fields:      fieldValues,
-				Schema:      s,
-				ObjectsRoot: objectsRoot,
-				PagesRoot:   pagesRoot,
+			createResult, err := creator.create(objectCreateParams{
+				typeName:   typeName,
+				title:      title,
+				targetPath: title,
+				fields:     fieldValues,
 			})
 			if err != nil {
 				return handleError(ErrFileWriteError, err, "")
