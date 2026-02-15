@@ -98,11 +98,9 @@ Examples:
 			return nil
 		}
 
-		if dailyEdit {
-			openFileInEditor(dailyPath, relPath, created)
-		} else {
-			fmt.Printf("File: %s\n", relPath)
-		}
+		// In human CLI mode, preserve the historical behavior:
+		// open daily notes by default. --edit is still used by JSON/agent callers.
+		openFileInEditor(dailyPath, relPath, created)
 
 		return nil
 	},
