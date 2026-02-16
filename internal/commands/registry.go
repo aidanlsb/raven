@@ -257,7 +257,7 @@ Checks include:
 	"docs": {
 		Name:        "docs",
 		Description: "Browse long-form Markdown documentation",
-		LongDesc: `Browse long-form documentation from the repository docs/ directory.
+		LongDesc: `Browse long-form documentation bundled into the rvn binary.
 
 Use this command for guides, references, and design notes.
 For command-level usage, use 'rvn help <command>'.`,

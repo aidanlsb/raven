@@ -195,7 +195,7 @@ rvn learn next
 
 ### `rvn docs`
 
-Browse long-form Markdown documentation from the repository `docs/` directory.
+Browse long-form Markdown documentation bundled into the `rvn` binary.
 
 ```bash
 rvn docs
@@ -227,7 +227,7 @@ rvn docs search refs --category reference --limit 5
 **Notes:**
 - `rvn docs` is for long-form guides/reference docs, not command flags/args
 - For command-level documentation, use `rvn help <command>`
-- Categories and topics are discovered from the `docs/` directory structure
+- Categories and topics are discovered from the bundled `docs/` directory structure
 
 ---
 
