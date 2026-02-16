@@ -619,12 +619,28 @@ steps:
 	result = v.RunCLI("workflow", "add", "file-brief", "--file", "workflows/file-brief.yaml")
 	result.MustSucceed(t)
 
-	// Confirm list includes both workflows.
+	// Bare filename should resolve under directories.workflow.
+	v.WriteFile("workflows/bare-brief.yaml", `description: Bare file workflow
+steps:
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Return JSON: {"outputs":{"markdown":"ok"}}
+`)
+	result = v.RunCLI("workflow", "add", "bare-brief", "--file", "bare-brief.yaml")
+	result.MustSucceed(t)
+	v.AssertFileContains("raven.yaml", "file: workflows/bare-brief.yaml")
+
+	// Confirm list includes all registered workflows.
 	result = v.RunCLI("workflow", "list")
 	result.MustSucceed(t)
 	items := result.DataList("workflows")
-	if len(items) != 2 {
-		t.Fatalf("expected 2 workflows, got %d\nRaw: %s", len(items), result.RawJSON)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 workflows, got %d\nRaw: %s", len(items), result.RawJSON)
 	}
 
 	// Remove one workflow and ensure it is gone.
@@ -649,6 +665,12 @@ func TestIntegration_WorkflowScaffold(t *testing.T) {
 	v.AssertFileExists("workflows/custom.yaml")
 	v.AssertFileContains("workflows/custom.yaml", "type: tool")
 	v.AssertFileContains("workflows/custom.yaml", "type: agent")
+
+	// Bare --file is resolved under directories.workflow.
+	result = v.RunCLI("workflow", "scaffold", "starter-bare", "--file", "starter-bare.yaml")
+	result.MustSucceed(t)
+	v.AssertFileExists("workflows/starter-bare.yaml")
+	v.AssertFileContains("raven.yaml", "file: workflows/starter-bare.yaml")
 
 	// Scaffolded workflow should be valid and runnable via workflow commands.
 	v.RunCLI("workflow", "validate", "starter").MustSucceed(t)

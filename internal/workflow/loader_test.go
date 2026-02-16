@@ -67,6 +67,21 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 	})
 
+	t.Run("resolves bare filename under default workflow directory", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "w1-bare.yaml")
+		if err := os.WriteFile(path, []byte("description: bare\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		wf, err := Load(vaultDir, "w1-bare", &config.WorkflowRef{File: "w1-bare.yaml"})
+		if err != nil {
+			t.Fatalf("Load error: %v", err)
+		}
+		if wf.Name != "w1-bare" {
+			t.Fatalf("expected workflow name w1-bare, got %s", wf.Name)
+		}
+	})
+
 	t.Run("enforces configured workflow directory", func(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(vaultDir, "automation", "flows"), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
@@ -105,6 +120,28 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 		if wf.Name != "w3" {
 			t.Fatalf("expected workflow name w3, got %s", wf.Name)
+		}
+	})
+
+	t.Run("resolves bare filename under custom workflow directory", func(t *testing.T) {
+		if err := os.MkdirAll(filepath.Join(vaultDir, "automation", "flows"), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		path := filepath.Join(vaultDir, "automation", "flows", "w4.yaml")
+		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		wf, err := LoadWithConfig(vaultDir, "w4", &config.WorkflowRef{File: "w4.yaml"}, &config.VaultConfig{
+			Directories: &config.DirectoriesConfig{
+				Workflow: "automation/flows/",
+			},
+		})
+		if err != nil {
+			t.Fatalf("LoadWithConfig error: %v", err)
+		}
+		if wf.Name != "w4" {
+			t.Fatalf("expected workflow name w4, got %s", wf.Name)
 		}
 	})
 
@@ -197,6 +234,45 @@ func TestGetAndList(t *testing.T) {
 		}
 		if badDesc == "" || !strings.Contains(badDesc, "(error:") {
 			t.Fatalf("expected bad workflow to include error description, got %q", badDesc)
+		}
+	})
+}
+
+func TestResolveWorkflowFileRef(t *testing.T) {
+	t.Run("keeps explicit workflow-relative path", func(t *testing.T) {
+		got, err := ResolveWorkflowFileRef("workflows/brief.yaml", "workflows/")
+		if err != nil {
+			t.Fatalf("ResolveWorkflowFileRef error: %v", err)
+		}
+		if got != "workflows/brief.yaml" {
+			t.Fatalf("expected workflows/brief.yaml, got %q", got)
+		}
+	})
+
+	t.Run("resolves bare filename under workflow directory", func(t *testing.T) {
+		got, err := ResolveWorkflowFileRef("brief.yaml", "workflows/")
+		if err != nil {
+			t.Fatalf("ResolveWorkflowFileRef error: %v", err)
+		}
+		if got != "workflows/brief.yaml" {
+			t.Fatalf("expected workflows/brief.yaml, got %q", got)
+		}
+	})
+
+	t.Run("normalizes windows separators", func(t *testing.T) {
+		got, err := ResolveWorkflowFileRef(`workflows\brief.yaml`, "workflows/")
+		if err != nil {
+			t.Fatalf("ResolveWorkflowFileRef error: %v", err)
+		}
+		if got != "workflows/brief.yaml" {
+			t.Fatalf("expected workflows/brief.yaml, got %q", got)
+		}
+	})
+
+	t.Run("rejects path outside configured workflow directory", func(t *testing.T) {
+		_, err := ResolveWorkflowFileRef("automation/brief.yaml", "workflows/")
+		if err == nil || !strings.Contains(err.Error(), "workflow file must be under directories.workflow") {
+			t.Fatalf("expected directories.workflow enforcement error, got %v", err)
 		}
 	})
 }

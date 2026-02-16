@@ -60,16 +60,9 @@ func LoadWithConfig(vaultPath, name string, ref *config.WorkflowRef, vaultCfg *c
 	if vaultCfg != nil {
 		workflowDir = vaultCfg.GetWorkflowDirectory()
 	}
-	fileRef, err := normalizeWorkflowFileRef(ref.File)
+	fileRef, err := ResolveWorkflowFileRef(ref.File, workflowDir)
 	if err != nil {
 		return nil, err
-	}
-	if !strings.HasPrefix(fileRef, workflowDir) {
-		return nil, fmt.Errorf(
-			"workflow file must be under directories.workflow %q: got %q",
-			workflowDir,
-			fileRef,
-		)
 	}
 
 	wf, err := loadFromFile(vaultPath, name, fileRef)
@@ -85,7 +78,9 @@ func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
 }
 
 func normalizeWorkflowFileRef(filePath string) (string, error) {
-	normalized := filepath.ToSlash(filepath.Clean(strings.TrimSpace(filePath)))
+	trimmed := strings.TrimSpace(filePath)
+	trimmed = strings.ReplaceAll(trimmed, "\\", "/")
+	normalized := filepath.ToSlash(filepath.Clean(trimmed))
 	normalized = strings.TrimPrefix(normalized, "./")
 	normalized = strings.TrimPrefix(normalized, "/")
 	if normalized == "" || normalized == "." {
@@ -93,6 +88,26 @@ func normalizeWorkflowFileRef(filePath string) (string, error) {
 	}
 	if normalized == ".." || strings.HasPrefix(normalized, "../") {
 		return "", fmt.Errorf("workflow file path cannot escape the vault")
+	}
+	return normalized, nil
+}
+
+// ResolveWorkflowFileRef normalizes a workflow file reference and enforces
+// directories.workflow policy. Bare filenames are resolved under workflowDir.
+func ResolveWorkflowFileRef(filePath, workflowDir string) (string, error) {
+	normalized, err := normalizeWorkflowFileRef(filePath)
+	if err != nil {
+		return "", err
+	}
+	if workflowDir != "" && !strings.HasPrefix(normalized, workflowDir) && !strings.Contains(normalized, "/") {
+		normalized = workflowDir + normalized
+	}
+	if workflowDir != "" && !strings.HasPrefix(normalized, workflowDir) {
+		return "", fmt.Errorf(
+			"workflow file must be under directories.workflow %q: got %q",
+			workflowDir,
+			normalized,
+		)
 	}
 	return normalized, nil
 }
