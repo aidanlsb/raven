@@ -543,6 +543,9 @@ or full path (people/freya.md).
 By default, this command returns enriched output (rendered wikilinks + backlinks).
 Use --raw to output only the raw file content (recommended for agents preparing precise edits).
 
+In an interactive terminal with fzf installed, bare 'rvn read' launches
+an interactive file picker.
+
 For long files, you can request a specific range with --start-line/--end-line, and/or
 ask for structured line output with --lines for copy-paste-safe anchors.`,
 		Args: []ArgMeta{
@@ -564,6 +567,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 		},
 		UseCases: []string{
 			"Read vault file content (use instead of 'cat', 'head', 'tail')",
+			"Interactively pick a file to read via fzf (when available)",
 			"Inspect file before editing (prefer --raw for exact string matching)",
 			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
 			"Get full content after finding object via query",
@@ -1266,6 +1270,9 @@ or a full path (objects/companies/cursor.md).
 
 The editor is determined by the 'editor' setting in config.toml or $EDITOR.
 
+In an interactive terminal with fzf installed, bare 'rvn open' launches
+an interactive file picker.
+
 Use --stdin to read object IDs from stdin (one per line) and open them all.
 This is useful for piping query results to open multiple files at once.`,
 		Args: []ArgMeta{
@@ -1281,6 +1288,7 @@ This is useful for piping query results to open multiple files at once.`,
 		},
 		UseCases: []string{
 			"Quickly open a file by its short name",
+			"Interactively pick a file to open via fzf (when available)",
 			"Open files using references without knowing full paths",
 			"Open multiple files from query results",
 		},

@@ -13,7 +13,7 @@ import (
 var openStdin bool
 
 var openCmd = &cobra.Command{
-	Use:   "open <reference>",
+	Use:   "open [reference]",
 	Short: "Open a file in your editor",
 	Long: `Opens a file in your configured editor.
 
@@ -30,6 +30,9 @@ Use --stdin to read object IDs from stdin (one per line) and open them all.
 This is useful for piping query results:
   rvn query 'object:project .status==active' --ids | rvn open --stdin
 
+In an interactive terminal with fzf installed, bare 'rvn open' launches
+an interactive file picker.
+
 Examples:
   rvn open cursor              # Opens companies/cursor.md
   rvn open companies/cursor    # Opens objects/companies/cursor.md
@@ -44,8 +47,8 @@ Examples:
 			}
 			return nil
 		}
-		if len(args) != 1 {
-			return fmt.Errorf("requires exactly 1 argument")
+		if len(args) > 1 {
+			return fmt.Errorf("accepts at most 1 argument")
 		}
 		return nil
 	},
@@ -56,6 +59,26 @@ Examples:
 		// Handle --stdin mode
 		if openStdin {
 			return runOpenStdin(vaultPath, vaultCfg)
+		}
+
+		if len(args) == 0 {
+			if canUseFZFInteractive() {
+				relPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "open> ", "Select a file to open (Esc to cancel)")
+				if err != nil {
+					return handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
+				}
+				if !selected {
+					return nil
+				}
+				openFileInEditor(filepath.Join(vaultPath, relPath), relPath, false)
+				return nil
+			}
+
+			return handleErrorMsg(
+				ErrMissingArgument,
+				"specify a reference",
+				interactivePickerMissingArgSuggestion("open", "rvn open <reference>"),
+			)
 		}
 
 		reference := args[0]
