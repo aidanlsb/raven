@@ -199,6 +199,7 @@ Browse long-form Markdown documentation bundled into the `rvn` binary.
 
 ```bash
 rvn docs
+rvn docs list
 rvn docs <section>
 rvn docs <section> <topic>
 rvn docs search <query> [--limit N] [--section SECTION]
@@ -218,6 +219,7 @@ rvn docs search <query> [--limit N] [--section SECTION]
 
 ```bash
 rvn docs
+rvn docs list
 rvn docs guide
 rvn docs reference query-language
 rvn docs search "saved query"
@@ -226,6 +228,8 @@ rvn docs search refs --section reference --limit 5
 
 **Notes:**
 - `rvn docs` is for long-form guides/reference docs, not command flags/args
+- `rvn docs list` prints explicit section commands with friendly titles/topic counts
+- `rvn docs <section>` prints explicit topic commands with friendly topic titles
 - For command-level documentation, use `rvn help <command>`
 - Sections/topics shown by `rvn docs` come from the authoritative `docs/index.yaml` registry (including explicit topic paths)
 

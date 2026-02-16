@@ -84,13 +84,14 @@ For command-level usage, use 'rvn help <command>'.
 
 Examples:
   rvn docs
+  rvn docs list
   rvn docs <section>
   rvn docs <section> <topic>
   rvn docs search "saved query"
   rvn docs search refs --section reference`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		sections, err := listDocsSectionsFS(builtindocs.FS, ".")
+		sections, err := listBundledDocsSections()
 		if err != nil {
 			return handleError(ErrInternal, err, "Rebuild rvn so bundled docs are available")
 		}
@@ -140,6 +141,22 @@ Examples:
 			fmt.Println()
 		}
 		return nil
+	},
+}
+
+var docsListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List docs sections and section commands",
+	Long: `List docs sections with explicit section command syntax.
+
+Use this to see exactly which 'rvn docs <section>' commands are available.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sections, err := listBundledDocsSections()
+		if err != nil {
+			return handleError(ErrInternal, err, "Rebuild rvn so bundled docs are available")
+		}
+		return outputDocsSections(sections)
 	},
 }
 
@@ -199,19 +216,18 @@ func outputDocsSections(sections []docsSectionView) error {
 		return nil
 	}
 
-	fmt.Println("Documentation sections:")
+	fmt.Println("Documentation section commands:")
 	for _, s := range sections {
-		topicLabel := "topics"
-		if s.TopicCount == 1 {
-			topicLabel = "topic"
-		}
-		fmt.Printf("  %-20s [%s] (%d %s)\n", s.Title, s.ID, s.TopicCount, topicLabel)
+		sectionCommand := fmt.Sprintf("rvn docs %s", s.ID)
+		fmt.Printf("  %-24s %s (%s)\n", sectionCommand, s.Title, docsTopicCountSummary(s.TopicCount))
 	}
 	fmt.Println()
-	fmt.Println(docsCommandHint)
-	fmt.Println("Open a section: rvn docs <section>")
-	fmt.Println("Open a topic:   rvn docs <section> <topic>")
-	fmt.Println("Search docs:     rvn docs search <query>")
+	fmt.Println("General docs commands:")
+	fmt.Println("  rvn docs list                 List sections and section commands")
+	fmt.Println("  rvn docs <section>            List topics in a section")
+	fmt.Println("  rvn docs <section> <topic>    Open a docs topic")
+	fmt.Println("  rvn docs search <query>       Search docs")
+	fmt.Println("  rvn help <command>            Command docs")
 	return nil
 }
 
@@ -233,14 +249,24 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 		return nil
 	}
 
-	fmt.Printf("%s topics:\n", section.Title)
+	fmt.Printf("Documentation topic commands for %s [%s]:\n", section.Title, section.ID)
 	if len(topics) == 0 {
-		fmt.Println("  (none)")
+		fmt.Println("  (no topics)")
+		fmt.Println()
+		fmt.Println("General docs commands:")
+		fmt.Printf("  %-48s %s\n", "rvn docs list", "List sections and section commands")
+		fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs search <query> --section %s", section.ID), "Search only this section")
 		return nil
 	}
 	for _, t := range topics {
-		fmt.Printf("  %-24s %s\n", t.ID, t.Title)
+		topicCommand := fmt.Sprintf("rvn docs %s %s", section.ID, t.ID)
+		fmt.Printf("  %-48s %s\n", topicCommand, t.Title)
 	}
+	fmt.Println()
+	fmt.Println("General docs commands:")
+	fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs %s", section.ID), "List topics in this section")
+	fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs search <query> --section %s", section.ID), "Search only this section")
+	fmt.Printf("  %-48s %s\n", "rvn docs list", "List sections and section commands")
 	return nil
 }
 
@@ -295,6 +321,10 @@ func docsTopicNotFound(sectionID, topicInput string, topics []docsTopicRecord) e
 
 func listDocsSections(docsRoot string) ([]docsSectionView, error) {
 	return listDocsSectionsFS(os.DirFS(docsRoot), ".")
+}
+
+func listBundledDocsSections() ([]docsSectionView, error) {
+	return listDocsSectionsFS(builtindocs.FS, ".")
 }
 
 func listDocsSectionsFS(docsFS fs.FS, docsRoot string) ([]docsSectionView, error) {
@@ -789,6 +819,13 @@ func titleFromSlug(slug string) string {
 	return strings.Join(parts, " ")
 }
 
+func docsTopicCountSummary(topicCount int) string {
+	if topicCount == 1 {
+		return "1 topic"
+	}
+	return fmt.Sprintf("%d topics", topicCount)
+}
+
 func isCommandSectionAlias(raw string) bool {
 	normalized := normalizeDocsSegment(raw)
 	return normalized == "command" || normalized == "commands"
@@ -837,6 +874,7 @@ func init() {
 	docsSearchCmd.Flags().IntVarP(&docsSearchLimit, "limit", "n", 20, "Maximum number of matches")
 	docsSearchCmd.Flags().StringVarP(&docsSearchSection, "section", "s", "", "Filter search to a docs section")
 
+	docsCmd.AddCommand(docsListCmd)
 	docsCmd.AddCommand(docsSearchCmd)
 	rootCmd.AddCommand(docsCmd)
 }

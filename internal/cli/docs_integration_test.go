@@ -18,8 +18,17 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 		t.Fatalf("expected docs sections, got none")
 	}
 
+	listAlias := v.RunCLI("docs", "list")
+	listAlias.MustSucceed(t)
+	aliasSections := listAlias.DataList("sections")
+	if len(aliasSections) != len(sections) {
+		t.Fatalf("expected docs list alias to return %d sections, got %d", len(sections), len(aliasSections))
+	}
+
 	requireSection(t, sections, "guide")
 	requireSection(t, sections, "reference")
+	requireSection(t, aliasSections, "guide")
+	requireSection(t, aliasSections, "reference")
 
 	reference := v.RunCLI("docs", "reference")
 	reference.MustSucceed(t)

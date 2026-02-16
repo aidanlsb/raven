@@ -267,6 +267,7 @@ For command-level usage, use 'rvn help <command>'.`,
 		},
 		Examples: []string{
 			"rvn docs --json",
+			"rvn docs list --json",
 			"rvn docs guide --json",
 			"rvn docs reference query-language --json",
 			"rvn docs search \"saved query\" --json",
@@ -276,6 +277,20 @@ For command-level usage, use 'rvn help <command>'.`,
 			"Browse docs topics by section",
 			"Open and read a specific docs page",
 			"Find long-form guidance outside command help",
+		},
+	},
+	"docs_list": {
+		Name:        "docs list",
+		Description: "List docs sections and section commands",
+		LongDesc: `List docs sections with explicit section command syntax.
+
+Use this to see exactly which 'rvn docs <section>' commands are available.`,
+		Examples: []string{
+			"rvn docs list --json",
+		},
+		UseCases: []string{
+			"List available docs section commands",
+			"See friendly section titles with topic counts",
 		},
 	},
 	"docs_search": {
