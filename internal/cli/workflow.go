@@ -171,26 +171,6 @@ func validateWorkflowCreateName(name string) error {
 	return nil
 }
 
-func normalizeWorkflowFileRef(raw string) string {
-	ref := filepath.ToSlash(filepath.Clean(strings.TrimSpace(raw)))
-	ref = strings.TrimPrefix(ref, "./")
-	ref = strings.TrimPrefix(ref, "/")
-	if ref == "." || ref == ".." || strings.HasPrefix(ref, "../") {
-		return ""
-	}
-	return ref
-}
-
-func validateWorkflowFileLocation(fileRef, workflowDir string) error {
-	if workflowDir == "" {
-		return nil
-	}
-	if !strings.HasPrefix(fileRef, workflowDir) {
-		return fmt.Errorf("workflow file must be under directories.workflow %q", workflowDir)
-	}
-	return nil
-}
-
 func registerWorkflowInConfig(
 	vaultPath string,
 	vaultCfg *config.VaultConfig,
@@ -255,11 +235,12 @@ Examples:
 		}
 		workflowDir := vaultCfg.GetWorkflowDirectory()
 
-		fileRef := normalizeWorkflowFileRef(workflowAddFile)
-		if fileRef == "" {
+		rawFileRef := strings.TrimSpace(workflowAddFile)
+		if rawFileRef == "" {
 			return handleErrorMsg(ErrMissingArgument, "--file is required", "Use --file <workflow YAML path>")
 		}
-		if err := validateWorkflowFileLocation(fileRef, workflowDir); err != nil {
+		fileRef, err := workflow.ResolveWorkflowFileRef(rawFileRef, workflowDir)
+		if err != nil {
 			return handleErrorMsg(
 				ErrInvalidInput,
 				err.Error(),
@@ -370,11 +351,8 @@ existing scaffold file.`,
 		if fileRef == "" {
 			fileRef = fmt.Sprintf("%s%s.yaml", workflowDir, name)
 		}
-		fileRef = normalizeWorkflowFileRef(fileRef)
-		if fileRef == "" {
-			return handleErrorMsg(ErrInvalidInput, "invalid workflow file path", "")
-		}
-		if err := validateWorkflowFileLocation(fileRef, workflowDir); err != nil {
+		fileRef, err = workflow.ResolveWorkflowFileRef(fileRef, workflowDir)
+		if err != nil {
 			return handleErrorMsg(
 				ErrInvalidInput,
 				err.Error(),
