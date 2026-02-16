@@ -14,6 +14,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -84,7 +85,7 @@ type checkScope struct {
 }
 
 // resolveCheckScope determines what to check based on args and flags
-func resolveCheckScope(vaultPath string, args []string) (*checkScope, error) {
+func resolveCheckScope(vaultPath string, args []string, vaultCfg *config.VaultConfig) (*checkScope, error) {
 	scope := &checkScope{scopeType: "full"}
 
 	// Type filter takes precedence
@@ -132,7 +133,7 @@ func resolveCheckScope(vaultPath string, args []string) (*checkScope, error) {
 	}
 
 	// Try resolving as a reference
-	result, err := ResolveReference(pathArg, ResolveOptions{VaultPath: vaultPath})
+	result, err := ResolveReference(pathArg, ResolveOptions{VaultPath: vaultPath, VaultConfig: vaultCfg})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve '%s': %w", pathArg, err)
 	}
@@ -217,8 +218,13 @@ var checkCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
+
 		// Resolve the check scope
-		scope, err := resolveCheckScope(vaultPath, args)
+		scope, err := resolveCheckScope(vaultPath, args, vaultCfg)
 		if err != nil {
 			return err
 		}
@@ -246,7 +252,6 @@ var checkCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
-		vaultCfg := loadVaultConfigSafe(vaultPath)
 
 		var errorCount, warningCount, fileCount int
 		var allDocs []*parser.ParsedDocument

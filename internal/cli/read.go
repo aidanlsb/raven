@@ -49,7 +49,10 @@ Examples:
 		setHyperlinksDisabled(readNoLinksFlag)
 
 		// Load vault config
-		vaultCfg := loadVaultConfigSafe(vaultPath)
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
 
 		var reference string
 		if len(args) == 0 {

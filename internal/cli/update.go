@@ -35,7 +35,10 @@ Examples:
 
 func runUpdate(cmd *cobra.Command, args []string) error {
 	vaultPath := getVaultPath()
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	if updateStdin {
 		if len(args) == 0 {

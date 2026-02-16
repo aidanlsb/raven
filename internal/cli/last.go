@@ -333,7 +333,10 @@ func applyToResults(vaultPath string, results []model.Result, applyStr string, c
 	}
 
 	// Load vault config for operations
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	// For trait queries, only 'update' with 'value=' is supported
 	var traitValue string

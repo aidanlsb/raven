@@ -8,14 +8,17 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 )
 
-// loadVaultConfigSafe loads the vault config, returning an empty config on error.
-// This is the preferred way to load vault config when config is optional.
-func loadVaultConfigSafe(vaultPath string) *config.VaultConfig {
+// loadVaultConfigSafe loads the vault config.
+// Returns an error if raven.yaml exists but is invalid.
+func loadVaultConfigSafe(vaultPath string) (*config.VaultConfig, error) {
 	cfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil || cfg == nil {
-		return &config.VaultConfig{}
+	if err != nil {
+		return nil, fmt.Errorf("failed to load raven.yaml: %w", err)
 	}
-	return cfg
+	if cfg == nil {
+		return &config.VaultConfig{}, nil
+	}
+	return cfg, nil
 }
 
 // buildParseOptions creates parser.ParseOptions from vault config.

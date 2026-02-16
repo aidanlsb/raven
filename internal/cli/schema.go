@@ -64,7 +64,10 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
 
-	vaultCfg, _ := config.LoadVaultConfig(vaultPath)
+	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, fmt.Errorf("failed to load raven.yaml: %w", err), "Fix raven.yaml and try again")
+	}
 
 	elapsed := time.Since(start).Milliseconds()
 
