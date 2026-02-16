@@ -193,6 +193,44 @@ rvn learn next
 
 ---
 
+### `rvn docs`
+
+Browse long-form Markdown documentation from the repository `docs/` directory.
+
+```bash
+rvn docs
+rvn docs <category>
+rvn docs <category> <topic>
+rvn docs search <query> [--limit N] [--category CATEGORY]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `category` | Docs category (for example `guide`, `reference`, `design`) |
+| `topic` | Topic slug within the category (for example `query-language`) |
+
+| Search Flag | Short | Description |
+|-------------|-------|-------------|
+| `--limit` | `-n` | Maximum number of search matches (default: 20) |
+| `--category` | `-c` | Restrict search to one docs category |
+
+**Examples:**
+
+```bash
+rvn docs
+rvn docs guide
+rvn docs reference query-language
+rvn docs search "saved query"
+rvn docs search refs --category reference --limit 5
+```
+
+**Notes:**
+- `rvn docs` is for long-form guides/reference docs, not command flags/args
+- For command-level documentation, use `rvn help <command>`
+- Categories and topics are discovered from the `docs/` directory structure
+
+---
+
 ### `rvn set`
 
 Set frontmatter fields on an object.

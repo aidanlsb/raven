@@ -254,6 +254,50 @@ Checks include:
 			"Find orphan lesson files not in syllabus",
 		},
 	},
+	"docs": {
+		Name:        "docs",
+		Description: "Browse long-form Markdown documentation",
+		LongDesc: `Browse long-form documentation from the repository docs/ directory.
+
+Use this command for guides, references, and design notes.
+For command-level usage, use 'rvn help <command>'.`,
+		Args: []ArgMeta{
+			{Name: "category", Description: "Docs category (e.g., guide, reference, design)", Required: false},
+			{Name: "topic", Description: "Topic slug within the category (e.g., query-language)", Required: false},
+		},
+		Examples: []string{
+			"rvn docs --json",
+			"rvn docs guide --json",
+			"rvn docs reference query-language --json",
+			"rvn docs search \"saved query\" --json",
+		},
+		UseCases: []string{
+			"List docs categories and topic counts",
+			"Browse docs topics by category",
+			"Open and read a specific docs page",
+			"Find long-form guidance outside command help",
+		},
+	},
+	"docs_search": {
+		Name:        "docs search",
+		Description: "Search long-form Markdown documentation",
+		Args: []ArgMeta{
+			{Name: "query", Description: "Search query text", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "limit", Short: "n", Description: "Maximum number of matches", Type: FlagTypeInt, Default: "20"},
+			{Name: "category", Short: "c", Description: "Filter search to one docs category", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn docs search query --json",
+			"rvn docs search \"saved query\" --category reference --json",
+		},
+		UseCases: []string{
+			"Search guides and references by keyword",
+			"Limit docs search to a specific category",
+			"Locate docs pages when topic slug is unknown",
+		},
+	},
 	"delete": {
 		Name:        "delete",
 		Description: "Delete an object from the vault",
