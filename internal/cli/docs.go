@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	builtindocs "github.com/aidanlsb/raven/docs"
 )
 
 const (
@@ -47,13 +50,13 @@ type docsTopicRecord struct {
 	ID       string
 	Title    string
 	Path     string
-	AbsPath  string
+	FSPath   string
 }
 
 var docsCmd = &cobra.Command{
 	Use:   "docs [category] [topic]",
 	Short: "Browse long-form Markdown documentation",
-	Long: `Browse long-form documentation from the repository docs/ directory.
+	Long: `Browse long-form documentation bundled into the rvn binary.
 
 Use this command for guides, references, and design notes.
 For command-level usage, use 'rvn help <command>'.
@@ -66,18 +69,9 @@ Examples:
   rvn docs search refs --category reference`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		docsRoot, err := discoverDocsRoot()
+		categories, err := listDocsCategoriesFS(builtindocs.FS, ".")
 		if err != nil {
-			return handleErrorMsg(
-				ErrFileNotFound,
-				"docs directory not found",
-				"Run from the Raven repository (or a subdirectory) that contains ./docs",
-			)
-		}
-
-		categories, err := listDocsCategories(docsRoot)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
+			return handleError(ErrInternal, err, "Rebuild rvn so bundled docs are available")
 		}
 
 		if len(args) == 0 {
@@ -89,7 +83,7 @@ Examples:
 			return docsCategoryNotFound(args, categories)
 		}
 
-		topics, err := listDocsTopics(docsRoot, category.ID)
+		topics, err := listDocsTopicsFS(builtindocs.FS, ".", category.ID)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -103,7 +97,7 @@ Examples:
 			return docsTopicNotFound(category.ID, args[1], topics)
 		}
 
-		content, err := os.ReadFile(topic.AbsPath)
+		content, err := fs.ReadFile(builtindocs.FS, topic.FSPath)
 		if err != nil {
 			return handleError(ErrFileReadError, err, "")
 		}
@@ -147,16 +141,7 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, "--limit must be >= 1", "")
 		}
 
-		docsRoot, err := discoverDocsRoot()
-		if err != nil {
-			return handleErrorMsg(
-				ErrFileNotFound,
-				"docs directory not found",
-				"Run from the Raven repository (or a subdirectory) that contains ./docs",
-			)
-		}
-
-		matches, err := searchDocs(docsRoot, query, docsSearchCategory, docsSearchLimit)
+		matches, err := searchDocsFS(builtindocs.FS, ".", query, docsSearchCategory, docsSearchLimit)
 		if err != nil {
 			return handleError(ErrInvalidInput, err, "Run 'rvn docs' to list categories")
 		}
@@ -283,41 +268,12 @@ func docsTopicNotFound(categoryID, topicInput string, topics []docsTopicRecord) 
 	)
 }
 
-func discoverDocsRoot() (string, error) {
-	if cwd, err := os.Getwd(); err == nil {
-		if p, ok := findDocsRootFrom(cwd); ok {
-			return p, nil
-		}
-	}
-
-	if exe, err := os.Executable(); err == nil {
-		if p, ok := findDocsRootFrom(filepath.Dir(exe)); ok {
-			return p, nil
-		}
-	}
-
-	return "", fmt.Errorf("docs root not found")
-}
-
-func findDocsRootFrom(start string) (string, bool) {
-	dir := start
-	for {
-		candidate := filepath.Join(dir, "docs")
-		info, err := os.Stat(candidate)
-		if err == nil && info.IsDir() {
-			return candidate, true
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", false
-		}
-		dir = parent
-	}
-}
-
 func listDocsCategories(docsRoot string) ([]docsCategoryView, error) {
-	entries, err := os.ReadDir(docsRoot)
+	return listDocsCategoriesFS(os.DirFS(docsRoot), ".")
+}
+
+func listDocsCategoriesFS(docsFS fs.FS, docsRoot string) ([]docsCategoryView, error) {
+	entries, err := fs.ReadDir(docsFS, docsRoot)
 	if err != nil {
 		return nil, fmt.Errorf("read docs root: %w", err)
 	}
@@ -328,7 +284,7 @@ func listDocsCategories(docsRoot string) ([]docsCategoryView, error) {
 			continue
 		}
 
-		topics, err := listDocsTopics(docsRoot, entry.Name())
+		topics, err := listDocsTopicsFS(docsFS, docsRoot, entry.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -347,8 +303,12 @@ func listDocsCategories(docsRoot string) ([]docsCategoryView, error) {
 }
 
 func listDocsTopics(docsRoot, category string) ([]docsTopicRecord, error) {
-	categoryPath := filepath.Join(docsRoot, category)
-	info, err := os.Stat(categoryPath)
+	return listDocsTopicsFS(os.DirFS(docsRoot), ".", category)
+}
+
+func listDocsTopicsFS(docsFS fs.FS, docsRoot, category string) ([]docsTopicRecord, error) {
+	categoryPath := path.Join(docsRoot, category)
+	info, err := fs.Stat(docsFS, categoryPath)
 	if err != nil {
 		return nil, fmt.Errorf("category %q not found: %w", category, err)
 	}
@@ -359,18 +319,18 @@ func listDocsTopics(docsRoot, category string) ([]docsTopicRecord, error) {
 	records := make([]docsTopicRecord, 0)
 	seen := make(map[string]string)
 
-	err = filepath.WalkDir(categoryPath, func(path string, d fs.DirEntry, walkErr error) error {
+	err = fs.WalkDir(docsFS, categoryPath, func(entryPath string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 
 		name := d.Name()
 		if d.IsDir() {
-			if path == categoryPath {
+			if entryPath == categoryPath {
 				return nil
 			}
 			if !isPublicDocsName(name) {
-				return filepath.SkipDir
+				return fs.SkipDir
 			}
 			return nil
 		}
@@ -382,11 +342,10 @@ func listDocsTopics(docsRoot, category string) ([]docsTopicRecord, error) {
 			return nil
 		}
 
-		rel, err := filepath.Rel(categoryPath, path)
-		if err != nil {
-			return err
+		rel := strings.TrimPrefix(entryPath, categoryPath+"/")
+		if rel == entryPath {
+			return fmt.Errorf("unexpected docs topic path %q for category %q", entryPath, category)
 		}
-		rel = filepath.ToSlash(rel)
 
 		id := normalizeDocsPathSlug(strings.TrimSuffix(rel, filepath.Ext(rel)))
 		if id == "" {
@@ -400,9 +359,9 @@ func listDocsTopics(docsRoot, category string) ([]docsTopicRecord, error) {
 		records = append(records, docsTopicRecord{
 			Category: category,
 			ID:       id,
-			Title:    extractDocsTitle(path, id),
-			Path:     filepath.ToSlash(filepath.Join("docs", category, rel)),
-			AbsPath:  path,
+			Title:    extractDocsTitleFS(docsFS, entryPath, id),
+			Path:     path.Join("docs", category, rel),
+			FSPath:   entryPath,
 		})
 		return nil
 	})
@@ -438,6 +397,10 @@ func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool)
 }
 
 func searchDocs(docsRoot, query, categoryFilter string, limit int) ([]docsSearchMatchView, error) {
+	return searchDocsFS(os.DirFS(docsRoot), ".", query, categoryFilter, limit)
+}
+
+func searchDocsFS(docsFS fs.FS, docsRoot, query, categoryFilter string, limit int) ([]docsSearchMatchView, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, fmt.Errorf("empty query")
@@ -446,7 +409,7 @@ func searchDocs(docsRoot, query, categoryFilter string, limit int) ([]docsSearch
 		return nil, fmt.Errorf("limit must be >= 1")
 	}
 
-	categories, err := listDocsCategories(docsRoot)
+	categories, err := listDocsCategoriesFS(docsFS, docsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -466,13 +429,13 @@ func searchDocs(docsRoot, query, categoryFilter string, limit int) ([]docsSearch
 	matches := make([]docsSearchMatchView, 0, limit)
 
 	for _, category := range selected {
-		topics, err := listDocsTopics(docsRoot, category.ID)
+		topics, err := listDocsTopicsFS(docsFS, docsRoot, category.ID)
 		if err != nil {
 			return nil, err
 		}
 
 		for _, topic := range topics {
-			content, err := os.ReadFile(topic.AbsPath)
+			content, err := fs.ReadFile(docsFS, topic.FSPath)
 			if err != nil {
 				return nil, fmt.Errorf("read %s: %w", topic.Path, err)
 			}
@@ -534,10 +497,10 @@ func shortenDocsSnippet(line, queryLower string) string {
 	return out
 }
 
-func extractDocsTitle(absPath, fallbackSlug string) string {
-	f, err := os.Open(absPath)
+func extractDocsTitleFS(docsFS fs.FS, docsPath, fallbackSlug string) string {
+	f, err := docsFS.Open(docsPath)
 	if err != nil {
-		return titleFromSlug(filepath.Base(fallbackSlug))
+		return titleFromSlug(path.Base(fallbackSlug))
 	}
 	defer f.Close()
 
@@ -552,7 +515,7 @@ func extractDocsTitle(absPath, fallbackSlug string) string {
 		}
 	}
 
-	return titleFromSlug(filepath.Base(fallbackSlug))
+	return titleFromSlug(path.Base(fallbackSlug))
 }
 
 func isPublicDocsName(name string) bool {

@@ -5,7 +5,31 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	builtindocs "github.com/aidanlsb/raven/docs"
 )
+
+func TestListDocsCategoriesFSLoadsEmbeddedDocs(t *testing.T) {
+	t.Parallel()
+
+	categories, err := listDocsCategoriesFS(builtindocs.FS, ".")
+	if err != nil {
+		t.Fatalf("listDocsCategoriesFS() error = %v", err)
+	}
+	if len(categories) == 0 {
+		t.Fatalf("expected embedded docs categories, got none")
+	}
+
+	var ids []string
+	for _, c := range categories {
+		ids = append(ids, c.ID)
+	}
+	for _, expected := range []string{"design", "guide", "reference"} {
+		if !slices.Contains(ids, expected) {
+			t.Fatalf("expected category %q in %v", expected, ids)
+		}
+	}
+}
 
 func TestNormalizeDocsPathSlug(t *testing.T) {
 	t.Parallel()
