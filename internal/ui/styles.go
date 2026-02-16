@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Minimal color palette: black, white, gray by default.
+// Minimal color palette with focused semantic accents.
 // Optional accent color can be configured via [ui].accent.
 // Uses ANSI colors for terminal theme compatibility.
 //
@@ -27,6 +27,13 @@ var (
 	// Defaults to Bold with no color when accent is not configured.
 	Accent = Bold
 
+	// Syntax style for code-like tokens and Raven syntax markers.
+	// Defaults to cyan for visibility when no accent is configured.
+	Syntax = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
+
+	// SyntaxSubtle style for supporting syntax values.
+	SyntaxSubtle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+
 	accentColor string
 )
 
@@ -41,11 +48,15 @@ func ConfigureTheme(accent string) {
 	if !ok {
 		accentColor = ""
 		Accent = Bold
+		Syntax = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
+		SyntaxSubtle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 		return
 	}
 
 	accentColor = normalized
 	Accent = lipgloss.NewStyle().Foreground(lipgloss.Color(normalized)).Bold(true)
+	Syntax = lipgloss.NewStyle().Foreground(lipgloss.Color(normalized)).Bold(true)
+	SyntaxSubtle = lipgloss.NewStyle().Foreground(lipgloss.Color(normalized))
 }
 
 // AccentColor returns the currently configured accent color, if any.

@@ -36,6 +36,10 @@ type UIConfig struct {
 	// Accent is an optional accent color for CLI output and markdown rendering.
 	// Supported values are ANSI color codes ("0" to "255") or hex colors ("#RRGGBB").
 	Accent string `toml:"accent"`
+
+	// CodeTheme sets the Glamour/Chroma theme used for rendered markdown code blocks.
+	// Example values: "monokai", "dracula", "github", "nord".
+	CodeTheme string `toml:"code_theme"`
 }
 
 // GetVaultPath returns the path for a named vault.
@@ -180,6 +184,7 @@ func CreateDefault() (string, error) {
 # Supports ANSI color codes (0-255) or hex (#RRGGBB).
 # [ui]
 # accent = "39"
+# code_theme = "monokai"
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {

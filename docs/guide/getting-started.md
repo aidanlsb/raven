@@ -1,54 +1,85 @@
-# Getting started
+# Getting Started
 
-## Install
+This guide is for your first session only.
+
+Goal: complete one full Raven loop with confidence:
+1. create a vault
+2. add structured information
+3. query and verify the result
+
+Out of scope here:
+- deep configuration (`configuration.md`)
+- deep schema modeling (`schema-intro.md` and `reference/schema.md`)
+- advanced command workflows (`cli-advanced.md`)
+
+## 1) Install and verify
 
 ```bash
 go install github.com/aidanlsb/raven/cmd/rvn@latest
 rvn version
 ```
 
-## Create a vault
+Success check: `rvn version` prints version/build metadata.
+
+## 2) Create a vault
 
 ```bash
-rvn init /path/to/notes
+rvn init ~/notes
+cd ~/notes
 ```
 
-This creates:
-- `schema.yaml` — types + traits
-- `raven.yaml` — vault config (saved queries, workflows, etc)
-- `.raven/` — local index + metadata (gitignored)
+Success check: you have:
+- `schema.yaml`
+- `raven.yaml`
+- `.raven/`
 
-## Configure your default vault (optional)
+## 3) Complete your first loop
 
-Raven looks for a global config at `~/.config/raven/config.toml` (or your OS config dir). You can have multiple named vaults and set one as your default:
-
-```toml
-default_vault = "work"
-editor = "code"
-editor_mode = "auto"
-
-[vaults]
-work = "/path/to/notes"
-personal = "/path/to/personal-notes"
-```
-
-## First commands
+### Step A: Create a typed object
 
 ```bash
-rvn learn              # optional guided tour of core concepts
-rvn daily              # open/create today’s daily note
-rvn add "Quick note"   # append to capture destination (default: today)
-rvn reindex            # build/update the index
-rvn query --list       # list saved queries from raven.yaml
+rvn new project "Onboarding"
 ```
 
-## Next steps
+Success check: a file exists at `projects/onboarding.md`.
 
-- Run `rvn learn next` to continue the built-in lesson sequence
-- Use `rvn learn open <lesson_id>` when you want a focused refresher
-- Read `core-concepts.md` to understand types, traits, and references
-- See `core-concepts.md` section **Agent-friendly descriptions** for writing useful schema context
-- See `cli.md` for common patterns and workflows
-- Keep `reference/cli.md` open for the complete command reference
-- Explore `reference/query-language.md` for powerful querying
+### Step B: Add a structured note
+
+```bash
+rvn add "Planning [[projects/onboarding]] @highlight"
+```
+
+This appends to today's daily note and includes:
+- a reference (`[[projects/onboarding]]`)
+- a trait (`@highlight`)
+
+### Step C: Query it
+
+```bash
+rvn query 'trait:highlight refs([[projects/onboarding]])'
+```
+
+Success check: at least one result appears from today's note.
+
+If no results appear:
+- run `rvn reindex`
+- run the same query again
+
+## 4) What to do next
+
+Follow this sequence:
+1. `configuration.md` - set up `config.toml` and `raven.yaml`
+2. `schema-intro.md` - learn practical `schema.yaml` basics
+3. `cli-basics.md` - daily command patterns
+
+## Agent next step (after activation)
+
+If you are using Cursor or Claude, connect Raven through MCP now:
+- see `reference/mcp.md` for setup
+
+Suggested first prompt once connected:
+
+```text
+"Summarize my onboarding project and list actionable notes that reference it."
+```
 

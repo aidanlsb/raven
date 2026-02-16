@@ -38,9 +38,13 @@ func TestNormalizeAccentColor(t *testing.T) {
 
 func TestConfigureThemeAccentColor(t *testing.T) {
 	origAccent := Accent
+	origSyntax := Syntax
+	origSyntaxSubtle := SyntaxSubtle
 	origAccentColor := accentColor
 	t.Cleanup(func() {
 		Accent = origAccent
+		Syntax = origSyntax
+		SyntaxSubtle = origSyntaxSubtle
 		accentColor = origAccentColor
 	})
 

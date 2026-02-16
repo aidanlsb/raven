@@ -5,17 +5,31 @@ sections:
     title: User Guides
     topics:
       getting-started:
+        title: Start Here
         path: getting-started.md
-      core-concepts:
-        path: core-concepts.md
       configuration:
+        title: Setup and Configuration
         path: configuration.md
+      schema-intro:
+        title: Schema Introduction
+        path: schema-intro.md
+      core-concepts:
+        title: Core Concepts
+        path: core-concepts.md
       cli:
+        title: CLI Learning Path
         path: cli.md
+      cli-basics:
+        title: CLI Basics
+        path: cli-basics.md
+      cli-advanced:
+        title: CLI Advanced
+        path: cli-advanced.md
       workflows:
+        title: Workflow Automation
         path: workflows.md
   reference:
-    title: Reference
+    title: Reference (Lookup)
     topics:
       cli:
         title: CLI Reference
@@ -41,6 +55,8 @@ sections:
   design:
     title: Design Notes
     topics:
+      onboarding-metrics:
+        path: onboarding-metrics.md
       architecture:
         path: architecture.md
       parsing:

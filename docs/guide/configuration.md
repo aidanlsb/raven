@@ -1,40 +1,193 @@
-# Configuration
+# Configuration Guide
 
-Raven uses:
-- `schema.yaml` — types + traits (structure)
-- `raven.yaml` — vault settings + saved queries + workflows (behavior)
-- `~/.config/raven/config.toml` — global settings (default vault, editor, editor mode)
+This page focuses only on Raven's core configuration files:
+- machine-level config in `~/.config/raven/config.toml`
+- vault-level config in `raven.yaml`
+- a brief handoff to `schema.yaml` (covered in depth separately)
 
-## `schema.yaml` (types + traits)
+Out of scope here:
+- detailed schema design patterns (`schema-intro.md` and `reference/schema.md`)
+- command tutorials (`cli-basics.md` and `cli-advanced.md`)
 
-Use this for:
-- defining types and their frontmatter fields
-- defining traits and their value types
+For complete syntax reference, use:
+- `reference/vault-config.md`
+- `reference/schema.md`
 
-Start here: `reference/schema.md`.
+## Configuration layers at a glance
 
-## `raven.yaml` (vault config)
+| File | Scope | What it controls |
+|------|-------|------------------|
+| `~/.config/raven/config.toml` | your machine | which vault is default, how files open in your editor |
+| `raven.yaml` | one vault | operational behavior inside that vault |
+| `schema.yaml` | one vault | data model for objects, fields, and traits |
 
-Use this for:
-- daily notes directory/template
-- saved queries (short names for RQL queries)
-- workflows
-- directory roots (`directories.object`, `directories.page`)
-- auto-reindex and capture settings
+Rule of thumb:
+- if a setting should apply across all vaults on your machine, put it in `config.toml`
+- if a setting should travel with a specific vault, put it in `raven.yaml` or `schema.yaml`
 
-Start here: `reference/vault-config.md`.
+## Machine-level config: `config.toml`
 
-## Templates
+`config.toml` is your personal Raven environment. It is where you define:
+- `default_vault`
+- editor settings (`editor`, `editor_mode`)
+- named vaults in `[vaults]`
 
-Templates can be:
-- per-type templates in `schema.yaml` (used by `rvn new`)
-- daily note template in `raven.yaml` (used by `rvn daily`)
+### Recommended baseline
 
-Template variables are documented in `reference/schema.md` (type templates) and `reference/vault-config.md` (daily template).
+```toml
+default_vault = "work"
+editor = "code"
+editor_mode = "auto"
 
-## Next steps
+[vaults]
+work = "/Users/you/work-notes"
+personal = "/Users/you/personal-notes"
 
-- See `reference/schema.md` for complete type and trait definition options
-- See `reference/vault-config.md` for all vault configuration settings
-- See `cli.md` for schema management commands
+[ui]
+accent = "39"
+code_theme = "monokai"
+```
+
+### Keys that matter most
+
+- `default_vault`  
+  Vault name Raven uses when no explicit vault is provided.
+
+- `editor`  
+  Editor command used by open/edit actions.
+
+- `editor_mode`  
+  How Raven launches the editor:
+  - `auto` (default)
+  - `terminal`
+  - `gui`
+
+- `[ui]`  
+  Optional terminal styling settings:
+  - `accent`: accent color for headings/highlights
+  - `code_theme`: markdown code block theme (for Glamour rendering)
+
+- `[vaults]`  
+  Name-to-path mapping for your known vaults.
+
+## Vault behavior config: `raven.yaml`
+
+`raven.yaml` defines how a vault behaves day to day. Start by deciding:
+1. where daily notes live
+2. where quick capture appends
+3. whether to enforce directory roots
+4. whether to keep operational shortcuts (saved queries/workflows) in config
+
+For a first setup, configure daily notes, capture, and auto-reindex first. Other sections are optional.
+
+### A practical starting point
+
+```yaml
+daily_directory: daily
+auto_reindex: true
+
+capture:
+  destination: daily
+  heading: "## Captured"
+  timestamp: false
+
+directories:
+  object: object/
+  page: page/
+  workflow: workflows/
+```
+
+### Key `raven.yaml` sections
+
+#### Daily notes
+
+```yaml
+daily_directory: daily
+daily_template: templates/daily.md
+```
+
+- `daily_directory` sets where daily notes are stored.
+- `daily_template` sets the format for newly created daily notes.
+
+#### Capture behavior
+
+```yaml
+capture:
+  destination: daily
+  heading: "## Captured"
+  timestamp: false
+```
+
+- `destination`: `"daily"` or a specific file path
+- `heading`: optional heading under which captures are appended
+- `timestamp`: whether entries are prefixed with time
+
+#### Index behavior
+
+```yaml
+auto_reindex: true
+```
+
+- `true` keeps the index in sync automatically after edits.
+- `false` gives manual control if you prefer explicit indexing.
+
+#### Directory layout
+
+```yaml
+directories:
+  object: object/
+  page: page/
+  workflow: workflows/
+```
+
+- `object`: root for typed objects
+- `page`: root for untyped pages
+- `workflow`: root for workflow definition files
+
+Use this when you want strict and predictable project structure.
+
+#### Deletion behavior
+
+```yaml
+deletion:
+  behavior: trash
+  trash_dir: .trash
+```
+
+- `behavior`: `trash` (safe default) or `permanent`
+- `trash_dir`: where deleted files are moved when trash mode is enabled
+
+#### Saved operational config
+
+```yaml
+queries:
+  overdue:
+    query: "trait:due .value==past"
+    description: "Items past due"
+
+workflows:
+  meeting-prep:
+    file: workflows/meeting-prep.yaml
+```
+
+- `queries` keeps shared saved-query names in the vault
+- `workflows` registers reusable workflow definitions
+
+## Vault structure config: `schema.yaml` (next section)
+
+`schema.yaml` is deep enough to treat separately. In short, it controls:
+- types
+- fields and validation rules
+- traits
+- type templates
+
+This guide keeps schema details out of scope so configuration stays focused.
+Use `reference/schema.md` for now; we can add a dedicated schema guide section next.
+
+## Related docs
+
+- `getting-started.md` for first-run setup flow
+- `schema-intro.md` for guide-level schema setup
+- `reference/vault-config.md` for complete `raven.yaml` options
+- `reference/schema.md` for full schema rules
 

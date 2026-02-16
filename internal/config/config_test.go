@@ -207,6 +207,7 @@ personal = "/path/to/personal"
 
 [ui]
 accent = "39"
+code_theme = "dracula"
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -228,6 +229,9 @@ accent = "39"
 	}
 	if cfg.UI.Accent != "39" {
 		t.Errorf("expected ui.accent '39', got %q", cfg.UI.Accent)
+	}
+	if cfg.UI.CodeTheme != "dracula" {
+		t.Errorf("expected ui.code_theme 'dracula', got %q", cfg.UI.CodeTheme)
 	}
 }
 

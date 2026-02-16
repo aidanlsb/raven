@@ -81,7 +81,7 @@ func readEnriched(opts readEnrichedOptions) error {
 		if rendered, renderErr := ui.RenderMarkdown(processedBody, width); renderErr == nil {
 			renderedBody = rendered
 		}
-		renderedBody = renderTraitsMuted(renderedBody)
+		renderedBody = renderTraitsStyled(renderedBody)
 	}
 
 	fmt.Println(marginPrefix + ui.DividerWithAccentLabel(opts.fileRelPath, width))
@@ -187,10 +187,8 @@ func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultCo
 	return strings.Join(outLines, "\n"), refs
 }
 
-func renderTraitsMuted(content string) string {
-	return parser.TraitHighlightPattern.ReplaceAllStringFunc(content, func(match string) string {
-		return ui.Muted.Render(match)
-	})
+func renderTraitsStyled(content string) string {
+	return ui.HighlightTraits(content)
 }
 
 func indentBlock(content string, spaces int) string {
