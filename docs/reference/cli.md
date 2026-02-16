@@ -228,8 +228,11 @@ rvn docs search refs --section reference --limit 5
 
 **Notes:**
 - `rvn docs` is for long-form guides/reference docs, not command flags/args
+- In an interactive terminal, `rvn docs` uses `fzf` for fuzzy section/topic selection when `fzf` is installed
+- Without `fzf` (or in non-interactive contexts), `rvn docs` falls back to plain text output
 - `rvn docs list` prints explicit section commands with friendly titles/topic counts
 - `rvn docs <section>` prints explicit topic commands with friendly topic titles
+- `rvn docs <section> <topic>` renders markdown with the shared CLI terminal style when outputting to a TTY
 - For command-level documentation, use `rvn help <command>`
 - Sections/topics shown by `rvn docs` come from the authoritative `docs/index.yaml` registry (including explicit topic paths)
 

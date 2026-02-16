@@ -2,12 +2,14 @@ package cli
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	builtindocs "github.com/aidanlsb/raven/docs"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 func TestListDocsSectionsFSLoadsEmbeddedDocs(t *testing.T) {
@@ -349,6 +351,224 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 		if !strings.Contains(out, snippet) {
 			t.Fatalf("output missing %q\nfull output:\n%s", snippet, out)
 		}
+	}
+}
+
+func TestShouldUseDocsFZFNavigator(t *testing.T) {
+	prevJSON := jsonOutput
+	prevLookPath := docsLookPath
+	prevStdinTTY := docsStdinIsTerminal
+	prevStdoutTTY := docsStdoutIsTerminal
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		docsLookPath = prevLookPath
+		docsStdinIsTerminal = prevStdinTTY
+		docsStdoutIsTerminal = prevStdoutTTY
+	})
+
+	docsStdinIsTerminal = func() bool { return true }
+	docsStdoutIsTerminal = func() bool { return true }
+	docsLookPath = func(file string) (string, error) {
+		if file == "fzf" {
+			return "/usr/local/bin/fzf", nil
+		}
+		return "", exec.ErrNotFound
+	}
+
+	jsonOutput = false
+	if !shouldUseDocsFZFNavigator() {
+		t.Fatalf("expected interactive docs mode when TTY and fzf is available")
+	}
+
+	jsonOutput = true
+	if shouldUseDocsFZFNavigator() {
+		t.Fatalf("expected interactive docs mode to be disabled for --json")
+	}
+
+	jsonOutput = false
+	docsStdinIsTerminal = func() bool { return false }
+	if shouldUseDocsFZFNavigator() {
+		t.Fatalf("expected interactive docs mode to be disabled when stdin is not a TTY")
+	}
+
+	docsStdinIsTerminal = func() bool { return true }
+	docsLookPath = func(string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+	if shouldUseDocsFZFNavigator() {
+		t.Fatalf("expected interactive docs mode to be disabled when fzf is unavailable")
+	}
+}
+
+func TestPickDocsSectionWithFZF(t *testing.T) {
+	prevRun := docsFZFRun
+	t.Cleanup(func() {
+		docsFZFRun = prevRun
+	})
+
+	sections := []docsSectionView{
+		{ID: "guide", Title: "User Guides", TopicCount: 5},
+		{ID: "reference", Title: "Reference", TopicCount: 9},
+	}
+
+	docsFZFRun = func(lines []string, prompt, header string) (string, bool, error) {
+		if prompt != "docs/section> " {
+			t.Fatalf("prompt = %q, want docs/section> ", prompt)
+		}
+		if !strings.Contains(header, "Select a docs section") {
+			t.Fatalf("unexpected header %q", header)
+		}
+		if len(lines) != 2 {
+			t.Fatalf("expected 2 lines, got %d", len(lines))
+		}
+		return lines[1], true, nil
+	}
+
+	selected, ok, err := pickDocsSectionWithFZF(sections)
+	if err != nil {
+		t.Fatalf("pickDocsSectionWithFZF() error = %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected section to be selected")
+	}
+	if selected.ID != "reference" {
+		t.Fatalf("selected section ID = %q, want reference", selected.ID)
+	}
+}
+
+func TestPickDocsTopicWithFZFCancelled(t *testing.T) {
+	prevRun := docsFZFRun
+	t.Cleanup(func() {
+		docsFZFRun = prevRun
+	})
+
+	section := docsSectionView{ID: "reference", Title: "Reference", TopicCount: 1}
+	topics := []docsTopicRecord{
+		{Section: "reference", ID: "query-language", Title: "Query Language"},
+	}
+
+	docsFZFRun = func(lines []string, prompt, header string) (string, bool, error) {
+		if len(lines) != 1 {
+			t.Fatalf("expected 1 topic line, got %d", len(lines))
+		}
+		if !strings.Contains(prompt, "docs/reference> ") {
+			t.Fatalf("unexpected prompt: %q", prompt)
+		}
+		return "", false, nil
+	}
+
+	_, ok, err := pickDocsTopicWithFZF(section, topics)
+	if err != nil {
+		t.Fatalf("pickDocsTopicWithFZF() error = %v", err)
+	}
+	if ok {
+		t.Fatalf("expected cancelled selection to return ok=false")
+	}
+}
+
+func TestDocsFZFSelectionID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "id with title", in: "reference\tReference", want: "reference"},
+		{name: "id only", in: "query-language", want: "query-language"},
+		{name: "trim whitespace", in: "  guide\tUser Guides  ", want: "guide"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := docsFZFSelectionID(tc.in)
+			if got != tc.want {
+				t.Fatalf("docsFZFSelectionID(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestOutputDocsTopicContentRendersMarkdownInTTY(t *testing.T) {
+	prevJSON := jsonOutput
+	prevDisplay := docsDisplayContext
+	prevRender := docsMarkdownRender
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		docsDisplayContext = prevDisplay
+		docsMarkdownRender = prevRender
+	})
+
+	jsonOutput = false
+	docsDisplayContext = func() *ui.DisplayContext {
+		return &ui.DisplayContext{TermWidth: 100, IsTTY: true}
+	}
+	docsMarkdownRender = func(content string, width int) (string, error) {
+		if width != 100 {
+			t.Fatalf("render width = %d, want 100", width)
+		}
+		if !strings.Contains(content, "# Query Language") {
+			t.Fatalf("expected topic markdown content to be passed to renderer")
+		}
+		return "RENDERED TOPIC\n", nil
+	}
+
+	out := captureStdout(t, func() {
+		err := outputDocsTopicContent(docsTopicRecord{
+			Section: "reference",
+			ID:      "query-language",
+			Title:   "Query Language",
+			Path:    "docs/reference/query-language.md",
+			FSPath:  "reference/query-language.md",
+		})
+		if err != nil {
+			t.Fatalf("outputDocsTopicContent() error = %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Path: docs/reference/query-language.md") {
+		t.Fatalf("expected output path header, got:\n%s", out)
+	}
+	if !strings.Contains(out, "RENDERED TOPIC") {
+		t.Fatalf("expected rendered markdown output, got:\n%s", out)
+	}
+}
+
+func TestOutputDocsTopicContentSkipsRendererWhenNotTTY(t *testing.T) {
+	prevJSON := jsonOutput
+	prevDisplay := docsDisplayContext
+	prevRender := docsMarkdownRender
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		docsDisplayContext = prevDisplay
+		docsMarkdownRender = prevRender
+	})
+
+	jsonOutput = false
+	docsDisplayContext = func() *ui.DisplayContext {
+		return &ui.DisplayContext{TermWidth: 100, IsTTY: false}
+	}
+	docsMarkdownRender = func(string, int) (string, error) {
+		t.Fatalf("renderer should not be called when output is not a TTY")
+		return "", nil
+	}
+
+	out := captureStdout(t, func() {
+		err := outputDocsTopicContent(docsTopicRecord{
+			Section: "reference",
+			ID:      "query-language",
+			Title:   "Query Language",
+			Path:    "docs/reference/query-language.md",
+			FSPath:  "reference/query-language.md",
+		})
+		if err != nil {
+			t.Fatalf("outputDocsTopicContent() error = %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "# Query Language") {
+		t.Fatalf("expected raw markdown output when not a TTY, got:\n%s", out)
 	}
 }
 

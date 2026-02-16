@@ -7,9 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glamour/ansi"
-
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
@@ -41,7 +38,7 @@ type readBacklinkGroup struct {
 	Lines  []string `json:"lines"`
 }
 
-const readRenderMargin = 2
+const readRenderMargin = ui.MarkdownRenderMargin
 
 func readEnriched(opts readEnrichedOptions) error {
 	// Split content into frontmatter and body
@@ -81,7 +78,7 @@ func readEnriched(opts readEnrichedOptions) error {
 	// Render body through glamour when outputting to a TTY
 	renderedBody := processedBody
 	if display.IsTTY {
-		if rendered, renderErr := renderMarkdown(processedBody, width); renderErr == nil {
+		if rendered, renderErr := ui.RenderMarkdown(processedBody, width); renderErr == nil {
 			renderedBody = rendered
 		}
 		renderedBody = renderTraitsMuted(renderedBody)
@@ -190,27 +187,6 @@ func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultCo
 	return strings.Join(outLines, "\n"), refs
 }
 
-// renderMarkdown renders a markdown string for terminal display using glamour.
-func renderMarkdown(content string, width int) (string, error) {
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStyles(ravenMarkdownStyle()),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	rendered, err := r.Render(content)
-	if err != nil {
-		return "", err
-	}
-
-	// glamour adds trailing newlines; normalize to a single trailing newline
-	rendered = strings.TrimRight(rendered, "\n") + "\n"
-
-	return rendered, nil
-}
-
 func renderTraitsMuted(content string) string {
 	return parser.TraitHighlightPattern.ReplaceAllStringFunc(content, func(match string) string {
 		return ui.Muted.Render(match)
@@ -231,141 +207,6 @@ func indentBlock(content string, spaces int) string {
 	}
 	return strings.Join(parts, "")
 }
-
-func ravenMarkdownStyle() ansi.StyleConfig {
-	muted := mdStringPtr("8")
-	var accent *string
-	if color, ok := ui.AccentColor(); ok {
-		accent = mdStringPtr(color)
-	}
-
-	return ansi.StyleConfig{
-		Document: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				BlockPrefix: "\n",
-				BlockSuffix: "\n",
-			},
-			Margin: mdUintPtr(readRenderMargin),
-		},
-		BlockQuote: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Color: muted,
-			},
-			Indent:      mdUintPtr(1),
-			IndentToken: mdStringPtr("│ "),
-		},
-		Paragraph: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{},
-		},
-		List: ansi.StyleList{
-			StyleBlock: ansi.StyleBlock{
-				StylePrimitive: ansi.StylePrimitive{},
-			},
-			LevelIndent: 2,
-		},
-		Heading: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				BlockSuffix: "\n",
-				Color:       accent,
-				Bold:        mdBoolPtr(true),
-			},
-		},
-		H1: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "# ",
-			},
-		},
-		H2: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "## ",
-			},
-		},
-		H3: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "### ",
-			},
-		},
-		H4: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "#### ",
-			},
-		},
-		H5: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "##### ",
-			},
-		},
-		H6: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "###### ",
-				Bold:   mdBoolPtr(false),
-			},
-		},
-		Strikethrough: ansi.StylePrimitive{
-			CrossedOut: mdBoolPtr(true),
-		},
-		Emph: ansi.StylePrimitive{
-			Italic: mdBoolPtr(true),
-		},
-		Strong: ansi.StylePrimitive{
-			Bold: mdBoolPtr(true),
-		},
-		HorizontalRule: ansi.StylePrimitive{
-			Color:  muted,
-			Format: "\n--------\n",
-		},
-		Item: ansi.StylePrimitive{
-			BlockPrefix: "• ",
-		},
-		Enumeration: ansi.StylePrimitive{
-			BlockPrefix: ". ",
-		},
-		Task: ansi.StyleTask{
-			Ticked:   "[x] ",
-			Unticked: "[ ] ",
-		},
-		Link: ansi.StylePrimitive{
-			Color:     muted,
-			Underline: mdBoolPtr(true),
-		},
-		LinkText: ansi.StylePrimitive{
-			Color: muted,
-			Bold:  mdBoolPtr(true),
-		},
-		Image: ansi.StylePrimitive{
-			Underline: mdBoolPtr(true),
-		},
-		ImageText: ansi.StylePrimitive{
-			Color:  muted,
-			Format: "Image: {{.text}} ->",
-		},
-		Code: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "`",
-				Suffix: "`",
-			},
-		},
-		CodeBlock: ansi.StyleCodeBlock{
-			StyleBlock: ansi.StyleBlock{
-				StylePrimitive: ansi.StylePrimitive{},
-			},
-		},
-		Table: ansi.StyleTable{
-			CenterSeparator: mdStringPtr("│"),
-			ColumnSeparator: mdStringPtr("│"),
-			RowSeparator:    mdStringPtr("─"),
-		},
-		DefinitionDescription: ansi.StylePrimitive{
-			BlockPrefix: "\n- ",
-		},
-	}
-}
-
-func mdBoolPtr(v bool) *bool { return &v }
-
-func mdStringPtr(v string) *string { return &v }
-
-func mdUintPtr(v uint) *uint { return &v }
 
 func resolveTargetToRelPath(target string, vaultPath string, vaultCfg *config.VaultConfig) (string, bool) {
 	res, err := ResolveReference(target, ResolveOptions{
