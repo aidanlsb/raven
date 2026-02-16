@@ -250,6 +250,108 @@ func TestResolveCLICommandPath(t *testing.T) {
 	}
 }
 
+func TestOutputDocsSectionsTextListsSectionCommands(t *testing.T) {
+	prevJSON := jsonOutput
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+	})
+	jsonOutput = false
+
+	out := captureStdout(t, func() {
+		err := outputDocsSections([]docsSectionView{
+			{ID: "guide", Title: "User Guides", TopicCount: 5},
+			{ID: "reference", Title: "Reference", TopicCount: 1},
+		})
+		if err != nil {
+			t.Fatalf("outputDocsSections() error = %v", err)
+		}
+	})
+
+	wantSnippets := []string{
+		"Documentation section commands:",
+		"rvn docs guide",
+		"User Guides (5 topics)",
+		"rvn docs reference",
+		"Reference (1 topic)",
+		"General docs commands:",
+		"rvn docs list",
+		"rvn docs <section>",
+		"rvn docs <section> <topic>",
+		"rvn docs search <query>",
+		"rvn help <command>",
+	}
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(out, snippet) {
+			t.Fatalf("output missing %q\nfull output:\n%s", snippet, out)
+		}
+	}
+}
+
+func TestOutputDocsTopicsTextListsTopicCommands(t *testing.T) {
+	prevJSON := jsonOutput
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+	})
+	jsonOutput = false
+
+	section := docsSectionView{ID: "reference", Title: "Reference", TopicCount: 2}
+	out := captureStdout(t, func() {
+		err := outputDocsTopics(section, []docsTopicRecord{
+			{Section: "reference", ID: "query-language", Title: "Query Language"},
+			{Section: "reference", ID: "cli", Title: "CLI Reference"},
+		})
+		if err != nil {
+			t.Fatalf("outputDocsTopics() error = %v", err)
+		}
+	})
+
+	wantSnippets := []string{
+		"Documentation topic commands for Reference [reference]:",
+		"rvn docs reference query-language",
+		"Query Language",
+		"rvn docs reference cli",
+		"CLI Reference",
+		"General docs commands:",
+		"rvn docs reference",
+		"rvn docs search <query> --section reference",
+		"rvn docs list",
+	}
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(out, snippet) {
+			t.Fatalf("output missing %q\nfull output:\n%s", snippet, out)
+		}
+	}
+}
+
+func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
+	prevJSON := jsonOutput
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+	})
+	jsonOutput = false
+
+	section := docsSectionView{ID: "design", Title: "Design Notes", TopicCount: 0}
+	out := captureStdout(t, func() {
+		err := outputDocsTopics(section, nil)
+		if err != nil {
+			t.Fatalf("outputDocsTopics() error = %v", err)
+		}
+	})
+
+	wantSnippets := []string{
+		"Documentation topic commands for Design Notes [design]:",
+		"(no topics)",
+		"General docs commands:",
+		"rvn docs list",
+		"rvn docs search <query> --section design",
+	}
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(out, snippet) {
+			t.Fatalf("output missing %q\nfull output:\n%s", snippet, out)
+		}
+	}
+}
+
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
