@@ -5,6 +5,8 @@
 - **Traits** — inline annotations (e.g., `@due`, `@priority`)
 
 It lives at the root of your vault.
+For first-session schema setup, start with `guide/schema-intro.md`.
+This page is lookup-oriented and intentionally exhaustive.
 
 ## Complete Example
 

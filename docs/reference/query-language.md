@@ -1,6 +1,7 @@
 # Query Language
 
-> **Shell Tip:** Always wrap queries in single quotes to prevent shell interpretation of special characters like `(`, `)`, `|`, and `!`. See the [CLI Guide](../guide/cli.md#shell-quoting) for details.
+> **Shell Tip:** Always wrap queries in single quotes to prevent shell interpretation of special characters like `(`, `)`, `|`, and `!`. See [CLI Basics](../guide/cli-basics.md#shell-quoting) for details.
+> This page is lookup-oriented. You should not need it to complete first-session onboarding.
 
 ## Core Principles
 

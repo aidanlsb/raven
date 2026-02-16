@@ -1,6 +1,8 @@
 # `raven.yaml` Reference
 
 `raven.yaml` controls vault behavior (as opposed to structure in `schema.yaml`). It lives at the root of your vault.
+If you are deciding *what* to configure first, start with `guide/configuration.md` and return here for full option details.
+This page is lookup-oriented and is not required for the first-session note -> structure -> query loop.
 
 ## Complete Example
 

@@ -224,12 +224,13 @@ func ResultCount(n int) string {
 }
 
 // Trait formats a trait with styling.
-// The @ and trait name are bold, the value (if any) is muted.
+// The @ and trait name use syntax styling, and the value (if any) uses
+// a subtle syntax style.
 func Trait(traitType string, value string) string {
 	if value == "" {
-		return Bold.Render("@" + traitType)
+		return Syntax.Render("@" + traitType)
 	}
-	return Bold.Render("@"+traitType) + Muted.Render("("+value+")")
+	return Syntax.Render("@"+traitType) + SyntaxSubtle.Render("("+value+")")
 }
 
 // HighlightTraits highlights all @trait patterns in text.

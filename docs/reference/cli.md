@@ -1,6 +1,8 @@
 # CLI Reference
 
-Complete reference for all Raven CLI commands. For usage patterns and workflows, see `guide/cli.md`.
+Complete reference for all Raven CLI commands.
+For guided usage patterns, see `guide/cli-basics.md` and `guide/cli-advanced.md`.
+This page is lookup-oriented and is not required to complete first-session onboarding.
 
 ## Global Flags
 

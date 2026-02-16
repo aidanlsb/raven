@@ -85,7 +85,8 @@ See `reference/query-language.md` for the full language.
 
 ## Next steps
 
-- See `cli.md` for common CLI patterns and workflows
+- See `cli-basics.md` for common first-day CLI patterns
+- See `cli-advanced.md` for bulk operations and advanced workflows
 - See `reference/schema.md` for defining types and traits
 - See `reference/file-format.md` for the complete file format specification
 

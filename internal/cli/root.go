@@ -34,6 +34,7 @@ who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Docs navigation and help-style commands do not require a vault context.
 		if isUnderCommand(cmd, "docs") {
+			applyUIThemeFromConfigBestEffort()
 			return nil
 		}
 
@@ -61,6 +62,7 @@ who gathered knowledge from across the world.`,
 			cfg = &config.Config{}
 		}
 		ui.ConfigureTheme(cfg.UI.Accent)
+		ui.ConfigureMarkdownCodeTheme(cfg.UI.CodeTheme)
 
 		// Resolve vault path: explicit path > named vault > default
 		if vaultPathFlag != "" {
@@ -125,4 +127,23 @@ func isUnderCommand(cmd *cobra.Command, name string) bool {
 		}
 	}
 	return false
+}
+
+func applyUIThemeFromConfigBestEffort() {
+	var (
+		localCfg *config.Config
+		err      error
+	)
+	if configPath != "" {
+		localCfg, err = config.LoadFrom(configPath)
+	} else {
+		localCfg, err = config.Load()
+	}
+	if err != nil || localCfg == nil {
+		ui.ConfigureTheme("")
+		ui.ConfigureMarkdownCodeTheme("")
+		return
+	}
+	ui.ConfigureTheme(localCfg.UI.Accent)
+	ui.ConfigureMarkdownCodeTheme(localCfg.UI.CodeTheme)
 }
