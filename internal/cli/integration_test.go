@@ -568,6 +568,21 @@ func TestIntegration_NewPageRespectsPagesRoot(t *testing.T) {
 	v.AssertFileContains("pages/quick-note.md", "type: page")
 }
 
+func TestIntegration_InvalidRavenYAMLFailsCommands(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML(`directories:
+  object: [
+`).
+		Build()
+
+	result := v.RunCLI("new", "page", "Broken Config Note")
+	result.MustFail(t, "CONFIG_INVALID")
+	result.MustFailWithMessage(t, "failed to load raven.yaml")
+
+	v.AssertFileNotExists("broken-config-note.md")
+}
+
 func TestIntegration_WorkflowManagementCommands(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).

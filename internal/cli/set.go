@@ -123,7 +123,10 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 	sch, _ := schema.Load(vaultPath)
 
 	// Load vault config (optional, used for roots + auto-reindex)
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	// If not confirming, show preview
 	if !setConfirm {
@@ -265,7 +268,10 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 	}
 
 	// Load vault config
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	// Resolve the reference using unified resolver
 	result, err := ResolveReference(reference, ResolveOptions{

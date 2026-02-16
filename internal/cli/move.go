@@ -106,7 +106,10 @@ func runMoveBulk(args []string, vaultPath string) error {
 	}
 
 	// Load vault config
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	// If not confirming, show preview
 	if !moveConfirm {
@@ -290,7 +293,10 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	start := time.Now()
 
 	// Load vault config for directory roots
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	// Normalize destination path (add .md if missing)
 	destination = paths.EnsureMDExtension(destination)

@@ -104,7 +104,10 @@ func runAddBulk(args []string, vaultPath string) error {
 	var warnings []Warning
 
 	// Load vault config
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 	captureCfg := vaultCfg.GetCaptureConfig()
 	if addTimestampFlag {
 		captureCfg.Timestamp = boolPtr(true)
@@ -247,7 +250,10 @@ func addSingleCapture(vaultPath string, args []string) error {
 	start := time.Now()
 
 	// Load vault config
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 	captureCfg := vaultCfg.GetCaptureConfig()
 
 	// Override timestamp if flag is set

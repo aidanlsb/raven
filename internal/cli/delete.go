@@ -83,7 +83,10 @@ func runDeleteBulk(vaultPath string) error {
 	}
 
 	// Load vault config
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	// If not confirming, show preview
 	if !deleteConfirm {
@@ -236,7 +239,10 @@ func deleteSingleObject(vaultPath, reference string) error {
 	start := time.Now()
 
 	// Load vault config for deletion settings and directory roots
-	vaultCfg := loadVaultConfigSafe(vaultPath)
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
 	// Resolve the reference using unified resolver
 	result, err := ResolveReference(reference, ResolveOptions{

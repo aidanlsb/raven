@@ -80,7 +80,10 @@ Examples:
 		}
 
 		// Load vault config for directory roots
-		vaultCfg := loadVaultConfigSafe(vaultPath)
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
 		db.SetDailyDirectory(vaultCfg.DailyDirectory)
 		dailyDir := vaultCfg.DailyDirectory
 		if dailyDir == "" {

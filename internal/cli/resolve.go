@@ -66,7 +66,11 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 	// Load vault config if not provided
 	vaultCfg := opts.VaultConfig
 	if vaultCfg == nil {
-		vaultCfg = loadVaultConfigSafe(opts.VaultPath)
+		var err error
+		vaultCfg, err = loadVaultConfigSafe(opts.VaultPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Fast path: try literal path first (most common case for explicit paths)
@@ -248,7 +252,11 @@ func resolveReferenceWithDynamicDates(reference string, opts ResolveOptions, all
 
 	vaultCfg := opts.VaultConfig
 	if vaultCfg == nil {
-		vaultCfg = loadVaultConfigSafe(opts.VaultPath)
+		var loadErr error
+		vaultCfg, loadErr = loadVaultConfigSafe(opts.VaultPath)
+		if loadErr != nil {
+			return nil, loadErr
+		}
 	}
 
 	dynResult, handled, dynErr := resolveDynamicDateReference(reference, opts.VaultPath, vaultCfg, allowDynamicMissing)
@@ -285,7 +293,11 @@ func resolveDynamicDateReference(reference, vaultPath string, vaultCfg *config.V
 	}
 
 	if vaultCfg == nil {
-		vaultCfg = loadVaultConfigSafe(vaultPath)
+		var loadErr error
+		vaultCfg, loadErr = loadVaultConfigSafe(vaultPath)
+		if loadErr != nil {
+			return nil, true, loadErr
+		}
 	}
 
 	parsed, err := vault.ParseDateArg(keyword)
@@ -366,7 +378,10 @@ Examples:
 		start := time.Now()
 		reference := args[0]
 
-		vaultCfg := loadVaultConfigSafe(vaultPath)
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
 
 		// Attempt resolution (including dynamic date keywords like "today")
 		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{

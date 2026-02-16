@@ -191,7 +191,10 @@ Examples:
 		}
 
 		// Load vault config for directory roots (optional)
-		vaultCfg := loadVaultConfigSafe(vaultPath)
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
 		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
 		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)

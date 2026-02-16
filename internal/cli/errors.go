@@ -7,6 +7,7 @@ const (
 	// Vault errors
 	ErrVaultNotFound     = "VAULT_NOT_FOUND"
 	ErrVaultNotSpecified = "VAULT_NOT_SPECIFIED"
+	ErrConfigInvalid     = "CONFIG_INVALID"
 
 	// Schema errors
 	ErrSchemaNotFound = "SCHEMA_NOT_FOUND"
@@ -52,17 +53,17 @@ const (
 	ErrMissingArgument = "MISSING_ARGUMENT"
 
 	// Workflow errors
-	ErrWorkflowNotFound         = "WORKFLOW_NOT_FOUND"
-	ErrWorkflowInvalid          = "WORKFLOW_INVALID"
-	ErrWorkflowChanged          = "WORKFLOW_CHANGED"
-	ErrWorkflowRunNotFound      = "WORKFLOW_RUN_NOT_FOUND"
-	ErrWorkflowNotAwaitingAgent = "WORKFLOW_NOT_AWAITING_AGENT"
-	ErrWorkflowTerminalState    = "WORKFLOW_TERMINAL_STATE"
-	ErrWorkflowConflict         = "WORKFLOW_CONFLICT"
-	ErrWorkflowStateCorrupt     = "WORKFLOW_STATE_CORRUPT"
-	ErrWorkflowInputInvalid     = "WORKFLOW_INPUT_INVALID"
-	ErrWorkflowAgentOutputInvalid = "WORKFLOW_AGENT_OUTPUT_INVALID"
-	ErrWorkflowInterpolationError = "WORKFLOW_INTERPOLATION_ERROR"
+	ErrWorkflowNotFound            = "WORKFLOW_NOT_FOUND"
+	ErrWorkflowInvalid             = "WORKFLOW_INVALID"
+	ErrWorkflowChanged             = "WORKFLOW_CHANGED"
+	ErrWorkflowRunNotFound         = "WORKFLOW_RUN_NOT_FOUND"
+	ErrWorkflowNotAwaitingAgent    = "WORKFLOW_NOT_AWAITING_AGENT"
+	ErrWorkflowTerminalState       = "WORKFLOW_TERMINAL_STATE"
+	ErrWorkflowConflict            = "WORKFLOW_CONFLICT"
+	ErrWorkflowStateCorrupt        = "WORKFLOW_STATE_CORRUPT"
+	ErrWorkflowInputInvalid        = "WORKFLOW_INPUT_INVALID"
+	ErrWorkflowAgentOutputInvalid  = "WORKFLOW_AGENT_OUTPUT_INVALID"
+	ErrWorkflowInterpolationError  = "WORKFLOW_INTERPOLATION_ERROR"
 	ErrWorkflowToolExecutionFailed = "WORKFLOW_TOOL_EXECUTION_FAILED"
 
 	// General errors

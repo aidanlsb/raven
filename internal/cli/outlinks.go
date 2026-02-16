@@ -30,7 +30,10 @@ Examples:
 		start := time.Now()
 
 		// Load vault config
-		vaultCfg := loadVaultConfigSafe(vaultPath)
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
 
 		// Resolve the reference to get the canonical object ID
 		// Use dynamic date resolution so "today", "yesterday", etc. work.

@@ -27,7 +27,10 @@ var editCmd = &cobra.Command{
 		newStr := args[2]
 
 		// Load vault config
-		vaultCfg := loadVaultConfigSafe(vaultPath)
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
 
 		// Resolve the reference using unified resolver
 		result, err := ResolveReference(reference, ResolveOptions{
