@@ -2,18 +2,15 @@ package cli
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
@@ -30,12 +27,7 @@ var (
 	docsSearchLimit   int
 	docsSearchSection string
 
-	docsLookPath         = exec.LookPath
-	docsFZFRun           = runDocsFZF
-	docsStdinIsTerminal  = func() bool { return isatty.IsTerminal(os.Stdin.Fd()) }
-	docsStdoutIsTerminal = func() bool {
-		return isatty.IsTerminal(os.Stdout.Fd())
-	}
+	docsFZFRun         = runDocsFZF
 	docsDisplayContext = ui.NewDisplayContext
 	docsMarkdownRender = ui.RenderMarkdown
 )
@@ -305,14 +297,7 @@ func outputDocsTopicContent(topic docsTopicRecord) error {
 }
 
 func shouldUseDocsFZFNavigator() bool {
-	if isJSONOutput() {
-		return false
-	}
-	if !docsStdinIsTerminal() || !docsStdoutIsTerminal() {
-		return false
-	}
-	_, err := docsLookPath("fzf")
-	return err == nil
+	return canUseFZFInteractive()
 }
 
 func runDocsFZFNavigator(sections []docsSectionView) error {
@@ -390,46 +375,12 @@ func docsFZFSelectionID(line string) string {
 }
 
 func runDocsFZF(lines []string, prompt, header string) (string, bool, error) {
-	if len(lines) == 0 {
-		return "", false, nil
-	}
-
-	args := []string{
-		"--layout=reverse",
-		"--height=80%",
-		"--border",
-		"--prompt", prompt,
-		"--delimiter", "\t",
-		"--with-nth", "2..",
-		"--select-1",
-		"--exit-0",
-	}
-	if strings.TrimSpace(header) != "" {
-		args = append(args, "--header", header)
-	}
-
-	cmd := exec.Command("fzf", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n") + "\n")
-
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			if code := exitErr.ExitCode(); code == 1 || code == 130 {
-				return "", false, nil
-			}
-		}
-		return "", false, fmt.Errorf("run fzf selector: %w", err)
-	}
-
-	selection := strings.TrimSpace(stdout.String())
-	if selection == "" {
-		return "", false, nil
-	}
-	return selection, true, nil
+	return runFZFPicker(lines, fzfPickerOptions{
+		Prompt:    prompt,
+		Header:    header,
+		Delimiter: "\t",
+		WithNth:   "2..",
+	})
 }
 
 func docsSectionNotFound(args []string, sections []docsSectionView) error {

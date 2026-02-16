@@ -19,7 +19,7 @@ var (
 )
 
 var readCmd = &cobra.Command{
-	Use:   "read <reference>",
+	Use:   "read [reference]",
 	Short: "Read a file with context",
 	Long: `Read and output a file from the vault.
 
@@ -29,6 +29,9 @@ or full path (people/freya.md).
 By default, this command shows enriched output (rendered wikilinks and backlinks).
 Use --raw to output only the raw file content (useful for agents and scripting).
 
+In an interactive terminal with fzf installed, bare 'rvn read' launches
+an interactive file picker.
+
 Examples:
   rvn read freya                  # Resolves to people/freya.md
   rvn read people/freya
@@ -37,10 +40,9 @@ Examples:
   rvn read people/freya --raw --lines
   rvn read people/freya --raw --start-line 10 --end-line 40
   rvn read people/freya --raw --json`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		reference := args[0]
 		start := time.Now()
 
 		// Apply hyperlink preference for this run.
@@ -48,6 +50,28 @@ Examples:
 
 		// Load vault config
 		vaultCfg := loadVaultConfigSafe(vaultPath)
+
+		var reference string
+		if len(args) == 0 {
+			if canUseFZFInteractive() {
+				selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "read> ", "Select a file to read (Esc to cancel)")
+				if err != nil {
+					return handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
+				}
+				if !selected {
+					return nil
+				}
+				reference = selectedPath
+			} else {
+				return handleErrorMsg(
+					ErrMissingArgument,
+					"specify a reference",
+					interactivePickerMissingArgSuggestion("read", "rvn read <reference>"),
+				)
+			}
+		} else {
+			reference = args[0]
+		}
 
 		// Resolve the reference using unified resolver
 		result, err := ResolveReference(reference, ResolveOptions{

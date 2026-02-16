@@ -356,19 +356,19 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 
 func TestShouldUseDocsFZFNavigator(t *testing.T) {
 	prevJSON := jsonOutput
-	prevLookPath := docsLookPath
-	prevStdinTTY := docsStdinIsTerminal
-	prevStdoutTTY := docsStdoutIsTerminal
+	prevLookPath := fzfLookPath
+	prevStdinTTY := fzfStdinIsTerminal
+	prevStdoutTTY := fzfStdoutIsTerminal
 	t.Cleanup(func() {
 		jsonOutput = prevJSON
-		docsLookPath = prevLookPath
-		docsStdinIsTerminal = prevStdinTTY
-		docsStdoutIsTerminal = prevStdoutTTY
+		fzfLookPath = prevLookPath
+		fzfStdinIsTerminal = prevStdinTTY
+		fzfStdoutIsTerminal = prevStdoutTTY
 	})
 
-	docsStdinIsTerminal = func() bool { return true }
-	docsStdoutIsTerminal = func() bool { return true }
-	docsLookPath = func(file string) (string, error) {
+	fzfStdinIsTerminal = func() bool { return true }
+	fzfStdoutIsTerminal = func() bool { return true }
+	fzfLookPath = func(file string) (string, error) {
 		if file == "fzf" {
 			return "/usr/local/bin/fzf", nil
 		}
@@ -386,13 +386,13 @@ func TestShouldUseDocsFZFNavigator(t *testing.T) {
 	}
 
 	jsonOutput = false
-	docsStdinIsTerminal = func() bool { return false }
+	fzfStdinIsTerminal = func() bool { return false }
 	if shouldUseDocsFZFNavigator() {
 		t.Fatalf("expected interactive docs mode to be disabled when stdin is not a TTY")
 	}
 
-	docsStdinIsTerminal = func() bool { return true }
-	docsLookPath = func(string) (string, error) {
+	fzfStdinIsTerminal = func() bool { return true }
+	fzfLookPath = func(string) (string, error) {
 		return "", exec.ErrNotFound
 	}
 	if shouldUseDocsFZFNavigator() {

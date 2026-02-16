@@ -594,7 +594,7 @@ rvn date 2025-02-01
 Open a file in your editor.
 
 ```bash
-rvn open <reference>
+rvn open [reference]
 ```
 
 | Argument | Description |
@@ -611,6 +611,8 @@ rvn open people/freya
 
 **Notes:**
 - Editor is determined by `editor` setting in config or `$EDITOR`
+- In an interactive terminal, bare `rvn open` uses `fzf` for fuzzy file picking when `fzf` is installed
+- If `fzf` is unavailable, run `rvn open <reference>`
 
 ---
 
@@ -619,7 +621,7 @@ rvn open people/freya
 Read raw file content.
 
 ```bash
-rvn read <path>
+rvn read [path]
 ```
 
 | Argument | Description |
@@ -632,6 +634,10 @@ rvn read <path>
 rvn read daily/2025-02-01.md
 rvn read people/freya.md
 ```
+
+**Notes:**
+- In an interactive terminal, bare `rvn read` uses `fzf` for fuzzy file picking when `fzf` is installed
+- If `fzf` is unavailable, run `rvn read <path>`
 
 ---
 

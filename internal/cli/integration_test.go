@@ -834,6 +834,22 @@ Bob is a software engineer.
 	}
 }
 
+func TestIntegration_ReadWithoutArgSuggestsUsage(t *testing.T) {
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("read")
+	result.MustFail(t, "MISSING_ARGUMENT")
+	result.MustFailWithMessage(t, "rvn read <reference>")
+}
+
+func TestIntegration_OpenWithoutArgSuggestsUsage(t *testing.T) {
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("open")
+	result.MustFail(t, "MISSING_ARGUMENT")
+	result.MustFailWithMessage(t, "rvn open <reference>")
+}
+
 // TestIntegration_Resolve tests the resolve command.
 func TestIntegration_Resolve(t *testing.T) {
 	v := testutil.NewTestVault(t).
