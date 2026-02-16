@@ -4,29 +4,30 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	builtindocs "github.com/aidanlsb/raven/docs"
 )
 
-func TestListDocsCategoriesFSLoadsEmbeddedDocs(t *testing.T) {
+func TestListDocsSectionsFSLoadsEmbeddedDocs(t *testing.T) {
 	t.Parallel()
 
-	categories, err := listDocsCategoriesFS(builtindocs.FS, ".")
+	sections, err := listDocsSectionsFS(builtindocs.FS, ".")
 	if err != nil {
-		t.Fatalf("listDocsCategoriesFS() error = %v", err)
+		t.Fatalf("listDocsSectionsFS() error = %v", err)
 	}
-	if len(categories) == 0 {
-		t.Fatalf("expected embedded docs categories, got none")
+	if len(sections) == 0 {
+		t.Fatalf("expected embedded docs sections, got none")
 	}
 
 	var ids []string
-	for _, c := range categories {
-		ids = append(ids, c.ID)
+	for _, s := range sections {
+		ids = append(ids, s.ID)
 	}
 	for _, expected := range []string{"design", "guide", "reference"} {
 		if !slices.Contains(ids, expected) {
-			t.Fatalf("expected category %q in %v", expected, ids)
+			t.Fatalf("expected section %q in %v", expected, ids)
 		}
 	}
 }
@@ -59,7 +60,7 @@ func TestNormalizeDocsPathSlug(t *testing.T) {
 	}
 }
 
-func TestListDocsCategoriesAndTopics(t *testing.T) {
+func TestListDocsSectionsAndTopics(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()
@@ -67,20 +68,29 @@ func TestListDocsCategoriesAndTopics(t *testing.T) {
 
 	writeTestFile(t, filepath.Join(docsRoot, "guide", "getting-started.md"), "# Getting started\n\nHello.\n")
 	writeTestFile(t, filepath.Join(docsRoot, "reference", "query_language.md"), "# Query Language\n\nDetails.\n")
-	writeTestFile(t, filepath.Join(docsRoot, "reference", "_draft.md"), "# Draft\n")
-	writeTestFile(t, filepath.Join(docsRoot, "_internal", "notes.md"), "# Notes\n")
+	writeTestFile(t, filepath.Join(docsRoot, "reference", "extra.md"), "# Extra\n")
+	writeTestFile(t, filepath.Join(docsRoot, "index.yaml"), `sections:
+  guide:
+    topics:
+      getting-started:
+        path: getting-started.md
+  reference:
+    topics:
+      query-language:
+        path: query_language.md
+`)
 
-	categories, err := listDocsCategories(docsRoot)
+	sections, err := listDocsSections(docsRoot)
 	if err != nil {
-		t.Fatalf("listDocsCategories() error = %v", err)
+		t.Fatalf("listDocsSections() error = %v", err)
 	}
 
 	var ids []string
-	for _, c := range categories {
-		ids = append(ids, c.ID)
+	for _, s := range sections {
+		ids = append(ids, s.ID)
 	}
 	if !slices.Equal(ids, []string{"guide", "reference"}) {
-		t.Fatalf("category IDs = %v, want [guide reference]", ids)
+		t.Fatalf("section IDs = %v, want [guide reference]", ids)
 	}
 
 	topics, err := listDocsTopics(docsRoot, "reference")
@@ -95,6 +105,132 @@ func TestListDocsCategoriesAndTopics(t *testing.T) {
 	}
 	if topics[0].Title != "Query Language" {
 		t.Fatalf("topic Title = %q, want Query Language", topics[0].Title)
+	}
+}
+
+func TestListDocsSectionsAndTopicsWithIndexOverrides(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	docsRoot := filepath.Join(tmp, "docs")
+
+	writeTestFile(t, filepath.Join(docsRoot, "guide", "cli.md"), "# CLI Guide\n")
+	writeTestFile(t, filepath.Join(docsRoot, "guide", "getting-started.md"), "# Getting Started\n")
+	writeTestFile(t, filepath.Join(docsRoot, "reference", "query-language.md"), "# Query Language\n")
+	writeTestFile(t, filepath.Join(docsRoot, "index.yaml"), `sections:
+  reference:
+    title: Reference
+    topics:
+      query-language:
+        path: query-language.md
+  guide:
+    title: User Guides
+    topics:
+      getting-started:
+        title: Start Here
+        path: getting-started.md
+      cli:
+        path: cli.md
+`)
+
+	sections, err := listDocsSections(docsRoot)
+	if err != nil {
+		t.Fatalf("listDocsSections() error = %v", err)
+	}
+	if len(sections) != 2 {
+		t.Fatalf("expected 2 sections, got %d", len(sections))
+	}
+
+	if sections[0].ID != "reference" {
+		t.Fatalf("first section ID = %q, want reference", sections[0].ID)
+	}
+	if sections[0].Title != "Reference" {
+		t.Fatalf("first section title = %q, want Reference", sections[0].Title)
+	}
+	if sections[1].ID != "guide" {
+		t.Fatalf("second section ID = %q, want guide", sections[1].ID)
+	}
+	if sections[1].Title != "User Guides" {
+		t.Fatalf("second section title = %q, want User Guides", sections[1].Title)
+	}
+
+	topics, err := listDocsTopics(docsRoot, "guide")
+	if err != nil {
+		t.Fatalf("listDocsTopics() error = %v", err)
+	}
+	if len(topics) != 2 {
+		t.Fatalf("expected 2 guide topics, got %d", len(topics))
+	}
+	if topics[0].ID != "getting-started" {
+		t.Fatalf("first topic ID = %q, want getting-started", topics[0].ID)
+	}
+	if topics[0].Title != "Start Here" {
+		t.Fatalf("first topic title = %q, want Start Here", topics[0].Title)
+	}
+	if topics[1].ID != "cli" {
+		t.Fatalf("second topic ID = %q, want cli", topics[1].ID)
+	}
+}
+
+func TestListDocsSectionsFailsWithoutIndex(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	docsRoot := filepath.Join(tmp, "docs")
+
+	writeTestFile(t, filepath.Join(docsRoot, "guide", "getting-started.md"), "# Getting Started\n")
+
+	_, err := listDocsSections(docsRoot)
+	if err == nil {
+		t.Fatal("expected listDocsSections() to fail without docs index")
+	}
+	if !strings.Contains(err.Error(), "docs index not found") {
+		t.Fatalf("error = %v, want missing docs index message", err)
+	}
+}
+
+func TestListDocsSectionsFailsForMissingIndexedSection(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	docsRoot := filepath.Join(tmp, "docs")
+
+	writeTestFile(t, filepath.Join(docsRoot, "index.yaml"), `sections:
+  missing:
+    topics:
+      intro:
+        path: intro.md
+`)
+
+	_, err := listDocsSections(docsRoot)
+	if err == nil {
+		t.Fatal("expected listDocsSections() to fail for missing indexed section directory")
+	}
+	if !strings.Contains(err.Error(), `section "missing" not found`) {
+		t.Fatalf("error = %v, want missing section message", err)
+	}
+}
+
+func TestListDocsTopicsFailsForMissingIndexedFile(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	docsRoot := filepath.Join(tmp, "docs")
+
+	writeTestFile(t, filepath.Join(docsRoot, "guide", "getting-started.md"), "# Getting Started\n")
+	writeTestFile(t, filepath.Join(docsRoot, "index.yaml"), `sections:
+  guide:
+    topics:
+      missing-topic:
+        path: missing.md
+`)
+
+	_, err := listDocsTopics(docsRoot, "guide")
+	if err == nil {
+		t.Fatal("expected listDocsTopics() to fail for missing indexed topic file")
+	}
+	if !strings.Contains(err.Error(), `points to missing file "missing.md"`) {
+		t.Fatalf("error = %v, want missing topic file message", err)
 	}
 }
 

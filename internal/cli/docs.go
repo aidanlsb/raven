@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -11,23 +12,26 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	builtindocs "github.com/aidanlsb/raven/docs"
 )
 
 const (
 	docsCommandHint = "For command docs, use: rvn help <command>"
+	docsIndexPath   = "index.yaml"
 )
 
 var (
-	docsSearchLimit    int
-	docsSearchCategory string
+	docsSearchLimit   int
+	docsSearchSection string
 )
 
-type docsCategoryView struct {
+type docsSectionView struct {
 	ID         string `json:"id"`
 	Title      string `json:"title"`
 	TopicCount int    `json:"topic_count"`
+	sortOrder  *int
 }
 
 type docsTopicView struct {
@@ -37,24 +41,41 @@ type docsTopicView struct {
 }
 
 type docsSearchMatchView struct {
-	Category string `json:"category"`
-	Topic    string `json:"topic"`
-	Title    string `json:"title"`
-	Path     string `json:"path"`
-	Line     int    `json:"line"`
-	Snippet  string `json:"snippet"`
+	Section string `json:"section"`
+	Topic   string `json:"topic"`
+	Title   string `json:"title"`
+	Path    string `json:"path"`
+	Line    int    `json:"line"`
+	Snippet string `json:"snippet"`
 }
 
 type docsTopicRecord struct {
-	Category string
-	ID       string
-	Title    string
-	Path     string
-	FSPath   string
+	Section   string
+	ID        string
+	Title     string
+	Path      string
+	FSPath    string
+	sortOrder *int
+}
+
+type docsIndex struct {
+	Sections     map[string]docsIndexSection
+	SectionOrder map[string]int
+}
+
+type docsIndexSection struct {
+	Title      string `yaml:"title"`
+	Topics     map[string]docsIndexTopicMeta
+	TopicOrder map[string]int
+}
+
+type docsIndexTopicMeta struct {
+	Title string `yaml:"title"`
+	Path  string `yaml:"path"`
 }
 
 var docsCmd = &cobra.Command{
-	Use:   "docs [category] [topic]",
+	Use:   "docs [section] [topic]",
 	Short: "Browse long-form Markdown documentation",
 	Long: `Browse long-form documentation bundled into the rvn binary.
 
@@ -63,38 +84,38 @@ For command-level usage, use 'rvn help <command>'.
 
 Examples:
   rvn docs
-  rvn docs guide
-  rvn docs reference query-language
+  rvn docs <section>
+  rvn docs <section> <topic>
   rvn docs search "saved query"
-  rvn docs search refs --category reference`,
+  rvn docs search refs --section reference`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		categories, err := listDocsCategoriesFS(builtindocs.FS, ".")
+		sections, err := listDocsSectionsFS(builtindocs.FS, ".")
 		if err != nil {
 			return handleError(ErrInternal, err, "Rebuild rvn so bundled docs are available")
 		}
 
 		if len(args) == 0 {
-			return outputDocsCategories(categories)
+			return outputDocsSections(sections)
 		}
 
-		category, ok := findDocsCategory(categories, args[0])
+		section, ok := findDocsSection(sections, args[0])
 		if !ok {
-			return docsCategoryNotFound(args, categories)
+			return docsSectionNotFound(args, sections)
 		}
 
-		topics, err := listDocsTopicsFS(builtindocs.FS, ".", category.ID)
+		topics, err := listDocsTopicsFS(builtindocs.FS, ".", section.ID)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
 		if len(args) == 1 {
-			return outputDocsTopics(category, topics)
+			return outputDocsTopics(section, topics)
 		}
 
 		topic, ok := findDocsTopic(topics, args[1])
 		if !ok {
-			return docsTopicNotFound(category.ID, args[1], topics)
+			return docsTopicNotFound(section.ID, args[1], topics)
 		}
 
 		content, err := fs.ReadFile(builtindocs.FS, topic.FSPath)
@@ -104,11 +125,11 @@ Examples:
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"category": category.ID,
-				"topic":    topic.ID,
-				"title":    topic.Title,
-				"path":     topic.Path,
-				"content":  string(content),
+				"section": section.ID,
+				"topic":   topic.ID,
+				"title":   topic.Title,
+				"path":    topic.Path,
+				"content": string(content),
 			}, nil)
 			return nil
 		}
@@ -129,7 +150,7 @@ var docsSearchCmd = &cobra.Command{
 
 Examples:
   rvn docs search query
-  rvn docs search "saved query" --category reference
+  rvn docs search "saved query" --section reference
   rvn docs search workflow --limit 10`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -141,9 +162,9 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, "--limit must be >= 1", "")
 		}
 
-		matches, err := searchDocsFS(builtindocs.FS, ".", query, docsSearchCategory, docsSearchLimit)
+		matches, err := searchDocsFS(builtindocs.FS, ".", query, docsSearchSection, docsSearchLimit)
 		if err != nil {
-			return handleError(ErrInvalidInput, err, "Run 'rvn docs' to list categories")
+			return handleError(ErrInvalidInput, err, "Run 'rvn docs' to list sections")
 		}
 
 		if isJSONOutput() {
@@ -162,35 +183,39 @@ Examples:
 
 		fmt.Printf("Matches for %q (%d):\n", query, len(matches))
 		for _, m := range matches {
-			fmt.Printf("- %s/%s:%d %s\n", m.Category, m.Topic, m.Line, m.Snippet)
+			fmt.Printf("- %s/%s:%d %s\n", m.Section, m.Topic, m.Line, m.Snippet)
 		}
 		return nil
 	},
 }
 
-func outputDocsCategories(categories []docsCategoryView) error {
+func outputDocsSections(sections []docsSectionView) error {
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
-			"categories":     categories,
+			"sections":       sections,
 			"command_docs":   "rvn help <command>",
-			"navigation_tip": "rvn docs <category> <topic>",
-		}, &Meta{Count: len(categories)})
+			"navigation_tip": "rvn docs <section> <topic>",
+		}, &Meta{Count: len(sections)})
 		return nil
 	}
 
-	fmt.Println("Documentation categories:")
-	for _, c := range categories {
-		fmt.Printf("  %-12s %d topic(s)\n", c.ID, c.TopicCount)
+	fmt.Println("Documentation sections:")
+	for _, s := range sections {
+		topicLabel := "topics"
+		if s.TopicCount == 1 {
+			topicLabel = "topic"
+		}
+		fmt.Printf("  %-20s [%s] (%d %s)\n", s.Title, s.ID, s.TopicCount, topicLabel)
 	}
 	fmt.Println()
 	fmt.Println(docsCommandHint)
-	fmt.Println("Open a category: rvn docs <category>")
-	fmt.Println("Open a topic:    rvn docs <category> <topic>")
+	fmt.Println("Open a section: rvn docs <section>")
+	fmt.Println("Open a topic:   rvn docs <section> <topic>")
 	fmt.Println("Search docs:     rvn docs search <query>")
 	return nil
 }
 
-func outputDocsTopics(category docsCategoryView, topics []docsTopicRecord) error {
+func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 	if isJSONOutput() {
 		items := make([]docsTopicView, 0, len(topics))
 		for _, t := range topics {
@@ -201,14 +226,14 @@ func outputDocsTopics(category docsCategoryView, topics []docsTopicRecord) error
 			})
 		}
 		outputSuccess(map[string]interface{}{
-			"category": category.ID,
-			"title":    category.Title,
-			"topics":   items,
+			"section": section.ID,
+			"title":   section.Title,
+			"topics":  items,
 		}, &Meta{Count: len(items)})
 		return nil
 	}
 
-	fmt.Printf("%s topics:\n", category.Title)
+	fmt.Printf("%s topics:\n", section.Title)
 	if len(topics) == 0 {
 		fmt.Println("  (none)")
 		return nil
@@ -219,16 +244,16 @@ func outputDocsTopics(category docsCategoryView, topics []docsTopicRecord) error
 	return nil
 }
 
-func docsCategoryNotFound(args []string, categories []docsCategoryView) error {
+func docsSectionNotFound(args []string, sections []docsSectionView) error {
 	if cmdPath, ok := resolveCLICommandPath(args); ok {
 		return handleErrorMsg(
 			ErrInvalidInput,
-			fmt.Sprintf("%q is a CLI command, not a docs category", cmdPath),
+			fmt.Sprintf("%q is a CLI command, not a docs section", cmdPath),
 			fmt.Sprintf("Use 'rvn help %s' for command documentation", cmdPath),
 		)
 	}
 
-	if isCommandCategoryAlias(args[0]) {
+	if isCommandSectionAlias(args[0]) {
 		return handleErrorMsg(
 			ErrInvalidInput,
 			"command docs are not part of 'rvn docs'",
@@ -236,153 +261,345 @@ func docsCategoryNotFound(args []string, categories []docsCategoryView) error {
 		)
 	}
 
-	available := make([]string, 0, len(categories))
-	for _, c := range categories {
-		available = append(available, c.ID)
+	available := make([]string, 0, len(sections))
+	for _, s := range sections {
+		available = append(available, s.ID)
 	}
 	sort.Strings(available)
 
 	return handleErrorMsg(
 		ErrInvalidInput,
-		fmt.Sprintf("unknown docs category: %s", args[0]),
-		fmt.Sprintf("Run 'rvn docs' to list categories (available: %s)", strings.Join(available, ", ")),
+		fmt.Sprintf("unknown docs section: %s", args[0]),
+		fmt.Sprintf("Run 'rvn docs' to list sections (available: %s)", strings.Join(available, ", ")),
 	)
 }
 
-func docsTopicNotFound(categoryID, topicInput string, topics []docsTopicRecord) error {
+func docsTopicNotFound(sectionID, topicInput string, topics []docsTopicRecord) error {
 	available := make([]string, 0, len(topics))
 	for _, t := range topics {
 		available = append(available, t.ID)
 	}
 	sort.Strings(available)
 
-	suggestion := fmt.Sprintf("Run 'rvn docs %s' to list topics", categoryID)
+	suggestion := fmt.Sprintf("Run 'rvn docs %s' to list topics", sectionID)
 	if len(available) > 0 {
 		suggestion = fmt.Sprintf("%s (available: %s)", suggestion, strings.Join(available, ", "))
 	}
 
 	return handleErrorMsg(
 		ErrInvalidInput,
-		fmt.Sprintf("unknown topic %q in category %q", topicInput, categoryID),
+		fmt.Sprintf("unknown topic %q in section %q", topicInput, sectionID),
 		suggestion,
 	)
 }
 
-func listDocsCategories(docsRoot string) ([]docsCategoryView, error) {
-	return listDocsCategoriesFS(os.DirFS(docsRoot), ".")
+func listDocsSections(docsRoot string) ([]docsSectionView, error) {
+	return listDocsSectionsFS(os.DirFS(docsRoot), ".")
 }
 
-func listDocsCategoriesFS(docsFS fs.FS, docsRoot string) ([]docsCategoryView, error) {
-	entries, err := fs.ReadDir(docsFS, docsRoot)
-	if err != nil {
-		return nil, fmt.Errorf("read docs root: %w", err)
-	}
-
-	categories := make([]docsCategoryView, 0)
-	for _, entry := range entries {
-		if !entry.IsDir() || !isPublicDocsName(entry.Name()) {
-			continue
-		}
-
-		topics, err := listDocsTopicsFS(docsFS, docsRoot, entry.Name())
-		if err != nil {
-			return nil, err
-		}
-		categories = append(categories, docsCategoryView{
-			ID:         entry.Name(),
-			Title:      titleFromSlug(entry.Name()),
-			TopicCount: len(topics),
-		})
-	}
-
-	sort.Slice(categories, func(i, j int) bool {
-		return categories[i].ID < categories[j].ID
-	})
-
-	return categories, nil
-}
-
-func listDocsTopics(docsRoot, category string) ([]docsTopicRecord, error) {
-	return listDocsTopicsFS(os.DirFS(docsRoot), ".", category)
-}
-
-func listDocsTopicsFS(docsFS fs.FS, docsRoot, category string) ([]docsTopicRecord, error) {
-	categoryPath := path.Join(docsRoot, category)
-	info, err := fs.Stat(docsFS, categoryPath)
-	if err != nil {
-		return nil, fmt.Errorf("category %q not found: %w", category, err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("category path %q is not a directory", categoryPath)
-	}
-
-	records := make([]docsTopicRecord, 0)
-	seen := make(map[string]string)
-
-	err = fs.WalkDir(docsFS, categoryPath, func(entryPath string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		name := d.Name()
-		if d.IsDir() {
-			if entryPath == categoryPath {
-				return nil
-			}
-			if !isPublicDocsName(name) {
-				return fs.SkipDir
-			}
-			return nil
-		}
-
-		if !isPublicDocsName(name) {
-			return nil
-		}
-		if strings.ToLower(filepath.Ext(name)) != ".md" {
-			return nil
-		}
-
-		rel := strings.TrimPrefix(entryPath, categoryPath+"/")
-		if rel == entryPath {
-			return fmt.Errorf("unexpected docs topic path %q for category %q", entryPath, category)
-		}
-
-		id := normalizeDocsPathSlug(strings.TrimSuffix(rel, filepath.Ext(rel)))
-		if id == "" {
-			return nil
-		}
-		if prev, exists := seen[id]; exists {
-			return fmt.Errorf("duplicate topic slug %q in category %q (%s and %s)", id, category, prev, rel)
-		}
-		seen[id] = rel
-
-		records = append(records, docsTopicRecord{
-			Category: category,
-			ID:       id,
-			Title:    extractDocsTitleFS(docsFS, entryPath, id),
-			Path:     path.Join("docs", category, rel),
-			FSPath:   entryPath,
-		})
-		return nil
-	})
+func listDocsSectionsFS(docsFS fs.FS, docsRoot string) ([]docsSectionView, error) {
+	index, err := loadDocsIndexFS(docsFS, docsRoot)
 	if err != nil {
 		return nil, err
 	}
+	if len(index.Sections) == 0 {
+		return nil, fmt.Errorf("docs index has no sections")
+	}
+
+	sections := make([]docsSectionView, 0, len(index.Sections))
+	for sectionID, meta := range index.Sections {
+		topics, err := listDocsTopicsWithIndexFS(docsFS, docsRoot, sectionID, index)
+		if err != nil {
+			return nil, err
+		}
+		title := titleFromSlug(sectionID)
+		if override := strings.TrimSpace(meta.Title); override != "" {
+			title = override
+		}
+		sections = append(sections, docsSectionView{
+			ID:         sectionID,
+			Title:      title,
+			TopicCount: len(topics),
+			sortOrder:  docsSortOrder(index.SectionOrder, sectionID),
+		})
+	}
+
+	sort.Slice(sections, func(i, j int) bool {
+		return docsSortLess(sections[i].sortOrder, sections[j].sortOrder, sections[i].ID, sections[j].ID)
+	})
+
+	return sections, nil
+}
+
+func listDocsTopics(docsRoot, section string) ([]docsTopicRecord, error) {
+	return listDocsTopicsFS(os.DirFS(docsRoot), ".", section)
+}
+
+func listDocsTopicsFS(docsFS fs.FS, docsRoot, section string) ([]docsTopicRecord, error) {
+	index, err := loadDocsIndexFS(docsFS, docsRoot)
+	if err != nil {
+		return nil, err
+	}
+	return listDocsTopicsWithIndexFS(docsFS, docsRoot, section, index)
+}
+
+func listDocsTopicsWithIndexFS(docsFS fs.FS, docsRoot, section string, index docsIndex) ([]docsTopicRecord, error) {
+	sectionMeta, ok := index.Sections[section]
+	if !ok {
+		return nil, fmt.Errorf("section %q is not declared in docs index", section)
+	}
+
+	sectionPath := path.Join(docsRoot, section)
+	info, err := fs.Stat(docsFS, sectionPath)
+	if err != nil {
+		return nil, fmt.Errorf("section %q not found: %w", section, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("section path %q is not a directory", sectionPath)
+	}
+
+	records := make([]docsTopicRecord, 0, len(sectionMeta.Topics))
+	seenPaths := make(map[string]string)
+
+	for topicID, meta := range sectionMeta.Topics {
+		normalizedID := normalizeDocsPathSlug(topicID)
+		if normalizedID == "" || normalizedID != topicID {
+			return nil, fmt.Errorf("docs index topic id %q in section %q must use normalized slug format", topicID, section)
+		}
+
+		relPath, fsPath, err := resolveDocsTopicPath(sectionPath, meta.Path)
+		if err != nil {
+			return nil, fmt.Errorf("docs index topic %q in section %q: %w", topicID, section, err)
+		}
+		if previousID, exists := seenPaths[relPath]; exists {
+			return nil, fmt.Errorf("docs index section %q maps duplicate path %q to topics %q and %q", section, relPath, previousID, topicID)
+		}
+		seenPaths[relPath] = topicID
+
+		fileInfo, err := fs.Stat(docsFS, fsPath)
+		if err != nil {
+			return nil, fmt.Errorf("docs index topic %q in section %q points to missing file %q: %w", topicID, section, relPath, err)
+		}
+		if fileInfo.IsDir() {
+			return nil, fmt.Errorf("docs index topic %q in section %q path %q is a directory", topicID, section, relPath)
+		}
+
+		title := extractDocsTitleFS(docsFS, fsPath, topicID)
+		if override := strings.TrimSpace(meta.Title); override != "" {
+			title = override
+		}
+		records = append(records, docsTopicRecord{
+			Section:   section,
+			ID:        topicID,
+			Title:     title,
+			Path:      path.Join("docs", section, relPath),
+			FSPath:    fsPath,
+			sortOrder: docsSortOrder(sectionMeta.TopicOrder, topicID),
+		})
+	}
 
 	sort.Slice(records, func(i, j int) bool {
-		return records[i].ID < records[j].ID
+		return docsSortLess(records[i].sortOrder, records[j].sortOrder, records[i].ID, records[j].ID)
 	})
 	return records, nil
 }
 
-func findDocsCategory(categories []docsCategoryView, raw string) (docsCategoryView, bool) {
-	needle := normalizeDocsSegment(raw)
-	for _, c := range categories {
-		if normalizeDocsSegment(c.ID) == needle {
-			return c, true
+func loadDocsIndexFS(docsFS fs.FS, docsRoot string) (docsIndex, error) {
+	index := docsIndex{
+		Sections:     make(map[string]docsIndexSection),
+		SectionOrder: make(map[string]int),
+	}
+	raw, err := fs.ReadFile(docsFS, path.Join(docsRoot, docsIndexPath))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return docsIndex{}, fmt.Errorf("docs index not found at %s", path.Join(docsRoot, docsIndexPath))
+		}
+		return docsIndex{}, fmt.Errorf("read docs index: %w", err)
+	}
+
+	var root yaml.Node
+	if err := yaml.Unmarshal(raw, &root); err != nil {
+		return docsIndex{}, fmt.Errorf("parse docs index: %w", err)
+	}
+	if len(root.Content) == 0 {
+		return index, nil
+	}
+	top := root.Content[0]
+	if top.Kind != yaml.MappingNode {
+		return docsIndex{}, fmt.Errorf("parse docs index: top-level YAML must be a mapping")
+	}
+	for i := 0; i+1 < len(top.Content); i += 2 {
+		key := strings.TrimSpace(top.Content[i].Value)
+		value := top.Content[i+1]
+		switch key {
+		case "sections":
+			if err := decodeDocsSectionsNode(value, &index); err != nil {
+				return docsIndex{}, fmt.Errorf("parse docs index sections: %w", err)
+			}
+		default:
+			return docsIndex{}, fmt.Errorf("parse docs index: unknown top-level field %q", key)
 		}
 	}
-	return docsCategoryView{}, false
+
+	return index, nil
+}
+
+func resolveDocsTopicPath(sectionPath, rawPath string) (string, string, error) {
+	relPath := strings.ReplaceAll(strings.TrimSpace(rawPath), "\\", "/")
+	if relPath == "" {
+		return "", "", fmt.Errorf("missing required field \"path\"")
+	}
+	cleanPath := path.Clean(relPath)
+	if cleanPath == "." || cleanPath == "/" {
+		return "", "", fmt.Errorf("invalid topic path %q", relPath)
+	}
+	if strings.HasPrefix(cleanPath, "/") || cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+		return "", "", fmt.Errorf("topic path %q must be relative to the section directory", relPath)
+	}
+	if strings.ToLower(filepath.Ext(cleanPath)) != ".md" {
+		return "", "", fmt.Errorf("topic path %q must end with .md", relPath)
+	}
+
+	segments := strings.Split(cleanPath, "/")
+	for _, segment := range segments {
+		if !isPublicDocsName(segment) {
+			return "", "", fmt.Errorf("topic path %q includes hidden/private segment %q", relPath, segment)
+		}
+	}
+
+	return cleanPath, path.Join(sectionPath, cleanPath), nil
+}
+
+func decodeDocsSectionsNode(node *yaml.Node, index *docsIndex) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("sections must be a mapping")
+	}
+
+	position := 0
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		sectionID := strings.TrimSpace(node.Content[i].Value)
+		if sectionID == "" {
+			return fmt.Errorf("sections contains an empty section key")
+		}
+		if normalizeDocsSegment(sectionID) != sectionID {
+			return fmt.Errorf("section id %q must use normalized slug format", sectionID)
+		}
+		if _, exists := index.Sections[sectionID]; exists {
+			return fmt.Errorf("duplicate section %q", sectionID)
+		}
+
+		sectionNode := node.Content[i+1]
+		if sectionNode.Kind != yaml.MappingNode {
+			return fmt.Errorf("section %q must be a mapping", sectionID)
+		}
+
+		section := docsIndexSection{
+			Topics:     make(map[string]docsIndexTopicMeta),
+			TopicOrder: make(map[string]int),
+		}
+		hasTopics := false
+		for j := 0; j+1 < len(sectionNode.Content); j += 2 {
+			field := strings.TrimSpace(sectionNode.Content[j].Value)
+			value := sectionNode.Content[j+1]
+			switch field {
+			case "title":
+				var title string
+				if err := value.Decode(&title); err != nil {
+					return fmt.Errorf("section %q field %q: %w", sectionID, field, err)
+				}
+				section.Title = strings.TrimSpace(title)
+			case "topics":
+				if err := decodeDocsTopicsNode(value, sectionID, &section); err != nil {
+					return err
+				}
+				hasTopics = true
+			default:
+				return fmt.Errorf("section %q has unknown field %q", sectionID, field)
+			}
+		}
+		if !hasTopics {
+			return fmt.Errorf("section %q is missing required field \"topics\"", sectionID)
+		}
+
+		index.Sections[sectionID] = section
+		index.SectionOrder[sectionID] = position
+		position++
+	}
+	return nil
+}
+
+func decodeDocsTopicsNode(node *yaml.Node, sectionID string, section *docsIndexSection) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("section %q topics must be a mapping", sectionID)
+	}
+
+	position := 0
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		topicID := strings.TrimSpace(node.Content[i].Value)
+		if topicID == "" {
+			return fmt.Errorf("section %q topics contains an empty topic key", sectionID)
+		}
+		if normalizeDocsPathSlug(topicID) != topicID {
+			return fmt.Errorf("topic id %q in section %q must use normalized slug format", topicID, sectionID)
+		}
+		if _, exists := section.Topics[topicID]; exists {
+			return fmt.Errorf("duplicate topic %q in section %q", topicID, sectionID)
+		}
+
+		var meta docsIndexTopicMeta
+		if err := node.Content[i+1].Decode(&meta); err != nil {
+			return fmt.Errorf("topic %q metadata in section %q: %w", topicID, sectionID, err)
+		}
+		meta.Title = strings.TrimSpace(meta.Title)
+		meta.Path = strings.TrimSpace(meta.Path)
+		if meta.Path == "" {
+			return fmt.Errorf("topic %q in section %q is missing required field \"path\"", topicID, sectionID)
+		}
+
+		section.Topics[topicID] = meta
+		section.TopicOrder[topicID] = position
+		position++
+	}
+
+	if len(section.Topics) == 0 {
+		return fmt.Errorf("section %q has an empty topics mapping", sectionID)
+	}
+	return nil
+}
+
+func docsSortOrder(orderByID map[string]int, id string) *int {
+	order, ok := orderByID[id]
+	if !ok {
+		return nil
+	}
+	out := order
+	return &out
+}
+
+func docsSortLess(orderA, orderB *int, idA, idB string) bool {
+	if orderA == nil && orderB == nil {
+		return idA < idB
+	}
+	if orderA == nil {
+		return false
+	}
+	if orderB == nil {
+		return true
+	}
+	if *orderA != *orderB {
+		return *orderA < *orderB
+	}
+	return idA < idB
+}
+
+func findDocsSection(sections []docsSectionView, raw string) (docsSectionView, bool) {
+	needle := normalizeDocsSegment(raw)
+	for _, section := range sections {
+		if normalizeDocsSegment(section.ID) == needle {
+			return section, true
+		}
+	}
+	return docsSectionView{}, false
 }
 
 func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool) {
@@ -396,11 +613,11 @@ func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool)
 	return docsTopicRecord{}, false
 }
 
-func searchDocs(docsRoot, query, categoryFilter string, limit int) ([]docsSearchMatchView, error) {
-	return searchDocsFS(os.DirFS(docsRoot), ".", query, categoryFilter, limit)
+func searchDocs(docsRoot, query, sectionFilter string, limit int) ([]docsSearchMatchView, error) {
+	return searchDocsFS(os.DirFS(docsRoot), ".", query, sectionFilter, limit)
 }
 
-func searchDocsFS(docsFS fs.FS, docsRoot, query, categoryFilter string, limit int) ([]docsSearchMatchView, error) {
+func searchDocsFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([]docsSearchMatchView, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, fmt.Errorf("empty query")
@@ -409,27 +626,27 @@ func searchDocsFS(docsFS fs.FS, docsRoot, query, categoryFilter string, limit in
 		return nil, fmt.Errorf("limit must be >= 1")
 	}
 
-	categories, err := listDocsCategoriesFS(docsFS, docsRoot)
+	sections, err := listDocsSectionsFS(docsFS, docsRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	selected := make([]docsCategoryView, 0)
-	if strings.TrimSpace(categoryFilter) == "" {
-		selected = categories
+	selected := make([]docsSectionView, 0)
+	if strings.TrimSpace(sectionFilter) == "" {
+		selected = sections
 	} else {
-		category, ok := findDocsCategory(categories, categoryFilter)
+		section, ok := findDocsSection(sections, sectionFilter)
 		if !ok {
-			return nil, fmt.Errorf("unknown category: %s", categoryFilter)
+			return nil, fmt.Errorf("unknown section: %s", sectionFilter)
 		}
-		selected = append(selected, category)
+		selected = append(selected, section)
 	}
 
 	queryLower := strings.ToLower(query)
 	matches := make([]docsSearchMatchView, 0, limit)
 
-	for _, category := range selected {
-		topics, err := listDocsTopicsFS(docsFS, docsRoot, category.ID)
+	for _, section := range selected {
+		topics, err := listDocsTopicsFS(docsFS, docsRoot, section.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -447,12 +664,12 @@ func searchDocsFS(docsFS fs.FS, docsRoot, query, categoryFilter string, limit in
 				}
 
 				matches = append(matches, docsSearchMatchView{
-					Category: category.ID,
-					Topic:    topic.ID,
-					Title:    topic.Title,
-					Path:     topic.Path,
-					Line:     i + 1,
-					Snippet:  shortenDocsSnippet(line, queryLower),
+					Section: section.ID,
+					Topic:   topic.ID,
+					Title:   topic.Title,
+					Path:    topic.Path,
+					Line:    i + 1,
+					Snippet: shortenDocsSnippet(line, queryLower),
 				})
 				if len(matches) >= limit {
 					return matches, nil
@@ -572,7 +789,7 @@ func titleFromSlug(slug string) string {
 	return strings.Join(parts, " ")
 }
 
-func isCommandCategoryAlias(raw string) bool {
+func isCommandSectionAlias(raw string) bool {
 	normalized := normalizeDocsSegment(raw)
 	return normalized == "command" || normalized == "commands"
 }
@@ -618,7 +835,7 @@ func findCommandByPathRuntime(root *cobra.Command, path string) (*cobra.Command,
 
 func init() {
 	docsSearchCmd.Flags().IntVarP(&docsSearchLimit, "limit", "n", 20, "Maximum number of matches")
-	docsSearchCmd.Flags().StringVarP(&docsSearchCategory, "category", "c", "", "Filter search to a docs category")
+	docsSearchCmd.Flags().StringVarP(&docsSearchSection, "section", "s", "", "Filter search to a docs section")
 
 	docsCmd.AddCommand(docsSearchCmd)
 	rootCmd.AddCommand(docsCmd)

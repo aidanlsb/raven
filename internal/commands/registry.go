@@ -262,8 +262,8 @@ Checks include:
 Use this command for guides, references, and design notes.
 For command-level usage, use 'rvn help <command>'.`,
 		Args: []ArgMeta{
-			{Name: "category", Description: "Docs category (e.g., guide, reference, design)", Required: false},
-			{Name: "topic", Description: "Topic slug within the category (e.g., query-language)", Required: false},
+			{Name: "section", Description: "Docs section (e.g., guide, reference, design)", Required: false},
+			{Name: "topic", Description: "Topic slug within the section (e.g., query-language)", Required: false},
 		},
 		Examples: []string{
 			"rvn docs --json",
@@ -272,8 +272,8 @@ For command-level usage, use 'rvn help <command>'.`,
 			"rvn docs search \"saved query\" --json",
 		},
 		UseCases: []string{
-			"List docs categories and topic counts",
-			"Browse docs topics by category",
+			"List docs sections and topic counts",
+			"Browse docs topics by section",
 			"Open and read a specific docs page",
 			"Find long-form guidance outside command help",
 		},
@@ -286,15 +286,15 @@ For command-level usage, use 'rvn help <command>'.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "limit", Short: "n", Description: "Maximum number of matches", Type: FlagTypeInt, Default: "20"},
-			{Name: "category", Short: "c", Description: "Filter search to one docs category", Type: FlagTypeString},
+			{Name: "section", Short: "s", Description: "Filter search to one docs section", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn docs search query --json",
-			"rvn docs search \"saved query\" --category reference --json",
+			"rvn docs search \"saved query\" --section reference --json",
 		},
 		UseCases: []string{
 			"Search guides and references by keyword",
-			"Limit docs search to a specific category",
+			"Limit docs search to a specific section",
 			"Locate docs pages when topic slug is unknown",
 		},
 	},

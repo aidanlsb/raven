@@ -199,20 +199,20 @@ Browse long-form Markdown documentation bundled into the `rvn` binary.
 
 ```bash
 rvn docs
-rvn docs <category>
-rvn docs <category> <topic>
-rvn docs search <query> [--limit N] [--category CATEGORY]
+rvn docs <section>
+rvn docs <section> <topic>
+rvn docs search <query> [--limit N] [--section SECTION]
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `category` | Docs category (for example `guide`, `reference`, `design`) |
-| `topic` | Topic slug within the category (for example `query-language`) |
+| `section` | Docs section (for example `guide`, `reference`, `design`) |
+| `topic` | Topic slug within the section (for example `query-language`) |
 
 | Search Flag | Short | Description |
 |-------------|-------|-------------|
 | `--limit` | `-n` | Maximum number of search matches (default: 20) |
-| `--category` | `-c` | Restrict search to one docs category |
+| `--section` | `-s` | Restrict search to one docs section |
 
 **Examples:**
 
@@ -221,13 +221,13 @@ rvn docs
 rvn docs guide
 rvn docs reference query-language
 rvn docs search "saved query"
-rvn docs search refs --category reference --limit 5
+rvn docs search refs --section reference --limit 5
 ```
 
 **Notes:**
 - `rvn docs` is for long-form guides/reference docs, not command flags/args
 - For command-level documentation, use `rvn help <command>`
-- Categories and topics are discovered from the bundled `docs/` directory structure
+- Sections/topics shown by `rvn docs` come from the authoritative `docs/index.yaml` registry (including explicit topic paths)
 
 ---
 
