@@ -13,13 +13,13 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 
 	list := v.RunCLI("docs")
 	list.MustSucceed(t)
-	categories := list.DataList("categories")
-	if len(categories) == 0 {
-		t.Fatalf("expected docs categories, got none")
+	sections := list.DataList("sections")
+	if len(sections) == 0 {
+		t.Fatalf("expected docs sections, got none")
 	}
 
-	requireCategory(t, categories, "guide")
-	requireCategory(t, categories, "reference")
+	requireSection(t, sections, "guide")
+	requireSection(t, sections, "reference")
 
 	reference := v.RunCLI("docs", "reference")
 	reference.MustSucceed(t)
@@ -39,7 +39,7 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 		t.Fatalf("expected non-empty content in docs open response")
 	}
 
-	search := v.RunCLI("docs", "search", "query", "--category", "reference", "--limit", "5")
+	search := v.RunCLI("docs", "search", "query", "--section", "reference", "--limit", "5")
 	search.MustSucceed(t)
 	if count, ok := search.Data["count"].(float64); !ok || count < 1 {
 		t.Fatalf("expected search count >= 1, got %v", search.Data["count"])
@@ -54,9 +54,9 @@ func TestIntegration_DocsCommandRedirectToHelp(t *testing.T) {
 	res.MustFailWithMessage(t, "rvn help query")
 }
 
-func requireCategory(t *testing.T, categories []interface{}, id string) {
+func requireSection(t *testing.T, sections []interface{}, id string) {
 	t.Helper()
-	for _, raw := range categories {
+	for _, raw := range sections {
 		item, ok := raw.(map[string]interface{})
 		if !ok {
 			continue
@@ -65,7 +65,7 @@ func requireCategory(t *testing.T, categories []interface{}, id string) {
 			return
 		}
 	}
-	t.Fatalf("expected category %q in %+v", id, categories)
+	t.Fatalf("expected section %q in %+v", id, sections)
 }
 
 func requireTopic(t *testing.T, topics []interface{}, id string) {

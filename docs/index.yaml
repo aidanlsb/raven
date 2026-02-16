@@ -1,0 +1,49 @@
+# Optional metadata for `rvn docs` navigation.
+# This index is authoritative for sections/topics shown in `rvn docs`.
+sections:
+  guide:
+    title: User Guides
+    topics:
+      getting-started:
+        path: getting-started.md
+      core-concepts:
+        path: core-concepts.md
+      configuration:
+        path: configuration.md
+      cli:
+        path: cli.md
+      workflows:
+        path: workflows.md
+  reference:
+    title: Reference
+    topics:
+      cli:
+        title: CLI Reference
+        path: cli.md
+      query-language:
+        path: query-language.md
+      file-format:
+        path: file-format.md
+      schema:
+        path: schema.md
+      workflows:
+        path: workflows.md
+      bulk-operations:
+        path: bulk-operations.md
+      mcp:
+        title: MCP Reference
+        path: mcp.md
+      vault-config:
+        title: raven.yaml Reference
+        path: vault-config.md
+      lessons:
+        path: lessons.md
+  design:
+    title: Design Notes
+    topics:
+      architecture:
+        path: architecture.md
+      parsing:
+        path: parsing.md
+      database:
+        path: database.md
