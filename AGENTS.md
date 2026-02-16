@@ -14,30 +14,6 @@ Raven is a structured, plain-text knowledge base built in Go. Markdown files wit
 
 ## Architecture
 
-```
-cmd/rvn/main.go          CLI entry point (thin wrapper)
-internal/
-  cli/                    Cobra command implementations (one file per command)
-  commands/               Command registry — single source of truth for CLI + MCP metadata
-  parser/                 Markdown → structured objects (frontmatter, traits, refs, sections)
-  schema/                 Schema loading, validation, type/trait definitions
-  index/                  SQLite index: schema, indexing, query plumbing
-  query/                  Raven Query Language (RQL) parsing and execution
-  model/                  Canonical type definitions (Object, Trait, Reference, etc.)
-  mcp/                    MCP server (JSON-RPC 2.0, generates tools from command registry)
-  vault/                  Vault operations (walk, dates, editor integration)
-  config/                 Global config (~/.config/raven/config.toml) and vault config (raven.yaml)
-  workflow/               Workflow definitions and execution
-  paths/                  Path normalization (trailing slashes, no leading slashes)
-  resolver/               Reference resolution
-  template/               Template rendering
-  testutil/               Shared test helpers
-docs/
-  guide/                  User-facing documentation
-  reference/              Schema, file format, query language, MCP reference
-  design/                 Architecture and design decision docs
-```
-
 ### Key Invariants
 
 - Markdown files are the only durable data store. The SQLite index is always rebuildable.
