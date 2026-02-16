@@ -260,6 +260,7 @@ Checks include:
 		LongDesc: `Browse long-form documentation bundled into the rvn binary.
 
 Use this command for guides, references, and design notes.
+When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
 For command-level usage, use 'rvn help <command>'.`,
 		Args: []ArgMeta{
 			{Name: "section", Description: "Docs section (e.g., guide, reference, design)", Required: false},
@@ -274,6 +275,7 @@ For command-level usage, use 'rvn help <command>'.`,
 		},
 		UseCases: []string{
 			"List docs sections and topic counts",
+			"Interactively select docs via fzf (when available)",
 			"Browse docs topics by section",
 			"Open and read a specific docs page",
 			"Find long-form guidance outside command help",

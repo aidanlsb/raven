@@ -2,19 +2,23 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	builtindocs "github.com/aidanlsb/raven/docs"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 const (
@@ -25,7 +29,18 @@ const (
 var (
 	docsSearchLimit   int
 	docsSearchSection string
+
+	docsLookPath         = exec.LookPath
+	docsFZFRun           = runDocsFZF
+	docsStdinIsTerminal  = func() bool { return isatty.IsTerminal(os.Stdin.Fd()) }
+	docsStdoutIsTerminal = func() bool {
+		return isatty.IsTerminal(os.Stdout.Fd())
+	}
+	docsDisplayContext = ui.NewDisplayContext
+	docsMarkdownRender = ui.RenderMarkdown
 )
+
+type docsFZFRunFunc func(lines []string, prompt, header string) (selectionLine string, selected bool, err error)
 
 type docsSectionView struct {
 	ID         string `json:"id"`
@@ -80,6 +95,7 @@ var docsCmd = &cobra.Command{
 	Long: `Browse long-form documentation bundled into the rvn binary.
 
 Use this command for guides, references, and design notes.
+When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
 For command-level usage, use 'rvn help <command>'.
 
 Examples:
@@ -97,6 +113,12 @@ Examples:
 		}
 
 		if len(args) == 0 {
+			if shouldUseDocsFZFNavigator() {
+				if err := runDocsFZFNavigator(sections); err != nil {
+					return handleError(ErrInternal, err, "Run 'rvn docs list' for non-interactive output")
+				}
+				return nil
+			}
 			return outputDocsSections(sections)
 		}
 
@@ -119,28 +141,7 @@ Examples:
 			return docsTopicNotFound(section.ID, args[1], topics)
 		}
 
-		content, err := fs.ReadFile(builtindocs.FS, topic.FSPath)
-		if err != nil {
-			return handleError(ErrFileReadError, err, "")
-		}
-
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"section": section.ID,
-				"topic":   topic.ID,
-				"title":   topic.Title,
-				"path":    topic.Path,
-				"content": string(content),
-			}, nil)
-			return nil
-		}
-
-		fmt.Printf("Path: %s\n\n", topic.Path)
-		fmt.Print(string(content))
-		if len(content) > 0 && content[len(content)-1] != '\n' {
-			fmt.Println()
-		}
-		return nil
+		return outputDocsTopicContent(topic)
 	},
 }
 
@@ -268,6 +269,167 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 	fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs search <query> --section %s", section.ID), "Search only this section")
 	fmt.Printf("  %-48s %s\n", "rvn docs list", "List sections and section commands")
 	return nil
+}
+
+func outputDocsTopicContent(topic docsTopicRecord) error {
+	content, err := fs.ReadFile(builtindocs.FS, topic.FSPath)
+	if err != nil {
+		return handleError(ErrFileReadError, err, "")
+	}
+
+	if isJSONOutput() {
+		outputSuccess(map[string]interface{}{
+			"section": topic.Section,
+			"topic":   topic.ID,
+			"title":   topic.Title,
+			"path":    topic.Path,
+			"content": string(content),
+		}, nil)
+		return nil
+	}
+
+	renderedContent := string(content)
+	display := docsDisplayContext()
+	if display.IsTTY {
+		if rendered, renderErr := docsMarkdownRender(string(content), display.TermWidth); renderErr == nil {
+			renderedContent = rendered
+		}
+	}
+
+	fmt.Printf("Path: %s\n\n", topic.Path)
+	fmt.Print(renderedContent)
+	if !strings.HasSuffix(renderedContent, "\n") {
+		fmt.Println()
+	}
+	return nil
+}
+
+func shouldUseDocsFZFNavigator() bool {
+	if isJSONOutput() {
+		return false
+	}
+	if !docsStdinIsTerminal() || !docsStdoutIsTerminal() {
+		return false
+	}
+	_, err := docsLookPath("fzf")
+	return err == nil
+}
+
+func runDocsFZFNavigator(sections []docsSectionView) error {
+	section, ok, err := pickDocsSectionWithFZF(sections)
+	if err != nil || !ok {
+		return err
+	}
+
+	topics, err := listDocsTopicsFS(builtindocs.FS, ".", section.ID)
+	if err != nil {
+		return err
+	}
+
+	topic, ok, err := pickDocsTopicWithFZF(section, topics)
+	if err != nil || !ok {
+		return err
+	}
+
+	return outputDocsTopicContent(topic)
+}
+
+func pickDocsSectionWithFZF(sections []docsSectionView) (docsSectionView, bool, error) {
+	lines := make([]string, 0, len(sections))
+	for _, section := range sections {
+		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", section.ID, section.Title, docsTopicCountSummary(section.TopicCount)))
+	}
+
+	selectedLine, selected, err := docsFZFRun(lines, "docs/section> ", "Select a docs section (Esc to cancel)")
+	if err != nil {
+		return docsSectionView{}, false, err
+	}
+	if !selected {
+		return docsSectionView{}, false, nil
+	}
+
+	sectionID := docsFZFSelectionID(selectedLine)
+	section, ok := findDocsSection(sections, sectionID)
+	if !ok {
+		return docsSectionView{}, false, fmt.Errorf("selected unknown docs section %q", sectionID)
+	}
+	return section, true, nil
+}
+
+func pickDocsTopicWithFZF(section docsSectionView, topics []docsTopicRecord) (docsTopicRecord, bool, error) {
+	lines := make([]string, 0, len(topics))
+	for _, topic := range topics {
+		lines = append(lines, fmt.Sprintf("%s\t%s", topic.ID, topic.Title))
+	}
+
+	prompt := fmt.Sprintf("docs/%s> ", section.ID)
+	header := fmt.Sprintf("Select a topic in %s [%s] (Esc to cancel)", section.Title, section.ID)
+	selectedLine, selected, err := docsFZFRun(lines, prompt, header)
+	if err != nil {
+		return docsTopicRecord{}, false, err
+	}
+	if !selected {
+		return docsTopicRecord{}, false, nil
+	}
+
+	topicID := docsFZFSelectionID(selectedLine)
+	topic, ok := findDocsTopic(topics, topicID)
+	if !ok {
+		return docsTopicRecord{}, false, fmt.Errorf("selected unknown docs topic %q in section %q", topicID, section.ID)
+	}
+	return topic, true, nil
+}
+
+func docsFZFSelectionID(line string) string {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return ""
+	}
+	parts := strings.SplitN(line, "\t", 2)
+	return strings.TrimSpace(parts[0])
+}
+
+func runDocsFZF(lines []string, prompt, header string) (string, bool, error) {
+	if len(lines) == 0 {
+		return "", false, nil
+	}
+
+	args := []string{
+		"--layout=reverse",
+		"--height=80%",
+		"--border",
+		"--prompt", prompt,
+		"--delimiter", "\t",
+		"--with-nth", "2..",
+		"--select-1",
+		"--exit-0",
+	}
+	if strings.TrimSpace(header) != "" {
+		args = append(args, "--header", header)
+	}
+
+	cmd := exec.Command("fzf", args...)
+	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n") + "\n")
+
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			if code := exitErr.ExitCode(); code == 1 || code == 130 {
+				return "", false, nil
+			}
+		}
+		return "", false, fmt.Errorf("run fzf selector: %w", err)
+	}
+
+	selection := strings.TrimSpace(stdout.String())
+	if selection == "" {
+		return "", false, nil
+	}
+	return selection, true, nil
 }
 
 func docsSectionNotFound(args []string, sections []docsSectionView) error {
