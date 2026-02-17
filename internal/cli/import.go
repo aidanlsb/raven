@@ -113,7 +113,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-	creator := newObjectCreationContext(vaultPath, sch, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
+	creator := newObjectCreationContext(vaultPath, sch, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
 
 	// Build the mapping config from flags and/or mapping file
 	mappingCfg, err := buildMappingConfig(args)

@@ -197,7 +197,8 @@ Examples:
 		}
 		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
-		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
+		templateDir := vaultCfg.GetTemplateDirectory()
+		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
 
 		// Check if file exists (with full path resolution including directory roots)
 		resolvedSlugPath := creator.resolveAndSlugifyTargetPath(targetPath, typeName)

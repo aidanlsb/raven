@@ -22,6 +22,9 @@ func TestLoadVaultConfig(t *testing.T) {
 		if cfg.GetWorkflowDirectory() != "workflows/" {
 			t.Errorf("expected default directories.workflow 'workflows/', got %q", cfg.GetWorkflowDirectory())
 		}
+		if cfg.GetTemplateDirectory() != "templates/" {
+			t.Errorf("expected default directories.template 'templates/', got %q", cfg.GetTemplateDirectory())
+		}
 	})
 
 	t.Run("loads custom config", func(t *testing.T) {
@@ -43,6 +46,9 @@ func TestLoadVaultConfig(t *testing.T) {
 		}
 		if cfg.GetWorkflowDirectory() != "workflows/" {
 			t.Errorf("expected default directories.workflow 'workflows/', got %q", cfg.GetWorkflowDirectory())
+		}
+		if cfg.GetTemplateDirectory() != "templates/" {
+			t.Errorf("expected default directories.template 'templates/', got %q", cfg.GetTemplateDirectory())
 		}
 	})
 
@@ -67,6 +73,9 @@ func TestLoadVaultConfig(t *testing.T) {
 		if cfg.GetWorkflowDirectory() != "workflows/" {
 			t.Errorf("expected default directories.workflow 'workflows/', got %q", cfg.GetWorkflowDirectory())
 		}
+		if cfg.GetTemplateDirectory() != "templates/" {
+			t.Errorf("expected default directories.template 'templates/', got %q", cfg.GetTemplateDirectory())
+		}
 	})
 
 	t.Run("normalizes directories.workflow", func(t *testing.T) {
@@ -84,6 +93,24 @@ func TestLoadVaultConfig(t *testing.T) {
 		}
 		if got := cfg.GetWorkflowDirectory(); got != "automation/workflows/" {
 			t.Errorf("expected normalized directories.workflow 'automation/workflows/', got %q", got)
+		}
+	})
+
+	t.Run("normalizes directories.template", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := "directories:\n  template: ./content/templates\n"
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetTemplateDirectory(); got != "content/templates/" {
+			t.Errorf("expected normalized directories.template 'content/templates/', got %q", got)
 		}
 	})
 
@@ -298,6 +325,45 @@ directories:
 		}
 		if got := cfg.GetWorkflowDirectory(); got != "old/workflows/" {
 			t.Errorf("expected plural workflows fallback, got %q", got)
+		}
+	})
+
+	t.Run("template key uses singular and falls back to plural", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := `
+daily_directory: daily
+directories:
+  template: content/templates
+  templates: old/templates
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetTemplateDirectory(); got != "content/templates/" {
+			t.Errorf("expected singular template to take precedence, got %q", got)
+		}
+
+		content = `
+daily_directory: daily
+directories:
+  templates: old/templates
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+		cfg, err = LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetTemplateDirectory(); got != "old/templates/" {
+			t.Errorf("expected plural templates fallback, got %q", got)
 		}
 	})
 

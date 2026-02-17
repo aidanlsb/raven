@@ -87,17 +87,23 @@
 ```
 → Ask: "What sections would you like in your meeting template? Common ones include 
   Attendees, Agenda, Notes, and Action Items."
-→ Create template file:
-  raven_add(text="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Agenda\n\n## Notes\n\n## Action Items", 
-            to="templates/meeting.md")
-→ Read current schema:
-  raven_read(path="schema.yaml")
-→ Edit schema to add template field:
-  raven_edit(path="schema.yaml", 
-             old_str="meeting:\n    default_path: meetings/", 
-             new_str="meeting:\n    default_path: meetings/\n    template: templates/meeting.md", 
-             confirm=true)
-→ "Done! Now when you run 'rvn new meeting \"Team Sync\"' it will include those sections automatically."
+→ Confirm the type exists and inspect its fields:
+  raven_schema(subcommand="type meeting")
+→ Scaffold a template file and bind it:
+  raven_template_scaffold(target="type", type_name="meeting")
+→ Write the template content:
+  raven_template_write(
+    target="type",
+    type_name="meeting",
+    content="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Agenda\n\n## Notes\n\n## Action Items"
+  )
+→ Preview with variables:
+  raven_template_render(target="type", type_name="meeting", title="Weekly Standup", field={"time": "10:00 AM"})
+→ Optional smoke test:
+  raven_new(type="meeting", title="Team Sync", field={"time": "10:00 AM"})
+→ If a specific existing file should be used:
+  raven_template_set(target="type", type_name="meeting", file="templates/meeting.md")
+→ "Done! New meeting notes will start with that structure."
 ```
 
 **User**: "What happened yesterday?"

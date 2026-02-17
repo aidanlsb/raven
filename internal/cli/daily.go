@@ -62,6 +62,7 @@ Examples:
 				dateStr,
 				friendlyDate,
 				vaultCfg.DailyTemplate,
+				vaultCfg.GetTemplateDirectory(),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create daily note: %w", err)

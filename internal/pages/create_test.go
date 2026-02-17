@@ -257,33 +257,17 @@ func TestCreateWithTemplate(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	t.Run("with inline template override", func(t *testing.T) {
-		result, err := Create(CreateOptions{
+	t.Run("inline template override rejected", func(t *testing.T) {
+		_, err := Create(CreateOptions{
 			VaultPath:        tmpDir,
 			TypeName:         "meeting",
 			Title:            "Team Sync",
 			TargetPath:       "meetings/team-sync",
-			TemplateOverride: "# {{title}}\n\n**Date:** {{date}}\n\n## Notes",
+			TemplateOverride: "# {{title}}\n\n## Notes",
+			TemplateDir:      "templates/",
 		})
-		if err != nil {
-			t.Fatalf("Create failed: %v", err)
-		}
-
-		content, err := os.ReadFile(result.FilePath)
-		if err != nil {
-			t.Fatalf("Failed to read file: %v", err)
-		}
-		contentStr := string(content)
-
-		// Check template was applied
-		if !strings.Contains(contentStr, "# Team Sync") {
-			t.Error("Template title variable not substituted")
-		}
-		if !strings.Contains(contentStr, "**Date:**") {
-			t.Error("Template date section not present")
-		}
-		if !strings.Contains(contentStr, "## Notes") {
-			t.Error("Template notes section not present")
+		if err == nil {
+			t.Fatal("Create expected error for inline template override, got nil")
 		}
 	})
 
@@ -305,6 +289,7 @@ func TestCreateWithTemplate(t *testing.T) {
 			Title:            "Weekly Standup",
 			TargetPath:       "meetings/weekly-standup",
 			TemplateOverride: "templates/meeting.md",
+			TemplateDir:      "templates/",
 		})
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
@@ -327,42 +312,37 @@ func TestCreateWithTemplate(t *testing.T) {
 		}
 	})
 
-	t.Run("missing template file leaves empty body", func(t *testing.T) {
-		result, err := Create(CreateOptions{
+	t.Run("missing template file errors", func(t *testing.T) {
+		_, err := Create(CreateOptions{
 			VaultPath:        tmpDir,
 			TypeName:         "note",
 			Title:            "Quick Note",
 			TargetPath:       "notes/quick-note",
 			TemplateOverride: "templates/missing.md",
+			TemplateDir:      "templates/",
 		})
-		if err != nil {
-			t.Fatalf("Create failed: %v", err)
-		}
-
-		content, err := os.ReadFile(result.FilePath)
-		if err != nil {
-			t.Fatalf("Failed to read file: %v", err)
-		}
-		contentStr := string(content)
-
-		// Should NOT add a default heading (headings create section objects)
-		if strings.Contains(contentStr, "# Quick Note") {
-			t.Error("Should NOT add default heading when template missing")
-		}
-		// But should have frontmatter
-		if !strings.Contains(contentStr, "type: note") {
-			t.Error("Should have type in frontmatter")
+		if err == nil {
+			t.Fatal("Create expected error for missing template file, got nil")
 		}
 	})
 
 	t.Run("with field variables", func(t *testing.T) {
+		templateDir := filepath.Join(tmpDir, "templates")
+		if err := os.MkdirAll(templateDir, 0755); err != nil {
+			t.Fatalf("Failed to create template dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(templateDir, "meeting-fields.md"), []byte("# {{title}}\n\n**Time:** {{field.time}}\n**Location:** {{field.location}}"), 0644); err != nil {
+			t.Fatalf("Failed to write template: %v", err)
+		}
+
 		result, err := Create(CreateOptions{
 			VaultPath:        tmpDir,
 			TypeName:         "meeting",
 			Title:            "Project Review",
 			TargetPath:       "meetings/project-review",
 			Fields:           map[string]string{"time": "14:00", "location": "Room A"},
-			TemplateOverride: "# {{title}}\n\n**Time:** {{field.time}}\n**Location:** {{field.location}}",
+			TemplateOverride: "templates/meeting-fields.md",
+			TemplateDir:      "templates/",
 		})
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)

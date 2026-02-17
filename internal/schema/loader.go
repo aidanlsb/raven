@@ -73,6 +73,20 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		schema.Traits = make(map[string]*TraitDefinition)
 	}
 
+	// Templates are file-backed only.
+	for typeName, typeDef := range schema.Types {
+		if typeDef == nil {
+			continue
+		}
+		spec := strings.TrimSpace(typeDef.Template)
+		if spec == "" {
+			continue
+		}
+		if strings.Contains(spec, "\n") || strings.Contains(spec, "\r") {
+			return nil, fmt.Errorf("type %q template must be a file path (inline templates are not supported)", typeName)
+		}
+	}
+
 	// Ensure built-in types exist with their fixed definitions.
 	// Built-in types are always overwritten to ensure consistency.
 	schema.Types["page"] = &TypeDefinition{
@@ -168,21 +182,9 @@ types:
         type: string
         required: true
 
-  # Example with inline template:
+  # Example with file-based template:
   # meeting:
   #   default_path: meetings/
-  #   template: |
-  #     # {{title}}
-  #     
-  #     **Date:** {{date}}
-  #     
-  #     ## Attendees
-  #     
-  #     ## Notes
-  #     
-  #     ## Action Items
-  #
-  # Or use a file-based template:
   #   template: templates/meeting.md
 
 # Traits: Universal annotations in content (@name or @name(value))

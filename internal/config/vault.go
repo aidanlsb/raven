@@ -17,8 +17,8 @@ type VaultConfig struct {
 	// DailyDirectory is where daily notes are stored (default: "daily/")
 	DailyDirectory string `yaml:"daily_directory"`
 
-	// DailyTemplate is either a path to a template file (e.g., "templates/daily.md")
-	// or inline template content for daily notes.
+	// DailyTemplate is a path to a template file (e.g., "templates/daily.md")
+	// for new daily notes.
 	DailyTemplate string `yaml:"daily_template,omitempty"`
 
 	// Directories configures directory organization for the vault.
@@ -147,6 +147,12 @@ type DirectoriesConfig struct {
 	// If empty, defaults to "workflows/".
 	Workflow string `yaml:"workflow,omitempty"`
 
+	// Template is the root directory for template files referenced by:
+	// - schema types.<type>.template
+	// - daily_template in raven.yaml
+	// If empty, defaults to "templates/".
+	Template string `yaml:"template,omitempty"`
+
 	// Deprecated: use Object instead. Kept for backwards compatibility.
 	Objects string `yaml:"objects,omitempty"`
 
@@ -155,6 +161,9 @@ type DirectoriesConfig struct {
 
 	// Deprecated: use Workflow instead. Kept for backwards compatibility.
 	Workflows string `yaml:"workflows,omitempty"`
+
+	// Deprecated: use Template instead. Kept for backwards compatibility.
+	Templates string `yaml:"templates,omitempty"`
 }
 
 // GetDirectoriesConfig returns the directories config with defaults applied.
@@ -177,11 +186,15 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	if cfg.Workflow == "" && cfg.Workflows != "" {
 		cfg.Workflow = cfg.Workflows
 	}
+	if cfg.Template == "" && cfg.Templates != "" {
+		cfg.Template = cfg.Templates
+	}
 
 	// Normalize paths: ensure trailing slash and no leading slash.
 	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
 	cfg.Workflow = paths.NormalizeDirRoot(cfg.Workflow)
+	cfg.Template = paths.NormalizeDirRoot(cfg.Template)
 
 	// If page root is omitted, default it to object root.
 	// This keeps "all notes under one root" configs simple:
@@ -195,6 +208,7 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	cfg.Objects = ""
 	cfg.Pages = ""
 	cfg.Workflows = ""
+	cfg.Templates = ""
 
 	return &cfg
 }
@@ -411,6 +425,7 @@ func intPtr(i int) *int {
 }
 
 const defaultWorkflowDirectory = "workflows/"
+const defaultTemplateDirectory = "templates/"
 
 // GetWorkflowRunsConfig returns workflow run checkpoint settings with defaults applied.
 func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
@@ -482,6 +497,34 @@ func (vc *VaultConfig) GetWorkflowDirectory() string {
 	cleaned = strings.TrimPrefix(cleaned, "/")
 	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
 		return defaultWorkflowDirectory
+	}
+	return paths.NormalizeDirRoot(cleaned)
+}
+
+// GetTemplateDirectory returns the configured template directory with defaults applied.
+// The result is always normalized as a vault-relative directory with trailing slash.
+func (vc *VaultConfig) GetTemplateDirectory() string {
+	dir := defaultTemplateDirectory
+	if vc != nil && vc.Directories != nil {
+		raw := vc.Directories.Template
+		if raw == "" {
+			raw = vc.Directories.Templates
+		}
+		if raw != "" {
+			dir = raw
+		}
+	}
+
+	normalized := paths.NormalizeDirRoot(dir)
+	if normalized == "" {
+		return defaultTemplateDirectory
+	}
+
+	cleaned := filepath.ToSlash(filepath.Clean(normalized))
+	cleaned = strings.TrimPrefix(cleaned, "./")
+	cleaned = strings.TrimPrefix(cleaned, "/")
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return defaultTemplateDirectory
 	}
 	return paths.NormalizeDirRoot(cleaned)
 }
@@ -601,6 +644,7 @@ queries:
 #   object: object/
 #   page: page/
 #   workflow: workflows/
+#   template: templates/
 
 # Workflows registry - declarations are file references only
 # Workflow definitions live in directories.workflow (default: workflows/)

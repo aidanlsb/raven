@@ -144,4 +144,23 @@ types:
 			t.Fatalf("expected teammates field type %q, got %q", FieldTypeRefArray, teammatesField.Type)
 		}
 	})
+
+	t.Run("rejects inline template definitions", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := `
+types:
+  meeting:
+    template: |
+      # {{title}}
+      
+      ## Notes
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error for inline template definition, got nil")
+		}
+	})
 }

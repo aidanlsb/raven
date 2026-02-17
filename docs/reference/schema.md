@@ -130,7 +130,7 @@ type: date
 | `description` | string | Optional human/agent context for the type |
 | `name_field` | string | Field that serves as the display name |
 | `default_path` | string | Directory where new files are created |
-| `template` | string | Template file path or inline content |
+| `template` | string | Template file path |
 | `fields` | object | Field definitions for frontmatter |
 
 ### `name_field`
@@ -184,25 +184,16 @@ With `directories` configured in `raven.yaml`, `default_path` is relative to `ob
 
 ### `template`
 
-Template for new files of this type. Can be a file path or inline content.
+Template file for new files of this type.
 
-**File-based:**
+Templates are file-backed only and should live under `directories.template` in `raven.yaml` (default: `templates/`).
+
+**Example:**
 
 ```yaml
 types:
   meeting:
     template: templates/meeting.md
-```
-
-**Inline:**
-
-```yaml
-types:
-  quick-note:
-    template: |
-      # {{title}}
-      
-      Created: {{date}}
 ```
 
 **Template variables:**
@@ -213,7 +204,7 @@ types:
 | `{{slug}}` | Slugified title | "team-sync" |
 | `{{type}}` | The type name | "meeting" |
 | `{{date}}` | Today's date | "2026-01-10" |
-| `{{datetime}}` | Current datetime | "2026-01-10T14:30:00Z" |
+| `{{datetime}}` | Current datetime | "2026-01-10T14:30" |
 | `{{year}}` | Current year | "2026" |
 | `{{month}}` | Current month (2-digit) | "01" |
 | `{{day}}` | Current day (2-digit) | "10" |

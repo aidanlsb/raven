@@ -164,10 +164,13 @@ rvn schema commands --json
 | `raven_schema_remove_field` | Remove a field |
 | `raven_schema_rename_type` | Rename a type and update all references |
 | `raven_schema_rename_field` | Rename a field and update all references |
-| `raven_schema_template_get` | Get the template for a type |
-| `raven_schema_template_set` | Set or update a type's template |
-| `raven_schema_template_remove` | Remove a type's template |
-| `raven_schema_template_render` | Preview a template with variables applied |
+| `raven_template_list` | List configured templates |
+| `raven_template_get` | Get template binding and content |
+| `raven_template_set` | Set template file binding |
+| `raven_template_scaffold` | Create template file and register binding |
+| `raven_template_write` | Replace bound template file content |
+| `raven_template_remove` | Remove template binding |
+| `raven_template_render` | Preview rendered template content |
 | `raven_schema_validate` | Validate schema correctness |
 
 ### Saved Queries
@@ -405,17 +408,26 @@ raven_schema_rename_type(old_name="event", new_name="meeting")  # Preview
 raven_schema_rename_type(old_name="event", new_name="meeting", confirm=true)  # Apply
 raven_reindex(full=true)  # Always reindex after rename
 
-# Manage templates
-raven_schema_template_get(type_name="meeting")
-raven_schema_template_set(type_name="meeting", content="# {{title}}\n\n## Notes\n")
-raven_schema_template_set(type_name="meeting", file="templates/meeting.md")
-raven_schema_template_render(type_name="meeting", title="Weekly Standup")
-raven_schema_template_remove(type_name="meeting")
+# Manage templates (file-backed lifecycle)
+raven_template_list()
+raven_template_scaffold(target="type", type_name="meeting")
+raven_template_set(target="type", type_name="meeting", file="templates/meeting.md")
+raven_template_write(target="type", type_name="meeting", content="# {{title}}\n\n## Notes\n")
+raven_template_render(target="type", type_name="meeting", title="Weekly Standup", field={"time": "10:00 AM"})
+raven_template_get(target="daily")
+raven_template_set(target="daily", file="templates/daily.md")
+raven_template_render(target="daily", date="tomorrow")
+raven_template_remove(target="type", type_name="meeting")
 
 # Resolve references
 raven_resolve(reference="freya")         # Short name → people/freya
 raven_resolve(reference="today")         # Dynamic date → daily/2026-02-07
 ```
+
+Notes:
+- Templates are file-backed only (no inline template bodies).
+- Template files must be under `directories.template` (default: `templates/`).
+- Use `raven_template_scaffold` for first-time setup, then `raven_template_write` to update content.
 
 ### Vault Health
 

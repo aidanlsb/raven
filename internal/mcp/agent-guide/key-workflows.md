@@ -505,20 +505,33 @@ Templates provide default content when users create new notes. Use the template 
 **Managing templates with CLI commands:**
 
 ```
-# Check current template
-raven_schema_template_get(type_name="meeting")
+# List all configured templates
+raven_template_list()
 
-# Set an inline template
-raven_schema_template_set(type_name="meeting", content="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Notes\n\n## Action Items")
+# Scaffold + register a type template
+raven_template_scaffold(target="type", type_name="meeting")
 
-# Set a file-based template (file must exist)
-raven_schema_template_set(type_name="meeting", file="templates/meeting.md")
+# Bind an existing file to a type template
+raven_template_set(target="type", type_name="meeting", file="templates/meeting.md")
+
+# Update template file content
+raven_template_write(
+  target="type",
+  type_name="meeting",
+  content="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Notes\n\n## Action Items"
+)
 
 # Preview with variables
-raven_schema_template_render(type_name="meeting", title="Weekly Standup")
+raven_template_render(target="type", type_name="meeting", title="Weekly Standup")
 
-# Remove a template
-raven_schema_template_remove(type_name="meeting")
+# Daily template lifecycle
+raven_template_get(target="daily")
+raven_template_set(target="daily", file="templates/daily.md")
+raven_template_render(target="daily", date="tomorrow")
+
+# Remove binding (optionally delete file)
+raven_template_remove(target="type", type_name="meeting")
+raven_template_remove(target="daily", delete_file=true)
 ```
 
 **Template Variables:**
@@ -529,39 +542,33 @@ raven_schema_template_remove(type_name="meeting")
 | `{{slug}}` | Slugified title | "team-sync" |
 | `{{type}}` | The type name | "meeting" |
 | `{{date}}` | Today's date | "2026-01-02" |
-| `{{datetime}}` | Current datetime | "2026-01-02T14:30:00Z" |
+| `{{datetime}}` | Current datetime | "2026-01-02T14:30" |
 | `{{year}}` | Current year | "2026" |
 | `{{month}}` | Current month (2-digit) | "01" |
 | `{{day}}` | Current day (2-digit) | "02" |
 | `{{weekday}}` | Day name | "Monday" |
 | `{{field.X}}` | Value of field X from `--field` | Value provided at creation |
 
-**Inline vs file-based templates:**
+**Template policy:**
 
-- **Inline** (`--content`): Best for short templates. Stored directly in `schema.yaml`.
-- **File-based** (`--file`): Best for complex templates. Stores a path reference; content loaded at render time.
+- Templates are **file-backed only** (no inline template bodies).
+- Template files must be under `directories.template` (default: `templates/`).
 
-**Daily note templates (raven.yaml):**
+**Important MCP notes for agents:**
 
-Daily notes use a special config in `raven.yaml`:
+- Use `raven_template_scaffold` for first-time setup (creates file + binds it).
+- Use `raven_template_write` to update template content in-place.
+- `raven_template_remove(..., delete_file=true)` can remove both binding and file with safety checks.
+
+**Daily note templates (`raven.yaml`):**
+
+Daily notes use `daily_template` as a file reference:
 
 ```yaml
 daily_directory: daily
+directories:
+  template: templates/
 daily_template: templates/daily.md
-```
-
-Or inline:
-
-```yaml
-daily_directory: daily
-daily_template: |
-  # {{weekday}}, {{date}}
-  
-  ## Morning
-  
-  ## Afternoon
-  
-  ## Evening
 ```
 
 **Workflow for helping users set up templates:**
@@ -569,8 +576,8 @@ daily_template: |
 1. Ask what type of notes they want templates for
 2. Check the schema to see if the type exists: `raven_schema(subcommand="type meeting")`
 3. Ask what sections/structure they want in new notes
-4. Set the template: `raven_schema_template_set(type_name="meeting", content="...")`
-5. Preview it: `raven_schema_template_render(type_name="meeting", title="Test")`
+4. Scaffold or set the template: `raven_template_scaffold(target="type", type_name="meeting")`
+5. Write content and preview: `raven_template_write(...)`, `raven_template_render(target="type", type_name="meeting", title="Test")`
 6. Test it: `raven_new(type="meeting", title="Test Meeting")`
 
 ### 16. Resolving References

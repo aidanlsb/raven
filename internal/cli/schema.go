@@ -470,6 +470,5 @@ func isBuiltinType(name string) bool {
 }
 
 func init() {
-	schemaCmd.AddCommand(schemaTemplateCmd)
 	rootCmd.AddCommand(schemaCmd)
 }

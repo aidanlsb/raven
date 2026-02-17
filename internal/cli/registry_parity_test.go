@@ -56,7 +56,6 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 		"schema add",
 		"schema remove",
 		"schema rename",
-		"schema template",
 		"schema update",
 		"serve",
 		"vaults",

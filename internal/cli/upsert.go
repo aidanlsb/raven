@@ -69,7 +69,8 @@ var upsertCmd = &cobra.Command{
 		}
 		objectsRoot := vaultCfg.GetObjectsRoot()
 		pagesRoot := vaultCfg.GetPagesRoot()
-		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot)
+		templateDir := vaultCfg.GetTemplateDirectory()
+		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
 		slugified := creator.resolveAndSlugifyTargetPath(title, typeName)
 		if !strings.HasSuffix(slugified, ".md") {
 			slugified += ".md"

@@ -12,6 +12,7 @@ type objectCreationContext struct {
 	schema      *schema.Schema
 	objectsRoot string
 	pagesRoot   string
+	templateDir string
 }
 
 type objectCreateParams struct {
@@ -23,12 +24,13 @@ type objectCreateParams struct {
 	templateOverride            string
 }
 
-func newObjectCreationContext(vaultPath string, sch *schema.Schema, objectsRoot, pagesRoot string) objectCreationContext {
+func newObjectCreationContext(vaultPath string, sch *schema.Schema, objectsRoot, pagesRoot, templateDir string) objectCreationContext {
 	return objectCreationContext{
 		vaultPath:   vaultPath,
 		schema:      sch,
 		objectsRoot: objectsRoot,
 		pagesRoot:   pagesRoot,
+		templateDir: templateDir,
 	}
 }
 
@@ -54,6 +56,7 @@ func (c objectCreationContext) create(params objectCreateParams) (*pages.CreateR
 		Schema:                      c.schema,
 		IncludeRequiredPlaceholders: params.includeRequiredPlaceholders,
 		TemplateOverride:            params.templateOverride,
+		TemplateDir:                 c.templateDir,
 		ObjectsRoot:                 c.objectsRoot,
 		PagesRoot:                   c.pagesRoot,
 	})

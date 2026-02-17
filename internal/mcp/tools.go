@@ -122,14 +122,20 @@ func CLICommandName(toolName string) string {
 		return "schema rename type"
 	case "schema_rename_field":
 		return "schema rename field"
-	case "schema_template_get":
-		return "schema template get"
-	case "schema_template_set":
-		return "schema template set"
-	case "schema_template_remove":
-		return "schema template remove"
-	case "schema_template_render":
-		return "schema template render"
+	case "template_list":
+		return "template list"
+	case "template_get":
+		return "template get"
+	case "template_set":
+		return "template set"
+	case "template_scaffold":
+		return "template scaffold"
+	case "template_write":
+		return "template write"
+	case "template_remove":
+		return "template remove"
+	case "template_render":
+		return "template render"
 	case "query_add":
 		return "query add"
 	case "query_remove":

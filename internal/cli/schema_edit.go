@@ -1424,7 +1424,7 @@ Rename type updates:
 Rename field updates:
 1. Field key in schema.yaml for the target type
 2. If name_field == old_field, updates it to new_field
-3. Type templates referencing {{field.old_field}} (inline schema template or template files)
+3. Type templates referencing {{field.old_field}} (template files)
 4. Object frontmatter keys for files with type:<type>
 5. Field keys inside ::type(...) declarations (only for that type)
 6. Saved queries in raven.yaml (best-effort for object:<type> queries)
@@ -1693,7 +1693,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	}
 
 	// -------------------------------------------------------------------------
-	// 1) schema.yaml updates (field key, name_field, inline template)
+	// 1) schema.yaml updates (field key, name_field, template references)
 	// -------------------------------------------------------------------------
 	schemaPath := paths.SchemaPath(vaultPath)
 	schemaData, err := os.ReadFile(schemaPath)
@@ -1759,7 +1759,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 		})
 	}
 
-	// Update template (inline vs file-based)
+	// Update template file references
 	if tmplSpec, ok := typeNode["template"].(string); ok && tmplSpec != "" {
 		if looksLikeTemplatePath(tmplSpec) {
 			absTmpl := filepath.Join(vaultPath, tmplSpec)
@@ -1784,16 +1784,6 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 						})
 					}
 				}
-			}
-		} else {
-			newSpec := strings.ReplaceAll(tmplSpec, tokenOld, tokenNew)
-			if newSpec != tmplSpec {
-				typeNode["template"] = newSpec
-				plan.Changes = append(plan.Changes, FieldRenameChange{
-					FilePath:    "schema.yaml",
-					ChangeType:  "template_inline",
-					Description: fmt.Sprintf("update inline template variable %s → %s", tokenOld, tokenNew),
-				})
 			}
 		}
 	}
@@ -2048,8 +2038,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	return plan, nil
 }
 
-// looksLikeTemplatePath mirrors internal/template's heuristic for deciding whether a
-// schema template spec is a file path or inline content.
+// looksLikeTemplatePath checks if a template spec looks like a file path.
 func looksLikeTemplatePath(s string) bool {
 	if s == "" {
 		return false
@@ -2066,7 +2055,7 @@ func looksLikeTemplatePath(s string) bool {
 	if strings.HasPrefix(s, "templates") {
 		return true
 	}
-	// If it has multiple lines, it's likely inline content
+	// Multi-line values are not valid template file paths.
 	if strings.Contains(s, "\n") {
 		return false
 	}
