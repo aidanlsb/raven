@@ -123,7 +123,11 @@ Supported output types:
 - executes tool steps in order
 - stops at the first agent step
 - persists a run checkpoint under `.raven/workflow-runs/`
-- returns `run_id`, `status`, `revision`, `next.prompt`, declared `next.outputs`, and accumulated `steps` output
+- returns `run_id`, `status`, `revision`, `next.prompt`, declared `next.outputs`, and lightweight `step_summaries`
+
+`rvn workflow runs step`:
+- loads a persisted run and returns full output for one `step_id`
+- enables incremental retrieval of large workflow context by step boundary
 
 `rvn workflow continue`:
 - loads a persisted run by `run_id`
@@ -227,6 +231,7 @@ rvn workflow run <name> --input key=value
 rvn workflow run <name> --input-json '{"date":"2026-02-14"}'
 rvn workflow continue <run-id> --agent-output-json '{"outputs":{"markdown":"..."}}'
 rvn workflow runs list --status awaiting_agent
+rvn workflow runs step <run-id> <step-id>
 rvn workflow runs prune --status completed --older-than 14d --confirm
 ```
 

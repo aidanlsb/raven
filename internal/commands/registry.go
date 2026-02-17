@@ -1460,7 +1460,7 @@ Reports migration, directory-policy, and file syntax errors.`,
 When an agent step is reached, this command returns:
 - the rendered agent prompt string
 - the declared agent outputs (e.g., markdown)
-- the accumulated step outputs so far
+- step summaries (use workflow runs step for full step output retrieval)
 `,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Workflow name", Required: true},
@@ -1483,7 +1483,9 @@ When an agent step is reached, this command returns:
 		Name:        "workflow continue",
 		Description: "Continue a paused workflow run",
 		LongDesc: `Continues a paused workflow run by validating and applying agent output JSON,
-then executing subsequent deterministic steps until the next agent step or completion.`,
+then executing subsequent deterministic steps until the next agent step or completion.
+
+Responses include step summaries; fetch full step output with workflow runs step.`,
 		Args: []ArgMeta{
 			{Name: "run-id", Description: "Workflow run ID to continue", Required: true},
 		},
@@ -1514,6 +1516,25 @@ then executing subsequent deterministic steps until the next agent step or compl
 		UseCases: []string{
 			"Find paused runs waiting for agent output",
 			"Inspect run history and status",
+		},
+	},
+	"workflow_runs_step": {
+		Name:        "workflow runs step",
+		Description: "Fetch output for a specific step in a workflow run",
+		LongDesc: `Returns the full stored output for one step in a persisted workflow run.
+
+Use this with step IDs from workflow_run/workflow_continue step summaries for
+incremental retrieval of large workflow context.`,
+		Args: []ArgMeta{
+			{Name: "run-id", Description: "Workflow run ID", Required: true},
+			{Name: "step-id", Description: "Step ID to retrieve output for", Required: true},
+		},
+		Examples: []string{
+			"rvn workflow runs step wrf_abcd1234 todos --json",
+		},
+		UseCases: []string{
+			"Fetch large step outputs on demand instead of in workflow_run responses",
+			"Inspect a specific tool or agent step output while debugging a run",
 		},
 	},
 	"workflow_runs_prune": {

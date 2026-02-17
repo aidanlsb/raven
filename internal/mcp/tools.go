@@ -158,6 +158,8 @@ func CLICommandName(toolName string) string {
 		return "workflow continue"
 	case "workflow_runs_list":
 		return "workflow runs list"
+	case "workflow_runs_step":
+		return "workflow runs step"
 	case "workflow_runs_prune":
 		return "workflow runs prune"
 	}

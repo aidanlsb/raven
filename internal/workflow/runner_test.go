@@ -61,6 +61,72 @@ func TestRunner_StopsAtAgentStep(t *testing.T) {
 	}
 }
 
+func TestRunner_ReturnsStepSummariesInsteadOfStepPayloads(t *testing.T) {
+	wf := &Workflow{
+		Name: "x",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "fetch",
+				Type: "tool",
+				Tool: "raven_stats",
+			},
+			{
+				ID:     "compose",
+				Type:   "agent",
+				Prompt: "Status:\n{{steps.fetch.data.status}}",
+				Outputs: map[string]*config.WorkflowPromptOutput{
+					"markdown": {Type: "markdown", Required: true},
+				},
+			},
+		},
+	}
+
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		return map[string]interface{}{
+			"ok": true,
+			"data": map[string]interface{}{
+				"status": "green",
+			},
+		}, nil
+	}
+
+	result, err := r.Run(wf, map[string]string{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Next == nil {
+		t.Fatal("expected awaiting agent boundary")
+	}
+	if len(result.StepSummaries) != 2 {
+		t.Fatalf("expected 2 step summaries, got %d", len(result.StepSummaries))
+	}
+
+	byID := map[string]RunStepSummary{}
+	for _, s := range result.StepSummaries {
+		byID[s.StepID] = s
+	}
+
+	fetch, ok := byID["fetch"]
+	if !ok {
+		t.Fatal("missing fetch step summary")
+	}
+	if fetch.Status != "ok" || !fetch.HasOutput {
+		t.Fatalf("unexpected fetch summary: %#v", fetch)
+	}
+
+	compose, ok := byID["compose"]
+	if !ok {
+		t.Fatal("missing compose step summary")
+	}
+	if compose.Status != string(RunStatusAwaitingAgent) {
+		t.Fatalf("unexpected compose status: %s", compose.Status)
+	}
+	if !compose.HasOutput {
+		t.Fatalf("expected compose step to have stored prompt state: %#v", compose)
+	}
+}
+
 func TestRunner_ToolStepTypedInterpolation(t *testing.T) {
 	wf := &Workflow{
 		Name: "typed",

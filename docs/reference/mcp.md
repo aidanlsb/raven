@@ -193,6 +193,7 @@ rvn schema commands --json
 | `raven_workflow_run` | Run a workflow until an agent step |
 | `raven_workflow_continue` | Continue a paused workflow run |
 | `raven_workflow_runs_list` | List persisted workflow runs |
+| `raven_workflow_runs_step` | Fetch output for a specific workflow run step |
 | `raven_workflow_runs_prune` | Prune persisted workflow runs |
 
 ---
@@ -488,6 +489,9 @@ raven_workflow_show(name="meeting-prep")
 
 # Run with inputs
 raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
+
+# Fetch one step output incrementally
+raven_workflow_runs_step(run_id="wrf_abcd1234", step_id="todos")
 ```
 
 Notes:

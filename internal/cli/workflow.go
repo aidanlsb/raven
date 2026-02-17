@@ -609,7 +609,7 @@ var workflowRunCmd = &cobra.Command{
 			markRunFailed(state, errCode, stepID, err)
 			workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
 			_ = workflow.SaveRunState(vaultPath, runCfg, state)
-			return handleErrorWithDetails(errCode, err.Error(), "", runStateErrorDetails(state, stepID))
+			return handleErrorWithDetails(errCode, err.Error(), "", runStateErrorDetails(wf, state, stepID))
 		}
 
 		workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
@@ -633,14 +633,20 @@ var workflowRunCmd = &cobra.Command{
 			fmt.Println("=== OUTPUTS ===")
 			outputJSON, _ := json.MarshalIndent(result.Next.Outputs, "", "  ")
 			fmt.Println(string(outputJSON))
+			fmt.Println()
+			fmt.Println("=== STEP SUMMARIES ===")
+			stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+			fmt.Println(string(stepSummariesJSON))
+			fmt.Println()
+			fmt.Printf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.\n", result.RunID)
 			return nil
 		}
 
 		fmt.Println("Workflow completed (no agent steps).")
 		fmt.Println()
-		fmt.Println("=== STEPS ===")
-		stepsJSON, _ := json.MarshalIndent(result.Steps, "", "  ")
-		fmt.Println(string(stepsJSON))
+		fmt.Println("=== STEP SUMMARIES ===")
+		stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+		fmt.Println(string(stepSummariesJSON))
 		return nil
 	},
 }
@@ -712,7 +718,7 @@ var workflowContinueCmd = &cobra.Command{
 
 		if err := workflow.ApplyAgentOutputs(wf, state, outputEnv); err != nil {
 			code := classifyContinueValidationError(state, err)
-			return handleErrorWithDetails(code, err.Error(), "", runStateErrorDetails(state, ""))
+			return handleErrorWithDetails(code, err.Error(), "", runStateErrorDetails(wf, state, ""))
 		}
 
 		state.Revision++
@@ -726,7 +732,7 @@ var workflowContinueCmd = &cobra.Command{
 			state.Revision++
 			workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
 			_ = workflow.SaveRunState(vaultPath, runCfg, state)
-			return handleErrorWithDetails(errCode, err.Error(), "", runStateErrorDetails(state, stepID))
+			return handleErrorWithDetails(errCode, err.Error(), "", runStateErrorDetails(wf, state, stepID))
 		}
 
 		workflow.ApplyRetentionExpiry(state, runCfg, time.Now().UTC())
@@ -750,14 +756,20 @@ var workflowContinueCmd = &cobra.Command{
 			fmt.Println("=== OUTPUTS ===")
 			outputJSON, _ := json.MarshalIndent(result.Next.Outputs, "", "  ")
 			fmt.Println(string(outputJSON))
+			fmt.Println()
+			fmt.Println("=== STEP SUMMARIES ===")
+			stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+			fmt.Println(string(stepSummariesJSON))
+			fmt.Println()
+			fmt.Printf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.\n", result.RunID)
 			return nil
 		}
 
 		fmt.Println("Workflow completed.")
 		fmt.Println()
-		fmt.Println("=== STEPS ===")
-		stepsJSON, _ := json.MarshalIndent(result.Steps, "", "  ")
-		fmt.Println(string(stepsJSON))
+		fmt.Println("=== STEP SUMMARIES ===")
+		stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+		fmt.Println(string(stepSummariesJSON))
 		return nil
 	},
 }
@@ -789,9 +801,63 @@ var workflowRunsListCmd = &cobra.Command{
 		}
 
 		if isJSONOutput() {
+			wfCache := map[string]*workflow.Workflow{}
+			wfMissing := map[string]bool{}
+			outRuns := make([]map[string]interface{}, 0, len(runs))
+			for _, run := range runs {
+				item := map[string]interface{}{
+					"version":       run.Version,
+					"run_id":        run.RunID,
+					"workflow_name": run.WorkflowName,
+					"workflow_hash": run.WorkflowHash,
+					"status":        run.Status,
+					"cursor":        run.Cursor,
+					"revision":      run.Revision,
+					"created_at":    run.CreatedAt.Format(time.RFC3339),
+					"updated_at":    run.UpdatedAt.Format(time.RFC3339),
+					"history":       run.History,
+					"failure":       run.Failure,
+					"available_steps": func() []string {
+						ids := make([]string, 0, len(run.Steps))
+						for id := range run.Steps {
+							ids = append(ids, id)
+						}
+						sort.Strings(ids)
+						return ids
+					}(),
+				}
+				if run.AwaitingStep != "" {
+					item["awaiting_step_id"] = run.AwaitingStep
+				}
+				if run.CompletedAt != nil {
+					item["completed_at"] = run.CompletedAt.Format(time.RFC3339)
+				}
+				if run.ExpiresAt != nil {
+					item["expires_at"] = run.ExpiresAt.Format(time.RFC3339)
+				}
+
+				if !wfMissing[run.WorkflowName] {
+					wf := wfCache[run.WorkflowName]
+					if wf == nil {
+						loaded, wfErr := workflow.Get(vaultPath, run.WorkflowName, vaultCfg)
+						if wfErr != nil {
+							wfMissing[run.WorkflowName] = true
+						} else {
+							wf = loaded
+							wfCache[run.WorkflowName] = wf
+						}
+					}
+					if wf != nil {
+						item["step_summaries"] = workflow.BuildStepSummaries(wf, run)
+					}
+				}
+
+				outRuns = append(outRuns, item)
+			}
+
 			outputSuccess(map[string]interface{}{
-				"runs": runs,
-			}, &Meta{Count: len(runs)})
+				"runs": outRuns,
+			}, &Meta{Count: len(outRuns)})
 			return nil
 		}
 
@@ -808,6 +874,80 @@ var workflowRunsListCmd = &cobra.Command{
 				run.UpdatedAt.Format(time.RFC3339),
 			)
 		}
+		return nil
+	},
+}
+
+var workflowRunsStepCmd = &cobra.Command{
+	Use:   "step <run-id> <step-id>",
+	Short: "Fetch output for a specific workflow step",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		runID := args[0]
+		stepID := strings.TrimSpace(args[1])
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		runCfg := vaultCfg.GetWorkflowRunsConfig()
+
+		state, err := workflow.LoadRunState(vaultPath, runCfg, runID)
+		if err != nil {
+			code := ErrWorkflowRunNotFound
+			if strings.Contains(err.Error(), "parse run state") {
+				code = ErrWorkflowStateCorrupt
+			}
+			return handleError(code, err, "")
+		}
+
+		stepOutput, ok := state.Steps[stepID]
+		if !ok {
+			available := make([]string, 0, len(state.Steps))
+			for id := range state.Steps {
+				available = append(available, id)
+			}
+			sort.Strings(available)
+			return handleErrorWithDetails(
+				ErrRefNotFound,
+				fmt.Sprintf("step '%s' not found in run '%s'", stepID, runID),
+				"Use one of the available step IDs",
+				map[string]interface{}{
+					"run_id":          state.RunID,
+					"workflow_name":   state.WorkflowName,
+					"available_steps": available,
+				},
+			)
+		}
+
+		var summaries []workflow.RunStepSummary
+		if wf, wfErr := workflow.Get(vaultPath, state.WorkflowName, vaultCfg); wfErr == nil {
+			summaries = workflow.BuildStepSummaries(wf, state)
+		}
+
+		payload := map[string]interface{}{
+			"run_id":        state.RunID,
+			"workflow_name": state.WorkflowName,
+			"status":        state.Status,
+			"revision":      state.Revision,
+			"step_id":       stepID,
+			"step_output":   stepOutput,
+		}
+		if len(summaries) > 0 {
+			payload["step_summaries"] = summaries
+		}
+
+		if isJSONOutput() {
+			outputSuccess(payload, nil)
+			return nil
+		}
+
+		fmt.Printf("run_id: %s\n", state.RunID)
+		fmt.Printf("workflow: %s\n", state.WorkflowName)
+		fmt.Printf("step_id: %s\n\n", stepID)
+		stepJSON, _ := json.MarshalIndent(stepOutput, "", "  ")
+		fmt.Println(string(stepJSON))
 		return nil
 	},
 }
@@ -1112,18 +1252,27 @@ func extractStepID(msg string) string {
 	return rest[:end]
 }
 
-func runStateErrorDetails(state *workflow.WorkflowRunState, failedStepID string) map[string]interface{} {
+func runStateErrorDetails(wf *workflow.Workflow, state *workflow.WorkflowRunState, failedStepID string) map[string]interface{} {
 	if state == nil {
 		return nil
 	}
+	available := make([]string, 0, len(state.Steps))
+	for id := range state.Steps {
+		available = append(available, id)
+	}
+	sort.Strings(available)
+
 	details := map[string]interface{}{
-		"run_id":        state.RunID,
-		"workflow_name": state.WorkflowName,
-		"status":        state.Status,
-		"revision":      state.Revision,
-		"cursor":        state.Cursor,
-		"steps":         state.Steps,
-		"updated_at":    state.UpdatedAt.Format(time.RFC3339),
+		"run_id":          state.RunID,
+		"workflow_name":   state.WorkflowName,
+		"status":          state.Status,
+		"revision":        state.Revision,
+		"cursor":          state.Cursor,
+		"available_steps": available,
+		"updated_at":      state.UpdatedAt.Format(time.RFC3339),
+	}
+	if wf != nil {
+		details["step_summaries"] = workflow.BuildStepSummaries(wf, state)
 	}
 	if failedStepID != "" {
 		details["failed_step_id"] = failedStepID
@@ -1164,6 +1313,7 @@ func init() {
 	workflowCmd.AddCommand(workflowRunCmd)
 	workflowCmd.AddCommand(workflowContinueCmd)
 	workflowRunsCmd.AddCommand(workflowRunsListCmd)
+	workflowRunsCmd.AddCommand(workflowRunsStepCmd)
 	workflowRunsCmd.AddCommand(workflowRunsPruneCmd)
 	workflowCmd.AddCommand(workflowRunsCmd)
 	rootCmd.AddCommand(workflowCmd)

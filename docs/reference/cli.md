@@ -1485,7 +1485,7 @@ rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1
 rvn workflow run daily-brief --input-json '{"date":"2026-02-14"}'
 ```
 
-Runs deterministic tool steps, then returns the rendered agent prompt, declared agent outputs schema, step outputs gathered so far, and a persisted `run_id`.
+Runs deterministic tool steps, then returns the rendered agent prompt, declared agent outputs schema, step summaries, and a persisted `run_id`.
 
 ---
 
@@ -1528,6 +1528,23 @@ rvn workflow runs list [--workflow name] [--status completed,failed]
 |------|-------------|
 | `--workflow` | Filter by workflow name |
 | `--status` | Filter by comma-separated statuses |
+
+---
+
+### `rvn workflow runs step`
+
+Fetch the stored output for one step in a persisted workflow run.
+
+```bash
+rvn workflow runs step <run-id> <step-id>
+```
+
+| Argument | Description |
+|----------|-------------|
+| `run-id` | Workflow run ID |
+| `step-id` | Step ID to retrieve |
+
+Use this with `step_summaries` from `workflow run` / `workflow continue` for incremental step retrieval.
 
 ---
 
