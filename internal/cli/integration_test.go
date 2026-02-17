@@ -203,6 +203,59 @@ func TestIntegration_SchemaValidationErrors(t *testing.T) {
 	result.AssertHasWarning(t, "UNKNOWN_FIELD")
 }
 
+func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Dana").MustSucceed(t)
+
+	// email is a string field; unquoted true should fail type validation.
+	result := v.RunCLI("set", "people/dana", "email=true")
+	result.MustFail(t, "VALIDATION_FAILED")
+
+	// Confirm no invalid bool value was written into frontmatter.
+	v.AssertFileNotContains("people/dana.md", "email: true")
+}
+
+func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Website", "--field", "status=active").MustSucceed(t)
+
+	// status is enum(active|paused|done); invalid enum should fail.
+	result := v.RunCLI("upsert", "project", "Website", "--field", "status=not-a-valid-status")
+	result.MustFail(t, "VALIDATION_FAILED")
+
+	// Existing value should remain unchanged.
+	v.AssertFileContains("projects/website.md", "status: active")
+}
+
+func TestIntegration_SetFieldsJSONPreservesStringType(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Erin").MustSucceed(t)
+
+	// email is a string field; JSON string "true" should stay a string.
+	result := v.RunCLI("set", "people/erin", "--fields-json", `{"email":"true"}`)
+	result.MustSucceed(t)
+	v.AssertFileContains("people/erin.md", `email: "true"`)
+}
+
+func TestIntegration_UpsertFieldJSONPreservesStringType(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	result := v.RunCLI("upsert", "person", "Field Json User", "--field-json", `{"email":"true"}`)
+	result.MustSucceed(t)
+	v.AssertFileContains("people/field-json-user.md", `email: "true"`)
+}
+
 // TestIntegration_BulkOperationsPreview tests bulk operations with preview mode.
 func TestIntegration_BulkOperationsPreview(t *testing.T) {
 	v := testutil.NewTestVault(t).

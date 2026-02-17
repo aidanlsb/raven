@@ -170,7 +170,7 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 				},
 			},
 			wantCmd:  "upsert",
-			wantArgs: []string{"brief", "Daily Brief 2026-02-14", "--content", "# Daily Brief", "--field", "owner=people/freya", "--field", "status=ready", "--json"},
+			wantArgs: []string{"brief", "Daily Brief 2026-02-14", "--content", "# Daily Brief", "--field-json", `{"owner":"people/freya","status":"ready"}`, "--json"},
 		},
 		{
 			toolName: "raven_delete",
@@ -185,7 +185,7 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 				"fields":    map[string]interface{}{"status": "active", "priority": "high"},
 			},
 			wantCmd:  "set",
-			wantArgs: []string{"people/freya", "priority=high", "status=active", "--json"},
+			wantArgs: []string{"people/freya", "--fields-json", `{"priority":"high","status":"active"}`, "--json"},
 		},
 		{
 			toolName: "raven_set",

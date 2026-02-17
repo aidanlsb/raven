@@ -1,10 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -21,8 +21,9 @@ import (
 )
 
 var (
-	setStdin   bool
-	setConfirm bool
+	setStdin      bool
+	setConfirm    bool
+	setFieldsJSON string
 )
 
 var setCmd = &cobra.Command{
@@ -56,12 +57,17 @@ func runSet(cmd *cobra.Command, args []string) error {
 
 	// Handle --stdin mode for bulk operations
 	if setStdin {
+		if strings.TrimSpace(setFieldsJSON) != "" {
+			return handleErrorMsg(ErrInvalidInput,
+				"--fields-json is not supported with --stdin",
+				"Use positional field=value updates when using --stdin")
+		}
 		return runSetBulk(cmd, args, vaultPath)
 	}
 
-	// Single object mode - requires object-id and at least one field=value
-	if len(args) < 2 {
-		return handleErrorMsg(ErrMissingArgument, "requires object-id and field=value arguments", "Usage: rvn set <object-id> field=value...")
+	// Single object mode - requires object-id and at least one update source.
+	if len(args) < 1 {
+		return handleErrorMsg(ErrMissingArgument, "requires object-id", "Usage: rvn set <object-id> field=value...")
 	}
 
 	objectID := args[0]
@@ -79,11 +85,16 @@ func runSet(cmd *cobra.Command, args []string) error {
 		updates[parts[0]] = parts[1]
 	}
 
-	if len(updates) == 0 {
-		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <object-id> field=value...")
+	typedUpdates, err := parseFieldValuesJSON(setFieldsJSON)
+	if err != nil {
+		return handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}
 
-	return setSingleObject(vaultPath, objectID, updates)
+	if len(updates) == 0 && len(typedUpdates) == 0 {
+		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <object-id> field=value... or --fields-json '{...}'")
+	}
+
+	return setSingleObject(vaultPath, objectID, updates, typedUpdates)
 }
 
 // runSetBulk handles bulk set operations from stdin.
@@ -163,11 +174,30 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "no frontmatter"}
 		}
 
+		objectType := fm.ObjectType
+		if objectType == "" {
+			objectType = "page"
+		}
+
+		_, resolvedUpdates, _, err := prepareValidatedFrontmatterMutation(
+			string(content),
+			fm,
+			objectType,
+			updates,
+			sch,
+			map[string]bool{"alias": true},
+		)
+		if err != nil {
+			var validationErr *fieldValidationError
+			if errors.As(err, &validationErr) {
+				return nil, &BulkResult{ID: id, Status: "skipped", Reason: validationErr.Error()}
+			}
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("validation error: %v", err)}
+		}
+
 		// Build change summary
-		fieldDefs := fieldDefsForObjectType(sch, fm.ObjectType)
 		changes := make(map[string]string)
-		for field, newVal := range updates {
-			resolvedVal := resolveDateKeywordForFieldValue(newVal, fieldDefs[field])
+		for field, resolvedVal := range resolvedUpdates {
 			oldVal := "<unset>"
 			if fm.Fields != nil {
 				if v, ok := fm.Fields[field]; ok {
@@ -228,12 +258,26 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 			return result
 		}
 
-		fieldDefs := fieldDefsForObjectType(sch, fm.ObjectType)
-		resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
+		objectType := fm.ObjectType
+		if objectType == "" {
+			objectType = "page"
+		}
 
-		// Build updated frontmatter
-		newContent, err := updateFrontmatter(string(content), fm, resolvedUpdates)
+		newContent, _, _, err := prepareValidatedFrontmatterMutation(
+			string(content),
+			fm,
+			objectType,
+			updates,
+			sch,
+			map[string]bool{"alias": true},
+		)
 		if err != nil {
+			var validationErr *fieldValidationError
+			if errors.As(err, &validationErr) {
+				result.Status = "error"
+				result.Reason = validationErr.Error()
+				return result
+			}
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("update error: %v", err)
 			return result
@@ -260,7 +304,7 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 }
 
 // setSingleObject sets fields on a single object (non-bulk mode).
-func setSingleObject(vaultPath, reference string, updates map[string]string) error {
+func setSingleObject(vaultPath, reference string, updates map[string]string, typedUpdates map[string]schema.FieldValue) error {
 	// Load schema for validation
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
@@ -284,7 +328,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 
 	// Check if this is an embedded object (section)
 	if result.IsSection {
-		return setEmbeddedObject(vaultPath, result.ObjectID, updates, sch, vaultCfg)
+		return setEmbeddedObject(vaultPath, result.ObjectID, updates, typedUpdates, sch, vaultCfg)
 	}
 
 	objectID := result.ObjectID
@@ -311,38 +355,27 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 		objectType = "page"
 	}
 
-	// Validate fields against schema
-	typeDef, hasType := sch.Types[objectType]
-	var validationWarnings []string
-
-	for fieldName, value := range updates {
-		if hasType && typeDef != nil {
-			// Check if this is a valid field
-			fieldDef, isField := typeDef.Fields[fieldName]
-
-			if !isField && fieldName != "alias" {
-				// Unknown field - warn but allow (for flexibility)
-				validationWarnings = append(validationWarnings,
-					fmt.Sprintf("'%s' is not a declared field for type '%s'", fieldName, objectType))
-			}
-
-			// Validate enum values
-			if isField && fieldDef != nil && fieldDef.Type == schema.FieldTypeEnum && len(fieldDef.Values) > 0 {
-				if !slices.Contains(fieldDef.Values, value) {
-					return handleErrorMsg(ErrValidationFailed,
-						fmt.Sprintf("invalid value '%s' for field '%s'", value, fieldName),
-						fmt.Sprintf("Allowed values: %s", strings.Join(fieldDef.Values, ", ")))
-				}
-			}
-		}
+	mergedUpdates := make(map[string]string, len(updates)+len(typedUpdates))
+	for key, value := range updates {
+		mergedUpdates[key] = value
+	}
+	for key, value := range typedUpdates {
+		mergedUpdates[key] = serializeFieldValueLiteral(value)
 	}
 
-	fieldDefs := fieldDefsForObjectType(sch, objectType)
-	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
-
-	// Build updated frontmatter
-	newContent, err := updateFrontmatter(string(content), fm, resolvedUpdates)
+	newContent, resolvedUpdates, validationWarnings, err := prepareValidatedFrontmatterMutation(
+		string(content),
+		fm,
+		objectType,
+		mergedUpdates,
+		sch,
+		map[string]bool{"alias": true},
+	)
 	if err != nil {
+		var validationErr *fieldValidationError
+		if errors.As(err, &validationErr) {
+			return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
+		}
 		return handleError(ErrFileWriteError, err, "Failed to update frontmatter")
 	}
 
@@ -365,13 +398,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string) err
 			"updated_fields": resolvedUpdates,
 		}
 		if len(validationWarnings) > 0 {
-			var warnings []Warning
-			for _, w := range validationWarnings {
-				warnings = append(warnings, Warning{
-					Code:    WarnUnknownField,
-					Message: w,
-				})
-			}
+			warnings := warningMessagesToWarnings(validationWarnings)
 			outputSuccessWithWarnings(result, warnings, nil)
 		} else {
 			outputSuccess(result, nil)
@@ -436,6 +463,14 @@ func resolveDateKeywordsForUpdates(updates map[string]string, fieldDefs map[stri
 
 // updateFrontmatter updates the frontmatter in the content with new field values.
 func updateFrontmatter(content string, fm *parser.Frontmatter, updates map[string]string) (string, error) {
+	typedUpdates := make(map[string]schema.FieldValue, len(updates))
+	for key, value := range updates {
+		typedUpdates[key] = parseFieldValueToSchema(value)
+	}
+	return updateFrontmatterWithFieldValues(content, fm, typedUpdates)
+}
+
+func updateFrontmatterWithFieldValues(content string, fm *parser.Frontmatter, updates map[string]schema.FieldValue) (string, error) {
 	lines := strings.Split(content, "\n")
 
 	startLine, endLine, ok := parser.FrontmatterBounds(lines)
@@ -459,9 +494,7 @@ func updateFrontmatter(content string, fm *parser.Frontmatter, updates map[strin
 
 	// Apply updates
 	for key, value := range updates {
-		// Handle special cases for value parsing
-		parsedValue := parseFieldValue(value)
-		yamlData[key] = parsedValue
+		yamlData[key] = fieldValueToYAMLValue(value)
 	}
 
 	// Marshal back to YAML
@@ -485,47 +518,34 @@ func updateFrontmatter(content string, fm *parser.Frontmatter, updates map[strin
 	return result.String(), nil
 }
 
-// parseFieldValue parses a field value string into an appropriate type.
-func parseFieldValue(value string) interface{} {
-	// Handle arrays: [a, b, c]
-	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
-		inner := value[1 : len(value)-1]
-		parts := strings.Split(inner, ",")
-		var items []interface{}
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				items = append(items, parseFieldValue(part))
-			}
+func fieldValueToYAMLValue(value schema.FieldValue) interface{} {
+	if value.IsNull() {
+		return nil
+	}
+	if ref, ok := value.AsRef(); ok {
+		return "[[" + ref + "]]"
+	}
+	if arr, ok := value.AsArray(); ok {
+		items := make([]interface{}, 0, len(arr))
+		for _, item := range arr {
+			items = append(items, fieldValueToYAMLValue(item))
 		}
 		return items
 	}
-
-	// Handle references: [[path]]
-	if strings.HasPrefix(value, "[[") && strings.HasSuffix(value, "]]") {
-		return value // Keep as-is for references
+	if s, ok := value.AsString(); ok {
+		return s
 	}
-
-	// Handle booleans
-	if value == "true" {
-		return true
+	if n, ok := value.AsNumber(); ok {
+		return n
 	}
-	if value == "false" {
-		return false
+	if b, ok := value.AsBool(); ok {
+		return b
 	}
-
-	// Handle quoted strings - remove quotes
-	if (strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")) ||
-		(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
-		return value[1 : len(value)-1]
-	}
-
-	// Default to string
-	return value
+	return value.Raw()
 }
 
 // setEmbeddedObject sets fields on an embedded object.
-func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
+func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, typedUpdates map[string]schema.FieldValue, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
 	// Parse the embedded ID: fileID#slug
 	fileID, slug, isEmbedded := paths.ParseEmbeddedID(objectID)
 	if !isEmbedded {
@@ -578,33 +598,6 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 	// Get the object type for validation
 	objectType := targetObj.ObjectType
 
-	// Validate fields against schema
-	typeDef, hasType := sch.Types[objectType]
-	var validationWarnings []string
-
-	for fieldName, value := range updates {
-		if hasType && typeDef != nil {
-			fieldDef, isField := typeDef.Fields[fieldName]
-
-			if !isField && fieldName != "alias" && fieldName != "id" {
-				validationWarnings = append(validationWarnings,
-					fmt.Sprintf("'%s' is not a declared field for type '%s'", fieldName, objectType))
-			}
-
-			// Validate enum values
-			if isField && fieldDef != nil && fieldDef.Type == schema.FieldTypeEnum && len(fieldDef.Values) > 0 {
-				if !slices.Contains(fieldDef.Values, value) {
-					return handleErrorMsg(ErrValidationFailed,
-						fmt.Sprintf("invalid value '%s' for field '%s'", value, fieldName),
-						fmt.Sprintf("Allowed values: %s", strings.Join(fieldDef.Values, ", ")))
-				}
-			}
-		}
-	}
-
-	fieldDefs := fieldDefsForObjectType(sch, objectType)
-	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
-
 	// Find the type declaration line (line after the heading)
 	typeDeclLine := targetObj.LineStart + 1
 
@@ -630,9 +623,32 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 		newFields[k] = v
 	}
 
-	// Apply updates (parse the string values into FieldValues)
-	for fieldName, value := range resolvedUpdates {
-		newFields[fieldName] = parseFieldValueToSchema(value)
+	mergedUpdates := make(map[string]string, len(updates)+len(typedUpdates))
+	for key, value := range updates {
+		mergedUpdates[key] = value
+	}
+	for key, value := range typedUpdates {
+		mergedUpdates[key] = serializeFieldValueLiteral(value)
+	}
+
+	parsedUpdates, resolvedUpdates, validationWarnings, err := prepareValidatedFieldMutation(
+		objectType,
+		targetObj.Fields,
+		mergedUpdates,
+		sch,
+		map[string]bool{"alias": true, "id": true},
+	)
+	if err != nil {
+		var validationErr *fieldValidationError
+		if errors.As(err, &validationErr) {
+			return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
+		}
+		return handleError(ErrFileWriteError, err, "Failed to update embedded fields")
+	}
+
+	// Apply validated updates.
+	for fieldName, value := range parsedUpdates {
+		newFields[fieldName] = value
 	}
 
 	// Serialize the updated type declaration
@@ -672,13 +688,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, sc
 			"updated_fields": resolvedUpdates,
 		}
 		if len(validationWarnings) > 0 {
-			var warnings []Warning
-			for _, w := range validationWarnings {
-				warnings = append(warnings, Warning{
-					Code:    WarnUnknownField,
-					Message: w,
-				})
-			}
+			warnings := warningMessagesToWarnings(validationWarnings)
 			outputSuccessWithWarnings(result, warnings, nil)
 		} else {
 			outputSuccess(result, nil)
@@ -762,11 +772,24 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *sc
 		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
 	}
 
+	_, resolvedUpdates, _, err := prepareValidatedFieldMutation(
+		targetObj.ObjectType,
+		targetObj.Fields,
+		updates,
+		sch,
+		map[string]bool{"alias": true, "id": true},
+	)
+	if err != nil {
+		var validationErr *fieldValidationError
+		if errors.As(err, &validationErr) {
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: validationErr.Error()}
+		}
+		return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("validation error: %v", err)}
+	}
+
 	// Build change summary
-	fieldDefs := fieldDefsForObjectType(sch, targetObj.ObjectType)
 	changes := make(map[string]string)
-	for field, newVal := range updates {
-		resolvedVal := resolveDateKeywordForFieldValue(newVal, fieldDefs[field])
+	for field, resolvedVal := range resolvedUpdates {
 		oldVal := "<unset>"
 		if targetObj.Fields != nil {
 			if v, ok := targetObj.Fields[field]; ok {
@@ -855,10 +878,18 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 		newFields[k] = v
 	}
 
-	fieldDefs := fieldDefsForObjectType(sch, targetObj.ObjectType)
-	for fieldName, value := range updates {
-		resolvedValue := resolveDateKeywordForFieldValue(value, fieldDefs[fieldName])
-		newFields[fieldName] = parseFieldValueToSchema(resolvedValue)
+	parsedUpdates, _, _, err := prepareValidatedFieldMutation(
+		targetObj.ObjectType,
+		targetObj.Fields,
+		updates,
+		sch,
+		map[string]bool{"alias": true, "id": true},
+	)
+	if err != nil {
+		return err
+	}
+	for fieldName, value := range parsedUpdates {
+		newFields[fieldName] = value
 	}
 
 	// Preserve leading whitespace
@@ -889,11 +920,15 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 
 // parseFieldValueToSchema converts a string value to schema.FieldValue.
 func parseFieldValueToSchema(value string) schema.FieldValue {
+	if strings.EqualFold(strings.TrimSpace(value), "null") {
+		return schema.Null()
+	}
 	return parser.ParseFieldValue(value)
 }
 
 func init() {
 	setCmd.Flags().BoolVar(&setStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	setCmd.Flags().BoolVar(&setConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
+	setCmd.Flags().StringVar(&setFieldsJSON, "fields-json", "", "Set fields via JSON object (typed values)")
 	rootCmd.AddCommand(setCmd)
 }
