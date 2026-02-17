@@ -473,15 +473,17 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
    raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
    raven_workflow_run(name="research", input={"question": "How does auth work?"})
    ```
-   Returns the rendered agent prompt plus step outputs gathered so far. Use the prompt to guide your response to the user.
+   Returns the rendered agent prompt plus `step_summaries`. Use:
+   `raven_workflow_runs_step(run_id="...", step_id="...")` to fetch full step output on demand.
 
 **How workflows work:**
 
 1. **Inputs** are validated (required fields checked, defaults applied)
 2. **Steps** execute in order, with `{{inputs.X}}` and `{{steps.<id>...}}` interpolated as needed
 3. When an **agent** step is reached, Raven returns the prompt plus the declared `outputs` schema
-4. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
-5. If changes are needed, use explicit `tool` steps or normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
+4. Raven also returns `step_summaries` so agents can fetch heavy context incrementally by step
+5. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
+6. If changes are needed, use explicit `tool` steps or normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
 
 **Variable patterns:**
 

@@ -133,7 +133,7 @@
 ```
 → raven_workflow_list()  # Check if meeting-prep exists
 → raven_workflow_run(name="meeting-prep", input={"person_id": "people/freya"})
-→ Use the returned prompt (and step outputs) to provide a comprehensive meeting prep
+→ Use the returned prompt (and fetch step output via raven_workflow_runs_step if needed) to provide a comprehensive meeting prep
 ```
 
 **User**: "I want to save a query for finding all my reading list items"

@@ -59,6 +59,14 @@ type RunExecutionSummary struct {
 	AgentBoundariesCrossed int `json:"agent_boundaries_crossed"`
 }
 
+// RunStepSummary is a lightweight status view for a workflow step.
+type RunStepSummary struct {
+	StepID    string `json:"step_id"`
+	StepType  string `json:"step_type"`
+	Status    string `json:"status"`
+	HasOutput bool   `json:"has_output"`
+}
+
 type RunSummary struct {
 	TerminalStepID string               `json:"terminal_step_id,omitempty"`
 	Summary        *RunExecutionSummary `json:"summary,omitempty"`
@@ -95,7 +103,7 @@ type RunResult struct {
 	Cursor         int                    `json:"cursor"`
 	AwaitingStepID string                 `json:"awaiting_step_id,omitempty"`
 	Inputs         map[string]interface{} `json:"inputs"`
-	Steps          map[string]interface{} `json:"steps"`
+	StepSummaries  []RunStepSummary       `json:"step_summaries"`
 	Next           *AgentRequest          `json:"next,omitempty"`
 	CreatedAt      string                 `json:"created_at"`
 	UpdatedAt      string                 `json:"updated_at"`

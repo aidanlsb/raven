@@ -106,7 +106,7 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 				At:       state.UpdatedAt,
 			})
 
-			return buildRunResult(state, &AgentRequest{
+			return buildRunResult(wf, state, &AgentRequest{
 				StepID:  step.ID,
 				Prompt:  promptWithContract,
 				Outputs: step.Outputs,
@@ -151,7 +151,7 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 		terminal = wf.Steps[len(wf.Steps)-1].ID
 	}
 
-	return buildRunResult(state, nil, &RunSummary{
+	return buildRunResult(wf, state, nil, &RunSummary{
 		TerminalStepID: terminal,
 		Summary:        computeRunExecutionSummary(state),
 	}), nil
@@ -285,20 +285,20 @@ func validateInputType(name, typ string, value interface{}) error {
 	return nil
 }
 
-func buildRunResult(state *WorkflowRunState, next *AgentRequest, summary *RunSummary) *RunResult {
+func buildRunResult(wf *Workflow, state *WorkflowRunState, next *AgentRequest, summary *RunSummary) *RunResult {
 	result := &RunResult{
-		RunID:        state.RunID,
-		WorkflowName: state.WorkflowName,
-		Status:       state.Status,
-		Revision:     state.Revision,
-		Cursor:       state.Cursor,
-		Inputs:       cloneInterfaceMap(state.Inputs),
-		Steps:        state.Steps,
-		Next:         next,
-		Result:       summary,
-		Failure:      state.Failure,
-		CreatedAt:    state.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    state.UpdatedAt.Format(time.RFC3339),
+		RunID:         state.RunID,
+		WorkflowName:  state.WorkflowName,
+		Status:        state.Status,
+		Revision:      state.Revision,
+		Cursor:        state.Cursor,
+		Inputs:        cloneInterfaceMap(state.Inputs),
+		StepSummaries: BuildStepSummaries(wf, state),
+		Next:          next,
+		Result:        summary,
+		Failure:       state.Failure,
+		CreatedAt:     state.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:     state.UpdatedAt.Format(time.RFC3339),
 	}
 	if state.AwaitingStep != "" {
 		result.AwaitingStepID = state.AwaitingStep
@@ -326,4 +326,50 @@ func computeRunExecutionSummary(state *WorkflowRunState) *RunExecutionSummary {
 		}
 	}
 	return summary
+}
+
+// BuildStepSummaries returns per-step status without embedding full step outputs.
+func BuildStepSummaries(wf *Workflow, state *WorkflowRunState) []RunStepSummary {
+	if wf == nil || state == nil {
+		return nil
+	}
+
+	lastStatusByStep := map[string]string{}
+	for _, ev := range state.History {
+		if ev.StepID == "" {
+			continue
+		}
+		lastStatusByStep[ev.StepID] = ev.Status
+	}
+
+	summaries := make([]RunStepSummary, 0, len(wf.Steps))
+	for i, step := range wf.Steps {
+		if step == nil {
+			continue
+		}
+
+		_, hasOutput := state.Steps[step.ID]
+		status := "pending"
+
+		if last, ok := lastStatusByStep[step.ID]; ok && last != "" {
+			status = last
+		} else if state.Status == RunStatusAwaitingAgent && state.AwaitingStep == step.ID {
+			status = string(RunStatusAwaitingAgent)
+		} else if hasOutput || i < state.Cursor {
+			if step.Type == "agent" {
+				status = "accepted"
+			} else {
+				status = "ok"
+			}
+		}
+
+		summaries = append(summaries, RunStepSummary{
+			StepID:    step.ID,
+			StepType:  step.Type,
+			Status:    status,
+			HasOutput: hasOutput,
+		})
+	}
+
+	return summaries
 }

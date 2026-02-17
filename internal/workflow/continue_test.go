@@ -89,6 +89,22 @@ func TestRunner_ContinueAfterAgentOutput(t *testing.T) {
 	if second.Status != RunStatusCompleted {
 		t.Fatalf("expected completed, got %s", second.Status)
 	}
+	if len(second.StepSummaries) != 3 {
+		t.Fatalf("expected 3 step summaries, got %d", len(second.StepSummaries))
+	}
+	summaryByID := map[string]RunStepSummary{}
+	for _, s := range second.StepSummaries {
+		summaryByID[s.StepID] = s
+	}
+	if summaryByID["todos"].Status != "ok" {
+		t.Fatalf("unexpected todos summary: %#v", summaryByID["todos"])
+	}
+	if summaryByID["compose"].Status != "accepted" {
+		t.Fatalf("unexpected compose summary: %#v", summaryByID["compose"])
+	}
+	if summaryByID["save"].Status != "ok" {
+		t.Fatalf("unexpected save summary: %#v", summaryByID["save"])
+	}
 	if saveArgs == nil {
 		t.Fatal("expected save tool call args")
 	}
