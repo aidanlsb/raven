@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestLoadVaultConfig(t *testing.T) {
@@ -501,5 +504,43 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 	}
 	if created2 {
 		t.Error("expected file to NOT be created on second call (already exists)")
+	}
+}
+
+func TestDefaultVaultConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	if _, err := CreateDefaultVaultConfig(tmpDir); err != nil {
+		t.Fatalf("failed to create default vault config: %v", err)
+	}
+	if _, err := schema.CreateDefault(tmpDir); err != nil {
+		t.Fatalf("failed to create default schema: %v", err)
+	}
+
+	cfg, err := LoadVaultConfig(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to load default vault config: %v", err)
+	}
+	sch, err := schema.Load(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to load default schema: %v", err)
+	}
+
+	validator := query.NewValidator(sch)
+	for name, savedQuery := range cfg.Queries {
+		name := name
+		savedQuery := savedQuery
+		t.Run(name, func(t *testing.T) {
+			if savedQuery == nil {
+				t.Fatalf("saved query %q is nil", name)
+			}
+			parsed, err := query.Parse(savedQuery.Query)
+			if err != nil {
+				t.Fatalf("saved query %q failed to parse: %v", name, err)
+			}
+			if err := validator.Validate(parsed); err != nil {
+				t.Fatalf("saved query %q does not match default schema: %v", name, err)
+			}
+		})
 	}
 }
