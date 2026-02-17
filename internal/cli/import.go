@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -214,7 +215,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 			warnings = append(warnings, w...)
 		} else {
 			// Create new object
-			result, w := importCreateObject(creator, matchValue, targetPath, itemCfg.TypeName, matchValue, mapped, contentValue, vaultCfg)
+			result, w := importCreateObject(creator, matchValue, targetPath, itemCfg.TypeName, matchValue, mapped, contentValue, sch, vaultCfg)
 			results = append(results, result)
 			warnings = append(warnings, w...)
 		}
@@ -424,8 +425,32 @@ func matchKeyValue(mapped map[string]interface{}, matchKey string) (string, bool
 }
 
 // importCreateObject creates a new vault object from imported data.
-func importCreateObject(creator objectCreationContext, targetPath, resolvedTargetPath, typeName, title string, fields map[string]interface{}, content string, vaultCfg *config.VaultConfig) (importResult, []Warning) {
+func importCreateObject(creator objectCreationContext, targetPath, resolvedTargetPath, typeName, title string, fields map[string]interface{}, content string, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
 	var warnings []Warning
+
+	typedFields := fieldsToSchemaValues(fields)
+	delete(typedFields, "type")
+
+	validatedTypedFields, warningMessages, err := prepareValidatedFieldMutationValues(
+		typeName,
+		nil,
+		typedFields,
+		sch,
+		map[string]bool{"type": true, "alias": true},
+	)
+	if err != nil {
+		var validationErr *fieldValidationError
+		reason := err.Error()
+		if errors.As(err, &validationErr) {
+			reason = validationErr.Error()
+		}
+		return importResult{
+			ID:     resolvedTargetPath,
+			Action: "error",
+			Reason: reason,
+		}, warnings
+	}
+	warnings = append(warnings, warningMessagesToWarnings(warningMessages)...)
 
 	// Convert fields to string map for pages.Create
 	stringFields := fieldsToStringMap(fields, typeName)
@@ -445,6 +470,58 @@ func importCreateObject(creator objectCreationContext, targetPath, resolvedTarge
 			Action: "error",
 			Reason: err.Error(),
 		}, warnings
+	}
+
+	createdBytes, err := os.ReadFile(createResult.FilePath)
+	if err != nil {
+		return importResult{
+			ID:     resolvedTargetPath,
+			Action: "error",
+			Reason: fmt.Sprintf("read error: %v", err),
+		}, warnings
+	}
+	createdContent := string(createdBytes)
+	createdFM, err := parser.ParseFrontmatter(createdContent)
+	if err != nil || createdFM == nil {
+		return importResult{
+			ID:     resolvedTargetPath,
+			Action: "error",
+			Reason: "failed to parse frontmatter",
+		}, warnings
+	}
+
+	if len(validatedTypedFields) > 0 {
+		updatedContent, _, err := prepareValidatedFrontmatterMutationValues(
+			createdContent,
+			createdFM,
+			typeName,
+			validatedTypedFields,
+			sch,
+			map[string]bool{"type": true, "alias": true},
+		)
+		if err != nil {
+			var validationErr *fieldValidationError
+			reason := err.Error()
+			if errors.As(err, &validationErr) {
+				reason = validationErr.Error()
+			}
+			return importResult{
+				ID:     resolvedTargetPath,
+				Action: "error",
+				Reason: reason,
+			}, warnings
+		}
+		createdContent = updatedContent
+	}
+
+	if createdContent != string(createdBytes) {
+		if err := atomicfile.WriteFile(createResult.FilePath, []byte(createdContent), 0o644); err != nil {
+			return importResult{
+				ID:     resolvedTargetPath,
+				Action: "error",
+				Reason: fmt.Sprintf("write error: %v", err),
+			}, warnings
+		}
 	}
 
 	// Append content to the file if provided
@@ -498,23 +575,30 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 		}, warnings
 	}
 
-	// Convert fields to string map for update
-	updates := fieldsToStringMap(fields, typeName)
-	delete(updates, "type")
+	typedUpdates := fieldsToSchemaValues(fields)
+	delete(typedUpdates, "type")
 
-	// Resolve date keywords
-	fieldDefs := fieldDefsForObjectType(sch, typeName)
-	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
-
-	// Update frontmatter
-	updatedFile, err := updateFrontmatter(string(fileData), fm, resolvedUpdates)
+	updatedFile, warningMessages, err := prepareValidatedFrontmatterMutationValues(
+		string(fileData),
+		fm,
+		typeName,
+		typedUpdates,
+		sch,
+		map[string]bool{"type": true, "alias": true},
+	)
 	if err != nil {
+		var validationErr *fieldValidationError
+		reason := fmt.Sprintf("update error: %v", err)
+		if errors.As(err, &validationErr) {
+			reason = validationErr.Error()
+		}
 		return importResult{
 			ID:     targetPath,
 			Action: "error",
-			Reason: fmt.Sprintf("update error: %v", err),
+			Reason: reason,
 		}, warnings
 	}
+	warnings = append(warnings, warningMessagesToWarnings(warningMessages)...)
 
 	// Replace body content if content field was provided
 	if newContent != "" {
@@ -540,6 +624,14 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 		Action: "updated",
 		File:   relPath,
 	}, warnings
+}
+
+func fieldsToSchemaValues(fields map[string]interface{}) map[string]schema.FieldValue {
+	values := make(map[string]schema.FieldValue, len(fields))
+	for key, value := range fields {
+		values[key] = parser.FieldValueFromYAML(value)
+	}
+	return values
 }
 
 // fieldsToStringMap converts a map[string]interface{} to map[string]string for frontmatter use.

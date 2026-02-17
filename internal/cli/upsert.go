@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 
 var (
 	upsertFieldFlags []string
+	upsertFieldJSON  string
 	upsertContent    string
 )
 
@@ -55,12 +57,24 @@ var upsertCmd = &cobra.Command{
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
 		}
+		typedFieldValues, err := parseFieldValuesJSON(upsertFieldJSON)
+		if err != nil {
+			return handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+		}
 
 		// Keep parity with `new`: auto-fill name_field from title if not explicitly provided.
 		if typeDef != nil && typeDef.NameField != "" {
-			if _, provided := fieldValues[typeDef.NameField]; !provided && title != "" {
-				fieldValues[typeDef.NameField] = title
+			if _, provided := fieldValues[typeDef.NameField]; !provided {
+				if _, typedProvided := typedFieldValues[typeDef.NameField]; !typedProvided && title != "" {
+					fieldValues[typeDef.NameField] = title
+				}
 			}
+		}
+
+		// Merge typed JSON fields into the same canonical field pipeline.
+		// Typed JSON values win over --field key=value collisions.
+		for key, value := range typedFieldValues {
+			fieldValues[key] = serializeFieldValueLiteral(value)
 		}
 
 		vaultCfg, err := loadVaultConfigSafe(vaultPath)
@@ -79,6 +93,7 @@ var upsertCmd = &cobra.Command{
 		relPath := slugified
 
 		status := "unchanged"
+		var cliWarnings []Warning
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			missingRequired := requiredFieldGaps(typeDef, fieldValues)
 			if len(missingRequired) > 0 {
@@ -99,6 +114,23 @@ var upsertCmd = &cobra.Command{
 				return handleErrorMsg(ErrRequiredField, msg, "Provide missing fields with --field")
 			}
 
+			_, resolvedCreateFields, warningMessages, err := prepareValidatedFieldMutation(
+				typeName,
+				nil,
+				fieldValues,
+				s,
+				map[string]bool{"type": true},
+			)
+			if err != nil {
+				var validationErr *fieldValidationError
+				if errors.As(err, &validationErr) {
+					return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
+				}
+				return handleError(ErrValidationFailed, err, "Failed to validate field values")
+			}
+			fieldValues = resolvedCreateFields
+			cliWarnings = append(cliWarnings, warningMessagesToWarnings(warningMessages)...)
+
 			createResult, err := creator.create(objectCreateParams{
 				typeName:   typeName,
 				title:      title,
@@ -111,13 +143,46 @@ var upsertCmd = &cobra.Command{
 			filePath = createResult.FilePath
 			relPath = createResult.RelativePath
 
-			if replaceBody {
-				createdContent, err := os.ReadFile(filePath)
+			createdBytes, err := os.ReadFile(filePath)
+			if err != nil {
+				return handleError(ErrFileReadError, err, "")
+			}
+			createdContent := string(createdBytes)
+
+			if len(resolvedCreateFields) > 0 {
+				createdFM, err := parser.ParseFrontmatter(createdContent)
 				if err != nil {
-					return handleError(ErrFileReadError, err, "")
+					return handleError(ErrInvalidInput, err, "Failed to parse frontmatter")
 				}
-				nextContent := replaceBodyContent(string(createdContent), upsertContent)
-				if err := atomicfile.WriteFile(filePath, []byte(nextContent), 0o644); err != nil {
+				if createdFM == nil {
+					return handleErrorMsg(ErrInvalidInput, "file has no frontmatter", "The file must have YAML frontmatter (---) for upsert")
+				}
+
+				updatedContent, _, warningMessages, err := prepareValidatedFrontmatterMutation(
+					createdContent,
+					createdFM,
+					typeName,
+					resolvedCreateFields,
+					s,
+					map[string]bool{"type": true, "alias": true},
+				)
+				if err != nil {
+					var validationErr *fieldValidationError
+					if errors.As(err, &validationErr) {
+						return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
+					}
+					return handleError(ErrFileWriteError, err, "Failed to update frontmatter")
+				}
+				cliWarnings = append(cliWarnings, warningMessagesToWarnings(warningMessages)...)
+				createdContent = updatedContent
+			}
+
+			if replaceBody {
+				createdContent = replaceBodyContent(createdContent, upsertContent)
+			}
+
+			if createdContent != string(createdBytes) {
+				if err := atomicfile.WriteFile(filePath, []byte(createdContent), 0o644); err != nil {
 					return handleError(ErrFileWriteError, err, "")
 				}
 			}
@@ -163,10 +228,23 @@ var upsertCmd = &cobra.Command{
 
 			nextContent := original
 			if len(updates) > 0 {
-				nextContent, err = updateFrontmatter(original, fm, updates)
+				var warningMessages []string
+				nextContent, _, warningMessages, err = prepareValidatedFrontmatterMutation(
+					original,
+					fm,
+					typeName,
+					updates,
+					s,
+					map[string]bool{"type": true, "alias": true},
+				)
 				if err != nil {
+					var validationErr *fieldValidationError
+					if errors.As(err, &validationErr) {
+						return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
+					}
 					return handleError(ErrFileWriteError, err, "Failed to update frontmatter")
 				}
+				cliWarnings = append(cliWarnings, warningMessagesToWarnings(warningMessages)...)
 			}
 
 			if replaceBody {
@@ -184,13 +262,18 @@ var upsertCmd = &cobra.Command{
 
 		objectID := vaultCfg.FilePathToObjectID(relPath)
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
+			data := map[string]interface{}{
 				"status": status,
 				"id":     objectID,
 				"file":   relPath,
 				"type":   typeName,
 				"title":  title,
-			}, nil)
+			}
+			if len(cliWarnings) > 0 {
+				outputSuccessWithWarnings(data, cliWarnings, nil)
+			} else {
+				outputSuccess(data, nil)
+			}
 			return nil
 		}
 
@@ -201,6 +284,9 @@ var upsertCmd = &cobra.Command{
 			fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relPath)))
 		default:
 			fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(relPath)))
+		}
+		for _, warning := range cliWarnings {
+			fmt.Println(ui.Warning(warning.Message))
 		}
 		return nil
 	},
@@ -256,6 +342,7 @@ func fieldValueMatchesInput(v schema.FieldValue, input string) bool {
 
 func init() {
 	upsertCmd.Flags().StringArrayVar(&upsertFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
+	upsertCmd.Flags().StringVar(&upsertFieldJSON, "field-json", "", "Set/update frontmatter fields as a JSON object")
 	upsertCmd.Flags().StringVar(&upsertContent, "content", "", "Replace body content (idempotent full-body mode)")
 	rootCmd.AddCommand(upsertCmd)
 }

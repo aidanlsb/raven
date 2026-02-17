@@ -245,6 +245,11 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 				}
 			}
 		case commands.FlagTypeKeyValue:
+			if isObjectArg(val) && hasFlag(meta.Flags, flag.Name+"-json") {
+				// Prefer JSON companion flags (e.g., --field-json) when available so
+				// typed values survive end-to-end without key=value coercion.
+				continue
+			}
 			// Key-value flags are represented as a JSON object in MCP, but some clients may
 			// send a single "k=v" string or an array of "k=v" strings. Accept all.
 			for _, pair := range keyValuePairs(val) {
@@ -281,6 +286,9 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	for _, flag := range meta.Flags {
 		if flag.Type == commands.FlagTypePosKeyValue {
 			if val, ok := normalizedArgs[flag.Name]; ok {
+				if isObjectArg(val) && hasFlag(meta.Flags, flag.Name+"-json") {
+					continue
+				}
 				// Like FlagTypeKeyValue: primarily a JSON object, but accept "k=v" strings/arrays too.
 				cliArgs = append(cliArgs, keyValuePairs(val)...)
 			}
@@ -378,6 +386,23 @@ func keyValuePairs(v interface{}) []string {
 	}
 }
 
+func hasFlag(flags []commands.FlagMeta, name string) bool {
+	for _, flag := range flags {
+		if flag.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func isObjectArg(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	_, ok := v.(map[string]interface{})
+	return ok
+}
+
 // normalizeArgs returns a copy of the args map with normalized keys.
 // MCP clients may send property names with underscores (e.g., "default_path")
 // instead of hyphens (e.g., "default-path"). This creates a lookup map that
@@ -404,6 +429,18 @@ func normalizeArgs(args map[string]interface{}) map[string]interface{} {
 	if v, ok := normalized["field"]; ok {
 		if _, exists := normalized["fields"]; !exists {
 			normalized["fields"] = v
+		}
+	}
+
+	// Prefer typed JSON companions when key-value inputs are provided as objects.
+	if v, ok := normalized["field"]; ok && isObjectArg(v) {
+		if _, exists := normalized["field-json"]; !exists {
+			normalized["field-json"] = v
+		}
+	}
+	if v, ok := normalized["fields"]; ok && isObjectArg(v) {
+		if _, exists := normalized["fields-json"]; !exists {
+			normalized["fields-json"] = v
 		}
 	}
 

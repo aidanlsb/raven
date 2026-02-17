@@ -159,6 +159,7 @@ converge to one current state rather than append history.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set/update frontmatter fields (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
+			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object (typed values)", Type: FlagTypeJSON},
 			{Name: "content", Description: "Replace body content (full-body idempotent mode)", Type: FlagTypeString},
 		},
 		Examples: []string{
@@ -1160,6 +1161,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		},
 		Flags: []FlagMeta{
 			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypePosKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "fields-json", Description: "Fields to update as a JSON object (typed values)", Type: FlagTypeJSON},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
