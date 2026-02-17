@@ -1494,7 +1494,7 @@ Runs deterministic tool steps, then returns the rendered agent prompt, declared 
 Continue a paused workflow run with agent output JSON.
 
 ```bash
-rvn workflow continue <run-id> [--agent-output-json '{...}'] [--agent-output-file ./output.json] [--expected-revision N]
+rvn workflow continue <run-id> [--agent-output-json '{...}'] [--agent-output '{...}'] [--agent-output-file ./output.json] [--expected-revision N]
 ```
 
 | Argument | Description |
@@ -1504,6 +1504,7 @@ rvn workflow continue <run-id> [--agent-output-json '{...}'] [--agent-output-fil
 | Flag | Description |
 |------|-------------|
 | `--agent-output-json` | Agent output payload with top-level `outputs` object |
+| `--agent-output` | Agent output payload as a JSON string (compatible with clients that cannot send object args) |
 | `--agent-output-file` | Read agent output payload from file |
 | `--expected-revision` | Enforce optimistic concurrency on run state |
 
@@ -1511,6 +1512,7 @@ rvn workflow continue <run-id> [--agent-output-json '{...}'] [--agent-output-fil
 
 ```bash
 rvn workflow continue wrf_abc123 --agent-output-json '{"outputs":{"markdown":"..."}}'
+rvn workflow continue wrf_abc123 --agent-output '{"outputs":{"markdown":"..."}}'
 rvn workflow continue wrf_abc123 --agent-output-file ./agent-output.json --expected-revision 2
 ```
 

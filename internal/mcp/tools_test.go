@@ -96,6 +96,62 @@ func TestSchemaFieldDescriptionFlagsPresentInMCP(t *testing.T) {
 	}
 }
 
+func TestSchemaCompatibilityForStructuredFlags(t *testing.T) {
+	tools := GenerateToolSchemas()
+	toolMap := make(map[string]Tool, len(tools))
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	assertAnyOfTypes := func(t *testing.T, toolName, flagName string, wantTypes []string) {
+		t.Helper()
+		tool, ok := toolMap[toolName]
+		if !ok {
+			t.Fatalf("expected tool %q to exist", toolName)
+		}
+		prop, ok := tool.InputSchema.Properties[flagName]
+		if !ok {
+			t.Fatalf("expected tool %q to expose %q", toolName, flagName)
+		}
+
+		propMap, ok := prop.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected %q.%q property to be object, got %T", toolName, flagName, prop)
+		}
+		anyOfRaw, ok := propMap["anyOf"]
+		if !ok {
+			t.Fatalf("expected %q.%q to include anyOf schema", toolName, flagName)
+		}
+		anyOfSlice, ok := anyOfRaw.([]map[string]interface{})
+		if !ok {
+			t.Fatalf("expected %q.%q anyOf to be []map[string]interface{}, got %T", toolName, flagName, anyOfRaw)
+		}
+
+		gotTypes := make(map[string]bool, len(anyOfSlice))
+		for _, candidate := range anyOfSlice {
+			if typ, ok := candidate["type"].(string); ok {
+				gotTypes[typ] = true
+			}
+		}
+		for _, want := range wantTypes {
+			if !gotTypes[want] {
+				t.Fatalf("expected %q.%q anyOf to include type %q, got %v", toolName, flagName, want, gotTypes)
+			}
+		}
+	}
+
+	// JSON flags should accept either object payloads or JSON-encoded strings.
+	assertAnyOfTypes(t, "raven_workflow_continue", "agent-output-json", []string{"object", "string"})
+	assertAnyOfTypes(t, "raven_workflow_run", "input-json", []string{"object", "string"})
+	assertAnyOfTypes(t, "raven_upsert", "field-json", []string{"object", "string"})
+	assertAnyOfTypes(t, "raven_set", "fields-json", []string{"object", "string"})
+
+	// Key/value flags should accept object, single "k=v", or []string forms.
+	assertAnyOfTypes(t, "raven_upsert", "field", []string{"object", "string", "array"})
+	assertAnyOfTypes(t, "raven_set", "fields", []string{"object", "string", "array"})
+	assertAnyOfTypes(t, "raven_workflow_run", "input", []string{"object", "string", "array"})
+}
+
 // TestBuildCLIArgsRoundtrip verifies that BuildCLIArgs produces valid CLI commands.
 func TestBuildCLIArgsRoundtrip(t *testing.T) {
 	tests := []struct {
@@ -257,6 +313,15 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			},
 			wantCmd:  "workflow",
 			wantArgs: []string{"continue", "wrf_abc123", "--agent-output-json", "--expected-revision", "2", "--json"},
+		},
+		{
+			toolName: "raven_workflow_continue",
+			args: map[string]interface{}{
+				"run-id":       "wrf_abc123",
+				"agent-output": `{"outputs":{"markdown":"done"}}`,
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"continue", "wrf_abc123", "--agent-output", `{"outputs":{"markdown":"done"}}`, "--json"},
 		},
 		{
 			toolName: "raven_workflow_runs_step",
