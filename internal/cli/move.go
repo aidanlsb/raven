@@ -291,15 +291,14 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 // moveSingleObject handles single move operation (non-bulk mode).
 func moveSingleObject(vaultPath, source, destination string) error {
 	start := time.Now()
+	originalDestination := destination
+	destinationIsDirectory := strings.HasSuffix(originalDestination, "/") || strings.HasSuffix(originalDestination, "\\")
 
 	// Load vault config for directory roots
 	vaultCfg, err := loadVaultConfigSafe(vaultPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-
-	// Normalize destination path (add .md if missing)
-	destination = paths.EnsureMDExtension(destination)
 
 	// Resolve source using unified resolver (supports short names, aliases, etc.)
 	sourceResult, err := ResolveReference(source, ResolveOptions{
@@ -322,6 +321,22 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		return handleError(ErrInternal, err, "Failed to resolve source path")
 	}
 	sourceID := vaultCfg.FilePathToObjectID(sourceRelPath)
+
+	// If destination is a directory (trailing slash), keep the source filename.
+	if destinationIsDirectory {
+		sourceBase := strings.TrimSuffix(filepath.Base(sourceRelPath), ".md")
+		if strings.TrimSpace(sourceBase) == "" {
+			return handleErrorMsg(ErrInvalidInput, "source has an invalid filename", "Use an explicit destination file path")
+		}
+		destination = filepath.ToSlash(filepath.Join(originalDestination, sourceBase))
+	}
+
+	// Normalize destination path (add .md if missing)
+	destination = paths.EnsureMDExtension(destination)
+	destinationBase := strings.TrimSuffix(filepath.Base(destination), ".md")
+	if strings.TrimSpace(destinationBase) == "" {
+		return handleErrorMsg(ErrInvalidInput, "destination has an empty filename", "Use a non-empty destination filename or a directory ending with /")
+	}
 
 	// Build destination path - apply directory roots if configured
 	destPath := destination

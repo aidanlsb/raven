@@ -62,6 +62,9 @@ The type is required. If title is not provided, you will be prompted for it.
 Required fields (as defined in schema.yaml) will be prompted for interactively,
 or can be provided via --field flags.
 
+Use --path to explicitly control the object path. Titles are treated as display
+names and must not include path separators.
+
 If the type has a name_field configured (e.g., name_field: name), the title
 argument automatically populates that field. This means for a person type with
 name_field: name, you can just call: rvn new person "Freya" --json
@@ -78,9 +81,11 @@ to understand which fields are auto-populated.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (repeatable) (key-value object)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
+			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
 		},
 		Examples: []string{
 			"rvn new person \"Freya\" --json",
+			"rvn new note \"Raven Friction\" --path note/raven-friction --json",
 			"rvn new project \"Website Redesign\" --json",
 			"rvn new book \"The Prose Edda\" --field author=people/snorri --json",
 		},
@@ -142,7 +147,8 @@ This command is the canonical idempotent write primitive for generated artifacts
 It creates a new object when missing, or updates the existing one in place.
 
 Semantics:
-- Identity is derived from <type> + <title> (same routing/slug logic as 'new')
+- By default, identity is derived from <type> + <title> (same routing/slug logic as 'new')
+- Use --path to override the storage path explicitly while keeping title as display metadata
 - Frontmatter fields provided via --field are merged/updated
 - If --content is provided, the body is fully replaced (idempotent reruns)
 - Returns status: created, updated, or unchanged
@@ -161,9 +167,11 @@ converge to one current state rather than append history.`,
 			{Name: "field", Description: "Set/update frontmatter fields (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
 			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object (typed values)", Type: FlagTypeJSON},
 			{Name: "content", Description: "Replace body content (full-body idempotent mode)", Type: FlagTypeString},
+			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
 		},
 		Examples: []string{
 			"rvn upsert brief \"Daily Brief 2026-02-14\" --content \"# Daily Brief\" --json",
+			"rvn upsert note \"Raven Friction\" --path note/raven-friction --content \"# Notes\" --json",
 			"rvn upsert report \"Q1 Status\" --field owner=people/freya --field status=draft --json",
 		},
 		UseCases: []string{

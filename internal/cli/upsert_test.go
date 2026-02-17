@@ -16,18 +16,24 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
+	prevPath := upsertPathFlag
+	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
+		upsertPathFlag = prevPath
+		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	upsertFieldFlags = nil
+	upsertPathFlag = ""
+	upsertCmd.Flags().Lookup("path").Changed = false
 
 	run := func(content string) (status string, file string) {
 		upsertContent = content
@@ -90,6 +96,8 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	prevJSON := jsonOutput
 	prevUpsertFields := upsertFieldFlags
 	prevUpsertContent := upsertContent
+	prevUpsertPath := upsertPathFlag
+	prevUpsertPathChanged := upsertCmd.Flags().Lookup("path").Changed
 	prevUpsertContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	prevAddTo := addToFlag
 	prevAddTimestamp := addTimestampFlag
@@ -100,6 +108,8 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevUpsertFields
 		upsertContent = prevUpsertContent
+		upsertPathFlag = prevUpsertPath
+		upsertCmd.Flags().Lookup("path").Changed = prevUpsertPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevUpsertContentChanged
 		addToFlag = prevAddTo
 		addTimestampFlag = prevAddTimestamp
@@ -110,6 +120,8 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	upsertFieldFlags = nil
+	upsertPathFlag = ""
+	upsertCmd.Flags().Lookup("path").Changed = false
 	upsertContent = "Canonical body"
 	upsertCmd.Flags().Lookup("content").Changed = true
 
@@ -170,6 +182,170 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	}
 	if strings.Contains(final, "appended line") {
 		t.Fatalf("expected upsert to replace body (remove appended line), got:\n%s", final)
+	}
+}
+
+func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeUpsertTestSchema(t, vaultPath)
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := upsertFieldFlags
+	prevContent := upsertContent
+	prevPath := upsertPathFlag
+	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		upsertFieldFlags = prevFields
+		upsertContent = prevContent
+		upsertPathFlag = prevPath
+		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	upsertFieldFlags = nil
+	upsertPathFlag = ""
+	upsertCmd.Flags().Lookup("path").Changed = false
+	upsertContent = ""
+	upsertCmd.Flags().Lookup("content").Changed = false
+
+	out := captureStdout(t, func() {
+		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "folder/name"}); err != nil {
+			t.Fatalf("upsertCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("failed to parse JSON response: %v; out=%s", err, out)
+	}
+	if resp.OK {
+		t.Fatalf("expected ok=false, got true; out=%s", out)
+	}
+	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
+	}
+	if !strings.Contains(resp.Error.Message, "title cannot contain path separators") {
+		t.Fatalf("expected path separator validation message, got: %q", resp.Error.Message)
+	}
+}
+
+func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeUpsertTestSchema(t, vaultPath)
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := upsertFieldFlags
+	prevContent := upsertContent
+	prevPath := upsertPathFlag
+	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		upsertFieldFlags = prevFields
+		upsertContent = prevContent
+		upsertPathFlag = prevPath
+		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	upsertFieldFlags = nil
+	upsertPathFlag = "custom/brief-daily"
+	upsertCmd.Flags().Lookup("path").Changed = true
+	upsertContent = "Body V1"
+	upsertCmd.Flags().Lookup("content").Changed = true
+
+	out := captureStdout(t, func() {
+		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}); err != nil {
+			t.Fatalf("upsertCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Status string `json:"status"`
+			File   string `json:"file"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("failed to parse JSON response: %v; out=%s", err, out)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true, got false; out=%s", out)
+	}
+	if resp.Data.Status != "created" {
+		t.Fatalf("expected status=created, got %q", resp.Data.Status)
+	}
+	if resp.Data.File != "custom/brief-daily.md" {
+		t.Fatalf("expected explicit path to be used, got %q", resp.Data.File)
+	}
+}
+
+func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeUpsertTestSchema(t, vaultPath)
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := upsertFieldFlags
+	prevContent := upsertContent
+	prevPath := upsertPathFlag
+	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
+	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		upsertFieldFlags = prevFields
+		upsertContent = prevContent
+		upsertPathFlag = prevPath
+		upsertCmd.Flags().Lookup("path").Changed = prevPathChanged
+		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	upsertFieldFlags = nil
+	upsertPathFlag = "brief/"
+	upsertCmd.Flags().Lookup("path").Changed = true
+	upsertContent = ""
+	upsertCmd.Flags().Lookup("content").Changed = false
+
+	out := captureStdout(t, func() {
+		if err := upsertCmd.RunE(upsertCmd, []string{"brief", "Daily Brief"}); err != nil {
+			t.Fatalf("upsertCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("failed to parse JSON response: %v; out=%s", err, out)
+	}
+	if resp.OK {
+		t.Fatalf("expected ok=false, got true; out=%s", out)
+	}
+	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
 	}
 }
 

@@ -185,6 +185,57 @@ func TestIntegration_MoveWithShortSourceReference(t *testing.T) {
 	v.AssertFileContains("projects/website.md", "[[people/alice-archived]]")
 }
 
+// TestIntegration_MoveDirectoryDestinationUsesSourceFilename verifies that
+// single-object move to a directory destination (trailing slash) derives the
+// destination filename from the source object.
+func TestIntegration_MoveDirectoryDestinationUsesSourceFilename(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		WithFile("objects/spec/raven-move-friction.md", `---
+type: note
+---
+`).
+		Build()
+
+	// Source is not in the default path and should resolve via short object ID.
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "spec/raven-move-friction", "note/")
+	result.MustSucceed(t)
+
+	v.AssertFileNotExists("objects/spec/raven-move-friction.md")
+	v.AssertFileExists("objects/note/raven-move-friction.md")
+	if got := result.DataString("destination"); got != "note/raven-move-friction" {
+		t.Fatalf("expected destination object ID %q, got %q", "note/raven-move-friction", got)
+	}
+}
+
+func TestIntegration_NewWithExplicitPath(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		Build()
+
+	result := v.RunCLI("new", "note", "Raven Friction", "--path", "note/raven-logo-brief")
+	result.MustSucceed(t)
+
+	v.AssertFileExists("objects/note/raven-logo-brief.md")
+	v.AssertFileNotExists("objects/note/raven-friction.md")
+}
+
 // TestIntegration_SchemaValidationErrors tests that schema validation errors are properly reported.
 func TestIntegration_SchemaValidationErrors(t *testing.T) {
 	v := testutil.NewTestVault(t).
@@ -254,6 +305,28 @@ func TestIntegration_UpsertFieldJSONPreservesStringType(t *testing.T) {
 	result := v.RunCLI("upsert", "person", "Field Json User", "--field-json", `{"email":"true"}`)
 	result.MustSucceed(t)
 	v.AssertFileContains("people/field-json-user.md", `email: "true"`)
+}
+
+func TestIntegration_UpsertWithExplicitPath(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		Build()
+
+	result := v.RunCLI("upsert", "note", "Raven Friction", "--path", "note/raven-logo-brief", "--content", "# V1")
+	result.MustSucceed(t)
+	v.AssertFileExists("objects/note/raven-logo-brief.md")
+	v.AssertFileContains("objects/note/raven-logo-brief.md", "# V1")
+
+	result = v.RunCLI("upsert", "note", "Raven Friction", "--path", "note/raven-logo-brief", "--content", "# V2")
+	result.MustSucceed(t)
+	v.AssertFileContains("objects/note/raven-logo-brief.md", "# V2")
 }
 
 // TestIntegration_BulkOperationsPreview tests bulk operations with preview mode.

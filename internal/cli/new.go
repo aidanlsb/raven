@@ -14,7 +14,10 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-var newFieldFlags []string
+var (
+	newFieldFlags []string
+	newPathFlag   string
+)
 
 var newCmd = &cobra.Command{
 	Use:   "new <type> [title]",
@@ -30,6 +33,7 @@ Examples:
   rvn new person                       # Prompts for title, creates in people/
   rvn new person "Freya"               # Creates people/freya.md
   rvn new person "Freya" --field name="Freya"  # With required field
+  rvn new note "Raven Friction" --path note/raven-friction
   rvn new project "Website Redesign"   # Creates projects/website-redesign.md
   rvn new page "Quick Note"            # Creates quick-note.md in vault root`,
 	Args: cobra.RangeArgs(1, 2),
@@ -74,6 +78,10 @@ Examples:
 			if title == "" {
 				return handleErrorMsg(ErrMissingArgument, "title cannot be empty", "")
 			}
+		}
+
+		if err := validateObjectTitle(title); err != nil {
+			return handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
 		}
 
 		// Parse --field flags into a map
@@ -184,10 +192,12 @@ Examples:
 			return nil // Error already output
 		}
 
-		// Use title as target path - pages.Create will apply default_path from schema
 		targetPath := title
-		if targetPath == "" {
-			return handleErrorMsg(ErrInvalidInput, "invalid title: cannot generate safe filename", "Provide a non-empty title")
+		if cmd.Flags().Changed("path") {
+			targetPath = strings.TrimSpace(newPathFlag)
+			if err := validateObjectTargetPath(targetPath); err != nil {
+				return handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
+			}
 		}
 
 		// Load vault config for directory roots (optional)
@@ -287,5 +297,6 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 
 func init() {
 	newCmd.Flags().StringArrayVar(&newFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
+	newCmd.Flags().StringVar(&newPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
 	rootCmd.AddCommand(newCmd)
 }

@@ -181,6 +181,16 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 		{
 			toolName: "raven_new",
 			args: map[string]interface{}{
+				"type":  "note",
+				"title": "Raven Friction",
+				"path":  "note/raven-friction",
+			},
+			wantCmd:  "new",
+			wantArgs: []string{"note", "Raven Friction", "--path", "note/raven-friction", "--json"},
+		},
+		{
+			toolName: "raven_new",
+			args: map[string]interface{}{
 				"type":  "person",
 				"title": "Freya",
 				"field": map[string]interface{}{"name": "Freya", "email": "freya@asgard.realm"},
@@ -227,6 +237,17 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			},
 			wantCmd:  "upsert",
 			wantArgs: []string{"brief", "Daily Brief 2026-02-14", "--content", "# Daily Brief", "--field-json", `{"owner":"people/freya","status":"ready"}`, "--json"},
+		},
+		{
+			toolName: "raven_upsert",
+			args: map[string]interface{}{
+				"type":    "note",
+				"title":   "Raven Friction",
+				"path":    "note/raven-friction",
+				"content": "# Notes",
+			},
+			wantCmd:  "upsert",
+			wantArgs: []string{"note", "Raven Friction", "--path", "note/raven-friction", "--content", "# Notes", "--json"},
 		},
 		{
 			toolName: "raven_delete",
