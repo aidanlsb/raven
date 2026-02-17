@@ -77,8 +77,7 @@ type TypeDefinition struct {
 	// The field must be a string type. If the field doesn't exist, it will be
 	// auto-created as a required string field.
 	NameField string `yaml:"name_field,omitempty"`
-	// Template is either a path to a template file (e.g., "templates/meeting.md")
-	// or inline template content (multi-line string starting with content, not a path).
+	// Template is a path to a template file (e.g., "templates/meeting.md").
 	Template string `yaml:"template,omitempty"`
 }
 

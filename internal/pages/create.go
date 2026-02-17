@@ -52,8 +52,12 @@ type CreateOptions struct {
 
 	// TemplateOverride allows overriding the type's template.
 	// If set, this is used instead of the schema's template for the type.
-	// Can be a file path (relative to vault) or inline template content.
+	// Must be a file path (relative to vault).
 	TemplateOverride string
+
+	// TemplateDir is the configured templates directory root (e.g., "templates/").
+	// Template references are validated against this directory.
+	TemplateDir string
 
 	// ObjectsRoot is the root directory for typed objects (e.g., "objects/").
 	// If set, the type's default_path is nested under this root.
@@ -182,10 +186,9 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 
 	// Load and apply template if specified
 	if templateSpec != "" {
-		templateContent, err := template.Load(opts.VaultPath, templateSpec)
+		templateContent, err := template.Load(opts.VaultPath, templateSpec, opts.TemplateDir)
 		if err != nil {
-			// Log warning but continue without template
-			templateContent = ""
+			return nil, fmt.Errorf("failed to load template: %w", err)
 		}
 
 		if templateContent != "" {
@@ -198,7 +201,6 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 				content.WriteString("\n")
 			}
 		}
-		// If template is empty/not found, leave file with just frontmatter
 	}
 	// No template specified - leave file with just frontmatter
 	// (Headings create section objects which adds noise to the index)
@@ -334,11 +336,11 @@ func Slugify(s string) string {
 
 // CreateDailyNote creates a daily note for the given date.
 func CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle string) (*CreateResult, error) {
-	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "")
+	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "", "")
 }
 
 // CreateDailyNoteWithTemplate creates a daily note with an optional template.
-func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, dailyTemplate string) (*CreateResult, error) {
+func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, dailyTemplate, templateDir string) (*CreateResult, error) {
 	targetPath := filepath.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
@@ -347,5 +349,6 @@ func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, da
 		Title:            friendlyTitle,
 		TargetPath:       targetPath,
 		TemplateOverride: dailyTemplate,
+		TemplateDir:      templateDir,
 	})
 }

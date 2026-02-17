@@ -10,7 +10,7 @@ This page is lookup-oriented and is not required for the first-session note -> s
 # Where daily notes are stored
 daily_directory: daily
 
-# Template for daily notes (path or inline content)
+# Template for daily notes (file path)
 daily_template: templates/daily.md
 
 # Auto-reindex after CLI operations (default: true)
@@ -21,6 +21,7 @@ directories:
   object: object/        # Root for typed objects
   page: page/            # Root for untyped pages
   workflow: workflows/   # Root for workflow definition files
+  template: templates/   # Root for template files
 
 # Quick capture settings
 capture:
@@ -88,7 +89,7 @@ Daily notes are created as `<daily_directory>/YYYY-MM-DD.md`.
 
 ### `daily_template`
 
-Template for new daily notes. Can be a file path or inline content.
+Template file path for new daily notes.
 
 | Type | Default |
 |------|---------|
@@ -98,19 +99,6 @@ Template for new daily notes. Can be a file path or inline content.
 
 ```yaml
 daily_template: templates/daily.md
-```
-
-**Inline template:**
-
-```yaml
-daily_template: |
-  # {{weekday}}, {{date}}
-  
-  ## Morning
-  
-  ## Afternoon
-  
-  ## Evening
 ```
 
 **Available variables:**
@@ -151,11 +139,15 @@ Uses singular keys (`object`, `page`) to encourage singular directory names, whi
 |----------|------|-------------|
 | `object` | string | Root directory for typed objects |
 | `page` | string | Root directory for untyped pages |
+| `workflow` | string | Root directory for workflow definition files |
+| `template` | string | Root directory for template files |
 
 ```yaml
 directories:
   object: object/
   page: page/
+  workflow: workflows/
+  template: templates/
 ```
 
 **How it works:**

@@ -2,10 +2,9 @@
 package template
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -71,46 +70,61 @@ func NewDailyVariables(date time.Time) *Variables {
 	}
 }
 
-// Load loads a template from either a file path or returns inline content.
-// If templateSpec starts with a path-like pattern, it's treated as a file path
-// relative to vaultPath. Otherwise, it's treated as inline template content.
-func Load(vaultPath, templateSpec string) (string, error) {
+// Load loads a template from a file path and enforces template directory policy.
+// Inline template content is not supported.
+func Load(vaultPath, templateSpec, templateDir string) (string, error) {
 	if templateSpec == "" {
 		return "", nil
 	}
 
-	// Heuristic: if it looks like a path (contains "/" or ends with ".md"),
-	// treat it as a file path. Otherwise, treat as inline content.
-	if isPath(templateSpec) {
-		return loadFromFile(vaultPath, templateSpec)
+	if strings.Contains(templateSpec, "\n") {
+		return "", fmt.Errorf("inline template content is not supported; use a template file path")
 	}
 
-	// Inline template content
-	return templateSpec, nil
+	fileRef, err := ResolveFileRef(templateSpec, templateDir)
+	if err != nil {
+		return "", err
+	}
+
+	return loadFromFile(vaultPath, fileRef)
 }
 
-// isPath determines if a string looks like a file path.
-func isPath(s string) bool {
-	// If it contains a slash, it's a path
-	if strings.Contains(s, "/") {
-		return true
+func normalizeFileRef(filePath string) (string, error) {
+	trimmed := strings.TrimSpace(filePath)
+	trimmed = strings.ReplaceAll(trimmed, "\\", "/")
+	normalized := filepath.ToSlash(filepath.Clean(trimmed))
+	normalized = strings.TrimPrefix(normalized, "./")
+	normalized = strings.TrimPrefix(normalized, "/")
+	if normalized == "" || normalized == "." {
+		return "", fmt.Errorf("template declaration must include a non-empty file path")
 	}
-	// If it ends with .md, it's a path
-	if strings.HasSuffix(s, ".md") {
-		return true
+	if normalized == ".." || strings.HasPrefix(normalized, "../") {
+		return "", fmt.Errorf("template file path cannot escape the vault")
 	}
-	// If it starts with "templates" or similar directory patterns
-	if strings.HasPrefix(s, "templates") {
-		return true
+	if strings.Contains(normalized, "\n") || strings.Contains(normalized, "\r") {
+		return "", fmt.Errorf("template file path cannot contain newlines")
 	}
-	// If it has multiple lines, it's likely inline content, not a path
-	if strings.Contains(s, "\n") {
-		return false
+	return normalized, nil
+}
+
+// ResolveFileRef normalizes a template file path and enforces directories.template
+// policy. Bare filenames are resolved under templateDir.
+func ResolveFileRef(filePath, templateDir string) (string, error) {
+	normalized, err := normalizeFileRef(filePath)
+	if err != nil {
+		return "", err
 	}
-	// Single line without slashes - could be a simple filename
-	// Check if it looks like a filename (word characters, dots, hyphens)
-	matched, _ := regexp.MatchString(`^[\w.-]+$`, s)
-	return matched && len(s) < 100 // Paths are usually short
+	if templateDir != "" && !strings.HasPrefix(normalized, templateDir) && !strings.Contains(normalized, "/") {
+		normalized = templateDir + normalized
+	}
+	if templateDir != "" && !strings.HasPrefix(normalized, templateDir) {
+		return "", fmt.Errorf(
+			"template file must be under directories.template %q: got %q",
+			templateDir,
+			normalized,
+		)
+	}
+	return normalized, nil
 }
 
 // loadFromFile loads template content from a file.
@@ -119,17 +133,13 @@ func loadFromFile(vaultPath, templatePath string) (string, error) {
 
 	// Security check: ensure path is within vault
 	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		if errors.Is(err, paths.ErrPathOutsideVault) {
-			return "", nil // Silent fail for security - return empty
-		}
-		return "", err
+		return "", fmt.Errorf("template file must be within vault")
 	}
 
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
-		// Return empty string on missing file (as per spec)
 		if os.IsNotExist(err) {
-			return "", nil
+			return "", fmt.Errorf("template file not found: %s", templatePath)
 		}
 		return "", err
 	}

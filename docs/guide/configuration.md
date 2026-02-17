@@ -95,6 +95,7 @@ directories:
   object: object/
   page: page/
   workflow: workflows/
+  template: templates/
 ```
 
 ### Key `raven.yaml` sections
@@ -143,6 +144,7 @@ directories:
 - `object`: root for typed objects
 - `page`: root for untyped pages
 - `workflow`: root for workflow definition files
+- `template`: root for template files
 
 Use this when you want strict and predictable project structure.
 
@@ -187,6 +189,7 @@ Use `reference/schema.md` for now; we can add a dedicated schema guide section n
 ## Related docs
 
 - `getting-started.md` for first-run setup flow
+- `templates.md` for template lifecycle setup and usage
 - `schema-intro.md` for guide-level schema setup
 - `reference/vault-config.md` for complete `raven.yaml` options
 - `reference/schema.md` for full schema rules

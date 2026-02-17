@@ -353,6 +353,8 @@ func TestCLICommandNameConversion(t *testing.T) {
 		{"raven_schema_add_trait", "schema add trait"},
 		{"raven_schema_add_field", "schema add field"},
 		{"raven_schema_validate", "schema validate"},
+		{"raven_template_get", "template get"},
+		{"raven_template_set", "template set"},
 		{"raven_workflow_add", "workflow add"},
 		{"raven_workflow_scaffold", "workflow scaffold"},
 		{"raven_workflow_remove", "workflow remove"},

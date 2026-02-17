@@ -69,8 +69,9 @@ If no results appear:
 
 Follow this sequence:
 1. `configuration.md` - set up `config.toml` and `raven.yaml`
-2. `schema-intro.md` - learn practical `schema.yaml` basics
-3. `cli-basics.md` - daily command patterns
+2. `templates.md` - set up reusable note structure
+3. `schema-intro.md` - learn practical `schema.yaml` basics
+4. `cli-basics.md` - daily command patterns
 
 ## Agent next step (after activation)
 

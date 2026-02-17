@@ -103,6 +103,7 @@ Single quotes protect characters like `(`, `)`, `|`, and `!`.
 
 ## What to use next
 
+- `templates.md` for type/daily template setup and lifecycle
 - `cli-advanced.md` for bulk changes, schema ops, and automation patterns
 - `reference/cli.md` for exact command flags and complete syntax
 

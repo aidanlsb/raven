@@ -159,19 +159,15 @@ func TestNewDailyVariables(t *testing.T) {
 	}
 }
 
-func TestLoad_InlineTemplate(t *testing.T) {
-	// Multi-line content should be treated as inline
-	content, err := Load("/tmp", "# {{title}}\n\n## Notes")
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if content != "# {{title}}\n\n## Notes" {
-		t.Errorf("Load() = %q, want inline content", content)
+func TestLoad_InlineTemplateRejected(t *testing.T) {
+	_, err := Load("/tmp", "# {{title}}\n\n## Notes", "templates/")
+	if err == nil {
+		t.Fatal("Load() expected error for inline template content, got nil")
 	}
 }
 
 func TestLoad_EmptyTemplate(t *testing.T) {
-	content, err := Load("/tmp", "")
+	content, err := Load("/tmp", "", "templates/")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -195,7 +191,7 @@ func TestLoad_FileTemplate(t *testing.T) {
 	}
 
 	// Load the template
-	content, err := Load(tmpDir, "templates/meeting.md")
+	content, err := Load(tmpDir, "templates/meeting.md", "templates/")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -207,47 +203,50 @@ func TestLoad_FileTemplate(t *testing.T) {
 func TestLoad_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Loading a missing file should return empty string (per spec)
-	content, err := Load(tmpDir, "templates/missing.md")
-	if err != nil {
-		t.Fatalf("Load() error = %v, want nil", err)
-	}
-	if content != "" {
-		t.Errorf("Load() = %q, want empty string for missing file", content)
+	_, err := Load(tmpDir, "templates/missing.md", "templates/")
+	if err == nil {
+		t.Fatal("Load() expected error for missing template file, got nil")
 	}
 }
 
 func TestLoad_PathOutsideVault(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Trying to load a file outside vault should return empty (security)
-	content, err := Load(tmpDir, "../etc/passwd")
-	if err != nil {
-		t.Fatalf("Load() error = %v, want nil", err)
-	}
-	if content != "" {
-		t.Errorf("Load() = %q, want empty string for path outside vault", content)
+	_, err := Load(tmpDir, "../etc/passwd", "templates/")
+	if err == nil {
+		t.Fatal("Load() expected error for path outside vault, got nil")
 	}
 }
 
-func TestIsPath(t *testing.T) {
+func TestResolveFileRef(t *testing.T) {
 	tests := []struct {
-		input    string
-		expected bool
+		name        string
+		input       string
+		templateDir string
+		expected    string
+		wantErr     bool
 	}{
-		{"templates/meeting.md", true},
-		{"meeting.md", true},
-		{"templates", true},
-		{"# {{title}}\n\nContent", false},
-		{"This is inline content", false},
-		{"", false},
+		{name: "already rooted", input: "templates/meeting.md", templateDir: "templates/", expected: "templates/meeting.md"},
+		{name: "bare filename under template dir", input: "meeting.md", templateDir: "templates/", expected: "templates/meeting.md"},
+		{name: "outside template dir rejected", input: "other/meeting.md", templateDir: "templates/", wantErr: true},
+		{name: "empty rejected", input: "", templateDir: "templates/", wantErr: true},
+		{name: "escape rejected", input: "../etc/passwd", templateDir: "templates/", wantErr: true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := isPath(tt.input)
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ResolveFileRef(tt.input, tt.templateDir)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ResolveFileRef(%q) expected error, got nil", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ResolveFileRef(%q) unexpected error: %v", tt.input, err)
+			}
 			if result != tt.expected {
-				t.Errorf("isPath(%q) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("ResolveFileRef(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}

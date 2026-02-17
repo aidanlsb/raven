@@ -1178,103 +1178,155 @@ Checks for internal consistency issues in `schema.yaml`.
 
 ---
 
-### `rvn schema template get`
+### `rvn template list`
 
-Show the template configured for a type.
+List configured type and daily template bindings.
 
 ```bash
-rvn schema template get <type>
+rvn template list
 ```
-
-| Argument | Description |
-|----------|-------------|
-| `type` | Type to get template for (e.g., `meeting`, `project`) |
-
-Returns the template spec, source type (`inline`, `file`, or `none`), and resolved content.
 
 **Examples:**
 
 ```bash
-rvn schema template get meeting --json
-rvn schema template get project --json
+rvn template list --json
 ```
 
 ---
 
-### `rvn schema template set`
+### `rvn template get`
 
-Set or update the template for a type.
+Show template binding and loaded content for a type or daily template.
 
 ```bash
-rvn schema template set <type> --content "..." 
-rvn schema template set <type> --file <path>
+rvn template get type <type_name>
+rvn template get daily
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `type` | Type to set template for |
+| `target` | `type` or `daily` |
+| `type_name` | Required when `target=type` |
+
+**Examples:**
+
+```bash
+rvn template get type meeting --json
+rvn template get daily --json
+```
+
+---
+
+### `rvn template set`
+
+Set template file binding for a type or daily template.
+
+```bash
+rvn template set type <type_name> --file <path>
+rvn template set daily --file <path>
+```
 
 | Flag | Description |
 |------|-------------|
-| `--content` | Inline template content (mutually exclusive with `--file`) |
-| `--file` | Path to template file relative to vault root (mutually exclusive with `--content`) |
-
-**Template variables:** `{{title}}`, `{{slug}}`, `{{type}}`, `{{date}}`, `{{datetime}}`, `{{year}}`, `{{month}}`, `{{day}}`, `{{weekday}}`, `{{field.<name>}}`
+| `--file` | Template file path under `directories.template` |
 
 **Examples:**
 
 ```bash
-rvn schema template set meeting --content "# {{title}}\n\n## Notes\n" --json
-rvn schema template set meeting --file templates/meeting.md --json
+rvn template set type meeting --file templates/meeting.md --json
+rvn template set daily --file templates/daily.md --json
 ```
 
 ---
 
-### `rvn schema template remove`
+### `rvn template scaffold`
 
-Remove the template from a type.
-
-```bash
-rvn schema template remove <type>
-```
-
-| Argument | Description |
-|----------|-------------|
-| `type` | Type to remove template from |
-
-Clears the template field from the type definition. Does not delete template files from disk.
-
-**Examples:**
+Create a template file and register its binding.
 
 ```bash
-rvn schema template remove meeting --json
+rvn template scaffold type <type_name> [--file <path>] [--force]
+rvn template scaffold daily [--file <path>] [--force]
 ```
-
----
-
-### `rvn schema template render`
-
-Preview a type's template with variables applied.
-
-```bash
-rvn schema template render <type> [--title "..."] [--field key=value]
-```
-
-| Argument | Description |
-|----------|-------------|
-| `type` | Type whose template to render |
 
 | Flag | Description |
 |------|-------------|
-| `--title` | Title to use for rendering (default: sample title) |
-| `--field` | Set field value for rendering (repeatable) |
+| `--file` | Optional template path under `directories.template` |
+| `--force` | Overwrite scaffold file if it exists |
 
 **Examples:**
 
 ```bash
-rvn schema template render meeting --json
-rvn schema template render meeting --title "Weekly Standup" --json
-rvn schema template render meeting --title "1:1" --field attendees="Alice, Bob" --json
+rvn template scaffold type meeting --json
+rvn template scaffold daily --json
+```
+
+---
+
+### `rvn template write`
+
+Replace content in the currently bound template file.
+
+```bash
+rvn template write type <type_name> --content "..."
+rvn template write daily --content "..."
+```
+
+| Flag | Description |
+|------|-------------|
+| `--content` | Template content to write |
+
+**Examples:**
+
+```bash
+rvn template write type meeting --content "# {{title}}\n\n## Notes" --json
+rvn template write daily --content "# {{weekday}}, {{date}}\n\n## Notes" --json
+```
+
+---
+
+### `rvn template remove`
+
+Remove template binding (optionally delete underlying file).
+
+```bash
+rvn template remove type <type_name> [--delete-file] [--force]
+rvn template remove daily [--delete-file] [--force]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--delete-file` | Also delete the bound template file |
+| `--force` | Skip safety checks for `--delete-file` |
+
+**Examples:**
+
+```bash
+rvn template remove type meeting --json
+rvn template remove daily --delete-file --force --json
+```
+
+---
+
+### `rvn template render`
+
+Preview rendered template output with variable substitution.
+
+```bash
+rvn template render type <type_name> [--title "..."] [--field key=value]
+rvn template render daily [--date today|yesterday|tomorrow|YYYY-MM-DD]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--title` | Title for type template rendering |
+| `--field` | Field values for type rendering (repeatable) |
+| `--date` | Date for daily render |
+
+**Examples:**
+
+```bash
+rvn template render type meeting --title "Weekly Standup" --field attendees="Alice, Bob" --json
+rvn template render daily --date tomorrow --json
 ```
 
 ---
