@@ -230,6 +230,7 @@ rvn workflow show <name>
 rvn workflow run <name> --input key=value
 rvn workflow run <name> --input-json '{"date":"2026-02-14"}'
 rvn workflow continue <run-id> --agent-output-json '{"outputs":{"markdown":"..."}}'
+rvn workflow continue <run-id> --agent-output '{"outputs":{"markdown":"..."}}'
 rvn workflow runs list --status awaiting_agent
 rvn workflow runs step <run-id> <step-id>
 rvn workflow runs prune --status completed --older-than 14d --confirm

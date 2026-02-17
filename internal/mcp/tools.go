@@ -54,10 +54,27 @@ func GenerateToolSchemas() []Tool {
 			case commands.FlagTypeInt:
 				prop["type"] = "integer"
 			case commands.FlagTypeJSON:
-				prop["type"] = "object"
+				// Some MCP clients can only pass primitive args. Accept JSON payloads
+				// either as structured objects or as JSON-encoded strings.
+				prop["anyOf"] = []map[string]interface{}{
+					{"type": "object"},
+					{"type": "string"},
+				}
+				prop["description"] = flag.Description + " (object or JSON string)"
 			case commands.FlagTypeKeyValue, commands.FlagTypePosKeyValue:
-				prop["type"] = "object"
-				prop["description"] = flag.Description + " (key-value object)"
+				// Key/value inputs are intentionally flexible for MCP compatibility:
+				// object, single "k=v" string, or array of "k=v" strings.
+				prop["anyOf"] = []map[string]interface{}{
+					{"type": "object"},
+					{"type": "string"},
+					{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+					},
+				}
+				prop["description"] = flag.Description + " (object, k=v string, or array of k=v strings)"
 			default:
 				prop["type"] = "string"
 			}

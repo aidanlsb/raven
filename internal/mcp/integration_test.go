@@ -303,6 +303,151 @@ func TestMCPIntegration_SetFields(t *testing.T) {
 	v.AssertFileContains("people/carol.md", "email: carol@example.com")
 }
 
+// TestMCPIntegration_StringEncodedStructuredInputs verifies that MCP tool calls
+// succeed when structured inputs are provided as strings (strict-client compatibility).
+func TestMCPIntegration_StringEncodedStructuredInputs(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  page:
+    default_path: notes/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+  project:
+    default_path: projects/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      status:
+        type: enum
+        values: [active, done]
+`).
+		WithRavenYAML(`workflows:
+  string-compat:
+    file: workflows/string-compat.yaml
+`).
+		WithFile("workflows/string-compat.yaml", `description: String payload compatibility workflow
+inputs:
+  date:
+    type: string
+    required: true
+steps:
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Compose a short brief for {{inputs.date}}.
+  - id: save
+    type: tool
+    tool: raven_upsert
+    arguments:
+      type: page
+      title: "Brief {{inputs.date}}"
+      content: "{{steps.compose.outputs.markdown}}"
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	// JSON-typed flag provided as JSON string (not object).
+	upsertResult := server.callTool("raven_upsert", map[string]interface{}{
+		"type":       "project",
+		"title":      "MCP Compat Project",
+		"field-json": `{"status":"active"}`,
+	})
+	if upsertResult.IsError {
+		t.Fatalf("upsert with field-json string failed: %s", upsertResult.Text)
+	}
+	v.AssertFileContains("projects/mcp-compat-project.md", "status: active")
+
+	// Key-value structured input provided as a single "k=v" string.
+	setResult := server.callTool("raven_set", map[string]interface{}{
+		"object_id": "projects/mcp-compat-project",
+		"fields":    "status=done",
+	})
+	if setResult.IsError {
+		t.Fatalf("set with fields string failed: %s", setResult.Text)
+	}
+	v.AssertFileContains("projects/mcp-compat-project.md", "status: done")
+
+	// JSON-typed workflow input provided as string (underscore key variant).
+	runResult := server.callTool("raven_workflow_run", map[string]interface{}{
+		"name":       "string-compat",
+		"input_json": `{"date":"2026-02-16"}`,
+	})
+	if runResult.IsError {
+		t.Fatalf("workflow run with input_json string failed: %s", runResult.Text)
+	}
+
+	var runResp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			RunID  string `json:"run_id"`
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(runResult.Text), &runResp); err != nil {
+		t.Fatalf("failed to parse workflow run response: %v\nraw: %s", err, runResult.Text)
+	}
+	if runResp.Data.RunID == "" {
+		t.Fatalf("expected workflow run_id, got empty response: %s", runResult.Text)
+	}
+	if runResp.Data.Status != "awaiting_agent" {
+		t.Fatalf("expected awaiting_agent status, got %q", runResp.Data.Status)
+	}
+
+	// JSON-typed workflow continue payload provided as string (underscore keys).
+	continueResult := server.callTool("raven_workflow_continue", map[string]interface{}{
+		"run_id":            runResp.Data.RunID,
+		"agent_output_json": `{"outputs":{"markdown":"# Brief\nGenerated from string payloads."}}`,
+	})
+	if continueResult.IsError {
+		t.Fatalf("workflow continue with agent_output_json string failed: %s", continueResult.Text)
+	}
+
+	var continueResp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(continueResult.Text), &continueResp); err != nil {
+		t.Fatalf("failed to parse workflow continue response: %v\nraw: %s", err, continueResult.Text)
+	}
+	if continueResp.Data.Status != "completed" {
+		t.Fatalf("expected completed status after continue, got %q", continueResp.Data.Status)
+	}
+
+	searchResult := server.callTool("raven_search", map[string]interface{}{
+		"query": "Generated from string payloads",
+		"limit": float64(5),
+	})
+	if searchResult.IsError {
+		t.Fatalf("search for persisted workflow output failed: %s", searchResult.Text)
+	}
+	var searchResp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Results []interface{} `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(searchResult.Text), &searchResp); err != nil {
+		t.Fatalf("failed to parse search response: %v\nraw: %s", err, searchResult.Text)
+	}
+	if len(searchResp.Data.Results) == 0 {
+		t.Fatalf("expected persisted output to be searchable, got no results: %s", searchResult.Text)
+	}
+}
+
 // TestMCPIntegration_EditDeleteWithEmptyString tests deleting text via raven_edit with empty new_str.
 func TestMCPIntegration_EditDeleteWithEmptyString(t *testing.T) {
 	v := testutil.NewTestVault(t).

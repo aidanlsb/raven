@@ -214,7 +214,10 @@ raven_new(type="person", title="Freya")
 
 ### Key-Value Flags
 
-Repeatable `--flag key=value` patterns are represented as JSON objects:
+Repeatable `--flag key=value` patterns accept multiple input forms for MCP compatibility:
+- object: `{"email":"freya@asgard.realm","role":"engineer"}`
+- single string: `"email=freya@asgard.realm"`
+- string array: `["email=freya@asgard.realm","role=engineer"]`
 
 ```
 # CLI
@@ -222,6 +225,27 @@ rvn new person "Freya" --field email=freya@asgard.realm --field role=engineer
 
 # MCP
 raven_new(type="person", title="Freya", field={"email": "freya@asgard.realm", "role": "engineer"})
+raven_new(type="person", title="Freya", field="email=freya@asgard.realm,role=engineer")
+```
+
+### JSON Flags
+
+Flags ending in `-json` accept either:
+- a structured object, or
+- a JSON-encoded string
+
+```
+# Object form
+raven_workflow_continue(
+  run_id="wrf_abc123",
+  agent_output_json={"outputs": {"markdown": "done"}}
+)
+
+# String form (works in clients that only pass primitive arguments)
+raven_workflow_continue(
+  run_id="wrf_abc123",
+  agent_output_json='{"outputs":{"markdown":"done"}}'
+)
 ```
 
 ### Preview/Confirm Pattern

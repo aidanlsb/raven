@@ -652,6 +652,7 @@ var workflowRunCmd = &cobra.Command{
 }
 
 var workflowContinueOutputJSON string
+var workflowContinueOutput string
 var workflowContinueOutputFile string
 var workflowContinueExpectedRevision int
 
@@ -711,7 +712,7 @@ var workflowContinueCmd = &cobra.Command{
 			)
 		}
 
-		outputEnv, err := parseAgentOutputEnvelope(workflowContinueOutputFile, workflowContinueOutputJSON)
+		outputEnv, err := parseAgentOutputEnvelope(workflowContinueOutputFile, workflowContinueOutputJSON, workflowContinueOutput)
 		if err != nil {
 			return handleError(ErrWorkflowAgentOutputInvalid, err, "")
 		}
@@ -1077,21 +1078,25 @@ func parseWorkflowInputs(inputFile, inputJSON string, kvFlags []string) (map[str
 	return inputs, nil
 }
 
-func parseAgentOutputEnvelope(outputFile, outputJSON string) (workflow.AgentOutputEnvelope, error) {
-	if outputFile == "" && strings.TrimSpace(outputJSON) == "" {
-		return workflow.AgentOutputEnvelope{}, fmt.Errorf("provide --agent-output-json or --agent-output-file")
+func parseAgentOutputEnvelope(outputFile, outputJSON, outputInline string) (workflow.AgentOutputEnvelope, error) {
+	if outputFile == "" && strings.TrimSpace(outputJSON) == "" && strings.TrimSpace(outputInline) == "" {
+		return workflow.AgentOutputEnvelope{}, fmt.Errorf("provide --agent-output-json, --agent-output, or --agent-output-file")
 	}
 
 	var obj map[string]interface{}
 	var err error
-	if outputFile != "" {
-		obj, err = readJSONFileObject(outputFile)
+	if strings.TrimSpace(outputJSON) != "" {
+		obj, err = parseJSONObject(outputJSON)
 		if err != nil {
 			return workflow.AgentOutputEnvelope{}, err
 		}
-	}
-	if strings.TrimSpace(outputJSON) != "" {
-		obj, err = parseJSONObject(outputJSON)
+	} else if strings.TrimSpace(outputInline) != "" {
+		obj, err = parseJSONObject(outputInline)
+		if err != nil {
+			return workflow.AgentOutputEnvelope{}, err
+		}
+	} else if outputFile != "" {
+		obj, err = readJSONFileObject(outputFile)
 		if err != nil {
 			return workflow.AgentOutputEnvelope{}, err
 		}
@@ -1294,6 +1299,7 @@ func init() {
 	workflowRunCmd.Flags().StringVar(&workflowInputFile, "input-file", "", "Read workflow inputs from JSON file")
 
 	workflowContinueCmd.Flags().StringVar(&workflowContinueOutputJSON, "agent-output-json", "", "Agent output JSON object")
+	workflowContinueCmd.Flags().StringVar(&workflowContinueOutput, "agent-output", "", "Agent output JSON object (string form)")
 	workflowContinueCmd.Flags().StringVar(&workflowContinueOutputFile, "agent-output-file", "", "Path to JSON file containing agent output")
 	workflowContinueCmd.Flags().IntVar(&workflowContinueExpectedRevision, "expected-revision", 0, "Expected run revision for optimistic concurrency")
 
