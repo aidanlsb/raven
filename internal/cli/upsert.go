@@ -21,6 +21,7 @@ var (
 	upsertFieldFlags []string
 	upsertFieldJSON  string
 	upsertContent    string
+	upsertPathFlag   string
 )
 
 var upsertCmd = &cobra.Command{
@@ -33,6 +34,16 @@ var upsertCmd = &cobra.Command{
 		typeName := args[0]
 		title := args[1]
 		replaceBody := cmd.Flags().Changed("content")
+		if err := validateObjectTitle(title); err != nil {
+			return handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
+		}
+		targetPath := title
+		if cmd.Flags().Changed("path") {
+			targetPath = strings.TrimSpace(upsertPathFlag)
+			if err := validateObjectTargetPath(targetPath); err != nil {
+				return handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
+			}
+		}
 
 		s, err := schema.Load(vaultPath)
 		if err != nil {
@@ -85,7 +96,7 @@ var upsertCmd = &cobra.Command{
 		pagesRoot := vaultCfg.GetPagesRoot()
 		templateDir := vaultCfg.GetTemplateDirectory()
 		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
-		slugified := creator.resolveAndSlugifyTargetPath(title, typeName)
+		slugified := creator.resolveAndSlugifyTargetPath(targetPath, typeName)
 		if !strings.HasSuffix(slugified, ".md") {
 			slugified += ".md"
 		}
@@ -134,7 +145,7 @@ var upsertCmd = &cobra.Command{
 			createResult, err := creator.create(objectCreateParams{
 				typeName:   typeName,
 				title:      title,
-				targetPath: title,
+				targetPath: targetPath,
 				fields:     fieldValues,
 			})
 			if err != nil {
@@ -344,5 +355,6 @@ func init() {
 	upsertCmd.Flags().StringArrayVar(&upsertFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
 	upsertCmd.Flags().StringVar(&upsertFieldJSON, "field-json", "", "Set/update frontmatter fields as a JSON object")
 	upsertCmd.Flags().StringVar(&upsertContent, "content", "", "Replace body content (idempotent full-body mode)")
+	upsertCmd.Flags().StringVar(&upsertPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
 	rootCmd.AddCommand(upsertCmd)
 }

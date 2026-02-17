@@ -57,15 +57,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil // simulate MCP/agent that didn't provide --field title=...
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
 
 	if err := newCmd.RunE(newCmd, []string{"book", "My Book"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
@@ -109,15 +115,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = []string{"title=Override Title"}
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
 
 	if err := newCmd.RunE(newCmd, []string{"book", "My Book 2"}); err != nil {
 		t.Fatalf("newCmd.RunE: %v", err)
@@ -156,15 +168,21 @@ types:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
 
 	// First run creates the file successfully.
 	_ = captureStdout(t, func() {
@@ -197,6 +215,176 @@ types:
 	}
 }
 
+func TestNewRejectsTitleWithPathSeparator(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  person:
+    default_path: people/
+`) + "\n"
+
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
+
+	out := captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"person", "folder/name"}); err != nil {
+			t.Fatalf("newCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
+	}
+	if resp.OK {
+		t.Fatalf("expected ok=false; out=%s", out)
+	}
+	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
+	}
+	if !strings.Contains(resp.Error.Message, "title cannot contain path separators") {
+		t.Fatalf("expected path separator validation message, got: %q", resp.Error.Message)
+	}
+}
+
+func TestNewUsesExplicitPathWhenProvided(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  note:
+    default_path: note/
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+	newPathFlag = "custom/raven-logo-brief"
+	newCmd.Flags().Lookup("path").Changed = true
+
+	out := captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}); err != nil {
+			t.Fatalf("newCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			File string `json:"file"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true; out=%s", out)
+	}
+	if resp.Data.File != "custom/raven-logo-brief.md" {
+		t.Fatalf("expected explicit path to be used, got %q", resp.Data.File)
+	}
+}
+
+func TestNewRejectsDirectoryOnlyPath(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  note:
+    default_path: note/
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+	newPathFlag = "note/"
+	newCmd.Flags().Lookup("path").Changed = true
+
+	out := captureStdout(t, func() {
+		if err := newCmd.RunE(newCmd, []string{"note", "Raven Move Friction"}); err != nil {
+			t.Fatalf("newCmd.RunE: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
+	}
+	if resp.OK {
+		t.Fatalf("expected ok=false; out=%s", out)
+	}
+	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
+	}
+}
+
 func TestNewPageUsesObjectRootWhenPageRootOmitted(t *testing.T) {
 	vaultPath := t.TempDir()
 
@@ -221,15 +409,21 @@ directories:
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	newFieldFlags = nil
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
 
 	out := captureStdout(t, func() {
 		if err := newCmd.RunE(newCmd, []string{"page", "Quick Note"}); err != nil {
