@@ -636,8 +636,8 @@ queries:
 
   # Active projects
   active-projects:
-    query: "object:project .status==active"
-    description: "Projects with status active"
+    query: "object:project has(trait:status .value==in_progress)"
+    description: "Projects marked in progress"
 
 # Optional directory settings
 # directories:
