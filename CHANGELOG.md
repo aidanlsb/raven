@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Query language with object and trait queries
 - Full-text search with FTS5
 - MCP server for AI agent integration
-- LSP server for editor integration
 - Daily notes with templates
 - Bulk operations with `--apply` flag
 - File watching with auto-reindex
