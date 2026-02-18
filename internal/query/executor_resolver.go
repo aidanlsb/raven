@@ -9,7 +9,7 @@ import (
 
 // SetResolver injects a resolver for target resolution.
 //
-// This allows callers (CLI/LSP) to provide a canonical resolver that includes
+// This allows callers (CLI/MCP) to provide a canonical resolver that includes
 // aliases and vault-specific settings like daily directory. If not set, the
 // executor will fall back to building a resolver from the objects table.
 func (e *Executor) SetResolver(r *resolver.Resolver) {

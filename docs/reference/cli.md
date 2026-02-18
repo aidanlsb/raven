@@ -1580,16 +1580,6 @@ Exposes Raven's CLI commands as MCP tools. See `reference/mcp.md`.
 
 ---
 
-### `rvn lsp`
-
-Start the Language Server Protocol server.
-
-```bash
-rvn lsp
-```
-
-Provides editor integration for reference completion, hover info, etc.
-
 ---
 
 ## Shell Completion

@@ -281,7 +281,6 @@ Since we process `*ast.ListItem` nodes and skip code blocks within them, this wo
 
 Precise line numbers are maintained throughout parsing for:
 - Error messages
-- Editor integration (LSP)
 - Query results
 - Trait/ref association with parent objects
 
