@@ -106,7 +106,7 @@ meeting/2026-01-17-council-gladsheim.md
 
 Two open threads, both traceable to the meeting they came from.
 
-**Recalling a person**
+**Reviewing references**
 
 Skírnir arrives at Hermod's hall with news. Before they speak, Hermod pulls up everything connected to him:
 
@@ -476,7 +476,3 @@ rvn docs          # browse the full documentation
 ```
 
 ---
-
-## Contributing
-
-See [AGENTS.md](AGENTS.md) for project architecture, build instructions, and contribution workflow.
