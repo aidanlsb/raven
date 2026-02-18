@@ -11,92 +11,120 @@
 
 ---
 
-Raven keeps Markdown files as the source of truth, then adds:
-- schema for structure and validation
-- query language for retrieval
-- CLI and MCP for agent workflows
+You keep notes in Markdown. The problem: they accumulate without structure. When you ask an AI assistant "what decisions did we make on the API project?", it can't actually look anything up — it guesses from whatever context you paste in.
 
-## Start Here: First Loop (5 minutes)
+Raven adds schema, a query language, and an MCP server to your Markdown vault. Your files stay readable and portable. But now you — and your agent — can query them.
 
-This is the fastest path to first success:
-1. create a vault
-2. add structured information
-3. query it successfully
+## A working example
+
+Say you're running a software project. You want to track decisions and action items inline as you take meeting notes, and be able to retrieve them later.
+
+**Define what you care about**
+
+```bash
+rvn schema add trait decision --type bool
+rvn schema add trait todo --type bool
+```
+
+**Create typed objects**
+
+```bash
+rvn new project "API Redesign" --field status=active
+rvn new person "Sarah"
+```
+
+**Capture notes as you work**
+
+In today's daily note, you capture what happened in your meeting:
+
+```bash
+rvn add "Move to GraphQL for faster client iteration @decision [[projects/api-redesign]] [[people/sarah]]"
+rvn add "Prototype the search endpoint by Friday @todo @due(2026-02-21) [[projects/api-redesign]]"
+```
+
+These are just lines in a Markdown file. But Raven indexes the structure.
+
+**Query across your vault**
+
+```bash
+# All decisions made on the API redesign
+rvn query 'trait:decision refs([[projects/api-redesign]])'
+
+# Open todos that are past their due date
+rvn query 'trait:todo at(trait:due .value==past)'
+
+# Every daily note that mentions Sarah
+rvn query 'object:date refs([[people/sarah]])'
+```
+
+**Ask your agent**
+
+Connect Raven via MCP and your agent runs the same queries against your actual vault:
+
+```
+"What decisions have been made on the API Redesign project, and are there any overdue tasks?"
+```
+
+The agent reads your schema, queries your notes, and gives you a grounded answer — not a guess.
+
+---
+
+## Why Markdown-first matters
+
+Your notes live as `.md` files in a directory you control. They are readable without Raven. They open in any editor. The structure Raven adds — type frontmatter, inline traits like `@decision`, wikilink references like `[[projects/api-redesign]]` — stays embedded in your files.
+
+You can query with Raven. You can also just open the file.
+
+---
+
+## Get started
 
 ### Prerequisites
 
-- Go 1.22+ installed ([Install Go](https://go.dev/doc/install))
-- A text editor on your machine (`code`, `cursor`, `vim`, etc.)
+- Go 1.22+ ([Install Go](https://go.dev/doc/install))
 
-### 1) Install and verify
+### Install
 
 ```bash
 go install github.com/aidanlsb/raven/cmd/rvn@latest
 rvn version
 ```
 
-Success check: `rvn version` prints version/build info.
-
-### 2) Create a vault
+### Create a vault
 
 ```bash
 rvn init ~/notes
 cd ~/notes
 ```
 
-Success check: you now have `schema.yaml`, `raven.yaml`, and `.raven/`.
+You now have `schema.yaml`, `raven.yaml`, and `.raven/`.
 
-### 3) Add structure
+### First loop
 
 ```bash
 rvn new project "Onboarding"
-rvn add "Planning [[projects/onboarding]] @highlight"
-```
-
-What this does:
-- creates a typed project object (`projects/onboarding`)
-- appends a structured note (reference + trait) to today's daily note
-
-### 4) Query across your vault
-
-```bash
+rvn add "Kickoff complete @highlight [[projects/onboarding]]"
 rvn query 'trait:highlight refs([[projects/onboarding]])'
 ```
 
-Success check: at least one result appears from your daily note.
+Success: at least one result appears. If not, run `rvn reindex` and retry.
 
-If you get no results, run `rvn reindex` once and re-run the query.
+### Connect your agent (MCP)
 
-### 5) Activated
-
-You have completed the first loop:
-- note captured
-- structure applied (`[[reference]]` + `@trait`)
-- query returned expected data
-
-## Next Step: Connect Your Agent
-
-Now that the first loop works, set up Raven for agent-assisted workflows:
-- [MCP setup guide](docs/reference/mcp.md)
-
-Suggested first prompt after MCP setup:
-
-```text
-"Summarize my current onboarding project and list open highlights or tasks that reference it."
-```
+See the [MCP setup guide](docs/reference/mcp.md).
 
 ---
 
-## Documentation Map
+## Documentation
 
-Use guides in this order:
-1. [Getting Started](docs/guide/getting-started.md) - first-session flow and verification
-2. [Configuration Guide](docs/guide/configuration.md) - `config.toml` and `raven.yaml`
-3. [Schema Introduction](docs/guide/schema-intro.md) - practical `schema.yaml` basics
-4. [CLI Basics](docs/guide/cli-basics.md) - everyday commands
-5. [CLI Advanced](docs/guide/cli-advanced.md) - bulk operations and power workflows
+**Guides** (read in order):
+1. [Getting Started](docs/guide/getting-started.md) — first-session flow and verification
+2. [Configuration](docs/guide/configuration.md) — `config.toml` and `raven.yaml`
+3. [Schema Introduction](docs/guide/schema-intro.md) — practical `schema.yaml` basics
+4. [CLI Basics](docs/guide/cli-basics.md) — everyday commands
+5. [CLI Advanced](docs/guide/cli-advanced.md) — bulk operations and power workflows
 
-Use references when you already know what you need:
+**References** (when you know what you need):
 - [CLI Reference](docs/reference/cli.md)
 - [Query Language](docs/reference/query-language.md)
 - [raven.yaml Reference](docs/reference/vault-config.md)
@@ -104,15 +132,6 @@ Use references when you already know what you need:
 
 ---
 
-## What Raven Is Optimized For
-
-- Markdown-first knowledge with explicit structure
-- Long-lived notes that remain useful with or without AI tools
-- Agent workflows constrained by your schema and references
-
 ## Contributing
 
-See:
-- [AGENTS.md](AGENTS.md) for project architecture and contribution workflow
-- [docs/](docs/) for user-facing and design documentation
-
+See [AGENTS.md](AGENTS.md) for project architecture and contribution workflow.
