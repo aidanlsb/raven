@@ -4,23 +4,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
-	builtindocs "github.com/aidanlsb/raven/docs"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-func TestListDocsSectionsFSLoadsEmbeddedDocs(t *testing.T) {
+func TestListDocsSectionsFSLoadsRepositoryDocs(t *testing.T) {
 	t.Parallel()
 
-	sections, err := listDocsSectionsFS(builtindocs.FS, ".")
+	docsRoot := filepath.Join(repoRoot(t), "docs")
+	sections, err := listDocsSections(docsRoot)
 	if err != nil {
-		t.Fatalf("listDocsSectionsFS() error = %v", err)
+		t.Fatalf("listDocsSections() error = %v", err)
 	}
 	if len(sections) == 0 {
-		t.Fatalf("expected embedded docs sections, got none")
+		t.Fatalf("expected docs sections, got none")
 	}
 
 	var ids []string
@@ -32,6 +33,16 @@ func TestListDocsSectionsFSLoadsEmbeddedDocs(t *testing.T) {
 			t.Fatalf("expected section %q in %v", expected, ids)
 		}
 	}
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve caller path")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
 }
 
 func TestNormalizeDocsPathSlug(t *testing.T) {
@@ -514,8 +525,9 @@ func TestOutputDocsTopicContentRendersMarkdownInTTY(t *testing.T) {
 		return "RENDERED TOPIC\n", nil
 	}
 
+	docsFS := os.DirFS(filepath.Join(repoRoot(t), "docs"))
 	out := captureStdout(t, func() {
-		err := outputDocsTopicContent(docsTopicRecord{
+		err := outputDocsTopicContent(docsFS, docsTopicRecord{
 			Section: "reference",
 			ID:      "query-language",
 			Title:   "Query Language",
@@ -554,8 +566,9 @@ func TestOutputDocsTopicContentSkipsRendererWhenNotTTY(t *testing.T) {
 		return "", nil
 	}
 
+	docsFS := os.DirFS(filepath.Join(repoRoot(t), "docs"))
 	out := captureStdout(t, func() {
-		err := outputDocsTopicContent(docsTopicRecord{
+		err := outputDocsTopicContent(docsFS, docsTopicRecord{
 			Section: "reference",
 			ID:      "query-language",
 			Title:   "Query Language",

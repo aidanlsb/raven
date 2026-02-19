@@ -37,6 +37,7 @@ Creates:
 - `schema.yaml` — types and traits
 - `raven.yaml` — vault config
 - `.raven/` — local index (gitignored)
+- `.raven/docs/` — local docs cache (fetched during init; retry with `rvn docs fetch`)
 
 ---
 
@@ -197,7 +198,7 @@ rvn learn next
 
 ### `rvn docs`
 
-Browse long-form Markdown documentation bundled into the `rvn` binary.
+Browse long-form Markdown documentation from the vault-local docs cache.
 
 ```bash
 rvn docs
@@ -205,6 +206,7 @@ rvn docs list
 rvn docs <section>
 rvn docs <section> <topic>
 rvn docs search <query> [--limit N] [--section SECTION]
+rvn docs fetch [--ref REF]
 ```
 
 | Argument | Description |
@@ -221,6 +223,7 @@ rvn docs search <query> [--limit N] [--section SECTION]
 
 ```bash
 rvn docs
+rvn docs fetch
 rvn docs list
 rvn docs guide
 rvn docs reference query-language
@@ -235,8 +238,9 @@ rvn docs search refs --section reference --limit 5
 - `rvn docs list` prints explicit section commands with friendly titles/topic counts
 - `rvn docs <section>` prints explicit topic commands with friendly topic titles
 - `rvn docs <section> <topic>` renders markdown with the shared CLI terminal style when outputting to a TTY
+- `rvn docs fetch` syncs docs into `.raven/docs` (default ref: `main`)
 - For command-level documentation, use `rvn help <command>`
-- Sections/topics shown by `rvn docs` come from the authoritative `docs/index.yaml` registry (including explicit topic paths)
+- Sections/topics shown by `rvn docs` come from the authoritative `.raven/docs/index.yaml` registry (including explicit topic paths)
 
 ---
 

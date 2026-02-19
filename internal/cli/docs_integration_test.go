@@ -9,7 +9,20 @@ import (
 )
 
 func TestIntegration_DocsListOpenSearch(t *testing.T) {
-	v := testutil.NewTestVault(t).Build()
+	v := testutil.NewTestVault(t).
+		WithFile(".raven/docs/index.yaml", `sections:
+  guide:
+    topics:
+      getting-started:
+        path: getting-started.md
+  reference:
+    topics:
+      query-language:
+        path: query-language.md
+`).
+		WithFile(".raven/docs/guide/getting-started.md", "# Getting Started\n\nWelcome.\n").
+		WithFile(".raven/docs/reference/query-language.md", "# Query Language\n\nquery predicate examples.\n").
+		Build()
 
 	list := v.RunCLI("docs")
 	list.MustSucceed(t)
@@ -56,7 +69,15 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 }
 
 func TestIntegration_DocsCommandRedirectToHelp(t *testing.T) {
-	v := testutil.NewTestVault(t).Build()
+	v := testutil.NewTestVault(t).
+		WithFile(".raven/docs/index.yaml", `sections:
+  guide:
+    topics:
+      getting-started:
+        path: getting-started.md
+`).
+		WithFile(".raven/docs/guide/getting-started.md", "# Getting Started\n").
+		Build()
 
 	res := v.RunCLI("docs", "query")
 	res.MustFail(t, "INVALID_INPUT")
