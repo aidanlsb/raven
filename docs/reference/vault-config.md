@@ -7,21 +7,19 @@ This page is lookup-oriented and is not required for the first-session note -> s
 ## Complete Example
 
 ```yaml
-# Where daily notes are stored
-daily_directory: daily
+# Directory organization
+directories:
+  daily: daily/         # Root for daily notes
+  object: object/       # Root for typed objects
+  page: page/           # Root for untyped pages
+  workflow: workflows/  # Root for workflow definition files
+  template: templates/  # Root for template files
 
 # Template for daily notes (file path)
 daily_template: templates/daily.md
 
 # Auto-reindex after CLI operations (default: true)
 auto_reindex: true
-
-# Directory organization (optional)
-directories:
-  object: object/        # Root for typed objects
-  page: page/            # Root for untyped pages
-  workflow: workflows/   # Root for workflow definition files
-  template: templates/   # Root for template files
 
 # Quick capture settings
 capture:
@@ -71,19 +69,22 @@ workflows:
 
 ## Configuration Options
 
-### `daily_directory`
+### `directories.daily`
 
-Directory where daily notes are stored.
+Root directory where daily notes are stored.
 
 | Type | Default |
 |------|---------|
-| string | `"daily"` |
+| string | `"daily/"` |
 
 ```yaml
-daily_directory: journal
+directories:
+  daily: journal/
 ```
 
-Daily notes are created as `<daily_directory>/YYYY-MM-DD.md`.
+Daily notes are created as `<directories.daily>/YYYY-MM-DD.md`.
+
+`daily_directory` is no longer supported. Use `directories.daily`.
 
 ---
 
@@ -137,6 +138,7 @@ Uses singular keys (`object`, `page`) to encourage singular directory names, whi
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `daily` | string | Root directory for daily notes |
 | `object` | string | Root directory for typed objects |
 | `page` | string | Root directory for untyped pages |
 | `workflow` | string | Root directory for workflow definition files |
@@ -144,6 +146,7 @@ Uses singular keys (`object`, `page`) to encourage singular directory names, whi
 
 ```yaml
 directories:
+  daily: daily/
   object: object/
   page: page/
   workflow: workflows/
@@ -385,8 +388,13 @@ When you run `rvn init`, a default `raven.yaml` is created:
 ```yaml
 # Raven Vault Configuration
 
-# Where daily notes are stored
-daily_directory: daily
+# Directory settings
+directories:
+  daily: daily/
+  object: object/
+  page: page/
+  workflow: workflows/
+  template: templates/
 
 # Auto-reindex after CLI operations (default: true)
 auto_reindex: true
@@ -408,10 +416,6 @@ queries:
   active-projects:
     query: "object:project has(trait:status .value==in_progress)"
     description: "Projects marked in progress"
-
-# Optional directories
-# directories:
-#   workflow: workflows/
 
 # Workflows registry
 workflows:
@@ -451,6 +455,7 @@ personal = "/path/to/personal-notes"
 Vault config (`raven.yaml`) is for per-vault behavior:
 
 ```yaml
-daily_directory: journal
+directories:
+  daily: journal/
 auto_reindex: true
 ```

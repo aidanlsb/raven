@@ -567,8 +567,8 @@ raven_template_remove(target="daily", delete_file=true)
 Daily notes use `daily_template` as a file reference:
 
 ```yaml
-daily_directory: daily
 directories:
+  daily: daily/
   template: templates/
 daily_template: templates/daily.md
 ```

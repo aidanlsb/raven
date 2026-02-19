@@ -101,7 +101,7 @@ Examples:
 			}
 
 			// Skip daily notes, templates, workflows
-			if strings.HasPrefix(relPath, vaultCfg.DailyDirectory+"/") ||
+			if strings.HasPrefix(relPath, vaultCfg.GetDailyDirectory()+"/") ||
 				strings.HasPrefix(relPath, "templates/") ||
 				strings.HasPrefix(relPath, "workflows/") {
 				return nil
@@ -262,7 +262,7 @@ func cleanEmptyDirs(vaultPath string, cfg *config.VaultConfig) error {
 		if dirs.Page != "" && strings.HasPrefix(relPath, strings.TrimSuffix(dirs.Page, "/")) {
 			return nil
 		}
-		if strings.HasPrefix(relPath, cfg.DailyDirectory) {
+		if strings.HasPrefix(relPath, cfg.GetDailyDirectory()) {
 			return nil
 		}
 

@@ -352,7 +352,7 @@ Examples:
 			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 		}
 		defer db.Close()
-		db.SetDailyDirectory(vaultCfg.DailyDirectory)
+		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
 		// Check staleness and optionally refresh
 		refresh, _ := cmd.Flags().GetBool("refresh")
@@ -386,7 +386,7 @@ Examples:
 
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithOptions(db, vaultPath, queryStr, start, sch, idsOnly, vaultCfg.DailyDirectory)
+			return runFullQueryWithOptions(db, vaultPath, queryStr, start, sch, idsOnly, vaultCfg.GetDailyDirectory())
 		}
 
 		if isSavedQuery {
@@ -394,7 +394,7 @@ Examples:
 		}
 
 		// Unknown query - provide helpful error
-		suggestion := buildUnknownQuerySuggestion(db, queryStr, vaultCfg.DailyDirectory, sch)
+		suggestion := buildUnknownQuerySuggestion(db, queryStr, vaultCfg.GetDailyDirectory(), sch)
 		return handleErrorMsg(ErrQueryInvalid,
 			fmt.Sprintf("unknown query: %s", queryStr),
 			suggestion)
@@ -428,7 +428,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 	// Execute the query
 	executor := query.NewExecutor(db.DB())
-	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory}); err == nil {
+	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory()}); err == nil {
 		executor.SetResolver(res)
 	}
 	executor.SetSchema(sch)

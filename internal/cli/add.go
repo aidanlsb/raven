@@ -234,8 +234,8 @@ func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
 	}
 
 	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
-		dailyDir = vaultCfg.DailyDirectory
+	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
+		dailyDir = vaultCfg.GetDailyDirectory()
 	}
 	if !strings.HasPrefix(baseID, dailyDir+"/") {
 		return false
@@ -390,7 +390,7 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 				dateStr = vault.FormatDateISO(t)
 			}
 			friendlyTitle := vault.FormatDateFriendly(t)
-			dailyDir := vaultCfg.DailyDirectory
+			dailyDir := vaultCfg.GetDailyDirectory()
 			if dailyDir == "" {
 				dailyDir = "daily"
 			}
@@ -593,8 +593,8 @@ func validateRefs(vaultPath string, refs []parser.Reference, vaultCfg *config.Va
 
 	// Determine daily directory from config
 	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
-		dailyDir = vaultCfg.DailyDirectory
+	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
+		dailyDir = vaultCfg.GetDailyDirectory()
 	}
 
 	// Open database and use its resolver (includes aliases and name_field values)
