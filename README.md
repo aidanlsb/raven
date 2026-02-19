@@ -14,7 +14,7 @@
 
 ## Example Usage
 
-Hermod (a PKM enthusiast) tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
+Hermod — Odin's messenger in Norse mythology, and our PKM enthusiast for this walkthrough — tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
 
 He uses Raven to keep it all straight. Types — `project`, `person`, `meeting` — each map to a folder of markdown files. Traits — `@todo`, `@decision` — are inline annotations that make content queryable. The rest is just markdown.
 
