@@ -14,7 +14,7 @@
 
 ## Example Usage
 
-Our protagonist is Hermod, Odin's messenger (and PKM enthusiast). Across nine realms, he tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
+Hermod (a PKM enthusiast) tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
 
 He uses Raven to keep it all straight. Types — `project`, `person`, `meeting` — each map to a folder of markdown files. Traits — `@todo`, `@decision` — are inline annotations that make content queryable. The rest is just markdown.
 
@@ -38,25 +38,25 @@ date: 2026-01-17
 
 # Saturday
 
-@todo Bring the terms to the dwarves before the new moon
-@todo Follow up with Skirnir on Svartálfaheim contacts
+@todo Bring the terms to Vanaheim before the new moon
+@todo Follow up with Skirnir on his contacts there
 
-Huginn and Muninn returned at dawn but said nothing. Odin keeps his own counsel.
+Still waiting to hear back from Odin.
 ```
 
 **Creating the project**
 
-A delegation to Svartálfaheim is forming — the dwarves have something Odin needs. Hermod opens a project to track it:
+A diplomatic mission to Vanaheim is taking shape. Hermod opens a project to track it:
 
 ```
-rvn new project dwarf-negotiation --field status=active
+rvn new project vanaheim-embassy --field status=active
 ```
 
-This creates `project/dwarf-negotiation.md` — a markdown file with YAML frontmatter holding the fields, with the body free for notes.
+This creates `project/vanaheim-embassy.md` — a markdown file with YAML frontmatter holding the fields, with the body free for notes.
 
 **Adding people**
 
-Two names will recur. Skírnir has dealt with the dwarves before; Forseti must approve any terms that touch on old grievances:
+Two names will recur. Skírnir has dealt with Vanaheim before; Forseti must approve any terms that touch on old grievances:
 
 ```
 rvn new person skirnir --field realm=asgard --field role=envoy
@@ -67,35 +67,35 @@ Now `[[person/skirnir]]` and `[[person/forseti]]` can be used as references anyw
 
 **Recording the meeting**
 
-After returning from Svartálfaheim, Hermod writes up the meeting:
+After the council, Hermod writes up the meeting:
 
 ```markdown
 ---
 type: meeting
 date: 2026-01-17
-project: [[project/dwarf-negotiation]]
+project: [[project/vanaheim-embassy]]
 ---
 
 # Council at Glaðsheim
 
-[[person/skirnir]] shared what he learned from Brokkr — the dwarves will forge what Odin asks, but they want payment in starlight.
+[[person/skirnir]] reports that Vanaheim is willing to negotiate, but wants concessions on the eastern trade routes.
 
-[[person/forseti]] warns this may reopen the dispute from Ivaldi's time.
+[[person/forseti]] warns this may reopen an older land dispute.
 
 @todo Bring the terms to Odin and await his decision
 @todo Confirm Forseti has reviewed the old grievances
 
-@decision No promises to the dwarves until Odin speaks.
+@decision No commitments until Odin speaks.
 ```
 
 The traits `@todo` and `@decision` make the content of Hermod's note queryable, and the references connect this meeting to the people and project involved.
 
 **Querying what's open**
 
-Days later, Hermod checks what remains unresolved from meetings linked to the dwarf negotiation project:
+Days later, Hermod checks what remains unresolved from meetings linked to the Vanaheim embassy:
 
 ```
-rvn query "trait:todo within(object:meeting .project==dwarf-negotiation)"
+rvn query "trait:todo within(object:meeting .project==vanaheim-embassy)"
 ```
 
 ```
@@ -116,12 +116,12 @@ rvn backlinks skirnir
 
 ```
 meeting/2026-01-17-council-gladsheim.md
-  [[person/skirnir]] shared what he learned from Brokkr
+  [[person/skirnir]] reports that Vanaheim is willing to negotiate
 
 meeting/2026-01-08-vanaheim-embassy.md
   [[person/skirnir]] negotiated the terms with Freyr's blessing
 
-project/dwarf-negotiation.md
+project/vanaheim-embassy.md
   Prior contact: [[person/skirnir]]
 ```
 
@@ -131,11 +131,11 @@ Everything Hermod has ever written about Skírnir, pulled up in one command.
 
 Odin summons him. Before the meeting, Hermod asks his agent:
 
-> "What should I report on the dwarf matter?"
+> "What should I report on the Vanaheim matter?"
 
 The agent calls Raven's MCP tools — querying open todos, recent meetings, and decisions linked to the project — and returns a synthesis:
 
-> Two open todos from the council meeting on Jan 17. The dwarves want payment in starlight — no commitment has been made yet (@decision). Forseti's review of old grievances is still outstanding. Bottom line: one blocker before Odin can decide.
+> Two open todos from the council meeting on Jan 17. Vanaheim wants concessions on the eastern trade routes — no commitment has been made yet (@decision). Forseti's review of old grievances is still outstanding. Bottom line: one blocker before Odin can decide.
 
 The agent doesn't need to search or guess — it queries structured data and reasons over what it finds.
 
@@ -206,7 +206,7 @@ hermod-vault/
 ├── daily/
 │   └── 2026-02-17.md
 ├── project/
-│   └── dwarf-negotiation.md
+│   └── vanaheim-embassy.md
 ├── person/
 │   ├── skirnir.md
 │   └── forseti.md
@@ -272,8 +272,8 @@ rvn schema add field meeting attendees --type ref[] --target person
 Traits are inline annotations that make content queryable. They can appear anywhere in the body of a file.
 
 ```markdown
-@todo Bring the terms to the dwarves before the new moon
-@decision No promises until Odin speaks
+@todo Bring the terms to Vanaheim before the new moon
+@decision No commitments until Odin speaks
 @priority(high) The Bifrost repairs cannot wait
 ```
 
@@ -290,13 +290,13 @@ References (refs) connect objects using `[[type/name]]` syntax. Use them in both
 ```markdown
 ---
 type: meeting
-project: [[project/dwarf-negotiation]]
+project: [[project/vanaheim-embassy]]
 attendees:
   - [[person/skirnir]]
   - [[person/forseti]]
 ---
 
-[[person/skirnir]] shared what he learned from Brokkr.
+[[person/skirnir]] reported back from his talks with Freyr.
 ```
 
 Every ref creates a two-way link. Use `rvn backlinks person/skirnir` to see everything that mentions Skírnir.
@@ -310,7 +310,7 @@ See [Core Concepts](docs/guide/core-concepts.md) for a deeper introduction, and 
 **New typed objects**
 
 ```bash
-rvn new project "Dwarf Negotiation" --field status=active
+rvn new project "Vanaheim Embassy" --field status=active
 rvn new person Skirnir --field realm=asgard --field role=envoy
 ```
 
@@ -330,7 +330,7 @@ Append to any file from the command line. Defaults to the daily note.
 
 ```bash
 rvn add "Heard rumors of unrest in Niflheim — worth investigating"
-rvn add "@todo Confirm Forseti reviewed the old grievances" --to project/dwarf-negotiation
+rvn add "@todo Confirm Forseti reviewed the old grievances" --to project/vanaheim-embassy
 ```
 
 **Editing files**
@@ -338,7 +338,7 @@ rvn add "@todo Confirm Forseti reviewed the old grievances" --to project/dwarf-n
 Files are plain markdown — edit them with any editor:
 
 ```bash
-rvn open project/dwarf-negotiation    # opens in $EDITOR
+rvn open project/vanaheim-embassy    # opens in $EDITOR
 ```
 
 ---
@@ -361,14 +361,14 @@ rvn query 'object:meeting refs([[person/skirnir]])'     # meetings mentioning Sk
 rvn query 'trait:todo'                                # all todos
 rvn query 'trait:todo .value==todo'                   # open todos only
 rvn query 'trait:todo within(object:meeting)'         # todos inside meetings
-rvn query 'trait:decision refs([[project/dwarf-negotiation]])'  # decisions on a project
+rvn query 'trait:decision refs([[project/vanaheim-embassy]])'  # decisions on a project
 ```
 
 **Full-text search**
 
 ```bash
-rvn search "starlight"                                # search all content
-rvn search "Brokkr" --type meeting                    # search within a type
+rvn search "trade routes"                             # search all content
+rvn search "Freyr" --type meeting                     # search within a type
 ```
 
 **Bulk operations on query results**
