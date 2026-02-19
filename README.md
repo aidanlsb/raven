@@ -12,7 +12,7 @@
 
 ---
 
-Raven adds three things to plain markdown notes:
+Raven adds three things to markdown notes:
 - A lightweight schema for defining types and fields
 - Syntax for annotating content with traits
 - Bidirectional linking between objects
@@ -21,6 +21,8 @@ And enables precise retrieval and powerful workflows with:
 - A full-featured CLI
 - An efficient query language
 - First-class agent support
+
+Everything stays local — plain text files you own and can read with any tool.
 
 ---
 
