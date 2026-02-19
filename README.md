@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="raven.svg" alt="Raven" width="180" />
+  <img src="raven-logo.svg" alt="Raven" width="180" />
 </p>
 
 <h1 align="center">Raven</h1>
@@ -185,7 +185,7 @@ Add to MCP configuration:
   "mcpServers": {
     "raven": {
       "command": "rvn",
-      "args": ["mcp", "--vault", "/path/to/your/vault"]
+      "args": ["serve", "--vault-path", "/path/to/your/vault"]
     }
   }
 }

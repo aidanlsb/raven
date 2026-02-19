@@ -2,13 +2,16 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/docsync"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -120,6 +123,19 @@ Creates:
 			fmt.Println("✓ Updated .gitignore (added Raven entries)")
 		default:
 			fmt.Println("• .gitignore already has Raven entries")
+		}
+
+		info := currentVersionInfo()
+		fetchResult, fetchErr := docsync.Fetch(docsync.FetchOptions{
+			VaultPath:  path,
+			CLIVersion: info.Version,
+			HTTPClient: &http.Client{Timeout: 60 * time.Second},
+		})
+		if fetchErr != nil {
+			fmt.Printf("! Docs fetch failed: %v\n", fetchErr)
+			fmt.Printf("  Run 'rvn --vault-path %s docs fetch' to retry.\n", path)
+		} else {
+			fmt.Printf("✓ Fetched docs into %s (%d files)\n", docsync.StoreRelPath, fetchResult.FileCount)
 		}
 
 		if createdConfig || createdSchema {

@@ -5,16 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	builtindocs "github.com/aidanlsb/raven/docs"
+	"github.com/aidanlsb/raven/internal/docsync"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -26,6 +28,8 @@ const (
 var (
 	docsSearchLimit   int
 	docsSearchSection string
+	docsFetchRef      string
+	docsFetchSource   string
 
 	docsFZFRun         = runDocsFZF
 	docsDisplayContext = ui.NewDisplayContext
@@ -84,9 +88,10 @@ type docsIndexTopicMeta struct {
 var docsCmd = &cobra.Command{
 	Use:   "docs [section] [topic]",
 	Short: "Browse long-form Markdown documentation",
-	Long: `Browse long-form documentation bundled into the rvn binary.
+	Long: `Browse long-form documentation stored in your vault's .raven/docs cache.
 
 Use this command for guides, references, and design notes.
+Run 'rvn docs fetch' to sync or refresh docs content.
 When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
 For command-level usage, use 'rvn help <command>'.
 
@@ -95,18 +100,24 @@ Examples:
   rvn docs list
   rvn docs <section>
   rvn docs <section> <topic>
+  rvn docs fetch
   rvn docs search "saved query"
   rvn docs search refs --section reference`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		sections, err := listBundledDocsSections()
+		source, err := loadVaultDocsSource(getVaultPath())
 		if err != nil {
-			return handleError(ErrInternal, err, "Rebuild rvn so bundled docs are available")
+			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+		}
+
+		sections, err := listDocsSectionsFS(source, ".")
+		if err != nil {
+			return handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
 		}
 
 		if len(args) == 0 {
 			if shouldUseDocsFZFNavigator() {
-				if err := runDocsFZFNavigator(sections); err != nil {
+				if err := runDocsFZFNavigator(source, sections); err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn docs list' for non-interactive output")
 				}
 				return nil
@@ -119,7 +130,7 @@ Examples:
 			return docsSectionNotFound(args, sections)
 		}
 
-		topics, err := listDocsTopicsFS(builtindocs.FS, ".", section.ID)
+		topics, err := listDocsTopicsFS(source, ".", section.ID)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -133,7 +144,7 @@ Examples:
 			return docsTopicNotFound(section.ID, args[1], topics)
 		}
 
-		return outputDocsTopicContent(topic)
+		return outputDocsTopicContent(source, topic)
 	},
 }
 
@@ -145,9 +156,14 @@ var docsListCmd = &cobra.Command{
 Use this to see exactly which 'rvn docs <section>' commands are available.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		sections, err := listBundledDocsSections()
+		source, err := loadVaultDocsSource(getVaultPath())
 		if err != nil {
-			return handleError(ErrInternal, err, "Rebuild rvn so bundled docs are available")
+			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+		}
+
+		sections, err := listDocsSectionsFS(source, ".")
+		if err != nil {
+			return handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
 		}
 		return outputDocsSections(sections)
 	},
@@ -164,6 +180,11 @@ Examples:
   rvn docs search workflow --limit 10`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		source, err := loadVaultDocsSource(getVaultPath())
+		if err != nil {
+			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+		}
+
 		query := strings.TrimSpace(strings.Join(args, " "))
 		if query == "" {
 			return handleErrorMsg(ErrMissingArgument, "specify a search query", "Usage: rvn docs search <query>")
@@ -172,7 +193,7 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, "--limit must be >= 1", "")
 		}
 
-		matches, err := searchDocsFS(builtindocs.FS, ".", query, docsSearchSection, docsSearchLimit)
+		matches, err := searchDocsFS(source, ".", query, docsSearchSection, docsSearchLimit)
 		if err != nil {
 			return handleError(ErrInvalidInput, err, "Run 'rvn docs' to list sections")
 		}
@@ -199,6 +220,54 @@ Examples:
 	},
 }
 
+var docsFetchCmd = &cobra.Command{
+	Use:   "fetch",
+	Short: "Fetch docs into .raven/docs for the current vault",
+	Long: `Download docs from Raven's source repository and install them under .raven/docs.
+
+This command replaces the local docs cache for the current vault.
+Use --ref to fetch a specific branch/tag/commit; default is "main".`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		info := currentVersionInfo()
+		result, err := docsync.Fetch(docsync.FetchOptions{
+			VaultPath:     getVaultPath(),
+			Ref:           strings.TrimSpace(docsFetchRef),
+			SourceBaseURL: strings.TrimSpace(docsFetchSource),
+			CLIVersion:    info.Version,
+			HTTPClient:    &http.Client{Timeout: 60 * time.Second},
+		})
+		if err != nil {
+			return handleError(ErrInternal, err, "Check your network connection and run 'rvn docs fetch' again")
+		}
+
+		relPath, relErr := filepath.Rel(getVaultPath(), result.DocsPath)
+		if relErr != nil {
+			relPath = docsync.StoreRelPath
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"path":         relPath,
+				"file_count":   result.FileCount,
+				"byte_count":   result.ByteCount,
+				"source":       result.Manifest.SourceBaseURL,
+				"ref":          result.Manifest.Ref,
+				"archive_url":  result.Manifest.ArchiveURL,
+				"fetched_at":   result.Manifest.FetchedAt,
+				"cli_version":  result.Manifest.CLIVersion,
+				"manifest_ver": result.Manifest.SchemaVersion,
+			}, nil)
+			return nil
+		}
+
+		fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", relPath, result.FileCount, result.ByteCount)
+		fmt.Printf("Source: %s (%s)\n", result.Manifest.SourceBaseURL, result.Manifest.Ref)
+		return nil
+	},
+}
+
 func outputDocsSections(sections []docsSectionView) error {
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
@@ -220,6 +289,7 @@ func outputDocsSections(sections []docsSectionView) error {
 	fmt.Println("  rvn docs <section>            List topics in a section")
 	fmt.Println("  rvn docs <section> <topic>    Open a docs topic")
 	fmt.Println("  rvn docs search <query>       Search docs")
+	fmt.Println("  rvn docs fetch                Sync docs into .raven/docs")
 	fmt.Println("  rvn help <command>            Command docs")
 	return nil
 }
@@ -249,6 +319,7 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 		fmt.Println("General docs commands:")
 		fmt.Printf("  %-48s %s\n", "rvn docs list", "List sections and section commands")
 		fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs search <query> --section %s", section.ID), "Search only this section")
+		fmt.Printf("  %-48s %s\n", "rvn docs fetch", "Sync docs into .raven/docs")
 		return nil
 	}
 	for _, t := range topics {
@@ -260,11 +331,12 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 	fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs %s", section.ID), "List topics in this section")
 	fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs search <query> --section %s", section.ID), "Search only this section")
 	fmt.Printf("  %-48s %s\n", "rvn docs list", "List sections and section commands")
+	fmt.Printf("  %-48s %s\n", "rvn docs fetch", "Sync docs into .raven/docs")
 	return nil
 }
 
-func outputDocsTopicContent(topic docsTopicRecord) error {
-	content, err := fs.ReadFile(builtindocs.FS, topic.FSPath)
+func outputDocsTopicContent(docsFS fs.FS, topic docsTopicRecord) error {
+	content, err := fs.ReadFile(docsFS, topic.FSPath)
 	if err != nil {
 		return handleError(ErrFileReadError, err, "")
 	}
@@ -300,13 +372,13 @@ func shouldUseDocsFZFNavigator() bool {
 	return canUseFZFInteractive()
 }
 
-func runDocsFZFNavigator(sections []docsSectionView) error {
+func runDocsFZFNavigator(docsFS fs.FS, sections []docsSectionView) error {
 	section, ok, err := pickDocsSectionWithFZF(sections)
 	if err != nil || !ok {
 		return err
 	}
 
-	topics, err := listDocsTopicsFS(builtindocs.FS, ".", section.ID)
+	topics, err := listDocsTopicsFS(docsFS, ".", section.ID)
 	if err != nil {
 		return err
 	}
@@ -316,7 +388,7 @@ func runDocsFZFNavigator(sections []docsSectionView) error {
 		return err
 	}
 
-	return outputDocsTopicContent(topic)
+	return outputDocsTopicContent(docsFS, topic)
 }
 
 func pickDocsSectionWithFZF(sections []docsSectionView) (docsSectionView, bool, error) {
@@ -436,8 +508,19 @@ func listDocsSections(docsRoot string) ([]docsSectionView, error) {
 	return listDocsSectionsFS(os.DirFS(docsRoot), ".")
 }
 
-func listBundledDocsSections() ([]docsSectionView, error) {
-	return listDocsSectionsFS(builtindocs.FS, ".")
+func loadVaultDocsSource(vaultPath string) (fs.FS, error) {
+	if strings.TrimSpace(vaultPath) == "" {
+		return nil, fmt.Errorf("no vault resolved for docs command")
+	}
+
+	docsFS, err := docsync.OpenFS(vaultPath)
+	if err != nil {
+		if errors.Is(err, docsync.ErrDocsNotFetched) {
+			return nil, fmt.Errorf("docs are not available for this vault")
+		}
+		return nil, err
+	}
+	return docsFS, nil
 }
 
 func listDocsSectionsFS(docsFS fs.FS, docsRoot string) ([]docsSectionView, error) {
@@ -986,8 +1069,11 @@ func findCommandByPathRuntime(root *cobra.Command, path string) (*cobra.Command,
 func init() {
 	docsSearchCmd.Flags().IntVarP(&docsSearchLimit, "limit", "n", 20, "Maximum number of matches")
 	docsSearchCmd.Flags().StringVarP(&docsSearchSection, "section", "s", "", "Filter search to a docs section")
+	docsFetchCmd.Flags().StringVar(&docsFetchRef, "ref", "", "Git ref for docs archive (branch, tag, or commit)")
+	docsFetchCmd.Flags().StringVar(&docsFetchSource, "source", "", "Override docs archive base URL")
 
 	docsCmd.AddCommand(docsListCmd)
 	docsCmd.AddCommand(docsSearchCmd)
+	docsCmd.AddCommand(docsFetchCmd)
 	rootCmd.AddCommand(docsCmd)
 }

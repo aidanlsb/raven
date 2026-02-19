@@ -32,12 +32,6 @@ Built for speed, with plain-text markdown files as the source of truth.
 Named for Odin's ravens Huginn (thought) and Muninn (memory), 
 who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Docs navigation and help-style commands do not require a vault context.
-		if isUnderCommand(cmd, "docs") {
-			applyUIThemeFromConfigBestEffort()
-			return nil
-		}
-
 		// Skip vault resolution for commands that don't need it
 		switch cmd.Name() {
 		case "init", "vaults", "completion", "help", "version":
@@ -118,32 +112,4 @@ func getVaultPath() string {
 // getConfig returns the loaded config.
 func getConfig() *config.Config {
 	return cfg
-}
-
-func isUnderCommand(cmd *cobra.Command, name string) bool {
-	for c := cmd; c != nil; c = c.Parent() {
-		if c.Name() == name {
-			return true
-		}
-	}
-	return false
-}
-
-func applyUIThemeFromConfigBestEffort() {
-	var (
-		localCfg *config.Config
-		err      error
-	)
-	if configPath != "" {
-		localCfg, err = config.LoadFrom(configPath)
-	} else {
-		localCfg, err = config.Load()
-	}
-	if err != nil || localCfg == nil {
-		ui.ConfigureTheme("")
-		ui.ConfigureMarkdownCodeTheme("")
-		return
-	}
-	ui.ConfigureTheme(localCfg.UI.Accent)
-	ui.ConfigureMarkdownCodeTheme(localCfg.UI.CodeTheme)
 }

@@ -266,9 +266,10 @@ Checks include:
 	"docs": {
 		Name:        "docs",
 		Description: "Browse long-form Markdown documentation",
-		LongDesc: `Browse long-form documentation bundled into the rvn binary.
+		LongDesc: `Browse long-form documentation stored in .raven/docs for the active vault.
 
 Use this command for guides, references, and design notes.
+Run 'rvn docs fetch' to sync or refresh local docs content.
 When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
 For command-level usage, use 'rvn help <command>'.`,
 		Args: []ArgMeta{
@@ -277,17 +278,40 @@ For command-level usage, use 'rvn help <command>'.`,
 		},
 		Examples: []string{
 			"rvn docs --json",
+			"rvn docs fetch --json",
 			"rvn docs list --json",
 			"rvn docs guide --json",
 			"rvn docs reference query-language --json",
 			"rvn docs search \"saved query\" --json",
 		},
 		UseCases: []string{
+			"Fetch docs into the current vault with `docs fetch`",
 			"List docs sections and topic counts",
 			"Interactively select docs via fzf (when available)",
 			"Browse docs topics by section",
 			"Open and read a specific docs page",
 			"Find long-form guidance outside command help",
+		},
+	},
+	"docs_fetch": {
+		Name:        "docs fetch",
+		Description: "Fetch docs into .raven/docs for the current vault",
+		LongDesc: `Download docs from Raven's source repository into .raven/docs.
+
+This replaces the local docs cache for the current vault.
+By default, docs are fetched from the "main" ref.`,
+		Flags: []FlagMeta{
+			{Name: "ref", Description: "Git ref to fetch (branch, tag, or commit)", Type: FlagTypeString, Default: "main"},
+			{Name: "source", Description: "Override docs archive base URL", Type: FlagTypeString, Default: "https://codeload.github.com/aidanlsb/raven/tar.gz"},
+		},
+		Examples: []string{
+			"rvn docs fetch --json",
+			"rvn docs fetch --ref v0.5.0 --json",
+		},
+		UseCases: []string{
+			"Sync docs for a vault after init",
+			"Refresh docs without reinstalling rvn",
+			"Pin docs to a specific ref for reproducibility",
 		},
 	},
 	"docs_list": {
