@@ -14,8 +14,9 @@ import (
 
 // VaultConfig represents vault-level configuration from raven.yaml.
 type VaultConfig struct {
-	// DailyDirectory is where daily notes are stored (default: "daily/")
-	DailyDirectory string `yaml:"daily_directory"`
+	// DailyDirectory is the resolved daily notes directory (default: "daily").
+	// It is derived from directories.daily after loading and is not serialized.
+	DailyDirectory string `yaml:"-"`
 
 	// DailyTemplate is a path to a template file (e.g., "templates/daily.md")
 	// for new daily notes.
@@ -70,6 +71,10 @@ func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
 		key := value.Content[i]
 		val := value.Content[i+1]
 
+		if key.Value == "daily_directory" {
+			return fmt.Errorf("daily_directory is no longer supported; use directories.daily instead")
+		}
+
 		// Backwards compatibility: migrate top-level workflow_directory into directories.workflow.
 		if key.Value == "workflow_directory" {
 			legacyDir := strings.TrimSpace(val.Value)
@@ -108,6 +113,7 @@ func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
 			}
 		}
 	}
+	vc.DailyDirectory = vc.GetDailyDirectory()
 	return nil
 }
 
@@ -132,6 +138,10 @@ func isWorkflowRunsConfigNode(node *yaml.Node) bool {
 // Uses singular keys (object, page) to encourage singular directory names,
 // which leads to more natural reference syntax like [[person/freya]] instead of [[people/freya]].
 type DirectoriesConfig struct {
+	// Daily is the root directory for daily notes (default: "daily/").
+	// Daily note files are created as <daily>/YYYY-MM-DD.md.
+	Daily string `yaml:"daily,omitempty"`
+
 	// Object is the root directory for typed objects (e.g., "object/").
 	// Type default_path values are relative to this.
 	// Object IDs strip this prefix, so "object/person/freya" becomes "person/freya".
@@ -191,6 +201,7 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	}
 
 	// Normalize paths: ensure trailing slash and no leading slash.
+	cfg.Daily = paths.NormalizeDirRoot(cfg.Daily)
 	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
 	cfg.Workflow = paths.NormalizeDirRoot(cfg.Workflow)
@@ -424,6 +435,7 @@ func intPtr(i int) *int {
 	return &i
 }
 
+const defaultDailyDirectory = "daily"
 const defaultWorkflowDirectory = "workflows/"
 const defaultTemplateDirectory = "templates/"
 
@@ -501,6 +513,31 @@ func (vc *VaultConfig) GetWorkflowDirectory() string {
 	return paths.NormalizeDirRoot(cleaned)
 }
 
+// GetDailyDirectory returns the configured daily directory with defaults applied.
+// The result is always normalized as a vault-relative directory without trailing slash.
+func (vc *VaultConfig) GetDailyDirectory() string {
+	dir := defaultDailyDirectory
+	if vc != nil && vc.Directories != nil && vc.Directories.Daily != "" {
+		dir = vc.Directories.Daily
+	} else if vc != nil && vc.DailyDirectory != "" {
+		// Fallback for programmatic configs that set DailyDirectory directly.
+		dir = vc.DailyDirectory
+	}
+
+	normalized := paths.NormalizeDirRoot(dir)
+	if normalized == "" {
+		return defaultDailyDirectory
+	}
+
+	cleaned := filepath.ToSlash(filepath.Clean(normalized))
+	cleaned = strings.TrimPrefix(cleaned, "./")
+	cleaned = strings.TrimPrefix(cleaned, "/")
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return defaultDailyDirectory
+	}
+	return strings.TrimSuffix(cleaned, "/")
+}
+
 // GetTemplateDirectory returns the configured template directory with defaults applied.
 // The result is always normalized as a vault-relative directory with trailing slash.
 func (vc *VaultConfig) GetTemplateDirectory() string {
@@ -546,7 +583,7 @@ type SavedQuery struct {
 // DefaultVaultConfig returns the default vault configuration.
 func DefaultVaultConfig() *VaultConfig {
 	return &VaultConfig{
-		DailyDirectory: "daily",
+		DailyDirectory: defaultDailyDirectory,
 	}
 }
 
@@ -568,11 +605,7 @@ func LoadVaultConfig(vaultPath string) (*VaultConfig, error) {
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse vault config %s: %w", configPath, err)
 	}
-
-	// Apply defaults for missing values
-	if config.DailyDirectory == "" {
-		config.DailyDirectory = "daily"
-	}
+	config.DailyDirectory = config.GetDailyDirectory()
 
 	return &config, nil
 }
@@ -590,8 +623,13 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 	defaultConfig := `# Raven Vault Configuration
 # These settings control vault-level behavior.
 
-# Where daily notes are stored
-daily_directory: daily
+# Directory settings
+directories:
+  daily: daily/
+  object: object/
+  page: page/
+  workflow: workflows/
+  template: templates/
 
 # Additional protected/system prefixes (additive).
 # Workflows and other automation features refuse to operate on protected paths.
@@ -639,13 +677,6 @@ queries:
     query: "object:project has(trait:status .value==in_progress)"
     description: "Projects marked in progress"
 
-# Optional directory settings
-# directories:
-#   object: object/
-#   page: page/
-#   workflow: workflows/
-#   template: templates/
-
 # Workflows registry - declarations are file references only
 # Workflow definitions live in directories.workflow (default: workflows/)
 workflows:
@@ -668,9 +699,11 @@ workflows:
 		return false, fmt.Errorf("failed to write vault config: %w", err)
 	}
 
-	workflowDir := filepath.Join(vaultPath, "workflows")
-	if err := os.MkdirAll(workflowDir, 0o755); err != nil {
-		return false, fmt.Errorf("failed to create default workflow directory: %w", err)
+	defaultDirectories := []string{"daily", "object", "page", "workflows", "templates"}
+	for _, dir := range defaultDirectories {
+		if err := os.MkdirAll(filepath.Join(vaultPath, dir), 0o755); err != nil {
+			return false, fmt.Errorf("failed to create default directory %q: %w", dir, err)
+		}
 	}
 
 	defaultOnboardWorkflow := `description: "Interactive vault setup and onboarding"
@@ -734,7 +767,7 @@ steps:
       - Build on defaults rather than replacing them unless they ask.
       - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
 `
-	onboardPath := filepath.Join(workflowDir, "onboard.yaml")
+	onboardPath := filepath.Join(vaultPath, "workflows", "onboard.yaml")
 	if err := atomicfile.WriteFile(onboardPath, []byte(defaultOnboardWorkflow), 0o644); err != nil {
 		return false, fmt.Errorf("failed to write default onboard workflow: %w", err)
 	}
@@ -760,12 +793,12 @@ func SaveVaultConfig(vaultPath string, cfg *VaultConfig) error {
 
 // DailyNotePath returns the full path for a daily note given a date string (YYYY-MM-DD).
 func (vc *VaultConfig) DailyNotePath(vaultPath, date string) string {
-	return filepath.Join(vaultPath, vc.DailyDirectory, date+".md")
+	return filepath.Join(vaultPath, vc.GetDailyDirectory(), date+".md")
 }
 
 // DailyNoteID returns the object ID for a daily note given a date string.
 func (vc *VaultConfig) DailyNoteID(date string) string {
-	return filepath.Join(vc.DailyDirectory, date)
+	return filepath.Join(vc.GetDailyDirectory(), date)
 }
 
 // FilePathToObjectID converts a file path (relative to vault) to an object ID.

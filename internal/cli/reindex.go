@@ -84,8 +84,8 @@ Examples:
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		db.SetDailyDirectory(vaultCfg.DailyDirectory)
-		dailyDir := vaultCfg.DailyDirectory
+		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+		dailyDir := vaultCfg.GetDailyDirectory()
 		if dailyDir == "" {
 			dailyDir = "daily"
 		}

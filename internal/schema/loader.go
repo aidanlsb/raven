@@ -155,7 +155,7 @@ version: 2  # Schema format version (do not change manually)
 # Built-in types (always available):
 #   - page: fallback for files without explicit type
 #   - section: auto-created for headings
-#   - date: daily notes (files named YYYY-MM-DD.md in daily_directory)
+#   - date: daily notes (files named YYYY-MM-DD.md under directories.daily)
 #
 # name_field: When set, 'rvn new <type> <title>' auto-populates this field
 # with the title argument. Makes object creation more intuitive.

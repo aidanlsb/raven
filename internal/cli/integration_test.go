@@ -1192,7 +1192,7 @@ func TestIntegration_BacklinksOutlinksDynamicDates(t *testing.T) {
 
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
-		WithRavenYAML("daily_directory: daily\n").
+		WithRavenYAML("directories:\n  daily: daily/\n").
 		WithFile("people/alice.md", `---
 type: person
 name: Alice

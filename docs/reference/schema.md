@@ -117,7 +117,7 @@ type: date
 - Created automatically by `rvn daily`
 - Has no defined fields (use traits for metadata)
 - Date references (`[[2026-01-10]]`) resolve to daily notes
-- Files are stored in `daily_directory` (from `raven.yaml`)
+- Files are stored under `directories.daily` (from `raven.yaml`)
 
 ---
 

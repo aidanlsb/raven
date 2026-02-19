@@ -89,19 +89,19 @@ For a first setup, configure daily notes, capture, and auto-reindex first. Other
 ### A practical starting point
 
 ```yaml
-daily_directory: daily
 auto_reindex: true
+
+directories:
+  daily: daily/
+  object: object/
+  page: page/
+  workflow: workflows/
+  template: templates/
 
 capture:
   destination: daily
   heading: "## Captured"
   timestamp: false
-
-directories:
-  object: object/
-  page: page/
-  workflow: workflows/
-  template: templates/
 ```
 
 ### Key `raven.yaml` sections
@@ -109,11 +109,12 @@ directories:
 #### Daily notes
 
 ```yaml
-daily_directory: daily
+directories:
+  daily: daily/
 daily_template: templates/daily.md
 ```
 
-- `daily_directory` sets where daily notes are stored.
+- `directories.daily` sets where daily notes are stored.
 - `daily_template` sets the format for newly created daily notes.
 
 #### Capture behavior
@@ -142,11 +143,14 @@ auto_reindex: true
 
 ```yaml
 directories:
+  daily: daily/
   object: object/
   page: page/
   workflow: workflows/
+  template: templates/
 ```
 
+- `daily`: root for daily notes
 - `object`: root for typed objects
 - `page`: root for untyped pages
 - `workflow`: root for workflow definition files

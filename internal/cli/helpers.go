@@ -41,7 +41,7 @@ func openDatabaseWithConfig(vaultPath string, vaultCfg *config.VaultConfig) (*in
 		return nil, err
 	}
 	if vaultCfg != nil {
-		db.SetDailyDirectory(vaultCfg.DailyDirectory)
+		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 	}
 	return db, nil
 }

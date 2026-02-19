@@ -49,7 +49,7 @@ func reindexFile(vaultPath, filePath string, vaultCfg *config.VaultConfig) error
 		return err
 	}
 	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.DailyDirectory)
+	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
 	if err := db.IndexDocumentWithMtime(doc, sch, mtime); err != nil {
 		return err

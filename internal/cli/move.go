@@ -158,7 +158,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
 	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.DailyDirectory)
+	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
 	// Create destination directory
 	fullDestDir := filepath.Join(vaultPath, destDir)
@@ -193,7 +193,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 			sourceID := vaultCfg.FilePathToObjectID(relSource)
 			destID := vaultCfg.FilePathToObjectID(destPath)
 			aliases, _ := db.AllAliases()
-			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory, ExtraIDs: []string{destID}})
+			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
 			aliasSlugToID := make(map[string]string, len(aliases))
 			for a, oid := range aliases {
 				aliasSlugToID[pages.SlugifyPath(a)] = oid
@@ -452,7 +452,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		db, err := index.Open(vaultPath)
 		if err == nil {
 			defer db.Close()
-			db.SetDailyDirectory(vaultCfg.DailyDirectory)
+			db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
 			// Get directory roots for expanded backlinks search
 			objectRoot := vaultCfg.GetObjectsRoot()
@@ -461,7 +461,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 			destID := vaultCfg.FilePathToObjectID(destPath)
 			aliases, _ := db.AllAliases()
-			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.DailyDirectory, ExtraIDs: []string{destID}})
+			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
 			aliasSlugToID := make(map[string]string, len(aliases))
 			for a, oid := range aliases {
 				aliasSlugToID[pages.SlugifyPath(a)] = oid
@@ -511,7 +511,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		})
 	} else {
 		defer db.Close()
-		db.SetDailyDirectory(vaultCfg.DailyDirectory)
+		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
 		// Remove old entry
 		if err := db.RemoveDocument(sourceID); err != nil {
