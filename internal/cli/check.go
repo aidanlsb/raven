@@ -384,7 +384,7 @@ var checkCmd = &cobra.Command{
 		if vaultCfg.HasDirectoriesConfig() {
 			validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 		}
-		validator.SetDailyDirectory(vaultCfg.DailyDirectory)
+		validator.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 
 		for _, doc := range allDocs {
 			issues := validator.ValidateDocument(doc)

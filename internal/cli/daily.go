@@ -48,8 +48,8 @@ Examples:
 		}
 
 		dateStr := vault.FormatDateISO(targetDate)
-		targetPath := filepath.Join(vaultCfg.DailyDirectory, dateStr)
-		dailyPath := filepath.Join(vaultPath, vaultCfg.DailyDirectory, dateStr+".md")
+		targetPath := filepath.Join(vaultCfg.GetDailyDirectory(), dateStr)
+		dailyPath := filepath.Join(vaultPath, vaultCfg.GetDailyDirectory(), dateStr+".md")
 
 		// Check if daily note already exists, create if needed
 		created := false
@@ -58,7 +58,7 @@ Examples:
 
 			result, err := pages.CreateDailyNoteWithTemplate(
 				vaultPath,
-				vaultCfg.DailyDirectory,
+				vaultCfg.GetDailyDirectory(),
 				dateStr,
 				friendlyDate,
 				vaultCfg.DailyTemplate,

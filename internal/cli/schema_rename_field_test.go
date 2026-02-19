@@ -19,7 +19,8 @@ types:
       email: { type: string }
 traits: {}
 `).
-		WithRavenYAML(`daily_directory: daily
+		WithRavenYAML(`directories:
+  daily: daily/
 queries:
   person-by-email:
     query: 'object:person .email=="alice@example.com"'
@@ -89,7 +90,8 @@ types:
       email: { type: string }
 traits: {}
 `).
-		WithRavenYAML(`daily_directory: daily
+		WithRavenYAML(`directories:
+  daily: daily/
 queries:
   person-by-email:
     query: 'object:person .email=="alice@example.com"'

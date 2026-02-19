@@ -87,8 +87,8 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 
 	// Get resolver with schema support for name_field resolution
 	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.DailyDirectory != "" {
-		dailyDir = vaultCfg.DailyDirectory
+	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
+		dailyDir = vaultCfg.GetDailyDirectory()
 	}
 
 	sch, _ := schema.Load(opts.VaultPath)
