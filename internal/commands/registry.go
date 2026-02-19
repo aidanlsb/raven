@@ -1343,6 +1343,68 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 			"Identify pages that could benefit from schema",
 		},
 	},
+	"vault": {
+		Name:        "vault",
+		Description: "Manage configured vaults and active selection",
+		LongDesc: `Manage configured vaults and active selection.
+
+The active vault is stored in state.toml.
+The default vault is stored in config.toml and used as fallback.`,
+		Examples: []string{
+			"rvn vault --json",
+			"rvn vault list --json",
+			"rvn vault current --json",
+			"rvn vault use work --json",
+			"rvn vault pin personal --json",
+			"rvn vault clear --json",
+		},
+		UseCases: []string{
+			"List configured vaults and inspect active/default markers",
+			"Switch active vault for subsequent CLI and MCP commands",
+			"Pin a default fallback vault in config.toml",
+		},
+	},
+	"vault_list": {
+		Name:        "vault list",
+		Description: "List configured vaults",
+		Examples: []string{
+			"rvn vault list --json",
+		},
+	},
+	"vault_current": {
+		Name:        "vault current",
+		Description: "Show the current resolved vault",
+		Examples: []string{
+			"rvn vault current --json",
+		},
+	},
+	"vault_use": {
+		Name:        "vault use",
+		Description: "Set the active vault in state.toml",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Configured vault name", Required: true},
+		},
+		Examples: []string{
+			"rvn vault use work --json",
+		},
+	},
+	"vault_pin": {
+		Name:        "vault pin",
+		Description: "Set default_vault in config.toml",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Configured vault name", Required: true},
+		},
+		Examples: []string{
+			"rvn vault pin personal --json",
+		},
+	},
+	"vault_clear": {
+		Name:        "vault clear",
+		Description: "Clear active vault from state.toml",
+		Examples: []string{
+			"rvn vault clear --json",
+		},
+	},
 	"open": {
 		Name:        "open",
 		Description: "Open a file in your editor",
