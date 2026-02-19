@@ -12,6 +12,18 @@
 
 ---
 
+Raven adds three things to plain markdown notes:
+- A lightweight schema for defining types and fields
+- Syntax for annotating content with traits
+- Bidirectional linking between objects
+
+And enables precise retrieval and powerful workflows with:
+- A full-featured CLI
+- An efficient query language
+- First-class agent support
+
+---
+
 ## Example Usage
 
 Hermod — Odin's messenger in Norse mythology, and our PKM enthusiast for this walkthrough — tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
