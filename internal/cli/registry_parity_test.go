@@ -58,7 +58,6 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 		"schema rename",
 		"schema update",
 		"serve",
-		"vaults",
 	}
 
 	paths := commandPaths(rootCmd)

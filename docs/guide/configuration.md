@@ -18,6 +18,7 @@ For complete syntax reference, use:
 | File | Scope | What it controls |
 |------|-------|------------------|
 | `~/.config/raven/config.toml` | your machine | which vault is default, how files open in your editor |
+| `~/.config/raven/state.toml` | your machine | active vault selection (`rvn vault use`) |
 | `raven.yaml` | one vault | operational behavior inside that vault |
 | `schema.yaml` | one vault | data model for objects, fields, and traits |
 
@@ -29,6 +30,7 @@ Rule of thumb:
 
 `config.toml` is your personal Raven environment. It is where you define:
 - `default_vault`
+- optional `state_file` override for runtime state location
 - editor settings (`editor`, `editor_mode`)
 - named vaults in `[vaults]`
 
@@ -36,6 +38,7 @@ Rule of thumb:
 
 ```toml
 default_vault = "work"
+state_file = "state.toml"
 editor = "code"
 editor_mode = "auto"
 
@@ -52,6 +55,9 @@ code_theme = "monokai"
 
 - `default_vault`  
   Vault name Raven uses when no explicit vault is provided.
+
+- `state_file`  
+  Optional path to `state.toml`. If relative, it resolves relative to `config.toml`'s directory.
 
 - `editor`  
   Editor command used by open/edit actions.
@@ -193,4 +199,3 @@ Use `reference/schema.md` for now; we can add a dedicated schema guide section n
 - `schema-intro.md` for guide-level schema setup
 - `reference/vault-config.md` for complete `raven.yaml` options
 - `reference/schema.md` for full schema rules
-

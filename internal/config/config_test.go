@@ -56,6 +56,20 @@ func TestConfigGetVaultPath(t *testing.T) {
 		}
 	})
 
+	t.Run("legacy vault supports default alias", func(t *testing.T) {
+		cfg := &Config{
+			Vault: "/legacy/vault/path",
+		}
+
+		path, err := cfg.GetVaultPath("default")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if path != "/legacy/vault/path" {
+			t.Errorf("expected '/legacy/vault/path', got %q", path)
+		}
+	})
+
 	t.Run("vault not found", func(t *testing.T) {
 		cfg := &Config{
 			Vaults: map[string]string{
@@ -199,6 +213,7 @@ func TestLoadFrom(t *testing.T) {
 	// Note: In TOML, keys after a [section] belong to that section.
 	// editor needs to come before [vaults] or after vault definitions.
 	content := `default_vault = "work"
+state_file = "state.toml"
 editor = "code"
 
 [vaults]
@@ -220,6 +235,9 @@ code_theme = "dracula"
 
 	if cfg.DefaultVault != "work" {
 		t.Errorf("expected default_vault 'work', got %q", cfg.DefaultVault)
+	}
+	if cfg.StateFile != "state.toml" {
+		t.Errorf("expected state_file 'state.toml', got %q", cfg.StateFile)
 	}
 	if cfg.Editor != "code" {
 		t.Errorf("expected editor 'code', got %q", cfg.Editor)

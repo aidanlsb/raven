@@ -14,6 +14,10 @@ type Config struct {
 	// DefaultVault is the name of the default vault (from Vaults map).
 	DefaultVault string `toml:"default_vault"`
 
+	// StateFile is an optional path to state.toml.
+	// If relative, it's resolved relative to config.toml's directory.
+	StateFile string `toml:"state_file"`
+
 	// Vault is the legacy single vault path (for backwards compatibility).
 	// Deprecated: Use DefaultVault + Vaults instead.
 	Vault string `toml:"vault"`
@@ -52,6 +56,11 @@ func (c *Config) GetVaultPath(name string) (string, error) {
 
 	// If still no name but legacy vault is set, use that
 	if name == "" && c.Vault != "" {
+		return c.Vault, nil
+	}
+
+	// Legacy compatibility: when only legacy vault is configured, allow "default" as the name.
+	if name == "default" && c.Vault != "" && len(c.Vaults) == 0 {
 		return c.Vault, nil
 	}
 
@@ -165,6 +174,9 @@ func CreateDefault() (string, error) {
 
 # Default vault name (must exist in [vaults] below)
 # default_vault = "personal"
+
+# Optional state file location (default: sibling state.toml next to config.toml)
+# state_file = "state.toml"
 
 # Named vaults
 # [vaults]

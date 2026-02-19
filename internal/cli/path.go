@@ -17,8 +17,16 @@ Useful for shell integration:
 Or add an alias to your ~/.zshrc:
   alias cdv='cd $(rvn path)'`,
 	Args: cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(getVaultPath())
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := getVaultPath()
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"path": path,
+			}, nil)
+			return nil
+		}
+		fmt.Println(path)
+		return nil
 	},
 }
 

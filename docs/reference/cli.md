@@ -13,13 +13,15 @@ These flags apply to all commands:
 | `--vault` | `-v` | Named vault from config |
 | `--vault-path` | | Explicit path to vault directory |
 | `--config` | | Path to config file |
+| `--state` | | Path to state file (overrides `state_file` in config) |
 | `--json` | | Output in JSON format (for agent/script use) |
 
 Vault resolution order:
 1. `--vault-path` (explicit path)
 2. `--vault` (named vault from config)
-3. `default_vault` in config
-4. Error if none specified
+3. `active_vault` in `state.toml`
+4. `default_vault` in config
+5. Error if none specified
 
 ---
 
@@ -823,13 +825,25 @@ Lists all markdown files that don't have an explicit `type:` in their frontmatte
 
 ---
 
-### `rvn vaults`
+### `rvn vault`
 
-List configured vaults.
+Manage configured vaults and active selection.
 
 ```bash
-rvn vaults
+rvn vault
+rvn vault list
+rvn vault current
+rvn vault use work
+rvn vault pin personal
+rvn vault clear
 ```
+
+Subcommands:
+- `list` — list configured vaults
+- `current` — show the currently resolved vault
+- `use <name>` — set `active_vault` in `state.toml`
+- `pin <name>` — set `default_vault` in `config.toml`
+- `clear` — clear `active_vault` from `state.toml`
 
 ---
 
