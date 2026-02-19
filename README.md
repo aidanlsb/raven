@@ -4,11 +4,19 @@
 
 <h1 align="center">Raven</h1>
 
+---
 
-<p align="center">
-  <strong>Plain-text notes built for agent collaboration.</strong><br>
-  <em>Early and experimental</em>
-</p>
+Raven adds three things to markdown notes:
+- A lightweight schema for defining types and fields
+- Syntax for annotating content with traits
+- Bidirectional linking between objects
+
+And enables precise retrieval and powerful workflows with:
+- A full-featured CLI
+- An efficient query language
+- First-class agent support
+
+Everything stays local — plain text files you own and can read with any tool.
 
 ---
 
