@@ -16,15 +16,15 @@ And enables precise retrieval and powerful workflows with:
 - An efficient query language
 - First-class agent support
 
-Everything stays local — plain text files you own and can read with any tool.
+Everything stays local — plain text files you own and can edit with any tool.
 
 ---
 
 ## Example Usage
 
-Hermod — Odin's messenger in Norse mythology, and our PKM enthusiast for this walkthrough — tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
+Hermod (Odin's messenger in Norse mythology and PKM enthusiast for this walkthrough) tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
 
-He uses Raven to keep it all straight. Types — `project`, `person`, `meeting` — each map to a folder of markdown files. Traits — `@todo`, `@decision` — are inline annotations that make content queryable. The rest is just markdown.
+He uses Raven to keep it all straight. Types `project`, `person`, and `meeting` each map to a folder of markdown files with yaml frontmatter for fields. Traits `@todo` and `@decision` are inline annotations that make content queryable. The rest is just markdown.
 
 ---
 
@@ -40,8 +40,7 @@ This creates and opens `daily/2026-01-17.md` — a running log for the day.
 
 ```markdown
 ---
-type: daily
-date: 2026-01-17
+type: date
 ---
 
 # Saturday
@@ -60,7 +59,7 @@ A diplomatic mission to Vanaheim is taking shape. Hermod opens a project to trac
 rvn new project vanaheim-embassy --field status=active
 ```
 
-This creates `project/vanaheim-embassy.md` — a markdown file with YAML frontmatter holding the fields, with the body free for notes.
+This creates `project/vanaheim-embassy.md` with `status: active` in the frontmatter and the rest free for notes.
 
 **Adding people**
 
@@ -71,7 +70,7 @@ rvn new person skirnir --field realm=asgard --field role=envoy
 rvn new person forseti --field realm=asgard --field role=arbiter
 ```
 
-Now `[[person/skirnir]]` and `[[person/forseti]]` can be used as references anywhere in Hermod's notes, which link back to their own markdown files.
+Now `[[person/skirnir]]` and `[[person/forseti]]` can be used as references anywhere in Hermod's notes, which link back to their own pages.
 
 **Recording the meeting**
 
@@ -86,7 +85,7 @@ project: [[project/vanaheim-embassy]]
 
 # Council at Glaðsheim
 
-[[person/skirnir]] reports that Vanaheim is willing to negotiate, but wants concessions on the eastern trade routes.
+[[person/skirnir]] reports that Vanaheim is willing to negotiate, but wants concessions
 
 [[person/forseti]] warns this may reopen an older land dispute.
 
@@ -193,7 +192,7 @@ Add to MCP configuration:
 
 Once connected, ask the agent:
 
-> "Help me set up my vault. I want to track projects, people I work with, and meetings."
+> "Help me set up my Raven vault"
 
 The agent will walk through schema creation, creating your first objects, and learning the query language — all through conversation.
 
