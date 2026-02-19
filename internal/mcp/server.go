@@ -4,6 +4,7 @@ package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 // Server is an MCP server that wraps Raven CLI commands.
 type Server struct {
 	vaultPath  string
+	baseArgs   []string
 	in         io.Reader
 	out        io.Writer
 	executable string // Path to the rvn executable
@@ -94,28 +96,56 @@ type ToolContent struct {
 	Text string `json:"text"`
 }
 
-// NewServer creates a new MCP server.
-func NewServer(vaultPath string) *Server {
+func resolveExecutablePath() string {
 	// Get the path to the current executable so we can call it for tool execution
 	executable, err := os.Executable()
 	if err != nil {
 		// Fall back to "rvn" and hope it's in PATH
 		executable = "rvn"
 	}
+	return executable
+}
+
+// NewServer creates a new MCP server.
+// If vaultPath is non-empty, it is pinned via --vault-path for all command execution.
+func NewServer(vaultPath string) *Server {
+	baseArgs := []string{}
+	if strings.TrimSpace(vaultPath) != "" {
+		baseArgs = append(baseArgs, "--vault-path", vaultPath)
+	}
 
 	return &Server{
 		vaultPath:  vaultPath,
+		baseArgs:   baseArgs,
 		in:         os.Stdin,
 		out:        os.Stdout,
-		executable: executable,
+		executable: resolveExecutablePath(),
+	}
+}
+
+// NewServerWithBaseArgs creates a new MCP server using a set of base CLI flags.
+// This is used by `rvn serve` for dynamic vault resolution with optional pass-through flags.
+func NewServerWithBaseArgs(baseArgs []string) *Server {
+	normalized := append([]string{}, baseArgs...)
+	return &Server{
+		baseArgs:   normalized,
+		in:         os.Stdin,
+		out:        os.Stdout,
+		executable: resolveExecutablePath(),
 	}
 }
 
 // NewServerWithExecutable creates a new MCP server with a custom executable path.
 // This is primarily used for testing with a built binary.
 func NewServerWithExecutable(vaultPath, executable string) *Server {
+	baseArgs := []string{}
+	if strings.TrimSpace(vaultPath) != "" {
+		baseArgs = append(baseArgs, "--vault-path", vaultPath)
+	}
+
 	return &Server{
 		vaultPath:  vaultPath,
+		baseArgs:   baseArgs,
 		in:         os.Stdin,
 		out:        os.Stdout,
 		executable: executable,
@@ -142,7 +172,11 @@ func (s *Server) Run() error {
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 
 	// Log startup to stderr (not stdout which is for protocol)
-	fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting for vault:", s.vaultPath)
+	if strings.TrimSpace(s.vaultPath) != "" {
+		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with pinned vault:", s.vaultPath)
+	} else {
+		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with dynamic vault resolution")
+	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -387,7 +421,12 @@ func (s *Server) handleResourcesRead(req *Request) {
 }
 
 func (s *Server) readSchemaFile() (string, error) {
-	schemaPath := paths.SchemaPath(s.vaultPath)
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return "", err
+	}
+
+	schemaPath := paths.SchemaPath(vaultPath)
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return "", err
@@ -408,8 +447,7 @@ func (s *Server) callTool(name string, args map[string]interface{}) (string, boo
 }
 
 func (s *Server) executeRvn(args []string) (string, bool) {
-	// Add vault path
-	args = append([]string{"--vault-path", s.vaultPath}, args...)
+	args = s.withBaseArgs(args)
 
 	// Use the executable path we determined at startup
 	cmd := exec.Command(s.executable, args...)
@@ -466,6 +504,41 @@ func (s *Server) executeRvn(args []string) (string, bool) {
 	}
 
 	return string(output), false
+}
+
+func (s *Server) withBaseArgs(args []string) []string {
+	out := make([]string, 0, len(s.baseArgs)+len(args))
+	out = append(out, s.baseArgs...)
+	out = append(out, args...)
+	return out
+}
+
+func (s *Server) resolveVaultPath() (string, error) {
+	if strings.TrimSpace(s.vaultPath) != "" {
+		return s.vaultPath, nil
+	}
+	return s.currentVaultPath()
+}
+
+func (s *Server) currentVaultPath() (string, error) {
+	args := s.withBaseArgs([]string{"path"})
+	cmd := exec.Command(s.executable, args...)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to resolve current vault: %w (%s)", err, strings.TrimSpace(stderr.String()))
+	}
+
+	resolved := strings.TrimSpace(stdout.String())
+	if resolved == "" {
+		return "", fmt.Errorf("failed to resolve current vault: empty path")
+	}
+
+	return resolved, nil
 }
 
 func (s *Server) sendResult(id interface{}, result interface{}) {

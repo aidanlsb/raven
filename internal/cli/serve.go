@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,8 +19,8 @@ This enables LLM agents to interact with your vault through a standardized proto
 The server communicates over stdin/stdout using JSON-RPC 2.0.
 
 Examples:
-  rvn serve                    # Run MCP server for default vault
-  rvn serve --vault personal   # Run MCP server for named vault
+  rvn serve                    # Run MCP server using normal CLI vault resolution
+  rvn serve --vault personal   # Force named vault for this server process
 
 For use with Claude Desktop, add to your config:
   {
@@ -31,12 +32,23 @@ For use with Claude Desktop, add to your config:
     }
   }`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		baseArgs := make([]string, 0, 8)
+		if strings.TrimSpace(configPath) != "" {
+			baseArgs = append(baseArgs, "--config", configPath)
+		}
+		if strings.TrimSpace(statePathFlag) != "" {
+			baseArgs = append(baseArgs, "--state", statePathFlag)
+		}
+		if strings.TrimSpace(vaultPathFlag) != "" {
+			baseArgs = append(baseArgs, "--vault-path", vaultPathFlag)
+		} else if strings.TrimSpace(vaultName) != "" {
+			baseArgs = append(baseArgs, "--vault", vaultName)
+		}
 
 		// Don't output anything to stdout except MCP protocol
 		// (but we can log to stderr if needed)
 
-		server := mcp.NewServer(vaultPath)
+		server := mcp.NewServerWithBaseArgs(baseArgs)
 		if err := server.Run(); err != nil {
 			return fmt.Errorf("MCP server error: %w", err)
 		}

@@ -425,14 +425,16 @@ workflows:
 
 Raven uses multiple configuration sources:
 
-1. **`~/.config/raven/config.toml`** — Global settings (default vault, editor)
-2. **`raven.yaml`** — Vault-specific settings (this file)
-3. **Command-line flags** — Override for single commands
+1. **`~/.config/raven/config.toml`** — Global settings (default vault, editor, optional `state_file`)
+2. **`~/.config/raven/state.toml`** — Mutable runtime state (for example `active_vault`)
+3. **`raven.yaml`** — Vault-specific settings (this file)
+4. **Command-line flags** — Override for single commands
 
 Global config (`config.toml`) is for cross-vault settings:
 
 ```toml
 default_vault = "work"
+state_file = "state.toml"
 editor = "code"
 editor_mode = "auto"
 
