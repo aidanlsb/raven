@@ -1650,6 +1650,95 @@ incremental retrieval of large workflow context.`,
 			"Manually enforce storage limits",
 		},
 	},
+	"skill_list": {
+		Name:        "skill list",
+		Description: "List Raven-provided skills",
+		LongDesc: `List bundled Raven skills.
+
+Use --target to include target-specific installed status and paths.`,
+		Flags: []FlagMeta{
+			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Examples: []string{"codex", "claude", "cursor"}},
+			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
+			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
+			{Name: "installed", Description: "Show installed skills only (requires --target)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn skill list --json",
+			"rvn skill list --target codex --json",
+			"rvn skill list --target cursor --scope project --installed --json",
+		},
+		UseCases: []string{
+			"Discover which Raven skills are available",
+			"Check installed skills for a specific runtime target",
+		},
+	},
+	"skill_install": {
+		Name:        "skill install",
+		Description: "Install a Raven skill for a target runtime",
+		LongDesc: `Install one bundled Raven skill for a target runtime.
+
+Preview is returned by default. Use --confirm to apply writes.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-schema"}},
+		},
+		Flags: []FlagMeta{
+			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
+			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
+			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
+			{Name: "force", Description: "Overwrite conflicting files", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn skill install raven-core --target codex --confirm --json",
+			"rvn skill install raven-schema --target claude --scope project --json",
+		},
+		UseCases: []string{
+			"Install Raven core skill guidance into an agent runtime",
+			"Preview skill installation plan before writing files",
+		},
+	},
+	"skill_remove": {
+		Name:        "skill remove",
+		Description: "Remove an installed Raven skill",
+		LongDesc: `Remove one installed Raven skill from a target runtime.
+
+Preview is returned by default. Use --confirm to apply removal.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-schema"}},
+		},
+		Flags: []FlagMeta{
+			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
+			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
+			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
+			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn skill remove raven-core --target codex --confirm --json",
+			"rvn skill remove raven-schema --target cursor --scope project --json",
+		},
+		UseCases: []string{
+			"Preview skill removal before deleting files",
+			"Uninstall a Raven skill from a runtime target",
+		},
+	},
+	"skill_doctor": {
+		Name:        "skill doctor",
+		Description: "Inspect skill installation health for target runtimes",
+		LongDesc:    `Inspect resolved install roots and installed Raven skills for one or all targets.`,
+		Flags: []FlagMeta{
+			{Name: "target", Description: "Target runtime: codex, claude, or cursor (omit to check all)", Type: FlagTypeString, Examples: []string{"codex", "claude", "cursor"}},
+			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
+			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn skill doctor --json",
+			"rvn skill doctor --target claude --scope project --json",
+		},
+		UseCases: []string{
+			"Verify skill install roots and installed skill presence",
+			"Debug target-specific skill path resolution",
+		},
+	},
 	"last": {
 		Name:        "last",
 		Description: "Show or select results from the last query",

@@ -492,7 +492,7 @@ Examples:
 			return handleError(ErrInternal, err, "")
 		}
 
-		if vaultCfg.Workflows == nil || len(vaultCfg.Workflows) == 0 {
+		if len(vaultCfg.Workflows) == 0 {
 			if isJSONOutput() {
 				outputSuccess(map[string]interface{}{
 					"valid":   true,

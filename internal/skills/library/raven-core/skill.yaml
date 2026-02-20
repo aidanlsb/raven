@@ -1,0 +1,26 @@
+id: raven-core
+title: Raven Core
+version: 1
+summary: Core Raven workflows for creating, querying, and editing content safely.
+entry: body.md
+references:
+  - references/command-map.md
+coverage:
+  commands:
+    - new
+    - upsert
+    - add
+    - read
+    - query
+    - search
+    - resolve
+    - set
+    - edit
+    - move
+    - delete
+execution:
+  preferred_transport: cli
+  cli_binary: rvn
+  cli_args_suffix:
+    - --json
+  mcp_fallback: false

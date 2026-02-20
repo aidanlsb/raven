@@ -6,7 +6,7 @@
 
 ---
 
-Raven adds three things to markdown notes:
+Raven adds a few features on top of markdown  
 - A lightweight schema for defining types and fields
 - Syntax for annotating content with traits
 - Bidirectional linking between objects

@@ -27,6 +27,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Run tests
+        shell: bash
         run: go test -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage

@@ -1,0 +1,30 @@
+id: raven-schema
+title: Raven Schema
+version: 1
+summary: Schema design and migration workflows for types, fields, and traits.
+entry: body.md
+references:
+  - references/migration-checklist.md
+coverage:
+  commands:
+    - schema
+    - schema add type
+    - schema add field
+    - schema add trait
+    - schema update type
+    - schema update field
+    - schema update trait
+    - schema rename type
+    - schema rename field
+    - schema remove type
+    - schema remove field
+    - schema remove trait
+    - schema validate
+    - check
+    - reindex
+execution:
+  preferred_transport: cli
+  cli_binary: rvn
+  cli_args_suffix:
+    - --json
+  mcp_fallback: false

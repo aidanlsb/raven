@@ -431,10 +431,6 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-func intPtr(i int) *int {
-	return &i
-}
-
 const defaultDailyDirectory = "daily"
 const defaultWorkflowDirectory = "workflows/"
 const defaultTemplateDirectory = "templates/"

@@ -97,15 +97,6 @@ func interpolateWithTypedInputs(s string, inputs map[string]interface{}, steps m
 	return out.String(), nil
 }
 
-func resolveExpr(expr string, inputs map[string]string, steps map[string]interface{}) (string, bool, error) {
-	typed := stringInputsToAny(inputs)
-	raw, ok, err := resolveExprRaw(expr, typed, steps)
-	if err != nil || !ok {
-		return "", ok, err
-	}
-	return formatForPrompt(raw), true, nil
-}
-
 func resolveExprTyped(expr string, inputs map[string]interface{}, steps map[string]interface{}) (string, bool, error) {
 	raw, ok, err := resolveExprRaw(expr, inputs, steps)
 	if err != nil || !ok {

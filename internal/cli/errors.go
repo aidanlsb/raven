@@ -66,6 +66,15 @@ const (
 	ErrWorkflowInterpolationError  = "WORKFLOW_INTERPOLATION_ERROR"
 	ErrWorkflowToolExecutionFailed = "WORKFLOW_TOOL_EXECUTION_FAILED"
 
+	// Skill errors
+	ErrSkillNotFound          = "SKILL_NOT_FOUND"
+	ErrSkillNotInstalled      = "SKILL_NOT_INSTALLED"
+	ErrSkillTargetUnsupported = "SKILL_TARGET_UNSUPPORTED"
+	ErrSkillInstallConflict   = "SKILL_INSTALL_CONFLICT"
+	ErrSkillRenderFailed      = "SKILL_RENDER_FAILED"
+	ErrSkillPathUnresolved    = "SKILL_PATH_UNRESOLVED"
+	ErrSkillReceiptInvalid    = "SKILL_RECEIPT_INVALID"
+
 	// General errors
 	ErrInternal       = "INTERNAL_ERROR"
 	ErrNotImplemented = "NOT_IMPLEMENTED"
