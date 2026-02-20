@@ -217,6 +217,39 @@ type: note
 	}
 }
 
+// TestIntegration_MoveDestinationWithRootPrefixAvoidsDoubleRoot verifies that
+// destinations already including the object root are not prefixed twice.
+func TestIntegration_MoveDestinationWithRootPrefixAvoidsDoubleRoot(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  doc:
+    default_path: doc/
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+  page: pages/
+`).
+		WithFile("objects/doc/test-note.md", `---
+type: doc
+---
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "doc/test-note", "objects/doc/test-note-moved")
+	result.MustSucceed(t)
+
+	v.AssertFileNotExists("objects/doc/test-note.md")
+	v.AssertFileExists("objects/doc/test-note-moved.md")
+	v.AssertFileNotExists("objects/objects/doc/test-note-moved.md")
+
+	if got := result.DataString("destination"); got != "doc/test-note-moved" {
+		t.Fatalf("expected destination object ID %q, got %q", "doc/test-note-moved", got)
+	}
+}
+
 func TestIntegration_NewWithExplicitPath(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
