@@ -458,6 +458,9 @@ directories:
 			{"person/freya", "object/person/freya.md"},
 			{"project/website", "object/project/website.md"},
 			{"my-note", "page/my-note.md"},
+			{"object/person/freya", "object/person/freya.md"},
+			{"page/my-note", "page/my-note.md"},
+			{"object/person/freya.md", "object/person/freya.md"},
 		}
 
 		for _, tc := range tests {
