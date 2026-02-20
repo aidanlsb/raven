@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aidanlsb/raven/internal/config"
 	"gopkg.in/yaml.v3"
+
+	"github.com/aidanlsb/raven/internal/config"
 )
 
 func TestLoad_InlineAndErrors(t *testing.T) {

@@ -136,16 +136,6 @@ func getConfig() *config.Config {
 	return cfg
 }
 
-// getConfigPath returns the resolved global config path.
-func getConfigPath() string {
-	return resolvedConfigPath
-}
-
-// getStatePath returns the resolved global state path.
-func getStatePath() string {
-	return resolvedStatePath
-}
-
 func loadGlobalConfigWithPath() (*config.Config, string, error) {
 	resolvedPath := config.ResolveConfigPath(configPath)
 
