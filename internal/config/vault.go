@@ -830,6 +830,19 @@ func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
 		return paths.ObjectIDToFilePath(ref, "", "", "")
 	}
 
+	ref = filepath.ToSlash(strings.TrimSpace(ref))
+	ref = strings.TrimPrefix(ref, "./")
+	ref = strings.TrimPrefix(ref, "/")
+	ref = strings.TrimSuffix(ref, ".md")
+
+	// If the reference is already rooted, keep it rooted exactly once.
+	if dirs.Object != "" && strings.HasPrefix(ref, dirs.Object) {
+		return ref + ".md"
+	}
+	if dirs.Page != "" && strings.HasPrefix(ref, dirs.Page) {
+		return ref + ".md"
+	}
+
 	// If the reference contains a slash, it's likely a typed object path
 	// e.g., "person/freya" -> "object/person/freya.md"
 	if strings.Contains(ref, "/") {
