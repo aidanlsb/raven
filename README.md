@@ -451,7 +451,7 @@ See the [workflows guide](docs/guide/workflows.md) and [workflows reference](doc
 
 ## Documentation
 
-Raven ships its documentation inside the binary. Browse it with `rvn docs`, or read it on GitHub:
+Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with `rvn docs` (sync with `rvn docs fetch`), or read them on GitHub:
 
 **Guides** (learning path):
 
