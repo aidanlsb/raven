@@ -1584,6 +1584,117 @@ rvn workflow runs prune [--status completed] [--older-than 14d] [--confirm]
 
 ---
 
+## Skill Commands
+
+### `rvn skill list`
+
+List bundled Raven skills.
+
+```bash
+rvn skill list [--target codex|claude|cursor] [--scope user|project] [--dest /path] [--installed]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--target` | Target runtime (`codex`, `claude`, or `cursor`) |
+| `--scope` | Install scope: `user` (default) or `project` |
+| `--dest` | Override install root path |
+| `--installed` | Show only installed skills (requires `--target`) |
+
+**Examples:**
+
+```bash
+rvn skill list
+rvn skill list --target codex
+rvn skill list --target cursor --scope project --installed
+```
+
+---
+
+### `rvn skill install`
+
+Install one bundled Raven skill for a target runtime.
+
+```bash
+rvn skill install <name> [--target codex|claude|cursor] [--scope user|project] [--dest /path] [--force] [--confirm]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Skill name (`raven-core` or `raven-schema`) |
+
+| Flag | Description |
+|------|-------------|
+| `--target` | Target runtime (`codex`, `claude`, or `cursor`) |
+| `--scope` | Install scope: `user` (default) or `project` |
+| `--dest` | Override install root path |
+| `--force` | Overwrite conflicting files |
+| `--confirm` | Apply changes (preview-only without this flag) |
+
+**Examples:**
+
+```bash
+rvn skill install raven-core --target codex
+rvn skill install raven-schema --target claude --scope project --confirm
+rvn skill install raven-core --target cursor --dest /tmp/skills --confirm
+```
+
+**Notes:**
+- Install previews by default.
+- If existing files differ, install returns a conflict error unless `--force` is used.
+
+---
+
+### `rvn skill remove`
+
+Remove an installed Raven skill from a target runtime.
+
+```bash
+rvn skill remove <name> [--target codex|claude|cursor] [--scope user|project] [--dest /path] [--confirm]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Skill name (`raven-core` or `raven-schema`) |
+
+| Flag | Description |
+|------|-------------|
+| `--target` | Target runtime (`codex`, `claude`, or `cursor`) |
+| `--scope` | Install scope: `user` (default) or `project` |
+| `--dest` | Override install root path |
+| `--confirm` | Apply changes (preview-only without this flag) |
+
+**Example:**
+
+```bash
+rvn skill remove raven-core --target codex --confirm
+```
+
+---
+
+### `rvn skill doctor`
+
+Inspect skill installation roots and installed skills.
+
+```bash
+rvn skill doctor [--target codex|claude|cursor] [--scope user|project] [--dest /path]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--target` | Target runtime (`codex`, `claude`, or `cursor`). Omit to check all targets |
+| `--scope` | Install scope: `user` (default) or `project` |
+| `--dest` | Override install root path (requires `--target`) |
+
+**Examples:**
+
+```bash
+rvn skill doctor
+rvn skill doctor --target claude --scope project
+```
+
+---
+
 ## Server Commands
 
 ### `rvn serve`

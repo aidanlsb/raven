@@ -196,6 +196,15 @@ rvn schema commands --json
 | `raven_workflow_runs_step` | Fetch output for a specific workflow run step |
 | `raven_workflow_runs_prune` | Prune persisted workflow runs |
 
+### Skills
+
+| Tool | Description |
+|------|-------------|
+| `raven_skill_list` | List bundled Raven skills |
+| `raven_skill_install` | Install a bundled skill for a target runtime |
+| `raven_skill_remove` | Remove an installed skill from a target runtime |
+| `raven_skill_doctor` | Inspect skill install roots and installed skills |
+
 ---
 
 ## Tool Parameter Conventions
@@ -521,6 +530,26 @@ raven_workflow_runs_step(run_id="wrf_abcd1234", step_id="todos")
 Notes:
 - `raven_workflow_add` is file-only; inline definitions are not supported
 - Workflow files must be under `directories.workflow` (default `workflows/`)
+
+### Skills
+
+```python
+# List available bundled skills
+raven_skill_list()
+
+# Preview install (default)
+raven_skill_install(name="raven-core", target="codex")
+
+# Apply install
+raven_skill_install(name="raven-core", target="codex", confirm=true)
+
+# Inspect target install health
+raven_skill_doctor(target="codex")
+```
+
+Notes:
+- Skill install/remove are preview-first; pass `confirm=true` to apply.
+- Supported targets are `codex`, `claude`, and `cursor`.
 
 ---
 

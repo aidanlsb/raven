@@ -1,0 +1,3 @@
+name: raven-schema
+description: Raven schema modeling and migration workflows.
+default_prompt: Use Raven schema commands with --json and validate before and after schema changes.

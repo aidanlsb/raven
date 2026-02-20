@@ -1,0 +1,3 @@
+name: raven-core
+description: Core Raven workflows for creating, querying, and editing content.
+default_prompt: Use Raven CLI commands with --json for safe and deterministic vault operations.
