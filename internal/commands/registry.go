@@ -1724,7 +1724,7 @@ Preview is returned by default. Use --confirm to apply removal.`,
 	"skill_doctor": {
 		Name:        "skill doctor",
 		Description: "Inspect skill installation health for target runtimes",
-		LongDesc: `Inspect resolved install roots and installed Raven skills for one or all targets.`,
+		LongDesc:    `Inspect resolved install roots and installed Raven skills for one or all targets.`,
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor (omit to check all)", Type: FlagTypeString, Examples: []string{"codex", "claude", "cursor"}},
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
