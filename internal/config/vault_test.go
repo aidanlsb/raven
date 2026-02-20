@@ -555,8 +555,6 @@ func TestDefaultVaultConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
 
 	validator := query.NewValidator(sch)
 	for name, savedQuery := range cfg.Queries {
-		name := name
-		savedQuery := savedQuery
 		t.Run(name, func(t *testing.T) {
 			if savedQuery == nil {
 				t.Fatalf("saved query %q is nil", name)

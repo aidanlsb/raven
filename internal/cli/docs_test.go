@@ -62,7 +62,6 @@ func TestNormalizeDocsPathSlug(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := normalizeDocsPathSlug(tc.in)
@@ -490,7 +489,6 @@ func TestDocsFZFSelectionID(t *testing.T) {
 		{name: "trim whitespace", in: "  guide\tUser Guides  ", want: "guide"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := docsFZFSelectionID(tc.in)

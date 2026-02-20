@@ -188,10 +188,6 @@ func coerceFieldValueForDefinition(value schema.FieldValue, fieldDef *schema.Fie
 	return value
 }
 
-func collectUnknownFieldWarnings(objectType string, sch *schema.Schema, updates map[string]string, allowedUnknown map[string]bool) []string {
-	return collectUnknownFieldWarningsByNames(objectType, sch, fieldNamesFromStringUpdates(updates), allowedUnknown)
-}
-
 func collectUnknownFieldWarningsByNames(objectType string, sch *schema.Schema, fieldNames []string, allowedUnknown map[string]bool) []string {
 	if sch == nil {
 		return nil
@@ -216,14 +212,6 @@ func collectUnknownFieldWarningsByNames(objectType string, sch *schema.Schema, f
 	}
 
 	return warnings
-}
-
-func fieldNamesFromStringUpdates(updates map[string]string) []string {
-	names := make([]string, 0, len(updates))
-	for name := range updates {
-		names = append(names, name)
-	}
-	return names
 }
 
 func fieldNamesFromValueUpdates(updates map[string]schema.FieldValue) []string {
@@ -264,35 +252,6 @@ func warningMessagesToWarnings(messages []string) []Warning {
 		})
 	}
 	return warnings
-}
-
-func formatFieldValueForDisplay(value schema.FieldValue) string {
-	if value.IsNull() {
-		return "null"
-	}
-	if ref, ok := value.AsRef(); ok {
-		return "[[" + ref + "]]"
-	}
-	if arr, ok := value.AsArray(); ok {
-		parts := make([]string, 0, len(arr))
-		for _, item := range arr {
-			parts = append(parts, formatFieldValueForDisplay(item))
-		}
-		return "[" + strings.Join(parts, ", ") + "]"
-	}
-	if s, ok := value.AsString(); ok {
-		return s
-	}
-	if n, ok := value.AsNumber(); ok {
-		if n == float64(int64(n)) {
-			return strconv.FormatInt(int64(n), 10)
-		}
-		return strconv.FormatFloat(n, 'f', -1, 64)
-	}
-	if b, ok := value.AsBool(); ok {
-		return strconv.FormatBool(b)
-	}
-	return fmt.Sprintf("%v", value.Raw())
 }
 
 func serializeFieldValueLiteral(value schema.FieldValue) string {
@@ -336,14 +295,6 @@ func serializeFieldValueLiteral(value schema.FieldValue) string {
 		return fmt.Sprintf("%v", value.Raw())
 	}
 	return string(b)
-}
-
-func fieldValuesToLiteralUpdates(values map[string]schema.FieldValue) map[string]string {
-	literals := make(map[string]string, len(values))
-	for key, value := range values {
-		literals[key] = serializeFieldValueLiteral(value)
-	}
-	return literals
 }
 
 func parseFieldValuesJSON(raw string) (map[string]schema.FieldValue, error) {

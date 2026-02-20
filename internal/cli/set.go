@@ -461,15 +461,6 @@ func resolveDateKeywordsForUpdates(updates map[string]string, fieldDefs map[stri
 	return resolved
 }
 
-// updateFrontmatter updates the frontmatter in the content with new field values.
-func updateFrontmatter(content string, fm *parser.Frontmatter, updates map[string]string) (string, error) {
-	typedUpdates := make(map[string]schema.FieldValue, len(updates))
-	for key, value := range updates {
-		typedUpdates[key] = parseFieldValueToSchema(value)
-	}
-	return updateFrontmatterWithFieldValues(content, fm, typedUpdates)
-}
-
 func updateFrontmatterWithFieldValues(content string, fm *parser.Frontmatter, updates map[string]schema.FieldValue) (string, error) {
 	lines := strings.Split(content, "\n")
 

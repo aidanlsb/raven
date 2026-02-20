@@ -38,11 +38,11 @@ who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip vault resolution for commands that don't need it
 		switch cmd.Name() {
-		case "init", "vault", "completion", "help", "version", "serve":
+		case "init", "vault", "completion", "help", "version", "serve", "skill":
 			return nil
 		}
 		// Also skip for completion/vault subcommands.
-		if cmd.Parent() != nil && (cmd.Parent().Name() == "completion" || cmd.Parent().Name() == "vault") {
+		if cmd.Parent() != nil && (cmd.Parent().Name() == "completion" || cmd.Parent().Name() == "vault" || cmd.Parent().Name() == "skill") {
 			return nil
 		}
 
@@ -134,16 +134,6 @@ func getVaultPath() string {
 // getConfig returns the loaded config.
 func getConfig() *config.Config {
 	return cfg
-}
-
-// getConfigPath returns the resolved global config path.
-func getConfigPath() string {
-	return resolvedConfigPath
-}
-
-// getStatePath returns the resolved global state path.
-func getStatePath() string {
-	return resolvedStatePath
 }
 
 func loadGlobalConfigWithPath() (*config.Config, string, error) {

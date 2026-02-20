@@ -36,8 +36,6 @@ var (
 	docsMarkdownRender = ui.RenderMarkdown
 )
 
-type docsFZFRunFunc func(lines []string, prompt, header string) (selectionLine string, selected bool, err error)
-
 type docsSectionView struct {
 	ID         string `json:"id"`
 	Title      string `json:"title"`
@@ -837,10 +835,6 @@ func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool)
 		}
 	}
 	return docsTopicRecord{}, false
-}
-
-func searchDocs(docsRoot, query, sectionFilter string, limit int) ([]docsSearchMatchView, error) {
-	return searchDocsFS(os.DirFS(docsRoot), ".", query, sectionFilter, limit)
 }
 
 func searchDocsFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([]docsSearchMatchView, error) {
