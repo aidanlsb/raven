@@ -22,10 +22,10 @@ rvn query 'object:project .status==active' --apply 'set reviewed=true' --confirm
 
 ```bash
 # Preview marking todo -> done
-rvn query 'trait:status .value==todo' --apply 'update value=done'
+rvn query 'trait:status .value==todo' --apply 'update done'
 
 # Apply
-rvn query 'trait:status .value==todo' --apply 'update value=done' --confirm
+rvn query 'trait:status .value==todo' --apply 'update done' --confirm
 ```
 
 ### Pipe IDs between commands
@@ -132,4 +132,3 @@ rvn check --json
 - `reference/cli.md` for exact flags and arguments
 - `reference/query-language.md` for complex query composition
 - `reference/bulk-operations.md` for operation semantics and safety details
-

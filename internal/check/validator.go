@@ -3,10 +3,8 @@ package check
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -457,153 +455,72 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 	}
 
 	// Validate value based on trait type
-	if traitDef.IsBoolean() {
-		// Boolean traits can be used bare (@done) which defaults to true,
-		// or with explicit value (@done(true) or @done(false))
-		if trait.HasValue() {
-			valueStr := trait.ValueString()
-			if valueStr != "true" && valueStr != "false" {
-				issues = append(issues, Issue{
-					Level:    LevelError,
-					Type:     IssueInvalidTraitValue,
-					FilePath: filePath,
-					Line:     trait.Line,
-					Message:  fmt.Sprintf("Invalid value '%s' for boolean trait '@%s' (expected true or false)", valueStr, trait.TraitType),
-					Value:    valueStr,
-					FixHint:  fmt.Sprintf("Use @%s, @%s(true), or @%s(false)", trait.TraitType, trait.TraitType, trait.TraitType),
-				})
-			}
+	if !traitDef.IsBoolean() && !trait.HasValue() && traitDef.Default == nil {
+		issues = append(issues, Issue{
+			Level:    LevelWarning,
+			Type:     IssueInvalidTraitValue,
+			FilePath: filePath,
+			Line:     trait.Line,
+			Message:  fmt.Sprintf("Trait '@%s' expects a value", trait.TraitType),
+			Value:    trait.TraitType,
+			FixHint:  fmt.Sprintf("Add a value: @%s(<value>)", trait.TraitType),
+		})
+		return issues
+	}
+
+	if !trait.HasValue() {
+		// Bare boolean trait usage is valid.
+		return issues
+	}
+
+	if err := schema.ValidateTraitValue(traitDef, *trait.Value); err != nil {
+		valueStr := trait.ValueString()
+		if valueStr == "" {
+			valueStr = fmt.Sprintf("%v", trait.Value.Raw())
 		}
-		// No value is fine - defaults to true
-	} else {
-		// Non-boolean traits should have a value
-		if !trait.HasValue() {
-			if traitDef.Default == nil {
-				issues = append(issues, Issue{
-					Level:    LevelWarning,
-					Type:     IssueInvalidTraitValue,
-					FilePath: filePath,
-					Line:     trait.Line,
-					Message:  fmt.Sprintf("Trait '@%s' expects a value", trait.TraitType),
-					Value:    trait.TraitType,
-					FixHint:  fmt.Sprintf("Add a value: @%s(<value>)", trait.TraitType),
-				})
-			}
-		} else {
-			valueStr := trait.ValueString()
 
-			// Validate date format for date traits
-			if traitDef.Type == schema.FieldTypeDate {
-				if !dates.IsValidDate(valueStr) {
-					issues = append(issues, Issue{
-						Level:    LevelError,
-						Type:     IssueInvalidDateFormat,
-						FilePath: filePath,
-						Line:     trait.Line,
-						Message:  fmt.Sprintf("Invalid date format '%s' for trait '@%s' (expected YYYY-MM-DD)", valueStr, trait.TraitType),
-						Value:    valueStr,
-						FixHint:  "Use date format YYYY-MM-DD (e.g., 2025-02-01)",
-					})
-				}
-			}
-
-			// Validate datetime format for datetime traits
-			if traitDef.Type == schema.FieldTypeDatetime {
-				if !dates.IsValidDatetime(valueStr) {
-					issues = append(issues, Issue{
-						Level:    LevelError,
-						Type:     IssueInvalidDateFormat,
-						FilePath: filePath,
-						Line:     trait.Line,
-						Message:  fmt.Sprintf("Invalid datetime format '%s' for trait '@%s'", valueStr, trait.TraitType),
-						Value:    valueStr,
-						FixHint:  "Use datetime format YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS",
-					})
-				}
-			}
-
-			// Validate enum value
-			if traitDef.Type == schema.FieldTypeEnum {
-				if len(traitDef.Values) == 0 {
-					issues = append(issues, Issue{
-						Level:    LevelError,
-						Type:     IssueInvalidEnumValue,
-						FilePath: filePath,
-						Line:     trait.Line,
-						Message:  fmt.Sprintf("Trait '@%s' is enum but has no allowed values", trait.TraitType),
-						Value:    trait.TraitType,
-						FixHint:  fmt.Sprintf("Define allowed values for trait '@%s' in schema", trait.TraitType),
-					})
-				}
-				validValue := false
-				for _, allowed := range traitDef.Values {
-					if allowed == valueStr {
-						validValue = true
-						break
-					}
-				}
-				if !validValue {
-					issues = append(issues, Issue{
-						Level:    LevelError,
-						Type:     IssueInvalidEnumValue,
-						FilePath: filePath,
-						Line:     trait.Line,
-						Message:  fmt.Sprintf("Invalid value '%s' for trait '@%s' (allowed: %v)", valueStr, trait.TraitType, traitDef.Values),
-						Value:    valueStr,
-						FixHint:  fmt.Sprintf("Change to one of: %v", traitDef.Values),
-					})
-				}
-			}
-
-			// Validate numeric traits
-			if traitDef.Type == schema.FieldTypeNumber {
-				if _, ok := parseTraitNumber(trait.Value); !ok {
-					issues = append(issues, Issue{
-						Level:    LevelError,
-						Type:     IssueInvalidTraitValue,
-						FilePath: filePath,
-						Line:     trait.Line,
-						Message:  fmt.Sprintf("Invalid number value '%s' for trait '@%s'", valueStr, trait.TraitType),
-						Value:    valueStr,
-						FixHint:  "Use a numeric value (e.g., @score(5) or @score(3.5))",
-					})
-				}
-			}
-
-			// Validate ref traits (allow bare strings or [[ref]])
-			if traitDef.Type == schema.FieldTypeRef {
-				if valueStr == "" {
-					issues = append(issues, Issue{
-						Level:    LevelError,
-						Type:     IssueInvalidTraitValue,
-						FilePath: filePath,
-						Line:     trait.Line,
-						Message:  fmt.Sprintf("Trait '@%s' expects a reference value", trait.TraitType),
-						Value:    trait.TraitType,
-						FixHint:  fmt.Sprintf("Use @%s([[target]]) or @%s(target)", trait.TraitType, trait.TraitType),
-					})
-				}
-			}
+		issueType := IssueInvalidTraitValue
+		fixHint := "Use a value that matches the trait schema"
+		switch normalizedTraitFieldType(traitDef) {
+		case schema.FieldTypeDate:
+			issueType = IssueInvalidDateFormat
+			fixHint = "Use date format YYYY-MM-DD (e.g., 2025-02-01)"
+		case schema.FieldTypeDatetime:
+			issueType = IssueInvalidDateFormat
+			fixHint = "Use datetime format YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS"
+		case schema.FieldTypeEnum:
+			issueType = IssueInvalidEnumValue
+			fixHint = fmt.Sprintf("Change to one of: %v", traitDef.Values)
+		case schema.FieldTypeBool:
+			fixHint = fmt.Sprintf("Use @%s, @%s(true), or @%s(false)", trait.TraitType, trait.TraitType, trait.TraitType)
+		case schema.FieldTypeNumber:
+			fixHint = "Use a numeric value (e.g., @score(5) or @score(3.5))"
+		case schema.FieldTypeRef:
+			fixHint = fmt.Sprintf("Use @%s([[target]]) or @%s(target)", trait.TraitType, trait.TraitType)
 		}
+
+		issues = append(issues, Issue{
+			Level:    LevelError,
+			Type:     issueType,
+			FilePath: filePath,
+			Line:     trait.Line,
+			Message:  fmt.Sprintf("Invalid value '%s' for trait '@%s': %v", valueStr, trait.TraitType, err),
+			Value:    valueStr,
+			FixHint:  fixHint,
+		})
 	}
 
 	return issues
 }
 
-func parseTraitNumber(value *schema.FieldValue) (float64, bool) {
-	if value == nil || value.IsNull() {
-		return 0, false
+func normalizedTraitFieldType(def *schema.TraitDefinition) schema.FieldType {
+	if def == nil {
+		return ""
 	}
-	if n, ok := value.AsNumber(); ok {
-		return n, true
+	if def.IsBoolean() {
+		return schema.FieldTypeBool
 	}
-	if s, ok := value.AsString(); ok {
-		n, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-		if err == nil {
-			return n, true
-		}
-	}
-	return 0, false
+	return def.Type
 }
 
 func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue {

@@ -26,4 +26,4 @@ What to do:
   - Many mutation tools require `confirm=true` to apply (otherwise you will only see a preview)
 - Use tool discovery to verify the exact tool name and parameters:
   - `raven_schema(subcommand="commands")` (CLI registry view)
-  - `raven_schema(subcommand="types")` / `raven_schema(subcommand="type <name>")` (required fields)
+  - `raven_schema(subcommand="types")` / `raven_schema(subcommand="type", name="<name>")` (required fields)

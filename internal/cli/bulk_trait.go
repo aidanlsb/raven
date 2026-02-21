@@ -12,11 +12,15 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
 // getTraitDefault returns the default value for a trait from the schema.
 func getTraitDefault(sch *schema.Schema, traitType string) string {
+	if sch == nil {
+		return ""
+	}
 	if traitDef, ok := sch.Traits[traitType]; ok {
 		if def, ok := traitDef.Default.(string); ok {
 			return def
@@ -65,27 +69,70 @@ type TraitBulkSummary struct {
 	Errors   int               `json:"errors"`
 }
 
-// applyUpdateTraitFromQuery applies update operation to trait query results.
-func applyUpdateTraitFromQuery(vaultPath string, traits []model.Trait, args []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
-	// Parse value=X argument
-	var newValue string
-	for _, arg := range args {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			return handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("invalid field format: %s", arg),
-				"Use format: value=<new_value>")
-		}
-		if parts[0] != "value" {
-			return handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("unknown field for trait: %s", parts[0]),
-				"For trait queries, only 'value' can be updated. Example: --apply \"update value=done\"")
-		}
-		newValue = parts[1]
+func parseTraitUpdateValueArgs(args []string, usageHint string) (string, error) {
+	value := strings.TrimSpace(strings.Join(args, " "))
+	if value == "" {
+		return "", handleErrorMsg(ErrMissingArgument, "no value specified", usageHint)
+	}
+	return value, nil
+}
+
+func ensureTraitSchema(vaultPath string, sch *schema.Schema) (*schema.Schema, error) {
+	if sch != nil {
+		return sch, nil
+	}
+	loaded, err := schema.Load(vaultPath)
+	if err != nil {
+		return nil, handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
+	}
+	return loaded, nil
+}
+
+func resolvedAndValidatedTraitValue(rawValue string, traitType string, sch *schema.Schema) (string, error) {
+	if sch == nil {
+		return rawValue, nil
 	}
 
-	if newValue == "" {
-		return handleErrorMsg(ErrMissingArgument, "no value specified", "Usage: --apply \"update value=<new_value>\"")
+	traitDef, ok := sch.Traits[traitType]
+	if !ok || traitDef == nil {
+		return rawValue, nil
+	}
+
+	resolved := resolveDateKeywordForTraitValue(rawValue, traitDef)
+	parsed := parser.ParseTraitValue(resolved)
+	if err := schema.ValidateTraitValue(traitDef, parsed); err != nil {
+		return "", handleErrorMsg(
+			ErrValidationFailed,
+			fmt.Sprintf("invalid value for trait '@%s': %v", traitType, err),
+			fmt.Sprintf("Use a value compatible with trait '@%s' in schema.yaml", traitType),
+		)
+	}
+
+	return resolved, nil
+}
+
+func precomputeTraitUpdateValues(traits []model.Trait, newValue string, sch *schema.Schema) (map[string]string, error) {
+	resolved := make(map[string]string, len(traits))
+	for _, t := range traits {
+		val, err := resolvedAndValidatedTraitValue(newValue, t.TraitType, sch)
+		if err != nil {
+			return nil, err
+		}
+		resolved[t.ID] = val
+	}
+	return resolved, nil
+}
+
+// applyUpdateTraitFromQuery applies update operation to trait query results.
+func applyUpdateTraitFromQuery(vaultPath string, traits []model.Trait, args []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+	newValue, err := parseTraitUpdateValueArgs(args, "Usage: --apply \"update <new_value>\"")
+	if err != nil {
+		return err
+	}
+
+	sch, err = ensureTraitSchema(vaultPath, sch)
+	if err != nil {
+		return err
 	}
 
 	if !confirm {
@@ -105,12 +152,13 @@ func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue str
 	var items []TraitBulkPreviewItem
 	var skipped []TraitBulkResult
 
+	resolvedValues, err := precomputeTraitUpdateValues(traits, newValue, sch)
+	if err != nil {
+		return err
+	}
+
 	for _, t := range traits {
-		var traitDef *schema.TraitDefinition
-		if sch != nil {
-			traitDef = sch.Traits[t.TraitType]
-		}
-		resolvedNewValue := resolveDateKeywordForTraitValue(newValue, traitDef)
+		resolvedNewValue := resolvedValues[t.ID]
 
 		oldValue := ""
 		if t.Value != nil {
@@ -207,6 +255,11 @@ func printTraitBulkPreview(preview *TraitBulkPreview) {
 
 // applyUpdateTraitBulk applies update operations to traits.
 func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue string, sch *schema.Schema, vaultCfg *config.VaultConfig, extraSkipped []TraitBulkResult) error {
+	resolvedValues, err := precomputeTraitUpdateValues(traits, newValue, sch)
+	if err != nil {
+		return err
+	}
+
 	// Group traits by file for efficient file I/O
 	traitsByFile := make(map[string][]model.Trait)
 	for _, t := range traits {
@@ -249,11 +302,7 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 		fileModified := false
 
 		for _, t := range fileTraits {
-			var traitDef *schema.TraitDefinition
-			if sch != nil {
-				traitDef = sch.Traits[t.TraitType]
-			}
-			resolvedNewValue := resolveDateKeywordForTraitValue(newValue, traitDef)
+			resolvedNewValue := resolvedValues[t.ID]
 
 			// Lines are 1-indexed
 			lineIdx := t.Line - 1
@@ -312,7 +361,7 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 				Line:     t.Line,
 				Status:   "modified",
 				OldValue: oldValue,
-				NewValue: newValue,
+				NewValue: resolvedNewValue,
 			})
 			modified++
 		}
@@ -421,10 +470,10 @@ func ReadTraitIDsFromStdin() (ids []string, err error) {
 
 // applyUpdateTraitsByID updates traits identified by IDs, with preview/confirm behavior.
 func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string, confirm bool, prompt bool, vaultCfg *config.VaultConfig) error {
-	// Load schema for defaults (optional)
+	// Load schema for validation/date keyword resolution.
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
-		sch = nil
+		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 
 	db, err := openDatabaseWithConfig(vaultPath, vaultCfg)

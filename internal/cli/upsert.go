@@ -47,7 +47,7 @@ var upsertCmd = &cobra.Command{
 
 		s, err := schema.Load(vaultPath)
 		if err != nil {
-			return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 		}
 
 		typeDef, typeExists := s.Types[typeName]
@@ -133,7 +133,11 @@ var upsertCmd = &cobra.Command{
 				map[string]bool{"type": true},
 			)
 			if err != nil {
+				var unknownErr *unknownFieldMutationError
 				var validationErr *fieldValidationError
+				if errors.As(err, &unknownErr) {
+					return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
+				}
 				if errors.As(err, &validationErr) {
 					return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
 				}
@@ -178,7 +182,11 @@ var upsertCmd = &cobra.Command{
 					map[string]bool{"type": true, "alias": true},
 				)
 				if err != nil {
+					var unknownErr *unknownFieldMutationError
 					var validationErr *fieldValidationError
+					if errors.As(err, &unknownErr) {
+						return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
+					}
 					if errors.As(err, &validationErr) {
 						return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
 					}
@@ -249,7 +257,11 @@ var upsertCmd = &cobra.Command{
 					map[string]bool{"type": true, "alias": true},
 				)
 				if err != nil {
+					var unknownErr *unknownFieldMutationError
 					var validationErr *fieldValidationError
+					if errors.As(err, &unknownErr) {
+						return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
+					}
 					if errors.As(err, &validationErr) {
 						return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
 					}

@@ -94,10 +94,12 @@ type importTypeMapping struct {
 
 // importResult tracks the outcome for one item.
 type importResult struct {
-	ID     string `json:"id"`
-	Action string `json:"action"` // "created", "updated", "skipped", "error"
-	File   string `json:"file,omitempty"`
-	Reason string `json:"reason,omitempty"`
+	ID      string                 `json:"id"`
+	Action  string                 `json:"action"` // "created", "updated", "skipped", "error"
+	File    string                 `json:"file,omitempty"`
+	Reason  string                 `json:"reason,omitempty"`
+	Code    string                 `json:"code,omitempty"`
+	Details map[string]interface{} `json:"details,omitempty"`
 }
 
 func runImport(cmd *cobra.Command, args []string) error {
@@ -106,7 +108,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	// Load schema
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 
 	// Load vault config
@@ -439,16 +441,7 @@ func importCreateObject(creator objectCreationContext, targetPath, resolvedTarge
 		map[string]bool{"type": true, "alias": true},
 	)
 	if err != nil {
-		var validationErr *fieldValidationError
-		reason := err.Error()
-		if errors.As(err, &validationErr) {
-			reason = validationErr.Error()
-		}
-		return importResult{
-			ID:     resolvedTargetPath,
-			Action: "error",
-			Reason: reason,
-		}, warnings
+		return importMutationErrorResult(resolvedTargetPath, err, ""), warnings
 	}
 	warnings = append(warnings, warningMessagesToWarnings(warningMessages)...)
 
@@ -500,16 +493,7 @@ func importCreateObject(creator objectCreationContext, targetPath, resolvedTarge
 			map[string]bool{"type": true, "alias": true},
 		)
 		if err != nil {
-			var validationErr *fieldValidationError
-			reason := err.Error()
-			if errors.As(err, &validationErr) {
-				reason = validationErr.Error()
-			}
-			return importResult{
-				ID:     resolvedTargetPath,
-				Action: "error",
-				Reason: reason,
-			}, warnings
+			return importMutationErrorResult(resolvedTargetPath, err, ""), warnings
 		}
 		createdContent = updatedContent
 	}
@@ -587,16 +571,7 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 		map[string]bool{"type": true, "alias": true},
 	)
 	if err != nil {
-		var validationErr *fieldValidationError
-		reason := fmt.Sprintf("update error: %v", err)
-		if errors.As(err, &validationErr) {
-			reason = validationErr.Error()
-		}
-		return importResult{
-			ID:     targetPath,
-			Action: "error",
-			Reason: reason,
-		}, warnings
+		return importMutationErrorResult(targetPath, err, "update error"), warnings
 	}
 	warnings = append(warnings, warningMessagesToWarnings(warningMessages)...)
 
@@ -632,6 +607,39 @@ func fieldsToSchemaValues(fields map[string]interface{}) map[string]schema.Field
 		values[key] = parser.FieldValueFromYAML(value)
 	}
 	return values
+}
+
+func importMutationErrorResult(id string, err error, fallbackPrefix string) importResult {
+	var unknownErr *unknownFieldMutationError
+	if errors.As(err, &unknownErr) {
+		return importResult{
+			ID:      id,
+			Action:  "error",
+			Reason:  unknownErr.Error(),
+			Code:    ErrUnknownField,
+			Details: unknownErr.Details(),
+		}
+	}
+
+	var validationErr *fieldValidationError
+	if errors.As(err, &validationErr) {
+		return importResult{
+			ID:     id,
+			Action: "error",
+			Reason: validationErr.Error(),
+			Code:   ErrValidationFailed,
+		}
+	}
+
+	reason := err.Error()
+	if strings.TrimSpace(fallbackPrefix) != "" {
+		reason = fmt.Sprintf("%s: %v", fallbackPrefix, err)
+	}
+	return importResult{
+		ID:     id,
+		Action: "error",
+		Reason: reason,
+	}
 }
 
 // fieldsToStringMap converts a map[string]interface{} to map[string]string for frontmatter use.
@@ -722,7 +730,11 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 		case "skipped":
 			fmt.Printf("  %s %s: %s\n", ui.Warning("skip"), r.ID, r.Reason)
 		case "error":
-			fmt.Printf("  %s %s: %s\n", ui.Warning("error"), r.ID, r.Reason)
+			if r.Code != "" {
+				fmt.Printf("  %s %s [%s]: %s\n", ui.Warning("error"), r.ID, r.Code, r.Reason)
+			} else {
+				fmt.Printf("  %s %s: %s\n", ui.Warning("error"), r.ID, r.Reason)
+			}
 		}
 	}
 
