@@ -3,7 +3,9 @@
 package cli_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -279,12 +281,37 @@ func TestIntegration_SchemaValidationErrors(t *testing.T) {
 	// Create the file manually without a required field and verify check finds the issue
 	v.RunCLI("new", "person", "TestPerson").MustSucceed(t)
 
-	// Verify that trying to set an invalid enum value fails
+	// Unknown fields should fail fast.
 	result := v.RunCLI("set", "people/testperson", "status=invalid_value")
-	// This should succeed but with a warning about unknown field
-	// because status is not a valid field for person type
-	result.MustSucceed(t)
-	result.AssertHasWarning(t, "UNKNOWN_FIELD")
+	result.MustFail(t, "UNKNOWN_FIELD")
+	if result.Error == nil || result.Error.Details == nil {
+		t.Fatalf("expected unknown field details in error, got: %#v", result.Error)
+	}
+	unknownFieldsRaw, ok := result.Error.Details["unknown_fields"].([]interface{})
+	if !ok || len(unknownFieldsRaw) == 0 {
+		t.Fatalf("expected unknown_fields in details, got: %#v", result.Error.Details)
+	}
+	if unknownFieldsRaw[0] != "status" {
+		t.Fatalf("expected unknown field 'status', got: %#v", unknownFieldsRaw)
+	}
+	result.MustFailWithMessage(t, "schema type person")
+}
+
+func TestIntegration_SetBulkFailsOnSchemaLoadError(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Schema Broken").MustSucceed(t)
+
+	schemaPath := filepath.Join(v.Path, "schema.yaml")
+	if err := os.WriteFile(schemaPath, []byte("version: ["), 0o644); err != nil {
+		t.Fatalf("failed to corrupt schema for test: %v", err)
+	}
+
+	result := v.RunCLIWithStdin("people/schema-broken\n", "set", "--stdin", "email=broken@example.com", "--confirm")
+	result.MustFail(t, "SCHEMA_INVALID")
+	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
 }
 
 func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {

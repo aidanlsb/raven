@@ -1181,7 +1181,7 @@ Targets:
 
 The object ID can be a full path (e.g., "people/freya") or a short reference
 that uniquely identifies an object. Field values are validated against the
-schema if the object has a known type.
+schema if the object has a known type. Unknown fields are rejected.
 
 Use this to update existing objects' metadata without manually editing files.
 

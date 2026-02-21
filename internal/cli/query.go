@@ -557,6 +557,15 @@ func applySetFromQuery(vaultPath string, ids []string, args []string, warnings [
 		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: --apply set field=value...")
 	}
 
+	// set requires schema-aware validation.
+	if sch == nil {
+		loadedSchema, err := schema.Load(vaultPath)
+		if err != nil {
+			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
+		}
+		sch = loadedSchema
+	}
+
 	if !confirm {
 		if err := previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg); err != nil {
 			return err
