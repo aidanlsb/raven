@@ -380,6 +380,42 @@ rvn move drafts/person.md people/freya.md --update-refs
 
 ---
 
+### `rvn reclassify`
+
+Change an object's type, updating frontmatter and optionally moving the file.
+
+```bash
+rvn reclassify <object> <new-type> [flags]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `object` | Object reference (short name, path, or ID) |
+| `new-type` | Target type name |
+
+| Flag | Description |
+|------|-------------|
+| `--field` | Supply field values (repeatable): `--field key=value` |
+| `--no-move` | Skip moving file to new type's default_path |
+| `--update-refs` | Update references when file moves (default: true) |
+| `--force` | Skip confirmation prompts (dropped fields, etc.) |
+
+**Examples:**
+
+```bash
+rvn reclassify inbox/note book --json
+rvn reclassify people/freya company --field industry=tech --json
+rvn reclassify pages/draft project --no-move --json
+```
+
+**Notes:**
+- Required fields on the new type are auto-filled from defaults or `--field` flags
+- Fields not defined on the new type are dropped (requires confirmation unless `--force`)
+- File is auto-moved to new type's `default_path` unless `--no-move`
+- Cannot reclassify to built-in types (page, section, date)
+
+---
+
 ## Query Commands
 
 ### `rvn query`
