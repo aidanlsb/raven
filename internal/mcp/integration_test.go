@@ -379,6 +379,15 @@ steps:
 	}
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: done")
 
+	// Update trait value uses a plain string positional value.
+	updateResult := server.callTool("raven_update", map[string]interface{}{
+		"trait_id": "tasks/missing.md:trait:0",
+		"value":    "done",
+	})
+	if updateResult.IsError {
+		t.Fatalf("update with plain string value failed: %s", updateResult.Text)
+	}
+
 	// JSON-typed workflow input provided as string (underscore key variant).
 	runResult := server.callTool("raven_workflow_run", map[string]interface{}{
 		"name":       "string-compat",

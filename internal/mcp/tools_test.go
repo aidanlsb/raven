@@ -274,6 +274,15 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantArgs: []string{"people/freya", "status=active", "--json"},
 		},
 		{
+			toolName: "raven_update",
+			args: map[string]interface{}{
+				"trait_id": "daily/2026-01-25.md:trait:0",
+				"value":    "done",
+			},
+			wantCmd:  "update",
+			wantArgs: []string{"daily/2026-01-25.md:trait:0", "done", "--json"},
+		},
+		{
 			toolName: "raven_schema_add_type",
 			args:     map[string]interface{}{"name": "event", "default-path": "events/"},
 			wantCmd:  "schema",

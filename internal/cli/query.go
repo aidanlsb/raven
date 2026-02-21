@@ -531,11 +531,11 @@ func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string
 	case "delete", "add", "move", "set":
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("'%s' is not supported for trait queries", applyCmd),
-			"For trait queries, use: --apply \"update value=<new_value>\"")
+			"For trait queries, use: --apply \"update <new_value>\"")
 	default:
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("unknown apply command: %s", applyCmd),
-			"For trait queries, use: --apply \"update value=<new_value>\"")
+			"For trait queries, use: --apply \"update <new_value>\"")
 	}
 }
 

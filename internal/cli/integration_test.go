@@ -434,7 +434,7 @@ type: page
 	v.RunCLI("reindex").MustSucceed(t)
 
 	// Preview bulk update on low priority traits (should not apply)
-	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "update value=high")
+	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "update high")
 	result.MustSucceed(t)
 
 	// Files should still have low priority since we didn't confirm
@@ -442,7 +442,7 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 
 	// Now confirm the bulk operation
-	result = v.RunCLI("query", "trait:priority .value==low", "--apply", "update value=high", "--confirm")
+	result = v.RunCLI("query", "trait:priority .value==low", "--apply", "update high", "--confirm")
 	result.MustSucceed(t)
 
 	// Files should now have high priority
@@ -471,15 +471,53 @@ type: page
 	v.RunCLI("reindex").MustSucceed(t)
 
 	// Single update by trait ID
-	result := v.RunCLI("update", "tasks/task1.md:trait:0", "value=high")
+	result := v.RunCLI("update", "tasks/task1.md:trait:0", "high")
 	result.MustSucceed(t)
 	v.AssertFileContains("tasks/task1.md", "@priority(high) First task")
 	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 
 	// Bulk update by stdin
-	result = v.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "value=done", "--confirm")
+	result = v.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "done", "--confirm")
 	result.MustSucceed(t)
 	v.AssertFileContains("tasks/task1.md", "@priority(done) Second task")
+}
+
+func TestIntegration_TraitUpdateRejectsInvalidEnumValue(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("update", "tasks/task1.md:trait:0", "critical")
+	result.MustFailWithMessage(t, "invalid value for trait '@priority'")
+	v.AssertFileContains("tasks/task1.md", "@priority(low) First task")
+}
+
+func TestIntegration_TraitQueryApplyRejectsInvalidEnumValue(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "update critical", "--confirm")
+	result.MustFailWithMessage(t, "invalid value for trait '@priority'")
+	v.AssertFileContains("tasks/task1.md", "@priority(low) First task")
 }
 
 // TestIntegration_TraitBulkUpdateObjectCommandsRejected tests that object commands are rejected for trait queries.
