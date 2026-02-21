@@ -697,6 +697,149 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 	v.AssertFileNotContains("schema.yaml", "description: Primary contact email")
 }
 
+// TestMCPIntegration_SchemaRenameTypeWithDefaultPathRename verifies MCP JSON
+// preview/apply behavior for type rename with optional default_path directory
+// migration.
+func TestMCPIntegration_SchemaRenameTypeWithDefaultPathRename(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  event:
+    default_path: events/
+    fields:
+      title: { type: string }
+  project:
+    default_path: projects/
+    fields:
+      kickoff:
+        type: ref
+        target: event
+traits: {}
+`).
+		WithFile("events/kickoff.md", `---
+type: event
+title: Kickoff
+---
+# Kickoff
+`).
+		WithFile("events/planning.md", `---
+type: event
+title: Planning
+---
+# Planning
+`).
+		WithFile("projects/roadmap.md", `---
+type: project
+kickoff: events/kickoff
+---
+# Roadmap
+
+Kickoff: [[events/kickoff]]
+Planning: [[events/planning|Planning]]
+::project(kickoff=events/kickoff)
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	preview := server.callTool("raven_schema_rename_type", map[string]interface{}{
+		"old_name": "event",
+		"new_name": "meeting",
+	})
+	if preview.IsError {
+		t.Fatalf("schema rename type preview failed: %s", preview.Text)
+	}
+
+	var previewResp struct {
+		OK   bool                   `json:"ok"`
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(preview.Text), &previewResp); err != nil {
+		t.Fatalf("failed to parse preview response: %v\nraw: %s", err, preview.Text)
+	}
+	if !previewResp.OK {
+		t.Fatalf("expected preview ok=true, got: %s", preview.Text)
+	}
+	if got, _ := previewResp.Data["preview"].(bool); !got {
+		t.Fatalf("expected preview=true, got: %#v", previewResp.Data["preview"])
+	}
+	if got, _ := previewResp.Data["default_path_rename_available"].(bool); !got {
+		t.Fatalf("expected default_path_rename_available=true, got: %#v", previewResp.Data["default_path_rename_available"])
+	}
+	if got, _ := previewResp.Data["default_path_old"].(string); got != "events/" {
+		t.Fatalf("expected default_path_old=events/, got: %#v", previewResp.Data["default_path_old"])
+	}
+	if got, _ := previewResp.Data["default_path_new"].(string); got != "meetings/" {
+		t.Fatalf("expected default_path_new=meetings/, got: %#v", previewResp.Data["default_path_new"])
+	}
+
+	v.AssertFileExists("events/kickoff.md")
+	v.AssertFileExists("events/planning.md")
+
+	apply := server.callTool("raven_schema_rename_type", map[string]interface{}{
+		"old_name":            "event",
+		"new_name":            "meeting",
+		"confirm":             true,
+		"rename-default-path": true,
+		"rename_default_path": true, // underscore variant should normalize
+	})
+	if apply.IsError {
+		t.Fatalf("schema rename type apply failed: %s", apply.Text)
+	}
+
+	var applyResp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			DefaultPathRenamed    bool   `json:"default_path_renamed"`
+			DefaultPathOld        string `json:"default_path_old"`
+			DefaultPathNew        string `json:"default_path_new"`
+			FilesMoved            int    `json:"files_moved"`
+			ReferenceFilesUpdated int    `json:"reference_files_updated"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(apply.Text), &applyResp); err != nil {
+		t.Fatalf("failed to parse apply response: %v\nraw: %s", err, apply.Text)
+	}
+	if !applyResp.OK {
+		t.Fatalf("expected apply ok=true, got: %s", apply.Text)
+	}
+	if !applyResp.Data.DefaultPathRenamed {
+		t.Fatalf("expected default_path_renamed=true, got false")
+	}
+	if applyResp.Data.DefaultPathOld != "events/" {
+		t.Fatalf("expected default_path_old=events/, got %q", applyResp.Data.DefaultPathOld)
+	}
+	if applyResp.Data.DefaultPathNew != "meetings/" {
+		t.Fatalf("expected default_path_new=meetings/, got %q", applyResp.Data.DefaultPathNew)
+	}
+	if applyResp.Data.FilesMoved != 2 {
+		t.Fatalf("expected files_moved=2, got %d", applyResp.Data.FilesMoved)
+	}
+	if applyResp.Data.ReferenceFilesUpdated < 1 {
+		t.Fatalf("expected reference_files_updated>=1, got %d", applyResp.Data.ReferenceFilesUpdated)
+	}
+
+	v.AssertFileContains("schema.yaml", "meeting:")
+	v.AssertFileContains("schema.yaml", "default_path: meetings/")
+	v.AssertFileContains("schema.yaml", "target: meeting")
+	v.AssertFileNotContains("schema.yaml", "\n  event:\n")
+
+	v.AssertFileExists("meetings/kickoff.md")
+	v.AssertFileExists("meetings/planning.md")
+	v.AssertFileNotExists("events/kickoff.md")
+	v.AssertFileNotExists("events/planning.md")
+	v.AssertFileContains("meetings/kickoff.md", "type: meeting")
+	v.AssertFileContains("meetings/planning.md", "type: meeting")
+
+	v.AssertFileContains("projects/roadmap.md", "kickoff: meetings/kickoff")
+	v.AssertFileContains("projects/roadmap.md", "[[meetings/kickoff]]")
+	v.AssertFileContains("projects/roadmap.md", "[[meetings/planning|Planning]]")
+	v.AssertFileContains("projects/roadmap.md", "::project(kickoff=meetings/kickoff)")
+	v.AssertFileNotContains("projects/roadmap.md", "events/kickoff")
+	v.AssertFileNotContains("projects/roadmap.md", "events/planning")
+}
+
 // TestMCPIntegration_Check tests vault check via MCP tool call.
 func TestMCPIntegration_Check(t *testing.T) {
 	v := testutil.NewTestVault(t).
