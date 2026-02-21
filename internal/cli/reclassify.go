@@ -554,7 +554,6 @@ func reindexAfterMove(vaultPath string, vaultCfg *config.VaultConfig, sch *schem
 	}
 }
 
-
 func init() {
 	reclassifyCmd.Flags().StringArrayVar(&reclassifyFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
 	reclassifyCmd.Flags().BoolVar(&reclassifyNoMove, "no-move", false, "Skip moving file to new type's default_path")
