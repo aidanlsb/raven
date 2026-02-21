@@ -171,26 +171,6 @@ This creates:
 
 ---
 
-## Development Checks
-
-CI runs `golangci-lint` v2.9.0 from `.github/workflows/ci.yml`, using rules from `.golangci.yml`.
-
-Install a local pre-commit hook that runs the same lint command:
-
-```bash
-make hooks-install
-```
-
-The hook runs `make lint` when staged changes include `*.go`, `go.mod`, `go.sum`, `.golangci.yml`, or `Makefile`.
-
-Skip once if needed:
-
-```bash
-SKIP_RAVEN_PRECOMMIT_LINT=1 git commit -m "..."
-```
-
----
-
 ## Agent Setup
 
 Raven is designed to work with LLM agents. The MCP server exposes every Raven command as a tool.
