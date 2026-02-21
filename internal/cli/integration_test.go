@@ -344,6 +344,29 @@ func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
 	v.AssertFileContains("projects/website.md", "status: active")
 }
 
+func TestIntegration_UpsertUnknownFieldFailsFast(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	result := v.RunCLI("upsert", "person", "Unknown Field User", "--field", "favorite_color=blue")
+	result.MustFail(t, "UNKNOWN_FIELD")
+	result.MustFailWithMessage(t, "schema type person")
+
+	if result.Error == nil || result.Error.Details == nil {
+		t.Fatalf("expected unknown field details in error, got: %#v", result.Error)
+	}
+	unknownFieldsRaw, ok := result.Error.Details["unknown_fields"].([]interface{})
+	if !ok || len(unknownFieldsRaw) == 0 {
+		t.Fatalf("expected unknown_fields in details, got: %#v", result.Error.Details)
+	}
+	if unknownFieldsRaw[0] != "favorite_color" {
+		t.Fatalf("expected unknown field 'favorite_color', got: %#v", unknownFieldsRaw)
+	}
+
+	v.AssertFileNotExists("people/unknown-field-user.md")
+}
+
 func TestIntegration_SetFieldsJSONPreservesStringType(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -770,6 +793,47 @@ types:
 	v.AssertFileNotExists("objects/objects/people/freya.md")
 	v.AssertFileContains("objects/people/freya.md", "type: person")
 	v.AssertFileContains("objects/people/freya.md", "name: Freya")
+}
+
+func TestIntegration_ImportUnknownFieldReturnsStructuredItemError(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	result := v.RunCLIWithStdin(`[{"name":"Freya","favorite_color":"green"}]`, "import", "person")
+	result.MustSucceed(t)
+
+	if got, ok := result.Data["errors"].(float64); !ok || int(got) != 1 {
+		t.Fatalf("expected errors=1, got: %#v", result.Data["errors"])
+	}
+
+	results := result.DataList("results")
+	if len(results) != 1 {
+		t.Fatalf("expected exactly 1 import result item, got %d", len(results))
+	}
+	item, ok := results[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected import result object, got: %#v", results[0])
+	}
+	if item["action"] != "error" {
+		t.Fatalf("expected import action=error, got: %#v", item["action"])
+	}
+	if item["code"] != "UNKNOWN_FIELD" {
+		t.Fatalf("expected import error code UNKNOWN_FIELD, got: %#v", item["code"])
+	}
+	details, ok := item["details"].(map[string]interface{})
+	if !ok || details == nil {
+		t.Fatalf("expected structured details for import item error, got: %#v", item["details"])
+	}
+	unknownFields, ok := details["unknown_fields"].([]interface{})
+	if !ok || len(unknownFields) == 0 {
+		t.Fatalf("expected unknown_fields detail, got: %#v", details)
+	}
+	if unknownFields[0] != "favorite_color" {
+		t.Fatalf("expected unknown field favorite_color, got: %#v", unknownFields)
+	}
+
+	v.AssertFileNotExists("people/freya.md")
 }
 
 // TestIntegration_NewPageRespectsPagesRoot verifies that creating a page type

@@ -464,72 +464,17 @@ func fieldDefsForObjectType(sch *schema.Schema, objectType string) map[string]*s
 	return typeDef.Fields
 }
 
-type unknownSetFieldError struct {
-	ObjectType   string
-	Unknown      []string
-	Allowed      []string
-	AllowedCount int
-}
-
-func (e *unknownSetFieldError) Error() string {
-	if len(e.Unknown) == 1 {
-		return fmt.Sprintf("unknown field '%s' for type '%s'", e.Unknown[0], e.ObjectType)
+func detectUnknownSetFields(objectType string, updates map[string]string, sch *schema.Schema, allowedUnknown map[string]bool) *unknownFieldMutationError {
+	fieldNames := make([]string, 0, len(updates))
+	for key := range updates {
+		fieldNames = append(fieldNames, key)
 	}
-	return fmt.Sprintf("unknown fields for type '%s': %s", e.ObjectType, strings.Join(e.Unknown, ", "))
-}
-
-func (e *unknownSetFieldError) Suggestion() string {
-	return fmt.Sprintf("Run 'rvn schema type %s' to view valid fields, or add missing fields with 'rvn schema add field %s <field_name> --type <field_type>'", e.ObjectType, e.ObjectType)
-}
-
-func (e *unknownSetFieldError) Details() map[string]interface{} {
-	details := map[string]interface{}{
-		"object_type":    e.ObjectType,
-		"unknown_fields": e.Unknown,
-	}
-	if len(e.Allowed) > 0 {
-		details["allowed_fields"] = e.Allowed
-		details["allowed_count"] = e.AllowedCount
-	}
-	return details
-}
-
-func detectUnknownSetFields(objectType string, updates map[string]string, sch *schema.Schema, allowedUnknown map[string]bool) *unknownSetFieldError {
-	if sch == nil {
-		return nil
-	}
-	typeDef, ok := sch.Types[objectType]
-	if !ok || typeDef == nil {
-		return nil
-	}
-
-	unknown := make([]string, 0)
-	for fieldName := range updates {
-		if allowedUnknown != nil && allowedUnknown[fieldName] {
-			continue
-		}
-		if _, exists := typeDef.Fields[fieldName]; exists {
-			continue
-		}
-		unknown = append(unknown, fieldName)
-	}
-	if len(unknown) == 0 {
-		return nil
-	}
-	sort.Strings(unknown)
-
-	allowed := make([]string, 0, len(typeDef.Fields))
-	for fieldName := range typeDef.Fields {
-		allowed = append(allowed, fieldName)
-	}
-	sort.Strings(allowed)
-
-	return &unknownSetFieldError{
-		ObjectType:   objectType,
-		Unknown:      unknown,
-		Allowed:      allowed,
-		AllowedCount: len(allowed),
-	}
+	return detectUnknownFieldMutationByNames(
+		objectType,
+		sch,
+		fieldNames,
+		allowedUnknown,
+	)
 }
 
 func resolveDateKeywordsForUpdates(updates map[string]string, fieldDefs map[string]*schema.FieldDefinition) map[string]string {
