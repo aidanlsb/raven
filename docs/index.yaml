@@ -55,8 +55,6 @@ sections:
   design:
     title: Design Notes
     topics:
-      onboarding-metrics:
-        path: onboarding-metrics.md
       architecture:
         path: architecture.md
       parsing:

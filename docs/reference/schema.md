@@ -632,6 +632,7 @@ rvn schema update field person email --description -
 # Rename a type (updates all files)
 rvn schema rename type event meeting          # Preview
 rvn schema rename type event meeting --confirm # Apply
+rvn schema rename type event meeting --confirm --rename-default-path # Also rename default_path dir + move files
 
 # Rename a field on a type (updates all downstream uses)
 rvn schema rename field person email email_address          # Preview

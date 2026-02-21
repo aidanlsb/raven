@@ -1144,7 +1144,7 @@ rvn schema remove field <type_name> <field_name>
 Rename a type and update all references.
 
 ```bash
-rvn schema rename type <old_name> <new_name> [--confirm]
+rvn schema rename type <old_name> <new_name> [--confirm] [--rename-default-path]
 ```
 
 | Argument | Description |
@@ -1155,6 +1155,7 @@ rvn schema rename type <old_name> <new_name> [--confirm]
 | Flag | Description |
 |------|-------------|
 | `--confirm` | Apply the rename (default: preview only) |
+| `--rename-default-path` | Also rename the type's `default_path` directory and move matching files (with reference updates) |
 
 **What it updates:**
 1. The type definition in `schema.yaml`
@@ -1170,11 +1171,15 @@ rvn schema rename type event meeting
 
 # Apply changes
 rvn schema rename type event meeting --confirm
+
+# Apply and also rename default_path (if suggested)
+rvn schema rename type event meeting --confirm --rename-default-path
 ```
 
 **Notes:**
 - Always run `rvn reindex --full` after renaming to update the index
 - Built-in types (`page`, `section`, `date`) cannot be renamed
+- When Raven can infer a default directory rename (for example `events/` -> `meetings/`), preview will show it as an optional change
 
 ---
 
