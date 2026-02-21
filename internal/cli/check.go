@@ -1216,7 +1216,7 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 
 	fmt.Printf("  Type for %s? %s %s: ",
 		ui.Bold.Render("@"+trait.TraitName),
-		ui.Muted.Render("[boolean/string/date/enum]"),
+		ui.Muted.Render("[boolean/string/number/date/datetime/enum/ref/url]"),
 		ui.Muted.Render(fmt.Sprintf("(default: %s)", suggested)))
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))
@@ -1232,6 +1232,7 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 		"datetime": true,
 		"enum":     true,
 		"ref":      true,
+		"url":      true,
 	}
 
 	// Normalize bool -> boolean

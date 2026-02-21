@@ -35,6 +35,10 @@ types:
         type: string
         required: true
 traits:
+  source:
+    type: url
+  source_list:
+    type: url[]
   task:
     fields:
       due:
@@ -61,6 +65,12 @@ traits:
 
 		if _, ok := schema.Traits["task"]; !ok {
 			t.Error("expected 'task' trait to exist")
+		}
+		if got := schema.Traits["source"].Type; got != FieldTypeURL {
+			t.Fatalf("expected trait type %q for source, got %q", FieldTypeURL, got)
+		}
+		if got := schema.Traits["source_list"].Type; got != FieldTypeURLArray {
+			t.Fatalf("expected trait type %q for source_list, got %q", FieldTypeURLArray, got)
 		}
 	})
 
@@ -114,6 +124,10 @@ types:
         type: reference
       teammates:
         type: reference[]
+      website:
+        type: url
+      links:
+        type: url[]
 `
 		err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0644)
 		if err != nil {
@@ -142,6 +156,20 @@ types:
 		}
 		if teammatesField.Type != FieldTypeRefArray {
 			t.Fatalf("expected teammates field type %q, got %q", FieldTypeRefArray, teammatesField.Type)
+		}
+		websiteField := typeDef.Fields["website"]
+		if websiteField == nil {
+			t.Fatal("expected 'website' field to exist")
+		}
+		if websiteField.Type != FieldTypeURL {
+			t.Fatalf("expected website field type %q, got %q", FieldTypeURL, websiteField.Type)
+		}
+		linksField := typeDef.Fields["links"]
+		if linksField == nil {
+			t.Fatal("expected 'links' field to exist")
+		}
+		if linksField.Type != FieldTypeURLArray {
+			t.Fatalf("expected links field type %q, got %q", FieldTypeURLArray, linksField.Type)
 		}
 	})
 

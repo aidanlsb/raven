@@ -252,6 +252,16 @@ fields:
   score: { type: number, min: 0, max: 100, default: 0 }
 ```
 
+#### `url`
+
+URL/link value. Must include a scheme (for example, `https://`).
+
+```yaml
+fields:
+  website: { type: url }
+  docs: { type: url }
+```
+
 #### `date`
 
 Date in `YYYY-MM-DD` format.
@@ -321,6 +331,7 @@ Add `[]` suffix for array fields:
 ```yaml
 fields:
   tags: { type: string[] }
+  links: { type: url[] }
   collaborators: { type: ref[], target: person }
   milestones: { type: date[] }
   priorities: { type: enum[], values: [low, medium, high] }
@@ -366,6 +377,18 @@ traits:
 ```
 
 Usage: `@note(Remember to follow up)`
+
+#### `url`
+
+URL/link value.
+
+```yaml
+traits:
+  source:
+    type: url
+```
+
+Usage: `@source(https://example.com/article)`
 
 #### `date`
 

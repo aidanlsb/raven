@@ -296,12 +296,21 @@ func addTrait(vaultPath, traitName string, start time.Time) error {
 var validFieldTypes = map[string]bool{
 	"string":   true,
 	"number":   true,
+	"url":      true,
 	"date":     true,
 	"datetime": true,
 	"bool":     true,
-	"boolean":  true,
 	"enum":     true,
 	"ref":      true,
+}
+
+func normalizeFieldTypeAlias(baseType string) string {
+	switch strings.ToLower(baseType) {
+	case "boolean":
+		return "bool"
+	default:
+		return strings.ToLower(baseType)
+	}
 }
 
 // FieldTypeValidation holds the result of validating a field type specification
@@ -319,7 +328,7 @@ type FieldTypeValidation struct {
 // validateFieldTypeSpec validates the --type and related flags for adding a field
 func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema) FieldTypeValidation {
 	result := FieldTypeValidation{
-		ValidTypes: []string{"string", "number", "date", "datetime", "bool", "enum", "ref"},
+		ValidTypes: []string{"string", "number", "url", "date", "datetime", "bool", "enum", "ref"},
 	}
 
 	// Handle empty type (defaults to string)
@@ -329,7 +338,7 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 
 	// Check for array suffix
 	isArray := strings.HasSuffix(fieldType, "[]")
-	baseType := strings.TrimSuffix(fieldType, "[]")
+	baseType := normalizeFieldTypeAlias(strings.TrimSuffix(fieldType, "[]"))
 
 	result.BaseType = baseType
 	result.IsArray = isArray
@@ -367,10 +376,11 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 	// Check if base type is valid
 	if !validFieldTypes[baseType] {
 		result.Error = fmt.Sprintf("'%s' is not a valid field type", fieldType)
-		result.Suggestion = "Valid types: string, number, date, datetime, bool, enum, ref (add [] suffix for arrays)"
+		result.Suggestion = "Valid types: string, number, url, date, datetime, bool, enum, ref (add [] suffix for arrays)"
 		result.Examples = []string{
 			"--type string        (text)",
 			"--type string[]      (array of text, e.g., tags)",
+			"--type url           (web link)",
 			"--type ref --target person   (reference to a person)",
 			"--type ref[] --target person (array of person references)",
 			"--type enum --values a,b,c   (single choice from list)",
@@ -534,9 +544,12 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 	// Build new field definition
 	newField := make(map[string]interface{})
 
-	fieldType := schemaAddFieldType
+	fieldType := validation.BaseType
 	if fieldType == "" {
 		fieldType = "string"
+	}
+	if validation.IsArray {
+		fieldType += "[]"
 	}
 	newField["type"] = fieldType
 
@@ -2340,7 +2353,7 @@ func init() {
 	schemaAddCmd.Flags().StringVar(&schemaAddDefaultPath, "default-path", "", "Default path for new type files")
 	schemaAddCmd.Flags().StringVar(&schemaAddNameField, "name-field", "", "Field to use as display name (auto-created if doesn't exist)")
 	schemaAddCmd.Flags().StringVar(&schemaAddDescription, "description", "", "Optional description for the type or field")
-	schemaAddCmd.Flags().StringVar(&schemaAddFieldType, "type", "", "Field/trait type (string, date, enum, ref, bool)")
+	schemaAddCmd.Flags().StringVar(&schemaAddFieldType, "type", "", "Field/trait type (string, number, url, date, datetime, enum, ref, bool)")
 	schemaAddCmd.Flags().BoolVar(&schemaAddRequired, "required", false, "Mark field as required")
 	schemaAddCmd.Flags().StringVar(&schemaAddDefault, "default", "", "Default value")
 	schemaAddCmd.Flags().StringVar(&schemaAddValues, "values", "", "Enum values (comma-separated)")

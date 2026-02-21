@@ -118,6 +118,12 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 			fieldDef.Type = normalizeFieldType(fieldDef.Type)
 		}
 	}
+	for _, traitDef := range schema.Traits {
+		if traitDef == nil {
+			continue
+		}
+		traitDef.Type = normalizeFieldType(traitDef.Type)
+	}
 
 	result.Schema = &schema
 	return result, nil
@@ -129,6 +135,10 @@ func normalizeFieldType(fieldType FieldType) FieldType {
 		return FieldTypeRef
 	case "reference[]":
 		return FieldTypeRefArray
+	case "url":
+		return FieldTypeURL
+	case "url[]":
+		return FieldTypeURLArray
 	default:
 		return fieldType
 	}

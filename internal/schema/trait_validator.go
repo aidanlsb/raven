@@ -39,6 +39,15 @@ func ValidateTraitValue(def *TraitDefinition, value FieldValue) error {
 			}
 		}
 		return fmt.Errorf("invalid number value %q", traitValueDisplay(value))
+	case FieldTypeURL:
+		s, ok := value.AsString()
+		if !ok {
+			return fmt.Errorf("expected URL value")
+		}
+		if err := validateURLString(s); err != nil {
+			return err
+		}
+		return nil
 	case FieldTypeDate:
 		s, ok := value.AsString()
 		if !ok || !dates.IsValidDate(s) {
@@ -79,7 +88,7 @@ func normalizedTraitType(fieldType FieldType, isBoolean bool) FieldType {
 	if isBoolean {
 		return FieldTypeBool
 	}
-	return fieldType
+	return normalizeFieldType(fieldType)
 }
 
 func traitValueDisplay(value FieldValue) string {

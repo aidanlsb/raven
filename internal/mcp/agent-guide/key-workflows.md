@@ -350,6 +350,7 @@ When adding fields to types, use the correct `--type` syntax:
 | Text | `type="string"` | name, email, notes |
 | Array of text | `type="string[]"` | tags, keywords |
 | Number | `type="number"` | priority, score |
+| URL | `type="url"` | website, source |
 | Date | `type="date"` | due, birthday |
 | DateTime | `type="datetime"` | created_at, meeting_time |
 | Boolean | `type="bool"` | active, archived |
@@ -366,6 +367,9 @@ raven_schema_add_field(type_name="person", field_name="email", type="string")
 
 # Array of strings (tags, keywords)
 raven_schema_add_field(type_name="project", field_name="tags", type="string[]")
+
+# URL field
+raven_schema_add_field(type_name="article", field_name="source", type="url")
 
 # Reference to another type (single)
 raven_schema_add_field(type_name="project", field_name="owner", type="ref", target="person")

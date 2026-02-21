@@ -805,7 +805,7 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 			{Name: "name", Description: "Name of the new trait", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "type", Description: "Trait type (string, date, enum, bool)", Type: FlagTypeString, Default: "string"},
+			{Name: "type", Description: "Trait type (string, number, url, date, datetime, enum, ref, bool)", Type: FlagTypeString, Default: "string"},
 			{Name: "values", Description: "Enum values (comma-separated)", Type: FlagTypeString},
 		},
 		Examples: []string{
@@ -821,6 +821,8 @@ Field Types:
   string      Plain text value
   string[]    Array of text values (e.g., tags)
   number      Numeric value
+  url         URL/link value (must include scheme, e.g., https://...)
+  url[]       Array of URL/link values
   date        Date in YYYY-MM-DD format
   datetime    Date and time
   bool        Boolean (true/false)
@@ -851,7 +853,7 @@ The command validates inputs and provides helpful suggestions if the syntax is i
 			{Name: "field_name", Description: "Name of the new field", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "type", Description: "Field type: string, number, date, datetime, bool, enum, ref (add [] for arrays)", Type: FlagTypeString, Default: "string"},
+			{Name: "type", Description: "Field type: string, number, url, date, datetime, bool, enum, ref (add [] for arrays)", Type: FlagTypeString, Default: "string"},
 			{Name: "required", Description: "Mark field as required", Type: FlagTypeBool},
 			{Name: "target", Description: "Target type for ref/ref[] fields (required for references)", Type: FlagTypeString},
 			{Name: "values", Description: "Allowed values for enum/enum[] fields (comma-separated)", Type: FlagTypeString},

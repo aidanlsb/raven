@@ -246,6 +246,78 @@ func TestValidateFieldValueNumberArray(t *testing.T) {
 	})
 }
 
+func TestValidateFieldValueURL(t *testing.T) {
+	defs := map[string]*FieldDefinition{
+		"website": {Type: FieldTypeURL},
+	}
+
+	t.Run("valid https URL", func(t *testing.T) {
+		fields := map[string]FieldValue{"website": String("https://example.com/docs")}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors, got %v", errors)
+		}
+	})
+
+	t.Run("valid mailto URL", func(t *testing.T) {
+		fields := map[string]FieldValue{"website": String("mailto:hello@example.com")}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors, got %v", errors)
+		}
+	})
+
+	t.Run("invalid - missing scheme", func(t *testing.T) {
+		fields := map[string]FieldValue{"website": String("example.com")}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(errors))
+		}
+	})
+
+	t.Run("invalid - bad type", func(t *testing.T) {
+		fields := map[string]FieldValue{"website": Number(42)}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(errors))
+		}
+	})
+}
+
+func TestValidateFieldValueURLArray(t *testing.T) {
+	defs := map[string]*FieldDefinition{
+		"links": {Type: FieldTypeURLArray},
+	}
+
+	t.Run("valid URL array", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"links": Array([]FieldValue{String("https://example.com"), String("https://example.org/path")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 0 {
+			t.Errorf("expected no errors, got %v", errors)
+		}
+	})
+
+	t.Run("invalid - not an array", func(t *testing.T) {
+		fields := map[string]FieldValue{"links": String("https://example.com")}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(errors))
+		}
+	})
+
+	t.Run("invalid - array with non-url", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"links": Array([]FieldValue{String("https://example.com"), String("not-a-url")}),
+		}
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Errorf("expected 1 error, got %d", len(errors))
+		}
+	})
+}
+
 func TestValidateFieldValueDate(t *testing.T) {
 	defs := map[string]*FieldDefinition{
 		"due": {Type: FieldTypeDate},
