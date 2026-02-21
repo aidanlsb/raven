@@ -434,6 +434,47 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"Archive old content without breaking references",
 		},
 	},
+	"reclassify": {
+		Name:        "reclassify",
+		Description: "Change an object's type",
+		LongDesc: `Change an object's type, updating frontmatter fields, applying defaults
+for the new type, and optionally moving the file to the new type's default directory.
+
+Required fields on the new type:
+- If a required field has a Default value, it is applied automatically
+- Missing required fields can be supplied via --field flags
+- In JSON mode: returns REQUIRED_FIELD_MISSING error with retry_with template
+
+Fields present on the old type but not defined on the new type are
+identified as "dropped fields" and require confirmation before removal.
+Use --force to skip this confirmation.
+
+The file is automatically moved to the new type's default_path unless
+--no-move is specified or no default_path is defined for the new type.
+References are updated when the file moves (controlled by --update-refs).`,
+		Args: []ArgMeta{
+			{Name: "object", Description: "Object reference (short name, path, or ID)", Required: true},
+			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types"},
+		},
+		Flags: []FlagMeta{
+			{Name: "field", Description: "Supply field values (repeatable) (key-value object)", Type: FlagTypeKeyValue, Examples: []string{`{"author": "people/snorri", "genre": "mythology"}`}},
+			{Name: "no-move", Description: "Skip moving file to new type's default_path", Type: FlagTypeBool},
+			{Name: "update-refs", Description: "Update references when file moves (default: true)", Type: FlagTypeBool, Default: "true"},
+			{Name: "force", Description: "Skip confirmation prompts (dropped fields, etc.)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn reclassify inbox/note book --json",
+			"rvn reclassify people/freya company --field industry=tech --json",
+			"rvn reclassify pages/draft project --no-move --json",
+			"rvn reclassify inbox/note book --force --json",
+		},
+		UseCases: []string{
+			"Change an object's type after creation",
+			"Reclassify a page to a specific schema type",
+			"Move an object to the correct type directory automatically",
+			"Convert between custom types with field mapping",
+		},
+	},
 	"query": {
 		Name:        "query",
 		Description: "Run a query using the Raven query language",

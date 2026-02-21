@@ -106,6 +106,7 @@ rvn schema commands --json
 | `raven_edit` | Surgical text replacement in files |
 | `raven_delete` | Delete an object (moves to trash) |
 | `raven_move` | Move or rename an object |
+| `raven_reclassify` | Change an object's type |
 
 ### Querying
 
