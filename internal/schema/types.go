@@ -123,6 +123,8 @@ const (
 	FieldTypeStringArray   FieldType = "string[]"
 	FieldTypeNumber        FieldType = "number"
 	FieldTypeNumberArray   FieldType = "number[]"
+	FieldTypeURL           FieldType = "url"
+	FieldTypeURLArray      FieldType = "url[]"
 	FieldTypeDate          FieldType = "date"
 	FieldTypeDateArray     FieldType = "date[]"
 	FieldTypeDatetime      FieldType = "datetime"

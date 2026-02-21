@@ -34,6 +34,18 @@ func TestValidateTraitValue(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "url valid",
+			def:     &TraitDefinition{Type: FieldTypeURL},
+			value:   String("https://example.com"),
+			wantErr: false,
+		},
+		{
+			name:    "url invalid",
+			def:     &TraitDefinition{Type: FieldTypeURL},
+			value:   String("example.com"),
+			wantErr: true,
+		},
+		{
 			name:    "date valid",
 			def:     &TraitDefinition{Type: FieldTypeDate},
 			value:   String("2026-02-21"),
