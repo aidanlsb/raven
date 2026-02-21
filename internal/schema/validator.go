@@ -101,6 +101,30 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 			}
 		}
 
+	case FieldTypeURL:
+		s, ok := value.AsString()
+		if !ok {
+			return fmt.Errorf("expected URL")
+		}
+		if err := validateURLString(s); err != nil {
+			return err
+		}
+
+	case FieldTypeURLArray:
+		arr, ok := value.AsArray()
+		if !ok {
+			return fmt.Errorf("expected array of URLs")
+		}
+		for _, v := range arr {
+			s, ok := v.AsString()
+			if !ok {
+				return fmt.Errorf("expected array of URLs")
+			}
+			if err := validateURLString(s); err != nil {
+				return err
+			}
+		}
+
 	case FieldTypeDate:
 		s, ok := value.AsString()
 		if !ok {
@@ -304,6 +328,8 @@ func IsValidFieldType(fieldType FieldType) bool {
 		FieldTypeStringArray,
 		FieldTypeNumber,
 		FieldTypeNumberArray,
+		FieldTypeURL,
+		FieldTypeURLArray,
 		FieldTypeDate,
 		FieldTypeDateArray,
 		FieldTypeDatetime,
@@ -321,5 +347,5 @@ func IsValidFieldType(fieldType FieldType) bool {
 }
 
 func ValidFieldTypes() string {
-	return "string, string[], number, number[], date, date[], datetime, datetime[], enum, enum[], bool, bool[], ref, ref[]"
+	return "string, string[], number, number[], url, url[], date, date[], datetime, datetime[], enum, enum[], bool, bool[], ref, ref[]"
 }

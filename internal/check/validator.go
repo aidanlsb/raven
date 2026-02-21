@@ -497,6 +497,8 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 			fixHint = "Use a numeric value (e.g., @score(5) or @score(3.5))"
 		case schema.FieldTypeRef:
 			fixHint = fmt.Sprintf("Use @%s([[target]]) or @%s(target)", trait.TraitType, trait.TraitType)
+		case schema.FieldTypeURL:
+			fixHint = fmt.Sprintf("Use @%s(https://example.com)", trait.TraitType)
 		}
 
 		issues = append(issues, Issue{

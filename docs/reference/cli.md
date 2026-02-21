@@ -918,7 +918,7 @@ rvn schema add trait <name> [--type TYPE] [--values VALUES]
 
 | Flag | Description |
 |------|-------------|
-| `--type` | Trait type: string, date, enum, bool (default: string) |
+| `--type` | Trait type: string, number, url, date, datetime, enum, ref, bool (default: string) |
 | `--values` | Enum values (comma-separated) |
 
 **Examples:**
@@ -946,7 +946,7 @@ rvn schema add field <type_name> <field_name> [--type TYPE] [--required] [--targ
 
 | Flag | Description |
 |------|-------------|
-| `--type` | Field type: string, date, enum, ref, bool (default: string) |
+| `--type` | Field type: string, number, url, date, datetime, enum, ref, bool (default: string) |
 | `--required` | Mark field as required |
 | `--target` | Target type for ref fields |
 | `--description` | Optional description for this field |
