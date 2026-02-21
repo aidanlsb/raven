@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -44,11 +45,7 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 			}
 
 			markerPath := filepath.Join(vaultPath, "editor-called.marker")
-			editorPath := filepath.Join(vaultPath, "fake-editor.sh")
-			editorScript := "#!/bin/sh\necho opened > \"" + markerPath + "\"\n"
-			if err := os.WriteFile(editorPath, []byte(editorScript), 0o755); err != nil {
-				t.Fatalf("write fake editor: %v", err)
-			}
+			editorPath := writeFakeEditor(t, vaultPath, markerPath)
 
 			prevVault := resolvedVaultPath
 			prevJSON := jsonOutput
@@ -121,11 +118,7 @@ func TestDailyJSONOpensEditorWhenEditEnabled(t *testing.T) {
 	vaultPath := t.TempDir()
 	const date = "2026-02-15"
 	markerPath := filepath.Join(vaultPath, "editor-called.marker")
-	editorPath := filepath.Join(vaultPath, "fake-editor.sh")
-	editorScript := "#!/bin/sh\necho opened > \"" + markerPath + "\"\n"
-	if err := os.WriteFile(editorPath, []byte(editorScript), 0o755); err != nil {
-		t.Fatalf("write fake editor: %v", err)
-	}
+	editorPath := writeFakeEditor(t, vaultPath, markerPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
@@ -184,11 +177,7 @@ func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
 	absPath := filepath.Join(vaultPath, relPath)
 
 	markerPath := filepath.Join(vaultPath, "editor-called.marker")
-	editorPath := filepath.Join(vaultPath, "fake-editor.sh")
-	editorScript := "#!/bin/sh\necho opened > \"" + markerPath + "\"\n"
-	if err := os.WriteFile(editorPath, []byte(editorScript), 0o755); err != nil {
-		t.Fatalf("write fake editor: %v", err)
-	}
+	editorPath := writeFakeEditor(t, vaultPath, markerPath)
 
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
@@ -221,4 +210,24 @@ func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
 	if _, err := os.Stat(absPath); err != nil {
 		t.Fatalf("daily note does not exist at %s: %v", absPath, err)
 	}
+}
+
+func writeFakeEditor(t *testing.T, dir, markerPath string) string {
+	t.Helper()
+
+	if runtime.GOOS == "windows" {
+		editorPath := filepath.Join(dir, "fake-editor.cmd")
+		script := "@echo off\r\necho opened > \"" + markerPath + "\"\r\n"
+		if err := os.WriteFile(editorPath, []byte(script), 0o644); err != nil {
+			t.Fatalf("write fake editor: %v", err)
+		}
+		return editorPath
+	}
+
+	editorPath := filepath.Join(dir, "fake-editor.sh")
+	script := "#!/bin/sh\necho opened > \"" + markerPath + "\"\n"
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake editor: %v", err)
+	}
+	return editorPath
 }

@@ -56,7 +56,8 @@ var (
 
 // Flags for schema rename commands
 var (
-	schemaRenameConfirm bool
+	schemaRenameConfirm           bool
+	schemaRenameDefaultPathRename bool
 )
 
 var schemaAddCmd = &cobra.Command{
@@ -1443,6 +1444,8 @@ Rename field updates:
 6. Saved queries in raven.yaml (best-effort for object:<type> queries)
 
 By default, previews changes. Use --confirm to apply.
+When type default_path clearly matches the type name, you can also rename
+that directory with --rename-default-path.
 
 Examples:
   rvn schema rename type event meeting
@@ -1476,9 +1479,22 @@ Examples:
 // TypeRenameChange represents a single change to be made
 type TypeRenameChange struct {
 	FilePath    string `json:"file_path"`
-	ChangeType  string `json:"change_type"` // "frontmatter", "embedded", "schema_ref_target"
+	ChangeType  string `json:"change_type"` // "frontmatter", "embedded", "schema_ref_target", "schema_default_path", "directory_move"
 	Description string `json:"description"`
 	Line        int    `json:"line,omitempty"`
+}
+
+type typeDirectoryMove struct {
+	SourceRelPath      string `json:"source_rel_path"`
+	DestinationRelPath string `json:"destination_rel_path"`
+	SourceID           string `json:"source_id"`
+	DestinationID      string `json:"destination_id"`
+}
+
+type typeDefaultPathRenamePlan struct {
+	OldDefaultPath string              `json:"old_default_path"`
+	NewDefaultPath string              `json:"new_default_path"`
+	Moves          []typeDirectoryMove `json:"moves,omitempty"`
 }
 
 // FieldRenameChange represents a single change to be made when renaming a field.
@@ -2103,6 +2119,11 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
 
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
+
 	// Check if old type exists
 	if _, exists := sch.Types[oldName]; !exists {
 		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", oldName), "")
@@ -2115,6 +2136,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 
 	// Collect all changes needed
 	var changes []TypeRenameChange
+	var optionalChanges []TypeRenameChange
 
 	// 1. Schema changes - the type itself
 	changes = append(changes, TypeRenameChange{
@@ -2142,6 +2164,25 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		}
 	}
 
+	// Optional: if default_path appears to be derived from the old type name,
+	// offer renaming the directory as part of the operation.
+	var defaultPathPlan *typeDefaultPathRenamePlan
+	if oldTypeDef := sch.Types[oldName]; oldTypeDef != nil {
+		if suggestedPath, ok := suggestRenamedDefaultPath(oldTypeDef.DefaultPath, oldName, newName); ok {
+			defaultPathPlan = &typeDefaultPathRenamePlan{
+				OldDefaultPath: paths.NormalizeDirRoot(oldTypeDef.DefaultPath),
+				NewDefaultPath: suggestedPath,
+			}
+			optionalChanges = append(optionalChanges, TypeRenameChange{
+				FilePath:    "schema.yaml",
+				ChangeType:  "schema_default_path",
+				Description: fmt.Sprintf("update default_path '%s' → '%s' for type '%s'", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath, newName),
+			})
+		}
+	}
+
+	movesBySource := make(map[string]typeDirectoryMove)
+
 	// 3. File changes - walk all markdown files
 	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
 		if result.Error != nil {
@@ -2155,15 +2196,30 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		lines := strings.Split(string(content), "\n")
 
 		// Check frontmatter for type: old_name
+		hasFileLevelOldType := false
 		for _, obj := range result.Document.Objects {
 			if obj.ObjectType == oldName && !strings.Contains(obj.ID, "#") {
 				// This is a file-level object with the old type
+				hasFileLevelOldType = true
 				changes = append(changes, TypeRenameChange{
 					FilePath:    result.RelativePath,
 					ChangeType:  "frontmatter",
 					Description: fmt.Sprintf("change type: %s → type: %s", oldName, newName),
 					Line:        1, // Frontmatter is at the start
 				})
+			}
+		}
+		if hasFileLevelOldType && defaultPathPlan != nil {
+			if move, ok := planTypeDirectoryMove(result.RelativePath, newName, defaultPathPlan, vaultCfg); ok {
+				if _, exists := movesBySource[move.SourceRelPath]; !exists {
+					movesBySource[move.SourceRelPath] = move
+					defaultPathPlan.Moves = append(defaultPathPlan.Moves, move)
+					optionalChanges = append(optionalChanges, TypeRenameChange{
+						FilePath:    move.SourceRelPath,
+						ChangeType:  "directory_move",
+						Description: fmt.Sprintf("move file '%s' → '%s'", move.SourceRelPath, move.DestinationRelPath),
+					})
+				}
 			}
 		}
 
@@ -2191,15 +2247,29 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 
 	// If not confirming, show preview
 	if !schemaRenameConfirm {
+		hint := "Run with --confirm to apply changes"
+		if defaultPathPlan != nil {
+			hint = "Run with --confirm to apply changes. Add --rename-default-path to also rename the default directory and move matching files."
+		}
+
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
+			result := map[string]interface{}{
 				"preview":       true,
 				"old_name":      oldName,
 				"new_name":      newName,
 				"total_changes": len(changes),
 				"changes":       changes,
-				"hint":          "Run with --confirm to apply changes",
-			}, &Meta{QueryTimeMs: elapsed})
+				"hint":          hint,
+			}
+			if defaultPathPlan != nil {
+				result["default_path_rename_available"] = true
+				result["default_path_old"] = defaultPathPlan.OldDefaultPath
+				result["default_path_new"] = defaultPathPlan.NewDefaultPath
+				result["optional_total_changes"] = len(optionalChanges)
+				result["optional_changes"] = optionalChanges
+				result["files_to_move"] = len(defaultPathPlan.Moves)
+			}
+			outputSuccess(result, &Meta{QueryTimeMs: elapsed})
 			return nil
 		}
 
@@ -2223,8 +2293,39 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 			}
 		}
 
+		if defaultPathPlan != nil {
+			fmt.Printf("\nOptional default directory rename (%d changes):\n", len(optionalChanges))
+			fmt.Printf("  default_path: %s → %s\n", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
+			if len(defaultPathPlan.Moves) > 0 {
+				fmt.Printf("  files to move: %d\n", len(defaultPathPlan.Moves))
+			}
+			fmt.Printf("  (add --rename-default-path to apply these optional changes)\n")
+		}
+
 		fmt.Printf("\nRun with --confirm to apply these changes.\n")
 		return nil
+	}
+
+	applyDefaultPathRename := false
+	if defaultPathPlan != nil {
+		applyDefaultPathRename = schemaRenameDefaultPathRename
+		if !applyDefaultPathRename && shouldPromptForConfirm() {
+			prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
+			if len(defaultPathPlan.Moves) > 0 {
+				prompt = fmt.Sprintf("Also rename default_path '%s' -> '%s' and move %d files with reference updates?",
+					defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath, len(defaultPathPlan.Moves))
+			}
+			applyDefaultPathRename = promptForConfirm(prompt)
+		}
+	}
+	if applyDefaultPathRename {
+		if err := validateTypeDirectoryMoves(vaultPath, defaultPathPlan.Moves); err != nil {
+			return handleErrorMsg(
+				ErrValidationFailed,
+				fmt.Sprintf("cannot rename default directory: %v", err),
+				"Use --confirm without --rename-default-path, or resolve destination conflicts and try again",
+			)
+		}
 	}
 
 	// Apply changes
@@ -2251,6 +2352,15 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		types[newName] = typeDef
 		delete(types, oldName)
 		appliedChanges++
+	}
+
+	if applyDefaultPathRename {
+		if typeDefAny, exists := types[newName]; exists {
+			if typeDefMap, ok := typeDefAny.(map[string]interface{}); ok {
+				typeDefMap["default_path"] = defaultPathPlan.NewDefaultPath
+				appliedChanges++
+			}
+		}
 	}
 
 	// Update ref field targets
@@ -2329,23 +2439,237 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		return handleError(ErrInternal, err, "")
 	}
 
+	movedFiles := 0
+	updatedReferenceFiles := 0
+	if applyDefaultPathRename {
+		movedFiles, updatedReferenceFiles, err = applyTypeDirectoryRename(vaultPath, vaultCfg, defaultPathPlan.Moves)
+		if err != nil {
+			return handleError(ErrFileWriteError, err, "Some files may have been renamed; review the vault and run 'rvn reindex --full'")
+		}
+		appliedChanges += movedFiles + updatedReferenceFiles
+	}
+
 	elapsed = time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
+		result := map[string]interface{}{
 			"renamed":         true,
 			"old_name":        oldName,
 			"new_name":        newName,
 			"changes_applied": appliedChanges,
 			"hint":            "Run 'rvn reindex --full' to update the index",
-		}, &Meta{QueryTimeMs: elapsed})
+		}
+		if defaultPathPlan != nil {
+			result["default_path_rename_available"] = true
+			result["default_path_renamed"] = applyDefaultPathRename
+			result["default_path_old"] = defaultPathPlan.OldDefaultPath
+			result["default_path_new"] = defaultPathPlan.NewDefaultPath
+			result["files_moved"] = movedFiles
+			result["reference_files_updated"] = updatedReferenceFiles
+			if !applyDefaultPathRename {
+				result["hint"] = "Run 'rvn reindex --full' to update the index. Use --rename-default-path to also rename the default directory."
+			}
+		}
+		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
 	fmt.Printf("✓ Renamed type '%s' to '%s'\n", oldName, newName)
 	fmt.Printf("  Applied %d changes\n", appliedChanges)
+	if applyDefaultPathRename {
+		fmt.Printf("  Renamed default_path %s → %s\n", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
+		fmt.Printf("  Moved %d files and updated references in %d files\n", movedFiles, updatedReferenceFiles)
+	} else if defaultPathPlan != nil {
+		fmt.Printf("  Default path remains %s (use --rename-default-path to rename to %s)\n", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
+	}
 	fmt.Printf("\nRun 'rvn reindex --full' to update the index.\n")
 	return nil
+}
+
+func suggestRenamedDefaultPath(oldDefaultPath, oldName, newName string) (string, bool) {
+	normalized := paths.NormalizeDirRoot(oldDefaultPath)
+	if normalized == "" {
+		return "", false
+	}
+	trimmed := strings.TrimSuffix(normalized, "/")
+	if trimmed == "" {
+		return "", false
+	}
+
+	lastSlash := strings.LastIndex(trimmed, "/")
+	parent := ""
+	base := trimmed
+	if lastSlash >= 0 {
+		parent = trimmed[:lastSlash]
+		base = trimmed[lastSlash+1:]
+	}
+
+	newBase := ""
+	switch base {
+	case oldName:
+		newBase = newName
+	case oldName + "s":
+		newBase = newName + "s"
+	default:
+		return "", false
+	}
+
+	next := newBase
+	if parent != "" {
+		next = parent + "/" + newBase
+	}
+	next = paths.NormalizeDirRoot(next)
+	if next == normalized {
+		return "", false
+	}
+	return next, true
+}
+
+func planTypeDirectoryMove(relPath, newName string, plan *typeDefaultPathRenamePlan, vaultCfg *config.VaultConfig) (typeDirectoryMove, bool) {
+	if plan == nil || vaultCfg == nil {
+		return typeDirectoryMove{}, false
+	}
+
+	sourceRel := filepath.ToSlash(strings.TrimPrefix(relPath, "./"))
+	sourceID := vaultCfg.FilePathToObjectID(sourceRel)
+	if !strings.HasPrefix(sourceID, plan.OldDefaultPath) {
+		return typeDirectoryMove{}, false
+	}
+	suffix := strings.TrimPrefix(sourceID, plan.OldDefaultPath)
+	if suffix == "" {
+		return typeDirectoryMove{}, false
+	}
+	destID := plan.NewDefaultPath + suffix
+	destRel := filepath.ToSlash(vaultCfg.ObjectIDToFilePath(destID, newName))
+	if sourceRel == destRel {
+		return typeDirectoryMove{}, false
+	}
+	return typeDirectoryMove{
+		SourceRelPath:      sourceRel,
+		DestinationRelPath: destRel,
+		SourceID:           sourceID,
+		DestinationID:      destID,
+	}, true
+}
+
+func validateTypeDirectoryMoves(vaultPath string, moves []typeDirectoryMove) error {
+	if len(moves) == 0 {
+		return nil
+	}
+
+	destinations := make(map[string]string, len(moves))
+	sources := make(map[string]struct{}, len(moves))
+	for _, move := range moves {
+		sourceAbs := filepath.Join(vaultPath, move.SourceRelPath)
+		destAbs := filepath.Join(vaultPath, move.DestinationRelPath)
+		sources[filepath.Clean(sourceAbs)] = struct{}{}
+
+		if _, err := os.Stat(sourceAbs); err != nil {
+			return fmt.Errorf("source file does not exist: %s", move.SourceRelPath)
+		}
+
+		if existingSource, exists := destinations[filepath.Clean(destAbs)]; exists && existingSource != move.SourceRelPath {
+			return fmt.Errorf("multiple files would move to '%s'", move.DestinationRelPath)
+		}
+		destinations[filepath.Clean(destAbs)] = move.SourceRelPath
+	}
+
+	for _, move := range moves {
+		destAbs := filepath.Clean(filepath.Join(vaultPath, move.DestinationRelPath))
+		if _, isSource := sources[destAbs]; isSource {
+			continue
+		}
+		if _, err := os.Stat(destAbs); err == nil {
+			return fmt.Errorf("destination already exists: %s", move.DestinationRelPath)
+		}
+	}
+
+	return nil
+}
+
+func applyTypeDirectoryRename(vaultPath string, vaultCfg *config.VaultConfig, moves []typeDirectoryMove) (int, int, error) {
+	if len(moves) == 0 {
+		return 0, 0, nil
+	}
+
+	orderedMoves := make([]typeDirectoryMove, len(moves))
+	copy(orderedMoves, moves)
+	sort.SliceStable(orderedMoves, func(i, j int) bool {
+		return len(orderedMoves[i].SourceRelPath) > len(orderedMoves[j].SourceRelPath)
+	})
+
+	idMoves := make(map[string]string, len(orderedMoves))
+	for _, move := range orderedMoves {
+		sourceAbs := filepath.Join(vaultPath, move.SourceRelPath)
+		destAbs := filepath.Join(vaultPath, move.DestinationRelPath)
+
+		if err := os.MkdirAll(filepath.Dir(destAbs), 0o755); err != nil {
+			return 0, 0, err
+		}
+		if err := os.Rename(sourceAbs, destAbs); err != nil {
+			return 0, 0, err
+		}
+		idMoves[move.SourceID] = move.DestinationID
+	}
+
+	updatedReferenceFiles, err := updateReferencesForTypeDirectoryMoves(vaultPath, vaultCfg, idMoves)
+	if err != nil {
+		return len(orderedMoves), updatedReferenceFiles, err
+	}
+	return len(orderedMoves), updatedReferenceFiles, nil
+}
+
+func updateReferencesForTypeDirectoryMoves(vaultPath string, vaultCfg *config.VaultConfig, idMoves map[string]string) (int, error) {
+	if len(idMoves) == 0 {
+		return 0, nil
+	}
+
+	objectRoot := ""
+	pageRoot := ""
+	if vaultCfg != nil {
+		objectRoot = vaultCfg.GetObjectsRoot()
+		pageRoot = vaultCfg.GetPagesRoot()
+	}
+
+	oldIDs := make([]string, 0, len(idMoves))
+	for oldID := range idMoves {
+		oldIDs = append(oldIDs, oldID)
+	}
+	sort.SliceStable(oldIDs, func(i, j int) bool {
+		return len(oldIDs[i]) > len(oldIDs[j])
+	})
+
+	updatedFiles := 0
+	err := vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+		if result.Path == "" {
+			return nil
+		}
+
+		content, err := os.ReadFile(result.Path)
+		if err != nil {
+			return nil //nolint:nilerr
+		}
+
+		original := string(content)
+		updated := original
+		for _, oldID := range oldIDs {
+			updated = replaceAllRefVariants(updated, oldID, oldID, idMoves[oldID], objectRoot, pageRoot)
+		}
+
+		if updated == original {
+			return nil
+		}
+		if err := atomicfile.WriteFile(result.Path, []byte(updated), 0o644); err != nil {
+			return err
+		}
+		updatedFiles++
+		return nil
+	})
+	if err != nil {
+		return updatedFiles, err
+	}
+
+	return updatedFiles, nil
 }
 
 func init() {
@@ -2376,6 +2700,7 @@ func init() {
 
 	// Add flags to schema rename command
 	schemaRenameCmd.Flags().BoolVar(&schemaRenameConfirm, "confirm", false, "Apply the rename (default: preview only)")
+	schemaRenameCmd.Flags().BoolVar(&schemaRenameDefaultPathRename, "rename-default-path", false, "Also rename type default_path directory and move matching files (with reference updates)")
 
 	// Add subcommands to schema command
 	schemaCmd.AddCommand(schemaAddCmd)
