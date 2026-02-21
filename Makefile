@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-all lint fmt check clean install
+.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -37,6 +37,22 @@ lint:
 			go run $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION) run; \
 			;; \
 	esac
+
+# Install repository-local Git hooks
+hooks-install:
+	@git config core.hooksPath .githooks
+	@chmod +x .githooks/pre-commit
+	@echo "Installed hooks from .githooks/"
+
+# Remove repository-local Git hooks path
+hooks-uninstall:
+	@current="$$(git config --get core.hooksPath || true)"; \
+	if [ "$$current" = ".githooks" ]; then \
+		git config --unset core.hooksPath; \
+		echo "Removed .githooks hooks path"; \
+	else \
+		echo "core.hooksPath is '$$current' (nothing to unset)"; \
+	fi
 
 # Format code
 fmt:

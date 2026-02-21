@@ -1,0 +1,38 @@
+#!/bin/sh
+
+set -eu
+
+if [ "${SKIP_RAVEN_PRECOMMIT_LINT:-0}" = "1" ]; then
+	echo "Skipping lint because SKIP_RAVEN_PRECOMMIT_LINT=1"
+	exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [ -z "$staged_files" ]; then
+	exit 0
+fi
+
+run_lint=0
+for path in $staged_files; do
+	case "$path" in
+		*.go|go.mod|go.sum|.golangci.yml|Makefile)
+			run_lint=1
+			break
+			;;
+	esac
+done
+
+if [ "$run_lint" -eq 0 ]; then
+	exit 0
+fi
+
+echo "Running lint checks (same command as CI lint job)..."
+if ! make lint; then
+	echo
+	echo "lint failed; commit aborted"
+	echo "Run 'make lint' locally and restage fixes."
+	exit 1
+fi
