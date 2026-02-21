@@ -714,11 +714,13 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 		Name:        "schema",
 		Description: "Introspect the schema",
 		Args: []ArgMeta{
-			{Name: "subcommand", Description: "types, traits, commands, type <name>, trait <name>", Required: false},
+			{Name: "subcommand", Description: "types, traits, commands, type, trait", Required: false},
+			{Name: "name", Description: "Type or trait name (required for subcommand=type|trait)", Required: false},
 		},
 		Examples: []string{
 			"rvn schema --json",
 			"rvn schema types --json",
+			"rvn schema type person --json",
 			"rvn schema commands --json",
 		},
 	},

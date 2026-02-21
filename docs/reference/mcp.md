@@ -283,7 +283,7 @@ raven_new(type="person", title="Freya")
 raven_new(type="person", title="Freya", field={"email": "freya@asgard.realm"})
 
 # Check required fields first
-raven_schema(subcommand="type person")
+raven_schema(subcommand="type", name="person")
 ```
 
 **name_field auto-population:**
@@ -296,7 +296,7 @@ raven_new(type="person", title="Freya")
 # Creates person with name: Freya in frontmatter
 
 # Check if name_field is configured
-raven_schema(subcommand="type person")
+raven_schema(subcommand="type", name="person")
 ```
 
 ### Creating a new file + adding body content (recommended agent flow)
@@ -426,7 +426,7 @@ raven_query(query_string="object:project .status==archived", apply="delete")
 ```python
 # View schema
 raven_schema(subcommand="types")
-raven_schema(subcommand="type person")
+raven_schema(subcommand="type", name="person")
 
 # Add to schema
 raven_schema_add_type(name="book", default_path="books/", name_field="title", description="Books and long-form reading material")
@@ -623,7 +623,7 @@ Types can specify a `name_field` which:
 
 ```python
 raven_schema(subcommand="types")  # Shows hints for types without name_field
-raven_schema(subcommand="type person")  # Shows name_field if configured
+raven_schema(subcommand="type", name="person")  # Shows name_field if configured
 ```
 
 ### Setting name_field
@@ -663,5 +663,5 @@ raven_schema_update_type(name="book", description="Reading and reference materia
 raven_schema_update_field(type_name="book", field_name="author", description="-")  # Remove
 
 # Read descriptions in schema introspection output
-raven_schema(subcommand="type book")
+raven_schema(subcommand="type", name="book")
 ```

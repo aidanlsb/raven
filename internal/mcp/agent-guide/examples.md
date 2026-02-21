@@ -22,7 +22,7 @@
 **User**: "Show me highlights from the books I'm reading"
 ```
 → raven_query(query_string="trait:highlight on(object:book .status==reading)")
-→ If no results, check: raven_schema(subcommand="type book") to verify status field exists
+→ If no results, check: raven_schema(subcommand="type", name="book") to verify status field exists
 ```
 
 **User**: "Tasks related to the website project"
@@ -35,7 +35,7 @@
 
 **User**: "Add a new person for my colleague Thor Odinson"
 ```
-→ raven_schema(subcommand="type person")  # Check required fields and name_field
+→ raven_schema(subcommand="type", name="person")  # Check required fields and name_field
 → If name_field: name is set:
    raven_new(type="person", title="Thor Odinson")  # name auto-populated
 → If no name_field:
@@ -68,7 +68,7 @@
 
 **User**: "Create a project for the website redesign"
 ```
-→ raven_schema(subcommand="type project")  # Check fields/traits
+→ raven_schema(subcommand="type", name="project")  # Check fields/traits
 → raven_new(type="project", title="Website Redesign")
 → "Created projects/website-redesign.md. Would you like to set any fields like client or due date?"
 ```
@@ -88,7 +88,7 @@
 → Ask: "What sections would you like in your meeting template? Common ones include 
   Attendees, Agenda, Notes, and Action Items."
 → Confirm the type exists and inspect its fields:
-  raven_schema(subcommand="type meeting")
+  raven_schema(subcommand="type", name="meeting")
 → Scaffold a template file and bind it:
   raven_template_scaffold(target="type", type_name="meeting")
 → Write the template content:

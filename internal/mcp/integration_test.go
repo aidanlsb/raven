@@ -635,6 +635,20 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 	if !strings.Contains(result.Text, "person") || !strings.Contains(result.Text, "project") {
 		t.Errorf("expected schema to include person and project types, got: %s", result.Text)
 	}
+
+	// Get details for one type using explicit positional args.
+	typeResult := server.callTool("raven_schema", map[string]interface{}{
+		"subcommand": "type",
+		"name":       "person",
+	})
+
+	if typeResult.IsError {
+		t.Fatalf("schema type introspection failed: %s", typeResult.Text)
+	}
+
+	if !strings.Contains(typeResult.Text, `"name":"person"`) {
+		t.Errorf("expected type details for person, got: %s", typeResult.Text)
+	}
 }
 
 // TestMCPIntegration_SchemaFieldDescriptionsViaToolCall verifies schema field

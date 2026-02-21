@@ -7,7 +7,7 @@
 - **References**: Wiki-style links between notes (`[[people/freya]]`)
 - **Schema**: User-defined in `schema.yaml` — types and traits must be defined here to be queryable
 
-Type and field definitions can include optional `description` values in `schema.yaml`. Use `raven_schema`/`raven_schema type <name>` to read them and ground tool decisions in the user's own terminology.
+Type and field definitions can include optional `description` values in `schema.yaml`. Use `raven_schema`/`raven_schema(subcommand="type", name="<name>")` to read them and ground tool decisions in the user's own terminology.
 
 **Built-in types:**
 
