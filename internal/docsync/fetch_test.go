@@ -17,10 +17,10 @@ func TestFetchInstallsDocsFromArchive(t *testing.T) {
 	t.Parallel()
 
 	archive := buildArchive(t, map[string]string{
-		"raven-main/docs/index.yaml":                   "sections:\n  guide:\n    topics:\n      getting-started:\n        path: getting-started.md\n",
-		"raven-main/docs/guide/getting-started.md":     "# Getting Started\n",
-		"raven-main/docs/reference/query-language.md":  "# Query\n",
-		"raven-main/internal/mcp/agent-guide/index.md": "ignored",
+		"raven-main/docs/index.yaml":                         "sections:\n  getting-started:\n    topics:\n      getting-started:\n        path: getting-started.md\n",
+		"raven-main/docs/getting-started/getting-started.md": "# Getting Started\n",
+		"raven-main/docs/querying/query-language.md":         "# Query\n",
+		"raven-main/internal/mcp/agent-guide/index.md":       "ignored",
 	})
 
 	vaultPath := t.TempDir()

@@ -21,8 +21,8 @@ title: Objects and Types
 prereqs:
   - refs
 docs:
-  - docs/guide/core-concepts.md#files-are-objects
-  - docs/reference/file-format.md#frontmatter
+  - docs/getting-started/core-concepts.md#files-are-objects
+  - docs/types-and-traits/file-format.md#frontmatter
 ---
 ```
 

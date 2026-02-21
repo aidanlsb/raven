@@ -526,18 +526,18 @@ func TestOutputDocsTopicContentRendersMarkdownInTTY(t *testing.T) {
 	docsFS := os.DirFS(filepath.Join(repoRoot(t), "docs"))
 	out := captureStdout(t, func() {
 		err := outputDocsTopicContent(docsFS, docsTopicRecord{
-			Section: "reference",
+			Section: "querying",
 			ID:      "query-language",
 			Title:   "Query Language",
-			Path:    "docs/reference/query-language.md",
-			FSPath:  "reference/query-language.md",
+			Path:    "docs/querying/query-language.md",
+			FSPath:  "querying/query-language.md",
 		})
 		if err != nil {
 			t.Fatalf("outputDocsTopicContent() error = %v", err)
 		}
 	})
 
-	if !strings.Contains(out, "Path: docs/reference/query-language.md") {
+	if !strings.Contains(out, "Path: docs/querying/query-language.md") {
 		t.Fatalf("expected output path header, got:\n%s", out)
 	}
 	if !strings.Contains(out, "RENDERED TOPIC") {
@@ -567,11 +567,11 @@ func TestOutputDocsTopicContentSkipsRendererWhenNotTTY(t *testing.T) {
 	docsFS := os.DirFS(filepath.Join(repoRoot(t), "docs"))
 	out := captureStdout(t, func() {
 		err := outputDocsTopicContent(docsFS, docsTopicRecord{
-			Section: "reference",
+			Section: "querying",
 			ID:      "query-language",
 			Title:   "Query Language",
-			Path:    "docs/reference/query-language.md",
-			FSPath:  "reference/query-language.md",
+			Path:    "docs/querying/query-language.md",
+			FSPath:  "querying/query-language.md",
 		})
 		if err != nil {
 			t.Fatalf("outputDocsTopicContent() error = %v", err)

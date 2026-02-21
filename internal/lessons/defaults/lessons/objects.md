@@ -1,9 +1,9 @@
 ---
 title: Objects and Types
 docs:
-  - docs/guide/core-concepts.md#files-are-objects
-  - docs/reference/file-format.md#frontmatter
-  - docs/reference/schema.md#type-definitions
+  - docs/getting-started/core-concepts.md#files-are-objects
+  - docs/types-and-traits/file-format.md#frontmatter
+  - docs/types-and-traits/schema.md#type-definitions
 ---
 
 # Objects and Types
