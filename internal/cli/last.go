@@ -34,11 +34,11 @@ Number formats:
 Examples:
   rvn last                              # Show all results from last query
   rvn last 1,3                          # Output IDs for results 1 and 3
-  rvn last 1-5 | rvn update --stdin value=done   # Pipe to update command
-  rvn last | fzf --multi | rvn update --stdin value=done  # Interactive selection
+  rvn last 1-5 | rvn update --stdin done   # Pipe to update command
+  rvn last | fzf --multi | rvn update --stdin done  # Interactive selection
 
 With --apply, applies an operation directly to selected query results:
-  rvn last 1,3 --apply "update value=done"
+  rvn last 1,3 --apply "update done"
   rvn last 1-5 --apply "set status=archived"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
@@ -320,7 +320,7 @@ func applyToResults(vaultPath string, results []model.Result, applyStr string, c
 	parts := strings.Fields(applyStr)
 	if len(parts) == 0 {
 		return handleErrorMsg(ErrInvalidInput, "no apply command specified",
-			"Use --apply \"update value=done\" or similar")
+			"Use --apply \"update done\" or similar")
 	}
 
 	applyCmd := parts[0]
@@ -338,16 +338,16 @@ func applyToResults(vaultPath string, results []model.Result, applyStr string, c
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
-	// For trait queries, only 'update' with 'value=' is supported
+	// For trait queries, only 'update <new_value>' is supported.
 	var traitValue string
 	if queryType == "trait" {
 		if applyCmd != "update" {
 			return handleErrorMsg(ErrInvalidInput,
 				fmt.Sprintf("'%s' is not supported for trait results", applyCmd),
-				"For traits, use: --apply \"update value=<new_value>\"")
+				"For traits, use: --apply \"update <new_value>\"")
 		}
 		var err error
-		traitValue, err = parseTraitValueArgs(applyArgs)
+		traitValue, err = parseTraitUpdateValueArgs(applyArgs, "Usage: --apply \"update <new_value>\"")
 		if err != nil {
 			return err
 		}
@@ -422,7 +422,7 @@ func resultContentForOutput(result model.Result) string {
 }
 
 func init() {
-	lastCmd.Flags().String("apply", "", "Apply an operation to selected results (e.g., \"update value=done\")")
+	lastCmd.Flags().String("apply", "", "Apply an operation to selected results (e.g., \"update done\")")
 	lastCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
 	lastCmd.Flags().Bool("pipe", false, "Force pipe-friendly output format")
 	lastCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")

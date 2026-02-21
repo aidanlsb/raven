@@ -2,7 +2,6 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,7 +13,7 @@ var (
 )
 
 var updateCmd = &cobra.Command{
-	Use:   "update <trait_id> value=<new_value>",
+	Use:   "update <trait_id> <new_value>",
 	Short: "Update a trait's value",
 	Long: `Update the value of a trait annotation.
 
@@ -27,8 +26,8 @@ Bulk operations:
   Bulk operations preview changes by default; use --confirm to apply.
 
 Examples:
-  rvn update daily/2026-01-25.md:trait:0 value=done
-  rvn query "trait:todo" --ids | rvn update --stdin value=done --confirm`,
+  rvn update daily/2026-01-25.md:trait:0 done
+  rvn query "trait:todo" --ids | rvn update --stdin done --confirm`,
 	Args: cobra.ArbitraryArgs,
 	RunE: runUpdate,
 }
@@ -41,10 +40,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	if updateStdin {
-		if len(args) == 0 {
-			return handleErrorMsg(ErrMissingArgument, "no value specified", "Usage: rvn update --stdin value=<new_value>")
-		}
-		newValue, err := parseTraitValueArgs(args)
+		newValue, err := parseTraitUpdateValueArgs(args, "Usage: rvn update --stdin <new_value>")
 		if err != nil {
 			return err
 		}
@@ -61,7 +57,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(args) < 2 {
-		return handleErrorMsg(ErrMissingArgument, "requires trait-id and value=<new_value> arguments", "Usage: rvn update <trait_id> value=<new_value>")
+		return handleErrorMsg(ErrMissingArgument, "requires trait-id and new value arguments", "Usage: rvn update <trait_id> <new_value>")
 	}
 
 	traitID := args[0]
@@ -69,37 +65,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return handleErrorMsg(ErrInvalidInput, "invalid trait ID format", "Trait IDs look like: path/file.md:trait:N")
 	}
 
-	newValue, err := parseTraitValueArgs(args[1:])
+	newValue, err := parseTraitUpdateValueArgs(args[1:], "Usage: rvn update <trait_id> <new_value>")
 	if err != nil {
 		return err
 	}
 
 	// Single update applies immediately (no preview/confirm)
 	return applyUpdateTraitsByID(vaultPath, []string{traitID}, newValue, true, false, vaultCfg)
-}
-
-func parseTraitValueArgs(args []string) (string, error) {
-	var newValue string
-	for _, arg := range args {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			return "", handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("invalid field format: %s", arg),
-				"Use format: value=<new_value>")
-		}
-		if parts[0] != "value" {
-			return "", handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("unknown field for trait: %s", parts[0]),
-				"For traits, only 'value' can be updated. Example: value=done")
-		}
-		newValue = parts[1]
-	}
-
-	if newValue == "" {
-		return "", handleErrorMsg(ErrMissingArgument, "no value specified", "Usage: value=<new_value>")
-	}
-
-	return newValue, nil
 }
 
 func init() {

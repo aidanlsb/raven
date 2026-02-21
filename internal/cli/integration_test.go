@@ -3,7 +3,9 @@
 package cli_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -279,12 +281,37 @@ func TestIntegration_SchemaValidationErrors(t *testing.T) {
 	// Create the file manually without a required field and verify check finds the issue
 	v.RunCLI("new", "person", "TestPerson").MustSucceed(t)
 
-	// Verify that trying to set an invalid enum value fails
+	// Unknown fields should fail fast.
 	result := v.RunCLI("set", "people/testperson", "status=invalid_value")
-	// This should succeed but with a warning about unknown field
-	// because status is not a valid field for person type
-	result.MustSucceed(t)
-	result.AssertHasWarning(t, "UNKNOWN_FIELD")
+	result.MustFail(t, "UNKNOWN_FIELD")
+	if result.Error == nil || result.Error.Details == nil {
+		t.Fatalf("expected unknown field details in error, got: %#v", result.Error)
+	}
+	unknownFieldsRaw, ok := result.Error.Details["unknown_fields"].([]interface{})
+	if !ok || len(unknownFieldsRaw) == 0 {
+		t.Fatalf("expected unknown_fields in details, got: %#v", result.Error.Details)
+	}
+	if unknownFieldsRaw[0] != "status" {
+		t.Fatalf("expected unknown field 'status', got: %#v", unknownFieldsRaw)
+	}
+	result.MustFailWithMessage(t, "schema type person")
+}
+
+func TestIntegration_SetBulkFailsOnSchemaLoadError(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Schema Broken").MustSucceed(t)
+
+	schemaPath := filepath.Join(v.Path, "schema.yaml")
+	if err := os.WriteFile(schemaPath, []byte("version: ["), 0o644); err != nil {
+		t.Fatalf("failed to corrupt schema for test: %v", err)
+	}
+
+	result := v.RunCLIWithStdin("people/schema-broken\n", "set", "--stdin", "email=broken@example.com", "--confirm")
+	result.MustFail(t, "SCHEMA_INVALID")
+	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
 }
 
 func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {
@@ -315,6 +342,29 @@ func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
 
 	// Existing value should remain unchanged.
 	v.AssertFileContains("projects/website.md", "status: active")
+}
+
+func TestIntegration_UpsertUnknownFieldFailsFast(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	result := v.RunCLI("upsert", "person", "Unknown Field User", "--field", "favorite_color=blue")
+	result.MustFail(t, "UNKNOWN_FIELD")
+	result.MustFailWithMessage(t, "schema type person")
+
+	if result.Error == nil || result.Error.Details == nil {
+		t.Fatalf("expected unknown field details in error, got: %#v", result.Error)
+	}
+	unknownFieldsRaw, ok := result.Error.Details["unknown_fields"].([]interface{})
+	if !ok || len(unknownFieldsRaw) == 0 {
+		t.Fatalf("expected unknown_fields in details, got: %#v", result.Error.Details)
+	}
+	if unknownFieldsRaw[0] != "favorite_color" {
+		t.Fatalf("expected unknown field 'favorite_color', got: %#v", unknownFieldsRaw)
+	}
+
+	v.AssertFileNotExists("people/unknown-field-user.md")
 }
 
 func TestIntegration_SetFieldsJSONPreservesStringType(t *testing.T) {
@@ -434,7 +484,7 @@ type: page
 	v.RunCLI("reindex").MustSucceed(t)
 
 	// Preview bulk update on low priority traits (should not apply)
-	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "update value=high")
+	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "update high")
 	result.MustSucceed(t)
 
 	// Files should still have low priority since we didn't confirm
@@ -442,7 +492,7 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 
 	// Now confirm the bulk operation
-	result = v.RunCLI("query", "trait:priority .value==low", "--apply", "update value=high", "--confirm")
+	result = v.RunCLI("query", "trait:priority .value==low", "--apply", "update high", "--confirm")
 	result.MustSucceed(t)
 
 	// Files should now have high priority
@@ -471,15 +521,53 @@ type: page
 	v.RunCLI("reindex").MustSucceed(t)
 
 	// Single update by trait ID
-	result := v.RunCLI("update", "tasks/task1.md:trait:0", "value=high")
+	result := v.RunCLI("update", "tasks/task1.md:trait:0", "high")
 	result.MustSucceed(t)
 	v.AssertFileContains("tasks/task1.md", "@priority(high) First task")
 	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 
 	// Bulk update by stdin
-	result = v.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "value=done", "--confirm")
+	result = v.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "done", "--confirm")
 	result.MustSucceed(t)
 	v.AssertFileContains("tasks/task1.md", "@priority(done) Second task")
+}
+
+func TestIntegration_TraitUpdateRejectsInvalidEnumValue(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("update", "tasks/task1.md:trait:0", "critical")
+	result.MustFailWithMessage(t, "invalid value for trait '@priority'")
+	v.AssertFileContains("tasks/task1.md", "@priority(low) First task")
+}
+
+func TestIntegration_TraitQueryApplyRejectsInvalidEnumValue(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("query", "trait:priority .value==low", "--apply", "update critical", "--confirm")
+	result.MustFailWithMessage(t, "invalid value for trait '@priority'")
+	v.AssertFileContains("tasks/task1.md", "@priority(low) First task")
 }
 
 // TestIntegration_TraitBulkUpdateObjectCommandsRejected tests that object commands are rejected for trait queries.
@@ -705,6 +793,47 @@ types:
 	v.AssertFileNotExists("objects/objects/people/freya.md")
 	v.AssertFileContains("objects/people/freya.md", "type: person")
 	v.AssertFileContains("objects/people/freya.md", "name: Freya")
+}
+
+func TestIntegration_ImportUnknownFieldReturnsStructuredItemError(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	result := v.RunCLIWithStdin(`[{"name":"Freya","favorite_color":"green"}]`, "import", "person")
+	result.MustSucceed(t)
+
+	if got, ok := result.Data["errors"].(float64); !ok || int(got) != 1 {
+		t.Fatalf("expected errors=1, got: %#v", result.Data["errors"])
+	}
+
+	results := result.DataList("results")
+	if len(results) != 1 {
+		t.Fatalf("expected exactly 1 import result item, got %d", len(results))
+	}
+	item, ok := results[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected import result object, got: %#v", results[0])
+	}
+	if item["action"] != "error" {
+		t.Fatalf("expected import action=error, got: %#v", item["action"])
+	}
+	if item["code"] != "UNKNOWN_FIELD" {
+		t.Fatalf("expected import error code UNKNOWN_FIELD, got: %#v", item["code"])
+	}
+	details, ok := item["details"].(map[string]interface{})
+	if !ok || details == nil {
+		t.Fatalf("expected structured details for import item error, got: %#v", item["details"])
+	}
+	unknownFields, ok := details["unknown_fields"].([]interface{})
+	if !ok || len(unknownFields) == 0 {
+		t.Fatalf("expected unknown_fields detail, got: %#v", details)
+	}
+	if unknownFields[0] != "favorite_color" {
+		t.Fatalf("expected unknown field favorite_color, got: %#v", unknownFields)
+	}
+
+	v.AssertFileNotExists("people/freya.md")
 }
 
 // TestIntegration_NewPageRespectsPagesRoot verifies that creating a page type

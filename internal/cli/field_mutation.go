@@ -16,6 +16,13 @@ type fieldValidationError struct {
 	Issues     []schema.ValidationError
 }
 
+type unknownFieldMutationError struct {
+	ObjectType   string
+	Unknown      []string
+	Allowed      []string
+	AllowedCount int
+}
+
 func (e *fieldValidationError) Error() string {
 	if len(e.Issues) == 0 {
 		return "field validation failed"
@@ -38,6 +45,29 @@ func (e *fieldValidationError) Suggestion() string {
 		return "Ensure values match the schema field types"
 	}
 	return fmt.Sprintf("Ensure values match the schema field types for type '%s'", e.ObjectType)
+}
+
+func (e *unknownFieldMutationError) Error() string {
+	if len(e.Unknown) == 1 {
+		return fmt.Sprintf("unknown field '%s' for type '%s'", e.Unknown[0], e.ObjectType)
+	}
+	return fmt.Sprintf("unknown fields for type '%s': %s", e.ObjectType, strings.Join(e.Unknown, ", "))
+}
+
+func (e *unknownFieldMutationError) Suggestion() string {
+	return fmt.Sprintf("Run 'rvn schema type %s' to view valid fields, or add missing fields with 'rvn schema add field %s <field_name> --type <field_type>'", e.ObjectType, e.ObjectType)
+}
+
+func (e *unknownFieldMutationError) Details() map[string]interface{} {
+	details := map[string]interface{}{
+		"object_type":    e.ObjectType,
+		"unknown_fields": e.Unknown,
+	}
+	if len(e.Allowed) > 0 {
+		details["allowed_fields"] = e.Allowed
+		details["allowed_count"] = e.AllowedCount
+	}
+	return details
 }
 
 func normalizeMutationType(objectType string) string {
@@ -86,7 +116,9 @@ func prepareValidatedFieldMutationValues(objectType string, existingFields map[s
 	normalizedType := normalizeMutationType(objectType)
 	fieldDefs := fieldDefsForObjectType(sch, normalizedType)
 	coercedUpdates := coerceFieldMutationValues(updates, fieldDefs)
-	warnings := collectUnknownFieldWarningsByNames(normalizedType, sch, fieldNamesFromValueUpdates(coercedUpdates), allowedUnknown)
+	if unknownErr := detectUnknownFieldMutationByNames(normalizedType, sch, fieldNamesFromValueUpdates(coercedUpdates), allowedUnknown); unknownErr != nil {
+		return nil, nil, unknownErr
+	}
 
 	merged := make(map[string]schema.FieldValue, len(existingFields)+len(coercedUpdates))
 	for key, value := range existingFields {
@@ -97,10 +129,10 @@ func prepareValidatedFieldMutationValues(objectType string, existingFields map[s
 	}
 
 	if err := validateMergedFields(normalizedType, merged, sch); err != nil {
-		return nil, warnings, err
+		return nil, nil, err
 	}
 
-	return coercedUpdates, warnings, nil
+	return coercedUpdates, nil, nil
 }
 
 func prepareValidatedFrontmatterMutationValues(content string, fm *parser.Frontmatter, objectType string, updates map[string]schema.FieldValue, sch *schema.Schema, allowedUnknown map[string]bool) (string, []string, error) {
@@ -188,7 +220,7 @@ func coerceFieldValueForDefinition(value schema.FieldValue, fieldDef *schema.Fie
 	return value
 }
 
-func collectUnknownFieldWarningsByNames(objectType string, sch *schema.Schema, fieldNames []string, allowedUnknown map[string]bool) []string {
+func detectUnknownFieldMutationByNames(objectType string, sch *schema.Schema, fieldNames []string, allowedUnknown map[string]bool) *unknownFieldMutationError {
 	if sch == nil {
 		return nil
 	}
@@ -200,7 +232,7 @@ func collectUnknownFieldWarningsByNames(objectType string, sch *schema.Schema, f
 
 	sort.Strings(fieldNames)
 
-	var warnings []string
+	unknown := make([]string, 0)
 	for _, fieldName := range fieldNames {
 		if allowedUnknown != nil && allowedUnknown[fieldName] {
 			continue
@@ -208,10 +240,24 @@ func collectUnknownFieldWarningsByNames(objectType string, sch *schema.Schema, f
 		if _, exists := typeDef.Fields[fieldName]; exists {
 			continue
 		}
-		warnings = append(warnings, fmt.Sprintf("'%s' is not a declared field for type '%s'", fieldName, objectType))
+		unknown = append(unknown, fieldName)
+	}
+	if len(unknown) == 0 {
+		return nil
 	}
 
-	return warnings
+	allowed := make([]string, 0, len(typeDef.Fields))
+	for fieldName := range typeDef.Fields {
+		allowed = append(allowed, fieldName)
+	}
+	sort.Strings(allowed)
+
+	return &unknownFieldMutationError{
+		ObjectType:   objectType,
+		Unknown:      unknown,
+		Allowed:      allowed,
+		AllowedCount: len(allowed),
+	}
 }
 
 func fieldNamesFromValueUpdates(updates map[string]schema.FieldValue) []string {

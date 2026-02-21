@@ -379,6 +379,15 @@ steps:
 	}
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: done")
 
+	// Update trait value uses a plain string positional value.
+	updateResult := server.callTool("raven_update", map[string]interface{}{
+		"trait_id": "tasks/missing.md:trait:0",
+		"value":    "done",
+	})
+	if updateResult.IsError {
+		t.Fatalf("update with plain string value failed: %s", updateResult.Text)
+	}
+
 	// JSON-typed workflow input provided as string (underscore key variant).
 	runResult := server.callTool("raven_workflow_run", map[string]interface{}{
 		"name":       "string-compat",
@@ -625,6 +634,20 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 	// Verify person and project types are in the output
 	if !strings.Contains(result.Text, "person") || !strings.Contains(result.Text, "project") {
 		t.Errorf("expected schema to include person and project types, got: %s", result.Text)
+	}
+
+	// Get details for one type using explicit positional args.
+	typeResult := server.callTool("raven_schema", map[string]interface{}{
+		"subcommand": "type",
+		"name":       "person",
+	})
+
+	if typeResult.IsError {
+		t.Fatalf("schema type introspection failed: %s", typeResult.Text)
+	}
+
+	if !strings.Contains(typeResult.Text, `"name":"person"`) {
+		t.Errorf("expected type details for person, got: %s", typeResult.Text)
 	}
 }
 

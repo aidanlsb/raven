@@ -173,6 +173,15 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantArgs: []string{"trait:due .value==today", "--json"},
 		},
 		{
+			toolName: "raven_schema",
+			args: map[string]interface{}{
+				"subcommand": "type",
+				"name":       "person",
+			},
+			wantCmd:  "schema",
+			wantArgs: []string{"type", "person", "--json"},
+		},
+		{
 			toolName: "raven_new",
 			args:     map[string]interface{}{"type": "person", "title": "Freya"},
 			wantCmd:  "new",
@@ -272,6 +281,15 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			},
 			wantCmd:  "set",
 			wantArgs: []string{"people/freya", "status=active", "--json"},
+		},
+		{
+			toolName: "raven_update",
+			args: map[string]interface{}{
+				"trait_id": "daily/2026-01-25.md:trait:0",
+				"value":    "done",
+			},
+			wantCmd:  "update",
+			wantArgs: []string{"daily/2026-01-25.md:trait:0", "done", "--json"},
 		},
 		{
 			toolName: "raven_schema_add_type",
@@ -428,6 +446,25 @@ func TestBuildCLIArgs_PreservesEmptyPositionalArgs(t *testing.T) {
 		"daily/2026-01-02.md",
 		"- old task",
 		"",
+	}
+
+	if !reflect.DeepEqual(cliArgs, want) {
+		t.Fatalf("BuildCLIArgs() = %#v, want %#v", cliArgs, want)
+	}
+}
+
+func TestBuildCLIArgs_SchemaTypeSubcommandUsesSeparatePositionals(t *testing.T) {
+	cliArgs := BuildCLIArgs("raven_schema", map[string]interface{}{
+		"subcommand": "type",
+		"name":       "meeting",
+	})
+
+	want := []string{
+		"schema",
+		"--json",
+		"--",
+		"type",
+		"meeting",
 	}
 
 	if !reflect.DeepEqual(cliArgs, want) {

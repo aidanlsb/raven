@@ -33,7 +33,7 @@ var setCmd = &cobra.Command{
 
 The object ID can be a full path (e.g., "people/freya") or a short reference
 that uniquely identifies an object. Field values are validated against the
-schema if the object has a known type.
+schema if the object has a known type. Unknown fields are rejected.
 
 Bulk operations:
   Use --stdin to read object IDs from stdin (one per line).
@@ -131,7 +131,10 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 	var warnings []Warning
 
 	// Load schema for validation
-	sch, _ := schema.Load(vaultPath)
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
+	}
 
 	// Load vault config (optional, used for roots + auto-reindex)
 	vaultCfg, err := loadVaultConfigSafe(vaultPath)
@@ -177,6 +180,9 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 		objectType := fm.ObjectType
 		if objectType == "" {
 			objectType = "page"
+		}
+		if ufErr := detectUnknownSetFields(objectType, updates, sch, map[string]bool{"alias": true}); ufErr != nil {
+			return nil, &BulkResult{ID: id, Status: "skipped", Reason: ufErr.Error()}
 		}
 
 		_, resolvedUpdates, _, err := prepareValidatedFrontmatterMutation(
@@ -262,6 +268,11 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 		if objectType == "" {
 			objectType = "page"
 		}
+		if ufErr := detectUnknownSetFields(objectType, updates, sch, map[string]bool{"alias": true}); ufErr != nil {
+			result.Status = "error"
+			result.Reason = ufErr.Error()
+			return result
+		}
 
 		newContent, _, _, err := prepareValidatedFrontmatterMutation(
 			string(content),
@@ -308,7 +319,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	// Load schema for validation
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 
 	// Load vault config
@@ -361,6 +372,10 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	}
 	for key, value := range typedUpdates {
 		mergedUpdates[key] = serializeFieldValueLiteral(value)
+	}
+
+	if ufErr := detectUnknownSetFields(objectType, mergedUpdates, sch, map[string]bool{"alias": true}); ufErr != nil {
+		return handleErrorWithDetails(ErrUnknownField, ufErr.Error(), ufErr.Suggestion(), ufErr.Details())
 	}
 
 	newContent, resolvedUpdates, validationWarnings, err := prepareValidatedFrontmatterMutation(
@@ -447,6 +462,19 @@ func fieldDefsForObjectType(sch *schema.Schema, objectType string) map[string]*s
 		return nil
 	}
 	return typeDef.Fields
+}
+
+func detectUnknownSetFields(objectType string, updates map[string]string, sch *schema.Schema, allowedUnknown map[string]bool) *unknownFieldMutationError {
+	fieldNames := make([]string, 0, len(updates))
+	for key := range updates {
+		fieldNames = append(fieldNames, key)
+	}
+	return detectUnknownFieldMutationByNames(
+		objectType,
+		sch,
+		fieldNames,
+		allowedUnknown,
+	)
 }
 
 func resolveDateKeywordsForUpdates(updates map[string]string, fieldDefs map[string]*schema.FieldDefinition) map[string]string {
@@ -621,6 +649,9 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 	for key, value := range typedUpdates {
 		mergedUpdates[key] = serializeFieldValueLiteral(value)
 	}
+	if ufErr := detectUnknownSetFields(objectType, mergedUpdates, sch, map[string]bool{"alias": true, "id": true}); ufErr != nil {
+		return handleErrorWithDetails(ErrUnknownField, ufErr.Error(), ufErr.Suggestion(), ufErr.Details())
+	}
 
 	parsedUpdates, resolvedUpdates, validationWarnings, err := prepareValidatedFieldMutation(
 		objectType,
@@ -762,6 +793,9 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *sc
 	if targetObj == nil {
 		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
 	}
+	if ufErr := detectUnknownSetFields(targetObj.ObjectType, updates, sch, map[string]bool{"alias": true, "id": true}); ufErr != nil {
+		return nil, &BulkResult{ID: id, Status: "skipped", Reason: ufErr.Error()}
+	}
 
 	_, resolvedUpdates, _, err := prepareValidatedFieldMutation(
 		targetObj.ObjectType,
@@ -867,6 +901,9 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 	newFields := make(map[string]schema.FieldValue)
 	for k, v := range targetObj.Fields {
 		newFields[k] = v
+	}
+	if ufErr := detectUnknownSetFields(targetObj.ObjectType, updates, sch, map[string]bool{"alias": true, "id": true}); ufErr != nil {
+		return ufErr
 	}
 
 	parsedUpdates, _, _, err := prepareValidatedFieldMutation(

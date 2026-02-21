@@ -95,7 +95,7 @@ Notes:
    
 3. If a required field is missing, ask the user for the value
 
-4. Check if the type has `name_field` configured (via `raven_schema type <name>`):
+4. Check if the type has `name_field` configured (via `raven_schema(subcommand="type", name="<name>")`):
    - If `name_field` is set, the title argument auto-populates that field
    - Example: person type with `name_field: name` means `title="Freya"` sets `name="Freya"`
 
@@ -110,7 +110,7 @@ raven_new(type="person", title="Freya")  # name="Freya" is auto-set
 raven_new(type="book", title="The Prose Edda")  # title="The Prose Edda" is auto-set
 ```
 
-Check `raven_schema types` — if you see a hint about types without `name_field`, suggest setting it up to simplify object creation.
+Check `raven_schema(subcommand="types")` — if you see a hint about types without `name_field`, suggest setting it up to simplify object creation.
 
 ### 3. Schema Discovery
 
@@ -120,7 +120,7 @@ When you need to understand the vault structure:
    ```
    raven_schema(subcommand="types")   # List all types (includes name_field hints)
    raven_schema(subcommand="traits")  # List all traits
-   raven_schema(subcommand="type person")  # Details about person type
+   raven_schema(subcommand="type", name="person")  # Details about person type
    ```
 
 2. Check saved queries:
@@ -134,7 +134,7 @@ When you need to understand the vault structure:
 
 **Understanding name_field:**
 
-When you call `raven_schema(subcommand="type person")`, check for:
+When you call `raven_schema(subcommand="type", name="person")`, check for:
 - `name_field`: Which field is the display name (e.g., "name", "title")
 - If set, the title argument to `raven_new` auto-populates this field
 
@@ -576,7 +576,7 @@ daily_template: templates/daily.md
 **Workflow for helping users set up templates:**
 
 1. Ask what type of notes they want templates for
-2. Check the schema to see if the type exists: `raven_schema(subcommand="type meeting")`
+2. Check the schema to see if the type exists: `raven_schema(subcommand="type", name="meeting")`
 3. Ask what sections/structure they want in new notes
 4. Scaffold or set the template: `raven_template_scaffold(target="type", type_name="meeting")`
 5. Write content and preview: `raven_template_write(...)`, `raven_template_render(target="type", type_name="meeting", title="Test")`
