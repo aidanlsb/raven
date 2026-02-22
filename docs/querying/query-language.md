@@ -10,10 +10,6 @@
 3. **Boolean composition**: predicates can be combined with AND (space), OR (`|`), and NOT (`!`)
 4. **Nested queries**: structural predicates accept nested `object:` / `trait:` queries directly (no `{...}` syntax)
 
-## Related Lessons
-
-- `refs` - Open with `rvn learn open refs`
-
 ## Syntax Conventions
 
 | Element | Syntax | Example |
@@ -207,4 +203,3 @@ object:project .status==active has(trait:due)
 object:project (.status==active | .status==backlog) !.archived==true
 object:meeting (has(trait:due .value==past) | has(trait:remind .value==past))
 ```
-

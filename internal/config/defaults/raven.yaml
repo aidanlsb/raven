@@ -1,0 +1,73 @@
+# Raven Vault Configuration
+# These settings control vault-level behavior.
+
+# Directory settings
+directories:
+  daily: daily/
+  object: object/
+  page: page/
+  workflow: workflows/
+  template: templates/
+
+# Additional protected/system prefixes (additive).
+# Workflows and other automation features refuse to operate on protected paths.
+# Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
+# protected_prefixes:
+#   - templates/
+#   - private/
+
+# Auto-reindex after CLI operations that modify files (default: true)
+# When enabled, commands like 'rvn add', 'rvn new', 'rvn set', 'rvn edit'
+# will automatically update the index. Disable if you prefer manual reindexing.
+auto_reindex: true
+
+# Quick capture settings for 'rvn add'
+# capture:
+#   destination: daily      # "daily" (default) or a file path like "inbox.md"
+#   heading: "## Captured"  # Optional heading to append under
+#   timestamp: true         # Prefix captures with time (default: false)
+
+# Deletion settings for 'rvn delete'
+# deletion:
+#   behavior: trash         # "trash" (default) or "permanent"
+#   trash_dir: .trash       # Directory for trashed files (default: .trash)
+
+# Saved queries - run with 'rvn query <name>'
+# Uses the Raven query language (same as 'rvn query "..."')
+queries:
+  # All items with @due trait
+  tasks:
+    query: "trait:due"
+    description: "All tasks with due dates"
+
+  # Overdue items
+  overdue:
+    query: "trait:due .value==past"
+    description: "Items past their due date"
+
+  # Items due this week
+  this-week:
+    query: "trait:due .value==this-week"
+    description: "Items due this week"
+
+  # Active projects
+  active-projects:
+    query: "object:project has(trait:todo)"
+    description: "Projects marked with @todo"
+
+# Workflows registry - declarations are file references only
+# Workflow definitions live in directories.workflow (default: workflows/)
+workflows:
+  onboard:
+    file: workflows/onboard.yaml
+
+# Workflow run checkpoint retention
+# Add this under the top-level workflows block
+#   runs:
+#     storage_path: .raven/workflow-runs
+#     auto_prune: true
+#     keep_completed_for_days: 7
+#     keep_failed_for_days: 14
+#     keep_awaiting_for_days: 30
+#     max_runs: 1000
+#     preserve_latest_per_workflow: 5

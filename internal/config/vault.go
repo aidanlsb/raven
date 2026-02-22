@@ -1,6 +1,7 @@
 package config
 
 import (
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -435,6 +436,9 @@ const defaultDailyDirectory = "daily"
 const defaultWorkflowDirectory = "workflows/"
 const defaultTemplateDirectory = "templates/"
 
+//go:embed defaults/raven.yaml defaults/workflows/onboard.yaml
+var defaultVaultFiles embed.FS
+
 // GetWorkflowRunsConfig returns workflow run checkpoint settings with defaults applied.
 func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
 	defaults := ResolvedWorkflowRunsConfig{
@@ -616,82 +620,11 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 		return false, nil
 	}
 
-	defaultConfig := `# Raven Vault Configuration
-# These settings control vault-level behavior.
-
-# Directory settings
-directories:
-  daily: daily/
-  object: object/
-  page: page/
-  workflow: workflows/
-  template: templates/
-
-# Additional protected/system prefixes (additive).
-# Workflows and other automation features refuse to operate on protected paths.
-# Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
-# protected_prefixes:
-#   - templates/
-#   - private/
-
-# Auto-reindex after CLI operations that modify files (default: true)
-# When enabled, commands like 'rvn add', 'rvn new', 'rvn set', 'rvn edit'
-# will automatically update the index. Disable if you prefer manual reindexing.
-auto_reindex: true
-
-# Quick capture settings for 'rvn add'
-# capture:
-#   destination: daily      # "daily" (default) or a file path like "inbox.md"
-#   heading: "## Captured"  # Optional heading to append under
-#   timestamp: true         # Prefix captures with time (default: false)
-
-# Deletion settings for 'rvn delete'
-# deletion:
-#   behavior: trash         # "trash" (default) or "permanent"
-#   trash_dir: .trash       # Directory for trashed files (default: .trash)
-
-# Saved queries - run with 'rvn query <name>'
-# Uses the Raven query language (same as 'rvn query "..."')
-queries:
-  # All items with @due trait
-  tasks:
-    query: "trait:due"
-    description: "All tasks with due dates"
-
-  # Overdue items
-  overdue:
-    query: "trait:due .value==past"
-    description: "Items past their due date"
-
-  # Items due this week
-  this-week:
-    query: "trait:due .value==this-week"
-    description: "Items due this week"
-
-  # Active projects
-  active-projects:
-    query: "object:project has(trait:todo)"
-    description: "Projects marked with @todo"
-
-# Workflows registry - declarations are file references only
-# Workflow definitions live in directories.workflow (default: workflows/)
-workflows:
-  onboard:
-    file: workflows/onboard.yaml
-
-# Workflow run checkpoint retention
-# Add this under the top-level workflows block
-#   runs:
-#     storage_path: .raven/workflow-runs
-#     auto_prune: true
-#     keep_completed_for_days: 7
-#     keep_failed_for_days: 14
-#     keep_awaiting_for_days: 30
-#     max_runs: 1000
-#     preserve_latest_per_workflow: 5
-`
-
-	if err := atomicfile.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {
+	defaultConfig, err := defaultVaultFiles.ReadFile("defaults/raven.yaml")
+	if err != nil {
+		return false, fmt.Errorf("failed to load embedded default vault config: %w", err)
+	}
+	if err := atomicfile.WriteFile(configPath, defaultConfig, 0o644); err != nil {
 		return false, fmt.Errorf("failed to write vault config: %w", err)
 	}
 
@@ -702,67 +635,12 @@ workflows:
 		}
 	}
 
-	defaultOnboardWorkflow := `description: "Interactive vault setup and onboarding"
-steps:
-  - id: onboard-agent
-    type: agent
-    outputs:
-      markdown:
-        type: markdown
-        required: true
-    prompt: |
-      You are helping the user set up their Raven vault. This is a fresh vault with default configuration.
-
-      Your goal is to understand what they want to track and customize the schema accordingly.
-
-      ## Interview Questions
-
-      Ask these questions conversationally (not all at once):
-
-      1. **What do you want to use this vault for?**
-         Examples: work projects, personal tasks, reading notes, meeting notes, research, recipes, contacts, etc.
-
-      2. **What kinds of things do you want to track?**
-         These become types. Listen for nouns: projects, people, books, articles, meetings, decisions, etc.
-
-      3. **What metadata matters to you?**
-         These become fields or traits. Listen for: deadlines, priorities, status, tags, ratings, etc.
-
-      5. **What are 2-3 concrete things you're working on right now?**
-         Use these to create seed content that makes the vault immediately useful.
-
-      ## Actions to Take
-
-      Based on their answers:
-
-      1. **Create types** using raven_schema_add_type for each kind of object they want to track
-         - Set appropriate name_field and default_path
-         - Add relevant fields
-         - Make them aware of the default types that are defined in the vault. Let them know what fields are defined already and check if they want to customize 
-
-      2. **Create traits** using raven_schema_add_trait for cross-cutting annotations
-         - @due, @priority, @todo are already in the default schema
-         - Add custom ones based on their needs (e.g., @rating, @context, @energy)
-
-      3. **Create 2-3 seed objects** using raven_new based on what they're currently working on
-         - This demonstrates the system and gives them something to query
-
-      4. **Show a sample query** using raven_query to demonstrate immediate value
-         - Query something they just created
-
-      5. **Suggest useful saved queries** and offer to add them with raven_query_add
-
-      ## Important Guidelines
-
-      - Be conversational, not robotic. This is a dialog, not a form.
-      - Start simple. Don't overwhelm with options - let complexity emerge from their needs.
-      - Explain as you go. Help them understand why you're creating each type/trait.
-      - The default schema already has: person, project types and due, todo, priority traits.
-      - Build on defaults rather than replacing them unless they ask.
-      - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
-`
+	defaultOnboardWorkflow, err := defaultVaultFiles.ReadFile("defaults/workflows/onboard.yaml")
+	if err != nil {
+		return false, fmt.Errorf("failed to load embedded default onboard workflow: %w", err)
+	}
 	onboardPath := filepath.Join(vaultPath, "workflows", "onboard.yaml")
-	if err := atomicfile.WriteFile(onboardPath, []byte(defaultOnboardWorkflow), 0o644); err != nil {
+	if err := atomicfile.WriteFile(onboardPath, defaultOnboardWorkflow, 0o644); err != nil {
 		return false, fmt.Errorf("failed to write default onboard workflow: %w", err)
 	}
 

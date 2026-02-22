@@ -78,14 +78,8 @@ Raven queries are type-constrained:
 
 See `querying/query-language.md` for the full language.
 
-## Related Lessons
-
-- `objects` - Open with `rvn learn open objects`
-- `refs` - Open with `rvn learn open refs`
-
 ## Next steps
 
 - Use `rvn help <command>` for CLI command details
 - See `types-and-traits/schema.md` for defining types and traits
 - See `types-and-traits/file-format.md` for the complete file format specification
-
