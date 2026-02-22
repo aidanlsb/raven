@@ -13,7 +13,7 @@ import (
 )
 
 var schemaCmd = &cobra.Command{
-	Use:   "schema [types|traits|type <name>|trait <name>|template ...|commands]",
+	Use:   "schema [types|traits|type <name>|trait <name>|core [name]|template ...|commands]",
 	Short: "Introspect the schema",
 	Long: `Query the schema for types, traits, and commands.
 
@@ -24,10 +24,13 @@ Examples:
   rvn schema types --json     # List all types
   rvn schema traits --json    # List all traits
   rvn schema type person --json   # Get type details
+  rvn schema core --json      # List core type config
+  rvn schema core date --json # Get core date config
   rvn schema trait due --json     # Get trait details
   rvn schema commands --json      # List available commands
   rvn schema template list --json
-  rvn schema type interview template list --json`,
+  rvn schema type interview template list --json
+  rvn schema core date template list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		start := time.Now()
@@ -40,11 +43,26 @@ Examples:
 		// Template-related subcommands:
 		// - schema template ...
 		// - schema type <type_name> template ...
+		// - schema core <core_type> template ...
 		if args[0] == "template" {
 			return runSchemaTemplateCommand(vaultPath, args[1:], start)
 		}
+		// Also support MCP-style positional order:
+		// - schema type template <action> <type_name> [template_id]
+		// - schema core template <action> <core_type> [template_id]
+		if len(args) >= 4 && args[0] == "type" && args[1] == "template" {
+			templateArgs := append([]string{args[2]}, args[4:]...)
+			return runSchemaTypeTemplateCommand(vaultPath, args[3], templateArgs, start)
+		}
+		if len(args) >= 4 && args[0] == "core" && args[1] == "template" {
+			templateArgs := append([]string{args[2]}, args[4:]...)
+			return runSchemaCoreTemplateCommand(vaultPath, args[3], templateArgs, start)
+		}
 		if len(args) >= 3 && args[0] == "type" && args[2] == "template" {
 			return runSchemaTypeTemplateCommand(vaultPath, args[1], args[3:], start)
+		}
+		if len(args) >= 3 && args[0] == "core" && args[2] == "template" {
+			return runSchemaCoreTemplateCommand(vaultPath, args[1], args[3:], start)
 		}
 
 		switch args[0] {
@@ -52,6 +70,14 @@ Examples:
 			return listSchemaTypes(vaultPath, start)
 		case "traits":
 			return listSchemaTraits(vaultPath, start)
+		case "core":
+			if len(args) == 1 {
+				return listSchemaCore(vaultPath, start)
+			}
+			if len(args) > 2 {
+				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema core subcommand: %s", args[2]), "Use: schema core [name] or schema core <name> template ...")
+			}
+			return getSchemaCore(vaultPath, args[1], start)
 		case "type":
 			if len(args) < 2 {
 				return handleErrorMsg(ErrMissingArgument, "specify a type name", "Usage: rvn schema type <name>")
@@ -65,7 +91,7 @@ Examples:
 		case "commands":
 			return listSchemaCommands(start)
 		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema subcommand: %s", args[0]), "Use: types, traits, type <name>, trait <name>, template ..., or commands")
+			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema subcommand: %s", args[0]), "Use: types, traits, type <name>, trait <name>, core [name], template ..., or commands")
 		}
 	},
 }
@@ -94,11 +120,32 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 
 	fmt.Println("Types:")
 	for name := range sch.Types {
+		if schema.IsBuiltinType(name) {
+			continue
+		}
 		fmt.Printf("  %s\n", name)
 	}
 	fmt.Println("  page (built-in)")
 	fmt.Println("  section (built-in)")
 	fmt.Println("  date (built-in)")
+
+	if len(sch.Core) > 0 {
+		fmt.Println("\nCore:")
+		coreNames := []string{"date", "page", "section"}
+		for _, name := range coreNames {
+			coreDef := sch.Core[name]
+			if coreDef == nil {
+				continue
+			}
+			if coreDef.DefaultTemplate != "" {
+				fmt.Printf("  %s: default_template=%s\n", name, coreDef.DefaultTemplate)
+			} else if len(coreDef.Templates) > 0 {
+				fmt.Printf("  %s: templates=%v\n", name, coreDef.Templates)
+			} else {
+				fmt.Printf("  %s: {}\n", name)
+			}
+		}
+	}
 
 	fmt.Println("\nTraits:")
 	for name := range sch.Traits {
@@ -225,6 +272,77 @@ func listSchemaTraits(vaultPath string, start time.Time) error {
 		}
 	}
 
+	return nil
+}
+
+func listSchemaCore(vaultPath string, start time.Time) error {
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+	}
+	elapsed := time.Since(start).Milliseconds()
+
+	result := map[string]CoreTypeSchema{
+		"date":    buildCoreTypeSchema("date", sch.Core["date"]),
+		"page":    buildCoreTypeSchema("page", sch.Core["page"]),
+		"section": buildCoreTypeSchema("section", sch.Core["section"]),
+	}
+
+	if isJSONOutput() {
+		outputSuccess(map[string]interface{}{"core": result}, &Meta{Count: len(result), QueryTimeMs: elapsed})
+		return nil
+	}
+
+	fmt.Println("Core types:")
+	names := []string{"date", "page", "section"}
+	for _, name := range names {
+		core := result[name]
+		if len(core.Templates) > 0 {
+			fmt.Printf("  %s templates=%v", name, core.Templates)
+			if core.DefaultTemplate != "" {
+				fmt.Printf(" default=%s", core.DefaultTemplate)
+			}
+			fmt.Println()
+			continue
+		}
+		if core.DefaultTemplate != "" {
+			fmt.Printf("  %s default=%s\n", name, core.DefaultTemplate)
+			continue
+		}
+		fmt.Printf("  %s\n", name)
+	}
+	return nil
+}
+
+func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+	}
+
+	if !schema.IsBuiltinType(coreTypeName) {
+		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("core type '%s' not found", coreTypeName), "Available core types: date, page, section")
+	}
+	elapsed := time.Since(start).Milliseconds()
+	coreJSON := buildCoreTypeSchema(coreTypeName, sch.Core[coreTypeName])
+
+	if isJSONOutput() {
+		outputSuccess(map[string]interface{}{"core": coreJSON}, &Meta{QueryTimeMs: elapsed})
+		return nil
+	}
+
+	fmt.Printf("Core type: %s\n", coreTypeName)
+	if len(coreJSON.Templates) > 0 {
+		fmt.Println("  Templates:")
+		templates := append([]string(nil), coreJSON.Templates...)
+		sort.Strings(templates)
+		for _, templateID := range templates {
+			fmt.Printf("    - %s\n", templateID)
+		}
+	}
+	if coreJSON.DefaultTemplate != "" {
+		fmt.Printf("  Default template: %s\n", coreJSON.DefaultTemplate)
+	}
 	return nil
 }
 
@@ -404,6 +522,7 @@ func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaR
 	result := SchemaResult{
 		Version: sch.Version,
 		Types:   make(map[string]TypeSchema),
+		Core:    make(map[string]CoreTypeSchema),
 		Traits:  make(map[string]TraitSchema),
 	}
 
@@ -416,6 +535,11 @@ func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaR
 	result.Types["page"] = TypeSchema{Name: "page", Builtin: true}
 	result.Types["section"] = TypeSchema{Name: "section", Builtin: true}
 	result.Types["date"] = TypeSchema{Name: "date", Builtin: true}
+
+	// Core type config
+	result.Core["date"] = buildCoreTypeSchema("date", sch.Core["date"])
+	result.Core["page"] = buildCoreTypeSchema("page", sch.Core["page"])
+	result.Core["section"] = buildCoreTypeSchema("section", sch.Core["section"])
 
 	// Traits
 	for name, traitDef := range sch.Traits {
@@ -490,6 +614,16 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 	return result
 }
 
+func buildCoreTypeSchema(name string, coreDef *schema.CoreTypeDefinition) CoreTypeSchema {
+	result := CoreTypeSchema{Name: name}
+	if coreDef == nil {
+		return result
+	}
+	result.Templates = append([]string(nil), coreDef.Templates...)
+	result.DefaultTemplate = coreDef.DefaultTemplate
+	return result
+}
+
 func buildTraitSchema(name string, traitDef *schema.TraitDefinition) TraitSchema {
 	result := TraitSchema{Name: name}
 	if traitDef != nil {
@@ -511,6 +645,6 @@ func isBuiltinType(name string) bool {
 func init() {
 	schemaCmd.Flags().StringVar(&schemaTemplateFileFlag, "file", "", "Template file path under directories.template (for `schema template set`)")
 	schemaCmd.Flags().StringVar(&schemaTemplateDescriptionFlag, "description", "", "Template description (for `schema template set`; use '-' to clear)")
-	schemaCmd.Flags().BoolVar(&schemaTypeTemplateClearFlag, "clear", false, "Clear type default template (for `schema type <type_name> template default --clear`)")
+	schemaCmd.Flags().BoolVar(&schemaTypeTemplateClearFlag, "clear", false, "Clear type/core default template (for `schema type <type_name> template default --clear` and `schema core <core_type> template default --clear`)")
 	rootCmd.AddCommand(schemaCmd)
 }

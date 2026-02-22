@@ -15,6 +15,9 @@ func TestNewSchema(t *testing.T) {
 	if s.Traits == nil {
 		t.Fatal("Traits should not be nil")
 	}
+	if s.Core == nil {
+		t.Fatal("Core should not be nil")
+	}
 
 	// Check built-in types
 	if _, ok := s.Types["page"]; !ok {
@@ -23,6 +26,9 @@ func TestNewSchema(t *testing.T) {
 
 	if _, ok := s.Types["section"]; !ok {
 		t.Error("expected 'section' type to exist")
+	}
+	if _, ok := s.Types["date"]; !ok {
+		t.Error("expected 'date' type to exist")
 	}
 
 	// Section should have title and level fields

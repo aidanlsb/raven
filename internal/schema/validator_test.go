@@ -321,12 +321,13 @@ func TestValidateSchemaTemplateBindings(t *testing.T) {
 		}
 	})
 
-	t.Run("validates date type template bindings", func(t *testing.T) {
+	t.Run("validates core date template bindings", func(t *testing.T) {
 		sch := &Schema{
 			Templates: map[string]*TemplateDefinition{
 				"daily_default": {File: "templates/daily.md"},
 			},
-			Types: map[string]*TypeDefinition{
+			Types: map[string]*TypeDefinition{},
+			Core: map[string]*CoreTypeDefinition{
 				"date": {
 					Templates:       []string{"daily_default"},
 					DefaultTemplate: "missing_default",

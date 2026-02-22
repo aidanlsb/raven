@@ -1266,20 +1266,25 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 
 	t.Run("daily lifecycle via date type templates", func(t *testing.T) {
 		v.WriteFile("templates/daily.md", "# {{weekday}}, {{date}}\n\n## Notes\n")
+		v.WriteFile("templates/daily-brief.md", "# {{date}}\n\n## Brief\n")
 
 		result := v.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md")
 		result.MustSucceed(t)
 		if result.DataString("file") != "templates/daily.md" {
 			t.Errorf("expected daily file binding to templates/daily.md, got %q", result.DataString("file"))
 		}
+		v.RunCLI("schema", "template", "set", "daily_brief", "--file", "templates/daily-brief.md").MustSucceed(t)
 
-		v.RunCLI("schema", "type", "date", "template", "set", "daily_default").MustSucceed(t)
-		v.RunCLI("schema", "type", "date", "template", "default", "daily_default").MustSucceed(t)
+		v.RunCLI("schema", "core", "date", "template", "set", "daily_default").MustSucceed(t)
+		v.RunCLI("schema", "core", "date", "template", "set", "daily_brief").MustSucceed(t)
+		v.RunCLI("schema", "core", "date", "template", "default", "daily_default").MustSucceed(t)
 
 		v.RunCLI("daily", "2026-02-03").MustSucceed(t)
 		v.AssertFileContains("daily/2026-02-03.md", "## Notes")
+		v.RunCLI("daily", "2026-02-05", "--template", "daily_brief").MustSucceed(t)
+		v.AssertFileContains("daily/2026-02-05.md", "## Brief")
 
-		v.RunCLI("schema", "type", "date", "template", "default", "--clear").MustSucceed(t)
+		v.RunCLI("schema", "core", "date", "template", "default", "--clear").MustSucceed(t)
 		v.RunCLI("daily", "2026-02-04").MustSucceed(t)
 		v.AssertFileNotContains("daily/2026-02-04.md", "## Notes")
 	})

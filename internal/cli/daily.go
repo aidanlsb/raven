@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +14,7 @@ import (
 )
 
 var dailyEdit bool
+var dailyTemplate string
 
 var dailyCmd = &cobra.Command{
 	Use:   "daily [date]",
@@ -21,12 +23,14 @@ var dailyCmd = &cobra.Command{
 
 If no date is provided, defaults to today.
 Use --edit to open it in your editor.
+Use --template to select a specific core date template ID.
 
 Examples:
   rvn daily              # Today's note
   rvn daily yesterday    # Yesterday's note
   rvn daily tomorrow     # Tomorrow's note
   rvn daily 2025-02-01   # Specific date
+  rvn daily 2025-02-01 --template daily_brief
   rvn daily --edit       # Open in editor`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -60,17 +64,35 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("failed to load schema: %w", err)
 			}
-
-			result, err := pages.CreateDailyNoteWithSchema(
-				vaultPath,
-				vaultCfg.GetDailyDirectory(),
-				dateStr,
-				friendlyDate,
-				s,
-				vaultCfg.GetTemplateDirectory(),
-			)
-			if err != nil {
-				return fmt.Errorf("failed to create daily note: %w", err)
+			var result *pages.CreateResult
+			if strings.TrimSpace(dailyTemplate) != "" {
+				templateOverride, err := schema.ResolveTypeTemplateFile(s, "date", dailyTemplate)
+				if err != nil {
+					return handleErrorMsg(ErrInvalidInput, err.Error(), "Use `rvn schema core date template list` to see available template IDs")
+				}
+				result, err = pages.CreateDailyNoteWithTemplate(
+					vaultPath,
+					vaultCfg.GetDailyDirectory(),
+					dateStr,
+					friendlyDate,
+					templateOverride,
+					vaultCfg.GetTemplateDirectory(),
+				)
+				if err != nil {
+					return fmt.Errorf("failed to create daily note: %w", err)
+				}
+			} else {
+				result, err = pages.CreateDailyNoteWithSchema(
+					vaultPath,
+					vaultCfg.GetDailyDirectory(),
+					dateStr,
+					friendlyDate,
+					s,
+					vaultCfg.GetTemplateDirectory(),
+				)
+				if err != nil {
+					return fmt.Errorf("failed to create daily note: %w", err)
+				}
 			}
 
 			if !isJSONOutput() {
@@ -114,5 +136,6 @@ Examples:
 
 func init() {
 	dailyCmd.Flags().BoolVarP(&dailyEdit, "edit", "e", false, "Open the note in the configured editor")
+	dailyCmd.Flags().StringVar(&dailyTemplate, "template", "", "Core date template ID to use when creating a new daily note")
 	rootCmd.AddCommand(dailyCmd)
 }

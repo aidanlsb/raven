@@ -22,6 +22,9 @@ func TestLoad(t *testing.T) {
 		if _, ok := schema.Types["section"]; !ok {
 			t.Error("expected 'section' type to exist")
 		}
+		if _, ok := schema.Types["date"]; !ok {
+			t.Error("expected 'date' type to exist")
+		}
 	})
 
 	t.Run("load custom schema", func(t *testing.T) {
@@ -235,7 +238,7 @@ types:
 templates:
   daily_default:
     file: templates/daily.md
-types:
+core:
   date:
     templates: [daily_default]
     default_template: daily_default
@@ -258,6 +261,89 @@ types:
 		}
 		if dateType.DefaultTemplate != "daily_default" {
 			t.Fatalf("expected date.default_template=%q, got %q", "daily_default", dateType.DefaultTemplate)
+		}
+	})
+
+	t.Run("preserves page type template bindings", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		schemaContent := `
+templates:
+  note_default:
+    file: templates/note.md
+core:
+  page:
+    templates: [note_default]
+    default_template: note_default
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		loaded, err := Load(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		pageType := loaded.Types["page"]
+		if pageType == nil {
+			t.Fatal("expected built-in page type")
+		}
+		if len(pageType.Templates) != 1 || pageType.Templates[0] != "note_default" {
+			t.Fatalf("expected page.templates=[%q], got %v", "note_default", pageType.Templates)
+		}
+		if pageType.DefaultTemplate != "note_default" {
+			t.Fatalf("expected page.default_template=%q, got %q", "note_default", pageType.DefaultTemplate)
+		}
+	})
+
+	t.Run("rejects built-in type definitions under types", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := `
+types:
+  date:
+    templates: [daily_default]
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error when defining core type under types, got nil")
+		}
+	})
+
+	t.Run("allows empty section core config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := `
+core:
+  section: {}
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err != nil {
+			t.Fatalf("expected section core {} to load, got error: %v", err)
+		}
+	})
+
+	t.Run("rejects section template config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := `
+templates:
+  bad:
+    file: templates/bad.md
+core:
+  section:
+    templates: [bad]
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error for section template config, got nil")
 		}
 	})
 
