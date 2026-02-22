@@ -30,9 +30,10 @@ func BuiltinTypeNames() []string {
 
 // Schema represents the complete schema definition loaded from schema.yaml.
 type Schema struct {
-	Version int                         `yaml:"version,omitempty"` // Schema format version
-	Types   map[string]*TypeDefinition  `yaml:"types"`
-	Traits  map[string]*TraitDefinition `yaml:"traits"`
+	Version   int                            `yaml:"version,omitempty"` // Schema format version
+	Types     map[string]*TypeDefinition     `yaml:"types"`
+	Traits    map[string]*TraitDefinition    `yaml:"traits"`
+	Templates map[string]*TemplateDefinition `yaml:"templates,omitempty"`
 }
 
 // NewSchema creates a new schema with built-in types.
@@ -62,7 +63,8 @@ func NewSchema() *Schema {
 				},
 			},
 		},
-		Traits: make(map[string]*TraitDefinition),
+		Traits:    make(map[string]*TraitDefinition),
+		Templates: make(map[string]*TemplateDefinition),
 	}
 }
 
@@ -78,7 +80,21 @@ type TypeDefinition struct {
 	// auto-created as a required string field.
 	NameField string `yaml:"name_field,omitempty"`
 	// Template is a path to a template file (e.g., "templates/meeting.md").
+	// Deprecated: use Schema.Templates + TypeDefinition.Templates + DefaultTemplate.
 	Template string `yaml:"template,omitempty"`
+	// Templates lists template IDs from the schema-level templates map that this type can use.
+	Templates []string `yaml:"templates,omitempty"`
+	// DefaultTemplate selects the template ID from Templates that is applied by default.
+	// If empty, object creation proceeds without a template unless explicitly selected.
+	DefaultTemplate string `yaml:"default_template,omitempty"`
+}
+
+// TemplateDefinition defines a schema-level template that can be bound to one or more types.
+type TemplateDefinition struct {
+	// File is the template file path under directories.template (e.g., "templates/interview/technical.md").
+	File string `yaml:"file"`
+	// Description provides optional context for humans/agents.
+	Description string `yaml:"description,omitempty"`
 }
 
 // TraitDefinition defines a trait (@due, @priority, @highlight, etc.).

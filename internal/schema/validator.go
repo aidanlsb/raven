@@ -293,9 +293,19 @@ func ValidateSchema(sch *Schema) []string {
 	var issues []string
 	validTypes := ValidFieldTypes()
 
+	for templateID, templateDef := range sch.Templates {
+		if templateDef == nil {
+			issues = append(issues, fmt.Sprintf("Template '%s' is null; expected an object with a file field", templateID))
+			continue
+		}
+		if templateDef.File == "" {
+			issues = append(issues, fmt.Sprintf("Template '%s' must define a non-empty file path", templateID))
+		}
+	}
+
 	for typeName, typeDef := range sch.Types {
 		// Skip built-in types
-		if IsBuiltinType(typeName) {
+		if IsBuiltinType(typeName) && typeName != "date" {
 			continue
 		}
 
@@ -315,6 +325,26 @@ func ValidateSchema(sch *Schema) []string {
 						issues = append(issues, fmt.Sprintf("Type '%s' field '%s' references unknown type '%s'", typeName, fieldName, fieldDef.Target))
 					}
 				}
+			}
+		}
+
+		seenTemplateIDs := make(map[string]struct{})
+		for _, templateID := range typeDef.Templates {
+			if templateID == "" {
+				issues = append(issues, fmt.Sprintf("Type '%s' templates cannot contain empty template IDs", typeName))
+				continue
+			}
+			if _, seen := seenTemplateIDs[templateID]; seen {
+				issues = append(issues, fmt.Sprintf("Type '%s' templates contains duplicate template ID '%s'", typeName, templateID))
+			}
+			seenTemplateIDs[templateID] = struct{}{}
+			if _, exists := sch.Templates[templateID]; !exists {
+				issues = append(issues, fmt.Sprintf("Type '%s' references unknown template '%s'", typeName, templateID))
+			}
+		}
+		if typeDef.DefaultTemplate != "" {
+			if _, ok := seenTemplateIDs[typeDef.DefaultTemplate]; !ok {
+				issues = append(issues, fmt.Sprintf("Type '%s' default_template '%s' is not included in type templates", typeName, typeDef.DefaultTemplate))
 			}
 		}
 	}

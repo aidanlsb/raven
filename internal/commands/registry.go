@@ -82,11 +82,13 @@ to understand which fields are auto-populated.`,
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (repeatable) (key-value object)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
+			{Name: "template", Description: "Type template ID to use for object creation", Type: FlagTypeString, Examples: []string{"interview_technical", "interview_screen"}},
 		},
 		Examples: []string{
 			"rvn new person \"Freya\" --json",
 			"rvn new note \"Raven Friction\" --path note/raven-friction --json",
 			"rvn new project \"Website Redesign\" --json",
+			"rvn new interview \"Jane Doe @ Acme\" --template technical --json",
 			"rvn new book \"The Prose Edda\" --field author=people/snorri --json",
 		},
 		UseCases: []string{
@@ -1068,158 +1070,96 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 			"Update embedded ::type(...) declarations and saved queries after field rename",
 		},
 	},
-	"template_list": {
-		Name:        "template list",
-		Description: "List configured templates",
-		LongDesc: `List configured type templates and daily template binding.
-
-Templates are file-backed only and must live under directories.template
-(default: templates/).`,
+	"schema_template_list": {
+		Name:        "schema template list",
+		Description: "List schema templates",
+		LongDesc:    "List all schema templates defined in the top-level templates block.",
 		Examples: []string{
-			"rvn template list --json",
-		},
-		UseCases: []string{
-			"Discover all configured templates",
-			"Inspect template bindings before edits",
+			"rvn schema template list --json",
 		},
 	},
-	"template_get": {
-		Name:        "template get",
-		Description: "Get template binding and content",
-		LongDesc: `Get template binding and loaded content for a type or daily template.
-
-Targets:
-- type <type_name>
-- daily`,
+	"schema_template_get": {
+		Name:        "schema template get",
+		Description: "Show a schema template definition",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Template target: type or daily", Required: true, Completions: []string{"type", "daily"}},
-			{Name: "type_name", Description: "Type name (required when target=type)", Required: false, DynamicComp: "types"},
+			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
 		Examples: []string{
-			"rvn template get type meeting --json",
-			"rvn template get daily --json",
-		},
-		UseCases: []string{
-			"Inspect a type template",
-			"Inspect daily template binding and content",
+			"rvn schema template get interview_technical --json",
 		},
 	},
-	"template_set": {
-		Name:        "template set",
-		Description: "Set template file binding",
-		LongDesc: `Set template file binding for a type or daily template.
-
-Templates are file-backed only. Use --file with a path under directories.template.`,
+	"schema_template_set": {
+		Name:        "schema template set",
+		Description: "Create or update a schema template definition",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Template target: type or daily", Required: true, Completions: []string{"type", "daily"}},
-			{Name: "type_name", Description: "Type name (required when target=type)", Required: false, DynamicComp: "types"},
+			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "file", Description: "Template file path under directories.template (required)", Type: FlagTypeString, Examples: []string{"templates/meeting.md", "templates/daily.md"}},
+			{Name: "file", Description: "Template file path under directories.template", Type: FlagTypeString, Examples: []string{"templates/interview/technical.md"}},
+			{Name: "description", Description: "Template description (use '-' to clear)", Type: FlagTypeString},
 		},
 		Examples: []string{
-			"rvn template set type meeting --file templates/meeting.md --json",
-			"rvn template set daily --file templates/daily.md --json",
-		},
-		UseCases: []string{
-			"Bind a type to an existing template file",
-			"Bind daily notes to a template file",
+			"rvn schema template set interview_technical --file templates/interview/technical.md --json",
+			"rvn schema template set interview_technical --file templates/interview/technical.md --description \"Technical interview prompt\" --json",
 		},
 	},
-	"template_scaffold": {
-		Name:        "template scaffold",
-		Description: "Create template file and register binding",
-		LongDesc: `Create a template file and register it for a type or daily template.
-
-Defaults:
-- type <name> -> <directories.template>/<name>.md
-- daily -> <directories.template>/daily.md`,
+	"schema_template_remove": {
+		Name:        "schema template remove",
+		Description: "Remove a schema template definition",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Template target: type or daily", Required: true, Completions: []string{"type", "daily"}},
-			{Name: "type_name", Description: "Type name (required when target=type)", Required: false, DynamicComp: "types"},
-		},
-		Flags: []FlagMeta{
-			{Name: "file", Description: "Optional template file path under directories.template", Type: FlagTypeString},
-			{Name: "force", Description: "Overwrite scaffold file if it already exists", Type: FlagTypeBool},
+			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
 		Examples: []string{
-			"rvn template scaffold type meeting --json",
-			"rvn template scaffold daily --json",
-			"rvn template scaffold type project --file templates/project-kickoff.md --force --json",
-		},
-		UseCases: []string{
-			"Bootstrap a new type template",
-			"Bootstrap daily template setup",
+			"rvn schema template remove interview_technical --json",
 		},
 	},
-	"template_write": {
-		Name:        "template write",
-		Description: "Replace bound template file content",
-		LongDesc:    `Replace content in the currently bound template file for a type or daily template.`,
+	"schema_type_template_list": {
+		Name:        "schema type template list",
+		Description: "List template IDs bound to a type",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Template target: type or daily", Required: true, Completions: []string{"type", "daily"}},
-			{Name: "type_name", Description: "Type name (required when target=type)", Required: false, DynamicComp: "types"},
-		},
-		Flags: []FlagMeta{
-			{Name: "content", Description: "Template content to write (required)", Type: FlagTypeString},
+			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
 		},
 		Examples: []string{
-			`rvn template write type meeting --content "# {{title}}\n\n## Notes" --json`,
-			`rvn template write daily --content "# {{weekday}}, {{date}}\n\n## Notes" --json`,
-		},
-		UseCases: []string{
-			"Edit a type template file via CLI/MCP",
-			"Edit daily template content via CLI/MCP",
+			"rvn schema type interview template list --json",
+			"rvn schema type date template list --json",
 		},
 	},
-	"template_remove": {
-		Name:        "template remove",
-		Description: "Remove template binding",
-		LongDesc: `Remove template binding from a type or daily template.
-
-Use --delete-file to also delete the template file. Deletion is blocked when other
-targets still reference the same file unless --force is provided.`,
+	"schema_type_template_set": {
+		Name:        "schema type template set",
+		Description: "Bind a schema template ID to a type",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Template target: type or daily", Required: true, Completions: []string{"type", "daily"}},
-			{Name: "type_name", Description: "Type name (required when target=type)", Required: false, DynamicComp: "types"},
-		},
-		Flags: []FlagMeta{
-			{Name: "delete-file", Description: "Also delete the underlying template file", Type: FlagTypeBool},
-			{Name: "force", Description: "Skip reference safety checks for --delete-file", Type: FlagTypeBool},
+			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
+			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
 		Examples: []string{
-			"rvn template remove type meeting --json",
-			"rvn template remove daily --delete-file --force --json",
-		},
-		UseCases: []string{
-			"Unlink a template binding",
-			"Unlink and delete a template file safely",
+			"rvn schema type interview template set interview_technical --json",
+			"rvn schema type date template set daily_default --json",
 		},
 	},
-	"template_render": {
-		Name:        "template render",
-		Description: "Preview rendered template content",
-		LongDesc: `Render a template with variable substitution.
-
-Targets:
-- type <type_name> (supports --title and --field)
-- daily (supports --date)`,
+	"schema_type_template_remove": {
+		Name:        "schema type template remove",
+		Description: "Unbind a schema template ID from a type",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Template target: type or daily", Required: true, Completions: []string{"type", "daily"}},
-			{Name: "type_name", Description: "Type name (required when target=type)", Required: false, DynamicComp: "types"},
-		},
-		Flags: []FlagMeta{
-			{Name: "title", Description: "Title for type template rendering", Type: FlagTypeString},
-			{Name: "field", Description: "Set field value for rendering (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"attendees": "Alice, Bob"}`, `{"status": "active"}`}},
-			{Name: "date", Description: "Date for daily render (today/yesterday/tomorrow/YYYY-MM-DD)", Type: FlagTypeString},
+			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
+			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
 		Examples: []string{
-			"rvn template render type meeting --title \"Weekly Standup\" --field attendees=\"Alice, Bob\" --json",
-			"rvn template render daily --date tomorrow --json",
+			"rvn schema type interview template remove interview_technical --json",
 		},
-		UseCases: []string{
-			"Preview a type template with substitutions",
-			"Preview daily template output for a date",
+	},
+	"schema_type_template_default": {
+		Name:        "schema type template default",
+		Description: "Set or clear a type default template ID",
+		Args: []ArgMeta{
+			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
+			{Name: "template_id", Description: "Schema template ID (omit with --clear)", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "clear", Description: "Clear the type default template", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema type interview template default interview_technical --json",
+			"rvn schema type interview template default --clear --json",
 		},
 	},
 	"set": {

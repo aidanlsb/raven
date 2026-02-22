@@ -17,6 +17,7 @@ import (
 var (
 	newFieldFlags []string
 	newPathFlag   string
+	newTemplate   string
 )
 
 var newCmd = &cobra.Command{
@@ -33,6 +34,7 @@ Examples:
   rvn new person                       # Prompts for title, creates in people/
   rvn new person "Freya"               # Creates people/freya.md
   rvn new person "Freya" --field name="Freya"  # With required field
+  rvn new interview "Jane Doe @ Acme" --template technical
   rvn new note "Raven Friction" --path note/raven-friction
   rvn new project "Website Redesign"   # Creates projects/website-redesign.md
   rvn new page "Quick Note"            # Creates quick-note.md in vault root`,
@@ -221,11 +223,17 @@ Examples:
 		}
 
 		// Create the page through the shared object creator.
+		templateOverride, err := schema.ResolveTypeTemplateFile(s, typeName, newTemplate)
+		if err != nil {
+			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use `rvn schema type <type_name> template list` to see available template IDs")
+		}
+
 		result, err := creator.create(objectCreateParams{
-			typeName:   typeName,
-			title:      title,
-			targetPath: targetPath,
-			fields:     fieldValues,
+			typeName:         typeName,
+			title:            title,
+			targetPath:       targetPath,
+			fields:           fieldValues,
+			templateOverride: templateOverride,
 		})
 		if err != nil {
 			return handleError(ErrFileWriteError, err, "")
@@ -298,5 +306,6 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 func init() {
 	newCmd.Flags().StringArrayVar(&newFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
 	newCmd.Flags().StringVar(&newPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
+	newCmd.Flags().StringVar(&newTemplate, "template", "", "Type template ID to use for object creation")
 	rootCmd.AddCommand(newCmd)
 }

@@ -451,3 +451,123 @@ directories:
 		t.Fatalf("expected created page file in objects root: %v", err)
 	}
 }
+
+func TestNewUsesTemplateIDFromSchema(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+templates:
+  interview_technical:
+    file: templates/interview/technical.md
+types:
+  interview:
+    default_path: interviews/
+    templates: [interview_technical]
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(vaultPath, "templates", "interview"), 0o755); err != nil {
+		t.Fatalf("mkdir templates/interview: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "templates", "interview", "technical.md"), []byte("## Technical Interview\n"), 0o644); err != nil {
+		t.Fatalf("write template file: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevTemplate := newTemplate
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newTemplate = prevTemplate
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+	newPathFlag = ""
+	newTemplate = "interview_technical"
+	newCmd.Flags().Lookup("path").Changed = false
+
+	if err := newCmd.RunE(newCmd, []string{"interview", "Jane Doe"}); err != nil {
+		t.Fatalf("newCmd.RunE: %v", err)
+	}
+
+	created := filepath.Join(vaultPath, "interviews", "jane-doe.md")
+	contentBytes, err := os.ReadFile(created)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	content := string(contentBytes)
+	if !strings.Contains(content, "## Technical Interview") {
+		t.Fatalf("expected selected template content in created file, got:\n%s", content)
+	}
+}
+
+func TestNewWithoutDefaultTemplateCreatesWithoutTemplate(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+templates:
+  interview_screen:
+    file: templates/interview/screen.md
+types:
+  interview:
+    default_path: interviews/
+    templates: [interview_screen]
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(vaultPath, "templates", "interview"), 0o755); err != nil {
+		t.Fatalf("mkdir templates/interview: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "templates", "interview", "screen.md"), []byte("## Screening Template\n"), 0o644); err != nil {
+		t.Fatalf("write template file: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevPath := newPathFlag
+	prevTemplate := newTemplate
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newPathFlag = prevPath
+		newTemplate = prevTemplate
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+	newPathFlag = ""
+	newTemplate = ""
+	newCmd.Flags().Lookup("path").Changed = false
+
+	if err := newCmd.RunE(newCmd, []string{"interview", "No Template Interview"}); err != nil {
+		t.Fatalf("newCmd.RunE: %v", err)
+	}
+
+	created := filepath.Join(vaultPath, "interviews", "no-template-interview.md")
+	contentBytes, err := os.ReadFile(created)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	content := string(contentBytes)
+	if strings.Contains(content, "## Screening Template") {
+		t.Fatalf("did not expect template content when default_template is unset, got:\n%s", content)
+	}
+}

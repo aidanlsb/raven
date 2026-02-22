@@ -394,7 +394,11 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 			if dailyDir == "" {
 				dailyDir = "daily"
 			}
-			if _, err := pages.CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, vaultCfg.DailyTemplate, vaultCfg.GetTemplateDirectory()); err != nil {
+			s, err := schema.Load(vaultPath)
+			if err != nil {
+				return fmt.Errorf("failed to load schema: %w", err)
+			}
+			if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory()); err != nil {
 				return fmt.Errorf("failed to create daily note: %w", err)
 			}
 		} else {
