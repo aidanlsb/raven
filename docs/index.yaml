@@ -1,21 +1,60 @@
 # Optional metadata for `rvn docs` navigation.
 # This index is authoritative for sections/topics shown in `rvn docs`.
 sections:
-  guide:
-    title: User Guides
+  getting-started:
+    title: Getting Started
     topics:
       getting-started:
         title: Start Here
         path: getting-started.md
-      configuration:
-        title: Setup and Configuration
-        path: configuration.md
-      schema-intro:
-        title: Schema Introduction
-        path: schema-intro.md
       core-concepts:
         title: Core Concepts
         path: core-concepts.md
+      configuration:
+        title: Setup and Configuration
+        path: configuration.md
+  querying:
+    title: Querying
+    topics:
+      query-language:
+        title: Query Language
+        path: query-language.md
+  types-and-traits:
+    title: Types and Traits
+    topics:
+      schema-intro:
+        title: Schema Introduction
+        path: schema-intro.md
+      schema:
+        title: Schema Reference
+        path: schema.md
+      file-format:
+        title: File Format
+        path: file-format.md
+      templates:
+        title: Templates
+        path: templates.md
+  vault-management:
+    title: Vault Management
+    topics:
+      bulk-operations:
+        title: Bulk Operations
+        path: bulk-operations.md
+  workflows:
+    title: Workflows
+    topics:
+      workflows:
+        title: Workflows Reference
+        path: workflows.md
+  agents:
+    title: Agents
+    topics:
+      mcp:
+        title: MCP Reference
+        path: mcp.md
+  guide:
+    title: User Guides
+    topics:
       cli:
         title: CLI Learning Path
         path: cli.md
@@ -34,19 +73,6 @@ sections:
       cli:
         title: CLI Reference
         path: cli.md
-      query-language:
-        path: query-language.md
-      file-format:
-        path: file-format.md
-      schema:
-        path: schema.md
-      workflows:
-        path: workflows.md
-      bulk-operations:
-        path: bulk-operations.md
-      mcp:
-        title: MCP Reference
-        path: mcp.md
       vault-config:
         title: raven.yaml Reference
         path: vault-config.md

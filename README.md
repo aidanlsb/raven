@@ -196,7 +196,7 @@ Once connected, ask the agent:
 
 The agent will walk through schema creation, creating your first objects, and learning the query language — all through conversation.
 
-See the full [MCP reference](docs/reference/mcp.md) for configuration options and available tools.
+See the full [MCP reference](docs/agents/mcp.md) for configuration options and available tools.
 
 ---
 
@@ -226,7 +226,7 @@ hermod-vault/
 - **The SQLite index is disposable** — delete it and run `rvn reindex` to rebuild from files
 - **Files are the source of truth** — edit them with any editor, sync with cloud storage or git
 
-See the [file format reference](docs/reference/file-format.md) for the full specification.
+See the [file format reference](docs/types-and-traits/file-format.md) for the full specification.
 
 ---
 
@@ -308,7 +308,7 @@ attendees:
 
 Every ref creates a two-way link. Use `rvn backlinks person/skirnir` to see everything that mentions Skírnir.
 
-See [Core Concepts](docs/guide/core-concepts.md) for a deeper introduction, and the [schema reference](docs/reference/schema.md) for the full specification.
+See [Core Concepts](docs/getting-started/core-concepts.md) for a deeper introduction, and the [schema reference](docs/types-and-traits/schema.md) for the full specification.
 
 ---
 
@@ -403,7 +403,7 @@ rvn query open-todos
 rvn query active-projects
 ```
 
-See the [query language reference](docs/reference/query-language.md) for the full syntax including boolean composition, nested queries, and date predicates.
+See the [query language reference](docs/querying/query-language.md) for the full syntax including boolean composition, nested queries, and date predicates.
 
 ---
 
@@ -445,7 +445,7 @@ Run via CLI or agent:
 rvn workflow run meeting-prep --input meeting_id=meeting/2026-01-17-council-gladsheim
 ```
 
-See the [workflows guide](docs/guide/workflows.md) and [workflows reference](docs/reference/workflows.md) for the full specification.
+See the [workflows guide](docs/guide/workflows.md) and [workflows reference](docs/workflows/workflows.md) for the full specification.
 
 ---
 
@@ -455,25 +455,25 @@ Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with
 
 **Guides** (learning path):
 
-1. [Getting Started](docs/guide/getting-started.md) — first-session flow and verification
-2. [Core Concepts](docs/guide/core-concepts.md) — types, traits, references
-3. [Schema Introduction](docs/guide/schema-intro.md) — practical `schema.yaml` basics
-4. [Configuration](docs/guide/configuration.md) — `raven.yaml` and `config.toml`
+1. [Getting Started](docs/getting-started/getting-started.md) — first-session flow and verification
+2. [Core Concepts](docs/getting-started/core-concepts.md) — types, traits, references
+3. [Schema Introduction](docs/types-and-traits/schema-intro.md) — practical `schema.yaml` basics
+4. [Configuration](docs/getting-started/configuration.md) — `raven.yaml` and `config.toml`
 5. [CLI Basics](docs/guide/cli-basics.md) — everyday commands
 6. [CLI Advanced](docs/guide/cli-advanced.md) — bulk operations and power workflows
-7. [Templates](docs/guide/templates.md) — type and daily templates
+7. [Templates](docs/types-and-traits/templates.md) — type and daily templates
 8. [Workflows](docs/guide/workflows.md) — multi-step agent pipelines
 
 **References** (lookup):
 
 - [CLI Reference](docs/reference/cli.md) — every command and flag
-- [Query Language](docs/reference/query-language.md) — full RQL syntax
-- [Schema Reference](docs/reference/schema.md) — `schema.yaml` specification
-- [File Format](docs/reference/file-format.md) — markdown + frontmatter spec
+- [Query Language](docs/querying/query-language.md) — full RQL syntax
+- [Schema Reference](docs/types-and-traits/schema.md) — `schema.yaml` specification
+- [File Format](docs/types-and-traits/file-format.md) — markdown + frontmatter spec
 - [Vault Config](docs/reference/vault-config.md) — `raven.yaml` reference
-- [MCP Reference](docs/reference/mcp.md) — agent integration
-- [Workflows Reference](docs/reference/workflows.md) — pipeline specification
-- [Bulk Operations](docs/reference/bulk-operations.md) — patterns for operating at scale
+- [MCP Reference](docs/agents/mcp.md) — agent integration
+- [Workflows Reference](docs/workflows/workflows.md) — pipeline specification
+- [Bulk Operations](docs/vault-management/bulk-operations.md) — patterns for operating at scale
 
 Interactive learning:
 

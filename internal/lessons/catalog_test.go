@@ -107,9 +107,9 @@ func TestLoadCatalogParsesAndNormalizesDocsFrontmatter(t *testing.T) {
 			Data: []byte(`---
 title: Objects
 docs:
-  - docs/guide/core-concepts.md#files-are-objects
-  - " docs/reference/file-format.md#frontmatter "
-  - docs/guide/core-concepts.md#files-are-objects
+  - docs/getting-started/core-concepts.md#files-are-objects
+  - " docs/types-and-traits/file-format.md#frontmatter "
+  - docs/getting-started/core-concepts.md#files-are-objects
   - ""
 ---
 
@@ -131,10 +131,10 @@ docs:
 	if len(lesson.Docs) != 2 {
 		t.Fatalf("expected 2 unique docs, got %d: %#v", len(lesson.Docs), lesson.Docs)
 	}
-	if lesson.Docs[0] != "docs/guide/core-concepts.md#files-are-objects" {
+	if lesson.Docs[0] != "docs/getting-started/core-concepts.md#files-are-objects" {
 		t.Fatalf("unexpected first docs link: %q", lesson.Docs[0])
 	}
-	if lesson.Docs[1] != "docs/reference/file-format.md#frontmatter" {
+	if lesson.Docs[1] != "docs/types-and-traits/file-format.md#frontmatter" {
 		t.Fatalf("unexpected second docs link: %q", lesson.Docs[1])
 	}
 }

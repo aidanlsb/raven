@@ -5,8 +5,7 @@ This is a guide-level introduction to `schema.yaml`.
 Goal: make your first safe schema changes without getting lost in full reference details.
 
 Out of scope:
-- exhaustive field/trait rules (use `reference/schema.md`)
-- every schema command variant (use `reference/cli.md`)
+- exhaustive field/trait rules (use `types-and-traits/schema.md`)
 
 ## What `schema.yaml` controls
 
@@ -83,7 +82,7 @@ This catches type/field/trait issues early and keeps the index aligned with the 
 
 ## What to read next
 
-- `reference/schema.md` for complete schema format and evolution rules
-- `reference/cli.md` for the full `rvn schema ...` command set
-- `configuration.md` for `config.toml` and `raven.yaml` setup
+- `types-and-traits/schema.md` for complete schema format and evolution rules
+- Use `rvn help <command>` for the full `rvn schema ...` command set
+- `getting-started/configuration.md` for `config.toml` and `raven.yaml` setup
 

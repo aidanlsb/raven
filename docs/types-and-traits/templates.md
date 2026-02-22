@@ -9,8 +9,7 @@ This guide covers both:
 Goal: set up templates safely with the `rvn template ...` command family.
 
 Out of scope:
-- full command-flag reference (use `reference/cli.md`)
-- full schema reference (use `reference/schema.md`)
+- full schema reference (use `types-and-traits/schema.md`)
 
 ## How templates work
 
@@ -177,7 +176,6 @@ Recommended safe flow:
 
 ## Related docs
 
-- `reference/cli.md` for exact `rvn template` flags
-- `reference/vault-config.md` for `directories.template` and `daily_template`
-- `reference/schema.md` for `types.<type>.template`
-- `configuration.md` for practical vault setup
+- Use `rvn help template` for exact `rvn template` flags
+- `getting-started/configuration.md` for `directories.template`, `daily_template`, and practical vault setup
+- `types-and-traits/schema.md` for `types.<type>.template`
