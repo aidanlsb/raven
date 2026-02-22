@@ -3,6 +3,8 @@
 The query language is powerful and can answer complex questions in a single query. Master it to serve users efficiently.
 
 For a quick pattern reference, fetch `raven://guide/query-cheatsheet`.
+For bulk execution patterns (`--apply`, `--ids`), see `raven://guide/key-workflows`.
+For query/tool failures, see `raven://guide/error-handling`.
 
 ### Query Types
 
@@ -36,13 +38,13 @@ trait:<name> [predicates...]
 - `refd([[source]])` — Referenced by specific source (inverse of `refs()`)
 - `refd(object:X ...)` — Referenced by objects matching nested object query
 - `parent(object:X ...)` — Direct parent matches nested object query
-- `parent:[[target]]` — Direct parent is specific object
+- `parent([[target]])` — Direct parent is specific object
 - `ancestor(object:X ...)` — Any ancestor matches nested object query
-- `ancestor:[[target]]` — Specific object is an ancestor
+- `ancestor([[target]])` — Specific object is an ancestor
 - `child(object:X ...)` — Has direct child matching nested object query
-- `child:[[target]]` — Has direct child that is a specific object
+- `child([[target]])` — Has direct child that is a specific object
 - `descendant(object:X ...)` — Has descendant matching nested object query
-- `descendant:[[target]]` — Has descendant that is a specific object
+- `descendant([[target]])` — Has descendant that is a specific object
 - `content("term")` — Full-text search on object content
 
 **For trait queries:**
@@ -54,9 +56,9 @@ trait:<name> [predicates...]
 - `in(.value, [a,b])` — Trait value is one of a list of values (use this for “value in list”)
 - `!.value==X` — Trait value does NOT equal X
 - `on(object:X ...)` — Direct parent matches nested object query
-- `on:[[target]]` — Direct parent is specific object
+- `on([[target]])` — Direct parent is specific object
 - `within(object:X ...)` — Inside object matching nested object query
-- `within:[[target]]` — Inside specific object
+- `within([[target]])` — Inside specific object
 - `refs([[target]])` — Trait's line references target
 - `refs(object:X ...)` — Trait's line references matching objects
 - `at(trait:X ...)` — Co-located with trait matching nested trait query
@@ -156,7 +158,7 @@ trait:due .value==this-week within(object:project .status==active)
 trait:due (refs([[people/freya]]) | refs([[people/thor]]))
 
 # Sections inside a specific project
-object:section ancestor:[[projects/website]]
+object:section ancestor([[projects/website]])
 
 # Meetings without any due items
 object:meeting !has(trait:due)

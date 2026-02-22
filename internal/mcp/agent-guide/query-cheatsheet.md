@@ -19,16 +19,15 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - References:
   - `refs([[target]])` (objects/traits that reference target)
   - `refs(object:project .status==active)`
-  - `within([[target]])` (traits/objects within a target object)
-  - `within(object:meeting .status==active)`
-  - `on([[target]])`, `on(object:...)`, `ancestor(...)`, `child(...)`
+  - Trait location: `within([[target]])`, `within(object:...)`, `on([[target]])`, `on(object:...)`
+  - Object hierarchy: `parent(...)`, `ancestor(...)`, `child(...)`, `descendant(...)`
 
 ## Sub-queries
 
 Nest queries inside predicates to filter by related objects or traits:
 
 - `refs(object:project .status == active)`
-- `within(object:meeting refs([[project/raven]]))`
+- `within(object:meeting refs([[projects/raven]]))`
 - `has(trait:due .value == past)`
 - `on(object:project .status == active)`
 
@@ -42,16 +41,16 @@ Combine predicates with boolean operators:
 - `(...)` = grouping
 
 Example:
-- `trait:todo (.value == todo | .value == doing) !refs([[project/legacy]])`
+- `trait:todo (.value == todo | .value == doing) !refs([[projects/legacy]])`
 
 This can be very useful to provide lots of information to the user. If a question is vague, err on the side of running a few different versions of a query that could match the description and returning all the results to the user.
 
 ## Examples
 
 - Open todos for a project page:
-  - `trait:todo within([[project/raven]]) .value != done`
+  - `trait:todo within([[projects/raven]]) .value != done`
 - Todos referencing a project:
-  - `trait:todo refs([[project/raven]]) .value != done`
+  - `trait:todo refs([[projects/raven]]) .value != done`
 - Due tomorrow:
   - `trait:due .value == tomorrow`
 - Meetings with an attendee:

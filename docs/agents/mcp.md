@@ -254,10 +254,10 @@ Bulk operations preview by default. Pass `confirm=true` to apply:
 
 ```
 # Preview (default)
-raven_query(query_string="trait:due .value==past", apply="set status=overdue")
+raven_query(query_string="object:project .status==active", apply="set reviewed=true")
 
 # Apply
-raven_query(query_string="trait:due .value==past", apply="set status=overdue", confirm=true)
+raven_query(query_string="object:project .status==active", apply="set reviewed=true", confirm=true)
 ```
 
 ---
@@ -351,10 +351,12 @@ Notes:
 
 ### Querying
 
+For full RQL syntax and examples, see `querying/query-language.md`.
+
 ```python
 # Object queries
 raven_query(query_string="object:project .status==active")
-raven_query(query_string="object:person .email==*")
+raven_query(query_string="object:person exists(.email)")
 
 # Trait queries
 raven_query(query_string="trait:due .value==past")
@@ -412,10 +414,13 @@ raven_edit(
 
 ```python
 # Preview changes
-raven_query(query_string="trait:due .value==past", apply="set status=overdue")
+raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue")
 
 # Apply after user confirmation
-raven_query(query_string="trait:due .value==past", apply="set status=overdue", confirm=true)
+raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue", confirm=true)
+
+# Trait query updates (trait queries support only update)
+raven_query(query_string="trait:todo .value==todo", apply="update done", confirm=true)
 
 # Other bulk operations
 raven_query(query_string="object:project .status==archived", apply="move archive/")

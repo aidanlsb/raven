@@ -508,7 +508,7 @@ rvn schema update field person email --required=true
 
 ```bash
 # First, add the field to all objects
-rvn query "object:person !.email==*" --ids | rvn set --stdin email="" --confirm
+rvn query "object:person !exists(.email)" --ids | rvn set --stdin email="" --confirm
 
 # Then make it required
 rvn schema update field person email --required=true
@@ -542,7 +542,7 @@ Fix with:
 rvn check
 
 # Update them
-rvn query "trait:priority .value==urgent" --apply "set priority=critical" --confirm
+rvn query "trait:priority .value==urgent" --apply "update critical" --confirm
 ```
 
 ### After Schema Changes
@@ -580,6 +580,12 @@ Validates vault files against the schema. Reports issues like:
 | `invalid_enum_value` | Value not in allowed list | Use valid value |
 | `undefined_trait` | Trait not in schema | Add trait to schema |
 | `missing_reference` | Link to non-existent page | Create the page |
+| `ambiguous_reference` | Reference matches multiple objects | Use full path (e.g., `[[people/freya]]`) |
+| `id_collision` | Same short name maps to multiple object IDs | Use full paths or rename objects |
+| `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
+| `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use full path |
+
+For reference resolution details and ambiguity behavior, see `types-and-traits/file-format.md` (References section).
 
 ---
 

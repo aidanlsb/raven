@@ -201,20 +201,23 @@ When users want to reorganize their vault:
 
 When users want to update many objects at once:
 
+For query syntax and predicate patterns, see `raven://guide/querying`.
+
 1. Use `raven_query` with `--apply` to update query results in bulk:
    ```
    # Preview changes (default — changes NOT applied)
-   raven_query(query_string="trait:due .value==past", apply="set status=overdue")
+   raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue")
    
    # Apply changes after user confirmation
-   raven_query(query_string="trait:due .value==past", apply="set status=overdue", confirm=true)
+   raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue", confirm=true)
+
+   # Trait query updates (trait queries support only update)
+   raven_query(query_string="trait:todo .value==todo", apply="update done", confirm=true)
    ```
 
 2. Supported bulk operations:
-   - `set field=value` — Update frontmatter fields
-   - `delete` — Delete matching objects
-   - `add <text>` — Append text to matching files
-   - `move <dir/>` — Move to directory (destination must end with `/`)
+   - Object queries: `set field=value`, `delete`, `add <text>`, `move <dir/>`
+   - Trait queries: `update <new_value>`
 
 3. Alternative: Use `--ids` to get IDs for piping:
    ```
@@ -244,7 +247,7 @@ When users want to update many objects at once:
 - Always preview before applying
 - Embedded objects (file#section): `set` supports them; `add/delete/move` skip them
 - Errors are collected and reported, but don't stop other operations
-- Use git to rollback if needed: `git checkout .`
+- Use git to rollback if needed: `git restore .`
 
 ### 7. Reindexing
 

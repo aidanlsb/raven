@@ -1,46 +1,43 @@
 # Query Language
 
-> **Shell Tip:** Always wrap queries in single quotes to prevent shell interpretation of special characters like `(`, `)`, `|`, and `!`.
-> This page is lookup-oriented. You should not need it to complete first-session onboarding.
+> **Shell Tip:** Wrap query strings in single quotes to avoid shell interpretation of `(`, `)`, `|`, and `!`.
+> This page is a reference and decision guide for Raven Query Language (RQL).
 
-## Core Principles
+## Start Here
 
-1. **Two query types**: object queries and trait queries
-2. **Single return type**: every query (including nested queries) returns exactly one type
-3. **Boolean composition**: predicates can be combined with AND (space), OR (`|`), and NOT (`!`)
-4. **Nested queries**: structural predicates accept nested `object:` / `trait:` queries directly (no `{...}` syntax)
+### Choose the Right Tool
 
-## Syntax Conventions
+| Use this | When you want |
+|----------|---------------|
+| `rvn query` | Structured filtering by type/trait, field values, hierarchy, and references |
+| `rvn search` | Free-text discovery when you do not know the structure yet |
+| `rvn backlinks` | All incoming references to one specific target |
+| `rvn outlinks` | All outgoing references from one specific target |
+| `rvn read` | Full file content after you already identified relevant objects |
 
-| Element | Syntax | Example |
-|---------|--------|---------|
-| Field access | `.` prefix | `.status==active` |
-| Equality | `==` | `.status==active`, `.value==past` |
-| Not equals | `!=` | `.status!=done` |
-| Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
-| Substring | `contains()` | `contains(.name, "website")` |
-| Starts with | `startswith()` | `startswith(.name, "My")` |
-| Ends with | `endswith()` | `endswith(.name, ".md")` |
-| Regex | `matches()` | `matches(.name, "^api.*$")` |
-| Membership (scalar) | `in()` | `in(.status, [active,backlog])`, `in(.value, [past,today])` |
-| Array any/all/none | `any()` / `all()` / `none()` | `any(.tags, _ == "urgent")` |
-| Presence | `exists()` | `exists(.email)`, `!exists(.email)` |
-| References | `[[...]]` | `[[people/freya]]` |
-| Raw string | `r"..."` | `matches(.path, r"C:\Users\.*")` |
+### Choose Query Type
 
-## Query Types
+| Query type | Returns | Best for |
+|------------|---------|----------|
+| `object:<type> ...` | Objects | Find files/sections by frontmatter fields and structural relationships |
+| `trait:<name> ...` | Trait instances | Find inline annotations (`@todo`, `@due`, etc.) and surrounding content|
+
+Core rules:
+1. Every query returns exactly one kind of result (objects or traits).
+2. Queries can nest arbitrarily, e.g. `object:project has(trait:...)`.
+3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
+
+## Query Shapes
 
 ### Object Query
 
-Returns objects of a single type.
-
-```
-object:<type> [<predicates>...]
+```text
+object:<type> [predicates...]
 ```
 
-**Examples:**
+Examples:
 
-```
+```text
 object:project
 object:project .status==active
 object:meeting has(trait:due .value==past)
@@ -49,135 +46,157 @@ object:project encloses(trait:todo .value==todo)
 
 ### Trait Query
 
-Returns traits of a single name.
-
-```
-trait:<name> [<predicates>...]
+```text
+trait:<name> [predicates...]
 ```
 
-**Examples:**
+Examples:
 
-```
+```text
 trait:due
 trait:due .value==past
 trait:highlight on(object:book .status==reading)
 ```
 
----
+## Syntax Building Blocks
+
+| Element | Syntax | Example |
+|---------|--------|---------|
+| Field access | `.` prefix | `.status==active`, `.value==past` |
+| Equality / inequality | `==`, `!=` | `.status!=done` |
+| Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
+| Presence | `exists(.field)` | `exists(.email)`, `!exists(.email)` |
+| Scalar membership | `in(.field, [a,b])` | `in(.status, [active,backlog])` |
+| Array quantifiers | `any()` / `all()` / `none()` | `any(.tags, _ == "urgent")` |
+| String functions | `contains()`, `startswith()`, `endswith()`, `matches()` | `contains(.name, "website")` |
+| References | `[[...]]` | `[[people/freya]]` |
+| Raw string | `r"..."` | `matches(.path, r"C:\Users\.*")` |
+
+Notes:
+- `.field==*` / `!.field==*` are not supported. Use `exists(.field)` / `!exists(.field)`.
+- String functions are case-insensitive by default. Pass `true` as a third argument for case-sensitive matching.
+- `matches()` accepts either a quoted pattern or regex literal (`/pattern/`).
 
 ## Object Query Predicates
 
-### Field-Based
-
-Filter by object frontmatter fields. Fields use dot prefix.
+### Field Predicates
 
 | Predicate | Meaning |
 |-----------|---------|
 | `.field==value` | Field equals value |
-| `.field!=value` | Field does NOT equal value |
-| `exists(.field)` | Field exists (has a value) |
-| `.field>value` | Field is greater than value |
-| `.field<value` | Field is less than value |
-| `.field>=value` | Field is greater or equal |
-| `.field<=value` | Field is less or equal |
+| `.field!=value` | Field does not equal value |
+| `.field>value`, `.field<value` | Numeric/date comparison |
+| `.field>=value`, `.field<=value` | Inclusive comparison |
+| `exists(.field)` | Field has a value |
+| `in(.field, [a,b,c])` | Field matches any listed scalar value |
 
-For fields typed as `ref` or `ref[]` in the schema, values are treated as reference targets. You can use unbracketed values (e.g. `.company==cursor`), and comparisons resolve to canonical IDs. If a ref-typed field contains an ambiguous value, queries on that field return an error until the value is disambiguated.
+Examples:
 
-Wikilinks inside **string** fields still produce backlinks, but string field comparisons remain literal.
-
-**Examples:**
-
-```
+```text
 object:project .status==active
-object:project .title=="My Project"
+object:project .title=="Website Redesign"
 object:person exists(.email)
 object:person !exists(.email)
-object:project .priority>5
+object:project in(.status, [active,paused])
 ```
 
-### String Matching Functions
+For `ref` and `ref[]` fields (from `schema.yaml`), comparison values are resolved as reference targets, including unbracketed shorthand such as `.company==cursor`.
+
+### String Matching
 
 | Function | Meaning |
 |----------|---------|
-| `contains(.field, "str")` | Field contains substring |
-| `startswith(.field, "str")` | Field starts with |
-| `endswith(.field, "str")` | Field ends with |
-| `matches(.field, "pattern")` | Field matches regex |
+| `contains(.field, "str")` | Substring match |
+| `startswith(.field, "str")` | Prefix match |
+| `endswith(.field, "str")` | Suffix match |
+| `matches(.field, "pattern")` / `matches(.field, /pattern/)` | Regex match |
 
-All string functions are **case-insensitive by default**. Add `true` as third argument for case-sensitive:
+Case-sensitive example:
 
-```
+```text
 contains(.name, "API", true)
 ```
 
-### Array Field Matching
+### Array Predicates
 
-For array fields, use quantifier functions (`any`, `all`, `none`). The `_` symbol represents the current element being tested.
+Use quantifiers for array fields. `_` represents the current array element.
 
-**Examples:**
-
-```
+```text
 object:project any(.tags, _ == "urgent")
 object:project all(.tags, startswith(_, "feature-"))
 object:project none(.tags, _ == "deprecated")
 ```
 
-### Structural Predicates (Function Form)
+### Structural Predicates
 
 | Predicate | Meaning |
 |-----------|---------|
-| `has(trait:...)` | Object has matching trait directly on the object |
-| `encloses(trait:...)` | Object has matching trait on self or any descendant object |
-| `parent(object:...)` / `parent([[target]])` / `parent(target)` | Direct parent matches |
-| `ancestor(object:...)` / `ancestor([[target]])` / `ancestor(target)` | Some ancestor matches |
-| `child(object:...)` / `child([[target]])` / `child(target)` | Has direct child matching |
-| `descendant(object:...)` / `descendant([[target]])` / `descendant(target)` | Has descendant matching |
-| `refs([[target]])` / `refs(target)` / `refs(object:...)` | Outgoing references |
-| `refd([[source]])` / `refd(source)` / `refd(object:...)` / `refd(trait:...)` | Incoming references |
-| `content("term")` | Full-text search over object content |
+| `has(trait:...)` | Object has matching trait directly on itself |
+| `encloses(trait:...)` | Object has matching trait on self or any descendant |
+| `parent(...)` | Direct parent matches query or target |
+| `ancestor(...)` | Any ancestor matches query or target |
+| `child(...)` | Direct child matches query or target |
+| `descendant(...)` | Any descendant matches query or target |
+| `refs(...)` | Object references a target or query match |
+| `refd(...)` | Object is referenced by a source or query match |
+| `content("term")` | Full-text term in object content |
 
-**Examples:**
+`parent`, `ancestor`, `child`, `descendant`, and `refs` accept:
+- Nested query: `parent(object:date)`
+- Wikilink: `parent([[daily/2026-01-10]])`
+- Target shorthand: `parent(daily/2026-01-10)`
 
-```
+Examples:
+
+```text
 object:project has(trait:due)
 object:project encloses(trait:todo .value==todo)
 object:meeting parent(object:date)
 object:meeting refs([[projects/website]])
 object:meeting refs(object:project .status==active)
 object:project refd(object:meeting)
-object:person content("colleague")
 ```
-
----
 
 ## Trait Query Predicates
 
-### Value-Based
+### Value Predicates
 
 | Predicate | Meaning |
 |-----------|---------|
-| `.value==val` | Value equals val |
-| `.value!=val` | Value does NOT equal val |
-| `.value>val` | Value greater than |
-| `.value<val` | Value less than |
-| `.value>=val` | Value greater or equal |
-| `.value<=val` | Value less or equal |
+| `.value==val`, `.value!=val` | Value equality/inequality |
+| `.value>val`, `.value<val` | Numeric/date comparison |
+| `.value>=val`, `.value<=val` | Inclusive comparison |
+| `in(.value, [a,b,c])` | Value is one of listed values |
 
-For string matching on values, use `contains()`, `startswith()`, `endswith()`, or `matches()` with `.value` as the first argument.
+Date/date-time comparisons also support relative keywords:
+- `past`
+- `today`
+- `tomorrow`
+- `this-week`
+- `next-week`
+- `future`
 
-### Structural Predicates (Function Form)
+Examples:
 
-| Predicate | Meaning |
-|-----------|---------|
-| `on(object:...)` / `on([[target]])` / `on(target)` | Trait is directly on object |
-| `within(object:...)` / `within([[target]])` / `within(target)` | Trait is within object subtree |
-| `at(trait:...)` | Co-located traits (same file+line) |
-| `refs([[target]])` / `refs(target)` / `refs(object:...)` | Line references target |
-| `content("term")` | Line content contains term |
-
-**Examples:**
-
+```text
+trait:due .value==past
+trait:due in(.value, [today,tomorrow])
+trait:due .value<=2026-03-01
 ```
+
+### Trait Structural Predicates
+
+| Predicate | Meaning |
+|-----------|---------|
+| `on(...)` | Trait is directly on matching object |
+| `within(...)` | Trait is anywhere within matching object subtree |
+| `at(trait:...)` | Co-located with matching trait (same file and line) |
+| `refs(...)` | Trait's line references target or query match |
+| `content("term")` | Trait's line contains term |
+
+Examples:
+
+```text
 trait:due on(object:meeting)
 trait:todo within(object:project .status==active)
 trait:due at(trait:todo)
@@ -185,21 +204,65 @@ trait:due refs([[people/freya]])
 trait:todo content("refactor")
 ```
 
----
+`refd(...)` is available on object queries, not trait queries.
 
 ## Boolean Composition
 
 | Operator | Syntax | Precedence |
 |----------|--------|------------|
-| NOT | `!` prefix | Highest |
-| AND | space (implicit) | Middle |
-| OR | `\|` | Lowest |
-| Grouping | `( )` | Explicit |
+| NOT | `!pred` | Highest |
+| AND | `pred1 pred2` | Middle |
+| OR | `pred1 \| pred2` | Lowest |
+| Grouping | `( ... )` | Explicit |
 
-**Examples:**
+Examples:
 
-```
+```text
 object:project .status==active has(trait:due)
 object:project (.status==active | .status==backlog) !.archived==true
 object:meeting (has(trait:due .value==past) | has(trait:remind .value==past))
 ```
+
+## Running and Applying Queries
+
+### Inspect Results
+
+```bash
+rvn query 'object:project .status==active' --json
+rvn query 'trait:due .value==past' --ids
+rvn query 'object:project refs([[companies/acme]])' --refresh --json
+```
+
+### Save and Reuse Queries
+
+```bash
+rvn query add overdue 'trait:due .value==past' --json
+rvn query overdue --json
+rvn query --list --json
+```
+
+Saved query placeholders (`{{args.name}}`) must be declared in `raven.yaml` under `queries.<name>.args`.
+
+### Bulk Operations by Query Type
+
+- Object query `--apply` supports: `set`, `add`, `delete`, `move`.
+- Trait query `--apply` supports only: `update <new_value>`.
+- All `--apply` operations preview by default; use `--confirm` to apply.
+
+Examples:
+
+```bash
+# Object query bulk update
+rvn query 'object:project has(trait:due .value==past)' --apply 'set status=overdue' --confirm
+
+# Trait query bulk update
+rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
+```
+
+## Related Docs
+
+- Query-driven bulk changes: `vault-management/bulk-operations.md`
+- Queryable field/trait definitions: `types-and-traits/schema.md`
+- Hierarchy and object IDs (`#fragment`, sections, embedded objects): `types-and-traits/file-format.md`
+- Saved query configuration in `raven.yaml`: `getting-started/configuration.md`
+- MCP query tool usage: `agents/mcp.md`
