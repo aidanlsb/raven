@@ -5,7 +5,7 @@
 Fundamentally Raven is a CLI for personal knowledge management, with first-class support for AI agents. 
 
 You keep your data in a directory of Markdown files (called a "vault"), and Raven lets you:
-- Define a schema, so your notes can have "types" (e.g., project, meeting, person)
+- Define a schema, so your notes can have well defined types (e.g., project, meeting, person)
 - Create "traits" to add inline annotations to your notes (e.g., a `@todo` trait for task management)
 - Add bidirectional links across notes with references (`[[page-to-reference]]`)
 - Find and operate on notes ussing an efficient query language
@@ -25,7 +25,7 @@ If `rvn` is not on your `PATH` after install, add your Go bin directory (usually
 
 ## Agent setup
 
-If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), run Raven as an MCP server:
+Raven is designed with the assumption that you will use an AI agent to interact with your vault. If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), run Raven as an MCP server:
 
 ```bash
 rvn serve --vault-path /path/to/vault

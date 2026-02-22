@@ -316,6 +316,12 @@ Both `::section` and `::section()` are equivalent - parentheses are optional whe
 
 ## References
 
+References connect objects across your vault. They power:
+- Navigation between notes
+- Backlinks (`rvn backlinks`)
+- Query predicates like `refs(...)` / `refd(...)`
+- Safe ref updates when objects move (`rvn move --update-refs`, default true)
+
 Wiki-style links reference other objects:
 
 ```markdown
@@ -333,15 +339,32 @@ Wiki-style links reference other objects:
 | `[[target\|display text]]` | Reference with display text |
 | `[[target#fragment]]` | Reference to embedded object |
 
-### Resolution
+### Where References Can Appear
 
-References are resolved in this order:
+- Markdown body content (most common)
+- Frontmatter `ref` / `ref[]` fields
+- Embedded object declarations (`::type(field=[[target]])`)
 
-1. **Alias match** — Reference matches an object's `alias` field
-2. **Name field match** — Reference matches an object's `name_field` value
-3. **Date match** — `[[YYYY-MM-DD]]` resolves to daily notes
-4. **Object ID match** — Reference matches a full object path
-5. **Short name match** — Reference matches filename (without path)
+### Resolution Model
+
+Raven resolves each reference to a canonical object ID. It evaluates these match sources:
+
+1. **Alias match** (`alias`)
+2. **Name field match** (`name_field`)
+3. **Date match** (`date`) for absolute `YYYY-MM-DD`
+4. **Object ID/path match** (`object_id`, `suffix_match`)
+5. **Short name match** (`short_name`)
+
+Match sources are exposed by `rvn resolve --json` as `match_source`.
+
+If multiple candidates remain after matching, the reference is ambiguous and is not resolved automatically.
+
+Special-case disambiguation:
+- If both a file and one of its own sections match the same short name, Raven prefers the file object.
+
+Date notes:
+- `[[2026-01-10]]` resolves to your daily note ID (under `directories.daily`).
+- Relative date keywords (`today`, `tomorrow`, `yesterday`) are command-time conveniences (for commands like `rvn resolve today`), not stable reference targets during indexing.
 
 **Short references** work when unambiguous:
 
@@ -351,11 +374,30 @@ References are resolved in this order:
 [[2026-01-10]]         → daily/2026-01-10
 ```
 
-**Ambiguous references** fail with an error listing matches:
+### Ambiguous References
 
+An ambiguous reference is one raw reference string that matches multiple objects, for example:
+- Duplicate short names (`projects/notes` and `meetings/notes`)
+- Alias collisions with another object path or short name
+- Duplicate/overlapping `name_field` values
+
+Behavior:
+- In index resolution, ambiguous refs remain unresolved.
+- `rvn check` reports `ambiguous_reference` issues (and related collisions like `id_collision`, `alias_collision`, `duplicate_alias`).
+- Commands that require a single target return `REF_AMBIGUOUS` and list matches.
+
+Inspect ambiguity with:
+
+```bash
+rvn resolve "notes" --json
+rvn check --issues ambiguous_reference,id_collision,alias_collision,duplicate_alias --json
 ```
-Reference "notes" is ambiguous: matches [projects/notes, meetings/notes]
-```
+
+Fix strategy:
+1. Use full canonical paths in links (`[[projects/notes]]`).
+2. Keep aliases unique and descriptive.
+3. Use `name_field` values that are unique within the vault context where you rely on semantic resolution.
+4. Re-run `rvn check` after edits.
 
 ### References in Frontmatter
 
@@ -370,6 +412,8 @@ collaborators:
   - people/thor
 ---
 ```
+
+For how references are used in queries, see `querying/query-language.md`.
 
 ---
 
