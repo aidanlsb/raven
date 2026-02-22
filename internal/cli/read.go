@@ -41,6 +41,11 @@ Examples:
   rvn read people/freya --raw --start-line 10 --end-line 40
   rvn read people/freya --raw --json`,
 	Args: cobra.MaximumNArgs(1),
+	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    false,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		start := time.Now()

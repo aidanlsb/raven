@@ -52,6 +52,11 @@ Examples:
 		}
 		return nil
 	},
+	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: true,
+		DisableWhenStdin:    true,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		vaultCfg, err := loadVaultConfigSafe(vaultPath)
