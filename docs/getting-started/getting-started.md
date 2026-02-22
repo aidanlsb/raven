@@ -9,8 +9,8 @@ Goal: complete one full Raven loop with confidence:
 
 Out of scope here:
 - deep configuration (`configuration.md`)
-- deep schema modeling (`schema-intro.md` and `reference/schema.md`)
-- advanced command workflows (`cli-advanced.md`)
+- deep schema modeling (`types-and-traits/schema-intro.md` and `types-and-traits/schema.md`)
+- advanced command workflows (use `rvn help <command>`)
 
 ## 1) Install and verify
 
@@ -68,15 +68,14 @@ If no results appear:
 ## 4) What to do next
 
 Follow this sequence:
-1. `configuration.md` - set up `config.toml` and `raven.yaml`
-2. `templates.md` - set up reusable note structure
-3. `schema-intro.md` - learn practical `schema.yaml` basics
-4. `cli-basics.md` - daily command patterns
+1. `getting-started/configuration.md` - set up `config.toml` and `raven.yaml`
+2. `types-and-traits/templates.md` - set up reusable note structure
+3. `types-and-traits/schema-intro.md` - learn practical `schema.yaml` basics
 
 ## Agent next step (after activation)
 
 If you are using Cursor or Claude, connect Raven through MCP now:
-- see `reference/mcp.md` for setup
+- see `agents/mcp.md` for setup
 
 Suggested first prompt once connected:
 

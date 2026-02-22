@@ -69,6 +69,19 @@ type TraitBulkSummary struct {
 	Errors   int               `json:"errors"`
 }
 
+type traitValueValidationError struct {
+	traitType string
+	cause     error
+}
+
+func (e *traitValueValidationError) Error() string {
+	return fmt.Sprintf("invalid value for trait '@%s': %v", e.traitType, e.cause)
+}
+
+func (e *traitValueValidationError) Suggestion() string {
+	return fmt.Sprintf("Use a value compatible with trait '@%s' in schema.yaml", e.traitType)
+}
+
 func parseTraitUpdateValueArgs(args []string, usageHint string) (string, error) {
 	value := strings.TrimSpace(strings.Join(args, " "))
 	if value == "" {
@@ -101,11 +114,10 @@ func resolvedAndValidatedTraitValue(rawValue string, traitType string, sch *sche
 	resolved := resolveDateKeywordForTraitValue(rawValue, traitDef)
 	parsed := parser.ParseTraitValue(resolved)
 	if err := schema.ValidateTraitValue(traitDef, parsed); err != nil {
-		return "", handleErrorMsg(
-			ErrValidationFailed,
-			fmt.Sprintf("invalid value for trait '@%s': %v", traitType, err),
-			fmt.Sprintf("Use a value compatible with trait '@%s' in schema.yaml", traitType),
-		)
+		return "", &traitValueValidationError{
+			traitType: traitType,
+			cause:     err,
+		}
 	}
 
 	return resolved, nil

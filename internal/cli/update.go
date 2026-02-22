@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -53,7 +54,8 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			return handleErrorMsg(ErrMissingArgument, "no trait IDs provided via stdin", "Pipe trait IDs to stdin, one per line")
 		}
 
-		return applyUpdateTraitsByID(vaultPath, ids, newValue, updateConfirm, false, vaultCfg)
+		err = applyUpdateTraitsByID(vaultPath, ids, newValue, updateConfirm, false, vaultCfg)
+		return handleTraitUpdateError(err)
 	}
 
 	if len(args) < 2 {
@@ -71,7 +73,19 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Single update applies immediately (no preview/confirm)
-	return applyUpdateTraitsByID(vaultPath, []string{traitID}, newValue, true, false, vaultCfg)
+	err = applyUpdateTraitsByID(vaultPath, []string{traitID}, newValue, true, false, vaultCfg)
+	return handleTraitUpdateError(err)
+}
+
+func handleTraitUpdateError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var validationErr *traitValueValidationError
+	if errors.As(err, &validationErr) {
+		return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
+	}
+	return err
 }
 
 func init() {

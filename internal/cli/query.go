@@ -527,7 +527,14 @@ func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string
 	// Dispatch to trait-specific operations
 	switch applyCmd {
 	case "update":
-		return applyUpdateTraitFromQuery(vaultPath, results, applyArgs, sch, vaultCfg, confirm)
+		err := applyUpdateTraitFromQuery(vaultPath, results, applyArgs, sch, vaultCfg, confirm)
+		if err != nil {
+			var validationErr *traitValueValidationError
+			if errors.As(err, &validationErr) {
+				return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
+			}
+		}
+		return err
 	case "delete", "add", "move", "set":
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("'%s' is not supported for trait queries", applyCmd),

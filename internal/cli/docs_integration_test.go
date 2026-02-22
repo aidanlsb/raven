@@ -11,17 +11,17 @@ import (
 func TestIntegration_DocsListOpenSearch(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithFile(".raven/docs/index.yaml", `sections:
-  guide:
+  getting-started:
     topics:
       getting-started:
         path: getting-started.md
-  reference:
+  querying:
     topics:
       query-language:
         path: query-language.md
 `).
-		WithFile(".raven/docs/guide/getting-started.md", "# Getting Started\n\nWelcome.\n").
-		WithFile(".raven/docs/reference/query-language.md", "# Query Language\n\nquery predicate examples.\n").
+		WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+		WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
 		Build()
 
 	list := v.RunCLI("docs")
@@ -38,20 +38,20 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 		t.Fatalf("expected docs list alias to return %d sections, got %d", len(sections), len(aliasSections))
 	}
 
-	requireSection(t, sections, "guide")
-	requireSection(t, sections, "reference")
-	requireSection(t, aliasSections, "guide")
-	requireSection(t, aliasSections, "reference")
+	requireSection(t, sections, "getting-started")
+	requireSection(t, sections, "querying")
+	requireSection(t, aliasSections, "getting-started")
+	requireSection(t, aliasSections, "querying")
 
-	reference := v.RunCLI("docs", "reference")
-	reference.MustSucceed(t)
-	topics := reference.DataList("topics")
+	querying := v.RunCLI("docs", "querying")
+	querying.MustSucceed(t)
+	topics := querying.DataList("topics")
 	if len(topics) == 0 {
-		t.Fatalf("expected reference topics, got none")
+		t.Fatalf("expected querying topics, got none")
 	}
 	requireTopic(t, topics, "query-language")
 
-	open := v.RunCLI("docs", "reference", "query-language")
+	open := v.RunCLI("docs", "querying", "query-language")
 	open.MustSucceed(t)
 	if title := open.DataString("title"); title == "" {
 		t.Fatalf("expected non-empty title in docs open response")
@@ -61,7 +61,7 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 		t.Fatalf("expected non-empty content in docs open response")
 	}
 
-	search := v.RunCLI("docs", "search", "query", "--section", "reference", "--limit", "5")
+	search := v.RunCLI("docs", "search", "query", "--section", "querying", "--limit", "5")
 	search.MustSucceed(t)
 	if count, ok := search.Data["count"].(float64); !ok || count < 1 {
 		t.Fatalf("expected search count >= 1, got %v", search.Data["count"])
@@ -71,12 +71,12 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 func TestIntegration_DocsCommandRedirectToHelp(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithFile(".raven/docs/index.yaml", `sections:
-  guide:
+  getting-started:
     topics:
       getting-started:
         path: getting-started.md
 `).
-		WithFile(".raven/docs/guide/getting-started.md", "# Getting Started\n").
+		WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n").
 		Build()
 
 	res := v.RunCLI("docs", "query")

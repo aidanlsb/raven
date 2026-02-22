@@ -646,7 +646,17 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 		t.Fatalf("schema type introspection failed: %s", typeResult.Text)
 	}
 
-	if !strings.Contains(typeResult.Text, `"name":"person"`) {
+	var typeResp struct {
+		Data struct {
+			Type struct {
+				Name string `json:"name"`
+			} `json:"type"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(typeResult.Text), &typeResp); err != nil {
+		t.Fatalf("failed to parse schema type response: %v\n%s", err, typeResult.Text)
+	}
+	if typeResp.Data.Type.Name != "person" {
 		t.Errorf("expected type details for person, got: %s", typeResult.Text)
 	}
 }

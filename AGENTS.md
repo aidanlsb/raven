@@ -149,4 +149,4 @@ When making significant changes, check if `docs/reference/` needs updating (espe
 5. If you added a new package, make sure it doesn't introduce circular imports
 6. If you touched parsing, indexing, or query execution, run `make test-integration`
 7. If you changed command behavior, check if `internal/mcp/agent-guide/` docs need updating
-8. If you added MCP resources or changed tool schemas, update `docs/reference/mcp.md`
+8. If you added MCP resources or changed tool schemas, update `docs/agents/mcp.md`

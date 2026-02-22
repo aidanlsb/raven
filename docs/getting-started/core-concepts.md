@@ -38,7 +38,7 @@ If the line immediately after a heading is a `::type(...)` declaration, that hea
 ::meeting(time=09:00, attendees=[[[people/freya]]])
 ```
 
-See `reference/file-format.md` for the exact rules and ID generation.
+See `types-and-traits/file-format.md` for the exact rules and ID generation.
 
 ## Traits
 
@@ -76,7 +76,7 @@ Raven queries are type-constrained:
 - `object:<type> ...` returns objects
 - `trait:<name> ...` returns trait instances
 
-See `reference/query-language.md` for the full language.
+See `querying/query-language.md` for the full language.
 
 ## Related Lessons
 
@@ -85,8 +85,7 @@ See `reference/query-language.md` for the full language.
 
 ## Next steps
 
-- See `cli-basics.md` for common first-day CLI patterns
-- See `cli-advanced.md` for bulk operations and advanced workflows
-- See `reference/schema.md` for defining types and traits
-- See `reference/file-format.md` for the complete file format specification
+- Use `rvn help <command>` for CLI command details
+- See `types-and-traits/schema.md` for defining types and traits
+- See `types-and-traits/file-format.md` for the complete file format specification
 

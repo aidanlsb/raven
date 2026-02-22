@@ -527,9 +527,9 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
 
 	// Bulk update by stdin
-	result = v.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "done", "--confirm")
+	result = v.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "medium", "--confirm")
 	result.MustSucceed(t)
-	v.AssertFileContains("tasks/task1.md", "@priority(done) Second task")
+	v.AssertFileContains("tasks/task1.md", "@priority(medium) Second task")
 }
 
 func TestIntegration_TraitUpdateRejectsInvalidEnumValue(t *testing.T) {
