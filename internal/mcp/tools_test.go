@@ -145,6 +145,7 @@ func TestSchemaCompatibilityForStructuredFlags(t *testing.T) {
 	assertAnyOfTypes(t, "raven_workflow_run", "input-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_upsert", "field-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_set", "fields-json", []string{"object", "string"})
+	assertAnyOfTypes(t, "raven_edit", "edits-json", []string{"object", "string"})
 
 	// Key/value flags should accept object, single "k=v", or []string forms.
 	assertAnyOfTypes(t, "raven_upsert", "field", []string{"object", "string", "array"})
@@ -232,6 +233,20 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			args:     map[string]interface{}{"text": "Hello world", "to": "inbox.md"},
 			wantCmd:  "add",
 			wantArgs: []string{"Hello world", "--to", "inbox.md", "--json"},
+		},
+		{
+			toolName: "raven_edit",
+			args: map[string]interface{}{
+				"path": "pages/notes.md",
+				"edits-json": map[string]interface{}{
+					"edits": []interface{}{
+						map[string]interface{}{"old_str": "Status: draft", "new_str": "Status: active"},
+					},
+				},
+				"confirm": true,
+			},
+			wantCmd:  "edit",
+			wantArgs: []string{"pages/notes.md", "--edits-json", "--confirm", "--json"},
 		},
 		{
 			toolName: "raven_upsert",
