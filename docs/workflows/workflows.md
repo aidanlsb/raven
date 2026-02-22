@@ -15,6 +15,7 @@ Workflows are explicitly registered under `workflows:` in `raven.yaml` and keyed
 Each declaration is a file reference (`file:`). Inline workflow bodies in `raven.yaml` are not supported.
 
 Workflow files must live under `directories.workflow` (default `workflows/`).
+The workflow name `runs` is reserved.
 
 ### Creating via CLI/MCP (recommended for agents)
 
@@ -137,7 +138,7 @@ Supported output types:
 
 ### Run Retention
 
-Workflow run records are kept using `workflows.runs` settings in `raven.yaml`:
+Workflow run records are kept using top-level `workflow_runs` settings in `raven.yaml`:
 - `storage_path` (default `.raven/workflow-runs`)
 - `auto_prune` (default `true`)
 - `keep_completed_for_days` (default `7`)
@@ -145,6 +146,21 @@ Workflow run records are kept using `workflows.runs` settings in `raven.yaml`:
 - `keep_awaiting_for_days` (default `30`)
 - `max_runs` (default `1000`)
 - `preserve_latest_per_workflow` (default `5`)
+
+Canonical shape:
+
+```yaml
+workflow_runs:
+  storage_path: .raven/workflow-runs
+  auto_prune: true
+  keep_completed_for_days: 7
+  keep_failed_for_days: 14
+  keep_awaiting_for_days: 30
+  max_runs: 1000
+  preserve_latest_per_workflow: 5
+```
+
+Compatibility note: legacy nested `workflows.runs` is still read, but new config should use top-level `workflow_runs`.
 
 ## Migrating Legacy Workflows
 
@@ -209,7 +225,7 @@ steps:
 
 ## Protected Paths
 
-Workflows and plan application refuse to operate on protected/system-managed paths.
+Workflows and other automation features refuse to operate on protected/system-managed paths.
 
 Hardcoded:
 - `.raven/`, `.trash/`, `.git/`
@@ -235,4 +251,3 @@ rvn workflow runs list --status awaiting_agent
 rvn workflow runs step <run-id> <step-id>
 rvn workflow runs prune --status completed --older-than 14d --confirm
 ```
-

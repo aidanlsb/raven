@@ -728,9 +728,6 @@ steps:
       3. **What metadata matters to you?**
          These become fields or traits. Listen for: deadlines, priorities, status, tags, ratings, etc.
 
-      4. **Do you want daily notes?**
-         The vault already supports these. Ask if they want to use them for journaling, standups, logs, etc.
-
       5. **What are 2-3 concrete things you're working on right now?**
          Use these to create seed content that makes the vault immediately useful.
 
@@ -741,6 +738,7 @@ steps:
       1. **Create types** using raven_schema_add_type for each kind of object they want to track
          - Set appropriate name_field and default_path
          - Add relevant fields
+         - Make them aware of the default types that are defined in the vault. Let them know what fields are defined already and check if they want to customize 
 
       2. **Create traits** using raven_schema_add_trait for cross-cutting annotations
          - @due, @priority, @todo are already in the default schema

@@ -2,14 +2,15 @@
 
 ## What is Raven?
 
-Raven is a structured, plain-text knowledge base.
+Fundamentally Raven is a CLI for personal knowledge management, with first-class support for AI agents. 
 
-You keep your real data in Markdown files, then Raven gives you:
-- a schema for structure (`type`, fields, traits)
-- references between notes (`[[...]]`)
-- fast local queries over an index you can always rebuild
+You keep your data in a directory of Markdown files (called a "vault"), and Raven lets you:
+- Define a schema, so your notes can have "types" (e.g., project, meeting, person)
+- Create "traits" to add inline annotations to your notes (e.g., a `@todo` trait for task management)
+- Add bidirectional links across notes with references (`[[page-to-reference]]`)
+- Find and operate on notes ussing an efficient query language
 
-The goal is simple: keep notes durable and human-readable without giving up structured workflows.
+The goal is to keep notes durable and simple without giving up structured workflows.
 
 ## Installation
 
@@ -43,7 +44,7 @@ For Claude Desktop, add:
 }
 ```
 
-Optional: install Raven's bundled agent skill pack for your runtime:
+Raven also ships with skills you can install for your agent(s) of choice.
 
 ```bash
 rvn skill list --json
@@ -75,15 +76,8 @@ rvn schema types
 
 ## Daily notes
 
-Daily notes are the fastest capture loop in Raven:
-
-```bash
-rvn daily
-rvn daily yesterday
-rvn daily 2026-02-22
-```
-
-- `rvn daily` opens or creates today's note.
+Daily notes are the simplest way to get started with Raven:
+- `rvn daily` opens today's note
 - The daily folder is configured with `directories.daily` in `raven.yaml`.
 
 
