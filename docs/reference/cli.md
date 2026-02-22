@@ -285,17 +285,19 @@ Surgical text replacement in vault files.
 
 ```bash
 rvn edit <path> <old_str> <new_str> [--confirm]
+rvn edit <path> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}' [--confirm]
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `path` | File path relative to vault root |
-| `old_str` | String to replace (must be unique in file) |
-| `new_str` | Replacement string (can be empty to delete) |
+| `old_str` | String to replace (must be unique in file, single-edit mode) |
+| `new_str` | Replacement string (can be empty to delete, single-edit mode) |
 
 | Flag | Description |
 |------|-------------|
 | `--confirm` | Apply the edit (preview-only by default) |
+| `--edits-json` | JSON object with ordered edits (`{"edits":[{"old_str":"...","new_str":"..."}]}`) |
 
 **Examples:**
 
@@ -303,10 +305,12 @@ rvn edit <path> <old_str> <new_str> [--confirm]
 rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[churn-analysis|Churn analysis]]"
 rvn edit "pages/notes.md" "reccommendation" "recommendation" --confirm
 rvn edit "daily/2026-01-02.md" "- old task" "" --confirm  # Delete
+rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"teh","new_str":"the"}]}' --confirm
 ```
 
 **Notes:**
 - The old string must appear exactly once to prevent ambiguous edits
+- Batch edits run in listed order against one working copy of the file
 - Whitespace matters — old_str must match exactly including indentation
 - For multi-line replacements, include newlines in both strings
 

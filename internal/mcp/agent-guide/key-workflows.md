@@ -159,6 +159,16 @@ When users want to modify existing notes:
    
    # Apply after reviewing preview
    raven_edit(path="projects/website.md", old_str="Status: active", new_str="Status: completed", confirm=true)
+
+   # Multiple ordered edits in one call
+   raven_edit(
+     path="projects/website.md",
+     edits_json={"edits":[
+       {"old_str":"Status: active","new_str":"Status: completed"},
+       {"old_str":"Owner: TBD","new_str":"Owner: [[people/freya]]"}
+     ]},
+     confirm=true
+   )
    ```
 
 3. Use `raven_read` first to understand the file content

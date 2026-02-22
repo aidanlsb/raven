@@ -42,6 +42,86 @@ func TestIntegration_ObjectLifecycle(t *testing.T) {
 	v.AssertFileNotExists("people/alice.md")
 }
 
+func TestIntegration_EditWithEditsJSON(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("daily/2026-02-15.md", `---
+type: page
+---
+# Daily
+
+- old task
+Status: draft
+`).
+		Build()
+
+	editsJSON := `{"edits":[{"old_str":"- old task","new_str":"- done task"},{"old_str":"Status: draft","new_str":"Status: active"}]}`
+
+	preview := v.RunCLI("edit", "daily/2026-02-15.md", "--edits-json", editsJSON)
+	preview.MustSucceed(t)
+	if got := preview.DataString("status"); got != "preview" {
+		t.Fatalf("expected preview status, got %q", got)
+	}
+	if got, ok := preview.Data["count"].(float64); !ok || int(got) != 2 {
+		t.Fatalf("expected preview count=2, got %#v", preview.Data["count"])
+	}
+	v.AssertFileContains("daily/2026-02-15.md", "- old task")
+	v.AssertFileContains("daily/2026-02-15.md", "Status: draft")
+
+	applied := v.RunCLI("edit", "daily/2026-02-15.md", "--edits-json", editsJSON, "--confirm")
+	applied.MustSucceed(t)
+	if got := applied.DataString("status"); got != "applied" {
+		t.Fatalf("expected applied status, got %q", got)
+	}
+	if got, ok := applied.Data["count"].(float64); !ok || int(got) != 2 {
+		t.Fatalf("expected applied count=2, got %#v", applied.Data["count"])
+	}
+	v.AssertFileContains("daily/2026-02-15.md", "- done task")
+	v.AssertFileContains("daily/2026-02-15.md", "Status: active")
+	v.AssertFileNotContains("daily/2026-02-15.md", "- old task")
+	v.AssertFileNotContains("daily/2026-02-15.md", "Status: draft")
+}
+
+func TestIntegration_EditWithEditsJSONIsAtomic(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("daily/2026-02-16.md", `---
+type: page
+---
+# Daily
+
+- old task
+Status: draft
+`).
+		Build()
+
+	editsJSON := `{"edits":[{"old_str":"- old task","new_str":"- done task"},{"old_str":"Status: missing","new_str":"Status: active"}]}`
+	result := v.RunCLI("edit", "daily/2026-02-16.md", "--edits-json", editsJSON, "--confirm")
+	result.MustFail(t, "STRING_NOT_FOUND")
+
+	v.AssertFileContains("daily/2026-02-16.md", "- old task")
+	v.AssertFileContains("daily/2026-02-16.md", "Status: draft")
+	v.AssertFileNotContains("daily/2026-02-16.md", "- done task")
+}
+
+func TestIntegration_EditSingleModeStillWorks(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("daily/2026-02-17.md", `---
+type: page
+---
+# Daily
+
+old task
+`).
+		Build()
+
+	result := v.RunCLI("edit", "daily/2026-02-17.md", "old task", "done task", "--confirm")
+	result.MustSucceed(t)
+	v.AssertFileContains("daily/2026-02-17.md", "done task")
+	v.AssertFileNotContains("daily/2026-02-17.md", "old task")
+}
+
 // TestIntegration_QueryByField tests querying objects by field values.
 func TestIntegration_QueryByField(t *testing.T) {
 	v := testutil.NewTestVault(t).
