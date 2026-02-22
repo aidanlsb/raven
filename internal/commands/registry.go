@@ -270,20 +270,20 @@ Checks include:
 		Description: "Browse long-form Markdown documentation",
 		LongDesc: `Browse long-form documentation stored in .raven/docs for the active vault.
 
-Use this command for guides, references, and design notes.
+Use this command for guides and references.
 Run 'rvn docs fetch' to sync or refresh local docs content.
 When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
 For command-level usage, use 'rvn help <command>'.`,
 		Args: []ArgMeta{
-			{Name: "section", Description: "Docs section (e.g., guide, reference, design)", Required: false},
+			{Name: "section", Description: "Docs section (e.g., getting-started, types-and-traits, querying)", Required: false},
 			{Name: "topic", Description: "Topic slug within the section (e.g., query-language)", Required: false},
 		},
 		Examples: []string{
 			"rvn docs --json",
 			"rvn docs fetch --json",
 			"rvn docs list --json",
-			"rvn docs guide --json",
-			"rvn docs reference query-language --json",
+			"rvn docs getting-started --json",
+			"rvn docs querying query-language --json",
 			"rvn docs search \"saved query\" --json",
 		},
 		UseCases: []string{

@@ -28,7 +28,7 @@ func TestListDocsSectionsFSLoadsRepositoryDocs(t *testing.T) {
 	for _, s := range sections {
 		ids = append(ids, s.ID)
 	}
-	for _, expected := range []string{"design", "guide", "reference"} {
+	for _, expected := range []string{"agents", "getting-started", "querying", "types-and-traits", "vault-management", "workflows"} {
 		if !slices.Contains(ids, expected) {
 			t.Fatalf("expected section %q in %v", expected, ids)
 		}
@@ -271,8 +271,8 @@ func TestOutputDocsSectionsTextListsSectionCommands(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		err := outputDocsSections([]docsSectionView{
-			{ID: "guide", Title: "User Guides", TopicCount: 5},
-			{ID: "reference", Title: "Reference", TopicCount: 1},
+			{ID: "getting-started", Title: "Getting Started", TopicCount: 3},
+			{ID: "querying", Title: "Querying", TopicCount: 1},
 		})
 		if err != nil {
 			t.Fatalf("outputDocsSections() error = %v", err)
@@ -281,10 +281,10 @@ func TestOutputDocsSectionsTextListsSectionCommands(t *testing.T) {
 
 	wantSnippets := []string{
 		"Documentation section commands:",
-		"rvn docs guide",
-		"User Guides (5 topics)",
-		"rvn docs reference",
-		"Reference (1 topic)",
+		"rvn docs getting-started",
+		"Getting Started (3 topics)",
+		"rvn docs querying",
+		"Querying (1 topic)",
 		"General docs commands:",
 		"rvn docs list",
 		"rvn docs <section>",
@@ -342,7 +342,7 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 	})
 	jsonOutput = false
 
-	section := docsSectionView{ID: "design", Title: "Design Notes", TopicCount: 0}
+	section := docsSectionView{ID: "vault-management", Title: "Vault Management", TopicCount: 0}
 	out := captureStdout(t, func() {
 		err := outputDocsTopics(section, nil)
 		if err != nil {
@@ -351,11 +351,11 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 	})
 
 	wantSnippets := []string{
-		"Documentation topic commands for Design Notes [design]:",
+		"Documentation topic commands for Vault Management [vault-management]:",
 		"(no topics)",
 		"General docs commands:",
 		"rvn docs list",
-		"rvn docs search <query> --section design",
+		"rvn docs search <query> --section vault-management",
 	}
 	for _, snippet := range wantSnippets {
 		if !strings.Contains(out, snippet) {
