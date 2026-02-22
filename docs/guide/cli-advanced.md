@@ -69,6 +69,9 @@ rvn edit daily/2026-02-15.md "- old text" "- new text"
 
 # Apply
 rvn edit daily/2026-02-15.md "- old text" "- new text" --confirm
+
+# Batch edits in one pass (ordered, same file)
+rvn edit daily/2026-02-15.md --edits-json '{"edits":[{"old_str":"- old text","new_str":"- new text"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --confirm
 ```
 
 For path changes with reference updates:

@@ -1291,24 +1291,31 @@ ambiguous edits.
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
 Whitespace matters—old_str must match exactly including indentation.
-For multi-line replacements, include newlines in both old_str and new_str.`,
+For multi-line replacements, include newlines in both old_str and new_str.
+
+Supports two input modes:
+  - Single edit (backward compatible): <path> <old_str> <new_str>
+  - Batch edits via JSON: <path> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "File path relative to vault root", Required: true},
-			{Name: "old_str", Description: "String to replace (must be unique in file)", Required: true},
-			{Name: "new_str", Description: "Replacement string (can be empty to delete)", Required: true},
+			{Name: "old_str", Description: "String to replace (must be unique in file, single-edit mode)", Required: false},
+			{Name: "new_str", Description: "Replacement string (can be empty to delete, single-edit mode)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "confirm", Description: "Apply the edit (default: preview only)", Type: FlagTypeBool},
+			{Name: "edits-json", Description: "JSON object with ordered edits, e.g. '{\"edits\":[{\"old_str\":\"from\",\"new_str\":\"to\"}]}'", Type: FlagTypeJSON},
 		},
 		Examples: []string{
 			`rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[churn-analysis|Churn analysis]]" --json`,
 			`rvn edit "pages/notes.md" "reccommendation" "recommendation" --confirm --json`,
 			`rvn edit "daily/2026-01-02.md" "- old task" "" --confirm --json`,
+			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --confirm --json`,
 		},
 		UseCases: []string{
 			"Edit vault files (use instead of 'sed', 'awk', or direct file writes)",
 			"Add wiki links to existing text",
 			"Fix typos in notes",
+			"Apply multiple ordered replacements in one command",
 			"Add traits to existing lines",
 			"Delete specific content with preview",
 		},

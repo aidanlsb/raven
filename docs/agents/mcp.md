@@ -407,6 +407,16 @@ raven_set(object_id="people/freya", fields={"email": "freya@asgard.realm", "stat
 # Edit content
 raven_edit(path="projects/website.md", old_str="Status: draft", new_str="Status: published")
 raven_edit(path="projects/website.md", old_str="Status: draft", new_str="Status: published", confirm=true)
+
+# Multiple ordered edits in one call
+raven_edit(
+    path="projects/website.md",
+    edits_json={"edits": [
+        {"old_str": "Status: draft", "new_str": "Status: published"},
+        {"old_str": "Owner: TBD", "new_str": "Owner: [[people/freya]]"},
+    ]},
+    confirm=true,
+)
 ```
 
 ### Bulk Operations
