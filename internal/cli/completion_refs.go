@@ -80,7 +80,7 @@ func referenceCompletionCandidates(objectIDs []string, toComplete string, includ
 	sectionInput := strings.Contains(toComplete, "#")
 
 	seen := make(map[string]struct{})
-	matches := make([]string, 0, min(maxReferenceCompletionResults, len(objectIDs)))
+	matches := make([]string, 0, minInt(maxReferenceCompletionResults, len(objectIDs)))
 
 	addMatch := func(candidate string) {
 		if candidate == "" {
@@ -229,7 +229,7 @@ func getFlagString(cmd *cobra.Command, name string) string {
 	return value
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
