@@ -92,16 +92,6 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		return nil, fmt.Errorf("target path is required")
 	}
 
-	// Extract original title before any path manipulation
-	originalBaseName := filepath.Base(opts.TargetPath)
-	originalBaseName = strings.TrimSuffix(originalBaseName, ".md")
-
-	// Use provided title or derive from path
-	title := opts.Title
-	if title == "" {
-		title = originalBaseName
-	}
-
 	// Resolve target path: apply type's default_path and directory roots
 	targetPath := resolveDefaultPathWithRoots(opts.TargetPath, opts.TypeName, opts.Schema, opts.ObjectsRoot, opts.PagesRoot)
 
