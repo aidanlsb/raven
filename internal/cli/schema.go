@@ -13,7 +13,7 @@ import (
 )
 
 var schemaCmd = &cobra.Command{
-	Use:   "schema [types|traits|type <name>|trait <name>|commands]",
+	Use:   "schema [types|traits|type <name>|trait <name>|template ...|commands]",
 	Short: "Introspect the schema",
 	Long: `Query the schema for types, traits, and commands.
 
@@ -25,7 +25,9 @@ Examples:
   rvn schema traits --json    # List all traits
   rvn schema type person --json   # Get type details
   rvn schema trait due --json     # Get trait details
-  rvn schema commands --json      # List available commands`,
+  rvn schema commands --json      # List available commands
+  rvn schema template list --json
+  rvn schema type interview template list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		start := time.Now()
@@ -33,6 +35,16 @@ Examples:
 		// If no subcommand, return full schema
 		if len(args) == 0 {
 			return dumpFullSchema(vaultPath, start)
+		}
+
+		// Template-related subcommands:
+		// - schema template ...
+		// - schema type <type_name> template ...
+		if args[0] == "template" {
+			return runSchemaTemplateCommand(vaultPath, args[1:], start)
+		}
+		if len(args) >= 3 && args[0] == "type" && args[2] == "template" {
+			return runSchemaTypeTemplateCommand(vaultPath, args[1], args[3:], start)
 		}
 
 		switch args[0] {
@@ -53,7 +65,7 @@ Examples:
 		case "commands":
 			return listSchemaCommands(start)
 		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema subcommand: %s", args[0]), "Use: types, traits, type <name>, trait <name>, or commands")
+			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema subcommand: %s", args[0]), "Use: types, traits, type <name>, trait <name>, template ..., or commands")
 		}
 	},
 }
@@ -261,6 +273,17 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	if typeDef.Template != "" {
 		fmt.Printf("  Template: %s\n", typeDef.Template)
 	}
+	if len(typeDef.Templates) > 0 {
+		fmt.Println("  Templates:")
+		templateIDs := append([]string(nil), typeDef.Templates...)
+		sort.Strings(templateIDs)
+		for _, templateID := range templateIDs {
+			fmt.Printf("    - %s\n", templateID)
+		}
+	}
+	if typeDef.DefaultTemplate != "" {
+		fmt.Printf("  Default template: %s\n", typeDef.DefaultTemplate)
+	}
 	if len(typeDef.Fields) > 0 {
 		fmt.Println("  Fields:")
 		for name, field := range typeDef.Fields {
@@ -399,6 +422,20 @@ func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaR
 		result.Traits[name] = buildTraitSchema(name, traitDef)
 	}
 
+	if len(sch.Templates) > 0 {
+		result.Templates = make(map[string]TemplateSchema, len(sch.Templates))
+		for id, templateDef := range sch.Templates {
+			if templateDef == nil {
+				continue
+			}
+			result.Templates[id] = TemplateSchema{
+				ID:          id,
+				File:        templateDef.File,
+				Description: templateDef.Description,
+			}
+		}
+	}
+
 	// Queries from vault config
 	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
 		result.Queries = make(map[string]SavedQueryInfo)
@@ -426,6 +463,8 @@ func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) 
 		result.Description = typeDef.Description
 		result.NameField = typeDef.NameField
 		result.Template = typeDef.Template
+		result.Templates = append([]string(nil), typeDef.Templates...)
+		result.DefaultTemplate = typeDef.DefaultTemplate
 
 		if len(typeDef.Fields) > 0 {
 			result.Fields = make(map[string]FieldSchema)
@@ -470,5 +509,8 @@ func isBuiltinType(name string) bool {
 }
 
 func init() {
+	schemaCmd.Flags().StringVar(&schemaTemplateFileFlag, "file", "", "Template file path under directories.template (for `schema template set`)")
+	schemaCmd.Flags().StringVar(&schemaTemplateDescriptionFlag, "description", "", "Template description (for `schema template set`; use '-' to clear)")
+	schemaCmd.Flags().BoolVar(&schemaTypeTemplateClearFlag, "clear", false, "Clear type default template (for `schema type <type_name> template default --clear`)")
 	rootCmd.AddCommand(schemaCmd)
 }

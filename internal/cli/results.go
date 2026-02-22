@@ -126,21 +126,31 @@ type TypeQueryResult struct {
 
 // SchemaResult represents the full schema dump.
 type SchemaResult struct {
-	Version int                       `json:"version"`
-	Types   map[string]TypeSchema     `json:"types"`
-	Traits  map[string]TraitSchema    `json:"traits"`
-	Queries map[string]SavedQueryInfo `json:"queries,omitempty"`
+	Version   int                       `json:"version"`
+	Types     map[string]TypeSchema     `json:"types"`
+	Traits    map[string]TraitSchema    `json:"traits"`
+	Templates map[string]TemplateSchema `json:"templates,omitempty"`
+	Queries   map[string]SavedQueryInfo `json:"queries,omitempty"`
 }
 
 // TypeSchema represents a type definition.
 type TypeSchema struct {
-	Name        string                 `json:"name"`
-	Builtin     bool                   `json:"builtin"`
-	DefaultPath string                 `json:"default_path,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	NameField   string                 `json:"name_field,omitempty"`
-	Template    string                 `json:"template,omitempty"`
-	Fields      map[string]FieldSchema `json:"fields,omitempty"`
+	Name            string                 `json:"name"`
+	Builtin         bool                   `json:"builtin"`
+	DefaultPath     string                 `json:"default_path,omitempty"`
+	Description     string                 `json:"description,omitempty"`
+	NameField       string                 `json:"name_field,omitempty"`
+	Template        string                 `json:"template,omitempty"`
+	Templates       []string               `json:"templates,omitempty"`
+	DefaultTemplate string                 `json:"default_template,omitempty"`
+	Fields          map[string]FieldSchema `json:"fields,omitempty"`
+}
+
+// TemplateSchema represents a schema-level template definition.
+type TemplateSchema struct {
+	ID          string `json:"id"`
+	File        string `json:"file"`
+	Description string `json:"description,omitempty"`
 }
 
 // FieldSchema represents a field definition.

@@ -179,9 +179,11 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	// Determine template to use
 	templateSpec := opts.TemplateOverride
 	if templateSpec == "" && opts.Schema != nil {
-		if typeDef, ok := opts.Schema.Types[opts.TypeName]; ok && typeDef != nil {
-			templateSpec = typeDef.Template
+		resolvedTemplate, err := schema.ResolveTypeTemplateFile(opts.Schema, opts.TypeName, "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve template for type %q: %w", opts.TypeName, err)
 		}
+		templateSpec = resolvedTemplate
 	}
 
 	// Load and apply template if specified
@@ -192,12 +194,9 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		}
 
 		if templateContent != "" {
-			// Apply variable substitution
-			vars := template.NewVariables(title, opts.TypeName, slugifiedPath, opts.Fields)
-			processedContent := template.Apply(templateContent, vars)
-			content.WriteString(processedContent)
+			content.WriteString(templateContent)
 			// Ensure template ends with newline
-			if !strings.HasSuffix(processedContent, "\n") {
+			if !strings.HasSuffix(templateContent, "\n") {
 				content.WriteString("\n")
 			}
 		}
@@ -337,6 +336,20 @@ func Slugify(s string) string {
 // CreateDailyNote creates a daily note for the given date.
 func CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle string) (*CreateResult, error) {
 	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "", "")
+}
+
+// CreateDailyNoteWithSchema creates a daily note using schema-driven template resolution.
+func CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle string, sch *schema.Schema, templateDir string) (*CreateResult, error) {
+	targetPath := filepath.Join(dailyDir, dateStr)
+
+	return Create(CreateOptions{
+		VaultPath:   vaultPath,
+		TypeName:    "date",
+		Title:       friendlyTitle,
+		TargetPath:  targetPath,
+		Schema:      sch,
+		TemplateDir: templateDir,
+	})
 }
 
 // CreateDailyNoteWithTemplate creates a daily note with an optional template.

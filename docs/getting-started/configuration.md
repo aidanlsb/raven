@@ -106,11 +106,10 @@ capture:
 ```yaml
 directories:
   daily: daily/
-daily_template: templates/daily.md
 ```
 
 - `directories.daily` sets where daily notes are stored.
-- `daily_template` sets the format for newly created daily notes.
+- Daily note template content is configured in `schema.yaml` by binding a template ID to type `date` and setting `default_template`.
 
 #### Capture behavior
 
@@ -209,9 +208,6 @@ directories:
   workflow: workflows/  # Root for workflow definition files
   template: templates/  # Root for template files
 
-# Template for daily notes (file path)
-daily_template: templates/daily.md
-
 # Auto-reindex after CLI operations (default: true)
 auto_reindex: true
 
@@ -282,29 +278,22 @@ Daily notes are created as `<directories.daily>/YYYY-MM-DD.md`.
 
 ---
 
-### `daily_template`
+### `daily_template` (deprecated)
 
-Template file path for new daily notes.
+`daily_template` is deprecated and should not be used for new configuration.
 
-| Type | Default |
-|------|---------|
-| string | (none) |
-
-**File-based template:**
+Daily note templates are now configured in `schema.yaml` through type `date`:
 
 ```yaml
-daily_template: templates/daily.md
+templates:
+  daily_default:
+    file: templates/daily.md
+
+types:
+  date:
+    templates: [daily_default]
+    default_template: daily_default
 ```
-
-**Available variables:**
-
-| Variable | Example |
-|----------|---------|
-| `{{date}}` | `2026-01-10` |
-| `{{weekday}}` | `Friday` |
-| `{{year}}` | `2026` |
-| `{{month}}` | `01` |
-| `{{day}}` | `10` |
 
 ---
 

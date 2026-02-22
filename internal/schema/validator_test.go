@@ -284,6 +284,64 @@ func TestValidateFieldValueURL(t *testing.T) {
 	})
 }
 
+func TestValidateSchemaTemplateBindings(t *testing.T) {
+	t.Run("reports unknown type template reference", func(t *testing.T) {
+		sch := &Schema{
+			Types: map[string]*TypeDefinition{
+				"interview": {
+					Templates: []string{"interview_technical"},
+				},
+			},
+			Traits: make(map[string]*TraitDefinition),
+		}
+
+		issues := ValidateSchema(sch)
+		if len(issues) == 0 {
+			t.Fatal("expected validation issues, got none")
+		}
+	})
+
+	t.Run("reports invalid default template ID", func(t *testing.T) {
+		sch := &Schema{
+			Templates: map[string]*TemplateDefinition{
+				"interview_screen": {File: "templates/interview/screen.md"},
+			},
+			Types: map[string]*TypeDefinition{
+				"interview": {
+					Templates:       []string{"interview_screen"},
+					DefaultTemplate: "interview_technical",
+				},
+			},
+			Traits: make(map[string]*TraitDefinition),
+		}
+
+		issues := ValidateSchema(sch)
+		if len(issues) == 0 {
+			t.Fatal("expected validation issues, got none")
+		}
+	})
+
+	t.Run("validates date type template bindings", func(t *testing.T) {
+		sch := &Schema{
+			Templates: map[string]*TemplateDefinition{
+				"daily_default": {File: "templates/daily.md"},
+			},
+			Types: map[string]*TypeDefinition{
+				"date": {
+					Templates:       []string{"daily_default"},
+					DefaultTemplate: "missing_default",
+				},
+			},
+			Traits: make(map[string]*TraitDefinition),
+		}
+
+		issues := ValidateSchema(sch)
+		if len(issues) == 0 {
+			t.Fatal("expected validation issues for date default_template, got none")
+		}
+	})
+}
+
 func TestValidateFieldValueURLArray(t *testing.T) {
 	defs := map[string]*FieldDefinition{
 		"links": {Type: FieldTypeURLArray},

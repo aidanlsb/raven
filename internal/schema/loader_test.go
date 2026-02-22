@@ -191,4 +191,109 @@ types:
 			t.Fatal("expected error for inline template definition, got nil")
 		}
 	})
+
+	t.Run("loads schema templates and type template IDs", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		schemaContent := `
+templates:
+  interview_technical:
+    file: templates/interview/technical.md
+types:
+  interview:
+    templates: [interview_technical]
+    default_template: interview_technical
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		loaded, err := Load(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if _, ok := loaded.Templates["interview_technical"]; !ok {
+			t.Fatal("expected schema template interview_technical to exist")
+		}
+		typeDef := loaded.Types["interview"]
+		if typeDef == nil {
+			t.Fatal("expected interview type")
+		}
+		if len(typeDef.Templates) != 1 || typeDef.Templates[0] != "interview_technical" {
+			t.Fatalf("expected interview.templates=[%q], got %v", "interview_technical", typeDef.Templates)
+		}
+		if got := typeDef.DefaultTemplate; got != "interview_technical" {
+			t.Fatalf("expected default_template=%q, got %q", "interview_technical", got)
+		}
+	})
+
+	t.Run("preserves date type template bindings", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		schemaContent := `
+templates:
+  daily_default:
+    file: templates/daily.md
+types:
+  date:
+    templates: [daily_default]
+    default_template: daily_default
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		loaded, err := Load(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		dateType := loaded.Types["date"]
+		if dateType == nil {
+			t.Fatal("expected built-in date type")
+		}
+		if len(dateType.Templates) != 1 || dateType.Templates[0] != "daily_default" {
+			t.Fatalf("expected date.templates=[%q], got %v", "daily_default", dateType.Templates)
+		}
+		if dateType.DefaultTemplate != "daily_default" {
+			t.Fatalf("expected date.default_template=%q, got %q", "daily_default", dateType.DefaultTemplate)
+		}
+	})
+
+	t.Run("rejects unknown type template id", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := `
+types:
+  interview:
+    templates: [interview_technical]
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error for unknown template ID, got nil")
+		}
+	})
+
+	t.Run("rejects default_template missing template ID", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := `
+templates:
+  interview_technical:
+    file: templates/interview/technical.md
+types:
+  interview:
+    templates: [interview_technical]
+    default_template: interview_screen
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error for invalid default_template template ID, got nil")
+		}
+	})
 }

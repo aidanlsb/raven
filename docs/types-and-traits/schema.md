@@ -27,7 +27,8 @@ types:
   project:
     name_field: title
     default_path: projects/
-    template: templates/project.md
+    templates: [project_standard]
+    default_template: project_standard
     fields:
       title: { type: string, required: true }
       status: { type: enum, values: [active, paused, done, archived], default: active }
@@ -40,6 +41,16 @@ types:
     fields:
       time: { type: datetime }
       attendees: { type: ref[], target: person }
+
+  date:
+    templates: [daily_default]
+    default_template: daily_default
+
+templates:
+  project_standard:
+    file: templates/project.md
+  daily_default:
+    file: templates/daily.md
 
 traits:
   due:
@@ -130,7 +141,8 @@ type: date
 | `description` | string | Optional human/agent context for the type |
 | `name_field` | string | Field that serves as the display name |
 | `default_path` | string | Directory where new files are created |
-| `template` | string | Template file path |
+| `templates` | string[] | Template IDs this type can use |
+| `default_template` | string | Default template ID for this type |
 | `fields` | object | Field definitions for frontmatter |
 
 ### `name_field`
@@ -182,34 +194,28 @@ types:
 
 With `directories` configured in `raven.yaml`, `default_path` is relative to `objects/`.
 
-### `template`
+### `templates` and `default_template`
 
-Template file for new files of this type.
-
-Templates are file-backed only and should live under `directories.template` in `raven.yaml` (default: `templates/`).
-
-**Example:**
+Types reference template IDs defined in top-level `templates`.
 
 ```yaml
 types:
   meeting:
-    template: templates/meeting.md
+    templates: [meeting_standard, meeting_retro]
+    default_template: meeting_standard
+
+templates:
+  meeting_standard:
+    file: templates/meeting/standard.md
+  meeting_retro:
+    file: templates/meeting/retro.md
 ```
 
-**Template variables:**
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `{{title}}` | Title passed to `rvn new` | "Team Sync" |
-| `{{slug}}` | Slugified title | "team-sync" |
-| `{{type}}` | The type name | "meeting" |
-| `{{date}}` | Today's date | "2026-01-10" |
-| `{{datetime}}` | Current datetime | "2026-01-10T14:30" |
-| `{{year}}` | Current year | "2026" |
-| `{{month}}` | Current month (2-digit) | "01" |
-| `{{day}}` | Current day (2-digit) | "10" |
-| `{{weekday}}` | Day name | "Friday" |
-| `{{field.X}}` | Value of field X from `--field` | (user-provided) |
+Rules:
+- Every ID in `types.<type>.templates` must exist in top-level `templates`.
+- `default_template`, when set, must be included in `types.<type>.templates`.
+- If `default_template` is unset, new objects are created without template content unless one is explicitly selected.
+- Templates are file-backed only and files must be under `directories.template` in `raven.yaml` (default: `templates/`).
 
 ---
 

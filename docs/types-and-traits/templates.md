@@ -1,69 +1,81 @@
 # Templates Guide
 
-Use templates when you want new notes to start with a consistent structure.
+Use templates when you want new notes to start with consistent, reusable content.
 
-This guide covers both:
-- type templates (for `rvn new <type> ...`)
-- daily templates (for `rvn daily`)
+This guide covers:
+- schema templates (shared file definitions in `schema.yaml`)
+- type template bindings (which template IDs a type can use)
+- daily templates through the built-in `date` type
 
-Goal: set up templates safely with the `rvn template ...` command family.
+Goal: set up templates with the `rvn schema template ...` and `rvn schema type <type> template ...` commands.
 
 Out of scope:
-- full schema reference (use `types-and-traits/schema.md`)
+- full command/flag reference (see `reference/cli.md`)
+- full schema format reference (see `types-and-traits/schema.md`)
 
 ## How templates work
 
-Templates in Raven are file-backed only.
+Templates are file-backed only.
 
-- A type template is stored in `schema.yaml` as `types.<type>.template: <file-path>`.
-- A daily template is stored in `raven.yaml` as `daily_template: <file-path>`.
+- Template definitions live in `schema.yaml` under top-level `templates:`.
+- Types opt into template IDs via `types.<type>.templates`.
+- A type can set `default_template`; if unset, creation proceeds without a template.
+- Daily notes use type `date`, so daily templates are configured via `types.date.templates` and `types.date.default_template`.
 - Template files must live under `directories.template` in `raven.yaml` (default: `templates/`).
 
-Example config:
+Example schema:
 
 ```yaml
-directories:
-  template: templates/
-daily_template: templates/daily.md
+templates:
+  meeting_standard:
+    file: templates/meeting/standard.md
+
+types:
+  meeting:
+    templates: [meeting_standard]
+    default_template: meeting_standard
+
+  date:
+    templates: [daily_default]
+    default_template: daily_default
 ```
 
 ## Quick start: type template
 
 Use this flow when you want structure for a type like `meeting`.
 
-### 1) Check the type exists
+### 1) Confirm the type exists
 
 ```bash
 rvn schema type meeting
 ```
 
-### 2) Scaffold and bind a template file
+### 2) Create a template file
 
 ```bash
-rvn template scaffold type meeting
-```
-
-Default file path: `templates/meeting.md`.
-
-### 3) Write template content
-
-```bash
-rvn template write type meeting --content '# {{title}}
-
-**Date:** {{date}}
+mkdir -p templates/meeting
+cat > templates/meeting/standard.md <<'EOF'
+# Meeting Notes
 
 ## Agenda
 
 ## Notes
 
 ## Action Items
-'
+EOF
 ```
 
-### 4) Preview variable substitution
+### 3) Register the schema template
 
 ```bash
-rvn template render type meeting --title "Weekly Standup"
+rvn schema template set meeting_standard --file templates/meeting/standard.md
+```
+
+### 4) Bind it to the type and set default
+
+```bash
+rvn schema type meeting template set meeting_standard
+rvn schema type meeting template default meeting_standard
 ```
 
 ### 5) Smoke test object creation
@@ -72,36 +84,31 @@ rvn template render type meeting --title "Weekly Standup"
 rvn new meeting "Weekly Standup"
 ```
 
-## Quick start: daily template
+## Quick start: daily template (`date` type)
 
-### 1) Scaffold and bind daily template
-
-```bash
-rvn template scaffold daily
-```
-
-Default file path: `templates/daily.md`.
-
-### 2) Write daily template content
+### 1) Create a daily template file
 
 ```bash
-rvn template write daily --content '# {{weekday}}, {{date}}
+cat > templates/daily.md <<'EOF'
+# Daily Note
 
 ## Morning
 
 ## Afternoon
 
 ## Evening
-'
+EOF
 ```
 
-### 3) Preview for a specific date
+### 2) Register and bind it to `date`
 
 ```bash
-rvn template render daily --date tomorrow
+rvn schema template set daily_default --file templates/daily.md
+rvn schema type date template set daily_default
+rvn schema type date template default daily_default
 ```
 
-### 4) Create/open a daily note
+### 3) Create/open a daily note
 
 ```bash
 rvn daily tomorrow
@@ -109,73 +116,43 @@ rvn daily tomorrow
 
 ## Command patterns
 
-- `rvn template list`  
-  Show all configured template bindings.
+- `rvn schema template list`
+  List all schema templates.
+- `rvn schema template get <template_id>`
+  Show one template definition.
+- `rvn schema template set <template_id> --file <path>`
+  Create or update a template definition.
+- `rvn schema template remove <template_id>`
+  Remove a template definition (blocked if still bound to any type).
+- `rvn schema type <type_name> template list`
+  List template IDs bound to a type.
+- `rvn schema type <type_name> template set <template_id>`
+  Bind a template ID to a type.
+- `rvn schema type <type_name> template remove <template_id>`
+  Unbind a template ID from a type.
+- `rvn schema type <type_name> template default <template_id>`
+  Set default template for a type.
+- `rvn schema type <type_name> template default --clear`
+  Clear default template for a type.
 
-- `rvn template get type <type_name>` / `rvn template get daily`  
-  Show binding + resolved file content.
+## Important behavior
 
-- `rvn template set ... --file <path>`  
-  Bind an existing template file (must already exist).
-
-- `rvn template scaffold ...`  
-  Create a template file and bind it in one step.
-
-- `rvn template write ... --content "..."`  
-  Replace content in the currently bound file.
-
-- `rvn template remove ...`  
-  Remove binding; add `--delete-file` to also delete the file.
-
-## Template variables
-
-Supported variables:
-
-| Variable | Meaning |
-|----------|---------|
-| `{{title}}` | object title (or date string for daily templates) |
-| `{{slug}}` | slugified title |
-| `{{type}}` | type name |
-| `{{date}}` | date (`YYYY-MM-DD`) |
-| `{{datetime}}` | datetime (`YYYY-MM-DDTHH:MM`) |
-| `{{year}}` | year |
-| `{{month}}` | month (`01`-`12`) |
-| `{{day}}` | day (`01`-`31`) |
-| `{{weekday}}` | weekday name |
-| `{{field.<name>}}` | value passed with `--field` during object creation |
-
-For daily templates, date-based variables are usually the most useful.
-
-## Reusing and deleting template files safely
-
-Multiple targets can point to the same file. For example, two types can share a common template.
-
-If you run:
-
-```bash
-rvn template remove type meeting --delete-file
-```
-
-Raven checks whether other template bindings still reference that file. If they do, deletion is blocked unless you pass `--force`.
-
-Recommended safe flow:
-1. `rvn template list`
-2. remove or repoint other bindings
-3. rerun remove with `--delete-file`
+- If a type has no `default_template`, `rvn new` creates the object without template content.
+- `--template <template_id>` on `rvn new` can override the default for that create call.
+- Template content is static file content at creation time.
 
 ## Troubleshooting
 
-- `template file must be under directories.template ...`  
+- `template file must be under directories.template ...`
   Move the file under your configured template directory or update `directories.template`.
-
-- `template file not found ...`  
-  Create it first (`rvn template scaffold ...`) or fix the path.
-
-- `inline template content is not supported`  
-  Use file references in `schema.yaml` / `raven.yaml`; do not store inline template bodies in config.
+- `template file not found ...`
+  Create the file first, then run `rvn schema template set ... --file ...`.
+- `template '<id>' is still referenced by ...`
+  Unbind from types first using `rvn schema type <type> template remove <id>`.
 
 ## Related docs
 
-- Use `rvn help template` for exact `rvn template` flags
-- `getting-started/configuration.md` for `directories.template`, `daily_template`, and practical vault setup
-- `types-and-traits/schema.md` for `types.<type>.template`
+- `reference/cli.md` for exact `schema template` and `schema type ... template` command details
+- `types-and-traits/schema.md` for `templates`, `types.<type>.templates`, and `default_template`
+- `reference/vault-config.md` for `directories.template`
+- `getting-started/configuration.md` for practical vault setup

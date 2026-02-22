@@ -1237,155 +1237,148 @@ Checks for internal consistency issues in `schema.yaml`.
 
 ---
 
-### `rvn template list`
+### `rvn schema template list`
 
-List configured type and daily template bindings.
+List all schema-level templates.
 
 ```bash
-rvn template list
+rvn schema template list
 ```
 
 **Examples:**
 
 ```bash
-rvn template list --json
+rvn schema template list --json
 ```
 
 ---
 
-### `rvn template get`
+### `rvn schema template get`
 
-Show template binding and loaded content for a type or daily template.
+Show one schema template definition.
 
 ```bash
-rvn template get type <type_name>
-rvn template get daily
+rvn schema template get <template_id>
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `target` | `type` or `daily` |
-| `type_name` | Required when `target=type` |
+| `template_id` | Template ID from `schema.yaml` |
 
 **Examples:**
 
 ```bash
-rvn template get type meeting --json
-rvn template get daily --json
+rvn schema template get interview_technical --json
 ```
 
 ---
 
-### `rvn template set`
+### `rvn schema template set`
 
-Set template file binding for a type or daily template.
+Create or update a schema template definition.
 
 ```bash
-rvn template set type <type_name> --file <path>
-rvn template set daily --file <path>
+rvn schema template set <template_id> --file <path> [--description "..."]
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--file` | Template file path under `directories.template` |
+| `--description` | Optional description (`-` clears existing value) |
 
 **Examples:**
 
 ```bash
-rvn template set type meeting --file templates/meeting.md --json
-rvn template set daily --file templates/daily.md --json
+rvn schema template set interview_technical --file templates/interview/technical.md --json
+rvn schema template set interview_technical --file templates/interview/technical.md --description "Technical interview prompt" --json
 ```
 
 ---
 
-### `rvn template scaffold`
+### `rvn schema template remove`
 
-Create a template file and register its binding.
+Remove a schema template definition.
 
 ```bash
-rvn template scaffold type <type_name> [--file <path>] [--force]
-rvn template scaffold daily [--file <path>] [--force]
+rvn schema template remove <template_id>
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--file` | Optional template path under `directories.template` |
-| `--force` | Overwrite scaffold file if it exists |
 
 **Examples:**
 
 ```bash
-rvn template scaffold type meeting --json
-rvn template scaffold daily --json
+rvn schema template remove interview_technical --json
 ```
 
 ---
 
-### `rvn template write`
+### `rvn schema type <type_name> template list`
 
-Replace content in the currently bound template file.
+List template IDs bound to a type.
 
 ```bash
-rvn template write type <type_name> --content "..."
-rvn template write daily --content "..."
+rvn schema type <type_name> template list
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--content` | Template content to write |
 
 **Examples:**
 
 ```bash
-rvn template write type meeting --content "# {{title}}\n\n## Notes" --json
-rvn template write daily --content "# {{weekday}}, {{date}}\n\n## Notes" --json
+rvn schema type interview template list --json
+rvn schema type date template list --json
 ```
 
 ---
 
-### `rvn template remove`
+### `rvn schema type <type_name> template set`
 
-Remove template binding (optionally delete underlying file).
+Bind a schema template ID to a type.
 
 ```bash
-rvn template remove type <type_name> [--delete-file] [--force]
-rvn template remove daily [--delete-file] [--force]
+rvn schema type <type_name> template set <template_id>
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--delete-file` | Also delete the bound template file |
-| `--force` | Skip safety checks for `--delete-file` |
 
 **Examples:**
 
 ```bash
-rvn template remove type meeting --json
-rvn template remove daily --delete-file --force --json
+rvn schema type interview template set interview_technical --json
+rvn schema type date template set daily_default --json
 ```
 
 ---
 
-### `rvn template render`
+### `rvn schema type <type_name> template remove`
 
-Preview rendered template output with variable substitution.
+Unbind a schema template ID from a type.
 
 ```bash
-rvn template render type <type_name> [--title "..."] [--field key=value]
-rvn template render daily [--date today|yesterday|tomorrow|YYYY-MM-DD]
+rvn schema type <type_name> template remove <template_id>
 ```
-
-| Flag | Description |
-|------|-------------|
-| `--title` | Title for type template rendering |
-| `--field` | Field values for type rendering (repeatable) |
-| `--date` | Date for daily render |
 
 **Examples:**
 
 ```bash
-rvn template render type meeting --title "Weekly Standup" --field attendees="Alice, Bob" --json
-rvn template render daily --date tomorrow --json
+rvn schema type interview template remove interview_technical --json
+```
+
+---
+
+### `rvn schema type <type_name> template default`
+
+Set or clear the default template ID for a type.
+
+```bash
+rvn schema type <type_name> template default <template_id>
+rvn schema type <type_name> template default --clear
+```
+
+| Flag | Description |
+|------|-------------|
+| `--clear` | Clear the default template for the type |
+
+**Examples:**
+
+```bash
+rvn schema type interview template default interview_technical --json
+rvn schema type interview template default --clear --json
 ```
 
 ---

@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -55,13 +56,17 @@ Examples:
 		created := false
 		if !pages.Exists(vaultPath, targetPath) {
 			friendlyDate := vault.FormatDateFriendly(targetDate)
+			s, err := schema.Load(vaultPath)
+			if err != nil {
+				return fmt.Errorf("failed to load schema: %w", err)
+			}
 
-			result, err := pages.CreateDailyNoteWithTemplate(
+			result, err := pages.CreateDailyNoteWithSchema(
 				vaultPath,
 				vaultCfg.GetDailyDirectory(),
 				dateStr,
 				friendlyDate,
-				vaultCfg.DailyTemplate,
+				s,
 				vaultCfg.GetTemplateDirectory(),
 			)
 			if err != nil {

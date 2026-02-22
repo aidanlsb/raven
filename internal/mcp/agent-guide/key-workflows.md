@@ -506,85 +506,47 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
 
 ### 15. Setting Up Templates
 
-Templates provide default content when users create new notes. Use the template CLI commands to manage them.
+Templates provide default content when users create new notes. Templates are schema-driven and file-backed.
 
-**Managing templates with CLI commands:**
+**Managing templates with MCP tools:**
 
 ```
-# List all configured templates
-raven_template_list()
+# Create/update a template definition in schema.yaml
+raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
 
-# Scaffold + register a type template
-raven_template_scaffold(target="type", type_name="meeting")
+# Inspect/list schema templates
+raven_schema_template_get(template_id="meeting_standard")
+raven_schema_template_list()
 
-# Bind an existing file to a type template
-raven_template_set(target="type", type_name="meeting", file="templates/meeting.md")
+# Bind template ID to a type and set default
+raven_schema_type_template_set(type_name="meeting", template_id="meeting_standard")
+raven_schema_type_template_default(type_name="meeting", template_id="meeting_standard")
 
-# Update template file content
-raven_template_write(
-  target="type",
-  type_name="meeting",
-  content="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Notes\n\n## Action Items"
-)
+# Daily notes use built-in type "date"
+raven_schema_type_template_set(type_name="date", template_id="daily_default")
+raven_schema_type_template_default(type_name="date", template_id="daily_default")
 
-# Preview with variables
-raven_template_render(target="type", type_name="meeting", title="Weekly Standup")
-
-# Daily template lifecycle
-raven_template_get(target="daily")
-raven_template_set(target="daily", file="templates/daily.md")
-raven_template_render(target="daily", date="tomorrow")
-
-# Remove binding (optionally delete file)
-raven_template_remove(target="type", type_name="meeting")
-raven_template_remove(target="daily", delete_file=true)
+# Remove type binding, then remove template definition
+raven_schema_type_template_remove(type_name="meeting", template_id="meeting_standard")
+raven_schema_template_remove(template_id="meeting_standard")
 ```
 
-**Template Variables:**
-
-| Variable | Description | Example Output |
-|----------|-------------|----------------|
-| `{{title}}` | Title passed to `rvn new` | "Team Sync" |
-| `{{slug}}` | Slugified title | "team-sync" |
-| `{{type}}` | The type name | "meeting" |
-| `{{date}}` | Today's date | "2026-01-02" |
-| `{{datetime}}` | Current datetime | "2026-01-02T14:30" |
-| `{{year}}` | Current year | "2026" |
-| `{{month}}` | Current month (2-digit) | "01" |
-| `{{day}}` | Current day (2-digit) | "02" |
-| `{{weekday}}` | Day name | "Monday" |
-| `{{field.X}}` | Value of field X from `--field` | Value provided at creation |
-
-**Template policy:**
+**Template behavior:**
 
 - Templates are **file-backed only** (no inline template bodies).
 - Template files must be under `directories.template` (default: `templates/`).
-
-**Important MCP notes for agents:**
-
-- Use `raven_template_scaffold` for first-time setup (creates file + binds it).
-- Use `raven_template_write` to update template content in-place.
-- `raven_template_remove(..., delete_file=true)` can remove both binding and file with safety checks.
-
-**Daily note templates (`raven.yaml`):**
-
-Daily notes use `daily_template` as a file reference:
-
-```yaml
-directories:
-  daily: daily/
-  template: templates/
-daily_template: templates/daily.md
-```
+- If a type has no `default_template`, creation proceeds without template content.
+- Removing a template definition is blocked while any type still references it.
 
 **Workflow for helping users set up templates:**
 
 1. Ask what type of notes they want templates for
 2. Check the schema to see if the type exists: `raven_schema(subcommand="type", name="meeting")`
 3. Ask what sections/structure they want in new notes
-4. Scaffold or set the template: `raven_template_scaffold(target="type", type_name="meeting")`
-5. Write content and preview: `raven_template_write(...)`, `raven_template_render(target="type", type_name="meeting", title="Test")`
-6. Test it: `raven_new(type="meeting", title="Test Meeting")`
+4. Ensure template file exists under `templates/` (create it if needed)
+5. Register template definition: `raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")`
+6. Bind + default for type: `raven_schema_type_template_set(...)`, `raven_schema_type_template_default(...)`
+7. Test it: `raven_new(type="meeting", title="Test Meeting")`
 
 ### 16. Resolving References
 
