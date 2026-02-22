@@ -134,11 +134,14 @@ When adding a new guide topic:
 
 `docs/` contains user-facing documentation:
 
-- `docs/guide/` — getting started, CLI usage, workflows
-- `docs/reference/` — schema format, query language, MCP API
-- `docs/design/` — architecture and design decisions
+- `docs/getting-started/` — first-session flow, core concepts, configuration
+- `docs/types-and-traits/` — schema intro, schema reference, file format, templates
+- `docs/querying/` — query language reference
+- `docs/vault-management/` — bulk operations
+- `docs/workflows/` — workflow pipelines
+- `docs/agents/` — MCP reference
 
-When making significant changes, check if `docs/reference/` needs updating (especially `mcp.md` for MCP changes, `cli.md` for CLI changes).
+When making significant changes, check if the relevant docs section needs updating (especially `agents/mcp.md` for MCP changes).
 
 ## What to Check Before Submitting
 

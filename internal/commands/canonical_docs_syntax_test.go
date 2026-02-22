@@ -13,8 +13,6 @@ func TestCanonicalDocsDoNotUseLegacyQueryOrMCPSyntax(t *testing.T) {
 
 	files := []string{
 		"README.md",
-		"docs/guide/cli.md",
-		"docs/reference/cli.md",
 		"docs/types-and-traits/file-format.md",
 		"docs/agents/mcp.md",
 		"internal/mcp/agent-guide/querying.md",

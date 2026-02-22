@@ -11,16 +11,10 @@ sections:
         title: Core Concepts
         path: core-concepts.md
       configuration:
-        title: Setup and Configuration
+        title: Configuration
         path: configuration.md
-  querying:
-    title: Querying
-    topics:
-      query-language:
-        title: Query Language
-        path: query-language.md
   types-and-traits:
-    title: Types and Traits
+    title: Types & Traits
     topics:
       schema-intro:
         title: Schema Introduction
@@ -34,6 +28,12 @@ sections:
       templates:
         title: Templates
         path: templates.md
+  querying:
+    title: Querying
+    topics:
+      query-language:
+        title: Query Language
+        path: query-language.md
   vault-management:
     title: Vault Management
     topics:
@@ -44,7 +44,7 @@ sections:
     title: Workflows
     topics:
       workflows:
-        title: Workflows Reference
+        title: Workflows
         path: workflows.md
   agents:
     title: Agents
@@ -52,38 +52,3 @@ sections:
       mcp:
         title: MCP Reference
         path: mcp.md
-  guide:
-    title: User Guides
-    topics:
-      cli:
-        title: CLI Learning Path
-        path: cli.md
-      cli-basics:
-        title: CLI Basics
-        path: cli-basics.md
-      cli-advanced:
-        title: CLI Advanced
-        path: cli-advanced.md
-      workflows:
-        title: Workflow Automation
-        path: workflows.md
-  reference:
-    title: Reference (Lookup)
-    topics:
-      cli:
-        title: CLI Reference
-        path: cli.md
-      vault-config:
-        title: raven.yaml Reference
-        path: vault-config.md
-      lessons:
-        path: lessons.md
-  design:
-    title: Design Notes
-    topics:
-      architecture:
-        path: architecture.md
-      parsing:
-        path: parsing.md
-      database:
-        path: database.md

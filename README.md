@@ -445,7 +445,7 @@ Run via CLI or agent:
 rvn workflow run meeting-prep --input meeting_id=meeting/2026-01-17-council-gladsheim
 ```
 
-See the [workflows guide](docs/guide/workflows.md) and [workflows reference](docs/workflows/workflows.md) for the full specification.
+See the [workflows reference](docs/workflows/workflows.md) for the full specification.
 
 ---
 
@@ -453,27 +453,25 @@ See the [workflows guide](docs/guide/workflows.md) and [workflows reference](doc
 
 Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with `rvn docs` (sync with `rvn docs fetch`), or read them on GitHub:
 
-**Guides** (learning path):
+**Getting Started:**
 
 1. [Getting Started](docs/getting-started/getting-started.md) — first-session flow and verification
 2. [Core Concepts](docs/getting-started/core-concepts.md) — types, traits, references
-3. [Schema Introduction](docs/types-and-traits/schema-intro.md) — practical `schema.yaml` basics
-4. [Configuration](docs/getting-started/configuration.md) — `raven.yaml` and `config.toml`
-5. [CLI Basics](docs/guide/cli-basics.md) — everyday commands
-6. [CLI Advanced](docs/guide/cli-advanced.md) — bulk operations and power workflows
-7. [Templates](docs/types-and-traits/templates.md) — type and daily templates
-8. [Workflows](docs/guide/workflows.md) — multi-step agent pipelines
+3. [Configuration](docs/getting-started/configuration.md) — `raven.yaml` and `config.toml`
 
-**References** (lookup):
+**Types & Traits:**
 
-- [CLI Reference](docs/reference/cli.md) — every command and flag
-- [Query Language](docs/querying/query-language.md) — full RQL syntax
+- [Schema Introduction](docs/types-and-traits/schema-intro.md) — practical `schema.yaml` basics
 - [Schema Reference](docs/types-and-traits/schema.md) — `schema.yaml` specification
 - [File Format](docs/types-and-traits/file-format.md) — markdown + frontmatter spec
-- [Vault Config](docs/reference/vault-config.md) — `raven.yaml` reference
-- [MCP Reference](docs/agents/mcp.md) — agent integration
-- [Workflows Reference](docs/workflows/workflows.md) — pipeline specification
+- [Templates](docs/types-and-traits/templates.md) — type and daily templates
+
+**Querying / Vault Management / Workflows / Agents:**
+
+- [Query Language](docs/querying/query-language.md) — full RQL syntax
 - [Bulk Operations](docs/vault-management/bulk-operations.md) — patterns for operating at scale
+- [Workflows](docs/workflows/workflows.md) — pipeline specification
+- [MCP Reference](docs/agents/mcp.md) — agent integration
 
 Interactive learning:
 
