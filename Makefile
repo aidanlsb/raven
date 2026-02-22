@@ -28,13 +28,15 @@ test-coverage:
 
 # Run linter with golangci-lint v2.
 # Uses local v2 binary when available, otherwise runs pinned version via go run.
+# The fallback is forced to CGO_ENABLED=0 to avoid macOS Security.framework linker
+# issues on systems with older Command Line Tools.
 lint:
 	@version="$$(golangci-lint --version 2>/dev/null || true)"; \
 	case "$$version" in \
 		*"version v2."*|*"version 2."*) golangci-lint run ;; \
 		*) \
 			echo "golangci-lint v2 not found in PATH; running $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION)"; \
-			go run $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION) run; \
+			CGO_ENABLED=0 go run $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION) run; \
 			;; \
 	esac
 
