@@ -69,6 +69,9 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	if schema.Types == nil {
 		schema.Types = make(map[string]*TypeDefinition)
 	}
+	if schema.Core == nil {
+		schema.Core = make(map[string]*CoreTypeDefinition)
+	}
 	if schema.Traits == nil {
 		schema.Traits = make(map[string]*TraitDefinition)
 	}
@@ -90,10 +93,13 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		}
 	}
 
-	// Templates are file-backed only.
+	// User type template settings must be valid.
 	for typeName, typeDef := range schema.Types {
 		if typeDef == nil {
 			continue
+		}
+		if IsBuiltinType(typeName) {
+			return nil, fmt.Errorf("type %q is a core type; configure it under 'core:' instead of 'types:'", typeName)
 		}
 		spec := strings.TrimSpace(typeDef.Template)
 		if spec != "" {
@@ -101,26 +107,27 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 				return nil, fmt.Errorf("type %q template must be a file path (inline templates are not supported)", typeName)
 			}
 		}
-
-		seenTemplateIDs := make(map[string]struct{})
-		for _, templateID := range typeDef.Templates {
-			templateID = strings.TrimSpace(templateID)
-			if templateID == "" {
-				return nil, fmt.Errorf("type %q templates cannot contain empty template IDs", typeName)
-			}
-			if _, seen := seenTemplateIDs[templateID]; seen {
-				return nil, fmt.Errorf("type %q templates contains duplicate template ID %q", typeName, templateID)
-			}
-			seenTemplateIDs[templateID] = struct{}{}
-			if _, ok := schema.Templates[templateID]; !ok {
-				return nil, fmt.Errorf("type %q references unknown template %q", typeName, templateID)
-			}
+		if err := validateTemplateBindings(typeName, typeDef.Templates, typeDef.DefaultTemplate, schema.Templates); err != nil {
+			return nil, err
 		}
-		if strings.TrimSpace(typeDef.DefaultTemplate) != "" {
-			defaultTemplate := strings.TrimSpace(typeDef.DefaultTemplate)
-			if _, ok := seenTemplateIDs[defaultTemplate]; !ok {
-				return nil, fmt.Errorf("type %q default_template %q is not included in type.templates", typeName, typeDef.DefaultTemplate)
+	}
+
+	// Core type template settings must be valid.
+	for coreName, coreDef := range schema.Core {
+		if !IsBuiltinType(coreName) {
+			return nil, fmt.Errorf("unknown core type %q under 'core:'", coreName)
+		}
+		if coreDef == nil {
+			return nil, fmt.Errorf("core type %q must be an object", coreName)
+		}
+		if coreName == "section" {
+			if len(coreDef.Templates) > 0 || strings.TrimSpace(coreDef.DefaultTemplate) != "" {
+				return nil, fmt.Errorf("core type %q does not support template configuration", coreName)
 			}
+			continue
+		}
+		if err := validateTemplateBindings("core."+coreName, coreDef.Templates, coreDef.DefaultTemplate, schema.Templates); err != nil {
+			return nil, err
 		}
 	}
 
@@ -142,15 +149,16 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	dateType := &TypeDefinition{
 		Fields: make(map[string]*FieldDefinition),
 	}
-	if existingDate := schema.Types["date"]; existingDate != nil {
-		// Preserve template bindings for the built-in date type so daily notes
-		// can be configured through schema templates.
-		dateType.Template = existingDate.Template
-		dateType.Templates = append([]string(nil), existingDate.Templates...)
-		dateType.DefaultTemplate = existingDate.DefaultTemplate
-		dateType.Description = existingDate.Description
+	if coreDate := schema.Core["date"]; coreDate != nil {
+		// Preserve template bindings for built-in date type from core config.
+		dateType.Templates = append([]string(nil), coreDate.Templates...)
+		dateType.DefaultTemplate = coreDate.DefaultTemplate
 	}
 	schema.Types["date"] = dateType
+	if corePage := schema.Core["page"]; corePage != nil {
+		schema.Types["page"].Templates = append([]string(nil), corePage.Templates...)
+		schema.Types["page"].DefaultTemplate = corePage.DefaultTemplate
+	}
 
 	// Initialize nil field maps for types
 	for _, typeDef := range schema.Types {
@@ -190,6 +198,30 @@ func normalizeFieldType(fieldType FieldType) FieldType {
 	}
 }
 
+func validateTemplateBindings(owner string, templateIDs []string, defaultTemplate string, templates map[string]*TemplateDefinition) error {
+	seenTemplateIDs := make(map[string]struct{})
+	for _, templateID := range templateIDs {
+		templateID = strings.TrimSpace(templateID)
+		if templateID == "" {
+			return fmt.Errorf("%s templates cannot contain empty template IDs", owner)
+		}
+		if _, seen := seenTemplateIDs[templateID]; seen {
+			return fmt.Errorf("%s templates contains duplicate template ID %q", owner, templateID)
+		}
+		seenTemplateIDs[templateID] = struct{}{}
+		if _, ok := templates[templateID]; !ok {
+			return fmt.Errorf("%s references unknown template %q", owner, templateID)
+		}
+	}
+	if strings.TrimSpace(defaultTemplate) != "" {
+		trimmedDefault := strings.TrimSpace(defaultTemplate)
+		if _, ok := seenTemplateIDs[trimmedDefault]; !ok {
+			return fmt.Errorf("%s default_template %q is not included in templates", owner, defaultTemplate)
+		}
+	}
+	return nil
+}
+
 // CreateDefault creates a default schema.yaml file in the vault.
 // Returns true if a new file was created, false if one already existed.
 func CreateDefault(vaultPath string) (bool, error) {
@@ -203,7 +235,7 @@ func CreateDefault(vaultPath string) (bool, error) {
 	defaultSchema := `# Raven Schema Configuration
 # Define your types and traits here.
 
-version: 2  # Schema format version (do not change manually)
+version: 1  # Schema format version (do not change manually)
 
 # Types: Define what objects ARE (frontmatter 'type:' field)
 # Types have fields (structured data in frontmatter)
@@ -212,6 +244,12 @@ version: 2  # Schema format version (do not change manually)
 #   - page: fallback for files without explicit type
 #   - section: auto-created for headings
 #   - date: daily notes (files named YYYY-MM-DD.md under directories.daily)
+#
+# Configure templates for core types under the 'core' block.
+# Supported:
+#   core.date.templates/default_template
+#   core.page.templates/default_template
+#   core.section: {}   (placeholder only; no configurable fields)
 #
 # name_field: When set, 'rvn new <type> <title>' auto-populates this field
 # with the title argument. Makes object creation more intuitive.
@@ -248,6 +286,15 @@ templates:
   # meeting_standard:
   #   file: templates/meeting.md
   #   description: Standard meeting notes template
+
+core:
+  # date:
+  #   templates: [daily_default]
+  #   default_template: daily_default
+  # page:
+  #   templates: [note_default]
+  #   default_template: note_default
+  # section: {}
 
 # Traits: Universal annotations in content (@name or @name(value))
 # Traits can be used on any object - just add them to your content.

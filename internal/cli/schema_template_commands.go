@@ -204,7 +204,11 @@ func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
 		}
 		for _, refID := range typeDef.Templates {
 			if refID == templateID {
-				refs = append(refs, typeName)
+				if schema.IsBuiltinType(typeName) {
+					refs = append(refs, "core."+typeName)
+				} else {
+					refs = append(refs, typeName)
+				}
 				break
 			}
 		}
@@ -214,7 +218,7 @@ func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
 		return handleErrorMsg(
 			ErrInvalidInput,
 			fmt.Sprintf("template '%s' is still referenced by: %s", templateID, strings.Join(refs, ", ")),
-			"Remove those type template bindings first with `rvn schema type <type_name> template remove <template_id>`",
+			"Remove those bindings first with `rvn schema type <type_name> template remove <template_id>` or `rvn schema core <core_type> template remove <template_id>`",
 		)
 	}
 
@@ -253,8 +257,8 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
-	if schema.IsBuiltinType(typeName) && typeName != "date" {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot use custom templates", typeName), "")
+	if schema.IsBuiltinType(typeName) {
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a core type; configure templates with `rvn schema core %s template ...`", typeName, typeName), "")
 	}
 	typeDef, ok := sch.Types[typeName]
 	if !ok || typeDef == nil {
@@ -417,6 +421,191 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 		return nil
 	default:
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown type template subcommand: %s", args[0]), "Use: list, set, remove, or default")
+	}
+}
+
+func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string, start time.Time) error {
+	coreTypeName = strings.TrimSpace(coreTypeName)
+	if coreTypeName == "" {
+		return handleErrorMsg(ErrInvalidInput, "core_type cannot be empty", "")
+	}
+	if !schema.IsBuiltinType(coreTypeName) {
+		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("core type '%s' not found", coreTypeName), "Available core types: date, page, section")
+	}
+	if coreTypeName == "section" {
+		return handleErrorMsg(ErrInvalidInput, "core type 'section' does not support template configuration", "")
+	}
+
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
+	}
+
+	coreDef := sch.Core[coreTypeName]
+	if coreDef == nil {
+		coreDef = &schema.CoreTypeDefinition{}
+	}
+
+	if len(args) == 0 {
+		return handleErrorMsg(ErrMissingArgument, "missing core template subcommand", "Use: rvn schema core <core_type> template list|set|remove|default ...")
+	}
+
+	switch args[0] {
+	case "list":
+		elapsed := time.Since(start).Milliseconds()
+		templateIDs := sortedTemplateIDs(coreDef.Templates)
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"core_type":        coreTypeName,
+				"templates":        templateIDs,
+				"default_template": coreDef.DefaultTemplate,
+			}, &Meta{Count: len(templateIDs), QueryTimeMs: elapsed})
+			return nil
+		}
+		fmt.Printf("Core templates for %s:\n", coreTypeName)
+		if len(templateIDs) == 0 {
+			fmt.Println("  (none)")
+		} else {
+			for _, templateID := range templateIDs {
+				fmt.Printf("  - %s\n", templateID)
+			}
+		}
+		if coreDef.DefaultTemplate != "" {
+			fmt.Printf("Default: %s\n", coreDef.DefaultTemplate)
+		} else {
+			fmt.Println("Default: (none)")
+		}
+		return nil
+	case "set":
+		if len(args) != 2 {
+			return handleErrorMsg(ErrInvalidInput, "set requires template_id", "Use: rvn schema core <core_type> template set <template_id>")
+		}
+		templateID := strings.TrimSpace(args[1])
+		if templateID == "" {
+			return handleErrorMsg(ErrInvalidInput, "template_id cannot be empty", "")
+		}
+		if _, exists := sch.Templates[templateID]; !exists {
+			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown template '%s'", templateID), "Use `rvn schema template list` to see available template IDs")
+		}
+		if containsTemplateID(coreDef.Templates, templateID) {
+			elapsed := time.Since(start).Milliseconds()
+			if isJSONOutput() {
+				outputSuccess(map[string]interface{}{
+					"core_type":     coreTypeName,
+					"template_id":   templateID,
+					"already_set":   true,
+					"default_match": coreDef.DefaultTemplate == templateID,
+				}, &Meta{QueryTimeMs: elapsed})
+				return nil
+			}
+			fmt.Printf("Core type %s already includes template %s\n", coreTypeName, templateID)
+			return nil
+		}
+		newTemplateIDs := append(append([]string(nil), coreDef.Templates...), templateID)
+
+		schemaDoc, _, err := readSchemaDoc(vaultPath)
+		if err != nil {
+			return err
+		}
+		coreNode := ensureMapNode(schemaDoc, "core")
+		typeNode := ensureMapNode(coreNode, coreTypeName)
+		typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
+		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+			return err
+		}
+		elapsed := time.Since(start).Milliseconds()
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"core_type":   coreTypeName,
+				"template_id": templateID,
+			}, &Meta{QueryTimeMs: elapsed})
+			return nil
+		}
+		fmt.Printf("Added template %s to core type %s\n", templateID, coreTypeName)
+		return nil
+	case "remove":
+		if len(args) != 2 {
+			return handleErrorMsg(ErrInvalidInput, "remove requires template_id", "Use: rvn schema core <core_type> template remove <template_id>")
+		}
+		templateID := strings.TrimSpace(args[1])
+		if templateID == "" {
+			return handleErrorMsg(ErrInvalidInput, "template_id cannot be empty", "")
+		}
+		if !containsTemplateID(coreDef.Templates, templateID) {
+			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("core type '%s' does not include template '%s'", coreTypeName, templateID), "Nothing to remove")
+		}
+		newTemplateIDs := removeTemplateID(coreDef.Templates, templateID)
+
+		schemaDoc, _, err := readSchemaDoc(vaultPath)
+		if err != nil {
+			return err
+		}
+		coreNode := ensureMapNode(schemaDoc, "core")
+		typeNode := ensureMapNode(coreNode, coreTypeName)
+		if len(newTemplateIDs) == 0 {
+			delete(typeNode, "templates")
+		} else {
+			typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
+		}
+		if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
+			delete(typeNode, "default_template")
+		}
+		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+			return err
+		}
+		elapsed := time.Since(start).Milliseconds()
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{"core_type": coreTypeName, "template_id": templateID, "removed": true}, &Meta{QueryTimeMs: elapsed})
+			return nil
+		}
+		fmt.Printf("Removed template %s from core type %s\n", templateID, coreTypeName)
+		return nil
+	case "default":
+		if schemaTypeTemplateClearFlag {
+			schemaDoc, _, err := readSchemaDoc(vaultPath)
+			if err != nil {
+				return err
+			}
+			coreNode := ensureMapNode(schemaDoc, "core")
+			typeNode := ensureMapNode(coreNode, coreTypeName)
+			delete(typeNode, "default_template")
+			if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+				return err
+			}
+			elapsed := time.Since(start).Milliseconds()
+			if isJSONOutput() {
+				outputSuccess(map[string]interface{}{"core_type": coreTypeName, "default_template": ""}, &Meta{QueryTimeMs: elapsed})
+				return nil
+			}
+			fmt.Printf("Cleared default template for core type %s\n", coreTypeName)
+			return nil
+		}
+		if len(args) != 2 {
+			return handleErrorMsg(ErrInvalidInput, "default requires template_id or --clear", "Use: rvn schema core <core_type> template default <template_id> OR --clear")
+		}
+		templateID := strings.TrimSpace(args[1])
+		if !containsTemplateID(coreDef.Templates, templateID) {
+			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("core type '%s' does not include template '%s'", coreTypeName, templateID), "Use `rvn schema core <core_type> template list` to see available template IDs")
+		}
+		schemaDoc, _, err := readSchemaDoc(vaultPath)
+		if err != nil {
+			return err
+		}
+		coreNode := ensureMapNode(schemaDoc, "core")
+		typeNode := ensureMapNode(coreNode, coreTypeName)
+		typeNode["default_template"] = templateID
+		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+			return err
+		}
+		elapsed := time.Since(start).Milliseconds()
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{"core_type": coreTypeName, "default_template": templateID}, &Meta{QueryTimeMs: elapsed})
+			return nil
+		}
+		fmt.Printf("Set default template for core type %s -> %s\n", coreTypeName, templateID)
+		return nil
+	default:
+		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown core template subcommand: %s", args[0]), "Use: list, set, remove, or default")
 	}
 }
 

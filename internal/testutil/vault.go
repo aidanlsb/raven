@@ -110,16 +110,14 @@ func (v *TestVault) FileExists(relPath string) bool {
 
 // MinimalSchema returns a minimal valid schema.yaml content.
 func MinimalSchema() string {
-	return `version: 2
-types:
-  page:
-    default_path: ""
+	return `version: 1
+types: {}
 `
 }
 
 // PersonProjectSchema returns a schema with person and project types.
 func PersonProjectSchema() string {
-	return `version: 2
+	return `version: 1
 types:
   person:
     default_path: people/

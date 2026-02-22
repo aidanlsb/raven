@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
 )
@@ -304,8 +305,8 @@ func ValidateSchema(sch *Schema) []string {
 	}
 
 	for typeName, typeDef := range sch.Types {
-		// Skip built-in types
-		if IsBuiltinType(typeName) && typeName != "date" {
+		// Built-in type definitions are runtime-owned and validated via core config.
+		if IsBuiltinType(typeName) {
 			continue
 		}
 
@@ -345,6 +346,43 @@ func ValidateSchema(sch *Schema) []string {
 		if typeDef.DefaultTemplate != "" {
 			if _, ok := seenTemplateIDs[typeDef.DefaultTemplate]; !ok {
 				issues = append(issues, fmt.Sprintf("Type '%s' default_template '%s' is not included in type templates", typeName, typeDef.DefaultTemplate))
+			}
+		}
+	}
+	for coreName, coreDef := range sch.Core {
+		if !IsBuiltinType(coreName) {
+			issues = append(issues, fmt.Sprintf("Unknown core type '%s'", coreName))
+			continue
+		}
+		if coreDef == nil {
+			issues = append(issues, fmt.Sprintf("Core type '%s' must be an object", coreName))
+			continue
+		}
+
+		if coreName == "section" {
+			if len(coreDef.Templates) > 0 || strings.TrimSpace(coreDef.DefaultTemplate) != "" {
+				issues = append(issues, "Core type 'section' does not support template configuration")
+			}
+			continue
+		}
+
+		seenTemplateIDs := make(map[string]struct{})
+		for _, templateID := range coreDef.Templates {
+			if templateID == "" {
+				issues = append(issues, fmt.Sprintf("Core type '%s' templates cannot contain empty template IDs", coreName))
+				continue
+			}
+			if _, seen := seenTemplateIDs[templateID]; seen {
+				issues = append(issues, fmt.Sprintf("Core type '%s' templates contains duplicate template ID '%s'", coreName, templateID))
+			}
+			seenTemplateIDs[templateID] = struct{}{}
+			if _, exists := sch.Templates[templateID]; !exists {
+				issues = append(issues, fmt.Sprintf("Core type '%s' references unknown template '%s'", coreName, templateID))
+			}
+		}
+		if coreDef.DefaultTemplate != "" {
+			if _, ok := seenTemplateIDs[coreDef.DefaultTemplate]; !ok {
+				issues = append(issues, fmt.Sprintf("Core type '%s' default_template '%s' is not included in core templates", coreName, coreDef.DefaultTemplate))
 			}
 		}
 	}

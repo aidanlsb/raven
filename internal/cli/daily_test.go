@@ -51,11 +51,13 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 			prevJSON := jsonOutput
 			prevCfg := cfg
 			prevEdit := dailyEdit
+			prevTemplate := dailyTemplate
 			t.Cleanup(func() {
 				resolvedVaultPath = prevVault
 				jsonOutput = prevJSON
 				cfg = prevCfg
 				dailyEdit = prevEdit
+				dailyTemplate = prevTemplate
 			})
 
 			resolvedVaultPath = vaultPath
@@ -124,11 +126,13 @@ func TestDailyJSONOpensEditorWhenEditEnabled(t *testing.T) {
 	prevJSON := jsonOutput
 	prevCfg := cfg
 	prevEdit := dailyEdit
+	prevTemplate := dailyTemplate
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		cfg = prevCfg
 		dailyEdit = prevEdit
+		dailyTemplate = prevTemplate
 	})
 
 	resolvedVaultPath = vaultPath
@@ -183,11 +187,13 @@ func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
 	prevJSON := jsonOutput
 	prevCfg := cfg
 	prevEdit := dailyEdit
+	prevTemplate := dailyTemplate
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		cfg = prevCfg
 		dailyEdit = prevEdit
+		dailyTemplate = prevTemplate
 	})
 
 	resolvedVaultPath = vaultPath

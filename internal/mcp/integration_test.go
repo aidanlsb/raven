@@ -309,7 +309,7 @@ func TestMCPIntegration_StringEncodedStructuredInputs(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
 types:
-  page:
+  note:
     default_path: notes/
     name_field: title
     fields:
