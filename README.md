@@ -394,8 +394,8 @@ queries:
     query: "trait:todo .value==todo"
     description: Open todos
   active-projects:
-    query: "object:project .status==active"
-    description: Active projects
+    query: "object:project has(trait:todo)"
+    description: Projects marked with @todo
 ```
 
 ```bash

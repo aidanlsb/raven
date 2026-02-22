@@ -21,7 +21,7 @@ When Raven indexes your notes, schema definitions determine what becomes structu
 After `rvn init`, your schema already includes:
 - built-in types (`page`, `section`, `date`)
 - starter types (`person`, `project`)
-- starter traits (including `due`, `priority`, `status`, `highlight`)
+- starter traits (`due`, `todo`, `priority`)
 
 Read your current schema first:
 
@@ -85,4 +85,3 @@ This catches type/field/trait issues early and keeps the index aligned with the 
 - `types-and-traits/schema.md` for complete schema format and evolution rules
 - Use `rvn help <command>` for the full `rvn schema ...` command set
 - `getting-started/configuration.md` for `config.toml` and `raven.yaml` setup
-

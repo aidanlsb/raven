@@ -778,6 +778,8 @@ When creating a type, you can specify a name_field which designates which field
 serves as the display name for objects of this type. The title argument to
 'rvn new' will auto-populate this field.
 
+If --default-path is omitted, Raven defaults it to "<type>/".
+
 If the name_field doesn't exist, it will be auto-created as a required string field.
 Use --description to add optional context for humans and agents.
 
@@ -788,14 +790,14 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 			{Name: "name", Description: "Name of the new type", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "default-path", Description: "Default directory for files of this type", Type: FlagTypeString, Examples: []string{"people/", "projects/"}},
+			{Name: "default-path", Description: "Default directory for files of this type (defaults to <type>/)", Type: FlagTypeString, Examples: []string{"person/", "project/"}},
 			{Name: "name-field", Description: "Field to use as display name (auto-created if doesn't exist)", Type: FlagTypeString, Examples: []string{"name", "title"}},
 			{Name: "description", Description: "Optional description for this type", Type: FlagTypeString},
 		},
 		Examples: []string{
-			"rvn schema add type person --name-field name --default-path people/ --json",
+			"rvn schema add type person --name-field name --default-path person/ --json",
 			"rvn schema add type person --description \"People and contacts\" --json",
-			"rvn schema add type project --name-field title --default-path projects/ --json",
+			"rvn schema add type project --name-field title --default-path project/ --json",
 		},
 		UseCases: []string{
 			"Create a new type for organizing objects",
@@ -908,7 +910,7 @@ Use --name-field="-" to remove the name_field setting.`,
 		},
 		Examples: []string{
 			"rvn schema update type person --name-field name --json",
-			"rvn schema update type person --default-path people/ --json",
+			"rvn schema update type person --default-path person/ --json",
 			"rvn schema update type person --description \"People and contacts\" --json",
 			"rvn schema update type meeting --add-trait due --json",
 		},

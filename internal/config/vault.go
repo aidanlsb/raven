@@ -670,8 +670,8 @@ queries:
 
   # Active projects
   active-projects:
-    query: "object:project has(trait:status .value==in_progress)"
-    description: "Projects marked in progress"
+    query: "object:project has(trait:todo)"
+    description: "Projects marked with @todo"
 
 # Workflows registry - declarations are file references only
 # Workflow definitions live in directories.workflow (default: workflows/)
@@ -743,7 +743,7 @@ steps:
          - Add relevant fields
 
       2. **Create traits** using raven_schema_add_trait for cross-cutting annotations
-         - @due, @priority, @status are already in the default schema
+         - @due, @priority, @todo are already in the default schema
          - Add custom ones based on their needs (e.g., @rating, @context, @energy)
 
       3. **Create 2-3 seed objects** using raven_new based on what they're currently working on
@@ -759,7 +759,7 @@ steps:
       - Be conversational, not robotic. This is a dialog, not a form.
       - Start simple. Don't overwhelm with options - let complexity emerge from their needs.
       - Explain as you go. Help them understand why you're creating each type/trait.
-      - The default schema already has: person, project types and due, priority, status, highlight, pinned, archived traits.
+      - The default schema already has: person, project types and due, todo, priority traits.
       - Build on defaults rather than replacing them unless they ask.
       - Refer to raven://guide/onboarding for detailed guidance on the onboarding process.
 `

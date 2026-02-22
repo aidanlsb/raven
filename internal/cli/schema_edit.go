@@ -71,7 +71,7 @@ Subcommands:
   field <type> <field>     Add a field to an existing type
 
 Examples:
-  rvn schema add type event --default-path events/
+  rvn schema add type event --default-path event/
   rvn schema add trait priority --type enum --values high,medium,low
   rvn schema add field person email --type string --required`,
 	Args: cobra.MinimumNArgs(2),
@@ -124,6 +124,12 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		nameField = strings.TrimSpace(input)
 	}
 
+	// Default to a path that matches the type name exactly unless explicitly overridden.
+	defaultPath := schemaAddDefaultPath
+	if strings.TrimSpace(defaultPath) == "" {
+		defaultPath = paths.NormalizeDirRoot(typeName)
+	}
+
 	// Read current schema file to preserve formatting
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
@@ -145,9 +151,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 
 	// Build new type definition
 	newType := make(map[string]interface{})
-	if schemaAddDefaultPath != "" {
-		newType["default_path"] = schemaAddDefaultPath
-	}
+	newType["default_path"] = defaultPath
 	if schemaAddDescription != "" {
 		newType["description"] = schemaAddDescription
 	}
@@ -183,7 +187,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		result := map[string]interface{}{
 			"added":        "type",
 			"name":         typeName,
-			"default_path": schemaAddDefaultPath,
+			"default_path": defaultPath,
 		}
 		if schemaAddDescription != "" {
 			result["description"] = schemaAddDescription
@@ -197,9 +201,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	fmt.Printf("✓ Added type '%s' to schema.yaml\n", typeName)
-	if schemaAddDefaultPath != "" {
-		fmt.Printf("  default_path: %s\n", schemaAddDefaultPath)
-	}
+	fmt.Printf("  default_path: %s\n", defaultPath)
 	if schemaAddDescription != "" {
 		fmt.Printf("  description: %s\n", schemaAddDescription)
 	}
@@ -681,7 +683,7 @@ Subcommands:
   field <type> <field>     Update a field on an existing type
 
 Examples:
-  rvn schema update type person --default-path people/
+  rvn schema update type person --default-path person/
   rvn schema update trait priority --values critical,high,medium,low
   rvn schema update field person email --required=true
   rvn schema update type meeting --add-trait due`,
@@ -2674,7 +2676,7 @@ func updateReferencesForTypeDirectoryMoves(vaultPath string, vaultCfg *config.Va
 
 func init() {
 	// Add flags to schema add command
-	schemaAddCmd.Flags().StringVar(&schemaAddDefaultPath, "default-path", "", "Default path for new type files")
+	schemaAddCmd.Flags().StringVar(&schemaAddDefaultPath, "default-path", "", "Default path for new type files (default: <type>/)")
 	schemaAddCmd.Flags().StringVar(&schemaAddNameField, "name-field", "", "Field to use as display name (auto-created if doesn't exist)")
 	schemaAddCmd.Flags().StringVar(&schemaAddDescription, "description", "", "Optional description for the type or field")
 	schemaAddCmd.Flags().StringVar(&schemaAddFieldType, "type", "", "Field/trait type (string, number, url, date, datetime, enum, ref, bool)")
