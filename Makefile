@@ -2,6 +2,7 @@
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+GOLANGCI_LINT_TOOLCHAIN ?= go1.23.0
 
 # Default target
 all: check build
@@ -27,16 +28,20 @@ test-coverage:
 	go tool cover -html=coverage.out -o coverage.html
 
 # Run linter with golangci-lint v2.
-# Uses local v2 binary when available, otherwise runs pinned version via go run.
-# The fallback is forced to CGO_ENABLED=0 to avoid macOS Security.framework linker
-# issues on systems with older Command Line Tools.
+# Explicitly requires a local v2 binary.
+# Force project toolchain for lint to avoid Go 1.26 package-loading regressions.
 lint:
 	@version="$$(golangci-lint --version 2>/dev/null || true)"; \
 	case "$$version" in \
-		*"version v2."*|*"version 2."*) golangci-lint run ;; \
+		*"version v2."*|*"version 2."*) GOTOOLCHAIN=$(GOLANGCI_LINT_TOOLCHAIN) golangci-lint run ;; \
+		"") \
+			echo "golangci-lint v2 not found in PATH. Install with: make tools"; \
+			exit 1; \
+			;; \
 		*) \
-			echo "golangci-lint v2 not found in PATH; running $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION)"; \
-			CGO_ENABLED=0 go run $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION) run; \
+			echo "golangci-lint v2 is required, found: $$version"; \
+			echo "Install pinned version with: go install $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION)"; \
+			exit 1; \
 			;; \
 	esac
 
