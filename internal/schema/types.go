@@ -4,7 +4,7 @@ package schema
 import "encoding/json"
 
 // CurrentSchemaVersion is the latest schema format version.
-const CurrentSchemaVersion = 2
+const CurrentSchemaVersion = 1
 
 // BuiltinTypes are types that are always present and cannot be modified by users.
 // These types have fixed definitions managed by Raven itself.
@@ -32,6 +32,7 @@ func BuiltinTypeNames() []string {
 type Schema struct {
 	Version   int                            `yaml:"version,omitempty"` // Schema format version
 	Types     map[string]*TypeDefinition     `yaml:"types"`
+	Core      map[string]*CoreTypeDefinition `yaml:"core,omitempty"`
 	Traits    map[string]*TraitDefinition    `yaml:"traits"`
 	Templates map[string]*TemplateDefinition `yaml:"templates,omitempty"`
 }
@@ -62,10 +63,26 @@ func NewSchema() *Schema {
 					},
 				},
 			},
+			// Built-in 'date' type for daily notes
+			"date": {
+				Fields: map[string]*FieldDefinition{},
+			},
 		},
+		Core:      make(map[string]*CoreTypeDefinition),
 		Traits:    make(map[string]*TraitDefinition),
 		Templates: make(map[string]*TemplateDefinition),
 	}
+}
+
+// CoreTypeDefinition defines supported configuration for a core type.
+//
+// Core types are Raven-managed with fixed field definitions.
+// Only explicitly-supported knobs are configurable via schema.yaml "core:".
+type CoreTypeDefinition struct {
+	// Templates lists template IDs from the schema-level templates map that this core type can use.
+	Templates []string `yaml:"templates,omitempty"`
+	// DefaultTemplate selects the template ID from Templates that is applied by default.
+	DefaultTemplate string `yaml:"default_template,omitempty"`
 }
 
 // TypeDefinition defines a type (person, meeting, project, etc.).

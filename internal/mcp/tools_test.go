@@ -488,6 +488,7 @@ func TestCLICommandNameConversion(t *testing.T) {
 		{"raven_schema_template_get", "schema template get"},
 		{"raven_schema_template_set", "schema template set"},
 		{"raven_schema_type_template_default", "schema type template default"},
+		{"raven_schema_core_template_default", "schema core template default"},
 		{"raven_workflow_add", "workflow add"},
 		{"raven_workflow_scaffold", "workflow scaffold"},
 		{"raven_workflow_remove", "workflow remove"},

@@ -157,7 +157,7 @@ func runSchemaMigration(vaultPath string, dryRun bool) (bool, error) {
 
 	fmt.Println("  ⚠ Full schema migration not yet implemented")
 	fmt.Println("  Manual migration steps:")
-	fmt.Println("    1. Add 'version: 2' at top of schema.yaml")
+	fmt.Println("    1. Add 'version: 1' at top of schema.yaml")
 	fmt.Println("    2. Convert trait fields to single-value format")
 	fmt.Println("    3. Move CLI aliases to queries in raven.yaml")
 

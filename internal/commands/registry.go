@@ -757,13 +757,15 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 		Name:        "schema",
 		Description: "Introspect the schema",
 		Args: []ArgMeta{
-			{Name: "subcommand", Description: "types, traits, commands, type, trait", Required: false},
-			{Name: "name", Description: "Type or trait name (required for subcommand=type|trait)", Required: false},
+			{Name: "subcommand", Description: "types, traits, commands, type, trait, core", Required: false},
+			{Name: "name", Description: "Type/trait/core name (required for subcommand=type|trait|core)", Required: false},
 		},
 		Examples: []string{
 			"rvn schema --json",
 			"rvn schema types --json",
 			"rvn schema type person --json",
+			"rvn schema core --json",
+			"rvn schema core date --json",
 			"rvn schema commands --json",
 		},
 	},
@@ -1121,7 +1123,6 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 		},
 		Examples: []string{
 			"rvn schema type interview template list --json",
-			"rvn schema type date template list --json",
 		},
 	},
 	"schema_type_template_set": {
@@ -1133,7 +1134,6 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 		},
 		Examples: []string{
 			"rvn schema type interview template set interview_technical --json",
-			"rvn schema type date template set daily_default --json",
 		},
 	},
 	"schema_type_template_remove": {
@@ -1160,6 +1160,55 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 		Examples: []string{
 			"rvn schema type interview template default interview_technical --json",
 			"rvn schema type interview template default --clear --json",
+		},
+	},
+	"schema_core_template_list": {
+		Name:        "schema core template list",
+		Description: "List template IDs bound to a core type",
+		Args: []ArgMeta{
+			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
+		},
+		Examples: []string{
+			"rvn schema core date template list --json",
+			"rvn schema core page template list --json",
+		},
+	},
+	"schema_core_template_set": {
+		Name:        "schema core template set",
+		Description: "Bind a schema template ID to a core type",
+		Args: []ArgMeta{
+			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
+			{Name: "template_id", Description: "Schema template ID", Required: true},
+		},
+		Examples: []string{
+			"rvn schema core date template set daily_default --json",
+			"rvn schema core page template set note_default --json",
+		},
+	},
+	"schema_core_template_remove": {
+		Name:        "schema core template remove",
+		Description: "Unbind a schema template ID from a core type",
+		Args: []ArgMeta{
+			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
+			{Name: "template_id", Description: "Schema template ID", Required: true},
+		},
+		Examples: []string{
+			"rvn schema core date template remove daily_default --json",
+		},
+	},
+	"schema_core_template_default": {
+		Name:        "schema core template default",
+		Description: "Set or clear a core type default template ID",
+		Args: []ArgMeta{
+			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
+			{Name: "template_id", Description: "Schema template ID (omit with --clear)", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "clear", Description: "Clear the core type default template", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema core date template default daily_default --json",
+			"rvn schema core date template default --clear --json",
 		},
 	},
 	"set": {
@@ -1308,11 +1357,13 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 		},
 		Flags: []FlagMeta{
 			{Name: "edit", Short: "e", Description: "Open the note in the configured editor", Type: FlagTypeBool},
+			{Name: "template", Description: "Core date template ID to use when creating a new daily note", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn daily --json",
 			"rvn daily yesterday --json",
 			"rvn daily 2025-02-01 --json",
+			"rvn daily 2025-02-01 --template daily_default --json",
 		},
 		UseCases: []string{
 			"Access or create today's daily note",

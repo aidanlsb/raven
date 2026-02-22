@@ -155,6 +155,14 @@ func CLICommandName(toolName string) string {
 		return "schema type template remove"
 	case "schema_type_template_default":
 		return "schema type template default"
+	case "schema_core_template_list":
+		return "schema core template list"
+	case "schema_core_template_set":
+		return "schema core template set"
+	case "schema_core_template_remove":
+		return "schema core template remove"
+	case "schema_core_template_default":
+		return "schema core template default"
 	case "query_add":
 		return "query add"
 	case "query_remove":

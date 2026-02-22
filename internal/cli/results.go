@@ -128,6 +128,7 @@ type TypeQueryResult struct {
 type SchemaResult struct {
 	Version   int                       `json:"version"`
 	Types     map[string]TypeSchema     `json:"types"`
+	Core      map[string]CoreTypeSchema `json:"core,omitempty"`
 	Traits    map[string]TraitSchema    `json:"traits"`
 	Templates map[string]TemplateSchema `json:"templates,omitempty"`
 	Queries   map[string]SavedQueryInfo `json:"queries,omitempty"`
@@ -144,6 +145,13 @@ type TypeSchema struct {
 	Templates       []string               `json:"templates,omitempty"`
 	DefaultTemplate string                 `json:"default_template,omitempty"`
 	Fields          map[string]FieldSchema `json:"fields,omitempty"`
+}
+
+// CoreTypeSchema represents configurable settings for a core type.
+type CoreTypeSchema struct {
+	Name            string   `json:"name"`
+	Templates       []string `json:"templates,omitempty"`
+	DefaultTemplate string   `json:"default_template,omitempty"`
 }
 
 // TemplateSchema represents a schema-level template definition.
