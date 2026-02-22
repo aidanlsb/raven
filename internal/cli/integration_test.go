@@ -1225,125 +1225,63 @@ name: Thor
 	})
 }
 
-// TestIntegration_TemplateLifecycle tests top-level template lifecycle commands.
-func TestIntegration_TemplateLifecycle(t *testing.T) {
+// TestIntegration_SchemaTemplateLifecycle tests schema template lifecycle commands.
+func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
-	t.Run("get with no template", func(t *testing.T) {
-		result := v.RunCLI("template", "get", "type", "person")
+	t.Run("schema template set/get/remove", func(t *testing.T) {
+		v.WriteFile("templates/person.md", "# Person Profile\n")
+
+		result := v.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md")
 		result.MustSucceed(t)
 
-		if result.Data["configured"] != false {
-			t.Errorf("expected configured=false, got %#v", result.Data["configured"])
+		result = v.RunCLI("schema", "template", "get", "person_profile")
+		result.MustSucceed(t)
+		if result.DataString("id") != "person_profile" {
+			t.Errorf("expected id=person_profile, got %q", result.DataString("id"))
 		}
-	})
-
-	t.Run("set file template", func(t *testing.T) {
-		v.WriteFile("templates/person.md", "# {{title}}\n\nEmail: {{field.email}}")
-		result := v.RunCLI("template", "set", "type", "person", "--file", "templates/person.md")
-		result.MustSucceed(t)
-
 		if result.DataString("file") != "templates/person.md" {
 			t.Errorf("expected file 'templates/person.md', got %q", result.DataString("file"))
 		}
-	})
 
-	t.Run("get after set", func(t *testing.T) {
-		result := v.RunCLI("template", "get", "type", "person")
+		v.RunCLI("schema", "type", "person", "template", "set", "person_profile").MustSucceed(t)
+		v.RunCLI("schema", "type", "person", "template", "default", "person_profile").MustSucceed(t)
+		v.RunCLI("new", "person", "Alice").MustSucceed(t)
+		v.AssertFileContains("people/alice.md", "# Person Profile")
+
+		result = v.RunCLI("schema", "type", "person", "template", "remove", "person_profile")
 		result.MustSucceed(t)
-
-		if result.Data["configured"] != true {
-			t.Errorf("expected configured=true")
-		}
-		if result.DataString("content") == "" {
-			t.Errorf("expected non-empty template content")
-		}
-	})
-
-	t.Run("render template", func(t *testing.T) {
-		result := v.RunCLI("template", "render", "type", "person", "--title", "Alice")
-		result.MustSucceed(t)
-
-		rendered := result.DataString("rendered")
-		if !strings.Contains(rendered, "# Alice") {
-			t.Errorf("expected rendered to contain '# Alice', got %q", rendered)
-		}
-	})
-
-	t.Run("get file-based template resolves content", func(t *testing.T) {
-		result := v.RunCLI("template", "get", "type", "person")
-		result.MustSucceed(t)
-
-		if result.DataString("content") == "" {
-			t.Errorf("expected non-empty content for file-based template")
-		}
-	})
-
-	t.Run("remove template", func(t *testing.T) {
-		result := v.RunCLI("template", "remove", "type", "person")
-		result.MustSucceed(t)
-
 		if result.Data["removed"] != true {
 			t.Errorf("expected removed=true")
 		}
-	})
 
-	t.Run("get after remove", func(t *testing.T) {
-		result := v.RunCLI("template", "get", "type", "person")
+		result = v.RunCLI("schema", "template", "remove", "person_profile")
 		result.MustSucceed(t)
-
-		if result.Data["configured"] != false {
-			t.Errorf("expected configured=false after remove, got %#v", result.Data["configured"])
+		if result.Data["removed"] != true {
+			t.Errorf("expected schema template remove=true")
 		}
 	})
 
-	t.Run("error on built-in type", func(t *testing.T) {
-		result := v.RunCLI("template", "get", "type", "page")
-		if result.OK {
-			t.Errorf("expected error for built-in type")
-		}
-	})
-
-	t.Run("error on unknown type", func(t *testing.T) {
-		result := v.RunCLI("template", "get", "type", "nonexistent")
-		if result.OK {
-			t.Errorf("expected error for unknown type")
-		}
-	})
-
-	t.Run("daily lifecycle", func(t *testing.T) {
+	t.Run("daily lifecycle via date type templates", func(t *testing.T) {
 		v.WriteFile("templates/daily.md", "# {{weekday}}, {{date}}\n\n## Notes\n")
 
-		result := v.RunCLI("template", "set", "daily", "--file", "templates/daily.md")
+		result := v.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md")
 		result.MustSucceed(t)
 		if result.DataString("file") != "templates/daily.md" {
 			t.Errorf("expected daily file binding to templates/daily.md, got %q", result.DataString("file"))
 		}
 
-		result = v.RunCLI("template", "get", "daily")
-		result.MustSucceed(t)
-		if result.Data["configured"] != true {
-			t.Errorf("expected daily configured=true")
-		}
+		v.RunCLI("schema", "type", "date", "template", "set", "daily_default").MustSucceed(t)
+		v.RunCLI("schema", "type", "date", "template", "default", "daily_default").MustSucceed(t)
 
-		result = v.RunCLI("template", "write", "daily", "--content", "# {{weekday}}, {{date}}\n\n## Morning\n")
-		result.MustSucceed(t)
-		v.AssertFileContains("templates/daily.md", "## Morning")
+		v.RunCLI("daily", "2026-02-03").MustSucceed(t)
+		v.AssertFileContains("daily/2026-02-03.md", "## Notes")
 
-		result = v.RunCLI("template", "render", "daily", "--date", "tomorrow")
-		result.MustSucceed(t)
-		if rendered := result.DataString("rendered"); !strings.Contains(rendered, "## Morning") {
-			t.Errorf("expected rendered daily template to include updated content, got %q", rendered)
-		}
-
-		result = v.RunCLI("template", "remove", "daily", "--delete-file")
-		result.MustSucceed(t)
-		if result.Data["removed"] != true {
-			t.Errorf("expected removed=true for daily template")
-		}
-		v.AssertFileNotExists("templates/daily.md")
+		v.RunCLI("schema", "type", "date", "template", "default", "--clear").MustSucceed(t)
+		v.RunCLI("daily", "2026-02-04").MustSucceed(t)
+		v.AssertFileNotContains("daily/2026-02-04.md", "## Notes")
 	})
 }
 

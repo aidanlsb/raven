@@ -72,6 +72,23 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	if schema.Traits == nil {
 		schema.Traits = make(map[string]*TraitDefinition)
 	}
+	if schema.Templates == nil {
+		schema.Templates = make(map[string]*TemplateDefinition)
+	}
+
+	// Schema-level templates are file-backed only.
+	for templateID, templateDef := range schema.Templates {
+		if templateDef == nil {
+			return nil, fmt.Errorf("template %q is null; expected an object with at least a file field", templateID)
+		}
+		spec := strings.TrimSpace(templateDef.File)
+		if spec == "" {
+			return nil, fmt.Errorf("template %q must define a non-empty file path", templateID)
+		}
+		if strings.Contains(spec, "\n") || strings.Contains(spec, "\r") {
+			return nil, fmt.Errorf("template %q file must be a file path (inline templates are not supported)", templateID)
+		}
+	}
 
 	// Templates are file-backed only.
 	for typeName, typeDef := range schema.Types {
@@ -79,11 +96,31 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 			continue
 		}
 		spec := strings.TrimSpace(typeDef.Template)
-		if spec == "" {
-			continue
+		if spec != "" {
+			if strings.Contains(spec, "\n") || strings.Contains(spec, "\r") {
+				return nil, fmt.Errorf("type %q template must be a file path (inline templates are not supported)", typeName)
+			}
 		}
-		if strings.Contains(spec, "\n") || strings.Contains(spec, "\r") {
-			return nil, fmt.Errorf("type %q template must be a file path (inline templates are not supported)", typeName)
+
+		seenTemplateIDs := make(map[string]struct{})
+		for _, templateID := range typeDef.Templates {
+			templateID = strings.TrimSpace(templateID)
+			if templateID == "" {
+				return nil, fmt.Errorf("type %q templates cannot contain empty template IDs", typeName)
+			}
+			if _, seen := seenTemplateIDs[templateID]; seen {
+				return nil, fmt.Errorf("type %q templates contains duplicate template ID %q", typeName, templateID)
+			}
+			seenTemplateIDs[templateID] = struct{}{}
+			if _, ok := schema.Templates[templateID]; !ok {
+				return nil, fmt.Errorf("type %q references unknown template %q", typeName, templateID)
+			}
+		}
+		if strings.TrimSpace(typeDef.DefaultTemplate) != "" {
+			defaultTemplate := strings.TrimSpace(typeDef.DefaultTemplate)
+			if _, ok := seenTemplateIDs[defaultTemplate]; !ok {
+				return nil, fmt.Errorf("type %q default_template %q is not included in type.templates", typeName, typeDef.DefaultTemplate)
+			}
 		}
 	}
 
@@ -102,9 +139,18 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		},
 	}
 	// Built-in 'date' type for daily notes
-	schema.Types["date"] = &TypeDefinition{
+	dateType := &TypeDefinition{
 		Fields: make(map[string]*FieldDefinition),
 	}
+	if existingDate := schema.Types["date"]; existingDate != nil {
+		// Preserve template bindings for the built-in date type so daily notes
+		// can be configured through schema templates.
+		dateType.Template = existingDate.Template
+		dateType.Templates = append([]string(nil), existingDate.Templates...)
+		dateType.DefaultTemplate = existingDate.DefaultTemplate
+		dateType.Description = existingDate.Description
+	}
+	schema.Types["date"] = dateType
 
 	// Initialize nil field maps for types
 	for _, typeDef := range schema.Types {
@@ -195,7 +241,13 @@ types:
   # Example with file-based template:
   # meeting:
   #   default_path: meetings/
-  #   template: templates/meeting.md
+  #   templates: [meeting_standard]
+  #   default_template: meeting_standard
+
+templates:
+  # meeting_standard:
+  #   file: templates/meeting.md
+  #   description: Standard meeting notes template
 
 # Traits: Universal annotations in content (@name or @name(value))
 # Traits can be used on any object - just add them to your content.

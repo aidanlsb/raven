@@ -32,3 +32,19 @@ func TestBuildTypeSchemaIncludesDescriptions(t *testing.T) {
 		t.Fatalf("expected field description %q, got %q", "Full display name", field.Description)
 	}
 }
+
+func TestBuildTypeSchemaIncludesTemplateBindings(t *testing.T) {
+	typeDef := &schema.TypeDefinition{
+		Templates:       []string{"interview_technical"},
+		DefaultTemplate: "interview_technical",
+	}
+
+	result := buildTypeSchema("interview", typeDef, false)
+
+	if len(result.Templates) != 1 || result.Templates[0] != "interview_technical" {
+		t.Fatalf("expected type templates [%q], got %v", "interview_technical", result.Templates)
+	}
+	if result.DefaultTemplate != "interview_technical" {
+		t.Fatalf("expected default template %q, got %q", "interview_technical", result.DefaultTemplate)
+	}
+}

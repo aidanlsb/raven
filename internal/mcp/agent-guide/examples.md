@@ -89,20 +89,14 @@
   Attendees, Agenda, Notes, and Action Items."
 → Confirm the type exists and inspect its fields:
   raven_schema(subcommand="type", name="meeting")
-→ Scaffold a template file and bind it:
-  raven_template_scaffold(target="type", type_name="meeting")
-→ Write the template content:
-  raven_template_write(
-    target="type",
-    type_name="meeting",
-    content="# {{title}}\n\n**Time:** {{field.time}}\n\n## Attendees\n\n## Agenda\n\n## Notes\n\n## Action Items"
-  )
-→ Preview with variables:
-  raven_template_render(target="type", type_name="meeting", title="Weekly Standup", field={"time": "10:00 AM"})
+→ Ensure a template file exists under templates/ (create templates/meeting.md if needed)
+→ Register a schema template definition:
+  raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
+→ Bind it to the meeting type and set as default:
+  raven_schema_type_template_set(type_name="meeting", template_id="meeting_standard")
+  raven_schema_type_template_default(type_name="meeting", template_id="meeting_standard")
 → Optional smoke test:
-  raven_new(type="meeting", title="Team Sync", field={"time": "10:00 AM"})
-→ If a specific existing file should be used:
-  raven_template_set(target="type", type_name="meeting", file="templates/meeting.md")
+  raven_new(type="meeting", title="Team Sync")
 → "Done! New meeting notes will start with that structure."
 ```
 
