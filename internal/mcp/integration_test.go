@@ -114,6 +114,40 @@ func TestMCPIntegration_CreateObject(t *testing.T) {
 	v.AssertFileContains("people/alice.md", "name: Alice")
 }
 
+func TestMCPIntegration_SchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	result := server.callTool("raven_schema_add_type", map[string]interface{}{
+		"name": "meeting",
+	})
+
+	if result.IsError {
+		t.Fatalf("tool call failed: %s", result.Text)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			DefaultPath string `json:"default_path"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if resp.Data.DefaultPath != "meeting/" {
+		t.Fatalf("expected default_path %q, got %q", "meeting/", resp.Data.DefaultPath)
+	}
+
+	v.AssertFileContains("schema.yaml", "meeting:")
+	v.AssertFileContains("schema.yaml", "default_path: meeting/")
+}
+
 // TestMCPIntegration_CreatePageWithObjectRootFallback verifies that when
 // directories.page is omitted, it defaults to directories.object for creation.
 func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {

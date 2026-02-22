@@ -57,7 +57,7 @@ Based on their answers, identify:
 - Good candidates: things with unique fields or templates
 
 **Traits** - Cross-cutting annotations that apply to many types
-- @due, @priority, @status work across everything
+- @due, @priority, @todo work across everything
 - Good for temporary states or metadata
 
 **Fields** - Structured data on a specific type
@@ -178,10 +178,7 @@ raven_query_add(
 Already in default schema:
 - `@due(YYYY-MM-DD)` - deadlines
 - `@priority(low|medium|high)` - importance
-- `@status(todo|in_progress|done|blocked)` - task state
-- `@highlight` - mark as important (boolean)
-- `@pinned` - keep visible
-- `@archived` - hide from default views
+- `@todo` - mark items as todo (boolean)
 
 Common additions:
 - `@rating(1-5)` - quality rating (number)
@@ -202,7 +199,7 @@ Common additions:
 - It applies across multiple types
 - It's a temporary state or annotation
 - You want to query across type boundaries
-- Examples: @due, @priority, @status, @highlight
+- Examples: @due, @priority, @todo, @rating
 
 **Use a FIELD when:**
 - It's specific to one type

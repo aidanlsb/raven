@@ -50,6 +50,22 @@ func TestSchemaAddTypeAndFieldDescriptions(t *testing.T) {
 	}
 }
 
+func TestSchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	result := v.RunCLI("schema", "add", "type", "meeting")
+	result.MustSucceed(t)
+
+	if got := result.Data["default_path"]; got != "meeting/" {
+		t.Fatalf("expected default_path %q, got %#v", "meeting/", got)
+	}
+
+	v.AssertFileContains("schema.yaml", "meeting:")
+	v.AssertFileContains("schema.yaml", "default_path: meeting/")
+}
+
 func TestSchemaUpdateAndRemoveTypeFieldDescriptions(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2

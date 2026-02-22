@@ -228,8 +228,8 @@ queries:
     query: "trait:due .value==past"
     description: "Overdue items"
   active-projects:
-    query: "object:project has(trait:status .value==in_progress)"
-    description: "Projects marked in progress"
+    query: "object:project has(trait:todo)"
+    description: "Projects marked with @todo"
 
 # Workflows registry (file references only)
 workflows:
@@ -453,8 +453,8 @@ queries:
     description: "Items past their due date"
 
   active-projects:
-    query: "object:project has(trait:status .value==in_progress)"
-    description: "Projects marked in progress"
+    query: "object:project has(trait:todo)"
+    description: "Projects marked with @todo"
 
   reading-list:
     query: "trait:toread"
@@ -597,8 +597,8 @@ queries:
     description: "Items due this week"
 
   active-projects:
-    query: "object:project has(trait:status .value==in_progress)"
-    description: "Projects marked in progress"
+    query: "object:project has(trait:todo)"
+    description: "Projects marked with @todo"
 
 # Workflows registry
 workflows:

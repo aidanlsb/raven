@@ -258,7 +258,7 @@ version: 1  # Schema format version (do not change manually)
 types:
   person:
     description: People and contacts
-    default_path: people/
+    default_path: person/
     name_field: name
     fields:
       name:
@@ -269,7 +269,7 @@ types:
         description: Primary contact email
 
   project:
-    default_path: projects/
+    default_path: project/
     name_field: name
     fields:
       name:
@@ -278,7 +278,7 @@ types:
 
   # Example with file-based template:
   # meeting:
-  #   default_path: meetings/
+  #   default_path: meeting/
   #   templates: [meeting_standard]
   #   default_template: meeting_standard
 
@@ -298,36 +298,22 @@ core:
 
 # Traits: Universal annotations in content (@name or @name(value))
 # Traits can be used on any object - just add them to your content.
-# Boolean traits: @highlight (no value)
+# Boolean traits: @todo (no value)
 # Valued traits: @due(2025-02-01), @priority(high)
 traits:
   # Date-related
   due:
     type: date
 
-  remind:
-    type: datetime
+  # Task marker (boolean trait)
+  todo:
+    type: boolean
 
-  # Priority/status
+  # Priority
   priority:
     type: enum
     values: [low, medium, high]
     default: medium
-
-  status:
-    type: enum
-    values: [todo, in_progress, done, blocked]
-    default: todo
-
-  # Markers (boolean traits)
-  highlight:
-    type: boolean
-
-  pinned:
-    type: boolean
-
-  archived:
-    type: boolean
 `
 
 	if err := atomicfile.WriteFile(schemaPath, []byte(defaultSchema), 0o644); err != nil {
