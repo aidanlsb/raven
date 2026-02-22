@@ -51,6 +51,11 @@ Examples:
   rvn reclassify pages/draft project --no-move --json
   rvn reclassify inbox/note book --force --json`,
 	Args: cobra.ExactArgs(2),
+	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    false,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		objectRef := args[0]

@@ -49,6 +49,11 @@ Bulk examples:
   rvn query "object:project .status==active" --ids | rvn set --stdin status=archived
   rvn query "object:project .status==active" --ids | rvn set --stdin status=archived --confirm`,
 	Args: cobra.ArbitraryArgs,
+	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    true,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	}),
 	RunE: runSet,
 }
 
