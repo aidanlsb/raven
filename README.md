@@ -476,7 +476,6 @@ Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with
 Interactive learning:
 
 ```bash
-rvn learn         # guided lessons on Raven concepts
 rvn docs          # browse the full documentation
 ```
 
