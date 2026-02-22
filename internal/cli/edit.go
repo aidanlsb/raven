@@ -20,6 +20,11 @@ var editCmd = &cobra.Command{
 	Short: commands.Registry["edit"].Description,
 	Long:  commands.Registry["edit"].LongDesc,
 	Args:  cobra.ExactArgs(3),
+	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    false,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		reference := args[0]

@@ -24,6 +24,11 @@ Examples:
   rvn outlinks daily/2025-02-01#standup
   rvn outlinks people/freya --json`,
 	Args: cobra.ExactArgs(1),
+	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: true,
+		DisableWhenStdin:    false,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		reference := args[0]

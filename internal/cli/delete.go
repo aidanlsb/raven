@@ -47,6 +47,11 @@ Bulk examples:
   rvn query "object:project .status==archived" --ids | rvn delete --stdin
   rvn query "object:project .status==archived" --ids | rvn delete --stdin --confirm`,
 	Args: cobra.MaximumNArgs(1),
+	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    true,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 
