@@ -38,11 +38,11 @@ who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip vault resolution for commands that don't need it
 		switch cmd.Name() {
-		case "init", "vault", "completion", "help", "version", "serve", "skill", "mcp":
+		case "init", "vault", "config", "completion", "help", "version", "serve", "skill", "mcp":
 			return nil
 		}
 		// Also skip for completion/vault subcommands.
-		if cmd.Parent() != nil && (cmd.Parent().Name() == "completion" || cmd.Parent().Name() == "vault" || cmd.Parent().Name() == "skill" || cmd.Parent().Name() == "mcp") {
+		if cmd.Parent() != nil && (cmd.Parent().Name() == "completion" || cmd.Parent().Name() == "vault" || cmd.Parent().Name() == "config" || cmd.Parent().Name() == "skill" || cmd.Parent().Name() == "mcp") {
 			return nil
 		}
 
@@ -154,4 +154,39 @@ func loadGlobalConfigWithPath() (*config.Config, string, error) {
 	}
 
 	return loadedCfg, resolvedPath, nil
+}
+
+func loadGlobalConfigAllowMissingWithPath() (*config.Config, string, bool, error) {
+	resolvedPath := config.ResolveConfigPath(configPath)
+
+	// Default path loading already treats missing files as empty config.
+	if strings.TrimSpace(configPath) == "" {
+		loadedCfg, err := config.Load()
+		if err != nil {
+			return nil, "", false, err
+		}
+		if loadedCfg == nil {
+			loadedCfg = &config.Config{}
+		}
+		_, statErr := os.Stat(resolvedPath)
+		return loadedCfg, resolvedPath, statErr == nil, nil
+	}
+
+	_, err := os.Stat(resolvedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &config.Config{}, resolvedPath, false, nil
+		}
+		return nil, "", false, err
+	}
+
+	loadedCfg, err := config.LoadFrom(resolvedPath)
+	if err != nil {
+		return nil, "", false, err
+	}
+	if loadedCfg == nil {
+		loadedCfg = &config.Config{}
+	}
+
+	return loadedCfg, resolvedPath, true, nil
 }

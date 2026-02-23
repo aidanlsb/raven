@@ -100,6 +100,25 @@ MCP exposes these as:
 - `raven_vault_remove`
 - `raven_vault_clear`
 
+### Manage global config fields via CLI/MCP
+
+Use `rvn config` for machine-level config lifecycle and explicit field edits:
+
+```bash
+rvn config init --json
+rvn config show --json
+rvn config set --editor cursor --editor-mode auto --json
+rvn config set --ui-accent 39 --ui-code-theme monokai --json
+rvn config unset --ui-accent --ui-code-theme --json
+```
+
+MCP exposes these as:
+- `raven_config`
+- `raven_config_show`
+- `raven_config_init`
+- `raven_config_set`
+- `raven_config_unset`
+
 ---
 
 ## Vault config: `raven.yaml`

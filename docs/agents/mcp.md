@@ -139,6 +139,11 @@ MCP tool descriptions are generated from that same registry and include command-
 | Tool | Description |
 |------|-------------|
 | `raven_init` | Initialize a new vault at a path |
+| `raven_config` | Manage global config.toml settings |
+| `raven_config_show` | Show current global config.toml values |
+| `raven_config_init` | Create default global config.toml if missing |
+| `raven_config_set` | Set one or more global config.toml fields |
+| `raven_config_unset` | Clear one or more global config.toml fields |
 | `raven_vault` | Manage configured vaults and active selection |
 | `raven_vault_list` | List configured vaults |
 | `raven_vault_current` | Show the current resolved vault |

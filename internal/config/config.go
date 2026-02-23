@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -158,14 +159,22 @@ func XDGPath() (string, error) {
 
 // CreateDefault creates a default config file if it doesn't exist.
 func CreateDefault() (string, error) {
-	configPath := DefaultPath()
+	return CreateDefaultAt(DefaultPath())
+}
+
+// CreateDefaultAt creates a default config file at a specific path if it doesn't exist.
+func CreateDefaultAt(path string) (string, error) {
+	configPath := strings.TrimSpace(path)
+	if configPath == "" {
+		return "", fmt.Errorf("config path is required")
+	}
 
 	if _, err := os.Stat(configPath); err == nil {
 		return configPath, nil // Already exists
 	}
 
 	// Create parent directories
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -199,7 +208,7 @@ func CreateDefault() (string, error) {
 # code_theme = "monokai"
 `
 
-	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {
 		return "", fmt.Errorf("failed to write config file: %w", err)
 	}
 

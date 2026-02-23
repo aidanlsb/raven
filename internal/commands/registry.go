@@ -1334,6 +1334,89 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 			"Identify pages that could benefit from schema",
 		},
 	},
+	"config": {
+		Name:        "config",
+		Description: "Manage global config.toml settings",
+		LongDesc: `Manage global Raven config.toml settings.
+
+Use this command group to initialize, inspect, and edit machine-level configuration
+such as editor settings, state file location, and default vault selection.`,
+		Examples: []string{
+			"rvn config --json",
+			"rvn config show --json",
+			"rvn config init --json",
+			"rvn config set --editor code --editor-mode auto --json",
+			"rvn config unset --ui-accent --ui-code-theme --json",
+		},
+		UseCases: []string{
+			"Inspect resolved global config and state paths",
+			"Create config.toml from defaults on first run",
+			"Update global editor and UI settings via CLI/MCP",
+		},
+	},
+	"config_show": {
+		Name:        "config show",
+		Description: "Show current global config.toml values",
+		Examples: []string{
+			"rvn config show --json",
+		},
+	},
+	"config_init": {
+		Name:        "config init",
+		Description: "Create default global config.toml if missing",
+		LongDesc: `Create a default global config.toml file at the resolved config path.
+
+If the file already exists, no changes are made.`,
+		Examples: []string{
+			"rvn config init --json",
+			"rvn config init --config /tmp/raven/config.toml --json",
+		},
+	},
+	"config_set": {
+		Name:        "config set",
+		Description: "Set one or more global config.toml fields",
+		LongDesc: `Set one or more explicit global config fields.
+
+Only known fields can be changed with this command.
+Use 'config unset' to clear fields.`,
+		Flags: []FlagMeta{
+			{Name: "editor", Description: "Set editor command", Type: FlagTypeString},
+			{Name: "editor-mode", Description: "Set editor mode (auto|terminal|gui)", Type: FlagTypeString, Examples: []string{"auto", "terminal", "gui"}},
+			{Name: "state-file", Description: "Set state.toml path (absolute or relative to config directory)", Type: FlagTypeString},
+			{Name: "default-vault", Description: "Set default_vault to a configured vault name", Type: FlagTypeString},
+			{Name: "ui-accent", Description: "Set UI accent color (ANSI 0-255 or #RRGGBB)", Type: FlagTypeString},
+			{Name: "ui-code-theme", Description: "Set markdown code theme name", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn config set --editor code --json",
+			"rvn config set --editor-mode terminal --json",
+			"rvn config set --state-file state.toml --json",
+			"rvn config set --default-vault work --json",
+			"rvn config set --ui-accent 39 --ui-code-theme monokai --json",
+		},
+		UseCases: []string{
+			"Configure global editor behavior",
+			"Set default_vault without editing TOML directly",
+			"Adjust CLI UI accent and markdown code theme",
+		},
+	},
+	"config_unset": {
+		Name:        "config unset",
+		Description: "Clear one or more global config.toml fields",
+		Flags: []FlagMeta{
+			{Name: "editor", Description: "Clear editor", Type: FlagTypeBool},
+			{Name: "editor-mode", Description: "Clear editor_mode", Type: FlagTypeBool},
+			{Name: "state-file", Description: "Clear state_file", Type: FlagTypeBool},
+			{Name: "default-vault", Description: "Clear default_vault", Type: FlagTypeBool},
+			{Name: "ui-accent", Description: "Clear ui.accent", Type: FlagTypeBool},
+			{Name: "ui-code-theme", Description: "Clear ui.code_theme", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn config unset --editor --json",
+			"rvn config unset --default-vault --json",
+			"rvn config unset --ui-accent --ui-code-theme --json",
+		},
+	},
 	"vault": {
 		Name:        "vault",
 		Description: "Manage configured vaults and active selection",
