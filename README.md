@@ -175,19 +175,31 @@ This creates:
 
 Raven is designed to work with LLM agents. The MCP server exposes every Raven command as a tool.
 
-**MCP Server (Claude Desktop, Cursor, etc.)**
+**MCP Setup (Claude Code, Claude Desktop, Cursor)**
 
-Add to MCP configuration:
+Install Raven into your MCP client config with one command:
 
-```json
-{
-  "mcpServers": {
-    "raven": {
-      "command": "rvn",
-      "args": ["serve", "--vault-path", "/path/to/your/vault"]
-    }
-  }
-}
+```bash
+rvn mcp install --client claude-desktop --vault-path /path/to/your/vault
+```
+
+You can also target other supported clients:
+
+```bash
+rvn mcp install --client claude-code --vault-path /path/to/your/vault
+rvn mcp install --client cursor --vault-path /path/to/your/vault
+```
+
+Check installation status across all clients:
+
+```bash
+rvn mcp status
+```
+
+For unsupported clients or fully manual setup, print the JSON snippet:
+
+```bash
+rvn mcp show --vault-path /path/to/your/vault
 ```
 
 Once connected, ask the agent:
