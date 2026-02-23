@@ -133,6 +133,7 @@ rvn schema commands --json
 
 | Tool | Description |
 |------|-------------|
+| `raven_init` | Initialize a new vault at a path |
 | `raven_check` | Validate vault against schema |
 | `raven_stats` | Show vault statistics |
 | `raven_untyped` | List pages without explicit type |

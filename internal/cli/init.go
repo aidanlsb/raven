@@ -15,6 +15,21 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
+type initDocsResult struct {
+	Fetched   bool   `json:"fetched"`
+	FileCount int    `json:"file_count,omitempty"`
+	StorePath string `json:"store_path,omitempty"`
+}
+
+type initResult struct {
+	Path           string         `json:"path"`
+	Status         string         `json:"status"`
+	CreatedConfig  bool           `json:"created_config"`
+	CreatedSchema  bool           `json:"created_schema"`
+	GitignoreState string         `json:"gitignore_state"`
+	Docs           initDocsResult `json:"docs"`
+}
+
 var initCmd = &cobra.Command{
 	Use:   "init <path>",
 	Short: "Initialize a new vault",
@@ -29,17 +44,19 @@ Creates:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[0]
 
-		fmt.Printf("Initializing vault at: %s\n", path)
+		if !isJSONOutput() {
+			fmt.Printf("Initializing vault at: %s\n", path)
+		}
 
 		// Create directory if it doesn't exist
 		if err := os.MkdirAll(path, 0755); err != nil {
-			return fmt.Errorf("failed to create vault directory: %w", err)
+			return handleError(ErrFileWriteError, fmt.Errorf("failed to create vault directory: %w", err), "Check that the destination path is writable")
 		}
 
 		// Create .raven directory
 		ravenDir := filepath.Join(path, ".raven")
 		if err := os.MkdirAll(ravenDir, 0755); err != nil {
-			return fmt.Errorf("failed to create .raven directory: %w", err)
+			return handleError(ErrFileWriteError, fmt.Errorf("failed to create .raven directory: %w", err), "Check that the destination path is writable")
 		}
 
 		// Ensure .gitignore has Raven entries
@@ -83,22 +100,68 @@ Creates:
 				newContent = strings.TrimRight(existingContent, "\n") + "\n" + addition
 			}
 			if err := os.WriteFile(gitignorePath, []byte(newContent), 0644); err != nil {
-				return fmt.Errorf("failed to write .gitignore: %w", err)
+				return handleError(ErrFileWriteError, fmt.Errorf("failed to write .gitignore: %w", err), "Check write permissions for .gitignore")
 			}
 		} else if existingContent != "" {
-			gitignoreStatus = "already has Raven entries"
+			gitignoreStatus = "unchanged"
 		}
 
 		// Create default raven.yaml (vault config)
 		createdConfig, err := config.CreateDefaultVaultConfig(path)
 		if err != nil {
-			return fmt.Errorf("failed to create raven.yaml: %w", err)
+			return handleError(ErrFileWriteError, fmt.Errorf("failed to create raven.yaml: %w", err), "")
 		}
 
 		// Create default schema.yaml
 		createdSchema, err := schema.CreateDefault(path)
 		if err != nil {
-			return fmt.Errorf("failed to create schema.yaml: %w", err)
+			return handleError(ErrFileWriteError, fmt.Errorf("failed to create schema.yaml: %w", err), "")
+		}
+
+		var (
+			docsResult initDocsResult
+			warnings   []Warning
+		)
+		info := currentVersionInfo()
+		fetchResult, fetchErr := docsync.Fetch(docsync.FetchOptions{
+			VaultPath:  path,
+			CLIVersion: info.Version,
+			HTTPClient: &http.Client{Timeout: 60 * time.Second},
+		})
+
+		if fetchErr != nil {
+			warnings = append(warnings, Warning{
+				Code:    WarnDocsFetchFailed,
+				Message: fmt.Sprintf("Docs fetch failed: %v. Run 'rvn --vault-path %s docs fetch' to retry.", fetchErr, path),
+			})
+		} else {
+			docsResult = initDocsResult{
+				Fetched:   true,
+				FileCount: fetchResult.FileCount,
+				StorePath: docsync.StoreRelPath,
+			}
+		}
+
+		status := "existing"
+		if createdConfig || createdSchema {
+			status = "initialized"
+		}
+
+		if isJSONOutput() {
+			result := initResult{
+				Path:           path,
+				Status:         status,
+				CreatedConfig:  createdConfig,
+				CreatedSchema:  createdSchema,
+				GitignoreState: gitignoreStatus,
+				Docs:           docsResult,
+			}
+			if len(warnings) > 0 {
+				outputSuccessWithWarnings(result, warnings, nil)
+			} else {
+				outputSuccess(result, nil)
+			}
+			return nil
 		}
 
 		// Report what was done
@@ -125,12 +188,6 @@ Creates:
 			fmt.Println("• .gitignore already has Raven entries")
 		}
 
-		info := currentVersionInfo()
-		fetchResult, fetchErr := docsync.Fetch(docsync.FetchOptions{
-			VaultPath:  path,
-			CLIVersion: info.Version,
-			HTTPClient: &http.Client{Timeout: 60 * time.Second},
-		})
 		if fetchErr != nil {
 			fmt.Printf("! Docs fetch failed: %v\n", fetchErr)
 			fmt.Printf("  Run 'rvn --vault-path %s docs fetch' to retry.\n", path)
@@ -138,7 +195,7 @@ Creates:
 			fmt.Printf("✓ Fetched docs into %s (%d files)\n", docsync.StoreRelPath, fetchResult.FileCount)
 		}
 
-		if createdConfig || createdSchema {
+		if status == "initialized" {
 			fmt.Println("\nVault initialized! Start adding markdown files.")
 		} else {
 			fmt.Println("\nExisting vault detected. Configuration preserved.")
