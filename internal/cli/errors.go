@@ -75,6 +75,10 @@ const (
 	ErrSkillPathUnresolved    = "SKILL_PATH_UNRESOLVED"
 	ErrSkillReceiptInvalid    = "SKILL_RECEIPT_INVALID"
 
+	// MCP client errors
+	ErrMCPClientInvalid    = "MCP_CLIENT_INVALID"
+	ErrMCPConfigWriteError = "MCP_CONFIG_WRITE_ERROR"
+
 	// General errors
 	ErrInternal       = "INTERNAL_ERROR"
 	ErrNotImplemented = "NOT_IMPLEMENTED"
