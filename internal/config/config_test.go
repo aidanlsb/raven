@@ -292,3 +292,32 @@ func TestXDGPath(t *testing.T) {
 		t.Errorf("expected config.toml, got %s", filepath.Base(path))
 	}
 }
+
+func TestCreateDefaultAt(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "nested", "config.toml")
+
+	createdPath, err := CreateDefaultAt(configPath)
+	if err != nil {
+		t.Fatalf("CreateDefaultAt returned error: %v", err)
+	}
+	if createdPath != configPath {
+		t.Fatalf("expected created path %q, got %q", configPath, createdPath)
+	}
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read created config: %v", err)
+	}
+	if len(content) == 0 {
+		t.Fatalf("expected non-empty default config content")
+	}
+
+	createdPath, err = CreateDefaultAt(configPath)
+	if err != nil {
+		t.Fatalf("CreateDefaultAt second call returned error: %v", err)
+	}
+	if createdPath != configPath {
+		t.Fatalf("expected second created path %q, got %q", configPath, createdPath)
+	}
+}
