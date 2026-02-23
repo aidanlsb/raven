@@ -37,13 +37,12 @@ For Claude Desktop, add:
 {
   "mcpServers": {
     "raven": {
-      "command": "rvn",
-      "args": ["serve", "--vault-path", "/path/to/vault"]
+      "command": "path/to/go/bin/rvn",
+      "args": "serve",
     }
   }
 }
 ```
-If the above does not work, you may need to specify the full path to the `rvn` binary.
 
 Raven also ships with skills you can install for your agent(s) of choice.
 
