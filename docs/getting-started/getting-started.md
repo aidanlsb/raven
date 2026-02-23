@@ -4,13 +4,13 @@
 
 Fundamentally Raven is a CLI for personal knowledge management, with first-class support for AI agents. 
 
-You keep your data in a directory of Markdown files (called a "vault"), and Raven lets you:
-- Define a schema, so your notes can have well defined types (e.g., project, meeting, person)
+You keep your data in a directory of markdown files (called a "vault"), and Raven lets you:
+- Define a schema, so your notes can have concrete "types" (e.g., project, meeting, person)
 - Create "traits" to add inline annotations to your notes (e.g., a `@todo` trait for task management)
-- Add bidirectional links across notes with references (`[[page-to-reference]]`)
-- Find and operate on notes ussing an efficient query language
+- Add bidirectional links across notes using references (`[[page-to-reference]]`)
+- Find and operate on notes using an efficient query language
 
-The goal is to keep notes durable and simple without giving up structured workflows.
+The goal is to keep notes durable and simple while still enabling structured workflows and accurate agent operations.
 
 ## Installation
 
@@ -23,9 +23,9 @@ rvn version
 
 If `rvn` is not on your `PATH` after install, add your Go bin directory (usually `$(go env GOPATH)/bin`) to your shell profile.
 
-## Agent setup
+## Agent Setup
 
-Raven is designed with the assumption that you will use an AI agent to interact with your vault. If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), run Raven as an MCP server:
+Raven is designed with the assumption that you will use an AI agent to interact with your vault (although this is by no means required). If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), run Raven as an MCP server:
 
 ```bash
 rvn serve --vault-path /path/to/vault
@@ -43,6 +43,7 @@ For Claude Desktop, add:
   }
 }
 ```
+If the above does not work, you may need to specify the full path to the `rvn` binary.
 
 Raven also ships with skills you can install for your agent(s) of choice.
 
