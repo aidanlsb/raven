@@ -77,6 +77,20 @@ func ConfigPath(client Client, homeDir string) (string, error) {
 	}
 }
 
+// ResolveCommand returns the absolute path to the running rvn binary.
+// Falls back to "rvn" if the path cannot be determined.
+func ResolveCommand() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "rvn"
+	}
+	resolved, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		return exe
+	}
+	return resolved
+}
+
 // BuildServerEntry creates a ServerEntry for the raven MCP server.
 // vaultName and vaultPath are optional vault pinning args.
 func BuildServerEntry(vaultName, vaultPath string) ServerEntry {
@@ -87,7 +101,7 @@ func BuildServerEntry(vaultName, vaultPath string) ServerEntry {
 		args = append(args, "--vault", vaultName)
 	}
 	return ServerEntry{
-		Command: "rvn",
+		Command: ResolveCommand(),
 		Args:    args,
 	}
 }

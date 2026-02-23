@@ -41,8 +41,8 @@ func TestConfigPath(t *testing.T) {
 func TestBuildServerEntry(t *testing.T) {
 	t.Run("no vault", func(t *testing.T) {
 		e := BuildServerEntry("", "")
-		if e.Command != "rvn" {
-			t.Fatalf("expected command=rvn, got %q", e.Command)
+		if e.Command == "" {
+			t.Fatal("expected non-empty command")
 		}
 		if len(e.Args) != 1 || e.Args[0] != "serve" {
 			t.Fatalf("expected args=[serve], got %v", e.Args)
@@ -87,7 +87,7 @@ func TestInstallFreshFile(t *testing.T) {
 	data := readJSON(t, cfgPath)
 	servers := data["mcpServers"].(map[string]interface{})
 	raven := servers["raven"].(map[string]interface{})
-	if raven["command"] != "rvn" {
+	if raven["command"] != ResolveCommand() {
 		t.Fatalf("unexpected command: %v", raven["command"])
 	}
 }
@@ -317,7 +317,7 @@ func TestStatusInstalled(t *testing.T) {
 	if !cs.Installed {
 		t.Fatal("expected installed=true")
 	}
-	if cs.Entry.Command != "rvn" {
+	if cs.Entry.Command != ResolveCommand() {
 		t.Fatalf("unexpected command: %s", cs.Entry.Command)
 	}
 	if len(cs.Entry.Args) != 3 || cs.Entry.Args[1] != "--vault" || cs.Entry.Args[2] != "work" {
