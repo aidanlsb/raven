@@ -1345,12 +1345,15 @@ The default vault is stored in config.toml and used as fallback.`,
 			"rvn vault --json",
 			"rvn vault list --json",
 			"rvn vault current --json",
+			"rvn vault add work /Users/you/work-notes --json",
 			"rvn vault use work --json",
 			"rvn vault pin personal --json",
+			"rvn vault remove personal --clear-default --clear-active --json",
 			"rvn vault clear --json",
 		},
 		UseCases: []string{
 			"List configured vaults and inspect active/default markers",
+			"Register named vault paths in config.toml",
 			"Switch active vault for subsequent CLI and MCP commands",
 			"Pin a default fallback vault in config.toml",
 		},
@@ -1377,6 +1380,57 @@ The default vault is stored in config.toml and used as fallback.`,
 		},
 		Examples: []string{
 			"rvn vault use work --json",
+		},
+	},
+	"vault_add": {
+		Name:        "vault add",
+		Description: "Add a vault to config.toml",
+		LongDesc: `Add or update a named vault entry in the global config file.
+
+By default, adding an existing name fails. Use --replace to update the existing path.
+Use --pin to also set default_vault to the added vault.`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Vault name", Required: true},
+			{Name: "path", Description: "Vault directory path", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "replace", Description: "Replace existing vault path if name already exists", Type: FlagTypeBool},
+			{Name: "pin", Description: "Also set this vault as default_vault", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn vault add work /Users/you/work-notes --json",
+			"rvn vault add personal /Users/you/personal-notes --pin --json",
+			"rvn vault add work /Users/you/new-work-notes --replace --json",
+		},
+		UseCases: []string{
+			"Register a new named vault in global config",
+			"Update a vault path with --replace",
+			"Set the added vault as default with --pin",
+		},
+	},
+	"vault_remove": {
+		Name:        "vault remove",
+		Description: "Remove a vault from config.toml",
+		LongDesc: `Remove a named vault entry from the global config file.
+
+Safety checks:
+- Removing the current default vault requires --clear-default
+- Removing the current active vault requires --clear-active`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Configured vault name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "clear-default", Description: "Clear default_vault when removing the default", Type: FlagTypeBool},
+			{Name: "clear-active", Description: "Clear active_vault when removing the active vault", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn vault remove personal --json",
+			"rvn vault remove personal --clear-default --json",
+			"rvn vault remove personal --clear-default --clear-active --json",
+		},
+		UseCases: []string{
+			"Delete stale vault entries from global config",
+			"Safely remove default/active vaults with explicit clearing flags",
 		},
 	},
 	"vault_pin": {

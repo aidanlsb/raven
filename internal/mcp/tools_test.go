@@ -174,6 +174,26 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantArgs: []string{"/tmp/raven-vault", "--json"},
 		},
 		{
+			toolName: "raven_vault_add",
+			args: map[string]interface{}{
+				"name": "work",
+				"path": "/tmp/work-vault",
+				"pin":  true,
+			},
+			wantCmd:  "vault",
+			wantArgs: []string{"add", "work", "/tmp/work-vault", "--pin", "--json"},
+		},
+		{
+			toolName: "raven_vault_remove",
+			args: map[string]interface{}{
+				"name":          "work",
+				"clear_default": true,
+				"clear_active":  true,
+			},
+			wantCmd:  "vault",
+			wantArgs: []string{"remove", "work", "--clear-default", "--clear-active", "--json"},
+		},
+		{
 			toolName: "raven_query",
 			args:     map[string]interface{}{"query_string": "trait:due .value==today"},
 			wantCmd:  "query",

@@ -134,6 +134,14 @@ rvn schema commands --json
 | Tool | Description |
 |------|-------------|
 | `raven_init` | Initialize a new vault at a path |
+| `raven_vault` | Manage configured vaults and active selection |
+| `raven_vault_list` | List configured vaults |
+| `raven_vault_current` | Show the current resolved vault |
+| `raven_vault_add` | Add a vault to config.toml |
+| `raven_vault_remove` | Remove a vault from config.toml |
+| `raven_vault_use` | Set the active vault in state.toml |
+| `raven_vault_pin` | Set default_vault in config.toml |
+| `raven_vault_clear` | Clear active vault from state.toml |
 | `raven_check` | Validate vault against schema |
 | `raven_stats` | Show vault statistics |
 | `raven_untyped` | List pages without explicit type |

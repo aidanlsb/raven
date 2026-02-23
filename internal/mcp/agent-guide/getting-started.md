@@ -3,6 +3,9 @@
 When first interacting with a Raven vault, follow this discovery sequence:
 
 0. **If no vault exists yet**: `raven_init(path="/path/to/vault")`
+0.5. **Register and select it globally**:
+   - `raven_vault_add(name="personal", path="/path/to/vault", pin=true)`
+   - `raven_vault_use(name="personal")`
 1. **Understand the schema**: `raven_schema(subcommand="types")` and `raven_schema(subcommand="traits")`
 2. **Get vault overview**: `raven_stats()` to see object counts and structure
 3. **Check saved queries**: `raven://queries/saved` or `raven_query(list=true)`
