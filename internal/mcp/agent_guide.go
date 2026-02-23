@@ -22,6 +22,12 @@ var guideTopics = []GuideTopic{
 		Path:        "agent-guide/critical-rules.md",
 	},
 	{
+		Slug:        "quickstart",
+		Name:        "Quickstart Mental Model",
+		Description: "One-pass conceptual overview of Raven and first commands to run.",
+		Path:        "agent-guide/quickstart.md",
+	},
+	{
 		Slug:        "onboarding",
 		Name:        "Vault Onboarding",
 		Description: "Guide for helping users set up a new vault interactively.",
@@ -80,6 +86,12 @@ var guideTopics = []GuideTopic{
 		Name:        "Example Conversations",
 		Description: "Example conversations and query translations.",
 		Path:        "agent-guide/examples.md",
+	},
+	{
+		Slug:        "lesson-plan",
+		Name:        "Agent Lesson Plan",
+		Description: "Teaching sequence, prerequisites, and common misconceptions for new users.",
+		Path:        "agent-guide/lesson-plan.md",
 	},
 }
 

@@ -115,6 +115,9 @@ When adding or modifying a command:
 |------|---------|
 | `index.md` | Navigation and topic discovery |
 | `critical-rules.md` | Safety rules agents must follow |
+| `quickstart.md` | One-pass mental model and first-command sequence |
+| `lesson-plan.md` | Teaching sequence, prerequisites, and misconceptions |
+| `onboarding.md` | Interactive setup for first-session vault creation |
 | `getting-started.md` | First steps in a new vault |
 | `core-concepts.md` | Types, traits, references explained |
 | `querying.md` | RQL reference and query strategy |

@@ -1,5 +1,7 @@
 # Core Concepts
 
+For orientation-first teaching, read `raven://guide/quickstart` before this guide.
+
 **Raven** is a plain-markdown knowledge system with:
 - **Types**: Schema definitions for what things are (e.g., `person`, `project`, `book`) — defined in `schema.yaml`
 - **Objects**: Instances of types — each file declares its type in frontmatter (e.g., `people/freya.md` is an object of type `person`)
@@ -54,3 +56,9 @@ When using object IDs in tool calls:
 - **With .md extension**: `people/freya.md` — also works
 
 If a short reference is ambiguous, Raven returns an `ambiguous_reference` error listing all matches. Ask the user which one they meant, or use the full path.
+
+## Related topics
+
+- `raven://guide/getting-started` - first-session discovery sequence
+- `raven://guide/querying` - turning questions into structured queries
+- `raven://guide/lesson-plan` - staged teaching sequence for new users

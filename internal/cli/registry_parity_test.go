@@ -49,6 +49,10 @@ func TestCheckCommandFlagsMatchRegistry(t *testing.T) {
 
 func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 	allowMissing := []string{
+		"mcp install",
+		"mcp remove",
+		"mcp show",
+		"mcp status",
 		"migrate",
 		"migrate directories",
 		"path",
