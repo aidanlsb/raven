@@ -49,7 +49,6 @@ func TestCheckCommandFlagsMatchRegistry(t *testing.T) {
 
 func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 	allowMissing := []string{
-		"init",
 		"migrate",
 		"migrate directories",
 		"path",

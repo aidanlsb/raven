@@ -168,6 +168,12 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantArgs: []string{"--json"},
 		},
 		{
+			toolName: "raven_init",
+			args:     map[string]interface{}{"path": "/tmp/raven-vault"},
+			wantCmd:  "init",
+			wantArgs: []string{"/tmp/raven-vault", "--json"},
+		},
+		{
 			toolName: "raven_query",
 			args:     map[string]interface{}{"query_string": "trait:due .value==today"},
 			wantCmd:  "query",

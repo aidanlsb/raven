@@ -182,6 +182,32 @@ converge to one current state rather than append history.`,
 			"Replace an object's body deterministically on reruns",
 		},
 	},
+	"init": {
+		Name:        "init",
+		Description: "Initialize a new vault at a path",
+		LongDesc: `Creates a new vault at the specified path with default configuration files.
+
+Creates:
+  - raven.yaml   (vault configuration)
+  - schema.yaml  (types and traits)
+  - .raven/      (index directory)
+  - .gitignore   (ignores derived files)
+
+Also attempts to fetch local docs into .raven/docs. If docs fetch fails, initialization
+still succeeds and returns a warning with a retry command.`,
+		Args: []ArgMeta{
+			{Name: "path", Description: "Directory path to initialize as a vault", Required: true},
+		},
+		Examples: []string{
+			"rvn init /path/to/new/vault --json",
+			"rvn init ./notes --json",
+		},
+		UseCases: []string{
+			"Bootstrap a new vault from an agent or script",
+			"Create required Raven config and schema files in one step",
+			"Initialize first-run setup before any other MCP tool calls",
+		},
+	},
 	"docs": {
 		Name:        "docs",
 		Description: "Browse long-form Markdown documentation",

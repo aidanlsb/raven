@@ -93,6 +93,7 @@ const (
 	WarnSchemaOutdated    = "SCHEMA_OUTDATED"
 	WarnDatabaseOutdated  = "DATABASE_OUTDATED"
 	WarnIndexUpdateFailed = "INDEX_UPDATE_FAILED"
+	WarnDocsFetchFailed   = "DOCS_FETCH_FAILED"
 	WarnMisuse            = "WRONG_COMMAND"
 	WarnMissingField      = "MISSING_REQUIRED_FIELD"
 	WarnBacklinks         = "HAS_BACKLINKS"
