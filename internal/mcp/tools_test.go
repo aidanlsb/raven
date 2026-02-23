@@ -96,6 +96,48 @@ func TestSchemaFieldDescriptionFlagsPresentInMCP(t *testing.T) {
 	}
 }
 
+func TestToolDescriptionsIncludeExamplesFromRegistry(t *testing.T) {
+	tools := GenerateToolSchemas()
+	toolMap := make(map[string]Tool, len(tools))
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	tests := []string{
+		"raven_query",
+		"raven_new",
+		"raven_workflow_run",
+	}
+
+	for _, toolName := range tests {
+		tool, ok := toolMap[toolName]
+		if !ok {
+			t.Fatalf("expected tool %q to exist", toolName)
+		}
+		if !strings.Contains(tool.Description, "\n\nExamples:") {
+			t.Fatalf("expected tool %q description to include examples section; got %q", toolName, tool.Description)
+		}
+	}
+}
+
+func TestWithExampleSectionLimitsOutput(t *testing.T) {
+	description := withExampleSection("Desc", []string{"one", "two", "three", "four"})
+
+	if !strings.Contains(description, "\n- `one`") ||
+		!strings.Contains(description, "\n- `two`") ||
+		!strings.Contains(description, "\n- `three`") {
+		t.Fatalf("expected first three examples to be rendered; got %q", description)
+	}
+
+	if strings.Contains(description, "\n- `four`") {
+		t.Fatalf("expected fourth example to be omitted; got %q", description)
+	}
+
+	if !strings.Contains(description, "... (1 more in CLI help)") {
+		t.Fatalf("expected overflow note in description; got %q", description)
+	}
+}
+
 func TestSchemaCompatibilityForStructuredFlags(t *testing.T) {
 	tools := GenerateToolSchemas()
 	toolMap := make(map[string]Tool, len(tools))

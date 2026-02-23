@@ -16,18 +16,19 @@ func GenerateToolSchemas() []Tool {
 	var tools []Tool
 
 	for cmdName, meta := range commands.Registry {
+		description := meta.Description
+		if meta.LongDesc != "" {
+			description = meta.LongDesc
+		}
+		description = withExampleSection(description, meta.Examples)
+
 		tool := Tool{
 			Name:        mcpToolName(cmdName),
-			Description: meta.Description,
+			Description: description,
 			InputSchema: InputSchema{
 				Type:       "object",
 				Properties: make(map[string]interface{}),
 			},
-		}
-
-		// Add long description if available
-		if meta.LongDesc != "" {
-			tool.Description = meta.LongDesc
 		}
 
 		// Add arguments as properties
@@ -94,6 +95,33 @@ func GenerateToolSchemas() []Tool {
 	}
 
 	return tools
+}
+
+func withExampleSection(description string, examples []string) string {
+	if len(examples) == 0 {
+		return strings.TrimSpace(description)
+	}
+
+	const maxExamples = 3
+
+	exampleCount := len(examples)
+	if exampleCount > maxExamples {
+		exampleCount = maxExamples
+	}
+
+	b := strings.Builder{}
+	b.WriteString(strings.TrimSpace(description))
+	b.WriteString("\n\nExamples:")
+	for _, example := range examples[:exampleCount] {
+		b.WriteString("\n- `")
+		b.WriteString(example)
+		b.WriteString("`")
+	}
+	if len(examples) > maxExamples {
+		b.WriteString(fmt.Sprintf("\n- ... (%d more in CLI help)", len(examples)-maxExamples))
+	}
+
+	return b.String()
 }
 
 // mcpToolName converts a CLI command name to an MCP tool name.

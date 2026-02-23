@@ -44,7 +44,9 @@ Raven exposes MCP resources that agents can fetch:
 Additional topic resources are available under `raven://guide/<topic>`:
 
 - `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations
+- `raven://guide/quickstart` - One-pass mental model and first command sequence
 - `raven://guide/onboarding` - Interactive vault setup for new users
+- `raven://guide/lesson-plan` - Teaching sequence, prerequisites, and misconceptions
 - `raven://guide/getting-started` - First steps for orienting in a new vault
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/querying` - Raven Query Language (RQL) and query strategy
@@ -58,6 +60,7 @@ Additional topic resources are available under `raven://guide/<topic>`:
 ### Agent Guide Resources
 
 The agent guide resources (`raven://guide/index` and `raven://guide/<topic>`) provide:
+- A quick conceptual orientation path (`quickstart` -> `getting-started` -> `lesson-plan`)
 - Getting started sequence for new vaults
 - Onboarding flow for first-time vault setup
 - Query language syntax and composition patterns
@@ -83,6 +86,8 @@ Tools are generated from Raven's command registry. To see the full list:
 ```bash
 rvn schema commands --json
 ```
+
+MCP tool descriptions are generated from that same registry and include command-specific example calls for quick copy/paste starts.
 
 ---
 

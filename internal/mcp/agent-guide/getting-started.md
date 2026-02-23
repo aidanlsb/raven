@@ -2,6 +2,9 @@
 
 When first interacting with a Raven vault, follow this discovery sequence:
 
+For a one-pass conceptual overview, start with `raven://guide/quickstart`.
+For a structured teaching flow, use `raven://guide/lesson-plan`.
+
 0. **If no vault exists yet**: `raven_init(path="/path/to/vault")`
 0.5. **Register and select it globally**:
    - `raven_vault_add(name="personal", path="/path/to/vault", pin=true)`
@@ -59,3 +62,9 @@ raven_add(text="## Notes\n- ...", to=create.data.file)
 
 Tip:
 - For long files, `raven_read` supports `start_line`/`end_line` (**1-indexed, inclusive**) and `lines=true` for copy-paste-safe anchors.
+
+## Related topics
+
+- `raven://guide/quickstart` - mental model + first commands
+- `raven://guide/core-concepts` - deeper model details
+- `raven://guide/key-workflows` - preview/confirm and mutation patterns
