@@ -81,6 +81,25 @@ For commands that operate on a vault:
 
 If `active_vault` is set but missing from config, Raven falls back to `default_vault` and emits a warning in non-JSON mode.
 
+### Manage global vault config via CLI/MCP
+
+Instead of editing `config.toml` manually, you can manage vault entries directly:
+
+```bash
+rvn vault add personal /Users/you/personal-notes --pin --json
+rvn vault use personal --json
+rvn vault list --json
+rvn vault remove personal --clear-default --clear-active --json
+```
+
+MCP exposes these as:
+- `raven_vault_add`
+- `raven_vault_use`
+- `raven_vault_pin`
+- `raven_vault_list`
+- `raven_vault_remove`
+- `raven_vault_clear`
+
 ---
 
 ## Vault config: `raven.yaml`
