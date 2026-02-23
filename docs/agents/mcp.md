@@ -2,30 +2,49 @@
 
 Raven exposes its CLI commands as MCP (Model Context Protocol) tools via `rvn serve`.
 
-## Starting the Server
+## Recommended Setup (Automatic Install)
+
+Install Raven into a supported MCP client config:
+
+```bash
+rvn mcp install --client claude-desktop --vault-path /path/to/vault
+```
+
+Supported clients:
+- `claude-code`
+- `claude-desktop`
+- `cursor`
+
+Examples:
+
+```bash
+rvn mcp install --client claude-code --vault-path /path/to/vault
+rvn mcp install --client cursor --vault-path /path/to/vault
+```
+
+Check status across all supported clients:
+
+```bash
+rvn mcp status
+```
+
+## Manual Setup (Fallback)
+
+If your client is unsupported, generate the JSON snippet:
+
+```bash
+rvn mcp show --vault-path /path/to/vault
+```
+
+Then add that snippet to your client config manually.
+
+## Starting the Server (Direct)
 
 ```bash
 rvn serve --vault-path /path/to/vault
 ```
 
 The server runs over stdin/stdout and exposes Raven tools to MCP clients.
-
-## Claude Desktop Configuration
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-```json
-{
-  "mcpServers": {
-    "raven": {
-      "command": "/path/to/rvn",
-      "args": ["serve", "--vault-path", "/path/to/vault"]
-    }
-  }
-}
-```
-
-Replace `/path/to/rvn` with the actual binary path (find with `which rvn`).
 
 ---
 

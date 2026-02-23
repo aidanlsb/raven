@@ -25,23 +25,29 @@ If `rvn` is not on your `PATH` after install, add your Go bin directory (usually
 
 ## Agent Setup
 
-Raven is designed with the assumption that you will use an AI agent to interact with your vault (although this is by no means required). If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), run Raven as an MCP server:
+Raven is designed with the assumption that you will use an AI agent to interact with your vault (although this is by no means required). If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), install the Raven MCP entry directly from the CLI:
 
 ```bash
-rvn serve --vault-path /path/to/vault
+rvn mcp install --client claude-desktop --vault-path /path/to/vault
 ```
 
-For Claude Desktop, add:
+You can also install for other supported clients:
 
-```json
-{
-  "mcpServers": {
-    "raven": {
-      "command": "path/to/go/bin/rvn",
-      "args": "serve",
-    }
-  }
-}
+```bash
+rvn mcp install --client claude-code --vault-path /path/to/vault
+rvn mcp install --client cursor --vault-path /path/to/vault
+```
+
+Verify setup:
+
+```bash
+rvn mcp status
+```
+
+If you need a manual snippet (for unsupported clients), print it with:
+
+```bash
+rvn mcp show --vault-path /path/to/vault
 ```
 
 Raven also ships with skills you can install for your agent(s) of choice.
