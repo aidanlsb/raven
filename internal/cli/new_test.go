@@ -150,6 +150,63 @@ types:
 	}
 }
 
+func TestNewFieldJSONPreservesStringType(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+      email:
+        type: string
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	prevVault := resolvedVaultPath
+	prevJSON := jsonOutput
+	prevFields := newFieldFlags
+	prevFieldJSON := newFieldJSON
+	prevPath := newPathFlag
+	prevPathChanged := newCmd.Flags().Lookup("path").Changed
+	t.Cleanup(func() {
+		resolvedVaultPath = prevVault
+		jsonOutput = prevJSON
+		newFieldFlags = prevFields
+		newFieldJSON = prevFieldJSON
+		newPathFlag = prevPath
+		newCmd.Flags().Lookup("path").Changed = prevPathChanged
+	})
+
+	resolvedVaultPath = vaultPath
+	jsonOutput = true
+	newFieldFlags = nil
+	newFieldJSON = `{"email":"true"}`
+	newPathFlag = ""
+	newCmd.Flags().Lookup("path").Changed = false
+
+	if err := newCmd.RunE(newCmd, []string{"person", "Field Json User"}); err != nil {
+		t.Fatalf("newCmd.RunE: %v", err)
+	}
+
+	created := filepath.Join(vaultPath, "people", "field-json-user.md")
+	b, err := os.ReadFile(created)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	got := string(b)
+	if !strings.Contains(got, `email: "true"`) {
+		t.Fatalf("expected email string literal to be preserved, got:\n%s", got)
+	}
+}
+
 func TestNewFileExistsEmitsJSONErrorInJSONMode(t *testing.T) {
 	vaultPath := t.TempDir()
 

@@ -470,6 +470,16 @@ func TestIntegration_UpsertFieldJSONPreservesStringType(t *testing.T) {
 	v.AssertFileContains("people/field-json-user.md", `email: "true"`)
 }
 
+func TestIntegration_NewFieldJSONPreservesStringType(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	result := v.RunCLI("new", "person", "New Field Json User", "--field-json", `{"email":"true"}`)
+	result.MustSucceed(t)
+	v.AssertFileContains("people/new-field-json-user.md", `email: "true"`)
+}
+
 func TestIntegration_UpsertWithExplicitPath(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
