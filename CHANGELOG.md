@@ -26,9 +26,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Symlink traversal protection
 - Path validation for all file operations
 
-## [0.1.0] - Unreleased
-
-Initial release.
-
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/aidanlsb/raven/releases/tag/v0.1.0
+[Unreleased]: https://github.com/aidanlsb/raven/commits/main

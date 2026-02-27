@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall
+.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall release-preflight release-tag release
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -73,6 +73,9 @@ fmt-check:
 # Run all checks (formatting, linting, tests)
 check: fmt-check lint test
 
+# Release gate used by CI release workflow and local release automation
+release-preflight: check test-integration
+
 # Clean build artifacts
 clean:
 	rm -f rvn coverage.out coverage.html
@@ -94,3 +97,31 @@ tidy:
 quick:
 	go fmt ./...
 	go vet ./...
+
+# Create an annotated release tag after validating repo state and running checks.
+# Usage: make release-tag VERSION=v0.2.0
+release-tag:
+	@test -n "$(VERSION)" || (echo "Usage: make release-tag VERSION=vX.Y.Z"; exit 1)
+	@echo "$(VERSION)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$' || (echo "VERSION must be semver, e.g. v1.2.3 or v1.2.3-rc.1"; exit 1)
+	@test "$$(git rev-parse --abbrev-ref HEAD)" = "main" || (echo "Releases must be cut from main"; exit 1)
+	@git diff --quiet || (echo "Working tree has unstaged changes"; exit 1)
+	@git diff --cached --quiet || (echo "Index has staged but uncommitted changes"; exit 1)
+	@if git rev-parse -q --verify "refs/tags/$(VERSION)" >/dev/null; then \
+		echo "Tag already exists locally: $(VERSION)"; \
+		exit 1; \
+	fi
+	@git fetch --tags --quiet
+	@if git ls-remote --tags --exit-code origin "refs/tags/$(VERSION)" >/dev/null 2>&1; then \
+		echo "Tag already exists on origin: $(VERSION)"; \
+		exit 1; \
+	fi
+	@echo "Running release preflight..."
+	@$(MAKE) release-preflight
+	@git tag -a "$(VERSION)" -m "Release $(VERSION)"
+	@echo "Created tag $(VERSION)"
+
+# Publish a release by creating and pushing a validated tag.
+# Usage: make release VERSION=v0.2.0
+release: release-tag
+	@git push origin "$(VERSION)"
+	@echo "Pushed $(VERSION). GitHub Actions release workflow will publish artifacts."
