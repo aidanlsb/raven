@@ -53,8 +53,6 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 		"mcp remove",
 		"mcp show",
 		"mcp status",
-		"migrate",
-		"migrate directories",
 		"path",
 		"schema add",
 		"schema remove",
