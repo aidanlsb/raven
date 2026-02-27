@@ -260,6 +260,13 @@ raven_workflow_continue(
   agent_output_json={"outputs": {"markdown": "done"}}
 )
 
+# New supports typed field payloads the same way
+raven_new(
+  type="person",
+  title="Freya",
+  field_json={"email": "freya@asgard.realm", "tags": ["core"]}
+)
+
 # String form (works in clients that only pass primitive arguments)
 raven_workflow_continue(
   run_id="wrf_abc123",

@@ -16,6 +16,7 @@ import (
 
 var (
 	newFieldFlags []string
+	newFieldJSON  string
 	newPathFlag   string
 	newTemplate   string
 )
@@ -28,7 +29,7 @@ var newCmd = &cobra.Command{
 The type is required. If title is not provided, you will be prompted for it.
 The file location is determined by the type's default_path setting in schema.yaml.
 Required fields (as defined in schema.yaml) will be prompted for interactively,
-or can be provided via --field flags.
+or can be provided via --field or --field-json flags.
 
 Examples:
   rvn new person                       # Prompts for title, creates in people/
@@ -86,22 +87,30 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
 		}
 
-		// Parse --field flags into a map
-		fieldValues := make(map[string]string)
-		for _, f := range newFieldFlags {
-			parts := strings.SplitN(f, "=", 2)
-			if len(parts) == 2 {
-				fieldValues[parts[0]] = parts[1]
-			}
+		// Parse --field and --field-json flags.
+		fieldValues, err := parseFieldFlags(newFieldFlags)
+		if err != nil {
+			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
+		}
+		typedFieldValues, err := parseFieldValuesJSON(newFieldJSON)
+		if err != nil {
+			return handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 		}
 
 		// Auto-fill the name_field from the positional title argument.
 		// If a type declares name_field (e.g., name_field: name), the title argument
 		// automatically populates that field, eliminating the need to specify it twice.
 		if typeDef != nil && typeDef.NameField != "" {
-			if _, provided := fieldValues[typeDef.NameField]; !provided && title != "" {
-				fieldValues[typeDef.NameField] = title
+			if _, provided := fieldValues[typeDef.NameField]; !provided {
+				if _, typedProvided := typedFieldValues[typeDef.NameField]; !typedProvided && title != "" {
+					fieldValues[typeDef.NameField] = title
+				}
 			}
+		}
+
+		// Typed JSON values win over --field key=value collisions.
+		for key, value := range typedFieldValues {
+			fieldValues[key] = serializeFieldValueLiteral(value)
 		}
 
 		// Collect required fields and check which are missing
@@ -305,6 +314,7 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 
 func init() {
 	newCmd.Flags().StringArrayVar(&newFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
+	newCmd.Flags().StringVar(&newFieldJSON, "field-json", "", "Set frontmatter fields via JSON object (typed values)")
 	newCmd.Flags().StringVar(&newPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
 	newCmd.Flags().StringVar(&newTemplate, "template", "", "Type template ID to use for object creation")
 	rootCmd.AddCommand(newCmd)

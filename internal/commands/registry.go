@@ -60,7 +60,7 @@ command applies templates, validates against the schema, and ensures proper inde
 
 The type is required. If title is not provided, you will be prompted for it.
 Required fields (as defined in schema.yaml) will be prompted for interactively,
-or can be provided via --field flags.
+or can be provided via --field flags or --field-json.
 
 Use --path to explicitly control the object path. Titles are treated as display
 names and must not include path separators.
@@ -81,6 +81,7 @@ to understand which fields are auto-populated.`,
 		},
 		Flags: []FlagMeta{
 			{Name: "field", Description: "Set field value (repeatable) (key-value object)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
+			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object (typed values)", Type: FlagTypeJSON},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
 			{Name: "template", Description: "Type template ID to use for object creation", Type: FlagTypeString, Examples: []string{"interview_technical", "interview_screen"}},
 		},
@@ -90,6 +91,7 @@ to understand which fields are auto-populated.`,
 			"rvn new project \"Website Redesign\" --json",
 			"rvn new interview \"Jane Doe @ Acme\" --template technical --json",
 			"rvn new book \"The Prose Edda\" --field author=people/snorri --json",
+			"rvn new person \"Freya\" --field-json '{\"email\":\"freya@asgard.realm\"}' --json",
 		},
 		UseCases: []string{
 			"Create a new typed object (NEVER write vault files directly)",

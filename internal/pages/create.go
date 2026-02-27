@@ -156,6 +156,9 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		value := allFields[fieldName]
 		if value == "" {
 			content.WriteString(fmt.Sprintf("%s: \n", fieldName))
+		} else if isQuotedYAMLScalar(value) {
+			// Preserve explicit quoted scalars as-is to avoid double-quoting.
+			content.WriteString(fmt.Sprintf("%s: %s\n", fieldName, value))
 		} else if strings.ContainsAny(value, ":\n\"'") {
 			// Quote values that need it
 			content.WriteString(fmt.Sprintf("%s: \"%s\"\n", fieldName, strings.ReplaceAll(value, "\"", "\\\"")))
@@ -207,6 +210,14 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		RelativePath:  relPath,
 		SlugifiedPath: slugifiedPath,
 	}, nil
+}
+
+func isQuotedYAMLScalar(value string) bool {
+	if len(value) < 2 {
+		return false
+	}
+	return (strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")) ||
+		(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'"))
 }
 
 // resolveDefaultPath applies the type's default_path if the target doesn't already have a directory.
