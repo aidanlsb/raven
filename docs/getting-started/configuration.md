@@ -53,8 +53,64 @@ code_theme = "monokai"
 | `editor` | string | `$EDITOR` | Used by commands that open files |
 | `editor_mode` | string | `auto` behavior in caller logic | One of `auto`, `terminal`, `gui` |
 | `[vaults]` | table | empty | Name -> absolute path mapping |
-| `[ui].accent` | string | unset | ANSI (`"0"`-`"255"`) or hex (`"#RRGGBB"`) accent color |
-| `[ui].code_theme` | string | unset | Markdown code theme (Glamour/Chroma), for example `monokai`, `dracula`, `github` |
+| `[ui].accent` | string | unset | Accent color for styled terminal output. Supports ANSI (`"0"`-`"255"`) or hex (`"#RRGGBB"` / `"#RGB"`). |
+| `[ui].code_theme` | string | unset (`monokai` effective default) | Markdown code-block theme (Glamour/Chroma), for example `monokai`, `dracula`, `github` |
+
+### UI options in detail
+
+`[ui]` controls human-facing terminal presentation. It does not affect JSON payloads (`--json`).
+
+#### `[ui].accent`
+
+Purpose:
+- Colors section headers, divider labels, and syntax-highlighted Raven markers in CLI output.
+
+Accepted values:
+- ANSI color index as string: `"0"` to `"255"` (example: `"39"`).
+- Hex color: `"#RRGGBB"` or shorthand `"#RGB"` (example: `"#5fd7ff"` or `"#5cf"`).
+- Disable accent explicitly with `"none"`, `"off"`, or `"default"` (in `config.toml`).
+
+Behavior details:
+- `#RGB` is normalized internally to `#RRGGBB`.
+- If the value is invalid, Raven falls back to its default non-accent style (bold headings, default syntax color).
+- `rvn config set --ui-accent` only enforces non-empty input; format validity is evaluated when output is rendered.
+
+Examples:
+
+```bash
+rvn config set --ui-accent 39 --json
+rvn config set --ui-accent '#5fd7ff' --json
+rvn config unset --ui-accent --json
+```
+
+#### `[ui].code_theme`
+
+Purpose:
+- Selects the Glamour/Chroma theme used for fenced code blocks in rendered markdown output.
+
+Accepted values:
+- Any Chroma style name (case-insensitive), for example: `monokai`, `dracula`, `github`, `nord`.
+
+Behavior details:
+- Current scope: markdown rendering paths (for example `rvn read` without `--raw` in terminal output).
+- Empty or invalid theme values fall back to `monokai`.
+- `rvn config set --ui-code-theme` only enforces non-empty input; theme validity is resolved when markdown is rendered.
+
+Examples:
+
+```bash
+rvn config set --ui-code-theme dracula --json
+rvn config set --ui-code-theme GitHub --json
+rvn config unset --ui-code-theme --json
+```
+
+#### Combined example
+
+```toml
+[ui]
+accent = "#5fd7ff"
+code_theme = "github"
+```
 
 ### Legacy compatibility
 
