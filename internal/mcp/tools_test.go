@@ -185,6 +185,7 @@ func TestSchemaCompatibilityForStructuredFlags(t *testing.T) {
 	// JSON flags should accept either object payloads or JSON-encoded strings.
 	assertAnyOfTypes(t, "raven_workflow_continue", "agent-output-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_workflow_run", "input-json", []string{"object", "string"})
+	assertAnyOfTypes(t, "raven_new", "field-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_upsert", "field-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_set", "fields-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_edit", "edits-json", []string{"object", "string"})
@@ -274,7 +275,7 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 				"field": map[string]interface{}{"name": "Freya", "email": "freya@asgard.realm"},
 			},
 			wantCmd:  "new",
-			wantArgs: []string{"--field", "email=freya@asgard.realm", "--field", "name=Freya", "person", "Freya", "--json"},
+			wantArgs: []string{"--field-json", `{"email":"freya@asgard.realm","name":"Freya"}`, "person", "Freya", "--json"},
 		},
 		{
 			toolName: "raven_new",
@@ -284,7 +285,7 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 				"fields": map[string]interface{}{"name": "Freya"}, // alias for `field`
 			},
 			wantCmd:  "new",
-			wantArgs: []string{"--field", "name=Freya", "person", "Freya", "--json"},
+			wantArgs: []string{"--field-json", `{"name":"Freya"}`, "person", "Freya", "--json"},
 		},
 		{
 			toolName: "raven_new",
