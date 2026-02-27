@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall release-preflight release-tag release
+.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall release-preflight release-next release-auto release-tag release
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -75,6 +75,32 @@ check: fmt-check lint test
 
 # Release gate used by CI release workflow and local release automation
 release-preflight: check test-integration
+
+# Compute the next stable semver release tag from existing tags.
+# Usage: make release-next BUMP=patch|minor|major
+release-next:
+	@test -n "$(BUMP)" || (echo "Usage: make release-next BUMP=patch|minor|major"; exit 1)
+	@echo "$(BUMP)" | grep -Eq '^(patch|minor|major)$$' || (echo "BUMP must be one of: patch, minor, major"; exit 1)
+	@latest="$$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"; \
+	if [ -z "$$latest" ]; then \
+		latest="v0.0.0"; \
+	fi; \
+	major="$$(echo "$${latest#v}" | cut -d. -f1)"; \
+	minor="$$(echo "$${latest#v}" | cut -d. -f2)"; \
+	patch="$$(echo "$${latest#v}" | cut -d. -f3)"; \
+	case "$(BUMP)" in \
+		major) major=$$((major + 1)); minor=0; patch=0 ;; \
+		minor) minor=$$((minor + 1)); patch=0 ;; \
+		patch) patch=$$((patch + 1)) ;; \
+	esac; \
+	echo "v$$major.$$minor.$$patch"
+
+# Compute next version from BUMP and run full guarded release flow.
+# Usage: make release-auto BUMP=patch|minor|major
+release-auto:
+	@next="$$( $(MAKE) --no-print-directory release-next BUMP=$(BUMP) )"; \
+	echo "Computed release tag: $$next"; \
+	$(MAKE) release VERSION="$$next"
 
 # Clean build artifacts
 clean:

@@ -44,6 +44,23 @@ Pushing the tag triggers [`.github/workflows/release.yml`](../.github/workflows/
 3. Runs `make release-preflight` again.
 4. Runs GoReleaser to publish binaries/checksums and GitHub Release notes.
 
+## Auto Increment
+
+Use explicit bump intent (no guessing):
+
+```bash
+make release-next BUMP=patch   # prints next tag only
+make release-auto BUMP=patch   # computes next tag, then runs full release flow
+```
+
+Supported bump values: `patch`, `minor`, `major`.
+
+If there are no existing stable tags, baseline is `v0.0.0` and first computed release is:
+
+- `BUMP=patch` -> `v0.0.1`
+- `BUMP=minor` -> `v0.1.0`
+- `BUMP=major` -> `v1.0.0`
+
 ## Codex Project Skill
 
 This repo includes a project-local Codex skill at:

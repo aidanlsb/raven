@@ -8,6 +8,8 @@ description: Cut, validate, and publish Raven releases with the repository's gua
 Use the repository release primitives as the source of truth:
 
 - `make release-preflight`
+- `make release-next BUMP=patch|minor|major`
+- `make release-auto BUMP=patch|minor|major`
 - `make release-tag VERSION=vX.Y.Z`
 - `make release VERSION=vX.Y.Z`
 
@@ -36,6 +38,8 @@ If no version is provided, ask for it. Do not infer bump level silently.
 ## Safe Variants
 
 - Validation-only: run `make release-preflight` and stop.
+- Compute-only: run `make release-next BUMP=<patch|minor|major>` and stop.
+- Auto-bump publish: run `make release-auto BUMP=<patch|minor|major>`.
 - Tag-only (no push): run `make release-tag VERSION=<tag>` and stop.
 - Full publish: run `make release VERSION=<tag>`.
 
@@ -53,4 +57,3 @@ If `gh` is available and authenticated, monitor release run status:
 gh run list --workflow Release --limit 5
 gh run view <run-id> --log-failed
 ```
-
