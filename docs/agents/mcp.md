@@ -576,6 +576,15 @@ raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync
 
 # Fetch one step output incrementally
 raven_workflow_runs_step(run_id="wrf_abcd1234", step_id="todos")
+
+# Page within a large step output (for example, query results)
+raven_workflow_runs_step(
+  run_id="wrf_abcd1234",
+  step_id="todos",
+  path="data.results",
+  offset=0,
+  limit=50
+)
 ```
 
 Notes:

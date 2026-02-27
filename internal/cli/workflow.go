@@ -777,6 +777,9 @@ var workflowContinueCmd = &cobra.Command{
 
 var workflowRunsStatus string
 var workflowRunsWorkflow string
+var workflowRunsStepPath string
+var workflowRunsStepOffset int
+var workflowRunsStepLimit int
 
 var workflowRunsListCmd = &cobra.Command{
 	Use:   "list",
@@ -933,8 +936,19 @@ var workflowRunsStepCmd = &cobra.Command{
 			"status":        state.Status,
 			"revision":      state.Revision,
 			"step_id":       stepID,
-			"step_output":   stepOutput,
 		}
+
+		paginationRequested := cmd.Flags().Changed("path") || cmd.Flags().Changed("offset") || cmd.Flags().Changed("limit")
+		if paginationRequested {
+			page, err := workflow.PaginateStepOutput(stepOutput, workflowRunsStepPath, workflowRunsStepOffset, workflowRunsStepLimit)
+			if err != nil {
+				return handleError(ErrInvalidInput, err, "Use --path for nested fields and provide valid --offset/--limit values")
+			}
+			payload["step_output_page"] = page
+		} else {
+			payload["step_output"] = stepOutput
+		}
+
 		if len(summaries) > 0 {
 			payload["step_summaries"] = summaries
 		}
@@ -947,7 +961,11 @@ var workflowRunsStepCmd = &cobra.Command{
 		fmt.Printf("run_id: %s\n", state.RunID)
 		fmt.Printf("workflow: %s\n", state.WorkflowName)
 		fmt.Printf("step_id: %s\n\n", stepID)
-		stepJSON, _ := json.MarshalIndent(stepOutput, "", "  ")
+		stepValue := payload["step_output"]
+		if paginationRequested {
+			stepValue = payload["step_output_page"]
+		}
+		stepJSON, _ := json.MarshalIndent(stepValue, "", "  ")
 		fmt.Println(string(stepJSON))
 		return nil
 	},
@@ -1305,6 +1323,9 @@ func init() {
 
 	workflowRunsListCmd.Flags().StringVar(&workflowRunsStatus, "status", "", "Filter by status (comma-separated)")
 	workflowRunsListCmd.Flags().StringVar(&workflowRunsWorkflow, "workflow", "", "Filter by workflow name")
+	workflowRunsStepCmd.Flags().StringVar(&workflowRunsStepPath, "path", "", "Dot path within step output to paginate (e.g. data.results)")
+	workflowRunsStepCmd.Flags().IntVar(&workflowRunsStepOffset, "offset", 0, "Zero-based offset for paginated step output")
+	workflowRunsStepCmd.Flags().IntVar(&workflowRunsStepLimit, "limit", 100, "Page size for paginated step output")
 
 	workflowRunsPruneCmd.Flags().StringVar(&workflowRunsPruneStatus, "status", "", "Prune only statuses (comma-separated)")
 	workflowRunsPruneCmd.Flags().StringVar(&workflowRunsPruneOlderThan, "older-than", "", "Prune records older than duration (e.g. 72h, 14d)")
