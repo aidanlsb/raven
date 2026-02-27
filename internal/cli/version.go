@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/buildinfo"
 )
 
 const defaultModulePath = "github.com/aidanlsb/raven"
@@ -63,6 +65,7 @@ func currentVersionInfo() versionInfo {
 
 	buildInfo, ok := readBuildInfo()
 	if !ok || buildInfo == nil {
+		applyLdflagsFallback(&info)
 		return info
 	}
 
@@ -85,6 +88,7 @@ func currentVersionInfo() versionInfo {
 	info.Commit = buildSetting(buildInfo, "vcs.revision")
 	info.CommitTime = buildSetting(buildInfo, "vcs.time")
 	info.Modified = strings.EqualFold(buildSetting(buildInfo, "vcs.modified"), "true")
+	applyLdflagsFallback(&info)
 
 	return info
 }
@@ -106,6 +110,22 @@ func buildSetting(info *debug.BuildInfo, key string) string {
 		}
 	}
 	return ""
+}
+
+func applyLdflagsFallback(info *versionInfo) {
+	if info == nil {
+		return
+	}
+
+	if info.Version == "devel" && buildinfo.Version != "" {
+		info.Version = normalizeVersion(buildinfo.Version)
+	}
+	if info.Commit == "" && buildinfo.Commit != "" {
+		info.Commit = buildinfo.Commit
+	}
+	if info.CommitTime == "" && buildinfo.Date != "" {
+		info.CommitTime = buildinfo.Date
+	}
 }
 
 func init() {

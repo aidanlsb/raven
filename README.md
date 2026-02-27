@@ -484,6 +484,7 @@ Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with
 - [Bulk Operations](docs/vault-management/bulk-operations.md) — patterns for operating at scale
 - [Workflows](docs/workflows/workflows.md) — pipeline specification
 - [MCP Reference](docs/agents/mcp.md) — agent integration
+- [Releasing](docs/RELEASING.md) — tag-driven release workflow and checklist
 
 Interactive learning:
 
