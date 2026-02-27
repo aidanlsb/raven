@@ -492,6 +492,8 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
    ```
    Returns the rendered agent prompt plus `step_summaries`. Use:
    `raven_workflow_runs_step(run_id="...", step_id="...")` to fetch full step output on demand.
+   For large outputs, page within a nested field:
+   `raven_workflow_runs_step(run_id="...", step_id="...", path="data.results", offset=0, limit=50)`.
 
 **How workflows work:**
 

@@ -456,6 +456,18 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantArgs: []string{"runs", "step", "wrf_abc123", "todos", "--json"},
 		},
 		{
+			toolName: "raven_workflow_runs_step",
+			args: map[string]interface{}{
+				"run-id":  "wrf_abc123",
+				"step-id": "todos",
+				"path":    "data.results",
+				"offset":  float64(50),
+				"limit":   float64(25),
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"runs", "step", "wrf_abc123", "todos", "--path", "data.results", "--offset", "50", "--limit", "25", "--json"},
+		},
+		{
 			toolName: "raven_workflow_add",
 			args: map[string]interface{}{
 				"name": "daily-brief",
