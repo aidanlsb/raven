@@ -127,7 +127,8 @@ Supported output types:
 - returns `run_id`, `status`, `revision`, `next.prompt`, declared `next.outputs`, and lightweight `step_summaries`
 
 `rvn workflow runs step`:
-- loads a persisted run and returns full output for one `step_id`
+- loads a persisted run and returns full output for one `step_id` (default behavior)
+- supports paged retrieval inside large outputs with `--path`, `--offset`, `--limit`
 - enables incremental retrieval of large workflow context by step boundary
 
 `rvn workflow continue`:
@@ -249,5 +250,6 @@ rvn workflow continue <run-id> --agent-output-json '{"outputs":{"markdown":"..."
 rvn workflow continue <run-id> --agent-output '{"outputs":{"markdown":"..."}}'
 rvn workflow runs list --status awaiting_agent
 rvn workflow runs step <run-id> <step-id>
+rvn workflow runs step <run-id> <step-id> --path data.results --offset 0 --limit 50
 rvn workflow runs prune --status completed --older-than 14d --confirm
 ```

@@ -1755,8 +1755,14 @@ incremental retrieval of large workflow context.`,
 			{Name: "run-id", Description: "Workflow run ID", Required: true},
 			{Name: "step-id", Description: "Step ID to retrieve output for", Required: true},
 		},
+		Flags: []FlagMeta{
+			{Name: "path", Description: "Dot path within step output to paginate (e.g. data.results)", Type: FlagTypeString},
+			{Name: "offset", Description: "Zero-based offset for paginated step output", Type: FlagTypeInt},
+			{Name: "limit", Description: "Page size for paginated step output", Type: FlagTypeInt},
+		},
 		Examples: []string{
 			"rvn workflow runs step wrf_abcd1234 todos --json",
+			"rvn workflow runs step wrf_abcd1234 todos --path data.results --offset 0 --limit 50 --json",
 		},
 		UseCases: []string{
 			"Fetch large step outputs on demand instead of in workflow_run responses",
