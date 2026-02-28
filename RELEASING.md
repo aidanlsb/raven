@@ -64,7 +64,7 @@ Supported bump values: `patch`, `minor`, `major`.
 2. Verifies the pushed tag is annotated.
 3. Runs `make release-preflight`.
 4. Runs GoReleaser to publish release artifacts and GitHub release notes.
-5. Updates `aidanlsb/homebrew-tap/Formula/raven.rb` when `HOMEBREW_TAP_TOKEN` is available.
+5. Updates `aidanlsb/homebrew-tap/Formula/rvn.rb` when `HOMEBREW_TAP_TOKEN` is available.
 
 ## Post-Release Verification
 
@@ -74,6 +74,6 @@ Supported bump values: `patch`, `minor`, `major`.
 
 ```bash
 brew tap aidanlsb/tap
-brew install raven
+brew install aidanlsb/tap/rvn
 rvn version
 ```
