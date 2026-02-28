@@ -526,6 +526,10 @@ Templates provide default content when users create new notes. Templates are sch
 **Managing templates with MCP tools:**
 
 ```
+# Create/update template files
+raven_template_write(path="meeting.md", content="# {{title}}\n\n## Notes")
+raven_template_list()
+
 # Create/update a template definition in schema.yaml
 raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
 
@@ -537,9 +541,9 @@ raven_schema_template_list()
 raven_schema_type_template_set(type_name="meeting", template_id="meeting_standard")
 raven_schema_type_template_default(type_name="meeting", template_id="meeting_standard")
 
-# Daily notes use built-in type "date"
-raven_schema_type_template_set(type_name="date", template_id="daily_default")
-raven_schema_type_template_default(type_name="date", template_id="daily_default")
+# Daily notes use built-in core type "date"
+raven_schema_core_template_set(core_type="date", template_id="daily_default")
+raven_schema_core_template_default(core_type="date", template_id="daily_default")
 
 # Remove type binding, then remove template definition
 raven_schema_type_template_remove(type_name="meeting", template_id="meeting_standard")
@@ -558,7 +562,7 @@ raven_schema_template_remove(template_id="meeting_standard")
 1. Ask what type of notes they want templates for
 2. Check the schema to see if the type exists: `raven_schema(subcommand="type", name="meeting")`
 3. Ask what sections/structure they want in new notes
-4. Ensure template file exists under `templates/` (create it if needed)
+4. Create/update template file: `raven_template_write(path="meeting.md", content="...")`
 5. Register template definition: `raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")`
 6. Bind + default for type: `raven_schema_type_template_set(...)`, `raven_schema_type_template_default(...)`
 7. Test it: `raven_new(type="meeting", title="Test Meeting")`
