@@ -59,6 +59,7 @@ Raven exposes MCP resources that agents can fetch:
 | `raven://queries/saved` | Saved Queries | List of saved queries defined in `raven.yaml` |
 | `raven://workflows/list` | Workflows List | List of workflows defined in `raven.yaml` |
 | `raven://workflows/<name>` | Workflow Details | Details for a specific workflow |
+| `raven://vault/agent-instructions` | Agent Instructions | Contents of vault-root `AGENTS.md` (listed only when the file exists) |
 
 Additional topic resources are available under `raven://guide/<topic>`:
 
