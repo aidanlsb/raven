@@ -223,13 +223,6 @@ personal = "/path/to/personal"
 [ui]
 accent = "39"
 code_theme = "dracula"
-
-[hooks]
-default_enabled = false
-
-[hooks.vaults]
-work = true
-personal = false
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -257,15 +250,6 @@ personal = false
 	}
 	if cfg.UI.CodeTheme != "dracula" {
 		t.Errorf("expected ui.code_theme 'dracula', got %q", cfg.UI.CodeTheme)
-	}
-	if cfg.Hooks.DefaultEnabled == nil || *cfg.Hooks.DefaultEnabled {
-		t.Errorf("expected hooks.default_enabled false, got %#v", cfg.Hooks.DefaultEnabled)
-	}
-	if !cfg.Hooks.Vaults["work"] {
-		t.Errorf("expected hooks.vaults.work true, got false")
-	}
-	if cfg.Hooks.Vaults["personal"] {
-		t.Errorf("expected hooks.vaults.personal false, got true")
 	}
 }
 
@@ -336,40 +320,4 @@ func TestCreateDefaultAt(t *testing.T) {
 	if createdPath != configPath {
 		t.Fatalf("expected second created path %q, got %q", configPath, createdPath)
 	}
-}
-
-func TestHooksEnabledForVault(t *testing.T) {
-	t.Run("defaults to false", func(t *testing.T) {
-		cfg := &Config{}
-		if cfg.HooksEnabledForVault("work") {
-			t.Fatal("expected false when unset")
-		}
-	})
-
-	t.Run("uses default when no vault override", func(t *testing.T) {
-		enabled := true
-		cfg := &Config{
-			Hooks: HooksPolicyConfig{
-				DefaultEnabled: &enabled,
-			},
-		}
-		if !cfg.HooksEnabledForVault("work") {
-			t.Fatal("expected true from hooks.default_enabled")
-		}
-	})
-
-	t.Run("vault override wins over default", func(t *testing.T) {
-		enabled := true
-		cfg := &Config{
-			Hooks: HooksPolicyConfig{
-				DefaultEnabled: &enabled,
-				Vaults: map[string]bool{
-					"work": false,
-				},
-			},
-		}
-		if cfg.HooksEnabledForVault("work") {
-			t.Fatal("expected vault-specific override to win (false)")
-		}
-	})
 }

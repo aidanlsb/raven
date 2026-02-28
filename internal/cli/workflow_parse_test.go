@@ -74,27 +74,3 @@ func TestParseAgentOutputEnvelope_RequiresInput(t *testing.T) {
 		t.Fatalf("error = %q, want to contain %q", err.Error(), want)
 	}
 }
-
-func TestShouldSuppressAutoHooksInWorkflow(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		tool string
-		want bool
-	}{
-		{name: "regular tool is suppressed", tool: "raven_new", want: true},
-		{name: "explicit hook tool is not suppressed", tool: "raven_hook", want: false},
-		{name: "cli hook alias is not suppressed", tool: "hook", want: false},
-		{name: "whitespace is trimmed", tool: "  raven_hook  ", want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := shouldSuppressAutoHooksInWorkflow(tt.tool); got != tt.want {
-				t.Fatalf("shouldSuppressAutoHooksInWorkflow(%q) = %v, want %v", tt.tool, got, tt.want)
-			}
-		})
-	}
-}

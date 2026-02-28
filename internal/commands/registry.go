@@ -1948,28 +1948,6 @@ with their match sources.`,
 			"Validate references without side effects",
 		},
 	},
-	"hook": {
-		Name:        "hook",
-		Description: "Run a named hook command from raven.yaml",
-		LongDesc: `Run a named hook command defined under hooks: in raven.yaml.
-
-Execution is subject to hook policy gates:
-- vault-local hooks_enabled: true
-- global config [hooks] policy for the active vault
-- --no-hooks / RVN_NO_HOOKS are not set`,
-		Args: []ArgMeta{
-			{Name: "name", Description: "Hook name defined under hooks: in raven.yaml", Required: true},
-		},
-		Examples: []string{
-			"rvn hook sync --json",
-			"rvn hook validate --json",
-		},
-		UseCases: []string{
-			"Run one hook manually for testing",
-			"Debug a hook command in isolation",
-			"Execute an automation step on demand",
-		},
-	},
 	"import": {
 		Name:        "import",
 		Description: "Import objects from JSON data",

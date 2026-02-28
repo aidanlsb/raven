@@ -5,22 +5,21 @@ import (
 	"testing"
 )
 
-func TestSaveToPersistsHooksPolicy(t *testing.T) {
+func TestSaveToPersistsConfigFields(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "config.toml")
 
-	enabled := true
 	cfg := &Config{
 		DefaultVault: "work",
+		StateFile:    "state.toml",
+		Editor:       "code",
+		EditorMode:   "gui",
 		Vaults: map[string]string{
 			"work": "/tmp/work-vault",
 		},
-		Hooks: HooksPolicyConfig{
-			DefaultEnabled: &enabled,
-			Vaults: map[string]bool{
-				"work": true,
-				"home": false,
-			},
+		UI: UIConfig{
+			Accent:    "39",
+			CodeTheme: "dracula",
 		},
 	}
 
@@ -33,13 +32,19 @@ func TestSaveToPersistsHooksPolicy(t *testing.T) {
 		t.Fatalf("LoadFrom returned error: %v", err)
 	}
 
-	if loaded.Hooks.DefaultEnabled == nil || !*loaded.Hooks.DefaultEnabled {
-		t.Fatalf("expected hooks.default_enabled=true, got %#v", loaded.Hooks.DefaultEnabled)
+	if loaded.StateFile != "state.toml" {
+		t.Fatalf("expected state_file=state.toml, got %q", loaded.StateFile)
 	}
-	if !loaded.Hooks.Vaults["work"] {
-		t.Fatal("expected hooks.vaults.work=true")
+	if loaded.Editor != "code" {
+		t.Fatalf("expected editor=code, got %q", loaded.Editor)
 	}
-	if loaded.Hooks.Vaults["home"] {
-		t.Fatal("expected hooks.vaults.home=false")
+	if loaded.EditorMode != "gui" {
+		t.Fatalf("expected editor_mode=gui, got %q", loaded.EditorMode)
+	}
+	if loaded.UI.Accent != "39" {
+		t.Fatalf("expected ui.accent=39, got %q", loaded.UI.Accent)
+	}
+	if loaded.UI.CodeTheme != "dracula" {
+		t.Fatalf("expected ui.code_theme=dracula, got %q", loaded.UI.CodeTheme)
 	}
 }
