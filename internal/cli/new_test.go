@@ -22,15 +22,29 @@ func captureStdout(t *testing.T, fn func()) string {
 	os.Stdout = w
 	t.Cleanup(func() { os.Stdout = orig })
 
+	outputCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, copyErr := io.Copy(&buf, r)
+		_ = r.Close()
+		if copyErr != nil {
+			errCh <- copyErr
+			return
+		}
+		outputCh <- buf.String()
+	}()
+
 	fn()
 
 	_ = w.Close()
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
+	select {
+	case err := <-errCh:
 		t.Fatalf("io.Copy: %v", err)
+		return ""
+	case output := <-outputCh:
+		return output
 	}
-	_ = r.Close()
-	return buf.String()
 }
 
 func TestNewAutoFillsNameFieldFromPositionalTitle(t *testing.T) {

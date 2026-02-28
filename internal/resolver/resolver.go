@@ -2,7 +2,7 @@
 package resolver
 
 import (
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/dates"
@@ -218,7 +218,7 @@ func maybeResolveDateRef(r *Resolver, c *matchCollector, ref string) (ResolveRes
 	}
 
 	// Convert date reference to daily note path
-	dateID := filepath.Join(r.dailyDirectory, ref)
+	dateID := path.Join(r.dailyDirectory, ref)
 
 	// Date references are special - they always resolve to the daily note path
 	// Don't treat as ambiguous with aliases since dates are a distinct concept
