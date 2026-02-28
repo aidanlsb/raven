@@ -6,15 +6,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 )
 
 var (
-	// binaryPath caches the path to the built rvn binary
+	// binaryPath caches the path to the built rvn binary.
 	binaryPath string
-	binaryOnce sync.Once
+	buildMu    sync.Mutex
 	buildErr   error
 )
 
@@ -55,30 +56,45 @@ type CLIMeta struct {
 func BuildCLI(t *testing.T) string {
 	t.Helper()
 
-	binaryOnce.Do(func() {
-		// Find the project root (directory containing go.mod)
-		projectRoot, err := findProjectRoot()
+	buildMu.Lock()
+	defer buildMu.Unlock()
+
+	// Reuse previously built binary if it still exists.
+	if binaryPath != "" {
+		if _, err := os.Stat(binaryPath); err == nil {
+			return binaryPath
+		}
+		// Binary disappeared (can happen on some Windows runners with temp cleanup).
+		binaryPath = ""
+		buildErr = nil
+	}
+
+	// Find the project root (directory containing go.mod)
+	projectRoot, err := findProjectRoot()
+	if err != nil {
+		buildErr = err
+	} else {
+		// Build to a temp location.
+		tmpDir, err := os.MkdirTemp("", "rvn-cli-bin-*")
 		if err != nil {
 			buildErr = err
-			return
-		}
+		} else {
+			binName := "rvn"
+			if runtime.GOOS == "windows" {
+				// Avoid relying on extension resolution in os/exec on Windows.
+				binName = "rvn.exe"
+			}
 
-		// Build to a temp location
-		tmpDir, err := os.MkdirTemp("", "raven-test-*")
-		if err != nil {
-			buildErr = err
-			return
+			binaryPath = filepath.Join(tmpDir, binName)
+			cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/rvn")
+			cmd.Dir = projectRoot
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				buildErr = &BuildError{Output: string(output), Err: err}
+				binaryPath = ""
+			}
 		}
-
-		binaryPath = filepath.Join(tmpDir, "rvn")
-		cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/rvn")
-		cmd.Dir = projectRoot
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			buildErr = &BuildError{Output: string(output), Err: err}
-			return
-		}
-	})
+	}
 
 	if buildErr != nil {
 		t.Fatalf("failed to build CLI: %v", buildErr)
