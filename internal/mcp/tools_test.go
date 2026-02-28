@@ -185,6 +185,8 @@ func TestSchemaCompatibilityForStructuredFlags(t *testing.T) {
 	// JSON flags should accept either object payloads or JSON-encoded strings.
 	assertAnyOfTypes(t, "raven_workflow_continue", "agent-output-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_workflow_run", "input-json", []string{"object", "string"})
+	assertAnyOfTypes(t, "raven_workflow_step_add", "step-json", []string{"object", "string"})
+	assertAnyOfTypes(t, "raven_workflow_step_update", "step-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_new", "field-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_upsert", "field-json", []string{"object", "string"})
 	assertAnyOfTypes(t, "raven_set", "fields-json", []string{"object", "string"})
@@ -501,6 +503,44 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			wantCmd:  "workflow",
 			wantArgs: []string{"validate", "daily-brief", "--json"},
 		},
+		{
+			toolName: "raven_workflow_step_add",
+			args: map[string]interface{}{
+				"workflow-name": "daily-brief",
+				"step-json": map[string]interface{}{
+					"id":   "fetch",
+					"type": "tool",
+					"tool": "raven_query",
+					"arguments": map[string]interface{}{
+						"query_string": "object:project .status==active",
+					},
+				},
+				"after": "compose",
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"step", "add", "daily-brief", "--step-json", "--after", "compose", "--json"},
+		},
+		{
+			toolName: "raven_workflow_step_update",
+			args: map[string]interface{}{
+				"workflow-name": "daily-brief",
+				"step-id":       "compose",
+				"step-json": map[string]interface{}{
+					"description": "Compose output",
+				},
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"step", "update", "daily-brief", "compose", "--step-json", "--json"},
+		},
+		{
+			toolName: "raven_workflow_step_remove",
+			args: map[string]interface{}{
+				"workflow-name": "daily-brief",
+				"step-id":       "compose",
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"step", "remove", "daily-brief", "compose", "--json"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -592,6 +632,9 @@ func TestCLICommandNameConversion(t *testing.T) {
 		{"raven_workflow_scaffold", "workflow scaffold"},
 		{"raven_workflow_remove", "workflow remove"},
 		{"raven_workflow_validate", "workflow validate"},
+		{"raven_workflow_step_add", "workflow step add"},
+		{"raven_workflow_step_update", "workflow step update"},
+		{"raven_workflow_step_remove", "workflow step remove"},
 		{"raven_workflow_continue", "workflow continue"},
 		{"raven_workflow_runs_list", "workflow runs list"},
 		{"raven_workflow_runs_step", "workflow runs step"},

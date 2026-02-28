@@ -103,8 +103,17 @@ func ApplyAgentOutputs(wf *Workflow, state *WorkflowRunState, env AgentOutputEnv
 	}
 
 	// Store canonical interpolation location and validated copy.
-	stepState["outputs"] = cloneInterfaceMap(env.Outputs)
+	outputs := cloneInterfaceMap(env.Outputs)
+	stepState["outputs"] = outputs
 	stepState["validated_outputs"] = cloneInterfaceMap(env.Outputs)
+
+	// Compatibility namespace: tool-style "data.outputs.*" lookup for agent outputs.
+	data, _ := stepState["data"].(map[string]interface{})
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+	data["outputs"] = cloneInterfaceMap(env.Outputs)
+	stepState["data"] = data
 	state.Steps[state.AwaitingStep] = stepState
 
 	state.History = append(state.History, RunHistoryEvent{

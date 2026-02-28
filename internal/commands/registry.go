@@ -1742,6 +1742,71 @@ Reports migration, directory-policy, and file syntax errors.`,
 			"Understand what a workflow does before running it",
 		},
 	},
+	"workflow_step_add": {
+		Name:        "workflow step add",
+		Description: "Add a step to a workflow definition file",
+		LongDesc: `Adds one step to a workflow YAML definition file.
+
+This edits the workflow file referenced by workflows.<name>.file in raven.yaml.
+Use --before/--after to control insertion order.`,
+		Args: []ArgMeta{
+			{Name: "workflow-name", Description: "Workflow name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "step-json", Description: "Step definition JSON object", Type: FlagTypeJSON, Examples: []string{`{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}`}},
+			{Name: "before", Description: "Insert new step before this step id", Type: FlagTypeString},
+			{Name: "after", Description: "Insert new step after this step id", Type: FlagTypeString},
+		},
+		Examples: []string{
+			`rvn workflow step add meeting-prep --step-json '{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:meeting .status==scheduled"}}' --json`,
+			`rvn workflow step add meeting-prep --step-json '{"id":"compose","type":"agent","prompt":"Summarize {{steps.fetch.data.results}}"}' --after fetch --json`,
+		},
+		UseCases: []string{
+			"Insert a new tool step while preserving YAML validity",
+			"Add an agent boundary without manual file editing",
+		},
+	},
+	"workflow_step_update": {
+		Name:        "workflow step update",
+		Description: "Update a step in a workflow definition file",
+		LongDesc: `Updates one step in a workflow YAML definition file.
+
+The provided --step-json is treated as a patch over the current step; omitted
+fields keep existing values.`,
+		Args: []ArgMeta{
+			{Name: "workflow-name", Description: "Workflow name", Required: true},
+			{Name: "step-id", Description: "Step ID to update", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "step-json", Description: "Step patch JSON object", Type: FlagTypeJSON, Examples: []string{`{"description":"Load upcoming meetings","arguments":{"query_string":"object:meeting .status==scheduled"}}`}},
+		},
+		Examples: []string{
+			`rvn workflow step update meeting-prep fetch --step-json '{"description":"Load upcoming meetings"}' --json`,
+			`rvn workflow step update meeting-prep compose --step-json '{"id":"draft","prompt":"Draft agenda from {{steps.fetch.data.results}}"}' --json`,
+		},
+		UseCases: []string{
+			"Patch step arguments without rewriting full YAML",
+			"Rename a step id while re-validating workflow integrity",
+		},
+	},
+	"workflow_step_remove": {
+		Name:        "workflow step remove",
+		Description: "Remove a step from a workflow definition file",
+		LongDesc: `Removes one step from a workflow YAML definition file.
+
+The command re-validates the workflow and rolls back on invalid edits.`,
+		Args: []ArgMeta{
+			{Name: "workflow-name", Description: "Workflow name", Required: true},
+			{Name: "step-id", Description: "Step ID to remove", Required: true},
+		},
+		Examples: []string{
+			"rvn workflow step remove meeting-prep fetch --json",
+		},
+		UseCases: []string{
+			"Delete obsolete steps safely",
+			"Refactor workflow step order by removing temporary steps",
+		},
+	},
 	"workflow_run": {
 		Name:        "workflow run",
 		Description: "Run a workflow until an agent step",

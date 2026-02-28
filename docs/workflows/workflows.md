@@ -29,6 +29,14 @@ rvn workflow validate [name]
 
 This gives immediate validation feedback and avoids YAML indentation mistakes.
 
+To mutate workflow definition steps without manual YAML edits:
+
+```bash
+rvn workflow step add <name> --step-json '{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}'
+rvn workflow step update <name> <step-id> --step-json '{"description":"Updated step description"}'
+rvn workflow step remove <name> <step-id>
+```
+
 ### File-Backed Declaration
 
 ```yaml
@@ -244,6 +252,9 @@ rvn workflow add <name> --file workflows/meeting-prep.yaml
 rvn workflow remove <name>
 rvn workflow validate [name]
 rvn workflow show <name>
+rvn workflow step add <name> --step-json '{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}'
+rvn workflow step update <name> <step-id> --step-json '{"description":"Updated step description"}'
+rvn workflow step remove <name> <step-id>
 rvn workflow run <name> --input key=value
 rvn workflow run <name> --input-json '{"date":"2026-02-14"}'
 rvn workflow continue <run-id> --agent-output-json '{"outputs":{"markdown":"..."}}'

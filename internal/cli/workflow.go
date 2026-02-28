@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
@@ -159,6 +161,243 @@ var workflowAddFile string
 var workflowScaffoldFile string
 var workflowScaffoldDescription string
 var workflowScaffoldForce bool
+var workflowStepAddJSON string
+var workflowStepAddBefore string
+var workflowStepAddAfter string
+var workflowStepUpdateJSON string
+
+type workflowFileDefinition struct {
+	Description string                           `yaml:"description,omitempty"`
+	Inputs      map[string]*config.WorkflowInput `yaml:"inputs,omitempty"`
+	Steps       []*config.WorkflowStep           `yaml:"steps,omitempty"`
+}
+
+var workflowStepCmd = &cobra.Command{
+	Use:   "step",
+	Short: "Edit workflow definition steps",
+	Long:  `Edit step definitions in a workflow YAML file without manual YAML editing.`,
+}
+
+var workflowStepAddCmd = &cobra.Command{
+	Use:   "add <workflow-name>",
+	Short: "Add a step to a workflow definition",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		workflowName := strings.TrimSpace(args[0])
+		if workflowName == "" {
+			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
+		}
+
+		step, err := parseWorkflowStepObject(workflowStepAddJSON, true)
+		if err != nil {
+			return handleError(ErrInvalidInput, err, "")
+		}
+
+		if strings.TrimSpace(workflowStepAddBefore) != "" && strings.TrimSpace(workflowStepAddAfter) != "" {
+			return handleErrorMsg(ErrInvalidInput, "use either --before or --after, not both", "")
+		}
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		def, fileRef, fullPath, originalContent, errCode, err := loadWorkflowDefinitionForEdit(vaultPath, vaultCfg, workflowName)
+		if err != nil {
+			return handleError(errCode, err, "Run 'rvn workflow list' to see available workflows")
+		}
+
+		if idx := findWorkflowStepIndex(def.Steps, step.ID); idx >= 0 {
+			return handleErrorMsg(
+				ErrDuplicateName,
+				fmt.Sprintf("step '%s' already exists", step.ID),
+				"Choose a different step id",
+			)
+		}
+
+		insertAt := len(def.Steps)
+		beforeID := strings.TrimSpace(workflowStepAddBefore)
+		afterID := strings.TrimSpace(workflowStepAddAfter)
+		switch {
+		case beforeID != "":
+			targetIdx := findWorkflowStepIndex(def.Steps, beforeID)
+			if targetIdx < 0 {
+				return handleErrorWithDetails(
+					ErrRefNotFound,
+					fmt.Sprintf("step '%s' not found", beforeID),
+					"Use 'rvn workflow show <name>' to inspect step ids",
+					map[string]interface{}{"workflow_name": workflowName, "step_id": beforeID},
+				)
+			}
+			insertAt = targetIdx
+		case afterID != "":
+			targetIdx := findWorkflowStepIndex(def.Steps, afterID)
+			if targetIdx < 0 {
+				return handleErrorWithDetails(
+					ErrRefNotFound,
+					fmt.Sprintf("step '%s' not found", afterID),
+					"Use 'rvn workflow show <name>' to inspect step ids",
+					map[string]interface{}{"workflow_name": workflowName, "step_id": afterID},
+				)
+			}
+			insertAt = targetIdx + 1
+		}
+
+		def.Steps = insertWorkflowStepAt(def.Steps, insertAt, step)
+		if err := writeWorkflowDefinitionForEdit(vaultPath, vaultCfg, workflowName, fileRef, fullPath, def, originalContent); err != nil {
+			return handleError(ErrWorkflowInvalid, err, "")
+		}
+
+		payload := map[string]interface{}{
+			"workflow_name": workflowName,
+			"file":          fileRef,
+			"action":        "add",
+			"step_id":       step.ID,
+			"step":          step,
+			"index":         insertAt,
+		}
+		if isJSONOutput() {
+			outputSuccess(payload, nil)
+			return nil
+		}
+
+		fmt.Printf("Added step '%s' to workflow '%s'.\n", step.ID, workflowName)
+		return nil
+	},
+}
+
+var workflowStepUpdateCmd = &cobra.Command{
+	Use:   "update <workflow-name> <step-id>",
+	Short: "Update a step in a workflow definition",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		workflowName := strings.TrimSpace(args[0])
+		stepID := strings.TrimSpace(args[1])
+		if workflowName == "" || stepID == "" {
+			return handleErrorMsg(ErrMissingArgument, "workflow name and step id are required", "")
+		}
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		def, fileRef, fullPath, originalContent, errCode, err := loadWorkflowDefinitionForEdit(vaultPath, vaultCfg, workflowName)
+		if err != nil {
+			return handleError(errCode, err, "Run 'rvn workflow list' to see available workflows")
+		}
+
+		targetIdx := findWorkflowStepIndex(def.Steps, stepID)
+		if targetIdx < 0 {
+			return handleErrorWithDetails(
+				ErrRefNotFound,
+				fmt.Sprintf("step '%s' not found", stepID),
+				"Use 'rvn workflow show <name>' to inspect step ids",
+				map[string]interface{}{"workflow_name": workflowName, "step_id": stepID},
+			)
+		}
+
+		updatedStep, err := applyWorkflowStepPatch(def.Steps[targetIdx], workflowStepUpdateJSON)
+		if err != nil {
+			return handleError(ErrInvalidInput, err, "")
+		}
+		if updatedStep.ID == "" {
+			updatedStep.ID = stepID
+		}
+
+		if updatedStep.ID != stepID {
+			if idx := findWorkflowStepIndex(def.Steps, updatedStep.ID); idx >= 0 {
+				return handleErrorMsg(
+					ErrDuplicateName,
+					fmt.Sprintf("step id '%s' already exists", updatedStep.ID),
+					"Use a unique step id",
+				)
+			}
+		}
+
+		def.Steps[targetIdx] = updatedStep
+		if err := writeWorkflowDefinitionForEdit(vaultPath, vaultCfg, workflowName, fileRef, fullPath, def, originalContent); err != nil {
+			return handleError(ErrWorkflowInvalid, err, "")
+		}
+
+		payload := map[string]interface{}{
+			"workflow_name": workflowName,
+			"file":          fileRef,
+			"action":        "update",
+			"step_id":       updatedStep.ID,
+			"previous_id":   stepID,
+			"step":          updatedStep,
+			"index":         targetIdx,
+		}
+		if isJSONOutput() {
+			outputSuccess(payload, nil)
+			return nil
+		}
+
+		if updatedStep.ID == stepID {
+			fmt.Printf("Updated step '%s' in workflow '%s'.\n", stepID, workflowName)
+		} else {
+			fmt.Printf("Updated step '%s' (renamed from '%s') in workflow '%s'.\n", updatedStep.ID, stepID, workflowName)
+		}
+		return nil
+	},
+}
+
+var workflowStepRemoveCmd = &cobra.Command{
+	Use:   "remove <workflow-name> <step-id>",
+	Short: "Remove a step from a workflow definition",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultPath := getVaultPath()
+		workflowName := strings.TrimSpace(args[0])
+		stepID := strings.TrimSpace(args[1])
+		if workflowName == "" || stepID == "" {
+			return handleErrorMsg(ErrMissingArgument, "workflow name and step id are required", "")
+		}
+
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+
+		def, fileRef, fullPath, originalContent, errCode, err := loadWorkflowDefinitionForEdit(vaultPath, vaultCfg, workflowName)
+		if err != nil {
+			return handleError(errCode, err, "Run 'rvn workflow list' to see available workflows")
+		}
+
+		targetIdx := findWorkflowStepIndex(def.Steps, stepID)
+		if targetIdx < 0 {
+			return handleErrorWithDetails(
+				ErrRefNotFound,
+				fmt.Sprintf("step '%s' not found", stepID),
+				"Use 'rvn workflow show <name>' to inspect step ids",
+				map[string]interface{}{"workflow_name": workflowName, "step_id": stepID},
+			)
+		}
+
+		def.Steps = append(def.Steps[:targetIdx], def.Steps[targetIdx+1:]...)
+		if err := writeWorkflowDefinitionForEdit(vaultPath, vaultCfg, workflowName, fileRef, fullPath, def, originalContent); err != nil {
+			return handleError(ErrWorkflowInvalid, err, "")
+		}
+
+		payload := map[string]interface{}{
+			"workflow_name": workflowName,
+			"file":          fileRef,
+			"action":        "remove",
+			"step_id":       stepID,
+			"index":         targetIdx,
+		}
+		if isJSONOutput() {
+			outputSuccess(payload, nil)
+			return nil
+		}
+
+		fmt.Printf("Removed step '%s' from workflow '%s'.\n", stepID, workflowName)
+		return nil
+	},
+}
 
 func validateWorkflowCreateName(name string) error {
 	if name == "runs" {
@@ -1065,6 +1304,205 @@ func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{
 	}
 }
 
+func loadWorkflowDefinitionForEdit(
+	vaultPath string,
+	vaultCfg *config.VaultConfig,
+	workflowName string,
+) (*workflowFileDefinition, string, string, []byte, string, error) {
+	if vaultCfg == nil {
+		return nil, "", "", nil, ErrInternal, fmt.Errorf("vault config is nil")
+	}
+	if len(vaultCfg.Workflows) == 0 {
+		return nil, "", "", nil, ErrWorkflowNotFound, fmt.Errorf("no workflows defined in raven.yaml")
+	}
+
+	ref, ok := vaultCfg.Workflows[workflowName]
+	if !ok {
+		return nil, "", "", nil, ErrWorkflowNotFound, fmt.Errorf("workflow '%s' not found", workflowName)
+	}
+	if ref == nil {
+		return nil, "", "", nil, ErrWorkflowInvalid, fmt.Errorf("workflow '%s' reference is nil", workflowName)
+	}
+	if strings.TrimSpace(ref.File) == "" {
+		return nil, "", "", nil, ErrWorkflowInvalid, fmt.Errorf("workflow '%s' has no file reference", workflowName)
+	}
+
+	fileRef, err := workflow.ResolveWorkflowFileRef(ref.File, vaultCfg.GetWorkflowDirectory())
+	if err != nil {
+		return nil, "", "", nil, ErrWorkflowInvalid, err
+	}
+	fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
+	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideVault) {
+			return nil, "", "", nil, ErrFileOutsideVault, err
+		}
+		return nil, "", "", nil, ErrInternal, err
+	}
+
+	originalContent, err := os.ReadFile(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, "", "", nil, ErrFileNotFound, fmt.Errorf("workflow file not found: %s", fileRef)
+		}
+		return nil, "", "", nil, ErrFileReadError, err
+	}
+
+	var parsed config.WorkflowRef
+	if err := yaml.Unmarshal(originalContent, &parsed); err != nil {
+		return nil, "", "", nil, ErrWorkflowInvalid, fmt.Errorf("parse workflow file: %w", err)
+	}
+
+	def := &workflowFileDefinition{
+		Description: parsed.Description,
+		Inputs:      parsed.Inputs,
+		Steps:       parsed.Steps,
+	}
+	if def.Steps == nil {
+		def.Steps = []*config.WorkflowStep{}
+	}
+	return def, fileRef, fullPath, originalContent, "", nil
+}
+
+func writeWorkflowDefinitionForEdit(
+	vaultPath string,
+	vaultCfg *config.VaultConfig,
+	workflowName string,
+	fileRef string,
+	fullPath string,
+	def *workflowFileDefinition,
+	originalContent []byte,
+) error {
+	if def == nil {
+		return fmt.Errorf("workflow definition is nil")
+	}
+	encoded, err := yaml.Marshal(def)
+	if err != nil {
+		return fmt.Errorf("encode workflow definition: %w", err)
+	}
+	if err := atomicfile.WriteFile(fullPath, encoded, 0o644); err != nil {
+		return fmt.Errorf("write workflow file %s: %w", fileRef, err)
+	}
+
+	if _, err := workflow.LoadWithConfig(vaultPath, workflowName, vaultCfg.Workflows[workflowName], vaultCfg); err != nil {
+		rollbackErr := atomicfile.WriteFile(fullPath, originalContent, 0o644)
+		if rollbackErr != nil {
+			return fmt.Errorf("validation failed: %w (rollback failed: %s)", err, rollbackErr.Error())
+		}
+		return err
+	}
+	return nil
+}
+
+func parseWorkflowStepObject(raw string, requireID bool) (*config.WorkflowStep, error) {
+	obj, err := parseJSONObject(raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateWorkflowStepJSONKeys(obj); err != nil {
+		return nil, err
+	}
+
+	stepBytes, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	var step config.WorkflowStep
+	if err := json.Unmarshal(stepBytes, &step); err != nil {
+		return nil, err
+	}
+
+	step.ID = strings.TrimSpace(step.ID)
+	step.Type = strings.TrimSpace(step.Type)
+	if requireID && step.ID == "" {
+		return nil, fmt.Errorf("step id is required")
+	}
+	return &step, nil
+}
+
+func applyWorkflowStepPatch(existing *config.WorkflowStep, patchJSON string) (*config.WorkflowStep, error) {
+	if existing == nil {
+		return nil, fmt.Errorf("existing step is nil")
+	}
+	patch, err := parseJSONObject(patchJSON)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateWorkflowStepJSONKeys(patch); err != nil {
+		return nil, err
+	}
+
+	existingBytes, err := json.Marshal(existing)
+	if err != nil {
+		return nil, err
+	}
+	var merged map[string]interface{}
+	if err := json.Unmarshal(existingBytes, &merged); err != nil {
+		return nil, err
+	}
+	mergeObject(merged, patch)
+
+	mergedBytes, err := json.Marshal(merged)
+	if err != nil {
+		return nil, err
+	}
+	var updated config.WorkflowStep
+	if err := json.Unmarshal(mergedBytes, &updated); err != nil {
+		return nil, err
+	}
+
+	updated.ID = strings.TrimSpace(updated.ID)
+	updated.Type = strings.TrimSpace(updated.Type)
+	return &updated, nil
+}
+
+func validateWorkflowStepJSONKeys(obj map[string]interface{}) error {
+	allowed := map[string]struct{}{
+		"id":          {},
+		"type":        {},
+		"description": {},
+		"rql":         {},
+		"ref":         {},
+		"term":        {},
+		"limit":       {},
+		"target":      {},
+		"prompt":      {},
+		"outputs":     {},
+		"tool":        {},
+		"arguments":   {},
+	}
+	for key := range obj {
+		if _, ok := allowed[key]; !ok {
+			return fmt.Errorf("unknown step field: %s", key)
+		}
+	}
+	return nil
+}
+
+func findWorkflowStepIndex(steps []*config.WorkflowStep, stepID string) int {
+	for i, step := range steps {
+		if step == nil {
+			continue
+		}
+		if strings.TrimSpace(step.ID) == stepID {
+			return i
+		}
+	}
+	return -1
+}
+
+func insertWorkflowStepAt(steps []*config.WorkflowStep, idx int, step *config.WorkflowStep) []*config.WorkflowStep {
+	if idx <= 0 {
+		return append([]*config.WorkflowStep{step}, steps...)
+	}
+	if idx >= len(steps) {
+		return append(steps, step)
+	}
+	steps = append(steps, nil)
+	copy(steps[idx+1:], steps[idx:])
+	steps[idx] = step
+	return steps
+}
+
 func parseWorkflowInputs(inputFile, inputJSON string, kvFlags []string) (map[string]interface{}, error) {
 	inputs := map[string]interface{}{}
 
@@ -1311,6 +1749,12 @@ func init() {
 	workflowScaffoldCmd.Flags().StringVar(&workflowScaffoldFile, "file", "", "Path for the scaffolded workflow YAML file (relative to vault root)")
 	workflowScaffoldCmd.Flags().StringVar(&workflowScaffoldDescription, "description", "", "Description for the scaffolded workflow")
 	workflowScaffoldCmd.Flags().BoolVar(&workflowScaffoldForce, "force", false, "Overwrite scaffold file if it already exists")
+	workflowStepAddCmd.Flags().StringVar(&workflowStepAddJSON, "step-json", "", "Step definition JSON object")
+	workflowStepAddCmd.Flags().StringVar(&workflowStepAddBefore, "before", "", "Insert new step before this step id")
+	workflowStepAddCmd.Flags().StringVar(&workflowStepAddAfter, "after", "", "Insert new step after this step id")
+	_ = workflowStepAddCmd.MarkFlagRequired("step-json")
+	workflowStepUpdateCmd.Flags().StringVar(&workflowStepUpdateJSON, "step-json", "", "Step patch JSON object")
+	_ = workflowStepUpdateCmd.MarkFlagRequired("step-json")
 
 	workflowRunCmd.Flags().StringArrayVar(&workflowInputFlags, "input", nil, "Set input value (can be repeated): --input name=value")
 	workflowRunCmd.Flags().StringVar(&workflowInputJSON, "input-json", "", "Set workflow inputs as a JSON object")
@@ -1337,6 +1781,10 @@ func init() {
 	workflowCmd.AddCommand(workflowRemoveCmd)
 	workflowCmd.AddCommand(workflowValidateCmd)
 	workflowCmd.AddCommand(workflowShowCmd)
+	workflowStepCmd.AddCommand(workflowStepAddCmd)
+	workflowStepCmd.AddCommand(workflowStepUpdateCmd)
+	workflowStepCmd.AddCommand(workflowStepRemoveCmd)
+	workflowCmd.AddCommand(workflowStepCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
 	workflowCmd.AddCommand(workflowContinueCmd)
 	workflowRunsCmd.AddCommand(workflowRunsListCmd)

@@ -63,7 +63,7 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 	if err := validateInputsTyped(wf, resolvedInputs); err != nil {
 		return nil, err
 	}
-	state.Inputs = resolvedInputs
+	state.Inputs = materializeOptionalInputs(wf, resolvedInputs)
 	state.Status = RunStatusRunning
 
 	for i := state.Cursor; i < len(wf.Steps); i++ {
@@ -253,6 +253,19 @@ func applyDefaultsTyped(wf *Workflow, inputs map[string]interface{}) (map[string
 		}
 	}
 	return result, nil
+}
+
+func materializeOptionalInputs(wf *Workflow, inputs map[string]interface{}) map[string]interface{} {
+	if wf == nil || wf.Inputs == nil {
+		return inputs
+	}
+	for name := range wf.Inputs {
+		if _, ok := inputs[name]; !ok {
+			// Keep optional declared inputs addressable in interpolation paths.
+			inputs[name] = nil
+		}
+	}
+	return inputs
 }
 
 func validateInputType(name, typ string, value interface{}) error {

@@ -202,3 +202,49 @@ func TestRunner_ToolStepTypedInterpolation(t *testing.T) {
 		t.Fatalf("content interpolation mismatch: got %#v", secondCallArgs["content"])
 	}
 }
+
+func TestRunner_OptionalInputOmittedIsAddressable(t *testing.T) {
+	wf := &Workflow{
+		Name: "optional-inputs",
+		Inputs: map[string]*config.WorkflowInput{
+			"title":   {Type: "string", Required: true},
+			"project": {Type: "string", Required: false},
+		},
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "create",
+				Type: "tool",
+				Tool: "raven_upsert",
+				Arguments: map[string]interface{}{
+					"type":    "analysis-plan",
+					"title":   "{{inputs.title}}",
+					"project": "{{inputs.project}}",
+				},
+			},
+		},
+	}
+
+	var createArgs map[string]interface{}
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		createArgs = args
+		return map[string]interface{}{"ok": true}, nil
+	}
+
+	result, err := r.Run(wf, map[string]string{"title": "New model order"})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Status != RunStatusCompleted {
+		t.Fatalf("expected completed status, got %s", result.Status)
+	}
+	if createArgs == nil {
+		t.Fatal("expected create tool args")
+	}
+	if _, ok := createArgs["project"]; !ok {
+		t.Fatal("expected optional project input key to be present")
+	}
+	if createArgs["project"] != nil {
+		t.Fatalf("expected omitted optional project to resolve as nil, got %#v", createArgs["project"])
+	}
+}

@@ -228,6 +228,9 @@ MCP tool descriptions are generated from that same registry and include command-
 | `raven_workflow_remove` | Remove a workflow definition from `raven.yaml` |
 | `raven_workflow_validate` | Validate workflow definitions |
 | `raven_workflow_show` | Show workflow details |
+| `raven_workflow_step_add` | Add a step to a workflow definition file |
+| `raven_workflow_step_update` | Update a step in a workflow definition file |
+| `raven_workflow_step_remove` | Remove a step from a workflow definition file |
 | `raven_workflow_run` | Run a workflow until an agent step |
 | `raven_workflow_continue` | Continue a paused workflow run |
 | `raven_workflow_runs_list` | List persisted workflow runs |
