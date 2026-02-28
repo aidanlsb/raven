@@ -2,7 +2,7 @@
 
 ## What is Raven?
 
-Fundamentally Raven is a CLI for personal knowledge management, with first-class support for AI agents. 
+Fundamentally Raven is a CLI for personal knowledge management, with first-class support for AI agents.
 
 You keep your data in a directory of markdown files (called a "vault"), and Raven lets you:
 - Define a schema, so your notes can have concrete "types" (e.g., project, meeting, person)
@@ -12,7 +12,7 @@ You keep your data in a directory of markdown files (called a "vault"), and Rave
 
 The goal is to keep notes durable and simple while still enabling structured workflows and accurate agent operations.
 
-## Installation
+## Installation and setup
 
 Raven requires Go 1.22+.
 
@@ -22,6 +22,25 @@ rvn version
 ```
 
 If `rvn` is not on your `PATH` after install, add your Go bin directory (usually `$(go env GOPATH)/bin`) to your shell profile.
+
+Initialize your first vault:
+
+```bash
+rvn init ~/notes
+cd ~/notes
+```
+
+`rvn init` creates the essential files:
+- `raven.yaml` (vault behavior)
+- `schema.yaml` (types, fields, traits)
+- `.raven/` (derived index cache)
+
+Quick sanity check:
+
+```bash
+rvn stats
+rvn schema types
+```
 
 ## Agent Setup
 
@@ -59,33 +78,11 @@ rvn skill install raven-core --target codex --confirm --json
 
 For complete MCP details and tool reference, see `agents/mcp.md`.
 
-## Setting up your vault
-
-Create a new vault and enter it:
-
-```bash
-rvn init ~/notes
-cd ~/notes
-```
-
-`rvn init` creates the essential files:
-- `raven.yaml` (vault behavior)
-- `schema.yaml` (types, fields, traits)
-- `.raven/` (derived index cache)
-
-Quick sanity check:
-
-```bash
-rvn stats
-rvn schema types
-```
-
 ## Daily notes
 
 Daily notes are the simplest way to get started with Raven:
 - `rvn daily` opens today's note
 - The daily folder is configured with `directories.daily` in `raven.yaml`.
-
 
 After you can create notes and daily entries, define your data model:
 1. Read `types-and-traits/schema-intro.md` for the first safe schema changes.
