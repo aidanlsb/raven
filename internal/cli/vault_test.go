@@ -291,13 +291,13 @@ func TestVaultAddRejectsDuplicateWithoutReplace(t *testing.T) {
 		t.Fatalf("create new path: %v", err)
 	}
 
-	cfgContent := `default_vault = "work"
-
-[vaults]
-work = "` + oldPath + `"
-`
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
+	if err := config.SaveTo(cfgPath, &config.Config{
+		DefaultVault: "work",
+		Vaults: map[string]string{
+			"work": oldPath,
+		},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
 	}
 
 	prevConfig := configPath
@@ -350,20 +350,20 @@ func TestVaultRemoveRequiresClearFlagsForDefaultAndActive(t *testing.T) {
 		t.Fatalf("create personal path: %v", err)
 	}
 
-	cfgContent := `default_vault = "work"
-
-[vaults]
-work = "` + workPath + `"
-personal = "` + personalPath + `"
-`
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
+	if err := config.SaveTo(cfgPath, &config.Config{
+		DefaultVault: "work",
+		Vaults: map[string]string{
+			"work":     workPath,
+			"personal": personalPath,
+		},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
 	}
-	stateContent := `version = 1
-active_vault = "work"
-`
-	if err := os.WriteFile(statePath, []byte(stateContent), 0o644); err != nil {
-		t.Fatalf("write state: %v", err)
+	if err := config.SaveState(statePath, &config.State{
+		Version:     config.StateVersion,
+		ActiveVault: "work",
+	}); err != nil {
+		t.Fatalf("save state: %v", err)
 	}
 
 	prevConfig := configPath
@@ -408,20 +408,20 @@ func TestVaultRemoveClearsDefaultAndActive(t *testing.T) {
 		t.Fatalf("create personal path: %v", err)
 	}
 
-	cfgContent := `default_vault = "work"
-
-[vaults]
-work = "` + workPath + `"
-personal = "` + personalPath + `"
-`
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
+	if err := config.SaveTo(cfgPath, &config.Config{
+		DefaultVault: "work",
+		Vaults: map[string]string{
+			"work":     workPath,
+			"personal": personalPath,
+		},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
 	}
-	stateContent := `version = 1
-active_vault = "work"
-`
-	if err := os.WriteFile(statePath, []byte(stateContent), 0o644); err != nil {
-		t.Fatalf("write state: %v", err)
+	if err := config.SaveState(statePath, &config.State{
+		Version:     config.StateVersion,
+		ActiveVault: "work",
+	}); err != nil {
+		t.Fatalf("save state: %v", err)
 	}
 
 	prevConfig := configPath
