@@ -150,6 +150,16 @@ The agent doesn't need to search or guess — it queries structured data and rea
 
 ## Installation
 
+Install with Homebrew:
+
+```bash
+brew tap aidanlsb/tap
+brew install raven
+rvn version
+```
+
+Or install with Go:
+
 ```bash
 go install github.com/aidanlsb/raven/cmd/rvn@latest
 rvn version

@@ -1,76 +1,79 @@
 # Releasing Raven
 
-This is a maintainer/internal document for releasing this repository.
+Maintainer runbook for shipping a tagged release.
 
 Raven uses a tag-driven release flow:
-
-1. Cut an annotated semver tag from `main`.
+1. Create an annotated semver tag from `main`.
 2. Push the tag.
-3. GitHub Actions runs preflight checks and publishes with GoReleaser.
+3. GitHub Actions runs preflight and publishes with GoReleaser.
 
-## Requirements
+## Preconditions
 
-- Clean working tree
-- On `main`
-- `origin` remote configured
-- GitHub secrets configured:
+- Working tree is clean.
+- Current branch is `main`.
+- `origin` points to `aidanlsb/raven`.
+- GitHub Actions secrets:
   - `GITHUB_TOKEN` (provided automatically by Actions)
-  - `HOMEBREW_TAP_TOKEN` (optional, for Homebrew formula publishing)
+  - `HOMEBREW_TAP_TOKEN` (required only for Homebrew formula publishing)
+
+## Homebrew One-Time Setup
+
+Raven publishes formulas to `aidanlsb/homebrew-tap` (`aidanlsb/tap` in brew commands).
+
+Before the first Homebrew-enabled release, confirm:
+1. `aidanlsb/homebrew-tap` exists and is writable by the token owner.
+2. The tap repo contains a `Formula/` directory.
+3. `HOMEBREW_TAP_TOKEN` is set in `aidanlsb/raven` repository secrets.
+
+If `HOMEBREW_TAP_TOKEN` is missing, release binaries still publish, but Homebrew formula updates are skipped.
 
 ## Local Preflight
-
-Run the same checks as release CI:
 
 ```bash
 make release-preflight
 ```
 
-## Cut and Publish (One Command)
+This runs formatting checks, lint, unit tests, and integration tests.
+
+## Release Commands
+
+Pick one approach:
 
 ```bash
 make release VERSION=v0.2.0
 ```
 
-This command:
-
-1. Validates semver tag format.
-2. Verifies clean tree and `main` branch.
-3. Runs `make release-preflight`.
-4. Creates an annotated tag.
-5. Pushes the tag to `origin`.
-
-Pushing the tag triggers `.github/workflows/release.yml`, which:
-
-1. Re-validates tag format.
-2. Verifies tag is annotated.
-3. Runs `make release-preflight` again.
-4. Runs GoReleaser to publish binaries/checksums and GitHub Release notes.
-
-## Auto Increment
-
-Use explicit bump intent (no guessing):
+Or compute and release the next version automatically:
 
 ```bash
-make release-next BUMP=patch   # prints next tag only
-make release-auto BUMP=patch   # computes next tag, then runs full release flow
+make release-auto BUMP=patch
+```
+
+Preview only (no tag created):
+
+```bash
+make release-next BUMP=patch
 ```
 
 Supported bump values: `patch`, `minor`, `major`.
 
-If there are no existing stable tags, baseline is `v0.0.0` and first computed release is:
+## What CI Does On Tag Push
 
-- `BUMP=patch` -> `v0.0.1`
-- `BUMP=minor` -> `v0.1.0`
-- `BUMP=major` -> `v1.0.0`
+`.github/workflows/release.yml` runs when a `v*.*.*` tag is pushed and:
+1. Validates semver tag format.
+2. Verifies the pushed tag is annotated.
+3. Runs `make release-preflight`.
+4. Runs GoReleaser to publish release artifacts and GitHub release notes.
+5. Updates `aidanlsb/homebrew-tap/Formula/raven.rb` when `HOMEBREW_TAP_TOKEN` is available.
 
-## Codex Project Skill
+## Post-Release Verification
 
-This repo includes a project-local Codex skill at:
+1. Confirm the GitHub Release has binaries plus `checksums.txt`.
+2. Confirm `aidanlsb/homebrew-tap` has a new formula commit.
+3. Verify Homebrew install:
 
-- `.codex/skills/raven-release/SKILL.md`
-
-Use it when you want Codex to drive the release workflow with the same guardrails:
-
-- Run release preflight only
-- Create a release tag without pushing
-- Cut and publish a full release via `make release`
+```bash
+brew tap aidanlsb/tap
+brew install raven
+rvn version
+```
