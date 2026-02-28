@@ -7,11 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
+var captureStdoutMu sync.Mutex
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
+	captureStdoutMu.Lock()
+	defer captureStdoutMu.Unlock()
 
 	orig := os.Stdout
 	r, w, err := os.Pipe()
@@ -20,7 +25,6 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 
 	os.Stdout = w
-	t.Cleanup(func() { os.Stdout = orig })
 
 	outputCh := make(chan string, 1)
 	errCh := make(chan error, 1)
@@ -37,12 +41,15 @@ func captureStdout(t *testing.T, fn func()) string {
 
 	fn()
 
+	os.Stdout = orig
 	_ = w.Close()
+	var copyErr error
+	var output string
 	select {
-	case err := <-errCh:
-		t.Fatalf("io.Copy: %v", err)
+	case copyErr = <-errCh:
+		t.Fatalf("io.Copy: %v", copyErr)
 		return ""
-	case output := <-outputCh:
+	case output = <-outputCh:
 		return output
 	}
 }
