@@ -154,7 +154,7 @@ Install with Homebrew:
 
 ```bash
 brew tap aidanlsb/tap
-brew install raven
+brew install aidanlsb/tap/rvn
 rvn version
 ```
 

@@ -91,7 +91,7 @@ release:
     **Full Changelog**: https://github.com/aidanlsb/raven/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 brews:
-  - name: raven
+  - name: rvn
     repository:
       owner: aidanlsb
       name: homebrew-tap
