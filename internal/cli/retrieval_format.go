@@ -140,12 +140,7 @@ func printSearchResults(queryStr string, results []model.SearchMatch) {
 			title = title[:metaWidth-6] + "..."
 		}
 
-		// File path (just filename) - use file column width
-		fileWidth := table.ContentWidth("file")
-		filePath := filepath.Base(result.FilePath)
-		if len(filePath) > fileWidth-3 {
-			filePath = filePath[:fileWidth-6] + "..."
-		}
+		filePath := formatSearchLocation(result.FilePath)
 
 		table.AddRow(ui.ResultRow{
 			Num:      i + 1,
@@ -201,6 +196,10 @@ func cleanSearchSnippetDynamic(snippet string, maxLen int) string {
 		result = limitSnippetLines(result, 8)
 	}
 	return result
+}
+
+func formatSearchLocation(filePath string) string {
+	return formatLocationLinkSimpleStyled(filePath, 1, ui.Muted.Render)
 }
 
 // cleanRawSnippet removes frontmatter and returns clean text.

@@ -3,6 +3,7 @@ package cli
 import (
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -46,5 +47,22 @@ func TestBuildTypeSchemaIncludesTemplateBindings(t *testing.T) {
 	}
 	if result.DefaultTemplate != "interview_technical" {
 		t.Fatalf("expected default template %q, got %q", "interview_technical", result.DefaultTemplate)
+	}
+}
+
+func TestBuildSchemaCommandsIncludesOnlySchemaCommands(t *testing.T) {
+	cmds := buildSchemaCommands()
+
+	if _, ok := cmds["schema"]; !ok {
+		t.Fatalf("expected schema command to be present")
+	}
+	if _, ok := cmds["schema_add_type"]; !ok {
+		t.Fatalf("expected schema_add_type command to be present")
+	}
+	if _, ok := cmds["search"]; ok {
+		t.Fatalf("expected non-schema command %q to be absent", "search")
+	}
+	if len(cmds) >= len(commands.Registry) {
+		t.Fatalf("expected schema command list to be a filtered subset: got %d of %d", len(cmds), len(commands.Registry))
 	}
 }
