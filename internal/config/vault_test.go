@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -571,4 +572,54 @@ func TestDefaultVaultConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVaultHooksConfig(t *testing.T) {
+	t.Run("defaults hooks to disabled", func(t *testing.T) {
+		cfg := DefaultVaultConfig()
+		if cfg.IsHooksEnabled() {
+			t.Fatal("expected hooks to be disabled by default")
+		}
+		if got := cfg.GetHooksTimeout(); got != 30*time.Second {
+			t.Fatalf("expected default hooks timeout 30s, got %s", got)
+		}
+	})
+
+	t.Run("parses hooks and trigger string/list values", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+		content := `
+hooks_enabled: true
+hooks_timeout_seconds: 12
+hooks:
+  validate: "rvn check --strict"
+  sync: "git add -A && git commit -m 'sync'"
+triggers:
+  after:edit: validate
+  after:delete: [validate, sync]
+`
+		if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("LoadVaultConfig returned error: %v", err)
+		}
+		if !cfg.IsHooksEnabled() {
+			t.Fatal("expected hooks to be enabled")
+		}
+		if got := cfg.GetHooksTimeout(); got != 12*time.Second {
+			t.Fatalf("expected hook timeout 12s, got %s", got)
+		}
+		if cfg.Hooks["validate"] == "" || cfg.Hooks["sync"] == "" {
+			t.Fatalf("expected hooks map entries to be parsed, got: %#v", cfg.Hooks)
+		}
+		if got := cfg.Triggers["after:edit"]; len(got) != 1 || got[0] != "validate" {
+			t.Fatalf("expected single trigger hook for after:edit, got %#v", got)
+		}
+		if got := cfg.Triggers["after:delete"]; len(got) != 2 || got[0] != "validate" || got[1] != "sync" {
+			t.Fatalf("expected two trigger hooks for after:delete, got %#v", got)
+		}
+	})
 }

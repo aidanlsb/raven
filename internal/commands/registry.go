@@ -6,13 +6,14 @@ package commands
 // Meta defines metadata for a CLI command that can be used to
 // generate both Cobra commands and MCP tool schemas.
 type Meta struct {
-	Name        string     // Command name (e.g., "trait", "add", "new")
-	Description string     // Short description
-	LongDesc    string     // Long description (for --help)
-	Args        []ArgMeta  // Positional arguments
-	Flags       []FlagMeta // Command flags
-	Examples    []string   // Usage examples
-	UseCases    []string   // Agent use cases (for MCP hints)
+	Name         string     // Command name (e.g., "trait", "add", "new")
+	Description  string     // Short description
+	LongDesc     string     // Long description (for --help)
+	Args         []ArgMeta  // Positional arguments
+	Flags        []FlagMeta // Command flags
+	Examples     []string   // Usage examples
+	UseCases     []string   // Agent use cases (for MCP hints)
+	MutatesVault bool       // True when command can mutate vault state (used for lifecycle triggers)
 }
 
 // ArgMeta defines a positional argument.
@@ -1945,6 +1946,28 @@ with their match sources.`,
 			"Discover the full object ID and type for a short name",
 			"Disambiguate references that might match multiple objects",
 			"Validate references without side effects",
+		},
+	},
+	"hook": {
+		Name:        "hook",
+		Description: "Run a named hook command from raven.yaml",
+		LongDesc: `Run a named hook command defined under hooks: in raven.yaml.
+
+Execution is subject to hook policy gates:
+- vault-local hooks_enabled: true
+- global config [hooks] policy for the active vault
+- --no-hooks / RVN_NO_HOOKS are not set`,
+		Args: []ArgMeta{
+			{Name: "name", Description: "Hook name defined under hooks: in raven.yaml", Required: true},
+		},
+		Examples: []string{
+			"rvn hook sync --json",
+			"rvn hook validate --json",
+		},
+		UseCases: []string{
+			"Run one hook manually for testing",
+			"Debug a hook command in isolation",
+			"Execute an automation step on demand",
 		},
 	},
 	"import": {

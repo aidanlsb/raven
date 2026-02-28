@@ -18,9 +18,11 @@ var (
 	vaultPathFlag string // Explicit path (rare)
 	configPath    string
 	statePathFlag string
+	noHooksFlag   bool
 
 	// Resolved values
 	resolvedVaultPath  string
+	resolvedVaultName  string
 	resolvedConfigPath string
 	resolvedStatePath  string
 	cfg                *config.Config
@@ -63,12 +65,14 @@ who gathered knowledge from across the world.`,
 		if vaultPathFlag != "" {
 			// Explicit path takes priority
 			resolvedVaultPath = vaultPathFlag
+			resolvedVaultName = ""
 		} else if vaultName != "" {
 			// Named vault from --vault flag
 			resolvedVaultPath, err = cfg.GetVaultPath(vaultName)
 			if err != nil {
 				return fmt.Errorf("vault '%s' not found\n\nRun 'rvn vault list' to see configured vaults", vaultName)
 			}
+			resolvedVaultName = vaultName
 		} else {
 			state, stateErr := config.LoadState(resolvedStatePath)
 			if stateErr != nil {
@@ -83,9 +87,12 @@ who gathered knowledge from across the world.`,
 					if err != nil {
 						return fmt.Errorf("active vault '%s' not found in config and no default vault configured\n\nRun 'rvn vault use <name>' or set default_vault in config.toml", activeVaultName)
 					}
+					resolvedVaultName = strings.TrimSpace(cfg.DefaultVault)
 					if !jsonOutput {
 						fmt.Fprintf(os.Stderr, "warning: active vault '%s' not found in config, falling back to default\n", activeVaultName)
 					}
+				} else {
+					resolvedVaultName = activeVaultName
 				}
 			} else {
 				// Default vault
@@ -100,6 +107,7 @@ Either:
   4. Set default_vault in ~/.config/raven/config.toml
   5. Run 'rvn init /path/to/new/vault' to create one`)
 				}
+				resolvedVaultName = strings.TrimSpace(cfg.DefaultVault)
 			}
 		}
 
@@ -108,6 +116,10 @@ Either:
 			return fmt.Errorf("vault not found: %s\n\nRun 'rvn init %s' to create it", resolvedVaultPath, resolvedVaultPath)
 		}
 
+		return nil
+	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		maybeRunCommandHooks(cmd)
 		return nil
 	},
 }
@@ -124,11 +136,17 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to config file")
 	rootCmd.PersistentFlags().StringVar(&statePathFlag, "state", "", "Path to state file (overrides state_file in config)")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format (for agent/script use)")
+	rootCmd.PersistentFlags().BoolVar(&noHooksFlag, "no-hooks", false, "Disable hook execution for this command")
 }
 
 // getVaultPath returns the resolved vault path.
 func getVaultPath() string {
 	return resolvedVaultPath
+}
+
+// getVaultName returns the resolved named vault from config, if available.
+func getVaultName() string {
+	return resolvedVaultName
 }
 
 // getConfig returns the loaded config.

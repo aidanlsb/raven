@@ -461,6 +461,72 @@ See the [workflows reference](docs/workflows/workflows.md) for the full specific
 
 ---
 
+## Hooks and Lifecycle Triggers
+
+Hooks let Raven run named shell commands after successful mutating commands.
+
+Use this for patterns like:
+- validating after edits
+- auto-syncing to git
+- kicking off workflows from normal CLI/MCP writes
+
+Hook execution requires **both**:
+1. vault-local enablement in `raven.yaml`
+2. global policy enablement in `~/.config/raven/config.toml`
+
+**Global policy (`config.toml`)**
+
+```toml
+[hooks]
+default_enabled = false
+
+[hooks.vaults]
+hermod = true
+```
+
+**Vault config (`raven.yaml`)**
+
+```yaml
+hooks_enabled: true
+hooks_timeout_seconds: 30
+
+hooks:
+  validate: "rvn check --strict --json"
+  sync: "git add -A && git commit -m 'raven sync' && git push"
+  run-brief: "rvn workflow run daily-brief --input date=today --json"
+
+triggers:
+  after:edit: [validate, sync]
+  after:new: validate
+  after:*: validate
+```
+
+Trigger names are validated against Raven's command registry (`after:<command>`), plus `after:*` for a wildcard.  
+For multi-word commands, use underscore IDs like `after:schema_add_field`.
+
+Run a hook explicitly:
+
+```bash
+rvn hook validate
+```
+
+Temporarily disable hooks:
+
+```bash
+rvn --no-hooks edit project/vanaheim-embassy "old" "new"
+# or
+RVN_NO_HOOKS=1 rvn set project/vanaheim-embassy status=active
+```
+
+Execution semantics:
+- hooks run once per command invocation
+- hooks run only after applied writes (not preview/dry-run paths)
+- workflow `tool` steps suppress automatic lifecycle hooks; use explicit `raven_hook`/`rvn hook` steps when needed
+- hook failures emit warnings and do not fail the primary command
+- hook recursion is guarded (v1 max depth: 1)
+
+---
+
 ## Documentation
 
 Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with `rvn docs` (sync with `rvn docs fetch`), or read them on GitHub:

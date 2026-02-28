@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -30,6 +31,19 @@ type VaultConfig struct {
 
 	// AutoReindex triggers an incremental reindex after CLI operations that modify files (default: true)
 	AutoReindex *bool `yaml:"auto_reindex,omitempty"`
+
+	// HooksEnabled enables automatic hook trigger execution for this vault.
+	// Default: false (explicit opt-in).
+	HooksEnabled *bool `yaml:"hooks_enabled,omitempty"`
+
+	// Hooks maps hook names to shell commands.
+	Hooks map[string]string `yaml:"hooks,omitempty"`
+
+	// Triggers maps lifecycle trigger names (e.g., after:edit, after:*) to one or more hook names.
+	Triggers map[string]HookRefList `yaml:"triggers,omitempty"`
+
+	// HooksTimeoutSeconds controls max hook runtime in seconds (default: 30).
+	HooksTimeoutSeconds int `yaml:"hooks_timeout_seconds,omitempty"`
 
 	// Queries defines saved queries that can be run with `rvn query <name>`
 	Queries map[string]*SavedQuery `yaml:"queries,omitempty"`
@@ -580,11 +594,71 @@ type SavedQuery struct {
 	Description string `yaml:"description,omitempty"`
 }
 
+// HookRefList supports trigger hook references as either a single string or a list.
+// Example:
+//
+//	triggers:
+//	  after:edit: sync
+//	  after:delete: [validate, sync]
+type HookRefList []string
+
+// UnmarshalYAML supports string or sequence values.
+func (h *HookRefList) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var single string
+		if err := value.Decode(&single); err != nil {
+			return err
+		}
+		single = strings.TrimSpace(single)
+		if single == "" {
+			*h = nil
+			return nil
+		}
+		*h = HookRefList{single}
+		return nil
+	case yaml.SequenceNode:
+		var many []string
+		if err := value.Decode(&many); err != nil {
+			return err
+		}
+		out := make(HookRefList, 0, len(many))
+		for _, item := range many {
+			trimmed := strings.TrimSpace(item)
+			if trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		*h = out
+		return nil
+	default:
+		return fmt.Errorf("expected string or list of strings")
+	}
+}
+
 // DefaultVaultConfig returns the default vault configuration.
 func DefaultVaultConfig() *VaultConfig {
 	return &VaultConfig{
 		DailyDirectory: defaultDailyDirectory,
 	}
+}
+
+// IsHooksEnabled returns true if hooks are enabled for this vault (default: false).
+func (vc *VaultConfig) IsHooksEnabled() bool {
+	if vc == nil || vc.HooksEnabled == nil {
+		return false
+	}
+	return *vc.HooksEnabled
+}
+
+// GetHooksTimeout returns hook timeout with defaults applied.
+// Default: 30s. Non-positive values fall back to default.
+func (vc *VaultConfig) GetHooksTimeout() time.Duration {
+	const defaultHookTimeout = 30 * time.Second
+	if vc == nil || vc.HooksTimeoutSeconds <= 0 {
+		return defaultHookTimeout
+	}
+	return time.Duration(vc.HooksTimeoutSeconds) * time.Second
 }
 
 // LoadVaultConfig loads vault configuration from raven.yaml.

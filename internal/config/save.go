@@ -20,11 +20,17 @@ type persistedConfig struct {
 	Editor       *string              `toml:"editor,omitempty"`
 	EditorMode   *string              `toml:"editor_mode,omitempty"`
 	UI           *persistedUISettings `toml:"ui,omitempty"`
+	Hooks        *persistedHooks      `toml:"hooks,omitempty"`
 }
 
 type persistedUISettings struct {
 	Accent    *string `toml:"accent,omitempty"`
 	CodeTheme *string `toml:"code_theme,omitempty"`
+}
+
+type persistedHooks struct {
+	DefaultEnabled *bool           `toml:"default_enabled,omitempty"`
+	Vaults         map[string]bool `toml:"vaults,omitempty"`
 }
 
 func nonEmptyPtr(value string) *string {
@@ -66,6 +72,13 @@ func SaveTo(path string, cfg *Config) error {
 		out.UI = &persistedUISettings{
 			Accent:    accent,
 			CodeTheme: codeTheme,
+		}
+	}
+
+	if cfg.Hooks.DefaultEnabled != nil || len(cfg.Hooks.Vaults) > 0 {
+		out.Hooks = &persistedHooks{
+			DefaultEnabled: cfg.Hooks.DefaultEnabled,
+			Vaults:         cfg.Hooks.Vaults,
 		}
 	}
 
