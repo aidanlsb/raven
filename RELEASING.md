@@ -1,6 +1,8 @@
 # Releasing Raven
 
-This repository uses a tag-driven release flow.
+This is a maintainer/internal document for releasing this repository.
+
+Raven uses a tag-driven release flow:
 
 1. Cut an annotated semver tag from `main`.
 2. Push the tag.
@@ -37,7 +39,7 @@ This command:
 4. Creates an annotated tag.
 5. Pushes the tag to `origin`.
 
-Pushing the tag triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml), which:
+Pushing the tag triggers `.github/workflows/release.yml`, which:
 
 1. Re-validates tag format.
 2. Verifies tag is annotated.
@@ -72,9 +74,3 @@ Use it when you want Codex to drive the release workflow with the same guardrail
 - Run release preflight only
 - Create a release tag without pushing
 - Cut and publish a full release via `make release`
-
-## Notes on Changelog
-
-- `CHANGELOG.md` is for curated human-written notes.
-- GitHub release notes are generated from commits by GoReleaser.
-- Prefer conventional commit prefixes (`feat:`, `fix:`, etc.) so release notes group cleanly.
