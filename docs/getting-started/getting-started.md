@@ -23,6 +23,25 @@ rvn version
 
 If `rvn` is not on your `PATH` after install, add your Go bin directory (usually `$(go env GOPATH)/bin`) to your shell profile.
 
+Initialize your first vault:
+
+```bash
+rvn init ~/notes
+cd ~/notes
+```
+
+`rvn init` creates the essential files:
+- `raven.yaml` (vault behavior)
+- `schema.yaml` (types, fields, traits)
+- `.raven/` (derived index cache)
+
+Quick sanity check:
+
+```bash
+rvn stats
+rvn schema types
+```
+
 ## Agent Setup
 
 Raven is designed with the assumption that you will use an AI agent to interact with your vault (although this is by no means required). If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), install the Raven MCP entry directly from the CLI:
@@ -59,33 +78,11 @@ rvn skill install raven-core --target codex --confirm --json
 
 For complete MCP details and tool reference, see `agents/mcp.md`.
 
-## Setting up your vault
-
-Create a new vault and enter it:
-
-```bash
-rvn init ~/notes
-cd ~/notes
-```
-
-`rvn init` creates the essential files:
-- `raven.yaml` (vault behavior)
-- `schema.yaml` (types, fields, traits)
-- `.raven/` (derived index cache)
-
-Quick sanity check:
-
-```bash
-rvn stats
-rvn schema types
-```
-
 ## Daily notes
 
 Daily notes are the simplest way to get started with Raven:
 - `rvn daily` opens today's note
 - The daily folder is configured with `directories.daily` in `raven.yaml`.
-
 
 After you can create notes and daily entries, define your data model:
 1. Read `types-and-traits/schema-intro.md` for the first safe schema changes.

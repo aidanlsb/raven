@@ -103,6 +103,4 @@ const (
 	WarnBacklinks         = "HAS_BACKLINKS"
 	WarnUnknownField      = "UNKNOWN_FIELD"
 	WarnTypeMismatch      = "TYPE_DIRECTORY_MISMATCH"
-	WarnHookConfig        = "HOOK_CONFIG"
-	WarnHookExecution     = "HOOK_EXECUTION_FAILED"
 )
