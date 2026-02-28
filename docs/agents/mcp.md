@@ -133,6 +133,14 @@ MCP tool descriptions are generated from that same registry and include command-
 | `raven_move` | Move or rename an object |
 | `raven_reclassify` | Change an object's type |
 
+### Template Management
+
+| Tool | Description |
+|------|-------------|
+| `raven_template_list` | List template files under `directories.template` |
+| `raven_template_write` | Create or update a template file |
+| `raven_template_delete` | Delete a template file (moves to trash) |
+
 ### Querying
 
 | Tool | Description |
@@ -495,6 +503,12 @@ raven_schema_rename_type(old_name="event", new_name="meeting", confirm=true)  # 
 raven_reindex(full=true)  # Always reindex after rename
 
 # Manage templates (schema-driven lifecycle)
+raven_template_write(path="meeting.md", content="# {{title}}\n\n## Notes")
+raven_template_list()
+```
+
+```python
+# Bind template files into schema lifecycle
 raven_schema_template_list()
 raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
 raven_schema_template_get(template_id="meeting_standard")
@@ -512,8 +526,9 @@ raven_resolve(reference="today")         # Dynamic date → daily/2026-02-07
 Notes:
 - Templates are file-backed only (no inline template bodies).
 - Template files must be under `directories.template` (default: `templates/`).
-- Daily templates are configured through type `date`:
-  define a template ID, bind it to `date`, and set `date`'s default template.
+- Daily templates are configured through core type `date`:
+  define a template ID, bind it with `raven_schema_core_template_set(core_type="date", ...)`,
+  and set default with `raven_schema_core_template_default(core_type="date", ...)`.
 
 ### Vault Health
 

@@ -296,6 +296,71 @@ Use this to see exactly which 'rvn docs <section>' commands are available.`,
 			"Locate docs pages when topic slug is unknown",
 		},
 	},
+	"template": {
+		Name:        "template",
+		Description: "Manage template files under directories.template",
+		LongDesc: `Manage template files under directories.template.
+
+Use this command group for template file lifecycle operations:
+- create/update template files
+- list template files
+- delete template files safely`,
+		Examples: []string{
+			"rvn template list --json",
+			"rvn template write meeting.md --content \"# {{title}}\" --json",
+			"rvn template delete meeting.md --json",
+		},
+		UseCases: []string{
+			"Manage template-file lifecycle separately from schema template bindings",
+			"Create/update template files before binding them in schema",
+			"Delete template files safely with in-use checks",
+		},
+	},
+	"template_list": {
+		Name:        "template list",
+		Description: "List template files",
+		Examples: []string{
+			"rvn template list --json",
+		},
+	},
+	"template_write": {
+		Name:        "template write",
+		Description: "Create or update a template file",
+		LongDesc: `Create or update a template file under directories.template.
+
+This command replaces the full file body with --content.
+Use it for both initial template creation and iterative updates.`,
+		Args: []ArgMeta{
+			{Name: "path", Description: "Template file path under directories.template", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "content", Description: "Template file content (full file body)", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn template write meeting.md --content \"# {{title}}\" --json",
+			"rvn template write templates/interview/technical.md --content \"## Technical interview\" --json",
+		},
+	},
+	"template_delete": {
+		Name:        "template delete",
+		Description: "Delete a template file (moves to .trash)",
+		LongDesc: `Delete a template file under directories.template.
+
+By default, deletion is blocked when schema templates still reference
+the file path. Use --force to bypass that check.
+
+The file is moved to .trash/ for recovery.`,
+		Args: []ArgMeta{
+			{Name: "path", Description: "Template file path under directories.template", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "force", Description: "Delete even if schema templates still reference this file", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn template delete meeting.md --json",
+			"rvn template delete meeting.md --force --json",
+		},
+	},
 	"delete": {
 		Name:        "delete",
 		Description: "Delete an object from the vault",

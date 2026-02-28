@@ -32,6 +32,8 @@ func TestMutatingCommandFlags(t *testing.T) {
 	}{
 		{id: "edit", mutates: true},
 		{id: "new", mutates: true},
+		{id: "template_write", mutates: true},
+		{id: "template_delete", mutates: true},
 		{id: "read", mutates: false},
 		{id: "stats", mutates: false},
 	}
