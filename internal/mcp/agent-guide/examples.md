@@ -89,7 +89,8 @@
   Attendees, Agenda, Notes, and Action Items."
 → Confirm the type exists and inspect its fields:
   raven_schema(subcommand="type", name="meeting")
-→ Ensure a template file exists under templates/ (create templates/meeting.md if needed)
+→ Create/update the template file:
+  raven_template_write(path="meeting.md", content="# {{title}}\n\n## Attendees\n\n## Agenda\n\n## Notes\n\n## Action Items")
 → Register a schema template definition:
   raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
 → Bind it to the meeting type and set as default:

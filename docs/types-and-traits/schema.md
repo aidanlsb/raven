@@ -217,6 +217,8 @@ Rules:
 - If `default_template` is unset, new objects are created without template content unless one is explicitly selected.
 - Templates are file-backed only and files must be under `directories.template` in `raven.yaml` (default: `templates/`).
 
+For a full workflow (file lifecycle, schema lifecycle, type/core bindings), see `types-and-traits/templates.md`.
+
 ---
 
 ## Field Definitions

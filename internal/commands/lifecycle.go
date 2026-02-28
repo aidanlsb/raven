@@ -32,6 +32,8 @@ var mutatingCommandIDs = map[string]struct{}{
 	"schema_core_template_set":     {},
 	"schema_core_template_remove":  {},
 	"schema_core_template_default": {},
+	"template_write":               {},
+	"template_delete":              {},
 	"set":                          {},
 	"update":                       {},
 	"edit":                         {},
