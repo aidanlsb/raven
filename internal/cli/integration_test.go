@@ -1088,6 +1088,84 @@ func TestIntegration_WorkflowScaffold_CustomWorkflowDirectory(t *testing.T) {
 	v.RunCLI("workflow", "show", "starter").MustSucceed(t)
 }
 
+func TestIntegration_WorkflowStepLifecycleCommands(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	v.WriteFile("workflows/meeting-prep.yaml", `description: Meeting prep
+steps:
+  - id: fetch
+    type: tool
+    tool: raven_query
+    arguments:
+      query_string: "object:meeting .status==scheduled"
+  - id: compose
+    type: agent
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+    prompt: |
+      Return JSON: {"outputs":{"markdown":"ok"}}
+`)
+	v.RunCLI("workflow", "add", "meeting-prep", "--file", "workflows/meeting-prep.yaml").MustSucceed(t)
+
+	v.RunCLI(
+		"workflow", "step", "add", "meeting-prep",
+		"--step-json", `{"id":"read_meeting","type":"tool","tool":"raven_read","arguments":{"path":"meetings/alice-1on1","raw":true}}`,
+		"--before", "compose",
+	).MustSucceed(t)
+
+	content := v.ReadFile("workflows/meeting-prep.yaml")
+	fetchIdx := strings.Index(content, "id: fetch")
+	readIdx := strings.Index(content, "id: read_meeting")
+	composeIdx := strings.Index(content, "id: compose")
+	if fetchIdx < 0 || readIdx < 0 || composeIdx < 0 {
+		t.Fatalf("expected fetch/read_meeting/compose steps in workflow file:\n%s", content)
+	}
+	if !(fetchIdx < readIdx && readIdx < composeIdx) {
+		t.Fatalf("expected read_meeting to be inserted before compose:\n%s", content)
+	}
+
+	v.RunCLI(
+		"workflow", "step", "update", "meeting-prep", "read_meeting",
+		"--step-json", `{"id":"load_meeting","description":"Load meeting context"}`,
+	).MustSucceed(t)
+	v.AssertFileContains("workflows/meeting-prep.yaml", "id: load_meeting")
+	v.AssertFileNotContains("workflows/meeting-prep.yaml", "id: read_meeting")
+	v.AssertFileContains("workflows/meeting-prep.yaml", "description: Load meeting context")
+
+	v.RunCLI("workflow", "step", "remove", "meeting-prep", "load_meeting").MustSucceed(t)
+	v.AssertFileNotContains("workflows/meeting-prep.yaml", "id: load_meeting")
+
+	dup := v.RunCLI(
+		"workflow", "step", "add", "meeting-prep",
+		"--step-json", `{"id":"compose","type":"agent","prompt":"Return JSON: {\"outputs\":{\"markdown\":\"ok\"}}"}`,
+	)
+	dup.MustFail(t, "DUPLICATE_NAME")
+}
+
+func TestIntegration_WorkflowStepRemoveRollsBackInvalidEdit(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	v.WriteFile("workflows/single-step.yaml", `description: Single step workflow
+steps:
+  - id: compose
+    type: agent
+    prompt: "Return JSON: {\"outputs\":{\"markdown\":\"ok\"}}"
+`)
+	v.RunCLI("workflow", "add", "single-step", "--file", "workflows/single-step.yaml").MustSucceed(t)
+
+	result := v.RunCLI("workflow", "step", "remove", "single-step", "compose")
+	result.MustFail(t, "WORKFLOW_INVALID")
+
+	// Ensure failed validation restored original file content.
+	v.AssertFileContains("workflows/single-step.yaml", "id: compose")
+}
+
 func TestIntegration_WorkflowValidateReportsInvalidDefinitions(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).

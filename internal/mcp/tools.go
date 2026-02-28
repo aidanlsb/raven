@@ -213,6 +213,12 @@ func CLICommandName(toolName string) string {
 		return "workflow validate"
 	case "workflow_show":
 		return "workflow show"
+	case "workflow_step_add":
+		return "workflow step add"
+	case "workflow_step_update":
+		return "workflow step update"
+	case "workflow_step_remove":
+		return "workflow step remove"
 	case "workflow_run":
 		return "workflow run"
 	case "workflow_continue":
