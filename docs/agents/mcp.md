@@ -121,6 +121,7 @@ MCP tool descriptions are generated from that same registry and include command-
 | `raven_import` | Import objects from JSON data (create/update) |
 | `raven_add` | Append content to existing file or daily note |
 | `raven_daily` | Open or create a daily note |
+| `raven_hook` | Run a named hook command from `raven.yaml` |
 
 ### Content Modification
 
@@ -590,6 +591,19 @@ raven_workflow_runs_step(
 Notes:
 - `raven_workflow_add` is file-only; inline definitions are not supported
 - Workflow files must be under `directories.workflow` (default `workflows/`)
+
+### Hooks
+
+```python
+# Manually run a named hook defined in raven.yaml
+raven_hook(name="validate")
+raven_hook(name="sync")
+```
+
+Notes:
+- Hook execution requires both vault-local `hooks_enabled: true` and global `[hooks]` policy enablement.
+- Workflow tool steps suppress automatic lifecycle hooks; use explicit `raven_hook` steps when running hooks inside workflows.
+- `raven_hook` executes shell commands in the vault root and returns stdout/stderr in JSON output.
 
 ### Skills
 

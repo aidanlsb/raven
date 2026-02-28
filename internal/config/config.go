@@ -34,6 +34,9 @@ type Config struct {
 
 	// UI controls optional CLI theming preferences.
 	UI UIConfig `toml:"ui"`
+
+	// Hooks controls global hook execution policy.
+	Hooks HooksPolicyConfig `toml:"hooks"`
 }
 
 // UIConfig represents optional CLI theming preferences.
@@ -45,6 +48,40 @@ type UIConfig struct {
 	// CodeTheme sets the Glamour/Chroma theme used for rendered markdown code blocks.
 	// Example values: "monokai", "dracula", "github", "nord".
 	CodeTheme string `toml:"code_theme"`
+}
+
+// HooksPolicyConfig represents global policy for vault hook execution.
+// Hooks are disabled by default unless explicitly enabled globally and in the vault.
+type HooksPolicyConfig struct {
+	// DefaultEnabled is the fallback policy when no per-vault override exists.
+	// Default: false.
+	DefaultEnabled *bool `toml:"default_enabled"`
+
+	// Vaults overrides hook execution policy by configured vault name.
+	Vaults map[string]bool `toml:"vaults"`
+}
+
+// HooksEnabledForVault returns whether hooks are globally allowed for a vault name.
+// Default is false unless explicitly enabled.
+func (c *Config) HooksEnabledForVault(vaultName string) bool {
+	if c == nil {
+		return false
+	}
+	return c.Hooks.EnabledForVault(vaultName)
+}
+
+// EnabledForVault returns whether hooks are globally allowed for a vault name.
+func (h HooksPolicyConfig) EnabledForVault(vaultName string) bool {
+	name := strings.TrimSpace(vaultName)
+	if name != "" && h.Vaults != nil {
+		if enabled, ok := h.Vaults[name]; ok {
+			return enabled
+		}
+	}
+	if h.DefaultEnabled != nil {
+		return *h.DefaultEnabled
+	}
+	return false
 }
 
 // GetVaultPath returns the path for a named vault.
@@ -206,6 +243,15 @@ func CreateDefaultAt(path string) (string, error) {
 # [ui]
 # accent = "39"
 # code_theme = "monokai"
+#
+# Global hook execution policy (hooks are disabled unless enabled here and in raven.yaml)
+# [hooks]
+# default_enabled = false
+#
+# Per-vault overrides by configured vault name
+# [hooks.vaults]
+# personal = true
+# work = false
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {
