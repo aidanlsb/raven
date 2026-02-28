@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -670,7 +671,7 @@ func (vc *VaultConfig) DailyNotePath(vaultPath, date string) string {
 
 // DailyNoteID returns the object ID for a daily note given a date string.
 func (vc *VaultConfig) DailyNoteID(date string) string {
-	return filepath.Join(vc.GetDailyDirectory(), date)
+	return path.Join(vc.GetDailyDirectory(), date)
 }
 
 // FilePathToObjectID converts a file path (relative to vault) to an object ID.

@@ -8,13 +8,14 @@ import (
 )
 
 func TestResolveStatePath(t *testing.T) {
-	configPath := "/tmp/raven/config.toml"
+	configPath := filepath.FromSlash("/tmp/raven/config.toml")
 
 	t.Run("explicit state path wins", func(t *testing.T) {
-		got := ResolveStatePath("/tmp/custom/state.toml", configPath, &Config{
+		explicit := filepath.FromSlash("/tmp/custom/state.toml")
+		got := ResolveStatePath(explicit, configPath, &Config{
 			StateFile: "state-from-config.toml",
 		})
-		if got != "/tmp/custom/state.toml" {
+		if got != explicit {
 			t.Fatalf("expected explicit state path, got %q", got)
 		}
 	})
@@ -23,24 +24,27 @@ func TestResolveStatePath(t *testing.T) {
 		got := ResolveStatePath("", configPath, &Config{
 			StateFile: "/var/tmp/raven-state.toml",
 		})
-		if got != "/var/tmp/raven-state.toml" {
+		want := filepath.Clean(filepath.FromSlash("/var/tmp/raven-state.toml"))
+		if got != want {
 			t.Fatalf("expected absolute state path, got %q", got)
 		}
 	})
 
 	t.Run("config state_file relative to config dir", func(t *testing.T) {
-		got := ResolveStatePath("", "/Users/me/.config/raven/config.toml", &Config{
+		cfgPath := filepath.FromSlash("/Users/me/.config/raven/config.toml")
+		got := ResolveStatePath("", cfgPath, &Config{
 			StateFile: "runtime/state.toml",
 		})
-		want := "/Users/me/.config/raven/runtime/state.toml"
+		want := filepath.Join(filepath.Dir(cfgPath), "runtime", "state.toml")
 		if got != want {
 			t.Fatalf("expected %q, got %q", want, got)
 		}
 	})
 
 	t.Run("fallback sibling state.toml", func(t *testing.T) {
-		got := ResolveStatePath("", "/Users/me/.config/raven/config.toml", &Config{})
-		want := "/Users/me/.config/raven/state.toml"
+		cfgPath := filepath.FromSlash("/Users/me/.config/raven/config.toml")
+		got := ResolveStatePath("", cfgPath, &Config{})
+		want := filepath.Join(filepath.Dir(cfgPath), "state.toml")
 		if got != want {
 			t.Fatalf("expected %q, got %q", want, got)
 		}

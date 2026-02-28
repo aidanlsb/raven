@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -53,7 +54,7 @@ Examples:
 		}
 
 		dateStr := vault.FormatDateISO(targetDate)
-		targetPath := filepath.Join(vaultCfg.GetDailyDirectory(), dateStr)
+		targetPath := path.Join(vaultCfg.GetDailyDirectory(), dateStr)
 		dailyPath := filepath.Join(vaultPath, vaultCfg.GetDailyDirectory(), dateStr+".md")
 
 		// Check if daily note already exists, create if needed

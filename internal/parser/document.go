@@ -254,7 +254,7 @@ func vaultRelativePath(filePath, vaultPath string) string {
 			relativePath = rel
 		}
 	}
-	return relativePath
+	return filepath.ToSlash(relativePath)
 }
 
 func filePathToID(relativePath string, opts *ParseOptions) string {

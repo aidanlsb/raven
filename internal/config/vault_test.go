@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -165,7 +166,7 @@ func TestVaultConfigPaths(t *testing.T) {
 
 	t.Run("DailyNoteID", func(t *testing.T) {
 		id := cfg.DailyNoteID("2025-02-01")
-		expected := filepath.Join("daily", "2025-02-01")
+		expected := path.Join("daily", "2025-02-01")
 		if id != expected {
 			t.Errorf("got %q, want %q", id, expected)
 		}
@@ -174,7 +175,7 @@ func TestVaultConfigPaths(t *testing.T) {
 	t.Run("custom directory", func(t *testing.T) {
 		cfg2 := &VaultConfig{DailyDirectory: "journal/daily"}
 		id := cfg2.DailyNoteID("2025-02-01")
-		expected := filepath.Join("journal/daily", "2025-02-01")
+		expected := path.Join("journal/daily", "2025-02-01")
 		if id != expected {
 			t.Errorf("got %q, want %q", id, expected)
 		}
