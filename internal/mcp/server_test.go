@@ -98,6 +98,15 @@ func callResourcesReadResponse(t *testing.T, s *Server, uri string) struct {
 	return resp
 }
 
+func hasResourceURI(resources []Resource, uri string) bool {
+	for _, resource := range resources {
+		if resource.URI == uri {
+			return true
+		}
+	}
+	return false
+}
+
 func TestResourcesListIncludesGuideIndexAndTopics(t *testing.T) {
 	s := newTestServerWithVault(t)
 	resources := callResourcesList(t, s)
@@ -120,6 +129,28 @@ func TestResourcesListIncludesGuideIndexAndTopics(t *testing.T) {
 		if !uris[uri] {
 			t.Fatalf("missing resource in list: %s", uri)
 		}
+	}
+}
+
+func TestResourcesListOmitsAgentInstructionsWhenMissing(t *testing.T) {
+	s := newTestServerWithVault(t)
+	resources := callResourcesList(t, s)
+
+	if hasResourceURI(resources, vaultAgentInstructionsResourceURI) {
+		t.Fatalf("did not expect %s when AGENTS.md is missing", vaultAgentInstructionsResourceURI)
+	}
+}
+
+func TestResourcesListIncludesAgentInstructionsWhenPresent(t *testing.T) {
+	s := newTestServerWithVault(t)
+	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
+	if err := os.WriteFile(agentPath, []byte("# Agent Rules\n"), 0644); err != nil {
+		t.Fatalf("write AGENTS.md: %v", err)
+	}
+
+	resources := callResourcesList(t, s)
+	if !hasResourceURI(resources, vaultAgentInstructionsResourceURI) {
+		t.Fatalf("expected %s when AGENTS.md exists", vaultAgentInstructionsResourceURI)
 	}
 }
 
@@ -147,6 +178,34 @@ func TestResourcesReadGuideIndexAndTopics(t *testing.T) {
 		if content.MimeType != "text/markdown" {
 			t.Fatalf("expected topic %s mimeType text/markdown, got %q", uri, content.MimeType)
 		}
+	}
+}
+
+func TestResourcesReadAgentInstructions(t *testing.T) {
+	s := newTestServerWithVault(t)
+	expected := "# Agent Rules\nAlways run checks.\n"
+	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
+	if err := os.WriteFile(agentPath, []byte(expected), 0644); err != nil {
+		t.Fatalf("write AGENTS.md: %v", err)
+	}
+
+	content := callResourcesRead(t, s, vaultAgentInstructionsResourceURI)
+	if content.MimeType != "text/markdown" {
+		t.Fatalf("expected mimeType text/markdown, got %q", content.MimeType)
+	}
+	if content.Text != expected {
+		t.Fatalf("unexpected AGENTS.md content: got %q want %q", content.Text, expected)
+	}
+}
+
+func TestResourcesReadAgentInstructionsMissing(t *testing.T) {
+	s := newTestServerWithVault(t)
+	resp := callResourcesReadResponse(t, s, vaultAgentInstructionsResourceURI)
+	if resp.Error == nil {
+		t.Fatal("expected error for missing AGENTS.md resource")
+	}
+	if resp.Error.Code != -32602 {
+		t.Fatalf("expected error code -32602, got %d", resp.Error.Code)
 	}
 }
 

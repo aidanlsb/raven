@@ -13,8 +13,9 @@ For a structured teaching flow, use `raven://guide/lesson-plan`.
 2. **Get vault overview**: `raven_stats()` to see object counts and structure
 3. **Check saved queries**: `raven://queries/saved` or `raven_query(list=true)`
 4. **Discover workflows**: `raven://workflows/list` or `raven_workflow_list()`
-5. **Grab the query cheatsheet**: `raven://guide/query-cheatsheet` for common patterns
-6. **Ask about existing data**: if they have JSON exports, use `raven_import` to seed the vault quickly
+5. **Fetch vault instructions (if available)**: `raven://vault/agent-instructions`
+6. **Grab the query cheatsheet**: `raven://guide/query-cheatsheet` for common patterns
+7. **Ask about existing data**: if they have JSON exports, use `raven_import` to seed the vault quickly
 
 You can also fetch the `raven://schema/current` MCP resource for the complete schema.yaml.
 
