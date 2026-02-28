@@ -140,3 +140,80 @@ func TestApplyAgentOutputs_Validation(t *testing.T) {
 		t.Fatal("expected validation error for missing required output")
 	}
 }
+
+func TestRunner_ContinueAfterAgentOutput_DataNamespaceCompatibility(t *testing.T) {
+	wf := &Workflow{
+		Name: "daily-brief",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "todos",
+				Type: "tool",
+				Tool: "raven_query",
+				Arguments: map[string]interface{}{
+					"query_string": "trait:todo .value==todo",
+				},
+			},
+			{
+				ID:   "compose",
+				Type: "agent",
+				Outputs: map[string]*config.WorkflowPromptOutput{
+					"markdown": {Type: "markdown", Required: true},
+				},
+				Prompt: "Compose brief for {{inputs.date}} with {{steps.todos.data.results}}",
+			},
+			{
+				ID:   "save",
+				Type: "tool",
+				Tool: "raven_upsert",
+				Arguments: map[string]interface{}{
+					"type":    "brief",
+					"title":   "Daily Brief {{inputs.date}}",
+					"content": "{{steps.compose.data.outputs.markdown}}",
+				},
+			},
+		},
+	}
+
+	var saveArgs map[string]interface{}
+	callCount := 0
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		callCount++
+		if callCount == 1 {
+			return map[string]interface{}{
+				"ok": true,
+				"data": map[string]interface{}{
+					"results": []interface{}{"a", "b"},
+				},
+			}, nil
+		}
+		saveArgs = args
+		return map[string]interface{}{"ok": true}, nil
+	}
+
+	state, err := NewRunState(wf, map[string]interface{}{"date": "2026-02-14"})
+	if err != nil {
+		t.Fatalf("NewRunState error: %v", err)
+	}
+
+	if _, err := r.RunWithState(wf, state); err != nil {
+		t.Fatalf("RunWithState error: %v", err)
+	}
+
+	if err := ApplyAgentOutputs(wf, state, AgentOutputEnvelope{
+		Outputs: map[string]interface{}{"markdown": "# Brief\n- item"},
+	}); err != nil {
+		t.Fatalf("ApplyAgentOutputs error: %v", err)
+	}
+	state.Revision++
+
+	if _, err := r.RunWithState(wf, state); err != nil {
+		t.Fatalf("resume RunWithState error: %v", err)
+	}
+	if saveArgs == nil {
+		t.Fatal("expected save tool call args")
+	}
+	if saveArgs["content"] != "# Brief\n- item" {
+		t.Fatalf("expected propagated agent output via data.outputs path, got %#v", saveArgs["content"])
+	}
+}
