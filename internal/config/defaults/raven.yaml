@@ -32,20 +32,6 @@ auto_reindex: true
 #   behavior: trash         # "trash" (default) or "permanent"
 #   trash_dir: .trash       # Directory for trashed files (default: .trash)
 
-# Hooks and lifecycle triggers
-# Hooks are disabled by default (explicit opt-in).
-# hooks_enabled: true
-# hooks_timeout_seconds: 30
-#
-# hooks:
-#   validate: "rvn check --strict"
-#   sync: "git add -A && git commit -m 'raven sync' && git push"
-#
-# triggers:
-#   after:edit: [validate, sync]
-#   after:new: sync
-#   after:*: validate
-
 # Saved queries - run with 'rvn query <name>'
 # Uses the Raven query language (same as 'rvn query "..."')
 queries:
