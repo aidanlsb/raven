@@ -45,14 +45,22 @@ func ResolveStatePath(explicitStatePath, configPath string, cfg *Config) string 
 
 	if cfg != nil {
 		if fromConfig := strings.TrimSpace(cfg.StateFile); fromConfig != "" {
-			if filepath.IsAbs(fromConfig) {
-				return fromConfig
+			if isAbsoluteStatePath(fromConfig) {
+				return filepath.Clean(filepath.FromSlash(fromConfig))
 			}
-			return filepath.Join(configDir, fromConfig)
+			return filepath.Join(configDir, filepath.FromSlash(fromConfig))
 		}
 	}
 
 	return filepath.Join(configDir, "state.toml")
+}
+
+func isAbsoluteStatePath(p string) bool {
+	if filepath.IsAbs(p) {
+		return true
+	}
+	// Treat slash-rooted config values as absolute on every OS.
+	return strings.HasPrefix(filepath.ToSlash(strings.TrimSpace(p)), "/")
 }
 
 // LoadState loads state.toml from a specific path.

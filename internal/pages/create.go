@@ -341,7 +341,7 @@ func CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle string) (*Creat
 
 // CreateDailyNoteWithSchema creates a daily note using schema-driven template resolution.
 func CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle string, sch *schema.Schema, templateDir string) (*CreateResult, error) {
-	targetPath := filepath.Join(dailyDir, dateStr)
+	targetPath := path.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
 		VaultPath:   vaultPath,
@@ -355,7 +355,7 @@ func CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle strin
 
 // CreateDailyNoteWithTemplate creates a daily note with an optional template.
 func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, dailyTemplate, templateDir string) (*CreateResult, error) {
-	targetPath := filepath.Join(dailyDir, dateStr)
+	targetPath := path.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
 		VaultPath:        vaultPath,

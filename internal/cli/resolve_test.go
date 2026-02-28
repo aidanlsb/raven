@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -173,7 +174,7 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 		}
 		dateStr := vault.FormatDateISO(parsed)
 
-		expectedID := filepath.Join(vaultCfg.DailyDirectory, dateStr)
+		expectedID := path.Join(vaultCfg.DailyDirectory, dateStr)
 		expectedPath := filepath.Join(tmpDir, vaultCfg.DailyDirectory, dateStr+".md")
 
 		if result.ObjectID != expectedID {
@@ -207,7 +208,7 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 			t.Fatalf("ParseDateArg failed: %v", err)
 		}
 		dateStr := vault.FormatDateISO(parsed)
-		expectedBaseID := filepath.Join(vaultCfg.DailyDirectory, dateStr)
+		expectedBaseID := path.Join(vaultCfg.DailyDirectory, dateStr)
 
 		if !result.IsSection {
 			t.Error("Expected IsSection = true")
