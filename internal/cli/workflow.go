@@ -1041,9 +1041,6 @@ func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{
 
 		cmdArgs := append([]string{"--vault-path", vaultPath}, cliArgs...)
 		cmd := exec.Command(exe, cmdArgs...)
-		if suppress := shouldSuppressAutoHooksInWorkflow(tool); suppress {
-			cmd.Env = append(os.Environ(), fmt.Sprintf("%s=1", hookNoHooksEnv))
-		}
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			trimmed := strings.TrimSpace(string(output))
@@ -1065,16 +1062,6 @@ func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{
 		}
 
 		return env, nil
-	}
-}
-
-func shouldSuppressAutoHooksInWorkflow(tool string) bool {
-	switch strings.TrimSpace(tool) {
-	case "raven_hook", "hook":
-		// Hooks are explicit in workflows via a dedicated hook step.
-		return false
-	default:
-		return true
 	}
 }
 

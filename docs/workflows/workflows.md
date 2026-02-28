@@ -71,7 +71,6 @@ steps:
 - `type: tool`
   - `tool`: Raven MCP tool name (for example `raven_query`, `raven_read`, `raven_upsert`)
   - `arguments`: map passed to the tool
-  - lifecycle hooks are explicit in workflows: automatic `after:<command>` triggers are suppressed for tool steps; add a `tool: raven_hook` step to run a hook
 - `type: agent`
   - `prompt`: rendered prompt string
   - `outputs`: optional typed output contract for the agent response
