@@ -100,7 +100,7 @@ The schema resource (`raven://schema/current`) returns the raw `schema.yaml` con
 
 ## Tool Discovery
 
-Tools are generated from Raven's command registry. To see the full list:
+Schema command metadata is exposed via:
 
 ```bash
 rvn schema commands --json

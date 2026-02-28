@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -27,7 +28,7 @@ Examples:
   rvn schema core --json      # List core type config
   rvn schema core date --json # Get core date config
   rvn schema trait due --json     # Get trait details
-  rvn schema commands --json      # List available commands
+  rvn schema commands --json      # List schema command metadata
   rvn schema template list --json
   rvn schema type interview template list --json
   rvn schema core date template list --json`,
@@ -466,21 +467,49 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 func listSchemaCommands(start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
-	// Generate commands from the registry - single source of truth!
+	cmds := buildSchemaCommands()
+
+	if isJSONOutput() {
+		outputSuccess(map[string]interface{}{
+			"commands": cmds,
+		}, &Meta{Count: len(cmds), QueryTimeMs: elapsed})
+		return nil
+	}
+
+	// Human-readable output
+	fmt.Println("Available schema commands:")
+	var names []string
+	for name := range cmds {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		c := cmds[name]
+		fmt.Printf("  %-18s %s\n", name, c.Description)
+	}
+	fmt.Println("\nUse 'rvn schema commands --json' for full details.")
+
+	return nil
+}
+
+func buildSchemaCommands() map[string]CommandSchema {
+	// Generate schema command metadata from the registry (single source of truth).
 	cmds := make(map[string]CommandSchema)
 	for name, meta := range commands.Registry {
+		if name != "schema" && !strings.HasPrefix(name, "schema_") {
+			continue
+		}
+
 		cmd := CommandSchema{
 			Description: meta.Description,
 			Examples:    meta.Examples,
 			UseCases:    meta.UseCases,
 		}
 
-		// Add args
 		for _, arg := range meta.Args {
 			cmd.Args = append(cmd.Args, arg.Name)
 		}
 
-		// Add flags
 		if len(meta.Flags) > 0 {
 			cmd.Flags = make(map[string]FlagSchema)
 			for _, flag := range meta.Flags {
@@ -495,27 +524,7 @@ func listSchemaCommands(start time.Time) error {
 		cmds[name] = cmd
 	}
 
-	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"commands": cmds,
-		}, &Meta{Count: len(cmds), QueryTimeMs: elapsed})
-		return nil
-	}
-
-	// Human-readable output
-	fmt.Println("Available commands:")
-	var names []string
-	for name := range cmds {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		c := cmds[name]
-		fmt.Printf("  %-18s %s\n", name, c.Description)
-	}
-	fmt.Println("\nUse 'rvn schema commands --json' for full details.")
-
-	return nil
+	return cmds
 }
 
 func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaResult {
