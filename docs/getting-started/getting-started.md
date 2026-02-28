@@ -2,17 +2,17 @@
 
 ## What is Raven?
 
-Fundamentally Raven is a CLI for personal knowledge management, with first-class support for AI agents. 
+Raven is a CLI for personal knowledge management, with first-class support for AI agents. 
 
 You keep your data in a directory of markdown files (called a "vault"), and Raven lets you:
-- Define a schema, so your notes can have concrete "types" (e.g., project, meeting, person)
+- Define a schema, so your notes can have specific "types" (e.g., project, meeting, person)
 - Create "traits" to add inline annotations to your notes (e.g., a `@todo` trait for task management)
 - Add bidirectional links across notes using references (`[[page-to-reference]]`)
-- Find and operate on notes using an efficient query language
+- Find and operate on notes using an efficient query language, or drive everything with an agent
 
 The goal is to keep notes durable and simple while still enabling structured workflows and accurate agent operations.
 
-## Installation
+## Installation & Vault Setup
 
 Raven requires Go 1.22+.
 
