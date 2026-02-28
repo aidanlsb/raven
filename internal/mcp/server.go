@@ -293,6 +293,8 @@ type ResourceContent struct {
 	Text     string `json:"text,omitempty"`
 }
 
+const vaultAgentInstructionsResourceURI = "raven://vault/agent-instructions"
+
 func (s *Server) handleResourcesList(req *Request) {
 	resources := append([]Resource{}, listAgentGuideResources()...)
 	resources = append(resources, Resource{
@@ -313,6 +315,9 @@ func (s *Server) handleResourcesList(req *Request) {
 		Description: "List of workflows defined in raven.yaml. Use raven://workflows/<name> for details.",
 		MimeType:    "application/json",
 	})
+	if agentInstructions, ok := s.agentInstructionsResource(); ok {
+		resources = append(resources, agentInstructions)
+	}
 	s.sendResult(req.ID, map[string]interface{}{"resources": resources})
 }
 
@@ -374,6 +379,21 @@ func (s *Server) handleResourcesRead(req *Request) {
 			MimeType: "application/json",
 			Text:     workflowsContent,
 		}
+	case vaultAgentInstructionsResourceURI:
+		agentInstructions, err := s.readAgentInstructionsResource()
+		if err != nil {
+			if os.IsNotExist(err) {
+				s.sendError(req.ID, -32602, "Resource not found", params.URI)
+				return
+			}
+			s.sendError(req.ID, -32603, "Failed to read agent instructions", err.Error())
+			return
+		}
+		content = ResourceContent{
+			URI:      params.URI,
+			MimeType: "text/markdown",
+			Text:     agentInstructions,
+		}
 	default:
 		if strings.HasPrefix(params.URI, "raven://workflows/") {
 			name := strings.TrimPrefix(params.URI, "raven://workflows/")
@@ -418,6 +438,40 @@ func (s *Server) handleResourcesRead(req *Request) {
 	s.sendResult(req.ID, map[string]interface{}{
 		"contents": []ResourceContent{content},
 	})
+}
+
+func (s *Server) agentInstructionsResource() (Resource, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return Resource{}, false
+	}
+
+	agentInstructionsPath := paths.AgentInstructionsPath(vaultPath)
+	info, err := os.Stat(agentInstructionsPath)
+	if err != nil || info.IsDir() {
+		return Resource{}, false
+	}
+
+	return Resource{
+		URI:         vaultAgentInstructionsResourceURI,
+		Name:        "Agent Instructions",
+		Description: "Agent guidance from AGENTS.md in the vault root.",
+		MimeType:    "text/markdown",
+	}, true
+}
+
+func (s *Server) readAgentInstructionsResource() (string, error) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return "", err
+	}
+
+	data, err := os.ReadFile(paths.AgentInstructionsPath(vaultPath))
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
 }
 
 func (s *Server) readSchemaFile() (string, error) {

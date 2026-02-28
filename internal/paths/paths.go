@@ -24,6 +24,9 @@ const MDExtension = ".md"
 // SchemaFilename is the vault schema filename.
 const SchemaFilename = "schema.yaml"
 
+// AgentInstructionsFilename is the vault agent instructions filename.
+const AgentInstructionsFilename = "AGENTS.md"
+
 // HasMDExtension returns true if the path ends with .md.
 func HasMDExtension(p string) bool {
 	return strings.HasSuffix(p, MDExtension)
@@ -40,6 +43,11 @@ func EnsureMDExtension(p string) string {
 // SchemaPath returns the absolute path to schema.yaml in a vault.
 func SchemaPath(vaultPath string) string {
 	return filepath.Join(vaultPath, SchemaFilename)
+}
+
+// AgentInstructionsPath returns the absolute path to AGENTS.md in a vault.
+func AgentInstructionsPath(vaultPath string) string {
+	return filepath.Join(vaultPath, AgentInstructionsFilename)
 }
 
 // TrimMDExtension removes the .md extension if present.

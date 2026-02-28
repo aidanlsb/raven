@@ -10,6 +10,7 @@ It is split into topic resources so agents can fetch only what they need.
 - Use `raven://guide/lesson-plan` when teaching a new user
 - Use `raven://schema/current` for the live schema
 - Use `raven://queries/saved` and `raven://workflows/list` for quick discovery
+- Use `raven://vault/agent-instructions` when available for vault-specific guidance
 - Use `raven://guide/query-cheatsheet` for common query patterns
 - Fetch a single topic resource when you need focused guidance
 

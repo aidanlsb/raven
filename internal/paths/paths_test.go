@@ -27,6 +27,16 @@ func TestNormalizeDirRoot(t *testing.T) {
 	}
 }
 
+func TestVaultRootFilePaths(t *testing.T) {
+	vaultPath := "/tmp/test-vault"
+	if got, want := SchemaPath(vaultPath), filepath.Join(vaultPath, "schema.yaml"); got != want {
+		t.Fatalf("SchemaPath() = %q, want %q", got, want)
+	}
+	if got, want := AgentInstructionsPath(vaultPath), filepath.Join(vaultPath, "AGENTS.md"); got != want {
+		t.Fatalf("AgentInstructionsPath() = %q, want %q", got, want)
+	}
+}
+
 func TestFilePathToObjectID(t *testing.T) {
 	tests := []struct {
 		filePath    string
