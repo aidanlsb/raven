@@ -71,10 +71,6 @@ func configData(ctx *globalConfigContext) map[string]interface{} {
 			"accent":     strings.TrimSpace(ctx.cfg.UI.Accent),
 			"code_theme": strings.TrimSpace(ctx.cfg.UI.CodeTheme),
 		},
-		"hooks": map[string]interface{}{
-			"default_enabled": ctx.cfg.Hooks.DefaultEnabled,
-			"vaults":          ctx.cfg.Hooks.Vaults,
-		},
 	}
 }
 
@@ -126,21 +122,6 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	if v := strings.TrimSpace(ctx.cfg.UI.CodeTheme); v != "" {
 		fmt.Printf("ui.code_theme: %s\n", v)
 	}
-	if ctx.cfg.Hooks.DefaultEnabled != nil {
-		fmt.Printf("hooks.default_enabled: %t\n", *ctx.cfg.Hooks.DefaultEnabled)
-	}
-	if len(ctx.cfg.Hooks.Vaults) > 0 {
-		names := make([]string, 0, len(ctx.cfg.Hooks.Vaults))
-		for name := range ctx.cfg.Hooks.Vaults {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		fmt.Println("hooks.vaults:")
-		for _, name := range names {
-			fmt.Printf("  %s = %t\n", name, ctx.cfg.Hooks.Vaults[name])
-		}
-	}
-
 	vaults := ctx.cfg.ListVaults()
 	if len(vaults) == 0 {
 		fmt.Println("vaults: (none)")
