@@ -32,7 +32,9 @@ jobs:
             echo "Expected semver tag like v1.2.3 or v1.2.3-rc.1"
             exit 1
           fi
-          if [[ "$(git cat-file -t "$tag")" != "tag" ]]; then
+          # On tag-push events, actions/checkout may rewrite local refs/tags/<tag>
+          # to the target commit SHA. Validate annotation status from remote refs.
+          if ! git ls-remote --exit-code --tags origin "refs/tags/${tag}^{}" >/dev/null 2>&1; then
             echo "Release tags must be annotated tags (git tag -a)."
             exit 1
           fi
