@@ -424,6 +424,7 @@ For modifying existing schema elements:
 4. Update a field:
    ```
    raven_schema_update_field(type_name="person", field_name="email", required="true")
+   raven_schema_update_field(type_name="project", field_name="status", values="active,paused,done,archived")
    ```
 
 5. Rename a type (updates schema AND all files):
