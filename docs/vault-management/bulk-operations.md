@@ -182,7 +182,7 @@ Outputs one ID per line for piping:
 rvn query "object:project .status==active" --ids
 
 # Trait query - outputs trait IDs
-rvn query "trait:due .value==past" --ids
+rvn query "trait:due .value<today" --ids
 ```
 
 ### Piping Examples
@@ -316,7 +316,7 @@ rvn query "object:project .priority==urgent" --ids | rvn set --stdin priority=cr
 
 ```bash
 # Mark projects with overdue items
-rvn query "object:project has(trait:due .value==past)" --apply "set status=overdue" --confirm
+rvn query "object:project has(trait:due .value<today)" --apply "set status=overdue" --confirm
 ```
 
 ### Batch Create Tags

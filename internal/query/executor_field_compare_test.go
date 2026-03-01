@@ -3,6 +3,7 @@ package query
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
@@ -44,5 +45,40 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 	}
 	if !(slices.Contains(ids, "metric/a") && slices.Contains(ids, "metric/c")) {
 		t.Fatalf("unexpected ids: %#v", ids)
+	}
+}
+
+func TestObjectFieldComparison_RelativeDateKeywordOrdering(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	today := time.Now().Format("2006-01-02")
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+
+	_, err := db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start) VALUES
+			('task/yesterday', 'task/yesterday.md', 'task', '{"due":"` + yesterday + `"}', 1),
+			('task/today', 'task/today.md', 'task', '{"due":"` + today + `"}', 1),
+			('task/tomorrow', 'task/tomorrow.md', 'task', '{"due":"` + tomorrow + `"}', 1);
+	`)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	e := NewExecutor(db)
+
+	q, err := Parse("object:task .due<today")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	results, err := e.ExecuteObjectQuery(q)
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+
+	if len(results) != 1 || results[0].ID != "task/yesterday" {
+		t.Fatalf("unexpected results: %#v", results)
 	}
 }

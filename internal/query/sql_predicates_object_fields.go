@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -39,6 +41,18 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 		}
 		value = resolved
 		altValue = alt
+	}
+
+	// Date/date-keyword values should use date-aware comparisons.
+	if !p.IsRefValue {
+		dateFieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
+		dateCond, dateArgs, ok := buildDateFieldCompareCondition(value, p.CompareOp, dateFieldExpr, jsonPath)
+		if ok {
+			if p.Negated() {
+				dateCond = "NOT (" + dateCond + ")"
+			}
+			return dateCond, dateArgs, nil
+		}
 	}
 
 	if p.CompareOp == CompareNeq {
@@ -78,6 +92,31 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	}
 
 	return cond, args, nil
+}
+
+func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string) (string, []interface{}, bool) {
+	cond, dateArgs, ok, err := index.TryParseDateComparisonWithOptions(
+		value,
+		compareOpToSQL(compareOp),
+		fieldExpr,
+		index.DateFilterOptions{
+			Now: time.Now(),
+		},
+	)
+	if err != nil || !ok {
+		return "", nil, false
+	}
+
+	// fieldExpr contains a placeholder for the JSON path. Inject one path argument
+	// for each field expression occurrence before date boundary args.
+	pathArgCount := strings.Count(cond, fieldExpr)
+	args := make([]interface{}, 0, pathArgCount+len(dateArgs))
+	for i := 0; i < pathArgCount; i++ {
+		args = append(args, jsonPath)
+	}
+	args = append(args, dateArgs...)
+
+	return cond, args, true
 }
 
 // resolveRefValue resolves a reference token and returns a canonical value plus a

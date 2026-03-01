@@ -411,12 +411,9 @@ traits:
 Usage: `@due(2026-01-15)` or `@due(tomorrow)`
 
 **Special date values for queries:**
-- `past` — Before today
 - `today` — Today
 - `tomorrow` — Tomorrow
-- `this-week` — This week
-- `next-week` — Next week
-- `this-month` — This month
+- `yesterday` — Yesterday
 
 #### `datetime`
 

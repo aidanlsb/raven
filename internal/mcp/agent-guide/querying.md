@@ -31,7 +31,7 @@ trait:<name> [predicates...]
 - `exists(.field)` — Field exists (has a value)
 - `!.field==value` — Field does NOT equal value
 - `!exists(.field)` — Field does NOT exist
-- `has(trait:X ...)` — Has trait matching nested trait query (`has(trait:due .value==past)`)
+- `has(trait:X ...)` — Has trait matching nested trait query (`has(trait:due .value<today)`)
 - `encloses(trait:X ...)` — Has matching trait anywhere in subtree (self or descendants)
 - `refs([[target]])` — References specific target (`refs([[people/freya]])`)
 - `refs(object:X ...)` — References objects matching nested object query
@@ -48,7 +48,7 @@ trait:<name> [predicates...]
 - `content("term")` — Full-text search on object content
 
 **For trait queries:**
-- `.value==X` — Trait value equals X (`.value==past`, `.value==high`, `.value==todo`)
+- `.value==X` — Trait value equals X (`.value==today`, `.value==high`, `.value==todo`)
 - `.value<X` — Trait value less than X (`.value<2025-01-01`)
 - `.value>X` — Trait value greater than X (`.value>5`)
 - `.value<=X` — Trait value less than or equal to X
@@ -75,11 +75,9 @@ trait:<name> [predicates...]
 - Use `any(.tags, _ == "x")` for **array fields** on objects.
 
 **Special date values for `trait:due`:**
-- `.value==past` — Before today
 - `.value==today` — Today
 - `.value==tomorrow` — Tomorrow
-- `.value==this-week` — This week
-- `.value==next-week` — Next week
+- `.value==yesterday` — Yesterday
 
 ### Query Composition: Translating Requests to Queries
 
@@ -137,7 +135,7 @@ object:project in(.status, [active,backlog])
 
 ```
 # Overdue items assigned to a person
-trait:due .value==past refs([[people/freya]])
+trait:due .value<today refs([[people/freya]])
 
 # Highlights from books currently being read
 trait:highlight on(object:book .status==reading)
@@ -152,7 +150,7 @@ object:meeting parent(object:date) refs([[people/thor]])
 object:project encloses(trait:todo .value==todo)
 
 # Tasks due this week on active projects
-trait:due .value==this-week within(object:project .status==active)
+trait:due .value>=today .value<=tomorrow within(object:project .status==active)
 
 # Items referencing either of two people
 trait:due (refs([[people/freya]]) | refs([[people/thor]]))

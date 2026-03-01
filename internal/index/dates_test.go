@@ -42,30 +42,6 @@ func TestParseDateFilter(t *testing.T) {
 			wantCondition: "= ?",
 			wantArgs:      []interface{}{"2025-02-01"},
 		},
-		{
-			name:          "past",
-			filter:        "past",
-			wantCondition: "< ?",
-			wantArgs:      []interface{}{today},
-		},
-		{
-			name:          "future",
-			filter:        "future",
-			wantCondition: "> ?",
-			wantArgs:      []interface{}{today},
-		},
-		{
-			name:          "this-week",
-			filter:        "this-week",
-			wantCondition: ">= ?",
-			wantArgs:      nil, // will have 2 args, just check condition shape
-		},
-		{
-			name:          "next-week",
-			filter:        "next-week",
-			wantCondition: ">= ?",
-			wantArgs:      nil,
-		},
 	}
 
 	for _, tt := range tests {
@@ -79,14 +55,12 @@ func TestParseDateFilter(t *testing.T) {
 				t.Errorf("condition %q does not contain %q", condition, tt.wantCondition)
 			}
 
-			if tt.wantArgs != nil {
-				if len(args) != len(tt.wantArgs) {
-					t.Errorf("got %d args, want %d", len(args), len(tt.wantArgs))
-				}
-				for i, want := range tt.wantArgs {
-					if i < len(args) && args[i] != want {
-						t.Errorf("arg[%d]: got %v, want %v", i, args[i], want)
-					}
+			if len(args) != len(tt.wantArgs) {
+				t.Errorf("got %d args, want %d", len(args), len(tt.wantArgs))
+			}
+			for i, want := range tt.wantArgs {
+				if i < len(args) && args[i] != want {
+					t.Errorf("arg[%d]: got %v, want %v", i, args[i], want)
 				}
 			}
 		})
@@ -98,6 +72,8 @@ func TestParseDateFilterInvalidDates(t *testing.T) {
 		"2025-13-45",
 		"2025-02-30",
 		"not-a-date",
+		"past",
+		"this-week",
 	}
 
 	for _, filter := range tests {
@@ -113,7 +89,7 @@ func TestParseDateFilterInvalidDates(t *testing.T) {
 func TestParseDateFilterCaseInsensitive(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 
-	tests := []string{"TODAY", "Today", "TODAY", "  today  "}
+	tests := []string{"TODAY", "Today", "  today  "}
 
 	for _, filter := range tests {
 		t.Run(filter, func(t *testing.T) {
@@ -131,38 +107,22 @@ func TestParseDateFilterCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestParseDateFilterWeekBoundaries(t *testing.T) {
-	// This test verifies that week calculations produce valid dates
-	condition, args, err := ParseDateFilter("this-week", "field")
+func TestTryParseDateComparisonWithOptions_InstantOrdering(t *testing.T) {
+	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
+
+	cond, args, ok, err := TryParseDateComparisonWithOptions("today", "<", "value", DateFilterOptions{
+		Now: now,
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected err: %v", err)
 	}
-
-	// Should have two date arguments (start and end of week)
-	if len(args) != 2 {
-		t.Fatalf("expected 2 args for this-week, got %d", len(args))
+	if !ok {
+		t.Fatalf("expected date comparison parse")
 	}
-
-	startDate := args[0].(string)
-	endDate := args[1].(string)
-
-	// Parse dates to verify they're valid
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
-		t.Errorf("invalid start date: %s", startDate)
+	if cond != "value < ?" {
+		t.Fatalf("cond = %q", cond)
 	}
-	end, err := time.Parse("2006-01-02", endDate)
-	if err != nil {
-		t.Errorf("invalid end date: %s", endDate)
-	}
-
-	// End should be after start
-	if !end.After(start) && !end.Equal(start) {
-		t.Errorf("end date %s should be >= start date %s", endDate, startDate)
-	}
-
-	// Verify condition uses both args
-	if !strings.Contains(condition, ">=") || !strings.Contains(condition, "<=") {
-		t.Errorf("expected range condition, got %s", condition)
+	if len(args) != 1 || args[0] != "2026-03-04" {
+		t.Fatalf("args = %v", args)
 	}
 }

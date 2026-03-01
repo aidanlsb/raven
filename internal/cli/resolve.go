@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -286,9 +287,8 @@ func resolveDynamicDateReference(reference, vaultPath string, vaultCfg *config.V
 	}
 
 	keyword := strings.ToLower(strings.TrimSpace(baseRef))
-	switch keyword {
-	case "today", "tomorrow", "yesterday":
-	default:
+	relative, ok := dates.ResolveRelativeDateKeyword(keyword, time.Now(), time.Monday)
+	if !ok || relative.Kind != dates.RelativeDateInstant {
 		return nil, false, nil
 	}
 
@@ -300,11 +300,7 @@ func resolveDynamicDateReference(reference, vaultPath string, vaultCfg *config.V
 		}
 	}
 
-	parsed, err := vault.ParseDateArg(keyword)
-	if err != nil {
-		return nil, true, err
-	}
-	dateStr := vault.FormatDateISO(parsed)
+	dateStr := relative.Date.Format(dates.DateLayout)
 	fileObjectID := vaultCfg.DailyNoteID(dateStr)
 	objectID := fileObjectID
 	if fragment != "" {

@@ -278,7 +278,7 @@ You can then pass inputs either by position (following args order) or as key=val
 Examples:
   rvn query "object:project .status==active"
   rvn query "object:meeting has(trait:due)"
-  rvn query "trait:due .value==past"
+  rvn query "trait:due .value<today"
   rvn query "trait:todo content(\"my task\")"
   rvn query "trait:highlight on(object:book .status==reading)"
   rvn query tasks                    # Run saved query
@@ -850,10 +850,10 @@ If the query uses {{args.<name>}}, declare accepted input names with --arg
 
 Examples:
   rvn query add tasks "trait:due"
-  rvn query add overdue "trait:due .value==past"
+  rvn query add overdue "trait:due .value<today"
   rvn query add active-projects "object:project .status==active"
   rvn query add project-todos "trait:todo refs([[{{args.project}}]])" --arg project --description "Todos tied to a project"
-  rvn query add urgent "trait:due .value==this-week|past" --description "Due soon or overdue"`,
+  rvn query add due-soon "trait:due in(.value,[today,tomorrow])" --description "Due today or tomorrow"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()

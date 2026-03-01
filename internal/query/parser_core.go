@@ -182,7 +182,7 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 	// Brace subqueries were removed from the core syntax (v3).
 	// Braces are not valid predicate tokens anymore.
 	if p.curr.Type == TokenLBrace {
-		return nil, fmt.Errorf("brace subqueries are no longer supported; write nested queries directly (e.g., has(trait:due .value==past))")
+		return nil, fmt.Errorf("brace subqueries are no longer supported; write nested queries directly (e.g., has(trait:due .value<today))")
 	}
 
 	// Field predicate (starts with .)

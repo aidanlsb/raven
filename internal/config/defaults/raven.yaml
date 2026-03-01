@@ -42,13 +42,13 @@ queries:
 
   # Overdue items
   overdue:
-    query: "trait:due .value==past"
-    description: "Items past their due date"
+    query: "trait:due .value<today"
+    description: "Items due before today"
 
-  # Items due this week
-  this-week:
-    query: "trait:due .value==this-week"
-    description: "Items due this week"
+  # Items due soon
+  due-soon:
+    query: "trait:due in(.value, [today, tomorrow])"
+    description: "Items due today or tomorrow"
 
   # Active projects
   active-projects:

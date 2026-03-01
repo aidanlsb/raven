@@ -28,7 +28,7 @@ Nest queries inside predicates to filter by related objects or traits:
 
 - `refs(object:project .status == active)`
 - `within(object:meeting refs([[projects/raven]]))`
-- `has(trait:due .value == past)`
+- `has(trait:due .value < today)`
 - `on(object:project .status == active)`
 
 ## Boolean logic
