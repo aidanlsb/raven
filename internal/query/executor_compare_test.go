@@ -66,13 +66,13 @@ func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestBuildValueCondition_DateFilterPast(t *testing.T) {
+func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 	p := &ValuePredicate{
-		Value:     "past",
+		Value:     "today",
 		CompareOp: CompareEq,
 	}
 	cond, args := buildValueCondition(p, "t.value")
-	if cond != "t.value < ? AND t.value IS NOT NULL" {
+	if cond != "t.value = ?" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
@@ -84,13 +84,27 @@ func TestBuildValueCondition_DateFilterPast(t *testing.T) {
 	}
 }
 
-func TestBuildValueCondition_DateFilterPastNotEqual(t *testing.T) {
+func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 	p := &ValuePredicate{
-		Value:     "past",
+		Value:     "tomorrow",
 		CompareOp: CompareNeq,
 	}
 	cond, args := buildValueCondition(p, "t.value")
-	if cond != "NOT (t.value < ? AND t.value IS NOT NULL)" {
+	if cond != "t.value != ?" {
+		t.Fatalf("cond = %q", cond)
+	}
+	if len(args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(args))
+	}
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	if args[0] != tomorrow {
+		t.Fatalf("arg = %#v, want %q", args[0], tomorrow)
+	}
+}
+
+func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
+	cond, args := buildCompareCondition("today", CompareLt, false, "t.value")
+	if cond != "t.value < ?" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
@@ -99,6 +113,16 @@ func TestBuildValueCondition_DateFilterPastNotEqual(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	if args[0] != today {
 		t.Fatalf("arg = %#v, want %q", args[0], today)
+	}
+}
+
+func TestBuildCompareCondition_UnknownKeywordFallsBackToString(t *testing.T) {
+	cond, args := buildCompareCondition("this-week", CompareEq, false, "t.value")
+	if cond != "LOWER(t.value) = LOWER(?)" {
+		t.Fatalf("cond = %q", cond)
+	}
+	if len(args) != 1 || args[0] != "this-week" {
+		t.Fatalf("args = %#v", args)
 	}
 }
 

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/sqlutil"
 )
@@ -13,10 +15,10 @@ import (
 // QueryTraits queries traits by type with optional value filter.
 // Filter syntax supports:
 //   - Simple value: "done" → value = 'done'
-//   - OR with pipe: "this-week|past" → value matches either
+//   - OR with pipe: "today|tomorrow" → value matches either
 //   - NOT with bang: "!done" → value != 'done'
 //   - Combined: "!done|!cancelled" → value not in (done, cancelled)
-//   - Date filters: "today", "this-week", "past", etc. (also work with | and !)
+//   - Date filters: "today", "tomorrow", "yesterday", YYYY-MM-DD (also work with | and !)
 func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.Trait, error) {
 	query := `
 		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
@@ -26,7 +28,9 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.T
 	args := []interface{}{traitType}
 
 	if valueFilter != nil && *valueFilter != "" {
-		condition, filterArgs, err := parseFilterExpression(*valueFilter, "value")
+		condition, filterArgs, err := parseFilterExpressionWithOptions(*valueFilter, "value", DateFilterOptions{
+			Now: time.Now(),
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -61,6 +65,12 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.T
 //
 // Returns SQL condition and args.
 func parseFilterExpression(filter string, fieldExpr string) (condition string, args []interface{}, err error) {
+	return parseFilterExpressionWithOptions(filter, fieldExpr, DateFilterOptions{
+		Now: time.Now(),
+	})
+}
+
+func parseFilterExpressionWithOptions(filter string, fieldExpr string, opts DateFilterOptions) (condition string, args []interface{}, err error) {
 	// Split on | for OR logic
 	parts := strings.Split(filter, "|")
 
@@ -84,7 +94,7 @@ func parseFilterExpression(filter string, fieldExpr string) (condition string, a
 		}
 
 		// Build condition for this part
-		partCondition, partArgs, buildErr := buildSingleFilterCondition(part, fieldExpr, isNegated)
+		partCondition, partArgs, buildErr := buildSingleFilterConditionWithOptions(part, fieldExpr, isNegated, opts)
 		if buildErr != nil {
 			return "", nil, buildErr
 		}
@@ -128,19 +138,16 @@ func parseFilterExpression(filter string, fieldExpr string) (condition string, a
 	return "(" + strings.Join(conditions, joiner) + ")", args, nil
 }
 
-// buildSingleFilterCondition builds a SQL condition for a single filter value.
-func buildSingleFilterCondition(value string, fieldExpr string, isNegated bool) (condition string, args []interface{}, err error) {
+func buildSingleFilterConditionWithOptions(value string, fieldExpr string, isNegated bool, opts DateFilterOptions) (condition string, args []interface{}, err error) {
 	// Check if it's a date filter
 	if isDateFilter(value) {
-		dateCondition, dateArgs, parseErr := ParseDateFilter(value, fieldExpr)
+		dateCondition, dateArgs, parseErr := ParseDateFilterWithOptions(value, fieldExpr, opts)
 		if parseErr != nil {
 			return "", nil, parseErr
 		}
 
 		if isNegated {
-			// Negate the date condition
-			// For simple comparisons, just flip the operator
-			// For range conditions (this-week), wrap in NOT(...)
+			// Negate the date condition.
 			return "NOT (" + dateCondition + ")", dateArgs, nil
 		}
 		return dateCondition, dateArgs, nil
@@ -155,16 +162,14 @@ func buildSingleFilterCondition(value string, fieldExpr string, isNegated bool) 
 
 // isDateFilter checks if a filter string is a date filter.
 func isDateFilter(filter string) bool {
-	lower := strings.ToLower(filter)
-	switch lower {
-	case "today", "yesterday", "tomorrow", "this-week", "next-week", "past", "future":
+	trimmed := strings.TrimSpace(filter)
+	if dates.IsValidDate(trimmed) {
 		return true
 	}
-	// Check for YYYY-MM-DD pattern
-	if len(filter) == 10 && filter[4] == '-' && filter[7] == '-' {
+	if dates.IsRelativeDateKeyword(trimmed) {
 		return true
 	}
-	return false
+	return looksLikeDateLiteral(trimmed)
 }
 
 // QueryTraitsMultiple queries multiple trait types at once.

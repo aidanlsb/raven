@@ -150,7 +150,6 @@ func TestLoadVaultConfig(t *testing.T) {
 		}
 	})
 }
-
 func TestVaultConfigPaths(t *testing.T) {
 	cfg := &VaultConfig{
 		DailyDirectory: "daily",

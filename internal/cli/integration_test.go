@@ -622,6 +622,27 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(medium) Second task")
 }
 
+func TestIntegration_TraitUpdateCommand_ResolvesRelativeDateKeyword(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @due(2026-01-01) Ship release
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("update", "tasks/task1.md:trait:0", "tomorrow")
+	result.MustSucceed(t)
+
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	v.AssertFileContains("tasks/task1.md", "@due("+tomorrow+")")
+}
+
 func TestIntegration_TraitUpdateRejectsInvalidEnumValue(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).

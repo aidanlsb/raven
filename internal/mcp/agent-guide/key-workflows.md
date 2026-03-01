@@ -206,10 +206,10 @@ For query syntax and predicate patterns, see `raven://guide/querying`.
 1. Use `raven_query` with `--apply` to update query results in bulk:
    ```
    # Preview changes (default — changes NOT applied)
-   raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue")
+   raven_query(query_string="object:project has(trait:due .value<today)", apply="set status=overdue")
    
    # Apply changes after user confirmation
-   raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue", confirm=true)
+   raven_query(query_string="object:project has(trait:due .value<today)", apply="set status=overdue", confirm=true)
 
    # Trait query updates (trait queries support only update)
    raven_query(query_string="trait:todo .value==todo", apply="update done", confirm=true)
@@ -338,8 +338,7 @@ Help users create reusable queries:
 
 1. Add a saved query:
    ```
-   raven_query_add(name="urgent", query_string="trait:due .value==this-week|past", 
-                   description="Due soon or overdue")
+   raven_query_add(name="due-soon", query_string="trait:due in(.value, [today,tomorrow])", description="Due today or tomorrow")
    ```
 
 2. Remove a saved query:

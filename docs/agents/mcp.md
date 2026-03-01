@@ -413,7 +413,7 @@ raven_query(query_string="object:project .status==active")
 raven_query(query_string="object:person exists(.email)")
 
 # Trait queries
-raven_query(query_string="trait:due .value==past")
+raven_query(query_string="trait:due .value<today")
 raven_query(query_string="trait:highlight on(object:book)")
 
 # Saved queries
@@ -468,10 +468,10 @@ raven_edit(
 
 ```python
 # Preview changes
-raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue")
+raven_query(query_string="object:project has(trait:due .value<today)", apply="set status=overdue")
 
 # Apply after user confirmation
-raven_query(query_string="object:project has(trait:due .value==past)", apply="set status=overdue", confirm=true)
+raven_query(query_string="object:project has(trait:due .value<today)", apply="set status=overdue", confirm=true)
 
 # Trait query updates (trait queries support only update)
 raven_query(query_string="trait:todo .value==todo", apply="update done", confirm=true)

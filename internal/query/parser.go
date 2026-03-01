@@ -131,7 +131,7 @@ func (p *Parser) parseValueList() ([]parsedValue, error) {
 }
 
 // parseInPredicate parses: in(.field, [a,b,"c"])
-// This is useful for scalar membership checks like trait:due in(.value, [past,today]).
+// This is useful for scalar membership checks like trait:due in(.value, [today,tomorrow]).
 func (p *Parser) parseInPredicate(negated bool) (Predicate, error) {
 	if err := p.expect(TokenLParen); err != nil {
 		return nil, err

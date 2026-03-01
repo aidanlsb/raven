@@ -141,7 +141,7 @@ Run a query to show immediate value:
 raven_query(query_string="object:project .status==active")
 
 # Or tasks due soon
-raven_query(query_string="trait:due .value==this-week")
+raven_query(query_string="trait:due in(.value, [today,tomorrow])")
 ```
 
 Offer to save useful queries:

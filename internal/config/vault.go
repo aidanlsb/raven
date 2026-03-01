@@ -570,7 +570,7 @@ func (vc *VaultConfig) GetTemplateDirectory() string {
 // SavedQuery defines a saved query using the Raven query language.
 type SavedQuery struct {
 	// Query is the query string using Raven query language
-	// e.g., "object:project .status==active" or "trait:due .value==past"
+	// e.g., "object:project .status==active" or "trait:due .value<today"
 	Query string `yaml:"query"`
 
 	// Args declares accepted saved-query input names and their positional order.

@@ -222,8 +222,8 @@ deletion:
 
 queries:
   overdue:
-    query: "trait:due .value==past"
-    description: "Items past due"
+    query: "trait:due .value<today"
+    description: "Items due before today"
   project-todos:
     query: "trait:todo refs([[{{args.project}}]])"
     args: [project]

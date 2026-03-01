@@ -9,13 +9,11 @@ import (
 )
 
 func resolveRelativeDateKeyword(value string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "today", "yesterday", "tomorrow":
-		parsed, _ := dates.ParseDateArg(value, time.Now())
-		return parsed.Format(dates.DateLayout), true
-	default:
+	resolved, ok := dates.ResolveRelativeDateKeyword(value, time.Now(), time.Monday)
+	if !ok || resolved.Kind != dates.RelativeDateInstant {
 		return "", false
 	}
+	return resolved.Date.Format(dates.DateLayout), true
 }
 
 func resolveDateKeywordList(value string) (string, bool) {

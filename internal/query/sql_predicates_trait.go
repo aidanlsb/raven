@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/index"
 )
@@ -122,34 +123,16 @@ func buildValueCondition(p *ValuePredicate, column string) (string, []interface{
 // buildCompareCondition builds a SQL condition for comparing a column to a value.
 // This is the core comparison logic shared by ValuePredicate and FieldPredicate(.value).
 func buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}) {
-	// Date filters (today, past, this-week, YYYY-MM-DD, etc.)
-	if compareOp == CompareEq || compareOp == CompareNeq {
-		if cond, args, ok := buildDateFilterCondition(strings.TrimSpace(value), column); ok {
-			negate := negated
-			if compareOp == CompareNeq {
-				negate = !negate
-			}
-			if negate {
-				cond = "NOT (" + cond + ")"
-			}
-			return cond, args
+	// Date filters (today/tomorrow/yesterday, YYYY-MM-DD, etc.)
+	if cond, args, ok := buildDateFilterConditionForCompare(strings.TrimSpace(value), compareOp, column); ok {
+		if negated {
+			cond = "NOT (" + cond + ")"
 		}
+		return cond, args
 	}
 
 	// Pick operator for the predicate.
-	op := "="
-	switch compareOp {
-	case CompareNeq:
-		op = "!="
-	case CompareLt:
-		op = "<"
-	case CompareGt:
-		op = ">"
-	case CompareLte:
-		op = "<="
-	case CompareGte:
-		op = ">="
-	}
+	op := compareOpToSQL(compareOp)
 
 	// Prefer numeric comparisons when RHS parses as a number.
 	if n, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
@@ -184,12 +167,17 @@ func (e *Executor) buildTraitValueFieldPredicateSQL(p *FieldPredicate, alias str
 	return cond, args, nil
 }
 
-func buildDateFilterCondition(value string, column string) (string, []interface{}, bool) {
+func buildDateFilterConditionForCompare(value string, compareOp CompareOp, column string) (string, []interface{}, bool) {
 	if value == "" {
 		return "", nil, false
 	}
-	cond, args, err := index.ParseDateFilter(value, column)
+	cond, args, ok, err := index.TryParseDateComparisonWithOptions(value, compareOpToSQL(compareOp), column, index.DateFilterOptions{
+		Now: time.Now(),
+	})
 	if err != nil {
+		return "", nil, false
+	}
+	if !ok {
 		return "", nil, false
 	}
 	return cond, args, true

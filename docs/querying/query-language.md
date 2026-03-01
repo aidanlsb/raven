@@ -40,7 +40,7 @@ Examples:
 ```text
 object:project
 object:project .status==active
-object:meeting has(trait:due .value==past)
+object:meeting has(trait:due .value<today)
 object:project encloses(trait:todo .value==todo)
 ```
 
@@ -54,7 +54,7 @@ Examples:
 
 ```text
 trait:due
-trait:due .value==past
+trait:due .value<today
 trait:highlight on(object:book .status==reading)
 ```
 
@@ -62,7 +62,7 @@ trait:highlight on(object:book .status==reading)
 
 | Element | Syntax | Example |
 |---------|--------|---------|
-| Field access | `.` prefix | `.status==active`, `.value==past` |
+| Field access | `.` prefix | `.status==active`, `.value<today` |
 | Equality / inequality | `==`, `!=` | `.status!=done` |
 | Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
 | Presence | `exists(.field)` | `exists(.email)`, `!exists(.email)` |
@@ -169,17 +169,14 @@ object:project refd(object:meeting)
 | `in(.value, [a,b,c])` | Value is one of listed values |
 
 Date/date-time comparisons also support relative keywords:
-- `past`
 - `today`
 - `tomorrow`
-- `this-week`
-- `next-week`
-- `future`
+- `yesterday`
 
 Examples:
 
 ```text
-trait:due .value==past
+trait:due .value<today
 trait:due in(.value, [today,tomorrow])
 trait:due .value<=2026-03-01
 ```
@@ -220,7 +217,7 @@ Examples:
 ```text
 object:project .status==active has(trait:due)
 object:project (.status==active | .status==backlog) !.archived==true
-object:meeting (has(trait:due .value==past) | has(trait:remind .value==past))
+object:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 ```
 
 ## Running and Applying Queries
@@ -229,14 +226,14 @@ object:meeting (has(trait:due .value==past) | has(trait:remind .value==past))
 
 ```bash
 rvn query 'object:project .status==active' --json
-rvn query 'trait:due .value==past' --ids
+rvn query 'trait:due .value<today' --ids
 rvn query 'object:project refs([[companies/acme]])' --refresh --json
 ```
 
 ### Save and Reuse Queries
 
 ```bash
-rvn query add overdue 'trait:due .value==past' --json
+rvn query add overdue 'trait:due .value<today' --json
 rvn query overdue --json
 rvn query --list --json
 ```
@@ -253,7 +250,7 @@ Examples:
 
 ```bash
 # Object query bulk update
-rvn query 'object:project has(trait:due .value==past)' --apply 'set status=overdue' --confirm
+rvn query 'object:project has(trait:due .value<today)' --apply 'set status=overdue' --confirm
 
 # Trait query bulk update
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm

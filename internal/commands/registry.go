@@ -497,7 +497,7 @@ Query syntax:
 - Object queries: object:<type> [predicates...]
   Examples: object:project .status==active, object:meeting refs([[people/freya]])
 - Trait queries: trait:<name> [predicates...]
-  Examples: trait:due .value==past, trait:highlight on(object:book)
+  Examples: trait:due .value<today, trait:highlight on(object:book)
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
@@ -505,11 +505,11 @@ Common predicates:
 - refs([[target]]) — References target (refs([[people/freya]]))
 - refs(object:type) — References objects matching subquery (refs(object:project .status==active))
 - within(object:type) — Trait is inside object type (within(object:meeting))
-- .value==X — Trait value equals X (.value==past, .value==high)
+- .value==X — Trait value equals X (.value==today, .value==high)
 - content("text") — Full-text search within content (content("meeting notes"))
 
-Special date values for trait:due:
-- .value==past, .value==today, .value==tomorrow, .value==this-week, .value==next-week
+Special date values for trait comparisons:
+- today, tomorrow, yesterday
 
 Saved query inputs must be declared with args: in raven.yaml when using {{args.<name>}}.
 You can then pass inputs by position (in args order) or as key=value pairs.
@@ -541,8 +541,8 @@ For trait queries (trait:...):
 		Examples: []string{
 			"rvn query 'object:project .status==active' --json",
 			"rvn query 'object:meeting has(trait:due)' --json",
-			"rvn query 'trait:due .value==past' --json",
-			"rvn query 'trait:due .value==past' --ids",
+			"rvn query 'trait:due .value<today' --json",
+			"rvn query 'trait:due .value<today' --ids",
 			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
 			"rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json",
 			"rvn query tasks --json",
@@ -562,7 +562,7 @@ For trait queries (trait:...):
 		Description: "Add a saved query to raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name for the new query", Required: true},
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or 'trait:due .value==past')", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or 'trait:due .value<today')", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
@@ -570,7 +570,7 @@ For trait queries (trait:...):
 		},
 		Examples: []string{
 			"rvn query add tasks 'trait:due' --json",
-			"rvn query add overdue 'trait:due .value==past' --json",
+			"rvn query add overdue 'trait:due .value<today' --json",
 			"rvn query add active-projects 'object:project .status==active' --json",
 			"rvn query add project-todos 'trait:todo refs([[{{args.project}}]])' --arg project --json",
 		},

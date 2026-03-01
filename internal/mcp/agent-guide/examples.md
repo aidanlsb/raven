@@ -7,16 +7,16 @@
 → Consolidate and present results
 ```
 
-**User**: "What do I have due this week?"
+**User**: "What do I have due today or tomorrow?"
 ```
-→ raven_query(query_string="trait:due .value==this-week")
+→ raven_query(query_string="trait:due in(.value, [today,tomorrow])")
 → Summarize results for user
 ```
 
-**User**: "Show me due items that are past OR today"
+**User**: "Show me due items on or before today"
 ```
-→ Use membership rather than array quantifiers:
-  raven_query(query_string="trait:due in(.value, [past,today])")
+→ Use direct date comparison:
+  raven_query(query_string="trait:due .value<=today")
 ```
 
 **User**: "Show me highlights from the books I'm reading"
@@ -156,7 +156,7 @@
 
 **User**: "Overdue items assigned to Freya"
 ```
-→ trait:due .value==past refs([[people/freya]])
+→ trait:due .value<today refs([[people/freya]])
 ```
 
 **User**: "Show my todos sorted by due date"
@@ -173,7 +173,7 @@
 
 **User**: "Find high-priority items that are also due soon"
 ```
-→ trait:due at(trait:priority .value==high)
+→ trait:due .value>=today .value<=tomorrow at(trait:priority .value==high)
 → Uses at: to find traits co-located on the same line
 ```
 
