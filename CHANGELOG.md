@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.2] - 2026-02-28
+
+### Changed
+- Homebrew formula name updated to `rvn` for install consistency.
+
+## [v0.0.1] - 2026-02-28
+
 ### Added
 - Initial public release
 - Core CLI commands: `init`, `reindex`, `check`, `query`, `backlinks`, `stats`
@@ -26,4 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Symlink traversal protection
 - Path validation for all file operations
 
-[Unreleased]: https://github.com/aidanlsb/raven/commits/main
+### Fixed
+- Release workflow tag annotation validation for tag-push events.
+
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.2...HEAD
+[v0.0.2]: https://github.com/aidanlsb/raven/compare/v0.0.1...v0.0.2
+[v0.0.1]: https://github.com/aidanlsb/raven/releases/tag/v0.0.1

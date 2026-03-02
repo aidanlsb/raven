@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall release-preflight release-next release-auto release-tag release
+.PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall release-preflight release-next release-auto release-changelog release-tag release
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -102,6 +102,13 @@ release-auto:
 	echo "Computed release tag: $$next"; \
 	$(MAKE) release VERSION="$$next"
 
+# Validate changelog contains an entry for the release version.
+# Usage: make release-changelog VERSION=v0.2.0
+release-changelog:
+	@test -n "$(VERSION)" || (echo "Usage: make release-changelog VERSION=vX.Y.Z"; exit 1)
+	@test -f CHANGELOG.md || (echo "CHANGELOG.md not found"; exit 1)
+	@grep -Eq '^## \[$(VERSION)\]' CHANGELOG.md || (echo "CHANGELOG.md is missing a section for $(VERSION). Add '## [$(VERSION)] - YYYY-MM-DD' before releasing."; exit 1)
+
 # Clean build artifacts
 clean:
 	rm -f rvn coverage.out coverage.html
@@ -141,6 +148,7 @@ release-tag:
 		echo "Tag already exists on origin: $(VERSION)"; \
 		exit 1; \
 	fi
+	@$(MAKE) --no-print-directory release-changelog VERSION="$(VERSION)"
 	@echo "Running release preflight..."
 	@$(MAKE) release-preflight
 	@git tag -a "$(VERSION)" -m "Release $(VERSION)"

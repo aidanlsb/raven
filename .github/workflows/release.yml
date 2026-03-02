@@ -39,6 +39,16 @@ jobs:
             exit 1
           fi
 
+      - name: Validate changelog entry
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if ! grep -Eq "^## \[${tag}\]" CHANGELOG.md; then
+            echo "CHANGELOG.md is missing a section for ${tag}."
+            echo "Add a heading like: ## [${tag}] - YYYY-MM-DD"
+            exit 1
+          fi
+
       - name: Install golangci-lint (for make lint)
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.9.0
 

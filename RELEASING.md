@@ -12,6 +12,7 @@ Raven uses a tag-driven release flow:
 - Working tree is clean.
 - Current branch is `main`.
 - `origin` points to `aidanlsb/raven`.
+- `CHANGELOG.md` includes a heading for the release tag (for example, `## [v0.2.0] - 2026-03-02`).
 - GitHub Actions secrets:
   - `GITHUB_TOKEN` (provided automatically by Actions)
   - `HOMEBREW_TAP_TOKEN` (required only for Homebrew formula publishing)
@@ -42,6 +43,8 @@ Pick one approach:
 ```bash
 make release VERSION=v0.2.0
 ```
+
+This command now validates that `CHANGELOG.md` has a matching `## [vX.Y.Z]` section before creating the tag.
 
 Or compute and release the next version automatically:
 
