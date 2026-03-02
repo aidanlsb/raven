@@ -194,7 +194,7 @@ This creates:
 - `raven.yaml` — vault configuration and saved queries
 - `.raven/` — index and internal state (disposable, rebuildable)
 
-> Requires Go 1.22+. See [Install Go](https://go.dev/doc/install).
+> Requires Go 1.23+. See [Install Go](https://go.dev/doc/install).
 
 ---
 
