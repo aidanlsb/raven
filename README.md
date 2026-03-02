@@ -6,7 +6,7 @@
 
 ---
 
-Raven adds a few features on top of markdown  
+Raven adds a few features on top of markdown:  
 - A lightweight schema for defining types and fields
 - Syntax for annotating content with traits
 - Bidirectional linking between objects
@@ -22,8 +22,8 @@ Everything stays local — plain text files you own and can edit with any tool.
 
 ## Table of Contents
 
-- [Example Usage](#example-usage)
 - [Installation](#installation)
+- [Example Usage](#example-usage)
 - [Agent Setup](#agent-setup)
 - [Vault Structure](#vault-structure)
 - [Core Concepts](#core-concepts)
@@ -34,6 +34,43 @@ Everything stays local — plain text files you own and can edit with any tool.
 - [Querying](#querying)
 - [Workflows](#workflows)
 - [Documentation](#documentation)
+
+---
+
+## Installation
+
+Install with Homebrew:
+
+```bash
+brew tap aidanlsb/tap
+brew install aidanlsb/tap/rvn
+rvn version
+```
+
+Or install with Go:
+
+```bash
+go install github.com/aidanlsb/raven/cmd/rvn@latest
+rvn version
+```
+
+### Quickstart
+
+```bash
+rvn init my-vault
+cd my-vault
+rvn new project "My First Project" --field status=active
+rvn query "object:project .status==active"
+```
+
+This creates:
+- `schema.yaml` — type and trait definitions
+- `raven.yaml` — vault configuration and saved queries
+- `.raven/` — index and internal state (disposable, rebuildable)
+
+> Requires Go 1.23+. See [Install Go](https://go.dev/doc/install).
+>
+> Raven is an early-stage project and subject to change.
 
 ---
 
@@ -162,39 +199,6 @@ The agent calls Raven's MCP tools — querying open todos, recent meetings, and 
 > Two open todos from the council meeting on Jan 17. Vanaheim wants concessions on the eastern trade routes — no commitment has been made yet (@decision). Forseti's review of old grievances is still outstanding. Bottom line: one blocker before Odin can decide.
 
 The agent doesn't need to search or guess — it queries structured data and reasons over what it finds.
-
----
-
-## Installation
-
-Install with Homebrew:
-
-```bash
-brew tap aidanlsb/tap
-brew install aidanlsb/tap/rvn
-rvn version
-```
-
-Or install with Go:
-
-```bash
-go install github.com/aidanlsb/raven/cmd/rvn@latest
-rvn version
-```
-
-Initialize a vault:
-
-```bash
-rvn init hermod-vault
-cd hermod-vault
-```
-
-This creates:
-- `schema.yaml` — type and trait definitions
-- `raven.yaml` — vault configuration and saved queries
-- `.raven/` — index and internal state (disposable, rebuildable)
-
-> Requires Go 1.23+. See [Install Go](https://go.dev/doc/install).
 
 ---
 
@@ -420,7 +424,7 @@ rvn search "Freyr" --type meeting                     # search within a type
 **Bulk operations on query results**
 
 ```bash
-rvn query 'trait:todo .value==todo' --apply 'update value=done' --confirm
+rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 ```
 
 **Saved queries**
