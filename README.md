@@ -20,6 +20,23 @@ Everything stays local — plain text files you own and can edit with any tool.
 
 ---
 
+## Table of Contents
+
+- [Example Usage](#example-usage)
+- [Installation](#installation)
+- [Agent Setup](#agent-setup)
+- [Vault Structure](#vault-structure)
+- [Core Concepts](#core-concepts)
+  - [Types](#types)
+  - [Traits](#traits)
+  - [References](#references)
+- [Creating Objects](#creating-objects)
+- [Querying](#querying)
+- [Workflows](#workflows)
+- [Documentation](#documentation)
+
+---
+
 ## Example Usage
 
 Hermod (Odin's messenger in Norse mythology and PKM enthusiast for this walkthrough) tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
