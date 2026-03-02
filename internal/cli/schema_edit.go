@@ -346,9 +346,10 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 	result.BaseType = baseType
 	result.IsArray = isArray
 
-	// Check if this looks like a schema type name (common mistake)
+	// Check if this looks like a schema type name (common mistake).
+	// Do not reject names that are also valid field types (e.g., built-in "date").
 	if sch != nil {
-		if _, isSchemaType := sch.Types[baseType]; isSchemaType {
+		if _, isSchemaType := sch.Types[baseType]; isSchemaType && !validFieldTypes[baseType] {
 			result.Error = fmt.Sprintf("'%s' is a type name, not a field type", baseType)
 			result.Suggestion = fmt.Sprintf("To reference objects of type '%s', use --type ref --target %s", baseType, baseType)
 			if isArray {
@@ -365,7 +366,7 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 		}
 
 		// Also check if adding [] to a type name
-		if _, isSchemaType := sch.Types[strings.TrimSuffix(baseType, "[]")]; isSchemaType {
+		if _, isSchemaType := sch.Types[strings.TrimSuffix(baseType, "[]")]; isSchemaType && !validFieldTypes[strings.TrimSuffix(baseType, "[]")] {
 			cleanType := strings.TrimSuffix(baseType, "[]")
 			result.Error = fmt.Sprintf("'%s' is a type name, not a field type", cleanType)
 			result.Suggestion = fmt.Sprintf("To reference an array of '%s' objects, use --type ref[] --target %s", cleanType, cleanType)

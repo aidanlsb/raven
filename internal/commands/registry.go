@@ -107,7 +107,6 @@ to understand which fields are auto-populated.`,
 
 By default, appends to today's daily note. Configure destination in raven.yaml.
 Only works on files that already exist (daily notes are auto-created).
-Timestamps are OFF by default; use --timestamp to include the current time.
 Auto-reindex is ON by default; configure via auto_reindex in raven.yaml.
 For creating NEW typed objects, use 'rvn new' instead.
 
@@ -118,14 +117,12 @@ Bulk operations preview changes by default; use --confirm to apply.
 Configuration (raven.yaml):
   capture:
     destination: daily      # "daily" or a file path
-    heading: "## Captured"  # Optional heading to append under
-    timestamp: false        # Prefix with time (default: false)`,
+    heading: "## Captured"  # Optional heading to append under`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target file path or daily note date (today/tomorrow/yesterday/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
-			{Name: "timestamp", Description: "Prefix with current time (HH:MM)", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
@@ -134,13 +131,11 @@ Configuration (raven.yaml):
 			"rvn add \"@priority(high) Urgent task\" --json",
 			"rvn add \"Note\" --to projects/website.md --json",
 			"rvn add \"Plan\" --to tomorrow --json",
-			"rvn add \"Call Odin\" --timestamp --json",
 		},
 		UseCases: []string{
 			"Quick capture to daily note",
 			"Add tasks to existing project files",
 			"Append notes to existing documents",
-			"Log timestamped events with --timestamp",
 		},
 	},
 	"upsert": {

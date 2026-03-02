@@ -25,7 +25,6 @@ auto_reindex: true
 # capture:
 #   destination: daily      # "daily" (default) or a file path like "inbox.md"
 #   heading: "## Captured"  # Optional heading to append under
-#   timestamp: true         # Prefix captures with time (default: false)
 
 # Deletion settings for 'rvn delete'
 # deletion:

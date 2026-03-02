@@ -196,7 +196,6 @@ directories:
 capture:
   destination: daily
   heading: "## Captured"
-  timestamp: false
 ```
 
 ### Full example (current canonical shape)
@@ -214,7 +213,6 @@ auto_reindex: true
 capture:
   destination: daily
   heading: "## Captured"
-  timestamp: false
 
 deletion:
   behavior: trash
@@ -292,7 +290,6 @@ Quick capture defaults for `rvn add`.
 |-----|------|---------|-------|
 | `destination` | string | `daily` | `"daily"` or a vault-relative file path like `inbox.md` |
 | `heading` | string | unset | If set, appends under that heading (creates heading if missing) |
-| `timestamp` | boolean | `false` | Prefix each capture with `HH:MM` |
 
 ### `deletion`
 

@@ -405,9 +405,6 @@ type CaptureConfig struct {
 	// If empty, appends to end of file.
 	// The heading is created if it doesn't exist.
 	Heading string `yaml:"heading,omitempty"`
-
-	// Timestamp prefixes each capture with the time (default: false)
-	Timestamp *bool `yaml:"timestamp,omitempty"`
 }
 
 // GetCaptureConfig returns the capture config with defaults applied.
@@ -415,7 +412,6 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 	if vc.Capture == nil {
 		return &CaptureConfig{
 			Destination: "daily",
-			Timestamp:   boolPtr(false),
 		}
 	}
 
@@ -423,14 +419,7 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 	if cfg.Destination == "" {
 		cfg.Destination = "daily"
 	}
-	if cfg.Timestamp == nil {
-		cfg.Timestamp = boolPtr(false)
-	}
 	return &cfg
-}
-
-func boolPtr(b bool) *bool {
-	return &b
 }
 
 const defaultDailyDirectory = "daily"

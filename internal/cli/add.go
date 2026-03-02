@@ -24,10 +24,9 @@ import (
 )
 
 var (
-	addToFlag        string
-	addTimestampFlag bool
-	addStdin         bool
-	addConfirm       bool
+	addToFlag  string
+	addStdin   bool
+	addConfirm bool
 )
 
 var addCmd = &cobra.Command{
@@ -36,7 +35,6 @@ var addCmd = &cobra.Command{
 	Long: `Quickly capture a thought, task, or note.
 
 By default, appends to today's daily note. Configure destination in raven.yaml.
-Timestamps are OFF by default; use --timestamp to include the current time.
 Auto-reindex is ON by default; configure via auto_reindex in raven.yaml.
 
 Bulk operations:
@@ -49,7 +47,6 @@ Examples:
   rvn add "Plan for tomorrow" --to tomorrow
   rvn add "Project idea" --to inbox.md
   rvn add "Meeting notes" --to cursor       # Resolves to companies/cursor.md
-  rvn add "Call Odin" --timestamp           # Includes time prefix
   rvn add "Met with [[people/freya]]" --json
 
 Bulk examples:
@@ -59,8 +56,7 @@ Bulk examples:
 Configuration (raven.yaml):
   capture:
     destination: daily      # "daily" or a file path
-    heading: "## Captured"  # Optional heading to append under
-    timestamp: false        # Prefix with time (default: false)`,
+    heading: "## Captured"  # Optional heading to append under`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
@@ -108,13 +104,9 @@ func runAddBulk(args []string, vaultPath string) error {
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-	captureCfg := vaultCfg.GetCaptureConfig()
-	if addTimestampFlag {
-		captureCfg.Timestamp = boolPtr(true)
-	}
 
 	// Format the capture line
-	line := formatCaptureLine(text, captureCfg)
+	line := formatCaptureLine(text)
 
 	// If not confirming, show preview
 	if !addConfirm {
@@ -256,11 +248,6 @@ func addSingleCapture(vaultPath string, args []string) error {
 	}
 	captureCfg := vaultCfg.GetCaptureConfig()
 
-	// Override timestamp if flag is set
-	if addTimestampFlag {
-		captureCfg.Timestamp = boolPtr(true)
-	}
-
 	// Join all args as the capture text
 	text := strings.Join(args, " ")
 
@@ -313,7 +300,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 	}
 
 	// Format the capture line
-	line := formatCaptureLine(text, captureCfg)
+	line := formatCaptureLine(text)
 
 	// Append to file (create if daily note)
 	if err := appendToFile(vaultPath, destPath, line, captureCfg, vaultCfg, isDailyNote, targetObjectID); err != nil {
@@ -358,17 +345,8 @@ func addSingleCapture(vaultPath string, args []string) error {
 	return nil
 }
 
-func formatCaptureLine(text string, cfg *config.CaptureConfig) string {
-	var parts []string
-
-	// Add timestamp if configured
-	if cfg.Timestamp != nil && *cfg.Timestamp {
-		parts = append(parts, time.Now().Format("15:04"))
-	}
-
-	parts = append(parts, text)
-
-	return "- " + strings.Join(parts, " ")
+func formatCaptureLine(text string) string {
+	return text
 }
 
 func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool, targetObjectID string) error {
@@ -709,14 +687,8 @@ func inferTypeFromPath(sch *schema.Schema, refPath string) string {
 	return ""
 }
 
-// boolPtr returns a pointer to the given bool value.
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 func init() {
 	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
-	addCmd.Flags().BoolVar(&addTimestampFlag, "timestamp", false, "Prefix with current time (HH:MM)")
 	addCmd.Flags().BoolVar(&addStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
 	if err := addCmd.RegisterFlagCompletionFunc("to", completeReferenceFlag(true)); err != nil {

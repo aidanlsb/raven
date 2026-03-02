@@ -100,7 +100,6 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	prevUpsertPathChanged := upsertCmd.Flags().Lookup("path").Changed
 	prevUpsertContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	prevAddTo := addToFlag
-	prevAddTimestamp := addTimestampFlag
 	prevAddStdin := addStdin
 	prevAddConfirm := addConfirm
 	t.Cleanup(func() {
@@ -112,7 +111,6 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		upsertCmd.Flags().Lookup("path").Changed = prevUpsertPathChanged
 		upsertCmd.Flags().Lookup("content").Changed = prevUpsertContentChanged
 		addToFlag = prevAddTo
-		addTimestampFlag = prevAddTimestamp
 		addStdin = prevAddStdin
 		addConfirm = prevAddConfirm
 	})
@@ -146,7 +144,6 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	relFile = createResp.Data.File
 
 	addToFlag = objectID
-	addTimestampFlag = false
 	addStdin = false
 	addConfirm = false
 	_ = captureStdout(t, func() {

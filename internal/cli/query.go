@@ -606,8 +606,7 @@ func applyAddFromQuery(vaultPath string, ids []string, args []string, warnings [
 	}
 
 	text := strings.Join(args, " ")
-	captureCfg := vaultCfg.GetCaptureConfig()
-	line := formatCaptureLine(text, captureCfg)
+	line := formatCaptureLine(text)
 
 	if !confirm {
 		if err := previewAddBulk(vaultPath, ids, line, warnings, vaultCfg); err != nil {
