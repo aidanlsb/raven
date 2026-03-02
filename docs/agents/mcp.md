@@ -498,6 +498,7 @@ raven_schema_add_field(type_name="person", field_name="company", type="ref", tar
 
 # Update schema
 raven_schema_update_type(name="person", name_field="name")
+raven_schema_update_field(type_name="project", field_name="status", values="active,paused,done,archived")
 raven_schema_update_field(type_name="person", field_name="company", description="-")  # Remove description
 
 # Rename a type (preview first, then confirm)

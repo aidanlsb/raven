@@ -741,6 +741,29 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 	v.AssertFileNotContains("schema.yaml", "description: Primary contact email")
 }
 
+// TestMCPIntegration_SchemaFieldEnumValuesViaToolCall verifies enum field values
+// can be updated via MCP without removing/recreating the field.
+func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	updateFieldResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+		"type_name":  "project",
+		"field_name": "status",
+		"values":     "active,paused,done,archived",
+	})
+	if updateFieldResult.IsError {
+		t.Fatalf("schema update field values failed: %s", updateFieldResult.Text)
+	}
+
+	v.AssertFileContains("schema.yaml", "status:")
+	v.AssertFileContains("schema.yaml", "- archived")
+}
+
 // TestMCPIntegration_SchemaRenameTypeWithDefaultPathRename verifies MCP JSON
 // preview/apply behavior for type rename with optional default_path directory
 // migration.
