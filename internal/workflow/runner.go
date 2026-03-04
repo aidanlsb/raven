@@ -320,7 +320,7 @@ func (r *Runner) runForEachStep(
 				if onError == "continue" {
 					goto nextIteration
 				}
-				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf(errMsg)
+				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf("%s", errMsg)
 			}
 
 			out, callErr := r.ToolFunc(nested.Tool, args)
@@ -333,7 +333,7 @@ func (r *Runner) runForEachStep(
 				if onError == "continue" {
 					goto nextIteration
 				}
-				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf(errMsg)
+				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf("%s", errMsg)
 			}
 
 			iterationSteps[nested.ID] = out

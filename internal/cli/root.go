@@ -41,9 +41,15 @@ who gathered knowledge from across the world.`,
 		case "init", "vault", "config", "completion", "help", "version", "serve", "skill", "mcp":
 			return nil
 		}
-		// Also skip for completion/vault subcommands.
-		if cmd.Parent() != nil && (cmd.Parent().Name() == "completion" || cmd.Parent().Name() == "vault" || cmd.Parent().Name() == "config" || cmd.Parent().Name() == "skill" || cmd.Parent().Name() == "mcp") {
-			return nil
+		// Also skip for completion/config/skill/mcp subcommands.
+		// Most vault subcommands do not require resolved vault path, except `vault path`.
+		if cmd.Parent() != nil {
+			parentName := cmd.Parent().Name()
+			if parentName == "vault" && cmd.Name() == "path" {
+				// `vault path` should resolve exactly like vault-bound commands.
+			} else if parentName == "completion" || parentName == "vault" || parentName == "config" || parentName == "skill" || parentName == "mcp" {
+				return nil
+			}
 		}
 
 		// Load config

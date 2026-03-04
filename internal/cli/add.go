@@ -24,9 +24,10 @@ import (
 )
 
 var (
-	addToFlag  string
-	addStdin   bool
-	addConfirm bool
+	addToFlag      string
+	addHeadingFlag string
+	addStdin       bool
+	addConfirm     bool
 )
 
 var addCmd = &cobra.Command{
@@ -46,6 +47,9 @@ Examples:
   rvn add "@due(tomorrow) Send the estimate"
   rvn add "Plan for tomorrow" --to tomorrow
   rvn add "Project idea" --to inbox.md
+  rvn add "Fix parser edge case" --to project/raven --heading bugs-fixes
+  rvn add "Capture under heading" --to project/raven --heading "### Bugs / Fixes"
+  rvn add "Structured note" --to project/raven#bugs-fixes
   rvn add "Meeting notes" --to cursor       # Resolves to companies/cursor.md
   rvn add "Met with [[people/freya]]" --json
 
@@ -77,6 +81,8 @@ Configuration (raven.yaml):
 
 // runAddBulk handles bulk add operations from stdin.
 func runAddBulk(args []string, vaultPath string) error {
+	headingSpec := effectiveAddHeadingSpec()
+
 	// Text to append is provided as arguments
 	if len(args) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no text to add", "Usage: rvn add --stdin <text>")
@@ -110,22 +116,24 @@ func runAddBulk(args []string, vaultPath string) error {
 
 	// If not confirming, show preview
 	if !addConfirm {
-		return previewAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+		return previewAddBulk(vaultPath, ids, line, headingSpec, warnings, vaultCfg)
 	}
 
 	// Apply the additions
-	return applyAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+	return applyAddBulk(vaultPath, ids, line, headingSpec, warnings, vaultCfg)
 }
 
 // previewAddBulk shows a preview of bulk add operations.
-func previewAddBulk(vaultPath string, ids []string, line string, warnings []Warning, vaultCfg *config.VaultConfig) error {
+func previewAddBulk(vaultPath string, ids []string, line string, headingSpec string, warnings []Warning, vaultCfg *config.VaultConfig) error {
 	parseOpts := buildParseOptions(vaultCfg)
 
 	preview := buildBulkPreview("add", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		// Resolve to a file path. For embedded IDs, resolve their parent file.
 		fileID := id
+		targetObjectID := ""
 		if baseID, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
 			fileID = baseID
+			targetObjectID = id
 		}
 		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
 		if err != nil {
@@ -157,9 +165,20 @@ func previewAddBulk(vaultPath string, ids []string, line string, warnings []Warn
 			}
 		}
 
+		if headingSpec != "" {
+			if targetObjectID != "" {
+				return nil, &BulkResult{ID: id, Status: "skipped", Reason: "cannot combine --heading with embedded IDs from stdin"}
+			}
+			resolvedTarget, err := resolveAddHeadingTarget(vaultPath, filePath, fileID, headingSpec, vaultCfg, parseOpts)
+			if err != nil {
+				return nil, &BulkResult{ID: id, Status: "skipped", Reason: err.Error()}
+			}
+			targetObjectID = resolvedTarget
+		}
+
 		details := fmt.Sprintf("append: %s", line)
-		if IsEmbeddedID(id) {
-			details = fmt.Sprintf("append within %s: %s", id, line)
+		if targetObjectID != "" {
+			details = fmt.Sprintf("append within %s: %s", targetObjectID, line)
 		}
 		return &BulkPreviewItem{
 			ID:      id,
@@ -174,8 +193,9 @@ func previewAddBulk(vaultPath string, ids []string, line string, warnings []Warn
 }
 
 // applyAddBulk applies bulk add operations.
-func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warning, vaultCfg *config.VaultConfig) error {
+func applyAddBulk(vaultPath string, ids []string, line string, headingSpec string, warnings []Warning, vaultCfg *config.VaultConfig) error {
 	captureCfg := vaultCfg.GetCaptureConfig()
+	parseOpts := buildParseOptions(vaultCfg)
 
 	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
@@ -193,6 +213,21 @@ func applyAddBulk(vaultPath string, ids []string, line string, warnings []Warnin
 			result.Status = "skipped"
 			result.Reason = "object not found"
 			return result
+		}
+
+		if headingSpec != "" {
+			if targetObjectID != "" {
+				result.Status = "error"
+				result.Reason = "cannot combine --heading with embedded IDs from stdin"
+				return result
+			}
+			resolvedTarget, err := resolveAddHeadingTarget(vaultPath, filePath, fileID, headingSpec, vaultCfg, parseOpts)
+			if err != nil {
+				result.Status = "error"
+				result.Reason = err.Error()
+				return result
+			}
+			targetObjectID = resolvedTarget
 		}
 
 		// Append to file (never create for bulk operations)
@@ -240,6 +275,7 @@ func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
 // addSingleCapture handles single capture mode (non-bulk).
 func addSingleCapture(vaultPath string, args []string) error {
 	start := time.Now()
+	headingSpec := effectiveAddHeadingSpec()
 
 	// Load vault config
 	vaultCfg, err := loadVaultConfigSafe(vaultPath)
@@ -247,6 +283,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 	captureCfg := vaultCfg.GetCaptureConfig()
+	parseOpts := buildParseOptions(vaultCfg)
 
 	// Join all args as the capture text
 	text := strings.Join(args, " ")
@@ -255,6 +292,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 	var destPath string
 	var isDailyNote bool
 	var targetObjectID string
+	var fileObjectID string
 	if addToFlag != "" {
 		// Resolve --to flag using unified resolver (supports section refs like file#section).
 		// If not found, fall back to dynamic date keywords (today/tomorrow/yesterday).
@@ -268,15 +306,18 @@ func addSingleCapture(vaultPath string, args []string) error {
 		}
 		destPath = result.FilePath
 		targetObjectID = result.ObjectID
+		fileObjectID = result.FileObjectID
 		isDailyNote = isDailyNoteObjectID(result.FileObjectID, vaultCfg)
 	} else if captureCfg.Destination == "daily" {
 		// Use today's daily note (auto-created if needed)
 		today := vault.FormatDateISO(time.Now())
 		destPath = vaultCfg.DailyNotePath(vaultPath, today)
+		fileObjectID = vaultCfg.DailyNoteID(today)
 		isDailyNote = true
 	} else {
 		// Use configured destination
 		destPath = filepath.Join(vaultPath, captureCfg.Destination)
+		fileObjectID = vaultCfg.FilePathToObjectID(captureCfg.Destination)
 
 		// Check if configured destination exists
 		if _, err := os.Stat(destPath); os.IsNotExist(err) {
@@ -292,6 +333,17 @@ func addSingleCapture(vaultPath string, args []string) error {
 			return handleErrorMsg(ErrFileOutsideVault, fmt.Sprintf("cannot capture outside vault: %s", destPath), "")
 		}
 		return handleError(ErrInternal, err, "")
+	}
+
+	if headingSpec != "" {
+		if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
+			return handleErrorMsg(ErrInvalidInput, "cannot combine --heading with a section reference in --to", "Use either --to <file#section> or --heading")
+		}
+		resolvedTarget, err := resolveAddHeadingTarget(vaultPath, destPath, fileObjectID, headingSpec, vaultCfg, parseOpts)
+		if err != nil {
+			return handleErrorMsg(ErrRefNotFound, err.Error(), "Use an existing section slug/id or heading text")
+		}
+		targetObjectID = resolvedTarget
 	}
 
 	// Create parent directories if needed
@@ -347,6 +399,126 @@ func addSingleCapture(vaultPath string, args []string) error {
 
 func formatCaptureLine(text string) string {
 	return text
+}
+
+func effectiveAddHeadingSpec() string {
+	return strings.TrimSpace(addHeadingFlag)
+}
+
+func resolveAddHeadingTarget(
+	vaultPath string,
+	destPath string,
+	fileObjectID string,
+	headingSpec string,
+	vaultCfg *config.VaultConfig,
+	parseOpts *parser.ParseOptions,
+) (string, error) {
+	spec := strings.TrimSpace(headingSpec)
+	if spec == "" {
+		return "", nil
+	}
+
+	contentBytes, err := os.ReadFile(destPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read target file")
+	}
+	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), destPath, vaultPath, parseOpts)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse target file")
+	}
+
+	prefix := fileObjectID + "#"
+	candidates := make([]*parser.ParsedObject, 0, len(doc.Objects))
+	for _, obj := range doc.Objects {
+		if obj == nil {
+			continue
+		}
+		if strings.HasPrefix(obj.ID, prefix) {
+			candidates = append(candidates, obj)
+		}
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("target file has no embedded sections: %s", fileObjectID)
+	}
+
+	// Markdown heading line (e.g., "### Bugs / Fixes")
+	if headingText, ok := parseHeadingTextFromSpec(spec); ok {
+		return resolveSectionByHeadingText(candidates, headingText)
+	}
+
+	// Bare heading text (contains spaces, no leading #) should resolve by title.
+	if strings.Contains(spec, " ") {
+		return resolveSectionByHeadingText(candidates, spec)
+	}
+
+	// Full object ID (e.g., objects/project/raven#bugs-fixes)
+	if strings.Contains(spec, "/") && strings.Contains(spec, "#") {
+		if !strings.HasPrefix(spec, prefix) {
+			return "", fmt.Errorf("section %q does not belong to %s", spec, fileObjectID)
+		}
+		for _, obj := range candidates {
+			if obj.ID == spec {
+				return obj.ID, nil
+			}
+		}
+		return "", fmt.Errorf("section not found: %s", spec)
+	}
+
+	// Fragment slug (e.g., "bugs-fixes" or "#bugs-fixes")
+	fragment := strings.TrimSpace(strings.TrimPrefix(spec, "#"))
+	if fragment == "" {
+		return "", fmt.Errorf("section fragment cannot be empty")
+	}
+	for _, obj := range candidates {
+		if strings.TrimPrefix(obj.ID, prefix) == fragment {
+			return obj.ID, nil
+		}
+	}
+	return "", fmt.Errorf("section fragment not found: %s", fragment)
+}
+
+func resolveSectionByHeadingText(candidates []*parser.ParsedObject, headingText string) (string, error) {
+	text := strings.TrimSpace(headingText)
+	if text == "" {
+		return "", fmt.Errorf("heading text cannot be empty")
+	}
+
+	matches := make([]string, 0, 2)
+	for _, obj := range candidates {
+		if obj == nil || obj.Heading == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(*obj.Heading), text) {
+			matches = append(matches, obj.ID)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("heading not found: %q", text)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("heading %q is ambiguous; use a section slug/id", text)
+	}
+}
+
+func parseHeadingTextFromSpec(spec string) (string, bool) {
+	trimmed := strings.TrimSpace(spec)
+	if !strings.HasPrefix(trimmed, "#") {
+		return "", false
+	}
+	i := 0
+	for i < len(trimmed) && trimmed[i] == '#' {
+		i++
+	}
+	if i == 0 || i >= len(trimmed) || trimmed[i] != ' ' {
+		return "", false
+	}
+	headingText := strings.TrimSpace(trimmed[i:])
+	if headingText == "" {
+		return "", false
+	}
+	return headingText, true
 }
 
 func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool, targetObjectID string) error {
@@ -689,6 +861,7 @@ func inferTypeFromPath(sch *schema.Schema, refPath string) string {
 
 func init() {
 	addCmd.Flags().StringVar(&addToFlag, "to", "", "Target file (path or reference like 'cursor')")
+	addCmd.Flags().StringVar(&addHeadingFlag, "heading", "", "Target heading within destination (heading slug, object#heading ID, or markdown heading text)")
 	addCmd.Flags().BoolVar(&addStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	addCmd.Flags().BoolVar(&addConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
 	if err := addCmd.RegisterFlagCompletionFunc("to", completeReferenceFlag(true)); err != nil {

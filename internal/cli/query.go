@@ -609,15 +609,15 @@ func applyAddFromQuery(vaultPath string, ids []string, args []string, warnings [
 	line := formatCaptureLine(text)
 
 	if !confirm {
-		if err := previewAddBulk(vaultPath, ids, line, warnings, vaultCfg); err != nil {
+		if err := previewAddBulk(vaultPath, ids, line, "", warnings, vaultCfg); err != nil {
 			return err
 		}
 		if promptForConfirm("Apply changes?") {
-			return applyAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+			return applyAddBulk(vaultPath, ids, line, "", warnings, vaultCfg)
 		}
 		return nil
 	}
-	return applyAddBulk(vaultPath, ids, line, warnings, vaultCfg)
+	return applyAddBulk(vaultPath, ids, line, "", warnings, vaultCfg)
 }
 
 // applyMoveFromQuery applies move operation from query results.

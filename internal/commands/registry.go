@@ -117,12 +117,19 @@ Bulk operations preview changes by default; use --confirm to apply.
 Configuration (raven.yaml):
   capture:
     destination: daily      # "daily" or a file path
-    heading: "## Captured"  # Optional heading to append under`,
+    heading: "## Captured"  # Optional heading to append under
+
+Use --heading to target an existing heading explicitly.
+Accepted values:
+- Heading slug (e.g., bugs-fixes)
+- Full object ID (e.g., project/raven#bugs-fixes)
+- Markdown heading text (e.g., "### Bugs / Fixes")`,
 		Args: []ArgMeta{
 			{Name: "text", Description: "Text to add (can include @traits and [[refs]])", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "to", Description: "Target file path or daily note date (today/tomorrow/yesterday/YYYY-MM-DD)", Type: FlagTypeString, Examples: []string{"projects/website.md", "inbox.md", "tomorrow"}},
+			{Name: "heading", Description: "Target existing heading within destination (slug, object#heading ID, or markdown heading text)", Type: FlagTypeString, Examples: []string{"bugs-fixes", "project/raven#bugs-fixes", "### Bugs / Fixes"}},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
@@ -131,6 +138,8 @@ Configuration (raven.yaml):
 			"rvn add \"@priority(high) Urgent task\" --json",
 			"rvn add \"Note\" --to projects/website.md --json",
 			"rvn add \"Plan\" --to tomorrow --json",
+			"rvn add \"Bug report\" --to project/raven --heading bugs-fixes --json",
+			"rvn add \"Bug report\" --to project/raven --heading \"### Bugs / Fixes\" --json",
 		},
 		UseCases: []string{
 			"Quick capture to daily note",
@@ -1493,6 +1502,7 @@ The default vault is stored in config.toml and used as fallback.`,
 			"rvn vault --json",
 			"rvn vault list --json",
 			"rvn vault current --json",
+			"rvn vault path --json",
 			"rvn vault add work /Users/you/work-notes --json",
 			"rvn vault use work --json",
 			"rvn vault pin personal --json",
@@ -1518,6 +1528,13 @@ The default vault is stored in config.toml and used as fallback.`,
 		Description: "Show the current resolved vault",
 		Examples: []string{
 			"rvn vault current --json",
+		},
+	},
+	"vault_path": {
+		Name:        "vault path",
+		Description: "Print the resolved vault directory path",
+		Examples: []string{
+			"rvn vault path --json",
 		},
 	},
 	"vault_use": {

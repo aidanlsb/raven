@@ -11,6 +11,7 @@ func TestResolveCommandID(t *testing.T) {
 		{path: "edit", wantID: "edit", wantOK: true},
 		{path: "schema add field", wantID: "schema_add_field", wantOK: true},
 		{path: "query add", wantID: "query_add", wantOK: true},
+		{path: "vault path", wantID: "vault_path", wantOK: true},
 		{path: "not a real command", wantID: "", wantOK: false},
 	}
 

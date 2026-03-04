@@ -1283,6 +1283,56 @@ type: page
 	v.AssertFileContains("inbox.md", "New task for today")
 }
 
+func TestIntegration_AddToSectionBySlug(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("project.md", `---
+type: page
+---
+# Project
+
+### Bugs / Fixes
+- Existing item
+
+### Other
+- Keep this below
+`).
+		Build()
+
+	result := v.RunCLI("add", "New bug item", "--to", "project.md", "--heading", "bugs-fixes")
+	result.MustSucceed(t)
+
+	content, err := os.ReadFile(filepath.Join(v.Path, "project.md"))
+	if err != nil {
+		t.Fatalf("read project.md: %v", err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "New bug item") {
+		t.Fatalf("expected new section content in project.md, got:\n%s", text)
+	}
+	if strings.Index(text, "New bug item") > strings.Index(text, "### Other") {
+		t.Fatalf("expected section append before next heading, got:\n%s", text)
+	}
+}
+
+func TestIntegration_AddToSectionByHeadingText(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("project.md", `---
+type: page
+---
+# Project
+
+### Bugs / Fixes
+- Existing item
+`).
+		Build()
+
+	result := v.RunCLI("add", "Another bug item", "--to", "project.md", "--heading", "### Bugs / Fixes")
+	result.MustSucceed(t)
+	v.AssertFileContains("project.md", "Another bug item")
+}
+
 // TestIntegration_DuplicateObjectError tests that creating a duplicate object fails.
 func TestIntegration_DuplicateObjectError(t *testing.T) {
 	v := testutil.NewTestVault(t).
