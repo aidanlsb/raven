@@ -1469,6 +1469,7 @@ func validateWorkflowStepJSONKeys(obj map[string]interface{}) error {
 		"outputs":     {},
 		"tool":        {},
 		"arguments":   {},
+		"foreach":     {},
 	}
 	for key := range obj {
 		if _, ok := allowed[key]; !ok {

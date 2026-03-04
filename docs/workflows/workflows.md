@@ -5,6 +5,7 @@ Workflows are reusable **steps-based pipelines** defined in workflow YAML files 
 Workflow v3 uses a breaking, steps-only model:
 - top-level `context` / `prompt` / `outputs` are removed
 - deterministic work happens in `type: tool` steps
+- deterministic fanout work happens in `type: foreach` steps
 - agent handoff happens at the first `type: agent` step
 
 Raven executes deterministic steps only. It does not call an LLM.
@@ -79,6 +80,12 @@ steps:
 - `type: tool`
   - `tool`: Raven MCP tool name (for example `raven_query`, `raven_read`, `raven_upsert`)
   - `arguments`: map passed to the tool
+- `type: foreach`
+  - `foreach.items`: interpolation expression resolving to an array (for example `{{steps.review.validated_outputs.findings}}`)
+  - `foreach.steps`: list of nested `type: tool` steps executed for each item
+  - `foreach.as`: optional item variable alias (default `item`)
+  - `foreach.index_as`: optional index variable alias (default `index`)
+  - `foreach.on_error`: optional failure policy: `fail_fast` (default) or `continue`
 - `type: agent`
   - `prompt`: rendered prompt string
   - `outputs`: optional typed output contract for the agent response
@@ -103,6 +110,7 @@ Interpolation is supported in prompts and tool arguments:
 - `{{inputs.name}}`
 - `{{steps.step_id}}`
 - `{{steps.step_id.data.results}}`
+- inside `foreach.steps`, `{{item}}` / `{{item.field}}` and `{{index}}` (or configured aliases)
 
 Interpolation behavior:
 - agent prompts always interpolate to strings
@@ -130,7 +138,7 @@ Supported output types:
 
 `rvn workflow run`:
 - validates inputs
-- executes tool steps in order
+- executes deterministic steps (`tool` and `foreach`) in order
 - stops at the first agent step
 - persists a run checkpoint under `.raven/workflow-runs/`
 - returns `run_id`, `status`, `revision`, `next.prompt`, declared `next.outputs`, and lightweight `step_summaries`

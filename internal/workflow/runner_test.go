@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -282,5 +284,263 @@ func TestRunner_OptionalInputOmittedIsAddressable(t *testing.T) {
 	}
 	if createArgs["project"] != nil {
 		t.Fatalf("expected omitted optional project to resolve as nil, got %#v", createArgs["project"])
+	}
+}
+
+func TestRunner_ForEachExecutesNestedToolsWithScopedInterpolation(t *testing.T) {
+	wf := &Workflow{
+		Name: "fanout",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "seed",
+				Type: "tool",
+				Tool: "raven_query",
+			},
+			{
+				ID:   "fanout",
+				Type: "foreach",
+				ForEach: &config.WorkflowForEach{
+					Items: "{{steps.seed.data.items}}",
+					Steps: []*config.WorkflowStep{
+						{
+							ID:   "create",
+							Type: "tool",
+							Tool: "raven_upsert",
+							Arguments: map[string]interface{}{
+								"title":  "{{item.title}}",
+								"rank":   "{{index}}",
+								"labels": "{{item.labels}}",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var createArgs []map[string]interface{}
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		switch tool {
+		case "raven_query":
+			return map[string]interface{}{
+				"ok": true,
+				"data": map[string]interface{}{
+					"items": []interface{}{
+						map[string]interface{}{"title": "First", "labels": []interface{}{"x", "y"}},
+						map[string]interface{}{"title": "Second", "labels": []interface{}{"z"}},
+					},
+				},
+			}, nil
+		case "raven_upsert":
+			createArgs = append(createArgs, args)
+			return map[string]interface{}{"ok": true, "data": map[string]interface{}{}}, nil
+		default:
+			return nil, fmt.Errorf("unexpected tool: %s", tool)
+		}
+	}
+
+	state, err := NewRunState(wf, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("NewRunState error: %v", err)
+	}
+	result, err := r.RunWithState(wf, state)
+	if err != nil {
+		t.Fatalf("RunWithState returned error: %v", err)
+	}
+	if result.Status != RunStatusCompleted {
+		t.Fatalf("expected completed status, got %s", result.Status)
+	}
+	if len(createArgs) != 2 {
+		t.Fatalf("expected 2 fanout tool calls, got %d", len(createArgs))
+	}
+	if createArgs[0]["title"] != "First" || createArgs[1]["title"] != "Second" {
+		t.Fatalf("unexpected titles: %#v", createArgs)
+	}
+	if _, ok := createArgs[0]["rank"].(int); !ok {
+		t.Fatalf("expected rank to preserve numeric type, got %T", createArgs[0]["rank"])
+	}
+	if _, ok := createArgs[0]["labels"].([]interface{}); !ok {
+		t.Fatalf("expected labels to preserve array type, got %T", createArgs[0]["labels"])
+	}
+
+	fanout, ok := state.Steps["fanout"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fanout step output map, got %T", state.Steps["fanout"])
+	}
+	data, ok := fanout["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fanout data map, got %T", fanout["data"])
+	}
+	if data["success_count"] != 2 || data["error_count"] != 0 {
+		t.Fatalf("unexpected fanout summary: %#v", data)
+	}
+}
+
+func TestRunner_ForEachContinueOnError(t *testing.T) {
+	wf := &Workflow{
+		Name: "fanout-continue",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "seed",
+				Type: "tool",
+				Tool: "raven_query",
+			},
+			{
+				ID:   "fanout",
+				Type: "foreach",
+				ForEach: &config.WorkflowForEach{
+					Items:   "{{steps.seed.data.items}}",
+					OnError: "continue",
+					Steps: []*config.WorkflowStep{
+						{
+							ID:   "create",
+							Type: "tool",
+							Tool: "raven_upsert",
+							Arguments: map[string]interface{}{
+								"title": "{{item.title}}",
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:   "after",
+				Type: "tool",
+				Tool: "raven_stats",
+			},
+		},
+	}
+
+	afterCalled := false
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		switch tool {
+		case "raven_query":
+			return map[string]interface{}{
+				"ok": true,
+				"data": map[string]interface{}{
+					"items": []interface{}{
+						map[string]interface{}{"title": "good-1"},
+						map[string]interface{}{"title": "bad"},
+						map[string]interface{}{"title": "good-2"},
+					},
+				},
+			}, nil
+		case "raven_upsert":
+			if args["title"] == "bad" {
+				return nil, fmt.Errorf("boom")
+			}
+			return map[string]interface{}{"ok": true}, nil
+		case "raven_stats":
+			afterCalled = true
+			return map[string]interface{}{"ok": true}, nil
+		default:
+			return nil, fmt.Errorf("unexpected tool: %s", tool)
+		}
+	}
+
+	state, err := NewRunState(wf, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("NewRunState error: %v", err)
+	}
+	result, err := r.RunWithState(wf, state)
+	if err != nil {
+		t.Fatalf("RunWithState returned error: %v", err)
+	}
+	if result.Status != RunStatusCompleted {
+		t.Fatalf("expected completed status, got %s", result.Status)
+	}
+	if !afterCalled {
+		t.Fatal("expected workflow to continue after foreach errors")
+	}
+
+	fanout, ok := state.Steps["fanout"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fanout step output map, got %T", state.Steps["fanout"])
+	}
+	data, ok := fanout["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fanout data map, got %T", fanout["data"])
+	}
+	if data["success_count"] != 2 || data["error_count"] != 1 {
+		t.Fatalf("unexpected fanout summary: %#v", data)
+	}
+}
+
+func TestRunner_ForEachFailFastReturnsError(t *testing.T) {
+	wf := &Workflow{
+		Name: "fanout-fail-fast",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "seed",
+				Type: "tool",
+				Tool: "raven_query",
+			},
+			{
+				ID:   "fanout",
+				Type: "foreach",
+				ForEach: &config.WorkflowForEach{
+					Items: "{{steps.seed.data.items}}",
+					Steps: []*config.WorkflowStep{
+						{
+							ID:   "create",
+							Type: "tool",
+							Tool: "raven_upsert",
+							Arguments: map[string]interface{}{
+								"title": "{{item.title}}",
+							},
+						},
+					},
+				},
+			},
+			{
+				ID:   "after",
+				Type: "tool",
+				Tool: "raven_stats",
+			},
+		},
+	}
+
+	afterCalled := false
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		switch tool {
+		case "raven_query":
+			return map[string]interface{}{
+				"ok": true,
+				"data": map[string]interface{}{
+					"items": []interface{}{
+						map[string]interface{}{"title": "ok"},
+						map[string]interface{}{"title": "bad"},
+					},
+				},
+			}, nil
+		case "raven_upsert":
+			if args["title"] == "bad" {
+				return nil, fmt.Errorf("tool failed")
+			}
+			return map[string]interface{}{"ok": true}, nil
+		case "raven_stats":
+			afterCalled = true
+			return map[string]interface{}{"ok": true}, nil
+		default:
+			return nil, fmt.Errorf("unexpected tool: %s", tool)
+		}
+	}
+
+	state, err := NewRunState(wf, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("NewRunState error: %v", err)
+	}
+	_, err = r.RunWithState(wf, state)
+	if err == nil {
+		t.Fatal("expected fail-fast foreach to return error")
+	}
+	if !strings.Contains(err.Error(), "foreach item 1 nested step 'create'") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if afterCalled {
+		t.Fatal("after step should not run on fail-fast foreach error")
 	}
 }

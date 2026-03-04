@@ -1,0 +1,35 @@
+description: Fan out Bifrost watch entries into individual task updates
+inputs:
+  watch_date:
+    type: date
+    required: true
+steps:
+  - id: gather_watch_notes
+    type: agent
+    outputs:
+      entries:
+        type: object[]
+        required: true
+    prompt: |
+      For watch date {{inputs.watch_date}}, return a JSON object with:
+      - outputs.entries as an array of objects
+      - each entry has guardian, note, and due fields
+
+  - id: write_watch_updates
+    type: foreach
+    foreach:
+      items: "{{steps.gather_watch_notes.validated_outputs.entries}}"
+      as: entry
+      index_as: slot
+      on_error: continue
+      steps:
+        - id: upsert_watch_task
+          type: tool
+          tool: raven_upsert
+          arguments:
+            type: task
+            title: "Bifrost watch {{slot}} - {{entry.guardian}}"
+            content: "{{entry.note}}"
+            field:
+              due: "{{entry.due}}"
+              project: "project/bifrost"

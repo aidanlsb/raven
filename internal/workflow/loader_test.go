@@ -94,6 +94,104 @@ steps:
 		}
 	})
 
+	t.Run("accepts foreach step with nested tool steps", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "foreach-ok.yaml")
+		content := `description: foreach
+steps:
+  - id: seed
+    type: tool
+    tool: raven_query
+  - id: fanout
+    type: foreach
+    foreach:
+      items: "{{steps.seed.data.results}}"
+      on_error: continue
+      steps:
+        - id: create
+          type: tool
+          tool: raven_upsert
+          arguments:
+            title: "{{item.title}}"
+            ordinal: "{{index}}"
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		if _, err := Load(vaultDir, "foreach-ok", &config.WorkflowRef{File: "workflows/foreach-ok.yaml"}); err != nil {
+			t.Fatalf("Load error: %v", err)
+		}
+	})
+
+	t.Run("rejects foreach missing items", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "foreach-missing-items.yaml")
+		content := `description: foreach
+steps:
+  - id: fanout
+    type: foreach
+    foreach:
+      steps:
+        - id: create
+          type: tool
+          tool: raven_upsert
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "foreach-missing-items", &config.WorkflowRef{File: "workflows/foreach-missing-items.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "missing foreach.items") {
+			t.Fatalf("expected foreach.items error, got %v", err)
+		}
+	})
+
+	t.Run("rejects foreach nested non-tool steps", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "foreach-non-tool.yaml")
+		content := `description: foreach
+steps:
+  - id: fanout
+    type: foreach
+    foreach:
+      items: "{{steps.seed.data.results}}"
+      steps:
+        - id: ask
+          type: agent
+          prompt: nope
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "foreach-non-tool", &config.WorkflowRef{File: "workflows/foreach-non-tool.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "must be type 'tool'") {
+			t.Fatalf("expected nested tool-only error, got %v", err)
+		}
+	})
+
+	t.Run("rejects foreach invalid on_error", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "foreach-on-error.yaml")
+		content := `description: foreach
+steps:
+  - id: fanout
+    type: foreach
+    foreach:
+      items: "{{steps.seed.data.results}}"
+      on_error: maybe
+      steps:
+        - id: create
+          type: tool
+          tool: raven_upsert
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "foreach-on-error", &config.WorkflowRef{File: "workflows/foreach-on-error.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "invalid foreach.on_error") {
+			t.Fatalf("expected foreach.on_error error, got %v", err)
+		}
+	})
+
 	t.Run("resolves bare filename under default workflow directory", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "w1-bare.yaml")
 		if err := os.WriteFile(path, []byte("description: bare\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
@@ -302,4 +400,44 @@ func TestResolveWorkflowFileRef(t *testing.T) {
 			t.Fatalf("expected directories.workflow enforcement error, got %v", err)
 		}
 	})
+}
+
+func TestLoad_TestdataForEachFixture(t *testing.T) {
+	vaultDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
+	if err != nil {
+		t.Fatalf("resolve testdata path: %v", err)
+	}
+
+	vaultCfg, err := config.LoadVaultConfig(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadVaultConfig error: %v", err)
+	}
+
+	wf, err := Get(vaultDir, "bifrost-watch-fanout", vaultCfg)
+	if err != nil {
+		t.Fatalf("Get workflow error: %v", err)
+	}
+	if len(wf.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(wf.Steps))
+	}
+
+	fanout := wf.Steps[1]
+	if fanout == nil || fanout.Type != "foreach" {
+		t.Fatalf("expected second step type foreach, got %#v", fanout)
+	}
+	if fanout.ForEach == nil {
+		t.Fatal("expected foreach config")
+	}
+	if fanout.ForEach.Items != "{{steps.gather_watch_notes.validated_outputs.entries}}" {
+		t.Fatalf("unexpected foreach.items: %q", fanout.ForEach.Items)
+	}
+	if fanout.ForEach.As != "entry" || fanout.ForEach.IndexAs != "slot" {
+		t.Fatalf("unexpected foreach aliases: as=%q index_as=%q", fanout.ForEach.As, fanout.ForEach.IndexAs)
+	}
+	if len(fanout.ForEach.Steps) != 1 || fanout.ForEach.Steps[0] == nil {
+		t.Fatalf("expected one nested tool step, got %#v", fanout.ForEach.Steps)
+	}
+	if fanout.ForEach.Steps[0].Type != "tool" || fanout.ForEach.Steps[0].Tool != "raven_upsert" {
+		t.Fatalf("unexpected nested step: %#v", fanout.ForEach.Steps[0])
+	}
 }

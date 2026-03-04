@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -219,10 +220,80 @@ func validateWorkflow(wf *Workflow) error {
 			if s.Tool == "" {
 				return fmt.Errorf("step '%s' (tool) missing tool", s.ID)
 			}
+		case "foreach":
+			if err := validateForEachStep(s); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("step '%s' has unknown type '%s'", s.ID, s.Type)
 		}
 	}
+	return nil
+}
+
+var workflowVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func validateForEachStep(step *config.WorkflowStep) error {
+	if step == nil {
+		return fmt.Errorf("foreach step is nil")
+	}
+	if step.ForEach == nil {
+		return fmt.Errorf("step '%s' (foreach) missing foreach config", step.ID)
+	}
+
+	def := step.ForEach
+	if strings.TrimSpace(def.Items) == "" {
+		return fmt.Errorf("step '%s' (foreach) missing foreach.items", step.ID)
+	}
+	if len(def.Steps) == 0 {
+		return fmt.Errorf("step '%s' (foreach) must define foreach.steps", step.ID)
+	}
+
+	itemVar := strings.TrimSpace(def.As)
+	if itemVar == "" {
+		itemVar = "item"
+	}
+	indexVar := strings.TrimSpace(def.IndexAs)
+	if indexVar == "" {
+		indexVar = "index"
+	}
+	if !workflowVarNamePattern.MatchString(itemVar) {
+		return fmt.Errorf("step '%s' (foreach) has invalid foreach.as '%s'", step.ID, def.As)
+	}
+	if !workflowVarNamePattern.MatchString(indexVar) {
+		return fmt.Errorf("step '%s' (foreach) has invalid foreach.index_as '%s'", step.ID, def.IndexAs)
+	}
+	if itemVar == indexVar {
+		return fmt.Errorf("step '%s' (foreach) variable names conflict: '%s'", step.ID, itemVar)
+	}
+
+	onError := strings.TrimSpace(def.OnError)
+	if onError != "" && onError != "fail_fast" && onError != "continue" {
+		return fmt.Errorf("step '%s' (foreach) has invalid foreach.on_error '%s'", step.ID, def.OnError)
+	}
+
+	seen := make(map[string]struct{}, len(def.Steps))
+	for i, nested := range def.Steps {
+		if nested == nil {
+			return fmt.Errorf("step '%s' (foreach) nested step %d is nil", step.ID, i)
+		}
+		nestedID := strings.TrimSpace(nested.ID)
+		if nestedID == "" {
+			return fmt.Errorf("step '%s' (foreach) nested step %d missing id", step.ID, i)
+		}
+		if _, ok := seen[nestedID]; ok {
+			return fmt.Errorf("step '%s' (foreach) has duplicate nested step id '%s'", step.ID, nestedID)
+		}
+		seen[nestedID] = struct{}{}
+
+		if nested.Type != "tool" {
+			return fmt.Errorf("step '%s' (foreach) nested step '%s' must be type 'tool'", step.ID, nestedID)
+		}
+		if strings.TrimSpace(nested.Tool) == "" {
+			return fmt.Errorf("step '%s' (foreach) nested step '%s' missing tool", step.ID, nestedID)
+		}
+	}
+
 	return nil
 }
 

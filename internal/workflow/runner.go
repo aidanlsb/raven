@@ -3,6 +3,7 @@ package workflow
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -135,6 +136,24 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 				At:       state.UpdatedAt,
 			})
 
+		case "foreach":
+			result, status, err := r.runForEachStep(step, state.Inputs, state.Steps)
+			if result != nil {
+				state.Steps[step.ID] = result
+			}
+			if err != nil {
+				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
+			}
+
+			state.Cursor = i + 1
+			state.UpdatedAt = time.Now().UTC()
+			state.History = append(state.History, RunHistoryEvent{
+				StepID:   step.ID,
+				StepType: "foreach",
+				Status:   status,
+				At:       state.UpdatedAt,
+			})
+
 		default:
 			return nil, fmt.Errorf("step '%s': unknown step type '%s'", step.ID, step.Type)
 		}
@@ -241,6 +260,147 @@ func validateInputsTyped(wf *Workflow, inputs map[string]interface{}) error {
 		return fmt.Errorf("missing required inputs: %v", missing)
 	}
 	return nil
+}
+
+func (r *Runner) runForEachStep(
+	step *config.WorkflowStep,
+	inputs map[string]interface{},
+	steps map[string]interface{},
+) (map[string]interface{}, string, error) {
+	if step == nil || step.ForEach == nil {
+		return nil, "", fmt.Errorf("foreach step config missing")
+	}
+	if r.ToolFunc == nil {
+		return nil, "", fmt.Errorf("tool function not configured")
+	}
+
+	itemVar := strings.TrimSpace(step.ForEach.As)
+	if itemVar == "" {
+		itemVar = "item"
+	}
+	indexVar := strings.TrimSpace(step.ForEach.IndexAs)
+	if indexVar == "" {
+		indexVar = "index"
+	}
+	onError := strings.TrimSpace(step.ForEach.OnError)
+	if onError == "" {
+		onError = "fail_fast"
+	}
+
+	rawItems, err := resolveForEachItems(step.ForEach.Items, inputs, steps)
+	if err != nil {
+		return nil, "", err
+	}
+
+	results := make([]interface{}, 0, len(rawItems))
+	successCount := 0
+	errorCount := 0
+
+	for idx, item := range rawItems {
+		iteration := map[string]interface{}{
+			"index": idx,
+			"item":  item,
+			"steps": map[string]interface{}{},
+			"ok":    true,
+		}
+		iterationSteps := iteration["steps"].(map[string]interface{})
+		scope := map[string]interface{}{
+			itemVar:  item,
+			indexVar: idx,
+		}
+
+		for _, nested := range step.ForEach.Steps {
+			args, interpErr := interpolateObjectWithScope(nested.Arguments, inputs, steps, scope)
+			if interpErr != nil {
+				errMsg := fmt.Sprintf("foreach item %d nested step '%s': %v", idx, nested.ID, interpErr)
+				iteration["ok"] = false
+				iteration["error"] = errMsg
+				errorCount++
+				results = append(results, iteration)
+				if onError == "continue" {
+					goto nextIteration
+				}
+				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf(errMsg)
+			}
+
+			out, callErr := r.ToolFunc(nested.Tool, args)
+			if callErr != nil {
+				errMsg := fmt.Sprintf("foreach item %d nested step '%s': %v", idx, nested.ID, callErr)
+				iteration["ok"] = false
+				iteration["error"] = errMsg
+				errorCount++
+				results = append(results, iteration)
+				if onError == "continue" {
+					goto nextIteration
+				}
+				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf(errMsg)
+			}
+
+			iterationSteps[nested.ID] = out
+		}
+
+		successCount++
+		results = append(results, iteration)
+
+	nextIteration:
+	}
+
+	status := "ok"
+	if errorCount > 0 {
+		status = "partial_failed"
+	}
+	return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), status, nil
+}
+
+func resolveForEachItems(
+	raw string,
+	inputs map[string]interface{},
+	steps map[string]interface{},
+) ([]interface{}, error) {
+	expr := strings.TrimSpace(raw)
+	if expr == "" {
+		return nil, fmt.Errorf("foreach.items is required")
+	}
+	if exact, ok := extractExactInterpolationExpr(expr); ok {
+		expr = exact
+	}
+
+	value, ok, err := resolveExprRaw(expr, inputs, steps)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("unknown variable: %s", expr)
+	}
+
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("foreach.items must resolve to array, got %T", value)
+	}
+	return items, nil
+}
+
+func buildForEachStepResult(
+	onError string,
+	itemVar string,
+	indexVar string,
+	successCount int,
+	errorCount int,
+	results []interface{},
+) map[string]interface{} {
+	total := successCount + errorCount
+	return map[string]interface{}{
+		"ok": errorCount == 0,
+		"data": map[string]interface{}{
+			"on_error":      onError,
+			"items_total":   total,
+			"success_count": successCount,
+			"error_count":   errorCount,
+			"results":       results,
+			"item_var":      itemVar,
+			"index_var":     indexVar,
+		},
+	}
 }
 
 func applyDefaultsTyped(wf *Workflow, inputs map[string]interface{}) (map[string]interface{}, error) {

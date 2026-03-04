@@ -102,3 +102,5 @@ workflows:
 
   code-review:
     file: workflows/code-review.yaml
+  bifrost-watch-fanout:
+    file: workflows/bifrost-watch-fanout.yaml

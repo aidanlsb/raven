@@ -314,6 +314,27 @@ type WorkflowStep struct {
 	// tool
 	Tool      string                 `yaml:"tool,omitempty" json:"tool,omitempty"`
 	Arguments map[string]interface{} `yaml:"arguments,omitempty" json:"arguments,omitempty"`
+
+	// foreach
+	ForEach *WorkflowForEach `yaml:"foreach,omitempty" json:"foreach,omitempty"`
+}
+
+// WorkflowForEach defines deterministic fanout behavior for workflow steps.
+type WorkflowForEach struct {
+	// Items is an interpolation expression resolving to an array.
+	Items string `yaml:"items" json:"items"`
+
+	// As defines the loop item variable name (default: "item").
+	As string `yaml:"as,omitempty" json:"as,omitempty"`
+
+	// IndexAs defines the loop index variable name (default: "index").
+	IndexAs string `yaml:"index_as,omitempty" json:"index_as,omitempty"`
+
+	// OnError controls failure policy: "fail_fast" (default) or "continue".
+	OnError string `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+
+	// Steps defines tool steps to execute per item.
+	Steps []*WorkflowStep `yaml:"steps" json:"steps"`
 }
 
 type WorkflowPromptOutput struct {
