@@ -189,6 +189,28 @@ func ApplyRetentionExpiry(state *WorkflowRunState, cfg config.ResolvedWorkflowRu
 }
 
 func validateOutputType(fieldName, expectedType string, value interface{}) error {
+	spec, err := parseOutputType(expectedType)
+	if err != nil {
+		return fmt.Errorf("agent output '%s' has unsupported declared type '%s'", fieldName, expectedType)
+	}
+
+	if spec.IsArray {
+		items, ok := value.([]interface{})
+		if !ok {
+			return fmt.Errorf("agent output '%s' must be array", fieldName)
+		}
+		for i, item := range items {
+			if err := validateOutputScalarType(fmt.Sprintf("%s[%d]", fieldName, i), spec.Base, item); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return validateOutputScalarType(fieldName, spec.Base, value)
+}
+
+func validateOutputScalarType(fieldName, expectedType string, value interface{}) error {
 	switch expectedType {
 	case "markdown", "string":
 		if _, ok := value.(string); !ok {

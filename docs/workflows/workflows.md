@@ -124,6 +124,7 @@ Supported output types:
 - `bool`
 - `object`
 - `array`
+- typed arrays using `[]` (for example `string[]`, `number[]`, `object[]`)
 
 ## Runtime Behavior
 

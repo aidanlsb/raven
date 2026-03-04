@@ -246,12 +246,8 @@ func rejectLegacyTopLevelKeys(root *yaml.Node) error {
 }
 
 func isValidOutputType(outputType string) bool {
-	switch outputType {
-	case "markdown", "string", "number", "bool", "object", "array":
-		return true
-	default:
-		return false
-	}
+	_, err := parseOutputType(outputType)
+	return err == nil
 }
 
 // Get retrieves a workflow by name from the vault configuration.

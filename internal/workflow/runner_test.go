@@ -61,6 +61,42 @@ func TestRunner_StopsAtAgentStep(t *testing.T) {
 	}
 }
 
+func TestRunner_AgentStepTypedArrayOutputExample(t *testing.T) {
+	wf := &Workflow{
+		Name: "x",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "agent",
+				Type: "agent",
+				Outputs: map[string]*config.WorkflowPromptOutput{
+					"bullets": {Type: "string[]", Required: true},
+				},
+				Prompt: "Summarize",
+			},
+		},
+	}
+
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	result, err := r.Run(wf, map[string]string{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Next == nil || result.Next.Example == nil {
+		t.Fatalf("expected agent contract example, got %#v", result.Next)
+	}
+	outputs, ok := result.Next.Example["outputs"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected outputs object in example, got %#v", result.Next.Example["outputs"])
+	}
+	items, ok := outputs["bullets"].([]interface{})
+	if !ok {
+		t.Fatalf("expected bullets to be array in example, got %T", outputs["bullets"])
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty bullets example array, got %#v", items)
+	}
+}
+
 func TestRunner_ReturnsStepSummariesInsteadOfStepPayloads(t *testing.T) {
 	wf := &Workflow{
 		Name: "x",

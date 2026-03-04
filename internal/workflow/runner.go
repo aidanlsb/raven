@@ -167,7 +167,16 @@ func buildOutputExample(outputs map[string]*config.WorkflowPromptOutput) map[str
 		if def == nil {
 			continue
 		}
-		switch def.Type {
+		spec, err := parseOutputType(def.Type)
+		if err != nil {
+			out[name] = nil
+			continue
+		}
+		if spec.IsArray {
+			out[name] = []interface{}{}
+			continue
+		}
+		switch spec.Base {
 		case "markdown":
 			out[name] = "..."
 		case "string":

@@ -68,6 +68,32 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts typed array agent outputs", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "typed-output.yaml")
+		content := `description: typed output
+steps:
+  - id: compose
+    type: agent
+    prompt: "Summarize"
+    outputs:
+      bullets:
+        type: string[]
+        required: true
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		wf, err := Load(vaultDir, "typed-output", &config.WorkflowRef{File: "workflows/typed-output.yaml"})
+		if err != nil {
+			t.Fatalf("Load error: %v", err)
+		}
+		got := wf.Steps[0].Outputs["bullets"]
+		if got == nil || got.Type != "string[]" {
+			t.Fatalf("expected typed output string[], got %#v", got)
+		}
+	})
+
 	t.Run("resolves bare filename under default workflow directory", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "w1-bare.yaml")
 		if err := os.WriteFile(path, []byte("description: bare\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {

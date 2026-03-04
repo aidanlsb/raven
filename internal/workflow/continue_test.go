@@ -141,6 +141,60 @@ func TestApplyAgentOutputs_Validation(t *testing.T) {
 	}
 }
 
+func TestApplyAgentOutputs_Validation_TypedArray(t *testing.T) {
+	wf := &Workflow{
+		Name: "x",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "a",
+				Type: "agent",
+				Outputs: map[string]*config.WorkflowPromptOutput{
+					"bullets": {Type: "string[]", Required: true},
+				},
+				Prompt: "x",
+			},
+		},
+	}
+
+	newAwaitingState := func() *WorkflowRunState {
+		state, err := NewRunState(wf, map[string]interface{}{})
+		if err != nil {
+			t.Fatalf("NewRunState error: %v", err)
+		}
+		state.Status = RunStatusAwaitingAgent
+		state.AwaitingStep = "a"
+		state.Steps["a"] = map[string]interface{}{"prompt": "x"}
+		return state
+	}
+
+	t.Run("accepts matching array element types", func(t *testing.T) {
+		state := newAwaitingState()
+		err := ApplyAgentOutputs(wf, state, AgentOutputEnvelope{
+			Outputs: map[string]interface{}{
+				"bullets": []interface{}{"one", "two"},
+			},
+		})
+		if err != nil {
+			t.Fatalf("ApplyAgentOutputs error: %v", err)
+		}
+	})
+
+	t.Run("rejects wrong array element types", func(t *testing.T) {
+		state := newAwaitingState()
+		err := ApplyAgentOutputs(wf, state, AgentOutputEnvelope{
+			Outputs: map[string]interface{}{
+				"bullets": []interface{}{"one", 2},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected validation error for mixed element types")
+		}
+		if got := err.Error(); got != "agent output 'bullets[1]' must be string" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
 func TestRunner_ContinueAfterAgentOutput_DataNamespaceCompatibility(t *testing.T) {
 	wf := &Workflow{
 		Name: "daily-brief",
