@@ -594,6 +594,42 @@ raven_workflow_show(name="meeting-prep")
 # Run with inputs
 raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
 
+# Add foreach fanout step with nested deterministic tool work
+raven_workflow_step_add(
+  workflow_name="daily-brief",
+  step_json={
+    "id":"fanout",
+    "type":"foreach",
+    "foreach":{
+      "items":"{{steps.collect.data.results}}",
+      "as":"item",
+      "steps":[
+        {
+          "id":"write",
+          "type":"tool",
+          "tool":"raven_upsert",
+          "arguments":{"type":"task","title":"{{item.title}}"}
+        }
+      ]
+    }
+  }
+)
+
+# Add switch routing step with explicit default fallback
+raven_workflow_step_add(
+  workflow_name="triage",
+  step_json={
+    "id":"route",
+    "type":"switch",
+    "switch":{
+      "value":"{{steps.classify.validated_outputs.route}}",
+      "outputs":{"action":{"type":"string","required":true}},
+      "cases":{"high":{"emit":{"action":"escalate"}}},
+      "default":{"emit":{"action":"backlog"}}
+    }
+  }
+)
+
 # Fetch one step output incrementally
 raven_workflow_runs_step(run_id="wrf_abcd1234", step_id="todos")
 
@@ -610,6 +646,9 @@ raven_workflow_runs_step(
 Notes:
 - `raven_workflow_add` is file-only; inline definitions are not supported
 - Workflow files must be under `directories.workflow` (default `workflows/`)
+- For `type: foreach`, downstream results are at `{{steps.<id>.data.results}}` with per-item `ok/error` details
+- For `type: switch`, selected branch metadata is at `{{steps.<id>.data.selected_case}}` and converged output at `{{steps.<id>.data.output.*}}`
+- `switch.default` is required, and branch steps are deterministic only (`tool` / `foreach`)
 
 ### Skills
 

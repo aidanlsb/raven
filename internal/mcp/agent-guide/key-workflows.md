@@ -498,11 +498,58 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
 **How workflows work:**
 
 1. **Inputs** are validated (required fields checked, defaults applied)
-2. **Steps** execute in order, with `{{inputs.X}}` and `{{steps.<id>...}}` interpolated as needed
-3. When an **agent** step is reached, Raven returns the prompt plus the declared `outputs` schema
-4. Raven also returns `step_summaries` so agents can fetch heavy context incrementally by step
-5. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
-6. If changes are needed, use explicit `tool` steps or normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
+2. **Deterministic steps** execute in order:
+   - `tool` for one deterministic tool call
+   - `foreach` for deterministic fanout over an array (`items`)
+   - `switch` for deterministic case routing with required `default`
+3. `{{inputs.X}}` and `{{steps.<id>...}}` are interpolated as needed
+4. When an **agent** step is reached, Raven returns the prompt plus the declared `outputs` schema
+5. Raven also returns `step_summaries` so agents can fetch heavy context incrementally by step
+6. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
+7. If changes are needed, use explicit `tool` steps or normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
+
+**Foreach and switch output paths:**
+
+- `foreach` stores summary and per-item results at `{{steps.<foreach_id>.data.results}}`
+- `foreach` per-item records include `item`, `index`, nested `steps`, and `ok/error`
+- `switch` stores selected branch metadata at `{{steps.<switch_id>.data.selected_case}}`
+- `switch` converged branch output is at `{{steps.<switch_id>.data.output.*}}`
+- Use `switch.outputs` + per-branch `emit` when downstream steps need a unified shape
+
+**Minimal examples:**
+
+```yaml
+- id: fanout
+  type: foreach
+  foreach:
+    items: "{{steps.collect.data.results}}"
+    as: item
+    steps:
+      - id: write
+        type: tool
+        tool: raven_upsert
+        arguments:
+          type: task
+          title: "{{item.title}}"
+```
+
+```yaml
+- id: route
+  type: switch
+  switch:
+    value: "{{steps.classify.validated_outputs.route}}"
+    outputs:
+      action:
+        type: string
+        required: true
+    cases:
+      high:
+        emit:
+          action: escalate
+    default:
+      emit:
+        action: backlog
+```
 
 **Variable patterns:**
 
@@ -512,6 +559,9 @@ Workflows are reusable multi-step pipelines. **Proactively check for workflows**
 | `{{steps.stepId}}` | Entire step output |
 | `{{steps.queryStep.data.results}}` | Result rows from a `tool: raven_query` step |
 | `{{steps.readStep.data.content}}` | Raw file content from a `tool: raven_read` step |
+| `{{steps.fanout.data.results}}` | Per-item output records from a `foreach` step |
+| `{{steps.route.data.selected_case}}` | Selected case label from a `switch` step |
+| `{{steps.route.data.output.action}}` | Converged emitted output field from a `switch` step |
 | `{{steps.toolStep.ok}}` | Tool success boolean from any `tool` step |
 
 **When to use workflows:**

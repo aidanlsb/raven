@@ -115,14 +115,7 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 			}, nil), nil
 
 		case "tool":
-			if r.ToolFunc == nil {
-				return nil, fmt.Errorf("step '%s': tool function not configured", step.ID)
-			}
-			args, err := interpolateObjectWithTypedInputs(step.Arguments, state.Inputs, state.Steps)
-			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
-			}
-			result, err := r.ToolFunc(step.Tool, args)
+			result, err := r.executeToolStep(step, state.Inputs, state.Steps, nil)
 			if err != nil {
 				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
 			}
@@ -150,6 +143,24 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 			state.History = append(state.History, RunHistoryEvent{
 				StepID:   step.ID,
 				StepType: "foreach",
+				Status:   status,
+				At:       state.UpdatedAt,
+			})
+
+		case "switch":
+			result, status, err := r.runSwitchStep(step, state.Inputs, state.Steps)
+			if result != nil {
+				state.Steps[step.ID] = result
+			}
+			if err != nil {
+				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
+			}
+
+			state.Cursor = i + 1
+			state.UpdatedAt = time.Now().UTC()
+			state.History = append(state.History, RunHistoryEvent{
+				StepID:   step.ID,
+				StepType: "switch",
 				Status:   status,
 				At:       state.UpdatedAt,
 			})
@@ -310,20 +321,7 @@ func (r *Runner) runForEachStep(
 		}
 
 		for _, nested := range step.ForEach.Steps {
-			args, interpErr := interpolateObjectWithScope(nested.Arguments, inputs, steps, scope)
-			if interpErr != nil {
-				errMsg := fmt.Sprintf("foreach item %d nested step '%s': %v", idx, nested.ID, interpErr)
-				iteration["ok"] = false
-				iteration["error"] = errMsg
-				errorCount++
-				results = append(results, iteration)
-				if onError == "continue" {
-					goto nextIteration
-				}
-				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf("%s", errMsg)
-			}
-
-			out, callErr := r.ToolFunc(nested.Tool, args)
+			out, callErr := r.executeToolStep(nested, inputs, steps, scope)
 			if callErr != nil {
 				errMsg := fmt.Sprintf("foreach item %d nested step '%s': %v", idx, nested.ID, callErr)
 				iteration["ok"] = false
@@ -350,6 +348,144 @@ func (r *Runner) runForEachStep(
 		status = "partial_failed"
 	}
 	return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), status, nil
+}
+
+func (r *Runner) runSwitchStep(
+	step *config.WorkflowStep,
+	inputs map[string]interface{},
+	steps map[string]interface{},
+) (map[string]interface{}, string, error) {
+	if step == nil || step.Switch == nil {
+		return nil, "", fmt.Errorf("switch step config missing")
+	}
+
+	value, err := resolveSwitchValue(step.Switch.Value, inputs, steps)
+	if err != nil {
+		return nil, "", err
+	}
+
+	selectedCase := value
+	branch, ok := step.Switch.Cases[value]
+	if !ok {
+		branch = step.Switch.Default
+		selectedCase = "default"
+	}
+	if branch == nil {
+		return nil, "", fmt.Errorf("switch selected branch is nil")
+	}
+
+	branchResults := make(map[string]interface{})
+	for _, nested := range branch.Steps {
+		effectiveSteps := overlayStepState(steps, branchResults)
+		switch nested.Type {
+		case "tool":
+			out, callErr := r.executeToolStep(nested, inputs, effectiveSteps, nil)
+			if callErr != nil {
+				return nil, "error", fmt.Errorf("switch branch '%s' nested step '%s': %w", selectedCase, nested.ID, callErr)
+			}
+			branchResults[nested.ID] = out
+		case "foreach":
+			out, _, runErr := r.runForEachStep(nested, inputs, effectiveSteps)
+			if runErr != nil {
+				return nil, "error", fmt.Errorf("switch branch '%s' nested step '%s': %w", selectedCase, nested.ID, runErr)
+			}
+			branchResults[nested.ID] = out
+		default:
+			return nil, "error", fmt.Errorf(
+				"switch branch '%s' nested step '%s' has unsupported type '%s'",
+				selectedCase,
+				nested.ID,
+				nested.Type,
+			)
+		}
+	}
+
+	var emit map[string]interface{}
+	if len(branch.Emit) > 0 {
+		effectiveSteps := overlayStepState(steps, branchResults)
+		emit, err = interpolateObjectWithTypedInputs(branch.Emit, inputs, effectiveSteps)
+		if err != nil {
+			return nil, "error", fmt.Errorf("switch branch '%s' emit: %w", selectedCase, err)
+		}
+	} else {
+		emit = map[string]interface{}{}
+	}
+
+	if len(step.Switch.Outputs) > 0 {
+		if err := ValidateAgentOutputs(step.Switch.Outputs, emit); err != nil {
+			return nil, "error", fmt.Errorf("switch branch '%s' emit invalid: %w", selectedCase, err)
+		}
+	}
+
+	return map[string]interface{}{
+		"ok": true,
+		"data": map[string]interface{}{
+			"value":          value,
+			"selected_case":  selectedCase,
+			"output":         emit,
+			"branch_results": branchResults,
+		},
+	}, "ok", nil
+}
+
+func resolveSwitchValue(
+	raw string,
+	inputs map[string]interface{},
+	steps map[string]interface{},
+) (string, error) {
+	expr := strings.TrimSpace(raw)
+	if expr == "" {
+		return "", fmt.Errorf("switch.value is required")
+	}
+	if exact, ok := extractExactInterpolationExpr(expr); ok {
+		val, exists, err := resolveExprRaw(exact, inputs, steps)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return "", fmt.Errorf("unknown variable: %s", exact)
+		}
+		strVal, ok := val.(string)
+		if !ok {
+			return "", fmt.Errorf("switch.value must resolve to string, got %T", val)
+		}
+		return strVal, nil
+	}
+	out, err := interpolateWithTypedInputs(expr, inputs, steps)
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+func overlayStepState(base map[string]interface{}, overlay map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(base)+len(overlay))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range overlay {
+		out[k] = v
+	}
+	return out
+}
+
+func (r *Runner) executeToolStep(
+	step *config.WorkflowStep,
+	inputs map[string]interface{},
+	steps map[string]interface{},
+	scope map[string]interface{},
+) (interface{}, error) {
+	if step == nil {
+		return nil, fmt.Errorf("tool step is nil")
+	}
+	if r.ToolFunc == nil {
+		return nil, fmt.Errorf("tool function not configured")
+	}
+	args, err := interpolateObjectWithScope(step.Arguments, inputs, steps, scope)
+	if err != nil {
+		return nil, err
+	}
+	return r.ToolFunc(step.Tool, args)
 }
 
 func resolveForEachItems(

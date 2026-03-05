@@ -149,6 +149,25 @@ var workflowShowCmd = &cobra.Command{
 					fmt.Printf("     outputs: %d\n", len(step.Outputs))
 				case "tool":
 					fmt.Printf("     tool: %s\n", step.Tool)
+				case "foreach":
+					if step.ForEach != nil {
+						fmt.Printf("     items: %s\n", step.ForEach.Items)
+						fmt.Printf("     nested_steps: %d\n", len(step.ForEach.Steps))
+						if step.ForEach.OnError != "" {
+							fmt.Printf("     on_error: %s\n", step.ForEach.OnError)
+						}
+					}
+				case "switch":
+					if step.Switch != nil {
+						fmt.Printf("     value: %s\n", step.Switch.Value)
+						fmt.Printf("     cases: %d\n", len(step.Switch.Cases))
+						if step.Switch.Default != nil {
+							fmt.Printf("     has_default: true\n")
+						}
+						if len(step.Switch.Outputs) > 0 {
+							fmt.Printf("     outputs: %d\n", len(step.Switch.Outputs))
+						}
+					}
 				}
 			}
 		}
@@ -1470,6 +1489,7 @@ func validateWorkflowStepJSONKeys(obj map[string]interface{}) error {
 		"tool":        {},
 		"arguments":   {},
 		"foreach":     {},
+		"switch":      {},
 	}
 	for key := range obj {
 		if _, ok := allowed[key]; !ok {

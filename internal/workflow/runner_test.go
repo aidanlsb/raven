@@ -544,3 +544,229 @@ func TestRunner_ForEachFailFastReturnsError(t *testing.T) {
 		t.Fatal("after step should not run on fail-fast foreach error")
 	}
 }
+
+func TestRunner_SwitchRoutesToMatchingCase(t *testing.T) {
+	wf := &Workflow{
+		Name: "switch-match",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "classify",
+				Type: "tool",
+				Tool: "raven_query",
+			},
+			{
+				ID:   "route",
+				Type: "switch",
+				Switch: &config.WorkflowSwitch{
+					Value: "{{steps.classify.data.route}}",
+					Outputs: map[string]*config.WorkflowPromptOutput{
+						"action": {Type: "string", Required: true},
+						"target": {Type: "string", Required: true},
+					},
+					Cases: map[string]*config.WorkflowSwitchCase{
+						"high": {
+							Steps: []*config.WorkflowStep{
+								{
+									ID:   "create_incident",
+									Type: "tool",
+									Tool: "raven_upsert",
+								},
+							},
+							Emit: map[string]interface{}{
+								"action": "create_incident",
+								"target": "{{steps.create_incident.data.object_id}}",
+							},
+						},
+					},
+					Default: &config.WorkflowSwitchCase{
+						Emit: map[string]interface{}{
+							"action": "fallback",
+							"target": "none",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	callOrder := make([]string, 0, 2)
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		callOrder = append(callOrder, tool)
+		switch tool {
+		case "raven_query":
+			return map[string]interface{}{
+				"ok": true,
+				"data": map[string]interface{}{
+					"route": "high",
+				},
+			}, nil
+		case "raven_upsert":
+			return map[string]interface{}{
+				"ok": true,
+				"data": map[string]interface{}{
+					"object_id": "incident/critical-db",
+				},
+			}, nil
+		default:
+			return nil, fmt.Errorf("unexpected tool: %s", tool)
+		}
+	}
+
+	state, err := NewRunState(wf, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("NewRunState error: %v", err)
+	}
+	result, err := r.RunWithState(wf, state)
+	if err != nil {
+		t.Fatalf("RunWithState returned error: %v", err)
+	}
+	if result.Status != RunStatusCompleted {
+		t.Fatalf("expected completed status, got %s", result.Status)
+	}
+	if len(callOrder) != 2 || callOrder[0] != "raven_query" || callOrder[1] != "raven_upsert" {
+		t.Fatalf("unexpected tool call order: %#v", callOrder)
+	}
+
+	routeStep, ok := state.Steps["route"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected switch step output map, got %T", state.Steps["route"])
+	}
+	data, ok := routeStep["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected switch data map, got %T", routeStep["data"])
+	}
+	if data["selected_case"] != "high" {
+		t.Fatalf("expected selected_case=high, got %#v", data["selected_case"])
+	}
+	output, ok := data["output"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected switch output map, got %T", data["output"])
+	}
+	if output["action"] != "create_incident" || output["target"] != "incident/critical-db" {
+		t.Fatalf("unexpected converged switch output: %#v", output)
+	}
+}
+
+func TestRunner_SwitchFallsBackToDefaultCase(t *testing.T) {
+	wf := &Workflow{
+		Name: "switch-default",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "classify",
+				Type: "tool",
+				Tool: "raven_query",
+			},
+			{
+				ID:   "route",
+				Type: "switch",
+				Switch: &config.WorkflowSwitch{
+					Value: "{{steps.classify.data.route}}",
+					Cases: map[string]*config.WorkflowSwitchCase{
+						"high": {
+							Emit: map[string]interface{}{
+								"action": "create_incident",
+							},
+						},
+					},
+					Default: &config.WorkflowSwitchCase{
+						Emit: map[string]interface{}{
+							"action": "fallback",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		if tool != "raven_query" {
+			return nil, fmt.Errorf("unexpected tool: %s", tool)
+		}
+		return map[string]interface{}{
+			"ok": true,
+			"data": map[string]interface{}{
+				"route": "unknown",
+			},
+		}, nil
+	}
+
+	state, err := NewRunState(wf, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("NewRunState error: %v", err)
+	}
+	_, err = r.RunWithState(wf, state)
+	if err != nil {
+		t.Fatalf("RunWithState returned error: %v", err)
+	}
+
+	routeStep, ok := state.Steps["route"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected switch step output map, got %T", state.Steps["route"])
+	}
+	data, ok := routeStep["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected switch data map, got %T", routeStep["data"])
+	}
+	if data["selected_case"] != "default" {
+		t.Fatalf("expected selected_case=default, got %#v", data["selected_case"])
+	}
+}
+
+func TestRunner_SwitchReturnsErrorOnInvalidEmitType(t *testing.T) {
+	wf := &Workflow{
+		Name: "switch-invalid-emit",
+		Steps: []*config.WorkflowStep{
+			{
+				ID:   "classify",
+				Type: "tool",
+				Tool: "raven_query",
+			},
+			{
+				ID:   "route",
+				Type: "switch",
+				Switch: &config.WorkflowSwitch{
+					Value: "{{steps.classify.data.route}}",
+					Outputs: map[string]*config.WorkflowPromptOutput{
+						"action": {Type: "string", Required: true},
+					},
+					Cases: map[string]*config.WorkflowSwitchCase{
+						"high": {
+							Emit: map[string]interface{}{
+								"action": 123,
+							},
+						},
+					},
+					Default: &config.WorkflowSwitchCase{
+						Emit: map[string]interface{}{
+							"action": "fallback",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
+		return map[string]interface{}{
+			"ok": true,
+			"data": map[string]interface{}{
+				"route": "high",
+			},
+		}, nil
+	}
+
+	state, err := NewRunState(wf, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("NewRunState error: %v", err)
+	}
+	_, err = r.RunWithState(wf, state)
+	if err == nil {
+		t.Fatal("expected switch emit validation error")
+	}
+	if !strings.Contains(err.Error(), "emit invalid") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

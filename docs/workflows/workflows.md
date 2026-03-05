@@ -6,6 +6,7 @@ Workflow v3 uses a breaking, steps-only model:
 - top-level `context` / `prompt` / `outputs` are removed
 - deterministic work happens in `type: tool` steps
 - deterministic fanout work happens in `type: foreach` steps
+- deterministic conditional routing happens in `type: switch` steps
 - agent handoff happens at the first `type: agent` step
 
 Raven executes deterministic steps only. It does not call an LLM.
@@ -86,6 +87,13 @@ steps:
   - `foreach.as`: optional item variable alias (default `item`)
   - `foreach.index_as`: optional index variable alias (default `index`)
   - `foreach.on_error`: optional failure policy: `fail_fast` (default) or `continue`
+- `type: switch`
+  - `switch.value`: interpolation/string value used for exact case matching
+  - `switch.cases`: map of case labels to branch definitions
+  - `switch.default`: required fallback branch
+  - branch `steps`: nested deterministic steps (`type: tool` or `type: foreach`)
+  - branch `emit`: optional converged branch output payload
+  - `switch.outputs`: optional output contract enforced against branch `emit` payloads
 - `type: agent`
   - `prompt`: rendered prompt string
   - `outputs`: optional typed output contract for the agent response
@@ -138,7 +146,7 @@ Supported output types:
 
 `rvn workflow run`:
 - validates inputs
-- executes deterministic steps (`tool` and `foreach`) in order
+- executes deterministic steps (`tool`, `foreach`, and `switch`) in order
 - stops at the first agent step
 - persists a run checkpoint under `.raven/workflow-runs/`
 - returns `run_id`, `status`, `revision`, `next.prompt`, declared `next.outputs`, and lightweight `step_summaries`

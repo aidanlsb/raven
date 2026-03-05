@@ -192,6 +192,154 @@ steps:
 		}
 	})
 
+	t.Run("accepts switch with cases and required default", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "switch-ok.yaml")
+		content := `description: switch
+steps:
+  - id: classify
+    type: agent
+    prompt: classify
+    outputs:
+      route:
+        type: string
+        required: true
+  - id: route
+    type: switch
+    switch:
+      value: "{{steps.classify.validated_outputs.route}}"
+      outputs:
+        action:
+          type: string
+          required: true
+      cases:
+        high:
+          steps:
+            - id: create_incident
+              type: tool
+              tool: raven_upsert
+          emit:
+            action: "create_incident"
+      default:
+        emit:
+          action: "fallback"
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		if _, err := Load(vaultDir, "switch-ok", &config.WorkflowRef{File: "workflows/switch-ok.yaml"}); err != nil {
+			t.Fatalf("Load error: %v", err)
+		}
+	})
+
+	t.Run("rejects switch missing value", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "switch-missing-value.yaml")
+		content := `description: switch
+steps:
+  - id: route
+    type: switch
+    switch:
+      cases:
+        high:
+          emit:
+            action: high
+      default:
+        emit:
+          action: fallback
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "switch-missing-value", &config.WorkflowRef{File: "workflows/switch-missing-value.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "missing switch.value") {
+			t.Fatalf("expected switch.value error, got %v", err)
+		}
+	})
+
+	t.Run("rejects switch missing default", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "switch-missing-default.yaml")
+		content := `description: switch
+steps:
+  - id: route
+    type: switch
+    switch:
+      value: "high"
+      cases:
+        high:
+          emit:
+            action: high
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "switch-missing-default", &config.WorkflowRef{File: "workflows/switch-missing-default.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "must define switch.default") {
+			t.Fatalf("expected switch.default error, got %v", err)
+		}
+	})
+
+	t.Run("rejects switch nested non-deterministic steps", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "switch-nested-agent.yaml")
+		content := `description: switch
+steps:
+  - id: route
+    type: switch
+    switch:
+      value: "high"
+      cases:
+        high:
+          steps:
+            - id: ask
+              type: agent
+              prompt: no
+      default:
+        emit:
+          action: fallback
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "switch-nested-agent", &config.WorkflowRef{File: "workflows/switch-nested-agent.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "must be type 'tool' or 'foreach'") {
+			t.Fatalf("expected deterministic nested-step error, got %v", err)
+		}
+	})
+
+	t.Run("rejects switch outputs without per-branch emit", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "switch-missing-emit.yaml")
+		content := `description: switch
+steps:
+  - id: route
+    type: switch
+    switch:
+      value: "high"
+      outputs:
+        action:
+          type: string
+          required: true
+      cases:
+        high:
+          steps:
+            - id: create
+              type: tool
+              tool: raven_upsert
+      default:
+        emit:
+          action: fallback
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "switch-missing-emit", &config.WorkflowRef{File: "workflows/switch-missing-emit.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "missing emit") {
+			t.Fatalf("expected missing emit error, got %v", err)
+		}
+	})
+
 	t.Run("resolves bare filename under default workflow directory", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "w1-bare.yaml")
 		if err := os.WriteFile(path, []byte("description: bare\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
@@ -439,5 +587,37 @@ func TestLoad_TestdataForEachFixture(t *testing.T) {
 	}
 	if fanout.ForEach.Steps[0].Type != "tool" || fanout.ForEach.Steps[0].Tool != "raven_upsert" {
 		t.Fatalf("unexpected nested step: %#v", fanout.ForEach.Steps[0])
+	}
+}
+
+func TestLoad_TestdataSwitchFixture(t *testing.T) {
+	vaultDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
+	if err != nil {
+		t.Fatalf("resolve testdata path: %v", err)
+	}
+
+	wf, err := Load(vaultDir, "switch-routing", &config.WorkflowRef{File: "workflows/switch-routing.yaml"})
+	if err != nil {
+		t.Fatalf("Load workflow error: %v", err)
+	}
+	if len(wf.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(wf.Steps))
+	}
+
+	route := wf.Steps[1]
+	if route == nil || route.Type != "switch" {
+		t.Fatalf("expected second step type switch, got %#v", route)
+	}
+	if route.Switch == nil {
+		t.Fatal("expected switch config")
+	}
+	if route.Switch.Value != "{{steps.classify.validated_outputs.route}}" {
+		t.Fatalf("unexpected switch.value: %q", route.Switch.Value)
+	}
+	if route.Switch.Default == nil {
+		t.Fatal("expected switch default branch")
+	}
+	if len(route.Switch.Cases) != 2 {
+		t.Fatalf("expected 2 switch cases, got %d", len(route.Switch.Cases))
 	}
 }

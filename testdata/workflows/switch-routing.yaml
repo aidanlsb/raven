@@ -1,0 +1,36 @@
+description: Route triage actions by classification output
+steps:
+  - id: classify
+    type: agent
+    outputs:
+      route:
+        type: string
+        required: true
+    prompt: |
+      Classify into one of: high, medium, low.
+
+  - id: route
+    type: switch
+    switch:
+      value: "{{steps.classify.validated_outputs.route}}"
+      outputs:
+        action:
+          type: string
+          required: true
+      cases:
+        high:
+          steps:
+            - id: create_incident
+              type: tool
+              tool: raven_upsert
+              arguments:
+                type: incident
+                title: "Escalated incident"
+          emit:
+            action: create_incident
+        medium:
+          emit:
+            action: create_task
+      default:
+        emit:
+          action: backlog

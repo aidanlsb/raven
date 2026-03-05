@@ -203,18 +203,8 @@ func validateWorkflow(wf *Workflow) error {
 			if s.Prompt == "" {
 				return fmt.Errorf("step '%s' (agent) missing prompt", s.ID)
 			}
-			if len(s.Outputs) > 0 {
-				for name, out := range s.Outputs {
-					if name == "" {
-						return fmt.Errorf("step '%s' (agent) has empty output name", s.ID)
-					}
-					if out == nil {
-						return fmt.Errorf("step '%s' (agent) output '%s' is nil", s.ID, name)
-					}
-					if !isValidOutputType(out.Type) {
-						return fmt.Errorf("step '%s' (agent) output '%s' has unknown type '%s'", s.ID, name, out.Type)
-					}
-				}
+			if err := validateStepOutputContract(s.ID, "agent", s.Outputs); err != nil {
+				return err
 			}
 		case "tool":
 			if s.Tool == "" {
@@ -222,6 +212,10 @@ func validateWorkflow(wf *Workflow) error {
 			}
 		case "foreach":
 			if err := validateForEachStep(s); err != nil {
+				return err
+			}
+		case "switch":
+			if err := validateSwitchStep(s); err != nil {
 				return err
 			}
 		default:
@@ -294,6 +288,138 @@ func validateForEachStep(step *config.WorkflowStep) error {
 		}
 	}
 
+	return nil
+}
+
+func validateSwitchStep(step *config.WorkflowStep) error {
+	if step == nil {
+		return fmt.Errorf("switch step is nil")
+	}
+	if step.Switch == nil {
+		return fmt.Errorf("step '%s' (switch) missing switch config", step.ID)
+	}
+
+	def := step.Switch
+	if strings.TrimSpace(def.Value) == "" {
+		return fmt.Errorf("step '%s' (switch) missing switch.value", step.ID)
+	}
+	if len(def.Cases) == 0 {
+		return fmt.Errorf("step '%s' (switch) must define switch.cases", step.ID)
+	}
+	if def.Default == nil {
+		return fmt.Errorf("step '%s' (switch) must define switch.default", step.ID)
+	}
+	if err := validateStepOutputContract(step.ID, "switch", def.Outputs); err != nil {
+		return err
+	}
+
+	requireEmit := len(def.Outputs) > 0
+	for label, branch := range def.Cases {
+		if strings.TrimSpace(label) == "" {
+			return fmt.Errorf("step '%s' (switch) has empty case label", step.ID)
+		}
+		if err := validateSwitchBranch(step.ID, fmt.Sprintf("case '%s'", label), branch, requireEmit, def.Outputs); err != nil {
+			return err
+		}
+	}
+	if err := validateSwitchBranch(step.ID, "default", def.Default, requireEmit, def.Outputs); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateSwitchBranch(
+	stepID string,
+	branchName string,
+	branch *config.WorkflowSwitchCase,
+	requireEmit bool,
+	contract map[string]*config.WorkflowPromptOutput,
+) error {
+	if branch == nil {
+		return fmt.Errorf("step '%s' (switch) %s branch is nil", stepID, branchName)
+	}
+	if len(branch.Steps) == 0 && len(branch.Emit) == 0 {
+		return fmt.Errorf("step '%s' (switch) %s must define steps or emit", stepID, branchName)
+	}
+
+	seen := make(map[string]struct{}, len(branch.Steps))
+	for i, nested := range branch.Steps {
+		if nested == nil {
+			return fmt.Errorf("step '%s' (switch) %s nested step %d is nil", stepID, branchName, i)
+		}
+		nestedID := strings.TrimSpace(nested.ID)
+		if nestedID == "" {
+			return fmt.Errorf("step '%s' (switch) %s nested step %d missing id", stepID, branchName, i)
+		}
+		if _, ok := seen[nestedID]; ok {
+			return fmt.Errorf("step '%s' (switch) %s has duplicate nested step id '%s'", stepID, branchName, nestedID)
+		}
+		seen[nestedID] = struct{}{}
+
+		switch nested.Type {
+		case "tool":
+			if strings.TrimSpace(nested.Tool) == "" {
+				return fmt.Errorf("step '%s' (switch) %s nested step '%s' missing tool", stepID, branchName, nestedID)
+			}
+		case "foreach":
+			if err := validateForEachStep(nested); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf(
+				"step '%s' (switch) %s nested step '%s' must be type 'tool' or 'foreach'",
+				stepID,
+				branchName,
+				nestedID,
+			)
+		}
+	}
+
+	if requireEmit {
+		if len(branch.Emit) == 0 {
+			return fmt.Errorf("step '%s' (switch) %s missing emit", stepID, branchName)
+		}
+		for key := range branch.Emit {
+			if _, ok := contract[key]; !ok {
+				return fmt.Errorf(
+					"step '%s' (switch) %s emit has undeclared field '%s'",
+					stepID,
+					branchName,
+					key,
+				)
+			}
+		}
+		for name, out := range contract {
+			if out != nil && out.Required {
+				if _, ok := branch.Emit[name]; !ok {
+					return fmt.Errorf("step '%s' (switch) %s emit missing required field '%s'", stepID, branchName, name)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateStepOutputContract(
+	stepID string,
+	stepType string,
+	outputs map[string]*config.WorkflowPromptOutput,
+) error {
+	if len(outputs) == 0 {
+		return nil
+	}
+	for name, out := range outputs {
+		if name == "" {
+			return fmt.Errorf("step '%s' (%s) has empty output name", stepID, stepType)
+		}
+		if out == nil {
+			return fmt.Errorf("step '%s' (%s) output '%s' is nil", stepID, stepType, name)
+		}
+		if !isValidOutputType(out.Type) {
+			return fmt.Errorf("step '%s' (%s) output '%s' has unknown type '%s'", stepID, stepType, name, out.Type)
+		}
+	}
 	return nil
 }
 

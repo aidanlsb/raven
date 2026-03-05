@@ -317,6 +317,9 @@ type WorkflowStep struct {
 
 	// foreach
 	ForEach *WorkflowForEach `yaml:"foreach,omitempty" json:"foreach,omitempty"`
+
+	// switch
+	Switch *WorkflowSwitch `yaml:"switch,omitempty" json:"switch,omitempty"`
 }
 
 // WorkflowForEach defines deterministic fanout behavior for workflow steps.
@@ -335,6 +338,30 @@ type WorkflowForEach struct {
 
 	// Steps defines tool steps to execute per item.
 	Steps []*WorkflowStep `yaml:"steps" json:"steps"`
+}
+
+// WorkflowSwitch defines deterministic conditional routing for workflow steps.
+type WorkflowSwitch struct {
+	// Value resolves to a case label.
+	Value string `yaml:"value" json:"value"`
+
+	// Outputs declares an optional converged output contract for branch emit values.
+	Outputs map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty" json:"outputs,omitempty"`
+
+	// Cases maps labels to branch definitions.
+	Cases map[string]*WorkflowSwitchCase `yaml:"cases" json:"cases"`
+
+	// Default is the required fallback branch.
+	Default *WorkflowSwitchCase `yaml:"default,omitempty" json:"default,omitempty"`
+}
+
+// WorkflowSwitchCase defines one switch branch body and optional converged output payload.
+type WorkflowSwitchCase struct {
+	// Steps are executed when this branch is selected.
+	Steps []*WorkflowStep `yaml:"steps,omitempty" json:"steps,omitempty"`
+
+	// Emit is optional branch output mapped to switch.outputs when declared.
+	Emit map[string]interface{} `yaml:"emit,omitempty" json:"emit,omitempty"`
 }
 
 type WorkflowPromptOutput struct {
