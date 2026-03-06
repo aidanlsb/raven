@@ -285,7 +285,8 @@ func TestAllNameFieldValues(t *testing.T) {
 		t.Fatalf("AllNameFieldValues error: %v", err)
 	}
 
-	if got := nameFieldMap["The Prose Edda"]; got != "books/the-prose-edda" {
-		t.Fatalf("nameFieldMap[%q] = %q, want %q", "The Prose Edda", got, "books/the-prose-edda")
+	got := nameFieldMap["The Prose Edda"]
+	if len(got) != 1 || got[0] != "books/the-prose-edda" {
+		t.Fatalf("nameFieldMap[%q] = %v, want [%q]", "The Prose Edda", got, "books/the-prose-edda")
 	}
 }

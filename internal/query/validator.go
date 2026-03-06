@@ -100,9 +100,9 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 	case *FieldPredicate:
 		return v.validateFieldPredicate(p, typeName, typeDef)
 	case *StringFuncPredicate:
-		return nil
+		return v.validateObjectStringFuncPredicate(p, typeName, typeDef)
 	case *ArrayQuantifierPredicate:
-		return nil
+		return v.validateArrayQuantifierPredicate(p, typeName, typeDef)
 	case *HasPredicate:
 		if p.SubQuery != nil {
 			return v.validateQuery(p.SubQuery)
@@ -189,6 +189,16 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 	case *ValuePredicate:
 		return nil
 	case *StringFuncPredicate:
+		if p.IsElementRef || p.Field != "value" {
+			fieldLabel := "." + p.Field
+			if p.IsElementRef {
+				fieldLabel = "_"
+			}
+			return &ValidationError{
+				Message:    fmt.Sprintf("string functions on trait queries only support .value, got %s", fieldLabel),
+				Suggestion: `Use contains(.value, "..."), startswith(.value, "..."), endswith(.value, "..."), or matches(.value, "..."). Use content("...") to search trait line content.`,
+			}
+		}
 		return nil
 	case *OnPredicate:
 		if p.SubQuery != nil {
@@ -290,23 +300,165 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 }
 
 func (v *Validator) validateFieldPredicate(p *FieldPredicate, typeName string, typeDef *schema.TypeDefinition) error {
-	// Check if field exists on the type
-	if typeDef == nil || typeDef.Fields == nil {
+	_, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
+	return err
+}
+
+func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, typeName string, typeDef *schema.TypeDefinition) error {
+	if p.IsElementRef {
 		return &ValidationError{
+			Message:    "string function placeholder '_' is only valid inside any()/all()/none()",
+			Suggestion: `Use contains(.field, "..."), startswith(.field, "..."), endswith(.field, "..."), or matches(.field, "...") for object fields.`,
+		}
+	}
+
+	fieldDef, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
+	if err != nil {
+		return err
+	}
+
+	if isArrayFieldType(fieldDef.Type) {
+		return &ValidationError{
+			Message:    fmt.Sprintf("string function predicates require a scalar field, but '.%s' is %s", p.Field, fieldDef.Type),
+			Suggestion: fmt.Sprintf(`Use any(.%s, contains(_, "...")) for array fields`, p.Field),
+		}
+	}
+
+	if !isStringLikeFieldType(fieldDef.Type) {
+		return &ValidationError{
+			Message:    fmt.Sprintf("string function predicates are not valid for field '.%s' of type %s", p.Field, fieldDef.Type),
+			Suggestion: "Use comparison predicates (.field==value, .field!=value, .field<value, etc.) for non-string fields",
+		}
+	}
+
+	return nil
+}
+
+func (v *Validator) validateArrayQuantifierPredicate(p *ArrayQuantifierPredicate, typeName string, typeDef *schema.TypeDefinition) error {
+	fieldDef, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
+	if err != nil {
+		return err
+	}
+
+	elemType, ok := arrayElementType(fieldDef.Type)
+	if !ok {
+		return &ValidationError{
+			Message:    fmt.Sprintf("array predicates any()/all()/none() require an array field, but '.%s' is %s", p.Field, fieldDef.Type),
+			Suggestion: "Use any()/all()/none() only with [] fields, or use scalar field predicates on non-array fields",
+		}
+	}
+
+	return v.validateArrayElementPredicate(p.ElementPred, elemType)
+}
+
+func (v *Validator) validateArrayElementPredicate(pred Predicate, elemType schema.FieldType) error {
+	switch p := pred.(type) {
+	case *ElementEqualityPredicate:
+		if p.IsRefValue && elemType != schema.FieldTypeRef {
+			return &ValidationError{
+				Message:    fmt.Sprintf("reference element comparison is only valid for ref[] fields, not %s[]", elemType),
+				Suggestion: "Use [[target]] comparisons only for ref[] fields",
+			}
+		}
+		return nil
+	case *StringFuncPredicate:
+		if !p.IsElementRef {
+			return &ValidationError{
+				Message:    "array element string functions must use '_' as the first argument",
+				Suggestion: `Use contains(_, "..."), startswith(_, "..."), endswith(_, "..."), or matches(_, "...")`,
+			}
+		}
+		if !isStringLikeFieldType(elemType) {
+			return &ValidationError{
+				Message:    fmt.Sprintf("string functions are not valid for array elements of type %s", elemType),
+				Suggestion: "Use element comparisons (_==value, _!=value, _<value, etc.) for non-string array element types",
+			}
+		}
+		return nil
+	case *OrPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validateArrayElementPredicate(subPred, elemType); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *NotPredicate:
+		return v.validateArrayElementPredicate(p.Inner, elemType)
+	case *GroupPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validateArrayElementPredicate(subPred, elemType); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return &ValidationError{
+			Message:    fmt.Sprintf("unsupported array element predicate type %T", pred),
+			Suggestion: `Use _==value, _!=value, or string functions like contains(_, "...")`,
+		}
+	}
+}
+
+func (v *Validator) fieldDefinitionForType(typeName string, typeDef *schema.TypeDefinition, fieldName string) (*schema.FieldDefinition, error) {
+	if typeDef == nil || typeDef.Fields == nil {
+		return nil, &ValidationError{
 			Message:    fmt.Sprintf("type '%s' has no defined fields", typeName),
 			Suggestion: fmt.Sprintf("Add fields to type '%s' in schema.yaml", typeName),
 		}
 	}
 
-	if _, exists := typeDef.Fields[p.Field]; !exists {
+	fieldDef, exists := typeDef.Fields[fieldName]
+	if !exists {
 		available := v.availableFields(typeDef)
-		return &ValidationError{
-			Message:    fmt.Sprintf("type '%s' has no field '%s'", typeName, p.Field),
+		return nil, &ValidationError{
+			Message:    fmt.Sprintf("type '%s' has no field '%s'", typeName, fieldName),
 			Suggestion: fmt.Sprintf("Available fields: %s", strings.Join(available, ", ")),
 		}
 	}
 
-	return nil
+	return fieldDef, nil
+}
+
+func isStringLikeFieldType(fieldType schema.FieldType) bool {
+	switch fieldType {
+	case schema.FieldTypeString,
+		schema.FieldTypeURL,
+		schema.FieldTypeDate,
+		schema.FieldTypeDatetime,
+		schema.FieldTypeEnum,
+		schema.FieldTypeRef:
+		return true
+	default:
+		return false
+	}
+}
+
+func isArrayFieldType(fieldType schema.FieldType) bool {
+	_, ok := arrayElementType(fieldType)
+	return ok
+}
+
+func arrayElementType(fieldType schema.FieldType) (schema.FieldType, bool) {
+	switch fieldType {
+	case schema.FieldTypeStringArray:
+		return schema.FieldTypeString, true
+	case schema.FieldTypeNumberArray:
+		return schema.FieldTypeNumber, true
+	case schema.FieldTypeURLArray:
+		return schema.FieldTypeURL, true
+	case schema.FieldTypeDateArray:
+		return schema.FieldTypeDate, true
+	case schema.FieldTypeDatetimeArray:
+		return schema.FieldTypeDatetime, true
+	case schema.FieldTypeEnumArray:
+		return schema.FieldTypeEnum, true
+	case schema.FieldTypeBoolArray:
+		return schema.FieldTypeBool, true
+	case schema.FieldTypeRefArray:
+		return schema.FieldTypeRef, true
+	default:
+		return "", false
+	}
 }
 
 func (v *Validator) availableTypes() []string {

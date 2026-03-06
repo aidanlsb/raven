@@ -42,6 +42,63 @@ func TestJoinQueryArgs(t *testing.T) {
 	}
 }
 
+func TestApplyQueryWindow(t *testing.T) {
+	items := []int{1, 2, 3, 4, 5}
+
+	tests := []struct {
+		name   string
+		offset int
+		limit  int
+		want   []int
+	}{
+		{
+			name:   "no offset no limit returns all",
+			offset: 0,
+			limit:  0,
+			want:   []int{1, 2, 3, 4, 5},
+		},
+		{
+			name:   "offset only",
+			offset: 2,
+			limit:  0,
+			want:   []int{3, 4, 5},
+		},
+		{
+			name:   "limit only",
+			offset: 0,
+			limit:  2,
+			want:   []int{1, 2},
+		},
+		{
+			name:   "offset and limit",
+			offset: 1,
+			limit:  3,
+			want:   []int{2, 3, 4},
+		},
+		{
+			name:   "offset past end returns empty",
+			offset: 10,
+			limit:  3,
+			want:   []int{},
+		},
+		{
+			name:   "limit larger than remaining returns remainder",
+			offset: 3,
+			limit:  10,
+			want:   []int{4, 5},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := applyQueryWindow(items, tt.offset, tt.limit)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("applyQueryWindow(%v, offset=%d, limit=%d) = %#v, want %#v", items, tt.offset, tt.limit, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMaybeSplitInlineSavedQueryArgs(t *testing.T) {
 	queries := map[string]*config.SavedQuery{
 		"proj-todos": {

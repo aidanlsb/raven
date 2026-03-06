@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -44,9 +46,12 @@ func TestRunStore_SaveLoadAndList(t *testing.T) {
 		t.Fatalf("run id mismatch: got %s want %s", got.RunID, state.RunID)
 	}
 
-	runs, err := ListRunStates(vault, cfg, RunListFilter{Workflow: "daily-brief"})
+	runs, warnings, err := ListRunStates(vault, cfg, RunListFilter{Workflow: "daily-brief"})
 	if err != nil {
 		t.Fatalf("ListRunStates error: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings, got %v", warnings)
 	}
 	if len(runs) != 1 {
 		t.Fatalf("expected one run, got %d", len(runs))
@@ -99,11 +104,67 @@ func TestRunStore_PruneByStatus(t *testing.T) {
 		t.Fatalf("expected 1 deletion, got %d", result.Deleted)
 	}
 
-	runs, err := ListRunStates(vault, cfg, RunListFilter{})
+	runs, warnings, err := ListRunStates(vault, cfg, RunListFilter{})
 	if err != nil {
 		t.Fatalf("ListRunStates error: %v", err)
 	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings, got %v", warnings)
+	}
 	if len(runs) != 1 || runs[0].RunID != "wrf_awaiting" {
 		t.Fatalf("unexpected remaining runs: %#v", runs)
+	}
+}
+
+func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
+	vault := t.TempDir()
+	cfg := config.ResolvedWorkflowRunsConfig{
+		StoragePath:               ".raven/workflow-runs",
+		AutoPrune:                 true,
+		KeepCompletedForDays:      7,
+		KeepFailedForDays:         7,
+		KeepAwaitingForDays:       7,
+		MaxRuns:                   100,
+		PreserveLatestPerWorkflow: 2,
+	}
+
+	if err := SaveRunState(vault, cfg, &WorkflowRunState{
+		Version:      1,
+		RunID:        "wrf_valid",
+		WorkflowName: "daily-brief",
+		WorkflowHash: "sha256:abc",
+		Status:       RunStatusAwaitingAgent,
+		Inputs:       map[string]interface{}{},
+		Steps:        map[string]interface{}{},
+		CreatedAt:    time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
+		Revision:     1,
+	}); err != nil {
+		t.Fatalf("SaveRunState error: %v", err)
+	}
+
+	storeDir := filepath.Join(vault, cfg.StoragePath)
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
+		t.Fatalf("mkdir store dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(storeDir, "wrf_corrupt.json"), []byte("{not-json"), 0o644); err != nil {
+		t.Fatalf("write corrupt run file: %v", err)
+	}
+
+	runs, warnings, err := ListRunStates(vault, cfg, RunListFilter{})
+	if err != nil {
+		t.Fatalf("ListRunStates error: %v", err)
+	}
+	if len(runs) != 1 || runs[0].RunID != "wrf_valid" {
+		t.Fatalf("expected valid run to remain visible, got %#v", runs)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning for corrupt file, got %d (%#v)", len(warnings), warnings)
+	}
+	if warnings[0].Code != "RUN_STATE_PARSE_ERROR" {
+		t.Fatalf("unexpected warning code: %s", warnings[0].Code)
+	}
+	if warnings[0].RunID != "wrf_corrupt" {
+		t.Fatalf("unexpected warning run id: %s", warnings[0].RunID)
 	}
 }

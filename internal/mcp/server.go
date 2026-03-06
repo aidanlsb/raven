@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/rvnexec"
 )
 
 // Server is an MCP server that wraps Raven CLI commands.
@@ -503,25 +504,17 @@ func (s *Server) callTool(name string, args map[string]interface{}) (string, boo
 func (s *Server) executeRvn(args []string) (string, bool) {
 	args = s.withBaseArgs(args)
 
-	// Use the executable path we determined at startup
-	cmd := exec.Command(s.executable, args...)
-
 	// Log to stderr for debugging
 	fmt.Fprintf(os.Stderr, "[raven-mcp] Executing: %s %v\n", s.executable, args)
 
-	output, err := cmd.CombinedOutput()
+	result, err := rvnexec.Run(s.executable, args)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[raven-mcp] Command error: %v, output: %s\n", err, string(output))
+		fmt.Fprintf(os.Stderr, "[raven-mcp] Command error: %v, output: %s\n", err, result.OutputString())
 
 		// If the CLI returned structured JSON, pass it through unchanged.
-		// Also treat ok:false as an error even if the process exit code was non-zero.
-		type envelope struct {
-			OK *bool `json:"ok"`
-		}
-		var env envelope
-		if json.Unmarshal(output, &env) == nil && env.OK != nil {
-			return string(output), true
+		if result.HasEnvelope && result.OK != nil {
+			return result.OutputString(), true
 		}
 
 		// Otherwise, wrap the error but KEEP the CLI output so users can see what failed.
@@ -531,7 +524,7 @@ func (s *Server) executeRvn(args []string) (string, bool) {
 				"code":    "EXECUTION_ERROR",
 				"message": err.Error(),
 				"details": map[string]interface{}{
-					"output": strings.TrimSpace(string(output)),
+					"output": result.TrimmedOutput(),
 				},
 			},
 		}
@@ -544,20 +537,16 @@ func (s *Server) executeRvn(args []string) (string, bool) {
 		return string(b), true
 	}
 
-	fmt.Fprintf(os.Stderr, "[raven-mcp] Command succeeded, output length: %d\n", len(output))
+	fmt.Fprintf(os.Stderr, "[raven-mcp] Command succeeded, output length: %d\n", len(result.Output))
 
 	// If the CLI returned a standard Raven JSON envelope with ok:false, surface it as an MCP tool error.
 	// This matters because some Raven commands intentionally exit 0 in --json mode to avoid Cobra printing,
 	// and rely on the JSON envelope for error signaling.
-	type envelope struct {
-		OK *bool `json:"ok"`
-	}
-	var env envelope
-	if json.Unmarshal(output, &env) == nil && env.OK != nil && !*env.OK {
-		return string(output), true
+	if result.OK != nil && !*result.OK {
+		return result.OutputString(), true
 	}
 
-	return string(output), false
+	return result.OutputString(), false
 }
 
 func (s *Server) withBaseArgs(args []string) []string {

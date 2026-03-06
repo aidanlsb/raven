@@ -20,7 +20,13 @@ func TestMCPToolsMatchRegistry(t *testing.T) {
 	}
 
 	// Check each registry command has a corresponding tool
+	expectedToolCount := 0
 	for cmdName, meta := range commands.Registry {
+		if meta.HideFromMCP {
+			continue
+		}
+		expectedToolCount++
+
 		toolName := mcpToolName(cmdName)
 		tool, ok := toolMap[toolName]
 		if !ok {
@@ -58,9 +64,9 @@ func TestMCPToolsMatchRegistry(t *testing.T) {
 	}
 
 	// Verify we have the expected number of tools
-	if len(tools) != len(commands.Registry) {
+	if len(tools) != expectedToolCount {
 		t.Errorf("Tool count mismatch: got %d tools, expected %d from registry",
-			len(tools), len(commands.Registry))
+			len(tools), expectedToolCount)
 	}
 }
 
@@ -196,6 +202,10 @@ func TestSchemaCompatibilityForStructuredFlags(t *testing.T) {
 	assertAnyOfTypes(t, "raven_upsert", "field", []string{"object", "string", "array"})
 	assertAnyOfTypes(t, "raven_set", "fields", []string{"object", "string", "array"})
 	assertAnyOfTypes(t, "raven_workflow_run", "input", []string{"object", "string", "array"})
+
+	// Repeatable string flags should accept either comma-delimited strings or arrays.
+	assertAnyOfTypes(t, "raven_query", "apply", []string{"string", "array"})
+	assertAnyOfTypes(t, "raven_query_add", "arg", []string{"string", "array"})
 }
 
 // TestBuildCLIArgsRoundtrip verifies that BuildCLIArgs produces valid CLI commands.
@@ -243,6 +253,15 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			args:     map[string]interface{}{"query_string": "trait:due .value==today"},
 			wantCmd:  "query",
 			wantArgs: []string{"trait:due .value==today", "--json"},
+		},
+		{
+			toolName: "raven_query",
+			args: map[string]interface{}{
+				"query_string": "object:project .status==active",
+				"apply":        []interface{}{"set status=done", "add @reviewed"},
+			},
+			wantCmd:  "query",
+			wantArgs: []string{"--apply", "set status=done", "--apply", "add @reviewed", "--json"},
 		},
 		{
 			toolName: "raven_schema",
@@ -444,10 +463,21 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 			args: map[string]interface{}{
 				"run-id":            "wrf_abc123",
 				"agent-output-json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "done"}},
-				"expected-revision": float64(2),
+				"expected-revision": 2,
 			},
 			wantCmd:  "workflow",
 			wantArgs: []string{"continue", "wrf_abc123", "--agent-output-json", "--expected-revision", "2", "--json"},
+		},
+		{
+			toolName: "raven_workflow_runs_step",
+			args: map[string]interface{}{
+				"run-id":  "wrf_abc123",
+				"step-id": "todos",
+				"offset":  int64(50),
+				"limit":   uint32(25),
+			},
+			wantCmd:  "workflow",
+			wantArgs: []string{"runs", "step", "wrf_abc123", "todos", "--offset", "50", "--limit", "25", "--json"},
 		},
 		{
 			toolName: "raven_workflow_continue",

@@ -30,8 +30,10 @@ type Options struct {
 	Aliases map[string]string
 
 	// NameFieldMap maps name_field values to object IDs for semantic resolution.
-	// For example: {"The Prose Edda": "books/the-prose-edda"}
-	NameFieldMap map[string]string
+	// Values are multi-mapped to preserve ambiguity when multiple objects share
+	// the same display name.
+	// For example: {"The Prose Edda": {"books/the-prose-edda"}}
+	NameFieldMap map[string][]string
 }
 
 // New creates a new Resolver with the given object IDs and options.
@@ -80,20 +82,25 @@ func New(objectIDs []string, opts Options) *Resolver {
 	if len(opts.NameFieldMap) > 0 {
 		r.nameFieldMap = make(map[string][]string, len(opts.NameFieldMap)*3)
 	}
-	for nameValue, objectID := range opts.NameFieldMap {
+	for nameValue, objectIDs := range opts.NameFieldMap {
 		if nameValue == "" {
 			continue
 		}
-		// Store both exact and slugified versions
-		r.nameFieldMap[nameValue] = append(r.nameFieldMap[nameValue], objectID)
 		sluggedName := pages.Slugify(nameValue)
-		if sluggedName != "" && sluggedName != nameValue {
-			r.nameFieldMap[sluggedName] = append(r.nameFieldMap[sluggedName], objectID)
-		}
-		// Also store lowercase for case-insensitive matching
 		lowerName := strings.ToLower(nameValue)
-		if lowerName != nameValue && lowerName != sluggedName {
-			r.nameFieldMap[lowerName] = append(r.nameFieldMap[lowerName], objectID)
+		for _, objectID := range objectIDs {
+			if objectID == "" {
+				continue
+			}
+			// Store both exact and slugified versions
+			r.nameFieldMap[nameValue] = append(r.nameFieldMap[nameValue], objectID)
+			if sluggedName != "" && sluggedName != nameValue {
+				r.nameFieldMap[sluggedName] = append(r.nameFieldMap[sluggedName], objectID)
+			}
+			// Also store lowercase for case-insensitive matching
+			if lowerName != nameValue && lowerName != sluggedName {
+				r.nameFieldMap[lowerName] = append(r.nameFieldMap[lowerName], objectID)
+			}
 		}
 	}
 

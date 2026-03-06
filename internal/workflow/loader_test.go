@@ -68,6 +68,24 @@ func TestLoad_FromFile(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects unknown top-level tool name", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "unknown-tool.yaml")
+		content := `description: bad tool
+steps:
+  - id: q
+    type: tool
+    tool: raven_not_real
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "unknown-tool", &config.WorkflowRef{File: "workflows/unknown-tool.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
+			t.Fatalf("expected unknown tool error, got %v", err)
+		}
+	})
+
 	t.Run("accepts typed array agent outputs", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "typed-output.yaml")
 		content := `description: typed output
@@ -192,6 +210,29 @@ steps:
 		}
 	})
 
+	t.Run("rejects foreach nested unknown tool name", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "foreach-unknown-tool.yaml")
+		content := `description: foreach
+steps:
+  - id: fanout
+    type: foreach
+    foreach:
+      items: "{{steps.seed.data.results}}"
+      steps:
+        - id: create
+          type: tool
+          tool: raven_not_real
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "foreach-unknown-tool", &config.WorkflowRef{File: "workflows/foreach-unknown-tool.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
+			t.Fatalf("expected unknown tool error, got %v", err)
+		}
+	})
+
 	t.Run("accepts switch with cases and required default", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "switch-ok.yaml")
 		content := `description: switch
@@ -254,6 +295,43 @@ steps:
 		_, err := Load(vaultDir, "switch-missing-value", &config.WorkflowRef{File: "workflows/switch-missing-value.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "missing switch.value") {
 			t.Fatalf("expected switch.value error, got %v", err)
+		}
+	})
+
+	t.Run("rejects switch nested unknown tool name", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "switch-unknown-tool.yaml")
+		content := `description: switch
+steps:
+  - id: classify
+    type: agent
+    prompt: classify
+    outputs:
+      route:
+        type: string
+        required: true
+  - id: route
+    type: switch
+    switch:
+      value: "{{steps.classify.validated_outputs.route}}"
+      cases:
+        high:
+          steps:
+            - id: create_incident
+              type: tool
+              tool: raven_not_real
+      default:
+        steps:
+          - id: create_default
+            type: tool
+            tool: raven_query
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "switch-unknown-tool", &config.WorkflowRef{File: "workflows/switch-unknown-tool.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
+			t.Fatalf("expected unknown tool error, got %v", err)
 		}
 	})
 

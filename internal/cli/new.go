@@ -227,7 +227,7 @@ Examples:
 			return handleErrorMsg(
 				ErrFileExists,
 				fmt.Sprintf("file already exists: %s.md", resolvedSlugPath),
-				"Choose a different title, or use `raven_open` to open the existing object",
+				"Choose a different title, or use `rvn open <reference>` to open the existing object",
 			)
 		}
 

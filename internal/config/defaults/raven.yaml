@@ -61,12 +61,12 @@ workflows:
     file: workflows/onboard.yaml
 
 # Workflow run checkpoint retention
-# Add this under the top-level workflows block
-#   runs:
-#     storage_path: .raven/workflow-runs
-#     auto_prune: true
-#     keep_completed_for_days: 7
-#     keep_failed_for_days: 14
-#     keep_awaiting_for_days: 30
-#     max_runs: 1000
-#     preserve_latest_per_workflow: 5
+# Add this as a top-level key:
+# workflow_runs:
+#   storage_path: .raven/workflow-runs
+#   auto_prune: true
+#   keep_completed_for_days: 7
+#   keep_failed_for_days: 14
+#   keep_awaiting_for_days: 30
+#   max_runs: 1000
+#   preserve_latest_per_workflow: 5

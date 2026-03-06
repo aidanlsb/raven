@@ -27,10 +27,18 @@ type RunPruneOptions struct {
 }
 
 type RunPruneResult struct {
-	Scanned int      `json:"scanned"`
-	Matched int      `json:"matched"`
-	Deleted int      `json:"deleted"`
-	RunIDs  []string `json:"run_ids,omitempty"`
+	Scanned  int               `json:"scanned"`
+	Matched  int               `json:"matched"`
+	Deleted  int               `json:"deleted"`
+	RunIDs   []string          `json:"run_ids,omitempty"`
+	Warnings []RunStoreWarning `json:"warnings,omitempty"`
+}
+
+type RunStoreWarning struct {
+	Code    string `json:"code"`
+	RunID   string `json:"run_id,omitempty"`
+	File    string `json:"file,omitempty"`
+	Message string `json:"message"`
 }
 
 func SaveRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, state *WorkflowRunState) error {
@@ -96,31 +104,53 @@ func DeleteRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, run
 	return nil
 }
 
-func ListRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, filter RunListFilter) ([]*WorkflowRunState, error) {
+func ListRunStates(
+	vaultPath string,
+	cfg config.ResolvedWorkflowRunsConfig,
+	filter RunListFilter,
+) ([]*WorkflowRunState, []RunStoreWarning, error) {
 	dir, err := runStoreDir(vaultPath, cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, fmt.Errorf("read run storage: %w", err)
+		return nil, nil, fmt.Errorf("read run storage: %w", err)
 	}
 
 	runs := make([]*WorkflowRunState, 0, len(entries))
+	warnings := make([]RunStoreWarning, 0)
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		content, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		runID := strings.TrimSuffix(entry.Name(), ".json")
+		filePath := filepath.Join(dir, entry.Name())
+		content, err := os.ReadFile(filePath)
 		if err != nil {
+			warnings = append(warnings, RunStoreWarning{
+				Code:    "RUN_STATE_READ_ERROR",
+				RunID:   runID,
+				File:    filePath,
+				Message: fmt.Sprintf("read run state: %v", err),
+			})
 			continue
 		}
 		var state WorkflowRunState
 		if err := json.Unmarshal(content, &state); err != nil {
+			warnings = append(warnings, RunStoreWarning{
+				Code:    "RUN_STATE_PARSE_ERROR",
+				RunID:   runID,
+				File:    filePath,
+				Message: fmt.Sprintf("parse run state: %v", err),
+			})
 			continue
+		}
+		if state.RunID == "" {
+			state.RunID = runID
 		}
 		if !matchesRunFilter(&state, filter) {
 			continue
@@ -131,7 +161,7 @@ func ListRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, filt
 	sort.Slice(runs, func(i, j int) bool {
 		return runs[i].UpdatedAt.After(runs[j].UpdatedAt)
 	})
-	return runs, nil
+	return runs, warnings, nil
 }
 
 func AutoPruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig) (*RunPruneResult, error) {
@@ -139,13 +169,13 @@ func AutoPruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig)
 		return &RunPruneResult{}, nil
 	}
 	now := time.Now().UTC()
-	runs, err := ListRunStates(vaultPath, cfg, RunListFilter{})
+	runs, warnings, err := ListRunStates(vaultPath, cfg, RunListFilter{})
 	if err != nil {
 		return nil, err
 	}
 	toDelete := chooseRunsForAutoPrune(runs, cfg, now)
 	if len(toDelete) == 0 {
-		return &RunPruneResult{Scanned: len(runs), Matched: 0, Deleted: 0}, nil
+		return &RunPruneResult{Scanned: len(runs) + len(warnings), Matched: 0, Deleted: 0, Warnings: warnings}, nil
 	}
 
 	deleted := 0
@@ -155,10 +185,11 @@ func AutoPruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig)
 		}
 	}
 	return &RunPruneResult{
-		Scanned: len(runs),
-		Matched: len(toDelete),
-		Deleted: deleted,
-		RunIDs:  runIDs(toDelete),
+		Scanned:  len(runs) + len(warnings),
+		Matched:  len(toDelete),
+		Deleted:  deleted,
+		RunIDs:   runIDs(toDelete),
+		Warnings: warnings,
 	}, nil
 }
 
@@ -166,7 +197,7 @@ func PruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, opt
 	if opts.Now.IsZero() {
 		opts.Now = time.Now().UTC()
 	}
-	runs, err := ListRunStates(vaultPath, cfg, RunListFilter{Statuses: opts.Statuses})
+	runs, warnings, err := ListRunStates(vaultPath, cfg, RunListFilter{Statuses: opts.Statuses})
 	if err != nil {
 		return nil, err
 	}
@@ -183,9 +214,10 @@ func PruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, opt
 	}
 
 	result := &RunPruneResult{
-		Scanned: len(runs),
-		Matched: len(candidates),
-		RunIDs:  runIDs(candidates),
+		Scanned:  len(runs) + len(warnings),
+		Matched:  len(candidates),
+		RunIDs:   runIDs(candidates),
+		Warnings: warnings,
 	}
 	if !opts.Apply {
 		return result, nil

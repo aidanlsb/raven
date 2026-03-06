@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -48,19 +47,6 @@ func TestCheckCommandFlagsMatchRegistry(t *testing.T) {
 }
 
 func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
-	allowMissing := []string{
-		"mcp install",
-		"mcp remove",
-		"mcp show",
-		"mcp status",
-		"path",
-		"schema add",
-		"schema remove",
-		"schema rename",
-		"schema update",
-		"serve",
-	}
-
 	paths := commandPaths(rootCmd)
 	for _, path := range paths {
 		if path == "" {
@@ -86,16 +72,7 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 		if _, ok := lookupRegistryMeta(path); ok {
 			continue
 		}
-		if slices.Contains(allowMissing, path) {
-			continue
-		}
 		t.Errorf("CLI command %q is missing registry metadata", path)
-	}
-
-	for _, allowed := range allowMissing {
-		if _, ok := findCommandByPath(rootCmd, allowed); !ok {
-			t.Errorf("allowlist entry %q no longer exists in CLI tree; update test", allowed)
-		}
 	}
 }
 

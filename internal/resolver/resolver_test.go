@@ -681,11 +681,11 @@ func TestNameFieldResolution(t *testing.T) {
 		"people/snorri-sturluson",
 	}
 
-	// Name field map: display name -> object ID
-	nameFieldMap := map[string]string{
-		"The Prose Edda":   "books/the-prose-edda",
-		"The Poetic Edda":  "books/the-poetic-edda",
-		"Snorri Sturluson": "people/snorri-sturluson",
+	// Name field map: display name -> object IDs
+	nameFieldMap := map[string][]string{
+		"The Prose Edda":   {"books/the-prose-edda"},
+		"The Poetic Edda":  {"books/the-poetic-edda"},
+		"Snorri Sturluson": {"people/snorri-sturluson"},
 	}
 
 	r := New(objectIDs, Options{NameFieldMap: nameFieldMap})
@@ -736,6 +736,34 @@ func TestNameFieldResolution(t *testing.T) {
 			t.Errorf("got %q, want %q", result.TargetID, "books/the-prose-edda")
 		}
 	})
+
+	t.Run("duplicate name_field values are ambiguous", func(t *testing.T) {
+		r2 := New(
+			[]string{"people/alex-1", "people/alex-2"},
+			Options{
+				NameFieldMap: map[string][]string{
+					"Alex": {"people/alex-1", "people/alex-2"},
+				},
+			},
+		)
+
+		result := r2.Resolve("Alex")
+		if !result.Ambiguous {
+			t.Fatalf("expected ambiguous result, got %+v", result)
+		}
+		if !hasMatch(result.Matches, "people/alex-1") || !hasMatch(result.Matches, "people/alex-2") {
+			t.Fatalf("expected matches to include both alex objects, got %v", result.Matches)
+		}
+	})
+}
+
+func hasMatch(matches []string, target string) bool {
+	for _, match := range matches {
+		if match == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestFindCollisions(t *testing.T) {

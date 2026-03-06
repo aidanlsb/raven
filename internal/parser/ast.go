@@ -6,6 +6,7 @@
 package parser
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -269,8 +270,15 @@ func collectTextSegments(node ast.Node, content []byte) []textSegment {
 
 	walkNode(node)
 
-	// Convert to segments, sorted by line
-	for line, builder := range lineTexts {
+	// Convert to segments, sorted by line for deterministic extraction order.
+	lines := make([]int, 0, len(lineTexts))
+	for line := range lineTexts {
+		lines = append(lines, line)
+	}
+	sort.Ints(lines)
+
+	for _, line := range lines {
+		builder := lineTexts[line]
 		segments = append(segments, textSegment{
 			text:  builder.String(),
 			start: lineStarts[line],

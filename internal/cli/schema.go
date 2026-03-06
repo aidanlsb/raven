@@ -209,7 +209,7 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 			result["hint"] = map[string]interface{}{
 				"message":                  "Some types have required string fields but no name_field configured. Setting name_field enables auto-population from the title argument in raven_new.",
 				"types_without_name_field": typesWithoutNameField,
-				"fix_command":              "raven_schema_update_type with name-field parameter",
+				"fix_command":              "rvn schema update type <type_name> --name-field <field_name>",
 			}
 		}
 

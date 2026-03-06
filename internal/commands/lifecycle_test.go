@@ -25,27 +25,3 @@ func TestResolveCommandID(t *testing.T) {
 		}
 	}
 }
-
-func TestMutatingCommandFlags(t *testing.T) {
-	cases := []struct {
-		id      string
-		mutates bool
-	}{
-		{id: "edit", mutates: true},
-		{id: "new", mutates: true},
-		{id: "template_write", mutates: true},
-		{id: "template_delete", mutates: true},
-		{id: "read", mutates: false},
-		{id: "stats", mutates: false},
-	}
-
-	for _, tc := range cases {
-		meta, ok := Registry[tc.id]
-		if !ok {
-			t.Fatalf("registry missing %q", tc.id)
-		}
-		if meta.MutatesVault != tc.mutates {
-			t.Fatalf("Registry[%q].MutatesVault=%v, want %v", tc.id, meta.MutatesVault, tc.mutates)
-		}
-	}
-}

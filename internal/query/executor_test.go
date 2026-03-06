@@ -384,6 +384,16 @@ func TestExecuteTraitQuery(t *testing.T) {
 			wantCount: 1, // matches "high" case-insensitively
 		},
 		{
+			name:      "trait string function on value",
+			query:     `trait:todo contains(.value, "to")`,
+			wantCount: 2, // matches todo values on trait5 and trait8
+		},
+		{
+			name:    "trait string function on unsupported field",
+			query:   `trait:todo contains(.content, "landing")`,
+			wantErr: true,
+		},
+		{
 			name:      "highlight traits",
 			query:     "trait:highlight",
 			wantCount: 1,

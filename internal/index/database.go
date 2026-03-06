@@ -582,7 +582,7 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 	// Extract additional refs from ref-typed fields in frontmatter/embedded objects.
 	// This allows `company: cursor` to work when the schema declares `company: ref`.
 	if sch != nil {
-		schemaRefs := extractRefsFromSchemaFields(doc.Objects, sch, doc.FilePath)
+		schemaRefs := extractRefsFromSchemaFields(doc.Objects, sch)
 		allRefs = mergeRefs(allRefs, schemaRefs)
 	}
 
@@ -1108,9 +1108,9 @@ func appendExtraIDs(objectIDs []string, extraIDs []string) []string {
 	return objectIDs
 }
 
-// AllNameFieldValues returns a map from name_field values to object IDs.
+// AllNameFieldValues returns a map from name_field values to candidate object IDs.
 // It queries each type's name_field and extracts the corresponding field value.
-func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, error) {
+func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string][]string, error) {
 	return allNameFieldValuesFromDB(d.db, sch)
 }
 
@@ -1160,8 +1160,8 @@ func allAliasesFromDB(db *sql.DB) (map[string]string, error) {
 	return aliases, rows.Err()
 }
 
-func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string]string, error) {
-	nameFieldMap := make(map[string]string)
+func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string][]string, error) {
+	nameFieldMap := make(map[string][]string)
 
 	if sch == nil {
 		return nameFieldMap, nil
@@ -1175,7 +1175,7 @@ func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string]string
 	}
 
 	// Query all objects and extract name_field values
-	rows, err := db.Query(`SELECT id, type, fields FROM objects WHERE type != '' AND fields != '{}'`)
+	rows, err := db.Query(`SELECT id, type, fields FROM objects WHERE type != '' AND fields != '{}' ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -1190,8 +1190,7 @@ func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string]string
 		if !ok {
 			continue
 		}
-		// Preserve existing semantics: last assignment wins (query order unspecified).
-		nameFieldMap[nameStr] = id
+		nameFieldMap[nameStr] = append(nameFieldMap[nameStr], id)
 	}
 
 	return nameFieldMap, rows.Err()
@@ -1723,56 +1722,51 @@ func (d *Database) resolveFieldRefBatch(res *resolver.Resolver, refs []fieldRefT
 //
 // The parser doesn't have schema context, so bare strings like "cursor" are stored as strings.
 // At index time, we use the schema to identify ref-typed fields and extract their values as refs.
-func extractRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema, filePath string) []*parser.ParsedRef {
-	var refs []*parser.ParsedRef
-	opts := parser.RefExtractOptions{AllowBareStrings: true}
+func extractRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema) []*parser.ParsedRef {
+	schemaRefs := extractSchemaFieldRefs(objects, sch)
+	if len(schemaRefs) == 0 {
+		return nil
+	}
 
-	for _, obj := range objects {
-		// Get type definition from schema
-		typeDef := sch.Types[obj.ObjectType]
-		if typeDef == nil {
-			continue
-		}
-
-		for fieldName, fieldValue := range obj.Fields {
-			fieldDef := typeDef.Fields[fieldName]
-			if fieldDef == nil {
-				continue
-			}
-
-			// Check if field is a ref or ref[] type
-			switch fieldDef.Type {
-			case schema.FieldTypeRef:
-				// Single ref field - extract target from string value
-				if targets := parser.ExtractRefsFromFieldValue(fieldValue, opts); len(targets) > 0 {
-					refs = append(refs, &parser.ParsedRef{
-						SourceID:  obj.ID,
-						TargetRaw: targets[0].TargetRaw,
-						Line:      obj.LineStart,
-					})
-				}
-
-			case schema.FieldTypeRefArray:
-				// Array of refs - extract targets from each element
-				for _, target := range parser.ExtractRefsFromFieldValue(fieldValue, opts) {
-					if target.TargetRaw == "" {
-						continue
-					}
-					refs = append(refs, &parser.ParsedRef{
-						SourceID:  obj.ID,
-						TargetRaw: target.TargetRaw,
-						Line:      obj.LineStart,
-					})
-				}
-			}
-		}
+	refs := make([]*parser.ParsedRef, 0, len(schemaRefs))
+	for _, schemaRef := range schemaRefs {
+		refs = append(refs, &parser.ParsedRef{
+			SourceID:  schemaRef.SourceID,
+			TargetRaw: schemaRef.TargetRaw,
+			Line:      schemaRef.Line,
+		})
 	}
 
 	return refs
 }
 
 func extractFieldRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schema.Schema) []fieldRefToIndex {
-	var refs []fieldRefToIndex
+	schemaRefs := extractSchemaFieldRefs(objects, sch)
+	if len(schemaRefs) == 0 {
+		return nil
+	}
+
+	refs := make([]fieldRefToIndex, 0, len(schemaRefs))
+	for _, schemaRef := range schemaRefs {
+		refs = append(refs, fieldRefToIndex(schemaRef))
+	}
+
+	return refs
+}
+
+type schemaFieldRef struct {
+	SourceID  string
+	FieldName string
+	TargetRaw string
+	Line      int
+}
+
+func extractSchemaFieldRefs(objects []*parser.ParsedObject, sch *schema.Schema) []schemaFieldRef {
+	if sch == nil {
+		return nil
+	}
+
+	var refs []schemaFieldRef
 	opts := parser.RefExtractOptions{AllowBareStrings: true}
 
 	for _, obj := range objects {
@@ -1790,19 +1784,23 @@ func extractFieldRefsFromSchemaFields(objects []*parser.ParsedObject, sch *schem
 			switch fieldDef.Type {
 			case schema.FieldTypeRef:
 				if targets := parser.ExtractRefsFromFieldValue(fieldValue, opts); len(targets) > 0 {
-					refs = append(refs, fieldRefToIndex{
+					if targets[0].TargetRaw == "" {
+						continue
+					}
+					refs = append(refs, schemaFieldRef{
 						SourceID:  obj.ID,
 						FieldName: fieldName,
 						TargetRaw: targets[0].TargetRaw,
 						Line:      obj.LineStart,
 					})
 				}
+
 			case schema.FieldTypeRefArray:
 				for _, target := range parser.ExtractRefsFromFieldValue(fieldValue, opts) {
 					if target.TargetRaw == "" {
 						continue
 					}
-					refs = append(refs, fieldRefToIndex{
+					refs = append(refs, schemaFieldRef{
 						SourceID:  obj.ID,
 						FieldName: fieldName,
 						TargetRaw: target.TargetRaw,

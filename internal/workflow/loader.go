@@ -10,6 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
 )
@@ -210,6 +211,9 @@ func validateWorkflow(wf *Workflow) error {
 			if s.Tool == "" {
 				return fmt.Errorf("step '%s' (tool) missing tool", s.ID)
 			}
+			if err := validateToolName(s.Tool); err != nil {
+				return fmt.Errorf("step '%s' (tool) %w", s.ID, err)
+			}
 		case "foreach":
 			if err := validateForEachStep(s); err != nil {
 				return err
@@ -286,6 +290,9 @@ func validateForEachStep(step *config.WorkflowStep) error {
 		if strings.TrimSpace(nested.Tool) == "" {
 			return fmt.Errorf("step '%s' (foreach) nested step '%s' missing tool", step.ID, nestedID)
 		}
+		if err := validateToolName(nested.Tool); err != nil {
+			return fmt.Errorf("step '%s' (foreach) nested step '%s' %w", step.ID, nestedID, err)
+		}
 	}
 
 	return nil
@@ -360,6 +367,9 @@ func validateSwitchBranch(
 		case "tool":
 			if strings.TrimSpace(nested.Tool) == "" {
 				return fmt.Errorf("step '%s' (switch) %s nested step '%s' missing tool", stepID, branchName, nestedID)
+			}
+			if err := validateToolName(nested.Tool); err != nil {
+				return fmt.Errorf("step '%s' (switch) %s nested step '%s' %w", stepID, branchName, nestedID, err)
 			}
 		case "foreach":
 			if err := validateForEachStep(nested); err != nil {
@@ -445,6 +455,13 @@ func rejectLegacyTopLevelKeys(root *yaml.Node) error {
 func isValidOutputType(outputType string) bool {
 	_, err := parseOutputType(outputType)
 	return err == nil
+}
+
+func validateToolName(tool string) error {
+	if _, ok := commands.ResolveToolCommandID(strings.TrimSpace(tool)); ok {
+		return nil
+	}
+	return fmt.Errorf("references unknown tool '%s'", tool)
 }
 
 // Get retrieves a workflow by name from the vault configuration.

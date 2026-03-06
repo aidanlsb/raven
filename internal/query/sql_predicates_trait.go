@@ -93,6 +93,14 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 // buildTraitStringFuncPredicateSQL builds SQL for string function predicates on trait values.
 // For traits, the field is implicitly the trait's value column.
 func (e *Executor) buildTraitStringFuncPredicateSQL(p *StringFuncPredicate, alias string) (string, []interface{}, error) {
+	if p.IsElementRef || p.Field != "value" {
+		fieldLabel := "." + p.Field
+		if p.IsElementRef {
+			fieldLabel = "_"
+		}
+		return "", nil, fmt.Errorf("unsupported trait string function field: %s (only .value is allowed for traits)", fieldLabel)
+	}
+
 	fieldExpr := fmt.Sprintf("%s.value", alias)
 
 	cond, args, err := buildStringFuncCondition(p.FuncType, fieldExpr, p.Value, p.CaseSensitive)

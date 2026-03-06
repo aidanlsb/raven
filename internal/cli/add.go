@@ -783,8 +783,7 @@ func validateRefs(vaultPath string, refs []parser.Reference, vaultCfg *config.Va
 			suggestedType := inferTypeFromPath(sch, ref.TargetRaw)
 			if suggestedType != "" {
 				warning.SuggestedType = suggestedType
-				warning.CreateCommand = fmt.Sprintf("rvn object create %s --title \"%s\" --json",
-					suggestedType, filepath.Base(ref.TargetRaw))
+				warning.CreateCommand = buildCreateObjectCommand(suggestedType, ref.TargetRaw)
 			}
 
 			warnings = append(warnings, warning)
@@ -828,8 +827,7 @@ func validateRefsWithoutDB(vaultPath string, refs []parser.Reference, sch *schem
 			suggestedType := inferTypeFromPath(sch, ref.TargetRaw)
 			if suggestedType != "" {
 				warning.SuggestedType = suggestedType
-				warning.CreateCommand = fmt.Sprintf("rvn object create %s --title \"%s\" --json",
-					suggestedType, filepath.Base(ref.TargetRaw))
+				warning.CreateCommand = buildCreateObjectCommand(suggestedType, ref.TargetRaw)
 			}
 
 			warnings = append(warnings, warning)
@@ -857,6 +855,14 @@ func inferTypeFromPath(sch *schema.Schema, refPath string) string {
 	}
 
 	return ""
+}
+
+func buildCreateObjectCommand(typeName, targetRaw string) string {
+	title := filepath.Base(strings.TrimSpace(targetRaw))
+	if title == "" || title == "." || title == "/" {
+		title = "new-object"
+	}
+	return fmt.Sprintf("rvn new %s %q --json", typeName, title)
 }
 
 func init() {

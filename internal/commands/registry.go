@@ -6,14 +6,14 @@ package commands
 // Meta defines metadata for a CLI command that can be used to
 // generate both Cobra commands and MCP tool schemas.
 type Meta struct {
-	Name         string     // Command name (e.g., "trait", "add", "new")
-	Description  string     // Short description
-	LongDesc     string     // Long description (for --help)
-	Args         []ArgMeta  // Positional arguments
-	Flags        []FlagMeta // Command flags
-	Examples     []string   // Usage examples
-	UseCases     []string   // Agent use cases (for MCP hints)
-	MutatesVault bool       // True when command can mutate vault state (used for lifecycle triggers)
+	Name        string     // Command name (e.g., "trait", "add", "new")
+	Description string     // Short description
+	LongDesc    string     // Long description (for --help)
+	Args        []ArgMeta  // Positional arguments
+	Flags       []FlagMeta // Command flags
+	Examples    []string   // Usage examples
+	UseCases    []string   // Agent use cases (for MCP hints)
+	HideFromMCP bool       // True when command should not be exposed as an MCP tool
 }
 
 // ArgMeta defines a positional argument.
@@ -214,6 +214,100 @@ still succeeds and returns a warning with a retry command.`,
 			"Create required Raven config and schema files in one step",
 			"Initialize first-run setup before any other MCP tool calls",
 		},
+	},
+	"path": {
+		Name:        "path",
+		Description: "Print the resolved vault directory path",
+		LongDesc: `Prints the configured vault directory path.
+
+Useful for shell integration:
+  cd $(rvn path)`,
+		Examples: []string{
+			"rvn path",
+			"rvn path --json",
+		},
+		UseCases: []string{
+			"Inspect the currently resolved vault path",
+			"Integrate Raven vault resolution into shell scripts",
+		},
+		HideFromMCP: true,
+	},
+	"serve": {
+		Name:        "serve",
+		Description: "Run Raven as an MCP server",
+		LongDesc:    "Run Raven as an MCP server over stdio.",
+		Examples: []string{
+			"rvn serve",
+			"rvn serve --vault personal",
+		},
+		UseCases: []string{
+			"Launch Raven MCP server for local clients",
+		},
+		HideFromMCP: true,
+	},
+	"mcp_install": {
+		Name:        "mcp install",
+		Description: "Add raven to an MCP client config",
+		LongDesc:    "Add raven to a supported MCP client config file.",
+		Flags: []FlagMeta{
+			{Name: "client", Description: "MCP client (claude-code, claude-desktop, cursor)", Type: FlagTypeString, Default: "claude-code"},
+			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
+			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn mcp install --client claude-code",
+			"rvn mcp install --client claude-desktop --vault work",
+		},
+		UseCases: []string{
+			"Install Raven MCP entry into a client config",
+		},
+		HideFromMCP: true,
+	},
+	"mcp_remove": {
+		Name:        "mcp remove",
+		Description: "Remove raven from an MCP client config",
+		LongDesc:    "Remove raven from a supported MCP client config file.",
+		Flags: []FlagMeta{
+			{Name: "client", Description: "MCP client (claude-code, claude-desktop, cursor)", Type: FlagTypeString, Default: "claude-code"},
+		},
+		Examples: []string{
+			"rvn mcp remove --client claude-code",
+		},
+		UseCases: []string{
+			"Remove Raven MCP entry from a client config",
+		},
+		HideFromMCP: true,
+	},
+	"mcp_status": {
+		Name:        "mcp status",
+		Description: "Show raven MCP status across all clients",
+		LongDesc:    "Show whether raven is configured in supported MCP clients.",
+		Examples: []string{
+			"rvn mcp status",
+			"rvn mcp status --json",
+		},
+		UseCases: []string{
+			"Check MCP installation status across clients",
+		},
+		HideFromMCP: true,
+	},
+	"mcp_show": {
+		Name:        "mcp show",
+		Description: "Print MCP config snippet for manual setup",
+		LongDesc:    "Print the JSON snippet for manually configuring Raven as an MCP server.",
+		Flags: []FlagMeta{
+			{Name: "client", Description: "MCP client (claude-code, claude-desktop, cursor)", Type: FlagTypeString},
+			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
+			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn mcp show --client claude-code",
+			"rvn mcp show --client cursor --vault work",
+		},
+		UseCases: []string{
+			"Generate manual MCP configuration snippet",
+		},
+		HideFromMCP: true,
 	},
 	"docs": {
 		Name:        "docs",
@@ -519,6 +613,8 @@ Saved query inputs must be declared with args: in raven.yaml when using {{args.<
 You can then pass inputs by position (in args order) or as key=value pairs.
 
 Use --ids to output just IDs (one per line) for piping to other commands.
+Use --limit/--offset for paginated result windows.
+Use --count-only to return only the total match count without items.
 Use --apply to run a bulk operation directly on query results.
 
 For object queries (object:...):
@@ -536,6 +632,9 @@ For trait queries (trait:...):
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
 			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
 			{Name: "ids", Description: "Output only object/trait IDs, one per line (for piping)", Type: FlagTypeBool},
+			{Name: "limit", Description: "Maximum number of query results to return (0 means no limit)", Type: FlagTypeInt},
+			{Name: "offset", Description: "Zero-based offset for query results", Type: FlagTypeInt},
+			{Name: "count-only", Description: "Return only the total count of matches (no items or IDs)", Type: FlagTypeBool},
 			{Name: "apply", Description: "Apply bulk operation to results (e.g., 'set status=done', 'delete', 'add @reviewed', 'update done')", Type: FlagTypeStringSlice},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 			{Name: "pipe", Description: "Force pipe-friendly output format", Type: FlagTypeBool},
@@ -547,6 +646,8 @@ For trait queries (trait:...):
 			"rvn query 'object:meeting has(trait:due)' --json",
 			"rvn query 'trait:due .value<today' --json",
 			"rvn query 'trait:due .value<today' --ids",
+			"rvn query 'trait:todo .value==todo' --limit 50 --offset 100 --json",
+			"rvn query 'trait:todo .value==todo' --count-only --json",
 			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
 			"rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json",
 			"rvn query tasks --json",
@@ -783,6 +884,95 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			"rvn schema core date --json",
 			"rvn schema commands --json",
 		},
+	},
+	"schema_add": {
+		Name:        "schema add",
+		Description: "Add a type, trait, or field to the schema",
+		Args: []ArgMeta{
+			{Name: "kind", Description: "Schema kind to add (type|trait|field)", Required: true},
+			{Name: "name", Description: "Type/trait name, or parent type for field", Required: true},
+			{Name: "field_name", Description: "Field name when kind=field", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "default-path", Description: "Default path for new type files (default: <type>/)", Type: FlagTypeString},
+			{Name: "name-field", Description: "Field to use as display name (auto-created if missing)", Type: FlagTypeString},
+			{Name: "description", Description: "Optional description for the type or field", Type: FlagTypeString},
+			{Name: "type", Description: "Field/trait type (string, number, url, date, datetime, enum, ref, bool)", Type: FlagTypeString},
+			{Name: "required", Description: "Mark field as required", Type: FlagTypeBool},
+			{Name: "default", Description: "Default value", Type: FlagTypeString},
+			{Name: "values", Description: "Enum values (comma-separated)", Type: FlagTypeString},
+			{Name: "target", Description: "Target type for ref fields", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn schema add type event --default-path event/",
+			"rvn schema add trait priority --type enum --values high,medium,low",
+			"rvn schema add field person email --type string --required",
+		},
+		HideFromMCP: true,
+	},
+	"schema_update": {
+		Name:        "schema update",
+		Description: "Update a type, trait, or field in the schema",
+		Args: []ArgMeta{
+			{Name: "kind", Description: "Schema kind to update (type|trait|field)", Required: true},
+			{Name: "name", Description: "Type/trait name, or parent type for field", Required: true},
+			{Name: "field_name", Description: "Field name when kind=field", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "default-path", Description: "Update default path for type", Type: FlagTypeString},
+			{Name: "name-field", Description: "Set/update display name field (use '-' to remove)", Type: FlagTypeString},
+			{Name: "description", Description: "Set/update description (use '-' to remove)", Type: FlagTypeString},
+			{Name: "type", Description: "Update field/trait type", Type: FlagTypeString},
+			{Name: "required", Description: "Update required status (true/false)", Type: FlagTypeString},
+			{Name: "default", Description: "Update default value", Type: FlagTypeString},
+			{Name: "values", Description: "Update enum values (comma-separated)", Type: FlagTypeString},
+			{Name: "target", Description: "Update target type for ref fields", Type: FlagTypeString},
+			{Name: "add-trait", Description: "Add a trait to this type", Type: FlagTypeString},
+			{Name: "remove-trait", Description: "Remove a trait from this type", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn schema update type person --default-path person/",
+			"rvn schema update trait priority --values critical,high,medium,low",
+			"rvn schema update field person email --required=true",
+		},
+		HideFromMCP: true,
+	},
+	"schema_remove": {
+		Name:        "schema remove",
+		Description: "Remove a type, trait, or field from the schema",
+		Args: []ArgMeta{
+			{Name: "kind", Description: "Schema kind to remove (type|trait|field)", Required: true},
+			{Name: "name", Description: "Type/trait name, or parent type for field", Required: true},
+			{Name: "field_name", Description: "Field name when kind=field", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema remove type event",
+			"rvn schema remove trait priority --force",
+			"rvn schema remove field person nickname",
+		},
+		HideFromMCP: true,
+	},
+	"schema_rename": {
+		Name:        "schema rename",
+		Description: "Rename a type or field and update references",
+		Args: []ArgMeta{
+			{Name: "kind", Description: "Schema kind to rename (type|field)", Required: true},
+			{Name: "old_name_or_type", Description: "Old type name, or parent type for field rename", Required: true},
+			{Name: "new_name_or_old_field", Description: "New type name, or old field name for field rename", Required: true},
+			{Name: "new_field", Description: "New field name when kind=field", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "confirm", Description: "Apply the rename (default: preview only)", Type: FlagTypeBool},
+			{Name: "rename-default-path", Description: "Also rename type default_path directory and move matching files", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn schema rename type event meeting --confirm",
+			"rvn schema rename field person email email_address --confirm",
+		},
+		HideFromMCP: true,
 	},
 	"schema_add_type": {
 		Name:        "schema add type",

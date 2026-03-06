@@ -74,6 +74,18 @@ func dedupePreserveOrder(ids []string) []string {
 	return out
 }
 
+func applyQueryWindow[T any](items []T, offset, limit int) []T {
+	if offset >= len(items) {
+		return []T{}
+	}
+
+	window := items[offset:]
+	if limit > 0 && limit < len(window) {
+		window = window[:limit]
+	}
+	return window
+}
+
 // printObjectTable prints object results in a tabular format with field columns
 func printObjectTable(results []model.Object, sch *schema.Schema) {
 	if len(results) == 0 {
@@ -374,6 +386,15 @@ Examples:
 
 		// Get --ids flag
 		idsOnly, _ := cmd.Flags().GetBool("ids")
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
+		countOnly, _ := cmd.Flags().GetBool("count-only")
+		if limit < 0 {
+			return handleErrorMsg(ErrInvalidInput, "--limit must be >= 0", "Use --limit 0 for no limit")
+		}
+		if offset < 0 {
+			return handleErrorMsg(ErrInvalidInput, "--offset must be >= 0", "Use --offset 0 for no offset")
+		}
 
 		// Get --apply flag
 		applyArgs, _ := cmd.Flags().GetStringArray("apply")
@@ -381,12 +402,19 @@ Examples:
 
 		// If --apply is set, run query and apply bulk operation
 		if len(applyArgs) > 0 {
+			if limit > 0 || offset > 0 || countOnly {
+				return handleErrorMsg(
+					ErrInvalidInput,
+					"--limit, --offset, and --count-only cannot be used with --apply",
+					"Remove pagination/count-only flags when using --apply",
+				)
+			}
 			return runQueryWithApply(db, vaultPath, queryStr, vaultCfg, sch, applyArgs, confirmApply, start)
 		}
 
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithOptions(db, vaultPath, queryStr, start, sch, idsOnly, vaultCfg.GetDailyDirectory())
+			return runFullQueryWithOptions(db, vaultPath, queryStr, start, sch, idsOnly, limit, offset, countOnly, vaultCfg.GetDailyDirectory())
 		}
 
 		if isSavedQuery {
@@ -645,7 +673,7 @@ func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings 
 	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
 }
 
-func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, dailyDir string) error {
+func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, limit, offset int, countOnly bool, dailyDir string) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
 	if err != nil {
@@ -677,35 +705,54 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "")
 		}
+		total := len(results)
+		windowed := applyQueryWindow(results, offset, limit)
+
+		if countOnly {
+			if isJSONOutput() {
+				outputSuccess(map[string]interface{}{
+					"query_type": "object",
+					"type":       q.TypeName,
+					"total":      total,
+				}, &Meta{Count: total, QueryTimeMs: elapsed})
+				return nil
+			}
+			fmt.Println(total)
+			return nil
+		}
 
 		// Save last results for numbered references (skip for --ids mode)
 		if !idsOnly {
-			saveLastResultsFromObjects(vaultPath, queryStr, results)
+			saveLastResultsFromObjects(vaultPath, queryStr, windowed)
 		}
 
 		// --ids mode: output just IDs, one per line
 		if idsOnly {
 			if isJSONOutput() {
-				ids := make([]string, len(results))
-				for i, r := range results {
+				ids := make([]string, len(windowed))
+				for i, r := range windowed {
 					ids[i] = r.ID
 				}
 				outputSuccess(map[string]interface{}{
-					"ids": ids,
+					"ids":      ids,
+					"total":    total,
+					"returned": len(ids),
+					"offset":   offset,
+					"limit":    limit,
 				}, &Meta{Count: len(ids), QueryTimeMs: elapsed})
 				return nil
 			}
-			for _, r := range results {
+			for _, r := range windowed {
 				fmt.Println(r.ID)
 			}
 			return nil
 		}
 
 		if isJSONOutput() {
-			items := make([]map[string]interface{}, len(results))
-			for i, r := range results {
+			items := make([]map[string]interface{}, len(windowed))
+			for i, r := range windowed {
 				item := map[string]interface{}{
-					"num":       i + 1, // 1-indexed for user reference
+					"num":       offset + i + 1, // 1-indexed for user reference
 					"id":        r.ID,
 					"type":      r.Type,
 					"fields":    r.Fields,
@@ -718,18 +765,22 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 				"query_type": "object",
 				"type":       q.TypeName,
 				"items":      items,
+				"total":      total,
+				"returned":   len(items),
+				"offset":     offset,
+				"limit":      limit,
 			}, &Meta{Count: len(items), QueryTimeMs: elapsed})
 			return nil
 		}
 
 		// Check for pipe mode
 		if ShouldUsePipeFormat() {
-			WritePipeableList(os.Stdout, pipeItemsForObjectResults(results))
+			WritePipeableList(os.Stdout, pipeItemsForObjectResults(windowed))
 			return nil
 		}
 
 		// Human-readable output
-		printQueryObjectResults(queryStr, q.TypeName, results, sch)
+		printQueryObjectResults(queryStr, q.TypeName, windowed, sch)
 		return nil
 	}
 
@@ -738,22 +789,41 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "")
 	}
+	total := len(results)
+	windowed := applyQueryWindow(results, offset, limit)
+
+	if countOnly {
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"query_type": "trait",
+				"trait":      q.TypeName,
+				"total":      total,
+			}, &Meta{Count: total, QueryTimeMs: elapsed})
+			return nil
+		}
+		fmt.Println(total)
+		return nil
+	}
 
 	// Save last results for numbered references (skip for --ids mode)
 	if !idsOnly {
-		saveLastResultsFromTraits(vaultPath, queryStr, results)
+		saveLastResultsFromTraits(vaultPath, queryStr, windowed)
 	}
 
 	// --ids mode: output just trait IDs, one per line
 	if idsOnly {
-		ids := make([]string, 0, len(results))
-		for _, r := range results {
+		ids := make([]string, 0, len(windowed))
+		for _, r := range windowed {
 			ids = append(ids, r.ID)
 		}
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"ids": ids,
+				"ids":      ids,
+				"total":    total,
+				"returned": len(ids),
+				"offset":   offset,
+				"limit":    limit,
 			}, &Meta{Count: len(ids), QueryTimeMs: elapsed})
 			return nil
 		}
@@ -764,10 +834,10 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 	}
 
 	if isJSONOutput() {
-		items := make([]map[string]interface{}, len(results))
-		for i, r := range results {
+		items := make([]map[string]interface{}, len(windowed))
+		for i, r := range windowed {
 			item := map[string]interface{}{
-				"num":        i + 1, // 1-indexed for user reference
+				"num":        offset + i + 1, // 1-indexed for user reference
 				"id":         r.ID,
 				"trait_type": r.TraitType,
 				"value":      r.Value,
@@ -782,18 +852,22 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 			"query_type": "trait",
 			"trait":      q.TypeName,
 			"items":      items,
+			"total":      total,
+			"returned":   len(items),
+			"offset":     offset,
+			"limit":      limit,
 		}, &Meta{Count: len(items), QueryTimeMs: elapsed})
 		return nil
 	}
 
 	// Check for pipe mode
 	if ShouldUsePipeFormat() {
-		WritePipeableList(os.Stdout, pipeItemsForTraitResults(results))
+		WritePipeableList(os.Stdout, pipeItemsForTraitResults(windowed))
 		return nil
 	}
 
 	// Human-readable output
-	printQueryTraitResults(queryStr, q.TypeName, results)
+	printQueryTraitResults(queryStr, q.TypeName, windowed)
 	return nil
 }
 
@@ -1370,6 +1444,9 @@ func init() {
 	queryCmd.Flags().BoolP("list", "l", false, "List saved queries")
 	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
 	queryCmd.Flags().Bool("ids", false, "Output only object/trait IDs, one per line (for piping)")
+	queryCmd.Flags().Int("limit", 0, "Maximum number of query results to return (0 means no limit)")
+	queryCmd.Flags().Int("offset", 0, "Zero-based offset for query results")
+	queryCmd.Flags().Bool("count-only", false, "Return only the total count of matches (no items or IDs)")
 	queryCmd.Flags().StringArray("apply", nil, "Apply a bulk operation to query results (format: command args...)")
 	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
 	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output format")

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/rvnexec"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -1054,7 +1054,7 @@ var workflowRunsListCmd = &cobra.Command{
 			return handleError(ErrInvalidInput, err, "")
 		}
 
-		runs, err := workflow.ListRunStates(vaultPath, vaultCfg.GetWorkflowRunsConfig(), workflow.RunListFilter{
+		runs, runWarnings, err := workflow.ListRunStates(vaultPath, vaultCfg.GetWorkflowRunsConfig(), workflow.RunListFilter{
 			Workflow: workflowRunsWorkflow,
 			Statuses: statuses,
 		})
@@ -1117,10 +1117,20 @@ var workflowRunsListCmd = &cobra.Command{
 				outRuns = append(outRuns, item)
 			}
 
-			outputSuccess(map[string]interface{}{
+			data := map[string]interface{}{
 				"runs": outRuns,
-			}, &Meta{Count: len(outRuns)})
+			}
+			warnings := runStoreWarningsToCLIWarnings(runWarnings)
+			if len(warnings) > 0 {
+				outputSuccessWithWarnings(data, warnings, &Meta{Count: len(outRuns)})
+			} else {
+				outputSuccess(data, &Meta{Count: len(outRuns)})
+			}
 			return nil
+		}
+
+		for _, w := range runWarnings {
+			fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.File)
 		}
 
 		if len(runs) == 0 {
@@ -1262,11 +1272,21 @@ var workflowRunsPruneCmd = &cobra.Command{
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
+			data := map[string]interface{}{
 				"dry_run": !workflowRunsPruneConfirm,
 				"prune":   result,
-			}, nil)
+			}
+			warnings := runStoreWarningsToCLIWarnings(result.Warnings)
+			if len(warnings) > 0 {
+				outputSuccessWithWarnings(data, warnings, nil)
+			} else {
+				outputSuccess(data, nil)
+			}
 			return nil
+		}
+
+		for _, w := range result.Warnings {
+			fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.File)
 		}
 
 		if workflowRunsPruneConfirm {
@@ -1298,28 +1318,24 @@ func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{
 		}
 
 		cmdArgs := append([]string{"--vault-path", vaultPath}, cliArgs...)
-		cmd := exec.Command(exe, cmdArgs...)
-		output, err := cmd.CombinedOutput()
+		result, err := rvnexec.Run(exe, cmdArgs)
 		if err != nil {
-			trimmed := strings.TrimSpace(string(output))
-			var env map[string]interface{}
-			if json.Unmarshal(output, &env) == nil {
-				return nil, fmt.Errorf("tool '%s' failed: %s", tool, trimmed)
+			if result.HasEnvelope {
+				return nil, fmt.Errorf("tool '%s' failed: %s", tool, result.TrimmedOutput())
 			}
-			return nil, fmt.Errorf("tool '%s' execution error: %w (%s)", tool, err, trimmed)
+			return nil, fmt.Errorf("tool '%s' execution error: %w (%s)", tool, err, result.TrimmedOutput())
 		}
 
-		var env map[string]interface{}
-		if err := json.Unmarshal(output, &env); err != nil {
-			return nil, fmt.Errorf("tool '%s' returned non-JSON output: %w", tool, err)
+		if !result.HasEnvelope {
+			return nil, fmt.Errorf("tool '%s' returned non-JSON output", tool)
 		}
 
-		if okVal, exists := env["ok"].(bool); exists && !okVal {
-			b, _ := json.Marshal(env)
+		if result.OK != nil && !*result.OK {
+			b, _ := json.Marshal(result.Envelope)
 			return nil, fmt.Errorf("tool '%s' returned error: %s", tool, string(b))
 		}
 
-		return env, nil
+		return result.Envelope, nil
 	}
 }
 
@@ -1458,7 +1474,7 @@ func applyWorkflowStepPatch(existing *config.WorkflowStep, patchJSON string) (*c
 	if err := json.Unmarshal(existingBytes, &merged); err != nil {
 		return nil, err
 	}
-	mergeObject(merged, patch)
+	deepMergeObject(merged, patch)
 
 	mergedBytes, err := json.Marshal(merged)
 	if err != nil {
@@ -1626,6 +1642,30 @@ func mergeObject(dst, src map[string]interface{}) {
 	}
 }
 
+func deepMergeObject(dst, src map[string]interface{}) {
+	for key, srcVal := range src {
+		srcMap, srcIsMap := srcVal.(map[string]interface{})
+		if !srcIsMap {
+			dst[key] = srcVal
+			continue
+		}
+
+		dstVal, dstExists := dst[key]
+		if !dstExists {
+			dst[key] = srcMap
+			continue
+		}
+		dstMap, dstIsMap := dstVal.(map[string]interface{})
+		if !dstIsMap {
+			dst[key] = srcMap
+			continue
+		}
+
+		deepMergeObject(dstMap, srcMap)
+		dst[key] = dstMap
+	}
+}
+
 func parseRunStatusFilter(raw string) (map[workflow.RunStatus]bool, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1662,6 +1702,21 @@ func parseOlderThan(raw string) (*time.Duration, error) {
 		return nil, err
 	}
 	return &dur, nil
+}
+
+func runStoreWarningsToCLIWarnings(runWarnings []workflow.RunStoreWarning) []Warning {
+	if len(runWarnings) == 0 {
+		return nil
+	}
+	warnings := make([]Warning, 0, len(runWarnings))
+	for _, w := range runWarnings {
+		warnings = append(warnings, Warning{
+			Code:    w.Code,
+			Message: w.Message,
+			Ref:     w.File,
+		})
+	}
+	return warnings
 }
 
 func markRunFailed(state *workflow.WorkflowRunState, code, stepID string, runErr error) {

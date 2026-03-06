@@ -307,3 +307,175 @@ func TestValidator_DirectTargetPredicates(t *testing.T) {
 		})
 	}
 }
+
+func TestValidator_TraitStringFunctionsRequireValueField(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{},
+		Traits: map[string]*schema.TraitDefinition{
+			"todo": {},
+		},
+	}
+
+	v := NewValidator(sch)
+
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{
+			name:    "value field is allowed",
+			query:   `trait:todo contains(.value, "todo")`,
+			wantErr: false,
+		},
+		{
+			name:    "content field is rejected",
+			query:   `trait:todo contains(.content, "todo")`,
+			wantErr: true,
+		},
+		{
+			name:    "element placeholder is rejected",
+			query:   `trait:todo contains(_, "todo")`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+
+			err = v.Validate(q)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected validation error, got nil")
+				}
+				if !strings.Contains(err.Error(), "only support .value") {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidator_ObjectStringFunctionsAndArrayQuantifiersValidateFieldTypes(t *testing.T) {
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"name":   {Type: schema.FieldTypeString},
+					"score":  {Type: schema.FieldTypeNumber},
+					"status": {Type: schema.FieldTypeEnum},
+					"tags":   {Type: schema.FieldTypeStringArray},
+					"scores": {Type: schema.FieldTypeNumberArray},
+					"owners": {Type: schema.FieldTypeRefArray, Target: "person"},
+				},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{},
+	}
+
+	v := NewValidator(sch)
+
+	tests := []struct {
+		name        string
+		query       string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "string function on scalar string field",
+			query:   `object:project contains(.name, "api")`,
+			wantErr: false,
+		},
+		{
+			name:    "array quantifier on string array with element string function",
+			query:   `object:project any(.tags, startswith(_, "feature-"))`,
+			wantErr: false,
+		},
+		{
+			name:    "array quantifier on ref array with ref element comparison",
+			query:   `object:project any(.owners, _ == [[people/freya]])`,
+			wantErr: false,
+		},
+		{
+			name:        "string function unknown field",
+			query:       `object:project contains(.missing, "api")`,
+			wantErr:     true,
+			errContains: "has no field 'missing'",
+		},
+		{
+			name:        "string function on number field",
+			query:       `object:project contains(.score, "9")`,
+			wantErr:     true,
+			errContains: "not valid for field '.score'",
+		},
+		{
+			name:        "string function on array field",
+			query:       `object:project contains(.tags, "urgent")`,
+			wantErr:     true,
+			errContains: "require a scalar field",
+		},
+		{
+			name:        "top-level string function underscore placeholder",
+			query:       `object:project contains(_, "api")`,
+			wantErr:     true,
+			errContains: "placeholder '_' is only valid inside any()/all()/none()",
+		},
+		{
+			name:        "array quantifier on non-array field",
+			query:       `object:project any(.name, _ == "api")`,
+			wantErr:     true,
+			errContains: "require an array field",
+		},
+		{
+			name:        "array element string function on numeric array",
+			query:       `object:project any(.scores, startswith(_, "1"))`,
+			wantErr:     true,
+			errContains: "not valid for array elements of type number",
+		},
+		{
+			name:        "array element string function must use underscore",
+			query:       `object:project any(.tags, startswith(.name, "api"))`,
+			wantErr:     true,
+			errContains: "must use '_' as the first argument",
+		},
+		{
+			name:        "reference element comparison only for ref arrays",
+			query:       `object:project any(.tags, _ == [[people/freya]])`,
+			wantErr:     true,
+			errContains: "only valid for ref[] fields",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+
+			err = v.Validate(q)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected validation error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Fatalf("expected error containing %q, got: %v", tt.errContains, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -474,8 +473,7 @@ var checkCmd = &cobra.Command{
 
 		if jsonOutput {
 			result := buildCheckJSONWithScope(vaultPath, scope, fileCount, errorCount, warningCount, allIssues, schemaIssues)
-			out, _ := json.MarshalIndent(result, "", "  ")
-			fmt.Println(string(out))
+			outputSuccess(result, nil)
 		} else if checkByFile {
 			// Group issues by file
 			printIssuesByFile(allIssues, schemaIssues, staleWarningShown)
@@ -1238,6 +1236,7 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 	validTypes := map[string]bool{
 		"boolean": true, "bool": true,
 		"string":   true,
+		"number":   true,
 		"date":     true,
 		"datetime": true,
 		"enum":     true,

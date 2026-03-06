@@ -407,6 +407,74 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("resolver keeps duplicate name_field values ambiguous", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		testSchema := schema.NewSchema()
+		testSchema.Types["book"] = &schema.TypeDefinition{
+			NameField: "title",
+			Fields: map[string]*schema.FieldDefinition{
+				"title": {Type: schema.FieldTypeString},
+			},
+		}
+
+		doc1 := &parser.ParsedDocument{
+			FilePath: "books/first.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "books/first",
+					ObjectType: "book",
+					Fields: map[string]schema.FieldValue{
+						"title": schema.String("Shared Display Name"),
+					},
+					LineStart: 1,
+				},
+			},
+		}
+		doc2 := &parser.ParsedDocument{
+			FilePath: "books/second.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "books/second",
+					ObjectType: "book",
+					Fields: map[string]schema.FieldValue{
+						"title": schema.String("Shared Display Name"),
+					},
+					LineStart: 1,
+				},
+			},
+		}
+
+		if err := db.IndexDocument(doc1, testSchema); err != nil {
+			t.Fatalf("failed to index first doc: %v", err)
+		}
+		if err := db.IndexDocument(doc2, testSchema); err != nil {
+			t.Fatalf("failed to index second doc: %v", err)
+		}
+
+		res, err := db.Resolver(ResolverOptions{Schema: testSchema})
+		if err != nil {
+			t.Fatalf("failed to build resolver: %v", err)
+		}
+
+		result := res.Resolve("Shared Display Name")
+		if !result.Ambiguous {
+			t.Fatalf("expected duplicate name_field resolution to be ambiguous, got %+v", result)
+		}
+
+		found := map[string]bool{}
+		for _, match := range result.Matches {
+			found[match] = true
+		}
+		if !found["books/first"] || !found["books/second"] {
+			t.Fatalf("expected matches to include both books, got %v", result.Matches)
+		}
+	})
+
 	t.Run("undefined traits are not indexed", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {
@@ -596,6 +664,86 @@ func TestTraitIDConsistency(t *testing.T) {
 	}
 	if dateSourceID != traitID {
 		t.Errorf("date_index source_id %q does not match traits.id %q — trait ID mismatch bug", dateSourceID, traitID)
+	}
+}
+
+func TestTraitIDsStableAcrossReindexForMultilineParagraph(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	sch := schema.NewSchema()
+	sch.Traits["todo"] = &schema.TraitDefinition{Type: schema.FieldTypeString}
+
+	content := "First task @todo one\nSecond task @todo two\nThird task @todo three\n"
+	expectedIDs := []string{
+		"notes/unstable.md:trait:0",
+		"notes/unstable.md:trait:1",
+		"notes/unstable.md:trait:2",
+	}
+
+	for i := 0; i < 20; i++ {
+		if err := db.ClearAllData(); err != nil {
+			t.Fatalf("iteration %d: failed to clear database: %v", i, err)
+		}
+
+		doc, err := parser.ParseDocument(content, "/vault/notes/unstable.md", "/vault")
+		if err != nil {
+			t.Fatalf("iteration %d: failed to parse document: %v", i, err)
+		}
+		if err := db.IndexDocument(doc, sch); err != nil {
+			t.Fatalf("iteration %d: failed to index document: %v", i, err)
+		}
+
+		rows, err := db.db.Query(`SELECT id FROM traits ORDER BY line_number`)
+		if err != nil {
+			t.Fatalf("iteration %d: failed to query traits: %v", i, err)
+		}
+
+		var gotIDs []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				t.Fatalf("iteration %d: failed to scan trait id: %v", i, err)
+			}
+			gotIDs = append(gotIDs, id)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			t.Fatalf("iteration %d: row iteration error: %v", i, err)
+		}
+		rows.Close()
+
+		if len(gotIDs) != len(expectedIDs) {
+			t.Fatalf("iteration %d: got %d traits, want %d", i, len(gotIDs), len(expectedIDs))
+		}
+		for j, gotID := range gotIDs {
+			if gotID != expectedIDs[j] {
+				t.Fatalf(
+					"iteration %d: trait id at line-order index %d = %q, want %q (unstable trait ordering)",
+					i, j, gotID, expectedIDs[j],
+				)
+			}
+		}
+
+		var dateSourceID string
+		if err := db.db.QueryRow(`
+			SELECT source_id FROM date_index
+			WHERE source_type='trait'
+			ORDER BY date
+			LIMIT 1
+		`).Scan(&dateSourceID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("iteration %d: failed to query date index source id: %v", i, err)
+		}
+		if dateSourceID != "" {
+			wantPrefix := "notes/unstable.md:trait:"
+			if len(dateSourceID) < len(wantPrefix) || dateSourceID[:len(wantPrefix)] != wantPrefix {
+				t.Fatalf("iteration %d: unexpected date_index trait source id %q", i, dateSourceID)
+			}
+		}
 	}
 }
 

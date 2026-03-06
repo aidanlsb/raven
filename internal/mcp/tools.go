@@ -4,7 +4,9 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commands"
@@ -16,6 +18,10 @@ func GenerateToolSchemas() []Tool {
 	var tools []Tool
 
 	for cmdName, meta := range commands.Registry {
+		if meta.HideFromMCP {
+			continue
+		}
+
 		description := meta.Description
 		if meta.LongDesc != "" {
 			description = meta.LongDesc
@@ -62,6 +68,19 @@ func GenerateToolSchemas() []Tool {
 					{"type": "string"},
 				}
 				prop["description"] = flag.Description + " (object or JSON string)"
+			case commands.FlagTypeStringSlice:
+				// Repeatable string flags are represented as arrays in MCP, while
+				// still accepting comma-delimited strings for client compatibility.
+				prop["anyOf"] = []map[string]interface{}{
+					{"type": "string"},
+					{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+					},
+				}
+				prop["description"] = flag.Description + " (string or array of strings)"
 			case commands.FlagTypeKeyValue, commands.FlagTypePosKeyValue:
 				// Key/value inputs are intentionally flexible for MCP compatibility:
 				// object, single "k=v" string, or array of "k=v" strings.
@@ -135,103 +154,15 @@ func mcpToolName(cmdName string) string {
 // CLICommandName converts an MCP tool name back to CLI command name.
 // e.g., "raven_new" -> "new", "raven_schema_add_type" -> "schema add type"
 func CLICommandName(toolName string) string {
-	// Remove "raven_" prefix
-	if len(toolName) > 6 && toolName[:6] == "raven_" {
-		toolName = toolName[6:]
+	if id, ok := commands.ResolveToolCommandID(toolName); ok {
+		if meta, ok := commands.Registry[id]; ok {
+			return meta.Name
+		}
+		return strings.ReplaceAll(id, "_", " ")
 	}
 
-	// Handle special cases where underscores are part of the command structure
-	// These are subcommands that use spaces, not underscores
-	switch toolName {
-	case "schema_add_type":
-		return "schema add type"
-	case "schema_add_trait":
-		return "schema add trait"
-	case "schema_add_field":
-		return "schema add field"
-	case "schema_validate":
-		return "schema validate"
-	case "schema_update_type":
-		return "schema update type"
-	case "schema_update_trait":
-		return "schema update trait"
-	case "schema_update_field":
-		return "schema update field"
-	case "schema_remove_type":
-		return "schema remove type"
-	case "schema_remove_trait":
-		return "schema remove trait"
-	case "schema_remove_field":
-		return "schema remove field"
-	case "schema_rename_type":
-		return "schema rename type"
-	case "schema_rename_field":
-		return "schema rename field"
-	case "schema_template_list":
-		return "schema template list"
-	case "schema_template_get":
-		return "schema template get"
-	case "schema_template_set":
-		return "schema template set"
-	case "schema_template_remove":
-		return "schema template remove"
-	case "schema_type_template_list":
-		return "schema type template list"
-	case "schema_type_template_set":
-		return "schema type template set"
-	case "schema_type_template_remove":
-		return "schema type template remove"
-	case "schema_type_template_default":
-		return "schema type template default"
-	case "schema_core_template_list":
-		return "schema core template list"
-	case "schema_core_template_set":
-		return "schema core template set"
-	case "schema_core_template_remove":
-		return "schema core template remove"
-	case "schema_core_template_default":
-		return "schema core template default"
-	case "template_list":
-		return "template list"
-	case "template_write":
-		return "template write"
-	case "template_delete":
-		return "template delete"
-	case "query_add":
-		return "query add"
-	case "query_remove":
-		return "query remove"
-	case "workflow_list":
-		return "workflow list"
-	case "workflow_add":
-		return "workflow add"
-	case "workflow_scaffold":
-		return "workflow scaffold"
-	case "workflow_remove":
-		return "workflow remove"
-	case "workflow_validate":
-		return "workflow validate"
-	case "workflow_show":
-		return "workflow show"
-	case "workflow_step_add":
-		return "workflow step add"
-	case "workflow_step_update":
-		return "workflow step update"
-	case "workflow_step_remove":
-		return "workflow step remove"
-	case "workflow_run":
-		return "workflow run"
-	case "workflow_continue":
-		return "workflow continue"
-	case "workflow_runs_list":
-		return "workflow runs list"
-	case "workflow_runs_step":
-		return "workflow runs step"
-	case "workflow_runs_prune":
-		return "workflow runs prune"
-	}
-
-	return toolName
+	raw := strings.TrimPrefix(toolName, "raven_")
+	return strings.ReplaceAll(raw, "_", " ")
 }
 
 // BuildCLIArgs builds CLI arguments from MCP tool arguments using the registry.
@@ -251,20 +182,13 @@ func CLICommandName(toolName string) string {
 // (e.g., "default-path" or "default_path"). This function accepts both forms
 // and normalizes them to match the registry's canonical names (which use hyphens).
 func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
-	cmdName := CLICommandName(toolName)
-	meta, ok := commands.Registry[cmdName]
+	cmdID, ok := commands.ResolveToolCommandID(toolName)
 	if !ok {
-		// Registry uses underscores (e.g., "schema_add_type"),
-		// but CLICommandName returns spaces (e.g., "schema add type").
-		// Try with underscores.
-		underscoreName := strings.ReplaceAll(cmdName, " ", "_")
-		meta, ok = commands.Registry[underscoreName]
-		if !ok {
-			// Commands MUST be in the registry. No fallback behavior.
-			// Return empty to trigger "unknown tool" error upstream.
-			return nil
-		}
+		// Commands MUST be in the registry. No fallback behavior.
+		// Return empty to trigger "unknown tool" error upstream.
+		return nil
 	}
+	meta := commands.Registry[cmdID]
 
 	var cliArgs []string
 
@@ -288,17 +212,13 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 				cliArgs = append(cliArgs, "--"+flag.Name)
 			}
 		case commands.FlagTypeInt:
-			if numVal, ok := val.(float64); ok {
-				cliArgs = append(cliArgs, "--"+flag.Name, fmt.Sprintf("%d", int(numVal)))
+			if intVal, ok := intFlagValue(val); ok {
+				cliArgs = append(cliArgs, "--"+flag.Name, intVal)
 			}
 		case commands.FlagTypeStringSlice:
-			// Comma-separated list becomes multiple flag invocations
-			if strVal, ok := val.(string); ok && strVal != "" {
-				for _, item := range strings.Split(strVal, ",") {
-					item = strings.TrimSpace(item)
-					if item != "" {
-						cliArgs = append(cliArgs, "--"+flag.Name, item)
-					}
+			for _, item := range stringSliceValues(val) {
+				if item != "" {
+					cliArgs = append(cliArgs, "--"+flag.Name, item)
 				}
 			}
 		case commands.FlagTypeJSON:
@@ -367,6 +287,51 @@ func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	return cliArgs
 }
 
+func intFlagValue(v interface{}) (string, bool) {
+	switch val := v.(type) {
+	case int:
+		return strconv.Itoa(val), true
+	case int8:
+		return strconv.FormatInt(int64(val), 10), true
+	case int16:
+		return strconv.FormatInt(int64(val), 10), true
+	case int32:
+		return strconv.FormatInt(int64(val), 10), true
+	case int64:
+		return strconv.FormatInt(val, 10), true
+	case uint:
+		return strconv.FormatUint(uint64(val), 10), true
+	case uint8:
+		return strconv.FormatUint(uint64(val), 10), true
+	case uint16:
+		return strconv.FormatUint(uint64(val), 10), true
+	case uint32:
+		return strconv.FormatUint(uint64(val), 10), true
+	case uint64:
+		return strconv.FormatUint(val, 10), true
+	case float32:
+		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
+			return "", false
+		}
+		return strconv.FormatInt(int64(val), 10), true
+	case float64:
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return "", false
+		}
+		return strconv.FormatInt(int64(val), 10), true
+	case json.Number:
+		if i, err := val.Int64(); err == nil {
+			return strconv.FormatInt(i, 10), true
+		}
+		if f, err := val.Float64(); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
+			return strconv.FormatInt(int64(f), 10), true
+		}
+		return "", false
+	default:
+		return "", false
+	}
+}
+
 func toString(v interface{}) string {
 	switch val := v.(type) {
 	case string:
@@ -380,6 +345,55 @@ func toString(v interface{}) string {
 		return ""
 	default:
 		return ""
+	}
+}
+
+// stringSliceValues normalizes repeatable string flag inputs.
+//
+// Supported forms:
+// - string:        "a,b,c" or "a"
+// - []interface{}: ["a","b"]
+// - []string:      ["a","b"]
+func stringSliceValues(v interface{}) []string {
+	switch val := v.(type) {
+	case string:
+		s := strings.TrimSpace(val)
+		if s == "" {
+			return nil
+		}
+		parts := strings.Split(s, ",")
+		values := make([]string, 0, len(parts))
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				values = append(values, part)
+			}
+		}
+		return values
+	case []interface{}:
+		values := make([]string, 0, len(val))
+		for _, item := range val {
+			s, ok := item.(string)
+			if !ok {
+				continue
+			}
+			s = strings.TrimSpace(s)
+			if s != "" {
+				values = append(values, s)
+			}
+		}
+		return values
+	case []string:
+		values := make([]string, 0, len(val))
+		for _, item := range val {
+			item = strings.TrimSpace(item)
+			if item != "" {
+				values = append(values, item)
+			}
+		}
+		return values
+	default:
+		return nil
 	}
 }
 
