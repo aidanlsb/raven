@@ -466,11 +466,11 @@ about: "[[The Prose Edda]]"
 			result.TargetID, result.Error)
 	}
 
-	// Also test via ResolveReferences
-	// First, manually resolve the refs with the schema-aware resolver
-	db.ResolveReferences("daily") // This uses basic resolver
+	// Also test via ResolveReferencesWithSchema (used in reindex/check flows)
+	if _, err := db.ResolveReferencesWithSchema("daily", sch); err != nil {
+		t.Fatalf("resolve refs with schema: %v", err)
+	}
 
-	// Build resolver with schema for backlinks check
 	backlinks, err := db.Backlinks("books/the-prose-edda")
 	if err != nil {
 		t.Fatal(err)
@@ -481,8 +481,16 @@ about: "[[The Prose Edda]]"
 		t.Logf("  - %s", bl.SourceID)
 	}
 
-	// Note: ResolveReferences uses basic resolver without schema,
-	// so name_field resolution may not work there. This is a known limitation.
+	found := false
+	for _, bl := range backlinks {
+		if bl.SourceID == "notes/edda-notes" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected backlink from notes/edda-notes to books/the-prose-edda via name_field resolution")
+	}
 }
 
 // TestQueryRefsWithResolution tests that query refs:[[target]] works with

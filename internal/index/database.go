@@ -451,7 +451,7 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	}
 
 	if d.autoResolveRefs && d.dailyDirectory != "" {
-		if _, err := d.ResolveReferencesForFile(doc.FilePath, d.dailyDirectory); err != nil {
+		if _, err := d.ResolveReferencesForFileWithSchema(doc.FilePath, d.dailyDirectory, sch); err != nil {
 			return err
 		}
 	}
@@ -1001,48 +1001,15 @@ type IndexStats struct {
 
 // AllObjectIDs returns all object IDs (for reference resolution).
 func (d *Database) AllObjectIDs() ([]string, error) {
-	rows, err := d.db.Query("SELECT id FROM objects")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-
-	return ids, rows.Err()
+	return allObjectIDsFromDB(d.db)
 }
 
 // AllAliases returns a map from alias to object ID for all objects with aliases.
 // This is used for reference resolution where [[alias]] should resolve to the object.
-// If multiple objects have the same alias, the first one encountered wins (non-deterministic).
+// If multiple objects have the same alias, the first one encountered in ID order wins.
 // Use FindDuplicateAliases to detect and report conflicts.
 func (d *Database) AllAliases() (map[string]string, error) {
-	rows, err := d.db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	aliases := make(map[string]string)
-	for rows.Next() {
-		var alias, id string
-		if err := rows.Scan(&alias, &id); err != nil {
-			return nil, err
-		}
-		// First one wins (deterministic due to ORDER BY id)
-		if _, exists := aliases[alias]; !exists {
-			aliases[alias] = id
-		}
-	}
-
-	return aliases, rows.Err()
+	return allAliasesFromDB(d.db)
 }
 
 // ResolverOptions configures resolver creation.
@@ -1072,14 +1039,22 @@ type ResolverOptions struct {
 //
 // Use this method for all resolver creation to ensure consistent behavior.
 func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
+	return BuildResolver(d.db, opts)
+}
+
+// BuildResolver builds the canonical resolver from a database handle.
+//
+// This shared helper allows all subsystems (index/query/check) to use identical
+// resolver semantics without re-implementing object ID and alias loading logic.
+func BuildResolver(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, error) {
 	dailyDir := defaultDailyDir(opts.DailyDirectory)
 
-	objectIDs, err := d.AllObjectIDs()
+	objectIDs, err := allObjectIDsFromDB(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object IDs: %w", err)
 	}
 
-	aliases, err := d.AllAliases()
+	aliases, err := allAliasesFromDB(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get aliases: %w", err)
 	}
@@ -1093,7 +1068,7 @@ func (d *Database) Resolver(opts ResolverOptions) (*resolver.Resolver, error) {
 		Aliases:        aliases,
 	}
 	if opts.Schema != nil {
-		nameFieldMap, err := d.AllNameFieldValues(opts.Schema)
+		nameFieldMap, err := allNameFieldValuesFromDB(db, opts.Schema)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get name field values: %w", err)
 		}
@@ -1136,6 +1111,56 @@ func appendExtraIDs(objectIDs []string, extraIDs []string) []string {
 // AllNameFieldValues returns a map from name_field values to object IDs.
 // It queries each type's name_field and extracts the corresponding field value.
 func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, error) {
+	return allNameFieldValuesFromDB(d.db, sch)
+}
+
+func allObjectIDsFromDB(db *sql.DB) ([]string, error) {
+	rows, err := db.Query("SELECT id FROM objects")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
+func allAliasesFromDB(db *sql.DB) (map[string]string, error) {
+	rows, err := db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
+	if err != nil {
+		// Some tests build a minimal objects schema without alias support.
+		// Treat that as "no aliases" instead of failing resolver creation.
+		if strings.Contains(err.Error(), "no such column: alias") {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	aliases := make(map[string]string)
+	for rows.Next() {
+		var alias, id string
+		if err := rows.Scan(&alias, &id); err != nil {
+			return nil, err
+		}
+		// First one wins (deterministic due to ORDER BY id).
+		if _, exists := aliases[alias]; !exists {
+			aliases[alias] = id
+		}
+	}
+
+	return aliases, rows.Err()
+}
+
+func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string]string, error) {
 	nameFieldMap := make(map[string]string)
 
 	if sch == nil {
@@ -1150,7 +1175,7 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string]string, er
 	}
 
 	// Query all objects and extract name_field values
-	rows, err := d.db.Query(`SELECT id, type, fields FROM objects WHERE type != '' AND fields != '{}'`)
+	rows, err := db.Query(`SELECT id, type, fields FROM objects WHERE type != '' AND fields != '{}'`)
 	if err != nil {
 		return nil, err
 	}
@@ -1450,9 +1475,18 @@ type ReferenceResolutionResult struct {
 // This should be called after all files have been indexed.
 // dailyDirectory is used to resolve date shorthand references like [[2025-02-01]].
 func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutionResult, error) {
+	return d.ResolveReferencesWithSchema(dailyDirectory, nil)
+}
+
+// ResolveReferencesWithSchema resolves all unresolved references in the refs table
+// using schema-aware name_field matching when schema is provided.
+func (d *Database) ResolveReferencesWithSchema(dailyDirectory string, sch *schema.Schema) (*ReferenceResolutionResult, error) {
 	result := &ReferenceResolutionResult{}
 
-	res, err := d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory})
+	res, err := d.Resolver(ResolverOptions{
+		DailyDirectory: dailyDirectory,
+		Schema:         sch,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1472,9 +1506,18 @@ func (d *Database) ResolveReferences(dailyDirectory string) (*ReferenceResolutio
 // This exists to support auto-reindex after CLI mutations without requiring a full
 // vault-wide reference resolution pass.
 func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*ReferenceResolutionResult, error) {
+	return d.ResolveReferencesForFileWithSchema(filePath, dailyDirectory, nil)
+}
+
+// ResolveReferencesForFileWithSchema resolves unresolved references for a single file
+// using schema-aware name_field matching when schema is provided.
+func (d *Database) ResolveReferencesForFileWithSchema(filePath, dailyDirectory string, sch *schema.Schema) (*ReferenceResolutionResult, error) {
 	result := &ReferenceResolutionResult{}
 
-	res, err := d.Resolver(ResolverOptions{DailyDirectory: dailyDirectory})
+	res, err := d.Resolver(ResolverOptions{
+		DailyDirectory: dailyDirectory,
+		Schema:         sch,
+	})
 	if err != nil {
 		return nil, err
 	}

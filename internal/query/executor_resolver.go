@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/resolver"
 )
 
@@ -33,54 +34,14 @@ func (e *Executor) getResolver() (*resolver.Resolver, error) {
 		return e.resolver, nil
 	}
 
-	// Query all object IDs from the database
-	rows, err := e.db.Query("SELECT id FROM objects")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get object IDs: %w", err)
-	}
-	defer rows.Close()
-
-	var objectIDs []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		objectIDs = append(objectIDs, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	// Query all aliases from the database
-	aliasRows, err := e.db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
-	if err != nil {
-		// Fall back to resolver without aliases
-		e.resolver = resolver.New(objectIDs, resolver.Options{DailyDirectory: e.dailyDirectory})
-		return e.resolver, nil
-	}
-	defer aliasRows.Close()
-
-	aliases := make(map[string]string)
-	for aliasRows.Next() {
-		var alias, id string
-		if err := aliasRows.Scan(&alias, &id); err != nil {
-			continue
-		}
-		if _, exists := aliases[alias]; !exists {
-			aliases[alias] = id
-		}
-	}
-	if err := aliasRows.Err(); err != nil {
-		// Fall back to resolver without aliases (avoid partial/incorrect alias maps)
-		e.resolver = resolver.New(objectIDs, resolver.Options{DailyDirectory: e.dailyDirectory})
-		return e.resolver, nil
-	}
-
-	e.resolver = resolver.New(objectIDs, resolver.Options{
+	res, err := index.BuildResolver(e.db, index.ResolverOptions{
 		DailyDirectory: e.dailyDirectory,
-		Aliases:        aliases,
+		Schema:         e.schema,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("build resolver: %w", err)
+	}
+	e.resolver = res
 	return e.resolver, nil
 }
 

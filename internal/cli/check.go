@@ -19,6 +19,7 @@ import (
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -264,6 +265,7 @@ var checkCmd = &cobra.Command{
 		staleWarningShown := false
 		var aliases map[string]string
 		var duplicateAliases []index.DuplicateAlias
+		var canonicalResolver *resolver.Resolver
 		db, err := index.Open(vaultPath)
 		if err == nil {
 			defer db.Close()
@@ -308,6 +310,12 @@ var checkCmd = &cobra.Command{
 
 			// Fetch duplicate aliases
 			duplicateAliases, _ = db.FindDuplicateAliases()
+
+			// Build canonical resolver (includes aliases + schema-aware name_field resolution).
+			canonicalResolver, _ = db.Resolver(index.ResolverOptions{
+				DailyDirectory: vaultCfg.GetDailyDirectory(),
+				Schema:         s,
+			})
 		}
 
 		// Determine which files to walk based on scope
@@ -377,14 +385,16 @@ var checkCmd = &cobra.Command{
 		}
 
 		// Second pass: validate with full context (including type information and aliases)
-		validator := check.NewValidatorWithTypesAndAliases(s, allObjectInfos, aliases)
+		validator := check.NewValidatorWithTypesAliasesAndResolver(s, allObjectInfos, aliases, canonicalResolver)
 		validator.SetDuplicateAliases(duplicateAliases)
 
 		// Set directory roots for cleaner path suggestions (e.g., [[people/freya]] instead of [[objects/people/freya]])
 		if vaultCfg.HasDirectoriesConfig() {
 			validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
 		}
-		validator.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+		if canonicalResolver == nil {
+			validator.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+		}
 
 		for _, doc := range allDocs {
 			issues := validator.ValidateDocument(doc)

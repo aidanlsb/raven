@@ -209,7 +209,7 @@ Examples:
 		// Resolve references after all files are indexed
 		var refResult *index.ReferenceResolutionResult
 		if !dryRun && fileCount > 0 {
-			refResult, err = db.ResolveReferences(dailyDir)
+			refResult, err = db.ResolveReferencesWithSchema(dailyDir, sch)
 			if err != nil && !jsonOutput {
 				fmt.Fprintf(os.Stderr, "Warning: failed to resolve references: %v\n", err)
 			}

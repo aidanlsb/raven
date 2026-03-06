@@ -174,6 +174,20 @@ func NewValidatorWithTypes(s *schema.Schema, objectInfos []ObjectInfo) *Validato
 
 // NewValidatorWithTypesAndAliases creates a new validator with type info and aliases.
 func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo, aliases map[string]string) *Validator {
+	return NewValidatorWithTypesAliasesAndResolver(s, objectInfos, aliases, nil)
+}
+
+// NewValidatorWithTypesAliasesAndResolver creates a new validator with type info,
+// aliases, and an optional pre-built resolver.
+//
+// When resolver is nil, a resolver is constructed from objectInfos and aliases.
+// When resolver is provided, it is used as-is (for example: index.Database.Resolver).
+func NewValidatorWithTypesAliasesAndResolver(
+	s *schema.Schema,
+	objectInfos []ObjectInfo,
+	aliases map[string]string,
+	prebuiltResolver *resolver.Resolver,
+) *Validator {
 	allIDs := make(map[string]struct{}, len(objectInfos))
 	objectTypes := make(map[string]string, len(objectInfos))
 	ids := make([]string, 0, len(objectInfos))
@@ -183,10 +197,14 @@ func NewValidatorWithTypesAndAliases(s *schema.Schema, objectInfos []ObjectInfo,
 		objectTypes[info.ID] = info.Type
 		ids = append(ids, info.ID)
 	}
+	res := prebuiltResolver
+	if res == nil {
+		res = resolver.New(ids, resolver.Options{Aliases: aliases})
+	}
 
 	return &Validator{
 		schema:          s,
-		resolver:        resolver.New(ids, resolver.Options{Aliases: aliases}),
+		resolver:        res,
 		allIDs:          allIDs,
 		objectTypes:     objectTypes,
 		aliases:         aliases,
