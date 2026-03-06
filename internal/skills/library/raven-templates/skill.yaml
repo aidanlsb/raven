@@ -1,0 +1,31 @@
+id: raven-templates
+title: Raven Templates
+version: 1
+summary: Template file lifecycle and schema/template binding workflows.
+entry: body.md
+references:
+  - references/template-lifecycle.md
+coverage:
+  commands:
+    - template
+    - template list
+    - template write
+    - template delete
+    - schema template list
+    - schema template get
+    - schema template set
+    - schema template remove
+    - schema type template list
+    - schema type template set
+    - schema type template remove
+    - schema type template default
+    - schema core template list
+    - schema core template set
+    - schema core template remove
+    - schema core template default
+execution:
+  preferred_transport: cli
+  cli_binary: rvn
+  cli_args_suffix:
+    - --json
+  mcp_fallback: false

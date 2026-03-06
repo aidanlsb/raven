@@ -2166,7 +2166,7 @@ Use --target to include target-specific installed status and paths.`,
 
 Preview is returned by default. Use --confirm to apply writes.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-schema"}},
+			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin", "raven-workflows"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2178,6 +2178,7 @@ Preview is returned by default. Use --confirm to apply writes.`,
 		Examples: []string{
 			"rvn skill install raven-core --target codex --confirm --json",
 			"rvn skill install raven-schema --target claude --scope project --json",
+			"rvn skill install raven-workflows --target codex --confirm --json",
 		},
 		UseCases: []string{
 			"Install Raven core skill guidance into an agent runtime",
@@ -2191,7 +2192,7 @@ Preview is returned by default. Use --confirm to apply writes.`,
 
 Preview is returned by default. Use --confirm to apply removal.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-schema"}},
+			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin", "raven-workflows"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2202,6 +2203,7 @@ Preview is returned by default. Use --confirm to apply removal.`,
 		Examples: []string{
 			"rvn skill remove raven-core --target codex --confirm --json",
 			"rvn skill remove raven-schema --target cursor --scope project --json",
+			"rvn skill remove raven-workflows --target codex --confirm --json",
 		},
 		UseCases: []string{
 			"Preview skill removal before deleting files",

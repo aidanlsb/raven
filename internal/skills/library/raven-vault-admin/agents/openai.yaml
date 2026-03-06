@@ -1,0 +1,3 @@
+name: raven-vault-admin
+description: Raven vault setup, active/default vault routing, and global config workflows.
+default_prompt: Manage Raven vaults and global config with explicit vault selection and --json output.

@@ -18,6 +18,10 @@ Use this skill for day-to-day Raven operations.
 3. Retrieve and analyze: `rvn query`, `rvn search`, `rvn backlinks`.
 4. Edit safely: `rvn edit` (surgical), `rvn move`, `rvn delete`.
 
+## Scope boundary
+
+- Use `raven-query-advanced` when the user needs RQL syntax help, complex predicate composition, saved query authoring, or query troubleshooting.
+
 ## Safety
 
 - Avoid shell-level `rm`/`mv` for vault objects when Raven commands exist.

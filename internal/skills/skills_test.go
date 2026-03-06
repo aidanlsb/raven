@@ -11,11 +11,18 @@ func TestLoadCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
 	}
-	if _, ok := catalog["raven-core"]; !ok {
-		t.Fatalf("catalog missing raven-core")
+	expected := []string{
+		"raven-core",
+		"raven-query-advanced",
+		"raven-schema",
+		"raven-templates",
+		"raven-vault-admin",
+		"raven-workflows",
 	}
-	if _, ok := catalog["raven-schema"]; !ok {
-		t.Fatalf("catalog missing raven-schema")
+	for _, skillID := range expected {
+		if _, ok := catalog[skillID]; !ok {
+			t.Fatalf("catalog missing %s", skillID)
+		}
 	}
 }
 

@@ -1,0 +1,26 @@
+id: raven-query-advanced
+title: Raven Query Advanced
+version: 1
+summary: Advanced Raven query language guidance, patterns, and troubleshooting.
+entry: body.md
+references:
+  - references/query-language.md
+  - references/query-recipes.md
+  - references/query-troubleshooting.md
+coverage:
+  commands:
+    - query
+    - query add
+    - query remove
+    - search
+    - backlinks
+    - outlinks
+    - last
+    - resolve
+    - read
+execution:
+  preferred_transport: cli
+  cli_binary: rvn
+  cli_args_suffix:
+    - --json
+  mcp_fallback: false
