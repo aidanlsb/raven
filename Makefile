@@ -2,7 +2,8 @@
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-GOLANGCI_LINT_TOOLCHAIN ?= go1.23.0
+GO_MOD_VERSION := $(shell sed -n 's/^go //p' go.mod | head -n 1)
+GOLANGCI_LINT_TOOLCHAIN ?= go$(GO_MOD_VERSION)
 
 # Default target
 all: check build
@@ -29,7 +30,7 @@ test-coverage:
 
 # Run linter with golangci-lint v2.
 # Explicitly requires a local v2 binary.
-# Force project toolchain for lint to avoid Go 1.26 package-loading regressions.
+# Force project go.mod toolchain for lint to avoid package-loading regressions.
 lint:
 	@version="$$(golangci-lint --version 2>/dev/null || true)"; \
 	case "$$version" in \
