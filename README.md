@@ -6,17 +6,19 @@
 
 ---
 
+**A CLI for knowledge management with first-class support for LLM agents.**
+
 Raven adds a few features on top of markdown:  
-- A lightweight schema for defining types and fields
-- Syntax for annotating content with traits
-- Bidirectional linking between objects
+- A lightweight schema for defining types 
+- Syntax for annotating content inline with traits
+- Bidirectional linking 
 
 And enables precise retrieval and powerful workflows with:
-- A full-featured CLI
+- A full-featured CLI for interacting with your notes
 - An efficient query language
 - First-class agent support
 
-Everything stays local — plain text files you own and can edit with any tool.
+Everything stays local in plain text files.
 
 ---
 
