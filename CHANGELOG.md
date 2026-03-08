@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.4] - 2026-03-08
+
+### Added
+- New MCP agent-guide topics for response contract, write patterns, workflow lifecycle, and large-vault query strategy.
+
+### Changed
+- Consolidated onboarding and teaching flow by removing the standalone lesson-plan guide.
+- Restructured key workflow guidance into a concise operational playbook with cross-links to focused topic guides.
+- Improved guide accuracy for query examples, issue-type coverage, and error-handling semantics.
+
 ## [v0.0.3] - 2026-03-02
 
 ### Added
@@ -45,7 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.4...HEAD
+[v0.0.4]: https://github.com/aidanlsb/raven/compare/v0.0.3...v0.0.4
 [v0.0.3]: https://github.com/aidanlsb/raven/compare/v0.0.2...v0.0.3
 [v0.0.2]: https://github.com/aidanlsb/raven/compare/v0.0.1...v0.0.2
 [v0.0.1]: https://github.com/aidanlsb/raven/releases/tag/v0.0.1
