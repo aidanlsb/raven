@@ -1,667 +1,158 @@
 # Key Workflows
 
-### 1. Vault Health Check
+This guide is an operational playbook. Use it for high-value end-to-end flows.
 
-When users ask about issues or want to clean up their vault:
+For detailed tool semantics, see focused topics:
+- `raven://guide/write-patterns`
+- `raven://guide/workflow-lifecycle`
+- `raven://guide/query-at-scale`
+- `raven://guide/response-contract`
 
-1. Run `raven_check` to get structured issues
-2. Review the summary to prioritize:
-   - `unknown_type`: Files using undefined types
-   - `missing_reference`: Broken links
-   - `undefined_trait`: Traits not in schema
-3. Work through fixes WITH the user:
-   - "I see 14 undefined types. The most common are: saga (45 files), rune (12 files)..."
-   - "Would you like me to add these to your schema?"
-4. Execute fix commands based on user confirmation
+## 1. Vault health and cleanup
 
-**Scoped checks for precision:**
+When users ask "what is broken" or want cleanup:
 
-```
-# Check a specific file (verify your own work after edits)
-raven_check(path="people/freya.md")
-raven_check(path="freya")  # References work too
+1. Run a scoped check.
+2. Prioritize high-impact errors.
+3. Propose fixes with explicit user confirmation.
 
-# Check a directory
-raven_check(path="projects/")
-
-# Check all objects of a specific type
-raven_check(type="project")
-
-# Check all usages of a specific trait
-raven_check(trait="due")
-
-# Filter to specific issue types
-raven_check(issues="missing_reference,unknown_type")
-
-# Exclude noisy warnings
-raven_check(exclude="unused_type,unused_trait,short_ref_could_be_full_path")
-
-# Only errors (skip warnings)
+```text
 raven_check(errors_only=true)
+raven_check(path="projects/")
+raven_check(issues="missing_reference,unknown_type")
 ```
 
-**When to use scoped checks:**
+Use `issue.fix_command` / `issue.fix_hint` from JSON output where available.
 
-| Scenario | Command |
-|----------|---------|
-| After creating/editing a file | `raven_check(path="path/to/file.md")` |
-| Validating a type's instances | `raven_check(type="project")` |
-| Checking trait value correctness | `raven_check(trait="due")` |
-| Quick error-only scan | `raven_check(errors_only=true)` |
-| Focus on broken links | `raven_check(issues="missing_reference")` |
+## 2. Create and enrich content
 
-**Verify your own work:**
+Preferred sequence:
 
-After making changes, run a scoped check to verify:
-```
-# After creating a person
-raven_new(type="person", title="Thor")
-raven_check(path="thor")  # Verify the new file is valid
+1. Create object via schema.
+2. Add body content.
+3. Set structured fields.
 
-# After bulk edits to projects
-raven_check(type="project")  # Verify all projects are still valid
-```
-
-### 2. Creating Content
-
-When users want to create notes:
-
-1. Use `raven_new` for typed objects:
-   ```
-   raven_new(type="person", title="Freya", field={"email": "freya@asgard.realm"})
-   ```
-   
-2. Use `raven_add` for quick capture:
-   ```
-   raven_add(text="@due(tomorrow) Follow up with Odin")
-   raven_add(text="Meeting notes", to="cursor")  # Resolves to companies/cursor.md
-   ```
-
-**Recommended agent flow for “create a new note and then add content”:**
-
-Raven is intentionally **not** a free-form file writer. The intended pattern is:
-
-1. Create the file with `raven_new`
-2. Append content to that file with `raven_add(to=...)`
-
-```
+```text
 create = raven_new(type="project", title="Website Redesign")
-# Use the returned file path (vault-relative)
 raven_add(text="## Notes\n- Kickoff next week", to=create.data.file)
+raven_set(object_id="projects/website-redesign", fields={"status":"active"})
 ```
 
-Notes:
-- `raven_add` can auto-create **daily notes**; for other targets the file must already exist.
-   
-3. If a required field is missing, ask the user for the value
+If output should be idempotent across reruns, use `raven_upsert` instead of repeated `raven_add`.
 
-4. Check if the type has `name_field` configured (via `raven_schema(subcommand="type", name="<name>")`):
-   - If `name_field` is set, the title argument auto-populates that field
-   - Example: person type with `name_field: name` means `title="Freya"` sets `name="Freya"`
+## 3. Edit safely
 
-**name_field auto-population:**
+Use preview/apply flow for content edits:
 
-If a type has `name_field` configured, you don't need to provide that field separately:
-```
-# Type has name_field: name
-raven_new(type="person", title="Freya")  # name="Freya" is auto-set
+```text
+raven_read(path="projects/website-redesign.md", raw=true)
 
-# Type has name_field: title  
-raven_new(type="book", title="The Prose Edda")  # title="The Prose Edda" is auto-set
+# Preview
+raven_edit(path="projects/website-redesign.md", old_str="Status: draft", new_str="Status: active")
+
+# Apply only after explicit approval
+raven_edit(path="projects/website-redesign.md", old_str="Status: draft", new_str="Status: active", confirm=true)
 ```
 
-Check `raven_schema(subcommand="types")` — if you see a hint about types without `name_field`, suggest setting it up to simplify object creation.
+For metadata changes, prefer `raven_set` over free-form edits.
 
-### 3. Schema Discovery
+## 4. Move, reclassify, and delete
 
-When you need to understand the vault structure:
+Always use Raven primitives so refs/index stay valid:
 
-1. Use `raven_schema` to see available types and traits:
-   ```
-   raven_schema(subcommand="types")   # List all types (includes name_field hints)
-   raven_schema(subcommand="traits")  # List all traits
-   raven_schema(subcommand="type", name="person")  # Details about person type
-   ```
-
-2. Check saved queries:
-   ```
-   raven_query(list=true)  # See saved queries defined in raven.yaml
-   ```
-
-3. Look for `name_field` hints in the types response:
-   - Types with required string fields but no `name_field` are listed
-   - Suggest setting up `name_field` for easier object creation
-
-**Understanding name_field:**
-
-When you call `raven_schema(subcommand="type", name="person")`, check for:
-- `name_field`: Which field is the display name (e.g., "name", "title")
-- If set, the title argument to `raven_new` auto-populates this field
-
-To set up `name_field` on an existing type:
-```
-raven_schema_update_type(name="person", name-field="name")
+```text
+raven_move(source="people/loki", destination="people/loki-archived")
+raven_reclassify(object="pages/draft", new-type="project")
 ```
 
-### 4. Editing Content
+Deletion flow:
 
-When users want to modify existing notes:
-
-1. Use `raven_set` for frontmatter changes:
-   ```
-   raven_set(object_id="people/freya", fields={"email": "freya@asgard.realm"})
-   ```
-
-2. Use `raven_edit` for content changes (requires unique string match):
-   ```
-   # Preview first (default)
-   raven_edit(path="projects/website.md", old_str="Status: active", new_str="Status: completed")
-   
-   # Apply after reviewing preview
-   raven_edit(path="projects/website.md", old_str="Status: active", new_str="Status: completed", confirm=true)
-
-   # Multiple ordered edits in one call
-   raven_edit(
-     path="projects/website.md",
-     edits_json={"edits":[
-       {"old_str":"Status: active","new_str":"Status: completed"},
-       {"old_str":"Owner: TBD","new_str":"Owner: [[people/freya]]"}
-     ]},
-     confirm=true
-   )
-   ```
-
-3. Use `raven_read` first to understand the file content
-
-**Tip for reliable edits:** Prefer `raven_read(path="...", raw=true)` before building `old_str` so the match is exact (no rendered links/backlink sections). For long files, use `start-line`/`end-line` (both are **1-indexed, inclusive**) and/or `lines=true` to get copy-paste-safe anchors without transcription.
-
-**Important:** `raven_edit` returns a preview by default. Changes are NOT applied unless you set `confirm=true`.
-
-### 5. Moving and Renaming Files
-
-When users want to reorganize their vault:
-
-1. Use `raven_move` to move or rename files:
-   ```
-   raven_move(source="inbox/note.md", destination="projects/website/note.md")
-   raven_move(source="people/loki", destination="people/loki-archived")
-   ```
-
-2. References are updated automatically (`--update-refs` defaults to true)
-
-3. **IMPORTANT:** If the response has `needs_confirm=true`, ASK THE USER before proceeding.
-   This happens when moving to a type's default directory with a mismatched type.
-   Example: Moving a 'page' type file to 'people/' (which is for 'person' type)
-   
-   Ask: "This file has type 'page' but you're moving it to 'people/' which is for 'person' files. Should I proceed anyway, or would you like to change the file's type first?"
-
-4. Security: Files can ONLY be moved within the vault. The command will reject any attempt to move files outside the vault or move external files in.
-
-### 6. Bulk Operations
-
-When users want to update many objects at once:
-
-For query syntax and predicate patterns, see `raven://guide/querying`.
-
-1. Use `raven_query` with `--apply` to update query results in bulk:
-   ```
-   # Preview changes (default — changes NOT applied)
-   raven_query(query_string="object:project has(trait:due .value<today)", apply="set status=overdue")
-   
-   # Apply changes after user confirmation
-   raven_query(query_string="object:project has(trait:due .value<today)", apply="set status=overdue", confirm=true)
-
-   # Trait query updates (trait queries support only update)
-   raven_query(query_string="trait:todo .value==todo", apply="update done", confirm=true)
-   ```
-
-2. Supported bulk operations:
-   - Object queries: `set field=value`, `delete`, `add <text>`, `move <dir/>`
-   - Trait queries: `update <new_value>`
-
-3. Alternative: Use `--ids` to get IDs for piping:
-   ```
-   raven_query(query_string="object:project .status==archived", ids=true)
-   # Returns just the IDs, one per line
-   ```
-
-**Getting file paths from query results (for editing/navigation):**
-
-- Object queries include `items[].file_path` and `items[].line`
-- Trait queries include `items[].file_path` and `items[].line`
-
-4. Commands with `--stdin` read IDs from standard input:
-   ```
-   raven_set(stdin=true, fields={"status": "archived"}, confirm=true)
-   raven_delete(stdin=true, confirm=true)
-   raven_add(stdin=true, text="@reviewed(2026-01-07)", confirm=true)
-   raven_move(stdin=true, destination="archive/", confirm=true)
-   ```
-
-5. **ALWAYS preview first, then confirm:**
-   - Run without `confirm=true` to see what will change
-   - Present the preview to the user
-   - Only run with `confirm=true` after user approval
-
-**Bulk operation safety rules:**
-- Always preview before applying
-- Embedded objects (file#section): `set` supports them; `add/delete/move` skip them
-- Errors are collected and reported, but don't stop other operations
-- Use git to rollback if needed: `git restore .`
-
-### 7. Reindexing
-
-After bulk operations or schema changes:
-
-1. Use `raven_reindex` to rebuild the index:
-   ```
-   raven_reindex()              # Incremental (default) - only changed/deleted files
-   raven_reindex(full=true)     # Force complete rebuild
-   ```
-
-2. This is needed after:
-   - Adding new types or traits to the schema
-   - Bulk file operations outside of Raven
-   - If queries return stale results
-
-### 8. Deleting Content
-
-**⚠️ ALWAYS confirm with the user before deleting anything.**
-
-When users want to remove files:
-
-1. **FIRST** check for backlinks:
-   ```
-   raven_backlinks(target="projects/old-project")
-   ```
-
-2. **THEN** confirm with the user before deleting:
-   - "I found this file is referenced by 3 other pages. Deleting it will create broken links. Are you sure you want to delete it?"
-   - Even if no backlinks: "Are you sure you want to delete projects/old-project?"
-
-3. Only after user confirms, use `raven_delete`:
-   ```
-   raven_delete(object_id="projects/old-project")
-   ```
-
-4. Files are moved to `.trash/` by default (not permanently deleted), but still ALWAYS get user confirmation first.
-
-**Never delete without explicit user approval, even if they asked to delete something.**
-
-### 9. Opening Files
-
-When users want to open or navigate to files:
-
-1. Use `raven_open` to open files by reference:
-   ```
-   raven_open(reference="cursor")           # Opens companies/cursor.md
-   raven_open(reference="companies/cursor") # Partial path also works
-   raven_open(reference="people/freya")     # Opens people/freya.md
-   ```
-   
-   The reference can be a short name, partial path, or full path.
-
-2. Use `raven_daily` to open/create daily notes:
-   ```
-   raven_daily()                    # Today's note
-   raven_daily(date="yesterday")    # Yesterday
-   raven_daily(date="2026-01-15")   # Specific date
-   ```
-
-3. Use `raven_date` for a date hub (everything related to a date):
-   ```
-   raven_date()                     # Today
-   raven_date(date="2026-01-15")    # Specific date
-   ```
-   
-   Returns: daily note, items due on that date, meetings, etc.
-
-### 10. Vault Statistics & Untyped Pages
-
-For understanding vault structure:
-
-1. Use `raven_stats` for vault overview:
-   ```
-   raven_stats()
-   ```
-   Returns counts of objects, traits, references, files by type
-
-2. Use `raven_untyped` to find pages without explicit types:
-   ```
-   raven_untyped()
-   ```
-   Returns files using fallback 'page' type. Helpful for cleanup: "I found 23 untyped pages. Would you like to assign types to them?"
-
-### 11. Managing Saved Queries
-
-Help users create reusable queries:
-
-1. Add a saved query:
-   ```
-   raven_query_add(name="due-soon", query_string="trait:due in(.value, [today,tomorrow])", description="Due today or tomorrow")
-   ```
-
-2. Remove a saved query:
-   ```
-   raven_query_remove(name="old-query")
-   ```
-
-3. List saved queries:
-   ```
-   raven_query(list=true)
-   ```
-
-### 12. Adding Fields to Types
-
-When adding fields to types, use the correct `--type` syntax:
-
-**Field Type Reference:**
-
-| Field Type | Syntax | Example |
-|------------|--------|---------|
-| Text | `type="string"` | name, email, notes |
-| Array of text | `type="string[]"` | tags, keywords |
-| Number | `type="number"` | priority, score |
-| URL | `type="url"` | website, source |
-| Date | `type="date"` | due, birthday |
-| DateTime | `type="datetime"` | created_at, meeting_time |
-| Boolean | `type="bool"` | active, archived |
-| Single choice | `type="enum", values="a,b,c"` | status |
-| Multiple choice | `type="enum[]", values="a,b,c"` | categories |
-| Reference | `type="ref", target="<type>"` | owner, author |
-| Array of refs | `type="ref[]", target="<type>"` | members, attendees |
-
-**Common patterns:**
-
+```text
+raven_backlinks(target="projects/old-project")
+# Ask for explicit approval after reporting impact
+raven_delete(object_id="projects/old-project")
 ```
-# Simple text field
-raven_schema_add_field(type_name="person", field_name="email", type="string")
 
-# Array of strings (tags, keywords)
-raven_schema_add_field(type_name="project", field_name="tags", type="string[]")
+Do not suggest blanket rollback commands. If rollback is needed, discuss scope and user intent first.
 
-# URL field
-raven_schema_add_field(type_name="article", field_name="source", type="url")
+## 5. Bulk mutation flow
 
-# Reference to another type (single)
+1. Select candidates with a query.
+2. Preview bulk apply.
+3. Ask for approval.
+4. Apply with `confirm=true`.
+5. Validate with scoped `raven_check`.
+
+```text
+# Preview
+raven_query(query_string="trait:todo .value==todo", apply="update done")
+
+# Apply
+raven_query(query_string="trait:todo .value==todo", apply="update done", confirm=true)
+
+# Verify
+raven_check(trait="todo")
+```
+
+## 6. Schema evolution flow
+
+When users need new structure:
+
+```text
+raven_schema(subcommand="types")
+raven_schema(subcommand="type", name="project")
+
 raven_schema_add_field(type_name="project", field_name="owner", type="ref", target="person")
-
-# Array of references (team members, attendees)
-raven_schema_add_field(type_name="team", field_name="members", type="ref[]", target="person")
-raven_schema_add_field(type_name="meeting", field_name="attendees", type="ref[]", target="person")
-
-# Enum with choices
-raven_schema_add_field(type_name="project", field_name="status", type="enum", values="active,paused,done")
-
-# Multiple enum selections
-raven_schema_add_field(type_name="book", field_name="genres", type="enum[]", values="fiction,non-fiction,technical")
+raven_schema_update_type(name="project", name-field="title")
+raven_schema_validate()
+raven_reindex(full=true)
 ```
 
-**Important:** The `type` parameter takes field types (string, ref, etc.), NOT schema type names. If you need a field that references objects of a certain type, use `type="ref", target="<type_name>"`.
+After schema changes, run validation and reindex before continuing.
 
-### 13. Schema Updates, Renames & Removals
+## 7. Workflow execution flow
 
-For modifying existing schema elements:
+For multi-step automations:
 
-1. Update a type:
-   ```
-   raven_schema_update_type(name="person", default_path="contacts/")
-   raven_schema_update_type(name="meeting", add_trait="due")
-   raven_schema_update_type(name="person", name_field="name")  # Set display name field
-   ```
-
-2. Add a new type with name_field:
-   ```
-   raven_schema_add_type(name="book", default_path="books/", name_field="title")
-   ```
-
-3. Update a trait:
-   ```
-   raven_schema_update_trait(name="priority", values="critical,high,medium,low")
-   ```
-
-4. Update a field:
-   ```
-   raven_schema_update_field(type_name="person", field_name="email", required="true")
-   raven_schema_update_field(type_name="project", field_name="status", values="active,paused,done,archived")
-   ```
-
-5. Rename a type (updates schema AND all files):
-   ```
-   # Preview first
-   raven_schema_rename_type(old_name="event", new_name="meeting")
-   
-   # Apply after confirmation
-   raven_schema_rename_type(old_name="event", new_name="meeting", confirm=true)
-   
-   # Always reindex after rename
-   raven_reindex(full=true)
-   ```
-
-6. Remove schema elements (use with caution):
-   ```
-   raven_schema_remove_type(name="old-type", force=true)
-   raven_schema_remove_trait(name="unused-trait", force=true)
-   raven_schema_remove_field(type_name="person", field_name="nickname")
-   ```
-
-7. Validate schema:
-   ```
-   raven_schema_validate()
-   ```
-
-### 14. Workflows
-
-Workflows are reusable multi-step pipelines. **Proactively check for workflows** when a user asks for complex analysis — a workflow may already exist for their request.
-
-1. List available workflows:
-   ```
-   raven_workflow_list()
-   ```
-
-2. For first-time setup, scaffold a valid starter workflow:
-   ```
-   raven_workflow_scaffold(name="daily-brief")
-   raven_workflow_validate(name="daily-brief")
-   ```
-
-3. Create custom workflows without editing `raven.yaml` directly:
-   ```
-   # First scaffold a valid file under directories.workflow (default workflows/)
-   raven_workflow_scaffold(name="daily-brief")
-
-   # Then register an existing file path
-   raven_workflow_add(name="daily-brief", file="workflows/daily-brief.yaml")
-   raven_workflow_validate(name="daily-brief")
-   ```
-
-   Notes:
-   - `raven_workflow_add` is file-only (no inline definition JSON)
-   - Files must be under `directories.workflow` in `raven.yaml`
-
-4. Show workflow details:
-   ```
-   raven_workflow_show(name="meeting-prep")
-   ```
-   Returns inputs and steps.
-
-5. Run a workflow with inputs:
-   ```
-   raven_workflow_run(name="meeting-prep", input={"meeting_id": "meetings/team-sync"})
-   raven_workflow_run(name="research", input={"question": "How does auth work?"})
-   ```
-   Returns the rendered agent prompt plus `step_summaries`. Use:
-   `raven_workflow_runs_step(run_id="...", step_id="...")` to fetch full step output on demand.
-   For large outputs, page within a nested field:
-   `raven_workflow_runs_step(run_id="...", step_id="...", path="data.results", offset=0, limit=50)`.
-
-**How workflows work:**
-
-1. **Inputs** are validated (required fields checked, defaults applied)
-2. **Deterministic steps** execute in order:
-   - `tool` for one deterministic tool call
-   - `foreach` for deterministic fanout over an array (`items`)
-   - `switch` for deterministic case routing with required `default`
-3. `{{inputs.X}}` and `{{steps.<id>...}}` are interpolated as needed
-4. When an **agent** step is reached, Raven returns the prompt plus the declared `outputs` schema
-5. Raven also returns `step_summaries` so agents can fetch heavy context incrementally by step
-6. The agent responds with a JSON envelope: `{ "outputs": { ... } }`
-7. If changes are needed, use explicit `tool` steps or normal Raven tools (`raven_add`, `raven_set`, `raven_edit`, `raven_move`, `raven_query --apply`, etc.)
-
-**Foreach and switch output paths:**
-
-- `foreach` stores summary and per-item results at `{{steps.<foreach_id>.data.results}}`
-- `foreach` per-item records include `item`, `index`, nested `steps`, and `ok/error`
-- `switch` stores selected branch metadata at `{{steps.<switch_id>.data.selected_case}}`
-- `switch` converged branch output is at `{{steps.<switch_id>.data.output.*}}`
-- Use `switch.outputs` + per-branch `emit` when downstream steps need a unified shape
-
-**Minimal examples:**
-
-```yaml
-- id: fanout
-  type: foreach
-  foreach:
-    items: "{{steps.collect.data.results}}"
-    as: item
-    steps:
-      - id: write
-        type: tool
-        tool: raven_upsert
-        arguments:
-          type: task
-          title: "{{item.title}}"
+```text
+raven_workflow_list()
+raven_workflow_show(name="meeting-prep")
+raven_workflow_run(name="meeting-prep", input={"meeting_id":"meetings/team-sync"})
 ```
 
-```yaml
-- id: route
-  type: switch
-  switch:
-    value: "{{steps.classify.validated_outputs.route}}"
-    outputs:
-      action:
-        type: string
-        required: true
-    cases:
-      high:
-        emit:
-          action: escalate
-    default:
-      emit:
-        action: backlog
+If the run pauses at an agent step, continue with `raven_workflow_continue`. See `raven://guide/workflow-lifecycle`.
+
+## 8. Query-driven analysis flow
+
+1. Compose a structured query.
+2. Narrow with predicates.
+3. Use `limit/offset` for large result sets.
+4. Read only needed files for synthesis.
+
+```text
+raven_query(query_string="object:meeting refs([[projects/website]])", limit=25, offset=0)
 ```
 
-**Variable patterns:**
+For large-vault tactics, see `raven://guide/query-at-scale`.
 
-| Pattern | What It Returns |
-|---------|-----------------|
-| `{{inputs.name}}` | Raw input value |
-| `{{steps.stepId}}` | Entire step output |
-| `{{steps.queryStep.data.results}}` | Result rows from a `tool: raven_query` step |
-| `{{steps.readStep.data.content}}` | Raw file content from a `tool: raven_read` step |
-| `{{steps.fanout.data.results}}` | Per-item output records from a `foreach` step |
-| `{{steps.route.data.selected_case}}` | Selected case label from a `switch` step |
-| `{{steps.route.data.output.action}}` | Converged emitted output field from a `switch` step |
-| `{{steps.toolStep.ok}}` | Tool success boolean from any `tool` step |
+## 9. Import and template setup (common setup tasks)
 
-**When to use workflows:**
-- User asks for a complex, multi-step analysis
-- User wants consistent formatting for recurring tasks
-- There's a workflow matching their request (check with `raven_workflow_list`)
+```text
+# Import preview first
+raven_import(type="person", file="contacts.json", dry_run=true)
+# Apply after approval
+raven_import(type="person", file="contacts.json", confirm=true)
 
-### 15. Setting Up Templates
-
-Templates provide default content when users create new notes. Templates are schema-driven and file-backed.
-
-**Managing templates with MCP tools:**
-
-```
-# Create/update template files
+# Template setup
 raven_template_write(path="meeting.md", content="# {{title}}\n\n## Notes")
-raven_template_list()
-
-# Create/update a template definition in schema.yaml
 raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
-
-# Inspect/list schema templates
-raven_schema_template_get(template_id="meeting_standard")
-raven_schema_template_list()
-
-# Bind template ID to a type and set default
-raven_schema_type_template_set(type_name="meeting", template_id="meeting_standard")
 raven_schema_type_template_default(type_name="meeting", template_id="meeting_standard")
-
-# Daily notes use built-in core type "date"
-raven_schema_core_template_set(core_type="date", template_id="daily_default")
-raven_schema_core_template_default(core_type="date", template_id="daily_default")
-
-# Remove type binding, then remove template definition
-raven_schema_type_template_remove(type_name="meeting", template_id="meeting_standard")
-raven_schema_template_remove(template_id="meeting_standard")
 ```
 
-**Template behavior:**
+## Related topics
 
-- Templates are **file-backed only** (no inline template bodies).
-- Template files must be under `directories.template` (default: `templates/`).
-- If a type has no `default_template`, creation proceeds without template content.
-- Removing a template definition is blocked while any type still references it.
-
-**Workflow for helping users set up templates:**
-
-1. Ask what type of notes they want templates for
-2. Check the schema to see if the type exists: `raven_schema(subcommand="type", name="meeting")`
-3. Ask what sections/structure they want in new notes
-4. Create/update template file: `raven_template_write(path="meeting.md", content="...")`
-5. Register template definition: `raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")`
-6. Bind + default for type: `raven_schema_type_template_set(...)`, `raven_schema_type_template_default(...)`
-7. Test it: `raven_new(type="meeting", title="Test Meeting")`
-
-### 16. Resolving References
-
-Use `raven_resolve` to check if a reference resolves before using it. This is a pure read operation with no side effects.
-
-```
-# Check if a short name resolves
-raven_resolve(reference="freya")
-
-# Resolve a dynamic date
-raven_resolve(reference="today")
-
-# Validate a reference before linking
-raven_resolve(reference="The Prose Edda")
-```
-
-**Response fields:**
-- `resolved: true/false` — whether resolution succeeded
-- `object_id` — canonical object ID (when resolved)
-- `file_path` — file path relative to vault (when resolved)
-- `type` — object type (when resolved)
-- `match_source` — how it was matched (`literal_path`, `short_name`, `alias`, `name_field`, `date`, etc.)
-- `ambiguous: true` with `matches` array — when multiple objects match
-
-### 17. Importing Structured Data
-
-When users want to migrate or sync JSON data from other tools:
-
-1. Use `raven_import` for batch create/update from JSON:
-   ```
-   raven_import(type="person", file="contacts.json", dry_run=true)
-   ```
-
-2. Always preview first with `dry_run=true`, then ask the user before applying with `confirm=true`:
-   ```
-   raven_import(type="person", file="contacts.json", confirm=true)
-   ```
-
-3. For mixed source records, use a mapping file with `type_field` and per-type maps:
-   ```
-   raven_import(mapping="migration.yaml", file="dump.json", dry_run=true)
-   raven_import(mapping="migration.yaml", file="dump.json", confirm=true)
-   ```
-
-4. Use `content_field` when a JSON field should become markdown body content instead of frontmatter.
-
-5. If the user only wants creates or only wants updates, use mode flags:
-   - `create_only=true` to skip existing objects
-   - `update_only=true` to skip missing objects
+- `raven://guide/critical-rules` - non-negotiable safety constraints
+- `raven://guide/response-contract` - errors/warnings/preview semantics
+- `raven://guide/write-patterns` - choosing `new` vs `add` vs `upsert`
+- `raven://guide/workflow-lifecycle` - run/continue/inspect/prune workflows
+- `raven://guide/querying` and `raven://guide/query-at-scale`

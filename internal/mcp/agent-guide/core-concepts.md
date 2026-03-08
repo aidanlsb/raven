@@ -61,4 +61,5 @@ If a short reference is ambiguous, Raven returns an `ambiguous_reference` error 
 
 - `raven://guide/getting-started` - first-session discovery sequence
 - `raven://guide/querying` - turning questions into structured queries
-- `raven://guide/lesson-plan` - staged teaching sequence for new users
+- `raven://guide/write-patterns` - creating and updating objects safely
+- `raven://guide/onboarding` - staged teaching and setup sequence for new users

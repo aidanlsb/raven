@@ -1,43 +1,36 @@
 # Best Practices
 
-1. **Always use Raven commands instead of shell commands**: Raven commands maintain index consistency and update references automatically.
+1. Start with structure, not file scanning.
+- Use `raven_schema`, `raven_stats`, and targeted `raven_query` first.
+- Read files only after narrowing candidates.
 
-   | Task | Use This | NOT This |
-   |------|----------|----------|
-   | Move/rename files | `raven_move` | `mv` |
-   | Delete files | `raven_delete` | `rm` |
-   | Create typed objects | `raven_new` | Writing files directly |
-   | Update frontmatter | `raven_set` | Manual file edits |
-   | Edit content | `raven_edit` | `sed`, `awk`, etc. |
-   | Read vault files | `raven_read` | `cat`, `head`, etc. |
+2. Treat the markdown vault as source of truth.
+- Index is rebuildable; use `raven_reindex` when state looks stale.
 
-   **Why this matters:**
-   - `raven_move` updates all references to the moved file automatically
-   - `raven_delete` warns about backlinks and moves files to `.trash/`
-   - `raven_new` applies templates and validates against the schema
-   - `raven_set` validates field values and triggers reindexing
+3. Prefer explicit, schema-safe writes.
+- Use `raven_new`, `raven_set`, `raven_edit`, `raven_move`, `raven_delete`, `raven_upsert`.
+- Avoid shell-level mutations for vault operations.
+- See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
-2. **Master the query language**: A single well-crafted query is better than multiple simple queries and file reads. Invest time in understanding predicates and composition.
+4. Use preview-first mutation flow.
+- For preview-capable commands, show preview, ask for approval, then apply with `confirm=true`.
 
-3. **Err on more information**: When in doubt about what the user wants, provide more results rather than fewer. Run multiple query interpretations if ambiguous.
+5. Surface ambiguity instead of guessing.
+- For ambiguous refs or unclear destructive intent, ask a focused clarifying question.
 
-4. **Always ask before bulk changes**: "I found 45 files with unknown type 'book'. Should I add this type to your schema?"
+6. Prefer one strong query over many weak queries.
+- Compose with predicates and relationships (`within`, `has`, `refs`, `ancestor`).
+- Use `count-only`, `limit`, and `offset` for large sets.
 
-5. **Preview before applying**: Operations like `raven_edit`, `raven_query --apply`, and bulk operations preview by default. Changes are NOT applied unless `confirm=true`.
+7. Use issue-driven repair loops.
+- `raven_check` -> prioritize issue types -> apply fixes -> re-check scope.
 
-   - For `raven_edit`, the default output *is* a dry-run preview (includes before/after context and line number). Only run again with `confirm=true` to apply.
-   - When preparing an edit, prefer reading raw content first: `raven_read(path="...", raw=true)` so you can copy an exact `old_str`.
+8. Keep workflows lifecycle-aware.
+- Before starting a new workflow run, check for existing `awaiting_agent` runs.
+- Continue existing runs when appropriate.
 
-6. **Use the schema as source of truth**: If something isn't in the schema, it won't be indexed or queryable. Guide users to define their types and traits.
+9. Report both results and risk.
+- Include what changed, what was validated, and any residual uncertainty.
 
-7. **Prefer structured queries over search**: Use `raven_query` with the query language before falling back to `raven_search`.
-
-   - Object/trait query results include `file_path` (and often `line`) in JSON output—use those paths for `raven_read` and `raven_edit`.
-
-8. **Check before creating**: Use `raven_backlinks` or `raven_search` to see if something already exists before creating duplicates.
-
-9. **Respect user's organization**: Look at existing `default_path` settings to understand where different types of content belong.
-
-10. **Reindex after schema changes**: If you add types or traits, run `raven_reindex(full=true)` so all files are re-parsed with the new schema.
-
-11. **Check for workflows proactively**: When a user asks for complex analysis, check `raven://workflows/list` or `raven_workflow_list()` first — there may be a workflow designed for their request.
+10. Keep docs and behavior aligned.
+- If command behavior changes, update guide docs and MCP user docs in the same change.

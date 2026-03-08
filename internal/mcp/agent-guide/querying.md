@@ -4,6 +4,7 @@ The query language is powerful and can answer complex questions in a single quer
 
 For a quick pattern reference, fetch `raven://guide/query-cheatsheet`.
 For bulk execution patterns (`--apply`, `--ids`), see `raven://guide/key-workflows`.
+For pagination and large-result handling, see `raven://guide/query-at-scale`.
 For query/tool failures, see `raven://guide/error-handling`.
 
 ### Query Types
@@ -149,7 +150,7 @@ object:meeting parent(object:date) refs([[people/thor]])
 # Projects that have any incomplete todos (anywhere in document)
 object:project encloses(trait:todo .value==todo)
 
-# Tasks due this week on active projects
+# Tasks due today or tomorrow on active projects
 trait:due .value>=today .value<=tomorrow within(object:project .status==active)
 
 # Items referencing either of two people
@@ -164,6 +165,8 @@ object:meeting !has(trait:due)
 # Active projects that reference a specific company
 object:project .status==active refs([[companies/acme]])
 ```
+
+Note: there is no built-in calendar-week operator. Use explicit date bounds that match the user's meaning of "this week."
 
 ### Query vs. Search: When to Use Which
 

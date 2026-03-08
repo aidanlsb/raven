@@ -4,13 +4,31 @@
 
 Raven is a structured, plain-text knowledge base built in Go. Markdown files with YAML frontmatter are the sole source of truth. A SQLite index (under `.raven/`) is a derived cache that can be rebuilt at any time with `rvn reindex`. The CLI binary is `rvn`, and an MCP server exposes the same commands as tools for AI agents.
 
-## Design Principles
+## Quick Start for Agents
 
-**Explicit over implicit.** There should be no "magic" behavior. Do not infer user intent unless it is unambiguous. If a feature requires guessing what the user means, it needs a clearer interface instead.
+- Read `internal/commands/registry.go` before adding/changing commands; it is the CLI + MCP metadata source of truth.
+- Prefer existing shared packages in `internal/` over adding command-local logic.
+- Preserve compatibility contracts: stable error/warning codes and the JSON response envelope.
+- If command behavior changes, update both implementation and registry metadata in the same change.
+- Run `make test` for code changes; also run `make test-integration` for parsing/index/query/CLI behavior changes.
+- Keep docs in sync when behavior changes (registry-derived help, MCP guide, and relevant `docs/` pages).
+- Before submitting, run `make fmt`, `make lint`, and relevant tests.
+
+## Raven Design Principles
+
+**Explicit over implicit.** There should be no "magic" behavior. Raven should not infer user intent unless it is unambiguous. If a feature requires guessing what the user means, it needs a clearer interface instead.
 
 **General-purpose primitives.** Outside of a few special cases (daily notes), features must not be specific to a particular workflow. Raven provides core knowledge-management primitives — types, traits, references, queries — not opinionated workflow tools.
 
 **No duplicated functionality.** Before implementing anything, check whether an existing package already handles it. Write clean, shared implementations. If two commands need the same logic, extract it into a shared internal package rather than duplicating code.
+
+## When Unsure, Ask (Do Not Guess)
+
+If requested behavior is not unambiguous, stop and ask a clarifying question instead of implementing inferred behavior. Examples:
+
+- Behavior changes that could break CLI/MCP compatibility or automation expectations.
+- Potentially destructive repository actions where scope is unclear.
+- Conflicting interpretations of command semantics, flags, or error-code behavior.
 
 ## Architecture
 
@@ -24,7 +42,7 @@ Raven is a structured, plain-text knowledge base built in Go. Markdown files wit
 ### Data Flow
 
 ```
-Markdown files → Parser → Index (SQLite) ← Query Executor
+Markdown files → Parser → Index (SQLite) → Query Executor
                    ↓
              Schema validation
                    ↓
@@ -33,10 +51,10 @@ Markdown files → Parser → Index (SQLite) ← Query Executor
 
 ## Language and Tooling
 
-- **Go 1.22+** — all code in standard Go style
+- **Go 1.24+** — all code in standard Go style
 - **Build:** `go build -o rvn ./cmd/rvn` or `make build`
 - **Formatting:** `gofmt -s` and `goimports` with local prefix `github.com/aidanlsb/raven`
-- **Linting:** `golangci-lint` (see `.golangci.yml` for enabled linters)
+- **Linting:** `golangci-lint v2` (see `.golangci.yml` for enabled linters)
 - **Dependencies:** pure-Go SQLite (`modernc.org/sqlite`), Cobra for CLI, goldmark for markdown
 
 ## Building and Testing
@@ -95,13 +113,30 @@ Imports should be grouped in this order (enforced by `goimports`):
 2. Third-party packages
 3. Local packages (`github.com/aidanlsb/raven/...`)
 
+## High-Risk Areas
+
+Changes in the areas below require extra validation before submitting:
+
+- Parser (`internal/parser/`, markdown/frontmatter handling):
+  - Run `make test` and `make test-integration`.
+  - Verify schema validation and object ID derivation behavior.
+- Index/query engine (`internal/index/`, query execution paths):
+  - Run `make test` and `make test-integration`.
+  - Check rebuild invariants (`rvn reindex`) and query result stability.
+- Path/reference handling (`internal/paths/`, ref resolution):
+  - Add/adjust table-driven tests for edge cases.
+  - Validate path normalization and reference updates for move/reclassify flows.
+- Command surface (`internal/cli/`, flags/outputs/errors):
+  - Confirm `--json` envelope and stable error/warning codes.
+  - Ensure `internal/commands/registry.go` metadata matches behavior exactly.
+
 ## Documentation
 
 Keep documentation in sync with code. There are three main documentation surfaces:
 
 ### Command Registry (single source of truth)
 
-`internal/commands/registry.go` defines all command metadata: descriptions, arguments, flags, examples, and agent use cases. This registry drives both the CLI (`--help`) and MCP tool schemas — update it once, and both stay in sync.
+`internal/commands/registry.go` defines all command metadata: descriptions, arguments, flags, examples, and agent use cases. This registry drives both the CLI and MCP tool schemas — update it once, and both stay in sync.
 
 When adding or modifying a command:
 1. Update the `Registry` map in `internal/commands/registry.go`
@@ -116,13 +151,16 @@ When adding or modifying a command:
 | `index.md` | Navigation and topic discovery |
 | `critical-rules.md` | Safety rules agents must follow |
 | `quickstart.md` | One-pass mental model and first-command sequence |
-| `lesson-plan.md` | Teaching sequence, prerequisites, and misconceptions |
-| `onboarding.md` | Interactive setup for first-session vault creation |
+| `onboarding.md` | Interactive setup and teaching sequence for first-session vault creation |
 | `getting-started.md` | First steps in a new vault |
 | `core-concepts.md` | Types, traits, references explained |
+| `response-contract.md` | JSON envelope, error codes, warnings, and preview/apply semantics |
+| `write-patterns.md` | Choosing safe write primitives (`new`, `add`, `upsert`, `set`, `edit`) |
 | `querying.md` | RQL reference and query strategy |
 | `query-cheatsheet.md` | Common query patterns |
-| `key-workflows.md` | Creation, editing, bulk operations |
+| `query-at-scale.md` | Pagination and narrowing strategy for large result sets |
+| `key-workflows.md` | End-to-end operational playbook |
+| `workflow-lifecycle.md` | Running, continuing, inspecting, and pruning workflow runs |
 | `error-handling.md` | Interpreting tool errors |
 | `issue-types.md` | `raven_check` issue reference |
 | `best-practices.md` | Operating principles |
@@ -146,13 +184,20 @@ When adding a new guide topic:
 
 When making significant changes, check if the relevant docs section needs updating (especially `agents/mcp.md` for MCP changes).
 
+## PR Output Contract
+
+When reporting completed work, include:
+
+- Files changed and the behavioral impact per file.
+- Commands/tests run and their outcomes.
+- Any residual risks, assumptions, or follow-up checks not yet executed.
+- Explicit note if docs were updated or intentionally not updated.
+
 ## What to Check Before Submitting
 
 1. `make fmt` — code must be formatted
 2. `make lint` — no linter errors
 3. `make test` — all unit tests pass
-4. If you changed CLI commands or flags, verify `internal/commands/registry.go` is updated to match
-5. If you added a new package, make sure it doesn't introduce circular imports
-6. If you touched parsing, indexing, or query execution, run `make test-integration`
-7. If you changed command behavior, check if `internal/mcp/agent-guide/` docs need updating
-8. If you added MCP resources or changed tool schemas, update `docs/agents/mcp.md`
+4. If parsing/index/query/CLI behavior changed, run checks from **High-Risk Areas**.
+5. If command behavior/flags changed, verify `internal/commands/registry.go` and related docs in **Documentation** are updated.
+6. If you added a new package, ensure no circular imports.

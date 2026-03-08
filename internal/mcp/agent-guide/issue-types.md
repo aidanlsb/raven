@@ -1,50 +1,59 @@
 # Issue Types Reference
 
-When `raven_check` returns issues, here's how to fix them:
+Use this guide for `raven_check` triage.
 
-**Errors (must fix):**
+Rule: in JSON mode, prefer each issue's `fix_command` and `fix_hint` over hard-coded repairs.
 
-| Issue Type | Meaning | Fix Command |
-|------------|---------|-------------|
-| `unknown_type` | File uses a type not in schema | `raven_schema_add_type(name="book")` |
-| `missing_reference` | Link to non-existent page | `raven_new(type="person", title="Freya")` |
-| `unknown_frontmatter_key` | Field not defined for type | `raven_schema_add_field(type_name="person", field_name="company")` |
-| `missing_required_field` | Required field not set | `raven_set(object_id="...", fields={"name": "..."})` |
-| `missing_required_trait` | Required trait not set | `raven_set(object_id="...", fields={"due": "2025-02-01"})` |
-| `invalid_enum_value` | Value not in allowed list | `raven_set(object_id="...", fields={"status": "done"})` |
-| `wrong_target_type` | Ref field points to wrong type | Update the reference to point to correct type |
-| `invalid_date_format` | Date/datetime value malformed | Fix to YYYY-MM-DD format |
-| `duplicate_object_id` | Multiple objects share same ID | Rename one of the duplicates |
-| `parse_error` | YAML frontmatter or syntax error | Fix the malformed syntax |
-| `ambiguous_reference` | Reference matches multiple objects | Use full path: `[[people/freya]]` |
-| `missing_target_type` | Ref field's target type doesn't exist | Add the target type to schema |
-| `duplicate_alias` | Multiple objects use same alias | Rename one of the aliases |
-| `alias_collision` | Alias conflicts with object ID/short name | Rename the alias |
-| `invalid_field_value` | Field value fails validation | Fix the value to match field type constraints |
-| `invalid_trait_value` | Trait value is wrong type | Fix value (e.g., boolean expects true/false, number expects numeric) |
+## Error-level issues (must fix)
 
-**Warnings (optional to fix):**
-
-| Issue Type | Meaning | Fix Suggestion |
+| Issue Type | Meaning | Typical Action |
 |------------|---------|----------------|
-| `undefined_trait` | Trait not in schema | `raven_schema_add_trait(name="toread", type="boolean")` |
-| `unused_type` | Type defined but never used | Remove from schema or create an instance |
-| `unused_trait` | Trait defined but never used | Remove from schema or use it |
-| `stale_index` | Index needs reindexing | `raven_reindex()` |
-| `short_ref_could_be_full_path` | Short ref could be clearer | Consider using full path |
-| `id_collision` | Short name matches multiple objects | Use full paths in references |
-| `self_referential_required` | Type has required ref to itself | Make field optional or add default |
-| `stale_fragment` | File exists but section/heading is missing | Update the fragment or remove the `#section` from reference |
+| `unknown_type` | File uses a type not in schema | Add/rename type in schema, or change file type. |
+| `missing_reference` | Link points to missing object/section | Create missing target or update/remove reference. |
+| `unknown_frontmatter_key` | Field is not defined for object type | Add schema field or remove invalid key. |
+| `missing_required_field` | Required type field missing | Set required field value(s). |
+| `invalid_field_value` | Field value violates schema | Correct value to match field constraints. |
+| `invalid_enum_value` | Enum value outside allowed set | Use one of allowed enum values. |
+| `wrong_target_type` | Ref points to object of wrong type | Replace with ref targeting correct type. |
+| `invalid_date_format` | Date/datetime value malformed | Normalize to expected format (`YYYY-MM-DD`, etc.). |
+| `duplicate_object_id` | Duplicate object IDs | Rename/move to unique IDs. |
+| `parse_error` | YAML/markdown parse failure | Fix malformed frontmatter/content syntax. |
+| `ambiguous_reference` | Ref resolves to multiple targets | Replace with explicit full-path reference. |
+| `missing_target_type` | Ref/ref[] field target type not defined | Add target type or update field target. |
+| `duplicate_alias` | Same alias used by multiple objects | Make aliases unique. |
+| `alias_collision` | Alias collides with ID/short-name namespace | Rename alias to non-colliding value. |
+| `missing_required_trait` | Required trait missing (when enforced) | Add required trait annotation or relax schema requirement. |
 
-**Using issue types for filtering:**
+## Warning-level issues (usually fix)
 
-```
-# Focus on actionable errors only
+| Issue Type | Meaning | Typical Action |
+|------------|---------|----------------|
+| `undefined_trait` | Trait used but not in schema | Add trait definition or remove usage. |
+| `unused_type` | Type defined but unused | Remove type or create instances. |
+| `unused_trait` | Trait defined but unused | Remove trait or start using it. |
+| `stale_index` | Index may be stale | Run `raven_reindex()`. |
+| `short_ref_could_be_full_path` | Short ref could be clearer | Consider explicit full path refs. |
+| `id_collision` | Short-name ID collision risk | Use explicit full paths. |
+| `self_referential_required` | Required self-ref creates impossible constraints | Make optional or provide defaults. |
+| `stale_fragment` | File exists but referenced heading/fragment missing | Update fragment or target heading. |
+| `unknown_field_type` | Schema field type is invalid/unsupported | Change field type to a valid schema field type. |
+
+## Filtering patterns
+
+```text
+# Focus on high-impact fixable errors
 raven_check(issues="missing_reference,unknown_type,missing_required_field")
 
-# Skip noisy schema warnings during cleanup
+# Exclude low-priority cleanup warnings
 raven_check(exclude="unused_type,unused_trait,short_ref_could_be_full_path")
 
-# Just errors, no warnings
+# Errors only
 raven_check(errors_only=true)
 ```
+
+## Practical repair loop
+
+1. Run scoped check (`path=`, `type=`, or `trait=` when possible).
+2. Group by `issue_type` and frequency.
+3. Apply fixes using `fix_command` where supplied.
+4. Re-run the same scoped check.

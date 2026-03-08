@@ -30,7 +30,7 @@ var guideTopics = []GuideTopic{
 	{
 		Slug:        "onboarding",
 		Name:        "Vault Onboarding",
-		Description: "Guide for helping users set up a new vault interactively.",
+		Description: "Guide for helping users set up a new vault interactively, including teaching sequence and misconceptions.",
 		Path:        "agent-guide/onboarding.md",
 	},
 	{
@@ -46,6 +46,18 @@ var guideTopics = []GuideTopic{
 		Path:        "agent-guide/core-concepts.md",
 	},
 	{
+		Slug:        "response-contract",
+		Name:        "Response Contract",
+		Description: "Standard JSON envelope, error/warning handling, and preview/apply semantics.",
+		Path:        "agent-guide/response-contract.md",
+	},
+	{
+		Slug:        "write-patterns",
+		Name:        "Write Patterns",
+		Description: "How to choose new/add/upsert/set/edit/update for safe, predictable writes.",
+		Path:        "agent-guide/write-patterns.md",
+	},
+	{
 		Slug:        "querying",
 		Name:        "Querying",
 		Description: "Raven Query Language reference and query strategy.",
@@ -58,10 +70,22 @@ var guideTopics = []GuideTopic{
 		Path:        "agent-guide/query-cheatsheet.md",
 	},
 	{
+		Slug:        "query-at-scale",
+		Name:        "Query At Scale",
+		Description: "Pagination and narrowing strategies for large result sets.",
+		Path:        "agent-guide/query-at-scale.md",
+	},
+	{
 		Slug:        "key-workflows",
 		Name:        "Key Workflows",
-		Description: "Common workflows for creation, editing, and maintenance.",
+		Description: "Operational playbook for validation, mutation, schema, and workflow execution flows.",
 		Path:        "agent-guide/key-workflows.md",
+	},
+	{
+		Slug:        "workflow-lifecycle",
+		Name:        "Workflow Lifecycle",
+		Description: "How to run, continue, inspect, and prune workflow runs.",
+		Path:        "agent-guide/workflow-lifecycle.md",
 	},
 	{
 		Slug:        "error-handling",
@@ -86,12 +110,6 @@ var guideTopics = []GuideTopic{
 		Name:        "Example Conversations",
 		Description: "Example conversations and query translations.",
 		Path:        "agent-guide/examples.md",
-	},
-	{
-		Slug:        "lesson-plan",
-		Name:        "Agent Lesson Plan",
-		Description: "Teaching sequence, prerequisites, and common misconceptions for new users.",
-		Path:        "agent-guide/lesson-plan.md",
 	},
 }
 

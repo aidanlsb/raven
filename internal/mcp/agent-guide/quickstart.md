@@ -51,5 +51,7 @@ raven_add(text="## Notes\n- ...", to=create.data.file)
 
 - `raven://guide/getting-started` for discovery sequence details
 - `raven://guide/core-concepts` for deeper model details
+- `raven://guide/write-patterns` for choosing safe write primitives
+- `raven://guide/response-contract` for error/warning handling
 - `raven://guide/query-cheatsheet` for fast query patterns
-- `raven://guide/lesson-plan` for a full teaching path
+- `raven://guide/onboarding` for a full teaching + setup path

@@ -1,29 +1,56 @@
 # Error Handling
 
-When tools return errors, here's how to handle them:
+Use this guide to recover from tool failures with predictable behavior.
 
-| Error Type | Meaning | What to Do |
-|------------|---------|------------|
-| `validation_error` | Invalid input or missing required fields | Check `retry_with` in response for corrected call template. Ask user for missing values. |
-| `not_found` | Object or file doesn't exist | Verify the path/reference. Offer to create it. |
-| `ambiguous_reference` | Short reference matches multiple objects | Show user the matches, ask which one they meant. Use full path. |
-| `data_integrity` | Operation blocked to protect data | Explain the safety concern to user, ask for confirmation. |
-| `parse_error` | YAML/markdown syntax error | Read the file, identify the syntax issue, offer to fix it. |
-| `database_error` | SQLite/FTS query failed (often search query syntax) | Treat it as “query syntax”, not “missing data”. Quote special tokens (especially hyphenated ones) and retry; prefer `raven_query` over `raven_search` for structured filtering. |
+For envelope semantics, see `raven://guide/response-contract`.
 
-**Validation error recovery:**
+## 1. Read the envelope first
 
-When `raven_new` or `raven_set` fails due to missing required fields, the response includes a `retry_with` template showing exactly what call to make with the missing fields filled in. Use this to ask the user for the missing values.
+- If `ok=true`, continue and inspect `warnings`.
+- If `ok=false`, branch on `error.code` and use `error.details`.
+- Prefer `error.details.retry_with` when present.
 
-## When a tool appears to “fail silently”
+## 2. Common error codes and responses
 
-If you see a client-side message like “No result received…” (i.e., no Raven JSON envelope at all), treat it as a transport/tool-execution issue rather than a Raven schema/validation issue.
+| Code | Meaning | Agent Response |
+|------|---------|----------------|
+| `MISSING_ARGUMENT` | Required arg missing | Ask for the missing input and retry. |
+| `REQUIRED_FIELD_MISSING` | Schema-required field missing | Ask for required field values; use `retry_with` template. |
+| `REF_AMBIGUOUS` | Reference resolves to multiple objects | Present candidates and ask for explicit target. |
+| `REF_NOT_FOUND` / `FILE_NOT_FOUND` / `OBJECT_NOT_FOUND` | Target missing | Confirm intent: create, correct path, or skip. |
+| `TYPE_NOT_FOUND` / `TRAIT_NOT_FOUND` | Schema element absent | Confirm whether to add schema or change operation. |
+| `UNKNOWN_FIELD` | Field not valid for type | Correct field or update schema intentionally. |
+| `CONFIRMATION_REQUIRED` | Unsafe change requires explicit approval | Show preview/impact and request approval. |
+| `DATA_INTEGRITY_BLOCK` | Operation blocked to protect data | Explain risk and ask how to proceed. |
+| `QUERY_INVALID` / `DATABASE_ERROR` | Query expression/search execution issue | Simplify query; quote special tokens; retry. |
+| `WORKFLOW_*` | Workflow state/input/execution failure | Inspect run/status/step outputs and resume carefully. |
 
-What to do:
-- Re-run the call once with the same arguments.
-- Double-check required arguments for MCP/non-interactive mode:
-  - `raven_new` requires `title`
-  - Many mutation tools require `confirm=true` to apply (otherwise you will only see a preview)
-- Use tool discovery to verify the exact tool name and parameters:
-  - `raven_schema(subcommand="commands")` (CLI registry view)
-  - `raven_schema(subcommand="types")` / `raven_schema(subcommand="type", name="<name>")` (required fields)
+## 3. Warning handling
+
+Warnings are actionable, not ignorable noise.
+
+- If warning affects correctness (stale index, mismatched type paths, backlinks), surface it.
+- For write operations, include warnings in your summary before asking to continue.
+- If warning indicates stale derived state, run `raven_reindex` and retry.
+
+## 4. "No result received" or silent tool failures
+
+If there is no Raven JSON payload at all, treat it as transport/execution failure.
+
+Recovery steps:
+1. Retry once with identical arguments.
+2. Re-check required args and exact tool name.
+3. If still failing, avoid assuming data/schema corruption.
+
+## 5. Recovery loop for check/repair tasks
+
+1. `raven_check(...)`
+2. Prioritize issues by impact.
+3. Apply targeted fix with user confirmation.
+4. Re-run scoped check to verify.
+
+## Related topics
+
+- `raven://guide/issue-types` - issue-level fixes for `raven_check`
+- `raven://guide/key-workflows` - operational mutation playbooks
+- `raven://guide/workflow-lifecycle` - workflow-specific recovery

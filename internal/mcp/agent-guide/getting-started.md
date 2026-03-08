@@ -3,7 +3,7 @@
 When first interacting with a Raven vault, follow this discovery sequence:
 
 For a one-pass conceptual overview, start with `raven://guide/quickstart`.
-For a structured teaching flow, use `raven://guide/lesson-plan`.
+For a structured teaching and setup flow, use `raven://guide/onboarding`.
 
 0. **If no vault exists yet**: `raven_init(path="/path/to/vault")`
 0.5. **Register and select it globally**:
@@ -68,4 +68,6 @@ Tip:
 
 - `raven://guide/quickstart` - mental model + first commands
 - `raven://guide/core-concepts` - deeper model details
+- `raven://guide/write-patterns` - safe creation and update primitives
+- `raven://guide/response-contract` - interpreting `ok/data/error/warnings/meta`
 - `raven://guide/key-workflows` - preview/confirm and mutation patterns

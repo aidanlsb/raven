@@ -34,6 +34,35 @@ raven_query(list=true)
 raven_workflow_list()
 ```
 
+## Teaching Sequence
+
+Use this sequence during onboarding to avoid overload and still show immediate value.
+
+1. **Orient**
+   - Fetch `raven://guide/quickstart` and explain the model in plain language.
+   - Confirm the user's domain and what they track.
+2. **Discover**
+   - Run discovery commands from the section above.
+   - Explain what already exists before proposing new structure.
+3. **Create one real object**
+   - Prefer concrete examples from the user's current work.
+   - Use `raven_new` first, then `raven_add` for body content.
+4. **Query it back**
+   - Run one query that proves value immediately.
+   - Example: `raven_query(query_string="trait:todo .value==todo")`.
+5. **Introduce bulk and safety patterns**
+   - Show preview-first behavior and explicit apply/confirm.
+   - Show `raven_check` for validation and cleanup.
+
+## Prerequisite Checks
+
+- Before creating objects:
+  - check required fields (`raven_schema(subcommand="type", name="<type>")`)
+- Before bulk updates:
+  - preview first, get user confirmation, then apply
+- Before deleting:
+  - inspect backlinks and discuss impact
+
 ## Interview Flow
 
 ### Phase 1: Understand Intent
@@ -206,6 +235,17 @@ Common additions:
 - It's always present (or should be)
 - It contains structured data (refs, enums)
 - Examples: person.email, book.author, meeting.attendees
+
+## Common Misconceptions to Correct
+
+- "Raven is a freeform file writer"
+  - Correction: create via schema tools first, then append content.
+- "The index is the database"
+  - Correction: markdown files are canonical; index is rebuildable.
+- "Search errors mean data is missing"
+  - Correction: many are query syntax issues; retry with quoting or structured queries.
+- "Bulk apply is safe without preview"
+  - Correction: preview and explicit confirmation are required workflow steps.
 
 ## Error Recovery
 

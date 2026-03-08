@@ -83,6 +83,13 @@
 → "Done. Imported contacts into your person objects."
 ```
 
+**User**: "Regenerate the weekly status report (overwrite previous draft)"
+```
+→ Use idempotent write instead of append-only capture:
+  raven_upsert(type="report", title="Weekly Status", content="# Weekly Status\n...")
+→ "Updated the existing Weekly Status report in place."
+```
+
 **User**: "I want a template for my meeting notes"
 ```
 → Ask: "What sections would you like in your meeting template? Common ones include 
@@ -129,6 +136,18 @@
 → raven_workflow_list()  # Check if meeting-prep exists
 → raven_workflow_run(name="meeting-prep", input={"person_id": "people/freya"})
 → Use the returned prompt (and fetch step output via raven_workflow_runs_step if needed) to provide a comprehensive meeting prep
+```
+
+**User**: "Continue the paused workflow run from earlier"
+```
+→ raven_workflow_runs_list(status="awaiting_agent")
+→ Select the run and submit agent outputs:
+  raven_workflow_continue(
+    run-id="wrf_...",
+    agent-output-json={"outputs":{"markdown":"..."}}
+  )
+→ If needed, inspect step payloads:
+  raven_workflow_runs_step(run-id="wrf_...", step-id="compose")
 ```
 
 **User**: "I want to save a query for finding all my reading list items"
@@ -181,6 +200,13 @@
 ```
 → Grouping is not supported in the query language.
 → Use multiple queries or client-side aggregation after fetching results.
+```
+
+**User**: "There are too many todos, give me the first page and total count"
+```
+→ raven_query(query_string="trait:todo .value==todo", count-only=true)
+→ raven_query(query_string="trait:todo .value==todo", limit=50, offset=0)
+→ "I can fetch the next page with offset=50."
 ```
 
 **User**: "Sort projects by their earliest due date"

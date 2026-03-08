@@ -65,13 +65,16 @@ Additional topic resources are available under `raven://guide/<topic>`:
 
 - `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations
 - `raven://guide/quickstart` - One-pass mental model and first command sequence
-- `raven://guide/onboarding` - Interactive vault setup for new users
-- `raven://guide/lesson-plan` - Teaching sequence, prerequisites, and misconceptions
+- `raven://guide/onboarding` - Interactive vault setup and teaching sequence for new users
 - `raven://guide/getting-started` - First steps for orienting in a new vault
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
+- `raven://guide/response-contract` - Standard envelope (`ok/data/error/warnings/meta`) and preview/apply semantics
+- `raven://guide/write-patterns` - Choosing `new` vs `add` vs `upsert` for safe writes
 - `raven://guide/querying` - Raven Query Language (RQL) and query strategy
 - `raven://guide/query-cheatsheet` - Common query patterns and shortcuts
+- `raven://guide/query-at-scale` - Pagination and narrowing strategies for large result sets
 - `raven://guide/key-workflows` - Common workflows and decision patterns
+- `raven://guide/workflow-lifecycle` - Run/continue/inspect/prune workflow runs
 - `raven://guide/error-handling` - How to respond to tool errors
 - `raven://guide/issue-types` - `raven_check` issue reference and fixes
 - `raven://guide/best-practices` - Operating principles and safety checks
@@ -80,11 +83,13 @@ Additional topic resources are available under `raven://guide/<topic>`:
 ### Agent Guide Resources
 
 The agent guide resources (`raven://guide/index` and `raven://guide/<topic>`) provide:
-- A quick conceptual orientation path (`quickstart` -> `getting-started` -> `lesson-plan`)
+- A quick conceptual orientation path (`quickstart` -> `getting-started` -> `onboarding`)
+- Tool response contract and stable error/warning handling
+- Safe write patterns (`new` vs `add` vs `upsert`)
 - Getting started sequence for new vaults
 - Onboarding flow for first-time vault setup
-- Query language syntax and composition patterns
-- Key workflows (creating, editing, querying, bulk operations)
+- Query syntax, composition patterns, and large-vault pagination tactics
+- Key workflows plus workflow-run lifecycle operations
 - Error handling patterns
 - Best practices and example conversations
 
