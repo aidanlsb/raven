@@ -21,7 +21,7 @@ var (
 var readCmd = &cobra.Command{
 	Use:   "read [reference]",
 	Short: "Read a file with context",
-	Long: `Read and output a file from the vault.
+	Long: `Read and output a file from the keep.
 
 The reference can be a short reference (freya), partial path (people/freya),
 or full path (people/freya.md).
@@ -47,14 +47,14 @@ Examples:
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 
 		// Apply hyperlink preference for this run.
 		setHyperlinksDisabled(readNoLinksFlag)
 
-		// Load vault config
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		// Load keep config
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
@@ -62,7 +62,7 @@ Examples:
 		var reference string
 		if len(args) == 0 {
 			if canUseFZFInteractive() {
-				selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "read> ", "Select a file to read (Esc to cancel)")
+				selectedPath, selected, err := pickKeepFileWithFZF(keepPath, keepCfg, "read> ", "Select a file to read (Esc to cancel)")
 				if err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 				}
@@ -83,15 +83,15 @@ Examples:
 
 		// Resolve the reference using unified resolver
 		result, err := ResolveReference(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
+			KeepPath:   keepPath,
+			KeepConfig: keepCfg,
 		})
 		if err != nil {
 			return handleResolveError(err, reference)
 		}
 
 		fullPath := result.FilePath
-		relPath, _ := filepath.Rel(vaultPath, fullPath)
+		relPath, _ := filepath.Rel(keepPath, fullPath)
 
 		// Read file
 		content, err := os.ReadFile(fullPath)
@@ -184,8 +184,8 @@ Examples:
 		}
 
 		return readEnriched(readEnrichedOptions{
-			vaultPath:   vaultPath,
-			vaultCfg:    vaultCfg,
+			keepPath:    keepPath,
+			keepCfg:     keepCfg,
 			reference:   reference,
 			objectID:    result.ObjectID,
 			fileAbsPath: fullPath,

@@ -7,7 +7,7 @@ import (
 )
 
 func TestSchemaRenameField_PreviewDoesNotModifyFiles(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   person:
@@ -78,7 +78,7 @@ type: page
 }
 
 func TestSchemaRenameField_ConfirmUpdatesSchemaTemplatesQueriesAndFiles(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   person:
@@ -141,7 +141,7 @@ type: page
 }
 
 func TestSchemaRenameField_ConflictInFrontmatterBlocksRename(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/alice.md", `---
 type: person
@@ -169,7 +169,7 @@ email_address: alice@new.example.com
 }
 
 func TestSchemaRenameField_ConflictInEmbeddedDeclBlocksRename(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("notes/embedded.md", `---
 type: page

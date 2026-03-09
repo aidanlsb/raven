@@ -9,10 +9,10 @@ import (
 )
 
 func TestUpsertCreateUpdateUnchanged(t *testing.T) {
-	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	keepPath := t.TempDir()
+	writeUpsertTestSchema(t, keepPath)
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
@@ -20,7 +20,7 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
@@ -29,7 +29,7 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	upsertFieldFlags = nil
 	upsertPathFlag = ""
@@ -75,7 +75,7 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 		t.Fatalf("expected status=updated, got %q", status)
 	}
 
-	b, err := os.ReadFile(filepath.Join(vaultPath, file))
+	b, err := os.ReadFile(filepath.Join(keepPath, file))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -89,10 +89,10 @@ func TestUpsertCreateUpdateUnchanged(t *testing.T) {
 }
 
 func TestUpsertVsAddBoundary(t *testing.T) {
-	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	keepPath := t.TempDir()
+	writeUpsertTestSchema(t, keepPath)
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevUpsertFields := upsertFieldFlags
 	prevUpsertContent := upsertContent
@@ -104,7 +104,7 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 	prevAddStdin := addStdin
 	prevAddConfirm := addConfirm
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevUpsertFields
 		upsertContent = prevUpsertContent
@@ -117,7 +117,7 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		addConfirm = prevAddConfirm
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	upsertFieldFlags = nil
 	upsertPathFlag = ""
@@ -155,7 +155,7 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		}
 	})
 
-	withAppendBytes, err := os.ReadFile(filepath.Join(vaultPath, relFile))
+	withAppendBytes, err := os.ReadFile(filepath.Join(keepPath, relFile))
 	if err != nil {
 		t.Fatalf("read file after add: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 		}
 	})
 
-	finalBytes, err := os.ReadFile(filepath.Join(vaultPath, relFile))
+	finalBytes, err := os.ReadFile(filepath.Join(keepPath, relFile))
 	if err != nil {
 		t.Fatalf("read file after upsert replace: %v", err)
 	}
@@ -186,10 +186,10 @@ func TestUpsertVsAddBoundary(t *testing.T) {
 }
 
 func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
-	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	keepPath := t.TempDir()
+	writeUpsertTestSchema(t, keepPath)
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
@@ -197,7 +197,7 @@ func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
 	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
@@ -206,7 +206,7 @@ func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	upsertFieldFlags = nil
 	upsertPathFlag = ""
@@ -242,10 +242,10 @@ func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
 }
 
 func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
-	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	keepPath := t.TempDir()
+	writeUpsertTestSchema(t, keepPath)
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
@@ -253,7 +253,7 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
@@ -262,7 +262,7 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	upsertFieldFlags = nil
 	upsertPathFlag = "custom/brief-daily"
@@ -298,10 +298,10 @@ func TestUpsertUsesExplicitPathWhenProvided(t *testing.T) {
 }
 
 func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
-	vaultPath := t.TempDir()
-	writeUpsertTestSchema(t, vaultPath)
+	keepPath := t.TempDir()
+	writeUpsertTestSchema(t, keepPath)
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := upsertFieldFlags
 	prevContent := upsertContent
@@ -309,7 +309,7 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 	prevPathChanged := upsertCmd.Flags().Lookup("path").Changed
 	prevContentChanged := upsertCmd.Flags().Lookup("content").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		upsertFieldFlags = prevFields
 		upsertContent = prevContent
@@ -318,7 +318,7 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 		upsertCmd.Flags().Lookup("content").Changed = prevContentChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	upsertFieldFlags = nil
 	upsertPathFlag = "brief/"
@@ -349,7 +349,7 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 	}
 }
 
-func writeUpsertTestSchema(t *testing.T, vaultPath string) {
+func writeUpsertTestSchema(t *testing.T, keepPath string) {
 	t.Helper()
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -362,7 +362,7 @@ types:
         type: string
         required: true
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 }

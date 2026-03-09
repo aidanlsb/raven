@@ -19,19 +19,19 @@ type globalConfigContext struct {
 }
 
 var (
-	configSetEditor       string
-	configSetEditorMode   string
-	configSetStateFile    string
-	configSetDefaultVault string
-	configSetUIAccent     string
-	configSetUICodeTheme  string
+	configSetEditor      string
+	configSetEditorMode  string
+	configSetStateFile   string
+	configSetDefaultKeep string
+	configSetUIAccent    string
+	configSetUICodeTheme string
 
-	configUnsetEditor       bool
-	configUnsetEditorMode   bool
-	configUnsetStateFile    bool
-	configUnsetDefaultVault bool
-	configUnsetUIAccent     bool
-	configUnsetUICodeTheme  bool
+	configUnsetEditor      bool
+	configUnsetEditorMode  bool
+	configUnsetStateFile   bool
+	configUnsetDefaultKeep bool
+	configUnsetUIAccent    bool
+	configUnsetUICodeTheme bool
 )
 
 func loadGlobalConfigContextAllowMissing() (*globalConfigContext, error) {
@@ -52,21 +52,21 @@ func loadGlobalConfigContextAllowMissing() (*globalConfigContext, error) {
 }
 
 func configData(ctx *globalConfigContext) map[string]interface{} {
-	vaults := make(map[string]string)
-	for name, path := range ctx.cfg.Vaults {
-		vaults[name] = path
+	keeps := make(map[string]string)
+	for name, path := range ctx.cfg.Keeps {
+		keeps[name] = path
 	}
 
 	return map[string]interface{}{
-		"config_path":   ctx.configPath,
-		"state_path":    ctx.statePath,
-		"exists":        ctx.configExists,
-		"default_vault": strings.TrimSpace(ctx.cfg.DefaultVault),
-		"state_file":    strings.TrimSpace(ctx.cfg.StateFile),
-		"vault":         strings.TrimSpace(ctx.cfg.Vault),
-		"vaults":        vaults,
-		"editor":        strings.TrimSpace(ctx.cfg.Editor),
-		"editor_mode":   strings.TrimSpace(ctx.cfg.EditorMode),
+		"config_path":  ctx.configPath,
+		"state_path":   ctx.statePath,
+		"exists":       ctx.configExists,
+		"default_keep": strings.TrimSpace(ctx.cfg.DefaultKeep),
+		"state_file":   strings.TrimSpace(ctx.cfg.StateFile),
+		"keep":         strings.TrimSpace(ctx.cfg.Keep),
+		"keeps":        keeps,
+		"editor":       strings.TrimSpace(ctx.cfg.Editor),
+		"editor_mode":  strings.TrimSpace(ctx.cfg.EditorMode),
 		"ui": map[string]interface{}{
 			"accent":     strings.TrimSpace(ctx.cfg.UI.Accent),
 			"code_theme": strings.TrimSpace(ctx.cfg.UI.CodeTheme),
@@ -104,8 +104,8 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("config: %s\n", ctx.configPath)
 	fmt.Printf("state:  %s\n", ctx.statePath)
 
-	if v := strings.TrimSpace(ctx.cfg.DefaultVault); v != "" {
-		fmt.Printf("default_vault: %s\n", v)
+	if v := strings.TrimSpace(ctx.cfg.DefaultKeep); v != "" {
+		fmt.Printf("default_keep: %s\n", v)
 	}
 	if v := strings.TrimSpace(ctx.cfg.StateFile); v != "" {
 		fmt.Printf("state_file: %s\n", v)
@@ -122,20 +122,20 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	if v := strings.TrimSpace(ctx.cfg.UI.CodeTheme); v != "" {
 		fmt.Printf("ui.code_theme: %s\n", v)
 	}
-	vaults := ctx.cfg.ListVaults()
-	if len(vaults) == 0 {
-		fmt.Println("vaults: (none)")
+	keeps := ctx.cfg.ListKeeps()
+	if len(keeps) == 0 {
+		fmt.Println("keeps: (none)")
 		return nil
 	}
 
-	names := make([]string, 0, len(vaults))
-	for name := range vaults {
+	names := make([]string, 0, len(keeps))
+	for name := range keeps {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	fmt.Println("vaults:")
+	fmt.Println("keeps:")
 	for _, name := range names {
-		fmt.Printf("  %s = %s\n", name, vaults[name])
+		fmt.Printf("  %s = %s\n", name, keeps[name])
 	}
 
 	return nil
@@ -224,16 +224,16 @@ var configSetCmd = &cobra.Command{
 			changed = append(changed, "state_file")
 		}
 
-		if cmd.Flags().Changed("default-vault") {
-			value := strings.TrimSpace(configSetDefaultVault)
+		if cmd.Flags().Changed("default-keep") {
+			value := strings.TrimSpace(configSetDefaultKeep)
 			if value == "" {
-				return handleErrorMsg(ErrInvalidInput, "default-vault cannot be empty; use 'rvn config unset --default-vault' to clear it", "")
+				return handleErrorMsg(ErrInvalidInput, "default-keep cannot be empty; use 'rvn config unset --default-keep' to clear it", "")
 			}
-			if _, err := ctx.cfg.GetVaultPath(value); err != nil {
-				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("default-vault '%s' is not configured", value), "Run 'rvn vault list' to see configured vaults")
+			if _, err := ctx.cfg.GetKeepPath(value); err != nil {
+				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("default-keep '%s' is not configured", value), "Run 'rvn keep list' to see configured keeps")
 			}
-			ctx.cfg.DefaultVault = value
-			changed = append(changed, "default_vault")
+			ctx.cfg.DefaultKeep = value
+			changed = append(changed, "default_keep")
 		}
 
 		if cmd.Flags().Changed("ui-accent") {
@@ -255,7 +255,7 @@ var configSetCmd = &cobra.Command{
 		}
 
 		if len(changed) == 0 {
-			return handleErrorMsg(ErrMissingArgument, "no fields provided; set at least one --editor/--editor-mode/--state-file/--default-vault/--ui-accent/--ui-code-theme", "")
+			return handleErrorMsg(ErrMissingArgument, "no fields provided; set at least one --editor/--editor-mode/--state-file/--default-keep/--ui-accent/--ui-code-theme", "")
 		}
 
 		if err := config.SaveTo(ctx.configPath, ctx.cfg); err != nil {
@@ -302,9 +302,9 @@ var configUnsetCmd = &cobra.Command{
 			ctx.cfg.StateFile = ""
 			changed = append(changed, "state_file")
 		}
-		if configUnsetDefaultVault {
-			ctx.cfg.DefaultVault = ""
-			changed = append(changed, "default_vault")
+		if configUnsetDefaultKeep {
+			ctx.cfg.DefaultKeep = ""
+			changed = append(changed, "default_keep")
 		}
 		if configUnsetUIAccent {
 			ctx.cfg.UI.Accent = ""
@@ -350,14 +350,14 @@ func init() {
 	configSetCmd.Flags().StringVar(&configSetEditor, "editor", "", "Set editor command")
 	configSetCmd.Flags().StringVar(&configSetEditorMode, "editor-mode", "", "Set editor mode (auto|terminal|gui)")
 	configSetCmd.Flags().StringVar(&configSetStateFile, "state-file", "", "Set state.toml path (absolute or relative to config directory)")
-	configSetCmd.Flags().StringVar(&configSetDefaultVault, "default-vault", "", "Set default_vault to a configured vault name")
+	configSetCmd.Flags().StringVar(&configSetDefaultKeep, "default-keep", "", "Set default_keep to a configured keep name")
 	configSetCmd.Flags().StringVar(&configSetUIAccent, "ui-accent", "", "Set UI accent color (ANSI 0-255 or #RRGGBB)")
 	configSetCmd.Flags().StringVar(&configSetUICodeTheme, "ui-code-theme", "", "Set markdown code theme name")
 
 	configUnsetCmd.Flags().BoolVar(&configUnsetEditor, "editor", false, "Clear editor")
 	configUnsetCmd.Flags().BoolVar(&configUnsetEditorMode, "editor-mode", false, "Clear editor_mode")
 	configUnsetCmd.Flags().BoolVar(&configUnsetStateFile, "state-file", false, "Clear state_file")
-	configUnsetCmd.Flags().BoolVar(&configUnsetDefaultVault, "default-vault", false, "Clear default_vault")
+	configUnsetCmd.Flags().BoolVar(&configUnsetDefaultKeep, "default-keep", false, "Clear default_keep")
 	configUnsetCmd.Flags().BoolVar(&configUnsetUIAccent, "ui-accent", false, "Clear ui.accent")
 	configUnsetCmd.Flags().BoolVar(&configUnsetUICodeTheme, "ui-code-theme", false, "Clear ui.code_theme")
 

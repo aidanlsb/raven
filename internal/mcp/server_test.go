@@ -19,7 +19,7 @@ func writeExecutableScript(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-func newTestServerWithVault(t *testing.T) *Server {
+func newTestServerWithKeep(t *testing.T) *Server {
 	t.Helper()
 
 	tmp := t.TempDir()
@@ -28,7 +28,7 @@ func newTestServerWithVault(t *testing.T) *Server {
 		t.Fatalf("write schema: %v", err)
 	}
 
-	return &Server{vaultPath: tmp}
+	return &Server{keepPath: tmp}
 }
 
 func callResourcesList(t *testing.T, s *Server) []Resource {
@@ -108,7 +108,7 @@ func hasResourceURI(resources []Resource, uri string) bool {
 }
 
 func TestResourcesListIncludesGuideIndexAndTopics(t *testing.T) {
-	s := newTestServerWithVault(t)
+	s := newTestServerWithKeep(t)
 	resources := callResourcesList(t, s)
 
 	uris := make(map[string]bool, len(resources))
@@ -133,29 +133,29 @@ func TestResourcesListIncludesGuideIndexAndTopics(t *testing.T) {
 }
 
 func TestResourcesListOmitsAgentInstructionsWhenMissing(t *testing.T) {
-	s := newTestServerWithVault(t)
+	s := newTestServerWithKeep(t)
 	resources := callResourcesList(t, s)
 
-	if hasResourceURI(resources, vaultAgentInstructionsResourceURI) {
-		t.Fatalf("did not expect %s when AGENTS.md is missing", vaultAgentInstructionsResourceURI)
+	if hasResourceURI(resources, keepAgentInstructionsResourceURI) {
+		t.Fatalf("did not expect %s when AGENTS.md is missing", keepAgentInstructionsResourceURI)
 	}
 }
 
 func TestResourcesListIncludesAgentInstructionsWhenPresent(t *testing.T) {
-	s := newTestServerWithVault(t)
-	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
+	s := newTestServerWithKeep(t)
+	agentPath := filepath.Join(s.keepPath, "AGENTS.md")
 	if err := os.WriteFile(agentPath, []byte("# Agent Rules\n"), 0644); err != nil {
 		t.Fatalf("write AGENTS.md: %v", err)
 	}
 
 	resources := callResourcesList(t, s)
-	if !hasResourceURI(resources, vaultAgentInstructionsResourceURI) {
-		t.Fatalf("expected %s when AGENTS.md exists", vaultAgentInstructionsResourceURI)
+	if !hasResourceURI(resources, keepAgentInstructionsResourceURI) {
+		t.Fatalf("expected %s when AGENTS.md exists", keepAgentInstructionsResourceURI)
 	}
 }
 
 func TestResourcesReadGuideIndexAndTopics(t *testing.T) {
-	s := newTestServerWithVault(t)
+	s := newTestServerWithKeep(t)
 
 	indexContent := callResourcesRead(t, s, "raven://guide/index")
 	if strings.TrimSpace(indexContent.Text) == "" {
@@ -182,14 +182,14 @@ func TestResourcesReadGuideIndexAndTopics(t *testing.T) {
 }
 
 func TestResourcesReadAgentInstructions(t *testing.T) {
-	s := newTestServerWithVault(t)
+	s := newTestServerWithKeep(t)
 	expected := "# Agent Rules\nAlways run checks.\n"
-	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
+	agentPath := filepath.Join(s.keepPath, "AGENTS.md")
 	if err := os.WriteFile(agentPath, []byte(expected), 0644); err != nil {
 		t.Fatalf("write AGENTS.md: %v", err)
 	}
 
-	content := callResourcesRead(t, s, vaultAgentInstructionsResourceURI)
+	content := callResourcesRead(t, s, keepAgentInstructionsResourceURI)
 	if content.MimeType != "text/markdown" {
 		t.Fatalf("expected mimeType text/markdown, got %q", content.MimeType)
 	}
@@ -199,8 +199,8 @@ func TestResourcesReadAgentInstructions(t *testing.T) {
 }
 
 func TestResourcesReadAgentInstructionsMissing(t *testing.T) {
-	s := newTestServerWithVault(t)
-	resp := callResourcesReadResponse(t, s, vaultAgentInstructionsResourceURI)
+	s := newTestServerWithKeep(t)
+	resp := callResourcesReadResponse(t, s, keepAgentInstructionsResourceURI)
 	if resp.Error == nil {
 		t.Fatal("expected error for missing AGENTS.md resource")
 	}
@@ -210,7 +210,7 @@ func TestResourcesReadAgentInstructionsMissing(t *testing.T) {
 }
 
 func TestResourcesReadSchema(t *testing.T) {
-	s := newTestServerWithVault(t)
+	s := newTestServerWithKeep(t)
 	content := callResourcesRead(t, s, "raven://schema/current")
 	if strings.TrimSpace(content.Text) == "" {
 		t.Fatal("schema content is empty")
@@ -224,7 +224,7 @@ func TestResourcesReadSchema(t *testing.T) {
 }
 
 func TestResourcesReadUnknownGuide(t *testing.T) {
-	s := newTestServerWithVault(t)
+	s := newTestServerWithKeep(t)
 	resp := callResourcesReadResponse(t, s, "raven://guide/does-not-exist")
 	if resp.Error == nil {
 		t.Fatal("expected error for unknown guide resource")
@@ -323,7 +323,7 @@ echo '{"ok":false,"error":{"code":"REQUIRED_FIELD_MISSING","message":"Missing re
 exit 0
 `)
 
-	s := &Server{vaultPath: tmp, executable: script}
+	s := &Server{keepPath: tmp, executable: script}
 	out, isErr := s.executeRvn([]string{"new", "--json", "--", "person", "Freya"})
 	if !isErr {
 		t.Fatalf("expected isError=true, got false; out=%s", out)
@@ -349,7 +349,7 @@ echo "something went wrong" 1>&2
 exit 1
 `)
 
-	s := &Server{vaultPath: tmp, executable: script}
+	s := &Server{keepPath: tmp, executable: script}
 	out, isErr := s.executeRvn([]string{"new", "--json", "--", "person", "Freya"})
 	if !isErr {
 		t.Fatalf("expected isError=true, got false; out=%s", out)

@@ -8,7 +8,7 @@ For detailed tool semantics, see focused topics:
 - `raven://guide/query-at-scale`
 - `raven://guide/response-contract`
 
-## 1. Vault health and cleanup
+## 1. Keep health and cleanup
 
 When users ask "what is broken" or want cleanup:
 
@@ -133,7 +133,7 @@ If the run pauses at an agent step, continue with `raven_workflow_continue`. See
 raven_query(query_string="object:meeting refs([[projects/website]])", limit=25, offset=0)
 ```
 
-For large-vault tactics, see `raven://guide/query-at-scale`.
+For large-keep tactics, see `raven://guide/query-at-scale`.
 
 ## 9. Import and template setup (common setup tasks)
 

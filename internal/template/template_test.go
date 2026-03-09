@@ -209,12 +209,12 @@ func TestLoad_MissingFile(t *testing.T) {
 	}
 }
 
-func TestLoad_PathOutsideVault(t *testing.T) {
+func TestLoad_PathOutsideKeep(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	_, err := Load(tmpDir, "../etc/passwd", "templates/")
 	if err == nil {
-		t.Fatal("Load() expected error for path outside vault, got nil")
+		t.Fatal("Load() expected error for path outside keep, got nil")
 	}
 }
 

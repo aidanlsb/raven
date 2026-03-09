@@ -1,13 +1,13 @@
-# Vault Onboarding Guide
+# Keep Onboarding Guide
 
-This guide helps agents onboard users to a new Raven vault through an interactive, conversational setup process.
+This guide helps agents onboard users to a new Raven keep through an interactive, conversational setup process.
 
 ## When to Use This Guide
 
-- User just ran `rvn init` and has a fresh vault
+- User just ran `rvn init` and has a fresh keep
 - User asks to "set up Raven" or "get started"
 - User runs the `onboard` workflow via `raven_workflow_run(name="onboard")`
-- Vault has only default types (person, project) and no custom content
+- Keep has only default types (person, project) and no custom content
 
 ## Onboarding Philosophy
 
@@ -69,7 +69,7 @@ Use this sequence during onboarding to avoid overload and still show immediate v
 
 Ask open-ended questions to understand their use case:
 
-> "What do you want to use this vault for?"
+> "What do you want to use this keep for?"
 
 Listen for domains: work, personal, research, creative projects, etc.
 

@@ -10,7 +10,7 @@ It is split into topic resources so agents can fetch only what they need.
 - Use `raven://guide/onboarding` when teaching and setting up a new user
 - Use `raven://schema/current` for the live schema
 - Use `raven://queries/saved` and `raven://workflows/list` for quick discovery
-- Use `raven://vault/agent-instructions` when available for vault-specific guidance
+- Use `raven://keep/agent-instructions` when available for keep-specific guidance
 - Use `raven://guide/response-contract` for envelope/error/warning handling
 - Fetch a single topic resource when you need focused guidance
 
@@ -26,8 +26,8 @@ It is split into topic resources so agents can fetch only what they need.
 
 - `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations
 - `raven://guide/quickstart` - One-pass mental model and first command sequence
-- `raven://guide/onboarding` - Interactive vault setup, teaching sequence, and misconceptions for new users
-- `raven://guide/getting-started` - First steps for orienting in a new vault
+- `raven://guide/onboarding` - Interactive keep setup, teaching sequence, and misconceptions for new users
+- `raven://guide/getting-started` - First steps for orienting in a new keep
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/response-contract` - Standard tool envelope, error codes, warnings, and preview/apply semantics
 - `raven://guide/write-patterns` - Choosing `new` vs `add` vs `upsert` and safe write flows

@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/keep"
 )
 
 var openStdin bool
@@ -58,27 +58,27 @@ Examples:
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		keepPath := getKeepPath()
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
 		// Handle --stdin mode
 		if openStdin {
-			return runOpenStdin(vaultPath, vaultCfg)
+			return runOpenStdin(keepPath, keepCfg)
 		}
 
 		if len(args) == 0 {
 			if canUseFZFInteractive() {
-				relPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "open> ", "Select a file to open (Esc to cancel)")
+				relPath, selected, err := pickKeepFileWithFZF(keepPath, keepCfg, "open> ", "Select a file to open (Esc to cancel)")
 				if err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 				}
 				if !selected {
 					return nil
 				}
-				openFileInEditor(filepath.Join(vaultPath, relPath), relPath, false)
+				openFileInEditor(filepath.Join(keepPath, relPath), relPath, false)
 				return nil
 			}
 
@@ -93,14 +93,14 @@ Examples:
 
 		// Resolve the reference using unified resolver, then dynamic date keywords.
 		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
+			KeepPath:   keepPath,
+			KeepConfig: keepCfg,
 		}, false)
 		if err != nil {
 			return handleResolveError(err, reference)
 		}
 
-		relPath, _ := filepath.Rel(vaultPath, result.FilePath)
+		relPath, _ := filepath.Rel(keepPath, result.FilePath)
 
 		// JSON output
 		if isJSONOutput() {
@@ -110,7 +110,7 @@ Examples:
 				editor = cfg.GetEditor()
 			}
 
-			opened := vault.OpenInEditor(cfg, result.FilePath)
+			opened := keep.OpenInEditor(cfg, result.FilePath)
 			outputSuccess(map[string]interface{}{
 				"file":   relPath,
 				"opened": opened,
@@ -126,7 +126,7 @@ Examples:
 	},
 }
 
-func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
+func runOpenStdin(keepPath string, keepCfg *config.KeepConfig) error {
 	ids, embedded, err := ReadIDsFromStdin()
 	if err != nil {
 		return err
@@ -148,15 +148,15 @@ func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
 	// Resolve each ID to a file path
 	for _, id := range ids {
 		result, err := ResolveReference(id, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
+			KeepPath:   keepPath,
+			KeepConfig: keepCfg,
 		})
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("%s: %v", id, err))
 			continue
 		}
 		filePaths = append(filePaths, result.FilePath)
-		relPath, _ := filepath.Rel(vaultPath, result.FilePath)
+		relPath, _ := filepath.Rel(keepPath, result.FilePath)
 		relPaths = append(relPaths, relPath)
 	}
 
@@ -176,7 +176,7 @@ func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
 			editor = cfg.GetEditor()
 		}
 
-		opened := vault.OpenFilesInEditor(cfg, filePaths)
+		opened := keep.OpenFilesInEditor(cfg, filePaths)
 		outputSuccess(map[string]interface{}{
 			"files":  relPaths,
 			"opened": opened,
@@ -187,7 +187,7 @@ func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
 	}
 
 	// Human output
-	if vault.OpenFilesInEditor(cfg, filePaths) {
+	if keep.OpenFilesInEditor(cfg, filePaths) {
 		fmt.Printf("Opening %d file(s)\n", len(filePaths))
 		for _, p := range relPaths {
 			fmt.Printf("  %s\n", p)
@@ -212,7 +212,7 @@ func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
 // If skipOpenMessage is true, it won't print "Opening..." (useful when a "Created" message was already shown).
 func openFileInEditor(filePath, relPath string, skipOpenMessage bool) {
 	cfg := getConfig()
-	if vault.OpenInEditor(cfg, filePath) {
+	if keep.OpenInEditor(cfg, filePath) {
 		if !skipOpenMessage {
 			fmt.Printf("Opening %s\n", relPath)
 		}

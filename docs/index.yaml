@@ -34,8 +34,8 @@ sections:
       query-language:
         title: Query Language
         path: query-language.md
-  vault-management:
-    title: Vault Management
+  keep-management:
+    title: Keep Management
     topics:
       bulk-operations:
         title: Bulk Operations

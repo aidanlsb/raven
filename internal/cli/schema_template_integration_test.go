@@ -9,7 +9,7 @@ import (
 )
 
 func TestIntegration_SchemaTemplateBindingsDriveNew(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   interview:

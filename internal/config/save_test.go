@@ -10,12 +10,12 @@ func TestSaveToPersistsConfigFields(t *testing.T) {
 	path := filepath.Join(tmp, "config.toml")
 
 	cfg := &Config{
-		DefaultVault: "work",
-		StateFile:    "state.toml",
-		Editor:       "code",
-		EditorMode:   "gui",
-		Vaults: map[string]string{
-			"work": "/tmp/work-vault",
+		DefaultKeep: "work",
+		StateFile:   "state.toml",
+		Editor:      "code",
+		EditorMode:  "gui",
+		Keeps: map[string]string{
+			"work": "/tmp/work-keep",
 		},
 		UI: UIConfig{
 			Accent:    "39",

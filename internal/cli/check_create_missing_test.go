@@ -10,7 +10,7 @@ import (
 )
 
 func TestCreateMissingPageUsesDirectoryRoots(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -18,11 +18,11 @@ types:
   meeting:
     default_path: meeting/
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	s, err := schema.Load(vaultPath)
+	s, err := schema.Load(keepPath)
 	if err != nil {
 		t.Fatalf("load schema: %v", err)
 	}
@@ -49,15 +49,15 @@ types:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := createMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "templates/"); err != nil {
+			if err := createMissingPage(keepPath, s, tc.targetPath, "meeting", "objects/", "", "templates/"); err != nil {
 				t.Fatalf("createMissingPage failed: %v", err)
 			}
 
-			if _, err := os.Stat(filepath.Join(vaultPath, tc.wantRelPath)); err != nil {
+			if _, err := os.Stat(filepath.Join(keepPath, tc.wantRelPath)); err != nil {
 				t.Fatalf("expected created file at %s: %v", tc.wantRelPath, err)
 			}
 
-			if _, err := os.Stat(filepath.Join(vaultPath, tc.unwantedRelPath)); err == nil {
+			if _, err := os.Stat(filepath.Join(keepPath, tc.unwantedRelPath)); err == nil {
 				t.Fatalf("did not expect file at %s", tc.unwantedRelPath)
 			}
 		})

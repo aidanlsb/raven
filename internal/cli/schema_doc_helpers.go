@@ -9,8 +9,8 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
-func readSchemaDoc(vaultPath string) (map[string]interface{}, map[string]interface{}, error) {
-	schemaPath := paths.SchemaPath(vaultPath)
+func readSchemaDoc(keepPath string) (map[string]interface{}, map[string]interface{}, error) {
+	schemaPath := paths.SchemaPath(keepPath)
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, nil, handleError(ErrFileReadError, err, "")
@@ -29,13 +29,13 @@ func readSchemaDoc(vaultPath string) (map[string]interface{}, map[string]interfa
 	return schemaDoc, types, nil
 }
 
-func writeSchemaDoc(vaultPath string, schemaDoc map[string]interface{}) error {
+func writeSchemaDoc(keepPath string, schemaDoc map[string]interface{}) error {
 	output, err := yaml.Marshal(schemaDoc)
 	if err != nil {
 		return handleError(ErrInternal, err, "")
 	}
 
-	schemaPath := paths.SchemaPath(vaultPath)
+	schemaPath := paths.SchemaPath(keepPath)
 	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}

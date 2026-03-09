@@ -224,28 +224,28 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 		},
 		{
 			toolName: "raven_init",
-			args:     map[string]interface{}{"path": "/tmp/raven-vault"},
+			args:     map[string]interface{}{"path": "/tmp/raven-keep"},
 			wantCmd:  "init",
-			wantArgs: []string{"/tmp/raven-vault", "--json"},
+			wantArgs: []string{"/tmp/raven-keep", "--json"},
 		},
 		{
-			toolName: "raven_vault_add",
+			toolName: "raven_keep_add",
 			args: map[string]interface{}{
 				"name": "work",
-				"path": "/tmp/work-vault",
+				"path": "/tmp/work-keep",
 				"pin":  true,
 			},
-			wantCmd:  "vault",
-			wantArgs: []string{"add", "work", "/tmp/work-vault", "--pin", "--json"},
+			wantCmd:  "keep",
+			wantArgs: []string{"add", "work", "/tmp/work-keep", "--pin", "--json"},
 		},
 		{
-			toolName: "raven_vault_remove",
+			toolName: "raven_keep_remove",
 			args: map[string]interface{}{
 				"name":          "work",
 				"clear_default": true,
 				"clear_active":  true,
 			},
-			wantCmd:  "vault",
+			wantCmd:  "keep",
 			wantArgs: []string{"remove", "work", "--clear-default", "--clear-active", "--json"},
 		},
 		{

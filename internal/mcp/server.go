@@ -18,7 +18,7 @@ import (
 
 // Server is an MCP server that wraps Raven CLI commands.
 type Server struct {
-	vaultPath  string
+	keepPath   string
 	baseArgs   []string
 	in         io.Reader
 	out        io.Writer
@@ -108,15 +108,15 @@ func resolveExecutablePath() string {
 }
 
 // NewServer creates a new MCP server.
-// If vaultPath is non-empty, it is pinned via --vault-path for all command execution.
-func NewServer(vaultPath string) *Server {
+// If keepPath is non-empty, it is pinned via --keep-path for all command execution.
+func NewServer(keepPath string) *Server {
 	baseArgs := []string{}
-	if strings.TrimSpace(vaultPath) != "" {
-		baseArgs = append(baseArgs, "--vault-path", vaultPath)
+	if strings.TrimSpace(keepPath) != "" {
+		baseArgs = append(baseArgs, "--keep-path", keepPath)
 	}
 
 	return &Server{
-		vaultPath:  vaultPath,
+		keepPath:   keepPath,
 		baseArgs:   baseArgs,
 		in:         os.Stdin,
 		out:        os.Stdout,
@@ -125,7 +125,7 @@ func NewServer(vaultPath string) *Server {
 }
 
 // NewServerWithBaseArgs creates a new MCP server using a set of base CLI flags.
-// This is used by `rvn serve` for dynamic vault resolution with optional pass-through flags.
+// This is used by `rvn serve` for dynamic keep resolution with optional pass-through flags.
 func NewServerWithBaseArgs(baseArgs []string) *Server {
 	normalized := append([]string{}, baseArgs...)
 	return &Server{
@@ -138,14 +138,14 @@ func NewServerWithBaseArgs(baseArgs []string) *Server {
 
 // NewServerWithExecutable creates a new MCP server with a custom executable path.
 // This is primarily used for testing with a built binary.
-func NewServerWithExecutable(vaultPath, executable string) *Server {
+func NewServerWithExecutable(keepPath, executable string) *Server {
 	baseArgs := []string{}
-	if strings.TrimSpace(vaultPath) != "" {
-		baseArgs = append(baseArgs, "--vault-path", vaultPath)
+	if strings.TrimSpace(keepPath) != "" {
+		baseArgs = append(baseArgs, "--keep-path", keepPath)
 	}
 
 	return &Server{
-		vaultPath:  vaultPath,
+		keepPath:   keepPath,
 		baseArgs:   baseArgs,
 		in:         os.Stdin,
 		out:        os.Stdout,
@@ -173,10 +173,10 @@ func (s *Server) Run() error {
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 
 	// Log startup to stderr (not stdout which is for protocol)
-	if strings.TrimSpace(s.vaultPath) != "" {
-		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with pinned vault:", s.vaultPath)
+	if strings.TrimSpace(s.keepPath) != "" {
+		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with pinned keep:", s.keepPath)
 	} else {
-		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with dynamic vault resolution")
+		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with dynamic keep resolution")
 	}
 
 	for scanner.Scan() {
@@ -294,14 +294,14 @@ type ResourceContent struct {
 	Text     string `json:"text,omitempty"`
 }
 
-const vaultAgentInstructionsResourceURI = "raven://vault/agent-instructions"
+const keepAgentInstructionsResourceURI = "raven://keep/agent-instructions"
 
 func (s *Server) handleResourcesList(req *Request) {
 	resources := append([]Resource{}, listAgentGuideResources()...)
 	resources = append(resources, Resource{
 		URI:         "raven://schema/current",
 		Name:        "Current Schema",
-		Description: "The current schema.yaml defining types and traits for this vault.",
+		Description: "The current schema.yaml defining types and traits for this keep.",
 		MimeType:    "text/yaml",
 	})
 	resources = append(resources, Resource{
@@ -380,7 +380,7 @@ func (s *Server) handleResourcesRead(req *Request) {
 			MimeType: "application/json",
 			Text:     workflowsContent,
 		}
-	case vaultAgentInstructionsResourceURI:
+	case keepAgentInstructionsResourceURI:
 		agentInstructions, err := s.readAgentInstructionsResource()
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -442,32 +442,32 @@ func (s *Server) handleResourcesRead(req *Request) {
 }
 
 func (s *Server) agentInstructionsResource() (Resource, bool) {
-	vaultPath, err := s.resolveVaultPath()
+	keepPath, err := s.resolveKeepPath()
 	if err != nil {
 		return Resource{}, false
 	}
 
-	agentInstructionsPath := paths.AgentInstructionsPath(vaultPath)
+	agentInstructionsPath := paths.AgentInstructionsPath(keepPath)
 	info, err := os.Stat(agentInstructionsPath)
 	if err != nil || info.IsDir() {
 		return Resource{}, false
 	}
 
 	return Resource{
-		URI:         vaultAgentInstructionsResourceURI,
+		URI:         keepAgentInstructionsResourceURI,
 		Name:        "Agent Instructions",
-		Description: "Agent guidance from AGENTS.md in the vault root.",
+		Description: "Agent guidance from AGENTS.md in the keep root.",
 		MimeType:    "text/markdown",
 	}, true
 }
 
 func (s *Server) readAgentInstructionsResource() (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+	keepPath, err := s.resolveKeepPath()
 	if err != nil {
 		return "", err
 	}
 
-	data, err := os.ReadFile(paths.AgentInstructionsPath(vaultPath))
+	data, err := os.ReadFile(paths.AgentInstructionsPath(keepPath))
 	if err != nil {
 		return "", err
 	}
@@ -476,12 +476,12 @@ func (s *Server) readAgentInstructionsResource() (string, error) {
 }
 
 func (s *Server) readSchemaFile() (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+	keepPath, err := s.resolveKeepPath()
 	if err != nil {
 		return "", err
 	}
 
-	schemaPath := paths.SchemaPath(vaultPath)
+	schemaPath := paths.SchemaPath(keepPath)
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return "", err
@@ -556,14 +556,14 @@ func (s *Server) withBaseArgs(args []string) []string {
 	return out
 }
 
-func (s *Server) resolveVaultPath() (string, error) {
-	if strings.TrimSpace(s.vaultPath) != "" {
-		return s.vaultPath, nil
+func (s *Server) resolveKeepPath() (string, error) {
+	if strings.TrimSpace(s.keepPath) != "" {
+		return s.keepPath, nil
 	}
-	return s.currentVaultPath()
+	return s.currentKeepPath()
 }
 
-func (s *Server) currentVaultPath() (string, error) {
+func (s *Server) currentKeepPath() (string, error) {
 	args := s.withBaseArgs([]string{"path"})
 	cmd := exec.Command(s.executable, args...)
 
@@ -573,12 +573,12 @@ func (s *Server) currentVaultPath() (string, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to resolve current vault: %w (%s)", err, strings.TrimSpace(stderr.String()))
+		return "", fmt.Errorf("failed to resolve current keep: %w (%s)", err, strings.TrimSpace(stderr.String()))
 	}
 
 	resolved := strings.TrimSpace(stdout.String())
 	if resolved == "" {
-		return "", fmt.Errorf("failed to resolve current vault: empty path")
+		return "", fmt.Errorf("failed to resolve current keep: empty path")
 	}
 
 	return resolved, nil

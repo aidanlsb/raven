@@ -92,13 +92,13 @@ func ResolveCommand() string {
 }
 
 // BuildServerEntry creates a ServerEntry for the raven MCP server.
-// vaultName and vaultPath are optional vault pinning args.
-func BuildServerEntry(vaultName, vaultPath string) ServerEntry {
+// keepName and keepPath are optional keep pinning args.
+func BuildServerEntry(keepName, keepPath string) ServerEntry {
 	args := []string{"serve"}
-	if vaultPath != "" {
-		args = append(args, "--vault-path", vaultPath)
-	} else if vaultName != "" {
-		args = append(args, "--vault", vaultName)
+	if keepPath != "" {
+		args = append(args, "--keep-path", keepPath)
+	} else if keepName != "" {
+		args = append(args, "--keep", keepName)
 	}
 	return ServerEntry{
 		Command: ResolveCommand(),

@@ -266,7 +266,7 @@ func TestDatabase(t *testing.T) {
 		defer db.Close()
 
 		doc := &parser.ParsedDocument{
-			// Simulate vaults with directories config enabled: object ID does not include "objects/".
+			// Simulate keeps with directories config enabled: object ID does not include "objects/".
 			FilePath: "objects/people/freya.md",
 			RawContent: `---
 ---
@@ -552,7 +552,7 @@ type: person
 
 # Freya
 `
-		freyaDoc, err := parser.ParseDocument(freyaContent, "/vault/people/freya.md", "/vault")
+		freyaDoc, err := parser.ParseDocument(freyaContent, "/keep/people/freya.md", "/keep")
 		if err != nil {
 			t.Fatalf("failed to parse freya doc: %v", err)
 		}
@@ -567,7 +567,7 @@ owner: "[[people/freya]]"
 
 # Alpha
 `
-		alphaDoc, err := parser.ParseDocument(alphaContent, "/vault/projects/alpha.md", "/vault")
+		alphaDoc, err := parser.ParseDocument(alphaContent, "/keep/projects/alpha.md", "/keep")
 		if err != nil {
 			t.Fatalf("failed to parse alpha doc: %v", err)
 		}
@@ -689,7 +689,7 @@ func TestTraitIDsStableAcrossReindexForMultilineParagraph(t *testing.T) {
 			t.Fatalf("iteration %d: failed to clear database: %v", i, err)
 		}
 
-		doc, err := parser.ParseDocument(content, "/vault/notes/unstable.md", "/vault")
+		doc, err := parser.ParseDocument(content, "/keep/notes/unstable.md", "/keep")
 		if err != nil {
 			t.Fatalf("iteration %d: failed to parse document: %v", i, err)
 		}
@@ -1126,8 +1126,8 @@ func TestAllIndexedFilePaths(t *testing.T) {
 }
 
 func TestOpenWithRebuildLock(t *testing.T) {
-	vaultDir := t.TempDir()
-	dbDir := filepath.Join(vaultDir, ".raven")
+	keepDir := t.TempDir()
+	dbDir := filepath.Join(keepDir, ".raven")
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		t.Fatalf("failed to create db dir: %v", err)
 	}
@@ -1144,7 +1144,7 @@ func TestOpenWithRebuildLock(t *testing.T) {
 	}
 	defer unlockFile(lockFile)
 
-	if _, _, err := OpenWithRebuild(vaultDir); !errors.Is(err, ErrIndexLocked) {
+	if _, _, err := OpenWithRebuild(keepDir); !errors.Is(err, ErrIndexLocked) {
 		t.Fatalf("expected ErrIndexLocked, got %v", err)
 	}
 }

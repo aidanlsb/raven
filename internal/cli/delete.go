@@ -13,8 +13,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -25,10 +25,10 @@ var (
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete <object_id>",
-	Short: "Delete an object from the vault",
-	Long: `Delete a file/object from the vault.
+	Short: "Delete an object from the keep",
+	Long: `Delete a file/object from the keep.
 
-By default, files are moved to a trash directory (.trash/) within the vault.
+By default, files are moved to a trash directory (.trash/) within the keep.
 This behavior can be changed to permanent deletion via raven.yaml.
 
 The command will warn about any backlinks (objects that reference the deleted item)
@@ -53,11 +53,11 @@ Bulk examples:
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
 		// Handle --stdin mode for bulk operations
 		if deleteStdin {
-			return runDeleteBulk(vaultPath)
+			return runDeleteBulk(keepPath)
 		}
 
 		// Single object mode - requires object-id
@@ -65,12 +65,12 @@ Bulk examples:
 			return handleErrorMsg(ErrMissingArgument, "requires object-id argument", "Usage: rvn delete <object-id>")
 		}
 
-		return deleteSingleObject(vaultPath, args[0])
+		return deleteSingleObject(keepPath, args[0])
 	},
 }
 
 // runDeleteBulk handles bulk delete operations from stdin.
-func runDeleteBulk(vaultPath string) error {
+func runDeleteBulk(keepPath string) error {
 	// Read IDs from stdin
 	ids, embedded, err := ReadIDsFromStdin()
 	if err != nil {
@@ -87,35 +87,35 @@ func runDeleteBulk(vaultPath string) error {
 		warnings = append(warnings, *w)
 	}
 
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
 	// If not confirming, show preview
 	if !deleteConfirm {
-		return previewDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+		return previewDeleteBulk(keepPath, ids, warnings, keepCfg)
 	}
 
 	// Apply the deletions
-	return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+	return applyDeleteBulk(keepPath, ids, warnings, keepCfg)
 }
 
 // previewDeleteBulk shows a preview of bulk delete operations.
-func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	deletionCfg := vaultCfg.GetDeletionConfig()
+func previewDeleteBulk(keepPath string, ids []string, warnings []Warning, keepCfg *config.KeepConfig) error {
+	deletionCfg := keepCfg.GetDeletionConfig()
 
 	// Open database for backlink checks
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
 	defer db.Close()
 
 	preview := buildBulkPreview("delete", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
-		objectID := vaultCfg.FilePathToObjectID(id)
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		objectID := keepCfg.FilePathToObjectID(id)
+		filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, id, keepCfg)
 		if err != nil {
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
@@ -152,11 +152,11 @@ func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vault
 }
 
 // applyDeleteBulk applies bulk delete operations.
-func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	deletionCfg := vaultCfg.GetDeletionConfig()
+func applyDeleteBulk(keepPath string, ids []string, warnings []Warning, keepCfg *config.KeepConfig) error {
+	deletionCfg := keepCfg.GetDeletionConfig()
 
 	// Open database for cleanup
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
@@ -166,8 +166,8 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 		result := BulkResult{ID: id}
 		// Canonicalize the object ID, but resolve the file using the original input
 		// (it may already include a rooted path).
-		objectID := vaultCfg.FilePathToObjectID(id)
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		objectID := keepCfg.FilePathToObjectID(id)
+		filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, id, keepCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -177,7 +177,7 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 		// Perform the deletion
 		if deletionCfg.Behavior == "trash" {
 			// Move to trash
-			trashDir := filepath.Join(vaultPath, deletionCfg.TrashDir)
+			trashDir := filepath.Join(keepPath, deletionCfg.TrashDir)
 			if err := os.MkdirAll(trashDir, 0755); err != nil {
 				result.Status = "error"
 				result.Reason = fmt.Sprintf("failed to create trash dir: %v", err)
@@ -185,7 +185,7 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 			}
 
 			// Preserve the file's actual directory structure in trash.
-			relPath, _ := filepath.Rel(vaultPath, filePath)
+			relPath, _ := filepath.Rel(keepPath, filePath)
 			destPath := filepath.Join(trashDir, relPath)
 
 			// Create parent directories in trash
@@ -240,19 +240,19 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 }
 
 // deleteSingleObject deletes a single object (non-bulk mode).
-func deleteSingleObject(vaultPath, reference string) error {
+func deleteSingleObject(keepPath, reference string) error {
 	start := time.Now()
 
-	// Load vault config for deletion settings and directory roots
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config for deletion settings and directory roots
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
 	// Resolve the reference using unified resolver
 	result, err := ResolveReference(reference, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
+		KeepPath:   keepPath,
+		KeepConfig: keepCfg,
 	})
 	if err != nil {
 		return handleResolveError(err, reference)
@@ -260,10 +260,10 @@ func deleteSingleObject(vaultPath, reference string) error {
 
 	objectID := result.ObjectID
 	filePath := result.FilePath
-	deletionCfg := vaultCfg.GetDeletionConfig()
+	deletionCfg := keepCfg.GetDeletionConfig()
 
 	// Find backlinks
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
@@ -325,13 +325,13 @@ func deleteSingleObject(vaultPath, reference string) error {
 	var destPath string
 	if deletionCfg.Behavior == "trash" {
 		// Move to trash
-		trashDir := filepath.Join(vaultPath, deletionCfg.TrashDir)
+		trashDir := filepath.Join(keepPath, deletionCfg.TrashDir)
 		if err := os.MkdirAll(trashDir, 0755); err != nil {
 			return handleError(ErrFileWriteError, err, "")
 		}
 
 		// Preserve the file's actual directory structure in trash.
-		relPath, _ := filepath.Rel(vaultPath, filePath)
+		relPath, _ := filepath.Rel(keepPath, filePath)
 		destPath = filepath.Join(trashDir, relPath)
 
 		// Create parent directories in trash
@@ -380,7 +380,7 @@ func deleteSingleObject(vaultPath, reference string) error {
 			"behavior": deletionCfg.Behavior,
 		}
 		if destPath != "" {
-			relDest, _ := filepath.Rel(vaultPath, destPath)
+			relDest, _ := filepath.Rel(keepPath, destPath)
 			result["trash_path"] = relDest
 		}
 		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
@@ -388,7 +388,7 @@ func deleteSingleObject(vaultPath, reference string) error {
 	}
 
 	if deletionCfg.Behavior == "trash" {
-		relDest, _ := filepath.Rel(vaultPath, destPath)
+		relDest, _ := filepath.Rel(keepPath, destPath)
 		fmt.Println(ui.Checkf("Moved to %s", ui.FilePath(relDest)))
 	} else {
 		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(objectID)))

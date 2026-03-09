@@ -258,7 +258,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 
 ## Related Docs
 
-- Query-driven bulk changes: `vault-management/bulk-operations.md`
+- Query-driven bulk changes: `keep-management/bulk-operations.md`
 - Queryable field/trait definitions: `types-and-traits/schema.md`
 - Hierarchy and object IDs (`#fragment`, sections, embedded objects): `types-and-traits/file-format.md`
 - Saved query configuration in `raven.yaml`: `getting-started/configuration.md`

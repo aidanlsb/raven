@@ -11,11 +11,11 @@ import (
 )
 
 func TestAuthoringService_MutateStep(t *testing.T) {
-	vault := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+	keep := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keep, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
-	workflowPath := filepath.Join(vault, "workflows", "demo.yaml")
+	workflowPath := filepath.Join(keep, "workflows", "demo.yaml")
 	initial := `description: demo
 steps:
   - id: fetch
@@ -29,12 +29,12 @@ steps:
 		t.Fatalf("write workflow file: %v", err)
 	}
 
-	cfg := &config.VaultConfig{
+	cfg := &config.KeepConfig{
 		Workflows: map[string]*config.WorkflowRef{
 			"demo": {File: "workflows/demo.yaml"},
 		},
 	}
-	svc := NewAuthoringService(vault, cfg)
+	svc := NewAuthoringService(keep, cfg)
 
 	t.Run("add with before hint", func(t *testing.T) {
 		res, err := svc.MutateStep(StepMutationRequest{
@@ -101,9 +101,9 @@ steps:
 }
 
 func TestAuthoringService_MutateStep_NotFound(t *testing.T) {
-	vault := t.TempDir()
-	cfg := &config.VaultConfig{Workflows: map[string]*config.WorkflowRef{}}
-	svc := NewAuthoringService(vault, cfg)
+	keep := t.TempDir()
+	cfg := &config.KeepConfig{Workflows: map[string]*config.WorkflowRef{}}
+	svc := NewAuthoringService(keep, cfg)
 
 	_, err := svc.MutateStep(StepMutationRequest{
 		WorkflowName: "missing",

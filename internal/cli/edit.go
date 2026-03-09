@@ -67,25 +67,25 @@ var editCmd = &cobra.Command{
 			return renderEditError(err)
 		}
 
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		// Load vault config
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		// Load keep config
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
 		// Resolve the reference using unified resolver
 		resolvedRef, err := ResolveReference(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
+			KeepPath:   keepPath,
+			KeepConfig: keepCfg,
 		})
 		if err != nil {
 			return handleResolveError(err, reference)
 		}
 
 		filePath := resolvedRef.FilePath
-		relPath, _ := filepath.Rel(vaultPath, filePath)
+		relPath, _ := filepath.Rel(keepPath, filePath)
 
 		// Read file content
 		content, err := os.ReadFile(filePath)
@@ -183,7 +183,7 @@ var editCmd = &cobra.Command{
 		}
 
 		// Auto-reindex if configured
-		maybeReindex(vaultPath, filePath, vaultCfg)
+		maybeReindex(keepPath, filePath, keepCfg)
 
 		if jsonOutput {
 			if batchMode {

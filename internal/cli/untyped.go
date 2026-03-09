@@ -13,9 +13,9 @@ var untypedCmd = &cobra.Command{
 	Short: "List untyped pages",
 	Long:  `Lists all files that are using the fallback 'page' type.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}

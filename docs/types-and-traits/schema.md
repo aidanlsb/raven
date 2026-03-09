@@ -1,10 +1,10 @@
 # `schema.yaml` Reference
 
-`schema.yaml` defines the structure of your vault:
+`schema.yaml` defines the structure of your keep:
 - **Types** — what objects are (e.g., `person`, `project`)
 - **Traits** — inline annotations (e.g., `@due`, `@priority`)
 
-It lives at the root of your vault.
+It lives at the root of your keep.
 For first-session schema setup, start with `types-and-traits/schema-intro.md`.
 This page is lookup-oriented and intentionally exhaustive.
 
@@ -569,7 +569,7 @@ Checks schema.yaml for internal consistency:
 
 ### `rvn check`
 
-Validates vault files against the schema. Reports issues like:
+Validates keep files against the schema. Reports issues like:
 
 | Issue Type | Description | Fix |
 |------------|-------------|-----|

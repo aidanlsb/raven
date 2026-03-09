@@ -8,7 +8,7 @@ import (
 )
 
 // AssertFileExists fails the test if the file does not exist.
-func (v *TestVault) AssertFileExists(relPath string) {
+func (v *TestKeep) AssertFileExists(relPath string) {
 	v.t.Helper()
 	fullPath := filepath.Join(v.Path, relPath)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
@@ -17,7 +17,7 @@ func (v *TestVault) AssertFileExists(relPath string) {
 }
 
 // AssertFileNotExists fails the test if the file exists.
-func (v *TestVault) AssertFileNotExists(relPath string) {
+func (v *TestKeep) AssertFileNotExists(relPath string) {
 	v.t.Helper()
 	fullPath := filepath.Join(v.Path, relPath)
 	if _, err := os.Stat(fullPath); err == nil {
@@ -26,7 +26,7 @@ func (v *TestVault) AssertFileNotExists(relPath string) {
 }
 
 // AssertFileContains fails the test if the file does not contain the substring.
-func (v *TestVault) AssertFileContains(relPath, substr string) {
+func (v *TestKeep) AssertFileContains(relPath, substr string) {
 	v.t.Helper()
 	content := v.ReadFile(relPath)
 	if !strings.Contains(content, substr) {
@@ -35,7 +35,7 @@ func (v *TestVault) AssertFileContains(relPath, substr string) {
 }
 
 // AssertFileNotContains fails the test if the file contains the substring.
-func (v *TestVault) AssertFileNotContains(relPath, substr string) {
+func (v *TestKeep) AssertFileNotContains(relPath, substr string) {
 	v.t.Helper()
 	content := v.ReadFile(relPath)
 	if strings.Contains(content, substr) {
@@ -44,7 +44,7 @@ func (v *TestVault) AssertFileNotContains(relPath, substr string) {
 }
 
 // AssertDirExists fails the test if the directory does not exist.
-func (v *TestVault) AssertDirExists(relPath string) {
+func (v *TestKeep) AssertDirExists(relPath string) {
 	v.t.Helper()
 	fullPath := filepath.Join(v.Path, relPath)
 	info, err := os.Stat(fullPath)
@@ -58,7 +58,7 @@ func (v *TestVault) AssertDirExists(relPath string) {
 }
 
 // AssertObjectExists runs a query to check if an object exists by ID.
-func (v *TestVault) AssertObjectExists(objectID string) {
+func (v *TestKeep) AssertObjectExists(objectID string) {
 	v.t.Helper()
 	// Use the read command to check if the object exists
 	result := v.RunCLI("read", objectID)
@@ -68,7 +68,7 @@ func (v *TestVault) AssertObjectExists(objectID string) {
 }
 
 // AssertObjectNotExists runs a query to check that an object does not exist.
-func (v *TestVault) AssertObjectNotExists(objectID string) {
+func (v *TestKeep) AssertObjectNotExists(objectID string) {
 	v.t.Helper()
 	result := v.RunCLI("read", objectID)
 	if result.OK {
@@ -77,7 +77,7 @@ func (v *TestVault) AssertObjectNotExists(objectID string) {
 }
 
 // AssertQueryCount runs a query and verifies the result count.
-func (v *TestVault) AssertQueryCount(query string, expectedCount int) {
+func (v *TestKeep) AssertQueryCount(query string, expectedCount int) {
 	v.t.Helper()
 	result := v.RunCLI("query", query)
 	result.MustSucceed(v.t)
@@ -91,7 +91,7 @@ func (v *TestVault) AssertQueryCount(query string, expectedCount int) {
 }
 
 // AssertBacklinks verifies that an object has the expected number of backlinks.
-func (v *TestVault) AssertBacklinks(objectID string, expectedCount int) {
+func (v *TestKeep) AssertBacklinks(objectID string, expectedCount int) {
 	v.t.Helper()
 	result := v.RunCLI("backlinks", objectID)
 	result.MustSucceed(v.t)

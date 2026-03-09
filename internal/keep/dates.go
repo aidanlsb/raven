@@ -1,5 +1,5 @@
-// Package vault provides utilities for vault operations.
-package vault
+// Package keep provides utilities for keep operations.
+package keep
 
 import (
 	"time"

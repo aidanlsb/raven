@@ -14,20 +14,20 @@ var serveCmd = &cobra.Command{
 	Short: "Run Raven as an MCP server",
 	Long: `Run Raven as an MCP (Model Context Protocol) server.
 
-This enables LLM agents to interact with your vault through a standardized protocol.
+This enables LLM agents to interact with your keep through a standardized protocol.
 
 The server communicates over stdin/stdout using JSON-RPC 2.0.
 
 Examples:
-  rvn serve                    # Run MCP server using normal CLI vault resolution
-  rvn serve --vault personal   # Force named vault for this server process
+  rvn serve                    # Run MCP server using normal CLI keep resolution
+  rvn serve --keep personal   # Force named keep for this server process
 
 For use with Claude Desktop, add to your config:
   {
     "mcpServers": {
       "raven": {
         "command": "rvn",
-        "args": ["serve", "--vault-path", "/path/to/vault"]
+        "args": ["serve", "--keep-path", "/path/to/keep"]
       }
     }
   }`,
@@ -39,10 +39,10 @@ For use with Claude Desktop, add to your config:
 		if strings.TrimSpace(statePathFlag) != "" {
 			baseArgs = append(baseArgs, "--state", statePathFlag)
 		}
-		if strings.TrimSpace(vaultPathFlag) != "" {
-			baseArgs = append(baseArgs, "--vault-path", vaultPathFlag)
-		} else if strings.TrimSpace(vaultName) != "" {
-			baseArgs = append(baseArgs, "--vault", vaultName)
+		if strings.TrimSpace(keepPathFlag) != "" {
+			baseArgs = append(baseArgs, "--keep-path", keepPathFlag)
+		} else if strings.TrimSpace(keepName) != "" {
+			baseArgs = append(baseArgs, "--keep", keepName)
 		}
 
 		// Don't output anything to stdout except MCP protocol

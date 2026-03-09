@@ -7,7 +7,7 @@ import (
 )
 
 func TestSchemaRenameType_PreviewReportsOptionalDefaultPathRename(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   event:
@@ -70,7 +70,7 @@ Kickoff: [[events/kickoff]]
 }
 
 func TestSchemaRenameType_ConfirmWithDefaultPathRenameMovesFilesAndUpdatesRefs(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   event:
@@ -137,7 +137,7 @@ Planning: [[events/planning|Planning]]
 }
 
 func TestSchemaRenameType_ConfirmWithoutDefaultPathRenameKeepsDirectory(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   event:

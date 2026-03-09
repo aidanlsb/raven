@@ -8,15 +8,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var reindexCmd = &cobra.Command{
 	Use:   "reindex",
 	Short: "Reindex all files",
-	Long: `Parses all markdown files in the vault and rebuilds the SQLite index.
+	Long: `Parses all markdown files in the keep and rebuilds the SQLite index.
 
 By default, performs an incremental reindex that only processes files that have
 changed since the last index. Deleted files are automatically detected and
@@ -34,7 +34,7 @@ Examples:
   # Check what would be reindexed without doing it
   rvn reindex --dry-run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		ctx := cmd.Context()
 		fullReindex, _ := cmd.Flags().GetBool("full")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
@@ -44,20 +44,20 @@ Examples:
 
 		if !jsonOutput && !dryRun {
 			if incremental {
-				fmt.Printf("Reindexing vault: %s\n", ui.FilePath(vaultPath))
+				fmt.Printf("Reindexing keep: %s\n", ui.FilePath(keepPath))
 			} else {
-				fmt.Printf("Full reindexing vault: %s\n", ui.FilePath(vaultPath))
+				fmt.Printf("Full reindexing keep: %s\n", ui.FilePath(keepPath))
 			}
 		}
 
 		// Load schema
-		sch, err := schema.Load(vaultPath)
+		sch, err := schema.Load(keepPath)
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
 
 		// Open database (rebuild if schema incompatible)
-		db, wasRebuilt, err := index.OpenWithRebuild(vaultPath)
+		db, wasRebuilt, err := index.OpenWithRebuild(keepPath)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
@@ -79,19 +79,19 @@ Examples:
 			}
 		}
 
-		// Load vault config for directory roots
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		// Load keep config for directory roots
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-		dailyDir := vaultCfg.GetDailyDirectory()
+		db.SetDailyDirectory(keepCfg.GetDailyDirectory())
+		dailyDir := keepCfg.GetDailyDirectory()
 		if dailyDir == "" {
 			dailyDir = "daily"
 		}
 
-		// Build parse options from vault config
-		parseOpts := buildParseOptions(vaultCfg)
+		// Build parse options from keep config
+		parseOpts := buildParseOptions(keepCfg)
 
 		// Clean up files in excluded directories (.trash/, etc.)
 		// These should never be in the index but might exist from before this check was added
@@ -117,7 +117,7 @@ Examples:
 					fmt.Fprintf(os.Stderr, "Warning: failed to check for deleted files: %v\n", err)
 				} else {
 					for _, relPath := range indexedPaths {
-						fullPath := vaultPath + "/" + relPath
+						fullPath := keepPath + "/" + relPath
 						if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 							deletedFiles = append(deletedFiles, relPath)
 							if !jsonOutput {
@@ -129,7 +129,7 @@ Examples:
 				}
 			} else {
 				// Actually remove deleted files
-				deletedFiles, err = db.RemoveDeletedFiles(vaultPath)
+				deletedFiles, err = db.RemoveDeletedFiles(keepPath)
 				if err != nil && !jsonOutput {
 					fmt.Fprintf(os.Stderr, "Warning: failed to clean up deleted files: %v\n", err)
 				}
@@ -147,8 +147,8 @@ Examples:
 			spinner.Start()
 		}
 
-		walkOpts := &vault.WalkOptions{ParseOptions: parseOpts}
-		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
+		walkOpts := &keep.WalkOptions{ParseOptions: parseOpts}
+		err = keep.WalkMarkdownFilesWithOptions(keepPath, walkOpts, func(result keep.WalkResult) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -203,7 +203,7 @@ Examples:
 		}
 
 		if err != nil {
-			return fmt.Errorf("error walking vault: %w", err)
+			return fmt.Errorf("error walking keep: %w", err)
 		}
 
 		// Resolve references after all files are indexed

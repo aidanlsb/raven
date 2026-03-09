@@ -14,7 +14,7 @@ Raven adds a few features on top of markdown:
 - Bidirectional linking 
 
 And enables precise retrieval and powerful workflows with:
-- A full-featured CLI for interacting with your notes
+- A full-featured CLI for managing your notes
 - An efficient query language
 - First-class agent support
 
@@ -27,7 +27,7 @@ Everything stays local in plain text files.
 - [Installation](#installation)
 - [Example Usage](#example-usage)
 - [Agent Setup](#agent-setup)
-- [Vault Structure](#vault-structure)
+- [Keep Structure](#keep-structure)
 - [Core Concepts](#core-concepts)
   - [Types](#types)
   - [Traits](#traits)
@@ -56,18 +56,20 @@ go install github.com/aidanlsb/raven/cmd/rvn@latest
 rvn version
 ```
 
-### Quickstart
+## Example Usage
+
+A collection of notes in Raven (called a "keep") is a folder of markdown files, with some Raven-specific additions. 
 
 ```bash
-rvn init my-vault
-cd my-vault
+rvn init my-keep
+cd my-keep
 rvn new project "My First Project" --field status=active
 rvn query "object:project .status==active"
 ```
 
 This creates:
 - `schema.yaml` — type and trait definitions
-- `raven.yaml` — vault configuration and saved queries
+- `raven.yaml` — keep configuration and saved queries
 - `.raven/` — index and internal state (disposable, rebuildable)
 
 > Requires Go 1.23+. See [Install Go](https://go.dev/doc/install).
@@ -213,14 +215,14 @@ Raven is designed to work with LLM agents. The MCP server exposes every Raven co
 Install Raven into your MCP client config with one command:
 
 ```bash
-rvn mcp install --client claude-desktop --vault-path /path/to/your/vault
+rvn mcp install --client claude-desktop --keep-path /path/to/your/keep
 ```
 
 You can also target other supported clients:
 
 ```bash
-rvn mcp install --client claude-code --vault-path /path/to/your/vault
-rvn mcp install --client cursor --vault-path /path/to/your/vault
+rvn mcp install --client claude-code --keep-path /path/to/your/keep
+rvn mcp install --client cursor --keep-path /path/to/your/keep
 ```
 
 Check installation status across all clients:
@@ -232,12 +234,12 @@ rvn mcp status
 For unsupported clients or fully manual setup, print the JSON snippet:
 
 ```bash
-rvn mcp show --vault-path /path/to/your/vault
+rvn mcp show --keep-path /path/to/your/keep
 ```
 
 Once connected, ask the agent:
 
-> "Help me set up my Raven vault"
+> "Help me set up my Raven keep"
 
 The agent will walk through schema creation, creating your first objects, and learning the query language — all through conversation.
 
@@ -245,16 +247,16 @@ See the full [MCP reference](docs/agents/mcp.md) for configuration options and a
 
 ---
 
-## Vault Structure
+## Keep Structure
 
 Everything is plain text.
 
 ```
-hermod-vault/
+hermod-keep/
 ├── .raven/
 │   └── index.db          # SQLite index (disposable)
 ├── schema.yaml            # type and trait definitions
-├── raven.yaml             # vault config, saved queries, workflows
+├── raven.yaml             # keep config, saved queries, workflows
 ├── daily/
 │   └── 2026-02-17.md
 ├── project/
@@ -279,7 +281,7 @@ See the [file format reference](docs/types-and-traits/file-format.md) for the fu
 
 ### Types
 
-Types define the kinds of objects in your vault. Each type has fields, a default folder, and a display name field.
+Types define the kinds of objects in your keep. Each type has fields, a default folder, and a display name field.
 
 ```yaml
 # schema.yaml
@@ -494,7 +496,7 @@ See the [workflows reference](docs/workflows/workflows.md) for the full specific
 
 ## Documentation
 
-Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with `rvn docs` (sync with `rvn docs fetch`), or read them on GitHub:
+Raven keeps long-form docs in your keep's `.raven/docs` cache. Browse them with `rvn docs` (sync with `rvn docs fetch`), or read them on GitHub:
 
 **Getting Started:**
 
@@ -509,11 +511,11 @@ Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with
 - [File Format](docs/types-and-traits/file-format.md) — markdown + frontmatter spec
 - [Templates](docs/types-and-traits/templates.md) — type and daily templates
 
-**Querying / Vault Management / Workflows / Agents:**
+**Querying / Keep Management / Workflows / Agents:**
 
 - [Query Language](docs/querying/query-language.md) — full RQL syntax
-- [Bulk Operations](docs/vault-management/bulk-operations.md) — patterns for operating at scale
-- [Hooks Removal Decision](docs/vault-management/hooks-removal-decision.md) — rationale and alternatives
+- [Bulk Operations](docs/keep-management/bulk-operations.md) — patterns for operating at scale
+- [Hooks Removal Decision](docs/keep-management/hooks-removal-decision.md) — rationale and alternatives
 - [Workflows](docs/workflows/workflows.md) — pipeline specification
 - [MCP Reference](docs/agents/mcp.md) — agent integration
 

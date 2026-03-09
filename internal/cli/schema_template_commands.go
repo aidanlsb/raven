@@ -19,36 +19,36 @@ var (
 	schemaTypeTemplateClearFlag   bool
 )
 
-func runSchemaTemplateCommand(vaultPath string, args []string, start time.Time) error {
+func runSchemaTemplateCommand(keepPath string, args []string, start time.Time) error {
 	if len(args) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "missing schema template subcommand", "Use: rvn schema template list|get|set|remove ...")
 	}
 
 	switch args[0] {
 	case "list":
-		return schemaTemplateList(vaultPath, start)
+		return schemaTemplateList(keepPath, start)
 	case "get":
 		if len(args) != 2 {
 			return handleErrorMsg(ErrInvalidInput, "template get requires template_id", "Use: rvn schema template get <template_id>")
 		}
-		return schemaTemplateGet(vaultPath, args[1], start)
+		return schemaTemplateGet(keepPath, args[1], start)
 	case "set":
 		if len(args) != 2 {
 			return handleErrorMsg(ErrInvalidInput, "template set requires template_id", "Use: rvn schema template set <template_id> --file <path>")
 		}
-		return schemaTemplateSet(vaultPath, args[1], start)
+		return schemaTemplateSet(keepPath, args[1], start)
 	case "remove":
 		if len(args) != 2 {
 			return handleErrorMsg(ErrInvalidInput, "template remove requires template_id", "Use: rvn schema template remove <template_id>")
 		}
-		return schemaTemplateRemove(vaultPath, args[1], start)
+		return schemaTemplateRemove(keepPath, args[1], start)
 	default:
 		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema template subcommand: %s", args[0]), "Use: list, get, set, or remove")
 	}
 }
 
-func schemaTemplateList(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func schemaTemplateList(keepPath string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -93,13 +93,13 @@ func schemaTemplateList(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func schemaTemplateGet(vaultPath, templateID string, start time.Time) error {
+func schemaTemplateGet(keepPath, templateID string, start time.Time) error {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return handleErrorMsg(ErrInvalidInput, "template_id cannot be empty", "")
 	}
 
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -126,7 +126,7 @@ func schemaTemplateGet(vaultPath, templateID string, start time.Time) error {
 	return nil
 }
 
-func schemaTemplateSet(vaultPath, templateID string, start time.Time) error {
+func schemaTemplateSet(keepPath, templateID string, start time.Time) error {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return handleErrorMsg(ErrInvalidInput, "template_id cannot be empty", "")
@@ -135,25 +135,25 @@ func schemaTemplateSet(vaultPath, templateID string, start time.Time) error {
 		return handleErrorMsg(ErrMissingArgument, "--file is required", "Use --file <path-under-directories.template>")
 	}
 
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-	templateDir := vaultCfg.GetTemplateDirectory()
+	templateDir := keepCfg.GetTemplateDirectory()
 	fileRef, err := template.ResolveFileRef(schemaTemplateFileFlag, templateDir)
 	if err != nil {
 		return handleErrorMsg(ErrInvalidInput, err.Error(), fmt.Sprintf("Use a file path under %s", templateDir))
 	}
 
-	fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		return handleError(ErrFileOutsideVault, err, "Template files must be within the vault")
+	fullPath := filepath.Join(keepPath, filepath.FromSlash(fileRef))
+	if err := paths.ValidateWithinKeep(keepPath, fullPath); err != nil {
+		return handleError(ErrFileOutsideKeep, err, "Template files must be within the keep")
 	}
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		return handleErrorMsg(ErrFileNotFound, fmt.Sprintf("template file not found: %s", fileRef), "Create the file first under directories.template (for example: templates/...)")
 	}
 
-	schemaDoc, _, err := readSchemaDoc(vaultPath)
+	schemaDoc, _, err := readSchemaDoc(keepPath)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func schemaTemplateSet(vaultPath, templateID string, start time.Time) error {
 		templateNode["description"] = strings.TrimSpace(schemaTemplateDescriptionFlag)
 	}
 
-	if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+	if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 		return err
 	}
 
@@ -183,13 +183,13 @@ func schemaTemplateSet(vaultPath, templateID string, start time.Time) error {
 	return nil
 }
 
-func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
+func schemaTemplateRemove(keepPath, templateID string, start time.Time) error {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return handleErrorMsg(ErrInvalidInput, "template_id cannot be empty", "")
 	}
 
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -222,7 +222,7 @@ func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
 		)
 	}
 
-	schemaDoc, _, err := readSchemaDoc(vaultPath)
+	schemaDoc, _, err := readSchemaDoc(keepPath)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
 	if len(templatesNode) == 0 {
 		delete(schemaDoc, "templates")
 	}
-	if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+	if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 		return err
 	}
 
@@ -247,13 +247,13 @@ func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
 	return nil
 }
 
-func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, start time.Time) error {
+func runSchemaTypeTemplateCommand(keepPath, typeName string, args []string, start time.Time) error {
 	typeName = strings.TrimSpace(typeName)
 	if typeName == "" {
 		return handleErrorMsg(ErrInvalidInput, "type_name cannot be empty", "")
 	}
 
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -322,13 +322,13 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 		}
 		newTemplateIDs := append(append([]string(nil), typeDef.Templates...), templateID)
 
-		schemaDoc, types, err := readSchemaDoc(vaultPath)
+		schemaDoc, types, err := readSchemaDoc(keepPath)
 		if err != nil {
 			return err
 		}
 		typeNode := ensureMapNode(types, typeName)
 		typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+		if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 			return err
 		}
 		elapsed := time.Since(start).Milliseconds()
@@ -354,7 +354,7 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 		}
 		newTemplateIDs := removeTemplateID(typeDef.Templates, templateID)
 
-		schemaDoc, types, err := readSchemaDoc(vaultPath)
+		schemaDoc, types, err := readSchemaDoc(keepPath)
 		if err != nil {
 			return err
 		}
@@ -367,7 +367,7 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 		if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
 			delete(typeNode, "default_template")
 		}
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+		if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 			return err
 		}
 		elapsed := time.Since(start).Milliseconds()
@@ -379,13 +379,13 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 		return nil
 	case "default":
 		if schemaTypeTemplateClearFlag {
-			schemaDoc, types, err := readSchemaDoc(vaultPath)
+			schemaDoc, types, err := readSchemaDoc(keepPath)
 			if err != nil {
 				return err
 			}
 			typeNode := ensureMapNode(types, typeName)
 			delete(typeNode, "default_template")
-			if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+			if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 				return err
 			}
 			elapsed := time.Since(start).Milliseconds()
@@ -403,13 +403,13 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 		if !containsTemplateID(typeDef.Templates, templateID) {
 			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("type '%s' does not include template '%s'", typeName, templateID), "Use `rvn schema type <type_name> template list` to see available template IDs")
 		}
-		schemaDoc, types, err := readSchemaDoc(vaultPath)
+		schemaDoc, types, err := readSchemaDoc(keepPath)
 		if err != nil {
 			return err
 		}
 		typeNode := ensureMapNode(types, typeName)
 		typeNode["default_template"] = templateID
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+		if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 			return err
 		}
 		elapsed := time.Since(start).Milliseconds()
@@ -424,7 +424,7 @@ func runSchemaTypeTemplateCommand(vaultPath, typeName string, args []string, sta
 	}
 }
 
-func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string, start time.Time) error {
+func runSchemaCoreTemplateCommand(keepPath, coreTypeName string, args []string, start time.Time) error {
 	coreTypeName = strings.TrimSpace(coreTypeName)
 	if coreTypeName == "" {
 		return handleErrorMsg(ErrInvalidInput, "core_type cannot be empty", "")
@@ -436,7 +436,7 @@ func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string,
 		return handleErrorMsg(ErrInvalidInput, "core type 'section' does not support template configuration", "")
 	}
 
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -503,14 +503,14 @@ func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string,
 		}
 		newTemplateIDs := append(append([]string(nil), coreDef.Templates...), templateID)
 
-		schemaDoc, _, err := readSchemaDoc(vaultPath)
+		schemaDoc, _, err := readSchemaDoc(keepPath)
 		if err != nil {
 			return err
 		}
 		coreNode := ensureMapNode(schemaDoc, "core")
 		typeNode := ensureMapNode(coreNode, coreTypeName)
 		typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+		if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 			return err
 		}
 		elapsed := time.Since(start).Milliseconds()
@@ -536,7 +536,7 @@ func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string,
 		}
 		newTemplateIDs := removeTemplateID(coreDef.Templates, templateID)
 
-		schemaDoc, _, err := readSchemaDoc(vaultPath)
+		schemaDoc, _, err := readSchemaDoc(keepPath)
 		if err != nil {
 			return err
 		}
@@ -550,7 +550,7 @@ func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string,
 		if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
 			delete(typeNode, "default_template")
 		}
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+		if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 			return err
 		}
 		elapsed := time.Since(start).Milliseconds()
@@ -562,14 +562,14 @@ func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string,
 		return nil
 	case "default":
 		if schemaTypeTemplateClearFlag {
-			schemaDoc, _, err := readSchemaDoc(vaultPath)
+			schemaDoc, _, err := readSchemaDoc(keepPath)
 			if err != nil {
 				return err
 			}
 			coreNode := ensureMapNode(schemaDoc, "core")
 			typeNode := ensureMapNode(coreNode, coreTypeName)
 			delete(typeNode, "default_template")
-			if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+			if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 				return err
 			}
 			elapsed := time.Since(start).Milliseconds()
@@ -587,14 +587,14 @@ func runSchemaCoreTemplateCommand(vaultPath, coreTypeName string, args []string,
 		if !containsTemplateID(coreDef.Templates, templateID) {
 			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("core type '%s' does not include template '%s'", coreTypeName, templateID), "Use `rvn schema core <core_type> template list` to see available template IDs")
 		}
-		schemaDoc, _, err := readSchemaDoc(vaultPath)
+		schemaDoc, _, err := readSchemaDoc(keepPath)
 		if err != nil {
 			return err
 		}
 		coreNode := ensureMapNode(schemaDoc, "core")
 		typeNode := ensureMapNode(coreNode, coreTypeName)
 		typeNode["default_template"] = templateID
-		if err := writeSchemaDoc(vaultPath, schemaDoc); err != nil {
+		if err := writeSchemaDoc(keepPath, schemaDoc); err != nil {
 			return err
 		}
 		elapsed := time.Since(start).Milliseconds()

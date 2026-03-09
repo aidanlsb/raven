@@ -7,7 +7,7 @@ Raven exposes its CLI commands as MCP (Model Context Protocol) tools via `rvn se
 Install Raven into a supported MCP client config:
 
 ```bash
-rvn mcp install --client claude-desktop --vault-path /path/to/vault
+rvn mcp install --client claude-desktop --keep-path /path/to/keep
 ```
 
 Supported clients:
@@ -18,8 +18,8 @@ Supported clients:
 Examples:
 
 ```bash
-rvn mcp install --client claude-code --vault-path /path/to/vault
-rvn mcp install --client cursor --vault-path /path/to/vault
+rvn mcp install --client claude-code --keep-path /path/to/keep
+rvn mcp install --client cursor --keep-path /path/to/keep
 ```
 
 Check status across all supported clients:
@@ -33,7 +33,7 @@ rvn mcp status
 If your client is unsupported, generate the JSON snippet:
 
 ```bash
-rvn mcp show --vault-path /path/to/vault
+rvn mcp show --keep-path /path/to/keep
 ```
 
 Then add that snippet to your client config manually.
@@ -41,7 +41,7 @@ Then add that snippet to your client config manually.
 ## Starting the Server (Direct)
 
 ```bash
-rvn serve --vault-path /path/to/vault
+rvn serve --keep-path /path/to/keep
 ```
 
 The server runs over stdin/stdout and exposes Raven tools to MCP clients.
@@ -55,18 +55,18 @@ Raven exposes MCP resources that agents can fetch:
 | URI | Name | Description |
 |-----|------|-------------|
 | `raven://guide/index` | Agent Guide Index | Overview of available agent guide topics |
-| `raven://schema/current` | Current Schema | The vault's `schema.yaml` defining types and traits |
+| `raven://schema/current` | Current Schema | The keep's `schema.yaml` defining types and traits |
 | `raven://queries/saved` | Saved Queries | List of saved queries defined in `raven.yaml` |
 | `raven://workflows/list` | Workflows List | List of workflows defined in `raven.yaml` |
 | `raven://workflows/<name>` | Workflow Details | Details for a specific workflow |
-| `raven://vault/agent-instructions` | Agent Instructions | Contents of vault-root `AGENTS.md` (listed only when the file exists) |
+| `raven://keep/agent-instructions` | Agent Instructions | Contents of keep-root `AGENTS.md` (listed only when the file exists) |
 
 Additional topic resources are available under `raven://guide/<topic>`:
 
 - `raven://guide/critical-rules` - Non-negotiable safety rules for Raven operations
 - `raven://guide/quickstart` - One-pass mental model and first command sequence
-- `raven://guide/onboarding` - Interactive vault setup and teaching sequence for new users
-- `raven://guide/getting-started` - First steps for orienting in a new vault
+- `raven://guide/onboarding` - Interactive keep setup and teaching sequence for new users
+- `raven://guide/getting-started` - First steps for orienting in a new keep
 - `raven://guide/core-concepts` - Types, traits, references, and file formats
 - `raven://guide/response-contract` - Standard envelope (`ok/data/error/warnings/meta`) and preview/apply semantics
 - `raven://guide/write-patterns` - Choosing `new` vs `add` vs `upsert` for safe writes
@@ -86,9 +86,9 @@ The agent guide resources (`raven://guide/index` and `raven://guide/<topic>`) pr
 - A quick conceptual orientation path (`quickstart` -> `getting-started` -> `onboarding`)
 - Tool response contract and stable error/warning handling
 - Safe write patterns (`new` vs `add` vs `upsert`)
-- Getting started sequence for new vaults
-- Onboarding flow for first-time vault setup
-- Query syntax, composition patterns, and large-vault pagination tactics
+- Getting started sequence for new keeps
+- Onboarding flow for first-time keep setup
+- Query syntax, composition patterns, and large-keep pagination tactics
 - Key workflows plus workflow-run lifecycle operations
 - Error handling patterns
 - Best practices and example conversations
@@ -125,7 +125,7 @@ This tool list is generated from the command registry and should stay in sync wi
 |------|-------------|
 | `raven_add` | Quickly capture a thought, task, or note. |
 | `raven_backlinks` | Find objects that reference a target |
-| `raven_check` | Validates all files in the vault against the schema. |
+| `raven_check` | Validates all files in the keep against the schema. |
 | `raven_config` | Manage global Raven config.toml settings. |
 | `raven_config_init` | Create a default global config.toml file at the resolved config path. |
 | `raven_config_set` | Set one or more explicit global config fields. |
@@ -133,25 +133,34 @@ This tool list is generated from the command registry and should stay in sync wi
 | `raven_config_unset` | Clear one or more global config.toml fields |
 | `raven_daily` | Open or create a daily note for a given date. |
 | `raven_date` | Date hub - all activity for a date |
-| `raven_delete` | Delete a file/object from the vault. |
-| `raven_docs` | Browse long-form documentation stored in .raven/docs for the active vault. |
+| `raven_delete` | Delete a file/object from the keep. |
+| `raven_docs` | Browse long-form documentation stored in .raven/docs for the active keep. |
 | `raven_docs_fetch` | Download docs from Raven's source repository into .raven/docs. |
 | `raven_docs_list` | List docs sections with explicit section command syntax. |
 | `raven_docs_search` | Search long-form Markdown documentation |
-| `raven_edit` | Replace a unique string in a vault file with another string. |
-| `raven_import` | Import objects from external JSON data into the vault. |
-| `raven_init` | Creates a new vault at the specified path with default configuration files. |
+| `raven_edit` | Replace a unique string in a keep file with another string. |
+| `raven_import` | Import objects from external JSON data into the keep. |
+| `raven_init` | Creates a new keep at the specified path with default configuration files. |
+| `raven_keep` | Manage configured keeps and active selection. |
+| `raven_keep_add` | Add or update a named keep entry in the global config file. |
+| `raven_keep_clear` | Clear active keep from state.toml |
+| `raven_keep_current` | Show the current resolved keep |
+| `raven_keep_list` | List configured keeps |
+| `raven_keep_path` | Print the resolved keep directory path |
+| `raven_keep_pin` | Set default_keep in config.toml |
+| `raven_keep_remove` | Remove a named keep entry from the global config file. |
+| `raven_keep_use` | Set the active keep in state.toml |
 | `raven_last` | Show or select results from the most recent query. |
-| `raven_move` | Move or rename a file/object within the vault. |
+| `raven_move` | Move or rename a file/object within the keep. |
 | `raven_new` | Creates a new note with the specified type. |
 | `raven_open` | Opens a file in your configured editor. |
 | `raven_outlinks` | Find links referenced by an object |
 | `raven_query` | Query objects or traits using the Raven query language. |
 | `raven_query_add` | Add a saved query to raven.yaml |
 | `raven_query_remove` | Remove a saved query from raven.yaml |
-| `raven_read` | Read and output a file from the vault. |
+| `raven_read` | Read and output a file from the keep. |
 | `raven_reclassify` | Change an object's type, updating frontmatter fields, applying defaults |
-| `raven_reindex` | Parses all markdown files in the vault and rebuilds the SQLite index. |
+| `raven_reindex` | Parses all markdown files in the keep and rebuilds the SQLite index. |
 | `raven_resolve` | Resolve a reference (short name, alias, path, date, etc.) and return |
 | `raven_schema` | Introspect the schema |
 | `raven_schema_add_field` | Add a field to an existing type definition. |
@@ -178,13 +187,13 @@ This tool list is generated from the command registry and should stay in sync wi
 | `raven_schema_update_trait` | Update an existing trait in the schema |
 | `raven_schema_update_type` | Update an existing type definition in schema.yaml. |
 | `raven_schema_validate` | Validate the schema for correctness |
-| `raven_search` | Search for content across all files in the vault. |
+| `raven_search` | Search for content across all files in the keep. |
 | `raven_set` | Set one or more frontmatter fields on an existing object. |
 | `raven_skill_doctor` | Inspect resolved install roots and installed Raven skills for one or all targets. |
 | `raven_skill_install` | Install one bundled Raven skill for a target runtime. |
 | `raven_skill_list` | List bundled Raven skills. |
 | `raven_skill_remove` | Remove one installed Raven skill from a target runtime. |
-| `raven_stats` | Show vault statistics |
+| `raven_stats` | Show keep statistics |
 | `raven_template` | Manage template files under directories.template. |
 | `raven_template_delete` | Delete a template file under directories.template. |
 | `raven_template_list` | List template files |
@@ -192,15 +201,6 @@ This tool list is generated from the command registry and should stay in sync wi
 | `raven_untyped` | Lists all markdown files that don't have an explicit type in their frontmatter (fallback to 'page' type). |
 | `raven_update` | Update the value of a trait annotation. |
 | `raven_upsert` | Create or update a typed object deterministically. |
-| `raven_vault` | Manage configured vaults and active selection. |
-| `raven_vault_add` | Add or update a named vault entry in the global config file. |
-| `raven_vault_clear` | Clear active vault from state.toml |
-| `raven_vault_current` | Show the current resolved vault |
-| `raven_vault_list` | List configured vaults |
-| `raven_vault_path` | Print the resolved vault directory path |
-| `raven_vault_pin` | Set default_vault in config.toml |
-| `raven_vault_remove` | Remove a named vault entry from the global config file. |
-| `raven_vault_use` | Set the active vault in state.toml |
 | `raven_version` | Shows version and build metadata for the currently running rvn binary. |
 | `raven_workflow_add` | Creates a workflow entry in raven.yaml without manual file editing. |
 | `raven_workflow_continue` | Continues a paused workflow run by validating and applying agent output JSON, |
@@ -399,7 +399,7 @@ raven_search(query="meeting notes")
 
 ### Getting file paths (for editing/navigation)
 
-- **From `raven_new`**: the response includes `data.file` (vault-relative path) and `data.id` (object ID).
+- **From `raven_new`**: the response includes `data.file` (keep-relative path) and `data.id` (object ID).
 - **From `raven_query`**:
   - Object queries include `items[].file_path` and `items[].line`
   - Trait queries include `items[].file_path` and `items[].line`
@@ -504,10 +504,10 @@ Notes:
   define a template ID, bind it with `raven_schema_core_template_set(core_type="date", ...)`,
   and set default with `raven_schema_core_template_default(core_type="date", ...)`.
 
-### Vault Health
+### Keep Health
 
 ```python
-# Check entire vault
+# Check entire keep
 raven_check()
 
 # Check a specific file (by path or reference)

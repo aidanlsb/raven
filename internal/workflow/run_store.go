@@ -41,11 +41,11 @@ type RunStoreWarning struct {
 	Message string `json:"message"`
 }
 
-func SaveRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, state *WorkflowRunState) error {
+func SaveRunState(keepPath string, cfg config.ResolvedWorkflowRunsConfig, state *WorkflowRunState) error {
 	if state == nil {
 		return fmt.Errorf("run state is nil")
 	}
-	dir, err := runStoreDir(vaultPath, cfg)
+	dir, err := runStoreDir(keepPath, cfg)
 	if err != nil {
 		return err
 	}
@@ -66,11 +66,11 @@ func SaveRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, state
 	return nil
 }
 
-func LoadRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, runID string) (*WorkflowRunState, error) {
+func LoadRunState(keepPath string, cfg config.ResolvedWorkflowRunsConfig, runID string) (*WorkflowRunState, error) {
 	if runID == "" {
 		return nil, fmt.Errorf("run id is required")
 	}
-	dir, err := runStoreDir(vaultPath, cfg)
+	dir, err := runStoreDir(keepPath, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +92,8 @@ func LoadRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, runID
 	return &state, nil
 }
 
-func DeleteRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, runID string) error {
-	dir, err := runStoreDir(vaultPath, cfg)
+func DeleteRunState(keepPath string, cfg config.ResolvedWorkflowRunsConfig, runID string) error {
+	dir, err := runStoreDir(keepPath, cfg)
 	if err != nil {
 		return err
 	}
@@ -105,11 +105,11 @@ func DeleteRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, run
 }
 
 func ListRunStates(
-	vaultPath string,
+	keepPath string,
 	cfg config.ResolvedWorkflowRunsConfig,
 	filter RunListFilter,
 ) ([]*WorkflowRunState, []RunStoreWarning, error) {
-	dir, err := runStoreDir(vaultPath, cfg)
+	dir, err := runStoreDir(keepPath, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -164,12 +164,12 @@ func ListRunStates(
 	return runs, warnings, nil
 }
 
-func AutoPruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig) (*RunPruneResult, error) {
+func AutoPruneRunStates(keepPath string, cfg config.ResolvedWorkflowRunsConfig) (*RunPruneResult, error) {
 	if !cfg.AutoPrune {
 		return &RunPruneResult{}, nil
 	}
 	now := time.Now().UTC()
-	runs, warnings, err := ListRunStates(vaultPath, cfg, RunListFilter{})
+	runs, warnings, err := ListRunStates(keepPath, cfg, RunListFilter{})
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func AutoPruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig)
 
 	deleted := 0
 	for _, run := range toDelete {
-		if err := DeleteRunState(vaultPath, cfg, run.RunID); err == nil {
+		if err := DeleteRunState(keepPath, cfg, run.RunID); err == nil {
 			deleted++
 		}
 	}
@@ -193,11 +193,11 @@ func AutoPruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig)
 	}, nil
 }
 
-func PruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, opts RunPruneOptions) (*RunPruneResult, error) {
+func PruneRunStates(keepPath string, cfg config.ResolvedWorkflowRunsConfig, opts RunPruneOptions) (*RunPruneResult, error) {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now().UTC()
 	}
-	runs, warnings, err := ListRunStates(vaultPath, cfg, RunListFilter{Statuses: opts.Statuses})
+	runs, warnings, err := ListRunStates(keepPath, cfg, RunListFilter{Statuses: opts.Statuses})
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func PruneRunStates(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, opt
 	}
 
 	for _, run := range candidates {
-		if err := DeleteRunState(vaultPath, cfg, run.RunID); err == nil {
+		if err := DeleteRunState(keepPath, cfg, run.RunID); err == nil {
 			result.Deleted++
 		}
 	}
@@ -307,7 +307,7 @@ func newestRunsByWorkflow(runs []*WorkflowRunState, preserve int) map[string]boo
 	return protected
 }
 
-func runStoreDir(vaultPath string, cfg config.ResolvedWorkflowRunsConfig) (string, error) {
+func runStoreDir(keepPath string, cfg config.ResolvedWorkflowRunsConfig) (string, error) {
 	rel := filepath.ToSlash(filepath.Clean(cfg.StoragePath))
 	rel = strings.TrimPrefix(rel, "./")
 	rel = strings.TrimPrefix(rel, "/")
@@ -315,10 +315,10 @@ func runStoreDir(vaultPath string, cfg config.ResolvedWorkflowRunsConfig) (strin
 		return "", fmt.Errorf("invalid workflow run storage path")
 	}
 	if rel == ".." || strings.HasPrefix(rel, "../") {
-		return "", fmt.Errorf("workflow run storage path escapes vault")
+		return "", fmt.Errorf("workflow run storage path escapes keep")
 	}
-	abs := filepath.Join(vaultPath, rel)
-	if err := paths.ValidateWithinVault(vaultPath, abs); err != nil {
+	abs := filepath.Join(keepPath, rel)
+	if err := paths.ValidateWithinKeep(keepPath, abs); err != nil {
 		return "", fmt.Errorf("invalid workflow run storage path: %w", err)
 	}
 	return abs, nil

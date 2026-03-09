@@ -13,13 +13,13 @@ import (
 )
 
 type persistedConfig struct {
-	DefaultVault *string              `toml:"default_vault,omitempty"`
-	StateFile    *string              `toml:"state_file,omitempty"`
-	Vault        *string              `toml:"vault,omitempty"`
-	Vaults       map[string]string    `toml:"vaults,omitempty"`
-	Editor       *string              `toml:"editor,omitempty"`
-	EditorMode   *string              `toml:"editor_mode,omitempty"`
-	UI           *persistedUISettings `toml:"ui,omitempty"`
+	DefaultKeep *string              `toml:"default_keep,omitempty"`
+	StateFile   *string              `toml:"state_file,omitempty"`
+	Keep        *string              `toml:"keep,omitempty"`
+	Keeps       map[string]string    `toml:"keeps,omitempty"`
+	Editor      *string              `toml:"editor,omitempty"`
+	EditorMode  *string              `toml:"editor_mode,omitempty"`
+	UI          *persistedUISettings `toml:"ui,omitempty"`
 }
 
 type persistedUISettings struct {
@@ -50,14 +50,14 @@ func SaveTo(path string, cfg *Config) error {
 	}
 
 	out := persistedConfig{
-		DefaultVault: nonEmptyPtr(cfg.DefaultVault),
-		StateFile:    nonEmptyPtr(cfg.StateFile),
-		Vault:        nonEmptyPtr(cfg.Vault),
-		Editor:       nonEmptyPtr(cfg.Editor),
-		EditorMode:   nonEmptyPtr(cfg.EditorMode),
+		DefaultKeep: nonEmptyPtr(cfg.DefaultKeep),
+		StateFile:   nonEmptyPtr(cfg.StateFile),
+		Keep:        nonEmptyPtr(cfg.Keep),
+		Editor:      nonEmptyPtr(cfg.Editor),
+		EditorMode:  nonEmptyPtr(cfg.EditorMode),
 	}
-	if len(cfg.Vaults) > 0 {
-		out.Vaults = cfg.Vaults
+	if len(cfg.Keeps) > 0 {
+		out.Keeps = cfg.Keeps
 	}
 
 	accent := nonEmptyPtr(cfg.UI.Accent)

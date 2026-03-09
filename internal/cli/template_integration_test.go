@@ -7,7 +7,7 @@ import "testing"
 import "github.com/aidanlsb/raven/internal/testutil"
 
 func TestIntegration_TemplateLifecycle(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 

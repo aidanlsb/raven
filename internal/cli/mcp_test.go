@@ -79,7 +79,7 @@ func TestMcpInstallAndRemove(t *testing.T) {
 	}
 }
 
-func TestMcpInstallWithVault(t *testing.T) {
+func TestMcpInstallWithKeep(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "claude.json")
 
@@ -103,8 +103,8 @@ func TestMcpInstallWithVault(t *testing.T) {
 	servers := data["mcpServers"].(map[string]interface{})
 	raven := servers["raven"].(map[string]interface{})
 	args := raven["args"].([]interface{})
-	if len(args) != 3 || args[1] != "--vault" || args[2] != "work" {
-		t.Fatalf("expected [serve --vault work], got %v", args)
+	if len(args) != 3 || args[1] != "--keep" || args[2] != "work" {
+		t.Fatalf("expected [serve --keep work], got %v", args)
 	}
 }
 
@@ -117,8 +117,8 @@ func TestMcpShowBuildsCorrectSnippet(t *testing.T) {
 		t.Fatalf("expected args=[serve], got %v", entry.Args)
 	}
 
-	entryWithVault := mcpclient.BuildServerEntry("personal", "")
-	if len(entryWithVault.Args) != 3 {
-		t.Fatalf("expected 3 args, got %d", len(entryWithVault.Args))
+	entryWithKeep := mcpclient.BuildServerEntry("personal", "")
+	if len(entryWithKeep.Args) != 3 {
+		t.Fatalf("expected 3 args, got %d", len(entryWithKeep.Args))
 	}
 }

@@ -30,10 +30,10 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vaultPath := t.TempDir()
+			keepPath := t.TempDir()
 			const date = "2026-02-14"
 			relPath := filepath.Join("daily", date+".md")
-			absPath := filepath.Join(vaultPath, relPath)
+			absPath := filepath.Join(keepPath, relPath)
 
 			if tt.precreate {
 				if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
@@ -44,23 +44,23 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 				}
 			}
 
-			markerPath := filepath.Join(vaultPath, "editor-called.marker")
-			editorPath := writeFakeEditor(t, vaultPath, markerPath)
+			markerPath := filepath.Join(keepPath, "editor-called.marker")
+			editorPath := writeFakeEditor(t, keepPath, markerPath)
 
-			prevVault := resolvedVaultPath
+			prevKeep := resolvedKeepPath
 			prevJSON := jsonOutput
 			prevCfg := cfg
 			prevEdit := dailyEdit
 			prevTemplate := dailyTemplate
 			t.Cleanup(func() {
-				resolvedVaultPath = prevVault
+				resolvedKeepPath = prevKeep
 				jsonOutput = prevJSON
 				cfg = prevCfg
 				dailyEdit = prevEdit
 				dailyTemplate = prevTemplate
 			})
 
-			resolvedVaultPath = vaultPath
+			resolvedKeepPath = keepPath
 			jsonOutput = true
 			cfg = &config.Config{Editor: editorPath}
 			dailyEdit = false
@@ -117,25 +117,25 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 }
 
 func TestDailyJSONOpensEditorWhenEditEnabled(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 	const date = "2026-02-15"
-	markerPath := filepath.Join(vaultPath, "editor-called.marker")
-	editorPath := writeFakeEditor(t, vaultPath, markerPath)
+	markerPath := filepath.Join(keepPath, "editor-called.marker")
+	editorPath := writeFakeEditor(t, keepPath, markerPath)
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevCfg := cfg
 	prevEdit := dailyEdit
 	prevTemplate := dailyTemplate
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		cfg = prevCfg
 		dailyEdit = prevEdit
 		dailyTemplate = prevTemplate
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	cfg = &config.Config{
 		Editor:     editorPath,
@@ -175,28 +175,28 @@ func TestDailyJSONOpensEditorWhenEditEnabled(t *testing.T) {
 }
 
 func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 	const date = "2026-02-16"
 	relPath := filepath.Join("daily", date+".md")
-	absPath := filepath.Join(vaultPath, relPath)
+	absPath := filepath.Join(keepPath, relPath)
 
-	markerPath := filepath.Join(vaultPath, "editor-called.marker")
-	editorPath := writeFakeEditor(t, vaultPath, markerPath)
+	markerPath := filepath.Join(keepPath, "editor-called.marker")
+	editorPath := writeFakeEditor(t, keepPath, markerPath)
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevCfg := cfg
 	prevEdit := dailyEdit
 	prevTemplate := dailyTemplate
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		cfg = prevCfg
 		dailyEdit = prevEdit
 		dailyTemplate = prevTemplate
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = false
 	cfg = &config.Config{
 		Editor:     editorPath,

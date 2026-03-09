@@ -9,7 +9,7 @@ import (
 )
 
 func TestIntegration_DocsListOpenSearch(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithFile(".raven/docs/index.yaml", `sections:
   getting-started:
     topics:
@@ -69,7 +69,7 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 }
 
 func TestIntegration_DocsCommandRedirectToHelp(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithFile(".raven/docs/index.yaml", `sections:
   getting-started:
     topics:

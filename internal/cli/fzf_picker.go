@@ -92,8 +92,8 @@ func runFZFPicker(lines []string, opts fzfPickerOptions) (string, bool, error) {
 	return selection, true, nil
 }
 
-func pickVaultFileWithFZF(vaultPath string, vaultCfg *config.VaultConfig, prompt, header string) (string, bool, error) {
-	paths, err := indexedVaultFilePaths(vaultPath, vaultCfg)
+func pickKeepFileWithFZF(keepPath string, keepCfg *config.KeepConfig, prompt, header string) (string, bool, error) {
+	paths, err := indexedKeepFilePaths(keepPath, keepCfg)
 	if err != nil {
 		return "", false, err
 	}
@@ -111,8 +111,8 @@ func pickVaultFileWithFZF(vaultPath string, vaultCfg *config.VaultConfig, prompt
 	return strings.TrimSpace(selectedLine), true, nil
 }
 
-func indexedVaultFilePaths(vaultPath string, vaultCfg *config.VaultConfig) ([]string, error) {
-	db, err := openDatabaseWithConfig(vaultPath, vaultCfg)
+func indexedKeepFilePaths(keepPath string, keepCfg *config.KeepConfig) ([]string, error) {
+	db, err := openDatabaseWithConfig(keepPath, keepCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func indexedVaultFilePaths(vaultPath string, vaultCfg *config.VaultConfig) ([]st
 
 	out := make([]string, 0, len(paths))
 	for _, relPath := range paths {
-		if _, err := os.Stat(filepath.Join(vaultPath, relPath)); err == nil {
+		if _, err := os.Stat(filepath.Join(keepPath, relPath)); err == nil {
 			out = append(out, relPath)
 		}
 	}

@@ -26,7 +26,7 @@ const (
 	fetchRequestTimeout = 60 * time.Second
 )
 
-var ErrDocsNotFetched = errors.New("docs are not fetched for this vault")
+var ErrDocsNotFetched = errors.New("docs are not fetched for this keep")
 
 // Manifest records the source and timing of the last docs sync.
 type Manifest struct {
@@ -40,7 +40,7 @@ type Manifest struct {
 
 // FetchOptions controls docs sync behavior.
 type FetchOptions struct {
-	VaultPath     string
+	KeepPath      string
 	SourceBaseURL string
 	Ref           string
 	CLIVersion    string
@@ -56,14 +56,14 @@ type FetchResult struct {
 	Manifest  Manifest
 }
 
-// DocsPath returns the absolute docs cache path for a vault.
-func DocsPath(vaultPath string) string {
-	return filepath.Join(vaultPath, filepath.FromSlash(StoreRelPath))
+// DocsPath returns the absolute docs cache path for a keep.
+func DocsPath(keepPath string) string {
+	return filepath.Join(keepPath, filepath.FromSlash(StoreRelPath))
 }
 
-// OpenFS opens the vault-local docs cache for read operations.
-func OpenFS(vaultPath string) (fs.FS, error) {
-	docsPath := DocsPath(vaultPath)
+// OpenFS opens the keep-local docs cache for read operations.
+func OpenFS(keepPath string) (fs.FS, error) {
+	docsPath := DocsPath(keepPath)
 	indexPath := filepath.Join(docsPath, DocsIndexFilename)
 	if _, err := os.Stat(indexPath); err != nil {
 		if os.IsNotExist(err) {
@@ -75,8 +75,8 @@ func OpenFS(vaultPath string) (fs.FS, error) {
 }
 
 // ReadManifest returns the docs manifest if present.
-func ReadManifest(vaultPath string) (*Manifest, error) {
-	manifestPath := filepath.Join(DocsPath(vaultPath), ManifestFilename)
+func ReadManifest(keepPath string) (*Manifest, error) {
+	manifestPath := filepath.Join(DocsPath(keepPath), ManifestFilename)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -92,11 +92,11 @@ func ReadManifest(vaultPath string) (*Manifest, error) {
 	return &manifest, nil
 }
 
-// Fetch downloads and installs docs into .raven/docs for the given vault.
+// Fetch downloads and installs docs into .raven/docs for the given keep.
 func Fetch(opts FetchOptions) (*FetchResult, error) {
-	vaultPath := strings.TrimSpace(opts.VaultPath)
-	if vaultPath == "" {
-		return nil, fmt.Errorf("vault path is required")
+	keepPath := strings.TrimSpace(opts.KeepPath)
+	if keepPath == "" {
+		return nil, fmt.Errorf("keep path is required")
 	}
 
 	ref := strings.TrimSpace(opts.Ref)
@@ -143,7 +143,7 @@ func Fetch(opts FetchOptions) (*FetchResult, error) {
 
 	tarReader := tar.NewReader(gzReader)
 
-	ravenDir := filepath.Join(vaultPath, ".raven")
+	ravenDir := filepath.Join(keepPath, ".raven")
 	if err := os.MkdirAll(ravenDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create .raven directory: %w", err)
 	}
@@ -233,7 +233,7 @@ func Fetch(opts FetchOptions) (*FetchResult, error) {
 		return nil, fmt.Errorf("write docs manifest: %w", err)
 	}
 
-	targetDir := DocsPath(vaultPath)
+	targetDir := DocsPath(keepPath)
 	backupDir := targetDir + ".backup"
 	_ = os.RemoveAll(backupDir)
 

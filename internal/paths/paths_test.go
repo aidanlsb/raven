@@ -27,12 +27,12 @@ func TestNormalizeDirRoot(t *testing.T) {
 	}
 }
 
-func TestVaultRootFilePaths(t *testing.T) {
-	vaultPath := "/tmp/test-vault"
-	if got, want := SchemaPath(vaultPath), filepath.Join(vaultPath, "schema.yaml"); got != want {
+func TestKeepRootFilePaths(t *testing.T) {
+	keepPath := "/tmp/test-keep"
+	if got, want := SchemaPath(keepPath), filepath.Join(keepPath, "schema.yaml"); got != want {
 		t.Fatalf("SchemaPath() = %q, want %q", got, want)
 	}
-	if got, want := AgentInstructionsPath(vaultPath), filepath.Join(vaultPath, "AGENTS.md"); got != want {
+	if got, want := AgentInstructionsPath(keepPath), filepath.Join(keepPath, "AGENTS.md"); got != want {
 		t.Fatalf("AgentInstructionsPath() = %q, want %q", got, want)
 	}
 }
@@ -101,38 +101,38 @@ func TestCandidateFilePaths(t *testing.T) {
 	}
 }
 
-func TestValidateWithinVault_AllowsInside(t *testing.T) {
-	vaultDir := t.TempDir()
-	target := filepath.Join(vaultDir, "notes", "new.md")
-	if err := ValidateWithinVault(vaultDir, target); err != nil {
-		t.Fatalf("ValidateWithinVault() = %v, want nil", err)
+func TestValidateWithinKeep_AllowsInside(t *testing.T) {
+	keepDir := t.TempDir()
+	target := filepath.Join(keepDir, "notes", "new.md")
+	if err := ValidateWithinKeep(keepDir, target); err != nil {
+		t.Fatalf("ValidateWithinKeep() = %v, want nil", err)
 	}
 }
 
-func TestValidateWithinVault_SymlinkEscape(t *testing.T) {
+func TestValidateWithinKeep_SymlinkEscape(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink tests are not reliable on windows")
 	}
 
 	rootDir := t.TempDir()
-	vaultDir := filepath.Join(rootDir, "vault")
+	keepDir := filepath.Join(rootDir, "keep")
 	outsideDir := filepath.Join(rootDir, "outside")
 
-	if err := os.MkdirAll(vaultDir, 0o755); err != nil {
-		t.Fatalf("mkdir vault: %v", err)
+	if err := os.MkdirAll(keepDir, 0o755); err != nil {
+		t.Fatalf("mkdir keep: %v", err)
 	}
 	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
 		t.Fatalf("mkdir outside: %v", err)
 	}
 
-	linkPath := filepath.Join(vaultDir, "link")
+	linkPath := filepath.Join(keepDir, "link")
 	if err := os.Symlink(outsideDir, linkPath); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
 
 	target := filepath.Join(linkPath, "new.md")
-	err := ValidateWithinVault(vaultDir, target)
-	if !errors.Is(err, ErrPathOutsideVault) {
-		t.Fatalf("ValidateWithinVault() = %v, want ErrPathOutsideVault", err)
+	err := ValidateWithinKeep(keepDir, target)
+	if !errors.Is(err, ErrPathOutsideKeep) {
+		t.Fatalf("ValidateWithinKeep() = %v, want ErrPathOutsideKeep", err)
 	}
 }

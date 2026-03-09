@@ -449,7 +449,7 @@ func (d *Database) UntypedPages() ([]string, error) {
 	return results, rows.Err()
 }
 
-// Search performs a full-text search across all content in the vault.
+// Search performs a full-text search across all content in the keep.
 // The query supports FTS5 query syntax:
 //   - Simple words: "meeting notes"
 //   - Phrases: '"team meeting"'

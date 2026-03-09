@@ -19,8 +19,8 @@ import (
 
 // CreateOptions configures page creation behavior.
 type CreateOptions struct {
-	// VaultPath is the root path of the vault.
-	VaultPath string
+	// KeepPath is the root path of the keep.
+	KeepPath string
 
 	// TypeName is the type of the page (e.g., "person", "project").
 	TypeName string
@@ -29,7 +29,7 @@ type CreateOptions struct {
 	// If empty, derived from the target path.
 	Title string
 
-	// TargetPath is the relative path within the vault.
+	// TargetPath is the relative path within the keep.
 	// Can be just a filename (e.g., "freya") or a full path (e.g., "people/freya").
 	// If no directory is specified AND the type has a default_path in the schema,
 	// the file will be created in the type's default directory.
@@ -52,7 +52,7 @@ type CreateOptions struct {
 
 	// TemplateOverride allows overriding the type's template.
 	// If set, this is used instead of the schema's template for the type.
-	// Must be a file path (relative to vault).
+	// Must be a file path (relative to keep).
 	TemplateOverride string
 
 	// TemplateDir is the configured templates directory root (e.g., "templates/").
@@ -73,7 +73,7 @@ type CreateResult struct {
 	// FilePath is the absolute path to the created file.
 	FilePath string
 
-	// RelativePath is the path relative to the vault.
+	// RelativePath is the path relative to the keep.
 	RelativePath string
 
 	// Slugified path used for the file.
@@ -82,8 +82,8 @@ type CreateResult struct {
 
 // Create creates a new page file with the given options.
 func Create(opts CreateOptions) (*CreateResult, error) {
-	if opts.VaultPath == "" {
-		return nil, fmt.Errorf("vault path is required")
+	if opts.KeepPath == "" {
+		return nil, fmt.Errorf("keep path is required")
 	}
 	if opts.TypeName == "" {
 		return nil, fmt.Errorf("type name is required")
@@ -99,17 +99,17 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	slugifiedPath := SlugifyPath(targetPath)
 
 	// Build the file path with slugified name
-	filePath := filepath.Join(opts.VaultPath, slugifiedPath)
+	filePath := filepath.Join(opts.KeepPath, slugifiedPath)
 	if !strings.HasSuffix(filePath, ".md") {
 		filePath += ".md"
 	}
 
-	// Security: verify path is within vault
-	if err := paths.ValidateWithinVault(opts.VaultPath, filePath); err != nil {
-		if errors.Is(err, paths.ErrPathOutsideVault) {
-			return nil, fmt.Errorf("cannot create file outside vault")
+	// Security: verify path is within keep
+	if err := paths.ValidateWithinKeep(opts.KeepPath, filePath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideKeep) {
+			return nil, fmt.Errorf("cannot create file outside keep")
 		}
-		return nil, fmt.Errorf("failed to validate vault path: %w", err)
+		return nil, fmt.Errorf("failed to validate keep path: %w", err)
 	}
 
 	// Create parent directories
@@ -181,7 +181,7 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 
 	// Load and apply template if specified
 	if templateSpec != "" {
-		templateContent, err := template.Load(opts.VaultPath, templateSpec, opts.TemplateDir)
+		templateContent, err := template.Load(opts.KeepPath, templateSpec, opts.TemplateDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load template: %w", err)
 		}
@@ -202,7 +202,7 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		return nil, fmt.Errorf("failed to write file: %w", err)
 	}
 
-	relPath, _ := filepath.Rel(opts.VaultPath, filePath)
+	relPath, _ := filepath.Rel(opts.KeepPath, filePath)
 	relPath = filepath.ToSlash(relPath)
 
 	return &CreateResult{
@@ -243,7 +243,7 @@ func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema
 
 	// If target already has a directory component, just add the appropriate root
 	if strings.Contains(targetPath, "/") {
-		// Check if it starts with a leading / (absolute within vault)
+		// Check if it starts with a leading / (absolute within keep)
 		if strings.HasPrefix(targetPath, "/") {
 			return strings.TrimPrefix(targetPath, "/")
 		}
@@ -259,7 +259,7 @@ func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema
 	if sch != nil {
 		if typeDef, ok := sch.Types[typeName]; ok && typeDef != nil && typeDef.DefaultPath != "" {
 			defaultPath = strings.ReplaceAll(filepath.ToSlash(filepath.Clean(typeDef.DefaultPath)), "\\", "/")
-			// Security: validate default_path doesn't escape vault
+			// Security: validate default_path doesn't escape keep
 			if defaultPath == "." || strings.Contains(defaultPath, "..") || filepath.IsAbs(typeDef.DefaultPath) || strings.HasPrefix(defaultPath, "/") {
 				defaultPath = ""
 			}
@@ -306,9 +306,9 @@ func ResolveTargetPathWithRoots(targetPath, typeName string, sch *schema.Schema,
 // Exists checks if a page already exists at the given path.
 // Note: This does NOT apply default_path resolution. Pass the already-resolved path
 // or use ExistsWithSchema for type-aware checking.
-func Exists(vaultPath, targetPath string) bool {
+func Exists(keepPath, targetPath string) bool {
 	slugifiedPath := SlugifyPath(targetPath)
-	filePath := filepath.Join(vaultPath, slugifiedPath)
+	filePath := filepath.Join(keepPath, slugifiedPath)
 	if !strings.HasSuffix(filePath, ".md") {
 		filePath += ".md"
 	}
@@ -317,9 +317,9 @@ func Exists(vaultPath, targetPath string) bool {
 }
 
 // ExistsWithSchema checks if a page already exists, applying default_path resolution.
-func ExistsWithSchema(vaultPath, targetPath, typeName string, sch *schema.Schema) bool {
+func ExistsWithSchema(keepPath, targetPath, typeName string, sch *schema.Schema) bool {
 	resolved := resolveDefaultPath(targetPath, typeName, sch)
-	return Exists(vaultPath, resolved)
+	return Exists(keepPath, resolved)
 }
 
 // SlugifyPath slugifies each component of a path.
@@ -335,16 +335,16 @@ func Slugify(s string) string {
 }
 
 // CreateDailyNote creates a daily note for the given date.
-func CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle string) (*CreateResult, error) {
-	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "", "")
+func CreateDailyNote(keepPath, dailyDir, dateStr, friendlyTitle string) (*CreateResult, error) {
+	return CreateDailyNoteWithTemplate(keepPath, dailyDir, dateStr, friendlyTitle, "", "")
 }
 
 // CreateDailyNoteWithSchema creates a daily note using schema-driven template resolution.
-func CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle string, sch *schema.Schema, templateDir string) (*CreateResult, error) {
+func CreateDailyNoteWithSchema(keepPath, dailyDir, dateStr, friendlyTitle string, sch *schema.Schema, templateDir string) (*CreateResult, error) {
 	targetPath := path.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
-		VaultPath:   vaultPath,
+		KeepPath:    keepPath,
 		TypeName:    "date",
 		Title:       friendlyTitle,
 		TargetPath:  targetPath,
@@ -354,11 +354,11 @@ func CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle strin
 }
 
 // CreateDailyNoteWithTemplate creates a daily note with an optional template.
-func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, dailyTemplate, templateDir string) (*CreateResult, error) {
+func CreateDailyNoteWithTemplate(keepPath, dailyDir, dateStr, friendlyTitle, dailyTemplate, templateDir string) (*CreateResult, error) {
 	targetPath := path.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
-		VaultPath:        vaultPath,
+		KeepPath:         keepPath,
 		TypeName:         "date",
 		Title:            friendlyTitle,
 		TargetPath:       targetPath,

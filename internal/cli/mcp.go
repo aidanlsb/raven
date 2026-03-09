@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	mcpClientFlag    string
-	mcpVaultName     string
-	mcpVaultPathFlag string
+	mcpClientFlag   string
+	mcpKeepName     string
+	mcpKeepPathFlag string
 )
 
 var mcpCmd = &cobra.Command{
@@ -38,7 +38,7 @@ Supported clients: claude-code, claude-desktop, cursor
 
 Examples:
   rvn mcp install --client claude-code
-  rvn mcp install --client claude-desktop --vault work`,
+  rvn mcp install --client claude-desktop --keep work`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := mcpclient.Client(mcpClientFlag)
@@ -52,7 +52,7 @@ Examples:
 			return handleError(ErrInternal, err, "")
 		}
 
-		entry := mcpclient.BuildServerEntry(mcpVaultName, mcpVaultPathFlag)
+		entry := mcpclient.BuildServerEntry(mcpKeepName, mcpKeepPathFlag)
 		result, err := mcpclient.Install(cfgPath, entry)
 		if err != nil {
 			return handleError(ErrMCPConfigWriteError, err, "")
@@ -222,7 +222,7 @@ useful for unsupported clients or manual configuration.
 
 Examples:
   rvn mcp show --client claude-code
-  rvn mcp show --client cursor --vault work`,
+  rvn mcp show --client cursor --keep work`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpClientFlag != "" && !mcpclient.ValidClient(mcpClientFlag) {
@@ -230,7 +230,7 @@ Examples:
 				"Supported clients: claude-code, claude-desktop, cursor")
 		}
 
-		entry := mcpclient.BuildServerEntry(mcpVaultName, mcpVaultPathFlag)
+		entry := mcpclient.BuildServerEntry(mcpKeepName, mcpKeepPathFlag)
 
 		snippet := map[string]interface{}{
 			"mcpServers": map[string]interface{}{
@@ -265,16 +265,16 @@ Examples:
 
 func init() {
 	mcpInstallCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
-	mcpInstallCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
-	mcpInstallCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
+	mcpInstallCmd.Flags().StringVar(&mcpKeepName, "keep", "", "Pin a named keep")
+	mcpInstallCmd.Flags().StringVar(&mcpKeepPathFlag, "keep-path", "", "Pin an explicit keep path")
 	_ = mcpInstallCmd.MarkFlagRequired("client")
 
 	mcpRemoveCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
 	_ = mcpRemoveCmd.MarkFlagRequired("client")
 
 	mcpShowCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
-	mcpShowCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
-	mcpShowCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
+	mcpShowCmd.Flags().StringVar(&mcpKeepName, "keep", "", "Pin a named keep")
+	mcpShowCmd.Flags().StringVar(&mcpKeepPathFlag, "keep-path", "", "Pin an explicit keep path")
 
 	mcpCmd.AddCommand(mcpInstallCmd)
 	mcpCmd.AddCommand(mcpRemoveCmd)

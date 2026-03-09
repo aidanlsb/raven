@@ -15,13 +15,13 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -34,11 +34,11 @@ var (
 
 var moveCmd = &cobra.Command{
 	Use:   "move <source> <destination>",
-	Short: "Move or rename an object within the vault",
-	Long: `Move or rename a file/object within the vault.
+	Short: "Move or rename an object within the keep",
+	Long: `Move or rename a file/object within the keep.
 
-Both source and destination must be within the vault. This command:
-- Validates paths are within the vault (security constraint)
+Both source and destination must be within the keep. This command:
+- Validates paths are within the keep (security constraint)
 - Updates all references to the moved file if --update-refs is set
 - Warns if moving to a type's default directory with mismatched type
 - Creates destination directories if needed
@@ -63,11 +63,11 @@ Bulk examples:
 		NonTargetDirective:  cobra.ShellCompDirectiveDefault,
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
 		// Handle --stdin mode for bulk operations
 		if moveStdin {
-			return runMoveBulk(args, vaultPath)
+			return runMoveBulk(args, keepPath)
 		}
 
 		// Single object mode - requires source and destination
@@ -75,12 +75,12 @@ Bulk examples:
 			return handleErrorMsg(ErrMissingArgument, "requires source and destination arguments", "Usage: rvn move <source> <destination>")
 		}
 
-		return moveSingleObject(vaultPath, args[0], args[1])
+		return moveSingleObject(keepPath, args[0], args[1])
 	},
 }
 
 // runMoveBulk handles bulk move operations from stdin.
-func runMoveBulk(args []string, vaultPath string) error {
+func runMoveBulk(args []string, keepPath string) error {
 	// Destination is provided as argument
 	if len(args) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no destination provided", "Usage: rvn move --stdin <destination-directory/>")
@@ -110,32 +110,32 @@ func runMoveBulk(args []string, vaultPath string) error {
 		warnings = append(warnings, *w)
 	}
 
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
 	// If not confirming, show preview
 	if !moveConfirm {
-		return previewMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+		return previewMoveBulk(keepPath, ids, destination, warnings, keepCfg)
 	}
 
 	// Apply the moves
-	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+	return applyMoveBulk(keepPath, ids, destination, warnings, keepCfg)
 }
 
 // previewMoveBulk shows a preview of bulk move operations.
-func previewMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
+func previewMoveBulk(keepPath string, ids []string, destDir string, warnings []Warning, keepCfg *config.KeepConfig) error {
 	preview := buildBulkPreview("move", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
-		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		sourceFile, err := keep.ResolveObjectToFileWithConfig(keepPath, id, keepCfg)
 		if err != nil {
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(destDir, filename)
-		fullDestPath := filepath.Join(vaultPath, destPath)
+		fullDestPath := filepath.Join(keepPath, destPath)
 		if _, err := os.Stat(fullDestPath); err == nil {
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("destination already exists: %s", destPath)}
 		}
@@ -153,27 +153,27 @@ func previewMoveBulk(vaultPath string, ids []string, destDir string, warnings []
 }
 
 // applyMoveBulk applies bulk move operations.
-func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
+func applyMoveBulk(keepPath string, ids []string, destDir string, warnings []Warning, keepCfg *config.KeepConfig) error {
 	// Load schema for type checking
-	sch, _ := schema.Load(vaultPath)
+	sch, _ := schema.Load(keepPath)
 
 	// Open database for reference updates
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
 	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 
 	// Create destination directory
-	fullDestDir := filepath.Join(vaultPath, destDir)
+	fullDestDir := filepath.Join(keepPath, destDir)
 	if err := os.MkdirAll(fullDestDir, 0755); err != nil {
 		return handleError(ErrFileWriteError, err, "Failed to create destination directory")
 	}
 
 	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
-		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		sourceFile, err := keep.ResolveObjectToFileWithConfig(keepPath, id, keepCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -183,7 +183,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 		// Build destination path
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(destDir, filename)
-		fullDestPath := filepath.Join(vaultPath, destPath)
+		fullDestPath := filepath.Join(keepPath, destPath)
 
 		// Check if destination already exists
 		if _, err := os.Stat(fullDestPath); err == nil {
@@ -194,19 +194,19 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 
 		// Update references if enabled
 		if moveUpdateRefs {
-			relSource, _ := filepath.Rel(vaultPath, sourceFile)
-			sourceID := vaultCfg.FilePathToObjectID(relSource)
-			destID := vaultCfg.FilePathToObjectID(destPath)
+			relSource, _ := filepath.Rel(keepPath, sourceFile)
+			sourceID := keepCfg.FilePathToObjectID(relSource)
+			destID := keepCfg.FilePathToObjectID(destPath)
 			aliases, _ := db.AllAliases()
-			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
+			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: keepCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
 			aliasSlugToID := make(map[string]string, len(aliases))
 			for a, oid := range aliases {
 				aliasSlugToID[pages.SlugifyPath(a)] = oid
 			}
 
 			// Get directory roots for expanded backlinks search
-			objectRoot := vaultCfg.GetObjectsRoot()
-			pageRoot := vaultCfg.GetPagesRoot()
+			objectRoot := keepCfg.GetObjectsRoot()
+			pageRoot := keepCfg.GetPagesRoot()
 			backlinks, _ := db.BacklinksWithRoots(sourceID, objectRoot, pageRoot)
 
 			for _, bl := range backlinks {
@@ -225,7 +225,7 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 					line = *bl.Line
 				}
 				// Update all variants of the reference on this line
-				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err != nil {
+				if err := updateAllRefVariantsAtLine(keepPath, keepCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err != nil {
 					// Best-effort: moving the file is the primary action; reference updates may fail.
 					continue
 				}
@@ -262,8 +262,8 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 			result.Reason = fmt.Sprintf("failed to read moved file: %v", err)
 			return result
 		}
-		parseOpts := buildParseOptions(vaultCfg)
-		newDoc, err := parser.ParseDocumentWithOptions(string(newContent), fullDestPath, vaultPath, parseOpts)
+		parseOpts := buildParseOptions(keepCfg)
+		newDoc, err := parser.ParseDocumentWithOptions(string(newContent), fullDestPath, keepPath, parseOpts)
 		if err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("failed to parse moved file: %v", err)
@@ -294,38 +294,38 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 }
 
 // moveSingleObject handles single move operation (non-bulk mode).
-func moveSingleObject(vaultPath, source, destination string) error {
+func moveSingleObject(keepPath, source, destination string) error {
 	start := time.Now()
 	originalDestination := destination
 	destinationIsDirectory := strings.HasSuffix(originalDestination, "/") || strings.HasSuffix(originalDestination, "\\")
 
-	// Load vault config for directory roots
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config for directory roots
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
 	// Resolve source using unified resolver (supports short names, aliases, etc.)
 	sourceResult, err := ResolveReference(source, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
+		KeepPath:   keepPath,
+		KeepConfig: keepCfg,
 	})
 	if err != nil {
 		return handleResolveError(err, source)
 	}
 	sourceFile := sourceResult.FilePath
 
-	// Security: Validate source is within vault
-	if err := paths.ValidateWithinVault(vaultPath, sourceFile); err != nil {
+	// Security: Validate source is within keep
+	if err := paths.ValidateWithinKeep(keepPath, sourceFile); err != nil {
 		return handleErrorMsg(ErrValidationFailed,
-			"Source path is outside vault",
-			"Files can only be moved within the vault")
+			"Source path is outside keep",
+			"Files can only be moved within the keep")
 	}
-	sourceRelPath, err := filepath.Rel(vaultPath, sourceFile)
+	sourceRelPath, err := filepath.Rel(keepPath, sourceFile)
 	if err != nil {
 		return handleError(ErrInternal, err, "Failed to resolve source path")
 	}
-	sourceID := vaultCfg.FilePathToObjectID(sourceRelPath)
+	sourceID := keepCfg.FilePathToObjectID(sourceRelPath)
 
 	// If destination is a directory (trailing slash), keep the source filename.
 	if destinationIsDirectory {
@@ -345,21 +345,21 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 	// Build destination path - apply directory roots if configured
 	destPath := destination
-	if vaultCfg.HasDirectoriesConfig() {
+	if keepCfg.HasDirectoriesConfig() {
 		// If destination is an object ID (like "people/freya.md"), resolve to file path
-		destPath = vaultCfg.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
+		destPath = keepCfg.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
 	}
-	destFile := filepath.Join(vaultPath, destPath)
+	destFile := filepath.Join(keepPath, destPath)
 
-	// Security: Validate destination is within vault
-	if err := paths.ValidateWithinVault(vaultPath, destFile); err != nil {
+	// Security: Validate destination is within keep
+	if err := paths.ValidateWithinKeep(keepPath, destFile); err != nil {
 		return handleErrorMsg(ErrValidationFailed,
-			"Destination path is outside vault",
-			"Files can only be moved within the vault")
+			"Destination path is outside keep",
+			"Files can only be moved within the keep")
 	}
 
 	// Security: Ensure destination is not in .raven directory
-	relDest, _ := filepath.Rel(vaultPath, destFile)
+	relDest, _ := filepath.Rel(keepPath, destFile)
 	if strings.HasPrefix(relDest, ".raven") || strings.HasPrefix(relDest, ".trash") {
 		return handleErrorMsg(ErrValidationFailed,
 			"Cannot move to system directory",
@@ -374,20 +374,20 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	}
 
 	// Load schema for type checking
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		sch = schema.NewSchema()
 	}
 
-	// Build parse options from vault config
-	parseOpts := buildParseOptions(vaultCfg)
+	// Build parse options from keep config
+	parseOpts := buildParseOptions(keepCfg)
 
 	// Parse source file to get its type
 	content, err := os.ReadFile(sourceFile)
 	if err != nil {
 		return handleError(ErrFileReadError, err, "")
 	}
-	doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, vaultPath, parseOpts)
+	doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, keepPath, parseOpts)
 	if err != nil {
 		return handleError(ErrInternal, err, "Failed to parse source file")
 	}
@@ -423,8 +423,8 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		// In JSON mode, return warning for agent to handle
 		if isJSONOutput() {
 			result := MoveResult{
-				Source:       vaultCfg.FilePathToObjectID(source),
-				Destination:  vaultCfg.FilePathToObjectID(destPath),
+				Source:       keepCfg.FilePathToObjectID(source),
+				Destination:  keepCfg.FilePathToObjectID(destPath),
 				NeedsConfirm: true,
 				Reason:       fmt.Sprintf("Type mismatch: file is '%s' but destination is default path for '%s'", fileType, mismatchType),
 			}
@@ -454,19 +454,19 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	// Find backlinks to update
 	var updatedRefs []string
 	if moveUpdateRefs {
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err == nil {
 			defer db.Close()
-			db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+			db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 
 			// Get directory roots for expanded backlinks search
-			objectRoot := vaultCfg.GetObjectsRoot()
-			pageRoot := vaultCfg.GetPagesRoot()
+			objectRoot := keepCfg.GetObjectsRoot()
+			pageRoot := keepCfg.GetPagesRoot()
 			backlinks, _ := db.BacklinksWithRoots(sourceID, objectRoot, pageRoot)
 
-			destID := vaultCfg.FilePathToObjectID(destPath)
+			destID := keepCfg.FilePathToObjectID(destPath)
 			aliases, _ := db.AllAliases()
-			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
+			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: keepCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
 			aliasSlugToID := make(map[string]string, len(aliases))
 			for a, oid := range aliases {
 				aliasSlugToID[pages.SlugifyPath(a)] = oid
@@ -488,7 +488,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 					line = *bl.Line
 				}
 				// Update all variants of the reference on this line
-				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err == nil {
+				if err := updateAllRefVariantsAtLine(keepPath, keepCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err == nil {
 					updatedRefs = append(updatedRefs, bl.SourceID)
 				}
 			}
@@ -507,7 +507,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	}
 
 	// Update index
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
 		warnings = append(warnings, Warning{
 			Code:    WarnIndexUpdateFailed,
@@ -516,7 +516,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		})
 	} else {
 		defer db.Close()
-		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+		db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 
 		// Remove old entry
 		if err := db.RemoveDocument(sourceID); err != nil {
@@ -540,7 +540,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 				Ref:     "Run 'rvn reindex' to rebuild the database",
 			})
 		} else {
-			newDoc, err := parser.ParseDocumentWithOptions(string(newContent), destFile, vaultPath, parseOpts)
+			newDoc, err := parser.ParseDocumentWithOptions(string(newContent), destFile, keepPath, parseOpts)
 			if err != nil {
 				warnings = append(warnings, Warning{
 					Code:    WarnIndexUpdateFailed,
@@ -570,7 +570,7 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	if isJSONOutput() {
 		result := MoveResult{
 			Source:      sourceID,
-			Destination: vaultCfg.FilePathToObjectID(destPath),
+			Destination: keepCfg.FilePathToObjectID(destPath),
 			UpdatedRefs: updatedRefs,
 		}
 		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
@@ -595,7 +595,7 @@ type MoveResult struct {
 }
 
 // updateReference updates a reference in a source file.
-func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldRef, newRef string) error {
+func updateReference(keepPath string, keepCfg *config.KeepConfig, sourceID, oldRef, newRef string) error {
 	// Strip section fragment from sourceID before resolving to file path.
 	// Backlinks from embedded objects have IDs like "daily/2026-01-05#meeting-notes",
 	// but the file is just "daily/2026-01-05.md".
@@ -604,7 +604,7 @@ func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, o
 		fileSourceID = sourceID[:idx]
 	}
 
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileSourceID, keepCfg)
 	if err != nil {
 		return err
 	}
@@ -636,10 +636,10 @@ func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, o
 	return atomicfile.WriteFile(filePath, []byte(newContent), 0o644)
 }
 
-func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldRef, newRef string) error {
+func updateReferenceAtLine(keepPath string, keepCfg *config.KeepConfig, sourceID string, line int, oldRef, newRef string) error {
 	if line <= 0 {
 		// Fallback to whole-file replacement.
-		return updateReference(vaultPath, vaultCfg, sourceID, oldRef, newRef)
+		return updateReference(keepPath, keepCfg, sourceID, oldRef, newRef)
 	}
 
 	// Strip section fragment from sourceID before resolving to file path.
@@ -650,7 +650,7 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 		fileSourceID = sourceID[:idx]
 	}
 
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileSourceID, keepCfg)
 	if err != nil {
 		return err
 	}
@@ -699,9 +699,9 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 // - [[object/person/freya]] (with directory root)
 // - [[person/freya|Freya]] (with display text)
 // - [[person/freya#notes]] (with fragment)
-func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
+func updateAllRefVariantsAtLine(keepPath string, keepCfg *config.KeepConfig, sourceID string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
 	if line <= 0 {
-		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
+		return updateAllRefVariants(keepPath, keepCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
 	}
 
 	// Strip section fragment from sourceID before resolving to file path.
@@ -710,7 +710,7 @@ func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, 
 		fileSourceID = sourceID[:idx]
 	}
 
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileSourceID, keepCfg)
 	if err != nil {
 		return err
 	}
@@ -732,7 +732,7 @@ func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, 
 	if updated == orig {
 		// Some refs (notably schema-typed bare frontmatter refs) may have imprecise
 		// line metadata. Fall back to full-file replacement.
-		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
+		return updateAllRefVariants(keepPath, keepCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
 	}
 	lines[idx] = updated
 
@@ -740,13 +740,13 @@ func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, 
 }
 
 // updateAllRefVariants updates all variants of a reference in an entire file.
-func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
+func updateAllRefVariants(keepPath string, keepCfg *config.KeepConfig, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
 	fileSourceID := sourceID
 	if idx := strings.Index(sourceID, "#"); idx >= 0 {
 		fileSourceID = sourceID[:idx]
 	}
 
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileSourceID, keepCfg)
 	if err != nil {
 		return err
 	}

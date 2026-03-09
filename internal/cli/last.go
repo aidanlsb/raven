@@ -41,7 +41,7 @@ With --apply, applies an operation directly to selected query results:
   rvn last 1,3 --apply "update done"
   rvn last 1-5 --apply "set status=archived"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
 		// Handle --pipe/--no-pipe flags
 		if pipeFlag, _ := cmd.Flags().GetBool("pipe"); pipeFlag {
@@ -53,7 +53,7 @@ With --apply, applies an operation directly to selected query results:
 		}
 
 		// Load the last results
-		lr, err := lastresults.Read(vaultPath)
+		lr, err := lastresults.Read(keepPath)
 		if err != nil {
 			if errors.Is(err, lastresults.ErrNoLastResults) {
 				return handleErrorMsg(ErrMissingArgument,
@@ -69,7 +69,7 @@ With --apply, applies an operation directly to selected query results:
 
 		// If no number args, display all results
 		if len(args) == 0 {
-			return displayLastResults(lr, applyStr, confirmApply, vaultPath)
+			return displayLastResults(lr, applyStr, confirmApply, keepPath)
 		}
 
 		// Parse the number arguments
@@ -88,7 +88,7 @@ With --apply, applies an operation directly to selected query results:
 
 		// If --apply is set, apply the operation
 		if applyStr != "" {
-			return applyFromLastResults(vaultPath, lr, entries, applyStr, confirmApply)
+			return applyFromLastResults(keepPath, lr, entries, applyStr, confirmApply)
 		}
 
 		// Output selected IDs (for piping)
@@ -118,14 +118,14 @@ With --apply, applies an operation directly to selected query results:
 }
 
 // displayLastResults shows the last results in the appropriate format.
-func displayLastResults(lr *lastresults.LastResults, applyStr string, confirm bool, vaultPath string) error {
+func displayLastResults(lr *lastresults.LastResults, applyStr string, confirm bool, keepPath string) error {
 	// If --apply is set without numbers, apply to all
 	if applyStr != "" {
 		results, err := lr.DecodeAll()
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
-		return applyFromLastResults(vaultPath, lr, results, applyStr, confirm)
+		return applyFromLastResults(keepPath, lr, results, applyStr, confirm)
 	}
 
 	if isJSONOutput() {
@@ -157,13 +157,13 @@ func displayLastResults(lr *lastresults.LastResults, applyStr string, confirm bo
 		return writeLastResultsPipe(lr)
 	}
 
-	return renderLastResultsHuman(lr, vaultPath)
+	return renderLastResultsHuman(lr, keepPath)
 }
 
-func renderLastResultsHuman(lr *lastresults.LastResults, vaultPath string) error {
+func renderLastResultsHuman(lr *lastresults.LastResults, keepPath string) error {
 	switch lr.Source {
 	case lastresults.SourceQuery:
-		return renderLastQueryResults(lr, vaultPath)
+		return renderLastQueryResults(lr, keepPath)
 	case lastresults.SourceSearch:
 		results, err := lr.DecodeSearchMatches()
 		if err != nil {
@@ -190,7 +190,7 @@ func renderLastResultsHuman(lr *lastresults.LastResults, vaultPath string) error
 	}
 }
 
-func renderLastQueryResults(lr *lastresults.LastResults, vaultPath string) error {
+func renderLastQueryResults(lr *lastresults.LastResults, keepPath string) error {
 	kind := ""
 	typeName := ""
 
@@ -236,7 +236,7 @@ func renderLastQueryResults(lr *lastresults.LastResults, vaultPath string) error
 			typeName = "object"
 		}
 		var sch *schema.Schema
-		if loaded, err := schema.Load(vaultPath); err == nil {
+		if loaded, err := schema.Load(keepPath); err == nil {
 			sch = loaded
 		}
 		printQueryObjectResults(lr.Query, typeName, objects, sch)
@@ -297,7 +297,7 @@ func writeLastResultsPipe(lr *lastresults.LastResults) error {
 	}
 }
 
-func applyFromLastResults(vaultPath string, lr *lastresults.LastResults, results []model.Result, applyStr string, confirm bool) error {
+func applyFromLastResults(keepPath string, lr *lastresults.LastResults, results []model.Result, applyStr string, confirm bool) error {
 	if lr.Source != lastresults.SourceQuery {
 		return handleErrorMsg(ErrInvalidInput,
 			"--apply is only supported for query results",
@@ -308,10 +308,10 @@ func applyFromLastResults(vaultPath string, lr *lastresults.LastResults, results
 	if err != nil {
 		return handleError(ErrInvalidInput, err, "")
 	}
-	return applyToResults(vaultPath, results, applyStr, confirm, queryType)
+	return applyToResults(keepPath, results, applyStr, confirm, queryType)
 }
 
-func applyToResults(vaultPath string, results []model.Result, applyStr string, confirm bool, queryType string) error {
+func applyToResults(keepPath string, results []model.Result, applyStr string, confirm bool, queryType string) error {
 	if len(results) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no entries to apply operation to", "")
 	}
@@ -332,8 +332,8 @@ func applyToResults(vaultPath string, results []model.Result, applyStr string, c
 		ids[i] = r.GetID()
 	}
 
-	// Load vault config for operations
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config for operations
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
@@ -357,25 +357,25 @@ func applyToResults(vaultPath string, results []model.Result, applyStr string, c
 	var warnings []Warning
 	switch applyCmd {
 	case "set":
-		return applySetFromQuery(vaultPath, ids, applyArgs, warnings, nil, vaultCfg, confirm)
+		return applySetFromQuery(keepPath, ids, applyArgs, warnings, nil, keepCfg, confirm)
 	case "update":
 		if queryType != "trait" {
 			return handleErrorMsg(ErrInvalidInput, "update is only supported for trait results",
 				"Use: --apply \"set field=value\" for object results")
 		}
-		return applyUpdateTraitsByID(vaultPath, ids, traitValue, confirm, true, vaultCfg)
+		return applyUpdateTraitsByID(keepPath, ids, traitValue, confirm, true, keepCfg)
 	case "delete":
 		if queryType == "trait" {
 			return handleErrorMsg(ErrInvalidInput, "cannot delete traits directly",
 				"Traits are part of their containing file")
 		}
-		return applyDeleteFromQuery(vaultPath, ids, warnings, vaultCfg, confirm)
+		return applyDeleteFromQuery(keepPath, ids, warnings, keepCfg, confirm)
 	case "move":
 		if queryType == "trait" {
 			return handleErrorMsg(ErrInvalidInput, "cannot move traits directly",
 				"Traits are part of their containing file")
 		}
-		return applyMoveFromQuery(vaultPath, ids, applyArgs, warnings, vaultCfg, confirm)
+		return applyMoveFromQuery(keepPath, ids, applyArgs, warnings, keepCfg, confirm)
 	default:
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("unknown apply command: %s", applyCmd),

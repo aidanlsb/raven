@@ -30,12 +30,12 @@ Examples:
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		reference := args[0]
 		start := time.Now()
 
-		// Load vault config
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		// Load keep config
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
@@ -43,8 +43,8 @@ Examples:
 		// Resolve the reference to get the canonical object ID
 		// Use dynamic date resolution so "today", "yesterday", etc. work.
 		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
-			VaultPath:    vaultPath,
-			VaultConfig:  vaultCfg,
+			KeepPath:     keepPath,
+			KeepConfig:   keepCfg,
 			AllowMissing: true,
 		}, true)
 		if err != nil {
@@ -52,7 +52,7 @@ Examples:
 		}
 		target := result.ObjectID
 
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 		}
@@ -63,7 +63,7 @@ Examples:
 			return handleError(ErrDatabaseError, err, "")
 		}
 
-		saveLastBacklinksResults(vaultPath, target, links)
+		saveLastBacklinksResults(keepPath, target, links)
 
 		elapsed := time.Since(start).Milliseconds()
 
@@ -82,7 +82,7 @@ Examples:
 	},
 }
 
-func saveLastBacklinksResults(vaultPath, target string, links []model.Reference) {
+func saveLastBacklinksResults(keepPath, target string, links []model.Reference) {
 	modelResults := make([]model.Result, len(links))
 	for i, link := range links {
 		modelResults[i] = link
@@ -91,7 +91,7 @@ func saveLastBacklinksResults(vaultPath, target string, links []model.Reference)
 	if err != nil {
 		return
 	}
-	_ = lastresults.Write(vaultPath, lr)
+	_ = lastresults.Write(keepPath, lr)
 }
 
 func init() {

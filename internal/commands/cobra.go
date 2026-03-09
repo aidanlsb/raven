@@ -9,8 +9,8 @@ import (
 )
 
 // Handler is a function that executes a command.
-// It receives the vault path, parsed args, and flag values.
-type Handler func(vaultPath string, args []string, flags map[string]interface{}) error
+// It receives the keep path, parsed args, and flag values.
+type Handler func(keepPath string, args []string, flags map[string]interface{}) error
 
 // HandlerRegistry maps command names to their handlers.
 var HandlerRegistry = make(map[string]Handler)
@@ -118,11 +118,11 @@ func GenerateCobraCommand(name string, handler Handler) *cobra.Command {
 	// Set RunE if handler provided
 	if handler != nil {
 		cmd.RunE = func(cmd *cobra.Command, args []string) error {
-			// Get vault path from parent command context
-			vaultPath, _ := cmd.Flags().GetString("vault-path")
-			if vaultPath == "" {
+			// Get keep path from parent command context
+			keepPath, _ := cmd.Flags().GetString("keep-path")
+			if keepPath == "" {
 				if parent := cmd.Parent(); parent != nil {
-					vaultPath, _ = parent.PersistentFlags().GetString("vault-path")
+					keepPath, _ = parent.PersistentFlags().GetString("keep-path")
 				}
 			}
 
@@ -154,7 +154,7 @@ func GenerateCobraCommand(name string, handler Handler) *cobra.Command {
 				}
 			}
 
-			return handler(vaultPath, args, flags)
+			return handler(keepPath, args, flags)
 		}
 	}
 

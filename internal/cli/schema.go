@@ -33,12 +33,12 @@ Examples:
   rvn schema type interview template list --json
   rvn schema core date template list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 
 		// If no subcommand, return full schema
 		if len(args) == 0 {
-			return dumpFullSchema(vaultPath, start)
+			return dumpFullSchema(keepPath, start)
 		}
 
 		// Template-related subcommands:
@@ -46,49 +46,49 @@ Examples:
 		// - schema type <type_name> template ...
 		// - schema core <core_type> template ...
 		if args[0] == "template" {
-			return runSchemaTemplateCommand(vaultPath, args[1:], start)
+			return runSchemaTemplateCommand(keepPath, args[1:], start)
 		}
 		// Also support MCP-style positional order:
 		// - schema type template <action> <type_name> [template_id]
 		// - schema core template <action> <core_type> [template_id]
 		if len(args) >= 4 && args[0] == "type" && args[1] == "template" {
 			templateArgs := append([]string{args[2]}, args[4:]...)
-			return runSchemaTypeTemplateCommand(vaultPath, args[3], templateArgs, start)
+			return runSchemaTypeTemplateCommand(keepPath, args[3], templateArgs, start)
 		}
 		if len(args) >= 4 && args[0] == "core" && args[1] == "template" {
 			templateArgs := append([]string{args[2]}, args[4:]...)
-			return runSchemaCoreTemplateCommand(vaultPath, args[3], templateArgs, start)
+			return runSchemaCoreTemplateCommand(keepPath, args[3], templateArgs, start)
 		}
 		if len(args) >= 3 && args[0] == "type" && args[2] == "template" {
-			return runSchemaTypeTemplateCommand(vaultPath, args[1], args[3:], start)
+			return runSchemaTypeTemplateCommand(keepPath, args[1], args[3:], start)
 		}
 		if len(args) >= 3 && args[0] == "core" && args[2] == "template" {
-			return runSchemaCoreTemplateCommand(vaultPath, args[1], args[3:], start)
+			return runSchemaCoreTemplateCommand(keepPath, args[1], args[3:], start)
 		}
 
 		switch args[0] {
 		case "types":
-			return listSchemaTypes(vaultPath, start)
+			return listSchemaTypes(keepPath, start)
 		case "traits":
-			return listSchemaTraits(vaultPath, start)
+			return listSchemaTraits(keepPath, start)
 		case "core":
 			if len(args) == 1 {
-				return listSchemaCore(vaultPath, start)
+				return listSchemaCore(keepPath, start)
 			}
 			if len(args) > 2 {
 				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema core subcommand: %s", args[2]), "Use: schema core [name] or schema core <name> template ...")
 			}
-			return getSchemaCore(vaultPath, args[1], start)
+			return getSchemaCore(keepPath, args[1], start)
 		case "type":
 			if len(args) < 2 {
 				return handleErrorMsg(ErrMissingArgument, "specify a type name", "Usage: rvn schema type <name>")
 			}
-			return getSchemaType(vaultPath, args[1], start)
+			return getSchemaType(keepPath, args[1], start)
 		case "trait":
 			if len(args) < 2 {
 				return handleErrorMsg(ErrMissingArgument, "specify a trait name", "Usage: rvn schema trait <name>")
 			}
-			return getSchemaTrait(vaultPath, args[1], start)
+			return getSchemaTrait(keepPath, args[1], start)
 		case "commands":
 			return listSchemaCommands(start)
 		default:
@@ -97,13 +97,13 @@ Examples:
 	},
 }
 
-func dumpFullSchema(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func dumpFullSchema(keepPath string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	keepCfg, err := config.LoadKeepConfig(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, fmt.Errorf("failed to load raven.yaml: %w", err), "Fix raven.yaml and try again")
 	}
@@ -111,7 +111,7 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		schemaJSON := buildSchemaResult(sch, vaultCfg)
+		schemaJSON := buildSchemaResult(sch, keepCfg)
 		outputSuccess(schemaJSON, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
@@ -153,9 +153,9 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 		fmt.Printf("  %s\n", name)
 	}
 
-	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
+	if keepCfg != nil && len(keepCfg.Queries) > 0 {
 		fmt.Println("\nSaved Queries:")
-		for name := range vaultCfg.Queries {
+		for name := range keepCfg.Queries {
 			fmt.Printf("  %s\n", name)
 		}
 	}
@@ -163,8 +163,8 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func listSchemaTypes(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func listSchemaTypes(keepPath string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -236,8 +236,8 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func listSchemaTraits(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func listSchemaTraits(keepPath string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -276,8 +276,8 @@ func listSchemaTraits(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func listSchemaCore(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func listSchemaCore(keepPath string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -315,8 +315,8 @@ func listSchemaCore(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func getSchemaCore(keepPath, coreTypeName string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -347,8 +347,8 @@ func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
 	return nil
 }
 
-func getSchemaType(vaultPath, typeName string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func getSchemaType(keepPath, typeName string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -429,8 +429,8 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 	return nil
 }
 
-func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+func getSchemaTrait(keepPath, traitName string, start time.Time) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
@@ -527,7 +527,7 @@ func buildSchemaCommands() map[string]CommandSchema {
 	return cmds
 }
 
-func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaResult {
+func buildSchemaResult(sch *schema.Schema, keepCfg *config.KeepConfig) SchemaResult {
 	result := SchemaResult{
 		Version: sch.Version,
 		Types:   make(map[string]TypeSchema),
@@ -569,10 +569,10 @@ func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaR
 		}
 	}
 
-	// Queries from vault config
-	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
+	// Queries from keep config
+	if keepCfg != nil && len(keepCfg.Queries) > 0 {
 		result.Queries = make(map[string]SavedQueryInfo)
-		for name, q := range vaultCfg.Queries {
+		for name, q := range keepCfg.Queries {
 			result.Queries[name] = SavedQueryInfo{
 				Name:        name,
 				Query:       q.Query,

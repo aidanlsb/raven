@@ -10,8 +10,8 @@ import (
 )
 
 func TestDailyBriefStepsWorkflowMigration(t *testing.T) {
-	vaultDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultDir, "workflows"), 0o755); err != nil {
+	keepDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keepDir, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 
@@ -49,12 +49,12 @@ steps:
       content: "{{steps.compose.outputs.markdown}}"
 `) + "\n"
 
-	path := filepath.Join(vaultDir, "workflows", "daily-brief.yaml")
+	path := filepath.Join(keepDir, "workflows", "daily-brief.yaml")
 	if err := os.WriteFile(path, []byte(def), 0o644); err != nil {
 		t.Fatalf("write workflow: %v", err)
 	}
 
-	wf, err := Load(vaultDir, "daily-brief", &config.WorkflowRef{File: "workflows/daily-brief.yaml"})
+	wf, err := Load(keepDir, "daily-brief", &config.WorkflowRef{File: "workflows/daily-brief.yaml"})
 	if err != nil {
 		t.Fatalf("Load error: %v", err)
 	}
@@ -63,7 +63,7 @@ steps:
 	}
 
 	callCount := 0
-	r := NewRunner(vaultDir, &config.VaultConfig{})
+	r := NewRunner(keepDir, &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		callCount++
 		if tool != "raven_query" {

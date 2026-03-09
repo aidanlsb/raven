@@ -160,8 +160,8 @@ func TestMaybeSplitInlineSavedQueryArgs(t *testing.T) {
 }
 
 func TestBuildUnknownQuerySuggestion_IncludesReadOpenForResolvableRefs(t *testing.T) {
-	// Use the real vault via local DB open; this test should stay stable because it uses
-	// an in-memory index rather than relying on a specific vault.
+	// Use the real keep via local DB open; this test should stay stable because it uses
+	// an in-memory index rather than relying on a specific keep.
 	//
 	// Create an in-memory DB and insert a known object ID so the resolver can resolve the short name.
 	db, err := index.OpenInMemory()

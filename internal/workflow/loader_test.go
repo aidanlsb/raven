@@ -12,17 +12,17 @@ import (
 )
 
 func TestLoad_InlineAndErrors(t *testing.T) {
-	vaultDir := t.TempDir()
+	keepDir := t.TempDir()
 
 	t.Run("nil ref", func(t *testing.T) {
-		_, err := Load(vaultDir, "x", nil)
+		_, err := Load(keepDir, "x", nil)
 		if err == nil || !strings.Contains(err.Error(), "workflow reference is nil") {
 			t.Fatalf("expected nil ref error, got %v", err)
 		}
 	})
 
 	t.Run("conflicting file and inline fields", func(t *testing.T) {
-		_, err := Load(vaultDir, "x", &config.WorkflowRef{
+		_, err := Load(keepDir, "x", &config.WorkflowRef{
 			File:  "wf.yaml",
 			Steps: []*config.WorkflowStep{{ID: "q", Type: "tool", Tool: "raven_query"}},
 		})
@@ -32,7 +32,7 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 	})
 
 	t.Run("inline workflow declarations are rejected", func(t *testing.T) {
-		_, err := Load(vaultDir, "x", &config.WorkflowRef{Description: "d"})
+		_, err := Load(keepDir, "x", &config.WorkflowRef{Description: "d"})
 		if err == nil || !strings.Contains(err.Error(), "inline workflow definitions are not supported") {
 			t.Fatalf("expected inline unsupported error, got %v", err)
 		}
@@ -48,18 +48,18 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 }
 
 func TestLoad_FromFile(t *testing.T) {
-	vaultDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultDir, "workflows"), 0o755); err != nil {
+	keepDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keepDir, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
 	t.Run("loads from file", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "w1.yaml")
+		path := filepath.Join(keepDir, "workflows", "w1.yaml")
 		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
-		wf, err := Load(vaultDir, "w1", &config.WorkflowRef{File: "workflows/w1.yaml"})
+		wf, err := Load(keepDir, "w1", &config.WorkflowRef{File: "workflows/w1.yaml"})
 		if err != nil {
 			t.Fatalf("Load error: %v", err)
 		}
@@ -69,7 +69,7 @@ func TestLoad_FromFile(t *testing.T) {
 	})
 
 	t.Run("rejects unknown top-level tool name", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "unknown-tool.yaml")
+		path := filepath.Join(keepDir, "workflows", "unknown-tool.yaml")
 		content := `description: bad tool
 steps:
   - id: q
@@ -80,14 +80,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "unknown-tool", &config.WorkflowRef{File: "workflows/unknown-tool.yaml"})
+		_, err := Load(keepDir, "unknown-tool", &config.WorkflowRef{File: "workflows/unknown-tool.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
 			t.Fatalf("expected unknown tool error, got %v", err)
 		}
 	})
 
 	t.Run("accepts typed array agent outputs", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "typed-output.yaml")
+		path := filepath.Join(keepDir, "workflows", "typed-output.yaml")
 		content := `description: typed output
 steps:
   - id: compose
@@ -102,7 +102,7 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		wf, err := Load(vaultDir, "typed-output", &config.WorkflowRef{File: "workflows/typed-output.yaml"})
+		wf, err := Load(keepDir, "typed-output", &config.WorkflowRef{File: "workflows/typed-output.yaml"})
 		if err != nil {
 			t.Fatalf("Load error: %v", err)
 		}
@@ -113,7 +113,7 @@ steps:
 	})
 
 	t.Run("accepts foreach step with nested tool steps", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "foreach-ok.yaml")
+		path := filepath.Join(keepDir, "workflows", "foreach-ok.yaml")
 		content := `description: foreach
 steps:
   - id: seed
@@ -136,13 +136,13 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		if _, err := Load(vaultDir, "foreach-ok", &config.WorkflowRef{File: "workflows/foreach-ok.yaml"}); err != nil {
+		if _, err := Load(keepDir, "foreach-ok", &config.WorkflowRef{File: "workflows/foreach-ok.yaml"}); err != nil {
 			t.Fatalf("Load error: %v", err)
 		}
 	})
 
 	t.Run("rejects foreach missing items", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "foreach-missing-items.yaml")
+		path := filepath.Join(keepDir, "workflows", "foreach-missing-items.yaml")
 		content := `description: foreach
 steps:
   - id: fanout
@@ -157,14 +157,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "foreach-missing-items", &config.WorkflowRef{File: "workflows/foreach-missing-items.yaml"})
+		_, err := Load(keepDir, "foreach-missing-items", &config.WorkflowRef{File: "workflows/foreach-missing-items.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "missing foreach.items") {
 			t.Fatalf("expected foreach.items error, got %v", err)
 		}
 	})
 
 	t.Run("rejects foreach nested non-tool steps", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "foreach-non-tool.yaml")
+		path := filepath.Join(keepDir, "workflows", "foreach-non-tool.yaml")
 		content := `description: foreach
 steps:
   - id: fanout
@@ -180,14 +180,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "foreach-non-tool", &config.WorkflowRef{File: "workflows/foreach-non-tool.yaml"})
+		_, err := Load(keepDir, "foreach-non-tool", &config.WorkflowRef{File: "workflows/foreach-non-tool.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "must be type 'tool'") {
 			t.Fatalf("expected nested tool-only error, got %v", err)
 		}
 	})
 
 	t.Run("rejects foreach invalid on_error", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "foreach-on-error.yaml")
+		path := filepath.Join(keepDir, "workflows", "foreach-on-error.yaml")
 		content := `description: foreach
 steps:
   - id: fanout
@@ -204,14 +204,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "foreach-on-error", &config.WorkflowRef{File: "workflows/foreach-on-error.yaml"})
+		_, err := Load(keepDir, "foreach-on-error", &config.WorkflowRef{File: "workflows/foreach-on-error.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "invalid foreach.on_error") {
 			t.Fatalf("expected foreach.on_error error, got %v", err)
 		}
 	})
 
 	t.Run("rejects foreach nested unknown tool name", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "foreach-unknown-tool.yaml")
+		path := filepath.Join(keepDir, "workflows", "foreach-unknown-tool.yaml")
 		content := `description: foreach
 steps:
   - id: fanout
@@ -227,14 +227,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "foreach-unknown-tool", &config.WorkflowRef{File: "workflows/foreach-unknown-tool.yaml"})
+		_, err := Load(keepDir, "foreach-unknown-tool", &config.WorkflowRef{File: "workflows/foreach-unknown-tool.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
 			t.Fatalf("expected unknown tool error, got %v", err)
 		}
 	})
 
 	t.Run("accepts switch with cases and required default", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "switch-ok.yaml")
+		path := filepath.Join(keepDir, "workflows", "switch-ok.yaml")
 		content := `description: switch
 steps:
   - id: classify
@@ -268,13 +268,13 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		if _, err := Load(vaultDir, "switch-ok", &config.WorkflowRef{File: "workflows/switch-ok.yaml"}); err != nil {
+		if _, err := Load(keepDir, "switch-ok", &config.WorkflowRef{File: "workflows/switch-ok.yaml"}); err != nil {
 			t.Fatalf("Load error: %v", err)
 		}
 	})
 
 	t.Run("rejects switch missing value", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "switch-missing-value.yaml")
+		path := filepath.Join(keepDir, "workflows", "switch-missing-value.yaml")
 		content := `description: switch
 steps:
   - id: route
@@ -292,14 +292,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "switch-missing-value", &config.WorkflowRef{File: "workflows/switch-missing-value.yaml"})
+		_, err := Load(keepDir, "switch-missing-value", &config.WorkflowRef{File: "workflows/switch-missing-value.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "missing switch.value") {
 			t.Fatalf("expected switch.value error, got %v", err)
 		}
 	})
 
 	t.Run("rejects switch nested unknown tool name", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "switch-unknown-tool.yaml")
+		path := filepath.Join(keepDir, "workflows", "switch-unknown-tool.yaml")
 		content := `description: switch
 steps:
   - id: classify
@@ -329,14 +329,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "switch-unknown-tool", &config.WorkflowRef{File: "workflows/switch-unknown-tool.yaml"})
+		_, err := Load(keepDir, "switch-unknown-tool", &config.WorkflowRef{File: "workflows/switch-unknown-tool.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
 			t.Fatalf("expected unknown tool error, got %v", err)
 		}
 	})
 
 	t.Run("rejects switch missing default", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "switch-missing-default.yaml")
+		path := filepath.Join(keepDir, "workflows", "switch-missing-default.yaml")
 		content := `description: switch
 steps:
   - id: route
@@ -352,14 +352,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "switch-missing-default", &config.WorkflowRef{File: "workflows/switch-missing-default.yaml"})
+		_, err := Load(keepDir, "switch-missing-default", &config.WorkflowRef{File: "workflows/switch-missing-default.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "must define switch.default") {
 			t.Fatalf("expected switch.default error, got %v", err)
 		}
 	})
 
 	t.Run("rejects switch nested non-deterministic steps", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "switch-nested-agent.yaml")
+		path := filepath.Join(keepDir, "workflows", "switch-nested-agent.yaml")
 		content := `description: switch
 steps:
   - id: route
@@ -380,14 +380,14 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "switch-nested-agent", &config.WorkflowRef{File: "workflows/switch-nested-agent.yaml"})
+		_, err := Load(keepDir, "switch-nested-agent", &config.WorkflowRef{File: "workflows/switch-nested-agent.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "must be type 'tool' or 'foreach'") {
 			t.Fatalf("expected deterministic nested-step error, got %v", err)
 		}
 	})
 
 	t.Run("rejects switch outputs without per-branch emit", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "switch-missing-emit.yaml")
+		path := filepath.Join(keepDir, "workflows", "switch-missing-emit.yaml")
 		content := `description: switch
 steps:
   - id: route
@@ -412,19 +412,19 @@ steps:
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "switch-missing-emit", &config.WorkflowRef{File: "workflows/switch-missing-emit.yaml"})
+		_, err := Load(keepDir, "switch-missing-emit", &config.WorkflowRef{File: "workflows/switch-missing-emit.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "missing emit") {
 			t.Fatalf("expected missing emit error, got %v", err)
 		}
 	})
 
 	t.Run("resolves bare filename under default workflow directory", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "w1-bare.yaml")
+		path := filepath.Join(keepDir, "workflows", "w1-bare.yaml")
 		if err := os.WriteFile(path, []byte("description: bare\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
-		wf, err := Load(vaultDir, "w1-bare", &config.WorkflowRef{File: "w1-bare.yaml"})
+		wf, err := Load(keepDir, "w1-bare", &config.WorkflowRef{File: "w1-bare.yaml"})
 		if err != nil {
 			t.Fatalf("Load error: %v", err)
 		}
@@ -434,15 +434,15 @@ steps:
 	})
 
 	t.Run("enforces configured workflow directory", func(t *testing.T) {
-		if err := os.MkdirAll(filepath.Join(vaultDir, "automation", "flows"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(keepDir, "automation", "flows"), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		path := filepath.Join(vaultDir, "automation", "flows", "w2.yaml")
+		path := filepath.Join(keepDir, "automation", "flows", "w2.yaml")
 		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := LoadWithConfig(vaultDir, "w2", &config.WorkflowRef{File: "automation/flows/w2.yaml"}, &config.VaultConfig{
+		_, err := LoadWithConfig(keepDir, "w2", &config.WorkflowRef{File: "automation/flows/w2.yaml"}, &config.KeepConfig{
 			Directories: &config.DirectoriesConfig{
 				Workflow: "workflows/",
 			},
@@ -453,15 +453,15 @@ steps:
 	})
 
 	t.Run("loads from custom workflow directory", func(t *testing.T) {
-		if err := os.MkdirAll(filepath.Join(vaultDir, "automation", "flows"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(keepDir, "automation", "flows"), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		path := filepath.Join(vaultDir, "automation", "flows", "w3.yaml")
+		path := filepath.Join(keepDir, "automation", "flows", "w3.yaml")
 		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
-		wf, err := LoadWithConfig(vaultDir, "w3", &config.WorkflowRef{File: "automation/flows/w3.yaml"}, &config.VaultConfig{
+		wf, err := LoadWithConfig(keepDir, "w3", &config.WorkflowRef{File: "automation/flows/w3.yaml"}, &config.KeepConfig{
 			Directories: &config.DirectoriesConfig{
 				Workflow: "automation/flows/",
 			},
@@ -475,15 +475,15 @@ steps:
 	})
 
 	t.Run("resolves bare filename under custom workflow directory", func(t *testing.T) {
-		if err := os.MkdirAll(filepath.Join(vaultDir, "automation", "flows"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(keepDir, "automation", "flows"), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		path := filepath.Join(vaultDir, "automation", "flows", "w4.yaml")
+		path := filepath.Join(keepDir, "automation", "flows", "w4.yaml")
 		if err := os.WriteFile(path, []byte("description: test\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
-		wf, err := LoadWithConfig(vaultDir, "w4", &config.WorkflowRef{File: "w4.yaml"}, &config.VaultConfig{
+		wf, err := LoadWithConfig(keepDir, "w4", &config.WorkflowRef{File: "w4.yaml"}, &config.KeepConfig{
 			Directories: &config.DirectoriesConfig{
 				Workflow: "automation/flows/",
 			},
@@ -497,35 +497,35 @@ steps:
 	})
 
 	t.Run("legacy top-level keys are rejected in workflow files", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "shorthand.yaml")
+		path := filepath.Join(keepDir, "workflows", "shorthand.yaml")
 		if err := os.WriteFile(path, []byte("description: test\nprompt: hi\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-		_, err := Load(vaultDir, "shorthand", &config.WorkflowRef{File: "workflows/shorthand.yaml"})
+		_, err := Load(keepDir, "shorthand", &config.WorkflowRef{File: "workflows/shorthand.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "legacy top-level key 'prompt'") {
 			t.Fatalf("expected legacy key error, got %v", err)
 		}
 	})
 
-	t.Run("file must be within vault", func(t *testing.T) {
-		outside := filepath.Join(filepath.Dir(vaultDir), "outside.yaml")
+	t.Run("file must be within keep", func(t *testing.T) {
+		outside := filepath.Join(filepath.Dir(keepDir), "outside.yaml")
 		if err := os.WriteFile(outside, []byte("prompt: hi\n"), 0o644); err != nil {
 			t.Fatalf("write outside: %v", err)
 		}
 
-		_, err := Load(vaultDir, "bad", &config.WorkflowRef{File: "../outside.yaml"})
-		if err == nil || !strings.Contains(err.Error(), "cannot escape the vault") {
+		_, err := Load(keepDir, "bad", &config.WorkflowRef{File: "../outside.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "cannot escape the keep") {
 			t.Fatalf("expected security error, got %v", err)
 		}
 	})
 
 	t.Run("file must include steps", func(t *testing.T) {
-		path := filepath.Join(vaultDir, "workflows", "noprompt.yaml")
+		path := filepath.Join(keepDir, "workflows", "noprompt.yaml")
 		if err := os.WriteFile(path, []byte("description: x\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
-		_, err := Load(vaultDir, "noprompt", &config.WorkflowRef{File: "workflows/noprompt.yaml"})
+		_, err := Load(keepDir, "noprompt", &config.WorkflowRef{File: "workflows/noprompt.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "must define 'steps'") {
 			t.Fatalf("expected missing steps error, got %v", err)
 		}
@@ -533,43 +533,43 @@ steps:
 }
 
 func TestGetAndList(t *testing.T) {
-	vaultDir := t.TempDir()
+	keepDir := t.TempDir()
 
 	t.Run("Get fails when no workflows configured", func(t *testing.T) {
-		_, err := Get(vaultDir, "x", &config.VaultConfig{})
+		_, err := Get(keepDir, "x", &config.KeepConfig{})
 		if err == nil || !strings.Contains(err.Error(), "no workflows defined") {
 			t.Fatalf("expected no workflows error, got %v", err)
 		}
 	})
 
 	t.Run("Get fails when workflow missing", func(t *testing.T) {
-		vc := &config.VaultConfig{
+		vc := &config.KeepConfig{
 			Workflows: map[string]*config.WorkflowRef{
 				"a": {File: "workflows/a.yaml"},
 			},
 		}
-		_, err := Get(vaultDir, "missing", vc)
+		_, err := Get(keepDir, "missing", vc)
 		if err == nil || !strings.Contains(err.Error(), "not found") {
 			t.Fatalf("expected not found error, got %v", err)
 		}
 	})
 
 	t.Run("List includes errors in description rather than failing", func(t *testing.T) {
-		if err := os.MkdirAll(filepath.Join(vaultDir, "workflows"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(keepDir, "workflows"), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(vaultDir, "workflows", "good.yaml"), []byte("description: ok\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(keepDir, "workflows", "good.yaml"), []byte("description: ok\nsteps:\n  - id: q\n    type: tool\n    tool: raven_query\n"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 
-		vc := &config.VaultConfig{
+		vc := &config.KeepConfig{
 			Workflows: map[string]*config.WorkflowRef{
 				"good": {File: "workflows/good.yaml"},
 				"bad":  {File: "workflows/does-not-exist.yaml"},
 			},
 		}
 
-		items, err := List(vaultDir, vc)
+		items, err := List(keepDir, vc)
 		if err != nil {
 			t.Fatalf("List error: %v", err)
 		}
@@ -629,17 +629,17 @@ func TestResolveWorkflowFileRef(t *testing.T) {
 }
 
 func TestLoad_TestdataForEachFixture(t *testing.T) {
-	vaultDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
+	keepDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
 	if err != nil {
 		t.Fatalf("resolve testdata path: %v", err)
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultDir)
+	keepCfg, err := config.LoadKeepConfig(keepDir)
 	if err != nil {
-		t.Fatalf("LoadVaultConfig error: %v", err)
+		t.Fatalf("LoadKeepConfig error: %v", err)
 	}
 
-	wf, err := Get(vaultDir, "bifrost-watch-fanout", vaultCfg)
+	wf, err := Get(keepDir, "bifrost-watch-fanout", keepCfg)
 	if err != nil {
 		t.Fatalf("Get workflow error: %v", err)
 	}
@@ -669,12 +669,12 @@ func TestLoad_TestdataForEachFixture(t *testing.T) {
 }
 
 func TestLoad_TestdataSwitchFixture(t *testing.T) {
-	vaultDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
+	keepDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
 	if err != nil {
 		t.Fatalf("resolve testdata path: %v", err)
 	}
 
-	wf, err := Load(vaultDir, "switch-routing", &config.WorkflowRef{File: "workflows/switch-routing.yaml"})
+	wf, err := Load(keepDir, "switch-routing", &config.WorkflowRef{File: "workflows/switch-routing.yaml"})
 	if err != nil {
 		t.Fatalf("Load workflow error: %v", err)
 	}

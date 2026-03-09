@@ -17,9 +17,9 @@ import (
 // - refs (including resolving refs for this file)
 // - date index
 // - FTS
-func reindexFile(vaultPath, filePath string, vaultCfg *config.VaultConfig) error {
+func reindexFile(keepPath, filePath string, keepCfg *config.KeepConfig) error {
 	// Load schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return err
 	}
@@ -31,8 +31,8 @@ func reindexFile(vaultPath, filePath string, vaultCfg *config.VaultConfig) error
 	}
 
 	// Parse with directory roots when configured
-	parseOpts := buildParseOptions(vaultCfg)
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+	parseOpts := buildParseOptions(keepCfg)
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, keepPath, parseOpts)
 	if err != nil {
 		return err
 	}
@@ -44,12 +44,12 @@ func reindexFile(vaultPath, filePath string, vaultCfg *config.VaultConfig) error
 	}
 
 	// Open database and index
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 
 	if err := db.IndexDocumentWithMtime(doc, sch, mtime); err != nil {
 		return err

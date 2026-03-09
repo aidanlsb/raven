@@ -9,7 +9,7 @@ Out of scope:
 
 ## What `schema.yaml` controls
 
-`schema.yaml` defines your vault's data model:
+`schema.yaml` defines your keep's data model:
 - **types**: what objects are (for example `project`, `person`, `book`)
 - **fields**: validated frontmatter keys per type
 - **traits**: inline annotations like `@due(2026-02-01)` or `@highlight`

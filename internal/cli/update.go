@@ -34,8 +34,8 @@ Examples:
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
-	vaultPath := getVaultPath()
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	keepPath := getKeepPath()
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
@@ -54,7 +54,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			return handleErrorMsg(ErrMissingArgument, "no trait IDs provided via stdin", "Pipe trait IDs to stdin, one per line")
 		}
 
-		err = applyUpdateTraitsByID(vaultPath, ids, newValue, updateConfirm, false, vaultCfg)
+		err = applyUpdateTraitsByID(keepPath, ids, newValue, updateConfirm, false, keepCfg)
 		return handleTraitUpdateError(err)
 	}
 
@@ -73,7 +73,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Single update applies immediately (no preview/confirm)
-	err = applyUpdateTraitsByID(vaultPath, []string{traitID}, newValue, true, false, vaultCfg)
+	err = applyUpdateTraitsByID(keepPath, []string{traitID}, newValue, true, false, keepCfg)
 	return handleTraitUpdateError(err)
 }
 

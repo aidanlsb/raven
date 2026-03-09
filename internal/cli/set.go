@@ -13,11 +13,11 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -58,7 +58,7 @@ Bulk examples:
 }
 
 func runSet(cmd *cobra.Command, args []string) error {
-	vaultPath := getVaultPath()
+	keepPath := getKeepPath()
 
 	// Handle --stdin mode for bulk operations
 	if setStdin {
@@ -67,7 +67,7 @@ func runSet(cmd *cobra.Command, args []string) error {
 				"--fields-json is not supported with --stdin",
 				"Use positional field=value updates when using --stdin")
 		}
-		return runSetBulk(cmd, args, vaultPath)
+		return runSetBulk(cmd, args, keepPath)
 	}
 
 	// Single object mode - requires object-id and at least one update source.
@@ -99,11 +99,11 @@ func runSet(cmd *cobra.Command, args []string) error {
 		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <object-id> field=value... or --fields-json '{...}'")
 	}
 
-	return setSingleObject(vaultPath, objectID, updates, typedUpdates)
+	return setSingleObject(keepPath, objectID, updates, typedUpdates)
 }
 
 // runSetBulk handles bulk set operations from stdin.
-func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
+func runSetBulk(cmd *cobra.Command, args []string, keepPath string) error {
 	// Parse field=value arguments (all args are field=value in stdin mode)
 	updates := make(map[string]string)
 	for _, arg := range args {
@@ -136,37 +136,37 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 	var warnings []Warning
 
 	// Load schema for validation
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 
-	// Load vault config (optional, used for roots + auto-reindex)
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config (optional, used for roots + auto-reindex)
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
 	// If not confirming, show preview
 	if !setConfirm {
-		return previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
+		return previewSetBulk(keepPath, ids, updates, warnings, sch, keepCfg)
 	}
 
 	// Apply the changes
-	return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
+	return applySetBulk(keepPath, ids, updates, warnings, sch, keepCfg)
 }
 
 // previewSetBulk shows a preview of bulk set operations.
-func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	parseOpts := buildParseOptions(vaultCfg)
+func previewSetBulk(keepPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, keepCfg *config.KeepConfig) error {
+	parseOpts := buildParseOptions(keepCfg)
 
 	preview := buildBulkPreview("set", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		// Check if this is an embedded object
 		if IsEmbeddedID(id) {
-			return previewSetEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
+			return previewSetEmbedded(keepPath, id, updates, sch, keepCfg, parseOpts)
 		}
 
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, id, keepCfg)
 		if err != nil {
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
@@ -231,14 +231,14 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 }
 
 // applySetBulk applies bulk set operations.
-func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	parseOpts := buildParseOptions(vaultCfg)
+func applySetBulk(keepPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, keepCfg *config.KeepConfig) error {
+	parseOpts := buildParseOptions(keepCfg)
 
 	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
 		// Check if this is an embedded object
 		if IsEmbeddedID(id) {
-			err := applySetEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
+			err := applySetEmbedded(keepPath, id, updates, sch, keepCfg, parseOpts)
 			if err != nil {
 				result.Status = "error"
 				result.Reason = err.Error()
@@ -248,7 +248,7 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 			return result
 		}
 
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
+		filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, id, keepCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -307,7 +307,7 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 		}
 
 		// Auto-reindex if configured
-		maybeReindex(vaultPath, filePath, vaultCfg)
+		maybeReindex(keepPath, filePath, keepCfg)
 
 		result.Status = "modified"
 		return result
@@ -320,23 +320,23 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 }
 
 // setSingleObject sets fields on a single object (non-bulk mode).
-func setSingleObject(vaultPath, reference string, updates map[string]string, typedUpdates map[string]schema.FieldValue) error {
+func setSingleObject(keepPath, reference string, updates map[string]string, typedUpdates map[string]schema.FieldValue) error {
 	// Load schema for validation
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
 	// Resolve the reference using unified resolver
 	result, err := ResolveReference(reference, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
+		KeepPath:   keepPath,
+		KeepConfig: keepCfg,
 	})
 	if err != nil {
 		return handleResolveError(err, reference)
@@ -344,7 +344,7 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 
 	// Check if this is an embedded object (section)
 	if result.IsSection {
-		return setEmbeddedObject(vaultPath, result.ObjectID, updates, typedUpdates, sch, vaultCfg)
+		return setEmbeddedObject(keepPath, result.ObjectID, updates, typedUpdates, sch, keepCfg)
 	}
 
 	objectID := result.ObjectID
@@ -405,9 +405,9 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	}
 
 	// Auto-reindex if configured
-	maybeReindex(vaultPath, filePath, vaultCfg)
+	maybeReindex(keepPath, filePath, keepCfg)
 
-	relPath, _ := filepath.Rel(vaultPath, filePath)
+	relPath, _ := filepath.Rel(keepPath, filePath)
 
 	// Output
 	if isJSONOutput() {
@@ -569,7 +569,7 @@ func fieldValueToYAMLValue(value schema.FieldValue) interface{} {
 }
 
 // setEmbeddedObject sets fields on an embedded object.
-func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, typedUpdates map[string]schema.FieldValue, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
+func setEmbeddedObject(keepPath, objectID string, updates map[string]string, typedUpdates map[string]schema.FieldValue, sch *schema.Schema, keepCfg *config.KeepConfig) error {
 	// Parse the embedded ID: fileID#slug
 	fileID, slug, isEmbedded := paths.ParseEmbeddedID(objectID)
 	if !isEmbedded {
@@ -577,7 +577,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 	}
 
 	// Resolve file ID to file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileID, keepCfg)
 	if err != nil {
 		return handleError(ErrFileDoesNotExist, err, "")
 	}
@@ -588,11 +588,11 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 		return handleError(ErrFileReadError, err, "")
 	}
 
-	// Get parse options from vault config
-	parseOpts := buildParseOptions(vaultCfg)
+	// Get parse options from keep config
+	parseOpts := buildParseOptions(keepCfg)
 
 	// Parse the document to find the embedded object
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, keepPath, parseOpts)
 	if err != nil {
 		return handleError(ErrInvalidInput, err, "Failed to parse document")
 	}
@@ -701,9 +701,9 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 	}
 
 	// Auto-reindex if configured
-	maybeReindex(vaultPath, filePath, vaultCfg)
+	maybeReindex(keepPath, filePath, keepCfg)
 
-	relPath, _ := filepath.Rel(vaultPath, filePath)
+	relPath, _ := filepath.Rel(keepPath, filePath)
 
 	// Output
 	if isJSONOutput() {
@@ -761,7 +761,7 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 }
 
 // previewSetEmbedded generates a preview for an embedded object.
-func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) (*BulkPreviewItem, *BulkResult) {
+func previewSetEmbedded(keepPath, id string, updates map[string]string, sch *schema.Schema, keepCfg *config.KeepConfig, parseOpts *parser.ParseOptions) (*BulkPreviewItem, *BulkResult) {
 	// Parse the embedded ID
 	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
 	if !isEmbedded {
@@ -769,7 +769,7 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *sc
 	}
 
 	// Resolve file ID to file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileID, keepCfg)
 	if err != nil {
 		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "parent file not found"}
 	}
@@ -781,7 +781,7 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *sc
 	}
 
 	// Parse the document
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, keepPath, parseOpts)
 	if err != nil {
 		return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
 	}
@@ -845,7 +845,7 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *sc
 }
 
 // applySetEmbedded applies a set operation to an embedded object.
-func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) error {
+func applySetEmbedded(keepPath, id string, updates map[string]string, sch *schema.Schema, keepCfg *config.KeepConfig, parseOpts *parser.ParseOptions) error {
 	// Parse the embedded ID
 	fileID, slug, isEmbedded := paths.ParseEmbeddedID(id)
 	if !isEmbedded {
@@ -853,7 +853,7 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 	}
 
 	// Resolve file ID to file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileID, keepCfg)
 	if err != nil {
 		return fmt.Errorf("parent file not found: %w", err)
 	}
@@ -865,7 +865,7 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 	}
 
 	// Parse the document
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, keepPath, parseOpts)
 	if err != nil {
 		return fmt.Errorf("parse error: %w", err)
 	}
@@ -946,7 +946,7 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 	}
 
 	// Auto-reindex if configured
-	maybeReindex(vaultPath, filePath, vaultCfg)
+	maybeReindex(keepPath, filePath, keepCfg)
 
 	return nil
 }

@@ -10,9 +10,9 @@ import (
 )
 
 func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevStrict := checkStrict
 	prevCreateMissing := checkCreateMissing
@@ -26,7 +26,7 @@ func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 	prevFix := checkFix
 	prevConfirm := checkConfirm
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		checkStrict = prevStrict
 		checkCreateMissing = prevCreateMissing
@@ -41,7 +41,7 @@ func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 		checkConfirm = prevConfirm
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	checkStrict = false
 	checkCreateMissing = false
@@ -71,8 +71,8 @@ func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 	if !envelope.OK {
 		t.Fatalf("expected ok=true, got false; out=%s", out)
 	}
-	if envelope.Data.VaultPath != vaultPath {
-		t.Fatalf("vault_path = %q, want %q", envelope.Data.VaultPath, vaultPath)
+	if envelope.Data.KeepPath != keepPath {
+		t.Fatalf("keep_path = %q, want %q", envelope.Data.KeepPath, keepPath)
 	}
 }
 

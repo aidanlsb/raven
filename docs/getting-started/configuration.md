@@ -1,8 +1,8 @@
 # Configuration Guide
 
-This guide covers global and vault-level configuration. 
+This guide covers global and keep-level configuration. 
 - global machine config in `config.toml`
-- vault-level behavior config in `raven.yaml`
+- keep-level behavior config in `raven.yaml`
 
 For schema details, see:
 - `docs/types-and-traits/schema-intro.md`
@@ -12,30 +12,30 @@ For schema details, see:
 
 | File | Scope | Purpose |
 |------|-------|---------|
-| `~/.config/raven/config.toml` | machine | Global defaults and vault registry |
-| `~/.config/raven/state.toml` | machine | Mutable runtime state (`active_vault`) |
-| `raven.yaml` (vault root) | per vault | Vault behavior and operational config |
+| `~/.config/raven/config.toml` | machine | Global defaults and keep registry |
+| `~/.config/raven/state.toml` | machine | Mutable runtime state (`active_keep`) |
+| `raven.yaml` (keep root) | per keep | Keep behavior and operational config |
 
 Rule of thumb:
-- Put cross-vault machine settings in `config.toml`.
-- Put vault behavior that should travel with the vault in `raven.yaml`.
+- Put cross-keep machine settings in `config.toml`.
+- Put keep behavior that should travel with the keep in `raven.yaml`.
 - Put structure and validation in `schema.yaml` (separate docs).
 
 ---
 
 ## Global config: `config.toml`
 
-`config.toml` controls how Raven resolves vaults and launches your editor.
+`config.toml` controls how Raven resolves keeps and launches your editor.
 
 ### Typical example
 
 ```toml
-default_vault = "work"
+default_keep = "work"
 state_file = "state.toml"
 editor = "cursor"
 editor_mode = "auto"
 
-[vaults]
+[keeps]
 work = "/Users/you/work-notes"
 personal = "/Users/you/personal-notes"
 
@@ -48,11 +48,11 @@ code_theme = "monokai"
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `default_vault` | string | none | Name from `[vaults]` used as fallback when no explicit vault is provided |
+| `default_keep` | string | none | Name from `[keeps]` used as fallback when no explicit keep is provided |
 | `state_file` | string | `state.toml` next to `config.toml` | Relative paths are resolved relative to the config directory |
 | `editor` | string | `$EDITOR` | Used by commands that open files |
 | `editor_mode` | string | `auto` behavior in caller logic | One of `auto`, `terminal`, `gui` |
-| `[vaults]` | table | empty | Name -> absolute path mapping |
+| `[keeps]` | table | empty | Name -> absolute path mapping |
 | `[ui].accent` | string | unset | Accent color for styled terminal output. Supports ANSI (`"0"`-`"255"`) or hex (`"#RRGGBB"` / `"#RGB"`). |
 | `[ui].code_theme` | string | unset (`monokai` effective default) | Markdown code-block theme (Glamour/Chroma), for example `monokai`, `dracula`, `github` |
 
@@ -114,8 +114,8 @@ code_theme = "github"
 
 ### Legacy compatibility
 
-- `vault` (single string path) is still supported for backward compatibility.
-- Prefer `default_vault` + `[vaults]` for new setups.
+- `keep` (single string path) is still supported for backward compatibility.
+- Prefer `default_keep` + `[keeps]` for new setups.
 
 ### Path resolution and overrides
 
@@ -127,34 +127,34 @@ code_theme = "github"
   - Else `state_file` from `config.toml`.
   - Else `state.toml` beside `config.toml`.
 
-### Vault resolution order at runtime
+### Keep resolution order at runtime
 
-For commands that operate on a vault:
-1. `--vault-path`
-2. `--vault <name>` (resolved via `[vaults]`)
-3. `active_vault` from `state.toml`
-4. `default_vault` from `config.toml`
+For commands that operate on a keep:
+1. `--keep-path`
+2. `--keep <name>` (resolved via `[keeps]`)
+3. `active_keep` from `state.toml`
+4. `default_keep` from `config.toml`
 
-If `active_vault` is set but missing from config, Raven falls back to `default_vault` and emits a warning in non-JSON mode.
+If `active_keep` is set but missing from config, Raven falls back to `default_keep` and emits a warning in non-JSON mode.
 
-### Manage global vault config via CLI/MCP
+### Manage global keep config via CLI/MCP
 
-Instead of editing `config.toml` manually, you can manage vault entries directly:
+Instead of editing `config.toml` manually, you can manage keep entries directly:
 
 ```bash
-rvn vault add personal /Users/you/personal-notes --pin --json
-rvn vault use personal --json
-rvn vault list --json
-rvn vault remove personal --clear-default --clear-active --json
+rvn keep add personal /Users/you/personal-notes --pin --json
+rvn keep use personal --json
+rvn keep list --json
+rvn keep remove personal --clear-default --clear-active --json
 ```
 
 MCP exposes these as:
-- `raven_vault_add`
-- `raven_vault_use`
-- `raven_vault_pin`
-- `raven_vault_list`
-- `raven_vault_remove`
-- `raven_vault_clear`
+- `raven_keep_add`
+- `raven_keep_use`
+- `raven_keep_pin`
+- `raven_keep_list`
+- `raven_keep_remove`
+- `raven_keep_clear`
 
 ### Manage global config fields via CLI/MCP
 
@@ -177,9 +177,9 @@ MCP exposes these as:
 
 ---
 
-## Vault config: `raven.yaml`
+## Keep config: `raven.yaml`
 
-`raven.yaml` controls per-vault behavior: directories, auto-reindexing, capture, deletion, saved queries, workflow registration, workflow run retention, and protected paths.
+`raven.yaml` controls per-keep behavior: directories, auto-reindexing, capture, deletion, saved queries, workflow registration, workflow run retention, and protected paths.
 
 ### Practical baseline
 
@@ -249,7 +249,7 @@ protected_prefixes:
 
 ### `auto_reindex`
 
-Automatically reindex after CLI commands that modify vault content.
+Automatically reindex after CLI commands that modify keep content.
 
 | Type | Default |
 |------|---------|
@@ -270,7 +270,7 @@ Directory roots used by Raven.
 | `template` | string | `templates/` | Root for template files referenced by schema |
 
 Behavior notes:
-- Paths are normalized as vault-relative paths.
+- Paths are normalized as keep-relative paths.
 - `workflow` and `template` are normalized with trailing `/`.
 - `daily` is normalized and used as a directory name (no trailing `/` in resolved internal value).
 - If the entire `directories` block is missing, Raven uses a flat layout (no `object`/`page` roots).
@@ -288,7 +288,7 @@ Quick capture defaults for `rvn add`.
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `destination` | string | `daily` | `"daily"` or a vault-relative file path like `inbox.md` |
+| `destination` | string | `daily` | `"daily"` or a keep-relative file path like `inbox.md` |
 | `heading` | string | unset | If set, appends under that heading (creates heading if missing) |
 
 ### `deletion`
@@ -298,7 +298,7 @@ Behavior for `rvn delete`.
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `behavior` | string | `trash` | `trash` or `permanent` |
-| `trash_dir` | string | `.trash` | Vault-relative trash location when `behavior: trash` |
+| `trash_dir` | string | `.trash` | Keep-relative trash location when `behavior: trash` |
 
 ### `queries`
 
@@ -350,7 +350,7 @@ Compatibility:
 
 ### `protected_prefixes`
 
-Additional vault-relative prefixes treated as protected/system-managed by automation features.
+Additional keep-relative prefixes treated as protected/system-managed by automation features.
 
 | Type | Default |
 |------|---------|

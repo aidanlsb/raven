@@ -9,17 +9,17 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 )
 
-func TestVaultRows(t *testing.T) {
+func TestKeepRows(t *testing.T) {
 	cfg := &config.Config{
-		DefaultVault: "work",
-		Vaults: map[string]string{
-			"work":     "/vault/work",
-			"personal": "/vault/personal",
+		DefaultKeep: "work",
+		Keeps: map[string]string{
+			"work":     "/keep/work",
+			"personal": "/keep/personal",
 		},
 	}
-	state := &config.State{ActiveVault: "personal"}
+	state := &config.State{ActiveKeep: "personal"}
 
-	rows, defaultName, activeName, activeMissing := vaultRows(cfg, state)
+	rows, defaultName, activeName, activeMissing := keepRows(cfg, state)
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
@@ -34,50 +34,50 @@ func TestVaultRows(t *testing.T) {
 	}
 }
 
-func TestResolveCurrentVault(t *testing.T) {
-	t.Run("prefers active vault", func(t *testing.T) {
+func TestResolveCurrentKeep(t *testing.T) {
+	t.Run("prefers active keep", func(t *testing.T) {
 		cfg := &config.Config{
-			DefaultVault: "work",
-			Vaults: map[string]string{
-				"work":     "/vault/work",
-				"personal": "/vault/personal",
+			DefaultKeep: "work",
+			Keeps: map[string]string{
+				"work":     "/keep/work",
+				"personal": "/keep/personal",
 			},
 		}
-		state := &config.State{ActiveVault: "personal"}
+		state := &config.State{ActiveKeep: "personal"}
 
-		got, err := resolveCurrentVault(cfg, state)
+		got, err := resolveCurrentKeep(cfg, state)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if got.Name != "personal" {
 			t.Fatalf("expected name=personal, got %q", got.Name)
 		}
-		if got.Path != "/vault/personal" {
-			t.Fatalf("expected path=/vault/personal, got %q", got.Path)
+		if got.Path != "/keep/personal" {
+			t.Fatalf("expected path=/keep/personal, got %q", got.Path)
 		}
-		if got.Source != "active_vault" {
-			t.Fatalf("expected source=active_vault, got %q", got.Source)
+		if got.Source != "active_keep" {
+			t.Fatalf("expected source=active_keep, got %q", got.Source)
 		}
 	})
 
 	t.Run("falls back to default when active missing", func(t *testing.T) {
 		cfg := &config.Config{
-			DefaultVault: "work",
-			Vaults: map[string]string{
-				"work": "/vault/work",
+			DefaultKeep: "work",
+			Keeps: map[string]string{
+				"work": "/keep/work",
 			},
 		}
-		state := &config.State{ActiveVault: "personal"}
+		state := &config.State{ActiveKeep: "personal"}
 
-		got, err := resolveCurrentVault(cfg, state)
+		got, err := resolveCurrentKeep(cfg, state)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if got.Name != "work" {
 			t.Fatalf("expected name=work, got %q", got.Name)
 		}
-		if got.Source != "default_vault_fallback" {
-			t.Fatalf("expected source=default_vault_fallback, got %q", got.Source)
+		if got.Source != "default_keep_fallback" {
+			t.Fatalf("expected source=default_keep_fallback, got %q", got.Source)
 		}
 		if !got.ActiveMissing {
 			t.Fatalf("expected active_missing=true")
@@ -86,25 +86,25 @@ func TestResolveCurrentVault(t *testing.T) {
 
 	t.Run("errors when neither active nor default is available", func(t *testing.T) {
 		cfg := &config.Config{}
-		state := &config.State{ActiveVault: "missing"}
+		state := &config.State{ActiveKeep: "missing"}
 
-		_, err := resolveCurrentVault(cfg, state)
+		_, err := resolveCurrentKeep(cfg, state)
 		if err == nil {
 			t.Fatalf("expected error")
 		}
 	})
 }
 
-func TestVaultUseCreatesStateFile(t *testing.T) {
+func TestKeepUseCreatesStateFile(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
 
-	content := `default_vault = "work"
+	content := `default_keep = "work"
 
-[vaults]
-work = "/vault/work"
-personal = "/vault/personal"
+[keeps]
+work = "/keep/work"
+personal = "/keep/personal"
 `
 	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -127,29 +127,29 @@ personal = "/vault/personal"
 		t.Fatalf("expected state file to not exist yet")
 	}
 
-	if err := vaultUseCmd.RunE(vaultUseCmd, []string{"personal"}); err != nil {
-		t.Fatalf("vaultUseCmd.RunE: %v", err)
+	if err := keepUseCmd.RunE(keepUseCmd, []string{"personal"}); err != nil {
+		t.Fatalf("keepUseCmd.RunE: %v", err)
 	}
 
 	state, err := config.LoadState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
 	}
-	if state.ActiveVault != "personal" {
-		t.Fatalf("expected active_vault=personal, got %q", state.ActiveVault)
+	if state.ActiveKeep != "personal" {
+		t.Fatalf("expected active_keep=personal, got %q", state.ActiveKeep)
 	}
 }
 
-func TestVaultPinUpdatesDefaultVault(t *testing.T) {
+func TestKeepPinUpdatesDefaultKeep(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
 
-	content := `default_vault = "work"
+	content := `default_keep = "work"
 
-[vaults]
-work = "/vault/work"
-personal = "/vault/personal"
+[keeps]
+work = "/keep/work"
+personal = "/keep/personal"
 `
 	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -168,36 +168,36 @@ personal = "/vault/personal"
 	statePathFlag = statePath
 	jsonOutput = true
 
-	if err := vaultPinCmd.RunE(vaultPinCmd, []string{"personal"}); err != nil {
-		t.Fatalf("vaultPinCmd.RunE: %v", err)
+	if err := keepPinCmd.RunE(keepPinCmd, []string{"personal"}); err != nil {
+		t.Fatalf("keepPinCmd.RunE: %v", err)
 	}
 
 	cfg, err := config.LoadFrom(cfgPath)
 	if err != nil {
 		t.Fatalf("reload config: %v", err)
 	}
-	if cfg.DefaultVault != "personal" {
-		t.Fatalf("expected default_vault=personal, got %q", cfg.DefaultVault)
+	if cfg.DefaultKeep != "personal" {
+		t.Fatalf("expected default_keep=personal, got %q", cfg.DefaultKeep)
 	}
 }
 
-func TestVaultClearRemovesActiveVault(t *testing.T) {
+func TestKeepClearRemovesActiveKeep(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
 
-	cfgContent := `default_vault = "work"
+	cfgContent := `default_keep = "work"
 
-[vaults]
-work = "/vault/work"
-personal = "/vault/personal"
+[keeps]
+work = "/keep/work"
+personal = "/keep/personal"
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	stateContent := `version = 1
-active_vault = "personal"
+active_keep = "personal"
 `
 	if err := os.WriteFile(statePath, []byte(stateContent), 0o644); err != nil {
 		t.Fatalf("write state: %v", err)
@@ -216,73 +216,73 @@ active_vault = "personal"
 	statePathFlag = statePath
 	jsonOutput = true
 
-	if err := vaultClearCmd.RunE(vaultClearCmd, []string{}); err != nil {
-		t.Fatalf("vaultClearCmd.RunE: %v", err)
+	if err := keepClearCmd.RunE(keepClearCmd, []string{}); err != nil {
+		t.Fatalf("keepClearCmd.RunE: %v", err)
 	}
 
 	state, err := config.LoadState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
 	}
-	if strings.TrimSpace(state.ActiveVault) != "" {
-		t.Fatalf("expected empty active_vault, got %q", state.ActiveVault)
+	if strings.TrimSpace(state.ActiveKeep) != "" {
+		t.Fatalf("expected empty active_keep, got %q", state.ActiveKeep)
 	}
 }
 
-func TestVaultAddAddsAndPinsVault(t *testing.T) {
+func TestKeepAddAddsAndPinsKeep(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
-	vaultPath := filepath.Join(tmp, "vault-personal")
+	keepPath := filepath.Join(tmp, "keep-personal")
 
 	if err := os.WriteFile(cfgPath, []byte(""), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
-		t.Fatalf("create vault path: %v", err)
+	if err := os.MkdirAll(keepPath, 0o755); err != nil {
+		t.Fatalf("create keep path: %v", err)
 	}
 
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevReplace := vaultAddReplace
-	prevPin := vaultAddPin
+	prevReplace := keepAddReplace
+	prevPin := keepAddPin
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultAddReplace = prevReplace
-		vaultAddPin = prevPin
+		keepAddReplace = prevReplace
+		keepAddPin = prevPin
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = true
-	vaultAddReplace = false
-	vaultAddPin = true
+	keepAddReplace = false
+	keepAddPin = true
 
-	if err := vaultAddCmd.RunE(vaultAddCmd, []string{"personal", vaultPath}); err != nil {
-		t.Fatalf("vaultAddCmd.RunE: %v", err)
+	if err := keepAddCmd.RunE(keepAddCmd, []string{"personal", keepPath}); err != nil {
+		t.Fatalf("keepAddCmd.RunE: %v", err)
 	}
 
 	cfg, err := config.LoadFrom(cfgPath)
 	if err != nil {
 		t.Fatalf("reload config: %v", err)
 	}
-	if got := cfg.DefaultVault; got != "personal" {
-		t.Fatalf("expected default_vault=personal, got %q", got)
+	if got := cfg.DefaultKeep; got != "personal" {
+		t.Fatalf("expected default_keep=personal, got %q", got)
 	}
-	if got := cfg.Vaults["personal"]; got != vaultPath {
-		t.Fatalf("expected vault path %q, got %q", vaultPath, got)
+	if got := cfg.Keeps["personal"]; got != keepPath {
+		t.Fatalf("expected keep path %q, got %q", keepPath, got)
 	}
 }
 
-func TestVaultAddRejectsDuplicateWithoutReplace(t *testing.T) {
+func TestKeepAddRejectsDuplicateWithoutReplace(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
-	oldPath := filepath.Join(tmp, "vault-work")
-	newPath := filepath.Join(tmp, "vault-work-new")
+	oldPath := filepath.Join(tmp, "keep-work")
+	newPath := filepath.Join(tmp, "keep-work-new")
 
 	if err := os.MkdirAll(oldPath, 0o755); err != nil {
 		t.Fatalf("create old path: %v", err)
@@ -292,8 +292,8 @@ func TestVaultAddRejectsDuplicateWithoutReplace(t *testing.T) {
 	}
 
 	if err := config.SaveTo(cfgPath, &config.Config{
-		DefaultVault: "work",
-		Vaults: map[string]string{
+		DefaultKeep: "work",
+		Keeps: map[string]string{
 			"work": oldPath,
 		},
 	}); err != nil {
@@ -303,23 +303,23 @@ func TestVaultAddRejectsDuplicateWithoutReplace(t *testing.T) {
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevReplace := vaultAddReplace
-	prevPin := vaultAddPin
+	prevReplace := keepAddReplace
+	prevPin := keepAddPin
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultAddReplace = prevReplace
-		vaultAddPin = prevPin
+		keepAddReplace = prevReplace
+		keepAddPin = prevPin
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = false
-	vaultAddReplace = false
-	vaultAddPin = false
+	keepAddReplace = false
+	keepAddPin = false
 
-	err := vaultAddCmd.RunE(vaultAddCmd, []string{"work", newPath})
+	err := keepAddCmd.RunE(keepAddCmd, []string{"work", newPath})
 	if err == nil {
 		t.Fatalf("expected duplicate error")
 	}
@@ -331,17 +331,17 @@ func TestVaultAddRejectsDuplicateWithoutReplace(t *testing.T) {
 	if loadErr != nil {
 		t.Fatalf("reload config: %v", loadErr)
 	}
-	if got := cfg.Vaults["work"]; got != oldPath {
+	if got := cfg.Keeps["work"]; got != oldPath {
 		t.Fatalf("expected existing path to remain %q, got %q", oldPath, got)
 	}
 }
 
-func TestVaultRemoveRequiresClearFlagsForDefaultAndActive(t *testing.T) {
+func TestKeepRemoveRequiresClearFlagsForDefaultAndActive(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
-	workPath := filepath.Join(tmp, "vault-work")
-	personalPath := filepath.Join(tmp, "vault-personal")
+	workPath := filepath.Join(tmp, "keep-work")
+	personalPath := filepath.Join(tmp, "keep-personal")
 
 	if err := os.MkdirAll(workPath, 0o755); err != nil {
 		t.Fatalf("create work path: %v", err)
@@ -351,8 +351,8 @@ func TestVaultRemoveRequiresClearFlagsForDefaultAndActive(t *testing.T) {
 	}
 
 	if err := config.SaveTo(cfgPath, &config.Config{
-		DefaultVault: "work",
-		Vaults: map[string]string{
+		DefaultKeep: "work",
+		Keeps: map[string]string{
 			"work":     workPath,
 			"personal": personalPath,
 		},
@@ -360,8 +360,8 @@ func TestVaultRemoveRequiresClearFlagsForDefaultAndActive(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 	if err := config.SaveState(statePath, &config.State{
-		Version:     config.StateVersion,
-		ActiveVault: "work",
+		Version:    config.StateVersion,
+		ActiveKeep: "work",
 	}); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
@@ -369,37 +369,37 @@ func TestVaultRemoveRequiresClearFlagsForDefaultAndActive(t *testing.T) {
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevClearDefault := vaultRemoveClearDefault
-	prevClearActive := vaultRemoveClearActive
+	prevClearDefault := keepRemoveClearDefault
+	prevClearActive := keepRemoveClearActive
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultRemoveClearDefault = prevClearDefault
-		vaultRemoveClearActive = prevClearActive
+		keepRemoveClearDefault = prevClearDefault
+		keepRemoveClearActive = prevClearActive
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = false
-	vaultRemoveClearDefault = false
-	vaultRemoveClearActive = false
+	keepRemoveClearDefault = false
+	keepRemoveClearActive = false
 
-	err := vaultRemoveCmd.RunE(vaultRemoveCmd, []string{"work"})
+	err := keepRemoveCmd.RunE(keepRemoveCmd, []string{"work"})
 	if err == nil {
 		t.Fatalf("expected confirmation-required error")
 	}
-	if !strings.Contains(err.Error(), "default vault") {
-		t.Fatalf("expected default vault error, got %v", err)
+	if !strings.Contains(err.Error(), "default keep") {
+		t.Fatalf("expected default keep error, got %v", err)
 	}
 }
 
-func TestVaultRemoveClearsDefaultAndActive(t *testing.T) {
+func TestKeepRemoveClearsDefaultAndActive(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
-	workPath := filepath.Join(tmp, "vault-work")
-	personalPath := filepath.Join(tmp, "vault-personal")
+	workPath := filepath.Join(tmp, "keep-work")
+	personalPath := filepath.Join(tmp, "keep-personal")
 
 	if err := os.MkdirAll(workPath, 0o755); err != nil {
 		t.Fatalf("create work path: %v", err)
@@ -409,8 +409,8 @@ func TestVaultRemoveClearsDefaultAndActive(t *testing.T) {
 	}
 
 	if err := config.SaveTo(cfgPath, &config.Config{
-		DefaultVault: "work",
-		Vaults: map[string]string{
+		DefaultKeep: "work",
+		Keeps: map[string]string{
 			"work":     workPath,
 			"personal": personalPath,
 		},
@@ -418,8 +418,8 @@ func TestVaultRemoveClearsDefaultAndActive(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 	if err := config.SaveState(statePath, &config.State{
-		Version:     config.StateVersion,
-		ActiveVault: "work",
+		Version:    config.StateVersion,
+		ActiveKeep: "work",
 	}); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
@@ -427,42 +427,42 @@ func TestVaultRemoveClearsDefaultAndActive(t *testing.T) {
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevClearDefault := vaultRemoveClearDefault
-	prevClearActive := vaultRemoveClearActive
+	prevClearDefault := keepRemoveClearDefault
+	prevClearActive := keepRemoveClearActive
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultRemoveClearDefault = prevClearDefault
-		vaultRemoveClearActive = prevClearActive
+		keepRemoveClearDefault = prevClearDefault
+		keepRemoveClearActive = prevClearActive
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = true
-	vaultRemoveClearDefault = true
-	vaultRemoveClearActive = true
+	keepRemoveClearDefault = true
+	keepRemoveClearActive = true
 
-	if err := vaultRemoveCmd.RunE(vaultRemoveCmd, []string{"work"}); err != nil {
-		t.Fatalf("vaultRemoveCmd.RunE: %v", err)
+	if err := keepRemoveCmd.RunE(keepRemoveCmd, []string{"work"}); err != nil {
+		t.Fatalf("keepRemoveCmd.RunE: %v", err)
 	}
 
 	cfg, err := config.LoadFrom(cfgPath)
 	if err != nil {
 		t.Fatalf("reload config: %v", err)
 	}
-	if got := cfg.DefaultVault; got != "" {
-		t.Fatalf("expected default_vault to be cleared, got %q", got)
+	if got := cfg.DefaultKeep; got != "" {
+		t.Fatalf("expected default_keep to be cleared, got %q", got)
 	}
-	if _, ok := cfg.Vaults["work"]; ok {
-		t.Fatalf("expected work vault to be removed")
+	if _, ok := cfg.Keeps["work"]; ok {
+		t.Fatalf("expected work keep to be removed")
 	}
 
 	state, err := config.LoadState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
 	}
-	if strings.TrimSpace(state.ActiveVault) != "" {
-		t.Fatalf("expected active_vault to be cleared, got %q", state.ActiveVault)
+	if strings.TrimSpace(state.ActiveKeep) != "" {
+		t.Fatalf("expected active_keep to be cleared, got %q", state.ActiveKeep)
 	}
 }

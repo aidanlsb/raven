@@ -15,7 +15,7 @@ import (
 
 // TestMCPIntegration_ToolsList tests that the MCP server returns tool schemas.
 func TestMCPIntegration_ToolsList(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -87,7 +87,7 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 
 // TestMCPIntegration_CreateObject tests creating an object via MCP tool call.
 func TestMCPIntegration_CreateObject(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -115,7 +115,7 @@ func TestMCPIntegration_CreateObject(t *testing.T) {
 }
 
 func TestMCPIntegration_SchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -151,7 +151,7 @@ func TestMCPIntegration_SchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
 // TestMCPIntegration_CreatePageWithObjectRootFallback verifies that when
 // directories.page is omitted, it defaults to directories.object for creation.
 func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`directories:
   object: objects/
@@ -176,7 +176,7 @@ func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {
 
 // TestMCPIntegration_QueryObjects tests querying objects via MCP tool call.
 func TestMCPIntegration_QueryObjects(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -223,7 +223,7 @@ func TestMCPIntegration_QueryObjects(t *testing.T) {
 // TestMCPIntegration_QuerySavedQueryInlineArgs tests MCP query_string containing
 // "<saved-query-name> <inputs...>" in a single string argument.
 func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
   project-by-status:
@@ -273,7 +273,7 @@ func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
 
 // TestMCPIntegration_ReadObject tests reading an object via MCP tool call.
 func TestMCPIntegration_ReadObject(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/bob.md", `---
 type: person
@@ -308,7 +308,7 @@ Bob is a developer.
 
 // TestMCPIntegration_SetFields tests updating object fields via MCP tool call.
 func TestMCPIntegration_SetFields(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -340,7 +340,7 @@ func TestMCPIntegration_SetFields(t *testing.T) {
 // TestMCPIntegration_StringEncodedStructuredInputs verifies that MCP tool calls
 // succeed when structured inputs are provided as strings (strict-client compatibility).
 func TestMCPIntegration_StringEncodedStructuredInputs(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   note:
@@ -493,7 +493,7 @@ steps:
 
 // TestMCPIntegration_EditDeleteWithEmptyString tests deleting text via raven_edit with empty new_str.
 func TestMCPIntegration_EditDeleteWithEmptyString(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("daily/2026-01-02.md", `---
 type: page
@@ -523,7 +523,7 @@ type: page
 
 // TestMCPIntegration_DeleteObject tests deleting an object via MCP tool call.
 func TestMCPIntegration_DeleteObject(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -553,7 +553,7 @@ func TestMCPIntegration_DeleteObject(t *testing.T) {
 
 // TestMCPIntegration_Search tests full-text search via MCP tool call.
 func TestMCPIntegration_Search(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("notes/meeting.md", `---
 type: page
@@ -597,7 +597,7 @@ Discussed the product roadmap and timeline.
 
 // TestMCPIntegration_Backlinks tests backlinks retrieval via MCP tool call.
 func TestMCPIntegration_Backlinks(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/eve.md", `---
 type: person
@@ -649,7 +649,7 @@ Eve's secret project.
 
 // TestMCPIntegration_SchemaIntrospection tests schema introspection via MCP.
 func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -698,7 +698,7 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 // TestMCPIntegration_SchemaFieldDescriptionsViaToolCall verifies schema field
 // descriptions can be added/updated/removed through MCP tools/call.
 func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -744,7 +744,7 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 // TestMCPIntegration_SchemaFieldEnumValuesViaToolCall verifies enum field values
 // can be updated via MCP without removing/recreating the field.
 func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -768,7 +768,7 @@ func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
 // preview/apply behavior for type rename with optional default_path directory
 // migration.
 func TestMCPIntegration_SchemaRenameTypeWithDefaultPathRename(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   event:
@@ -907,9 +907,9 @@ Planning: [[events/planning|Planning]]
 	v.AssertFileNotContains("projects/roadmap.md", "events/planning")
 }
 
-// TestMCPIntegration_Check tests vault check via MCP tool call.
+// TestMCPIntegration_Check tests keep check via MCP tool call.
 func TestMCPIntegration_Check(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("notes/broken.md", `---
 type: page
@@ -943,7 +943,7 @@ References [[nonexistent/page]] which doesn't exist.
 // TestMCPIntegration_CheckCreateMissingWithConfirm verifies non-interactive
 // create-missing behavior via MCP (JSON mode + confirm=true).
 func TestMCPIntegration_CheckCreateMissingWithConfirm(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   meeting:
@@ -980,7 +980,7 @@ meeting: "[[meeting/all-hands]]"
 
 // TestMCPIntegration_ErrorHandling tests that MCP errors are properly surfaced.
 func TestMCPIntegration_ErrorHandling(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -1023,7 +1023,7 @@ func TestMCPIntegration_ErrorHandling(t *testing.T) {
 // testServer wraps the MCP Server for testing purposes.
 type testServer struct {
 	t          *testing.T
-	vaultPath  string
+	keepPath   string
 	executable string
 }
 
@@ -1034,10 +1034,10 @@ type toolResult struct {
 }
 
 // newTestServer creates a test server with a custom executable path.
-func newTestServer(t *testing.T, vaultPath, executable string) *testServer {
+func newTestServer(t *testing.T, keepPath, executable string) *testServer {
 	return &testServer{
 		t:          t,
-		vaultPath:  vaultPath,
+		keepPath:   keepPath,
 		executable: executable,
 	}
 }
@@ -1053,7 +1053,7 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 	}
 
 	// Create a real MCP server but with custom executable
-	server := mcp.NewServerWithExecutable(s.vaultPath, s.executable)
+	server := mcp.NewServerWithExecutable(s.keepPath, s.executable)
 
 	// Create a simulated JSON-RPC request
 	paramsBytes, _ := json.Marshal(map[string]interface{}{

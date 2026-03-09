@@ -13,7 +13,7 @@ func resetConfigSetFlagsForTest() {
 	configSetEditor = ""
 	configSetEditorMode = ""
 	configSetStateFile = ""
-	configSetDefaultVault = ""
+	configSetDefaultKeep = ""
 	configSetUIAccent = ""
 	configSetUICodeTheme = ""
 
@@ -26,7 +26,7 @@ func resetConfigSetFlagsForTest() {
 	if f := configSetCmd.Flags().Lookup("state-file"); f != nil {
 		f.Changed = false
 	}
-	if f := configSetCmd.Flags().Lookup("default-vault"); f != nil {
+	if f := configSetCmd.Flags().Lookup("default-keep"); f != nil {
 		f.Changed = false
 	}
 	if f := configSetCmd.Flags().Lookup("ui-accent"); f != nil {
@@ -41,7 +41,7 @@ func resetConfigUnsetFlagsForTest() {
 	configUnsetEditor = false
 	configUnsetEditorMode = false
 	configUnsetStateFile = false
-	configUnsetDefaultVault = false
+	configUnsetDefaultKeep = false
 	configUnsetUIAccent = false
 	configUnsetUICodeTheme = false
 }
@@ -80,8 +80,8 @@ func TestConfigSetUpdatesFields(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 
-	content := `[vaults]
-work = "/vault/work"
+	content := `[keeps]
+work = "/keep/work"
 `
 	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -104,13 +104,13 @@ work = "/vault/work"
 
 	configSetEditor = "code"
 	configSetEditorMode = "terminal"
-	configSetDefaultVault = "work"
+	configSetDefaultKeep = "work"
 	configSetUIAccent = "39"
 	configSetUICodeTheme = "dracula"
 
 	configSetCmd.Flags().Lookup("editor").Changed = true
 	configSetCmd.Flags().Lookup("editor-mode").Changed = true
-	configSetCmd.Flags().Lookup("default-vault").Changed = true
+	configSetCmd.Flags().Lookup("default-keep").Changed = true
 	configSetCmd.Flags().Lookup("ui-accent").Changed = true
 	configSetCmd.Flags().Lookup("ui-code-theme").Changed = true
 
@@ -128,8 +128,8 @@ work = "/vault/work"
 	if cfg.EditorMode != "terminal" {
 		t.Fatalf("expected editor_mode=terminal, got %q", cfg.EditorMode)
 	}
-	if cfg.DefaultVault != "work" {
-		t.Fatalf("expected default_vault=work, got %q", cfg.DefaultVault)
+	if cfg.DefaultKeep != "work" {
+		t.Fatalf("expected default_keep=work, got %q", cfg.DefaultKeep)
 	}
 	if cfg.UI.Accent != "39" {
 		t.Fatalf("expected ui.accent=39, got %q", cfg.UI.Accent)
@@ -143,12 +143,12 @@ func TestConfigUnsetClearsFields(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 
-	content := `default_vault = "work"
+	content := `default_keep = "work"
 editor = "code"
 editor_mode = "gui"
 
-[vaults]
-work = "/vault/work"
+[keeps]
+work = "/keep/work"
 
 [ui]
 accent = "39"
@@ -175,7 +175,7 @@ code_theme = "dracula"
 
 	configUnsetEditor = true
 	configUnsetEditorMode = true
-	configUnsetDefaultVault = true
+	configUnsetDefaultKeep = true
 	configUnsetUIAccent = true
 	configUnsetUICodeTheme = true
 
@@ -193,8 +193,8 @@ code_theme = "dracula"
 	if cfg.EditorMode != "" {
 		t.Fatalf("expected editor_mode to be cleared, got %q", cfg.EditorMode)
 	}
-	if cfg.DefaultVault != "" {
-		t.Fatalf("expected default_vault to be cleared, got %q", cfg.DefaultVault)
+	if cfg.DefaultKeep != "" {
+		t.Fatalf("expected default_keep to be cleared, got %q", cfg.DefaultKeep)
 	}
 	if cfg.UI.Accent != "" {
 		t.Fatalf("expected ui.accent to be cleared, got %q", cfg.UI.Accent)
@@ -204,7 +204,7 @@ code_theme = "dracula"
 	}
 }
 
-func TestConfigSetRejectsUnknownDefaultVault(t *testing.T) {
+func TestConfigSetRejectsUnknownDefaultKeep(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "config.toml")
 	if err := os.WriteFile(cfgPath, []byte(""), 0o644); err != nil {
@@ -226,14 +226,14 @@ func TestConfigSetRejectsUnknownDefaultVault(t *testing.T) {
 	jsonOutput = false
 	resetConfigSetFlagsForTest()
 
-	configSetDefaultVault = "missing"
-	configSetCmd.Flags().Lookup("default-vault").Changed = true
+	configSetDefaultKeep = "missing"
+	configSetCmd.Flags().Lookup("default-keep").Changed = true
 
 	err := configSetCmd.RunE(configSetCmd, []string{})
 	if err == nil {
-		t.Fatalf("expected error for unknown default vault")
+		t.Fatalf("expected error for unknown default keep")
 	}
 	if !strings.Contains(err.Error(), "not configured") {
-		t.Fatalf("expected unknown vault error, got %v", err)
+		t.Fatalf("expected unknown keep error, got %v", err)
 	}
 }

@@ -15,16 +15,16 @@ import (
 // caller-provided function hook, and agent steps only render prompts (they do
 // not call an LLM).
 type Runner struct {
-	vaultPath string
-	vaultCfg  *config.VaultConfig
+	keepPath string
+	keepCfg  *config.KeepConfig
 
 	ToolFunc func(tool string, args map[string]interface{}) (interface{}, error)
 }
 
-func NewRunner(vaultPath string, vaultCfg *config.VaultConfig) *Runner {
+func NewRunner(keepPath string, keepCfg *config.KeepConfig) *Runner {
 	return &Runner{
-		vaultPath: vaultPath,
-		vaultCfg:  vaultCfg,
+		keepPath: keepPath,
+		keepCfg:  keepCfg,
 	}
 }
 

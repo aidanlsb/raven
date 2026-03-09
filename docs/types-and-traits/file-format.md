@@ -33,7 +33,7 @@ Every object in Raven has a unique ID derived from its location.
 
 ### File-Level Objects
 
-For file-level objects, the ID is derived from the file path (relative to vault root) without the `.md` extension:
+For file-level objects, the ID is derived from the file path (relative to keep root) without the `.md` extension:
 
 | File Path | Object ID |
 |-----------|-----------|
@@ -316,7 +316,7 @@ Both `::section` and `::section()` are equivalent - parentheses are optional whe
 
 ## References
 
-References connect objects across your vault. They power:
+References connect objects across your keep. They power:
 - Navigation between notes
 - Backlinks (`rvn backlinks`)
 - Query predicates like `refs(...)` / `refd(...)`
@@ -396,7 +396,7 @@ rvn check --issues ambiguous_reference,id_collision,alias_collision,duplicate_al
 Fix strategy:
 1. Use full canonical paths in links (`[[projects/notes]]`).
 2. Keep aliases unique and descriptive.
-3. Use `name_field` values that are unique within the vault context where you rely on semantic resolution.
+3. Use `name_field` values that are unique within the keep context where you rely on semantic resolution.
 4. Re-run `rvn check` after edits.
 
 ### References in Frontmatter

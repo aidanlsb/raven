@@ -39,7 +39,7 @@ func TestConfigPath(t *testing.T) {
 }
 
 func TestBuildServerEntry(t *testing.T) {
-	t.Run("no vault", func(t *testing.T) {
+	t.Run("no keep", func(t *testing.T) {
 		e := BuildServerEntry("", "")
 		if e.Command == "" {
 			t.Fatal("expected non-empty command")
@@ -49,24 +49,24 @@ func TestBuildServerEntry(t *testing.T) {
 		}
 	})
 
-	t.Run("vault name", func(t *testing.T) {
+	t.Run("keep name", func(t *testing.T) {
 		e := BuildServerEntry("work", "")
-		if len(e.Args) != 3 || e.Args[1] != "--vault" || e.Args[2] != "work" {
-			t.Fatalf("expected [serve --vault work], got %v", e.Args)
+		if len(e.Args) != 3 || e.Args[1] != "--keep" || e.Args[2] != "work" {
+			t.Fatalf("expected [serve --keep work], got %v", e.Args)
 		}
 	})
 
-	t.Run("vault path", func(t *testing.T) {
-		e := BuildServerEntry("", "/my/vault")
-		if len(e.Args) != 3 || e.Args[1] != "--vault-path" || e.Args[2] != "/my/vault" {
-			t.Fatalf("expected [serve --vault-path /my/vault], got %v", e.Args)
+	t.Run("keep path", func(t *testing.T) {
+		e := BuildServerEntry("", "/my/keep")
+		if len(e.Args) != 3 || e.Args[1] != "--keep-path" || e.Args[2] != "/my/keep" {
+			t.Fatalf("expected [serve --keep-path /my/keep], got %v", e.Args)
 		}
 	})
 
-	t.Run("vault path takes precedence", func(t *testing.T) {
-		e := BuildServerEntry("work", "/my/vault")
-		if len(e.Args) != 3 || e.Args[1] != "--vault-path" {
-			t.Fatalf("expected vault-path to take precedence, got %v", e.Args)
+	t.Run("keep path takes precedence", func(t *testing.T) {
+		e := BuildServerEntry("work", "/my/keep")
+		if len(e.Args) != 3 || e.Args[1] != "--keep-path" {
+			t.Fatalf("expected keep-path to take precedence, got %v", e.Args)
 		}
 	})
 }
@@ -169,7 +169,7 @@ func TestInstallUpdate(t *testing.T) {
 	servers := data["mcpServers"].(map[string]interface{})
 	raven := servers["raven"].(map[string]interface{})
 	args := raven["args"].([]interface{})
-	if len(args) != 3 || args[1] != "--vault" {
+	if len(args) != 3 || args[1] != "--keep" {
 		t.Fatalf("unexpected args after update: %v", args)
 	}
 }
@@ -320,7 +320,7 @@ func TestStatusInstalled(t *testing.T) {
 	if cs.Entry.Command != ResolveCommand() {
 		t.Fatalf("unexpected command: %s", cs.Entry.Command)
 	}
-	if len(cs.Entry.Args) != 3 || cs.Entry.Args[1] != "--vault" || cs.Entry.Args[2] != "work" {
+	if len(cs.Entry.Args) != 3 || cs.Entry.Args[1] != "--keep" || cs.Entry.Args[2] != "work" {
 		t.Fatalf("unexpected args: %v", cs.Entry.Args)
 	}
 }

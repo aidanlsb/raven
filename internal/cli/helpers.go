@@ -8,51 +8,51 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 )
 
-// loadVaultConfigSafe loads the vault config.
+// loadKeepConfigSafe loads the keep config.
 // Returns an error if raven.yaml exists but is invalid.
-func loadVaultConfigSafe(vaultPath string) (*config.VaultConfig, error) {
-	cfg, err := config.LoadVaultConfig(vaultPath)
+func loadKeepConfigSafe(keepPath string) (*config.KeepConfig, error) {
+	cfg, err := config.LoadKeepConfig(keepPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load raven.yaml: %w", err)
 	}
 	if cfg == nil {
-		return &config.VaultConfig{}, nil
+		return &config.KeepConfig{}, nil
 	}
 	return cfg, nil
 }
 
-// buildParseOptions creates parser.ParseOptions from vault config.
+// buildParseOptions creates parser.ParseOptions from keep config.
 // Returns nil if no directory configuration is present.
-func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil || !vaultCfg.HasDirectoriesConfig() {
+func buildParseOptions(keepCfg *config.KeepConfig) *parser.ParseOptions {
+	if keepCfg == nil || !keepCfg.HasDirectoriesConfig() {
 		return nil
 	}
 	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
+		ObjectsRoot: keepCfg.GetObjectsRoot(),
+		PagesRoot:   keepCfg.GetPagesRoot(),
 	}
 }
 
 // openDatabaseWithConfig opens the database and sets the daily directory.
 // Caller is responsible for calling db.Close().
-func openDatabaseWithConfig(vaultPath string, vaultCfg *config.VaultConfig) (*index.Database, error) {
-	db, err := index.Open(vaultPath)
+func openDatabaseWithConfig(keepPath string, keepCfg *config.KeepConfig) (*index.Database, error) {
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return nil, err
 	}
-	if vaultCfg != nil {
-		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	if keepCfg != nil {
+		db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 	}
 	return db, nil
 }
 
-// maybeReindex reindexes a file if auto-reindex is enabled in the vault config.
+// maybeReindex reindexes a file if auto-reindex is enabled in the keep config.
 // Errors are logged but not returned (best-effort reindexing).
-func maybeReindex(vaultPath, filePath string, vaultCfg *config.VaultConfig) {
-	if vaultCfg == nil || !vaultCfg.IsAutoReindexEnabled() {
+func maybeReindex(keepPath, filePath string, keepCfg *config.KeepConfig) {
+	if keepCfg == nil || !keepCfg.IsAutoReindexEnabled() {
 		return
 	}
-	if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
+	if err := reindexFile(keepPath, filePath, keepCfg); err != nil {
 		if !isJSONOutput() {
 			fmt.Printf("  (reindex failed: %v)\n", err)
 		}

@@ -75,7 +75,7 @@ workflows:
           For each project, summarize its current state and recommend immediate actions.
 
   research:
-    description: "Research a topic across the vault"
+    description: "Research a topic across the keep"
     inputs:
       question:
         type: string

@@ -12,19 +12,19 @@ import (
 
 // Config represents the global Raven configuration.
 type Config struct {
-	// DefaultVault is the name of the default vault (from Vaults map).
-	DefaultVault string `toml:"default_vault"`
+	// DefaultKeep is the name of the default keep (from Keeps map).
+	DefaultKeep string `toml:"default_keep"`
 
 	// StateFile is an optional path to state.toml.
 	// If relative, it's resolved relative to config.toml's directory.
 	StateFile string `toml:"state_file"`
 
-	// Vault is the legacy single vault path (for backwards compatibility).
-	// Deprecated: Use DefaultVault + Vaults instead.
-	Vault string `toml:"vault"`
+	// Keep is the legacy single keep path (for backwards compatibility).
+	// Deprecated: Use DefaultKeep + Keeps instead.
+	Keep string `toml:"keep"`
 
-	// Vaults is a map of vault names to paths.
-	Vaults map[string]string `toml:"vaults"`
+	// Keeps is a map of keep names to paths.
+	Keeps map[string]string `toml:"keeps"`
 
 	// Editor is the editor to use for opening files (defaults to $EDITOR).
 	Editor string `toml:"editor"`
@@ -47,60 +47,60 @@ type UIConfig struct {
 	CodeTheme string `toml:"code_theme"`
 }
 
-// GetVaultPath returns the path for a named vault.
-// If name is empty, returns the default vault path.
-func (c *Config) GetVaultPath(name string) (string, error) {
+// GetKeepPath returns the path for a named keep.
+// If name is empty, returns the default keep path.
+func (c *Config) GetKeepPath(name string) (string, error) {
 	// If no name specified, use default
 	if name == "" {
-		name = c.DefaultVault
+		name = c.DefaultKeep
 	}
 
-	// If still no name but legacy vault is set, use that
-	if name == "" && c.Vault != "" {
-		return c.Vault, nil
+	// If still no name but legacy keep is set, use that
+	if name == "" && c.Keep != "" {
+		return c.Keep, nil
 	}
 
-	// Legacy compatibility: when only legacy vault is configured, allow "default" as the name.
-	if name == "default" && c.Vault != "" && len(c.Vaults) == 0 {
-		return c.Vault, nil
+	// Legacy compatibility: when only legacy keep is configured, allow "default" as the name.
+	if name == "default" && c.Keep != "" && len(c.Keeps) == 0 {
+		return c.Keep, nil
 	}
 
-	// Look up named vault
-	if c.Vaults != nil {
-		if path, ok := c.Vaults[name]; ok {
+	// Look up named keep
+	if c.Keeps != nil {
+		if path, ok := c.Keeps[name]; ok {
 			return path, nil
 		}
 	}
 
-	// If name matches default and legacy vault exists
-	if name == "" && c.Vault != "" {
-		return c.Vault, nil
+	// If name matches default and legacy keep exists
+	if name == "" && c.Keep != "" {
+		return c.Keep, nil
 	}
 
 	if name == "" {
-		return "", fmt.Errorf("no default vault configured")
+		return "", fmt.Errorf("no default keep configured")
 	}
 
-	return "", fmt.Errorf("vault '%s' not found in config", name)
+	return "", fmt.Errorf("keep '%s' not found in config", name)
 }
 
-// GetDefaultVaultPath returns the default vault path.
-func (c *Config) GetDefaultVaultPath() (string, error) {
-	return c.GetVaultPath("")
+// GetDefaultKeepPath returns the default keep path.
+func (c *Config) GetDefaultKeepPath() (string, error) {
+	return c.GetKeepPath("")
 }
 
-// ListVaults returns all configured vaults with their paths.
-func (c *Config) ListVaults() map[string]string {
+// ListKeeps returns all configured keeps with their paths.
+func (c *Config) ListKeeps() map[string]string {
 	result := make(map[string]string)
 
-	// Add named vaults
-	for name, path := range c.Vaults {
+	// Add named keeps
+	for name, path := range c.Keeps {
 		result[name] = path
 	}
 
-	// If legacy vault and no named vaults, add as "default"
-	if len(result) == 0 && c.Vault != "" {
-		result["default"] = c.Vault
+	// If legacy keep and no named keeps, add as "default"
+	if len(result) == 0 && c.Keep != "" {
+		result["default"] = c.Keep
 	}
 
 	return result
@@ -181,14 +181,14 @@ func CreateDefaultAt(path string) (string, error) {
 	defaultConfig := `# Raven Configuration
 # See: https://github.com/aidanlsb/raven
 
-# Default vault name (must exist in [vaults] below)
-# default_vault = "personal"
+# Default keep name (must exist in [keeps] below)
+# default_keep = "personal"
 
 # Optional state file location (default: sibling state.toml next to config.toml)
 # state_file = "state.toml"
 
-# Named vaults
-# [vaults]
+# Named keeps
+# [keeps]
 # personal = "/path/to/your/notes"
 # work = "/path/to/work/notes"
 

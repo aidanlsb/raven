@@ -34,9 +34,9 @@ var (
 var importCmd = &cobra.Command{
 	Use:   "import [type]",
 	Short: "Import objects from JSON data",
-	Long: `Import objects from external JSON data into the vault.
+	Long: `Import objects from external JSON data into the keep.
 
-Reads a JSON array (or single object) and creates or updates vault objects
+Reads a JSON array (or single object) and creates or updates keep objects
 by mapping input fields to a schema type's fields.
 
 Input can come from stdin or a file (--file). Field mappings can be specified
@@ -103,20 +103,20 @@ type importResult struct {
 }
 
 func runImport(cmd *cobra.Command, args []string) error {
-	vaultPath := getVaultPath()
+	keepPath := getKeepPath()
 
 	// Load schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-	creator := newObjectCreationContext(vaultPath, sch, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+	creator := newObjectCreationContext(keepPath, sch, keepCfg.GetObjectsRoot(), keepCfg.GetPagesRoot(), keepCfg.GetTemplateDirectory())
 
 	// Build the mapping config from flags and/or mapping file
 	mappingCfg, err := buildMappingConfig(args)
@@ -212,12 +212,12 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 		if exists {
 			// Update existing object
-			result, w := importUpdateObject(vaultPath, targetPath, itemCfg.TypeName, mapped, contentValue, sch, vaultCfg)
+			result, w := importUpdateObject(keepPath, targetPath, itemCfg.TypeName, mapped, contentValue, sch, keepCfg)
 			results = append(results, result)
 			warnings = append(warnings, w...)
 		} else {
 			// Create new object
-			result, w := importCreateObject(creator, matchValue, targetPath, itemCfg.TypeName, matchValue, mapped, contentValue, sch, vaultCfg)
+			result, w := importCreateObject(creator, matchValue, targetPath, itemCfg.TypeName, matchValue, mapped, contentValue, sch, keepCfg)
 			results = append(results, result)
 			warnings = append(warnings, w...)
 		}
@@ -426,8 +426,8 @@ func matchKeyValue(mapped map[string]interface{}, matchKey string) (string, bool
 	}
 }
 
-// importCreateObject creates a new vault object from imported data.
-func importCreateObject(creator objectCreationContext, targetPath, resolvedTargetPath, typeName, title string, fields map[string]interface{}, content string, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
+// importCreateObject creates a new keep object from imported data.
+func importCreateObject(creator objectCreationContext, targetPath, resolvedTargetPath, typeName, title string, fields map[string]interface{}, content string, sch *schema.Schema, keepCfg *config.KeepConfig) (importResult, []Warning) {
 	var warnings []Warning
 
 	typedFields := fieldsToSchemaValues(fields)
@@ -520,21 +520,21 @@ func importCreateObject(creator objectCreationContext, targetPath, resolvedTarge
 	}
 
 	// Auto-reindex
-	maybeReindex(creator.vaultPath, createResult.FilePath, vaultCfg)
+	maybeReindex(creator.keepPath, createResult.FilePath, keepCfg)
 
 	return importResult{
-		ID:     vaultCfg.FilePathToObjectID(createResult.RelativePath),
+		ID:     keepCfg.FilePathToObjectID(createResult.RelativePath),
 		Action: "created",
 		File:   createResult.RelativePath,
 	}, warnings
 }
 
-// importUpdateObject updates an existing vault object with imported data.
-func importUpdateObject(vaultPath, targetPath, typeName string, fields map[string]interface{}, newContent string, sch *schema.Schema, vaultCfg *config.VaultConfig) (importResult, []Warning) {
+// importUpdateObject updates an existing keep object with imported data.
+func importUpdateObject(keepPath, targetPath, typeName string, fields map[string]interface{}, newContent string, sch *schema.Schema, keepCfg *config.KeepConfig) (importResult, []Warning) {
 	var warnings []Warning
 
 	slugPath := pages.SlugifyPath(targetPath)
-	filePath := filepath.Join(vaultPath, slugPath)
+	filePath := filepath.Join(keepPath, slugPath)
 	if !strings.HasSuffix(filePath, ".md") {
 		filePath += ".md"
 	}
@@ -590,12 +590,12 @@ func importUpdateObject(vaultPath, targetPath, typeName string, fields map[strin
 	}
 
 	// Auto-reindex
-	maybeReindex(vaultPath, filePath, vaultCfg)
+	maybeReindex(keepPath, filePath, keepCfg)
 
-	relPath, _ := filepath.Rel(vaultPath, filePath)
+	relPath, _ := filepath.Rel(keepPath, filePath)
 
 	return importResult{
-		ID:     vaultCfg.FilePathToObjectID(relPath),
+		ID:     keepCfg.FilePathToObjectID(relPath),
 		Action: "updated",
 		File:   relPath,
 	}, warnings

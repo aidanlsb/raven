@@ -55,7 +55,7 @@ var Registry = map[string]Meta{
 		Description: "Create a new typed object",
 		LongDesc: `Creates a new note with the specified type.
 
-⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command to create new vault objects instead
+⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command to create new keep objects instead
 of writing files directly with 'echo', 'touch', or file writing tools. The raven_new
 command applies templates, validates against the schema, and ensures proper indexing.
 
@@ -95,7 +95,7 @@ to understand which fields are auto-populated.`,
 			"rvn new person \"Freya\" --field-json '{\"email\":\"freya@asgard.realm\"}' --json",
 		},
 		UseCases: []string{
-			"Create a new typed object (NEVER write vault files directly)",
+			"Create a new typed object (NEVER write keep files directly)",
 			"Create a new person entry with schema validation",
 			"Create a new project file with template applied",
 		},
@@ -191,11 +191,11 @@ converge to one current state rather than append history.`,
 	},
 	"init": {
 		Name:        "init",
-		Description: "Initialize a new vault at a path",
-		LongDesc: `Creates a new vault at the specified path with default configuration files.
+		Description: "Initialize a new keep at a path",
+		LongDesc: `Creates a new keep at the specified path with default configuration files.
 
 Creates:
-  - raven.yaml   (vault configuration)
+  - raven.yaml   (keep configuration)
   - schema.yaml  (types and traits)
   - .raven/      (index directory)
   - .gitignore   (ignores derived files)
@@ -203,22 +203,22 @@ Creates:
 Also attempts to fetch local docs into .raven/docs. If docs fetch fails, initialization
 still succeeds and returns a warning with a retry command.`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "Directory path to initialize as a vault", Required: true},
+			{Name: "path", Description: "Directory path to initialize as a keep", Required: true},
 		},
 		Examples: []string{
-			"rvn init /path/to/new/vault --json",
+			"rvn init /path/to/new/keep --json",
 			"rvn init ./notes --json",
 		},
 		UseCases: []string{
-			"Bootstrap a new vault from an agent or script",
+			"Bootstrap a new keep from an agent or script",
 			"Create required Raven config and schema files in one step",
 			"Initialize first-run setup before any other MCP tool calls",
 		},
 	},
 	"path": {
 		Name:        "path",
-		Description: "Print the resolved vault directory path",
-		LongDesc: `Prints the configured vault directory path.
+		Description: "Print the resolved keep directory path",
+		LongDesc: `Prints the configured keep directory path.
 
 Useful for shell integration:
   cd $(rvn path)`,
@@ -227,8 +227,8 @@ Useful for shell integration:
 			"rvn path --json",
 		},
 		UseCases: []string{
-			"Inspect the currently resolved vault path",
-			"Integrate Raven vault resolution into shell scripts",
+			"Inspect the currently resolved keep path",
+			"Integrate Raven keep resolution into shell scripts",
 		},
 		HideFromMCP: true,
 	},
@@ -238,7 +238,7 @@ Useful for shell integration:
 		LongDesc:    "Run Raven as an MCP server over stdio.",
 		Examples: []string{
 			"rvn serve",
-			"rvn serve --vault personal",
+			"rvn serve --keep personal",
 		},
 		UseCases: []string{
 			"Launch Raven MCP server for local clients",
@@ -251,12 +251,12 @@ Useful for shell integration:
 		LongDesc:    "Add raven to a supported MCP client config file.",
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (claude-code, claude-desktop, cursor)", Type: FlagTypeString, Default: "claude-code"},
-			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
-			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
+			{Name: "keep", Description: "Pin a named keep", Type: FlagTypeString},
+			{Name: "keep-path", Description: "Pin an explicit keep path", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn mcp install --client claude-code",
-			"rvn mcp install --client claude-desktop --vault work",
+			"rvn mcp install --client claude-desktop --keep work",
 		},
 		UseCases: []string{
 			"Install Raven MCP entry into a client config",
@@ -297,12 +297,12 @@ Useful for shell integration:
 		LongDesc:    "Print the JSON snippet for manually configuring Raven as an MCP server.",
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (claude-code, claude-desktop, cursor)", Type: FlagTypeString},
-			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
-			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
+			{Name: "keep", Description: "Pin a named keep", Type: FlagTypeString},
+			{Name: "keep-path", Description: "Pin an explicit keep path", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn mcp show --client claude-code",
-			"rvn mcp show --client cursor --vault work",
+			"rvn mcp show --client cursor --keep work",
 		},
 		UseCases: []string{
 			"Generate manual MCP configuration snippet",
@@ -312,7 +312,7 @@ Useful for shell integration:
 	"docs": {
 		Name:        "docs",
 		Description: "Browse long-form Markdown documentation",
-		LongDesc: `Browse long-form documentation stored in .raven/docs for the active vault.
+		LongDesc: `Browse long-form documentation stored in .raven/docs for the active keep.
 
 Use this command for guides and references.
 Run 'rvn docs fetch' to sync or refresh local docs content.
@@ -331,7 +331,7 @@ For command-level usage, use 'rvn help <command>'.`,
 			"rvn docs search \"saved query\" --json",
 		},
 		UseCases: []string{
-			"Fetch docs into the current vault with `docs fetch`",
+			"Fetch docs into the current keep with `docs fetch`",
 			"List docs sections and topic counts",
 			"Interactively select docs via fzf (when available)",
 			"Browse docs topics by section",
@@ -341,10 +341,10 @@ For command-level usage, use 'rvn help <command>'.`,
 	},
 	"docs_fetch": {
 		Name:        "docs fetch",
-		Description: "Fetch docs into .raven/docs for the current vault",
+		Description: "Fetch docs into .raven/docs for the current keep",
 		LongDesc: `Download docs from Raven's source repository into .raven/docs.
 
-This replaces the local docs cache for the current vault.
+This replaces the local docs cache for the current keep.
 By default, docs are fetched from the "main" ref.`,
 		Flags: []FlagMeta{
 			{Name: "ref", Description: "Git ref to fetch (branch, tag, or commit)", Type: FlagTypeString, Default: "main"},
@@ -355,7 +355,7 @@ By default, docs are fetched from the "main" ref.`,
 			"rvn docs fetch --ref v0.5.0 --json",
 		},
 		UseCases: []string{
-			"Sync docs for a vault after init",
+			"Sync docs for a keep after init",
 			"Refresh docs without reinstalling rvn",
 			"Pin docs to a specific ref for reproducibility",
 		},
@@ -461,12 +461,12 @@ The file is moved to .trash/ for recovery.`,
 	},
 	"delete": {
 		Name:        "delete",
-		Description: "Delete an object from the vault",
-		LongDesc: `Delete a file/object from the vault.
+		Description: "Delete an object from the keep",
+		LongDesc: `Delete a file/object from the keep.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'rm'.
 Using 'rm' directly will NOT warn about backlinks (other files that reference this one),
-potentially creating broken links throughout the vault. The raven_delete command:
+potentially creating broken links throughout the keep. The raven_delete command:
 - Warns about incoming backlinks before deletion
 - Moves files to .trash/ for recovery (not permanent deletion)
 - Updates the index properly
@@ -497,19 +497,19 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 	},
 	"move": {
 		Name:        "move",
-		Description: "Move or rename an object within the vault",
-		LongDesc: `Move or rename a file/object within the vault.
+		Description: "Move or rename an object within the keep",
+		LongDesc: `Move or rename a file/object within the keep.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
 Using 'mv' directly will NOT update references to the file, causing broken links
-throughout the vault. The raven_move command automatically updates all [[references]]
+throughout the keep. The raven_move command automatically updates all [[references]]
 that point to the moved file.
 
-SECURITY: Both source and destination must be within the vault.
-Files cannot be moved outside the vault, and external files cannot be moved in.
+SECURITY: Both source and destination must be within the keep.
+Files cannot be moved outside the keep, and external files cannot be moved in.
 
 This command:
-- Validates paths are within the vault
+- Validates paths are within the keep
 - Updates all references to the moved file (--update-refs, default: true)
 - Warns if moving to a type's default directory with mismatched type
 - Creates destination directories if needed
@@ -541,7 +541,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",
 			"Move file to different directory with reference updates",
-			"Reorganize vault structure while keeping links intact",
+			"Reorganize keep structure while keeping links intact",
 			"Archive old content without breaking references",
 		},
 	},
@@ -727,7 +727,7 @@ For trait queries (trait:...):
 	"read": {
 		Name:        "read",
 		Description: "Read a file (raw or enriched)",
-		LongDesc: `Read and output a file from the vault.
+		LongDesc: `Read and output a file from the keep.
 
 The reference can be a short reference (freya), partial path (people/freya),
 or full path (people/freya.md).
@@ -758,7 +758,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			"rvn read people/freya --raw --lines --json",
 		},
 		UseCases: []string{
-			"Read vault file content (use instead of 'cat', 'head', 'tail')",
+			"Read keep file content (use instead of 'cat', 'head', 'tail')",
 			"Interactively pick a file to read via fzf (when available)",
 			"Inspect file before editing (prefer --raw for exact string matching)",
 			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
@@ -767,7 +767,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 	},
 	"stats": {
 		Name:        "stats",
-		Description: "Show vault statistics",
+		Description: "Show keep statistics",
 		Examples: []string{
 			"rvn stats --json",
 		},
@@ -791,8 +791,8 @@ multiple installs exist on the system.`,
 	},
 	"reindex": {
 		Name:        "reindex",
-		Description: "Rebuild the SQLite index from all vault files",
-		LongDesc: `Parses all markdown files in the vault and rebuilds the SQLite index.
+		Description: "Rebuild the SQLite index from all keep files",
+		LongDesc: `Parses all markdown files in the keep and rebuilds the SQLite index.
 
 Use this after:
 - Bulk file operations outside of Raven
@@ -816,8 +816,8 @@ Use --full to force a complete rebuild of the entire index.`,
 	},
 	"check": {
 		Name:        "check",
-		Description: "Validate vault against schema",
-		LongDesc: `Validates all files in the vault against the schema.
+		Description: "Validate keep against schema",
+		LongDesc: `Validates all files in the keep against the schema.
 
 Returns structured issues with:
 - issue_type: unknown_type, missing_reference, undefined_trait, unknown_frontmatter_key, etc.
@@ -827,7 +827,7 @@ Returns structured issues with:
 The summary groups issues by type with counts and top values, making it easy to prioritize fixes.
 
 Scoping:
-- Pass a file path, directory, or reference to check a subset of the vault
+- Pass a file path, directory, or reference to check a subset of the keep
 - Use --type to check all objects of a specific type
 - Use --trait to check all usages of a specific trait
 - Use --issues to check only specific issue types
@@ -836,7 +836,7 @@ Scoping:
 For agents: Use this tool to discover issues, then use the fix_command suggestions to resolve them.
 Ask the user for clarification when needed (e.g., which type to use for missing references).`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "File, directory, or reference to check (optional, defaults to entire vault)", Required: false},
+			{Name: "path", Description: "File, directory, or reference to check (optional, defaults to entire keep)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "strict", Description: "Treat warnings as errors", Type: FlagTypeBool},
@@ -862,7 +862,7 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			"rvn check --exclude unused_type,unused_trait --json",
 		},
 		UseCases: []string{
-			"Validate entire vault for issues",
+			"Validate entire keep for issues",
 			"Check a specific file after editing",
 			"Verify all objects of a type are valid",
 			"Check all trait usages for correct values",
@@ -1487,12 +1487,12 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 	},
 	"edit": {
 		Name:        "edit",
-		Description: "Surgical text replacement in vault files",
-		LongDesc: `Replace a unique string in a vault file with another string.
+		Description: "Surgical text replacement in keep files",
+		LongDesc: `Replace a unique string in a keep file with another string.
 
 ⚠️ IMPORTANT FOR AGENTS: Use this command instead of shell tools like 'sed' or 'awk'
-to edit vault files. This ensures proper preview/confirm workflow and maintains
-file integrity within the vault.
+to edit keep files. This ensures proper preview/confirm workflow and maintains
+file integrity within the keep.
 
 The string to replace must appear exactly once in the file to prevent 
 ambiguous edits.
@@ -1506,7 +1506,7 @@ Supports two input modes:
   - Single edit (backward compatible): <path> <old_str> <new_str>
   - Batch edits via JSON: <path> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "File path relative to vault root", Required: true},
+			{Name: "path", Description: "File path relative to keep root", Required: true},
 			{Name: "old_str", Description: "String to replace (must be unique in file, single-edit mode)", Required: false},
 			{Name: "new_str", Description: "Replacement string (can be empty to delete, single-edit mode)", Required: false},
 		},
@@ -1521,7 +1521,7 @@ Supports two input modes:
 			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --confirm --json`,
 		},
 		UseCases: []string{
-			"Edit vault files (use instead of 'sed', 'awk', or direct file writes)",
+			"Edit keep files (use instead of 'sed', 'awk', or direct file writes)",
 			"Add wiki links to existing text",
 			"Fix typos in notes",
 			"Apply multiple ordered replacements in one command",
@@ -1531,8 +1531,8 @@ Supports two input modes:
 	},
 	"search": {
 		Name:        "search",
-		Description: "Full-text search across all vault content",
-		LongDesc: `Search for content across all files in the vault.
+		Description: "Full-text search across all keep content",
+		LongDesc: `Search for content across all files in the keep.
 
 Uses full-text search with relevance ranking. Supports:
   - Simple words: "meeting notes" (finds pages containing both words)
@@ -1557,7 +1557,7 @@ Use --type to filter results to specific object types.`,
 		},
 		UseCases: []string{
 			"Find pages mentioning specific topics",
-			"Search for content across the entire vault",
+			"Search for content across the entire keep",
 			"Locate pages by partial matches",
 			"Find all mentions of a person or concept",
 		},
@@ -1604,7 +1604,7 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 		LongDesc: `Manage global Raven config.toml settings.
 
 Use this command group to initialize, inspect, and edit machine-level configuration
-such as editor settings, state file location, and default vault selection.`,
+such as editor settings, state file location, and default keep selection.`,
 		Examples: []string{
 			"rvn config --json",
 			"rvn config show --json",
@@ -1647,7 +1647,7 @@ Use 'config unset' to clear fields.`,
 			{Name: "editor", Description: "Set editor command", Type: FlagTypeString},
 			{Name: "editor-mode", Description: "Set editor mode (auto|terminal|gui)", Type: FlagTypeString, Examples: []string{"auto", "terminal", "gui"}},
 			{Name: "state-file", Description: "Set state.toml path (absolute or relative to config directory)", Type: FlagTypeString},
-			{Name: "default-vault", Description: "Set default_vault to a configured vault name", Type: FlagTypeString},
+			{Name: "default-keep", Description: "Set default_keep to a configured keep name", Type: FlagTypeString},
 			{Name: "ui-accent", Description: "Set UI accent color (ANSI 0-255 or #RRGGBB)", Type: FlagTypeString},
 			{Name: "ui-code-theme", Description: "Set markdown code theme name", Type: FlagTypeString},
 		},
@@ -1655,12 +1655,12 @@ Use 'config unset' to clear fields.`,
 			"rvn config set --editor code --json",
 			"rvn config set --editor-mode terminal --json",
 			"rvn config set --state-file state.toml --json",
-			"rvn config set --default-vault work --json",
+			"rvn config set --default-keep work --json",
 			"rvn config set --ui-accent 39 --ui-code-theme monokai --json",
 		},
 		UseCases: []string{
 			"Configure global editor behavior",
-			"Set default_vault without editing TOML directly",
+			"Set default_keep without editing TOML directly",
 			"Adjust CLI UI accent and markdown code theme",
 		},
 	},
@@ -1671,138 +1671,138 @@ Use 'config unset' to clear fields.`,
 			{Name: "editor", Description: "Clear editor", Type: FlagTypeBool},
 			{Name: "editor-mode", Description: "Clear editor_mode", Type: FlagTypeBool},
 			{Name: "state-file", Description: "Clear state_file", Type: FlagTypeBool},
-			{Name: "default-vault", Description: "Clear default_vault", Type: FlagTypeBool},
+			{Name: "default-keep", Description: "Clear default_keep", Type: FlagTypeBool},
 			{Name: "ui-accent", Description: "Clear ui.accent", Type: FlagTypeBool},
 			{Name: "ui-code-theme", Description: "Clear ui.code_theme", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn config unset --editor --json",
-			"rvn config unset --default-vault --json",
+			"rvn config unset --default-keep --json",
 			"rvn config unset --ui-accent --ui-code-theme --json",
 		},
 	},
-	"vault": {
-		Name:        "vault",
-		Description: "Manage configured vaults and active selection",
-		LongDesc: `Manage configured vaults and active selection.
+	"keep": {
+		Name:        "keep",
+		Description: "Manage configured keeps and active selection",
+		LongDesc: `Manage configured keeps and active selection.
 
-The active vault is stored in state.toml.
-The default vault is stored in config.toml and used as fallback.`,
+The active keep is stored in state.toml.
+The default keep is stored in config.toml and used as fallback.`,
 		Examples: []string{
-			"rvn vault --json",
-			"rvn vault list --json",
-			"rvn vault current --json",
-			"rvn vault path --json",
-			"rvn vault add work /Users/you/work-notes --json",
-			"rvn vault use work --json",
-			"rvn vault pin personal --json",
-			"rvn vault remove personal --clear-default --clear-active --json",
-			"rvn vault clear --json",
+			"rvn keep --json",
+			"rvn keep list --json",
+			"rvn keep current --json",
+			"rvn keep path --json",
+			"rvn keep add work /Users/you/work-notes --json",
+			"rvn keep use work --json",
+			"rvn keep pin personal --json",
+			"rvn keep remove personal --clear-default --clear-active --json",
+			"rvn keep clear --json",
 		},
 		UseCases: []string{
-			"List configured vaults and inspect active/default markers",
-			"Register named vault paths in config.toml",
-			"Switch active vault for subsequent CLI and MCP commands",
-			"Pin a default fallback vault in config.toml",
+			"List configured keeps and inspect active/default markers",
+			"Register named keep paths in config.toml",
+			"Switch active keep for subsequent CLI and MCP commands",
+			"Pin a default fallback keep in config.toml",
 		},
 	},
-	"vault_list": {
-		Name:        "vault list",
-		Description: "List configured vaults",
+	"keep_list": {
+		Name:        "keep list",
+		Description: "List configured keeps",
 		Examples: []string{
-			"rvn vault list --json",
+			"rvn keep list --json",
 		},
 	},
-	"vault_current": {
-		Name:        "vault current",
-		Description: "Show the current resolved vault",
+	"keep_current": {
+		Name:        "keep current",
+		Description: "Show the current resolved keep",
 		Examples: []string{
-			"rvn vault current --json",
+			"rvn keep current --json",
 		},
 	},
-	"vault_path": {
-		Name:        "vault path",
-		Description: "Print the resolved vault directory path",
+	"keep_path": {
+		Name:        "keep path",
+		Description: "Print the resolved keep directory path",
 		Examples: []string{
-			"rvn vault path --json",
+			"rvn keep path --json",
 		},
 	},
-	"vault_use": {
-		Name:        "vault use",
-		Description: "Set the active vault in state.toml",
+	"keep_use": {
+		Name:        "keep use",
+		Description: "Set the active keep in state.toml",
 		Args: []ArgMeta{
-			{Name: "name", Description: "Configured vault name", Required: true},
+			{Name: "name", Description: "Configured keep name", Required: true},
 		},
 		Examples: []string{
-			"rvn vault use work --json",
+			"rvn keep use work --json",
 		},
 	},
-	"vault_add": {
-		Name:        "vault add",
-		Description: "Add a vault to config.toml",
-		LongDesc: `Add or update a named vault entry in the global config file.
+	"keep_add": {
+		Name:        "keep add",
+		Description: "Add a keep to config.toml",
+		LongDesc: `Add or update a named keep entry in the global config file.
 
 By default, adding an existing name fails. Use --replace to update the existing path.
-Use --pin to also set default_vault to the added vault.`,
+Use --pin to also set default_keep to the added keep.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Vault name", Required: true},
-			{Name: "path", Description: "Vault directory path", Required: true},
+			{Name: "name", Description: "Keep name", Required: true},
+			{Name: "path", Description: "Keep directory path", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "replace", Description: "Replace existing vault path if name already exists", Type: FlagTypeBool},
-			{Name: "pin", Description: "Also set this vault as default_vault", Type: FlagTypeBool},
+			{Name: "replace", Description: "Replace existing keep path if name already exists", Type: FlagTypeBool},
+			{Name: "pin", Description: "Also set this keep as default_keep", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn vault add work /Users/you/work-notes --json",
-			"rvn vault add personal /Users/you/personal-notes --pin --json",
-			"rvn vault add work /Users/you/new-work-notes --replace --json",
+			"rvn keep add work /Users/you/work-notes --json",
+			"rvn keep add personal /Users/you/personal-notes --pin --json",
+			"rvn keep add work /Users/you/new-work-notes --replace --json",
 		},
 		UseCases: []string{
-			"Register a new named vault in global config",
-			"Update a vault path with --replace",
-			"Set the added vault as default with --pin",
+			"Register a new named keep in global config",
+			"Update a keep path with --replace",
+			"Set the added keep as default with --pin",
 		},
 	},
-	"vault_remove": {
-		Name:        "vault remove",
-		Description: "Remove a vault from config.toml",
-		LongDesc: `Remove a named vault entry from the global config file.
+	"keep_remove": {
+		Name:        "keep remove",
+		Description: "Remove a keep from config.toml",
+		LongDesc: `Remove a named keep entry from the global config file.
 
 Safety checks:
-- Removing the current default vault requires --clear-default
-- Removing the current active vault requires --clear-active`,
+- Removing the current default keep requires --clear-default
+- Removing the current active keep requires --clear-active`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Configured vault name", Required: true},
+			{Name: "name", Description: "Configured keep name", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "clear-default", Description: "Clear default_vault when removing the default", Type: FlagTypeBool},
-			{Name: "clear-active", Description: "Clear active_vault when removing the active vault", Type: FlagTypeBool},
+			{Name: "clear-default", Description: "Clear default_keep when removing the default", Type: FlagTypeBool},
+			{Name: "clear-active", Description: "Clear active_keep when removing the active keep", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn vault remove personal --json",
-			"rvn vault remove personal --clear-default --json",
-			"rvn vault remove personal --clear-default --clear-active --json",
+			"rvn keep remove personal --json",
+			"rvn keep remove personal --clear-default --json",
+			"rvn keep remove personal --clear-default --clear-active --json",
 		},
 		UseCases: []string{
-			"Delete stale vault entries from global config",
-			"Safely remove default/active vaults with explicit clearing flags",
+			"Delete stale keep entries from global config",
+			"Safely remove default/active keeps with explicit clearing flags",
 		},
 	},
-	"vault_pin": {
-		Name:        "vault pin",
-		Description: "Set default_vault in config.toml",
+	"keep_pin": {
+		Name:        "keep pin",
+		Description: "Set default_keep in config.toml",
 		Args: []ArgMeta{
-			{Name: "name", Description: "Configured vault name", Required: true},
+			{Name: "name", Description: "Configured keep name", Required: true},
 		},
 		Examples: []string{
-			"rvn vault pin personal --json",
+			"rvn keep pin personal --json",
 		},
 	},
-	"vault_clear": {
-		Name:        "vault clear",
-		Description: "Clear active vault from state.toml",
+	"keep_clear": {
+		Name:        "keep clear",
+		Description: "Clear active keep from state.toml",
 		Examples: []string{
-			"rvn vault clear --json",
+			"rvn keep clear --json",
 		},
 	},
 	"open": {
@@ -1862,7 +1862,7 @@ before saving so agents get immediate feedback for migration and syntax issues.`
 			{Name: "name", Description: "Workflow name to create", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "file", Description: "Path to external workflow YAML file (relative to vault root)", Type: FlagTypeString, Examples: []string{"workflows/meeting-prep.yaml"}},
+			{Name: "file", Description: "Path to external workflow YAML file (relative to keep root)", Type: FlagTypeString, Examples: []string{"workflows/meeting-prep.yaml"}},
 		},
 		Examples: []string{
 			"rvn workflow add meeting-prep --file workflows/meeting-prep.yaml --json",
@@ -2166,7 +2166,7 @@ Use --target to include target-specific installed status and paths.`,
 
 Preview is returned by default. Use --confirm to apply writes.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin", "raven-workflows"}},
+			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-keep-admin", "raven-workflows"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2192,7 +2192,7 @@ Preview is returned by default. Use --confirm to apply writes.`,
 
 Preview is returned by default. Use --confirm to apply removal.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin", "raven-workflows"}},
+			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-keep-admin", "raven-workflows"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2303,9 +2303,9 @@ with their match sources.`,
 	"import": {
 		Name:        "import",
 		Description: "Import objects from JSON data",
-		LongDesc: `Import objects from external JSON data into the vault.
+		LongDesc: `Import objects from external JSON data into the keep.
 
-Reads a JSON array (or single object) and creates or updates vault objects
+Reads a JSON array (or single object) and creates or updates keep objects
 by mapping input fields to a schema type's fields.
 
 Input can come from stdin or a file (--file). Field mappings can be specified
@@ -2361,7 +2361,7 @@ Mapping file format (heterogeneous):
 			"Import contacts, events, or tasks from external tools",
 			"Migrate data from another note-taking app",
 			"Bulk-create objects from structured data",
-			"Sync external data sources into the vault",
+			"Sync external data sources into the keep",
 		},
 	},
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func TestRunStore_SaveLoadAndList(t *testing.T) {
-	vault := t.TempDir()
+	keep := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
 		AutoPrune:                 true,
@@ -35,10 +35,10 @@ func TestRunStore_SaveLoadAndList(t *testing.T) {
 		Revision:     1,
 	}
 
-	if err := SaveRunState(vault, cfg, state); err != nil {
+	if err := SaveRunState(keep, cfg, state); err != nil {
 		t.Fatalf("SaveRunState error: %v", err)
 	}
-	got, err := LoadRunState(vault, cfg, state.RunID)
+	got, err := LoadRunState(keep, cfg, state.RunID)
 	if err != nil {
 		t.Fatalf("LoadRunState error: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestRunStore_SaveLoadAndList(t *testing.T) {
 		t.Fatalf("run id mismatch: got %s want %s", got.RunID, state.RunID)
 	}
 
-	runs, warnings, err := ListRunStates(vault, cfg, RunListFilter{Workflow: "daily-brief"})
+	runs, warnings, err := ListRunStates(keep, cfg, RunListFilter{Workflow: "daily-brief"})
 	if err != nil {
 		t.Fatalf("ListRunStates error: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestRunStore_SaveLoadAndList(t *testing.T) {
 }
 
 func TestRunStore_PruneByStatus(t *testing.T) {
-	vault := t.TempDir()
+	keep := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
 		AutoPrune:                 true,
@@ -72,7 +72,7 @@ func TestRunStore_PruneByStatus(t *testing.T) {
 
 	create := func(id string, status RunStatus) {
 		t.Helper()
-		err := SaveRunState(vault, cfg, &WorkflowRunState{
+		err := SaveRunState(keep, cfg, &WorkflowRunState{
 			Version:      1,
 			RunID:        id,
 			WorkflowName: "daily-brief",
@@ -93,7 +93,7 @@ func TestRunStore_PruneByStatus(t *testing.T) {
 	create("wrf_awaiting", RunStatusAwaitingAgent)
 
 	statuses := map[RunStatus]bool{RunStatusCompleted: true}
-	result, err := PruneRunStates(vault, cfg, RunPruneOptions{
+	result, err := PruneRunStates(keep, cfg, RunPruneOptions{
 		Statuses: statuses,
 		Apply:    true,
 	})
@@ -104,7 +104,7 @@ func TestRunStore_PruneByStatus(t *testing.T) {
 		t.Fatalf("expected 1 deletion, got %d", result.Deleted)
 	}
 
-	runs, warnings, err := ListRunStates(vault, cfg, RunListFilter{})
+	runs, warnings, err := ListRunStates(keep, cfg, RunListFilter{})
 	if err != nil {
 		t.Fatalf("ListRunStates error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestRunStore_PruneByStatus(t *testing.T) {
 }
 
 func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
-	vault := t.TempDir()
+	keep := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
 		AutoPrune:                 true,
@@ -128,7 +128,7 @@ func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
 		PreserveLatestPerWorkflow: 2,
 	}
 
-	if err := SaveRunState(vault, cfg, &WorkflowRunState{
+	if err := SaveRunState(keep, cfg, &WorkflowRunState{
 		Version:      1,
 		RunID:        "wrf_valid",
 		WorkflowName: "daily-brief",
@@ -143,7 +143,7 @@ func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
 		t.Fatalf("SaveRunState error: %v", err)
 	}
 
-	storeDir := filepath.Join(vault, cfg.StoragePath)
+	storeDir := filepath.Join(keep, cfg.StoragePath)
 	if err := os.MkdirAll(storeDir, 0o755); err != nil {
 		t.Fatalf("mkdir store dir: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
 		t.Fatalf("write corrupt run file: %v", err)
 	}
 
-	runs, warnings, err := ListRunStates(vault, cfg, RunListFilter{})
+	runs, warnings, err := ListRunStates(keep, cfg, RunListFilter{})
 	if err != nil {
 		t.Fatalf("ListRunStates error: %v", err)
 	}

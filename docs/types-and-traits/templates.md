@@ -170,5 +170,5 @@ rvn daily tomorrow
 
 - `reference/cli.md` for exact `schema template` and `schema type ... template` command details
 - `types-and-traits/schema.md` for `templates`, `types.<type>.templates`, and `default_template`
-- `reference/vault-config.md` for `directories.template`
-- `getting-started/configuration.md` for practical vault setup
+- `reference/keep-config.md` for `directories.template`
+- `getting-started/configuration.md` for practical keep setup

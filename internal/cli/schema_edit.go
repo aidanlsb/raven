@@ -16,11 +16,11 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 // Flags for schema add commands
@@ -76,31 +76,31 @@ Examples:
   rvn schema add field person email --type string --required`,
 	Args: cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 		kind := args[0]
 
 		switch kind {
 		case "type":
-			return addType(vaultPath, args[1], start)
+			return addType(keepPath, args[1], start)
 		case "trait":
-			return addTrait(vaultPath, args[1], start)
+			return addTrait(keepPath, args[1], start)
 		case "field":
 			if len(args) < 3 {
 				return handleErrorMsg(ErrMissingArgument, "field requires type and field name", "Usage: rvn schema add field <type> <field>")
 			}
-			return addField(vaultPath, args[1], args[2], start)
+			return addField(keepPath, args[1], args[2], start)
 		default:
 			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Use: type, trait, or field")
 		}
 	},
 }
 
-func addType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func addType(keepPath, typeName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -211,11 +211,11 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	return nil
 }
 
-func addTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func addTrait(keepPath, traitName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -465,11 +465,11 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 	return result
 }
 
-func addField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func addField(keepPath, typeName, fieldName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -631,11 +631,11 @@ Examples:
   rvn schema validate --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 
 		// Try to load the schema - this validates most things
-		sch, err := schema.Load(vaultPath)
+		sch, err := schema.Load(keepPath)
 		if err != nil {
 			return handleError(ErrSchemaInvalid, err, "Fix the errors and try again")
 		}
@@ -690,28 +690,28 @@ Examples:
   rvn schema update type meeting --add-trait due`,
 	Args: cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 		kind := args[0]
 
 		switch kind {
 		case "type":
-			return updateType(vaultPath, args[1], start)
+			return updateType(keepPath, args[1], start)
 		case "trait":
-			return updateTrait(vaultPath, args[1], start)
+			return updateTrait(keepPath, args[1], start)
 		case "field":
 			if len(args) < 3 {
 				return handleErrorMsg(ErrMissingArgument, "field requires type and field name", "Usage: rvn schema update field <type> <field>")
 			}
-			return updateField(vaultPath, args[1], args[2], start)
+			return updateField(keepPath, args[1], args[2], start)
 		default:
 			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Use: type, trait, or field")
 		}
 	},
 }
 
-func updateType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func updateType(keepPath, typeName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Check built-in types
 	if schema.IsBuiltinType(typeName) {
@@ -719,7 +719,7 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -878,11 +878,11 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	return nil
 }
 
-func updateTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func updateTrait(keepPath, traitName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -960,11 +960,11 @@ func updateTrait(vaultPath, traitName string, start time.Time) error {
 	return nil
 }
 
-func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func updateField(keepPath, typeName, fieldName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -991,7 +991,7 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 	// Check data integrity for required changes
 	if schemaUpdateRequired == "true" {
 		// This would make the field required - check all objects have it
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err == nil {
 			defer db.Close()
 			objects, err := db.QueryObjects(typeName)
@@ -1137,28 +1137,28 @@ Examples:
   rvn schema remove field person nickname`,
 	Args: cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 		kind := args[0]
 
 		switch kind {
 		case "type":
-			return removeType(vaultPath, args[1], start)
+			return removeType(keepPath, args[1], start)
 		case "trait":
-			return removeTrait(vaultPath, args[1], start)
+			return removeTrait(keepPath, args[1], start)
 		case "field":
 			if len(args) < 3 {
 				return handleErrorMsg(ErrMissingArgument, "field requires type and field name", "Usage: rvn schema remove field <type> <field>")
 			}
-			return removeField(vaultPath, args[1], args[2], start)
+			return removeField(keepPath, args[1], args[2], start)
 		default:
 			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Use: type, trait, or field")
 		}
 	},
 }
 
-func removeType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func removeType(keepPath, typeName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Check built-in types
 	if schema.IsBuiltinType(typeName) {
@@ -1166,7 +1166,7 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -1178,7 +1178,7 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 
 	// Check for affected objects
 	var warnings []Warning
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err == nil {
 		defer db.Close()
 		objects, err := db.QueryObjects(typeName)
@@ -1247,11 +1247,11 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 	return nil
 }
 
-func removeTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func removeTrait(keepPath, traitName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -1263,7 +1263,7 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 
 	// Check for affected trait instances
 	var warnings []Warning
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err == nil {
 		defer db.Close()
 		instances, err := db.QueryTraits(traitName, nil)
@@ -1325,11 +1325,11 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 	return nil
 }
 
-func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func removeField(keepPath, typeName, fieldName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -1356,7 +1356,7 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 
 	// If field is required, block removal unless user fixes files first
 	if fieldDef.Required {
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err == nil {
 			defer db.Close()
 			objects, err := db.QueryObjects(typeName)
@@ -1458,7 +1458,7 @@ Examples:
   rvn schema rename field person email email_address --confirm`,
 	Args: cobra.MinimumNArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 		kind := args[0]
 
@@ -1467,12 +1467,12 @@ Examples:
 			if len(args) != 3 {
 				return handleErrorMsg(ErrMissingArgument, "type rename requires old and new names", "Usage: rvn schema rename type <old_name> <new_name>")
 			}
-			return renameType(vaultPath, args[1], args[2], start)
+			return renameType(keepPath, args[1], args[2], start)
 		case "field":
 			if len(args) != 4 {
 				return handleErrorMsg(ErrMissingArgument, "field rename requires type, old field, and new field", "Usage: rvn schema rename field <type> <old_field> <new_field>")
 			}
-			return renameField(vaultPath, args[1], args[2], args[3], start)
+			return renameField(keepPath, args[1], args[2], args[3], start)
 		default:
 			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Currently supported: type, field")
 		}
@@ -1537,7 +1537,7 @@ type fieldRenamePlan struct {
 	Conflicts []FieldRenameConflict
 }
 
-func renameField(vaultPath, typeName, oldField, newField string, start time.Time) error {
+func renameField(keepPath, typeName, oldField, newField string, start time.Time) error {
 	if typeName == "" || oldField == "" || newField == "" {
 		return handleErrorMsg(ErrInvalidInput, "type and field names cannot be empty", "Usage: rvn schema rename field <type> <old_field> <new_field>")
 	}
@@ -1551,7 +1551,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 	}
 
 	// Load existing schema for validation
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
@@ -1570,7 +1570,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 		return handleErrorMsg(ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName), "")
 	}
 
-	plan, err := buildFieldRenamePlan(vaultPath, typeName, oldField, newField)
+	plan, err := buildFieldRenamePlan(keepPath, typeName, oldField, newField)
 	if err != nil {
 		return err
 	}
@@ -1645,7 +1645,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 
 	// 1) schema.yaml
 	if len(plan.SchemaYAML) > 0 {
-		schemaPath := paths.SchemaPath(vaultPath)
+		schemaPath := paths.SchemaPath(keepPath)
 		if err := atomicfile.WriteFile(schemaPath, plan.SchemaYAML, 0o644); err != nil {
 			return handleError(ErrFileWriteError, err, "")
 		}
@@ -1669,7 +1669,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 
 	// 3) raven.yaml
 	if len(plan.RavenYAML) > 0 {
-		cfgPath := filepath.Join(vaultPath, "raven.yaml")
+		cfgPath := filepath.Join(keepPath, "raven.yaml")
 		if err := atomicfile.WriteFile(cfgPath, plan.RavenYAML, 0o644); err != nil {
 			return handleError(ErrFileWriteError, err, "")
 		}
@@ -1711,7 +1711,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 	return nil
 }
 
-func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fieldRenamePlan, error) {
+func buildFieldRenamePlan(keepPath, typeName, oldField, newField string) (*fieldRenamePlan, error) {
 	tokenOld := "{{field." + oldField + "}}"
 	tokenNew := "{{field." + newField + "}}"
 
@@ -1727,7 +1727,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	// -------------------------------------------------------------------------
 	// 1) schema.yaml updates (field key, name_field, template references)
 	// -------------------------------------------------------------------------
-	schemaPath := paths.SchemaPath(vaultPath)
+	schemaPath := paths.SchemaPath(keepPath)
 	schemaData, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, handleError(ErrFileReadError, err, "")
@@ -1794,12 +1794,12 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	// Update template file references
 	if tmplSpec, ok := typeNode["template"].(string); ok && tmplSpec != "" {
 		if looksLikeTemplatePath(tmplSpec) {
-			absTmpl := filepath.Join(vaultPath, tmplSpec)
-			if err := paths.ValidateWithinVault(vaultPath, absTmpl); err != nil {
-				if errors.Is(err, paths.ErrPathOutsideVault) {
+			absTmpl := filepath.Join(keepPath, tmplSpec)
+			if err := paths.ValidateWithinKeep(keepPath, absTmpl); err != nil {
+				if errors.Is(err, paths.ErrPathOutsideKeep) {
 					// Silent no-op for security
 				} else {
-					return nil, handleError(ErrFileOutsideVault, err, "")
+					return nil, handleError(ErrFileOutsideKeep, err, "")
 				}
 			} else {
 				tmplContent, err := os.ReadFile(absTmpl)
@@ -1807,7 +1807,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 					newContent := strings.ReplaceAll(string(tmplContent), tokenOld, tokenNew)
 					if newContent != string(tmplContent) {
 						plan.TemplateFiles[absTmpl] = []byte(newContent)
-						rel, _ := filepath.Rel(vaultPath, absTmpl)
+						rel, _ := filepath.Rel(keepPath, absTmpl)
 						plan.TemplateFileRelPaths[absTmpl] = rel
 						plan.Changes = append(plan.Changes, FieldRenameChange{
 							FilePath:    rel,
@@ -1829,7 +1829,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	// -------------------------------------------------------------------------
 	// 2) raven.yaml saved query rewrites (best-effort)
 	// -------------------------------------------------------------------------
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	keepCfg, err := config.LoadKeepConfig(keepPath)
 	if err != nil {
 		return nil, handleError(ErrFileReadError, err, "")
 	}
@@ -1837,15 +1837,15 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	changedQueries := false
 	fieldRefPattern := regexp.MustCompile(`\.` + regexp.QuoteMeta(oldField) + `\b`)
 
-	if vaultCfg != nil && vaultCfg.Queries != nil {
+	if keepCfg != nil && keepCfg.Queries != nil {
 		// Stable order for deterministic output/change list
 		var qNames []string
-		for name := range vaultCfg.Queries {
+		for name := range keepCfg.Queries {
 			qNames = append(qNames, name)
 		}
 		sort.Strings(qNames)
 		for _, name := range qNames {
-			q := vaultCfg.Queries[name]
+			q := keepCfg.Queries[name]
 			if q == nil || q.Query == "" {
 				continue
 			}
@@ -1870,7 +1870,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	}
 
 	if changedQueries {
-		cfgOut, err := yaml.Marshal(vaultCfg)
+		cfgOut, err := yaml.Marshal(keepCfg)
 		if err != nil {
 			return nil, handleError(ErrInternal, err, "")
 		}
@@ -1880,7 +1880,7 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 	// -------------------------------------------------------------------------
 	// 3) Markdown frontmatter + embedded ::type(...) rewrites
 	// -------------------------------------------------------------------------
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+	err = keep.WalkMarkdownFiles(keepPath, func(result keep.WalkResult) error {
 		if result.Error != nil || result.Document == nil {
 			return nil //nolint:nilerr
 		}
@@ -2096,8 +2096,8 @@ func looksLikeTemplatePath(s string) bool {
 	return matched && len(s) < 100
 }
 
-func renameType(vaultPath, oldName, newName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func renameType(keepPath, oldName, newName string, start time.Time) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Validate names
 	if oldName == "" || newName == "" {
@@ -2117,12 +2117,12 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	}
 
 	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
 	}
 
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
@@ -2187,7 +2187,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	movesBySource := make(map[string]typeDirectoryMove)
 
 	// 3. File changes - walk all markdown files
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+	err = keep.WalkMarkdownFiles(keepPath, func(result keep.WalkResult) error {
 		if result.Error != nil {
 			return nil //nolint:nilerr // skip errors
 		}
@@ -2213,7 +2213,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 			}
 		}
 		if hasFileLevelOldType && defaultPathPlan != nil {
-			if move, ok := planTypeDirectoryMove(result.RelativePath, newName, defaultPathPlan, vaultCfg); ok {
+			if move, ok := planTypeDirectoryMove(result.RelativePath, newName, defaultPathPlan, keepCfg); ok {
 				if _, exists := movesBySource[move.SourceRelPath]; !exists {
 					movesBySource[move.SourceRelPath] = move
 					defaultPathPlan.Moves = append(defaultPathPlan.Moves, move)
@@ -2322,7 +2322,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		}
 	}
 	if applyDefaultPathRename {
-		if err := validateTypeDirectoryMoves(vaultPath, defaultPathPlan.Moves); err != nil {
+		if err := validateTypeDirectoryMoves(keepPath, defaultPathPlan.Moves); err != nil {
 			return handleErrorMsg(
 				ErrValidationFailed,
 				fmt.Sprintf("cannot rename default directory: %v", err),
@@ -2398,7 +2398,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	}
 
 	// 2. Update markdown files
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+	err = keep.WalkMarkdownFiles(keepPath, func(result keep.WalkResult) error {
 		if result.Error != nil {
 			return nil //nolint:nilerr
 		}
@@ -2445,9 +2445,9 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	movedFiles := 0
 	updatedReferenceFiles := 0
 	if applyDefaultPathRename {
-		movedFiles, updatedReferenceFiles, err = applyTypeDirectoryRename(vaultPath, vaultCfg, defaultPathPlan.Moves)
+		movedFiles, updatedReferenceFiles, err = applyTypeDirectoryRename(keepPath, keepCfg, defaultPathPlan.Moves)
 		if err != nil {
-			return handleError(ErrFileWriteError, err, "Some files may have been renamed; review the vault and run 'rvn reindex --full'")
+			return handleError(ErrFileWriteError, err, "Some files may have been renamed; review the keep and run 'rvn reindex --full'")
 		}
 		appliedChanges += movedFiles + updatedReferenceFiles
 	}
@@ -2528,13 +2528,13 @@ func suggestRenamedDefaultPath(oldDefaultPath, oldName, newName string) (string,
 	return next, true
 }
 
-func planTypeDirectoryMove(relPath, newName string, plan *typeDefaultPathRenamePlan, vaultCfg *config.VaultConfig) (typeDirectoryMove, bool) {
-	if plan == nil || vaultCfg == nil {
+func planTypeDirectoryMove(relPath, newName string, plan *typeDefaultPathRenamePlan, keepCfg *config.KeepConfig) (typeDirectoryMove, bool) {
+	if plan == nil || keepCfg == nil {
 		return typeDirectoryMove{}, false
 	}
 
 	sourceRel := filepath.ToSlash(strings.TrimPrefix(relPath, "./"))
-	sourceID := vaultCfg.FilePathToObjectID(sourceRel)
+	sourceID := keepCfg.FilePathToObjectID(sourceRel)
 	if !strings.HasPrefix(sourceID, plan.OldDefaultPath) {
 		return typeDirectoryMove{}, false
 	}
@@ -2543,7 +2543,7 @@ func planTypeDirectoryMove(relPath, newName string, plan *typeDefaultPathRenameP
 		return typeDirectoryMove{}, false
 	}
 	destID := plan.NewDefaultPath + suffix
-	destRel := filepath.ToSlash(vaultCfg.ObjectIDToFilePath(destID, newName))
+	destRel := filepath.ToSlash(keepCfg.ObjectIDToFilePath(destID, newName))
 	if sourceRel == destRel {
 		return typeDirectoryMove{}, false
 	}
@@ -2555,7 +2555,7 @@ func planTypeDirectoryMove(relPath, newName string, plan *typeDefaultPathRenameP
 	}, true
 }
 
-func validateTypeDirectoryMoves(vaultPath string, moves []typeDirectoryMove) error {
+func validateTypeDirectoryMoves(keepPath string, moves []typeDirectoryMove) error {
 	if len(moves) == 0 {
 		return nil
 	}
@@ -2563,8 +2563,8 @@ func validateTypeDirectoryMoves(vaultPath string, moves []typeDirectoryMove) err
 	destinations := make(map[string]string, len(moves))
 	sources := make(map[string]struct{}, len(moves))
 	for _, move := range moves {
-		sourceAbs := filepath.Join(vaultPath, move.SourceRelPath)
-		destAbs := filepath.Join(vaultPath, move.DestinationRelPath)
+		sourceAbs := filepath.Join(keepPath, move.SourceRelPath)
+		destAbs := filepath.Join(keepPath, move.DestinationRelPath)
 		sources[filepath.Clean(sourceAbs)] = struct{}{}
 
 		if _, err := os.Stat(sourceAbs); err != nil {
@@ -2578,7 +2578,7 @@ func validateTypeDirectoryMoves(vaultPath string, moves []typeDirectoryMove) err
 	}
 
 	for _, move := range moves {
-		destAbs := filepath.Clean(filepath.Join(vaultPath, move.DestinationRelPath))
+		destAbs := filepath.Clean(filepath.Join(keepPath, move.DestinationRelPath))
 		if _, isSource := sources[destAbs]; isSource {
 			continue
 		}
@@ -2590,7 +2590,7 @@ func validateTypeDirectoryMoves(vaultPath string, moves []typeDirectoryMove) err
 	return nil
 }
 
-func applyTypeDirectoryRename(vaultPath string, vaultCfg *config.VaultConfig, moves []typeDirectoryMove) (int, int, error) {
+func applyTypeDirectoryRename(keepPath string, keepCfg *config.KeepConfig, moves []typeDirectoryMove) (int, int, error) {
 	if len(moves) == 0 {
 		return 0, 0, nil
 	}
@@ -2603,8 +2603,8 @@ func applyTypeDirectoryRename(vaultPath string, vaultCfg *config.VaultConfig, mo
 
 	idMoves := make(map[string]string, len(orderedMoves))
 	for _, move := range orderedMoves {
-		sourceAbs := filepath.Join(vaultPath, move.SourceRelPath)
-		destAbs := filepath.Join(vaultPath, move.DestinationRelPath)
+		sourceAbs := filepath.Join(keepPath, move.SourceRelPath)
+		destAbs := filepath.Join(keepPath, move.DestinationRelPath)
 
 		if err := os.MkdirAll(filepath.Dir(destAbs), 0o755); err != nil {
 			return 0, 0, err
@@ -2615,23 +2615,23 @@ func applyTypeDirectoryRename(vaultPath string, vaultCfg *config.VaultConfig, mo
 		idMoves[move.SourceID] = move.DestinationID
 	}
 
-	updatedReferenceFiles, err := updateReferencesForTypeDirectoryMoves(vaultPath, vaultCfg, idMoves)
+	updatedReferenceFiles, err := updateReferencesForTypeDirectoryMoves(keepPath, keepCfg, idMoves)
 	if err != nil {
 		return len(orderedMoves), updatedReferenceFiles, err
 	}
 	return len(orderedMoves), updatedReferenceFiles, nil
 }
 
-func updateReferencesForTypeDirectoryMoves(vaultPath string, vaultCfg *config.VaultConfig, idMoves map[string]string) (int, error) {
+func updateReferencesForTypeDirectoryMoves(keepPath string, keepCfg *config.KeepConfig, idMoves map[string]string) (int, error) {
 	if len(idMoves) == 0 {
 		return 0, nil
 	}
 
 	objectRoot := ""
 	pageRoot := ""
-	if vaultCfg != nil {
-		objectRoot = vaultCfg.GetObjectsRoot()
-		pageRoot = vaultCfg.GetPagesRoot()
+	if keepCfg != nil {
+		objectRoot = keepCfg.GetObjectsRoot()
+		pageRoot = keepCfg.GetPagesRoot()
 	}
 
 	oldIDs := make([]string, 0, len(idMoves))
@@ -2643,7 +2643,7 @@ func updateReferencesForTypeDirectoryMoves(vaultPath string, vaultCfg *config.Va
 	})
 
 	updatedFiles := 0
-	err := vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+	err := keep.WalkMarkdownFiles(keepPath, func(result keep.WalkResult) error {
 		if result.Path == "" {
 			return nil
 		}

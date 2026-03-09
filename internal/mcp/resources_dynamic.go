@@ -15,18 +15,18 @@ type savedQueryResource struct {
 }
 
 func (s *Server) readSavedQueriesResource() (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+	keepPath, err := s.resolveKeepPath()
 	if err != nil {
 		return "", err
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	keepCfg, err := config.LoadKeepConfig(keepPath)
 	if err != nil {
 		return "", err
 	}
 
-	queries := make([]savedQueryResource, 0, len(vaultCfg.Queries))
-	for name, q := range vaultCfg.Queries {
+	queries := make([]savedQueryResource, 0, len(keepCfg.Queries))
+	for name, q := range keepCfg.Queries {
 		if q == nil {
 			continue
 		}
@@ -51,17 +51,17 @@ func (s *Server) readSavedQueriesResource() (string, error) {
 }
 
 func (s *Server) readWorkflowsListResource() (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+	keepPath, err := s.resolveKeepPath()
 	if err != nil {
 		return "", err
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	keepCfg, err := config.LoadKeepConfig(keepPath)
 	if err != nil {
 		return "", err
 	}
 
-	items, err := workflow.List(vaultPath, vaultCfg)
+	items, err := workflow.List(keepPath, keepCfg)
 	if err != nil {
 		return "", err
 	}
@@ -80,17 +80,17 @@ func (s *Server) readWorkflowsListResource() (string, error) {
 }
 
 func (s *Server) readWorkflowResource(name string) (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+	keepPath, err := s.resolveKeepPath()
 	if err != nil {
 		return "", err
 	}
 
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	keepCfg, err := config.LoadKeepConfig(keepPath)
 	if err != nil {
 		return "", err
 	}
 
-	wf, err := workflow.Get(vaultPath, name, vaultCfg)
+	wf, err := workflow.Get(keepPath, name, keepCfg)
 	if err != nil {
 		return "", err
 	}

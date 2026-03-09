@@ -9,8 +9,8 @@ import (
 )
 
 func TestRunService_StartAndContinue(t *testing.T) {
-	vault := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+	keep := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keep, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 
@@ -40,11 +40,11 @@ steps:
       title: "Daily Brief {{inputs.date}}"
       content: "{{steps.compose.outputs.markdown}}"
 `
-	if err := os.WriteFile(filepath.Join(vault, "workflows", "daily.yaml"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keep, "workflows", "daily.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write workflow file: %v", err)
 	}
 
-	cfg := &config.VaultConfig{
+	cfg := &config.KeepConfig{
 		Workflows: map[string]*config.WorkflowRef{
 			"daily": {File: "workflows/daily.yaml"},
 		},
@@ -52,7 +52,7 @@ steps:
 
 	var savedContent interface{}
 	callCount := 0
-	svc := NewRunService(vault, cfg, func(tool string, args map[string]interface{}) (interface{}, error) {
+	svc := NewRunService(keep, cfg, func(tool string, args map[string]interface{}) (interface{}, error) {
 		callCount++
 		switch tool {
 		case "raven_query":
@@ -110,8 +110,8 @@ steps:
 }
 
 func TestRunService_ContinueRevisionConflict(t *testing.T) {
-	vault := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+	keep := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keep, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
 	}
 	content := `description: test
@@ -124,16 +124,16 @@ steps:
         type: markdown
         required: true
 `
-	if err := os.WriteFile(filepath.Join(vault, "workflows", "x.yaml"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keep, "workflows", "x.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write workflow file: %v", err)
 	}
 
-	cfg := &config.VaultConfig{
+	cfg := &config.KeepConfig{
 		Workflows: map[string]*config.WorkflowRef{
 			"x": {File: "workflows/x.yaml"},
 		},
 	}
-	svc := NewRunService(vault, cfg, func(tool string, args map[string]interface{}) (interface{}, error) {
+	svc := NewRunService(keep, cfg, func(tool string, args map[string]interface{}) (interface{}, error) {
 		return map[string]interface{}{"ok": true}, nil
 	})
 

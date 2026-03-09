@@ -103,15 +103,15 @@ func formatLocationLinkSimpleStyled(relPath string, line int, render func(...str
 		return render(location)
 	}
 
-	// Get vault path and config
-	vaultPath := getVaultPath()
+	// Get keep path and config
+	keepPath := getKeepPath()
 	cfg := getConfig()
 
-	if vaultPath == "" {
+	if keepPath == "" {
 		return render(location)
 	}
 
-	absPath := filepath.Join(vaultPath, relPath)
+	absPath := filepath.Join(keepPath, relPath)
 	url := buildEditorURL(cfg, absPath, line)
 
 	return render(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, location))

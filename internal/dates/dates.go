@@ -2,7 +2,7 @@
 //
 // This package exists to avoid duplicating date parsing logic across:
 // - schema validation
-// - vault/CLI date args
+// - keep/CLI date args
 // - check validation
 // - index/query date filters
 // - reference resolution (date shorthand)
