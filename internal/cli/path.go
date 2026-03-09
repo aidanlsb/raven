@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func outputVaultPath(path string) error {
+func outputKeepPath(path string) error {
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
 			"path": path,
@@ -19,8 +19,8 @@ func outputVaultPath(path string) error {
 
 var pathCmd = &cobra.Command{
 	Use:   "path",
-	Short: "Print the resolved vault directory path",
-	Long: `Prints the configured vault directory path.
+	Short: "Print the resolved keep directory path",
+	Long: `Prints the configured keep directory path.
 
 Useful for shell integration:
   cd $(rvn path)
@@ -29,23 +29,23 @@ Or add an alias to your ~/.zshrc:
   alias cdv='cd $(rvn path)'`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return outputVaultPath(getVaultPath())
+		return outputKeepPath(getKeepPath())
 	},
 }
 
-var vaultPathCmd = &cobra.Command{
+var keepPathCmd = &cobra.Command{
 	Use:   "path",
-	Short: "Print the resolved vault directory path",
-	Long: `Print the resolved vault directory path.
+	Short: "Print the resolved keep directory path",
+	Long: `Print the resolved keep directory path.
 
 Useful for shell integration:
-  cd $(rvn vault path)
+  cd $(rvn keep path)
 
-This command resolves the vault the same way regular vault-bound commands do:
-explicit --vault-path, then --vault, then active/default config.`,
+This command resolves the keep the same way regular keep-bound commands do:
+explicit --keep-path, then --keep, then active/default config.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return outputVaultPath(getVaultPath())
+		return outputKeepPath(getKeepPath())
 	},
 }
 

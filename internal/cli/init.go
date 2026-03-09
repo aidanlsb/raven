@@ -32,11 +32,11 @@ type initResult struct {
 
 var initCmd = &cobra.Command{
 	Use:   "init <path>",
-	Short: "Initialize a new vault",
-	Long: `Creates a new vault at the specified path with default configuration files.
+	Short: "Initialize a new keep",
+	Long: `Creates a new keep at the specified path with default configuration files.
 
 Creates:
-  - raven.yaml   (vault configuration)
+  - raven.yaml   (keep configuration)
   - schema.yaml  (types and traits)
   - .raven/      (index directory)
   - .gitignore   (ignores derived files)`,
@@ -45,12 +45,12 @@ Creates:
 		path := args[0]
 
 		if !isJSONOutput() {
-			fmt.Printf("Initializing vault at: %s\n", path)
+			fmt.Printf("Initializing keep at: %s\n", path)
 		}
 
 		// Create directory if it doesn't exist
 		if err := os.MkdirAll(path, 0755); err != nil {
-			return handleError(ErrFileWriteError, fmt.Errorf("failed to create vault directory: %w", err), "Check that the destination path is writable")
+			return handleError(ErrFileWriteError, fmt.Errorf("failed to create keep directory: %w", err), "Check that the destination path is writable")
 		}
 
 		// Create .raven directory
@@ -106,8 +106,8 @@ Creates:
 			gitignoreStatus = "unchanged"
 		}
 
-		// Create default raven.yaml (vault config)
-		createdConfig, err := config.CreateDefaultVaultConfig(path)
+		// Create default raven.yaml (keep config)
+		createdConfig, err := config.CreateDefaultKeepConfig(path)
 		if err != nil {
 			return handleError(ErrFileWriteError, fmt.Errorf("failed to create raven.yaml: %w", err), "")
 		}
@@ -124,7 +124,7 @@ Creates:
 		)
 		info := currentVersionInfo()
 		fetchResult, fetchErr := docsync.Fetch(docsync.FetchOptions{
-			VaultPath:  path,
+			KeepPath:   path,
 			CLIVersion: info.Version,
 			HTTPClient: &http.Client{Timeout: 60 * time.Second},
 		})
@@ -132,7 +132,7 @@ Creates:
 		if fetchErr != nil {
 			warnings = append(warnings, Warning{
 				Code:    WarnDocsFetchFailed,
-				Message: fmt.Sprintf("Docs fetch failed: %v. Run 'rvn --vault-path %s docs fetch' to retry.", fetchErr, path),
+				Message: fmt.Sprintf("Docs fetch failed: %v. Run 'rvn --keep-path %s docs fetch' to retry.", fetchErr, path),
 			})
 		} else {
 			docsResult = initDocsResult{
@@ -166,7 +166,7 @@ Creates:
 
 		// Report what was done
 		if createdConfig {
-			fmt.Println("✓ Created raven.yaml (vault configuration)")
+			fmt.Println("✓ Created raven.yaml (keep configuration)")
 		} else {
 			fmt.Println("• raven.yaml already exists (kept)")
 		}
@@ -190,15 +190,15 @@ Creates:
 
 		if fetchErr != nil {
 			fmt.Printf("! Docs fetch failed: %v\n", fetchErr)
-			fmt.Printf("  Run 'rvn --vault-path %s docs fetch' to retry.\n", path)
+			fmt.Printf("  Run 'rvn --keep-path %s docs fetch' to retry.\n", path)
 		} else {
 			fmt.Printf("✓ Fetched docs into %s (%d files)\n", docsync.StoreRelPath, fetchResult.FileCount)
 		}
 
 		if status == "initialized" {
-			fmt.Println("\nVault initialized! Start adding markdown files.")
+			fmt.Println("\nKeep initialized! Start adding markdown files.")
 		} else {
-			fmt.Println("\nExisting vault detected. Configuration preserved.")
+			fmt.Println("\nExisting keep detected. Configuration preserved.")
 		}
 
 		return nil

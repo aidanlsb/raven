@@ -37,7 +37,7 @@ func TestRunner_StopsAtAgentStep(t *testing.T) {
 	}
 
 	callCount := 0
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		callCount++
 		return map[string]interface{}{
@@ -78,7 +78,7 @@ func TestRunner_AgentStepTypedArrayOutputExample(t *testing.T) {
 		},
 	}
 
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	result, err := r.Run(wf, map[string]string{})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
@@ -119,7 +119,7 @@ func TestRunner_ReturnsStepSummariesInsteadOfStepPayloads(t *testing.T) {
 		},
 	}
 
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		return map[string]interface{}{
 			"ok": true,
@@ -202,7 +202,7 @@ func TestRunner_ToolStepTypedInterpolation(t *testing.T) {
 	var secondCallArgs map[string]interface{}
 	callIndex := 0
 
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		callIndex++
 		if callIndex == 1 {
@@ -263,7 +263,7 @@ func TestRunner_OptionalInputOmittedIsAddressable(t *testing.T) {
 	}
 
 	var createArgs map[string]interface{}
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		createArgs = args
 		return map[string]interface{}{"ok": true}, nil
@@ -319,7 +319,7 @@ func TestRunner_ForEachExecutesNestedToolsWithScopedInterpolation(t *testing.T) 
 	}
 
 	var createArgs []map[string]interface{}
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		switch tool {
 		case "raven_query":
@@ -413,7 +413,7 @@ func TestRunner_ForEachContinueOnError(t *testing.T) {
 	}
 
 	afterCalled := false
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		switch tool {
 		case "raven_query":
@@ -503,7 +503,7 @@ func TestRunner_ForEachFailFastReturnsError(t *testing.T) {
 	}
 
 	afterCalled := false
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		switch tool {
 		case "raven_query":
@@ -590,7 +590,7 @@ func TestRunner_SwitchRoutesToMatchingCase(t *testing.T) {
 	}
 
 	callOrder := make([]string, 0, 2)
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		callOrder = append(callOrder, tool)
 		switch tool {
@@ -679,7 +679,7 @@ func TestRunner_SwitchFallsBackToDefaultCase(t *testing.T) {
 		},
 	}
 
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		if tool != "raven_query" {
 			return nil, fmt.Errorf("unexpected tool: %s", tool)
@@ -748,7 +748,7 @@ func TestRunner_SwitchReturnsErrorOnInvalidEmitType(t *testing.T) {
 		},
 	}
 
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		return map[string]interface{}{
 			"ok": true,

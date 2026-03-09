@@ -16,8 +16,8 @@ import (
 )
 
 type readEnrichedOptions struct {
-	vaultPath   string
-	vaultCfg    *config.VaultConfig
+	keepPath    string
+	keepCfg     *config.KeepConfig
 	reference   string
 	objectID    string
 	fileAbsPath string
@@ -45,10 +45,10 @@ func readEnriched(opts readEnrichedOptions) error {
 	frontmatter, body := splitFrontmatterBody(opts.content)
 
 	// Pre-process wikilinks in body: convert [[links]] to markdown links
-	processedBody, refs := preprocessWikilinks(body, opts.vaultPath, opts.vaultCfg)
+	processedBody, refs := preprocessWikilinks(body, opts.keepPath, opts.keepCfg)
 
 	// Fetch backlinks and extract context lines
-	backlinkGroups, backlinksCount, err := readBacklinksWithContext(opts.vaultPath, opts.vaultCfg, opts.objectID)
+	backlinkGroups, backlinksCount, err := readBacklinksWithContext(opts.keepPath, opts.keepCfg, opts.objectID)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func splitFrontmatterBody(content string) (frontmatter string, body string) {
 
 // preprocessWikilinks collects wikilink reference metadata from the body while
 // preserving the original [[wikilink]] text for display.
-func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultConfig) (string, []readReference) {
+func preprocessWikilinks(body string, keepPath string, keepCfg *config.KeepConfig) (string, []readReference) {
 	lines := strings.Split(body, "\n")
 	outLines := make([]string, 0, len(lines))
 	var refs []readReference
@@ -176,7 +176,7 @@ func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultCo
 			refs = append(refs, readReference{Text: m.Target})
 
 			// Resolve to file path for JSON metadata/backlinks context.
-			path, ok := resolveTargetToRelPath(m.Target, vaultPath, vaultCfg)
+			path, ok := resolveTargetToRelPath(m.Target, keepPath, keepCfg)
 			if ok {
 				refs[len(refs)-1].Path = &path
 			}
@@ -206,23 +206,23 @@ func indentBlock(content string, spaces int) string {
 	return strings.Join(parts, "")
 }
 
-func resolveTargetToRelPath(target string, vaultPath string, vaultCfg *config.VaultConfig) (string, bool) {
+func resolveTargetToRelPath(target string, keepPath string, keepCfg *config.KeepConfig) (string, bool) {
 	res, err := ResolveReference(target, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
+		KeepPath:   keepPath,
+		KeepConfig: keepCfg,
 	})
 	if err != nil {
 		return "", false
 	}
-	rel, err := filepath.Rel(vaultPath, res.FilePath)
+	rel, err := filepath.Rel(keepPath, res.FilePath)
 	if err != nil {
 		return "", false
 	}
 	return rel, true
 }
 
-func readBacklinksWithContext(vaultPath string, vaultCfg *config.VaultConfig, targetObjectID string) ([]readBacklinkGroup, int, error) {
-	db, err := index.Open(vaultPath)
+func readBacklinksWithContext(keepPath string, keepCfg *config.KeepConfig, targetObjectID string) ([]readBacklinkGroup, int, error) {
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return nil, 0, handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
@@ -250,7 +250,7 @@ func readBacklinksWithContext(vaultPath string, vaultCfg *config.VaultConfig, ta
 	for _, filePath := range order {
 		lines, ok := fileCache[filePath]
 		if !ok {
-			full := filepath.Join(vaultPath, filePath)
+			full := filepath.Join(keepPath, filePath)
 			b, readErr := os.ReadFile(full)
 			if readErr != nil {
 				// If we can't read the file, still include the group but with a placeholder
@@ -292,11 +292,11 @@ func formatFileLink(relPath string) string {
 	if !shouldEmitHyperlinks() {
 		return ui.FilePath(relPath)
 	}
-	vaultPath := getVaultPath()
-	if vaultPath == "" {
+	keepPath := getKeepPath()
+	if keepPath == "" {
 		return ui.FilePath(relPath)
 	}
-	abs := filepath.Join(vaultPath, relPath)
+	abs := filepath.Join(keepPath, relPath)
 	url := buildEditorURL(getConfig(), abs, 1)
 	return ui.FilePath(fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", url, relPath))
 }

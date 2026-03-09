@@ -15,18 +15,18 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/lastresults"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
 // saveLastResultsFromTraits builds and saves a LastResults from trait query results.
 // Returns the built LastResults for use in output formatting.
-func saveLastResultsFromTraits(vaultPath, queryStr string, results []model.Trait) *lastresults.LastResults {
+func saveLastResultsFromTraits(keepPath, queryStr string, results []model.Trait) *lastresults.LastResults {
 	modelResults := make([]model.Result, len(results))
 	for i, r := range results {
 		modelResults[i] = r
@@ -37,13 +37,13 @@ func saveLastResultsFromTraits(vaultPath, queryStr string, results []model.Trait
 		return nil
 	}
 
-	_ = lastresults.Write(vaultPath, lr)
+	_ = lastresults.Write(keepPath, lr)
 	return lr
 }
 
 // saveLastResultsFromObjects builds and saves a LastResults from object query results.
 // Returns the built LastResults for use in output formatting.
-func saveLastResultsFromObjects(vaultPath, queryStr string, results []model.Object) *lastresults.LastResults {
+func saveLastResultsFromObjects(keepPath, queryStr string, results []model.Object) *lastresults.LastResults {
 	modelResults := make([]model.Result, len(results))
 	for i, r := range results {
 		modelResults[i] = r
@@ -54,7 +54,7 @@ func saveLastResultsFromObjects(vaultPath, queryStr string, results []model.Obje
 		return nil
 	}
 
-	_ = lastresults.Write(vaultPath, lr)
+	_ = lastresults.Write(keepPath, lr)
 	return lr
 }
 
@@ -299,7 +299,7 @@ Examples:
   rvn query --list                   # List saved queries`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 
 		// Handle --pipe/--no-pipe flags
@@ -311,8 +311,8 @@ Examples:
 			SetPipeFormat(&f)
 		}
 
-		// Load vault config for saved queries
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		// Load keep config for saved queries
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -320,7 +320,7 @@ Examples:
 		// Handle --list flag
 		listFlag, _ := cmd.Flags().GetBool("list")
 		if listFlag {
-			return listSavedQueries(vaultCfg, start)
+			return listSavedQueries(keepCfg, start)
 		}
 
 		if len(args) == 0 {
@@ -329,13 +329,13 @@ Examples:
 
 		// MCP sends query_string as a single positional arg. Support
 		// "saved-query-name <inputs...>" in that single string.
-		args = maybeSplitInlineSavedQueryArgs(args, vaultCfg.Queries)
+		args = maybeSplitInlineSavedQueryArgs(args, keepCfg.Queries)
 
 		queryName := args[0]
 		queryStr := ""
 		isSavedQuery := false
 
-		if savedQuery, ok := vaultCfg.Queries[queryName]; ok {
+		if savedQuery, ok := keepCfg.Queries[queryName]; ok {
 			isSavedQuery = true
 			declaredArgs, err := normalizeSavedQueryArgs(queryName, savedQuery.Args)
 			if err != nil {
@@ -359,26 +359,26 @@ Examples:
 			queryStr = joinQueryArgs(args)
 		}
 
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 		}
 		defer db.Close()
-		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+		db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 
 		// Check staleness and optionally refresh
 		refresh, _ := cmd.Flags().GetBool("refresh")
 		if refresh {
-			if err := smartReindex(db, vaultPath); err != nil {
+			if err := smartReindex(db, keepPath); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to refresh index: %v\n", err)
 			}
 		} else {
 			// Check for staleness and warn
-			warnIfStale(db, vaultPath)
+			warnIfStale(db, keepPath)
 		}
 
 		// Load schema for validation
-		sch, schemaErr := schema.Load(vaultPath)
+		sch, schemaErr := schema.Load(keepPath)
 		if schemaErr != nil {
 			// Schema load failure is not fatal - continue without validation
 			sch = nil
@@ -409,12 +409,12 @@ Examples:
 					"Remove pagination/count-only flags when using --apply",
 				)
 			}
-			return runQueryWithApply(db, vaultPath, queryStr, vaultCfg, sch, applyArgs, confirmApply, start)
+			return runQueryWithApply(db, keepPath, queryStr, keepCfg, sch, applyArgs, confirmApply, start)
 		}
 
 		// Check if this is a full query string (starts with object: or trait:)
 		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithOptions(db, vaultPath, queryStr, start, sch, idsOnly, limit, offset, countOnly, vaultCfg.GetDailyDirectory())
+			return runFullQueryWithOptions(db, keepPath, queryStr, start, sch, idsOnly, limit, offset, countOnly, keepCfg.GetDailyDirectory())
 		}
 
 		if isSavedQuery {
@@ -422,7 +422,7 @@ Examples:
 		}
 
 		// Unknown query - provide helpful error
-		suggestion := buildUnknownQuerySuggestion(db, queryStr, vaultCfg.GetDailyDirectory(), sch)
+		suggestion := buildUnknownQuerySuggestion(db, queryStr, keepCfg.GetDailyDirectory(), sch)
 		return handleErrorMsg(ErrQueryInvalid,
 			fmt.Sprintf("unknown query: %s", queryStr),
 			suggestion)
@@ -430,7 +430,7 @@ Examples:
 }
 
 // runQueryWithApply runs a query and applies a bulk operation to the results.
-func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg *config.VaultConfig, sch *schema.Schema, applyArgs []string, confirm bool, start time.Time) error {
+func runQueryWithApply(db *index.Database, keepPath, queryStr string, keepCfg *config.KeepConfig, sch *schema.Schema, applyArgs []string, confirm bool, start time.Time) error {
 	if !strings.HasPrefix(queryStr, "object:") && !strings.HasPrefix(queryStr, "trait:") {
 		return handleErrorMsg(ErrQueryInvalid,
 			fmt.Sprintf("unknown query: %s", queryStr),
@@ -456,14 +456,14 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 	// Execute the query
 	executor := query.NewExecutor(db.DB())
-	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory()}); err == nil {
+	if res, err := db.Resolver(index.ResolverOptions{DailyDirectory: keepCfg.GetDailyDirectory()}); err == nil {
 		executor.SetResolver(res)
 	}
 	executor.SetSchema(sch)
 
 	// Handle trait queries separately - they operate on traits, not objects
 	if q.Type == query.QueryTypeTrait {
-		return runTraitQueryWithApply(executor, vaultPath, queryStr, q, applyCmd, applyOperationArgs, sch, vaultCfg, confirm)
+		return runTraitQueryWithApply(executor, keepPath, queryStr, q, applyCmd, applyOperationArgs, sch, keepCfg, confirm)
 	}
 
 	// Object query - collect object IDs
@@ -515,13 +515,13 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 	switch applyCmd {
 	case "set":
 		// Set supports embedded objects, so pass all IDs
-		return applySetFromQuery(vaultPath, ids, applyOperationArgs, warnings, sch, vaultCfg, confirm)
+		return applySetFromQuery(keepPath, ids, applyOperationArgs, warnings, sch, keepCfg, confirm)
 	case "delete":
-		return applyDeleteFromQuery(vaultPath, fileIDs, warnings, vaultCfg, confirm)
+		return applyDeleteFromQuery(keepPath, fileIDs, warnings, keepCfg, confirm)
 	case "add":
-		return applyAddFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, vaultCfg, confirm)
+		return applyAddFromQuery(keepPath, fileIDs, applyOperationArgs, warnings, keepCfg, confirm)
 	case "move":
-		return applyMoveFromQuery(vaultPath, fileIDs, applyOperationArgs, warnings, vaultCfg, confirm)
+		return applyMoveFromQuery(keepPath, fileIDs, applyOperationArgs, warnings, keepCfg, confirm)
 	default:
 		return handleErrorMsg(ErrInvalidInput,
 			fmt.Sprintf("unknown apply command: %s", applyCmd),
@@ -531,7 +531,7 @@ func runQueryWithApply(db *index.Database, vaultPath, queryStr string, vaultCfg 
 
 // runTraitQueryWithApply handles --apply for trait queries.
 // Trait queries operate on traits, not objects.
-func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string, q *query.Query, applyCmd string, applyArgs []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+func runTraitQueryWithApply(executor *query.Executor, keepPath, queryStr string, q *query.Query, applyCmd string, applyArgs []string, sch *schema.Schema, keepCfg *config.KeepConfig, confirm bool) error {
 	// Execute the trait query
 	results, err := executor.ExecuteTraitQuery(q)
 	if err != nil {
@@ -555,7 +555,7 @@ func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string
 	// Dispatch to trait-specific operations
 	switch applyCmd {
 	case "update":
-		err := applyUpdateTraitFromQuery(vaultPath, results, applyArgs, sch, vaultCfg, confirm)
+		err := applyUpdateTraitFromQuery(keepPath, results, applyArgs, sch, keepCfg, confirm)
 		if err != nil {
 			var validationErr *traitValueValidationError
 			if errors.As(err, &validationErr) {
@@ -575,7 +575,7 @@ func runTraitQueryWithApply(executor *query.Executor, vaultPath, queryStr string
 }
 
 // applySetFromQuery applies set operation from query results.
-func applySetFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+func applySetFromQuery(keepPath string, ids []string, args []string, warnings []Warning, sch *schema.Schema, keepCfg *config.KeepConfig, confirm bool) error {
 	// Parse field=value arguments
 	updates := make(map[string]string)
 	for _, arg := range args {
@@ -594,7 +594,7 @@ func applySetFromQuery(vaultPath string, ids []string, args []string, warnings [
 
 	// set requires schema-aware validation.
 	if sch == nil {
-		loadedSchema, err := schema.Load(vaultPath)
+		loadedSchema, err := schema.Load(keepPath)
 		if err != nil {
 			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 		}
@@ -602,33 +602,33 @@ func applySetFromQuery(vaultPath string, ids []string, args []string, warnings [
 	}
 
 	if !confirm {
-		if err := previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg); err != nil {
+		if err := previewSetBulk(keepPath, ids, updates, warnings, sch, keepCfg); err != nil {
 			return err
 		}
 		if promptForConfirm("Apply changes?") {
-			return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
+			return applySetBulk(keepPath, ids, updates, warnings, sch, keepCfg)
 		}
 		return nil
 	}
-	return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
+	return applySetBulk(keepPath, ids, updates, warnings, sch, keepCfg)
 }
 
 // applyDeleteFromQuery applies delete operation from query results.
-func applyDeleteFromQuery(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
+func applyDeleteFromQuery(keepPath string, ids []string, warnings []Warning, keepCfg *config.KeepConfig, confirm bool) error {
 	if !confirm {
-		if err := previewDeleteBulk(vaultPath, ids, warnings, vaultCfg); err != nil {
+		if err := previewDeleteBulk(keepPath, ids, warnings, keepCfg); err != nil {
 			return err
 		}
 		if promptForConfirm("Apply changes?") {
-			return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+			return applyDeleteBulk(keepPath, ids, warnings, keepCfg)
 		}
 		return nil
 	}
-	return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
+	return applyDeleteBulk(keepPath, ids, warnings, keepCfg)
 }
 
 // applyAddFromQuery applies add operation from query results.
-func applyAddFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
+func applyAddFromQuery(keepPath string, ids []string, args []string, warnings []Warning, keepCfg *config.KeepConfig, confirm bool) error {
 	if len(args) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no text to add", "Usage: --apply add <text>")
 	}
@@ -637,19 +637,19 @@ func applyAddFromQuery(vaultPath string, ids []string, args []string, warnings [
 	line := formatCaptureLine(text)
 
 	if !confirm {
-		if err := previewAddBulk(vaultPath, ids, line, "", warnings, vaultCfg); err != nil {
+		if err := previewAddBulk(keepPath, ids, line, "", warnings, keepCfg); err != nil {
 			return err
 		}
 		if promptForConfirm("Apply changes?") {
-			return applyAddBulk(vaultPath, ids, line, "", warnings, vaultCfg)
+			return applyAddBulk(keepPath, ids, line, "", warnings, keepCfg)
 		}
 		return nil
 	}
-	return applyAddBulk(vaultPath, ids, line, "", warnings, vaultCfg)
+	return applyAddBulk(keepPath, ids, line, "", warnings, keepCfg)
 }
 
 // applyMoveFromQuery applies move operation from query results.
-func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
+func applyMoveFromQuery(keepPath string, ids []string, args []string, warnings []Warning, keepCfg *config.KeepConfig, confirm bool) error {
 	if len(args) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no destination provided", "Usage: --apply move <destination-directory/>")
 	}
@@ -662,18 +662,18 @@ func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings 
 	}
 
 	if !confirm {
-		if err := previewMoveBulk(vaultPath, ids, destination, warnings, vaultCfg); err != nil {
+		if err := previewMoveBulk(keepPath, ids, destination, warnings, keepCfg); err != nil {
 			return err
 		}
 		if promptForConfirm("Apply changes?") {
-			return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+			return applyMoveBulk(keepPath, ids, destination, warnings, keepCfg)
 		}
 		return nil
 	}
-	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
+	return applyMoveBulk(keepPath, ids, destination, warnings, keepCfg)
 }
 
-func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, limit, offset int, countOnly bool, dailyDir string) error {
+func runFullQueryWithOptions(db *index.Database, keepPath, queryStr string, start time.Time, sch *schema.Schema, idsOnly bool, limit, offset int, countOnly bool, dailyDir string) error {
 	// Parse the query
 	q, err := query.Parse(queryStr)
 	if err != nil {
@@ -723,7 +723,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 
 		// Save last results for numbered references (skip for --ids mode)
 		if !idsOnly {
-			saveLastResultsFromObjects(vaultPath, queryStr, windowed)
+			saveLastResultsFromObjects(keepPath, queryStr, windowed)
 		}
 
 		// --ids mode: output just IDs, one per line
@@ -807,7 +807,7 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 
 	// Save last results for numbered references (skip for --ids mode)
 	if !idsOnly {
-		saveLastResultsFromTraits(vaultPath, queryStr, windowed)
+		saveLastResultsFromTraits(keepPath, queryStr, windowed)
 	}
 
 	// --ids mode: output just trait IDs, one per line
@@ -871,12 +871,12 @@ func runFullQueryWithOptions(db *index.Database, vaultPath, queryStr string, sta
 	return nil
 }
 
-func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
+func listSavedQueries(keepCfg *config.KeepConfig, start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
 		var queries []SavedQueryInfo
-		for name, q := range vaultCfg.Queries {
+		for name, q := range keepCfg.Queries {
 			queries = append(queries, SavedQueryInfo{
 				Name:        name,
 				Query:       q.Query,
@@ -892,12 +892,12 @@ func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
 
 	// Human-readable output
 	fmt.Println("Saved queries:")
-	if len(vaultCfg.Queries) == 0 {
+	if len(keepCfg.Queries) == 0 {
 		fmt.Println("  (none defined)")
 		fmt.Println("\nDefine queries in raven.yaml under 'queries:'")
 		return nil
 	}
-	for name, q := range vaultCfg.Queries {
+	for name, q := range keepCfg.Queries {
 		desc := q.Description
 		if desc == "" {
 			desc = q.Query
@@ -929,7 +929,7 @@ Examples:
   rvn query add due-soon "trait:due in(.value,[today,tomorrow])" --description "Due today or tomorrow"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		queryName := args[0]
 		queryStr := args[1]
 		description, _ := cmd.Flags().GetString("description")
@@ -950,13 +950,13 @@ Examples:
 		}
 
 		// Load existing config
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
 		// Check if query already exists
-		if _, exists := vaultCfg.Queries[queryName]; exists {
+		if _, exists := keepCfg.Queries[queryName]; exists {
 			return handleErrorMsg(ErrDuplicateName, fmt.Sprintf("query '%s' already exists", queryName), "Use 'rvn query remove' first to replace it")
 		}
 
@@ -968,13 +968,13 @@ Examples:
 		}
 
 		// Update config
-		if vaultCfg.Queries == nil {
-			vaultCfg.Queries = make(map[string]*config.SavedQuery)
+		if keepCfg.Queries == nil {
+			keepCfg.Queries = make(map[string]*config.SavedQuery)
 		}
-		vaultCfg.Queries[queryName] = &newQuery
+		keepCfg.Queries[queryName] = &newQuery
 
 		// Write back to raven.yaml
-		if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
+		if err := config.SaveKeepConfig(keepPath, keepCfg); err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
@@ -1004,25 +1004,25 @@ Examples:
   rvn query remove my-tasks`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		queryName := args[0]
 
 		// Load existing config
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
 		// Check if query exists
-		if _, exists := vaultCfg.Queries[queryName]; !exists {
+		if _, exists := keepCfg.Queries[queryName]; !exists {
 			return handleErrorMsg(ErrQueryNotFound, fmt.Sprintf("query '%s' not found", queryName), "Run 'rvn query --list' to see available queries")
 		}
 
 		// Remove query
-		delete(vaultCfg.Queries, queryName)
+		delete(keepCfg.Queries, queryName)
 
 		// Write back to raven.yaml
-		if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
+		if err := config.SaveKeepConfig(keepPath, keepCfg); err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
@@ -1041,12 +1041,12 @@ Examples:
 
 // warnIfStale checks if the index has stale files and prints a warning.
 // Only warns for non-JSON output to avoid polluting machine-readable results.
-func warnIfStale(db *index.Database, vaultPath string) {
+func warnIfStale(db *index.Database, keepPath string) {
 	if isJSONOutput() {
 		return
 	}
 
-	staleness, err := db.CheckStaleness(vaultPath)
+	staleness, err := db.CheckStaleness(keepPath)
 	if err != nil {
 		return // Silently fail - don't break queries for staleness check errors
 	}
@@ -1067,14 +1067,14 @@ func warnIfStale(db *index.Database, vaultPath string) {
 }
 
 // smartReindex performs an incremental reindex of only stale files.
-func smartReindex(db *index.Database, vaultPath string) error {
-	sch, err := schema.Load(vaultPath)
+func smartReindex(db *index.Database, keepPath string) error {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return err
 	}
 
 	var reindexed int
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+	err = keep.WalkMarkdownFiles(keepPath, func(result keep.WalkResult) error {
 		if result.Error != nil {
 			return nil //nolint:nilerr // skip files with errors
 		}

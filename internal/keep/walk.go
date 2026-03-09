@@ -1,4 +1,4 @@
-package vault
+package keep
 
 import (
 	"errors"
@@ -29,26 +29,26 @@ type WalkOptions struct {
 	ParseOptions *parser.ParseOptions
 }
 
-// WalkMarkdownFiles walks all markdown files in a vault and calls the handler for each.
+// WalkMarkdownFiles walks all markdown files in a keep and calls the handler for each.
 // It automatically:
 // - Skips the .raven directory
 // - Only processes .md files
-// - Verifies files are within the vault (security check)
+// - Verifies files are within the keep (security check)
 // - Parses each document
-func WalkMarkdownFiles(vaultPath string, handler func(result WalkResult) error) error {
-	return WalkMarkdownFilesWithOptions(vaultPath, nil, handler)
+func WalkMarkdownFiles(keepPath string, handler func(result WalkResult) error) error {
+	return WalkMarkdownFilesWithOptions(keepPath, nil, handler)
 }
 
 // WalkMarkdownFilesWithOptions walks all markdown files with custom options.
-func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler func(result WalkResult) error) error {
+func WalkMarkdownFilesWithOptions(keepPath string, opts *WalkOptions, handler func(result WalkResult) error) error {
 	var parseOpts *parser.ParseOptions
 	if opts != nil {
 		parseOpts = opts.ParseOptions
 	}
 
-	return filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
+	return filepath.WalkDir(keepPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			relativePath, _ := filepath.Rel(vaultPath, path)
+			relativePath, _ := filepath.Rel(keepPath, path)
 			return handler(WalkResult{
 				Path:         path,
 				RelativePath: relativePath,
@@ -70,12 +70,12 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 			return nil
 		}
 
-		// Security: verify file is within vault
-		if err := paths.ValidateWithinVault(vaultPath, path); err != nil {
-			if errors.Is(err, paths.ErrPathOutsideVault) {
+		// Security: verify file is within keep
+		if err := paths.ValidateWithinKeep(keepPath, path); err != nil {
+			if errors.Is(err, paths.ErrPathOutsideKeep) {
 				return nil
 			}
-			relativePath, _ := filepath.Rel(vaultPath, path)
+			relativePath, _ := filepath.Rel(keepPath, path)
 			return handler(WalkResult{
 				Path:         path,
 				RelativePath: relativePath,
@@ -83,7 +83,7 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 			})
 		}
 
-		relativePath, _ := filepath.Rel(vaultPath, path)
+		relativePath, _ := filepath.Rel(keepPath, path)
 
 		// Get file mtime
 		info, err := d.Info()
@@ -107,7 +107,7 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 		}
 
 		// Parse document with options
-		doc, err := parser.ParseDocumentWithOptions(string(content), path, vaultPath, parseOpts)
+		doc, err := parser.ParseDocumentWithOptions(string(content), path, keepPath, parseOpts)
 		if err != nil {
 			return handler(WalkResult{
 				Path:         path,
@@ -127,11 +127,11 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 
 // CollectDocuments walks all markdown files and returns parsed documents.
 // Returns the documents and any files that had errors.
-func CollectDocuments(vaultPath string) ([]*parser.ParsedDocument, []WalkResult, error) {
+func CollectDocuments(keepPath string) ([]*parser.ParsedDocument, []WalkResult, error) {
 	var docs []*parser.ParsedDocument
 	var errors []WalkResult
 
-	err := WalkMarkdownFiles(vaultPath, func(result WalkResult) error {
+	err := WalkMarkdownFiles(keepPath, func(result WalkResult) error {
 		if result.Error != nil {
 			errors = append(errors, result)
 		} else {
@@ -145,30 +145,30 @@ func CollectDocuments(vaultPath string) ([]*parser.ParsedDocument, []WalkResult,
 
 // ResolveObjectToFile resolves an object ID to an absolute file path.
 // Supports exact matches and slugified matching (e.g., "people/Sif" -> "people/sif.md").
-func ResolveObjectToFile(vaultPath, objectID string) (string, error) {
-	return ResolveObjectToFileWithRoots(vaultPath, objectID, "", "")
+func ResolveObjectToFile(keepPath, objectID string) (string, error) {
+	return ResolveObjectToFileWithRoots(keepPath, objectID, "", "")
 }
 
 // ResolveObjectToFileWithConfig resolves a reference/object ID to an absolute file path,
-// using vault directory roots when configured.
-func ResolveObjectToFileWithConfig(vaultPath, ref string, vaultCfg *config.VaultConfig) (string, error) {
+// using keep directory roots when configured.
+func ResolveObjectToFileWithConfig(keepPath, ref string, keepCfg *config.KeepConfig) (string, error) {
 	objectsRoot := ""
 	pagesRoot := ""
-	if vaultCfg != nil && vaultCfg.HasDirectoriesConfig() {
-		if dirs := vaultCfg.GetDirectoriesConfig(); dirs != nil {
+	if keepCfg != nil && keepCfg.HasDirectoriesConfig() {
+		if dirs := keepCfg.GetDirectoriesConfig(); dirs != nil {
 			objectsRoot = dirs.Object
 			pagesRoot = dirs.Page
 		}
 	}
-	return ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot)
+	return ResolveObjectToFileWithRoots(keepPath, ref, objectsRoot, pagesRoot)
 }
 
 // ResolveObjectToFileWithRoots resolves a reference/object ID to an absolute file path,
 // using the provided objects/pages roots for both direct candidate paths and fuzzy matching.
-func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string) (string, error) {
+func ResolveObjectToFileWithRoots(keepPath, ref, objectsRoot, pagesRoot string) (string, error) {
 	// Try direct candidates first (literal + rooted).
 	for _, rel := range paths.CandidateFilePaths(ref, objectsRoot, pagesRoot) {
-		filePath := filepath.Join(vaultPath, rel)
+		filePath := filepath.Join(keepPath, rel)
 		if _, err := os.Stat(filePath); err == nil {
 			return filePath, nil
 		}
@@ -176,9 +176,9 @@ func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string)
 
 	wantID := paths.FilePathToObjectID(ref, objectsRoot, pagesRoot)
 
-	// Fall back to walking the vault and using exact/slugified matching.
+	// Fall back to walking the keep and using exact/slugified matching.
 	var foundPath string
-	err := filepath.WalkDir(vaultPath, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(keepPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			// Best-effort: we still want to resolve if some files/dirs are unreadable.
 			return nil //nolint:nilerr
@@ -194,7 +194,7 @@ func ResolveObjectToFileWithRoots(vaultPath, ref, objectsRoot, pagesRoot string)
 			return nil
 		}
 
-		relPath, _ := filepath.Rel(vaultPath, path)
+		relPath, _ := filepath.Rel(keepPath, path)
 		relID := paths.FilePathToObjectID(relPath, objectsRoot, pagesRoot)
 
 		// Exact match

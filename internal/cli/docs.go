@@ -86,7 +86,7 @@ type docsIndexTopicMeta struct {
 var docsCmd = &cobra.Command{
 	Use:   "docs [section] [topic]",
 	Short: "Browse long-form Markdown documentation",
-	Long: `Browse long-form documentation stored in your vault's .raven/docs cache.
+	Long: `Browse long-form documentation stored in your keep's .raven/docs cache.
 
 Use this command for guides, references, and design notes.
 Run 'rvn docs fetch' to sync or refresh docs content.
@@ -103,9 +103,9 @@ Examples:
   rvn docs search refs --section reference`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		source, err := loadVaultDocsSource(getVaultPath())
+		source, err := loadKeepDocsSource(getKeepPath())
 		if err != nil {
-			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this keep")
 		}
 
 		sections, err := listDocsSectionsFS(source, ".")
@@ -154,9 +154,9 @@ var docsListCmd = &cobra.Command{
 Use this to see exactly which 'rvn docs <section>' commands are available.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		source, err := loadVaultDocsSource(getVaultPath())
+		source, err := loadKeepDocsSource(getKeepPath())
 		if err != nil {
-			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this keep")
 		}
 
 		sections, err := listDocsSectionsFS(source, ".")
@@ -178,9 +178,9 @@ Examples:
   rvn docs search workflow --limit 10`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		source, err := loadVaultDocsSource(getVaultPath())
+		source, err := loadKeepDocsSource(getKeepPath())
 		if err != nil {
-			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this keep")
 		}
 
 		query := strings.TrimSpace(strings.Join(args, " "))
@@ -220,16 +220,16 @@ Examples:
 
 var docsFetchCmd = &cobra.Command{
 	Use:   "fetch",
-	Short: "Fetch docs into .raven/docs for the current vault",
+	Short: "Fetch docs into .raven/docs for the current keep",
 	Long: `Download docs from Raven's source repository and install them under .raven/docs.
 
-This command replaces the local docs cache for the current vault.
+This command replaces the local docs cache for the current keep.
 Use --ref to fetch a specific branch/tag/commit; default is "main".`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		info := currentVersionInfo()
 		result, err := docsync.Fetch(docsync.FetchOptions{
-			VaultPath:     getVaultPath(),
+			KeepPath:      getKeepPath(),
 			Ref:           strings.TrimSpace(docsFetchRef),
 			SourceBaseURL: strings.TrimSpace(docsFetchSource),
 			CLIVersion:    info.Version,
@@ -239,7 +239,7 @@ Use --ref to fetch a specific branch/tag/commit; default is "main".`,
 			return handleError(ErrInternal, err, "Check your network connection and run 'rvn docs fetch' again")
 		}
 
-		relPath, relErr := filepath.Rel(getVaultPath(), result.DocsPath)
+		relPath, relErr := filepath.Rel(getKeepPath(), result.DocsPath)
 		if relErr != nil {
 			relPath = docsync.StoreRelPath
 		}
@@ -506,15 +506,15 @@ func listDocsSections(docsRoot string) ([]docsSectionView, error) {
 	return listDocsSectionsFS(os.DirFS(docsRoot), ".")
 }
 
-func loadVaultDocsSource(vaultPath string) (fs.FS, error) {
-	if strings.TrimSpace(vaultPath) == "" {
-		return nil, fmt.Errorf("no vault resolved for docs command")
+func loadKeepDocsSource(keepPath string) (fs.FS, error) {
+	if strings.TrimSpace(keepPath) == "" {
+		return nil, fmt.Errorf("no keep resolved for docs command")
 	}
 
-	docsFS, err := docsync.OpenFS(vaultPath)
+	docsFS, err := docsync.OpenFS(keepPath)
 	if err != nil {
 		if errors.Is(err, docsync.ErrDocsNotFetched) {
-			return nil, fmt.Errorf("docs are not available for this vault")
+			return nil, fmt.Errorf("docs are not available for this keep")
 		}
 		return nil, err
 	}

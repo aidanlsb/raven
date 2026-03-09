@@ -23,9 +23,9 @@ func TestFetchInstallsDocsFromArchive(t *testing.T) {
 		"raven-main/internal/mcp/agent-guide/index.md":       "ignored",
 	})
 
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 	result, err := Fetch(FetchOptions{
-		VaultPath:     vaultPath,
+		KeepPath:      keepPath,
 		SourceBaseURL: "https://example.invalid/docs",
 		Ref:           "main",
 		CLIVersion:    "v0.0.1",
@@ -50,11 +50,11 @@ func TestFetchInstallsDocsFromArchive(t *testing.T) {
 		t.Fatalf("manifest ref = %q, want main", result.Manifest.Ref)
 	}
 
-	if _, err := os.Stat(filepath.Join(vaultPath, StoreRelPath, DocsIndexFilename)); err != nil {
+	if _, err := os.Stat(filepath.Join(keepPath, StoreRelPath, DocsIndexFilename)); err != nil {
 		t.Fatalf("expected docs index to exist: %v", err)
 	}
 
-	manifest, err := ReadManifest(vaultPath)
+	manifest, err := ReadManifest(keepPath)
 	if err != nil {
 		t.Fatalf("ReadManifest() error = %v", err)
 	}
@@ -62,7 +62,7 @@ func TestFetchInstallsDocsFromArchive(t *testing.T) {
 		t.Fatalf("manifest cli_version = %v, want v0.0.1", manifest)
 	}
 
-	if _, err := OpenFS(vaultPath); err != nil {
+	if _, err := OpenFS(keepPath); err != nil {
 		t.Fatalf("OpenFS() error = %v", err)
 	}
 }
@@ -75,8 +75,8 @@ func TestFetchReplacesExistingDocsCache(t *testing.T) {
 		"raven-main/docs/guide/start.md": "# Start\n",
 	})
 
-	vaultPath := t.TempDir()
-	oldPath := filepath.Join(vaultPath, StoreRelPath)
+	keepPath := t.TempDir()
+	oldPath := filepath.Join(keepPath, StoreRelPath)
 	if err := os.MkdirAll(oldPath, 0o755); err != nil {
 		t.Fatalf("mkdir old docs: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestFetchReplacesExistingDocsCache(t *testing.T) {
 	}
 
 	if _, err := Fetch(FetchOptions{
-		VaultPath:     vaultPath,
+		KeepPath:      keepPath,
 		SourceBaseURL: "https://example.invalid/archive",
 		Ref:           "main",
 		HTTPClient: &http.Client{Transport: fakeTransport{
@@ -98,7 +98,7 @@ func TestFetchReplacesExistingDocsCache(t *testing.T) {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(vaultPath, StoreRelPath, "stale.md")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(keepPath, StoreRelPath, "stale.md")); !os.IsNotExist(err) {
 		t.Fatalf("expected stale docs to be removed, err=%v", err)
 	}
 }

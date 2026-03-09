@@ -14,13 +14,13 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -63,11 +63,11 @@ Configuration (raven.yaml):
     heading: "## Captured"  # Optional heading to append under`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
 		// Handle --stdin mode for bulk operations
 		if addStdin {
-			return runAddBulk(args, vaultPath)
+			return runAddBulk(args, keepPath)
 		}
 
 		// Single capture mode - requires text argument
@@ -75,12 +75,12 @@ Configuration (raven.yaml):
 			return handleErrorMsg(ErrMissingArgument, "requires text argument", "Usage: rvn add <text>")
 		}
 
-		return addSingleCapture(vaultPath, args)
+		return addSingleCapture(keepPath, args)
 	},
 }
 
 // runAddBulk handles bulk add operations from stdin.
-func runAddBulk(args []string, vaultPath string) error {
+func runAddBulk(args []string, keepPath string) error {
 	headingSpec := effectiveAddHeadingSpec()
 
 	// Text to append is provided as arguments
@@ -105,8 +105,8 @@ func runAddBulk(args []string, vaultPath string) error {
 	// Warnings are kept for parity with other bulk ops; add supports embedded targets so no special warning.
 	var warnings []Warning
 
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
@@ -116,16 +116,16 @@ func runAddBulk(args []string, vaultPath string) error {
 
 	// If not confirming, show preview
 	if !addConfirm {
-		return previewAddBulk(vaultPath, ids, line, headingSpec, warnings, vaultCfg)
+		return previewAddBulk(keepPath, ids, line, headingSpec, warnings, keepCfg)
 	}
 
 	// Apply the additions
-	return applyAddBulk(vaultPath, ids, line, headingSpec, warnings, vaultCfg)
+	return applyAddBulk(keepPath, ids, line, headingSpec, warnings, keepCfg)
 }
 
 // previewAddBulk shows a preview of bulk add operations.
-func previewAddBulk(vaultPath string, ids []string, line string, headingSpec string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	parseOpts := buildParseOptions(vaultCfg)
+func previewAddBulk(keepPath string, ids []string, line string, headingSpec string, warnings []Warning, keepCfg *config.KeepConfig) error {
+	parseOpts := buildParseOptions(keepCfg)
 
 	preview := buildBulkPreview("add", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
 		// Resolve to a file path. For embedded IDs, resolve their parent file.
@@ -135,7 +135,7 @@ func previewAddBulk(vaultPath string, ids []string, line string, headingSpec str
 			fileID = baseID
 			targetObjectID = id
 		}
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+		filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileID, keepCfg)
 		if err != nil {
 			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
 		}
@@ -149,7 +149,7 @@ func previewAddBulk(vaultPath string, ids []string, line string, headingSpec str
 			if err != nil {
 				return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
 			}
-			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
+			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, keepPath, parseOpts)
 			if err != nil {
 				return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
 			}
@@ -169,7 +169,7 @@ func previewAddBulk(vaultPath string, ids []string, line string, headingSpec str
 			if targetObjectID != "" {
 				return nil, &BulkResult{ID: id, Status: "skipped", Reason: "cannot combine --heading with embedded IDs from stdin"}
 			}
-			resolvedTarget, err := resolveAddHeadingTarget(vaultPath, filePath, fileID, headingSpec, vaultCfg, parseOpts)
+			resolvedTarget, err := resolveAddHeadingTarget(keepPath, filePath, fileID, headingSpec, keepCfg, parseOpts)
 			if err != nil {
 				return nil, &BulkResult{ID: id, Status: "skipped", Reason: err.Error()}
 			}
@@ -193,9 +193,9 @@ func previewAddBulk(vaultPath string, ids []string, line string, headingSpec str
 }
 
 // applyAddBulk applies bulk add operations.
-func applyAddBulk(vaultPath string, ids []string, line string, headingSpec string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	captureCfg := vaultCfg.GetCaptureConfig()
-	parseOpts := buildParseOptions(vaultCfg)
+func applyAddBulk(keepPath string, ids []string, line string, headingSpec string, warnings []Warning, keepCfg *config.KeepConfig) error {
+	captureCfg := keepCfg.GetCaptureConfig()
+	parseOpts := buildParseOptions(keepCfg)
 
 	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
@@ -208,7 +208,7 @@ func applyAddBulk(vaultPath string, ids []string, line string, headingSpec strin
 			targetObjectID = id
 		}
 
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
+		filePath, err := keep.ResolveObjectToFileWithConfig(keepPath, fileID, keepCfg)
 		if err != nil {
 			result.Status = "skipped"
 			result.Reason = "object not found"
@@ -221,7 +221,7 @@ func applyAddBulk(vaultPath string, ids []string, line string, headingSpec strin
 				result.Reason = "cannot combine --heading with embedded IDs from stdin"
 				return result
 			}
-			resolvedTarget, err := resolveAddHeadingTarget(vaultPath, filePath, fileID, headingSpec, vaultCfg, parseOpts)
+			resolvedTarget, err := resolveAddHeadingTarget(keepPath, filePath, fileID, headingSpec, keepCfg, parseOpts)
 			if err != nil {
 				result.Status = "error"
 				result.Reason = err.Error()
@@ -231,14 +231,14 @@ func applyAddBulk(vaultPath string, ids []string, line string, headingSpec strin
 		}
 
 		// Append to file (never create for bulk operations)
-		if err := appendToFile(vaultPath, filePath, line, captureCfg, vaultCfg, false, targetObjectID); err != nil {
+		if err := appendToFile(keepPath, filePath, line, captureCfg, keepCfg, false, targetObjectID); err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("append failed: %v", err)
 			return result
 		}
 
 		// Reindex if configured
-		maybeReindex(vaultPath, filePath, vaultCfg)
+		maybeReindex(keepPath, filePath, keepCfg)
 
 		result.Status = "added"
 		return result
@@ -250,7 +250,7 @@ func applyAddBulk(vaultPath string, ids []string, line string, headingSpec strin
 	})
 }
 
-func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
+func isDailyNoteObjectID(objectID string, keepCfg *config.KeepConfig) bool {
 	if objectID == "" {
 		return false
 	}
@@ -261,8 +261,8 @@ func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
 	}
 
 	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
-		dailyDir = vaultCfg.GetDailyDirectory()
+	if keepCfg != nil && keepCfg.GetDailyDirectory() != "" {
+		dailyDir = keepCfg.GetDailyDirectory()
 	}
 	if !strings.HasPrefix(baseID, dailyDir+"/") {
 		return false
@@ -273,17 +273,17 @@ func isDailyNoteObjectID(objectID string, vaultCfg *config.VaultConfig) bool {
 }
 
 // addSingleCapture handles single capture mode (non-bulk).
-func addSingleCapture(vaultPath string, args []string) error {
+func addSingleCapture(keepPath string, args []string) error {
 	start := time.Now()
 	headingSpec := effectiveAddHeadingSpec()
 
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
-	captureCfg := vaultCfg.GetCaptureConfig()
-	parseOpts := buildParseOptions(vaultCfg)
+	captureCfg := keepCfg.GetCaptureConfig()
+	parseOpts := buildParseOptions(keepCfg)
 
 	// Join all args as the capture text
 	text := strings.Join(args, " ")
@@ -297,8 +297,8 @@ func addSingleCapture(vaultPath string, args []string) error {
 		// Resolve --to flag using unified resolver (supports section refs like file#section).
 		// If not found, fall back to dynamic date keywords (today/tomorrow/yesterday).
 		result, err := resolveReferenceWithDynamicDates(addToFlag, ResolveOptions{
-			VaultPath:    vaultPath,
-			VaultConfig:  vaultCfg,
+			KeepPath:     keepPath,
+			KeepConfig:   keepCfg,
 			AllowMissing: true,
 		}, true)
 		if err != nil {
@@ -307,17 +307,17 @@ func addSingleCapture(vaultPath string, args []string) error {
 		destPath = result.FilePath
 		targetObjectID = result.ObjectID
 		fileObjectID = result.FileObjectID
-		isDailyNote = isDailyNoteObjectID(result.FileObjectID, vaultCfg)
+		isDailyNote = isDailyNoteObjectID(result.FileObjectID, keepCfg)
 	} else if captureCfg.Destination == "daily" {
 		// Use today's daily note (auto-created if needed)
-		today := vault.FormatDateISO(time.Now())
-		destPath = vaultCfg.DailyNotePath(vaultPath, today)
-		fileObjectID = vaultCfg.DailyNoteID(today)
+		today := keep.FormatDateISO(time.Now())
+		destPath = keepCfg.DailyNotePath(keepPath, today)
+		fileObjectID = keepCfg.DailyNoteID(today)
 		isDailyNote = true
 	} else {
 		// Use configured destination
-		destPath = filepath.Join(vaultPath, captureCfg.Destination)
-		fileObjectID = vaultCfg.FilePathToObjectID(captureCfg.Destination)
+		destPath = filepath.Join(keepPath, captureCfg.Destination)
+		fileObjectID = keepCfg.FilePathToObjectID(captureCfg.Destination)
 
 		// Check if configured destination exists
 		if _, err := os.Stat(destPath); os.IsNotExist(err) {
@@ -327,10 +327,10 @@ func addSingleCapture(vaultPath string, args []string) error {
 		}
 	}
 
-	// Security: verify path is within vault
-	if err := paths.ValidateWithinVault(vaultPath, destPath); err != nil {
-		if errors.Is(err, paths.ErrPathOutsideVault) {
-			return handleErrorMsg(ErrFileOutsideVault, fmt.Sprintf("cannot capture outside vault: %s", destPath), "")
+	// Security: verify path is within keep
+	if err := paths.ValidateWithinKeep(keepPath, destPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideKeep) {
+			return handleErrorMsg(ErrFileOutsideKeep, fmt.Sprintf("cannot capture outside keep: %s", destPath), "")
 		}
 		return handleError(ErrInternal, err, "")
 	}
@@ -339,7 +339,7 @@ func addSingleCapture(vaultPath string, args []string) error {
 		if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
 			return handleErrorMsg(ErrInvalidInput, "cannot combine --heading with a section reference in --to", "Use either --to <file#section> or --heading")
 		}
-		resolvedTarget, err := resolveAddHeadingTarget(vaultPath, destPath, fileObjectID, headingSpec, vaultCfg, parseOpts)
+		resolvedTarget, err := resolveAddHeadingTarget(keepPath, destPath, fileObjectID, headingSpec, keepCfg, parseOpts)
 		if err != nil {
 			return handleErrorMsg(ErrRefNotFound, err.Error(), "Use an existing section slug/id or heading text")
 		}
@@ -355,24 +355,24 @@ func addSingleCapture(vaultPath string, args []string) error {
 	line := formatCaptureLine(text)
 
 	// Append to file (create if daily note)
-	if err := appendToFile(vaultPath, destPath, line, captureCfg, vaultCfg, isDailyNote, targetObjectID); err != nil {
+	if err := appendToFile(keepPath, destPath, line, captureCfg, keepCfg, isDailyNote, targetObjectID); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
 	// Get line count for response
 	lineNum := getFileLineCount(destPath)
 
-	relPath, _ := filepath.Rel(vaultPath, destPath)
+	relPath, _ := filepath.Rel(keepPath, destPath)
 
 	// Check for broken references and build warnings
 	var warnings []Warning
 	refs := parser.ExtractRefs(text, 1)
 	if len(refs) > 0 {
-		warnings = append(warnings, validateRefs(vaultPath, refs, vaultCfg)...)
+		warnings = append(warnings, validateRefs(keepPath, refs, keepCfg)...)
 	}
 
 	// Reindex if configured
-	maybeReindex(vaultPath, destPath, vaultCfg)
+	maybeReindex(keepPath, destPath, keepCfg)
 
 	elapsed := time.Since(start).Milliseconds()
 
@@ -406,11 +406,11 @@ func effectiveAddHeadingSpec() string {
 }
 
 func resolveAddHeadingTarget(
-	vaultPath string,
+	keepPath string,
 	destPath string,
 	fileObjectID string,
 	headingSpec string,
-	vaultCfg *config.VaultConfig,
+	keepCfg *config.KeepConfig,
 	parseOpts *parser.ParseOptions,
 ) (string, error) {
 	spec := strings.TrimSpace(headingSpec)
@@ -422,7 +422,7 @@ func resolveAddHeadingTarget(
 	if err != nil {
 		return "", fmt.Errorf("failed to read target file")
 	}
-	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), destPath, vaultPath, parseOpts)
+	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), destPath, keepPath, parseOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse target file")
 	}
@@ -521,7 +521,7 @@ func parseHeadingTextFromSpec(spec string) (string, bool) {
 	return headingText, true
 }
 
-func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool, targetObjectID string) error {
+func appendToFile(keepPath, destPath, line string, cfg *config.CaptureConfig, keepCfg *config.KeepConfig, isDailyNote bool, targetObjectID string) error {
 	// Check if file exists
 	fileExists := true
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
@@ -537,18 +537,18 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 			t, err := time.Parse(dates.DateLayout, dateStr)
 			if err != nil {
 				t = time.Now()
-				dateStr = vault.FormatDateISO(t)
+				dateStr = keep.FormatDateISO(t)
 			}
-			friendlyTitle := vault.FormatDateFriendly(t)
-			dailyDir := vaultCfg.GetDailyDirectory()
+			friendlyTitle := keep.FormatDateFriendly(t)
+			dailyDir := keepCfg.GetDailyDirectory()
 			if dailyDir == "" {
 				dailyDir = "daily"
 			}
-			s, err := schema.Load(vaultPath)
+			s, err := schema.Load(keepPath)
 			if err != nil {
 				return fmt.Errorf("failed to load schema: %w", err)
 			}
-			if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory()); err != nil {
+			if _, err := pages.CreateDailyNoteWithSchema(keepPath, dailyDir, dateStr, friendlyTitle, s, keepCfg.GetTemplateDirectory()); err != nil {
 				return fmt.Errorf("failed to create daily note: %w", err)
 			}
 		} else {
@@ -560,7 +560,7 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 	// If a specific embedded/section object is targeted, append within that object's range.
 	// This overrides capture.heading behavior for this operation.
 	if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
-		return appendWithinObject(vaultPath, destPath, line, targetObjectID, vaultCfg)
+		return appendWithinObject(keepPath, destPath, line, targetObjectID, keepCfg)
 	}
 
 	// If heading is configured, find or create it
@@ -594,7 +594,7 @@ func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, v
 	return nil
 }
 
-func appendWithinObject(vaultPath, destPath, line, objectID string, vaultCfg *config.VaultConfig) error {
+func appendWithinObject(keepPath, destPath, line, objectID string, keepCfg *config.KeepConfig) error {
 	contentBytes, err := os.ReadFile(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
@@ -603,14 +603,14 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, vaultCfg *co
 	lines := strings.Split(content, "\n")
 
 	var opts *parser.ParseOptions
-	if vaultCfg != nil {
+	if keepCfg != nil {
 		opts = &parser.ParseOptions{
-			ObjectsRoot: vaultCfg.GetObjectsRoot(),
-			PagesRoot:   vaultCfg.GetPagesRoot(),
+			ObjectsRoot: keepCfg.GetObjectsRoot(),
+			PagesRoot:   keepCfg.GetPagesRoot(),
 		}
 	}
 
-	doc, err := parser.ParseDocumentWithOptions(content, destPath, vaultPath, opts)
+	doc, err := parser.ParseDocumentWithOptions(content, destPath, keepPath, opts)
 	if err != nil {
 		return fmt.Errorf("failed to parse document: %w", err)
 	}
@@ -736,26 +736,26 @@ func getFileLineCount(path string) int {
 }
 
 // validateRefs checks if references exist and returns warnings for missing ones.
-func validateRefs(vaultPath string, refs []parser.Reference, vaultCfg *config.VaultConfig) []Warning {
+func validateRefs(keepPath string, refs []parser.Reference, keepCfg *config.KeepConfig) []Warning {
 	var warnings []Warning
 
 	// Load schema to infer types from default_path
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return warnings
 	}
 
 	// Determine daily directory from config
 	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
-		dailyDir = vaultCfg.GetDailyDirectory()
+	if keepCfg != nil && keepCfg.GetDailyDirectory() != "" {
+		dailyDir = keepCfg.GetDailyDirectory()
 	}
 
 	// Open database and use its resolver (includes aliases and name_field values)
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
-		// Fall back to walking vault if database is unavailable
-		return validateRefsWithoutDB(vaultPath, refs, sch, dailyDir)
+		// Fall back to walking keep if database is unavailable
+		return validateRefsWithoutDB(keepPath, refs, sch, dailyDir)
 	}
 	defer db.Close()
 
@@ -765,7 +765,7 @@ func validateRefs(vaultPath string, refs []parser.Reference, vaultCfg *config.Va
 		Schema:         sch,
 	})
 	if err != nil {
-		return validateRefsWithoutDB(vaultPath, refs, sch, dailyDir)
+		return validateRefsWithoutDB(keepPath, refs, sch, dailyDir)
 	}
 
 	for _, ref := range refs {
@@ -794,13 +794,13 @@ func validateRefs(vaultPath string, refs []parser.Reference, vaultCfg *config.Va
 }
 
 // validateRefsWithoutDB is a fallback for when the database is unavailable.
-// It walks the vault files but does not support alias resolution.
-func validateRefsWithoutDB(vaultPath string, refs []parser.Reference, sch *schema.Schema, dailyDir string) []Warning {
+// It walks the keep files but does not support alias resolution.
+func validateRefsWithoutDB(keepPath string, refs []parser.Reference, sch *schema.Schema, dailyDir string) []Warning {
 	var warnings []Warning
 
-	// Collect existing object IDs by walking the vault
+	// Collect existing object IDs by walking the keep
 	var objectIDs []string
-	_ = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
+	_ = keep.WalkMarkdownFiles(keepPath, func(result keep.WalkResult) error {
 		if result.Document != nil {
 			for _, obj := range result.Document.Objects {
 				objectIDs = append(objectIDs, obj.ID)

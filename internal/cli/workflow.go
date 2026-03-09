@@ -32,14 +32,14 @@ var workflowListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available workflows",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
-		items, err := workflow.List(vaultPath, vaultCfg)
+		items, err := workflow.List(keepPath, keepCfg)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -86,15 +86,15 @@ var workflowShowCmd = &cobra.Command{
 	Short: "Show workflow details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		name := args[0]
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
-		wf, err := workflow.Get(vaultPath, name, vaultCfg)
+		wf, err := workflow.Get(keepPath, name, keepCfg)
 		if err != nil {
 			return handleError(ErrQueryNotFound, err, "Use 'rvn workflow list' to see available workflows")
 		}
@@ -202,7 +202,7 @@ var workflowStepAddCmd = &cobra.Command{
 	Short: "Add a step to a workflow definition",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		workflowName := strings.TrimSpace(args[0])
 		if workflowName == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
@@ -217,12 +217,12 @@ var workflowStepAddCmd = &cobra.Command{
 			return handleErrorMsg(ErrInvalidInput, "use either --before or --after, not both", "")
 		}
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
+		svc := workflow.NewAuthoringService(keepPath, keepCfg)
 		result, err := svc.MutateStep(workflow.StepMutationRequest{
 			WorkflowName: workflowName,
 			Action:       workflow.StepMutationAdd,
@@ -259,21 +259,21 @@ var workflowStepUpdateCmd = &cobra.Command{
 	Short: "Update a step in a workflow definition",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		workflowName := strings.TrimSpace(args[0])
 		stepID := strings.TrimSpace(args[1])
 		if workflowName == "" || stepID == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name and step id are required", "")
 		}
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
+		svc := workflow.NewAuthoringService(keepPath, keepCfg)
 
-		def, _, _, _, errCode, err := loadWorkflowDefinitionForEdit(vaultPath, vaultCfg, workflowName)
+		def, _, _, _, errCode, err := loadWorkflowDefinitionForEdit(keepPath, keepCfg, workflowName)
 		if err != nil {
 			return handleError(errCode, err, "Run 'rvn workflow list' to see available workflows")
 		}
@@ -344,19 +344,19 @@ var workflowStepRemoveCmd = &cobra.Command{
 	Short: "Remove a step from a workflow definition",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		workflowName := strings.TrimSpace(args[0])
 		stepID := strings.TrimSpace(args[1])
 		if workflowName == "" || stepID == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name and step id are required", "")
 		}
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
+		svc := workflow.NewAuthoringService(keepPath, keepCfg)
 		result, err := svc.MutateStep(workflow.StepMutationRequest{
 			WorkflowName: workflowName,
 			Action:       workflow.StepMutationRemove,
@@ -395,8 +395,8 @@ func validateWorkflowCreateName(name string) error {
 }
 
 func registerWorkflowInConfig(
-	vaultPath string,
-	vaultCfg *config.VaultConfig,
+	keepPath string,
+	keepCfg *config.KeepConfig,
 	name string,
 	ref *config.WorkflowRef,
 ) (*workflow.Workflow, string, error) {
@@ -404,27 +404,27 @@ func registerWorkflowInConfig(
 		return nil, ErrWorkflowInvalid, fmt.Errorf("workflow reference is nil")
 	}
 
-	if vaultCfg == nil {
-		loadedCfg, err := config.LoadVaultConfig(vaultPath)
+	if keepCfg == nil {
+		loadedCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return nil, ErrInternal, err
 		}
-		vaultCfg = loadedCfg
+		keepCfg = loadedCfg
 	}
-	if vaultCfg.Workflows == nil {
-		vaultCfg.Workflows = make(map[string]*config.WorkflowRef)
+	if keepCfg.Workflows == nil {
+		keepCfg.Workflows = make(map[string]*config.WorkflowRef)
 	}
-	if _, exists := vaultCfg.Workflows[name]; exists {
+	if _, exists := keepCfg.Workflows[name]; exists {
 		return nil, ErrDuplicateName, fmt.Errorf("workflow '%s' already exists", name)
 	}
 
-	loaded, err := workflow.LoadWithConfig(vaultPath, name, ref, vaultCfg)
+	loaded, err := workflow.LoadWithConfig(keepPath, name, ref, keepCfg)
 	if err != nil {
 		return nil, ErrWorkflowInvalid, err
 	}
 
-	vaultCfg.Workflows[name] = ref
-	if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
+	keepCfg.Workflows[name] = ref
+	if err := config.SaveKeepConfig(keepPath, keepCfg); err != nil {
 		return nil, ErrInternal, err
 	}
 
@@ -443,7 +443,7 @@ Examples:
   rvn workflow add meeting-prep --file workflows/meeting-prep.yaml`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		name := strings.TrimSpace(args[0])
 		if name == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
@@ -452,11 +452,11 @@ Examples:
 			return err
 		}
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
-		workflowDir := vaultCfg.GetWorkflowDirectory()
+		workflowDir := keepCfg.GetWorkflowDirectory()
 
 		rawFileRef := strings.TrimSpace(workflowAddFile)
 		if rawFileRef == "" {
@@ -474,7 +474,7 @@ Examples:
 		ref := &config.WorkflowRef{
 			File: fileRef,
 		}
-		loaded, errCode, err := registerWorkflowInConfig(vaultPath, vaultCfg, name, ref)
+		loaded, errCode, err := registerWorkflowInConfig(keepPath, keepCfg, name, ref)
 		if err != nil {
 			if errCode == ErrDuplicateName {
 				return handleErrorMsg(errCode, err.Error(), fmt.Sprintf("Use 'rvn workflow remove %s' first to replace it", name))
@@ -555,7 +555,7 @@ Use --file to choose a different file path and --force to overwrite an
 existing scaffold file.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		name := strings.TrimSpace(args[0])
 		if name == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
@@ -564,11 +564,11 @@ existing scaffold file.`,
 			return err
 		}
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
-		workflowDir := vaultCfg.GetWorkflowDirectory()
+		workflowDir := keepCfg.GetWorkflowDirectory()
 
 		fileRef := strings.TrimSpace(workflowScaffoldFile)
 		if fileRef == "" {
@@ -583,9 +583,9 @@ existing scaffold file.`,
 			)
 		}
 
-		fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-			return handleError(ErrFileOutsideVault, err, "Workflow files must be within the vault")
+		fullPath := filepath.Join(keepPath, filepath.FromSlash(fileRef))
+		if err := paths.ValidateWithinKeep(keepPath, fullPath); err != nil {
+			return handleError(ErrFileOutsideKeep, err, "Workflow files must be within the keep")
 		}
 
 		if _, err := os.Stat(fullPath); err == nil && !workflowScaffoldForce {
@@ -606,7 +606,7 @@ existing scaffold file.`,
 		}
 
 		ref := &config.WorkflowRef{File: fileRef}
-		loaded, errCode, err := registerWorkflowInConfig(vaultPath, vaultCfg, name, ref)
+		loaded, errCode, err := registerWorkflowInConfig(keepPath, keepCfg, name, ref)
 		if err != nil {
 			if errCode == ErrDuplicateName {
 				return handleErrorMsg(
@@ -645,25 +645,25 @@ Examples:
   rvn workflow remove daily-brief`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		name := strings.TrimSpace(args[0])
 		if name == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
 		}
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
-		if vaultCfg.Workflows == nil {
+		if keepCfg.Workflows == nil {
 			return handleErrorMsg(
 				ErrWorkflowNotFound,
 				fmt.Sprintf("workflow '%s' not found", name),
 				"Run 'rvn workflow list' to see available workflows",
 			)
 		}
-		if _, exists := vaultCfg.Workflows[name]; !exists {
+		if _, exists := keepCfg.Workflows[name]; !exists {
 			return handleErrorMsg(
 				ErrWorkflowNotFound,
 				fmt.Sprintf("workflow '%s' not found", name),
@@ -671,11 +671,11 @@ Examples:
 			)
 		}
 
-		delete(vaultCfg.Workflows, name)
-		if len(vaultCfg.Workflows) == 0 {
-			vaultCfg.Workflows = nil
+		delete(keepCfg.Workflows, name)
+		if len(keepCfg.Workflows) == 0 {
+			keepCfg.Workflows = nil
 		}
-		if err := config.SaveVaultConfig(vaultPath, vaultCfg); err != nil {
+		if err := config.SaveKeepConfig(keepPath, keepCfg); err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
@@ -708,14 +708,14 @@ Examples:
   rvn workflow validate meeting-prep`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
 
-		if len(vaultCfg.Workflows) == 0 {
+		if len(keepCfg.Workflows) == 0 {
 			if isJSONOutput() {
 				outputSuccess(map[string]interface{}{
 					"valid":   true,
@@ -731,7 +731,7 @@ Examples:
 		var names []string
 		if len(args) == 1 {
 			name := strings.TrimSpace(args[0])
-			if _, ok := vaultCfg.Workflows[name]; !ok {
+			if _, ok := keepCfg.Workflows[name]; !ok {
 				return handleErrorMsg(
 					ErrWorkflowNotFound,
 					fmt.Sprintf("workflow '%s' not found", name),
@@ -740,8 +740,8 @@ Examples:
 			}
 			names = []string{name}
 		} else {
-			names = make([]string, 0, len(vaultCfg.Workflows))
-			for name := range vaultCfg.Workflows {
+			names = make([]string, 0, len(keepCfg.Workflows))
+			for name := range keepCfg.Workflows {
 				names = append(names, name)
 			}
 			sort.Strings(names)
@@ -750,7 +750,7 @@ Examples:
 		results := make([]workflowValidationItem, 0, len(names))
 		invalidCount := 0
 		for _, name := range names {
-			_, loadErr := workflow.LoadWithConfig(vaultPath, name, vaultCfg.Workflows[name], vaultCfg)
+			_, loadErr := workflow.LoadWithConfig(keepPath, name, keepCfg.Workflows[name], keepCfg)
 			item := workflowValidationItem{
 				Name:  name,
 				Valid: loadErr == nil,
@@ -797,10 +797,10 @@ var workflowRunCmd = &cobra.Command{
 	Short: "Run a workflow until it reaches an agent step",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		name := args[0]
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -810,7 +810,7 @@ var workflowRunCmd = &cobra.Command{
 			return handleError(ErrWorkflowInputInvalid, err, "")
 		}
 
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
+		svc := workflow.NewRunService(keepPath, keepCfg, makeToolFunc(keepPath))
 		outcome, err := svc.Start(workflow.StartRunRequest{
 			WorkflowName: name,
 			Inputs:       inputs,
@@ -868,10 +868,10 @@ var workflowContinueCmd = &cobra.Command{
 	Short: "Continue a paused workflow run with agent output JSON",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		runID := args[0]
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -881,7 +881,7 @@ var workflowContinueCmd = &cobra.Command{
 			return handleError(ErrWorkflowAgentOutputInvalid, err, "")
 		}
 
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
+		svc := workflow.NewRunService(keepPath, keepCfg, makeToolFunc(keepPath))
 		outcome, err := svc.Continue(workflow.ContinueRunRequest{
 			RunID:            runID,
 			ExpectedRevision: workflowContinueExpectedRevision,
@@ -940,8 +940,8 @@ var workflowRunsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List persisted workflow runs",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepPath := getKeepPath()
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -951,7 +951,7 @@ var workflowRunsListCmd = &cobra.Command{
 			return handleError(ErrInvalidInput, err, "")
 		}
 
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
+		svc := workflow.NewRunService(keepPath, keepCfg, makeToolFunc(keepPath))
 		runs, runWarnings, err := svc.ListRuns(workflow.RunListFilter{
 			Workflow: workflowRunsWorkflow,
 			Statuses: statuses,
@@ -1002,7 +1002,7 @@ var workflowRunsListCmd = &cobra.Command{
 				if !wfMissing[run.WorkflowName] {
 					wf := wfCache[run.WorkflowName]
 					if wf == nil {
-						loaded, wfErr := workflow.Get(vaultPath, run.WorkflowName, vaultCfg)
+						loaded, wfErr := workflow.Get(keepPath, run.WorkflowName, keepCfg)
 						if wfErr != nil {
 							wfMissing[run.WorkflowName] = true
 						} else {
@@ -1056,15 +1056,15 @@ var workflowRunsStepCmd = &cobra.Command{
 	Short: "Fetch output for a specific workflow step",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		runID := args[0]
 		stepID := strings.TrimSpace(args[1])
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
+		svc := workflow.NewRunService(keepPath, keepCfg, makeToolFunc(keepPath))
 		paginationRequested := cmd.Flags().Changed("path") || cmd.Flags().Changed("offset") || cmd.Flags().Changed("limit")
 		stepResult, err := svc.StepOutput(workflow.StepOutputRequest{
 			RunID:      runID,
@@ -1136,8 +1136,8 @@ var workflowRunsPruneCmd = &cobra.Command{
 	Use:   "prune",
 	Short: "Prune persisted workflow runs",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		keepPath := getKeepPath()
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
@@ -1151,7 +1151,7 @@ var workflowRunsPruneCmd = &cobra.Command{
 			return handleError(ErrInvalidInput, err, "")
 		}
 
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
+		svc := workflow.NewRunService(keepPath, keepCfg, makeToolFunc(keepPath))
 		result, err := svc.PruneRuns(workflow.RunPruneOptions{
 			Statuses:  statuses,
 			OlderThan: olderThan,
@@ -1198,7 +1198,7 @@ var workflowRunsCmd = &cobra.Command{
 
 // makeToolFunc executes workflow tool steps through the same registry-driven
 // CLI argument mapping used by MCP.
-func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{}) (interface{}, error) {
+func makeToolFunc(keepPath string) func(tool string, args map[string]interface{}) (interface{}, error) {
 	return func(tool string, args map[string]interface{}) (interface{}, error) {
 		cliArgs := mcp.BuildCLIArgs(tool, args)
 		if len(cliArgs) == 0 {
@@ -1210,7 +1210,7 @@ func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{
 			return nil, fmt.Errorf("failed to resolve executable: %w", err)
 		}
 
-		cmdArgs := append([]string{"--vault-path", vaultPath}, cliArgs...)
+		cmdArgs := append([]string{"--keep-path", keepPath}, cliArgs...)
 		result, err := rvnexec.Run(exe, cmdArgs)
 		if err != nil {
 			if result.HasEnvelope {
@@ -1233,18 +1233,18 @@ func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{
 }
 
 func loadWorkflowDefinitionForEdit(
-	vaultPath string,
-	vaultCfg *config.VaultConfig,
+	keepPath string,
+	keepCfg *config.KeepConfig,
 	workflowName string,
 ) (*workflowFileDefinition, string, string, []byte, string, error) {
-	if vaultCfg == nil {
-		return nil, "", "", nil, ErrInternal, fmt.Errorf("vault config is nil")
+	if keepCfg == nil {
+		return nil, "", "", nil, ErrInternal, fmt.Errorf("keep config is nil")
 	}
-	if len(vaultCfg.Workflows) == 0 {
+	if len(keepCfg.Workflows) == 0 {
 		return nil, "", "", nil, ErrWorkflowNotFound, fmt.Errorf("no workflows defined in raven.yaml")
 	}
 
-	ref, ok := vaultCfg.Workflows[workflowName]
+	ref, ok := keepCfg.Workflows[workflowName]
 	if !ok {
 		return nil, "", "", nil, ErrWorkflowNotFound, fmt.Errorf("workflow '%s' not found", workflowName)
 	}
@@ -1255,14 +1255,14 @@ func loadWorkflowDefinitionForEdit(
 		return nil, "", "", nil, ErrWorkflowInvalid, fmt.Errorf("workflow '%s' has no file reference", workflowName)
 	}
 
-	fileRef, err := workflow.ResolveWorkflowFileRef(ref.File, vaultCfg.GetWorkflowDirectory())
+	fileRef, err := workflow.ResolveWorkflowFileRef(ref.File, keepCfg.GetWorkflowDirectory())
 	if err != nil {
 		return nil, "", "", nil, ErrWorkflowInvalid, err
 	}
-	fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		if errors.Is(err, paths.ErrPathOutsideVault) {
-			return nil, "", "", nil, ErrFileOutsideVault, err
+	fullPath := filepath.Join(keepPath, filepath.FromSlash(fileRef))
+	if err := paths.ValidateWithinKeep(keepPath, fullPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideKeep) {
+			return nil, "", "", nil, ErrFileOutsideKeep, err
 		}
 		return nil, "", "", nil, ErrInternal, err
 	}
@@ -1599,8 +1599,8 @@ func mapWorkflowDomainCode(code workflow.Code) string {
 		return ErrFileReadError
 	case workflow.CodeFileWriteError:
 		return ErrFileWriteError
-	case workflow.CodeFileOutsideVault:
-		return ErrFileOutsideVault
+	case workflow.CodeFileOutsideKeep:
+		return ErrFileOutsideKeep
 	case workflow.CodeWorkflowNotFound:
 		return ErrWorkflowNotFound
 	case workflow.CodeWorkflowInvalid:
@@ -1707,8 +1707,8 @@ func runStateErrorDetails(wf *workflow.Workflow, state *workflow.WorkflowRunStat
 }
 
 func init() {
-	workflowAddCmd.Flags().StringVar(&workflowAddFile, "file", "", "Path to external workflow YAML file (relative to vault root)")
-	workflowScaffoldCmd.Flags().StringVar(&workflowScaffoldFile, "file", "", "Path for the scaffolded workflow YAML file (relative to vault root)")
+	workflowAddCmd.Flags().StringVar(&workflowAddFile, "file", "", "Path to external workflow YAML file (relative to keep root)")
+	workflowScaffoldCmd.Flags().StringVar(&workflowScaffoldFile, "file", "", "Path for the scaffolded workflow YAML file (relative to keep root)")
 	workflowScaffoldCmd.Flags().StringVar(&workflowScaffoldDescription, "description", "", "Description for the scaffolded workflow")
 	workflowScaffoldCmd.Flags().BoolVar(&workflowScaffoldForce, "force", false, "Overwrite scaffold file if it already exists")
 	workflowStepAddCmd.Flags().StringVar(&workflowStepAddJSON, "step-json", "", "Step definition JSON object")

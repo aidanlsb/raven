@@ -12,11 +12,11 @@ import (
 )
 
 func TestUpdateReferenceUpdatesFragments(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	// Create a source file that contains references to an object and its sections.
 	sourceRel := filepath.Join("daily", "2026-01-01.md")
-	sourceAbs := filepath.Join(vaultPath, sourceRel)
+	sourceAbs := filepath.Join(keepPath, sourceRel)
 	if err := os.MkdirAll(filepath.Dir(sourceAbs), 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestUpdateReferenceUpdatesFragments(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	if err := updateReference(vaultPath, &config.VaultConfig{}, "daily/2026-01-01", "projects/old", "projects/new"); err != nil {
+	if err := updateReference(keepPath, &config.KeepConfig{}, "daily/2026-01-01", "projects/old", "projects/new"); err != nil {
 		t.Fatalf("updateReference: %v", err)
 	}
 
@@ -92,11 +92,11 @@ func TestChooseReplacementRefBaseFallsBackToFullWhenAmbiguous(t *testing.T) {
 }
 
 func TestUpdateReferenceUpdatesRefsOnTraitLines(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	// Create a source file that contains references on trait lines.
 	sourceRel := filepath.Join("daily", "2026-01-02.md")
-	sourceAbs := filepath.Join(vaultPath, sourceRel)
+	sourceAbs := filepath.Join(keepPath, sourceRel)
 	if err := os.MkdirAll(filepath.Dir(sourceAbs), 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestUpdateReferenceUpdatesRefsOnTraitLines(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	if err := updateReference(vaultPath, &config.VaultConfig{}, "daily/2026-01-02", "projects/old", "projects/new"); err != nil {
+	if err := updateReference(keepPath, &config.KeepConfig{}, "daily/2026-01-02", "projects/old", "projects/new"); err != nil {
 		t.Fatalf("updateReference: %v", err)
 	}
 
@@ -144,11 +144,11 @@ func TestUpdateReferenceUpdatesRefsOnTraitLines(t *testing.T) {
 }
 
 func TestUpdateReferenceAtLineUpdatesRefsOnTraitLines(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	// Create a source file that contains references on trait lines.
 	sourceRel := filepath.Join("daily", "2026-01-03.md")
-	sourceAbs := filepath.Join(vaultPath, sourceRel)
+	sourceAbs := filepath.Join(keepPath, sourceRel)
 	if err := os.MkdirAll(filepath.Dir(sourceAbs), 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestUpdateReferenceAtLineUpdatesRefsOnTraitLines(t *testing.T) {
 	}
 
 	// Update ref on line 3 (trait line)
-	if err := updateReferenceAtLine(vaultPath, &config.VaultConfig{}, "daily/2026-01-03", 3, "projects/old", "projects/new"); err != nil {
+	if err := updateReferenceAtLine(keepPath, &config.KeepConfig{}, "daily/2026-01-03", 3, "projects/old", "projects/new"); err != nil {
 		t.Fatalf("updateReferenceAtLine line 3: %v", err)
 	}
 
@@ -336,11 +336,11 @@ func TestUpdateReferenceAtLineWithSectionSourceID(t *testing.T) {
 	// This tests the real-world case where the backlink's source_id includes a section
 	// fragment (e.g., "daily/2026-01-05#meeting-notes"), which is what happens when
 	// a ref appears within an embedded object/section.
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	// Create a source file with sections containing trait lines with refs.
 	sourceRel := filepath.Join("daily", "2026-01-05.md")
-	sourceAbs := filepath.Join(vaultPath, sourceRel)
+	sourceAbs := filepath.Join(keepPath, sourceRel)
 	if err := os.MkdirAll(filepath.Dir(sourceAbs), 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestUpdateReferenceAtLineWithSectionSourceID(t *testing.T) {
 
 	// The backlink's source_id includes the section: "daily/2026-01-05#meeting-notes"
 	// This should still correctly resolve to the file and update line 7.
-	err := updateReferenceAtLine(vaultPath, &config.VaultConfig{}, "daily/2026-01-05#meeting-notes", 7, "projects/old", "projects/new")
+	err := updateReferenceAtLine(keepPath, &config.KeepConfig{}, "daily/2026-01-05#meeting-notes", 7, "projects/old", "projects/new")
 	if err != nil {
 		t.Fatalf("updateReferenceAtLine with section ID: %v", err)
 	}

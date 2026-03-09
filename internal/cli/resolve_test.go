@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/vault"
+	"github.com/aidanlsb/raven/internal/keep"
 )
 
 func TestResolveReference(t *testing.T) {
-	// Create a temp vault for testing
+	// Create a temp keep for testing
 	tmpDir, err := os.MkdirTemp("", "resolve-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -63,12 +63,12 @@ name: Thor
 
 	// Initialize the database by running reindex
 	// For testing, we'll use tryLiteralPath which doesn't need the database
-	vaultCfg := &config.VaultConfig{}
+	keepCfg := &config.KeepConfig{}
 
 	t.Run("literal path resolution", func(t *testing.T) {
 		result, err := ResolveReference("people/freya", ResolveOptions{
-			VaultPath:   tmpDir,
-			VaultConfig: vaultCfg,
+			KeepPath:   tmpDir,
+			KeepConfig: keepCfg,
 		})
 		if err != nil {
 			t.Fatalf("ResolveReference failed: %v", err)
@@ -83,8 +83,8 @@ name: Thor
 
 	t.Run("literal path with .md extension", func(t *testing.T) {
 		result, err := ResolveReference("people/freya.md", ResolveOptions{
-			VaultPath:   tmpDir,
-			VaultConfig: vaultCfg,
+			KeepPath:   tmpDir,
+			KeepConfig: keepCfg,
 		})
 		if err != nil {
 			t.Fatalf("ResolveReference failed: %v", err)
@@ -96,8 +96,8 @@ name: Thor
 
 	t.Run("not found error", func(t *testing.T) {
 		_, err := ResolveReference("people/nonexistent", ResolveOptions{
-			VaultPath:   tmpDir,
-			VaultConfig: vaultCfg,
+			KeepPath:   tmpDir,
+			KeepConfig: keepCfg,
 		})
 		if err == nil {
 			t.Error("Expected error for nonexistent file")
@@ -109,12 +109,12 @@ name: Thor
 }
 
 func TestResolveReferenceErrors(t *testing.T) {
-	t.Run("empty vault path", func(t *testing.T) {
+	t.Run("empty keep path", func(t *testing.T) {
 		_, err := ResolveReference("test", ResolveOptions{
-			VaultPath: "",
+			KeepPath: "",
 		})
 		if err == nil {
-			t.Error("Expected error for empty vault path")
+			t.Error("Expected error for empty keep path")
 		}
 	})
 }
@@ -158,24 +158,24 @@ func TestRefNotFoundError(t *testing.T) {
 func TestResolveReferenceWithDynamicDates(t *testing.T) {
 	t.Run("falls back to dynamic keyword when not found", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		vaultCfg := &config.VaultConfig{DailyDirectory: "journal"}
+		keepCfg := &config.KeepConfig{DailyDirectory: "journal"}
 
 		result, err := resolveReferenceWithDynamicDates("today", ResolveOptions{
-			VaultPath:   tmpDir,
-			VaultConfig: vaultCfg,
+			KeepPath:   tmpDir,
+			KeepConfig: keepCfg,
 		}, true)
 		if err != nil {
 			t.Fatalf("resolveReferenceWithDynamicDates failed: %v", err)
 		}
 
-		parsed, err := vault.ParseDateArg("today")
+		parsed, err := keep.ParseDateArg("today")
 		if err != nil {
 			t.Fatalf("ParseDateArg failed: %v", err)
 		}
-		dateStr := vault.FormatDateISO(parsed)
+		dateStr := keep.FormatDateISO(parsed)
 
-		expectedID := path.Join(vaultCfg.DailyDirectory, dateStr)
-		expectedPath := filepath.Join(tmpDir, vaultCfg.DailyDirectory, dateStr+".md")
+		expectedID := path.Join(keepCfg.DailyDirectory, dateStr)
+		expectedPath := filepath.Join(tmpDir, keepCfg.DailyDirectory, dateStr+".md")
 
 		if result.ObjectID != expectedID {
 			t.Errorf("ObjectID = %q, want %q", result.ObjectID, expectedID)
@@ -193,22 +193,22 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 
 	t.Run("dynamic keyword honors section fragment", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		vaultCfg := &config.VaultConfig{DailyDirectory: "daily"}
+		keepCfg := &config.KeepConfig{DailyDirectory: "daily"}
 
 		result, err := resolveReferenceWithDynamicDates("tomorrow#notes", ResolveOptions{
-			VaultPath:   tmpDir,
-			VaultConfig: vaultCfg,
+			KeepPath:   tmpDir,
+			KeepConfig: keepCfg,
 		}, true)
 		if err != nil {
 			t.Fatalf("resolveReferenceWithDynamicDates failed: %v", err)
 		}
 
-		parsed, err := vault.ParseDateArg("tomorrow")
+		parsed, err := keep.ParseDateArg("tomorrow")
 		if err != nil {
 			t.Fatalf("ParseDateArg failed: %v", err)
 		}
-		dateStr := vault.FormatDateISO(parsed)
-		expectedBaseID := path.Join(vaultCfg.DailyDirectory, dateStr)
+		dateStr := keep.FormatDateISO(parsed)
+		expectedBaseID := path.Join(keepCfg.DailyDirectory, dateStr)
 
 		if !result.IsSection {
 			t.Error("Expected IsSection = true")
@@ -223,7 +223,7 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 
 	t.Run("normal resolution wins over dynamic keyword", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		vaultCfg := &config.VaultConfig{}
+		keepCfg := &config.KeepConfig{}
 
 		todayPath := filepath.Join(tmpDir, "today.md")
 		if err := os.WriteFile(todayPath, []byte("# Today"), 0644); err != nil {
@@ -231,8 +231,8 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 		}
 
 		result, err := resolveReferenceWithDynamicDates("today", ResolveOptions{
-			VaultPath:   tmpDir,
-			VaultConfig: vaultCfg,
+			KeepPath:   tmpDir,
+			KeepConfig: keepCfg,
 		}, true)
 		if err != nil {
 			t.Fatalf("resolveReferenceWithDynamicDates failed: %v", err)
@@ -247,11 +247,11 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 
 	t.Run("missing dynamic keyword respects allowMissing", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		vaultCfg := &config.VaultConfig{}
+		keepCfg := &config.KeepConfig{}
 
 		_, err := resolveReferenceWithDynamicDates("yesterday", ResolveOptions{
-			VaultPath:   tmpDir,
-			VaultConfig: vaultCfg,
+			KeepPath:   tmpDir,
+			KeepConfig: keepCfg,
 		}, false)
 		if err == nil {
 			t.Fatal("Expected error for missing daily note")

@@ -374,7 +374,7 @@ Content`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			doc, err := ParseDocument(tt.content, "test.md", "/vault")
+			doc, err := ParseDocument(tt.content, "test.md", "/keep")
 			if err != nil {
 				t.Fatalf("ParseDocument error: %v", err)
 			}

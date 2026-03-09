@@ -1,0 +1,3 @@
+name: raven-keep-admin
+description: Raven keep setup, active/default keep routing, and global config workflows.
+default_prompt: Manage Raven keeps and global config with explicit keep selection and --json output.

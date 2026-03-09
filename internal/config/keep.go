@@ -14,8 +14,8 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
-// VaultConfig represents vault-level configuration from raven.yaml.
-type VaultConfig struct {
+// KeepConfig represents keep-level configuration from raven.yaml.
+type KeepConfig struct {
 	// DailyDirectory is the resolved daily notes directory (default: "daily").
 	// It is derived from directories.daily after loading and is not serialized.
 	DailyDirectory string `yaml:"-"`
@@ -24,7 +24,7 @@ type VaultConfig struct {
 	// for new daily notes.
 	DailyTemplate string `yaml:"daily_template,omitempty"`
 
-	// Directories configures directory organization for the vault.
+	// Directories configures directory organization for the keep.
 	// When set, typed objects are nested under objects/, untyped pages under pages/.
 	// Object IDs strip the directory prefix, keeping references short.
 	Directories *DirectoriesConfig `yaml:"directories,omitempty"`
@@ -42,7 +42,7 @@ type VaultConfig struct {
 	// WorkflowRuns configures persisted workflow run checkpoints and retention.
 	WorkflowRuns *WorkflowRunsConfig `yaml:"workflow_runs,omitempty"`
 
-	// ProtectedPrefixes are additional vault-relative path prefixes that Raven should
+	// ProtectedPrefixes are additional keep-relative path prefixes that Raven should
 	// treat as protected/system-managed. Workflows and other automation features
 	// should refuse to read/write/move/edit/delete within these prefixes.
 	//
@@ -57,13 +57,13 @@ type VaultConfig struct {
 	Deletion *DeletionConfig `yaml:"deletion,omitempty"`
 }
 
-func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
-	type plain VaultConfig
+func (vc *KeepConfig) UnmarshalYAML(value *yaml.Node) error {
+	type plain KeepConfig
 	var p plain
 	if err := value.Decode(&p); err != nil {
 		return err
 	}
-	*vc = VaultConfig(p)
+	*vc = KeepConfig(p)
 
 	if value.Kind != yaml.MappingNode {
 		return nil
@@ -134,7 +134,7 @@ func isWorkflowRunsConfigNode(node *yaml.Node) bool {
 	return false
 }
 
-// DirectoriesConfig configures directory organization for the vault.
+// DirectoriesConfig configures directory organization for the keep.
 // This allows nesting type folders under a common root while keeping reference paths short.
 //
 // Uses singular keys (object, page) to encourage singular directory names,
@@ -179,10 +179,10 @@ type DirectoriesConfig struct {
 }
 
 // GetDirectoriesConfig returns the directories config with defaults applied.
-// Returns nil if directories are not configured (flat vault structure).
+// Returns nil if directories are not configured (flat keep structure).
 // Handles backwards compatibility: if old plural keys (objects, pages) are set
 // but new singular keys (object, page) are not, uses the old values.
-func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
+func (vc *KeepConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	if vc.Directories == nil {
 		return nil
 	}
@@ -227,7 +227,7 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 }
 
 // HasDirectoriesConfig returns true if directory organization is configured.
-func (vc *VaultConfig) HasDirectoriesConfig() bool {
+func (vc *KeepConfig) HasDirectoriesConfig() bool {
 	if vc.Directories == nil {
 		return false
 	}
@@ -239,7 +239,7 @@ func (vc *VaultConfig) HasDirectoriesConfig() bool {
 // WorkflowRef is a reference to a workflow definition.
 // It can contain an inline definition or a file reference.
 type WorkflowRef struct {
-	// File is a path to an external workflow file (relative to vault root).
+	// File is a path to an external workflow file (relative to keep root).
 	File string `yaml:"file,omitempty"`
 
 	// Inline definition fields
@@ -371,7 +371,7 @@ type WorkflowPromptOutput struct {
 
 // WorkflowRunsConfig configures persisted workflow run checkpoints and pruning.
 type WorkflowRunsConfig struct {
-	// StoragePath is the vault-relative directory for workflow run checkpoints.
+	// StoragePath is the keep-relative directory for workflow run checkpoints.
 	StoragePath string `yaml:"storage_path,omitempty"`
 
 	// AutoPrune runs retention cleanup on workflow run/continue.
@@ -407,16 +407,16 @@ type ResolvedWorkflowRunsConfig struct {
 // DeletionConfig configures how file deletion is handled.
 type DeletionConfig struct {
 	// Behavior controls what happens when a file is deleted.
-	// "trash" (default) - Move to trash directory within vault
+	// "trash" (default) - Move to trash directory within keep
 	// "permanent" - Delete the file permanently
 	Behavior string `yaml:"behavior,omitempty"`
 
-	// TrashDir is the directory within the vault where trashed files go (default: ".trash")
+	// TrashDir is the directory within the keep where trashed files go (default: ".trash")
 	TrashDir string `yaml:"trash_dir,omitempty"`
 }
 
 // GetDeletionConfig returns the deletion config with defaults applied.
-func (vc *VaultConfig) GetDeletionConfig() *DeletionConfig {
+func (vc *KeepConfig) GetDeletionConfig() *DeletionConfig {
 	if vc.Deletion == nil {
 		return &DeletionConfig{
 			Behavior: "trash",
@@ -435,7 +435,7 @@ func (vc *VaultConfig) GetDeletionConfig() *DeletionConfig {
 }
 
 // IsAutoReindexEnabled returns true if auto-reindexing is enabled (default: true).
-func (vc *VaultConfig) IsAutoReindexEnabled() bool {
+func (vc *KeepConfig) IsAutoReindexEnabled() bool {
 	if vc.AutoReindex == nil {
 		return true // Enabled by default
 	}
@@ -456,7 +456,7 @@ type CaptureConfig struct {
 }
 
 // GetCaptureConfig returns the capture config with defaults applied.
-func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
+func (vc *KeepConfig) GetCaptureConfig() *CaptureConfig {
 	if vc.Capture == nil {
 		return &CaptureConfig{
 			Destination: "daily",
@@ -475,10 +475,10 @@ const defaultWorkflowDirectory = "workflows/"
 const defaultTemplateDirectory = "templates/"
 
 //go:embed defaults/raven.yaml defaults/workflows/onboard.yaml
-var defaultVaultFiles embed.FS
+var defaultKeepFiles embed.FS
 
 // GetWorkflowRunsConfig returns workflow run checkpoint settings with defaults applied.
-func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
+func (vc *KeepConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
 	defaults := ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
 		AutoPrune:                 true,
@@ -524,8 +524,8 @@ func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
 }
 
 // GetWorkflowDirectory returns the configured workflow directory with defaults applied.
-// The result is always normalized as a vault-relative directory with trailing slash.
-func (vc *VaultConfig) GetWorkflowDirectory() string {
+// The result is always normalized as a keep-relative directory with trailing slash.
+func (vc *KeepConfig) GetWorkflowDirectory() string {
 	dir := defaultWorkflowDirectory
 	if vc != nil && vc.Directories != nil {
 		raw := vc.Directories.Workflow
@@ -552,8 +552,8 @@ func (vc *VaultConfig) GetWorkflowDirectory() string {
 }
 
 // GetDailyDirectory returns the configured daily directory with defaults applied.
-// The result is always normalized as a vault-relative directory without trailing slash.
-func (vc *VaultConfig) GetDailyDirectory() string {
+// The result is always normalized as a keep-relative directory without trailing slash.
+func (vc *KeepConfig) GetDailyDirectory() string {
 	dir := defaultDailyDirectory
 	if vc != nil && vc.Directories != nil && vc.Directories.Daily != "" {
 		dir = vc.Directories.Daily
@@ -577,8 +577,8 @@ func (vc *VaultConfig) GetDailyDirectory() string {
 }
 
 // GetTemplateDirectory returns the configured template directory with defaults applied.
-// The result is always normalized as a vault-relative directory with trailing slash.
-func (vc *VaultConfig) GetTemplateDirectory() string {
+// The result is always normalized as a keep-relative directory with trailing slash.
+func (vc *KeepConfig) GetTemplateDirectory() string {
 	dir := defaultTemplateDirectory
 	if vc != nil && vc.Directories != nil {
 		raw := vc.Directories.Template
@@ -618,66 +618,66 @@ type SavedQuery struct {
 	Description string `yaml:"description,omitempty"`
 }
 
-// DefaultVaultConfig returns the default vault configuration.
-func DefaultVaultConfig() *VaultConfig {
-	return &VaultConfig{
+// DefaultKeepConfig returns the default keep configuration.
+func DefaultKeepConfig() *KeepConfig {
+	return &KeepConfig{
 		DailyDirectory: defaultDailyDirectory,
 	}
 }
 
-// LoadVaultConfig loads vault configuration from raven.yaml.
+// LoadKeepConfig loads keep configuration from raven.yaml.
 // Returns default config if file doesn't exist.
-func LoadVaultConfig(vaultPath string) (*VaultConfig, error) {
-	configPath := filepath.Join(vaultPath, "raven.yaml")
+func LoadKeepConfig(keepPath string) (*KeepConfig, error) {
+	configPath := filepath.Join(keepPath, "raven.yaml")
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return DefaultVaultConfig(), nil
+		return DefaultKeepConfig(), nil
 	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read vault config %s: %w", configPath, err)
+		return nil, fmt.Errorf("failed to read keep config %s: %w", configPath, err)
 	}
 
-	var config VaultConfig
+	var config KeepConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse vault config %s: %w", configPath, err)
+		return nil, fmt.Errorf("failed to parse keep config %s: %w", configPath, err)
 	}
 	config.DailyDirectory = config.GetDailyDirectory()
 
 	return &config, nil
 }
 
-// CreateDefaultVaultConfig creates a default raven.yaml file in the vault.
+// CreateDefaultKeepConfig creates a default raven.yaml file in the keep.
 // Returns true if a new file was created, false if one already existed.
-func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
-	configPath := filepath.Join(vaultPath, "raven.yaml")
+func CreateDefaultKeepConfig(keepPath string) (bool, error) {
+	configPath := filepath.Join(keepPath, "raven.yaml")
 
 	// Skip if file already exists
 	if _, err := os.Stat(configPath); err == nil {
 		return false, nil
 	}
 
-	defaultConfig, err := defaultVaultFiles.ReadFile("defaults/raven.yaml")
+	defaultConfig, err := defaultKeepFiles.ReadFile("defaults/raven.yaml")
 	if err != nil {
-		return false, fmt.Errorf("failed to load embedded default vault config: %w", err)
+		return false, fmt.Errorf("failed to load embedded default keep config: %w", err)
 	}
 	if err := atomicfile.WriteFile(configPath, defaultConfig, 0o644); err != nil {
-		return false, fmt.Errorf("failed to write vault config: %w", err)
+		return false, fmt.Errorf("failed to write keep config: %w", err)
 	}
 
 	defaultDirectories := []string{"daily", "object", "page", "workflows", "templates"}
 	for _, dir := range defaultDirectories {
-		if err := os.MkdirAll(filepath.Join(vaultPath, dir), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(keepPath, dir), 0o755); err != nil {
 			return false, fmt.Errorf("failed to create default directory %q: %w", dir, err)
 		}
 	}
 
-	defaultOnboardWorkflow, err := defaultVaultFiles.ReadFile("defaults/workflows/onboard.yaml")
+	defaultOnboardWorkflow, err := defaultKeepFiles.ReadFile("defaults/workflows/onboard.yaml")
 	if err != nil {
 		return false, fmt.Errorf("failed to load embedded default onboard workflow: %w", err)
 	}
-	onboardPath := filepath.Join(vaultPath, "workflows", "onboard.yaml")
+	onboardPath := filepath.Join(keepPath, "workflows", "onboard.yaml")
 	if err := atomicfile.WriteFile(onboardPath, defaultOnboardWorkflow, 0o644); err != nil {
 		return false, fmt.Errorf("failed to write default onboard workflow: %w", err)
 	}
@@ -685,9 +685,9 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 	return true, nil
 }
 
-// SaveVaultConfig writes the vault config back to raven.yaml.
-func SaveVaultConfig(vaultPath string, cfg *VaultConfig) error {
-	configPath := filepath.Join(vaultPath, "raven.yaml")
+// SaveKeepConfig writes the keep config back to raven.yaml.
+func SaveKeepConfig(keepPath string, cfg *KeepConfig) error {
+	configPath := filepath.Join(keepPath, "raven.yaml")
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -702,19 +702,19 @@ func SaveVaultConfig(vaultPath string, cfg *VaultConfig) error {
 }
 
 // DailyNotePath returns the full path for a daily note given a date string (YYYY-MM-DD).
-func (vc *VaultConfig) DailyNotePath(vaultPath, date string) string {
-	return filepath.Join(vaultPath, vc.GetDailyDirectory(), date+".md")
+func (vc *KeepConfig) DailyNotePath(keepPath, date string) string {
+	return filepath.Join(keepPath, vc.GetDailyDirectory(), date+".md")
 }
 
 // DailyNoteID returns the object ID for a daily note given a date string.
-func (vc *VaultConfig) DailyNoteID(date string) string {
+func (vc *KeepConfig) DailyNoteID(date string) string {
 	return path.Join(vc.GetDailyDirectory(), date)
 }
 
-// FilePathToObjectID converts a file path (relative to vault) to an object ID.
+// FilePathToObjectID converts a file path (relative to keep) to an object ID.
 // If directories are configured, the appropriate root prefix is stripped.
 // For example, with object: "object/", the path "object/person/freya.md" becomes "person/freya".
-func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
+func (vc *KeepConfig) FilePathToObjectID(filePath string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return paths.FilePathToObjectID(filePath, "", "")
@@ -722,11 +722,11 @@ func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
 	return paths.FilePathToObjectID(filePath, dirs.Object, dirs.Page)
 }
 
-// ObjectIDToFilePath converts an object ID to a file path (relative to vault).
+// ObjectIDToFilePath converts an object ID to a file path (relative to keep).
 // If directories are configured, the appropriate root prefix is added.
 // The typeName helps determine which root to use (object vs page).
 // If typeName is empty or "page", uses the page root; otherwise uses object root.
-func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
+func (vc *KeepConfig) ObjectIDToFilePath(objectID, typeName string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return paths.ObjectIDToFilePath(objectID, typeName, "", "")
@@ -737,8 +737,8 @@ func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 // ResolveReferenceToFilePath resolves a reference (object ID) to a file path.
 // This handles the logic of checking whether the reference looks like a typed object
 // (has a directory prefix like "person/freya") or an untyped page ("my-note").
-// Returns the relative file path within the vault.
-func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
+// Returns the relative file path within the keep.
+func (vc *KeepConfig) ResolveReferenceToFilePath(ref string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return paths.ObjectIDToFilePath(ref, "", "", "")
@@ -778,7 +778,7 @@ func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
 }
 
 // IsInObjectsRoot checks if a file path is under the object root directory.
-func (vc *VaultConfig) IsInObjectsRoot(filePath string) bool {
+func (vc *KeepConfig) IsInObjectsRoot(filePath string) bool {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil || dirs.Object == "" {
 		return false
@@ -787,7 +787,7 @@ func (vc *VaultConfig) IsInObjectsRoot(filePath string) bool {
 }
 
 // IsInPagesRoot checks if a file path is under the page root directory.
-func (vc *VaultConfig) IsInPagesRoot(filePath string) bool {
+func (vc *KeepConfig) IsInPagesRoot(filePath string) bool {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil || dirs.Page == "" {
 		return false
@@ -796,7 +796,7 @@ func (vc *VaultConfig) IsInPagesRoot(filePath string) bool {
 }
 
 // GetObjectsRoot returns the object root directory, or empty string if not configured.
-func (vc *VaultConfig) GetObjectsRoot() string {
+func (vc *KeepConfig) GetObjectsRoot() string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return ""
@@ -805,7 +805,7 @@ func (vc *VaultConfig) GetObjectsRoot() string {
 }
 
 // GetPagesRoot returns the page root directory, or empty string if not configured.
-func (vc *VaultConfig) GetPagesRoot() string {
+func (vc *KeepConfig) GetPagesRoot() string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
 		return ""

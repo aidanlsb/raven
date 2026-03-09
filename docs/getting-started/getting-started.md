@@ -4,7 +4,7 @@
 
 Raven is a CLI for personal knowledge management, with first-class support for AI agents. 
 
-You keep your data in a directory of markdown files (called a "vault"), and Raven lets you:
+You keep your data in a directory of markdown files (called a "keep"), and Raven lets you:
 - Define a schema, so your notes can have specific "types" (e.g., project, meeting, person)
 - Create "traits" to add inline annotations to your notes (e.g., a `@todo` trait for task management)
 - Add bidirectional links across notes using references (`[[page-to-reference]]`)
@@ -12,7 +12,7 @@ You keep your data in a directory of markdown files (called a "vault"), and Rave
 
 The goal is to keep notes durable and simple while still enabling structured workflows and accurate agent operations.
 
-## Installation & Vault Setup
+## Installation & Keep Setup
 
 Raven requires Go 1.22+.
 
@@ -23,7 +23,7 @@ rvn version
 
 If `rvn` is not on your `PATH` after install, add your Go bin directory (usually `$(go env GOPATH)/bin`) to your shell profile.
 
-Initialize your first vault:
+Initialize your first keep:
 
 ```bash
 rvn init ~/notes
@@ -31,7 +31,7 @@ cd ~/notes
 ```
 
 `rvn init` creates the essential files:
-- `raven.yaml` (vault behavior)
+- `raven.yaml` (keep behavior)
 - `schema.yaml` (types, fields, traits)
 - `.raven/` (derived index cache)
 
@@ -44,17 +44,17 @@ rvn schema types
 
 ## Agent Setup
 
-Raven is designed with the assumption that you will use an AI agent to interact with your vault (although this is by no means required). If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), install the Raven MCP entry directly from the CLI:
+Raven is designed with the assumption that you will use an AI agent to interact with your keep (although this is by no means required). If you use an MCP-capable client (Codex, Claude Desktop, Cursor, etc.), install the Raven MCP entry directly from the CLI:
 
 ```bash
-rvn mcp install --client claude-desktop --vault-path /path/to/vault
+rvn mcp install --client claude-desktop --keep-path /path/to/keep
 ```
 
 You can also install for other supported clients:
 
 ```bash
-rvn mcp install --client claude-code --vault-path /path/to/vault
-rvn mcp install --client cursor --vault-path /path/to/vault
+rvn mcp install --client claude-code --keep-path /path/to/keep
+rvn mcp install --client cursor --keep-path /path/to/keep
 ```
 
 Verify setup:
@@ -66,7 +66,7 @@ rvn mcp status
 If you need a manual snippet (for unsupported clients), print it with:
 
 ```bash
-rvn mcp show --vault-path /path/to/vault
+rvn mcp show --keep-path /path/to/keep
 ```
 
 Raven also ships with skills you can install for your agent(s) of choice.

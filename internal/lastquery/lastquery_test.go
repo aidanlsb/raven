@@ -174,8 +174,8 @@ func TestGetAllIDs(t *testing.T) {
 }
 
 func TestPath(t *testing.T) {
-	path := Path("/vault")
-	expected := filepath.Join("/vault", ".raven", "last-query.json")
+	path := Path("/keep")
+	expected := filepath.Join("/keep", ".raven", "last-query.json")
 	if path != expected {
 		t.Errorf("Path() = %q, want %q", path, expected)
 	}

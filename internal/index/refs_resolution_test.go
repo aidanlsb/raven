@@ -28,7 +28,7 @@ import (
 // - Quoted wikilinks: "[[target]]"
 // - Bare strings without schema: stored as string, not indexed as ref
 func TestFrontmatterRefResolution(t *testing.T) {
-	// Create temp directory for test vault
+	// Create temp directory for test keep
 	tmpDir, err := os.MkdirTemp("", "raven-test-refs-*")
 	if err != nil {
 		t.Fatal(err)

@@ -16,7 +16,7 @@ func TestLoadCatalog(t *testing.T) {
 		"raven-query-advanced",
 		"raven-schema",
 		"raven-templates",
-		"raven-vault-admin",
+		"raven-keep-admin",
 		"raven-workflows",
 	}
 	for _, skillID := range expected {

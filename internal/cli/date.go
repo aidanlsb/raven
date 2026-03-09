@@ -8,8 +8,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var dateCmd = &cobra.Command{
@@ -28,12 +28,12 @@ Examples:
   rvn date 2025-02-01`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		// Load vault config for daily directory
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		// Load keep config for daily directory
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
-			return fmt.Errorf("failed to load vault config: %w", err)
+			return fmt.Errorf("failed to load keep config: %w", err)
 		}
 
 		// Parse date argument
@@ -41,15 +41,15 @@ Examples:
 		if len(args) > 0 {
 			dateArg = args[0]
 		}
-		targetDate, err := vault.ParseDateArg(dateArg)
+		targetDate, err := keep.ParseDateArg(dateArg)
 		if err != nil {
 			return err
 		}
 
-		dateStr := vault.FormatDateISO(targetDate)
+		dateStr := keep.FormatDateISO(targetDate)
 		dayOfWeek := targetDate.Format("Monday")
 
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
@@ -59,7 +59,7 @@ Examples:
 		fmt.Printf("%s %s\n\n", ui.SectionHeader(dateStr), ui.Hint(fmt.Sprintf("(%s)", dayOfWeek)))
 
 		// Check for daily note
-		dailyNoteID := vaultCfg.DailyNoteID(dateStr)
+		dailyNoteID := keepCfg.DailyNoteID(dateStr)
 		dailyNote, err := db.GetObject(dailyNoteID)
 		if err != nil {
 			return fmt.Errorf("failed to query daily note: %w", err)

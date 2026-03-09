@@ -19,11 +19,11 @@ func TestCheckStaleness(t *testing.T) {
 
 	sch := schema.NewSchema()
 
-	vaultDir := t.TempDir()
+	keepDir := t.TempDir()
 	now := time.Now().Unix()
 
-	stalePath := filepath.Join(vaultDir, "notes/stale.md")
-	freshPath := filepath.Join(vaultDir, "notes/fresh.md")
+	stalePath := filepath.Join(keepDir, "notes/stale.md")
+	freshPath := filepath.Join(keepDir, "notes/fresh.md")
 
 	if err := os.MkdirAll(filepath.Dir(stalePath), 0755); err != nil {
 		t.Fatalf("failed to create notes dir: %v", err)
@@ -80,7 +80,7 @@ func TestCheckStaleness(t *testing.T) {
 		t.Fatalf("failed to chtimes fresh file: %v", err)
 	}
 
-	info, err := db.CheckStaleness(vaultDir)
+	info, err := db.CheckStaleness(keepDir)
 	if err != nil {
 		t.Fatalf("CheckStaleness error: %v", err)
 	}
@@ -121,13 +121,13 @@ func TestRemoveDeletedFiles(t *testing.T) {
 	sch := schema.NewSchema()
 	sch.Traits["flag"] = &schema.TraitDefinition{Type: schema.FieldTypeBool}
 
-	vaultDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultDir, "notes"), 0755); err != nil {
+	keepDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keepDir, "notes"), 0755); err != nil {
 		t.Fatalf("failed to create notes dir: %v", err)
 	}
 
 	// Create only the "exists" file on disk.
-	if err := os.WriteFile(filepath.Join(vaultDir, "notes/exists.md"), []byte("ok"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepDir, "notes/exists.md"), []byte("ok"), 0644); err != nil {
 		t.Fatalf("failed to write exists file: %v", err)
 	}
 
@@ -159,7 +159,7 @@ func TestRemoveDeletedFiles(t *testing.T) {
 		t.Fatalf("failed to index missing doc: %v", err)
 	}
 
-	removed, err := db.RemoveDeletedFiles(vaultDir)
+	removed, err := db.RemoveDeletedFiles(keepDir)
 	if err != nil {
 		t.Fatalf("RemoveDeletedFiles error: %v", err)
 	}

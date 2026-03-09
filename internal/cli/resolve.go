@@ -13,8 +13,8 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 // ResolveResult contains the resolved reference information.
@@ -37,11 +37,11 @@ type ResolveResult struct {
 
 // ResolveOptions configures reference resolution behavior.
 type ResolveOptions struct {
-	// VaultPath is the root path of the vault (required)
-	VaultPath string
+	// KeepPath is the root path of the keep (required)
+	KeepPath string
 
-	// VaultConfig is the vault configuration (optional, will be loaded if nil)
-	VaultConfig *config.VaultConfig
+	// KeepConfig is the keep configuration (optional, will be loaded if nil)
+	KeepConfig *config.KeepConfig
 
 	// AllowMissing if true, returns a result for date references even if the file doesn't exist
 	// This is useful for commands that may create the file (like daily notes)
@@ -60,27 +60,27 @@ type ResolveOptions struct {
 //
 // Returns an error if the reference is not found or is ambiguous.
 func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, error) {
-	if opts.VaultPath == "" {
-		return nil, fmt.Errorf("vault path is required")
+	if opts.KeepPath == "" {
+		return nil, fmt.Errorf("keep path is required")
 	}
 
-	// Load vault config if not provided
-	vaultCfg := opts.VaultConfig
-	if vaultCfg == nil {
+	// Load keep config if not provided
+	keepCfg := opts.KeepConfig
+	if keepCfg == nil {
 		var err error
-		vaultCfg, err = loadVaultConfigSafe(opts.VaultPath)
+		keepCfg, err = loadKeepConfigSafe(opts.KeepPath)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Fast path: try literal path first (most common case for explicit paths)
-	if result := tryLiteralPath(reference, opts.VaultPath, vaultCfg); result != nil {
+	if result := tryLiteralPath(reference, opts.KeepPath, keepCfg); result != nil {
 		return result, nil
 	}
 
 	// Use the database resolver for full resolution
-	db, err := index.Open(opts.VaultPath)
+	db, err := index.Open(opts.KeepPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w (run 'rvn reindex' to rebuild)", err)
 	}
@@ -88,11 +88,11 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 
 	// Get resolver with schema support for name_field resolution
 	dailyDir := "daily"
-	if vaultCfg != nil && vaultCfg.GetDailyDirectory() != "" {
-		dailyDir = vaultCfg.GetDailyDirectory()
+	if keepCfg != nil && keepCfg.GetDailyDirectory() != "" {
+		dailyDir = keepCfg.GetDailyDirectory()
 	}
 
-	sch, _ := schema.Load(opts.VaultPath)
+	sch, _ := schema.Load(opts.KeepPath)
 	res, err := db.Resolver(index.ResolverOptions{
 		DailyDirectory: dailyDir,
 		Schema:         sch, // nil is fine, aliases still work
@@ -135,11 +135,11 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 	}
 
 	// Resolve the file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(opts.VaultPath, result.FileObjectID, vaultCfg)
+	filePath, err := keep.ResolveObjectToFileWithConfig(opts.KeepPath, result.FileObjectID, keepCfg)
 	if err != nil {
 		// For date references with AllowMissing, construct the expected path
 		if opts.AllowMissing && strings.HasPrefix(result.FileObjectID, dailyDir+"/") {
-			expectedPath := filepath.Join(opts.VaultPath, result.FileObjectID+".md")
+			expectedPath := filepath.Join(opts.KeepPath, result.FileObjectID+".md")
 			result.FilePath = expectedPath
 			return result, nil
 		}
@@ -155,7 +155,7 @@ func ResolveReference(reference string, opts ResolveOptions) (*ResolveResult, er
 
 // tryLiteralPath attempts to resolve a reference as a literal file path.
 // Returns nil if the path doesn't exist.
-func tryLiteralPath(reference string, vaultPath string, vaultCfg *config.VaultConfig) *ResolveResult {
+func tryLiteralPath(reference string, keepPath string, keepCfg *config.KeepConfig) *ResolveResult {
 	// Try the reference as-is
 	candidates := []string{reference}
 
@@ -165,12 +165,12 @@ func tryLiteralPath(reference string, vaultPath string, vaultCfg *config.VaultCo
 	}
 
 	for _, candidate := range candidates {
-		fullPath := filepath.Join(vaultPath, candidate)
+		fullPath := filepath.Join(keepPath, candidate)
 		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
 			// Found it - build the result
 			objectID := strings.TrimSuffix(candidate, ".md")
-			if vaultCfg != nil {
-				objectID = vaultCfg.FilePathToObjectID(objectID)
+			if keepCfg != nil {
+				objectID = keepCfg.FilePathToObjectID(objectID)
 			}
 
 			return &ResolveResult{
@@ -251,16 +251,16 @@ func resolveReferenceWithDynamicDates(reference string, opts ResolveOptions, all
 		return nil, err
 	}
 
-	vaultCfg := opts.VaultConfig
-	if vaultCfg == nil {
+	keepCfg := opts.KeepConfig
+	if keepCfg == nil {
 		var loadErr error
-		vaultCfg, loadErr = loadVaultConfigSafe(opts.VaultPath)
+		keepCfg, loadErr = loadKeepConfigSafe(opts.KeepPath)
 		if loadErr != nil {
 			return nil, loadErr
 		}
 	}
 
-	dynResult, handled, dynErr := resolveDynamicDateReference(reference, opts.VaultPath, vaultCfg, allowDynamicMissing)
+	dynResult, handled, dynErr := resolveDynamicDateReference(reference, opts.KeepPath, keepCfg, allowDynamicMissing)
 	if !handled {
 		return nil, err
 	}
@@ -270,7 +270,7 @@ func resolveReferenceWithDynamicDates(reference string, opts ResolveOptions, all
 	return dynResult, nil
 }
 
-func resolveDynamicDateReference(reference, vaultPath string, vaultCfg *config.VaultConfig, allowMissing bool) (*ResolveResult, bool, error) {
+func resolveDynamicDateReference(reference, keepPath string, keepCfg *config.KeepConfig, allowMissing bool) (*ResolveResult, bool, error) {
 	ref := strings.TrimSpace(reference)
 	if ref == "" {
 		return nil, false, nil
@@ -292,21 +292,21 @@ func resolveDynamicDateReference(reference, vaultPath string, vaultCfg *config.V
 		return nil, false, nil
 	}
 
-	if vaultCfg == nil {
+	if keepCfg == nil {
 		var loadErr error
-		vaultCfg, loadErr = loadVaultConfigSafe(vaultPath)
+		keepCfg, loadErr = loadKeepConfigSafe(keepPath)
 		if loadErr != nil {
 			return nil, true, loadErr
 		}
 	}
 
 	dateStr := relative.Date.Format(dates.DateLayout)
-	fileObjectID := vaultCfg.DailyNoteID(dateStr)
+	fileObjectID := keepCfg.DailyNoteID(dateStr)
 	objectID := fileObjectID
 	if fragment != "" {
 		objectID = fileObjectID + "#" + fragment
 	}
-	filePath := vaultCfg.DailyNotePath(vaultPath, dateStr)
+	filePath := keepCfg.DailyNotePath(keepPath, dateStr)
 
 	if !allowMissing {
 		if _, err := os.Stat(filePath); err != nil {
@@ -375,19 +375,19 @@ Examples:
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		start := time.Now()
 		reference := args[0]
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
 		// Attempt resolution (including dynamic date keywords like "today")
 		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
+			KeepPath:   keepPath,
+			KeepConfig: keepCfg,
 		}, true) // allowDynamicMissing=true so "today" resolves even without a file
 
 		elapsed := time.Since(start).Milliseconds()
@@ -448,7 +448,7 @@ Examples:
 		relFilePath := ""
 
 		if result.FilePath != "" {
-			rel, relErr := filepath.Rel(vaultPath, result.FilePath)
+			rel, relErr := filepath.Rel(keepPath, result.FilePath)
 			if relErr == nil {
 				relFilePath = rel
 			} else {
@@ -457,7 +457,7 @@ Examples:
 		}
 
 		// Look up the object type from the database
-		db, dbErr := index.Open(vaultPath)
+		db, dbErr := index.Open(keepPath)
 		if dbErr == nil {
 			defer db.Close()
 			obj, objErr := db.GetObject(result.ObjectID)

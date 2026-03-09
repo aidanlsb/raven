@@ -28,7 +28,7 @@ func TestListDocsSectionsFSLoadsRepositoryDocs(t *testing.T) {
 	for _, s := range sections {
 		ids = append(ids, s.ID)
 	}
-	for _, expected := range []string{"agents", "getting-started", "querying", "types-and-traits", "vault-management", "workflows"} {
+	for _, expected := range []string{"agents", "getting-started", "querying", "types-and-traits", "keep-management", "workflows"} {
 		if !slices.Contains(ids, expected) {
 			t.Fatalf("expected section %q in %v", expected, ids)
 		}
@@ -342,7 +342,7 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 	})
 	jsonOutput = false
 
-	section := docsSectionView{ID: "vault-management", Title: "Vault Management", TopicCount: 0}
+	section := docsSectionView{ID: "keep-management", Title: "Keep Management", TopicCount: 0}
 	out := captureStdout(t, func() {
 		err := outputDocsTopics(section, nil)
 		if err != nil {
@@ -351,11 +351,11 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 	})
 
 	wantSnippets := []string{
-		"Documentation topic commands for Vault Management [vault-management]:",
+		"Documentation topic commands for Keep Management [keep-management]:",
 		"(no topics)",
 		"General docs commands:",
 		"rvn docs list",
-		"rvn docs search <query> --section vault-management",
+		"rvn docs search <query> --section keep-management",
 	}
 	for _, snippet := range wantSnippets {
 		if !strings.Contains(out, snippet) {

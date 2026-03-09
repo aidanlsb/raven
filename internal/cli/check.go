@@ -15,13 +15,13 @@ import (
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -68,7 +68,7 @@ type CheckScopeJSON struct {
 
 // CheckResultJSON is the top-level JSON output
 type CheckResultJSON struct {
-	VaultPath  string             `json:"vault_path"`
+	KeepPath   string             `json:"keep_path"`
 	Scope      *CheckScopeJSON    `json:"scope,omitempty"`
 	FileCount  int                `json:"file_count"`
 	ErrorCount int                `json:"error_count"`
@@ -77,7 +77,7 @@ type CheckResultJSON struct {
 	Summary    []CheckSummaryJSON `json:"summary"`
 }
 
-// checkScope describes what subset of the vault to check
+// checkScope describes what subset of the keep to check
 type checkScope struct {
 	scopeType   string   // "full", "file", "directory", "type_filter", "trait_filter"
 	scopeValue  string   // The path, type name, or trait name
@@ -85,7 +85,7 @@ type checkScope struct {
 }
 
 // resolveCheckScope determines what to check based on args and flags
-func resolveCheckScope(vaultPath string, args []string, vaultCfg *config.VaultConfig) (*checkScope, error) {
+func resolveCheckScope(keepPath string, args []string, keepCfg *config.KeepConfig) (*checkScope, error) {
 	scope := &checkScope{scopeType: "full"}
 
 	// Type filter takes precedence
@@ -102,7 +102,7 @@ func resolveCheckScope(vaultPath string, args []string, vaultCfg *config.VaultCo
 		return scope, nil
 	}
 
-	// No positional arg means full vault
+	// No positional arg means full keep
 	if len(args) == 0 {
 		return scope, nil
 	}
@@ -110,7 +110,7 @@ func resolveCheckScope(vaultPath string, args []string, vaultCfg *config.VaultCo
 	pathArg := args[0]
 
 	// Try as literal file/directory first
-	fullPath := filepath.Join(vaultPath, pathArg)
+	fullPath := filepath.Join(keepPath, pathArg)
 
 	// Check if it's a directory
 	if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
@@ -126,20 +126,20 @@ func resolveCheckScope(vaultPath string, args []string, vaultCfg *config.VaultCo
 	}
 	if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 		scope.scopeType = "file"
-		relPath, _ := filepath.Rel(vaultPath, filePath)
+		relPath, _ := filepath.Rel(keepPath, filePath)
 		scope.scopeValue = relPath
 		scope.targetFiles = []string{filePath}
 		return scope, nil
 	}
 
 	// Try resolving as a reference
-	result, err := ResolveReference(pathArg, ResolveOptions{VaultPath: vaultPath, VaultConfig: vaultCfg})
+	result, err := ResolveReference(pathArg, ResolveOptions{KeepPath: keepPath, KeepConfig: keepCfg})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve '%s': %w", pathArg, err)
 	}
 
 	scope.scopeType = "file"
-	relPath, _ := filepath.Rel(vaultPath, result.FilePath)
+	relPath, _ := filepath.Rel(keepPath, result.FilePath)
 	scope.scopeValue = relPath
 	scope.targetFiles = []string{result.FilePath}
 	return scope, nil
@@ -213,18 +213,18 @@ func shouldIncludeSchemaIssue(issue check.SchemaIssue, include, exclude map[chec
 
 var checkCmd = &cobra.Command{
 	Use:   "check [path]",
-	Short: "Validate the vault",
+	Short: "Validate the keep",
 	Long:  `Checks all files for errors and warnings (type mismatches, broken references, etc.)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
 		// Resolve the check scope
-		scope, err := resolveCheckScope(vaultPath, args, vaultCfg)
+		scope, err := resolveCheckScope(keepPath, args, keepCfg)
 		if err != nil {
 			return err
 		}
@@ -232,7 +232,7 @@ var checkCmd = &cobra.Command{
 		if !jsonOutput {
 			switch scope.scopeType {
 			case "full":
-				fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
+				fmt.Printf("Checking keep: %s\n", ui.Muted.Render(keepPath))
 			case "file":
 				fmt.Printf("Checking file: %s\n", ui.FilePath(scope.scopeValue))
 			case "directory":
@@ -248,7 +248,7 @@ var checkCmd = &cobra.Command{
 		includeIssues, excludeIssues := parseIssueFilter()
 
 		// Load schema
-		s, err := schema.Load(vaultPath)
+		s, err := schema.Load(keepPath)
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
@@ -265,10 +265,10 @@ var checkCmd = &cobra.Command{
 		var aliases map[string]string
 		var duplicateAliases []index.DuplicateAlias
 		var canonicalResolver *resolver.Resolver
-		db, err := index.Open(vaultPath)
+		db, err := index.Open(keepPath)
 		if err == nil {
 			defer db.Close()
-			stalenessInfo, err := db.CheckStaleness(vaultPath)
+			stalenessInfo, err := db.CheckStaleness(keepPath)
 			if err == nil && stalenessInfo.IsStale {
 				staleCount := len(stalenessInfo.StaleFiles)
 				if !jsonOutput {
@@ -285,7 +285,7 @@ var checkCmd = &cobra.Command{
 					}
 					fmt.Printf("       %s\n\n", ui.Hint("Run 'rvn reindex' to update the index."))
 				}
-				// Add to issues for JSON output (only for full vault checks)
+				// Add to issues for JSON output (only for full keep checks)
 				if scope.scopeType == "full" {
 					staleIssue := check.Issue{
 						Level:      check.LevelWarning,
@@ -312,7 +312,7 @@ var checkCmd = &cobra.Command{
 
 			// Build canonical resolver (includes aliases + schema-aware name_field resolution).
 			canonicalResolver, _ = db.Resolver(index.ResolverOptions{
-				DailyDirectory: vaultCfg.GetDailyDirectory(),
+				DailyDirectory: keepCfg.GetDailyDirectory(),
 				Schema:         s,
 			})
 		}
@@ -325,26 +325,26 @@ var checkCmd = &cobra.Command{
 		case "file":
 			// For single file, we still need all object IDs for reference validation
 			// but we only validate the target file
-			walkPath = vaultPath
+			walkPath = keepPath
 			targetFileSet = make(map[string]bool)
 			for _, f := range scope.targetFiles {
 				targetFileSet[f] = true
 			}
 		case "directory":
-			walkPath = filepath.Join(vaultPath, scope.scopeValue)
+			walkPath = filepath.Join(keepPath, scope.scopeValue)
 		default:
-			walkPath = vaultPath
+			walkPath = keepPath
 		}
 
-		// First pass: parse all documents in the vault to collect object IDs
+		// First pass: parse all documents in the keep to collect object IDs
 		// (needed for reference validation even when checking a subset)
-		walkOpts := &vault.WalkOptions{
+		walkOpts := &keep.WalkOptions{
 			ParseOptions: &parser.ParseOptions{
-				ObjectsRoot: vaultCfg.GetObjectsRoot(),
-				PagesRoot:   vaultCfg.GetPagesRoot(),
+				ObjectsRoot: keepCfg.GetObjectsRoot(),
+				PagesRoot:   keepCfg.GetPagesRoot(),
 			},
 		}
-		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
+		err = keep.WalkMarkdownFilesWithOptions(keepPath, walkOpts, func(result keep.WalkResult) error {
 			if result.Error != nil {
 				// Only count files in scope
 				if isFileInScope(result.Path, scope, walkPath, targetFileSet) {
@@ -380,7 +380,7 @@ var checkCmd = &cobra.Command{
 		})
 
 		if err != nil {
-			return fmt.Errorf("error walking vault: %w", err)
+			return fmt.Errorf("error walking keep: %w", err)
 		}
 
 		// Second pass: validate with full context (including type information and aliases)
@@ -388,11 +388,11 @@ var checkCmd = &cobra.Command{
 		validator.SetDuplicateAliases(duplicateAliases)
 
 		// Set directory roots for cleaner path suggestions (e.g., [[people/freya]] instead of [[objects/people/freya]])
-		if vaultCfg.HasDirectoriesConfig() {
-			validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
+		if keepCfg.HasDirectoriesConfig() {
+			validator.SetDirectoryRoots(keepCfg.GetObjectsRoot(), keepCfg.GetPagesRoot())
 		}
 		if canonicalResolver == nil {
-			validator.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+			validator.SetDailyDirectory(keepCfg.GetDailyDirectory())
 		}
 
 		for _, doc := range allDocs {
@@ -426,7 +426,7 @@ var checkCmd = &cobra.Command{
 			}
 		}
 
-		// Run schema integrity checks (only for full vault checks, or when checking types/traits)
+		// Run schema integrity checks (only for full keep checks, or when checking types/traits)
 		if scope.scopeType == "full" || scope.scopeType == "type_filter" || scope.scopeType == "trait_filter" {
 			schemaIssues = validator.ValidateSchema()
 
@@ -467,12 +467,12 @@ var checkCmd = &cobra.Command{
 		if jsonOutput && checkCreateMissing && scope.scopeType == "full" && checkConfirm {
 			missingRefs := validator.MissingRefs()
 			if len(missingRefs) > 0 {
-				createMissingRefsNonInteractive(vaultPath, s, missingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+				createMissingRefsNonInteractive(keepPath, s, missingRefs, keepCfg.GetObjectsRoot(), keepCfg.GetPagesRoot(), keepCfg.GetTemplateDirectory())
 			}
 		}
 
 		if jsonOutput {
-			result := buildCheckJSONWithScope(vaultPath, scope, fileCount, errorCount, warningCount, allIssues, schemaIssues)
+			result := buildCheckJSONWithScope(keepPath, scope, fileCount, errorCount, warningCount, allIssues, schemaIssues)
 			outputSuccess(result, nil)
 		} else if checkByFile {
 			// Group issues by file
@@ -504,11 +504,11 @@ var checkCmd = &cobra.Command{
 				fmt.Println(ui.Hint("Use --verbose to see all issues, or --by-file to group by file."))
 			}
 
-			// Handle --create-missing (interactive mode only, full vault check only)
+			// Handle --create-missing (interactive mode only, full keep check only)
 			if checkCreateMissing && scope.scopeType == "full" {
 				missingRefs := validator.MissingRefs()
 				if len(missingRefs) > 0 {
-					created := handleMissingRefs(vaultPath, s, missingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+					created := handleMissingRefs(keepPath, s, missingRefs, keepCfg.GetObjectsRoot(), keepCfg.GetPagesRoot(), keepCfg.GetTemplateDirectory())
 					if created > 0 {
 						fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 					}
@@ -516,7 +516,7 @@ var checkCmd = &cobra.Command{
 
 				undefinedTraits := validator.UndefinedTraits()
 				if len(undefinedTraits) > 0 {
-					added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
+					added := handleUndefinedTraits(keepPath, s, undefinedTraits)
 					if added > 0 {
 						fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
 					}
@@ -531,7 +531,7 @@ var checkCmd = &cobra.Command{
 				if len(fixableIssues) == 0 {
 					fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
 				} else {
-					fixed, err := handleAutoFix(vaultPath, fixableIssues, checkConfirm)
+					fixed, err := handleAutoFix(keepPath, fixableIssues, checkConfirm)
 					if err != nil {
 						fmt.Printf("\n%s\n", ui.Errorf("Fix failed: %v", err))
 					} else if checkConfirm {
@@ -836,9 +836,9 @@ func printIssuesVerbose(issues []check.Issue, schemaIssues []check.SchemaIssue) 
 }
 
 // buildCheckJSONWithScope creates the structured JSON output for check command with scope info
-func buildCheckJSONWithScope(vaultPath string, scope *checkScope, fileCount, errorCount, warnCount int, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
+func buildCheckJSONWithScope(keepPath string, scope *checkScope, fileCount, errorCount, warnCount int, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
 	result := CheckResultJSON{
-		VaultPath:  vaultPath,
+		KeepPath:   keepPath,
 		FileCount:  fileCount,
 		ErrorCount: errorCount,
 		WarnCount:  warnCount,
@@ -952,8 +952,8 @@ func buildCheckJSONInternal(result CheckResultJSON, issues []check.Issue, schema
 	return result
 }
 
-func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
+func handleMissingRefs(keepPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
+	creator := newObjectCreationContext(keepPath, s, objectsRoot, pagesRoot, templateDir)
 
 	// Categorize refs by confidence
 	var certain, inferred, unknown []*check.MissingRef
@@ -1007,7 +1007,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range certain {
 				resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
-				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
+				if err := createMissingPage(keepPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -1035,7 +1035,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
-				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
+				if err := createMissingPage(keepPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -1075,12 +1075,12 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 			// Validate type exists, offer to create if not
 			if _, exists := s.Types[response]; !exists {
-				created += handleNewTypeCreation(vaultPath, s, ref, response, reader, objectsRoot, pagesRoot, templateDir)
+				created += handleNewTypeCreation(keepPath, s, ref, response, reader, objectsRoot, pagesRoot, templateDir)
 				continue
 			}
 
 			resolvedPath := resolvePath(ref.TargetPath, response)
-			if err := createMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, templateDir); err != nil {
+			if err := createMissingPage(keepPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, templateDir); err != nil {
 				fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 			} else {
 				fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
@@ -1094,8 +1094,8 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 // createMissingRefsNonInteractive creates missing refs deterministically for agent/json mode.
 // It only creates refs with a known type and skips unknown-type refs that require user input.
-func createMissingRefsNonInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
+func createMissingRefsNonInteractive(keepPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
+	creator := newObjectCreationContext(keepPath, s, objectsRoot, pagesRoot, templateDir)
 	created := 0
 	seen := make(map[string]struct{})
 
@@ -1121,7 +1121,7 @@ func createMissingRefsNonInteractive(vaultPath string, s *schema.Schema, refs []
 			continue
 		}
 
-		if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err == nil {
+		if err := createMissingPage(keepPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err == nil {
 			created++
 		}
 	}
@@ -1131,7 +1131,7 @@ func createMissingRefsNonInteractive(vaultPath string, s *schema.Schema, refs []
 
 // handleUndefinedTraits prompts the user to add undefined traits to the schema.
 // Returns the number of traits added.
-func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.UndefinedTrait) int {
+func handleUndefinedTraits(keepPath string, s *schema.Schema, traits []*check.UndefinedTrait) int {
 	if len(traits) == 0 {
 		return 0
 	}
@@ -1202,7 +1202,7 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		}
 
 		// Create the trait
-		if err := createNewTrait(vaultPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
+		if err := createNewTrait(keepPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
 			fmt.Printf("  %s\n", ui.Errorf("Failed to add @%s: %v", trait.TraitName, err))
 			continue
 		}
@@ -1258,8 +1258,8 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 }
 
 // createNewTrait adds a new trait to schema.yaml.
-func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType string, enumValues []string, defaultValue string) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func createNewTrait(keepPath string, s *schema.Schema, traitName, traitType string, enumValues []string, defaultValue string) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Read current schema file
 	data, err := os.ReadFile(schemaPath)
@@ -1331,7 +1331,7 @@ func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType str
 
 // handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
 // Returns the number of pages created (0 or 1).
-func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader, objectsRoot, pagesRoot, templateDir string) int {
+func handleNewTypeCreation(keepPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader, objectsRoot, pagesRoot, templateDir string) int {
 	fmt.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
 		ui.Bold.Render("'"+typeName+"'"),
 		ui.Muted.Render("[y/N]"))
@@ -1349,7 +1349,7 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 	defaultPath = strings.TrimSpace(defaultPath)
 
 	// Create the type
-	if err := createNewType(vaultPath, s, typeName, defaultPath); err != nil {
+	if err := createNewType(keepPath, s, typeName, defaultPath); err != nil {
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeName, err))
 		return 0
 	}
@@ -1359,9 +1359,9 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 	}
 
 	// Now create the page with the new type (resolving path with new default_path)
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
+	creator := newObjectCreationContext(keepPath, s, objectsRoot, pagesRoot, templateDir)
 	resolvedPath := creator.resolveAndSlugifyTargetPath(ref.TargetPath, typeName)
-	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err != nil {
+	if err := createMissingPage(keepPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err != nil {
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
 	}
@@ -1370,8 +1370,8 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 }
 
 // createNewType adds a new type to schema.yaml.
-func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath string) error {
-	schemaPath := paths.SchemaPath(vaultPath)
+func createNewType(keepPath string, s *schema.Schema, typeName, defaultPath string) error {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Check built-in types
 	if schema.IsBuiltinType(typeName) {
@@ -1425,8 +1425,8 @@ func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath str
 
 // createMissingPage creates a new page file using the pages package.
 // pages.Create handles default_path resolution automatically via the schema.
-func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot, templateDir string) error {
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
+func createMissingPage(keepPath string, s *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot, templateDir string) error {
+	creator := newObjectCreationContext(keepPath, s, objectsRoot, pagesRoot, templateDir)
 	_, err := creator.create(objectCreateParams{
 		typeName:                    typeName,
 		targetPath:                  targetPath,
@@ -1562,8 +1562,8 @@ func extractTraitNameFromMessage(msg string) string {
 	return msg[start : start+end]
 }
 
-// handleAutoFix applies auto-fixes to the vault
-func handleAutoFix(vaultPath string, fixes []fixableIssue, confirm bool) (fixResult, error) {
+// handleAutoFix applies auto-fixes to the keep
+func handleAutoFix(keepPath string, fixes []fixableIssue, confirm bool) (fixResult, error) {
 	result := fixResult{}
 
 	// Group fixes by file
@@ -1601,7 +1601,7 @@ func handleAutoFix(vaultPath string, fixes []fixableIssue, confirm bool) (fixRes
 
 	for _, filePath := range filePaths {
 		fileFixes := fixesByFile[filePath]
-		fullPath := filepath.Join(vaultPath, filePath)
+		fullPath := filepath.Join(keepPath, filePath)
 
 		content, err := os.ReadFile(fullPath)
 		if err != nil {

@@ -1,7 +1,7 @@
 // Package paths provides canonical helpers for:
-//   - Converting between vault-relative markdown file paths (e.g. "objects/people/freya.md")
+//   - Converting between keep-relative markdown file paths (e.g. "objects/people/freya.md")
 //     and Raven object IDs (e.g. "people/freya")
-//   - Validating paths are within the vault (security)
+//   - Validating paths are within the keep (security)
 //   - Parsing embedded object IDs (e.g. "file#section")
 //
 // It also centralizes directory-root handling (objects/pages roots) so that
@@ -15,16 +15,16 @@ import (
 	"strings"
 )
 
-// ErrPathOutsideVault is returned when a path is outside the vault.
-var ErrPathOutsideVault = errors.New("path is outside vault")
+// ErrPathOutsideKeep is returned when a path is outside the keep.
+var ErrPathOutsideKeep = errors.New("path is outside keep")
 
 // MDExtension is the markdown file extension.
 const MDExtension = ".md"
 
-// SchemaFilename is the vault schema filename.
+// SchemaFilename is the keep schema filename.
 const SchemaFilename = "schema.yaml"
 
-// AgentInstructionsFilename is the vault agent instructions filename.
+// AgentInstructionsFilename is the keep agent instructions filename.
 const AgentInstructionsFilename = "AGENTS.md"
 
 // HasMDExtension returns true if the path ends with .md.
@@ -40,14 +40,14 @@ func EnsureMDExtension(p string) string {
 	return p + MDExtension
 }
 
-// SchemaPath returns the absolute path to schema.yaml in a vault.
-func SchemaPath(vaultPath string) string {
-	return filepath.Join(vaultPath, SchemaFilename)
+// SchemaPath returns the absolute path to schema.yaml in a keep.
+func SchemaPath(keepPath string) string {
+	return filepath.Join(keepPath, SchemaFilename)
 }
 
-// AgentInstructionsPath returns the absolute path to AGENTS.md in a vault.
-func AgentInstructionsPath(vaultPath string) string {
-	return filepath.Join(vaultPath, AgentInstructionsFilename)
+// AgentInstructionsPath returns the absolute path to AGENTS.md in a keep.
+func AgentInstructionsPath(keepPath string) string {
+	return filepath.Join(keepPath, AgentInstructionsFilename)
 }
 
 // TrimMDExtension removes the .md extension if present.
@@ -72,7 +72,7 @@ func NormalizeDirRoot(root string) string {
 	return root + "/"
 }
 
-// normalizeRelPath normalizes a vault-relative path-like value:
+// normalizeRelPath normalizes a keep-relative path-like value:
 // - converts OS separators to '/'
 // - trims leading "./" and leading "/"
 // - collapses repeated '/'
@@ -86,7 +86,7 @@ func normalizeRelPath(p string) string {
 	return p
 }
 
-// FilePathToObjectID converts a vault-relative file path to an object ID.
+// FilePathToObjectID converts a keep-relative file path to an object ID.
 //
 // It:
 // - strips a trailing ".md"
@@ -109,7 +109,7 @@ func FilePathToObjectID(filePath, objectsRoot, pagesRoot string) string {
 	return id
 }
 
-// ObjectIDToFilePath converts an object ID to a vault-relative markdown file path.
+// ObjectIDToFilePath converts an object ID to a keep-relative markdown file path.
 //
 // If roots are configured, typeName is used to decide whether to prefix with
 // pagesRoot or objectsRoot:
@@ -175,7 +175,7 @@ func ShortNameFromID(id string) string {
 	return filepath.Base(id)
 }
 
-// CandidateFilePaths returns vault-relative markdown paths to try for a reference.
+// CandidateFilePaths returns keep-relative markdown paths to try for a reference.
 //
 // It always includes the "literal" interpretation (ref + ".md" after stripping any
 // ".md" suffix), plus rooted interpretations if roots are configured.
@@ -197,7 +197,7 @@ func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
 
 	var out []string
 
-	// 1) Treat as literal relative path from vault root.
+	// 1) Treat as literal relative path from keep root.
 	add(EnsureMDExtension(ref), &out)
 
 	// 2) If roots are configured, also try rooted interpretations when ref is not already rooted.
@@ -211,15 +211,15 @@ func CandidateFilePaths(ref, objectsRoot, pagesRoot string) []string {
 	return out
 }
 
-// ValidateWithinVault checks that a target path is within the vault directory.
-// Returns an error if the path would escape the vault (security check).
+// ValidateWithinKeep checks that a target path is within the keep directory.
+// Returns an error if the path would escape the keep (security check).
 //
 // This function:
 // - Resolves both paths to absolute paths
 // - Evaluates symlinks for security
 // - Handles paths that don't exist yet by checking parent directories
-func ValidateWithinVault(vaultPath, targetPath string) error {
-	absVault, err := filepath.Abs(vaultPath)
+func ValidateWithinKeep(keepPath, targetPath string) error {
+	absKeep, err := filepath.Abs(keepPath)
 	if err != nil {
 		return err
 	}
@@ -230,9 +230,9 @@ func ValidateWithinVault(vaultPath, targetPath string) error {
 	}
 
 	// Resolve any symlinks for security
-	realVault, err := filepath.EvalSymlinks(absVault)
+	realKeep, err := filepath.EvalSymlinks(absKeep)
 	if err != nil {
-		realVault = absVault
+		realKeep = absKeep
 	}
 
 	resolvedTarget, err := resolveTargetPath(absTarget)
@@ -240,9 +240,9 @@ func ValidateWithinVault(vaultPath, targetPath string) error {
 		return err
 	}
 
-	// Ensure target is within vault
-	if !isWithinPath(realVault, resolvedTarget) {
-		return ErrPathOutsideVault
+	// Ensure target is within keep
+	if !isWithinPath(realKeep, resolvedTarget) {
+		return ErrPathOutsideKeep
 	}
 
 	return nil
@@ -296,11 +296,11 @@ func isWithinPath(base, target string) bool {
 	return !strings.HasPrefix(rel, "..")
 }
 
-// ProtectedPathConfig controls which vault-relative paths are considered
+// ProtectedPathConfig controls which keep-relative paths are considered
 // system-managed and should not be modified by automation features.
 //
 // Callers should treat IsProtectedRelPath as an additional guardrail on top of
-// ValidateWithinVault; it is not a security boundary, but it prevents foot-guns.
+// ValidateWithinKeep; it is not a security boundary, but it prevents foot-guns.
 var hardProtectedPrefixes = []string{
 	".raven/",
 	".trash/",
@@ -312,9 +312,9 @@ var hardProtectedFiles = map[string]struct{}{
 	"schema.yaml": {},
 }
 
-// IsProtectedRelPath returns true if relPath (vault-relative) is protected.
+// IsProtectedRelPath returns true if relPath (keep-relative) is protected.
 //
-// extraPrefixes are additional user-configured protected prefixes (vault-relative).
+// extraPrefixes are additional user-configured protected prefixes (keep-relative).
 // They are treated as directory prefixes (normalized with NormalizeDirRoot).
 func IsProtectedRelPath(relPath string, extraPrefixes []string) bool {
 	p := normalizeRelPath(relPath)

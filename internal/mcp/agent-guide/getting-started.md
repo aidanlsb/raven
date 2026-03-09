@@ -1,21 +1,21 @@
 # Getting Started
 
-When first interacting with a Raven vault, follow this discovery sequence:
+When first interacting with a Raven keep, follow this discovery sequence:
 
 For a one-pass conceptual overview, start with `raven://guide/quickstart`.
 For a structured teaching and setup flow, use `raven://guide/onboarding`.
 
-0. **If no vault exists yet**: `raven_init(path="/path/to/vault")`
+0. **If no keep exists yet**: `raven_init(path="/path/to/keep")`
 0.5. **Register and select it globally**:
-   - `raven_vault_add(name="personal", path="/path/to/vault", pin=true)`
-   - `raven_vault_use(name="personal")`
+   - `raven_keep_add(name="personal", path="/path/to/keep", pin=true)`
+   - `raven_keep_use(name="personal")`
 1. **Understand the schema**: `raven_schema(subcommand="types")` and `raven_schema(subcommand="traits")`
-2. **Get vault overview**: `raven_stats()` to see object counts and structure
+2. **Get keep overview**: `raven_stats()` to see object counts and structure
 3. **Check saved queries**: `raven://queries/saved` or `raven_query(list=true)`
 4. **Discover workflows**: `raven://workflows/list` or `raven_workflow_list()`
-5. **Fetch vault instructions (if available)**: `raven://vault/agent-instructions`
+5. **Fetch keep instructions (if available)**: `raven://keep/agent-instructions`
 6. **Grab the query cheatsheet**: `raven://guide/query-cheatsheet` for common patterns
-7. **Ask about existing data**: if they have JSON exports, use `raven_import` to seed the vault quickly
+7. **Ask about existing data**: if they have JSON exports, use `raven_import` to seed the keep quickly
 
 You can also fetch the `raven://schema/current` MCP resource for the complete schema.yaml.
 

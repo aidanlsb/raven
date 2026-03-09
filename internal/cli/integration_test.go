@@ -15,7 +15,7 @@ import (
 
 // TestIntegration_ObjectLifecycle tests creating, querying, updating, and deleting objects.
 func TestIntegration_ObjectLifecycle(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -43,7 +43,7 @@ func TestIntegration_ObjectLifecycle(t *testing.T) {
 }
 
 func TestIntegration_EditWithEditsJSON(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("daily/2026-02-15.md", `---
 type: page
@@ -83,7 +83,7 @@ Status: draft
 }
 
 func TestIntegration_EditWithEditsJSONIsAtomic(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("daily/2026-02-16.md", `---
 type: page
@@ -105,7 +105,7 @@ Status: draft
 }
 
 func TestIntegration_EditSingleModeStillWorks(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("daily/2026-02-17.md", `---
 type: page
@@ -124,7 +124,7 @@ old task
 
 // TestIntegration_QueryByField tests querying objects by field values.
 func TestIntegration_QueryByField(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -146,7 +146,7 @@ func TestIntegration_QueryByField(t *testing.T) {
 
 // TestIntegration_ReferencesAndBacklinks tests reference resolution and backlinks.
 func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -167,7 +167,7 @@ func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 
 // TestIntegration_TraitQueries tests trait queries with various predicates.
 func TestIntegration_TraitQueries(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
 type: page
@@ -201,7 +201,7 @@ type: page
 
 // TestIntegration_MoveWithReferenceUpdate tests that moving files updates references.
 func TestIntegration_MoveWithReferenceUpdate(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -226,7 +226,7 @@ func TestIntegration_MoveWithReferenceUpdate(t *testing.T) {
 // TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef verifies that
 // schema-typed ref fields written as bare YAML strings are also updated.
 func TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -251,7 +251,7 @@ func TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef(t *testing.T) {
 // TestIntegration_MoveWithShortSourceReference ensures source refs are resolved
 // before backlink/index updates (e.g. `rvn move alice people/alice-archived`).
 func TestIntegration_MoveWithShortSourceReference(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -271,7 +271,7 @@ func TestIntegration_MoveWithShortSourceReference(t *testing.T) {
 // single-object move to a directory destination (trailing slash) derives the
 // destination filename from the source object.
 func TestIntegration_MoveDirectoryDestinationUsesSourceFilename(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   note:
@@ -302,7 +302,7 @@ type: note
 // TestIntegration_MoveDestinationWithRootPrefixAvoidsDoubleRoot verifies that
 // destinations already including the object root are not prefixed twice.
 func TestIntegration_MoveDestinationWithRootPrefixAvoidsDoubleRoot(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   doc:
@@ -333,7 +333,7 @@ type: doc
 }
 
 func TestIntegration_NewWithExplicitPath(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   note:
@@ -353,7 +353,7 @@ types:
 
 // TestIntegration_SchemaValidationErrors tests that schema validation errors are properly reported.
 func TestIntegration_SchemaValidationErrors(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -378,7 +378,7 @@ func TestIntegration_SchemaValidationErrors(t *testing.T) {
 }
 
 func TestIntegration_SetBulkFailsOnSchemaLoadError(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -395,7 +395,7 @@ func TestIntegration_SetBulkFailsOnSchemaLoadError(t *testing.T) {
 }
 
 func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -410,7 +410,7 @@ func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {
 }
 
 func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -425,7 +425,7 @@ func TestIntegration_UpsertValidatesTypedValuesAtWriteTime(t *testing.T) {
 }
 
 func TestIntegration_UpsertUnknownFieldFailsFast(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -448,7 +448,7 @@ func TestIntegration_UpsertUnknownFieldFailsFast(t *testing.T) {
 }
 
 func TestIntegration_SetFieldsJSONPreservesStringType(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -461,7 +461,7 @@ func TestIntegration_SetFieldsJSONPreservesStringType(t *testing.T) {
 }
 
 func TestIntegration_UpsertFieldJSONPreservesStringType(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -471,7 +471,7 @@ func TestIntegration_UpsertFieldJSONPreservesStringType(t *testing.T) {
 }
 
 func TestIntegration_NewFieldJSONPreservesStringType(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -481,7 +481,7 @@ func TestIntegration_NewFieldJSONPreservesStringType(t *testing.T) {
 }
 
 func TestIntegration_UpsertWithExplicitPath(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   note:
@@ -504,7 +504,7 @@ types:
 
 // TestIntegration_BulkOperationsPreview tests bulk operations with preview mode.
 func TestIntegration_BulkOperationsPreview(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -532,7 +532,7 @@ func TestIntegration_BulkOperationsPreview(t *testing.T) {
 
 // TestIntegration_BulkDelete tests bulk delete with confirmation.
 func TestIntegration_BulkDelete(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -551,7 +551,7 @@ func TestIntegration_BulkDelete(t *testing.T) {
 
 // TestIntegration_TraitBulkUpdate tests bulk update on trait query results.
 func TestIntegration_TraitBulkUpdate(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
 type: page
@@ -595,7 +595,7 @@ type: page
 
 // TestIntegration_TraitUpdateCommand tests the update command for trait IDs.
 func TestIntegration_TraitUpdateCommand(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
 type: page
@@ -623,7 +623,7 @@ type: page
 }
 
 func TestIntegration_TraitUpdateCommand_ResolvesRelativeDateKeyword(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
 type: page
@@ -644,7 +644,7 @@ type: page
 }
 
 func TestIntegration_TraitUpdateRejectsInvalidEnumValue(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
 type: page
@@ -663,7 +663,7 @@ type: page
 }
 
 func TestIntegration_TraitQueryApplyRejectsInvalidEnumValue(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
 type: page
@@ -683,7 +683,7 @@ type: page
 
 // TestIntegration_TraitBulkUpdateObjectCommandsRejected tests that object commands are rejected for trait queries.
 func TestIntegration_TraitBulkUpdateObjectCommandsRejected(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("tasks/task1.md", `---
 type: page
@@ -710,7 +710,7 @@ type: page
 
 // TestIntegration_CheckValidation tests the check command for validation.
 func TestIntegration_CheckValidation(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("notes/orphan.md", `---
 type: page
@@ -742,7 +742,7 @@ See [[nonexistent/page]] for details.
 // TestIntegration_CheckCreateMissingRespectsDirectoryRoots verifies that
 // `check --create-missing` creates typed objects under configured directory roots.
 func TestIntegration_CheckCreateMissingRespectsDirectoryRoots(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   meeting:
@@ -770,7 +770,7 @@ meeting: "[[meeting/all-hands]]"
 	// check --create-missing is interactive and non-JSON; accept default "yes"
 	// for "Certain (from typed fields)" prompts by sending an empty line.
 	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "--create-missing")
+	cmd := exec.Command(binary, "--keep-path", v.Path, "check", "--create-missing")
 	cmd.Stdin = strings.NewReader("\n")
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
@@ -792,7 +792,7 @@ meeting: "[[meeting/all-hands]]"
 // 2) check creates the type in schema.yaml
 // 3) missing page is created under configured objects root
 func TestIntegration_CheckCreateMissingUnknownTypeRespectsDirectoryRoots(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   project:
@@ -817,7 +817,7 @@ See [[meeting/all-hands]] for notes.
 	// - Create new type meeting?: y
 	// - Default path for meeting: meeting/
 	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "check", "--create-missing")
+	cmd := exec.Command(binary, "--keep-path", v.Path, "check", "--create-missing")
 	cmd.Stdin = strings.NewReader("meeting\ny\nmeeting/\n")
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
@@ -843,7 +843,7 @@ See [[meeting/all-hands]] for notes.
 // TestIntegration_CheckCreateMissingJSONConfirmRespectsDirectoryRoots verifies
 // non-interactive create-missing in JSON mode (agent-style invocation).
 func TestIntegration_CheckCreateMissingJSONConfirmRespectsDirectoryRoots(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   meeting:
@@ -870,7 +870,7 @@ meeting: "[[meeting/all-hands]]"
 
 	// Agent-style call: JSON mode + create-missing + confirm.
 	binary := testutil.BuildCLI(t)
-	cmd := exec.Command(binary, "--vault-path", v.Path, "--json", "check", "--create-missing", "--confirm")
+	cmd := exec.Command(binary, "--keep-path", v.Path, "--json", "check", "--create-missing", "--confirm")
 	_, _ = cmd.CombinedOutput() // check may exit non-zero due validation issues; side effects are what we validate.
 
 	v.AssertFileExists("objects/meeting/all-hands.md")
@@ -881,7 +881,7 @@ meeting: "[[meeting/all-hands]]"
 // create new objects through the canonical path resolution logic, including
 // configured directory roots.
 func TestIntegration_ImportRespectsDirectoryRootsOnCreate(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   person:
@@ -907,7 +907,7 @@ types:
 }
 
 func TestIntegration_ImportUnknownFieldReturnsStructuredItemError(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -950,7 +950,7 @@ func TestIntegration_ImportUnknownFieldReturnsStructuredItemError(t *testing.T) 
 // TestIntegration_NewPageRespectsPagesRoot verifies that creating a page type
 // uses the configured pages root directory.
 func TestIntegration_NewPageRespectsPagesRoot(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`directories:
   object: objects/
@@ -968,7 +968,7 @@ func TestIntegration_NewPageRespectsPagesRoot(t *testing.T) {
 }
 
 func TestIntegration_InvalidRavenYAMLFailsCommands(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`directories:
   object: [
@@ -983,7 +983,7 @@ func TestIntegration_InvalidRavenYAMLFailsCommands(t *testing.T) {
 }
 
 func TestIntegration_WorkflowManagementCommands(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -1064,7 +1064,7 @@ steps:
 }
 
 func TestIntegration_WorkflowScaffold(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -1095,7 +1095,7 @@ func TestIntegration_WorkflowScaffold(t *testing.T) {
 }
 
 func TestIntegration_WorkflowScaffold_CustomWorkflowDirectory(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`directories:
   workflow: automation/workflows/
@@ -1110,7 +1110,7 @@ func TestIntegration_WorkflowScaffold_CustomWorkflowDirectory(t *testing.T) {
 }
 
 func TestIntegration_WorkflowStepLifecycleCommands(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -1168,7 +1168,7 @@ steps:
 }
 
 func TestIntegration_WorkflowStepRemoveRollsBackInvalidEdit(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -1188,7 +1188,7 @@ steps:
 }
 
 func TestIntegration_WorkflowValidateReportsInvalidDefinitions(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`workflows:
   broken:
@@ -1208,7 +1208,7 @@ func TestIntegration_WorkflowValidateReportsInvalidDefinitions(t *testing.T) {
 
 // TestIntegration_Search tests full-text search.
 func TestIntegration_Search(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("notes/meeting.md", `---
 type: page
@@ -1245,7 +1245,7 @@ type: page
 
 // TestIntegration_DailyNote tests daily note creation and management.
 func TestIntegration_DailyNote(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`version: 1
 daily:
@@ -1267,7 +1267,7 @@ daily:
 
 // TestIntegration_Add tests adding content to files.
 func TestIntegration_Add(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("inbox.md", `---
 type: page
@@ -1284,7 +1284,7 @@ type: page
 }
 
 func TestIntegration_AddToSectionBySlug(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("project.md", `---
 type: page
@@ -1316,7 +1316,7 @@ type: page
 }
 
 func TestIntegration_AddToSectionByHeadingText(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("project.md", `---
 type: page
@@ -1335,7 +1335,7 @@ type: page
 
 // TestIntegration_DuplicateObjectError tests that creating a duplicate object fails.
 func TestIntegration_DuplicateObjectError(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -1349,7 +1349,7 @@ func TestIntegration_DuplicateObjectError(t *testing.T) {
 
 // TestIntegration_ReadObject tests reading object content.
 func TestIntegration_ReadObject(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/bob.md", `---
 type: person
@@ -1377,7 +1377,7 @@ Bob is a software engineer.
 }
 
 func TestIntegration_ReadWithoutArgSuggestsUsage(t *testing.T) {
-	v := testutil.NewTestVault(t).Build()
+	v := testutil.NewTestKeep(t).Build()
 
 	result := v.RunCLI("read")
 	result.MustFail(t, "MISSING_ARGUMENT")
@@ -1385,7 +1385,7 @@ func TestIntegration_ReadWithoutArgSuggestsUsage(t *testing.T) {
 }
 
 func TestIntegration_OpenWithoutArgSuggestsUsage(t *testing.T) {
-	v := testutil.NewTestVault(t).Build()
+	v := testutil.NewTestKeep(t).Build()
 
 	result := v.RunCLI("open")
 	result.MustFail(t, "MISSING_ARGUMENT")
@@ -1394,7 +1394,7 @@ func TestIntegration_OpenWithoutArgSuggestsUsage(t *testing.T) {
 
 // TestIntegration_Resolve tests the resolve command.
 func TestIntegration_Resolve(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/freya.md", `---
 type: person
@@ -1466,7 +1466,7 @@ name: Thor
 
 // TestIntegration_SchemaTemplateLifecycle tests schema template lifecycle commands.
 func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
@@ -1534,7 +1534,7 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 func TestIntegration_BacklinksOutlinksDynamicDates(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML("directories:\n  daily: daily/\n").
 		WithFile("people/alice.md", `---

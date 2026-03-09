@@ -72,7 +72,7 @@ func NewDailyVariables(date time.Time) *Variables {
 
 // Load loads a template from a file path and enforces template directory policy.
 // Inline template content is not supported.
-func Load(vaultPath, templateSpec, templateDir string) (string, error) {
+func Load(keepPath, templateSpec, templateDir string) (string, error) {
 	if templateSpec == "" {
 		return "", nil
 	}
@@ -86,7 +86,7 @@ func Load(vaultPath, templateSpec, templateDir string) (string, error) {
 		return "", err
 	}
 
-	return loadFromFile(vaultPath, fileRef)
+	return loadFromFile(keepPath, fileRef)
 }
 
 func normalizeFileRef(filePath string) (string, error) {
@@ -99,7 +99,7 @@ func normalizeFileRef(filePath string) (string, error) {
 		return "", fmt.Errorf("template declaration must include a non-empty file path")
 	}
 	if normalized == ".." || strings.HasPrefix(normalized, "../") {
-		return "", fmt.Errorf("template file path cannot escape the vault")
+		return "", fmt.Errorf("template file path cannot escape the keep")
 	}
 	if strings.Contains(normalized, "\n") || strings.Contains(normalized, "\r") {
 		return "", fmt.Errorf("template file path cannot contain newlines")
@@ -128,12 +128,12 @@ func ResolveFileRef(filePath, templateDir string) (string, error) {
 }
 
 // loadFromFile loads template content from a file.
-func loadFromFile(vaultPath, templatePath string) (string, error) {
-	fullPath := filepath.Join(vaultPath, templatePath)
+func loadFromFile(keepPath, templatePath string) (string, error) {
+	fullPath := filepath.Join(keepPath, templatePath)
 
-	// Security check: ensure path is within vault
-	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		return "", fmt.Errorf("template file must be within vault")
+	// Security check: ensure path is within keep
+	if err := paths.ValidateWithinKeep(keepPath, fullPath); err != nil {
+		return "", fmt.Errorf("template file must be within keep")
 	}
 
 	content, err := os.ReadFile(fullPath)

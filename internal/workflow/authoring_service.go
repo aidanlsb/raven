@@ -41,14 +41,14 @@ type StepMutationResult struct {
 }
 
 type AuthoringService struct {
-	vaultPath string
-	vaultCfg  *config.VaultConfig
+	keepPath string
+	keepCfg  *config.KeepConfig
 }
 
-func NewAuthoringService(vaultPath string, vaultCfg *config.VaultConfig) *AuthoringService {
+func NewAuthoringService(keepPath string, keepCfg *config.KeepConfig) *AuthoringService {
 	return &AuthoringService{
-		vaultPath: vaultPath,
-		vaultCfg:  vaultCfg,
+		keepPath: keepPath,
+		keepCfg:  keepCfg,
 	}
 }
 
@@ -59,8 +59,8 @@ func (s *AuthoringService) MutateStep(req StepMutationRequest) (*StepMutationRes
 	if strings.TrimSpace(req.WorkflowName) == "" {
 		return nil, newDomainError(CodeInvalidInput, "workflow name cannot be empty", nil)
 	}
-	if s.vaultCfg == nil {
-		return nil, newDomainError(CodeWorkflowInvalid, "vault config is nil", nil)
+	if s.keepCfg == nil {
+		return nil, newDomainError(CodeWorkflowInvalid, "keep config is nil", nil)
 	}
 
 	def, fileRef, fullPath, err := s.loadWorkflowDefinition(req.WorkflowName)
@@ -97,11 +97,11 @@ func (s *AuthoringService) MutateStep(req StepMutationRequest) (*StepMutationRes
 func (s *AuthoringService) loadWorkflowDefinition(
 	workflowName string,
 ) (*externalWorkflowDef, string, string, error) {
-	if len(s.vaultCfg.Workflows) == 0 {
+	if len(s.keepCfg.Workflows) == 0 {
 		return nil, "", "", newDomainError(CodeWorkflowNotFound, "no workflows defined in raven.yaml", nil)
 	}
 
-	ref, ok := s.vaultCfg.Workflows[workflowName]
+	ref, ok := s.keepCfg.Workflows[workflowName]
 	if !ok {
 		return nil, "", "", newDomainError(CodeWorkflowNotFound, fmt.Sprintf("workflow '%s' not found", workflowName), nil)
 	}
@@ -112,14 +112,14 @@ func (s *AuthoringService) loadWorkflowDefinition(
 		return nil, "", "", newDomainError(CodeWorkflowInvalid, fmt.Sprintf("workflow '%s' has no file reference", workflowName), nil)
 	}
 
-	fileRef, err := ResolveWorkflowFileRef(ref.File, s.vaultCfg.GetWorkflowDirectory())
+	fileRef, err := ResolveWorkflowFileRef(ref.File, s.keepCfg.GetWorkflowDirectory())
 	if err != nil {
 		return nil, "", "", newDomainError(CodeWorkflowInvalid, err.Error(), err)
 	}
-	fullPath := filepath.Join(s.vaultPath, filepath.FromSlash(fileRef))
-	if err := paths.ValidateWithinVault(s.vaultPath, fullPath); err != nil {
-		if errors.Is(err, paths.ErrPathOutsideVault) {
-			return nil, "", "", newDomainError(CodeFileOutsideVault, err.Error(), err)
+	fullPath := filepath.Join(s.keepPath, filepath.FromSlash(fileRef))
+	if err := paths.ValidateWithinKeep(s.keepPath, fullPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideKeep) {
+			return nil, "", "", newDomainError(CodeFileOutsideKeep, err.Error(), err)
 		}
 		return nil, "", "", newDomainError(CodeWorkflowInvalid, "failed to validate workflow file path", err)
 	}

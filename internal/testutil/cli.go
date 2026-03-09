@@ -133,16 +133,16 @@ func findProjectRoot() (string, error) {
 	}
 }
 
-// RunCLI executes a CLI command against the vault and returns the parsed result.
+// RunCLI executes a CLI command against the keep and returns the parsed result.
 // Commands are run with --json flag automatically.
-func (v *TestVault) RunCLI(args ...string) *CLIResult {
+func (v *TestKeep) RunCLI(args ...string) *CLIResult {
 	v.t.Helper()
 
 	// Ensure binary is built
 	binary := BuildCLI(v.t)
 
-	// Build command args with vault path and json flag
-	cmdArgs := []string{"--vault-path", v.Path, "--json"}
+	// Build command args with keep path and json flag
+	cmdArgs := []string{"--keep-path", v.Path, "--json"}
 	cmdArgs = append(cmdArgs, args...)
 
 	cmd := exec.Command(binary, cmdArgs...)
@@ -192,14 +192,14 @@ func (v *TestVault) RunCLI(args ...string) *CLIResult {
 }
 
 // RunCLIWithStdin executes a CLI command with stdin input.
-func (v *TestVault) RunCLIWithStdin(stdin string, args ...string) *CLIResult {
+func (v *TestKeep) RunCLIWithStdin(stdin string, args ...string) *CLIResult {
 	v.t.Helper()
 
 	// Ensure binary is built
 	binary := BuildCLI(v.t)
 
-	// Build command args with vault path and json flag
-	cmdArgs := []string{"--vault-path", v.Path, "--json"}
+	// Build command args with keep path and json flag
+	cmdArgs := []string{"--keep-path", v.Path, "--json"}
 	cmdArgs = append(cmdArgs, args...)
 
 	cmd := exec.Command(binary, cmdArgs...)

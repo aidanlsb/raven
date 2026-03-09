@@ -57,11 +57,11 @@ Examples:
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		objectRef := args[0]
 		newTypeName := args[1]
 
-		return runReclassify(vaultPath, objectRef, newTypeName)
+		return runReclassify(keepPath, objectRef, newTypeName)
 	},
 }
 
@@ -81,24 +81,24 @@ type ReclassifyResult struct {
 	Reason        string   `json:"reason,omitempty"`
 }
 
-func runReclassify(vaultPath, objectRef, newTypeName string) error {
+func runReclassify(keepPath, objectRef, newTypeName string) error {
 	start := time.Now()
 
-	// Load vault config + schema
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	// Load keep config + schema
+	keepCfg, err := loadKeepConfigSafe(keepPath)
 	if err != nil {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
 
 	// Resolve the object reference
 	resolved, err := ResolveReference(objectRef, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
+		KeepPath:   keepPath,
+		KeepConfig: keepCfg,
 	})
 	if err != nil {
 		return handleResolveError(err, objectRef)
@@ -284,7 +284,7 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 				NeedsConfirm:  true,
 				Reason:        fmt.Sprintf("Fields not defined on type '%s' will be dropped: %s", newTypeName, strings.Join(droppedFields, ", ")),
 			}
-			relPath, _ := filepath.Rel(vaultPath, filePath)
+			relPath, _ := filepath.Rel(keepPath, filePath)
 			result.File = relPath
 			outputSuccess(result, nil)
 			return nil
@@ -326,7 +326,7 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
-	relPath, _ := filepath.Rel(vaultPath, filePath)
+	relPath, _ := filepath.Rel(keepPath, filePath)
 	result := ReclassifyResult{
 		ObjectID:      objectID,
 		OldType:       oldType,
@@ -343,7 +343,7 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 		currentDir := filepath.Dir(relPath)
 
 		// Resolve currentDir through directory roots for comparison
-		currentObjDir := vaultCfg.FilePathToObjectID(currentDir)
+		currentObjDir := keepCfg.FilePathToObjectID(currentDir)
 		if currentObjDir == "" {
 			currentObjDir = currentDir
 		}
@@ -351,11 +351,11 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 		if currentObjDir != defaultDir {
 			// Compute destination path
 			filename := filepath.Base(relPath)
-			destRelPath := vaultCfg.ResolveReferenceToFilePath(
+			destRelPath := keepCfg.ResolveReferenceToFilePath(
 				strings.TrimSuffix(filepath.Join(defaultDir, strings.TrimSuffix(filename, ".md")), ".md"),
 			)
 			destRelPath = paths.EnsureMDExtension(destRelPath)
-			destAbsPath := filepath.Join(vaultPath, destRelPath)
+			destAbsPath := filepath.Join(keepPath, destRelPath)
 
 			// Only move if destination doesn't already exist
 			if _, err := os.Stat(destAbsPath); os.IsNotExist(err) {
@@ -366,7 +366,7 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 
 				// Update references before moving
 				if reclassifyUpdateRefs {
-					updatedRefs = updateRefsForMove(vaultPath, vaultCfg, objectID, relPath, destRelPath)
+					updatedRefs = updateRefsForMove(keepPath, keepCfg, objectID, relPath, destRelPath)
 				}
 
 				// Perform the move
@@ -385,17 +385,17 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 				result.File = relPath
 
 				// Update object ID
-				newObjectID := vaultCfg.FilePathToObjectID(destRelPath)
+				newObjectID := keepCfg.FilePathToObjectID(destRelPath)
 				result.ObjectID = newObjectID
 
 				// Remove old index entry
-				reindexAfterMove(vaultPath, vaultCfg, sch, objectID, filePath)
+				reindexAfterMove(keepPath, keepCfg, sch, objectID, filePath)
 			}
 		}
 	}
 
 	// Reindex the file
-	maybeReindex(vaultPath, filePath, vaultCfg)
+	maybeReindex(keepPath, filePath, keepCfg)
 
 	elapsed := time.Since(start).Milliseconds()
 
@@ -487,22 +487,22 @@ func updateFrontmatterForReclassify(content, newType string, fieldValues map[str
 
 // updateRefsForMove updates all references pointing to the old object ID to point to the new location.
 // Returns the list of source IDs that were updated.
-func updateRefsForMove(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldRelPath, newRelPath string) []string {
-	db, err := index.Open(vaultPath)
+func updateRefsForMove(keepPath string, keepCfg *config.KeepConfig, sourceID, oldRelPath, newRelPath string) []string {
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return nil
 	}
 	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 
-	destID := vaultCfg.FilePathToObjectID(newRelPath)
-	objectRoot := vaultCfg.GetObjectsRoot()
-	pageRoot := vaultCfg.GetPagesRoot()
+	destID := keepCfg.FilePathToObjectID(newRelPath)
+	objectRoot := keepCfg.GetObjectsRoot()
+	pageRoot := keepCfg.GetPagesRoot()
 
 	backlinks, _ := db.BacklinksWithRoots(sourceID, objectRoot, pageRoot)
 
 	aliases, _ := db.AllAliases()
-	res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
+	res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: keepCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
 	aliasSlugToID := make(map[string]string, len(aliases))
 	for a, oid := range aliases {
 		aliasSlugToID[pages.SlugifyPath(a)] = oid
@@ -524,7 +524,7 @@ func updateRefsForMove(vaultPath string, vaultCfg *config.VaultConfig, sourceID,
 		if bl.Line != nil {
 			line = *bl.Line
 		}
-		if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err == nil {
+		if err := updateAllRefVariantsAtLine(keepPath, keepCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err == nil {
 			updatedRefs = append(updatedRefs, bl.SourceID)
 		}
 	}
@@ -533,13 +533,13 @@ func updateRefsForMove(vaultPath string, vaultCfg *config.VaultConfig, sourceID,
 }
 
 // reindexAfterMove removes the old index entry and indexes the new file location.
-func reindexAfterMove(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, oldID, newFilePath string) {
-	db, err := index.Open(vaultPath)
+func reindexAfterMove(keepPath string, keepCfg *config.KeepConfig, sch *schema.Schema, oldID, newFilePath string) {
+	db, err := index.Open(keepPath)
 	if err != nil {
 		return
 	}
 	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	db.SetDailyDirectory(keepCfg.GetDailyDirectory())
 
 	// Remove old entry
 	_ = db.RemoveDocument(oldID)
@@ -549,8 +549,8 @@ func reindexAfterMove(vaultPath string, vaultCfg *config.VaultConfig, sch *schem
 	if err != nil {
 		return
 	}
-	parseOpts := buildParseOptions(vaultCfg)
-	newDoc, err := parser.ParseDocumentWithOptions(string(newContent), newFilePath, vaultPath, parseOpts)
+	parseOpts := buildParseOptions(keepCfg)
+	newDoc, err := parser.ParseDocumentWithOptions(string(newContent), newFilePath, keepPath, parseOpts)
 	if err != nil || newDoc == nil {
 		return
 	}

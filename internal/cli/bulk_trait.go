@@ -90,11 +90,11 @@ func parseTraitUpdateValueArgs(args []string, usageHint string) (string, error) 
 	return value, nil
 }
 
-func ensureTraitSchema(vaultPath string, sch *schema.Schema) (*schema.Schema, error) {
+func ensureTraitSchema(keepPath string, sch *schema.Schema) (*schema.Schema, error) {
 	if sch != nil {
 		return sch, nil
 	}
-	loaded, err := schema.Load(vaultPath)
+	loaded, err := schema.Load(keepPath)
 	if err != nil {
 		return nil, handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
@@ -136,31 +136,31 @@ func precomputeTraitUpdateValues(traits []model.Trait, newValue string, sch *sch
 }
 
 // applyUpdateTraitFromQuery applies update operation to trait query results.
-func applyUpdateTraitFromQuery(vaultPath string, traits []model.Trait, args []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+func applyUpdateTraitFromQuery(keepPath string, traits []model.Trait, args []string, sch *schema.Schema, keepCfg *config.KeepConfig, confirm bool) error {
 	newValue, err := parseTraitUpdateValueArgs(args, "Usage: --apply \"update <new_value>\"")
 	if err != nil {
 		return err
 	}
 
-	sch, err = ensureTraitSchema(vaultPath, sch)
+	sch, err = ensureTraitSchema(keepPath, sch)
 	if err != nil {
 		return err
 	}
 
 	if !confirm {
-		if err := previewUpdateTraitBulk(vaultPath, traits, newValue, sch, nil); err != nil {
+		if err := previewUpdateTraitBulk(keepPath, traits, newValue, sch, nil); err != nil {
 			return err
 		}
 		if promptForConfirm("Apply changes?") {
-			return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, nil)
+			return applyUpdateTraitBulk(keepPath, traits, newValue, sch, keepCfg, nil)
 		}
 		return nil
 	}
-	return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, nil)
+	return applyUpdateTraitBulk(keepPath, traits, newValue, sch, keepCfg, nil)
 }
 
 // previewUpdateTraitBulk shows a preview of trait update operations.
-func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue string, sch *schema.Schema, extraSkipped []TraitBulkResult) error {
+func previewUpdateTraitBulk(keepPath string, traits []model.Trait, newValue string, sch *schema.Schema, extraSkipped []TraitBulkResult) error {
 	var items []TraitBulkPreviewItem
 	var skipped []TraitBulkResult
 
@@ -266,7 +266,7 @@ func printTraitBulkPreview(preview *TraitBulkPreview) {
 }
 
 // applyUpdateTraitBulk applies update operations to traits.
-func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue string, sch *schema.Schema, vaultCfg *config.VaultConfig, extraSkipped []TraitBulkResult) error {
+func applyUpdateTraitBulk(keepPath string, traits []model.Trait, newValue string, sch *schema.Schema, keepCfg *config.KeepConfig, extraSkipped []TraitBulkResult) error {
 	resolvedValues, err := precomputeTraitUpdateValues(traits, newValue, sch)
 	if err != nil {
 		return err
@@ -290,8 +290,8 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 
 	for filePath, fileTraits := range traitsByFile {
 		fullPath := filePath
-		if !strings.HasPrefix(filePath, vaultPath) {
-			fullPath = vaultPath + "/" + filePath
+		if !strings.HasPrefix(filePath, keepPath) {
+			fullPath = keepPath + "/" + filePath
 		}
 
 		// Read the file
@@ -393,7 +393,7 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 				}
 				continue
 			}
-			maybeReindex(vaultPath, fullPath, vaultCfg)
+			maybeReindex(keepPath, fullPath, keepCfg)
 		}
 	}
 
@@ -481,14 +481,14 @@ func ReadTraitIDsFromStdin() (ids []string, err error) {
 }
 
 // applyUpdateTraitsByID updates traits identified by IDs, with preview/confirm behavior.
-func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string, confirm bool, prompt bool, vaultCfg *config.VaultConfig) error {
+func applyUpdateTraitsByID(keepPath string, traitIDs []string, newValue string, confirm bool, prompt bool, keepCfg *config.KeepConfig) error {
 	// Load schema for validation/date keyword resolution.
-	sch, err := schema.Load(vaultPath)
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 
-	db, err := openDatabaseWithConfig(vaultPath, vaultCfg)
+	db, err := openDatabaseWithConfig(keepPath, keepCfg)
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
@@ -500,15 +500,15 @@ func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string,
 	}
 
 	if !confirm {
-		if err := previewUpdateTraitBulk(vaultPath, traits, newValue, sch, skipped); err != nil {
+		if err := previewUpdateTraitBulk(keepPath, traits, newValue, sch, skipped); err != nil {
 			return err
 		}
 		if prompt && promptForConfirm("Apply changes?") {
-			return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, skipped)
+			return applyUpdateTraitBulk(keepPath, traits, newValue, sch, keepCfg, skipped)
 		}
 		return nil
 	}
-	return applyUpdateTraitBulk(vaultPath, traits, newValue, sch, vaultCfg, skipped)
+	return applyUpdateTraitBulk(keepPath, traits, newValue, sch, keepCfg, skipped)
 }
 
 // resolveTraitIDs resolves trait IDs to concrete trait results using the index.

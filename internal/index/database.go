@@ -39,8 +39,8 @@ func (d *Database) DB() *sql.DB {
 }
 
 // Open opens or creates the database.
-func Open(vaultPath string) (*Database, error) {
-	dbDir := filepath.Join(vaultPath, ".raven")
+func Open(keepPath string) (*Database, error) {
+	dbDir := filepath.Join(keepPath, ".raven")
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create .raven directory: %w", err)
 	}
@@ -62,8 +62,8 @@ func Open(vaultPath string) (*Database, error) {
 
 // OpenWithRebuild opens the database, rebuilding if schema is incompatible.
 // Returns (database, wasRebuilt, error).
-func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
-	dbDir := filepath.Join(vaultPath, ".raven")
+func OpenWithRebuild(keepPath string) (*Database, bool, error) {
+	dbDir := filepath.Join(keepPath, ".raven")
 	dbPath := filepath.Join(dbDir, "index.db")
 
 	lock, err := acquireIndexLock(dbDir)
@@ -83,7 +83,7 @@ func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
 					return nil, false, err
 				}
 				// Open fresh
-				freshDB, err := Open(vaultPath)
+				freshDB, err := Open(keepPath)
 				return freshDB, true, err
 			}
 			db.Close()
@@ -91,7 +91,7 @@ func OpenWithRebuild(vaultPath string) (*Database, bool, error) {
 	}
 
 	// Open normally
-	db, err := Open(vaultPath)
+	db, err := Open(keepPath)
 	return db, false, err
 }
 
@@ -881,7 +881,7 @@ func (d *Database) AllIndexedFilePaths() ([]string, error) {
 
 // RemoveDeletedFiles removes index entries for files that no longer exist on the filesystem.
 // Returns the list of removed file paths.
-func (d *Database) RemoveDeletedFiles(vaultPath string) ([]string, error) {
+func (d *Database) RemoveDeletedFiles(keepPath string) ([]string, error) {
 	indexedPaths, err := d.AllIndexedFilePaths()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get indexed paths: %w", err)
@@ -889,7 +889,7 @@ func (d *Database) RemoveDeletedFiles(vaultPath string) ([]string, error) {
 
 	var removed []string
 	for _, relPath := range indexedPaths {
-		if fileMissing(filepath.Join(vaultPath, relPath)) {
+		if fileMissing(filepath.Join(keepPath, relPath)) {
 			// File was deleted - remove from index
 			if err := d.RemoveFile(relPath); err != nil {
 				return removed, fmt.Errorf("failed to remove %s: %w", relPath, err)
@@ -1028,7 +1028,7 @@ type ResolverOptions struct {
 	ExtraIDs []string
 }
 
-// Resolver builds the canonical resolver for this vault index.
+// Resolver builds the canonical resolver for this keep index.
 //
 // This is the ONE resolver factory that handles all cases:
 // - Object IDs (full path + short name resolution)
@@ -1328,14 +1328,14 @@ func getTraitDefault(sch *schema.Schema, traitType string) interface{} {
 // StalenessInfo contains information about index freshness.
 type StalenessInfo struct {
 	IsStale      bool     // True if any files are stale
-	StaleFiles   []string // List of stale file paths (relative to vault)
+	StaleFiles   []string // List of stale file paths (relative to keep)
 	TotalFiles   int      // Total number of indexed files
 	CheckedFiles int      // Number of files checked
 }
 
 // CheckStaleness compares indexed file mtimes against current filesystem mtimes.
-// vaultPath is needed to stat files. Returns info about which files are stale.
-func (d *Database) CheckStaleness(vaultPath string) (*StalenessInfo, error) {
+// keepPath is needed to stat files. Returns info about which files are stale.
+func (d *Database) CheckStaleness(keepPath string) (*StalenessInfo, error) {
 	info := &StalenessInfo{}
 
 	// Get all unique file paths and their indexed mtimes
@@ -1353,7 +1353,7 @@ func (d *Database) CheckStaleness(vaultPath string) (*StalenessInfo, error) {
 
 		info.TotalFiles++
 
-		stale, checked, err := isFileStaleAgainstIndexedMtime(filepath.Join(vaultPath, filePath), indexedMtime)
+		stale, checked, err := isFileStaleAgainstIndexedMtime(filepath.Join(keepPath, filePath), indexedMtime)
 		if err != nil {
 			// File was deleted or moved - consider stale
 			info.StaleFiles = append(info.StaleFiles, filePath)
@@ -1432,7 +1432,7 @@ func (d *Database) GetFileMtime(filePath string) (int64, error) {
 
 // IsFileStale checks if a single file needs reindexing.
 // Returns true if the file's current mtime is newer than indexed mtime.
-func (d *Database) IsFileStale(vaultPath, filePath string) (bool, error) {
+func (d *Database) IsFileStale(keepPath, filePath string) (bool, error) {
 	indexedMtime, err := d.GetFileMtime(filePath)
 	if err != nil {
 		return false, err
@@ -1444,7 +1444,7 @@ func (d *Database) IsFileStale(vaultPath, filePath string) (bool, error) {
 	}
 
 	// Check current file mtime
-	fullPath := filepath.Join(vaultPath, filePath)
+	fullPath := filepath.Join(keepPath, filePath)
 	stat, err := os.Stat(fullPath)
 	if err != nil {
 		// File doesn't exist - consider stale (will be cleaned up)
@@ -1503,7 +1503,7 @@ func (d *Database) ResolveReferencesWithSchema(dailyDirectory string, sch *schem
 // ResolveReferencesForFile resolves unresolved references for a single file.
 //
 // This exists to support auto-reindex after CLI mutations without requiring a full
-// vault-wide reference resolution pass.
+// keep-wide reference resolution pass.
 func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*ReferenceResolutionResult, error) {
 	return d.ResolveReferencesForFileWithSchema(filePath, dailyDirectory, nil)
 }

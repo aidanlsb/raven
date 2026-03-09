@@ -12,7 +12,7 @@ import (
 // objectCreationContext centralizes path resolution and object creation behavior.
 // All CLI entry points that create new objects should use this helper.
 type objectCreationContext struct {
-	vaultPath   string
+	keepPath    string
 	schema      *schema.Schema
 	objectsRoot string
 	pagesRoot   string
@@ -57,9 +57,9 @@ func validateObjectTargetPath(targetPath string) error {
 	return nil
 }
 
-func newObjectCreationContext(vaultPath string, sch *schema.Schema, objectsRoot, pagesRoot, templateDir string) objectCreationContext {
+func newObjectCreationContext(keepPath string, sch *schema.Schema, objectsRoot, pagesRoot, templateDir string) objectCreationContext {
 	return objectCreationContext{
-		vaultPath:   vaultPath,
+		keepPath:    keepPath,
 		schema:      sch,
 		objectsRoot: objectsRoot,
 		pagesRoot:   pagesRoot,
@@ -76,12 +76,12 @@ func (c objectCreationContext) resolveAndSlugifyTargetPath(targetPath, typeName 
 }
 
 func (c objectCreationContext) exists(targetPath, typeName string) bool {
-	return pages.Exists(c.vaultPath, c.resolveTargetPath(targetPath, typeName))
+	return pages.Exists(c.keepPath, c.resolveTargetPath(targetPath, typeName))
 }
 
 func (c objectCreationContext) create(params objectCreateParams) (*pages.CreateResult, error) {
 	return pages.Create(pages.CreateOptions{
-		VaultPath:                   c.vaultPath,
+		KeepPath:                    c.keepPath,
 		TypeName:                    params.typeName,
 		Title:                       params.title,
 		TargetPath:                  params.targetPath,

@@ -22,15 +22,15 @@ type externalWorkflowDef struct {
 	Steps       []*config.WorkflowStep           `yaml:"steps,omitempty"`
 }
 
-// LoadAll loads all workflows from the vault configuration.
-func LoadAll(vaultPath string, vaultCfg *config.VaultConfig) ([]*Workflow, error) {
-	if vaultCfg.Workflows == nil {
+// LoadAll loads all workflows from the keep configuration.
+func LoadAll(keepPath string, keepCfg *config.KeepConfig) ([]*Workflow, error) {
+	if keepCfg.Workflows == nil {
 		return nil, nil
 	}
 
 	var workflows []*Workflow
-	for name, ref := range vaultCfg.Workflows {
-		wf, err := LoadWithConfig(vaultPath, name, ref, vaultCfg)
+	for name, ref := range keepCfg.Workflows {
+		wf, err := LoadWithConfig(keepPath, name, ref, keepCfg)
 		if err != nil {
 			return nil, fmt.Errorf("workflow '%s': %w", name, err)
 		}
@@ -40,8 +40,8 @@ func LoadAll(vaultPath string, vaultCfg *config.VaultConfig) ([]*Workflow, error
 	return workflows, nil
 }
 
-// LoadWithConfig loads a single workflow by name using vault-level workflow policy.
-func LoadWithConfig(vaultPath, name string, ref *config.WorkflowRef, vaultCfg *config.VaultConfig) (*Workflow, error) {
+// LoadWithConfig loads a single workflow by name using keep-level workflow policy.
+func LoadWithConfig(keepPath, name string, ref *config.WorkflowRef, keepCfg *config.KeepConfig) (*Workflow, error) {
 	if ref == nil {
 		return nil, fmt.Errorf("workflow reference is nil")
 	}
@@ -58,16 +58,16 @@ func LoadWithConfig(vaultPath, name string, ref *config.WorkflowRef, vaultCfg *c
 		)
 	}
 
-	workflowDir := config.DefaultVaultConfig().GetWorkflowDirectory()
-	if vaultCfg != nil {
-		workflowDir = vaultCfg.GetWorkflowDirectory()
+	workflowDir := config.DefaultKeepConfig().GetWorkflowDirectory()
+	if keepCfg != nil {
+		workflowDir = keepCfg.GetWorkflowDirectory()
 	}
 	fileRef, err := ResolveWorkflowFileRef(ref.File, workflowDir)
 	if err != nil {
 		return nil, err
 	}
 
-	wf, err := loadFromFile(vaultPath, name, fileRef)
+	wf, err := loadFromFile(keepPath, name, fileRef)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +75,8 @@ func LoadWithConfig(vaultPath, name string, ref *config.WorkflowRef, vaultCfg *c
 }
 
 // Load loads a single workflow by name with default config policy.
-func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
-	return LoadWithConfig(vaultPath, name, ref, config.DefaultVaultConfig())
+func Load(keepPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
+	return LoadWithConfig(keepPath, name, ref, config.DefaultKeepConfig())
 }
 
 func normalizeWorkflowFileRef(filePath string) (string, error) {
@@ -89,7 +89,7 @@ func normalizeWorkflowFileRef(filePath string) (string, error) {
 		return "", fmt.Errorf("workflow declaration must include a non-empty file path")
 	}
 	if normalized == ".." || strings.HasPrefix(normalized, "../") {
-		return "", fmt.Errorf("workflow file path cannot escape the vault")
+		return "", fmt.Errorf("workflow file path cannot escape the keep")
 	}
 	return normalized, nil
 }
@@ -115,12 +115,12 @@ func ResolveWorkflowFileRef(filePath, workflowDir string) (string, error) {
 }
 
 // loadFromFile loads a workflow from an external YAML file.
-func loadFromFile(vaultPath, name, filePath string) (*Workflow, error) {
-	// Security: ensure path is within vault
-	fullPath := filepath.Join(vaultPath, filePath)
-	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-		if errors.Is(err, paths.ErrPathOutsideVault) {
-			return nil, fmt.Errorf("workflow file must be within vault")
+func loadFromFile(keepPath, name, filePath string) (*Workflow, error) {
+	// Security: ensure path is within keep
+	fullPath := filepath.Join(keepPath, filePath)
+	if err := paths.ValidateWithinKeep(keepPath, fullPath); err != nil {
+		if errors.Is(err, paths.ErrPathOutsideKeep) {
+			return nil, fmt.Errorf("workflow file must be within keep")
 		}
 		return nil, fmt.Errorf("failed to validate workflow file: %w", err)
 	}
@@ -464,34 +464,34 @@ func validateToolName(tool string) error {
 	return fmt.Errorf("references unknown tool '%s'", tool)
 }
 
-// Get retrieves a workflow by name from the vault configuration.
-func Get(vaultPath, name string, vaultCfg *config.VaultConfig) (*Workflow, error) {
-	if vaultCfg.Workflows == nil {
+// Get retrieves a workflow by name from the keep configuration.
+func Get(keepPath, name string, keepCfg *config.KeepConfig) (*Workflow, error) {
+	if keepCfg.Workflows == nil {
 		return nil, fmt.Errorf("no workflows defined in raven.yaml")
 	}
 
-	ref, ok := vaultCfg.Workflows[name]
+	ref, ok := keepCfg.Workflows[name]
 	if !ok {
 		return nil, fmt.Errorf("workflow '%s' not found", name)
 	}
 
-	return LoadWithConfig(vaultPath, name, ref, vaultCfg)
+	return LoadWithConfig(keepPath, name, ref, keepCfg)
 }
 
 // List returns all workflow names and descriptions.
-func List(vaultPath string, vaultCfg *config.VaultConfig) ([]*ListItem, error) {
-	if vaultCfg.Workflows == nil {
+func List(keepPath string, keepCfg *config.KeepConfig) ([]*ListItem, error) {
+	if keepCfg.Workflows == nil {
 		return nil, nil
 	}
 
 	var items []*ListItem
-	for name, ref := range vaultCfg.Workflows {
+	for name, ref := range keepCfg.Workflows {
 		item := &ListItem{
 			Name: name,
 		}
 
 		// Load to get full definition (handles file references)
-		wf, err := LoadWithConfig(vaultPath, name, ref, vaultCfg)
+		wf, err := LoadWithConfig(keepPath, name, ref, keepCfg)
 		if err != nil {
 			// Include error in description rather than failing
 			item.Description = fmt.Sprintf("(error: %v)", err)

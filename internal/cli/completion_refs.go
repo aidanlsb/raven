@@ -43,8 +43,8 @@ func completeReferenceFlag(includeDynamicDates bool) func(*cobra.Command, []stri
 }
 
 func completeReferenceValues(cmd *cobra.Command, toComplete string, includeDynamicDates bool) ([]string, cobra.ShellCompDirective) {
-	vaultPath := completionVaultPath(cmd)
-	if vaultPath == "" {
+	keepPath := completionKeepPath(cmd)
+	if keepPath == "" {
 		dateMatches := filterDynamicDateKeywords(toComplete, includeDynamicDates)
 		if len(dateMatches) > 0 {
 			return dateMatches, cobra.ShellCompDirectiveNoFileComp
@@ -52,7 +52,7 @@ func completeReferenceValues(cmd *cobra.Command, toComplete string, includeDynam
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	db, err := index.Open(vaultPath)
+	db, err := index.Open(keepPath)
 	if err != nil {
 		dateMatches := filterDynamicDateKeywords(toComplete, includeDynamicDates)
 		if len(dateMatches) > 0 {
@@ -169,14 +169,14 @@ func matchesCompletion(candidate, input string) bool {
 	return false
 }
 
-func completionVaultPath(cmd *cobra.Command) string {
-	if explicit := strings.TrimSpace(getFlagString(cmd, "vault-path")); explicit != "" {
+func completionKeepPath(cmd *cobra.Command) string {
+	if explicit := strings.TrimSpace(getFlagString(cmd, "keep-path")); explicit != "" {
 		return explicit
 	}
 
 	cfgPath := strings.TrimSpace(getFlagString(cmd, "config"))
 	statePath := strings.TrimSpace(getFlagString(cmd, "state"))
-	namedVault := strings.TrimSpace(getFlagString(cmd, "vault"))
+	namedKeep := strings.TrimSpace(getFlagString(cmd, "keep"))
 
 	resolvedConfigPath := config.ResolveConfigPath(cfgPath)
 
@@ -193,8 +193,8 @@ func completionVaultPath(cmd *cobra.Command) string {
 		return ""
 	}
 
-	if namedVault != "" {
-		path, err := cfg.GetVaultPath(namedVault)
+	if namedKeep != "" {
+		path, err := cfg.GetKeepPath(namedKeep)
 		if err == nil {
 			return path
 		}
@@ -204,16 +204,16 @@ func completionVaultPath(cmd *cobra.Command) string {
 	resolvedStatePath := config.ResolveStatePath(statePath, resolvedConfigPath, cfg)
 	state, err := config.LoadState(resolvedStatePath)
 	if err == nil {
-		activeVaultName := strings.TrimSpace(state.ActiveVault)
-		if activeVaultName != "" {
-			path, err := cfg.GetVaultPath(activeVaultName)
+		activeKeepName := strings.TrimSpace(state.ActiveKeep)
+		if activeKeepName != "" {
+			path, err := cfg.GetKeepPath(activeKeepName)
 			if err == nil {
 				return path
 			}
 		}
 	}
 
-	defaultPath, err := cfg.GetDefaultVaultPath()
+	defaultPath, err := cfg.GetDefaultKeepPath()
 	if err == nil {
 		return defaultPath
 	}

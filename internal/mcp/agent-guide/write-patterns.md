@@ -64,7 +64,7 @@ raven_edit(path="projects/website-redesign.md", old_str="Status: draft", new_str
 
 - Prefer `raven_read(path="...", raw=true)` before building `old_str` for `raven_edit`.
 - For bulk writes, preview first and require user approval before `confirm=true`.
-- Avoid shell file writes (`echo`, `sed`, `mv`, `rm`) inside vault operations.
+- Avoid shell file writes (`echo`, `sed`, `mv`, `rm`) inside keep operations.
 
 ## Related topics
 

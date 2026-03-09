@@ -1,4 +1,4 @@
-package vault
+package keep
 
 import (
 	"os"
@@ -10,16 +10,16 @@ import (
 )
 
 func TestResolveObjectToFileWithRoots_DirectCandidates(t *testing.T) {
-	vaultDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultDir, "people"), 0o755); err != nil {
+	keepDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keepDir, "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	target := filepath.Join(vaultDir, "people", "freya.md")
+	target := filepath.Join(keepDir, "people", "freya.md")
 	if err := os.WriteFile(target, []byte("# Freya\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	got, err := ResolveObjectToFileWithRoots(vaultDir, "people/freya", "", "")
+	got, err := ResolveObjectToFileWithRoots(keepDir, "people/freya", "", "")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots error: %v", err)
 	}
@@ -29,24 +29,24 @@ func TestResolveObjectToFileWithRoots_DirectCandidates(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithRoots_WithDirectoryRoots(t *testing.T) {
-	vaultDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultDir, "objects", "people"), 0o755); err != nil {
+	keepDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keepDir, "objects", "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(vaultDir, "pages"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(keepDir, "pages"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	objPath := filepath.Join(vaultDir, "objects", "people", "freya.md")
+	objPath := filepath.Join(keepDir, "objects", "people", "freya.md")
 	if err := os.WriteFile(objPath, []byte("# Freya\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	pagePath := filepath.Join(vaultDir, "pages", "my-note.md")
+	pagePath := filepath.Join(keepDir, "pages", "my-note.md")
 	if err := os.WriteFile(pagePath, []byte("# Note\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	gotObj, err := ResolveObjectToFileWithRoots(vaultDir, "people/freya", "objects/", "pages/")
+	gotObj, err := ResolveObjectToFileWithRoots(keepDir, "people/freya", "objects/", "pages/")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots object error: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestResolveObjectToFileWithRoots_WithDirectoryRoots(t *testing.T) {
 		t.Fatalf("got %q, want %q", gotObj, objPath)
 	}
 
-	gotPage, err := ResolveObjectToFileWithRoots(vaultDir, "my-note", "objects/", "pages/")
+	gotPage, err := ResolveObjectToFileWithRoots(keepDir, "my-note", "objects/", "pages/")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots page error: %v", err)
 	}
@@ -64,18 +64,18 @@ func TestResolveObjectToFileWithRoots_WithDirectoryRoots(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithRoots_SlugifiedFallback(t *testing.T) {
-	vaultDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultDir, "objects", "people"), 0o755); err != nil {
+	keepDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keepDir, "objects", "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	// Only create lowercased file on disk.
-	objPath := filepath.Join(vaultDir, "objects", "people", "sif.md")
+	objPath := filepath.Join(keepDir, "objects", "people", "sif.md")
 	if err := os.WriteFile(objPath, []byte("# Sif\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
 	// Use mixed case ref so direct candidates are less likely to match on case-sensitive FS.
-	got, err := ResolveObjectToFileWithRoots(vaultDir, "people/Sif", "objects/", "pages/")
+	got, err := ResolveObjectToFileWithRoots(keepDir, "people/Sif", "objects/", "pages/")
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithRoots error: %v", err)
 	}
@@ -90,23 +90,23 @@ func TestResolveObjectToFileWithRoots_SlugifiedFallback(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithConfig_NormalizesRoots(t *testing.T) {
-	vaultDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(vaultDir, "objects", "people"), 0o755); err != nil {
+	keepDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(keepDir, "objects", "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	objPath := filepath.Join(vaultDir, "objects", "people", "freya.md")
+	objPath := filepath.Join(keepDir, "objects", "people", "freya.md")
 	if err := os.WriteFile(objPath, []byte("# Freya\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	vc := &config.VaultConfig{
+	vc := &config.KeepConfig{
 		Directories: &config.DirectoriesConfig{
 			Objects: "objects", // intentionally missing trailing slash
 			Pages:   "pages",   // intentionally missing trailing slash
 		},
 	}
 
-	got, err := ResolveObjectToFileWithConfig(vaultDir, "people/freya", vc)
+	got, err := ResolveObjectToFileWithConfig(keepDir, "people/freya", vc)
 	if err != nil {
 		t.Fatalf("ResolveObjectToFileWithConfig error: %v", err)
 	}
@@ -116,8 +116,8 @@ func TestResolveObjectToFileWithConfig_NormalizesRoots(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithRoots_NotFound(t *testing.T) {
-	vaultDir := t.TempDir()
-	_, err := ResolveObjectToFileWithRoots(vaultDir, "people/missing.md", "objects/", "pages/")
+	keepDir := t.TempDir()
+	_, err := ResolveObjectToFileWithRoots(keepDir, "people/missing.md", "objects/", "pages/")
 	if err == nil || !strings.Contains(err.Error(), "object not found") {
 		t.Fatalf("expected not found error, got %v", err)
 	}

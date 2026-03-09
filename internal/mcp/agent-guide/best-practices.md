@@ -4,12 +4,12 @@
 - Use `raven_schema`, `raven_stats`, and targeted `raven_query` first.
 - Read files only after narrowing candidates.
 
-2. Treat the markdown vault as source of truth.
+2. Treat the markdown keep as source of truth.
 - Index is rebuildable; use `raven_reindex` when state looks stale.
 
 3. Prefer explicit, schema-safe writes.
 - Use `raven_new`, `raven_set`, `raven_edit`, `raven_move`, `raven_delete`, `raven_upsert`.
-- Avoid shell-level mutations for vault operations.
+- Avoid shell-level mutations for keep operations.
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
 4. Use preview-first mutation flow.

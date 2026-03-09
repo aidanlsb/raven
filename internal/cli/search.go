@@ -21,10 +21,10 @@ var searchCmd = &cobra.Command{
 	Long:  commands.Registry["search"].LongDesc,
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
 		// Open database
-		db, _, err := index.OpenWithRebuild(vaultPath)
+		db, _, err := index.OpenWithRebuild(keepPath)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
@@ -44,7 +44,7 @@ var searchCmd = &cobra.Command{
 			return fmt.Errorf("search failed: %w", err)
 		}
 
-		saveLastSearchResults(vaultPath, query, results)
+		saveLastSearchResults(keepPath, query, results)
 
 		// Output results
 		if jsonOutput {
@@ -61,7 +61,7 @@ var searchCmd = &cobra.Command{
 	},
 }
 
-func saveLastSearchResults(vaultPath, query string, results []model.SearchMatch) {
+func saveLastSearchResults(keepPath, query string, results []model.SearchMatch) {
 	modelResults := make([]model.Result, len(results))
 	for i, r := range results {
 		modelResults[i] = r
@@ -70,7 +70,7 @@ func saveLastSearchResults(vaultPath, query string, results []model.SearchMatch)
 	if err != nil {
 		return
 	}
-	_ = lastresults.Write(vaultPath, lr)
+	_ = lastresults.Write(keepPath, lr)
 }
 
 func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {

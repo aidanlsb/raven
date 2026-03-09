@@ -30,7 +30,7 @@ var upsertCmd = &cobra.Command{
 	Long:  commands.Registry["upsert"].LongDesc,
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		typeName := args[0]
 		title := args[1]
 		replaceBody := cmd.Flags().Changed("content")
@@ -45,7 +45,7 @@ var upsertCmd = &cobra.Command{
 			}
 		}
 
-		s, err := schema.Load(vaultPath)
+		s, err := schema.Load(keepPath)
 		if err != nil {
 			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 		}
@@ -88,19 +88,19 @@ var upsertCmd = &cobra.Command{
 			fieldValues[key] = serializeFieldValueLiteral(value)
 		}
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		objectsRoot := vaultCfg.GetObjectsRoot()
-		pagesRoot := vaultCfg.GetPagesRoot()
-		templateDir := vaultCfg.GetTemplateDirectory()
-		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
+		objectsRoot := keepCfg.GetObjectsRoot()
+		pagesRoot := keepCfg.GetPagesRoot()
+		templateDir := keepCfg.GetTemplateDirectory()
+		creator := newObjectCreationContext(keepPath, s, objectsRoot, pagesRoot, templateDir)
 		slugified := creator.resolveAndSlugifyTargetPath(targetPath, typeName)
 		if !strings.HasSuffix(slugified, ".md") {
 			slugified += ".md"
 		}
-		filePath := filepath.Join(vaultPath, slugified)
+		filePath := filepath.Join(keepPath, slugified)
 		relPath := slugified
 
 		status := "unchanged"
@@ -206,7 +206,7 @@ var upsertCmd = &cobra.Command{
 				}
 			}
 
-			maybeReindex(vaultPath, filePath, vaultCfg)
+			maybeReindex(keepPath, filePath, keepCfg)
 			status = "created"
 		} else if err != nil {
 			return handleError(ErrFileReadError, err, "")
@@ -278,12 +278,12 @@ var upsertCmd = &cobra.Command{
 				if err := atomicfile.WriteFile(filePath, []byte(nextContent), 0o644); err != nil {
 					return handleError(ErrFileWriteError, err, "")
 				}
-				maybeReindex(vaultPath, filePath, vaultCfg)
+				maybeReindex(keepPath, filePath, keepCfg)
 				status = "updated"
 			}
 		}
 
-		objectID := vaultCfg.FilePathToObjectID(relPath)
+		objectID := keepCfg.FilePathToObjectID(relPath)
 		if isJSONOutput() {
 			data := map[string]interface{}{
 				"status": status,

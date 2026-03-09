@@ -55,7 +55,7 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestNewAutoFillsNameFieldFromPositionalTitle(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	// Schema with name_field set to 'title' - the positional title should auto-fill it.
 	schemaYAML := strings.TrimSpace(`
@@ -70,25 +70,25 @@ types:
         required: true
 `) + "\n"
 
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
 	// Isolate global state used by the CLI package.
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil // simulate MCP/agent that didn't provide --field title=...
 	newPathFlag = ""
@@ -98,7 +98,7 @@ types:
 		t.Fatalf("newCmd.RunE: %v", err)
 	}
 
-	created := filepath.Join(vaultPath, "books", "my-book.md")
+	created := filepath.Join(keepPath, "books", "my-book.md")
 	b, err := os.ReadFile(created)
 	if err != nil {
 		t.Fatalf("read created file: %v", err)
@@ -114,7 +114,7 @@ types:
 }
 
 func TestNewDoesNotOverrideExplicitNameField(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	// Schema with name_field - explicit --field should take precedence over positional title
 	schemaYAML := strings.TrimSpace(`
@@ -129,24 +129,24 @@ types:
         required: true
 `) + "\n"
 
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = []string{"title=Override Title"}
 	newPathFlag = ""
@@ -156,7 +156,7 @@ types:
 		t.Fatalf("newCmd.RunE: %v", err)
 	}
 
-	created := filepath.Join(vaultPath, "books", "my-book-2.md")
+	created := filepath.Join(keepPath, "books", "my-book-2.md")
 	b, err := os.ReadFile(created)
 	if err != nil {
 		t.Fatalf("read created file: %v", err)
@@ -172,7 +172,7 @@ types:
 }
 
 func TestNewFieldJSONPreservesStringType(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -187,18 +187,18 @@ types:
       email:
         type: string
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevFieldJSON := newFieldJSON
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newFieldJSON = prevFieldJSON
@@ -206,7 +206,7 @@ types:
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newFieldJSON = `{"email":"true"}`
@@ -217,7 +217,7 @@ types:
 		t.Fatalf("newCmd.RunE: %v", err)
 	}
 
-	created := filepath.Join(vaultPath, "people", "field-json-user.md")
+	created := filepath.Join(keepPath, "people", "field-json-user.md")
 	b, err := os.ReadFile(created)
 	if err != nil {
 		t.Fatalf("read created file: %v", err)
@@ -229,7 +229,7 @@ types:
 }
 
 func TestNewFileExistsEmitsJSONErrorInJSONMode(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -238,25 +238,25 @@ types:
     default_path: people/
 `) + "\n"
 
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
 	// Isolate global state used by the CLI package.
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newPathFlag = ""
@@ -294,7 +294,7 @@ types:
 }
 
 func TestNewRejectsTitleWithPathSeparator(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -303,24 +303,24 @@ types:
     default_path: people/
 `) + "\n"
 
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newPathFlag = ""
@@ -354,7 +354,7 @@ types:
 }
 
 func TestNewUsesExplicitPathWhenProvided(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -362,24 +362,24 @@ types:
   note:
     default_path: note/
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newPathFlag = "custom/raven-logo-brief"
@@ -409,7 +409,7 @@ types:
 }
 
 func TestNewRejectsDirectoryOnlyPath(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -417,24 +417,24 @@ types:
   note:
     default_path: note/
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newPathFlag = "note/"
@@ -464,7 +464,7 @@ types:
 }
 
 func TestNewPageUsesObjectRootWhenPageRootOmitted(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -472,7 +472,7 @@ types:
   person:
     default_path: people/
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
@@ -480,24 +480,24 @@ types:
 directories:
   object: objects/
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte(ravenYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "raven.yaml"), []byte(ravenYAML), 0o644); err != nil {
 		t.Fatalf("write raven.yaml: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newPathFlag = ""
@@ -525,13 +525,13 @@ directories:
 		t.Fatalf("expected file path under objects root, got %q", resp.Data.File)
 	}
 
-	if _, err := os.Stat(filepath.Join(vaultPath, "objects", "quick-note.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(keepPath, "objects", "quick-note.md")); err != nil {
 		t.Fatalf("expected created page file in objects root: %v", err)
 	}
 }
 
 func TestNewUsesTemplateIDFromSchema(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -543,24 +543,24 @@ types:
     default_path: interviews/
     templates: [interview_technical]
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(vaultPath, "templates", "interview"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(keepPath, "templates", "interview"), 0o755); err != nil {
 		t.Fatalf("mkdir templates/interview: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(vaultPath, "templates", "interview", "technical.md"), []byte("## Technical Interview\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "templates", "interview", "technical.md"), []byte("## Technical Interview\n"), 0o644); err != nil {
 		t.Fatalf("write template file: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevTemplate := newTemplate
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
@@ -568,7 +568,7 @@ types:
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newPathFlag = ""
@@ -579,7 +579,7 @@ types:
 		t.Fatalf("newCmd.RunE: %v", err)
 	}
 
-	created := filepath.Join(vaultPath, "interviews", "jane-doe.md")
+	created := filepath.Join(keepPath, "interviews", "jane-doe.md")
 	contentBytes, err := os.ReadFile(created)
 	if err != nil {
 		t.Fatalf("read created file: %v", err)
@@ -591,7 +591,7 @@ types:
 }
 
 func TestNewWithoutDefaultTemplateCreatesWithoutTemplate(t *testing.T) {
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
 	schemaYAML := strings.TrimSpace(`
 version: 2
@@ -603,24 +603,24 @@ types:
     default_path: interviews/
     templates: [interview_screen]
 `) + "\n"
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(vaultPath, "templates", "interview"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(keepPath, "templates", "interview"), 0o755); err != nil {
 		t.Fatalf("mkdir templates/interview: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(vaultPath, "templates", "interview", "screen.md"), []byte("## Screening Template\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "templates", "interview", "screen.md"), []byte("## Screening Template\n"), 0o644); err != nil {
 		t.Fatalf("write template file: %v", err)
 	}
 
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := newFieldFlags
 	prevPath := newPathFlag
 	prevTemplate := newTemplate
 	prevPathChanged := newCmd.Flags().Lookup("path").Changed
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		newFieldFlags = prevFields
 		newPathFlag = prevPath
@@ -628,7 +628,7 @@ types:
 		newCmd.Flags().Lookup("path").Changed = prevPathChanged
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	newFieldFlags = nil
 	newPathFlag = ""
@@ -639,7 +639,7 @@ types:
 		t.Fatalf("newCmd.RunE: %v", err)
 	}
 
-	created := filepath.Join(vaultPath, "interviews", "no-template-interview.md")
+	created := filepath.Join(keepPath, "interviews", "no-template-interview.md")
 	contentBytes, err := os.ReadFile(created)
 	if err != nil {
 		t.Fatalf("read created file: %v", err)

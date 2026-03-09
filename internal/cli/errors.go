@@ -4,10 +4,10 @@ package cli
 // Error codes for structured error responses.
 // These codes are stable and can be relied upon by agents.
 const (
-	// Vault errors
-	ErrVaultNotFound     = "VAULT_NOT_FOUND"
-	ErrVaultNotSpecified = "VAULT_NOT_SPECIFIED"
-	ErrConfigInvalid     = "CONFIG_INVALID"
+	// Keep errors
+	ErrKeepNotFound     = "KEEP_NOT_FOUND"
+	ErrKeepNotSpecified = "KEEP_NOT_SPECIFIED"
+	ErrConfigInvalid    = "CONFIG_INVALID"
 
 	// Schema errors
 	ErrSchemaNotFound = "SCHEMA_NOT_FOUND"
@@ -27,11 +27,11 @@ const (
 	ErrRefAmbiguous = "REF_AMBIGUOUS"
 
 	// File errors
-	ErrFileNotFound     = "FILE_NOT_FOUND"
-	ErrFileExists       = "FILE_EXISTS"
-	ErrFileReadError    = "FILE_READ_ERROR"
-	ErrFileWriteError   = "FILE_WRITE_ERROR"
-	ErrFileOutsideVault = "FILE_OUTSIDE_VAULT"
+	ErrFileNotFound    = "FILE_NOT_FOUND"
+	ErrFileExists      = "FILE_EXISTS"
+	ErrFileReadError   = "FILE_READ_ERROR"
+	ErrFileWriteError  = "FILE_WRITE_ERROR"
+	ErrFileOutsideKeep = "FILE_OUTSIDE_KEEP"
 
 	// Database errors
 	ErrDatabaseError   = "DATABASE_ERROR"

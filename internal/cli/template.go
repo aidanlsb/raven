@@ -43,15 +43,15 @@ var templateListCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
-		templateDir := vaultCfg.GetTemplateDirectory()
-		files, err := listTemplateFiles(vaultPath, templateDir)
+		templateDir := keepCfg.GetTemplateDirectory()
+		files, err := listTemplateFiles(keepPath, templateDir)
 		if err != nil {
 			return handleError(ErrFileReadError, err, "Check directories.template and filesystem permissions")
 		}
@@ -88,26 +88,26 @@ Use it for both initial template creation and iterative updates.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
 		if !cmd.Flags().Changed("content") {
 			return handleErrorMsg(ErrMissingArgument, "--content is required", "Provide template markdown with --content")
 		}
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		templateDir := vaultCfg.GetTemplateDirectory()
+		templateDir := keepCfg.GetTemplateDirectory()
 
 		fileRef, err := template.ResolveFileRef(args[0], templateDir)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(), fmt.Sprintf("Use a file path under %s", templateDir))
 		}
 
-		fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-			return handleError(ErrFileOutsideVault, err, "Template files must be within the vault")
+		fullPath := filepath.Join(keepPath, filepath.FromSlash(fileRef))
+		if err := paths.ValidateWithinKeep(keepPath, fullPath); err != nil {
+			return handleError(ErrFileOutsideKeep, err, "Template files must be within the keep")
 		}
 
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
@@ -129,7 +129,7 @@ Use it for both initial template creation and iterative updates.`,
 			if err := atomicfile.WriteFile(fullPath, []byte(templateWriteContent), 0o644); err != nil {
 				return handleError(ErrFileWriteError, err, "")
 			}
-			maybeReindex(vaultPath, fullPath, vaultCfg)
+			maybeReindex(keepPath, fullPath, keepCfg)
 		}
 
 		elapsed := time.Since(start).Milliseconds()
@@ -160,22 +160,22 @@ The file is moved to .trash/ for recovery.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		templateDir := vaultCfg.GetTemplateDirectory()
+		templateDir := keepCfg.GetTemplateDirectory()
 
 		fileRef, err := template.ResolveFileRef(args[0], templateDir)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(), fmt.Sprintf("Use a file path under %s", templateDir))
 		}
 
-		fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-			return handleError(ErrFileOutsideVault, err, "Template files must be within the vault")
+		fullPath := filepath.Join(keepPath, filepath.FromSlash(fileRef))
+		if err := paths.ValidateWithinKeep(keepPath, fullPath); err != nil {
+			return handleError(ErrFileOutsideKeep, err, "Template files must be within the keep")
 		}
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 			return handleErrorMsg(ErrFileNotFound, fmt.Sprintf("template file not found: %s", fileRef), "")
@@ -183,7 +183,7 @@ The file is moved to .trash/ for recovery.`,
 			return handleError(ErrFileReadError, err, "")
 		}
 
-		templateIDs, err := schemaTemplateRefsForFile(vaultPath, fileRef, templateDir)
+		templateIDs, err := schemaTemplateRefsForFile(keepPath, fileRef, templateDir)
 		if err != nil {
 			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 		}
@@ -195,13 +195,13 @@ The file is moved to .trash/ for recovery.`,
 			)
 		}
 
-		trashRef, err := moveTemplateToTrash(vaultPath, fileRef)
+		trashRef, err := moveTemplateToTrash(keepPath, fileRef)
 		if err != nil {
 			return handleError(ErrFileWriteError, err, "Unable to move template file to .trash")
 		}
 
 		var warnings []Warning
-		db, err := openDatabaseWithConfig(vaultPath, vaultCfg)
+		db, err := openDatabaseWithConfig(keepPath, keepCfg)
 		if err != nil {
 			warnings = append(warnings, Warning{
 				Code:    WarnIndexUpdateFailed,
@@ -248,9 +248,9 @@ type templateFileInfo struct {
 	SizeBytes int64  `json:"size_bytes"`
 }
 
-func listTemplateFiles(vaultPath, templateDir string) ([]templateFileInfo, error) {
-	root := filepath.Join(vaultPath, filepath.FromSlash(templateDir))
-	if err := paths.ValidateWithinVault(vaultPath, root); err != nil {
+func listTemplateFiles(keepPath, templateDir string) ([]templateFileInfo, error) {
+	root := filepath.Join(keepPath, filepath.FromSlash(templateDir))
+	if err := paths.ValidateWithinKeep(keepPath, root); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(root); os.IsNotExist(err) {
@@ -271,7 +271,7 @@ func listTemplateFiles(vaultPath, templateDir string) ([]templateFileInfo, error
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(vaultPath, path)
+		rel, err := filepath.Rel(keepPath, path)
 		if err != nil {
 			return err
 		}
@@ -289,8 +289,8 @@ func listTemplateFiles(vaultPath, templateDir string) ([]templateFileInfo, error
 	return files, nil
 }
 
-func schemaTemplateRefsForFile(vaultPath, fileRef, templateDir string) ([]string, error) {
-	sch, err := schema.Load(vaultPath)
+func schemaTemplateRefsForFile(keepPath, fileRef, templateDir string) ([]string, error) {
+	sch, err := schema.Load(keepPath)
 	if err != nil {
 		return nil, err
 	}
@@ -315,15 +315,15 @@ func schemaTemplateRefsForFile(vaultPath, fileRef, templateDir string) ([]string
 	return refs, nil
 }
 
-func moveTemplateToTrash(vaultPath, fileRef string) (string, error) {
-	sourceAbs := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-	trashRef, err := uniqueTrashRef(vaultPath, filepath.ToSlash(filepath.Join(".trash", filepath.FromSlash(fileRef))))
+func moveTemplateToTrash(keepPath, fileRef string) (string, error) {
+	sourceAbs := filepath.Join(keepPath, filepath.FromSlash(fileRef))
+	trashRef, err := uniqueTrashRef(keepPath, filepath.ToSlash(filepath.Join(".trash", filepath.FromSlash(fileRef))))
 	if err != nil {
 		return "", err
 	}
-	destAbs := filepath.Join(vaultPath, filepath.FromSlash(trashRef))
+	destAbs := filepath.Join(keepPath, filepath.FromSlash(trashRef))
 
-	if err := paths.ValidateWithinVault(vaultPath, destAbs); err != nil {
+	if err := paths.ValidateWithinKeep(keepPath, destAbs); err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(destAbs), 0o755); err != nil {
@@ -335,13 +335,13 @@ func moveTemplateToTrash(vaultPath, fileRef string) (string, error) {
 	return trashRef, nil
 }
 
-func uniqueTrashRef(vaultPath, initial string) (string, error) {
+func uniqueTrashRef(keepPath, initial string) (string, error) {
 	candidate := initial
 	ext := filepath.Ext(initial)
 	base := strings.TrimSuffix(initial, ext)
 
 	for i := 0; i < 1000; i++ {
-		candidateAbs := filepath.Join(vaultPath, filepath.FromSlash(candidate))
+		candidateAbs := filepath.Join(keepPath, filepath.FromSlash(candidate))
 		if _, err := os.Stat(candidateAbs); os.IsNotExist(err) {
 			return candidate, nil
 		} else if err != nil {

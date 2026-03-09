@@ -8,38 +8,38 @@ import (
 	"testing"
 )
 
-// createTestVaultForReclassify creates a temp vault with schema and a typed file.
-// Returns the vault path.
-func createTestVaultForReclassify(t *testing.T, schemaYAML, fileName, fileContent string) string {
+// createTestKeepForReclassify creates a temp keep with schema and a typed file.
+// Returns the keep path.
+func createTestKeepForReclassify(t *testing.T, schemaYAML, fileName, fileContent string) string {
 	t.Helper()
-	vaultPath := t.TempDir()
+	keepPath := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, "schema.yaml"), []byte(schemaYAML), 0644); err != nil {
 		t.Fatalf("write schema.yaml: %v", err)
 	}
 
-	dir := filepath.Dir(filepath.Join(vaultPath, fileName))
+	dir := filepath.Dir(filepath.Join(keepPath, fileName))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(vaultPath, fileName), []byte(fileContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(keepPath, fileName), []byte(fileContent), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 
-	return vaultPath
+	return keepPath
 }
 
-func setupReclassifyGlobals(t *testing.T, vaultPath string) {
+func setupReclassifyGlobals(t *testing.T, keepPath string) {
 	t.Helper()
-	prevVault := resolvedVaultPath
+	prevKeep := resolvedKeepPath
 	prevJSON := jsonOutput
 	prevFields := reclassifyFieldFlags
 	prevNoMove := reclassifyNoMove
 	prevUpdateRefs := reclassifyUpdateRefs
 	prevForce := reclassifyForce
 	t.Cleanup(func() {
-		resolvedVaultPath = prevVault
+		resolvedKeepPath = prevKeep
 		jsonOutput = prevJSON
 		reclassifyFieldFlags = prevFields
 		reclassifyNoMove = prevNoMove
@@ -47,7 +47,7 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 		reclassifyForce = prevForce
 	})
 
-	resolvedVaultPath = vaultPath
+	resolvedKeepPath = keepPath
 	jsonOutput = true
 	reclassifyFieldFlags = nil
 	reclassifyNoMove = false
@@ -66,16 +66,16 @@ types:
       title:
         type: string
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\n---\n\nSome content.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 	reclassifyNoMove = true // don't move for this test
 	reclassifyForce = true  // skip dropped fields confirmation
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -98,7 +98,7 @@ types:
 	}
 
 	// Verify the file was updated
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(keepPath, "notes/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -119,15 +119,15 @@ types:
   book:
     default_path: books/
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 	reclassifyForce = true
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -150,12 +150,12 @@ types:
 	}
 
 	// Verify old file is gone
-	if _, err := os.Stat(filepath.Join(vaultPath, "notes/my-note.md")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(keepPath, "notes/my-note.md")); !os.IsNotExist(err) {
 		t.Fatalf("expected old file to be removed")
 	}
 
 	// Verify new file exists
-	if _, err := os.Stat(filepath.Join(vaultPath, "books/my-note.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(keepPath, "books/my-note.md")); err != nil {
 		t.Fatalf("expected new file to exist: %v", err)
 	}
 }
@@ -168,16 +168,16 @@ types:
   book:
     default_path: books/
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 	reclassifyNoMove = true
 	reclassifyForce = true
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -194,7 +194,7 @@ types:
 	}
 
 	// File should still be in the original location
-	if _, err := os.Stat(filepath.Join(vaultPath, "notes/my-note.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(keepPath, "notes/my-note.md")); err != nil {
 		t.Fatalf("expected file to remain at original path: %v", err)
 	}
 }
@@ -214,14 +214,14 @@ types:
         type: string
         required: true
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -259,17 +259,17 @@ types:
         type: string
         required: true
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 	reclassifyFieldFlags = []string{"author=Tolkien"}
 	reclassifyNoMove = true
 	reclassifyForce = true
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -286,7 +286,7 @@ types:
 	}
 
 	// Verify field was added
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(keepPath, "notes/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -309,16 +309,16 @@ types:
         required: true
         default: draft
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 	reclassifyNoMove = true
 	reclassifyForce = true
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -335,7 +335,7 @@ types:
 	}
 
 	// Verify default was applied
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(keepPath, "notes/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -370,14 +370,14 @@ types:
   book:
     default_path: books/
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\ncategory: tech\npriority: high\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -411,16 +411,16 @@ types:
   book:
     default_path: books/
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\ncategory: tech\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 	reclassifyForce = true
 	reclassifyNoMove = true
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -440,7 +440,7 @@ types:
 	}
 
 	// Verify the dropped field was removed
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(keepPath, "notes/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -456,14 +456,14 @@ types:
   book:
     default_path: books/
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"books/my-book.md",
 		"---\ntype: book\ntitle: My Book\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "books/my-book", "book"); err != nil {
+		if err := runReclassify(keepPath, "books/my-book", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -491,14 +491,14 @@ types:
   book:
     default_path: books/
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"books/my-book.md",
 		"---\ntype: book\ntitle: My Book\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "books/my-book", "page"); err != nil {
+		if err := runReclassify(keepPath, "books/my-book", "page"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -526,14 +526,14 @@ types:
   book:
     default_path: books/
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"books/my-book.md",
 		"---\ntype: book\ntitle: My Book\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "books/my-book", "unicorn"); err != nil {
+		if err := runReclassify(keepPath, "books/my-book", "unicorn"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -569,16 +569,16 @@ types:
       title:
         type: string
 `
-	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+	keepPath := createTestKeepForReclassify(t, schemaYAML,
 		"notes/my-note.md",
 		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
 
-	setupReclassifyGlobals(t, vaultPath)
+	setupReclassifyGlobals(t, keepPath)
 	reclassifyNoMove = true
 	reclassifyForce = true
 
 	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
+		if err := runReclassify(keepPath, "notes/my-note", "book"); err != nil {
 			t.Fatalf("runReclassify: %v", err)
 		}
 	})
@@ -595,7 +595,7 @@ types:
 	}
 
 	// Title should be preserved (exists on both types)
-	b, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	b, err := os.ReadFile(filepath.Join(keepPath, "notes/my-note.md"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}

@@ -62,8 +62,8 @@ func TestLoadStateMissingReturnsDefault(t *testing.T) {
 	if state.Version != StateVersion {
 		t.Fatalf("expected version %d, got %d", StateVersion, state.Version)
 	}
-	if state.ActiveVault != "" {
-		t.Fatalf("expected empty active vault, got %q", state.ActiveVault)
+	if state.ActiveKeep != "" {
+		t.Fatalf("expected empty active keep, got %q", state.ActiveKeep)
 	}
 }
 
@@ -72,7 +72,7 @@ func TestSaveStateRoundTrip(t *testing.T) {
 	path := filepath.Join(tmp, "state.toml")
 
 	err := SaveState(path, &State{
-		ActiveVault: "work",
+		ActiveKeep: "work",
 	})
 	if err != nil {
 		t.Fatalf("save state: %v", err)
@@ -85,8 +85,8 @@ func TestSaveStateRoundTrip(t *testing.T) {
 	if loaded.Version != StateVersion {
 		t.Fatalf("expected version %d, got %d", StateVersion, loaded.Version)
 	}
-	if loaded.ActiveVault != "work" {
-		t.Fatalf("expected active_vault=work, got %q", loaded.ActiveVault)
+	if loaded.ActiveKeep != "work" {
+		t.Fatalf("expected active_keep=work, got %q", loaded.ActiveKeep)
 	}
 }
 
@@ -95,10 +95,10 @@ func TestSaveToWritesConfiguredFields(t *testing.T) {
 	path := filepath.Join(tmp, "config.toml")
 
 	err := SaveTo(path, &Config{
-		DefaultVault: "work",
-		StateFile:    "state.toml",
-		Vaults: map[string]string{
-			"work": "/vault/work",
+		DefaultKeep: "work",
+		StateFile:   "state.toml",
+		Keeps: map[string]string{
+			"work": "/keep/work",
 		},
 	})
 	if err != nil {
@@ -110,13 +110,13 @@ func TestSaveToWritesConfiguredFields(t *testing.T) {
 		t.Fatalf("read config: %v", err)
 	}
 	content := string(data)
-	if !strings.Contains(content, `default_vault = "work"`) {
-		t.Fatalf("expected default_vault in output, got:\n%s", content)
+	if !strings.Contains(content, `default_keep = "work"`) {
+		t.Fatalf("expected default_keep in output, got:\n%s", content)
 	}
 	if !strings.Contains(content, `state_file = "state.toml"`) {
 		t.Fatalf("expected state_file in output, got:\n%s", content)
 	}
-	if !strings.Contains(content, "[vaults]") {
-		t.Fatalf("expected vaults table in output, got:\n%s", content)
+	if !strings.Contains(content, "[keeps]") {
+		t.Fatalf("expected keeps table in output, got:\n%s", content)
 	}
 }

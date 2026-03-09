@@ -1,4 +1,4 @@
-// Package check handles vault-wide validation.
+// Package check handles keep-wide validation.
 package check
 
 import (
@@ -167,7 +167,7 @@ func NewValidatorWithAliases(s *schema.Schema, objectIDs []string, aliases map[s
 }
 
 // NewValidatorWithTypes creates a new validator with object type information.
-// objectInfos should contain ID and type for each object in the vault.
+// objectInfos should contain ID and type for each object in the keep.
 func NewValidatorWithTypes(s *schema.Schema, objectInfos []ObjectInfo) *Validator {
 	return NewValidatorWithTypesAndAliases(s, objectInfos, nil)
 }

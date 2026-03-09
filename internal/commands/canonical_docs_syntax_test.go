@@ -28,7 +28,7 @@ func TestCanonicalDocsDoNotUseLegacyQueryOrMCPSyntax(t *testing.T) {
 		"refs:{",
 		"refs:[[",
 		`content:"`,
-		`["mcp", "--vault"`,
+		`["mcp", "--keep"`,
 	}
 
 	root := repoRoot(t)

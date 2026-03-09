@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var dailyEdit bool
@@ -35,12 +35,12 @@ Examples:
   rvn daily --edit       # Open in editor`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 
-		// Load vault config for daily directory
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		// Load keep config for daily directory
+		keepCfg, err := config.LoadKeepConfig(keepPath)
 		if err != nil {
-			return fmt.Errorf("failed to load vault config: %w", err)
+			return fmt.Errorf("failed to load keep config: %w", err)
 		}
 
 		// Parse date argument
@@ -48,20 +48,20 @@ Examples:
 		if len(args) > 0 {
 			dateArg = args[0]
 		}
-		targetDate, err := vault.ParseDateArg(dateArg)
+		targetDate, err := keep.ParseDateArg(dateArg)
 		if err != nil {
 			return err
 		}
 
-		dateStr := vault.FormatDateISO(targetDate)
-		targetPath := path.Join(vaultCfg.GetDailyDirectory(), dateStr)
-		dailyPath := filepath.Join(vaultPath, vaultCfg.GetDailyDirectory(), dateStr+".md")
+		dateStr := keep.FormatDateISO(targetDate)
+		targetPath := path.Join(keepCfg.GetDailyDirectory(), dateStr)
+		dailyPath := filepath.Join(keepPath, keepCfg.GetDailyDirectory(), dateStr+".md")
 
 		// Check if daily note already exists, create if needed
 		created := false
-		if !pages.Exists(vaultPath, targetPath) {
-			friendlyDate := vault.FormatDateFriendly(targetDate)
-			s, err := schema.Load(vaultPath)
+		if !pages.Exists(keepPath, targetPath) {
+			friendlyDate := keep.FormatDateFriendly(targetDate)
+			s, err := schema.Load(keepPath)
 			if err != nil {
 				return fmt.Errorf("failed to load schema: %w", err)
 			}
@@ -72,24 +72,24 @@ Examples:
 					return handleErrorMsg(ErrInvalidInput, err.Error(), "Use `rvn schema core date template list` to see available template IDs")
 				}
 				result, err = pages.CreateDailyNoteWithTemplate(
-					vaultPath,
-					vaultCfg.GetDailyDirectory(),
+					keepPath,
+					keepCfg.GetDailyDirectory(),
 					dateStr,
 					friendlyDate,
 					templateOverride,
-					vaultCfg.GetTemplateDirectory(),
+					keepCfg.GetTemplateDirectory(),
 				)
 				if err != nil {
 					return fmt.Errorf("failed to create daily note: %w", err)
 				}
 			} else {
 				result, err = pages.CreateDailyNoteWithSchema(
-					vaultPath,
-					vaultCfg.GetDailyDirectory(),
+					keepPath,
+					keepCfg.GetDailyDirectory(),
 					dateStr,
 					friendlyDate,
 					s,
-					vaultCfg.GetTemplateDirectory(),
+					keepCfg.GetTemplateDirectory(),
 				)
 				if err != nil {
 					return fmt.Errorf("failed to create daily note: %w", err)
@@ -104,7 +104,7 @@ Examples:
 		}
 
 		// Open in editor using shared logic
-		relPath, _ := filepath.Rel(vaultPath, dailyPath)
+		relPath, _ := filepath.Rel(keepPath, dailyPath)
 
 		if isJSONOutput() {
 			editor := ""
@@ -114,7 +114,7 @@ Examples:
 
 			opened := false
 			if dailyEdit {
-				opened = vault.OpenInEditor(getConfig(), dailyPath)
+				opened = keep.OpenInEditor(getConfig(), dailyPath)
 			}
 
 			outputSuccess(map[string]interface{}{

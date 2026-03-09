@@ -5,7 +5,7 @@ package model
 
 import "strconv"
 
-// Trait represents an instance of a trait annotation in the vault.
+// Trait represents an instance of a trait annotation in the keep.
 // Examples: @todo, @todo(done), @due(2025-01-25), @highlight
 type Trait struct {
 	// ID uniquely identifies this trait instance.
@@ -23,7 +23,7 @@ type Trait struct {
 	Content string `json:"content"`
 
 	// FilePath is the path to the file containing this trait,
-	// relative to the vault root.
+	// relative to the keep root.
 	FilePath string `json:"file_path"`
 
 	// Line is the 1-indexed line number where this trait appears.

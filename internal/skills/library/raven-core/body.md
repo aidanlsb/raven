@@ -24,5 +24,5 @@ Use this skill for day-to-day Raven operations.
 
 ## Safety
 
-- Avoid shell-level `rm`/`mv` for vault objects when Raven commands exist.
-- Keep path operations vault-relative where possible.
+- Avoid shell-level `rm`/`mv` for keep objects when Raven commands exist.
+- Keep path operations keep-relative where possible.

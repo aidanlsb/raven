@@ -7,7 +7,7 @@ import (
 )
 
 func TestSchemaAddTypeAndFieldDescriptions(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -51,7 +51,7 @@ func TestSchemaAddTypeAndFieldDescriptions(t *testing.T) {
 }
 
 func TestSchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
 
@@ -67,7 +67,7 @@ func TestSchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
 }
 
 func TestSchemaUpdateAndRemoveTypeFieldDescriptions(t *testing.T) {
-	v := testutil.NewTestVault(t).
+	v := testutil.NewTestKeep(t).
 		WithSchema(`version: 2
 types:
   person:

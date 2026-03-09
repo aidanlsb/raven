@@ -1,6 +1,6 @@
 # Query At Scale
 
-Use this guide when vault size is large, queries are expensive, or result sets are broad.
+Use this guide when keep size is large, queries are expensive, or result sets are broad.
 
 ## Strategy
 

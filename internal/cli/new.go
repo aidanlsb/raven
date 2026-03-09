@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/keep"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -38,14 +38,14 @@ Examples:
   rvn new interview "Jane Doe @ Acme" --template technical
   rvn new note "Raven Friction" --path note/raven-friction
   rvn new project "Website Redesign"   # Creates projects/website-redesign.md
-  rvn new page "Quick Note"            # Creates quick-note.md in vault root`,
+  rvn new page "Quick Note"            # Creates quick-note.md in keep root`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
+		keepPath := getKeepPath()
 		typeName := args[0]
 
 		// Load schema
-		s, err := schema.Load(vaultPath)
+		s, err := schema.Load(keepPath)
 		if err != nil {
 			return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 		}
@@ -211,15 +211,15 @@ Examples:
 			}
 		}
 
-		// Load vault config for directory roots (optional)
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		// Load keep config for directory roots (optional)
+		keepCfg, err := loadKeepConfigSafe(keepPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		objectsRoot := vaultCfg.GetObjectsRoot()
-		pagesRoot := vaultCfg.GetPagesRoot()
-		templateDir := vaultCfg.GetTemplateDirectory()
-		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
+		objectsRoot := keepCfg.GetObjectsRoot()
+		pagesRoot := keepCfg.GetPagesRoot()
+		templateDir := keepCfg.GetTemplateDirectory()
+		creator := newObjectCreationContext(keepPath, s, objectsRoot, pagesRoot, templateDir)
 
 		// Check if file exists (with full path resolution including directory roots)
 		resolvedSlugPath := creator.resolveAndSlugifyTargetPath(targetPath, typeName)
@@ -248,15 +248,15 @@ Examples:
 			return handleError(ErrFileWriteError, err, "")
 		}
 
-		// Auto-reindex if configured (vaultCfg already loaded above)
-		maybeReindex(vaultPath, result.FilePath, vaultCfg)
+		// Auto-reindex if configured (keepCfg already loaded above)
+		maybeReindex(keepPath, result.FilePath, keepCfg)
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"file":  result.RelativePath,
 				"type":  typeName,
 				"title": title,
-				"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
+				"id":    keepCfg.FilePathToObjectID(result.RelativePath),
 			}, nil)
 			return nil
 		}
@@ -264,7 +264,7 @@ Examples:
 		fmt.Println(ui.Checkf("Created %s", ui.FilePath(result.RelativePath)))
 
 		// Open in editor (or print path if no editor configured)
-		vault.OpenInEditorOrPrintPath(getConfig(), result.FilePath)
+		keep.OpenInEditorOrPrintPath(getConfig(), result.FilePath)
 
 		return nil
 	},
@@ -289,13 +289,13 @@ func completeTypes(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	}
 
 	// Try to load schema for dynamic completion
-	vaultPath := getVaultPath()
-	if vaultPath == "" {
+	keepPath := getKeepPath()
+	if keepPath == "" {
 		// Fall back to built-in types only
 		return schema.BuiltinTypeNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
-	s, err := schema.Load(vaultPath)
+	s, err := schema.Load(keepPath)
 	if err != nil {
 		return schema.BuiltinTypeNames(), cobra.ShellCompDirectiveNoFileComp
 	}

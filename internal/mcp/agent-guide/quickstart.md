@@ -31,7 +31,7 @@ Then fetch:
 - `raven://schema/current` for full schema
 - `raven://queries/saved` for saved query names
 - `raven://workflows/list` for available workflow entry points
-- `raven://vault/agent-instructions` for vault-specific agent guidance (if present)
+- `raven://keep/agent-instructions` for keep-specific agent guidance (if present)
 
 ## Recommended first create flow
 

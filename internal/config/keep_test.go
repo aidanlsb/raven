@@ -10,12 +10,12 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-func TestLoadVaultConfig(t *testing.T) {
+func TestLoadKeepConfig(t *testing.T) {
 	t.Run("default config when file missing", func(t *testing.T) {
 		// Use a temp directory without a raven.yaml
 		tmpDir := t.TempDir()
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -40,7 +40,7 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -66,7 +66,7 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -91,7 +91,7 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -109,7 +109,7 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -127,7 +127,7 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		if _, err := LoadVaultConfig(tmpDir); err == nil {
+		if _, err := LoadKeepConfig(tmpDir); err == nil {
 			t.Fatal("expected error for legacy daily_directory, got nil")
 		}
 	})
@@ -141,7 +141,7 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -150,14 +150,14 @@ func TestLoadVaultConfig(t *testing.T) {
 		}
 	})
 }
-func TestVaultConfigPaths(t *testing.T) {
-	cfg := &VaultConfig{
+func TestKeepConfigPaths(t *testing.T) {
+	cfg := &KeepConfig{
 		DailyDirectory: "daily",
 	}
 
 	t.Run("DailyNotePath", func(t *testing.T) {
-		path := cfg.DailyNotePath("/vault", "2025-02-01")
-		expected := filepath.Join("/vault", "daily", "2025-02-01.md")
+		path := cfg.DailyNotePath("/keep", "2025-02-01")
+		expected := filepath.Join("/keep", "daily", "2025-02-01.md")
 		if path != expected {
 			t.Errorf("got %q, want %q", path, expected)
 		}
@@ -172,7 +172,7 @@ func TestVaultConfigPaths(t *testing.T) {
 	})
 
 	t.Run("custom directory", func(t *testing.T) {
-		cfg2 := &VaultConfig{DailyDirectory: "journal/daily"}
+		cfg2 := &KeepConfig{DailyDirectory: "journal/daily"}
 		id := cfg2.DailyNoteID("2025-02-01")
 		expected := path.Join("journal/daily", "2025-02-01")
 		if id != expected {
@@ -195,7 +195,7 @@ directories:
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -225,7 +225,7 @@ directories:
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -253,7 +253,7 @@ directories:
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -288,7 +288,7 @@ directories:
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -315,7 +315,7 @@ directories:
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -330,7 +330,7 @@ directories:
 		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
-		cfg, err = LoadVaultConfig(tmpDir)
+		cfg, err = LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -352,7 +352,7 @@ directories:
 			t.Fatalf("failed to write config: %v", err)
 		}
 
-		cfg, err := LoadVaultConfig(tmpDir)
+		cfg, err := LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -367,7 +367,7 @@ directories:
 		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
-		cfg, err = LoadVaultConfig(tmpDir)
+		cfg, err = LoadKeepConfig(tmpDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -377,7 +377,7 @@ directories:
 	})
 
 	t.Run("nil when not configured", func(t *testing.T) {
-		cfg := &VaultConfig{DailyDirectory: "daily"}
+		cfg := &KeepConfig{DailyDirectory: "daily"}
 
 		if cfg.HasDirectoriesConfig() {
 			t.Error("expected HasDirectoriesConfig to return false")
@@ -388,7 +388,7 @@ directories:
 	})
 
 	t.Run("FilePathToObjectID with roots", func(t *testing.T) {
-		cfg := &VaultConfig{
+		cfg := &KeepConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
 				Object: "object/",
@@ -415,7 +415,7 @@ directories:
 	})
 
 	t.Run("ObjectIDToFilePath with roots", func(t *testing.T) {
-		cfg := &VaultConfig{
+		cfg := &KeepConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
 				Object: "object/",
@@ -443,7 +443,7 @@ directories:
 	})
 
 	t.Run("ResolveReferenceToFilePath", func(t *testing.T) {
-		cfg := &VaultConfig{
+		cfg := &KeepConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
 				Object: "object/",
@@ -472,10 +472,10 @@ directories:
 	})
 }
 
-func TestCreateDefaultVaultConfig(t *testing.T) {
+func TestCreateDefaultKeepConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	created, err := CreateDefaultVaultConfig(tmpDir)
+	created, err := CreateDefaultKeepConfig(tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 	}
 
 	// Verify it can be loaded
-	cfg, err := LoadVaultConfig(tmpDir)
+	cfg, err := LoadKeepConfig(tmpDir)
 	if err != nil {
 		t.Fatalf("failed to load created config: %v", err)
 	}
@@ -528,7 +528,7 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 	}
 
 	// Calling again should NOT overwrite - returns false
-	created2, err := CreateDefaultVaultConfig(tmpDir)
+	created2, err := CreateDefaultKeepConfig(tmpDir)
 	if err != nil {
 		t.Fatalf("unexpected error on second call: %v", err)
 	}
@@ -537,19 +537,19 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 	}
 }
 
-func TestDefaultVaultConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
+func TestDefaultKeepConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	if _, err := CreateDefaultVaultConfig(tmpDir); err != nil {
-		t.Fatalf("failed to create default vault config: %v", err)
+	if _, err := CreateDefaultKeepConfig(tmpDir); err != nil {
+		t.Fatalf("failed to create default keep config: %v", err)
 	}
 	if _, err := schema.CreateDefault(tmpDir); err != nil {
 		t.Fatalf("failed to create default schema: %v", err)
 	}
 
-	cfg, err := LoadVaultConfig(tmpDir)
+	cfg, err := LoadKeepConfig(tmpDir)
 	if err != nil {
-		t.Fatalf("failed to load default vault config: %v", err)
+		t.Fatalf("failed to load default keep config: %v", err)
 	}
 	sch, err := schema.Load(tmpDir)
 	if err != nil {

@@ -2,7 +2,7 @@
 
 ## FUNDAMENTAL PRINCIPLE: Plain Text is the Source of Truth
 
-**Raven is a plain-text-first system. The user's markdown files, `schema.yaml`, and `raven.yaml` are the ONLY source of truth for a vault.**
+**Raven is a plain-text-first system. The user's markdown files, `schema.yaml`, and `raven.yaml` are the ONLY source of truth for a keep.**
 
 The SQLite database (`.raven/index.sqlite`) is a **derived, disposable cache**:
 
@@ -14,7 +14,7 @@ The SQLite database (`.raven/index.sqlite`) is a **derived, disposable cache**:
 **This means:**
 - All mutations to user data must write to markdown files, not just the database
 - The database is rebuilt, never migrated with user data
-- Users can sync their vault via git/Dropbox/iCloud without syncing `.raven/`
+- Users can sync their keep via git/Dropbox/iCloud without syncing `.raven/`
 - If the database is corrupted or outdated, delete it and reindex
 
 **Never:**
@@ -74,7 +74,7 @@ Configuration defines everything—nothing is hidden:
 - Built-in types:
   - `page` and `section`: Can be customized or extended by the user
   - `date`: Locked (cannot be modified). Used for daily notes (YYYY-MM-DD.md files). Use traits for daily note metadata.
-- Vault behavior (daily directory, queries) configured in `raven.yaml`
+- Keep behavior (daily directory, queries) configured in `raven.yaml`
 - Field validation, defaults—all in the schema
 
 **Traits are universal**: Traits defined globally in `schema.yaml` can be used:
@@ -130,30 +130,30 @@ Avoid building opinionated workflows into the core:
 
 The tool should be a foundation that users build their workflows on top of.
 
-### Vault-Scoped Operations
+### Keep-Scoped Operations
 
-**All Raven functionality must operate exclusively within the explicitly identified vault.**
+**All Raven functionality must operate exclusively within the explicitly identified keep.**
 
 This is a security and integrity principle:
 
-- **File operations**: Read, write, create, delete—only within the vault directory
-- **Path validation**: Always verify resolved paths remain within vault boundaries before any operation
-- **No escape**: Symlinks, `../` paths, or any mechanism that could reach outside the vault must be blocked
-- **Explicit boundaries**: The vault path is set via config or CLI flag—never inferred from current directory alone
+- **File operations**: Read, write, create, delete—only within the keep directory
+- **Path validation**: Always verify resolved paths remain within keep boundaries before any operation
+- **No escape**: Symlinks, `../` paths, or any mechanism that could reach outside the keep must be blocked
+- **Explicit boundaries**: The keep path is set via config or CLI flag—never inferred from current directory alone
 
 Implementation pattern:
 ```go
 // Always validate paths before operations
-absVault, _ := filepath.Abs(vaultPath)
+absKeep, _ := filepath.Abs(keepPath)
 absTarget, _ := filepath.Abs(targetPath)
-if !strings.HasPrefix(absTarget, absVault+string(filepath.Separator)) {
-    return fmt.Errorf("cannot operate outside vault: %s", targetPath)
+if !strings.HasPrefix(absTarget, absKeep+string(filepath.Separator)) {
+    return fmt.Errorf("cannot operate outside keep: %s", targetPath)
 }
 ```
 
 This protects users from:
 - Accidental writes to system files
-- Malicious references escaping the vault
+- Malicious references escaping the keep
 - Unintended side effects from misconfigured paths
 
 ## Code Standards
@@ -169,10 +169,10 @@ This protects users from:
 
 ### Package Boundaries
 Keep functionality in the right package:
-- **`internal/config/`**: All config loading AND saving (e.g., `SaveVaultConfig`)
+- **`internal/config/`**: All config loading AND saving (e.g., `SaveKeepConfig`)
 - **`internal/cli/`**: Command handlers only—no business logic that could be reused
 - **`internal/pages/`**: Page creation, slugification, path handling
-- **`internal/vault/`**: Vault-level utilities (walking files, date parsing, editor)
+- **`internal/keep/`**: Keep-level utilities (walking files, date parsing, editor)
 - **`internal/index/`**: Database operations
 
 **Signs of misplaced code:**
@@ -255,7 +255,7 @@ The MCP server calls CLI commands via `exec.Command`. **Argument ordering is str
 ### Testing
 
 - Unit tests for parser components (frontmatter, markdown, traits, refs)
-- Integration tests using `testdata/` vault
+- Integration tests using `testdata/` keep
 - Test edge cases: empty files, malformed syntax, unicode, code blocks
 
 ### CLI Design
@@ -263,7 +263,7 @@ The MCP server calls CLI commands via `exec.Command`. **Argument ordering is str
 - Commands should be discoverable via `--help`
 - Error messages should suggest fixes
 - Output should be human-readable by default, with `--json` for scripting
-- Enforce vault-scoped operations (see "Vault-Scoped Operations" above)
+- Enforce keep-scoped operations (see "Keep-Scoped Operations" above)
 
 ## Implementation Checklist
 

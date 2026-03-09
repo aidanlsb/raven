@@ -1,4 +1,4 @@
-package vault
+package keep
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 // GUI editors are started in the background (non-blocking).
 // Terminal editors run in the foreground to keep TTY attached.
 //
-// Note: If your vault path contains spaces (e.g., iCloud paths like
+// Note: If your keep path contains spaces (e.g., iCloud paths like
 // "Mobile Documents"), some editors may have issues. Use a symlink
 // to a path without spaces as a workaround.
 func OpenInEditor(cfg *config.Config, filePath string) bool {

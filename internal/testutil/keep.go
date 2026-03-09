@@ -7,46 +7,46 @@ import (
 	"testing"
 )
 
-// TestVault represents a temporary vault for testing.
-type TestVault struct {
+// TestKeep represents a temporary keep for testing.
+type TestKeep struct {
 	Path   string
 	t      *testing.T
 	schema string
 	files  map[string]string
 }
 
-// NewTestVault creates a new test vault builder.
-// Call Build() to create the actual vault directory.
-func NewTestVault(t *testing.T) *TestVault {
+// NewTestKeep creates a new test keep builder.
+// Call Build() to create the actual keep directory.
+func NewTestKeep(t *testing.T) *TestKeep {
 	t.Helper()
-	return &TestVault{
+	return &TestKeep{
 		t:     t,
 		files: make(map[string]string),
 	}
 }
 
-// WithSchema sets the schema.yaml content for the vault.
-func (v *TestVault) WithSchema(yaml string) *TestVault {
+// WithSchema sets the schema.yaml content for the keep.
+func (v *TestKeep) WithSchema(yaml string) *TestKeep {
 	v.schema = yaml
 	return v
 }
 
-// WithFile adds a file to the vault.
-// The path is relative to the vault root.
-func (v *TestVault) WithFile(path, content string) *TestVault {
+// WithFile adds a file to the keep.
+// The path is relative to the keep root.
+func (v *TestKeep) WithFile(path, content string) *TestKeep {
 	v.files[path] = content
 	return v
 }
 
-// WithRavenYAML sets the raven.yaml content for the vault.
-func (v *TestVault) WithRavenYAML(yaml string) *TestVault {
+// WithRavenYAML sets the raven.yaml content for the keep.
+func (v *TestKeep) WithRavenYAML(yaml string) *TestKeep {
 	v.files["raven.yaml"] = yaml
 	return v
 }
 
-// Build creates the vault directory and all configured files.
-// Returns the TestVault for method chaining.
-func (v *TestVault) Build() *TestVault {
+// Build creates the keep directory and all configured files.
+// Returns the TestKeep for method chaining.
+func (v *TestKeep) Build() *TestKeep {
 	v.t.Helper()
 
 	// Create temp directory
@@ -65,8 +65,8 @@ func (v *TestVault) Build() *TestVault {
 	return v
 }
 
-// writeFile writes a file to the vault, creating directories as needed.
-func (v *TestVault) writeFile(relPath, content string) {
+// writeFile writes a file to the keep, creating directories as needed.
+func (v *TestKeep) writeFile(relPath, content string) {
 	v.t.Helper()
 	fullPath := filepath.Join(v.Path, relPath)
 
@@ -82,15 +82,15 @@ func (v *TestVault) writeFile(relPath, content string) {
 	}
 }
 
-// WriteFile writes a file to the vault, creating directories as needed.
-func (v *TestVault) WriteFile(relPath, content string) {
+// WriteFile writes a file to the keep, creating directories as needed.
+func (v *TestKeep) WriteFile(relPath, content string) {
 	v.t.Helper()
 	v.writeFile(relPath, content)
 }
 
-// ReadFile reads a file from the vault.
+// ReadFile reads a file from the keep.
 // Returns the content as a string.
-func (v *TestVault) ReadFile(relPath string) string {
+func (v *TestKeep) ReadFile(relPath string) string {
 	v.t.Helper()
 	fullPath := filepath.Join(v.Path, relPath)
 	content, err := os.ReadFile(fullPath)
@@ -100,8 +100,8 @@ func (v *TestVault) ReadFile(relPath string) string {
 	return string(content)
 }
 
-// FileExists checks if a file exists in the vault.
-func (v *TestVault) FileExists(relPath string) bool {
+// FileExists checks if a file exists in the keep.
+func (v *TestKeep) FileExists(relPath string) bool {
 	v.t.Helper()
 	fullPath := filepath.Join(v.Path, relPath)
 	_, err := os.Stat(fullPath)

@@ -41,7 +41,7 @@ func TestRunner_ContinueAfterAgentOutput(t *testing.T) {
 
 	var saveArgs map[string]interface{}
 	callCount := 0
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		callCount++
 		if callCount == 1 {
@@ -230,7 +230,7 @@ func TestRunner_ContinueAfterAgentOutput_DataNamespaceCompatibility(t *testing.T
 
 	var saveArgs map[string]interface{}
 	callCount := 0
-	r := NewRunner("/tmp/vault", &config.VaultConfig{})
+	r := NewRunner("/tmp/keep", &config.KeepConfig{})
 	r.ToolFunc = func(tool string, args map[string]interface{}) (interface{}, error) {
 		callCount++
 		if callCount == 1 {

@@ -12,7 +12,7 @@ import (
 
 // ParsedDocument represents a fully parsed document.
 type ParsedDocument struct {
-	FilePath   string          // File path relative to vault
+	FilePath   string          // File path relative to keep
 	RawContent string          // Raw markdown content
 	Body       string          // Content without frontmatter (for full-text search indexing)
 	Objects    []*ParsedObject // All objects in this document
@@ -79,13 +79,13 @@ type ParseOptions struct {
 }
 
 // ParseDocument parses a markdown document.
-func ParseDocument(content string, filePath string, vaultPath string) (*ParsedDocument, error) {
-	return ParseDocumentWithOptions(content, filePath, vaultPath, nil)
+func ParseDocument(content string, filePath string, keepPath string) (*ParsedDocument, error) {
+	return ParseDocumentWithOptions(content, filePath, keepPath, nil)
 }
 
 // ParseDocumentWithOptions parses a markdown document with custom options.
-func ParseDocumentWithOptions(content string, filePath string, vaultPath string, opts *ParseOptions) (*ParsedDocument, error) {
-	relativePath := vaultRelativePath(filePath, vaultPath)
+func ParseDocumentWithOptions(content string, filePath string, keepPath string, opts *ParseOptions) (*ParsedDocument, error) {
+	relativePath := keepRelativePath(filePath, keepPath)
 	fileID := filePathToID(relativePath, opts)
 
 	var objects []*ParsedObject
@@ -247,10 +247,10 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	}, nil
 }
 
-func vaultRelativePath(filePath, vaultPath string) string {
+func keepRelativePath(filePath, keepPath string) string {
 	relativePath := filePath
-	if vaultPath != "" {
-		if rel, err := filepath.Rel(vaultPath, filePath); err == nil {
+	if keepPath != "" {
+		if rel, err := filepath.Rel(keepPath, filePath); err == nil {
 			relativePath = rel
 		}
 	}
@@ -258,7 +258,7 @@ func vaultRelativePath(filePath, vaultPath string) string {
 }
 
 func filePathToID(relativePath string, opts *ParseOptions) string {
-	// File ID is derived from the vault-relative file path.
+	// File ID is derived from the keep-relative file path.
 	// This is the canonical path->ID mapping, including directory roots.
 	objectsRoot := ""
 	pagesRoot := ""

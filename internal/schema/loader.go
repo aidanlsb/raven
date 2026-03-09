@@ -22,10 +22,10 @@ type LoadResult struct {
 	Warnings []SchemaWarning
 }
 
-// Load loads the schema from a vault's schema.yaml file.
+// Load loads the schema from a keep's schema.yaml file.
 // Returns a default schema if the file doesn't exist.
-func Load(vaultPath string) (*Schema, error) {
-	result, err := LoadWithWarnings(vaultPath)
+func Load(keepPath string) (*Schema, error) {
+	result, err := LoadWithWarnings(keepPath)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +33,8 @@ func Load(vaultPath string) (*Schema, error) {
 }
 
 // LoadWithWarnings loads the schema and returns any migration warnings.
-func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
-	schemaPath := paths.SchemaPath(vaultPath)
+func LoadWithWarnings(keepPath string) (*LoadResult, error) {
+	schemaPath := paths.SchemaPath(keepPath)
 	result := &LoadResult{Warnings: []SchemaWarning{}}
 
 	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
@@ -222,10 +222,10 @@ func validateTemplateBindings(owner string, templateIDs []string, defaultTemplat
 	return nil
 }
 
-// CreateDefault creates a default schema.yaml file in the vault.
+// CreateDefault creates a default schema.yaml file in the keep.
 // Returns true if a new file was created, false if one already existed.
-func CreateDefault(vaultPath string) (bool, error) {
-	schemaPath := paths.SchemaPath(vaultPath)
+func CreateDefault(keepPath string) (bool, error) {
+	schemaPath := paths.SchemaPath(keepPath)
 
 	// Skip if file already exists
 	if _, err := os.Stat(schemaPath); err == nil {

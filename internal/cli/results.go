@@ -84,7 +84,7 @@ type FileLine struct {
 // Stats Types
 // =============================================================================
 
-// StatsResult represents vault statistics.
+// StatsResult represents keep statistics.
 // Used by: stats
 type StatsResult struct {
 	FileCount   int `json:"file_count"`

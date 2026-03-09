@@ -1,5 +1,5 @@
-# Raven Vault Configuration
-# These settings control vault-level behavior.
+# Raven Keep Configuration
+# These settings control keep-level behavior.
 
 # Directory settings
 directories:

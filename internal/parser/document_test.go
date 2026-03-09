@@ -15,7 +15,7 @@ name: Freya
 
 Some content about Freya.
 `
-		doc, err := ParseDocument(content, "/vault/people/freya.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/people/freya.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -55,7 +55,7 @@ More text here.
 
 Even more text.
 `
-		doc, err := ParseDocument(content, "/vault/doc.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/doc.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -88,7 +88,7 @@ Even more text.
 
 Discussion notes here.
 `
-		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/meetings.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -113,7 +113,7 @@ Discussion notes here.
 
 Discussion notes here.
 `
-		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/meetings.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -146,7 +146,7 @@ First meeting.
 
 Second meeting with same heading.
 `
-		doc, err := ParseDocument(content, "/vault/daily.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/daily.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -173,7 +173,7 @@ Second meeting with same heading.
 
 Discussion notes here.
 `
-		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/meetings.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -195,7 +195,7 @@ First ideas section.
 
 Second ideas section with same heading.
 `
-		doc, err := ParseDocument(content, "/vault/doc.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/doc.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -221,7 +221,7 @@ Second ideas section with same heading.
 
 - @task(due=2024-01-15) Do the thing
 `
-		doc, err := ParseDocument(content, "/vault/project.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/project.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -250,7 +250,7 @@ def my_function():
 
 - @done Another real task
 `
-		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/notes.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -276,7 +276,7 @@ This is example code with [[fake-ref]]
 
 Also see [[another-real-ref]].
 `
-		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/notes.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -298,7 +298,7 @@ Use ` + "`@decorator`" + ` for Python decorators.
 
 - @todo This is a real task
 `
-		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/notes.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -332,7 +332,7 @@ Use ` + "`@decorator`" + ` for Python decorators.
 
 - @done Another real task
 `
-		doc, err := ParseDocument(content, "/vault/notes.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/notes.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -360,7 +360,7 @@ name: Freya
 			PagesRoot:   "pages/",
 		}
 
-		doc, err := ParseDocumentWithOptions(content, "/vault/objects/people/freya.md", "/vault", opts)
+		doc, err := ParseDocumentWithOptions(content, "/keep/objects/people/freya.md", "/keep", opts)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -380,7 +380,7 @@ Some content.
 			PagesRoot:   "pages/",
 		}
 
-		doc, err := ParseDocumentWithOptions(content, "/vault/pages/my-note.md", "/vault", opts)
+		doc, err := ParseDocumentWithOptions(content, "/keep/pages/my-note.md", "/keep", opts)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -403,7 +403,7 @@ type: date
 		}
 
 		// Daily notes are not under objects/ or pages/
-		doc, err := ParseDocumentWithOptions(content, "/vault/daily/2025-01-01.md", "/vault", opts)
+		doc, err := ParseDocumentWithOptions(content, "/keep/daily/2025-01-01.md", "/keep", opts)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -422,7 +422,7 @@ type: date
 
 Discussed project status.
 `
-		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/daily/2025-01-15.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -448,7 +448,7 @@ Discussed project status.
 
 Team discussion.
 `
-		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/daily/2025-01-15.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -488,7 +488,7 @@ Team discussion.
 
 Discussed roadmap.
 `
-		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/daily/2025-01-15.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -522,7 +522,7 @@ Discussed roadmap.
 
 Discussed [[projects/website]] progress.
 `
-		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
+		doc, err := ParseDocument(content, "/keep/daily/2025-01-15.md", "/keep")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

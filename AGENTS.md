@@ -75,7 +75,7 @@ make check              # fmt-check + lint + test (run before submitting)
 - **Table-driven tests** are the primary pattern — define test cases as struct slices.
 - Test files go alongside implementation: `foo.go` → `foo_test.go`.
 - Integration tests use build tag `//go:build integration` and live in `internal/cli/` and `internal/mcp/`.
-- Integration tests use `testutil.BuildCLI(t)` and `testutil.RunCLI(t, vaultPath, args...)` to exercise the real binary.
+- Integration tests use `testutil.BuildCLI(t)` and `testutil.RunCLI(t, keepPath, args...)` to exercise the real binary.
 - Shared test helpers are in `internal/testutil/`.
 - Test fixtures live in `testdata/`.
 
@@ -151,8 +151,8 @@ When adding or modifying a command:
 | `index.md` | Navigation and topic discovery |
 | `critical-rules.md` | Safety rules agents must follow |
 | `quickstart.md` | One-pass mental model and first-command sequence |
-| `onboarding.md` | Interactive setup and teaching sequence for first-session vault creation |
-| `getting-started.md` | First steps in a new vault |
+| `onboarding.md` | Interactive setup and teaching sequence for first-session keep creation |
+| `getting-started.md` | First steps in a new keep |
 | `core-concepts.md` | Types, traits, references explained |
 | `response-contract.md` | JSON envelope, error codes, warnings, and preview/apply semantics |
 | `write-patterns.md` | Choosing safe write primitives (`new`, `add`, `upsert`, `set`, `edit`) |
@@ -178,7 +178,7 @@ When adding a new guide topic:
 - `docs/getting-started/` — first-session flow, core concepts, configuration
 - `docs/types-and-traits/` — schema intro, schema reference, file format, templates
 - `docs/querying/` — query language reference
-- `docs/vault-management/` — bulk operations
+- `docs/keep-management/` — bulk operations
 - `docs/workflows/` — workflow pipelines
 - `docs/agents/` — MCP reference
 

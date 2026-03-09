@@ -2,7 +2,7 @@ package model
 
 import "strconv"
 
-// Object represents an instance of a typed object in the vault.
+// Object represents an instance of a typed object in the keep.
 // Objects are markdown files with frontmatter that defines their type and fields.
 type Object struct {
 	// ID uniquely identifies this object.
@@ -16,7 +16,7 @@ type Object struct {
 	Fields map[string]interface{} `json:"fields,omitempty"`
 
 	// FilePath is the path to the file containing this object,
-	// relative to the vault root.
+	// relative to the keep root.
 	FilePath string `json:"file_path"`
 
 	// LineStart is the 1-indexed line number where this object starts.

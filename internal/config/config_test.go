@@ -6,16 +6,16 @@ import (
 	"testing"
 )
 
-func TestConfigGetVaultPath(t *testing.T) {
-	t.Run("named vault", func(t *testing.T) {
+func TestConfigGetKeepPath(t *testing.T) {
+	t.Run("named keep", func(t *testing.T) {
 		cfg := &Config{
-			Vaults: map[string]string{
+			Keeps: map[string]string{
 				"work":     "/path/to/work",
 				"personal": "/path/to/personal",
 			},
 		}
 
-		path, err := cfg.GetVaultPath("work")
+		path, err := cfg.GetKeepPath("work")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -24,16 +24,16 @@ func TestConfigGetVaultPath(t *testing.T) {
 		}
 	})
 
-	t.Run("default vault", func(t *testing.T) {
+	t.Run("default keep", func(t *testing.T) {
 		cfg := &Config{
-			DefaultVault: "personal",
-			Vaults: map[string]string{
+			DefaultKeep: "personal",
+			Keeps: map[string]string{
 				"work":     "/path/to/work",
 				"personal": "/path/to/personal",
 			},
 		}
 
-		path, err := cfg.GetVaultPath("")
+		path, err := cfg.GetKeepPath("")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -42,66 +42,66 @@ func TestConfigGetVaultPath(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy vault fallback", func(t *testing.T) {
+	t.Run("legacy keep fallback", func(t *testing.T) {
 		cfg := &Config{
-			Vault: "/legacy/vault/path",
+			Keep: "/legacy/keep/path",
 		}
 
-		path, err := cfg.GetVaultPath("")
+		path, err := cfg.GetKeepPath("")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if path != "/legacy/vault/path" {
-			t.Errorf("expected '/legacy/vault/path', got %q", path)
+		if path != "/legacy/keep/path" {
+			t.Errorf("expected '/legacy/keep/path', got %q", path)
 		}
 	})
 
-	t.Run("legacy vault supports default alias", func(t *testing.T) {
+	t.Run("legacy keep supports default alias", func(t *testing.T) {
 		cfg := &Config{
-			Vault: "/legacy/vault/path",
+			Keep: "/legacy/keep/path",
 		}
 
-		path, err := cfg.GetVaultPath("default")
+		path, err := cfg.GetKeepPath("default")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if path != "/legacy/vault/path" {
-			t.Errorf("expected '/legacy/vault/path', got %q", path)
+		if path != "/legacy/keep/path" {
+			t.Errorf("expected '/legacy/keep/path', got %q", path)
 		}
 	})
 
-	t.Run("vault not found", func(t *testing.T) {
+	t.Run("keep not found", func(t *testing.T) {
 		cfg := &Config{
-			Vaults: map[string]string{
+			Keeps: map[string]string{
 				"work": "/path/to/work",
 			},
 		}
 
-		_, err := cfg.GetVaultPath("nonexistent")
+		_, err := cfg.GetKeepPath("nonexistent")
 		if err == nil {
-			t.Error("expected error for nonexistent vault")
+			t.Error("expected error for nonexistent keep")
 		}
 	})
 
 	t.Run("no default configured", func(t *testing.T) {
 		cfg := &Config{}
 
-		_, err := cfg.GetVaultPath("")
+		_, err := cfg.GetKeepPath("")
 		if err == nil {
 			t.Error("expected error when no default configured")
 		}
 	})
 }
 
-func TestConfigGetDefaultVaultPath(t *testing.T) {
+func TestConfigGetDefaultKeepPath(t *testing.T) {
 	cfg := &Config{
-		DefaultVault: "main",
-		Vaults: map[string]string{
+		DefaultKeep: "main",
+		Keeps: map[string]string{
 			"main": "/path/to/main",
 		},
 	}
 
-	path, err := cfg.GetDefaultVaultPath()
+	path, err := cfg.GetDefaultKeepPath()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -110,64 +110,64 @@ func TestConfigGetDefaultVaultPath(t *testing.T) {
 	}
 }
 
-func TestConfigListVaults(t *testing.T) {
-	t.Run("named vaults", func(t *testing.T) {
+func TestConfigListKeeps(t *testing.T) {
+	t.Run("named keeps", func(t *testing.T) {
 		cfg := &Config{
-			Vaults: map[string]string{
+			Keeps: map[string]string{
 				"work":     "/path/to/work",
 				"personal": "/path/to/personal",
 			},
 		}
 
-		vaults := cfg.ListVaults()
-		if len(vaults) != 2 {
-			t.Errorf("expected 2 vaults, got %d", len(vaults))
+		keeps := cfg.ListKeeps()
+		if len(keeps) != 2 {
+			t.Errorf("expected 2 keeps, got %d", len(keeps))
 		}
-		if vaults["work"] != "/path/to/work" {
-			t.Error("missing 'work' vault")
+		if keeps["work"] != "/path/to/work" {
+			t.Error("missing 'work' keep")
 		}
-		if vaults["personal"] != "/path/to/personal" {
-			t.Error("missing 'personal' vault")
+		if keeps["personal"] != "/path/to/personal" {
+			t.Error("missing 'personal' keep")
 		}
 	})
 
-	t.Run("legacy vault as default", func(t *testing.T) {
+	t.Run("legacy keep as default", func(t *testing.T) {
 		cfg := &Config{
-			Vault: "/legacy/path",
+			Keep: "/legacy/path",
 		}
 
-		vaults := cfg.ListVaults()
-		if len(vaults) != 1 {
-			t.Errorf("expected 1 vault, got %d", len(vaults))
+		keeps := cfg.ListKeeps()
+		if len(keeps) != 1 {
+			t.Errorf("expected 1 keep, got %d", len(keeps))
 		}
-		if vaults["default"] != "/legacy/path" {
-			t.Error("expected legacy vault as 'default'")
+		if keeps["default"] != "/legacy/path" {
+			t.Error("expected legacy keep as 'default'")
 		}
 	})
 
 	t.Run("empty config", func(t *testing.T) {
 		cfg := &Config{}
 
-		vaults := cfg.ListVaults()
-		if len(vaults) != 0 {
-			t.Errorf("expected 0 vaults, got %d", len(vaults))
+		keeps := cfg.ListKeeps()
+		if len(keeps) != 0 {
+			t.Errorf("expected 0 keeps, got %d", len(keeps))
 		}
 	})
 
-	t.Run("named vaults take precedence over legacy", func(t *testing.T) {
+	t.Run("named keeps take precedence over legacy", func(t *testing.T) {
 		cfg := &Config{
-			Vault: "/legacy/path",
-			Vaults: map[string]string{
+			Keep: "/legacy/path",
+			Keeps: map[string]string{
 				"main": "/named/path",
 			},
 		}
 
-		vaults := cfg.ListVaults()
-		if len(vaults) != 1 {
-			t.Errorf("expected 1 vault, got %d", len(vaults))
+		keeps := cfg.ListKeeps()
+		if len(keeps) != 1 {
+			t.Errorf("expected 1 keep, got %d", len(keeps))
 		}
-		if _, ok := vaults["default"]; ok {
-			t.Error("legacy vault should not appear when named vaults exist")
+		if _, ok := keeps["default"]; ok {
+			t.Error("legacy keep should not appear when named keeps exist")
 		}
 	})
 }
@@ -211,12 +211,12 @@ func TestLoadFrom(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.toml")
 
 	// Note: In TOML, keys after a [section] belong to that section.
-	// editor needs to come before [vaults] or after vault definitions.
-	content := `default_vault = "work"
+	// editor needs to come before [keeps] or after keep definitions.
+	content := `default_keep = "work"
 state_file = "state.toml"
 editor = "code"
 
-[vaults]
+[keeps]
 work = "/path/to/work"
 personal = "/path/to/personal"
 
@@ -233,8 +233,8 @@ code_theme = "dracula"
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.DefaultVault != "work" {
-		t.Errorf("expected default_vault 'work', got %q", cfg.DefaultVault)
+	if cfg.DefaultKeep != "work" {
+		t.Errorf("expected default_keep 'work', got %q", cfg.DefaultKeep)
 	}
 	if cfg.StateFile != "state.toml" {
 		t.Errorf("expected state_file 'state.toml', got %q", cfg.StateFile)
@@ -242,8 +242,8 @@ code_theme = "dracula"
 	if cfg.Editor != "code" {
 		t.Errorf("expected editor 'code', got %q", cfg.Editor)
 	}
-	if len(cfg.Vaults) != 2 {
-		t.Errorf("expected 2 vaults, got %d: %v", len(cfg.Vaults), cfg.Vaults)
+	if len(cfg.Keeps) != 2 {
+		t.Errorf("expected 2 keeps, got %d: %v", len(cfg.Keeps), cfg.Keeps)
 	}
 	if cfg.UI.Accent != "39" {
 		t.Errorf("expected ui.accent '39', got %q", cfg.UI.Accent)

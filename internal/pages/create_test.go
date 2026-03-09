@@ -132,7 +132,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("basic page creation", func(t *testing.T) {
 		result, err := Create(CreateOptions{
-			VaultPath:  tmpDir,
+			KeepPath:   tmpDir,
 			TypeName:   "person",
 			Title:      "Freya",
 			TargetPath: "people/freya",
@@ -168,7 +168,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("slugified path creation", func(t *testing.T) {
 		result, err := Create(CreateOptions{
-			VaultPath:  tmpDir,
+			KeepPath:   tmpDir,
 			TypeName:   "person",
 			Title:      "Sif",
 			TargetPath: "people/Sif", // Not pre-slugified
@@ -191,7 +191,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("windows-style target path keeps directory structure", func(t *testing.T) {
 		result, err := Create(CreateOptions{
-			VaultPath:  tmpDir,
+			KeepPath:   tmpDir,
 			TypeName:   "note",
 			Title:      "Competitions",
 			TargetPath: `game-notes\Competitions`,
@@ -212,7 +212,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("with fields", func(t *testing.T) {
 		result, err := Create(CreateOptions{
-			VaultPath:  tmpDir,
+			KeepPath:   tmpDir,
 			TypeName:   "project",
 			Title:      "Website",
 			TargetPath: "projects/website",
@@ -238,7 +238,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("path escaping blocked", func(t *testing.T) {
 		_, err := Create(CreateOptions{
-			VaultPath:  tmpDir,
+			KeepPath:   tmpDir,
 			TypeName:   "page",
 			Title:      "Evil",
 			TargetPath: "../escaped/evil",
@@ -259,7 +259,7 @@ func TestCreateWithTemplate(t *testing.T) {
 
 	t.Run("inline template override rejected", func(t *testing.T) {
 		_, err := Create(CreateOptions{
-			VaultPath:        tmpDir,
+			KeepPath:         tmpDir,
 			TypeName:         "meeting",
 			Title:            "Team Sync",
 			TargetPath:       "meetings/team-sync",
@@ -284,7 +284,7 @@ func TestCreateWithTemplate(t *testing.T) {
 		}
 
 		result, err := Create(CreateOptions{
-			VaultPath:        tmpDir,
+			KeepPath:         tmpDir,
 			TypeName:         "meeting",
 			Title:            "Weekly Standup",
 			TargetPath:       "meetings/weekly-standup",
@@ -314,7 +314,7 @@ func TestCreateWithTemplate(t *testing.T) {
 
 	t.Run("missing template file errors", func(t *testing.T) {
 		_, err := Create(CreateOptions{
-			VaultPath:        tmpDir,
+			KeepPath:         tmpDir,
 			TypeName:         "note",
 			Title:            "Quick Note",
 			TargetPath:       "notes/quick-note",
@@ -336,7 +336,7 @@ func TestCreateWithTemplate(t *testing.T) {
 		}
 
 		result, err := Create(CreateOptions{
-			VaultPath:        tmpDir,
+			KeepPath:         tmpDir,
 			TypeName:         "meeting",
 			Title:            "Project Review",
 			TargetPath:       "meetings/project-review",

@@ -29,14 +29,14 @@ var guideTopics = []GuideTopic{
 	},
 	{
 		Slug:        "onboarding",
-		Name:        "Vault Onboarding",
-		Description: "Guide for helping users set up a new vault interactively, including teaching sequence and misconceptions.",
+		Name:        "Keep Onboarding",
+		Description: "Guide for helping users set up a new keep interactively, including teaching sequence and misconceptions.",
 		Path:        "agent-guide/onboarding.md",
 	},
 	{
 		Slug:        "getting-started",
 		Name:        "Getting Started",
-		Description: "Discovery sequence and first steps in a new vault.",
+		Description: "Discovery sequence and first steps in a new keep.",
 		Path:        "agent-guide/getting-started.md",
 	},
 	{

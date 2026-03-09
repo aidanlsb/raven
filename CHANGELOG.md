@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v0.0.4] - 2026-03-08
 
 ### Added
-- New MCP agent-guide topics for response contract, write patterns, workflow lifecycle, and large-vault query strategy.
+- New MCP agent-guide topics for response contract, write patterns, workflow lifecycle, and large-keep query strategy.
 
 ### Changed
 - Consolidated onboarding and teaching flow by removing the standalone lesson-plan guide.
@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive documentation
 
 ### Security
-- Vault-scoped operations (no access outside vault)
+- Keep-scoped operations (no access outside keep)
 - Symlink traversal protection
 - Path validation for all file operations
 

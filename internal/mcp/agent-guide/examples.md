@@ -42,7 +42,7 @@
    raven_new(type="person", title="Thor Odinson", field={"name": "Thor Odinson"})
 ```
 
-**User**: "My vault has a lot of broken links, can you help fix them?"
+**User**: "My keep has a lot of broken links, can you help fix them?"
 ```
 → raven_check(issues="missing_reference")  # Focus on broken links
 → Review summary, explain to user

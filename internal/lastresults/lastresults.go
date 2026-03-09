@@ -47,14 +47,14 @@ var (
 )
 
 // Path returns the path to the last-results.json file.
-func Path(vaultPath string) string {
-	return filepath.Join(vaultPath, ".raven", "last-results.json")
+func Path(keepPath string) string {
+	return filepath.Join(keepPath, ".raven", "last-results.json")
 }
 
 // Write saves the last results to disk.
-func Write(vaultPath string, lr *LastResults) error {
+func Write(keepPath string, lr *LastResults) error {
 	// Ensure .raven directory exists
-	ravenDir := filepath.Join(vaultPath, ".raven")
+	ravenDir := filepath.Join(keepPath, ".raven")
 	if err := os.MkdirAll(ravenDir, 0755); err != nil {
 		return fmt.Errorf("failed to create .raven directory: %w", err)
 	}
@@ -66,7 +66,7 @@ func Write(vaultPath string, lr *LastResults) error {
 	}
 
 	// Write to file
-	path := Path(vaultPath)
+	path := Path(keepPath)
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("failed to write last results: %w", err)
 	}
@@ -76,8 +76,8 @@ func Write(vaultPath string, lr *LastResults) error {
 
 // Read loads the last results from disk.
 // Falls back to legacy last-query.json if needed.
-func Read(vaultPath string) (*LastResults, error) {
-	path := Path(vaultPath)
+func Read(keepPath string) (*LastResults, error) {
+	path := Path(keepPath)
 
 	data, err := os.ReadFile(path)
 	if err == nil {
@@ -93,7 +93,7 @@ func Read(vaultPath string) (*LastResults, error) {
 	}
 
 	// Fallback: legacy last-query.json
-	lq, err := lastquery.Read(vaultPath)
+	lq, err := lastquery.Read(keepPath)
 	if err != nil {
 		if errors.Is(err, lastquery.ErrNoLastQuery) {
 			return nil, ErrNoLastResults

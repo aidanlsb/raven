@@ -10,22 +10,22 @@ import (
 )
 
 type RunService struct {
-	vaultPath string
-	vaultCfg  *config.VaultConfig
-	toolFunc  func(tool string, args map[string]interface{}) (interface{}, error)
-	now       func() time.Time
+	keepPath string
+	keepCfg  *config.KeepConfig
+	toolFunc func(tool string, args map[string]interface{}) (interface{}, error)
+	now      func() time.Time
 }
 
 func NewRunService(
-	vaultPath string,
-	vaultCfg *config.VaultConfig,
+	keepPath string,
+	keepCfg *config.KeepConfig,
 	toolFunc func(tool string, args map[string]interface{}) (interface{}, error),
 ) *RunService {
 	return &RunService{
-		vaultPath: vaultPath,
-		vaultCfg:  vaultCfg,
-		toolFunc:  toolFunc,
-		now:       func() time.Time { return time.Now().UTC() },
+		keepPath: keepPath,
+		keepCfg:  keepCfg,
+		toolFunc: toolFunc,
+		now:      func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -71,17 +71,17 @@ func (s *RunService) Start(req StartRunRequest) (*RunExecutionOutcome, error) {
 	if strings.TrimSpace(req.WorkflowName) == "" {
 		return nil, newDomainError(CodeInvalidInput, "workflow name is required", nil)
 	}
-	if s.vaultCfg == nil {
-		return nil, newDomainError(CodeWorkflowInvalid, "vault config is nil", nil)
+	if s.keepCfg == nil {
+		return nil, newDomainError(CodeWorkflowInvalid, "keep config is nil", nil)
 	}
 
-	wf, err := Get(s.vaultPath, req.WorkflowName, s.vaultCfg)
+	wf, err := Get(s.keepPath, req.WorkflowName, s.keepCfg)
 	if err != nil {
 		return nil, newDomainError(CodeWorkflowNotFound, err.Error(), err)
 	}
 
-	runCfg := s.vaultCfg.GetWorkflowRunsConfig()
-	_, _ = AutoPruneRunStates(s.vaultPath, runCfg)
+	runCfg := s.keepCfg.GetWorkflowRunsConfig()
+	_, _ = AutoPruneRunStates(s.keepPath, runCfg)
 
 	inputs := req.Inputs
 	if inputs == nil {
@@ -93,7 +93,7 @@ func (s *RunService) Start(req StartRunRequest) (*RunExecutionOutcome, error) {
 		return nil, newDomainError(CodeWorkflowInvalid, err.Error(), err)
 	}
 
-	runner := NewRunner(s.vaultPath, s.vaultCfg)
+	runner := NewRunner(s.keepPath, s.keepCfg)
 	runner.ToolFunc = s.toolFunc
 
 	result, err := runner.RunWithState(wf, state)
@@ -101,7 +101,7 @@ func (s *RunService) Start(req StartRunRequest) (*RunExecutionOutcome, error) {
 		code, stepID := classifyRunnerFailure(err)
 		markRunFailedState(state, string(code), stepID, err, s.now())
 		ApplyRetentionExpiry(state, runCfg, s.now())
-		_ = SaveRunState(s.vaultPath, runCfg, state)
+		_ = SaveRunState(s.keepPath, runCfg, state)
 
 		de := newDomainError(code, err.Error(), err)
 		de.StepID = stepID
@@ -109,7 +109,7 @@ func (s *RunService) Start(req StartRunRequest) (*RunExecutionOutcome, error) {
 	}
 
 	ApplyRetentionExpiry(state, runCfg, s.now())
-	if err := SaveRunState(s.vaultPath, runCfg, state); err != nil {
+	if err := SaveRunState(s.keepPath, runCfg, state); err != nil {
 		return nil, newDomainError(CodeFileWriteError, "save workflow run state", err)
 	}
 
@@ -127,14 +127,14 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 	if strings.TrimSpace(req.RunID) == "" {
 		return nil, newDomainError(CodeInvalidInput, "run id is required", nil)
 	}
-	if s.vaultCfg == nil {
-		return nil, newDomainError(CodeWorkflowInvalid, "vault config is nil", nil)
+	if s.keepCfg == nil {
+		return nil, newDomainError(CodeWorkflowInvalid, "keep config is nil", nil)
 	}
 
-	runCfg := s.vaultCfg.GetWorkflowRunsConfig()
-	_, _ = AutoPruneRunStates(s.vaultPath, runCfg)
+	runCfg := s.keepCfg.GetWorkflowRunsConfig()
+	_, _ = AutoPruneRunStates(s.keepPath, runCfg)
 
-	state, err := LoadRunState(s.vaultPath, runCfg, req.RunID)
+	state, err := LoadRunState(s.keepPath, runCfg, req.RunID)
 	if err != nil {
 		code := CodeWorkflowRunNotFound
 		if strings.Contains(err.Error(), "parse run state") {
@@ -158,7 +158,7 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 		return &RunExecutionOutcome{State: state}, de
 	}
 
-	wf, err := Get(s.vaultPath, state.WorkflowName, s.vaultCfg)
+	wf, err := Get(s.keepPath, state.WorkflowName, s.keepCfg)
 	if err != nil {
 		return &RunExecutionOutcome{State: state}, newDomainError(CodeWorkflowNotFound, err.Error(), err)
 	}
@@ -181,7 +181,7 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 	}
 
 	state.Revision++
-	runner := NewRunner(s.vaultPath, s.vaultCfg)
+	runner := NewRunner(s.keepPath, s.keepCfg)
 	runner.ToolFunc = s.toolFunc
 
 	result, err := runner.RunWithState(wf, state)
@@ -190,7 +190,7 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 		markRunFailedState(state, string(code), stepID, err, s.now())
 		state.Revision++
 		ApplyRetentionExpiry(state, runCfg, s.now())
-		_ = SaveRunState(s.vaultPath, runCfg, state)
+		_ = SaveRunState(s.keepPath, runCfg, state)
 
 		de := newDomainError(code, err.Error(), err)
 		de.StepID = stepID
@@ -198,7 +198,7 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 	}
 
 	ApplyRetentionExpiry(state, runCfg, s.now())
-	if err := SaveRunState(s.vaultPath, runCfg, state); err != nil {
+	if err := SaveRunState(s.keepPath, runCfg, state); err != nil {
 		return nil, newDomainError(CodeFileWriteError, "save workflow run state", err)
 	}
 
@@ -210,28 +210,28 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 }
 
 func (s *RunService) ListRuns(filter RunListFilter) ([]*WorkflowRunState, []RunStoreWarning, error) {
-	if s == nil || s.vaultCfg == nil {
+	if s == nil || s.keepCfg == nil {
 		return nil, nil, newDomainError(CodeWorkflowInvalid, "run service is not configured", nil)
 	}
-	return ListRunStates(s.vaultPath, s.vaultCfg.GetWorkflowRunsConfig(), filter)
+	return ListRunStates(s.keepPath, s.keepCfg.GetWorkflowRunsConfig(), filter)
 }
 
 func (s *RunService) PruneRuns(opts RunPruneOptions) (*RunPruneResult, error) {
-	if s == nil || s.vaultCfg == nil {
+	if s == nil || s.keepCfg == nil {
 		return nil, newDomainError(CodeWorkflowInvalid, "run service is not configured", nil)
 	}
-	return PruneRunStates(s.vaultPath, s.vaultCfg.GetWorkflowRunsConfig(), opts)
+	return PruneRunStates(s.keepPath, s.keepCfg.GetWorkflowRunsConfig(), opts)
 }
 
 func (s *RunService) StepOutput(req StepOutputRequest) (*StepOutputResult, error) {
-	if s == nil || s.vaultCfg == nil {
+	if s == nil || s.keepCfg == nil {
 		return nil, newDomainError(CodeWorkflowInvalid, "run service is not configured", nil)
 	}
 	if strings.TrimSpace(req.RunID) == "" || strings.TrimSpace(req.StepID) == "" {
 		return nil, newDomainError(CodeInvalidInput, "run id and step id are required", nil)
 	}
 
-	state, err := LoadRunState(s.vaultPath, s.vaultCfg.GetWorkflowRunsConfig(), req.RunID)
+	state, err := LoadRunState(s.keepPath, s.keepCfg.GetWorkflowRunsConfig(), req.RunID)
 	if err != nil {
 		code := CodeWorkflowRunNotFound
 		if strings.Contains(err.Error(), "parse run state") {
@@ -269,7 +269,7 @@ func (s *RunService) StepOutput(req StepOutputRequest) (*StepOutputResult, error
 	}
 
 	if req.IncludeSum {
-		if wf, wfErr := Get(s.vaultPath, state.WorkflowName, s.vaultCfg); wfErr == nil {
+		if wf, wfErr := Get(s.keepPath, state.WorkflowName, s.keepCfg); wfErr == nil {
 			result.Summaries = BuildStepSummaries(wf, state)
 		}
 	}
