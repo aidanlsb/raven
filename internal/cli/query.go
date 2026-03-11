@@ -18,9 +18,9 @@ import (
 	"github.com/aidanlsb/raven/internal/lastresults"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -1046,18 +1046,19 @@ func warnIfStale(db *index.Database, vaultPath string) {
 		return
 	}
 
-	staleness, err := db.CheckStaleness(vaultPath)
+	rt := &readsvc.Runtime{VaultPath: vaultPath, DB: db}
+	isStale, staleFiles, err := readsvc.CheckStaleness(rt)
 	if err != nil {
 		return // Silently fail - don't break queries for staleness check errors
 	}
 
-	if staleness.IsStale {
-		staleCount := len(staleness.StaleFiles)
+	if isStale {
+		staleCount := len(staleFiles)
 		if staleCount == 1 {
 			fmt.Fprintln(os.Stderr, ui.Warning("1 file may be stale. Run 'rvn reindex' or use '--refresh'."))
 		} else if staleCount <= 3 {
 			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale: %s",
-				staleCount, strings.Join(staleness.StaleFiles, ", ")))
+				staleCount, strings.Join(staleFiles, ", ")))
 			fmt.Fprintf(os.Stderr, "  Run 'rvn reindex' or use '--refresh' to update.\n")
 		} else {
 			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale. Run 'rvn reindex' or use '--refresh'.", staleCount))
@@ -1068,32 +1069,11 @@ func warnIfStale(db *index.Database, vaultPath string) {
 
 // smartReindex performs an incremental reindex of only stale files.
 func smartReindex(db *index.Database, vaultPath string) error {
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return err
+	rt := &readsvc.Runtime{
+		VaultPath: vaultPath,
+		DB:        db,
 	}
-
-	var reindexed int
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
-		if result.Error != nil {
-			return nil //nolint:nilerr // skip files with errors
-		}
-
-		// Check if file needs reindexing
-		indexedMtime, err := db.GetFileMtime(result.RelativePath)
-		if err == nil && indexedMtime > 0 && result.FileMtime <= indexedMtime {
-			return nil // File is up-to-date
-		}
-
-		// Reindex this file
-		if err := db.IndexDocumentWithMtime(result.Document, sch, result.FileMtime); err != nil {
-			return nil //nolint:nilerr // skip files that fail to index
-		}
-
-		reindexed++
-		return nil
-	})
-
+	reindexed, err := readsvc.SmartReindex(rt)
 	if err != nil {
 		return err
 	}

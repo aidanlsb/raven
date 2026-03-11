@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
@@ -222,13 +222,17 @@ func resolveTargetToRelPath(target string, vaultPath string, vaultCfg *config.Va
 }
 
 func readBacklinksWithContext(vaultPath string, vaultCfg *config.VaultConfig, targetObjectID string) ([]readBacklinkGroup, int, error) {
-	db, err := index.Open(vaultPath)
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
 	if err != nil {
 		return nil, 0, handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
-	defer db.Close()
+	defer rt.Close()
+	if vaultCfg != nil {
+		rt.VaultCfg = vaultCfg
+		rt.DB.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+	}
 
-	links, err := db.Backlinks(targetObjectID)
+	links, err := readsvc.Backlinks(rt, targetObjectID)
 	if err != nil {
 		return nil, 0, handleError(ErrDatabaseError, err, "")
 	}
