@@ -6,31 +6,6 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-// buildBulkPreview builds preview items + skipped results for a bulk operation.
-func buildBulkPreview(action string, ids []string, warnings []Warning, previewFn func(id string) (*BulkPreviewItem, *BulkResult)) *BulkPreview {
-	var items []BulkPreviewItem
-	var skipped []BulkResult
-
-	for _, id := range ids {
-		item, skip := previewFn(id)
-		if skip != nil {
-			skipped = append(skipped, *skip)
-			continue
-		}
-		if item != nil {
-			items = append(items, *item)
-		}
-	}
-
-	return &BulkPreview{
-		Action:   action,
-		Items:    items,
-		Skipped:  skipped,
-		Total:    len(ids),
-		Warnings: warnings,
-	}
-}
-
 func outputBulkPreview(preview *BulkPreview, extra map[string]interface{}) error {
 	if isJSONOutput() {
 		data := map[string]interface{}{
@@ -50,15 +25,6 @@ func outputBulkPreview(preview *BulkPreview, extra map[string]interface{}) error
 
 	PrintBulkPreview(preview)
 	return nil
-}
-
-// applyBulk executes a bulk operation and returns per-ID results.
-func applyBulk(ids []string, applyFn func(id string) BulkResult) []BulkResult {
-	results := make([]BulkResult, 0, len(ids))
-	for _, id := range ids {
-		results = append(results, applyFn(id))
-	}
-	return results
 }
 
 func buildBulkSummary(action string, results []BulkResult, warnings []Warning) *BulkSummary {

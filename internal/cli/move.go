@@ -18,7 +18,6 @@ import (
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -124,25 +123,37 @@ func runMoveBulk(args []string, vaultPath string) error {
 
 // previewMoveBulk shows a preview of bulk move operations.
 func previewMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	preview := buildBulkPreview("move", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
-		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
-		}
-
-		filename := filepath.Base(sourceFile)
-		destPath := filepath.Join(destDir, filename)
-		fullDestPath := filepath.Join(vaultPath, destPath)
-		if _, err := os.Stat(fullDestPath); err == nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("destination already exists: %s", destPath)}
-		}
-
-		return &BulkPreviewItem{
-			ID:      id,
-			Action:  "move",
-			Details: fmt.Sprintf("→ %s", destPath),
-		}, nil
+	previewResult, err := objectsvc.PreviewMoveBulk(objectsvc.MoveBulkRequest{
+		VaultPath:      vaultPath,
+		VaultConfig:    vaultCfg,
+		ObjectIDs:      ids,
+		DestinationDir: destDir,
 	})
+	if err != nil {
+		return handleError(ErrInvalidInput, err, "Example: rvn move --stdin archive/projects/")
+	}
+
+	preview := &BulkPreview{
+		Action:   "move",
+		Items:    make([]BulkPreviewItem, 0, len(previewResult.Items)),
+		Skipped:  make([]BulkResult, 0, len(previewResult.Skipped)),
+		Total:    previewResult.Total,
+		Warnings: warnings,
+	}
+	for _, item := range previewResult.Items {
+		preview.Items = append(preview.Items, BulkPreviewItem{
+			ID:      item.ID,
+			Action:  item.Action,
+			Details: item.Details,
+		})
+	}
+	for _, skip := range previewResult.Skipped {
+		preview.Skipped = append(preview.Skipped, BulkResult{
+			ID:     skip.ID,
+			Status: skip.Status,
+			Reason: skip.Reason,
+		})
+	}
 
 	return outputBulkPreview(preview, map[string]interface{}{
 		"destination": destDir,
@@ -154,70 +165,40 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 	// Load schema for type checking
 	sch, _ := schema.Load(vaultPath)
 	parseOpts := buildParseOptions(vaultCfg)
-
-	results := applyBulk(ids, func(id string) BulkResult {
-		result := BulkResult{ID: id}
-		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			result.Status = "skipped"
-			result.Reason = "object not found"
-			return result
-		}
-
-		// Build destination path
-		filename := filepath.Base(sourceFile)
-		destPath := filepath.Join(destDir, filename)
-		fullDestPath := filepath.Join(vaultPath, destPath)
-
-		// Check if destination already exists
-		if _, err := os.Stat(fullDestPath); err == nil {
-			result.Status = "skipped"
-			result.Reason = fmt.Sprintf("destination already exists: %s", destPath)
-			return result
-		}
-
-		relSource, _ := filepath.Rel(vaultPath, sourceFile)
-		sourceID := vaultCfg.FilePathToObjectID(relSource)
-		destID := vaultCfg.FilePathToObjectID(destPath)
-
-		serviceResult, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
-			VaultPath:         vaultPath,
-			SourceFile:        sourceFile,
-			DestinationFile:   fullDestPath,
-			SourceObjectID:    sourceID,
-			DestinationObject: destID,
-			UpdateRefs:        moveUpdateRefs,
-			FailOnIndexError:  true,
-			VaultConfig:       vaultCfg,
-			Schema:            sch,
-			ParseOptions:      parseOpts,
-		})
-		if err != nil {
-			result.Status = "error"
-			var svcErr *objectsvc.Error
-			if errors.As(err, &svcErr) {
-				result.Reason = svcErr.Message
-			} else {
-				result.Reason = fmt.Sprintf("move failed: %v", err)
-			}
-			return result
-		}
-
-		for _, warningMessage := range serviceResult.WarningMessages {
-			warnings = append(warnings, Warning{
-				Code:    WarnIndexUpdateFailed,
-				Message: warningMessage,
-				Ref:     "Run 'rvn reindex' to rebuild the database",
-			})
-		}
-
-		result.Status = "moved"
-		result.Details = destPath
-		return result
+	summaryResult, err := objectsvc.ApplyMoveBulk(objectsvc.MoveBulkRequest{
+		VaultPath:      vaultPath,
+		VaultConfig:    vaultCfg,
+		Schema:         sch,
+		ObjectIDs:      ids,
+		DestinationDir: destDir,
+		UpdateRefs:     moveUpdateRefs,
+		ParseOptions:   parseOpts,
 	})
+	if err != nil {
+		return handleError(ErrInvalidInput, err, "Example: rvn move --stdin archive/projects/")
+	}
 
-	summary := buildBulkSummary("move", results, warnings)
-	return outputBulkSummary(summary, warnings, map[string]interface{}{
+	results := make([]BulkResult, 0, len(summaryResult.Results))
+	for _, result := range summaryResult.Results {
+		results = append(results, BulkResult{
+			ID:      result.ID,
+			Status:  result.Status,
+			Reason:  result.Reason,
+			Details: result.Details,
+		})
+	}
+
+	combinedWarnings := append([]Warning{}, warnings...)
+	for _, warningMessage := range summaryResult.WarningMessages {
+		combinedWarnings = append(combinedWarnings, Warning{
+			Code:    WarnIndexUpdateFailed,
+			Message: warningMessage,
+			Ref:     "Run 'rvn reindex' to rebuild the database",
+		})
+	}
+
+	summary := buildBulkSummary("move", results, combinedWarnings)
+	return outputBulkSummary(summary, combinedWarnings, map[string]interface{}{
 		"destination": destDir,
 	})
 }

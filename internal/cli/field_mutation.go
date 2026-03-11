@@ -9,27 +9,6 @@ import (
 type fieldValidationError = fieldmutation.ValidationError
 type unknownFieldMutationError = fieldmutation.UnknownFieldMutationError
 
-func prepareValidatedFieldMutation(
-	objectType string,
-	existingFields map[string]schema.FieldValue,
-	updates map[string]string,
-	sch *schema.Schema,
-	allowedUnknown map[string]bool,
-) (map[string]schema.FieldValue, map[string]string, []string, error) {
-	return fieldmutation.PrepareValidatedFieldMutation(objectType, existingFields, updates, sch, allowedUnknown)
-}
-
-func prepareValidatedFrontmatterMutation(
-	content string,
-	fm *parser.Frontmatter,
-	objectType string,
-	updates map[string]string,
-	sch *schema.Schema,
-	allowedUnknown map[string]bool,
-) (string, map[string]string, []string, error) {
-	return fieldmutation.PrepareValidatedFrontmatterMutation(content, fm, objectType, updates, sch, allowedUnknown)
-}
-
 func prepareValidatedFieldMutationValues(
 	objectType string,
 	existingFields map[string]schema.FieldValue,
@@ -49,15 +28,6 @@ func prepareValidatedFrontmatterMutationValues(
 	allowedUnknown map[string]bool,
 ) (string, []string, error) {
 	return fieldmutation.PrepareValidatedFrontmatterMutationValues(content, fm, objectType, updates, sch, allowedUnknown)
-}
-
-func detectUnknownFieldMutationByNames(
-	objectType string,
-	sch *schema.Schema,
-	fieldNames []string,
-	allowedUnknown map[string]bool,
-) *unknownFieldMutationError {
-	return fieldmutation.DetectUnknownFieldMutationByNames(objectType, sch, fieldNames, allowedUnknown)
 }
 
 func warningMessagesToWarnings(messages []string) []Warning {

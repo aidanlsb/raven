@@ -15,7 +15,6 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -106,46 +105,39 @@ func runDeleteBulk(vaultPath string) error {
 // previewDeleteBulk shows a preview of bulk delete operations.
 func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig) error {
 	deletionCfg := vaultCfg.GetDeletionConfig()
-
-	// Open database for backlink checks
-	db, err := index.Open(vaultPath)
+	previewResult, err := objectsvc.PreviewDeleteBulk(objectsvc.DeleteBulkRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		ObjectIDs:   ids,
+		Behavior:    deletionCfg.Behavior,
+		TrashDir:    deletionCfg.TrashDir,
+	})
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
-	defer db.Close()
 
-	preview := buildBulkPreview("delete", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
-		objectID := vaultCfg.FilePathToObjectID(id)
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
-		}
-
-		// Check for backlinks
-		backlinks, _ := db.Backlinks(objectID)
-		details := ""
-		if len(backlinks) > 0 {
-			details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
-		}
-
-		item := BulkPreviewItem{
-			ID:      id,
-			Action:  "delete",
-			Details: details,
-		}
-		if deletionCfg.Behavior == "trash" {
-			item.Changes = map[string]string{"behavior": fmt.Sprintf("move to %s/", deletionCfg.TrashDir)}
-		} else {
-			item.Changes = map[string]string{"behavior": "permanent deletion"}
-		}
-
-		// Verify file exists
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "file not found"}
-		}
-
-		return &item, nil
-	})
+	preview := &BulkPreview{
+		Action:   "delete",
+		Items:    make([]BulkPreviewItem, 0, len(previewResult.Items)),
+		Skipped:  make([]BulkResult, 0, len(previewResult.Skipped)),
+		Total:    previewResult.Total,
+		Warnings: warnings,
+	}
+	for _, item := range previewResult.Items {
+		preview.Items = append(preview.Items, BulkPreviewItem{
+			ID:      item.ID,
+			Action:  item.Action,
+			Details: item.Details,
+			Changes: item.Changes,
+		})
+	}
+	for _, skip := range previewResult.Skipped {
+		preview.Skipped = append(preview.Skipped, BulkResult{
+			ID:     skip.ID,
+			Status: skip.Status,
+			Reason: skip.Reason,
+		})
+	}
 
 	return outputBulkPreview(preview, map[string]interface{}{
 		"behavior": deletionCfg.Behavior,
@@ -155,63 +147,37 @@ func previewDeleteBulk(vaultPath string, ids []string, warnings []Warning, vault
 // applyDeleteBulk applies bulk delete operations.
 func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig) error {
 	deletionCfg := vaultCfg.GetDeletionConfig()
-
-	// Open database for cleanup
-	db, err := index.Open(vaultPath)
+	summaryResult, err := objectsvc.ApplyDeleteBulk(objectsvc.DeleteBulkRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		ObjectIDs:   ids,
+		Behavior:    deletionCfg.Behavior,
+		TrashDir:    deletionCfg.TrashDir,
+	})
 	if err != nil {
 		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 	}
-	defer db.Close()
 
-	results := applyBulk(ids, func(id string) BulkResult {
-		result := BulkResult{ID: id}
-		// Canonicalize the object ID, but resolve the file using the original input
-		// (it may already include a rooted path).
-		objectID := vaultCfg.FilePathToObjectID(id)
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			result.Status = "skipped"
-			result.Reason = "object not found"
-			return result
-		}
-
-		// Perform the deletion
-		_, err = objectsvc.DeleteFile(objectsvc.DeleteFileRequest{
-			VaultPath: vaultPath,
-			FilePath:  filePath,
-			Behavior:  deletionCfg.Behavior,
-			TrashDir:  deletionCfg.TrashDir,
+	results := make([]BulkResult, 0, len(summaryResult.Results))
+	for _, result := range summaryResult.Results {
+		results = append(results, BulkResult{
+			ID:     result.ID,
+			Status: result.Status,
+			Reason: result.Reason,
 		})
-		if err != nil {
-			result.Status = "error"
-			var svcErr *objectsvc.Error
-			if errors.As(err, &svcErr) {
-				result.Reason = svcErr.Message
-			} else {
-				result.Reason = fmt.Sprintf("delete failed: %v", err)
-			}
-			return result
-		}
+	}
 
-		// Remove from index
-		if err := db.RemoveDocument(objectID); err != nil {
-			warningMsg := fmt.Sprintf("Failed to remove deleted object from index: %v", err)
-			if errors.Is(err, index.ErrObjectNotFound) {
-				warningMsg = "Object not found in index; consider running 'rvn reindex'"
-			}
-			warnings = append(warnings, Warning{
-				Code:    WarnIndexUpdateFailed,
-				Message: warningMsg,
-				Ref:     "Run 'rvn reindex' to rebuild the database",
-			})
-		}
+	combinedWarnings := append([]Warning{}, warnings...)
+	for _, message := range summaryResult.WarningMessages {
+		combinedWarnings = append(combinedWarnings, Warning{
+			Code:    WarnIndexUpdateFailed,
+			Message: message,
+			Ref:     "Run 'rvn reindex' to rebuild the database",
+		})
+	}
 
-		result.Status = "deleted"
-		return result
-	})
-
-	summary := buildBulkSummary("delete", results, warnings)
-	return outputBulkSummary(summary, warnings, map[string]interface{}{
+	summary := buildBulkSummary("delete", results, combinedWarnings)
+	return outputBulkSummary(summary, combinedWarnings, map[string]interface{}{
 		"behavior": deletionCfg.Behavior,
 	})
 }

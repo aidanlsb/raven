@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -158,71 +156,39 @@ func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
 // previewSetBulk shows a preview of bulk set operations.
 func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
 	parseOpts := buildParseOptions(vaultCfg)
-
-	preview := buildBulkPreview("set", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
-		// Check if this is an embedded object
-		if IsEmbeddedID(id) {
-			return previewSetEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
-		}
-
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
-		}
-
-		// Read current values to show diff
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
-		}
-
-		fm, err := parser.ParseFrontmatter(string(content))
-		if err != nil || fm == nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "no frontmatter"}
-		}
-
-		objectType := fm.ObjectType
-		if objectType == "" {
-			objectType = "page"
-		}
-		if ufErr := detectUnknownSetFields(objectType, updates, sch, map[string]bool{"alias": true}); ufErr != nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: ufErr.Error()}
-		}
-
-		_, resolvedUpdates, _, err := prepareValidatedFrontmatterMutation(
-			string(content),
-			fm,
-			objectType,
-			updates,
-			sch,
-			map[string]bool{"alias": true},
-		)
-		if err != nil {
-			var validationErr *fieldValidationError
-			if errors.As(err, &validationErr) {
-				return nil, &BulkResult{ID: id, Status: "skipped", Reason: validationErr.Error()}
-			}
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("validation error: %v", err)}
-		}
-
-		// Build change summary
-		changes := make(map[string]string)
-		for field, resolvedVal := range resolvedUpdates {
-			oldVal := "<unset>"
-			if fm.Fields != nil {
-				if v, ok := fm.Fields[field]; ok {
-					oldVal = fmt.Sprintf("%v", v)
-				}
-			}
-			changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
-		}
-
-		return &BulkPreviewItem{
-			ID:      id,
-			Action:  "set",
-			Changes: changes,
-		}, nil
+	previewResult, err := objectsvc.PreviewSetBulk(objectsvc.SetBulkRequest{
+		VaultPath:    vaultPath,
+		VaultConfig:  vaultCfg,
+		Schema:       sch,
+		ObjectIDs:    ids,
+		Updates:      updates,
+		ParseOptions: parseOpts,
 	})
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+
+	preview := &BulkPreview{
+		Action:   "set",
+		Items:    make([]BulkPreviewItem, 0, len(previewResult.Items)),
+		Skipped:  make([]BulkResult, 0, len(previewResult.Skipped)),
+		Total:    previewResult.Total,
+		Warnings: warnings,
+	}
+	for _, item := range previewResult.Items {
+		preview.Items = append(preview.Items, BulkPreviewItem{
+			ID:      item.ID,
+			Action:  item.Action,
+			Changes: item.Changes,
+		})
+	}
+	for _, skip := range previewResult.Skipped {
+		preview.Skipped = append(preview.Skipped, BulkResult{
+			ID:     skip.ID,
+			Status: skip.Status,
+			Reason: skip.Reason,
+		})
+	}
 
 	return outputBulkPreview(preview, map[string]interface{}{
 		"fields": updates,
@@ -232,59 +198,28 @@ func previewSetBulk(vaultPath string, ids []string, updates map[string]string, w
 // applySetBulk applies bulk set operations.
 func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
 	parseOpts := buildParseOptions(vaultCfg)
-
-	results := applyBulk(ids, func(id string) BulkResult {
-		result := BulkResult{ID: id}
-		// Check if this is an embedded object
-		if IsEmbeddedID(id) {
-			err := applySetEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
-			if err != nil {
-				result.Status = "error"
-				result.Reason = err.Error()
-			} else {
-				result.Status = "modified"
-			}
-			return result
-		}
-
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			result.Status = "skipped"
-			result.Reason = "object not found"
-			return result
-		}
-
-		_, err = objectsvc.SetObjectFile(objectsvc.SetObjectFileRequest{
-			FilePath:      filePath,
-			ObjectID:      id,
-			Updates:       updates,
-			Schema:        sch,
-			AllowedFields: map[string]bool{"alias": true},
-		})
-		if err != nil {
-			result.Status = "error"
-			var svcErr *objectsvc.Error
-			var unknownErr *unknownFieldMutationError
-			var validationErr *fieldValidationError
-			switch {
-			case errors.As(err, &svcErr):
-				result.Reason = svcErr.Message
-			case errors.As(err, &unknownErr):
-				result.Reason = unknownErr.Error()
-			case errors.As(err, &validationErr):
-				result.Reason = validationErr.Error()
-			default:
-				result.Reason = fmt.Sprintf("update error: %v", err)
-			}
-			return result
-		}
-
-		// Auto-reindex if configured
+	summaryResult, err := objectsvc.ApplySetBulk(objectsvc.SetBulkRequest{
+		VaultPath:    vaultPath,
+		VaultConfig:  vaultCfg,
+		Schema:       sch,
+		ObjectIDs:    ids,
+		Updates:      updates,
+		ParseOptions: parseOpts,
+	}, func(filePath string) {
 		maybeReindex(vaultPath, filePath, vaultCfg)
-
-		result.Status = "modified"
-		return result
 	})
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+
+	results := make([]BulkResult, 0, len(summaryResult.Results))
+	for _, result := range summaryResult.Results {
+		results = append(results, BulkResult{
+			ID:     result.ID,
+			Status: result.Status,
+			Reason: result.Reason,
+		})
+	}
 
 	summary := buildBulkSummary("set", results, warnings)
 	return outputBulkSummary(summary, warnings, map[string]interface{}{
@@ -412,19 +347,6 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	return nil
 }
 
-func detectUnknownSetFields(objectType string, updates map[string]string, sch *schema.Schema, allowedUnknown map[string]bool) *unknownFieldMutationError {
-	fieldNames := make([]string, 0, len(updates))
-	for key := range updates {
-		fieldNames = append(fieldNames, key)
-	}
-	return detectUnknownFieldMutationByNames(
-		objectType,
-		sch,
-		fieldNames,
-		allowedUnknown,
-	)
-}
-
 // setEmbeddedObject sets fields on an embedded object.
 func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, typedUpdates map[string]schema.FieldValue, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
 	// Parse the embedded ID: fileID#slug
@@ -536,127 +458,6 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 	for _, warning := range validationWarnings {
 		fmt.Printf("  %s\n", ui.Warning(warning))
 	}
-
-	return nil
-}
-
-// previewSetEmbedded generates a preview for an embedded object.
-func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) (*BulkPreviewItem, *BulkResult) {
-	// Parse the embedded ID
-	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
-	if !isEmbedded {
-		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "invalid embedded ID format"}
-	}
-
-	// Resolve file ID to file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
-	if err != nil {
-		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "parent file not found"}
-	}
-
-	// Read the file
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
-	}
-
-	// Parse the document
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
-	if err != nil {
-		return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
-	}
-
-	// Find the embedded object
-	var targetObj *parser.ParsedObject
-	for _, obj := range doc.Objects {
-		if obj.ID == id {
-			targetObj = obj
-			break
-		}
-	}
-
-	if targetObj == nil {
-		return nil, &BulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
-	}
-	if ufErr := detectUnknownSetFields(targetObj.ObjectType, updates, sch, map[string]bool{"alias": true, "id": true}); ufErr != nil {
-		return nil, &BulkResult{ID: id, Status: "skipped", Reason: ufErr.Error()}
-	}
-
-	_, resolvedUpdates, _, err := prepareValidatedFieldMutation(
-		targetObj.ObjectType,
-		targetObj.Fields,
-		updates,
-		sch,
-		map[string]bool{"alias": true, "id": true},
-	)
-	if err != nil {
-		var validationErr *fieldValidationError
-		if errors.As(err, &validationErr) {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: validationErr.Error()}
-		}
-		return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("validation error: %v", err)}
-	}
-
-	// Build change summary
-	changes := make(map[string]string)
-	for field, resolvedVal := range resolvedUpdates {
-		oldVal := "<unset>"
-		if targetObj.Fields != nil {
-			if v, ok := targetObj.Fields[field]; ok {
-				if s, ok := v.AsString(); ok {
-					oldVal = s
-				} else if n, ok := v.AsNumber(); ok {
-					oldVal = fmt.Sprintf("%v", n)
-				} else if b, ok := v.AsBool(); ok {
-					oldVal = fmt.Sprintf("%v", b)
-				} else {
-					oldVal = fmt.Sprintf("%v", v.Raw())
-				}
-			}
-		}
-		changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
-	}
-
-	return &BulkPreviewItem{
-		ID:      id,
-		Action:  "set",
-		Changes: changes,
-	}, nil
-}
-
-// applySetEmbedded applies a set operation to an embedded object.
-func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) error {
-	// Parse the embedded ID
-	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
-	if !isEmbedded {
-		return fmt.Errorf("invalid embedded ID format")
-	}
-
-	// Resolve file ID to file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
-	if err != nil {
-		return fmt.Errorf("parent file not found: %w", err)
-	}
-
-	_, err = objectsvc.SetEmbeddedObject(objectsvc.SetEmbeddedObjectRequest{
-		VaultPath:      vaultPath,
-		FilePath:       filePath,
-		ObjectID:       id,
-		Updates:        updates,
-		Schema:         sch,
-		AllowedFields:  map[string]bool{"alias": true, "id": true},
-		DocumentParser: parseOpts,
-	})
-	if err != nil {
-		var svcErr *objectsvc.Error
-		if errors.As(err, &svcErr) {
-			return errors.New(svcErr.Message)
-		}
-		return err
-	}
-
-	// Auto-reindex if configured
-	maybeReindex(vaultPath, filePath, vaultCfg)
 
 	return nil
 }

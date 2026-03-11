@@ -465,83 +465,34 @@ func (s *Server) callDirectSetBulk(
 
 	confirm := boolValue(normalized["confirm"])
 	parseOpts := parseOptionsFromVaultConfig(vaultCfg)
+	request := objectsvc.SetBulkRequest{
+		VaultPath:    vaultPath,
+		VaultConfig:  vaultCfg,
+		Schema:       sch,
+		ObjectIDs:    objectIDs,
+		Updates:      updates,
+		ParseOptions: parseOpts,
+	}
 
 	if !confirm {
-		items := make([]map[string]interface{}, 0, len(objectIDs))
-		var skipped []map[string]interface{}
-
-		for _, id := range objectIDs {
-			if strings.Contains(id, "#") {
-				item, skip := previewSetBulkEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
-				if skip != nil {
-					skipped = append(skipped, skip)
-					continue
-				}
-				items = append(items, item)
-				continue
-			}
-
-			filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-			if err != nil {
-				skipped = append(skipped, map[string]interface{}{"id": id, "status": "skipped", "reason": "object not found"})
-				continue
-			}
-
-			content, err := os.ReadFile(filePath)
-			if err != nil {
-				skipped = append(skipped, map[string]interface{}{"id": id, "status": "skipped", "reason": fmt.Sprintf("read error: %v", err)})
-				continue
-			}
-
-			fm, err := parser.ParseFrontmatter(string(content))
-			if err != nil || fm == nil {
-				skipped = append(skipped, map[string]interface{}{"id": id, "status": "skipped", "reason": "no frontmatter"})
-				continue
-			}
-
-			objectType := fm.ObjectType
-			if objectType == "" {
-				objectType = "page"
-			}
-
-			if unknownErr := fieldmutation.DetectUnknownFieldMutationByNames(objectType, sch, mapKeys(updates), map[string]bool{"alias": true}); unknownErr != nil {
-				skipped = append(skipped, map[string]interface{}{"id": id, "status": "skipped", "reason": unknownErr.Error()})
-				continue
-			}
-
-			_, resolvedUpdates, _, err := fieldmutation.PrepareValidatedFrontmatterMutation(
-				string(content),
-				fm,
-				objectType,
-				updates,
-				sch,
-				map[string]bool{"alias": true},
-			)
-			if err != nil {
-				var validationErr *fieldmutation.ValidationError
-				if errors.As(err, &validationErr) {
-					skipped = append(skipped, map[string]interface{}{"id": id, "status": "skipped", "reason": validationErr.Error()})
-				} else {
-					skipped = append(skipped, map[string]interface{}{"id": id, "status": "skipped", "reason": fmt.Sprintf("validation error: %v", err)})
-				}
-				continue
-			}
-
-			changes := make(map[string]string)
-			for field, resolvedVal := range resolvedUpdates {
-				oldVal := "<unset>"
-				if fm.Fields != nil {
-					if v, ok := fm.Fields[field]; ok {
-						oldVal = fmt.Sprintf("%v", v)
-					}
-				}
-				changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
-			}
-
+		previewResult, err := objectsvc.PreviewSetBulk(request)
+		if err != nil {
+			return errorEnvelope("INTERNAL_ERROR", err.Error(), "", nil), true
+		}
+		items := make([]map[string]interface{}, 0, len(previewResult.Items))
+		skipped := make([]map[string]interface{}, 0, len(previewResult.Skipped))
+		for _, item := range previewResult.Items {
 			items = append(items, map[string]interface{}{
-				"id":      id,
-				"action":  "set",
-				"changes": changes,
+				"id":      item.ID,
+				"action":  item.Action,
+				"changes": item.Changes,
+			})
+		}
+		for _, result := range previewResult.Skipped {
+			skipped = append(skipped, map[string]interface{}{
+				"id":     result.ID,
+				"status": result.Status,
+				"reason": result.Reason,
 			})
 		}
 
@@ -550,73 +501,39 @@ func (s *Server) callDirectSetBulk(
 			"action":   "set",
 			"items":    items,
 			"skipped":  skipped,
-			"total":    len(objectIDs),
+			"total":    previewResult.Total,
 			"warnings": nil,
 			"fields":   updates,
 		}
 		return successEnvelope(data, nil), false
 	}
 
-	results := make([]map[string]interface{}, 0, len(objectIDs))
-	modifiedCount := 0
-	skippedCount := 0
-	errorCount := 0
-
-	for _, id := range objectIDs {
-		result := map[string]interface{}{"id": id}
-
-		if strings.Contains(id, "#") {
-			err := applySetBulkEmbedded(vaultPath, id, updates, sch, vaultCfg, parseOpts)
-			if err != nil {
-				result["status"] = "error"
-				result["reason"] = err.Error()
-				errorCount++
-			} else {
-				result["status"] = "modified"
-				modifiedCount++
-			}
-			results = append(results, result)
-			continue
-		}
-
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			result["status"] = "skipped"
-			result["reason"] = "object not found"
-			skippedCount++
-			results = append(results, result)
-			continue
-		}
-
-		_, err = objectsvc.SetObjectFile(objectsvc.SetObjectFileRequest{
-			FilePath:      filePath,
-			ObjectID:      id,
-			Updates:       updates,
-			Schema:        sch,
-			AllowedFields: map[string]bool{"alias": true},
-		})
-		if err != nil {
-			result["status"] = "error"
-			result["reason"] = setBulkReasonFromError(err)
-			errorCount++
-			results = append(results, result)
-			continue
-		}
-
+	summaryResult, err := objectsvc.ApplySetBulk(request, func(filePath string) {
 		maybeDirectReindexFile(vaultPath, filePath, vaultCfg)
-		result["status"] = "modified"
-		modifiedCount++
-		results = append(results, result)
+	})
+	if err != nil {
+		return errorEnvelope("INTERNAL_ERROR", err.Error(), "", nil), true
+	}
+	results := make([]map[string]interface{}, 0, len(summaryResult.Results))
+	for _, result := range summaryResult.Results {
+		entry := map[string]interface{}{
+			"id":     result.ID,
+			"status": result.Status,
+		}
+		if strings.TrimSpace(result.Reason) != "" {
+			entry["reason"] = result.Reason
+		}
+		results = append(results, entry)
 	}
 
 	data := map[string]interface{}{
-		"ok":       errorCount == 0,
-		"action":   "set",
+		"ok":       summaryResult.Errors == 0,
+		"action":   summaryResult.Action,
 		"results":  results,
-		"total":    len(results),
-		"skipped":  skippedCount,
-		"errors":   errorCount,
-		"modified": modifiedCount,
+		"total":    summaryResult.Total,
+		"skipped":  summaryResult.Skipped,
+		"errors":   summaryResult.Errors,
+		"modified": summaryResult.Modified,
 		"fields":   updates,
 	}
 	return successEnvelope(data, nil), false
@@ -733,60 +650,39 @@ func (s *Server) callDirectDeleteBulk(
 	}
 
 	deletionCfg := vaultCfg.GetDeletionConfig()
-
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return errorEnvelope("DATABASE_ERROR", "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil), true
+	request := objectsvc.DeleteBulkRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		ObjectIDs:   objectIDs,
+		Behavior:    deletionCfg.Behavior,
+		TrashDir:    deletionCfg.TrashDir,
 	}
-	defer db.Close()
 
 	confirm := boolValue(normalized["confirm"])
 	if !confirm {
-		items := make([]map[string]interface{}, 0, len(objectIDs))
-		var skipped []map[string]interface{}
-
-		for _, id := range objectIDs {
-			objectID := vaultCfg.FilePathToObjectID(id)
-			filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-			if err != nil {
-				skipped = append(skipped, map[string]interface{}{
-					"id":     id,
-					"status": "skipped",
-					"reason": "object not found",
-				})
-				continue
+		previewResult, err := objectsvc.PreviewDeleteBulk(request)
+		if err != nil {
+			return errorEnvelope("DATABASE_ERROR", "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil), true
+		}
+		items := make([]map[string]interface{}, 0, len(previewResult.Items))
+		skipped := make([]map[string]interface{}, 0, len(previewResult.Skipped))
+		for _, item := range previewResult.Items {
+			entry := map[string]interface{}{
+				"id":      item.ID,
+				"action":  item.Action,
+				"changes": item.Changes,
 			}
-
-			details := ""
-			backlinks, _ := db.Backlinks(objectID)
-			if len(backlinks) > 0 {
-				details = fmt.Sprintf("⚠ referenced by %d objects", len(backlinks))
+			if strings.TrimSpace(item.Details) != "" {
+				entry["details"] = item.Details
 			}
-
-			item := map[string]interface{}{
-				"id":     id,
-				"action": "delete",
-				"changes": map[string]string{
-					"behavior": "permanent deletion",
-				},
-			}
-			if details != "" {
-				item["details"] = details
-			}
-			if deletionCfg.Behavior == "trash" {
-				item["changes"] = map[string]string{"behavior": fmt.Sprintf("move to %s/", deletionCfg.TrashDir)}
-			}
-
-			if _, err := os.Stat(filePath); os.IsNotExist(err) {
-				skipped = append(skipped, map[string]interface{}{
-					"id":     id,
-					"status": "skipped",
-					"reason": "file not found",
-				})
-				continue
-			}
-
-			items = append(items, item)
+			items = append(items, entry)
+		}
+		for _, result := range previewResult.Skipped {
+			skipped = append(skipped, map[string]interface{}{
+				"id":     result.ID,
+				"status": result.Status,
+				"reason": result.Reason,
+			})
 		}
 
 		data := map[string]interface{}{
@@ -794,78 +690,45 @@ func (s *Server) callDirectDeleteBulk(
 			"action":   "delete",
 			"items":    items,
 			"skipped":  skipped,
-			"total":    len(objectIDs),
+			"total":    previewResult.Total,
 			"warnings": warnings,
-			"behavior": deletionCfg.Behavior,
+			"behavior": previewResult.Behavior,
 		}
 		return successEnvelope(data, nil), false
 	}
 
-	results := make([]map[string]interface{}, 0, len(objectIDs))
-	deletedCount := 0
-	skippedCount := 0
-	errorCount := 0
-
-	for _, id := range objectIDs {
-		result := map[string]interface{}{
-			"id": id,
+	summaryResult, err := objectsvc.ApplyDeleteBulk(request)
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil), true
+	}
+	results := make([]map[string]interface{}, 0, len(summaryResult.Results))
+	for _, result := range summaryResult.Results {
+		entry := map[string]interface{}{
+			"id":     result.ID,
+			"status": result.Status,
 		}
-
-		objectID := vaultCfg.FilePathToObjectID(id)
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			result["status"] = "skipped"
-			result["reason"] = "object not found"
-			skippedCount++
-			results = append(results, result)
-			continue
+		if strings.TrimSpace(result.Reason) != "" {
+			entry["reason"] = result.Reason
 		}
-
-		_, err = objectsvc.DeleteFile(objectsvc.DeleteFileRequest{
-			VaultPath: vaultPath,
-			FilePath:  filePath,
-			Behavior:  deletionCfg.Behavior,
-			TrashDir:  deletionCfg.TrashDir,
+		results = append(results, entry)
+	}
+	for _, warningMsg := range summaryResult.WarningMessages {
+		warnings = append(warnings, directWarning{
+			Code:    "INDEX_UPDATE_FAILED",
+			Message: warningMsg,
+			Ref:     "Run 'rvn reindex' to rebuild the database",
 		})
-		if err != nil {
-			result["status"] = "error"
-			var svcErr *objectsvc.Error
-			if errors.As(err, &svcErr) {
-				result["reason"] = svcErr.Message
-			} else {
-				result["reason"] = fmt.Sprintf("delete failed: %v", err)
-			}
-			errorCount++
-			results = append(results, result)
-			continue
-		}
-
-		if err := db.RemoveDocument(objectID); err != nil {
-			warningMsg := fmt.Sprintf("Failed to remove deleted object from index: %v", err)
-			if errors.Is(err, index.ErrObjectNotFound) {
-				warningMsg = "Object not found in index; consider running 'rvn reindex'"
-			}
-			warnings = append(warnings, directWarning{
-				Code:    "INDEX_UPDATE_FAILED",
-				Message: warningMsg,
-				Ref:     "Run 'rvn reindex' to rebuild the database",
-			})
-		}
-
-		result["status"] = "deleted"
-		deletedCount++
-		results = append(results, result)
 	}
 
 	data := map[string]interface{}{
-		"ok":       errorCount == 0,
-		"action":   "delete",
+		"ok":       summaryResult.Errors == 0,
+		"action":   summaryResult.Action,
 		"results":  results,
-		"total":    len(results),
-		"skipped":  skippedCount,
-		"errors":   errorCount,
-		"deleted":  deletedCount,
-		"behavior": deletionCfg.Behavior,
+		"total":    summaryResult.Total,
+		"skipped":  summaryResult.Skipped,
+		"errors":   summaryResult.Errors,
+		"deleted":  summaryResult.Deleted,
+		"behavior": summaryResult.Behavior,
 	}
 	return successEnvelope(data, warnings), false
 }
@@ -1059,137 +922,85 @@ func (s *Server) callDirectMoveBulk(
 
 	confirm := boolValue(normalized["confirm"])
 	updateRefs := boolValueDefault(normalized["update-refs"], true)
-	parseOpts := parseOptionsFromVaultConfig(vaultCfg)
+	request := objectsvc.MoveBulkRequest{
+		VaultPath:      vaultPath,
+		VaultConfig:    vaultCfg,
+		Schema:         sch,
+		ObjectIDs:      objectIDs,
+		DestinationDir: destination,
+		UpdateRefs:     updateRefs,
+		ParseOptions:   parseOptionsFromVaultConfig(vaultCfg),
+	}
 
 	if !confirm {
-		items := make([]map[string]interface{}, 0, len(objectIDs))
-		var skipped []map[string]interface{}
-
-		for _, id := range objectIDs {
-			sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-			if err != nil {
-				skipped = append(skipped, map[string]interface{}{
-					"id":     id,
-					"status": "skipped",
-					"reason": "object not found",
-				})
-				continue
-			}
-
-			filename := filepath.Base(sourceFile)
-			destPath := filepath.Join(destination, filename)
-			fullDestPath := filepath.Join(vaultPath, destPath)
-			if _, err := os.Stat(fullDestPath); err == nil {
-				skipped = append(skipped, map[string]interface{}{
-					"id":     id,
-					"status": "skipped",
-					"reason": fmt.Sprintf("destination already exists: %s", destPath),
-				})
-				continue
-			}
-
+		previewResult, err := objectsvc.PreviewMoveBulk(request)
+		if err != nil {
+			return errorEnvelope("INVALID_INPUT", err.Error(), "Example: rvn move --stdin archive/projects/", nil), true
+		}
+		items := make([]map[string]interface{}, 0, len(previewResult.Items))
+		skipped := make([]map[string]interface{}, 0, len(previewResult.Skipped))
+		for _, item := range previewResult.Items {
 			items = append(items, map[string]interface{}{
-				"id":      id,
-				"action":  "move",
-				"details": fmt.Sprintf("→ %s", destPath),
+				"id":      item.ID,
+				"action":  item.Action,
+				"details": item.Details,
+			})
+		}
+		for _, result := range previewResult.Skipped {
+			skipped = append(skipped, map[string]interface{}{
+				"id":     result.ID,
+				"status": result.Status,
+				"reason": result.Reason,
 			})
 		}
 
 		data := map[string]interface{}{
 			"preview":     true,
-			"action":      "move",
+			"action":      previewResult.Action,
 			"items":       items,
 			"skipped":     skipped,
-			"total":       len(objectIDs),
+			"total":       previewResult.Total,
 			"warnings":    warnings,
-			"destination": destination,
+			"destination": previewResult.Destination,
 		}
 		return successEnvelope(data, nil), false
 	}
 
-	results := make([]map[string]interface{}, 0, len(objectIDs))
-	movedCount := 0
-	skippedCount := 0
-	errorCount := 0
-
-	for _, id := range objectIDs {
-		result := map[string]interface{}{
-			"id": id,
+	summaryResult, err := objectsvc.ApplyMoveBulk(request)
+	if err != nil {
+		return errorEnvelope("INVALID_INPUT", err.Error(), "Example: rvn move --stdin archive/projects/", nil), true
+	}
+	results := make([]map[string]interface{}, 0, len(summaryResult.Results))
+	for _, result := range summaryResult.Results {
+		entry := map[string]interface{}{
+			"id":     result.ID,
+			"status": result.Status,
 		}
-
-		sourceFile, err := vault.ResolveObjectToFileWithConfig(vaultPath, id, vaultCfg)
-		if err != nil {
-			result["status"] = "skipped"
-			result["reason"] = "object not found"
-			skippedCount++
-			results = append(results, result)
-			continue
+		if strings.TrimSpace(result.Reason) != "" {
+			entry["reason"] = result.Reason
 		}
-
-		filename := filepath.Base(sourceFile)
-		destPath := filepath.Join(destination, filename)
-		fullDestPath := filepath.Join(vaultPath, destPath)
-
-		if _, err := os.Stat(fullDestPath); err == nil {
-			result["status"] = "skipped"
-			result["reason"] = fmt.Sprintf("destination already exists: %s", destPath)
-			skippedCount++
-			results = append(results, result)
-			continue
+		if strings.TrimSpace(result.Details) != "" {
+			entry["details"] = result.Details
 		}
-
-		relSource, _ := filepath.Rel(vaultPath, sourceFile)
-		sourceID := vaultCfg.FilePathToObjectID(relSource)
-		destID := vaultCfg.FilePathToObjectID(destPath)
-
-		serviceResult, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
-			VaultPath:         vaultPath,
-			SourceFile:        sourceFile,
-			DestinationFile:   fullDestPath,
-			SourceObjectID:    sourceID,
-			DestinationObject: destID,
-			UpdateRefs:        updateRefs,
-			FailOnIndexError:  true,
-			VaultConfig:       vaultCfg,
-			Schema:            sch,
-			ParseOptions:      parseOpts,
+		results = append(results, entry)
+	}
+	for _, warningMessage := range summaryResult.WarningMessages {
+		warnings = append(warnings, directWarning{
+			Code:    "INDEX_UPDATE_FAILED",
+			Message: warningMessage,
+			Ref:     "Run 'rvn reindex' to rebuild the database",
 		})
-		if err != nil {
-			result["status"] = "error"
-			var svcErr *objectsvc.Error
-			if errors.As(err, &svcErr) {
-				result["reason"] = svcErr.Message
-			} else {
-				result["reason"] = fmt.Sprintf("move failed: %v", err)
-			}
-			errorCount++
-			results = append(results, result)
-			continue
-		}
-
-		for _, warningMessage := range serviceResult.WarningMessages {
-			warnings = append(warnings, directWarning{
-				Code:    "INDEX_UPDATE_FAILED",
-				Message: warningMessage,
-				Ref:     "Run 'rvn reindex' to rebuild the database",
-			})
-		}
-
-		result["status"] = "moved"
-		result["details"] = destPath
-		movedCount++
-		results = append(results, result)
 	}
 
 	data := map[string]interface{}{
-		"ok":          errorCount == 0,
-		"action":      "move",
+		"ok":          summaryResult.Errors == 0,
+		"action":      summaryResult.Action,
 		"results":     results,
-		"total":       len(results),
-		"skipped":     skippedCount,
-		"errors":      errorCount,
-		"moved":       movedCount,
-		"destination": destination,
+		"total":       summaryResult.Total,
+		"skipped":     summaryResult.Skipped,
+		"errors":      summaryResult.Errors,
+		"moved":       summaryResult.Moved,
+		"destination": summaryResult.Destination,
 	}
 	return successEnvelope(data, warnings), false
 }
@@ -1668,14 +1479,6 @@ func extractSetObjectIDs(args map[string]interface{}, stdinMode bool) []string {
 	return ids
 }
 
-func mapKeys(values map[string]string) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	return keys
-}
-
 func hasAnyArg(args map[string]interface{}, keys ...string) bool {
 	for _, key := range keys {
 		if _, ok := args[key]; ok {
@@ -1683,146 +1486,6 @@ func hasAnyArg(args map[string]interface{}, keys ...string) bool {
 		}
 	}
 	return false
-}
-
-func previewSetBulkEmbedded(
-	vaultPath string,
-	id string,
-	updates map[string]string,
-	sch *schema.Schema,
-	vaultCfg *config.VaultConfig,
-	parseOpts *parser.ParseOptions,
-) (map[string]interface{}, map[string]interface{}) {
-	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
-	if !isEmbedded {
-		return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": "invalid embedded ID format"}
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
-	if err != nil {
-		return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": "parent file not found"}
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": fmt.Sprintf("read error: %v", err)}
-	}
-
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
-	if err != nil {
-		return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": fmt.Sprintf("parse error: %v", err)}
-	}
-
-	var targetObj *parser.ParsedObject
-	for _, obj := range doc.Objects {
-		if obj.ID == id {
-			targetObj = obj
-			break
-		}
-	}
-	if targetObj == nil {
-		return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": "embedded object not found"}
-	}
-
-	if unknownErr := fieldmutation.DetectUnknownFieldMutationByNames(targetObj.ObjectType, sch, mapKeys(updates), map[string]bool{"alias": true, "id": true}); unknownErr != nil {
-		return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": unknownErr.Error()}
-	}
-
-	_, resolvedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutation(
-		targetObj.ObjectType,
-		targetObj.Fields,
-		updates,
-		sch,
-		map[string]bool{"alias": true, "id": true},
-	)
-	if err != nil {
-		var validationErr *fieldmutation.ValidationError
-		if errors.As(err, &validationErr) {
-			return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": validationErr.Error()}
-		}
-		return nil, map[string]interface{}{"id": id, "status": "skipped", "reason": fmt.Sprintf("validation error: %v", err)}
-	}
-
-	changes := make(map[string]string)
-	for field, resolvedVal := range resolvedUpdates {
-		oldVal := "<unset>"
-		if targetObj.Fields != nil {
-			if v, ok := targetObj.Fields[field]; ok {
-				if s, ok := v.AsString(); ok {
-					oldVal = s
-				} else if n, ok := v.AsNumber(); ok {
-					oldVal = fmt.Sprintf("%v", n)
-				} else if b, ok := v.AsBool(); ok {
-					oldVal = fmt.Sprintf("%v", b)
-				} else {
-					oldVal = fmt.Sprintf("%v", v.Raw())
-				}
-			}
-		}
-		changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
-	}
-
-	return map[string]interface{}{
-		"id":      id,
-		"action":  "set",
-		"changes": changes,
-	}, nil
-}
-
-func applySetBulkEmbedded(
-	vaultPath string,
-	id string,
-	updates map[string]string,
-	sch *schema.Schema,
-	vaultCfg *config.VaultConfig,
-	parseOpts *parser.ParseOptions,
-) error {
-	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
-	if !isEmbedded {
-		return fmt.Errorf("invalid embedded ID format")
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
-	if err != nil {
-		return fmt.Errorf("parent file not found: %w", err)
-	}
-
-	_, err = objectsvc.SetEmbeddedObject(objectsvc.SetEmbeddedObjectRequest{
-		VaultPath:      vaultPath,
-		FilePath:       filePath,
-		ObjectID:       id,
-		Updates:        updates,
-		Schema:         sch,
-		AllowedFields:  map[string]bool{"alias": true, "id": true},
-		DocumentParser: parseOpts,
-	})
-	if err != nil {
-		var svcErr *objectsvc.Error
-		if errors.As(err, &svcErr) {
-			return errors.New(svcErr.Message)
-		}
-		return err
-	}
-
-	maybeDirectReindexFile(vaultPath, filePath, vaultCfg)
-	return nil
-}
-
-func setBulkReasonFromError(err error) string {
-	var svcErr *objectsvc.Error
-	var unknownErr *fieldmutation.UnknownFieldMutationError
-	var validationErr *fieldmutation.ValidationError
-
-	switch {
-	case errors.As(err, &svcErr):
-		return svcErr.Message
-	case errors.As(err, &unknownErr):
-		return unknownErr.Error()
-	case errors.As(err, &validationErr):
-		return validationErr.Error()
-	default:
-		return fmt.Sprintf("update error: %v", err)
-	}
 }
 
 func extractAddObjectIDs(args map[string]interface{}, stdinMode bool) []string {
