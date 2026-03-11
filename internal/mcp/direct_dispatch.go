@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,9 +15,12 @@ import (
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -65,6 +70,21 @@ func (s *Server) callToolDirect(name string, args map[string]interface{}) (strin
 		return out, isErr, true
 	case "raven_move":
 		out, isErr := s.callDirectMove(args)
+		return out, isErr, true
+	case "raven_search":
+		out, isErr := s.callDirectSearch(args)
+		return out, isErr, true
+	case "raven_backlinks":
+		out, isErr := s.callDirectBacklinks(args)
+		return out, isErr, true
+	case "raven_outlinks":
+		out, isErr := s.callDirectOutlinks(args)
+		return out, isErr, true
+	case "raven_resolve":
+		out, isErr := s.callDirectResolve(args)
+		return out, isErr, true
+	case "raven_query":
+		out, isErr := s.callDirectQuery(args)
 		return out, isErr, true
 	default:
 		return "", false, false
@@ -1005,6 +1025,343 @@ func (s *Server) callDirectMoveBulk(
 	return successEnvelope(data, warnings), false
 }
 
+func (s *Server) callDirectSearch(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	normalized := normalizeArgs(args)
+	queryStr := strings.TrimSpace(toString(normalized["query"]))
+	if queryStr == "" {
+		return errorEnvelope("MISSING_ARGUMENT", "requires query argument", "Usage: rvn search <query>", nil), true
+	}
+
+	limit := intValueDefault(normalized["limit"], 20)
+	searchType := strings.TrimSpace(toString(normalized["type"]))
+
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", "failed to open database", "Run 'rvn reindex' to rebuild the database", nil), true
+	}
+	defer rt.Close()
+
+	results, err := readsvc.Search(rt, queryStr, searchType, limit)
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", fmt.Sprintf("search failed: %v", err), "", nil), true
+	}
+
+	readsvc.SaveSearchResults(vaultPath, queryStr, results)
+
+	data := map[string]interface{}{
+		"query":   queryStr,
+		"results": formatSearchMatches(results),
+	}
+	return successEnvelope(data, nil), false
+}
+
+func (s *Server) callDirectBacklinks(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	normalized := normalizeArgs(args)
+	reference := strings.TrimSpace(toString(normalized["target"]))
+	if reference == "" {
+		return errorEnvelope("MISSING_ARGUMENT", "requires target argument", "Usage: rvn backlinks <target>", nil), true
+	}
+
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", "failed to open database", "Run 'rvn reindex' to rebuild the database", nil), true
+	}
+	defer rt.Close()
+
+	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+	if err != nil {
+		return mapDirectResolveError(err, reference)
+	}
+
+	links, err := readsvc.Backlinks(rt, resolved.ObjectID)
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", fmt.Sprintf("failed to read backlinks: %v", err), "", nil), true
+	}
+	readsvc.SaveBacklinksResults(vaultPath, resolved.ObjectID, links)
+
+	data := map[string]interface{}{
+		"target": resolved.ObjectID,
+		"items":  links,
+	}
+	return successEnvelope(data, nil), false
+}
+
+func (s *Server) callDirectOutlinks(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	normalized := normalizeArgs(args)
+	reference := strings.TrimSpace(toString(normalized["source"]))
+	if reference == "" {
+		return errorEnvelope("MISSING_ARGUMENT", "requires source argument", "Usage: rvn outlinks <source>", nil), true
+	}
+
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", "failed to open database", "Run 'rvn reindex' to rebuild the database", nil), true
+	}
+	defer rt.Close()
+
+	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+	if err != nil {
+		return mapDirectResolveError(err, reference)
+	}
+
+	links, err := readsvc.Outlinks(rt, resolved.ObjectID)
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", fmt.Sprintf("failed to read outlinks: %v", err), "", nil), true
+	}
+	readsvc.SaveOutlinksResults(vaultPath, resolved.ObjectID, links)
+
+	data := map[string]interface{}{
+		"source": resolved.ObjectID,
+		"items":  links,
+	}
+	return successEnvelope(data, nil), false
+}
+
+func (s *Server) callDirectResolve(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	normalized := normalizeArgs(args)
+	reference := strings.TrimSpace(toString(normalized["reference"]))
+	if reference == "" {
+		return errorEnvelope("MISSING_ARGUMENT", "requires reference argument", "Usage: rvn resolve <reference>", nil), true
+	}
+
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", "failed to open database", "Run 'rvn reindex' to rebuild the database", nil), true
+	}
+	defer rt.Close()
+
+	resolved, err := readsvc.ResolveReferenceWithDynamicDates(reference, rt, true)
+
+	var ambiguousErr *readsvc.AmbiguousRefError
+	if errors.As(err, &ambiguousErr) {
+		matches := make([]map[string]interface{}, 0, len(ambiguousErr.Matches))
+		for _, match := range ambiguousErr.Matches {
+			entry := map[string]interface{}{"object_id": match}
+			if ambiguousErr.MatchSources != nil {
+				if source, ok := ambiguousErr.MatchSources[match]; ok {
+					entry["match_source"] = source
+				}
+			}
+			matches = append(matches, entry)
+		}
+
+		return successEnvelope(map[string]interface{}{
+			"resolved":  false,
+			"ambiguous": true,
+			"reference": reference,
+			"matches":   matches,
+		}, nil), false
+	}
+
+	if err != nil {
+		return successEnvelope(map[string]interface{}{
+			"resolved":  false,
+			"reference": reference,
+		}, nil), false
+	}
+
+	relPath := resolved.FilePath
+	if rel, relErr := filepath.Rel(vaultPath, resolved.FilePath); relErr == nil {
+		relPath = rel
+	}
+
+	objectType := ""
+	if obj, objErr := rt.DB.GetObject(resolved.ObjectID); objErr == nil && obj != nil {
+		objectType = obj.Type
+	}
+
+	data := map[string]interface{}{
+		"resolved":   true,
+		"object_id":  resolved.ObjectID,
+		"file_path":  relPath,
+		"is_section": resolved.IsSection,
+	}
+	if objectType != "" {
+		data["type"] = objectType
+	}
+	if resolved.MatchSource != "" {
+		data["match_source"] = resolved.MatchSource
+	}
+	if resolved.IsSection {
+		data["file_object_id"] = resolved.FileObjectID
+	}
+	return successEnvelope(data, nil), false
+}
+
+func (s *Server) callDirectQuery(args map[string]interface{}) (string, bool) {
+	normalized := normalizeArgs(args)
+	queryString := strings.TrimSpace(toString(normalized["query_string"]))
+	if queryString == "" {
+		return errorEnvelope("MISSING_ARGUMENT", "specify a query string", "Run 'rvn query --list' to see saved queries", nil), true
+	}
+
+	// Keep complex/saved-query behavior on CLI until fully migrated.
+	if boolValue(normalized["list"]) || boolValue(normalized["refresh"]) ||
+		len(stringSliceValues(normalized["apply"])) > 0 || hasAnyArg(normalized, "inputs") ||
+		(!strings.HasPrefix(queryString, "object:") && !strings.HasPrefix(queryString, "trait:")) {
+		cmdArgs := BuildCLIArgs("raven_query", args)
+		if len(cmdArgs) == 0 {
+			return errorEnvelope("UNKNOWN_TOOL", "unknown tool: raven_query", "", nil), true
+		}
+		return s.executeRvn(cmdArgs)
+	}
+
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	limit := intValueDefault(normalized["limit"], 0)
+	offset := intValueDefault(normalized["offset"], 0)
+	idsOnly := boolValue(normalized["ids"])
+	countOnly := boolValue(normalized["count-only"])
+	if limit < 0 {
+		return errorEnvelope("INVALID_INPUT", "--limit must be >= 0", "Use --limit 0 for no limit", nil), true
+	}
+	if offset < 0 {
+		return errorEnvelope("INVALID_INPUT", "--offset must be >= 0", "Use --offset 0 for no offset", nil), true
+	}
+
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if err != nil {
+		return errorEnvelope("DATABASE_ERROR", "failed to open database", "Run 'rvn reindex' to rebuild the database", nil), true
+	}
+	defer rt.Close()
+
+	result, err := readsvc.ExecuteQuery(rt, readsvc.ExecuteQueryRequest{
+		QueryString: queryString,
+		IDsOnly:     idsOnly,
+		Limit:       limit,
+		Offset:      offset,
+		CountOnly:   countOnly,
+	})
+	if err != nil {
+		var validationErr *query.ValidationError
+		if errors.As(err, &validationErr) {
+			return errorEnvelope("QUERY_INVALID", validationErr.Message, validationErr.Suggestion, nil), true
+		}
+		return errorEnvelope("QUERY_INVALID", fmt.Sprintf("parse error: %v", err), "", nil), true
+	}
+
+	if countOnly {
+		key := "type"
+		if result.QueryType == "trait" {
+			key = "trait"
+		}
+		return successEnvelope(map[string]interface{}{
+			"query_type": result.QueryType,
+			key:          result.TypeName,
+			"total":      result.Total,
+		}, nil), false
+	}
+
+	if idsOnly {
+		return successEnvelope(map[string]interface{}{
+			"ids":      result.IDs,
+			"total":    result.Total,
+			"returned": result.Returned,
+			"offset":   result.Offset,
+			"limit":    result.Limit,
+		}, nil), false
+	}
+
+	if result.QueryType == "object" {
+		items := make([]map[string]interface{}, len(result.Objects))
+		for i, row := range result.Objects {
+			items[i] = map[string]interface{}{
+				"num":       result.Offset + i + 1,
+				"id":        row.ID,
+				"type":      row.Type,
+				"fields":    row.Fields,
+				"file_path": row.FilePath,
+				"line":      row.LineStart,
+			}
+		}
+		readsvc.SaveObjectQueryResults(vaultPath, queryString, result.Objects)
+		return successEnvelope(map[string]interface{}{
+			"query_type": result.QueryType,
+			"type":       result.TypeName,
+			"items":      items,
+			"total":      result.Total,
+			"returned":   result.Returned,
+			"offset":     result.Offset,
+			"limit":      result.Limit,
+		}, nil), false
+	}
+
+	items := make([]map[string]interface{}, len(result.Traits))
+	for i, row := range result.Traits {
+		items[i] = map[string]interface{}{
+			"num":        result.Offset + i + 1,
+			"id":         row.ID,
+			"trait_type": row.TraitType,
+			"value":      row.Value,
+			"content":    row.Content,
+			"file_path":  row.FilePath,
+			"line":       row.Line,
+			"object_id":  row.ParentObjectID,
+		}
+	}
+	readsvc.SaveTraitQueryResults(vaultPath, queryString, result.Traits)
+	return successEnvelope(map[string]interface{}{
+		"query_type": result.QueryType,
+		"trait":      result.TypeName,
+		"items":      items,
+		"total":      result.Total,
+		"returned":   result.Returned,
+		"offset":     result.Offset,
+		"limit":      result.Limit,
+	}, nil), false
+}
+
+func mapDirectResolveError(err error, reference string) (string, bool) {
+	var ambiguous *readsvc.AmbiguousRefError
+	if errors.As(err, &ambiguous) {
+		return errorEnvelope("REF_AMBIGUOUS", ambiguous.Error(), "Use a full object ID/path to disambiguate", nil), true
+	}
+
+	var notFound *readsvc.RefNotFoundError
+	if errors.As(err, &notFound) {
+		return errorEnvelope("REF_NOT_FOUND", notFound.Error(), "Check the object reference and run 'rvn reindex' if needed", nil), true
+	}
+
+	return errorEnvelope("REF_NOT_FOUND", fmt.Sprintf("reference '%s' not found", reference), "Check the object reference and run 'rvn reindex' if needed", nil), true
+}
+
+func formatSearchMatches(results []model.SearchMatch) []map[string]interface{} {
+	formatted := make([]map[string]interface{}, len(results))
+	for i, result := range results {
+		formatted[i] = map[string]interface{}{
+			"object_id": result.ObjectID,
+			"title":     result.Title,
+			"file_path": result.FilePath,
+			"snippet":   result.Snippet,
+			"rank":      result.Rank,
+		}
+	}
+	return formatted
+}
+
 func (s *Server) directContext(args map[string]interface{}) (string, *config.VaultConfig, *schema.Schema, map[string]interface{}, string, bool) {
 	vaultPath, err := s.resolveVaultPath()
 	if err != nil {
@@ -1292,6 +1649,63 @@ func boolValueDefault(v interface{}, defaultValue bool) bool {
 		return defaultValue
 	}
 	return boolValue(v)
+}
+
+func intValueDefault(v interface{}, defaultValue int) int {
+	if v == nil {
+		return defaultValue
+	}
+
+	switch val := v.(type) {
+	case int:
+		return val
+	case int8:
+		return int(val)
+	case int16:
+		return int(val)
+	case int32:
+		return int(val)
+	case int64:
+		return int(val)
+	case uint:
+		return int(val)
+	case uint8:
+		return int(val)
+	case uint16:
+		return int(val)
+	case uint32:
+		return int(val)
+	case uint64:
+		return int(val)
+	case float32:
+		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
+			return defaultValue
+		}
+		return int(val)
+	case float64:
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return defaultValue
+		}
+		return int(val)
+	case json.Number:
+		if i, err := val.Int64(); err == nil {
+			return int(i)
+		}
+		if f, err := val.Float64(); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
+			return int(f)
+		}
+		return defaultValue
+	case string:
+		if strings.TrimSpace(val) == "" {
+			return defaultValue
+		}
+		if i, err := strconv.Atoi(strings.TrimSpace(val)); err == nil {
+			return i
+		}
+		return defaultValue
+	default:
+		return defaultValue
+	}
 }
 
 func extractMoveObjectIDs(args map[string]interface{}) ([]string, []string) {

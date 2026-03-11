@@ -5,9 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/lastresults"
-	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 var outlinksCmd = &cobra.Command{
@@ -34,35 +32,29 @@ Examples:
 		reference := args[0]
 		start := time.Now()
 
-		// Load vault config
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
+		defer rt.Close()
 
 		// Resolve the reference to get the canonical object ID
 		// Use dynamic date resolution so "today", "yesterday", etc. work.
 		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
+			VaultPath:   rt.VaultPath,
+			VaultConfig: rt.VaultCfg,
 		}, true)
 		if err != nil {
 			return handleResolveError(err, reference)
 		}
 		source := result.ObjectID
 
-		db, err := index.Open(vaultPath)
-		if err != nil {
-			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
-		}
-		defer db.Close()
-
-		links, err := db.Outlinks(source)
+		links, err := readsvc.Outlinks(rt, source)
 		if err != nil {
 			return handleError(ErrDatabaseError, err, "")
 		}
 
-		saveLastOutlinksResults(vaultPath, source, links)
+		readsvc.SaveOutlinksResults(vaultPath, source, links)
 
 		elapsed := time.Since(start).Milliseconds()
 
@@ -79,18 +71,6 @@ Examples:
 
 		return nil
 	},
-}
-
-func saveLastOutlinksResults(vaultPath, source string, links []model.Reference) {
-	modelResults := make([]model.Result, len(links))
-	for i, link := range links {
-		modelResults[i] = link
-	}
-	lr, err := lastresults.NewFromResults(lastresults.SourceOutlinks, "", source, modelResults)
-	if err != nil {
-		return
-	}
-	_ = lastresults.Write(vaultPath, lr)
 }
 
 func init() {

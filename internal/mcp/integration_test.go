@@ -1307,6 +1307,221 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "moved", "destination"})
 	})
+
+	t.Run("search", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/roadmap.md", `---
+type: project
+status: active
+---
+# Roadmap
+
+Contains roadmap milestones.
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/roadmap.md", `---
+type: project
+status: active
+---
+# Roadmap
+
+Contains roadmap milestones.
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_search", map[string]interface{}{
+			"query": "roadmap milestones",
+			"limit": 5,
+		})
+		cliResult := vCLI.RunCLI("search", "roadmap milestones", "--limit", "5")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "results"})
+	})
+
+	t.Run("backlinks", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/eve.md", `---
+type: person
+name: Eve
+---
+# Eve
+`).
+			WithFile("projects/security.md", `---
+type: project
+status: active
+owner: people/eve
+---
+# Security
+
+Owner [[people/eve]]
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/eve.md", `---
+type: person
+name: Eve
+---
+# Eve
+`).
+			WithFile("projects/security.md", `---
+type: project
+status: active
+owner: people/eve
+---
+# Security
+
+Owner [[people/eve]]
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_backlinks", map[string]interface{}{
+			"target": "people/eve",
+		})
+		cliResult := vCLI.RunCLI("backlinks", "people/eve")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"target", "items"})
+	})
+
+	t.Run("outlinks", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/eve.md", `---
+type: person
+name: Eve
+---
+# Eve
+`).
+			WithFile("projects/security.md", `---
+type: project
+status: active
+owner: people/eve
+---
+# Security
+
+Owner [[people/eve]]
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/eve.md", `---
+type: person
+name: Eve
+---
+# Eve
+`).
+			WithFile("projects/security.md", `---
+type: project
+status: active
+owner: people/eve
+---
+# Security
+
+Owner [[people/eve]]
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_outlinks", map[string]interface{}{
+			"source": "projects/security",
+		})
+		cliResult := vCLI.RunCLI("outlinks", "projects/security")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"source", "items"})
+	})
+
+	t.Run("resolve", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/alex.md", `---
+type: person
+name: Alex
+---
+# Alex
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/alex.md", `---
+type: person
+name: Alex
+---
+# Alex
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_resolve", map[string]interface{}{
+			"reference": "alex",
+		})
+		cliResult := vCLI.RunCLI("resolve", "alex")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"resolved", "object_id", "file_path", "is_section", "type", "match_source"})
+	})
+
+	t.Run("query_full", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/alpha.md", `---
+type: project
+status: active
+---
+# Alpha
+`).
+			WithFile("projects/beta.md", `---
+type: project
+status: paused
+---
+# Beta
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/alpha.md", `---
+type: project
+status: active
+---
+# Alpha
+`).
+			WithFile("projects/beta.md", `---
+type: project
+status: paused
+---
+# Beta
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_query", map[string]interface{}{
+			"query_string": "object:project .status==active",
+			"limit":        10,
+			"offset":       0,
+		})
+		cliResult := vCLI.RunCLI("query", "object:project .status==active", "--limit", "10", "--offset", "0")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_type", "type", "items", "total", "returned", "offset", "limit"})
+	})
 }
 
 func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
@@ -1535,6 +1750,76 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 			"destination": "archive/",
 		})
 		cliResult := vCLI.RunCLIWithStdin("", "move", "--stdin", "archive/")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("query_parse_error", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_query", map[string]interface{}{
+			"query_string": "object:project .status===",
+		})
+		cliResult := vCLI.RunCLI("query", "object:project .status===")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("backlinks_missing_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_backlinks", map[string]interface{}{
+			"target": "people/missing",
+		})
+		cliResult := vCLI.RunCLI("backlinks", "people/missing")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("outlinks_ambiguous_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/sam.md", `---
+type: person
+name: Sam
+---
+# Sam
+`).
+			WithFile("projects/sam.md", `---
+type: project
+status: active
+---
+# Sam
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/sam.md", `---
+type: person
+name: Sam
+---
+# Sam
+`).
+			WithFile("projects/sam.md", `---
+type: project
+status: active
+---
+# Sam
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_outlinks", map[string]interface{}{
+			"source": "sam",
+		})
+		cliResult := vCLI.RunCLI("outlinks", "sam")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})

@@ -7,9 +7,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commands"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/lastresults"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 var searchLimit int
@@ -22,29 +21,20 @@ var searchCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
+		query := strings.Join(args, " ")
 
-		// Open database
-		db, _, err := index.OpenWithRebuild(vaultPath)
+		rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
-		defer db.Close()
+		defer rt.Close()
 
-		// Join all args as the search query
-		query := strings.Join(args, " ")
-
-		// Perform search
-		var results []model.SearchMatch
-		if searchType != "" {
-			results, err = db.SearchWithType(query, searchType, searchLimit)
-		} else {
-			results, err = db.Search(query, searchLimit)
-		}
+		results, err := readsvc.Search(rt, query, searchType, searchLimit)
 		if err != nil {
 			return fmt.Errorf("search failed: %w", err)
 		}
 
-		saveLastSearchResults(vaultPath, query, results)
+		readsvc.SaveSearchResults(vaultPath, query, results)
 
 		// Output results
 		if jsonOutput {
@@ -59,18 +49,6 @@ var searchCmd = &cobra.Command{
 
 		return nil
 	},
-}
-
-func saveLastSearchResults(vaultPath, query string, results []model.SearchMatch) {
-	modelResults := make([]model.Result, len(results))
-	for i, r := range results {
-		modelResults[i] = r
-	}
-	lr, err := lastresults.NewFromResults(lastresults.SourceSearch, query, "", modelResults)
-	if err != nil {
-		return
-	}
-	_ = lastresults.Write(vaultPath, lr)
 }
 
 func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {
