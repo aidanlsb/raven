@@ -1522,6 +1522,144 @@ status: paused
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_type", "type", "items", "total", "returned", "offset", "limit"})
 	})
+
+	t.Run("schema_template_set", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/person.md", "# Person Template\n")
+		vCLI.WriteFile("templates/person.md", "# Person Template\n")
+
+		mcpResult := server.callTool("raven_schema_template_set", map[string]interface{}{
+			"template_id": "person_profile",
+			"file":        "templates/person.md",
+			"description": "Person profile template",
+		})
+		cliResult := vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md", "--description", "Person profile template")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"id", "file", "description"})
+	})
+
+	t.Run("schema_template_get", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/person.md", "# Person Template\n")
+		vCLI.WriteFile("templates/person.md", "# Person Template\n")
+		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md", "--description", "Person profile template").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md", "--description", "Person profile template").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_schema_template_get", map[string]interface{}{
+			"template_id": "person_profile",
+		})
+		cliResult := vCLI.RunCLI("schema", "template", "get", "person_profile")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"id", "file", "description"})
+	})
+
+	t.Run("schema_template_remove", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/person.md", "# Person Template\n")
+		vCLI.WriteFile("templates/person.md", "# Person Template\n")
+		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_schema_template_remove", map[string]interface{}{
+			"template_id": "person_profile",
+		})
+		cliResult := vCLI.RunCLI("schema", "template", "remove", "person_profile")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"removed", "id"})
+	})
+
+	t.Run("schema_type_template_set", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/person.md", "# Person Template\n")
+		vCLI.WriteFile("templates/person.md", "# Person Template\n")
+		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_schema_type_template_set", map[string]interface{}{
+			"type_name":   "person",
+			"template_id": "person_profile",
+		})
+		cliResult := vCLI.RunCLI("schema", "type", "person", "template", "set", "person_profile")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "template_id"})
+	})
+
+	t.Run("schema_type_template_default_clear", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/person.md", "# Person Template\n")
+		vCLI.WriteFile("templates/person.md", "# Person Template\n")
+		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
+		vMCP.RunCLI("schema", "type", "person", "template", "set", "person_profile").MustSucceed(t)
+		vCLI.RunCLI("schema", "type", "person", "template", "set", "person_profile").MustSucceed(t)
+		vMCP.RunCLI("schema", "type", "person", "template", "default", "person_profile").MustSucceed(t)
+		vCLI.RunCLI("schema", "type", "person", "template", "default", "person_profile").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_schema_type_template_default", map[string]interface{}{
+			"type_name": "person",
+			"clear":     true,
+		})
+		cliResult := vCLI.RunCLI("schema", "type", "person", "template", "default", "--clear")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "default_template"})
+	})
+
+	t.Run("schema_core_template_set", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/daily.md", "# Daily Template\n")
+		vCLI.WriteFile("templates/daily.md", "# Daily Template\n")
+		vMCP.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_schema_core_template_set", map[string]interface{}{
+			"core_type":   "date",
+			"template_id": "daily_default",
+		})
+		cliResult := vCLI.RunCLI("schema", "core", "date", "template", "set", "daily_default")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core_type", "template_id"})
+	})
+
+	t.Run("schema_core_template_default_clear", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/daily.md", "# Daily Template\n")
+		vCLI.WriteFile("templates/daily.md", "# Daily Template\n")
+		vMCP.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
+		vMCP.RunCLI("schema", "core", "date", "template", "set", "daily_default").MustSucceed(t)
+		vCLI.RunCLI("schema", "core", "date", "template", "set", "daily_default").MustSucceed(t)
+		vMCP.RunCLI("schema", "core", "date", "template", "default", "daily_default").MustSucceed(t)
+		vCLI.RunCLI("schema", "core", "date", "template", "default", "daily_default").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_schema_core_template_default", map[string]interface{}{
+			"core_type": "date",
+			"clear":     true,
+		})
+		cliResult := vCLI.RunCLI("schema", "core", "date", "template", "default", "--clear")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core_type", "default_template"})
+	})
 }
 
 func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {

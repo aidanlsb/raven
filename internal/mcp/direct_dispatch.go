@@ -24,6 +24,7 @@ import (
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -87,6 +88,42 @@ func (s *Server) callToolDirect(name string, args map[string]interface{}) (strin
 		return out, isErr, true
 	case "raven_query":
 		out, isErr := s.callDirectQuery(args)
+		return out, isErr, true
+	case "raven_schema_template_list":
+		out, isErr := s.callDirectSchemaTemplateList(args)
+		return out, isErr, true
+	case "raven_schema_template_get":
+		out, isErr := s.callDirectSchemaTemplateGet(args)
+		return out, isErr, true
+	case "raven_schema_template_set":
+		out, isErr := s.callDirectSchemaTemplateSet(args)
+		return out, isErr, true
+	case "raven_schema_template_remove":
+		out, isErr := s.callDirectSchemaTemplateRemove(args)
+		return out, isErr, true
+	case "raven_schema_type_template_list":
+		out, isErr := s.callDirectSchemaTypeTemplateList(args)
+		return out, isErr, true
+	case "raven_schema_type_template_set":
+		out, isErr := s.callDirectSchemaTypeTemplateSet(args)
+		return out, isErr, true
+	case "raven_schema_type_template_remove":
+		out, isErr := s.callDirectSchemaTypeTemplateRemove(args)
+		return out, isErr, true
+	case "raven_schema_type_template_default":
+		out, isErr := s.callDirectSchemaTypeTemplateDefault(args)
+		return out, isErr, true
+	case "raven_schema_core_template_list":
+		out, isErr := s.callDirectSchemaCoreTemplateList(args)
+		return out, isErr, true
+	case "raven_schema_core_template_set":
+		out, isErr := s.callDirectSchemaCoreTemplateSet(args)
+		return out, isErr, true
+	case "raven_schema_core_template_remove":
+		out, isErr := s.callDirectSchemaCoreTemplateRemove(args)
+		return out, isErr, true
+	case "raven_schema_core_template_default":
+		out, isErr := s.callDirectSchemaCoreTemplateDefault(args)
 		return out, isErr, true
 	default:
 		return "", false, false
@@ -1665,6 +1702,252 @@ func dedupeIDs(ids []string) []string {
 	return out
 }
 
+func (s *Server) callDirectSchemaTemplateList(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	items, err := schemasvc.ListTemplates(vaultPath)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{"templates": items}, nil), false
+}
+
+func (s *Server) callDirectSchemaTemplateGet(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	normalized := normalizeArgs(args)
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+	item, err := schemasvc.GetTemplate(vaultPath, templateID)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"id":          item.ID,
+		"file":        item.File,
+		"description": item.Description,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaTemplateSet(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	normalized := normalizeArgs(args)
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+	description := toString(normalized["description"])
+	item, err := schemasvc.SetTemplate(schemasvc.SetTemplateRequest{
+		VaultPath:   vaultPath,
+		TemplateID:  templateID,
+		File:        toString(normalized["file"]),
+		Description: description,
+	})
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"id":          item.ID,
+		"file":        item.File,
+		"description": strings.TrimSpace(description),
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaTemplateRemove(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	normalized := normalizeArgs(args)
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+	if err := schemasvc.RemoveTemplate(vaultPath, templateID); err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"removed": true,
+		"id":      templateID,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaTypeTemplateList(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	typeName := strings.TrimSpace(toString(normalized["type_name"]))
+
+	state, err := schemasvc.ListTypeTemplates(vaultPath, typeName)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"type":             typeName,
+		"templates":        state.Templates,
+		"default_template": state.DefaultTemplate,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaTypeTemplateSet(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	typeName := strings.TrimSpace(toString(normalized["type_name"]))
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+
+	result, err := schemasvc.AddTypeTemplate(vaultPath, typeName, templateID)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	if result.AlreadySet {
+		return successEnvelope(map[string]interface{}{
+			"type":          typeName,
+			"template_id":   templateID,
+			"already_set":   true,
+			"default_match": result.DefaultMatch,
+		}, nil), false
+	}
+
+	return successEnvelope(map[string]interface{}{
+		"type":        typeName,
+		"template_id": templateID,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaTypeTemplateRemove(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	typeName := strings.TrimSpace(toString(normalized["type_name"]))
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+
+	if err := schemasvc.RemoveTypeTemplate(vaultPath, typeName, templateID); err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"type":        typeName,
+		"template_id": templateID,
+		"removed":     true,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaTypeTemplateDefault(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	typeName := strings.TrimSpace(toString(normalized["type_name"]))
+	clearDefault := boolValue(normalized["clear"])
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+
+	newDefault, err := schemasvc.SetTypeDefaultTemplate(vaultPath, typeName, templateID, clearDefault)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"type":             typeName,
+		"default_template": newDefault,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaCoreTemplateList(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	coreType := strings.TrimSpace(toString(normalized["core_type"]))
+
+	state, err := schemasvc.ListCoreTemplates(vaultPath, coreType)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"core_type":        coreType,
+		"templates":        state.Templates,
+		"default_template": state.DefaultTemplate,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaCoreTemplateSet(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	coreType := strings.TrimSpace(toString(normalized["core_type"]))
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+
+	result, err := schemasvc.AddCoreTemplate(vaultPath, coreType, templateID)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	if result.AlreadySet {
+		return successEnvelope(map[string]interface{}{
+			"core_type":     coreType,
+			"template_id":   templateID,
+			"already_set":   true,
+			"default_match": result.DefaultMatch,
+		}, nil), false
+	}
+
+	return successEnvelope(map[string]interface{}{
+		"core_type":   coreType,
+		"template_id": templateID,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaCoreTemplateRemove(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	coreType := strings.TrimSpace(toString(normalized["core_type"]))
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+
+	if err := schemasvc.RemoveCoreTemplate(vaultPath, coreType, templateID); err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"core_type":   coreType,
+		"template_id": templateID,
+		"removed":     true,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaCoreTemplateDefault(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+	coreType := strings.TrimSpace(toString(normalized["core_type"]))
+	clearDefault := boolValue(normalized["clear"])
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+
+	newDefault, err := schemasvc.SetCoreDefaultTemplate(vaultPath, coreType, templateID, clearDefault)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+	return successEnvelope(map[string]interface{}{
+		"core_type":        coreType,
+		"default_template": newDefault,
+	}, nil), false
+}
+
 func mapDirectResolveError(err error, reference string) (string, bool) {
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
@@ -1922,6 +2205,14 @@ func mapDirectServiceError(err error) (string, bool) {
 	}
 
 	return errorEnvelope("UNEXPECTED", err.Error(), "", nil), true
+}
+
+func mapDirectSchemaServiceError(err error) (string, bool) {
+	var svcErr *schemasvc.Error
+	if errors.As(err, &svcErr) {
+		return errorEnvelope(string(svcErr.Code), svcErr.Message, svcErr.Suggestion, svcErr.Details), true
+	}
+	return errorEnvelope("INTERNAL_ERROR", err.Error(), "", nil), true
 }
 
 func warningMessagesToDirectWarnings(messages []string, code string) []directWarning {
