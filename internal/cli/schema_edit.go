@@ -20,6 +20,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -97,24 +98,6 @@ Examples:
 }
 
 func addType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if type already exists
-	if _, exists := sch.Types[typeName]; exists {
-		return handleErrorMsg(ErrObjectExists, fmt.Sprintf("type '%s' already exists", typeName), "")
-	}
-
-	// Check built-in types
-	if schema.IsBuiltinType(typeName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type", typeName), "Choose a different name")
-	}
-
 	// Interactive prompt for name_field if not provided and not in JSON mode
 	nameField := schemaAddNameField
 	if nameField == "" && !isJSONOutput() {
@@ -130,166 +113,77 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		defaultPath = paths.NormalizeDirRoot(typeName)
 	}
 
-	// Read current schema file to preserve formatting
-	data, err := os.ReadFile(schemaPath)
+	result, err := schemasvc.AddType(schemasvc.AddTypeRequest{
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		DefaultPath: defaultPath,
+		NameField:   nameField,
+		Description: schemaAddDescription,
+	})
 	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	// Parse as YAML to modify
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	// Ensure types map exists
-	types, ok := schemaDoc["types"].(map[string]interface{})
-	if !ok {
-		types = make(map[string]interface{})
-		schemaDoc["types"] = types
-	}
-
-	// Build new type definition
-	newType := make(map[string]interface{})
-	newType["default_path"] = defaultPath
-	if schemaAddDescription != "" {
-		newType["description"] = schemaAddDescription
-	}
-
-	// Handle name_field - auto-create the field if it doesn't exist
-	if nameField != "" {
-		newType["name_field"] = nameField
-
-		// Auto-create the field as required string
-		fields := make(map[string]interface{})
-		fields[nameField] = map[string]interface{}{
-			"type":     "string",
-			"required": true,
-		}
-		newType["fields"] = fields
-	}
-
-	types[typeName] = newType
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
+		return mapSchemaAddServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		result := map[string]interface{}{
+		data := map[string]interface{}{
 			"added":        "type",
-			"name":         typeName,
-			"default_path": defaultPath,
+			"name":         result.Name,
+			"default_path": result.DefaultPath,
 		}
-		if schemaAddDescription != "" {
-			result["description"] = schemaAddDescription
+		if result.Description != "" {
+			data["description"] = result.Description
 		}
-		if nameField != "" {
-			result["name_field"] = nameField
-			result["auto_created_field"] = nameField
+		if result.NameField != "" {
+			data["name_field"] = result.NameField
+			data["auto_created_field"] = result.AutoCreatedField
 		}
-		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
-	fmt.Printf("✓ Added type '%s' to schema.yaml\n", typeName)
-	fmt.Printf("  default_path: %s\n", defaultPath)
-	if schemaAddDescription != "" {
-		fmt.Printf("  description: %s\n", schemaAddDescription)
+	fmt.Printf("✓ Added type '%s' to schema.yaml\n", result.Name)
+	fmt.Printf("  default_path: %s\n", result.DefaultPath)
+	if result.Description != "" {
+		fmt.Printf("  description: %s\n", result.Description)
 	}
-	if nameField != "" {
-		fmt.Printf("  name_field: %s (auto-created as required string)\n", nameField)
+	if result.NameField != "" {
+		fmt.Printf("  name_field: %s (auto-created as required string)\n", result.NameField)
 	}
 	return nil
 }
 
 func addTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.AddTrait(schemasvc.AddTraitRequest{
+		VaultPath: vaultPath,
+		TraitName: traitName,
+		TraitType: schemaAddFieldType,
+		Values:    schemaAddValues,
+		Default:   schemaAddDefault,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if trait already exists
-	if _, exists := sch.Traits[traitName]; exists {
-		return handleErrorMsg(ErrObjectExists, fmt.Sprintf("trait '%s' already exists", traitName), "")
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	// Ensure traits map exists
-	traits, ok := schemaDoc["traits"].(map[string]interface{})
-	if !ok {
-		traits = make(map[string]interface{})
-		schemaDoc["traits"] = traits
-	}
-
-	// Build new trait definition
-	newTrait := make(map[string]interface{})
-
-	// Default type is string
-	traitType := schemaAddFieldType
-	if traitType == "" {
-		traitType = "string"
-	}
-	newTrait["type"] = traitType
-
-	if schemaAddValues != "" {
-		newTrait["values"] = strings.Split(schemaAddValues, ",")
-	}
-	if schemaAddDefault != "" {
-		newTrait["default"] = schemaAddDefault
-	}
-
-	traits[traitName] = newTrait
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
+		return mapSchemaAddServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		result := map[string]interface{}{
+		data := map[string]interface{}{
 			"added": "trait",
-			"name":  traitName,
-			"type":  traitType,
+			"name":  result.Name,
+			"type":  result.Type,
 		}
-		if schemaAddValues != "" {
-			result["values"] = strings.Split(schemaAddValues, ",")
+		if len(result.Values) > 0 {
+			data["values"] = result.Values
 		}
-		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
-	fmt.Printf("✓ Added trait '%s' to schema.yaml\n", traitName)
-	fmt.Printf("  type: %s\n", traitType)
-	if schemaAddValues != "" {
+	fmt.Printf("✓ Added trait '%s' to schema.yaml\n", result.Name)
+	fmt.Printf("  type: %s\n", result.Type)
+	if len(result.Values) > 0 {
 		fmt.Printf("  values: %s\n", schemaAddValues)
 	}
 	return nil
@@ -466,151 +360,87 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 }
 
 func addField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.AddField(schemasvc.AddFieldRequest{
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		FieldName:   fieldName,
+		FieldType:   schemaAddFieldType,
+		Required:    schemaAddRequired,
+		Default:     schemaAddDefault,
+		Values:      schemaAddValues,
+		Target:      schemaAddTarget,
+		Description: schemaAddDescription,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if type exists
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "Add the type first with 'rvn schema add type'")
-	}
-
-	// Check if type is a built-in type (cannot be modified)
-	if schema.IsBuiltinType(typeName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot add fields to built-in type '%s'", typeName), "Built-in types (page, section, date) have fixed definitions. Use traits for additional metadata.")
-	}
-
-	// Check if field already exists
-	if typeDef.Fields != nil {
-		if _, exists := typeDef.Fields[fieldName]; exists {
-			return handleErrorMsg(ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", fieldName, typeName), "")
-		}
-	}
-
-	// Validate field type specification
-	validation := validateFieldTypeSpec(schemaAddFieldType, schemaAddTarget, schemaAddValues, sch)
-	if !validation.Valid {
-		details := map[string]interface{}{
-			"field_type":  schemaAddFieldType,
-			"valid_types": validation.ValidTypes,
-		}
-		if len(validation.Examples) > 0 {
-			details["examples"] = validation.Examples
-		}
-		if validation.TargetHint != "" {
-			details["target_hint"] = validation.TargetHint
-		}
-		hint := validation.Suggestion
-		if len(validation.Examples) > 0 && !isJSONOutput() {
-			hint += "\n\nExamples:\n"
-			for _, ex := range validation.Examples {
-				hint += "  " + ex + "\n"
-			}
-		}
-		return handleErrorWithDetails(ErrInvalidInput, validation.Error, hint, details)
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	// Navigate to type definition
-	types, ok := schemaDoc["types"].(map[string]interface{})
-	if !ok {
-		return handleErrorMsg(ErrSchemaInvalid, "types section not found", "")
-	}
-
-	typeNode, ok := types[typeName].(map[string]interface{})
-	if !ok {
-		typeNode = make(map[string]interface{})
-		types[typeName] = typeNode
-	}
-
-	// Ensure fields map exists
-	fields, ok := typeNode["fields"].(map[string]interface{})
-	if !ok {
-		fields = make(map[string]interface{})
-		typeNode["fields"] = fields
-	}
-
-	// Build new field definition
-	newField := make(map[string]interface{})
-
-	fieldType := validation.BaseType
-	if fieldType == "" {
-		fieldType = "string"
-	}
-	if validation.IsArray {
-		fieldType += "[]"
-	}
-	newField["type"] = fieldType
-
-	if schemaAddRequired {
-		newField["required"] = true
-	}
-	if schemaAddDefault != "" {
-		newField["default"] = schemaAddDefault
-	}
-	if schemaAddValues != "" {
-		newField["values"] = strings.Split(schemaAddValues, ",")
-	}
-	if schemaAddTarget != "" {
-		newField["target"] = schemaAddTarget
-	}
-	if schemaAddDescription != "" {
-		newField["description"] = schemaAddDescription
-	}
-
-	fields[fieldName] = newField
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
+		return mapSchemaAddServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		result := map[string]interface{}{
+		data := map[string]interface{}{
 			"added":      "field",
-			"type":       typeName,
-			"field":      fieldName,
-			"field_type": fieldType,
-			"required":   schemaAddRequired,
+			"type":       result.TypeName,
+			"field":      result.FieldName,
+			"field_type": result.FieldType,
+			"required":   result.Required,
 		}
-		if schemaAddDescription != "" {
-			result["description"] = schemaAddDescription
+		if result.Description != "" {
+			data["description"] = result.Description
 		}
-		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
-	fmt.Printf("✓ Added field '%s' to type '%s'\n", fieldName, typeName)
-	fmt.Printf("  type: %s\n", fieldType)
-	if schemaAddRequired {
+	fmt.Printf("✓ Added field '%s' to type '%s'\n", result.FieldName, result.TypeName)
+	fmt.Printf("  type: %s\n", result.FieldType)
+	if result.Required {
 		fmt.Println("  required: true")
 	}
-	if schemaAddDescription != "" {
-		fmt.Printf("  description: %s\n", schemaAddDescription)
+	if result.Description != "" {
+		fmt.Printf("  description: %s\n", result.Description)
 	}
 	return nil
+}
+
+func mapSchemaAddServiceError(err error) error {
+	var svcErr *schemasvc.Error
+	if errors.As(err, &svcErr) {
+		suggestion := svcErr.Suggestion
+		if !isJSONOutput() && len(svcErr.Details) > 0 {
+			if examples := detailExamples(svcErr.Details["examples"]); len(examples) > 0 {
+				suggestion += "\n\nExamples:\n"
+				for _, ex := range examples {
+					suggestion += "  " + ex + "\n"
+				}
+			}
+		}
+		if len(svcErr.Details) > 0 {
+			return handleErrorWithDetails(string(svcErr.Code), svcErr.Message, suggestion, svcErr.Details)
+		}
+		return handleErrorMsg(string(svcErr.Code), svcErr.Message, suggestion)
+	}
+	return handleError(ErrInternal, err, "")
+}
+
+func detailExamples(raw interface{}) []string {
+	if raw == nil {
+		return nil
+	}
+	switch vals := raw.(type) {
+	case []string:
+		return vals
+	case []interface{}:
+		out := make([]string, 0, len(vals))
+		for _, v := range vals {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 var schemaValidateCmd = &cobra.Command{

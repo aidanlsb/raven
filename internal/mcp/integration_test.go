@@ -1523,6 +1523,50 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_type", "type", "items", "total", "returned", "offset", "limit"})
 	})
 
+	t.Run("schema_add_type", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_add_type", map[string]interface{}{
+			"name": "meeting",
+		})
+		cliResult := vCLI.RunCLI("schema", "add", "type", "meeting")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"added", "name", "default_path"})
+	})
+
+	t.Run("schema_add_trait", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_add_trait", map[string]interface{}{
+			"name":   "priority",
+			"type":   "enum",
+			"values": "high,medium,low",
+		})
+		cliResult := vCLI.RunCLI("schema", "add", "trait", "priority", "--type", "enum", "--values", "high,medium,low")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"added", "name", "type", "values"})
+	})
+
+	t.Run("schema_add_field", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_add_field", map[string]interface{}{
+			"type_name":   "person",
+			"field_name":  "website",
+			"type":        "string",
+			"description": "Primary website URL",
+		})
+		cliResult := vCLI.RunCLI("schema", "add", "field", "person", "website", "--type", "string", "--description", "Primary website URL")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"added", "type", "field", "field_type", "required", "description"})
+	})
+
 	t.Run("schema_template_set", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
@@ -1888,6 +1932,21 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 			"destination": "archive/",
 		})
 		cliResult := vCLI.RunCLIWithStdin("", "move", "--stdin", "archive/")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("schema_add_field_invalid_type", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_add_field", map[string]interface{}{
+			"type_name":  "person",
+			"field_name": "manager",
+			"type":       "person",
+		})
+		cliResult := vCLI.RunCLI("schema", "add", "field", "person", "manager", "--type", "person")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})

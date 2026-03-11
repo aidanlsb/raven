@@ -6,6 +6,7 @@ const (
 	ErrorSchemaNotFound ErrorCode = "SCHEMA_NOT_FOUND"
 	ErrorSchemaInvalid  ErrorCode = "SCHEMA_INVALID"
 	ErrorTypeNotFound   ErrorCode = "TYPE_NOT_FOUND"
+	ErrorObjectExists   ErrorCode = "OBJECT_EXISTS"
 	ErrorConfigInvalid  ErrorCode = "CONFIG_INVALID"
 	ErrorInvalidInput   ErrorCode = "INVALID_INPUT"
 	ErrorFileNotFound   ErrorCode = "FILE_NOT_FOUND"

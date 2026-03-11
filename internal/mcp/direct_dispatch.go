@@ -89,6 +89,15 @@ func (s *Server) callToolDirect(name string, args map[string]interface{}) (strin
 	case "raven_query":
 		out, isErr := s.callDirectQuery(args)
 		return out, isErr, true
+	case "raven_schema_add_type":
+		out, isErr := s.callDirectSchemaAddType(args)
+		return out, isErr, true
+	case "raven_schema_add_trait":
+		out, isErr := s.callDirectSchemaAddTrait(args)
+		return out, isErr, true
+	case "raven_schema_add_field":
+		out, isErr := s.callDirectSchemaAddField(args)
+		return out, isErr, true
 	case "raven_schema_template_list":
 		out, isErr := s.callDirectSchemaTemplateList(args)
 		return out, isErr, true
@@ -1700,6 +1709,108 @@ func dedupeIDs(ids []string) []string {
 		out = append(out, id)
 	}
 	return out
+}
+
+func (s *Server) callDirectSchemaAddType(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+
+	typeName := strings.TrimSpace(toString(normalized["name"]))
+	defaultPath := toString(normalized["default-path"])
+	nameField := toString(normalized["name-field"])
+	description := toString(normalized["description"])
+
+	result, err := schemasvc.AddType(schemasvc.AddTypeRequest{
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		DefaultPath: defaultPath,
+		NameField:   nameField,
+		Description: description,
+	})
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+
+	data := map[string]interface{}{
+		"added":        "type",
+		"name":         result.Name,
+		"default_path": result.DefaultPath,
+	}
+	if result.Description != "" {
+		data["description"] = result.Description
+	}
+	if result.NameField != "" {
+		data["name_field"] = result.NameField
+		data["auto_created_field"] = result.AutoCreatedField
+	}
+	return successEnvelope(data, nil), false
+}
+
+func (s *Server) callDirectSchemaAddTrait(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+
+	result, err := schemasvc.AddTrait(schemasvc.AddTraitRequest{
+		VaultPath: vaultPath,
+		TraitName: strings.TrimSpace(toString(normalized["name"])),
+		TraitType: toString(normalized["type"]),
+		Values:    toString(normalized["values"]),
+		Default:   toString(normalized["default"]),
+	})
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+
+	data := map[string]interface{}{
+		"added": "trait",
+		"name":  result.Name,
+		"type":  result.Type,
+	}
+	if len(result.Values) > 0 {
+		data["values"] = result.Values
+	}
+	return successEnvelope(data, nil), false
+}
+
+func (s *Server) callDirectSchemaAddField(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+
+	result, err := schemasvc.AddField(schemasvc.AddFieldRequest{
+		VaultPath:   vaultPath,
+		TypeName:    strings.TrimSpace(toString(normalized["type_name"])),
+		FieldName:   strings.TrimSpace(toString(normalized["field_name"])),
+		FieldType:   toString(normalized["type"]),
+		Required:    boolValue(normalized["required"]),
+		Default:     toString(normalized["default"]),
+		Values:      toString(normalized["values"]),
+		Target:      toString(normalized["target"]),
+		Description: toString(normalized["description"]),
+	})
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+
+	data := map[string]interface{}{
+		"added":      "field",
+		"type":       result.TypeName,
+		"field":      result.FieldName,
+		"field_type": result.FieldType,
+		"required":   result.Required,
+	}
+	if result.Description != "" {
+		data["description"] = result.Description
+	}
+	return successEnvelope(data, nil), false
 }
 
 func (s *Server) callDirectSchemaTemplateList(args map[string]interface{}) (string, bool) {
