@@ -1,0 +1,122 @@
+package objectsvc
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestCreateObjectSuccess(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	result, err := Create(CreateRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "person",
+		Title:      "Freya",
+		TargetPath: "Freya",
+		Schema:     sch,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if result.RelativePath != "people/freya.md" {
+		t.Fatalf("expected people/freya.md, got %s", result.RelativePath)
+	}
+	if _, err := os.Stat(result.FilePath); err != nil {
+		t.Fatalf("expected file to exist: %v", err)
+	}
+}
+
+func TestCreateMissingRequiredField(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  task:
+    default_path: task/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+      status:
+        type: string
+        required: true
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	_, err := Create(CreateRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "task",
+		Title:      "Write tests",
+		TargetPath: "Write tests",
+		Schema:     sch,
+	})
+	if err == nil {
+		t.Fatal("expected required field error")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != ErrorRequiredField {
+		t.Fatalf("expected ErrorRequiredField, got %s", svcErr.Code)
+	}
+}
+
+func TestCreateRejectsExistingFile(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	if err := os.MkdirAll(filepath.Join(vaultPath, "people"), 0o755); err != nil {
+		t.Fatalf("mkdir people: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "people/freya.md"), []byte("---\ntype: person\nname: Freya\n---\n"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	_, err := Create(CreateRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "person",
+		Title:      "Freya",
+		TargetPath: "Freya",
+		Schema:     sch,
+	})
+	if err == nil {
+		t.Fatal("expected file exists error")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != ErrorFileExists {
+		t.Fatalf("expected ErrorFileExists, got %s", svcErr.Code)
+	}
+}

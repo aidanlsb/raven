@@ -490,6 +490,10 @@ func (s *Server) readSchemaFile() (string, error) {
 }
 
 func (s *Server) callTool(name string, args map[string]interface{}) (string, bool) {
+	if out, isErr, handled := s.callToolDirect(name, args); handled {
+		return out, isErr
+	}
+
 	// Build CLI args from the registry - single source of truth!
 	cmdArgs := BuildCLIArgs(name, args)
 

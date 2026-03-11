@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -1017,6 +1019,607 @@ func TestMCPIntegration_ErrorHandling(t *testing.T) {
 
 	if resp.Error.Code != "FILE_EXISTS" {
 		t.Errorf("expected error code FILE_EXISTS, got %s", resp.Error.Code)
+	}
+}
+
+func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
+	binary := testutil.BuildCLI(t)
+
+	t.Run("new", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_new", map[string]interface{}{
+			"type":  "person",
+			"title": "Parity Person",
+			"field": map[string]interface{}{
+				"email": "parity@example.com",
+			},
+		})
+		cliResult := vCLI.RunCLI("new", "person", "Parity Person", "--field", "email=parity@example.com")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "id", "title", "type"})
+	})
+
+	t.Run("upsert", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_upsert", map[string]interface{}{
+			"type":    "project",
+			"title":   "Parity Project",
+			"field":   map[string]interface{}{"status": "active"},
+			"content": "# Parity Body",
+		})
+		cliResult := vCLI.RunCLI("upsert", "project", "Parity Project", "--field", "status=active", "--content", "# Parity Body")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "id", "file", "type", "title"})
+	})
+
+	t.Run("add", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{
+			"type":  "person",
+			"title": "Parity Add",
+		})
+		vCLI.RunCLI("new", "person", "Parity Add").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_add", map[string]interface{}{
+			"text": "Parity add content",
+			"to":   "people/parity-add",
+		})
+		cliResult := vCLI.RunCLI("add", "Parity add content", "--to", "people/parity-add")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "line", "content"})
+	})
+
+	t.Run("add_bulk_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Bulk One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Bulk Two"})
+		vCLI.RunCLI("new", "person", "Add Bulk One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Add Bulk Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_add", map[string]interface{}{
+			"stdin":      true,
+			"object_ids": []interface{}{"people/add-bulk-one", "people/add-bulk-two"},
+			"text":       "bulk add preview",
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/add-bulk-one\npeople/add-bulk-two\n", "add", "--stdin", "bulk add preview")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "content"})
+	})
+
+	t.Run("add_bulk_apply", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Apply One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Apply Two"})
+		vCLI.RunCLI("new", "person", "Add Apply One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Add Apply Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_add", map[string]interface{}{
+			"stdin":      true,
+			"confirm":    true,
+			"object_ids": []interface{}{"people/add-apply-one", "people/add-apply-two"},
+			"text":       "bulk add apply",
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/add-apply-one\npeople/add-apply-two\n", "add", "--stdin", "--confirm", "bulk add apply")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "added", "content"})
+	})
+
+	t.Run("set", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{
+			"type":  "person",
+			"title": "Parity Set",
+		})
+		vCLI.RunCLI("new", "person", "Parity Set").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_set", map[string]interface{}{
+			"object_id": "people/parity-set",
+			"fields": map[string]interface{}{
+				"email": "set@example.com",
+			},
+		})
+		cliResult := vCLI.RunCLI("set", "people/parity-set", "email=set@example.com")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "object_id", "type", "updated_fields"})
+	})
+
+	t.Run("set_bulk_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Bulk One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Bulk Two"})
+		vCLI.RunCLI("new", "person", "Set Bulk One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Set Bulk Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_set", map[string]interface{}{
+			"stdin":      true,
+			"object_ids": []interface{}{"people/set-bulk-one", "people/set-bulk-two"},
+			"fields":     "email=bulk@example.com",
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/set-bulk-one\npeople/set-bulk-two\n", "set", "--stdin", "email=bulk@example.com")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "fields"})
+	})
+
+	t.Run("set_bulk_apply", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Apply One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Apply Two"})
+		vCLI.RunCLI("new", "person", "Set Apply One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Set Apply Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_set", map[string]interface{}{
+			"stdin":      true,
+			"confirm":    true,
+			"object_ids": []interface{}{"people/set-apply-one", "people/set-apply-two"},
+			"fields":     "email=apply@example.com",
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/set-apply-one\npeople/set-apply-two\n", "set", "--stdin", "--confirm", "email=apply@example.com")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "modified", "fields"})
+	})
+
+	t.Run("delete", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{
+			"type":  "person",
+			"title": "Parity Delete",
+		})
+		vCLI.RunCLI("new", "person", "Parity Delete").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+			"object_id": "people/parity-delete",
+			"force":     true,
+		})
+		cliResult := vCLI.RunCLI("delete", "people/parity-delete", "--force")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"deleted", "behavior", "trash_path"})
+	})
+
+	t.Run("delete_bulk_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Bulk One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Bulk Two"})
+		vCLI.RunCLI("new", "person", "Delete Bulk One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Delete Bulk Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+			"stdin":      true,
+			"object_ids": []interface{}{"people/delete-bulk-one", "people/delete-bulk-two"},
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/delete-bulk-one\npeople/delete-bulk-two\n", "delete", "--stdin")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "behavior"})
+	})
+
+	t.Run("delete_bulk_apply", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Apply One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Apply Two"})
+		vCLI.RunCLI("new", "person", "Delete Apply One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Delete Apply Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+			"stdin":      true,
+			"confirm":    true,
+			"object_ids": []interface{}{"people/delete-apply-one", "people/delete-apply-two"},
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/delete-apply-one\npeople/delete-apply-two\n", "delete", "--stdin", "--confirm")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "deleted", "behavior"})
+	})
+
+	t.Run("move", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Move Me"})
+		server.callTool("raven_new", map[string]interface{}{
+			"type":  "project",
+			"title": "Move Ref",
+			"field": map[string]interface{}{
+				"status": "active",
+				"owner":  "people/move-me",
+			},
+		})
+		vCLI.RunCLI("new", "person", "Move Me").MustSucceed(t)
+		vCLI.RunCLI("new", "project", "Move Ref", "--field", "status=active", "--field", "owner=people/move-me").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_move", map[string]interface{}{
+			"source":      "people/move-me",
+			"destination": "archive/move-me-archived",
+		})
+		cliResult := vCLI.RunCLI("move", "people/move-me", "archive/move-me-archived")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"source", "destination", "updated_refs"})
+	})
+
+	t.Run("move_bulk_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk Two"})
+		vCLI.RunCLI("new", "person", "Bulk One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Bulk Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_move", map[string]interface{}{
+			"stdin":       true,
+			"destination": "archive/",
+			"object_ids":  []interface{}{"people/bulk-one", "people/bulk-two"},
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/bulk-one\npeople/bulk-two\n", "move", "--stdin", "archive/")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "destination"})
+	})
+
+	t.Run("move_bulk_apply", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk Apply One"})
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk Apply Two"})
+		vCLI.RunCLI("new", "person", "Bulk Apply One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Bulk Apply Two").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_move", map[string]interface{}{
+			"stdin":       true,
+			"confirm":     true,
+			"destination": "archive/",
+			"object_ids":  []interface{}{"people/bulk-apply-one", "people/bulk-apply-two"},
+		})
+		cliResult := vCLI.RunCLIWithStdin("people/bulk-apply-one\npeople/bulk-apply-two\n", "move", "--stdin", "--confirm", "archive/")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "moved", "destination"})
+	})
+}
+
+func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
+	binary := testutil.BuildCLI(t)
+
+	t.Run("set_missing_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_set", map[string]interface{}{
+			"object_id": "people/missing",
+			"fields":    "alias=ghost",
+		})
+		cliResult := vCLI.RunCLI("set", "people/missing", "alias=ghost")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("set_ambiguous_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Alice"})
+		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Alice", "field": map[string]interface{}{"status": "active"}})
+		vCLI.RunCLI("new", "person", "Alice").MustSucceed(t)
+		vCLI.RunCLI("new", "project", "Alice", "--field", "status=active").MustSucceed(t)
+
+		// Ensure resolver-backed reference lookup sees both objects.
+		server.callTool("raven_reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_set", map[string]interface{}{
+			"object_id": "alice",
+			"fields":    "alias=ambiguous",
+		})
+		cliResult := vCLI.RunCLI("set", "alice", "alias=ambiguous")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("set_bulk_missing_ids", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_set", map[string]interface{}{
+			"stdin":  true,
+			"fields": "email=bulk@example.com",
+		})
+		cliResult := vCLI.RunCLIWithStdin("", "set", "--stdin", "email=bulk@example.com")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("set_bulk_fields_json_not_supported", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_set", map[string]interface{}{
+			"stdin":       true,
+			"fields_json": map[string]interface{}{"email": "bulk@example.com"},
+		})
+		cliResult := vCLI.RunCLIWithStdin("", "set", "--stdin", "--fields-json", "{\"email\":\"bulk@example.com\"}")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("add_missing_text", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_add", map[string]interface{}{
+			"to": "people/missing",
+		})
+		cliResult := vCLI.RunCLI("add", "--to", "people/missing")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("add_bulk_missing_ids", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_add", map[string]interface{}{
+			"stdin": true,
+			"text":  "bulk add",
+		})
+		cliResult := vCLI.RunCLIWithStdin("", "add", "--stdin", "bulk add")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("add_missing_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_add", map[string]interface{}{
+			"text": "missing ref add",
+			"to":   "people/missing",
+		})
+		cliResult := vCLI.RunCLI("add", "missing ref add", "--to", "people/missing")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("add_ambiguous_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Jordan"})
+		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Jordan", "field": map[string]interface{}{"status": "active"}})
+		vCLI.RunCLI("new", "person", "Jordan").MustSucceed(t)
+		vCLI.RunCLI("new", "project", "Jordan", "--field", "status=active").MustSucceed(t)
+
+		server.callTool("raven_reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_add", map[string]interface{}{
+			"text": "ambiguous ref add",
+			"to":   "jordan",
+		})
+		cliResult := vCLI.RunCLI("add", "ambiguous ref add", "--to", "jordan")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("delete_missing_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+			"object_id": "people/missing",
+			"force":     true,
+		})
+		cliResult := vCLI.RunCLI("delete", "people/missing", "--force")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("delete_ambiguous_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Robin"})
+		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Robin", "field": map[string]interface{}{"status": "active"}})
+		vCLI.RunCLI("new", "person", "Robin").MustSucceed(t)
+		vCLI.RunCLI("new", "project", "Robin", "--field", "status=active").MustSucceed(t)
+
+		server.callTool("raven_reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+			"object_id": "robin",
+			"force":     true,
+		})
+		cliResult := vCLI.RunCLI("delete", "robin", "--force")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("delete_bulk_missing_ids", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+			"stdin": true,
+		})
+		cliResult := vCLI.RunCLIWithStdin("", "delete", "--stdin")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("move_missing_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_move", map[string]interface{}{
+			"source":      "people/missing",
+			"destination": "archive/missing",
+		})
+		cliResult := vCLI.RunCLI("move", "people/missing", "archive/missing")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("move_ambiguous_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Sam"})
+		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Sam", "field": map[string]interface{}{"status": "active"}})
+		vCLI.RunCLI("new", "person", "Sam").MustSucceed(t)
+		vCLI.RunCLI("new", "project", "Sam", "--field", "status=active").MustSucceed(t)
+
+		server.callTool("raven_reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_move", map[string]interface{}{
+			"source":      "sam",
+			"destination": "archive/sam",
+		})
+		cliResult := vCLI.RunCLI("move", "sam", "archive/sam")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("move_bulk_missing_ids", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_move", map[string]interface{}{
+			"stdin":       true,
+			"destination": "archive/",
+		})
+		cliResult := vCLI.RunCLIWithStdin("", "move", "--stdin", "archive/")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+}
+
+type mcpEnvelope struct {
+	OK       bool                   `json:"ok"`
+	Data     map[string]interface{} `json:"data,omitempty"`
+	Error    *mcpErrorEnvelope      `json:"error,omitempty"`
+	Warnings []mcpWarningEnvelope   `json:"warnings,omitempty"`
+}
+
+type mcpErrorEnvelope struct {
+	Code       string                 `json:"code"`
+	Message    string                 `json:"message"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+	Suggestion string                 `json:"suggestion,omitempty"`
+}
+
+type mcpWarningEnvelope struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Ref     string `json:"ref,omitempty"`
+}
+
+func parseMCPEnvelope(t *testing.T, raw string) *mcpEnvelope {
+	t.Helper()
+	var env mcpEnvelope
+	if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		t.Fatalf("failed to parse MCP envelope: %v\nraw: %s", err, raw)
+	}
+	return &env
+}
+
+func assertEnvelopeParity(t *testing.T, mcpResult toolResult, cliResult *testutil.CLIResult, dataKeys []string) {
+	t.Helper()
+
+	env := parseMCPEnvelope(t, mcpResult.Text)
+
+	if env.OK != cliResult.OK {
+		t.Fatalf("ok mismatch: mcp=%v cli=%v\nmcp: %s\ncli: %s", env.OK, cliResult.OK, mcpResult.Text, cliResult.RawJSON)
+	}
+	if mcpResult.IsError != !env.OK {
+		t.Fatalf("isError mismatch: isError=%v ok=%v\nmcp: %s", mcpResult.IsError, env.OK, mcpResult.Text)
+	}
+
+	if cliResult.Error == nil {
+		if env.Error != nil {
+			t.Fatalf("expected no error, got mcp error %+v", env.Error)
+		}
+	} else {
+		if env.Error == nil {
+			t.Fatalf("expected mcp error code %q, got nil\nmcp: %s\ncli: %s", cliResult.Error.Code, mcpResult.Text, cliResult.RawJSON)
+		}
+		if env.Error.Code != cliResult.Error.Code {
+			t.Fatalf("error code mismatch: mcp=%q cli=%q\nmcp: %s\ncli: %s", env.Error.Code, cliResult.Error.Code, mcpResult.Text, cliResult.RawJSON)
+		}
+	}
+
+	for _, key := range dataKeys {
+		var mcpVal interface{}
+		if env.Data != nil {
+			mcpVal = env.Data[key]
+		}
+		var cliVal interface{}
+		if cliResult.Data != nil {
+			cliVal = cliResult.Data[key]
+		}
+		if !reflect.DeepEqual(mcpVal, cliVal) {
+			t.Fatalf("data mismatch for key %q: mcp=%#v cli=%#v\nmcp: %s\ncli: %s", key, mcpVal, cliVal, mcpResult.Text, cliResult.RawJSON)
+		}
+	}
+
+	mcpWarningCodes := make([]string, 0, len(env.Warnings))
+	for _, warning := range env.Warnings {
+		mcpWarningCodes = append(mcpWarningCodes, warning.Code)
+	}
+	cliWarningCodes := make([]string, 0, len(cliResult.Warnings))
+	for _, warning := range cliResult.Warnings {
+		cliWarningCodes = append(cliWarningCodes, warning.Code)
+	}
+	sort.Strings(mcpWarningCodes)
+	sort.Strings(cliWarningCodes)
+	if !reflect.DeepEqual(mcpWarningCodes, cliWarningCodes) {
+		t.Fatalf("warning code mismatch: mcp=%v cli=%v\nmcp: %s\ncli: %s", mcpWarningCodes, cliWarningCodes, mcpResult.Text, cliResult.RawJSON)
 	}
 }
 

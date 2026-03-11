@@ -6,16 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -156,20 +153,7 @@ func previewMoveBulk(vaultPath string, ids []string, destDir string, warnings []
 func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
 	// Load schema for type checking
 	sch, _ := schema.Load(vaultPath)
-
-	// Open database for reference updates
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
-	}
-	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-
-	// Create destination directory
-	fullDestDir := filepath.Join(vaultPath, destDir)
-	if err := os.MkdirAll(fullDestDir, 0755); err != nil {
-		return handleError(ErrFileWriteError, err, "Failed to create destination directory")
-	}
+	parseOpts := buildParseOptions(vaultCfg)
 
 	results := applyBulk(ids, func(id string) BulkResult {
 		result := BulkResult{ID: id}
@@ -192,94 +176,39 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 			return result
 		}
 
-		// Update references if enabled
-		if moveUpdateRefs {
-			relSource, _ := filepath.Rel(vaultPath, sourceFile)
-			sourceID := vaultCfg.FilePathToObjectID(relSource)
-			destID := vaultCfg.FilePathToObjectID(destPath)
-			aliases, _ := db.AllAliases()
-			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
-			aliasSlugToID := make(map[string]string, len(aliases))
-			for a, oid := range aliases {
-				aliasSlugToID[pages.SlugifyPath(a)] = oid
-			}
+		relSource, _ := filepath.Rel(vaultPath, sourceFile)
+		sourceID := vaultCfg.FilePathToObjectID(relSource)
+		destID := vaultCfg.FilePathToObjectID(destPath)
 
-			// Get directory roots for expanded backlinks search
-			objectRoot := vaultCfg.GetObjectsRoot()
-			pageRoot := vaultCfg.GetPagesRoot()
-			backlinks, _ := db.BacklinksWithRoots(sourceID, objectRoot, pageRoot)
-
-			for _, bl := range backlinks {
-				oldRaw := strings.TrimSpace(bl.TargetRaw)
-				oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[") // tolerate bracketed legacy data
-				base := oldRaw
-				if i := strings.Index(base, "#"); i >= 0 {
-					base = base[:i]
-				}
-				if base == "" {
-					continue
-				}
-				repl := chooseReplacementRefBase(base, sourceID, destID, aliasSlugToID, res)
-				line := 0
-				if bl.Line != nil {
-					line = *bl.Line
-				}
-				// Update all variants of the reference on this line
-				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err != nil {
-					// Best-effort: moving the file is the primary action; reference updates may fail.
-					continue
-				}
-			}
-		}
-
-		// Perform the move
-		if err := os.Rename(sourceFile, fullDestPath); err != nil {
+		serviceResult, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
+			VaultPath:         vaultPath,
+			SourceFile:        sourceFile,
+			DestinationFile:   fullDestPath,
+			SourceObjectID:    sourceID,
+			DestinationObject: destID,
+			UpdateRefs:        moveUpdateRefs,
+			FailOnIndexError:  true,
+			VaultConfig:       vaultCfg,
+			Schema:            sch,
+			ParseOptions:      parseOpts,
+		})
+		if err != nil {
 			result.Status = "error"
-			result.Reason = fmt.Sprintf("move failed: %v", err)
-			return result
-		}
-
-		// Update index
-		sourceID := strings.TrimSuffix(id, ".md")
-		if err := db.RemoveDocument(sourceID); err != nil {
-			if errors.Is(err, index.ErrObjectNotFound) {
-				warnings = append(warnings, Warning{
-					Code:    WarnIndexUpdateFailed,
-					Message: "Object not found in index while updating move; consider running 'rvn reindex'",
-					Ref:     "Run 'rvn reindex' to rebuild the database",
-				})
+			var svcErr *objectsvc.Error
+			if errors.As(err, &svcErr) {
+				result.Reason = svcErr.Message
 			} else {
-				result.Status = "error"
-				result.Reason = fmt.Sprintf("failed to remove from index: %v", err)
-				return result
+				result.Reason = fmt.Sprintf("move failed: %v", err)
 			}
+			return result
 		}
 
-		// Reindex new location
-		newContent, err := os.ReadFile(fullDestPath)
-		if err != nil {
-			result.Status = "error"
-			result.Reason = fmt.Sprintf("failed to read moved file: %v", err)
-			return result
-		}
-		parseOpts := buildParseOptions(vaultCfg)
-		newDoc, err := parser.ParseDocumentWithOptions(string(newContent), fullDestPath, vaultPath, parseOpts)
-		if err != nil {
-			result.Status = "error"
-			result.Reason = fmt.Sprintf("failed to parse moved file: %v", err)
-			return result
-		}
-		if newDoc == nil {
-			result.Status = "error"
-			result.Reason = "failed to parse moved file: got nil document"
-			return result
-		}
-		if sch != nil {
-			if err := db.IndexDocument(newDoc, sch); err != nil {
-				result.Status = "error"
-				result.Reason = fmt.Sprintf("failed to index moved file: %v", err)
-				return result
-			}
+		for _, warningMessage := range serviceResult.WarningMessages {
+			warnings = append(warnings, Warning{
+				Code:    WarnIndexUpdateFailed,
+				Message: warningMessage,
+				Ref:     "Run 'rvn reindex' to rebuild the database",
+			})
 		}
 
 		result.Status = "moved"
@@ -452,117 +381,44 @@ func moveSingleObject(vaultPath, source, destination string) error {
 	}
 
 	// Find backlinks to update
-	var updatedRefs []string
-	if moveUpdateRefs {
-		db, err := index.Open(vaultPath)
-		if err == nil {
-			defer db.Close()
-			db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-
-			// Get directory roots for expanded backlinks search
-			objectRoot := vaultCfg.GetObjectsRoot()
-			pageRoot := vaultCfg.GetPagesRoot()
-			backlinks, _ := db.BacklinksWithRoots(sourceID, objectRoot, pageRoot)
-
-			destID := vaultCfg.FilePathToObjectID(destPath)
-			aliases, _ := db.AllAliases()
-			res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: vaultCfg.GetDailyDirectory(), ExtraIDs: []string{destID}})
-			aliasSlugToID := make(map[string]string, len(aliases))
-			for a, oid := range aliases {
-				aliasSlugToID[pages.SlugifyPath(a)] = oid
-			}
-
-			for _, bl := range backlinks {
-				oldRaw := strings.TrimSpace(bl.TargetRaw)
-				oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[") // tolerate bracketed legacy data
-				base := oldRaw
-				if i := strings.Index(base, "#"); i >= 0 {
-					base = base[:i]
-				}
-				if base == "" {
-					continue
-				}
-				repl := chooseReplacementRefBase(base, sourceID, destID, aliasSlugToID, res)
-				line := 0
-				if bl.Line != nil {
-					line = *bl.Line
-				}
-				// Update all variants of the reference on this line
-				if err := updateAllRefVariantsAtLine(vaultPath, vaultCfg, bl.SourceID, line, sourceID, base, repl, objectRoot, pageRoot); err == nil {
-					updatedRefs = append(updatedRefs, bl.SourceID)
-				}
+	serviceResult, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
+		VaultPath:         vaultPath,
+		SourceFile:        sourceFile,
+		DestinationFile:   destFile,
+		SourceObjectID:    sourceID,
+		DestinationObject: vaultCfg.FilePathToObjectID(destPath),
+		UpdateRefs:        moveUpdateRefs,
+		FailOnIndexError:  false,
+		VaultConfig:       vaultCfg,
+		Schema:            sch,
+		ParseOptions:      parseOpts,
+	})
+	if err != nil {
+		var svcErr *objectsvc.Error
+		if errors.As(err, &svcErr) {
+			switch svcErr.Code {
+			case objectsvc.ErrorInvalidInput:
+				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+			case objectsvc.ErrorFileRead:
+				return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
+			case objectsvc.ErrorFileWrite:
+				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+			case objectsvc.ErrorValidationFailed:
+				return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
+			default:
+				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
 			}
 		}
-	}
-
-	// Create destination directory if needed
-	destDirPath := filepath.Dir(destFile)
-	if err := os.MkdirAll(destDirPath, 0755); err != nil {
 		return handleError(ErrFileWriteError, err, "")
 	}
 
-	// Perform the move
-	if err := os.Rename(sourceFile, destFile); err != nil {
-		return handleError(ErrFileWriteError, err, "")
-	}
-
-	// Update index
-	db, err := index.Open(vaultPath)
-	if err != nil {
+	updatedRefs := serviceResult.UpdatedRefs
+	for _, warningMessage := range serviceResult.WarningMessages {
 		warnings = append(warnings, Warning{
 			Code:    WarnIndexUpdateFailed,
-			Message: fmt.Sprintf("Failed to open index database for update: %v", err),
+			Message: warningMessage,
 			Ref:     "Run 'rvn reindex' to rebuild the database",
 		})
-	} else {
-		defer db.Close()
-		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-
-		// Remove old entry
-		if err := db.RemoveDocument(sourceID); err != nil {
-			warningMsg := fmt.Sprintf("Failed to remove old index entry: %v", err)
-			if errors.Is(err, index.ErrObjectNotFound) {
-				warningMsg = "Object not found in index while updating move; consider running 'rvn reindex'"
-			}
-			warnings = append(warnings, Warning{
-				Code:    WarnIndexUpdateFailed,
-				Message: warningMsg,
-				Ref:     "Run 'rvn reindex' to rebuild the database",
-			})
-		}
-
-		// Index new location
-		newContent, err := os.ReadFile(destFile)
-		if err != nil {
-			warnings = append(warnings, Warning{
-				Code:    WarnIndexUpdateFailed,
-				Message: fmt.Sprintf("Failed to read moved file for indexing: %v", err),
-				Ref:     "Run 'rvn reindex' to rebuild the database",
-			})
-		} else {
-			newDoc, err := parser.ParseDocumentWithOptions(string(newContent), destFile, vaultPath, parseOpts)
-			if err != nil {
-				warnings = append(warnings, Warning{
-					Code:    WarnIndexUpdateFailed,
-					Message: fmt.Sprintf("Failed to parse moved file for indexing: %v", err),
-					Ref:     "Run 'rvn reindex' to rebuild the database",
-				})
-			} else if newDoc == nil {
-				warnings = append(warnings, Warning{
-					Code:    WarnIndexUpdateFailed,
-					Message: "Failed to parse moved file for indexing: got nil document",
-					Ref:     "Run 'rvn reindex' to rebuild the database",
-				})
-			} else {
-				if err := db.IndexDocument(newDoc, sch); err != nil {
-					warnings = append(warnings, Warning{
-						Code:    WarnIndexUpdateFailed,
-						Message: fmt.Sprintf("Failed to index moved file: %v", err),
-						Ref:     "Run 'rvn reindex' to rebuild the database",
-					})
-				}
-			}
-		}
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -594,366 +450,24 @@ type MoveResult struct {
 	Reason       string   `json:"reason,omitempty"`
 }
 
-// updateReference updates a reference in a source file.
 func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldRef, newRef string) error {
-	// Strip section fragment from sourceID before resolving to file path.
-	// Backlinks from embedded objects have IDs like "daily/2026-01-05#meeting-notes",
-	// but the file is just "daily/2026-01-05.md".
-	fileSourceID := sourceID
-	if idx := strings.Index(sourceID, "#"); idx >= 0 {
-		fileSourceID = sourceID[:idx]
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
-	if err != nil {
-		return err
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	// Replace the reference
-	oldPattern := "[[" + oldRef + "]]"
-	newPattern := "[[" + newRef + "]]"
-	newContent := strings.ReplaceAll(string(content), oldPattern, newPattern)
-
-	// Also handle references with display text: [[old|text]] -> [[new|text]]
-	oldPatternWithText := "[[" + oldRef + "|"
-	newPatternWithText := "[[" + newRef + "|"
-	newContent = strings.ReplaceAll(newContent, oldPatternWithText, newPatternWithText)
-
-	// Also handle section/fragment links: [[old#section]] -> [[new#section]]
-	oldPatternWithFragment := "[[" + oldRef + "#"
-	newPatternWithFragment := "[[" + newRef + "#"
-	newContent = strings.ReplaceAll(newContent, oldPatternWithFragment, newPatternWithFragment)
-
-	if newContent == string(content) {
-		return nil // No changes needed
-	}
-
-	return atomicfile.WriteFile(filePath, []byte(newContent), 0o644)
+	return objectsvc.UpdateReference(vaultPath, vaultCfg, sourceID, oldRef, newRef)
 }
 
 func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldRef, newRef string) error {
-	if line <= 0 {
-		// Fallback to whole-file replacement.
-		return updateReference(vaultPath, vaultCfg, sourceID, oldRef, newRef)
-	}
-
-	// Strip section fragment from sourceID before resolving to file path.
-	// Backlinks from embedded objects have IDs like "daily/2026-01-05#meeting-notes",
-	// but the file is just "daily/2026-01-05.md".
-	fileSourceID := sourceID
-	if idx := strings.Index(sourceID, "#"); idx >= 0 {
-		fileSourceID = sourceID[:idx]
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
-	if err != nil {
-		return err
-	}
-
-	contentBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	lines := strings.Split(string(contentBytes), "\n")
-	idx := line - 1 // 1-indexed in DB
-	if idx < 0 || idx >= len(lines) {
-		// Out of range; avoid rewriting unknown locations.
-		return nil
-	}
-
-	orig := lines[idx]
-	updated := orig
-
-	// Replace the reference
-	oldPattern := "[[" + oldRef + "]]"
-	newPattern := "[[" + newRef + "]]"
-	updated = strings.ReplaceAll(updated, oldPattern, newPattern)
-
-	// Also handle references with display text: [[old|text]] -> [[new|text]]
-	oldPatternWithText := "[[" + oldRef + "|"
-	newPatternWithText := "[[" + newRef + "|"
-	updated = strings.ReplaceAll(updated, oldPatternWithText, newPatternWithText)
-
-	// Also handle section/fragment links: [[old#section]] -> [[new#section]]
-	oldPatternWithFragment := "[[" + oldRef + "#"
-	newPatternWithFragment := "[[" + newRef + "#"
-	updated = strings.ReplaceAll(updated, oldPatternWithFragment, newPatternWithFragment)
-
-	if updated == orig {
-		return nil
-	}
-	lines[idx] = updated
-
-	return atomicfile.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0o644)
+	return objectsvc.UpdateReferenceAtLine(vaultPath, vaultCfg, sourceID, line, oldRef, newRef)
 }
 
-// updateAllRefVariantsAtLine updates all variants of a reference on a specific line.
-// This handles cases where the same object might be referenced as:
-// - [[person/freya]] (canonical ID)
-// - [[object/person/freya]] (with directory root)
-// - [[person/freya|Freya]] (with display text)
-// - [[person/freya#notes]] (with fragment)
 func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
-	if line <= 0 {
-		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
-	}
-
-	// Strip section fragment from sourceID before resolving to file path.
-	fileSourceID := sourceID
-	if idx := strings.Index(sourceID, "#"); idx >= 0 {
-		fileSourceID = sourceID[:idx]
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
-	if err != nil {
-		return err
-	}
-
-	contentBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	lines := strings.Split(string(contentBytes), "\n")
-	idx := line - 1 // 1-indexed in DB
-	if idx < 0 || idx >= len(lines) {
-		return nil
-	}
-
-	orig := lines[idx]
-	updated := replaceAllRefVariants(orig, oldID, oldBase, newRef, objectRoot, pageRoot)
-
-	if updated == orig {
-		// Some refs (notably schema-typed bare frontmatter refs) may have imprecise
-		// line metadata. Fall back to full-file replacement.
-		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
-	}
-	lines[idx] = updated
-
-	return atomicfile.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0o644)
+	return objectsvc.UpdateAllRefVariantsAtLine(vaultPath, vaultCfg, sourceID, line, oldID, oldBase, newRef, objectRoot, pageRoot)
 }
 
-// updateAllRefVariants updates all variants of a reference in an entire file.
-func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
-	fileSourceID := sourceID
-	if idx := strings.Index(sourceID, "#"); idx >= 0 {
-		fileSourceID = sourceID[:idx]
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
-	if err != nil {
-		return err
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	newContent := replaceAllRefVariants(string(content), oldID, oldBase, newRef, objectRoot, pageRoot)
-
-	if newContent == string(content) {
-		return nil
-	}
-
-	return atomicfile.WriteFile(filePath, []byte(newContent), 0o644)
-}
-
-// replaceAllRefVariants replaces all variants of a reference in content.
-// Handles: bare ID, directory-prefixed, with display text, with fragments.
 func replaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
-	// Build list of old patterns to search for:
-	// - canonical object ID (people/freya)
-	// - directory-prefixed canonical IDs (objects/people/freya, pages/...)
-	// - raw base as originally written (e.g., short ref "freya")
-	oldPatterns := make([]string, 0, 6)
-	seen := make(map[string]struct{}, 6)
-	addPattern := func(p string) {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			return
-		}
-		if _, ok := seen[p]; ok {
-			return
-		}
-		seen[p] = struct{}{}
-		oldPatterns = append(oldPatterns, p)
-	}
-
-	addPattern(oldID)
-	addPattern(oldBase)
-	if objectRoot != "" {
-		addPattern(objectRoot + oldID)
-	}
-	if pageRoot != "" && pageRoot != objectRoot {
-		addPattern(pageRoot + oldID)
-	}
-
-	result := content
-	for _, oldPattern := range oldPatterns {
-		// Replace exact matches: [[old]] -> [[new]]
-		result = strings.ReplaceAll(result, "[["+oldPattern+"]]", "[["+newRef+"]]")
-
-		// Replace with display text: [[old|text]] -> [[new|text]]
-		result = strings.ReplaceAll(result, "[["+oldPattern+"|", "[["+newRef+"|")
-
-		// Replace with fragment: [[old#section]] -> [[new#section]]
-		result = strings.ReplaceAll(result, "[["+oldPattern+"#", "[["+newRef+"#")
-	}
-
-	// Also update bare scalar refs in YAML frontmatter (e.g. owner: people/freya).
-	result = replaceFrontmatterBareRefVariants(result, oldPatterns, newRef)
-	// And in ::type(...) declaration field values.
-	result = replaceTypeDeclBareRefVariants(result, oldPatterns, newRef)
-
-	return result
-}
-
-func replaceFrontmatterBareRefVariants(content string, oldPatterns []string, newRef string) string {
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
-		return content
-	}
-
-	end := -1
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSpace(lines[i]) == "---" {
-			end = i
-			break
-		}
-	}
-	if end == -1 {
-		return content
-	}
-
-	frontmatter := strings.Join(lines[1:end], "\n")
-	updatedFrontmatter := frontmatter
-	for _, oldPattern := range oldPatterns {
-		updatedFrontmatter = replaceFrontmatterBareRef(updatedFrontmatter, oldPattern, newRef)
-	}
-	if updatedFrontmatter == frontmatter {
-		return content
-	}
-
-	var updatedLines []string
-	if updatedFrontmatter != "" {
-		updatedLines = strings.Split(updatedFrontmatter, "\n")
-	}
-
-	rebuilt := make([]string, 0, 1+len(updatedLines)+len(lines[end:]))
-	rebuilt = append(rebuilt, lines[0])
-	rebuilt = append(rebuilt, updatedLines...)
-	rebuilt = append(rebuilt, lines[end:]...)
-
-	return strings.Join(rebuilt, "\n")
-}
-
-func replaceFrontmatterBareRef(frontmatter, oldPattern, newRef string) string {
-	oldPattern = strings.TrimSpace(oldPattern)
-	if oldPattern == "" || oldPattern == newRef {
-		return frontmatter
-	}
-
-	escapedOld := regexp.QuoteMeta(oldPattern)
-	escapedNew := strings.ReplaceAll(newRef, "$", "$$")
-	result := frontmatter
-
-	// Key-value scalar replacements.
-	result = regexp.MustCompile(`(?m)^(\s*[^:\n#]+:\s*)"`+escapedOld+`"(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
-	result = regexp.MustCompile(`(?m)^(\s*[^:\n#]+:\s*)'`+escapedOld+`'(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
-	result = regexp.MustCompile(`(?m)^(\s*[^:\n#]+:\s*)`+escapedOld+`(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
-
-	// Block list item replacements.
-	result = regexp.MustCompile(`(?m)^(\s*-\s*)"`+escapedOld+`"(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
-	result = regexp.MustCompile(`(?m)^(\s*-\s*)'`+escapedOld+`'(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
-	result = regexp.MustCompile(`(?m)^(\s*-\s*)`+escapedOld+`(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
-
-	// Inline array element replacements (quoted and unquoted).
-	result = regexp.MustCompile(`([\[,]\s*)"`+escapedOld+`"(\s*(?:,|\]))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
-	result = regexp.MustCompile(`([\[,]\s*)'`+escapedOld+`'(\s*(?:,|\]))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
-	result = regexp.MustCompile(`([\[,]\s*)`+escapedOld+`(\s*(?:,|\]))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
-
-	return result
-}
-
-func replaceTypeDeclBareRefVariants(content string, oldPatterns []string, newRef string) string {
-	lines := strings.Split(content, "\n")
-	changed := false
-	for i, line := range lines {
-		if !strings.HasPrefix(strings.TrimSpace(line), "::") {
-			continue
-		}
-
-		updated := line
-		for _, oldPattern := range oldPatterns {
-			updated = replaceTypeDeclBareRef(updated, oldPattern, newRef)
-		}
-		if updated != line {
-			lines[i] = updated
-			changed = true
-		}
-	}
-	if !changed {
-		return content
-	}
-	return strings.Join(lines, "\n")
-}
-
-func replaceTypeDeclBareRef(line, oldPattern, newRef string) string {
-	oldPattern = strings.TrimSpace(oldPattern)
-	if oldPattern == "" || oldPattern == newRef {
-		return line
-	}
-
-	escapedOld := regexp.QuoteMeta(oldPattern)
-	escapedNew := strings.ReplaceAll(newRef, "$", "$$")
-	result := line
-
-	// Single field values: owner=people/freya (or quoted).
-	result = regexp.MustCompile(`(=\s*)"`+escapedOld+`"(\s*(?:,|\)))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
-	result = regexp.MustCompile(`(=\s*)'`+escapedOld+`'(\s*(?:,|\)))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
-	result = regexp.MustCompile(`(=\s*)`+escapedOld+`(\s*(?:,|\)))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
-
-	// Inline arrays: owners=[people/freya, "people/thor"]
-	result = regexp.MustCompile(`([\[,]\s*)"`+escapedOld+`"(\s*(?:,|\]))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
-	result = regexp.MustCompile(`([\[,]\s*)'`+escapedOld+`'(\s*(?:,|\]))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
-	result = regexp.MustCompile(`([\[,]\s*)`+escapedOld+`(\s*(?:,|\]))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
-
-	return result
+	return objectsvc.ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot)
 }
 
 func chooseReplacementRefBase(oldBase, sourceID, destID string, aliasSlugToID map[string]string, res *resolver.Resolver) string {
-	// If the original reference was explicit (contains a path), keep it explicit.
-	if strings.Contains(oldBase, "/") {
-		return destID
-	}
-
-	// If the original reference looks like an alias for this object, keep it stable.
-	// Aliases are designed to survive renames/moves without needing ref rewrites.
-	if aliasSlugToID != nil {
-		if aliasSlugToID[pages.SlugifyPath(oldBase)] == sourceID {
-			return oldBase
-		}
-	}
-
-	// Otherwise, this is a short ref. Prefer keeping it short *if* the new short name
-	// resolves uniquely to the destination ID.
-	candidate := paths.ShortNameFromID(destID)
-	if candidate != "" && res != nil {
-		r := res.Resolve(candidate)
-		if !r.Ambiguous && r.TargetID == destID {
-			return candidate
-		}
-	}
-
-	// Fall back to explicit ref (always correct).
-	return destID
+	return objectsvc.ChooseReplacementRefBase(oldBase, sourceID, destID, aliasSlugToID, res)
 }
 
 func init() {

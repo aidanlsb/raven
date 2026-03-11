@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -50,18 +52,6 @@ Examples:
 			return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 		}
 
-		// Check if type exists
-		typeDef, typeExists := s.Types[typeName]
-		if !typeExists && !schema.IsBuiltinType(typeName) {
-			// List available types
-			var typeNames []string
-			for name := range s.Types {
-				typeNames = append(typeNames, name)
-			}
-			sort.Strings(typeNames)
-			return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", ")))
-		}
-
 		// Get title from args or prompt
 		var title string
 		reader := bufio.NewReader(os.Stdin)
@@ -97,112 +87,6 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 		}
 
-		// Auto-fill the name_field from the positional title argument.
-		// If a type declares name_field (e.g., name_field: name), the title argument
-		// automatically populates that field, eliminating the need to specify it twice.
-		if typeDef != nil && typeDef.NameField != "" {
-			if _, provided := fieldValues[typeDef.NameField]; !provided {
-				if _, typedProvided := typedFieldValues[typeDef.NameField]; !typedProvided && title != "" {
-					fieldValues[typeDef.NameField] = title
-				}
-			}
-		}
-
-		// Typed JSON values win over --field key=value collisions.
-		for key, value := range typedFieldValues {
-			fieldValues[key] = serializeFieldValueLiteral(value)
-		}
-
-		// Collect required fields and check which are missing
-		var missingFields []string
-		var fieldDetails []map[string]interface{}
-
-		if typeDef != nil {
-			// Sort field names for consistent order
-			var fieldNames []string
-			for name := range typeDef.Fields {
-				fieldNames = append(fieldNames, name)
-			}
-			sort.Strings(fieldNames)
-
-			for _, fieldName := range fieldNames {
-				fieldDef := typeDef.Fields[fieldName]
-				if fieldDef != nil && fieldDef.Required {
-					// Check if already provided via --field
-					if _, ok := fieldValues[fieldName]; ok {
-						continue
-					}
-
-					// Check if there's a default
-					if fieldDef.Default != nil {
-						fieldValues[fieldName] = fmt.Sprintf("%v", fieldDef.Default)
-						continue
-					}
-
-					if isJSONOutput() {
-						// Non-interactive: collect missing required fields for error
-						missingFields = append(missingFields, fieldName)
-						detail := map[string]interface{}{
-							"name":     fieldName,
-							"type":     string(fieldDef.Type),
-							"required": true,
-						}
-						if len(fieldDef.Values) > 0 {
-							detail["values"] = fieldDef.Values
-						}
-						fieldDetails = append(fieldDetails, detail)
-					} else {
-						// Interactive: prompt for value
-						fmt.Fprintf(os.Stderr, "%s (required): ", fieldName)
-						value, err := reader.ReadString('\n')
-						if err != nil {
-							return fmt.Errorf("failed to read input: %w", err)
-						}
-						value = strings.TrimSpace(value)
-						if value == "" {
-							return fmt.Errorf("required field '%s' cannot be empty", fieldName)
-						}
-						fieldValues[fieldName] = value
-					}
-				}
-			}
-
-		}
-
-		// In JSON mode, error if required fields are missing
-		if isJSONOutput() && len(missingFields) > 0 {
-			// Build a concrete example showing exactly how to provide the missing fields.
-			// This helps agents understand exactly what parameters to add on retry.
-			var exampleParts []string
-			for _, f := range missingFields {
-				exampleParts = append(exampleParts, fmt.Sprintf(`"%s": "<value>"`, f))
-			}
-			example := fmt.Sprintf(`field: {%s}`, strings.Join(exampleParts, ", "))
-
-			details := map[string]interface{}{
-				"missing_fields": fieldDetails,
-				"type":           typeName,
-				"title":          title,
-				"retry_with": map[string]interface{}{
-					"type":  typeName,
-					"title": title,
-					"field": buildFieldTemplate(missingFields),
-				},
-			}
-
-			// Include name_field info to help agents understand auto-population
-			if typeDef != nil && typeDef.NameField != "" {
-				details["name_field"] = typeDef.NameField
-				details["name_field_hint"] = fmt.Sprintf("The title argument auto-populates the '%s' field", typeDef.NameField)
-			}
-
-			outputError(ErrRequiredField,
-				fmt.Sprintf("Missing required fields: %s", strings.Join(missingFields, ", ")),
-				details,
-				fmt.Sprintf("Retry the same call with: %s", example))
-			return nil // Error already output
-		}
-
 		targetPath := title
 		if cmd.Flags().Changed("path") {
 			targetPath = strings.TrimSpace(newPathFlag)
@@ -216,69 +100,126 @@ Examples:
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		objectsRoot := vaultCfg.GetObjectsRoot()
-		pagesRoot := vaultCfg.GetPagesRoot()
-		templateDir := vaultCfg.GetTemplateDirectory()
-		creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
 
-		// Check if file exists (with full path resolution including directory roots)
-		resolvedSlugPath := creator.resolveAndSlugifyTargetPath(targetPath, typeName)
-		if creator.exists(targetPath, typeName) {
-			return handleErrorMsg(
-				ErrFileExists,
-				fmt.Sprintf("file already exists: %s.md", resolvedSlugPath),
-				"Choose a different title, or use `rvn open <reference>` to open the existing object",
-			)
-		}
+		for {
+			result, err := objectsvc.Create(objectsvc.CreateRequest{
+				VaultPath:        vaultPath,
+				TypeName:         typeName,
+				Title:            title,
+				TargetPath:       targetPath,
+				FieldValues:      fieldValues,
+				TypedFieldValues: typedFieldValues,
+				Schema:           s,
+				ObjectsRoot:      vaultCfg.GetObjectsRoot(),
+				PagesRoot:        vaultCfg.GetPagesRoot(),
+				TemplateDir:      vaultCfg.GetTemplateDirectory(),
+				TemplateID:       newTemplate,
+			})
+			if err != nil {
+				var svcErr *objectsvc.Error
+				if errors.As(err, &svcErr) {
+					switch svcErr.Code {
+					case objectsvc.ErrorTypeNotFound:
+						return handleErrorMsg(ErrTypeNotFound, svcErr.Message, svcErr.Suggestion)
+					case objectsvc.ErrorFileExists:
+						return handleErrorMsg(ErrFileExists, svcErr.Message, svcErr.Suggestion)
+					case objectsvc.ErrorInvalidInput:
+						return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+					case objectsvc.ErrorRequiredField:
+						if isJSONOutput() {
+							outputError(ErrRequiredField, svcErr.Message, svcErr.Details, svcErr.Suggestion)
+							return nil
+						}
 
-		// Create the page through the shared object creator.
-		templateOverride, err := schema.ResolveTypeTemplateFile(s, typeName, newTemplate)
-		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use `rvn schema type <type_name> template list` to see available template IDs")
-		}
+						prompted := false
+						for _, fieldName := range missingFieldNamesFromDetails(svcErr.Details) {
+							if _, exists := fieldValues[fieldName]; exists {
+								continue
+							}
+							fmt.Fprintf(os.Stderr, "%s (required): ", fieldName)
+							value, readErr := reader.ReadString('\n')
+							if readErr != nil {
+								return fmt.Errorf("failed to read input: %w", readErr)
+							}
+							value = strings.TrimSpace(value)
+							if value == "" {
+								return fmt.Errorf("required field '%s' cannot be empty", fieldName)
+							}
+							fieldValues[fieldName] = value
+							prompted = true
+						}
+						if prompted {
+							continue
+						}
+						return handleErrorMsg(ErrRequiredField, svcErr.Message, svcErr.Suggestion)
+					case objectsvc.ErrorValidationFailed:
+						return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
+					case objectsvc.ErrorFileWrite:
+						return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+					default:
+						return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+					}
+				}
+				return handleError(ErrFileWriteError, err, "")
+			}
 
-		result, err := creator.create(objectCreateParams{
-			typeName:         typeName,
-			title:            title,
-			targetPath:       targetPath,
-			fields:           fieldValues,
-			templateOverride: templateOverride,
-		})
-		if err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
+			// Auto-reindex if configured (vaultCfg already loaded above)
+			maybeReindex(vaultPath, result.FilePath, vaultCfg)
 
-		// Auto-reindex if configured (vaultCfg already loaded above)
-		maybeReindex(vaultPath, result.FilePath, vaultCfg)
+			if isJSONOutput() {
+				outputSuccess(map[string]interface{}{
+					"file":  result.RelativePath,
+					"type":  typeName,
+					"title": title,
+					"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
+				}, nil)
+				return nil
+			}
 
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"file":  result.RelativePath,
-				"type":  typeName,
-				"title": title,
-				"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
-			}, nil)
+			fmt.Println(ui.Checkf("Created %s", ui.FilePath(result.RelativePath)))
+
+			// Open in editor (or print path if no editor configured)
+			vault.OpenInEditorOrPrintPath(getConfig(), result.FilePath)
+
 			return nil
 		}
-
-		fmt.Println(ui.Checkf("Created %s", ui.FilePath(result.RelativePath)))
-
-		// Open in editor (or print path if no editor configured)
-		vault.OpenInEditorOrPrintPath(getConfig(), result.FilePath)
-
-		return nil
 	},
 	ValidArgsFunction: completeTypes,
 }
 
-// buildFieldTemplate creates a template object showing required field names.
-// This is included in error responses so agents can see exactly what structure to provide.
-func buildFieldTemplate(missingFields []string) map[string]string {
-	result := make(map[string]string)
-	for _, f := range missingFields {
-		result[f] = "<value>"
+func missingFieldNamesFromDetails(details map[string]interface{}) []string {
+	raw, ok := details["missing_fields"]
+	if !ok {
+		return nil
 	}
-	return result
+
+	items, ok := raw.([]map[string]interface{})
+	if ok {
+		names := make([]string, 0, len(items))
+		for _, item := range items {
+			if name, ok := item["name"].(string); ok && strings.TrimSpace(name) != "" {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+
+	rawItems, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	names := make([]string, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		item, ok := rawItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if name, ok := item["name"].(string); ok && strings.TrimSpace(name) != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // completeTypes provides shell completion for type names

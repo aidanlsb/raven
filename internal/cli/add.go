@@ -10,11 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
@@ -126,66 +125,39 @@ func runAddBulk(args []string, vaultPath string) error {
 // previewAddBulk shows a preview of bulk add operations.
 func previewAddBulk(vaultPath string, ids []string, line string, headingSpec string, warnings []Warning, vaultCfg *config.VaultConfig) error {
 	parseOpts := buildParseOptions(vaultCfg)
-
-	preview := buildBulkPreview("add", ids, warnings, func(id string) (*BulkPreviewItem, *BulkResult) {
-		// Resolve to a file path. For embedded IDs, resolve their parent file.
-		fileID := id
-		targetObjectID := ""
-		if baseID, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
-			fileID = baseID
-			targetObjectID = id
-		}
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
-		if err != nil {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "object not found"}
-		}
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			return nil, &BulkResult{ID: id, Status: "skipped", Reason: "file not found"}
-		}
-
-		// For embedded IDs, ensure the target section exists in the file.
-		if IsEmbeddedID(id) {
-			content, err := os.ReadFile(filePath)
-			if err != nil {
-				return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
-			}
-			doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
-			if err != nil {
-				return nil, &BulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
-			}
-			found := false
-			for _, obj := range doc.Objects {
-				if obj != nil && obj.ID == id {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return nil, &BulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
-			}
-		}
-
-		if headingSpec != "" {
-			if targetObjectID != "" {
-				return nil, &BulkResult{ID: id, Status: "skipped", Reason: "cannot combine --heading with embedded IDs from stdin"}
-			}
-			resolvedTarget, err := resolveAddHeadingTarget(vaultPath, filePath, fileID, headingSpec, vaultCfg, parseOpts)
-			if err != nil {
-				return nil, &BulkResult{ID: id, Status: "skipped", Reason: err.Error()}
-			}
-			targetObjectID = resolvedTarget
-		}
-
-		details := fmt.Sprintf("append: %s", line)
-		if targetObjectID != "" {
-			details = fmt.Sprintf("append within %s: %s", targetObjectID, line)
-		}
-		return &BulkPreviewItem{
-			ID:      id,
-			Action:  "add",
-			Details: details,
-		}, nil
+	previewResult, err := objectsvc.PreviewAddBulk(objectsvc.AddBulkRequest{
+		VaultPath:    vaultPath,
+		VaultConfig:  vaultCfg,
+		ObjectIDs:    ids,
+		Line:         line,
+		HeadingSpec:  headingSpec,
+		ParseOptions: parseOpts,
 	})
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+
+	preview := &BulkPreview{
+		Action:   "add",
+		Items:    make([]BulkPreviewItem, 0, len(previewResult.Items)),
+		Skipped:  make([]BulkResult, 0, len(previewResult.Skipped)),
+		Total:    previewResult.Total,
+		Warnings: warnings,
+	}
+	for _, item := range previewResult.Items {
+		preview.Items = append(preview.Items, BulkPreviewItem{
+			ID:      item.ID,
+			Action:  item.Action,
+			Details: item.Details,
+		})
+	}
+	for _, skip := range previewResult.Skipped {
+		preview.Skipped = append(preview.Skipped, BulkResult{
+			ID:     skip.ID,
+			Status: skip.Status,
+			Reason: skip.Reason,
+		})
+	}
 
 	return outputBulkPreview(preview, map[string]interface{}{
 		"content": line,
@@ -194,55 +166,29 @@ func previewAddBulk(vaultPath string, ids []string, line string, headingSpec str
 
 // applyAddBulk applies bulk add operations.
 func applyAddBulk(vaultPath string, ids []string, line string, headingSpec string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	captureCfg := vaultCfg.GetCaptureConfig()
 	parseOpts := buildParseOptions(vaultCfg)
-
-	results := applyBulk(ids, func(id string) BulkResult {
-		result := BulkResult{ID: id}
-		// Resolve to a file path. For embedded IDs, resolve their parent file and
-		// pass the embedded ID through so appendToFile can target the correct section.
-		fileID := id
-		targetObjectID := ""
-		if baseID, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
-			fileID = baseID
-			targetObjectID = id
-		}
-
-		filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
-		if err != nil {
-			result.Status = "skipped"
-			result.Reason = "object not found"
-			return result
-		}
-
-		if headingSpec != "" {
-			if targetObjectID != "" {
-				result.Status = "error"
-				result.Reason = "cannot combine --heading with embedded IDs from stdin"
-				return result
-			}
-			resolvedTarget, err := resolveAddHeadingTarget(vaultPath, filePath, fileID, headingSpec, vaultCfg, parseOpts)
-			if err != nil {
-				result.Status = "error"
-				result.Reason = err.Error()
-				return result
-			}
-			targetObjectID = resolvedTarget
-		}
-
-		// Append to file (never create for bulk operations)
-		if err := appendToFile(vaultPath, filePath, line, captureCfg, vaultCfg, false, targetObjectID); err != nil {
-			result.Status = "error"
-			result.Reason = fmt.Sprintf("append failed: %v", err)
-			return result
-		}
-
-		// Reindex if configured
+	bulkResult, err := objectsvc.ApplyAddBulk(objectsvc.AddBulkRequest{
+		VaultPath:    vaultPath,
+		VaultConfig:  vaultCfg,
+		ObjectIDs:    ids,
+		Line:         line,
+		HeadingSpec:  headingSpec,
+		ParseOptions: parseOpts,
+	}, func(filePath string) {
 		maybeReindex(vaultPath, filePath, vaultCfg)
-
-		result.Status = "added"
-		return result
 	})
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+
+	results := make([]BulkResult, 0, len(bulkResult.Results))
+	for _, result := range bulkResult.Results {
+		results = append(results, BulkResult{
+			ID:     result.ID,
+			Status: result.Status,
+			Reason: result.Reason,
+		})
+	}
 
 	summary := buildBulkSummary("add", results, warnings)
 	return outputBulkSummary(summary, warnings, map[string]interface{}{
@@ -413,93 +359,7 @@ func resolveAddHeadingTarget(
 	vaultCfg *config.VaultConfig,
 	parseOpts *parser.ParseOptions,
 ) (string, error) {
-	spec := strings.TrimSpace(headingSpec)
-	if spec == "" {
-		return "", nil
-	}
-
-	contentBytes, err := os.ReadFile(destPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read target file")
-	}
-	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), destPath, vaultPath, parseOpts)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse target file")
-	}
-
-	prefix := fileObjectID + "#"
-	candidates := make([]*parser.ParsedObject, 0, len(doc.Objects))
-	for _, obj := range doc.Objects {
-		if obj == nil {
-			continue
-		}
-		if strings.HasPrefix(obj.ID, prefix) {
-			candidates = append(candidates, obj)
-		}
-	}
-	if len(candidates) == 0 {
-		return "", fmt.Errorf("target file has no embedded sections: %s", fileObjectID)
-	}
-
-	// Markdown heading line (e.g., "### Bugs / Fixes")
-	if headingText, ok := parseHeadingTextFromSpec(spec); ok {
-		return resolveSectionByHeadingText(candidates, headingText)
-	}
-
-	// Bare heading text (contains spaces, no leading #) should resolve by title.
-	if strings.Contains(spec, " ") {
-		return resolveSectionByHeadingText(candidates, spec)
-	}
-
-	// Full object ID (e.g., objects/project/raven#bugs-fixes)
-	if strings.Contains(spec, "/") && strings.Contains(spec, "#") {
-		if !strings.HasPrefix(spec, prefix) {
-			return "", fmt.Errorf("section %q does not belong to %s", spec, fileObjectID)
-		}
-		for _, obj := range candidates {
-			if obj.ID == spec {
-				return obj.ID, nil
-			}
-		}
-		return "", fmt.Errorf("section not found: %s", spec)
-	}
-
-	// Fragment slug (e.g., "bugs-fixes" or "#bugs-fixes")
-	fragment := strings.TrimSpace(strings.TrimPrefix(spec, "#"))
-	if fragment == "" {
-		return "", fmt.Errorf("section fragment cannot be empty")
-	}
-	for _, obj := range candidates {
-		if strings.TrimPrefix(obj.ID, prefix) == fragment {
-			return obj.ID, nil
-		}
-	}
-	return "", fmt.Errorf("section fragment not found: %s", fragment)
-}
-
-func resolveSectionByHeadingText(candidates []*parser.ParsedObject, headingText string) (string, error) {
-	text := strings.TrimSpace(headingText)
-	if text == "" {
-		return "", fmt.Errorf("heading text cannot be empty")
-	}
-
-	matches := make([]string, 0, 2)
-	for _, obj := range candidates {
-		if obj == nil || obj.Heading == nil {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(*obj.Heading), text) {
-			matches = append(matches, obj.ID)
-		}
-	}
-	switch len(matches) {
-	case 0:
-		return "", fmt.Errorf("heading not found: %q", text)
-	case 1:
-		return matches[0], nil
-	default:
-		return "", fmt.Errorf("heading %q is ambiguous; use a section slug/id", text)
-	}
+	return objectsvc.ResolveAddHeadingTarget(vaultPath, destPath, fileObjectID, headingSpec, parseOpts)
 }
 
 func parseHeadingTextFromSpec(spec string) (string, bool) {
@@ -522,217 +382,13 @@ func parseHeadingTextFromSpec(spec string) (string, bool) {
 }
 
 func appendToFile(vaultPath, destPath, line string, cfg *config.CaptureConfig, vaultCfg *config.VaultConfig, isDailyNote bool, targetObjectID string) error {
-	// Check if file exists
-	fileExists := true
-	if _, err := os.Stat(destPath); os.IsNotExist(err) {
-		fileExists = false
-	}
-
-	// If file doesn't exist and it's a daily note, create it
-	if !fileExists {
-		if isDailyNote {
-			// Extract date from path and create using pages package
-			base := filepath.Base(destPath)
-			dateStr := strings.TrimSuffix(base, ".md")
-			t, err := time.Parse(dates.DateLayout, dateStr)
-			if err != nil {
-				t = time.Now()
-				dateStr = vault.FormatDateISO(t)
-			}
-			friendlyTitle := vault.FormatDateFriendly(t)
-			dailyDir := vaultCfg.GetDailyDirectory()
-			if dailyDir == "" {
-				dailyDir = "daily"
-			}
-			s, err := schema.Load(vaultPath)
-			if err != nil {
-				return fmt.Errorf("failed to load schema: %w", err)
-			}
-			if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory()); err != nil {
-				return fmt.Errorf("failed to create daily note: %w", err)
-			}
-		} else {
-			// This shouldn't happen - we check earlier, but just in case
-			return fmt.Errorf("file does not exist: %s", destPath)
-		}
-	}
-
-	// If a specific embedded/section object is targeted, append within that object's range.
-	// This overrides capture.heading behavior for this operation.
-	if targetObjectID != "" && strings.Contains(targetObjectID, "#") {
-		return appendWithinObject(vaultPath, destPath, line, targetObjectID, vaultCfg)
-	}
-
-	// If heading is configured, find or create it
-	if cfg.Heading != "" {
-		return appendUnderHeading(destPath, line, cfg.Heading)
-	}
-
-	// Simple append to end of file
-	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-	defer f.Close()
-
-	// Ensure we're on a new line
-	stat, _ := f.Stat()
-	if stat.Size() > 0 {
-		// Check if file ends with newline
-		content, _ := os.ReadFile(destPath)
-		if len(content) > 0 && content[len(content)-1] != '\n' {
-			if _, err := f.WriteString("\n"); err != nil {
-				return fmt.Errorf("failed to write newline: %w", err)
-			}
-		}
-	}
-
-	if _, err := f.WriteString(line + "\n"); err != nil {
-		return fmt.Errorf("failed to write capture: %w", err)
-	}
-
-	return nil
-}
-
-func appendWithinObject(vaultPath, destPath, line, objectID string, vaultCfg *config.VaultConfig) error {
-	contentBytes, err := os.ReadFile(destPath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
-	content := string(contentBytes)
-	lines := strings.Split(content, "\n")
-
-	var opts *parser.ParseOptions
-	if vaultCfg != nil {
-		opts = &parser.ParseOptions{
-			ObjectsRoot: vaultCfg.GetObjectsRoot(),
-			PagesRoot:   vaultCfg.GetPagesRoot(),
-		}
-	}
-
-	doc, err := parser.ParseDocumentWithOptions(content, destPath, vaultPath, opts)
-	if err != nil {
-		return fmt.Errorf("failed to parse document: %w", err)
-	}
-
-	var target *parser.ParsedObject
-	for _, obj := range doc.Objects {
-		if obj != nil && obj.ID == objectID {
-			target = obj
-			break
-		}
-	}
-	if target == nil {
-		return fmt.Errorf("target section not found: %s", objectID)
-	}
-
-	// Insertion point is just before the next object's heading (or EOF).
-	// LineEnd is 1-indexed (inclusive); inserting before the next heading corresponds
-	// to inserting at index == LineEnd (since slice indices are 0-indexed).
-	insertIdx := len(lines)
-	if target.LineEnd != nil {
-		insertIdx = *target.LineEnd
-		if insertIdx < 0 {
-			insertIdx = 0
-		}
-		if insertIdx > len(lines) {
-			insertIdx = len(lines)
-		}
-	}
-
-	// Avoid inserting above the heading itself. LineStart is 1-indexed; the earliest
-	// valid insertion point is the line after the heading: index == LineStart.
-	minInsertIdx := target.LineStart
-	if minInsertIdx < 0 {
-		minInsertIdx = 0
-	}
-	if minInsertIdx > len(lines) {
-		minInsertIdx = len(lines)
-	}
-
-	// Insert before trailing empty lines at the boundary (mirrors appendUnderHeading behavior).
-	for insertIdx > minInsertIdx && strings.TrimSpace(lines[insertIdx-1]) == "" {
-		insertIdx--
-	}
-
-	newLines := make([]string, 0, len(lines)+1)
-	newLines = append(newLines, lines[:insertIdx]...)
-	newLines = append(newLines, line)
-	newLines = append(newLines, lines[insertIdx:]...)
-
-	return atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644)
-}
-
-func appendUnderHeading(destPath, line, heading string) error {
-	content, err := os.ReadFile(destPath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
-
-	lines := strings.Split(string(content), "\n")
-
-	// Find the heading
-	headingIdx := -1
-	nextHeadingIdx := -1
-	headingLevel := strings.Count(strings.Split(heading, " ")[0], "#")
-
-	for i, l := range lines {
-		trimmed := strings.TrimSpace(l)
-		if trimmed == heading {
-			headingIdx = i
-			continue
-		}
-		// If we found our heading, look for the next heading of same or higher level
-		if headingIdx >= 0 && strings.HasPrefix(trimmed, "#") {
-			level := 0
-			for _, c := range trimmed {
-				if c == '#' {
-					level++
-				} else {
-					break
-				}
-			}
-			if level <= headingLevel {
-				nextHeadingIdx = i
-				break
-			}
-		}
-	}
-
-	var newLines []string
-	if headingIdx == -1 {
-		// Heading doesn't exist, add it at the end
-		newLines = append(lines, "", heading, line)
-	} else if nextHeadingIdx == -1 {
-		// Heading exists, no next heading, append at end
-		// But insert before any trailing empty lines
-		insertIdx := len(lines)
-		for insertIdx > headingIdx+1 && strings.TrimSpace(lines[insertIdx-1]) == "" {
-			insertIdx--
-		}
-		newLines = append(lines[:insertIdx], line)
-		newLines = append(newLines, lines[insertIdx:]...)
-	} else {
-		// Insert before the next heading
-		insertIdx := nextHeadingIdx
-		// Skip back over empty lines
-		for insertIdx > headingIdx+1 && strings.TrimSpace(lines[insertIdx-1]) == "" {
-			insertIdx--
-		}
-		newLines = append(lines[:insertIdx], line)
-		newLines = append(newLines, lines[insertIdx:]...)
-	}
-
-	return atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644)
+	parseOpts := buildParseOptions(vaultCfg)
+	return objectsvc.AppendToFile(vaultPath, destPath, line, cfg, vaultCfg, isDailyNote, targetObjectID, parseOpts)
 }
 
 // getFileLineCount returns the number of lines in a file.
 func getFileLineCount(path string) int {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return 0
-	}
-	return strings.Count(string(content), "\n")
+	return objectsvc.FileLineCount(path)
 }
 
 // validateRefs checks if references exist and returns warnings for missing ones.

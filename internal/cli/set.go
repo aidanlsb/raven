@@ -9,10 +9,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -255,54 +254,28 @@ func applySetBulk(vaultPath string, ids []string, updates map[string]string, war
 			return result
 		}
 
-		content, err := os.ReadFile(filePath)
+		_, err = objectsvc.SetObjectFile(objectsvc.SetObjectFileRequest{
+			FilePath:      filePath,
+			ObjectID:      id,
+			Updates:       updates,
+			Schema:        sch,
+			AllowedFields: map[string]bool{"alias": true},
+		})
 		if err != nil {
 			result.Status = "error"
-			result.Reason = fmt.Sprintf("read error: %v", err)
-			return result
-		}
-
-		fm, err := parser.ParseFrontmatter(string(content))
-		if err != nil || fm == nil {
-			result.Status = "skipped"
-			result.Reason = "no frontmatter"
-			return result
-		}
-
-		objectType := fm.ObjectType
-		if objectType == "" {
-			objectType = "page"
-		}
-		if ufErr := detectUnknownSetFields(objectType, updates, sch, map[string]bool{"alias": true}); ufErr != nil {
-			result.Status = "error"
-			result.Reason = ufErr.Error()
-			return result
-		}
-
-		newContent, _, _, err := prepareValidatedFrontmatterMutation(
-			string(content),
-			fm,
-			objectType,
-			updates,
-			sch,
-			map[string]bool{"alias": true},
-		)
-		if err != nil {
+			var svcErr *objectsvc.Error
+			var unknownErr *unknownFieldMutationError
 			var validationErr *fieldValidationError
-			if errors.As(err, &validationErr) {
-				result.Status = "error"
+			switch {
+			case errors.As(err, &svcErr):
+				result.Reason = svcErr.Message
+			case errors.As(err, &unknownErr):
+				result.Reason = unknownErr.Error()
+			case errors.As(err, &validationErr):
 				result.Reason = validationErr.Error()
-				return result
+			default:
+				result.Reason = fmt.Sprintf("update error: %v", err)
 			}
-			result.Status = "error"
-			result.Reason = fmt.Sprintf("update error: %v", err)
-			return result
-		}
-
-		// Write the file back
-		if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
-			result.Status = "error"
-			result.Reason = fmt.Sprintf("write error: %v", err)
 			return result
 		}
 
@@ -350,64 +323,48 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	objectID := result.ObjectID
 	filePath := result.FilePath
 
-	// Read the file
-	content, err := os.ReadFile(filePath)
+	serviceResult, err := objectsvc.SetObjectFile(objectsvc.SetObjectFileRequest{
+		FilePath:      filePath,
+		ObjectID:      objectID,
+		Updates:       updates,
+		TypedUpdates:  typedUpdates,
+		Schema:        sch,
+		AllowedFields: map[string]bool{"alias": true},
+	})
 	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	// Parse frontmatter
-	fm, err := parser.ParseFrontmatter(string(content))
-	if err != nil {
-		return handleError(ErrInvalidInput, err, "Failed to parse frontmatter")
-	}
-	if fm == nil {
-		return handleErrorMsg(ErrInvalidInput, "file has no frontmatter", "The file must have YAML frontmatter (---) to set fields")
-	}
-
-	// Get the object type
-	objectType := fm.ObjectType
-	if objectType == "" {
-		objectType = "page"
-	}
-
-	mergedUpdates := make(map[string]string, len(updates)+len(typedUpdates))
-	for key, value := range updates {
-		mergedUpdates[key] = value
-	}
-	for key, value := range typedUpdates {
-		mergedUpdates[key] = serializeFieldValueLiteral(value)
-	}
-
-	if ufErr := detectUnknownSetFields(objectType, mergedUpdates, sch, map[string]bool{"alias": true}); ufErr != nil {
-		return handleErrorWithDetails(ErrUnknownField, ufErr.Error(), ufErr.Suggestion(), ufErr.Details())
-	}
-
-	newContent, resolvedUpdates, validationWarnings, err := prepareValidatedFrontmatterMutation(
-		string(content),
-		fm,
-		objectType,
-		mergedUpdates,
-		sch,
-		map[string]bool{"alias": true},
-	)
-	if err != nil {
+		var svcErr *objectsvc.Error
+		if errors.As(err, &svcErr) {
+			switch svcErr.Code {
+			case objectsvc.ErrorInvalidInput:
+				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+			case objectsvc.ErrorValidationFailed:
+				return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
+			case objectsvc.ErrorFileRead:
+				return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
+			case objectsvc.ErrorFileWrite:
+				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+			default:
+				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+			}
+		}
+		var unknownErr *unknownFieldMutationError
 		var validationErr *fieldValidationError
+		if errors.As(err, &unknownErr) {
+			return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
+		}
 		if errors.As(err, &validationErr) {
 			return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
 		}
 		return handleError(ErrFileWriteError, err, "Failed to update frontmatter")
 	}
 
-	// Write the file back
-	if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
-	}
-
 	// Auto-reindex if configured
 	maybeReindex(vaultPath, filePath, vaultCfg)
 
 	relPath, _ := filepath.Rel(vaultPath, filePath)
+	objectType := serviceResult.ObjectType
+	resolvedUpdates := serviceResult.ResolvedUpdates
+	validationWarnings := serviceResult.WarningMessages
 
 	// Output
 	if isJSONOutput() {
@@ -435,8 +392,8 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
 		oldVal := ""
-		if fm.Fields != nil {
-			if v, ok := fm.Fields[name]; ok {
+		if serviceResult.PreviousFields != nil {
+			if v, ok := serviceResult.PreviousFields[name]; ok {
 				oldVal = fmt.Sprintf("%v", v)
 			}
 		}
@@ -455,20 +412,6 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	return nil
 }
 
-func fieldDefsForObjectType(sch *schema.Schema, objectType string) map[string]*schema.FieldDefinition {
-	if sch == nil {
-		return nil
-	}
-	if objectType == "" {
-		objectType = "page"
-	}
-	typeDef, ok := sch.Types[objectType]
-	if !ok || typeDef == nil {
-		return nil
-	}
-	return typeDef.Fields
-}
-
 func detectUnknownSetFields(objectType string, updates map[string]string, sch *schema.Schema, allowedUnknown map[string]bool) *unknownFieldMutationError {
 	fieldNames := make([]string, 0, len(updates))
 	for key := range updates {
@@ -480,92 +423,6 @@ func detectUnknownSetFields(objectType string, updates map[string]string, sch *s
 		fieldNames,
 		allowedUnknown,
 	)
-}
-
-func resolveDateKeywordsForUpdates(updates map[string]string, fieldDefs map[string]*schema.FieldDefinition) map[string]string {
-	if fieldDefs == nil {
-		return updates
-	}
-
-	resolved := make(map[string]string, len(updates))
-	for field, value := range updates {
-		resolved[field] = resolveDateKeywordForFieldValue(value, fieldDefs[field])
-	}
-	return resolved
-}
-
-func updateFrontmatterWithFieldValues(content string, fm *parser.Frontmatter, updates map[string]schema.FieldValue) (string, error) {
-	lines := strings.Split(content, "\n")
-
-	startLine, endLine, ok := parser.FrontmatterBounds(lines)
-	if !ok {
-		return "", fmt.Errorf("no frontmatter found")
-	}
-	if endLine == -1 {
-		return "", fmt.Errorf("unclosed frontmatter")
-	}
-
-	// Parse existing frontmatter as a map to preserve order and unknown fields
-	frontmatterContent := strings.Join(lines[startLine+1:endLine], "\n")
-	var yamlData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatterContent), &yamlData); err != nil {
-		return "", fmt.Errorf("failed to parse frontmatter: %w", err)
-	}
-
-	if yamlData == nil {
-		yamlData = make(map[string]interface{})
-	}
-
-	// Apply updates
-	for key, value := range updates {
-		yamlData[key] = fieldValueToYAMLValue(value)
-	}
-
-	// Marshal back to YAML
-	newFrontmatter, err := yaml.Marshal(yamlData)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal frontmatter: %w", err)
-	}
-
-	// Reconstruct the file
-	var result strings.Builder
-	result.WriteString("---\n")
-	result.Write(newFrontmatter)
-	result.WriteString("---")
-
-	// Add the rest of the content
-	if endLine+1 < len(lines) {
-		result.WriteString("\n")
-		result.WriteString(strings.Join(lines[endLine+1:], "\n"))
-	}
-
-	return result.String(), nil
-}
-
-func fieldValueToYAMLValue(value schema.FieldValue) interface{} {
-	if value.IsNull() {
-		return nil
-	}
-	if ref, ok := value.AsRef(); ok {
-		return "[[" + ref + "]]"
-	}
-	if arr, ok := value.AsArray(); ok {
-		items := make([]interface{}, 0, len(arr))
-		for _, item := range arr {
-			items = append(items, fieldValueToYAMLValue(item))
-		}
-		return items
-	}
-	if s, ok := value.AsString(); ok {
-		return s
-	}
-	if n, ok := value.AsNumber(); ok {
-		return n
-	}
-	if b, ok := value.AsBool(); ok {
-		return b
-	}
-	return value.Raw()
 }
 
 // setEmbeddedObject sets fields on an embedded object.
@@ -582,128 +439,51 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 		return handleError(ErrFileDoesNotExist, err, "")
 	}
 
-	// Read the file
-	content, err := os.ReadFile(filePath)
+	serviceResult, err := objectsvc.SetEmbeddedObject(objectsvc.SetEmbeddedObjectRequest{
+		VaultPath:      vaultPath,
+		FilePath:       filePath,
+		ObjectID:       objectID,
+		Updates:        updates,
+		TypedUpdates:   typedUpdates,
+		Schema:         sch,
+		AllowedFields:  map[string]bool{"alias": true, "id": true},
+		DocumentParser: buildParseOptions(vaultCfg),
+	})
 	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	// Get parse options from vault config
-	parseOpts := buildParseOptions(vaultCfg)
-
-	// Parse the document to find the embedded object
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
-	if err != nil {
-		return handleError(ErrInvalidInput, err, "Failed to parse document")
-	}
-
-	// Find the embedded object by ID
-	var targetObj *parser.ParsedObject
-	for _, obj := range doc.Objects {
-		if obj.ID == objectID {
-			targetObj = obj
-			break
+		var svcErr *objectsvc.Error
+		if errors.As(err, &svcErr) {
+			switch svcErr.Code {
+			case objectsvc.ErrorInvalidInput:
+				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+			case objectsvc.ErrorValidationFailed:
+				return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
+			case objectsvc.ErrorFileRead:
+				return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
+			case objectsvc.ErrorFileWrite:
+				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+			default:
+				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+			}
 		}
-	}
-
-	if targetObj == nil {
-		return handleErrorMsg(ErrFileDoesNotExist,
-			fmt.Sprintf("embedded object '%s' not found in file", slug),
-			"Check that the embedded ID exists in the file")
-	}
-
-	// Verify this is actually an embedded object (not the file-level object)
-	if targetObj.ParentID == nil {
-		return handleErrorMsg(ErrInvalidInput,
-			"cannot use embedded set on file-level object",
-			fmt.Sprintf("Use 'rvn set %s field=value' instead", fileID))
-	}
-
-	// Get the object type for validation
-	objectType := targetObj.ObjectType
-
-	// Find the type declaration line (line after the heading)
-	typeDeclLine := targetObj.LineStart + 1
-
-	// Update the file content
-	lines := strings.Split(string(content), "\n")
-
-	// Verify the line is a type declaration
-	if typeDeclLine-1 >= len(lines) {
-		return handleErrorMsg(ErrInvalidInput, "type declaration line not found", "")
-	}
-
-	declLine := lines[typeDeclLine-1] // Convert to 0-indexed
-	trimmedDecl := strings.TrimSpace(declLine)
-	if !strings.HasPrefix(trimmedDecl, "::") {
-		return handleErrorMsg(ErrInvalidInput,
-			fmt.Sprintf("expected type declaration at line %d, found: %s", typeDeclLine, trimmedDecl),
-			"The embedded object may have been modified or is in an unexpected format")
-	}
-
-	// Merge existing fields with updates
-	newFields := make(map[string]schema.FieldValue)
-	for k, v := range targetObj.Fields {
-		newFields[k] = v
-	}
-
-	mergedUpdates := make(map[string]string, len(updates)+len(typedUpdates))
-	for key, value := range updates {
-		mergedUpdates[key] = value
-	}
-	for key, value := range typedUpdates {
-		mergedUpdates[key] = serializeFieldValueLiteral(value)
-	}
-	if ufErr := detectUnknownSetFields(objectType, mergedUpdates, sch, map[string]bool{"alias": true, "id": true}); ufErr != nil {
-		return handleErrorWithDetails(ErrUnknownField, ufErr.Error(), ufErr.Suggestion(), ufErr.Details())
-	}
-
-	parsedUpdates, resolvedUpdates, validationWarnings, err := prepareValidatedFieldMutation(
-		objectType,
-		targetObj.Fields,
-		mergedUpdates,
-		sch,
-		map[string]bool{"alias": true, "id": true},
-	)
-	if err != nil {
+		var unknownErr *unknownFieldMutationError
 		var validationErr *fieldValidationError
+		if errors.As(err, &unknownErr) {
+			return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
+		}
 		if errors.As(err, &validationErr) {
 			return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
 		}
 		return handleError(ErrFileWriteError, err, "Failed to update embedded fields")
 	}
 
-	// Apply validated updates.
-	for fieldName, value := range parsedUpdates {
-		newFields[fieldName] = value
-	}
-
-	// Serialize the updated type declaration
-	// Preserve leading whitespace from original line
-	leadingSpace := ""
-	for _, c := range declLine {
-		if c == ' ' || c == '\t' {
-			leadingSpace += string(c)
-		} else {
-			break
-		}
-	}
-
-	newDeclLine := leadingSpace + parser.SerializeTypeDeclaration(objectType, newFields)
-
-	// Replace the line
-	lines[typeDeclLine-1] = newDeclLine
-
-	// Write the file back
-	newContent := strings.Join(lines, "\n")
-	if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
-	}
-
 	// Auto-reindex if configured
 	maybeReindex(vaultPath, filePath, vaultCfg)
 
 	relPath, _ := filepath.Rel(vaultPath, filePath)
+	objectType := serviceResult.ObjectType
+	resolvedUpdates := serviceResult.ResolvedUpdates
+	validationWarnings := serviceResult.WarningMessages
+	previousFields := serviceResult.PreviousFields
 
 	// Output
 	if isJSONOutput() {
@@ -732,8 +512,8 @@ func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, ty
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
 		oldVal := ""
-		if targetObj.Fields != nil {
-			if v, ok := targetObj.Fields[name]; ok {
+		if previousFields != nil {
+			if v, ok := previousFields[name]; ok {
 				if s, ok := v.AsString(); ok {
 					oldVal = s
 				} else if n, ok := v.AsNumber(); ok {
@@ -847,7 +627,7 @@ func previewSetEmbedded(vaultPath, id string, updates map[string]string, sch *sc
 // applySetEmbedded applies a set operation to an embedded object.
 func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *schema.Schema, vaultCfg *config.VaultConfig, parseOpts *parser.ParseOptions) error {
 	// Parse the embedded ID
-	fileID, slug, isEmbedded := paths.ParseEmbeddedID(id)
+	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
 	if !isEmbedded {
 		return fmt.Errorf("invalid embedded ID format")
 	}
@@ -858,105 +638,27 @@ func applySetEmbedded(vaultPath, id string, updates map[string]string, sch *sche
 		return fmt.Errorf("parent file not found: %w", err)
 	}
 
-	// Read the file
-	content, err := os.ReadFile(filePath)
+	_, err = objectsvc.SetEmbeddedObject(objectsvc.SetEmbeddedObjectRequest{
+		VaultPath:      vaultPath,
+		FilePath:       filePath,
+		ObjectID:       id,
+		Updates:        updates,
+		Schema:         sch,
+		AllowedFields:  map[string]bool{"alias": true, "id": true},
+		DocumentParser: parseOpts,
+	})
 	if err != nil {
-		return fmt.Errorf("read error: %w", err)
-	}
-
-	// Parse the document
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOpts)
-	if err != nil {
-		return fmt.Errorf("parse error: %w", err)
-	}
-
-	// Find the embedded object
-	var targetObj *parser.ParsedObject
-	for _, obj := range doc.Objects {
-		if obj.ID == id {
-			targetObj = obj
-			break
+		var svcErr *objectsvc.Error
+		if errors.As(err, &svcErr) {
+			return errors.New(svcErr.Message)
 		}
-	}
-
-	if targetObj == nil {
-		return fmt.Errorf("embedded object '%s' not found", slug)
-	}
-
-	// Verify this is an embedded object
-	if targetObj.ParentID == nil {
-		return fmt.Errorf("cannot modify file-level object as embedded")
-	}
-
-	// Find the type declaration line
-	typeDeclLine := targetObj.LineStart + 1
-	lines := strings.Split(string(content), "\n")
-
-	if typeDeclLine-1 >= len(lines) {
-		return fmt.Errorf("type declaration line not found")
-	}
-
-	declLine := lines[typeDeclLine-1]
-	trimmedDecl := strings.TrimSpace(declLine)
-	if !strings.HasPrefix(trimmedDecl, "::") {
-		return fmt.Errorf("expected type declaration at line %d", typeDeclLine)
-	}
-
-	// Merge existing fields with updates
-	newFields := make(map[string]schema.FieldValue)
-	for k, v := range targetObj.Fields {
-		newFields[k] = v
-	}
-	if ufErr := detectUnknownSetFields(targetObj.ObjectType, updates, sch, map[string]bool{"alias": true, "id": true}); ufErr != nil {
-		return ufErr
-	}
-
-	parsedUpdates, _, _, err := prepareValidatedFieldMutation(
-		targetObj.ObjectType,
-		targetObj.Fields,
-		updates,
-		sch,
-		map[string]bool{"alias": true, "id": true},
-	)
-	if err != nil {
 		return err
-	}
-	for fieldName, value := range parsedUpdates {
-		newFields[fieldName] = value
-	}
-
-	// Preserve leading whitespace
-	leadingSpace := ""
-	for _, c := range declLine {
-		if c == ' ' || c == '\t' {
-			leadingSpace += string(c)
-		} else {
-			break
-		}
-	}
-
-	// Serialize and replace
-	newDeclLine := leadingSpace + parser.SerializeTypeDeclaration(targetObj.ObjectType, newFields)
-	lines[typeDeclLine-1] = newDeclLine
-
-	// Write the file back
-	newContent := strings.Join(lines, "\n")
-	if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
-		return fmt.Errorf("write error: %w", err)
 	}
 
 	// Auto-reindex if configured
 	maybeReindex(vaultPath, filePath, vaultCfg)
 
 	return nil
-}
-
-// parseFieldValueToSchema converts a string value to schema.FieldValue.
-func parseFieldValueToSchema(value string) schema.FieldValue {
-	if strings.EqualFold(strings.TrimSpace(value), "null") {
-		return schema.Null()
-	}
-	return parser.ParseFieldValue(value)
 }
 
 func init() {

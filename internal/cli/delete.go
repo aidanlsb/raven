@@ -13,6 +13,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -175,45 +176,21 @@ func applyDeleteBulk(vaultPath string, ids []string, warnings []Warning, vaultCf
 		}
 
 		// Perform the deletion
-		if deletionCfg.Behavior == "trash" {
-			// Move to trash
-			trashDir := filepath.Join(vaultPath, deletionCfg.TrashDir)
-			if err := os.MkdirAll(trashDir, 0755); err != nil {
-				result.Status = "error"
-				result.Reason = fmt.Sprintf("failed to create trash dir: %v", err)
-				return result
-			}
-
-			// Preserve the file's actual directory structure in trash.
-			relPath, _ := filepath.Rel(vaultPath, filePath)
-			destPath := filepath.Join(trashDir, relPath)
-
-			// Create parent directories in trash
-			if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-				result.Status = "error"
-				result.Reason = fmt.Sprintf("failed to create parent dirs: %v", err)
-				return result
-			}
-
-			// If file already exists in trash, add timestamp
-			if _, err := os.Stat(destPath); err == nil {
-				timestamp := time.Now().Format("2006-01-02-150405")
-				base := strings.TrimSuffix(filepath.Base(destPath), ".md")
-				destPath = filepath.Join(filepath.Dir(destPath), base+"-"+timestamp+".md")
-			}
-
-			if err := os.Rename(filePath, destPath); err != nil {
-				result.Status = "error"
-				result.Reason = fmt.Sprintf("move failed: %v", err)
-				return result
-			}
-		} else {
-			// Permanent deletion
-			if err := os.Remove(filePath); err != nil {
-				result.Status = "error"
+		_, err = objectsvc.DeleteFile(objectsvc.DeleteFileRequest{
+			VaultPath: vaultPath,
+			FilePath:  filePath,
+			Behavior:  deletionCfg.Behavior,
+			TrashDir:  deletionCfg.TrashDir,
+		})
+		if err != nil {
+			result.Status = "error"
+			var svcErr *objectsvc.Error
+			if errors.As(err, &svcErr) {
+				result.Reason = svcErr.Message
+			} else {
 				result.Reason = fmt.Sprintf("delete failed: %v", err)
-				return result
 			}
+			return result
 		}
 
 		// Remove from index
@@ -322,39 +299,27 @@ func deleteSingleObject(vaultPath, reference string) error {
 	}
 
 	// Perform the deletion
-	var destPath string
-	if deletionCfg.Behavior == "trash" {
-		// Move to trash
-		trashDir := filepath.Join(vaultPath, deletionCfg.TrashDir)
-		if err := os.MkdirAll(trashDir, 0755); err != nil {
-			return handleError(ErrFileWriteError, err, "")
+	serviceResult, err := objectsvc.DeleteFile(objectsvc.DeleteFileRequest{
+		VaultPath: vaultPath,
+		FilePath:  filePath,
+		Behavior:  deletionCfg.Behavior,
+		TrashDir:  deletionCfg.TrashDir,
+	})
+	if err != nil {
+		var svcErr *objectsvc.Error
+		if errors.As(err, &svcErr) {
+			switch svcErr.Code {
+			case objectsvc.ErrorInvalidInput:
+				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+			case objectsvc.ErrorFileWrite:
+				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+			default:
+				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+			}
 		}
-
-		// Preserve the file's actual directory structure in trash.
-		relPath, _ := filepath.Rel(vaultPath, filePath)
-		destPath = filepath.Join(trashDir, relPath)
-
-		// Create parent directories in trash
-		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
-
-		// If file already exists in trash, add timestamp
-		if _, err := os.Stat(destPath); err == nil {
-			timestamp := time.Now().Format("2006-01-02-150405")
-			base := strings.TrimSuffix(filepath.Base(destPath), ".md")
-			destPath = filepath.Join(filepath.Dir(destPath), base+"-"+timestamp+".md")
-		}
-
-		if err := os.Rename(filePath, destPath); err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
-	} else {
-		// Permanent deletion
-		if err := os.Remove(filePath); err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
+		return handleError(ErrFileWriteError, err, "")
 	}
+	destPath := serviceResult.TrashPath
 
 	// Remove from index
 	if err := db.RemoveDocument(objectID); err != nil {
