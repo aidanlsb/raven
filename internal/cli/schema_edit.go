@@ -15,7 +15,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/query"
@@ -121,7 +120,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		Description: schemaAddDescription,
 	})
 	if err != nil {
-		return mapSchemaAddServiceError(err)
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -163,7 +162,7 @@ func addTrait(vaultPath, traitName string, start time.Time) error {
 		Default:   schemaAddDefault,
 	})
 	if err != nil {
-		return mapSchemaAddServiceError(err)
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -372,7 +371,7 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 		Description: schemaAddDescription,
 	})
 	if err != nil {
-		return mapSchemaAddServiceError(err)
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -403,7 +402,7 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 	return nil
 }
 
-func mapSchemaAddServiceError(err error) error {
+func mapSchemaServiceError(err error) error {
 	var svcErr *schemasvc.Error
 	if errors.As(err, &svcErr) {
 		suggestion := svcErr.Suggestion
@@ -541,153 +540,17 @@ Examples:
 }
 
 func updateType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Check built-in types
-	if schema.IsBuiltinType(typeName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be modified", typeName), "")
-	}
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.UpdateType(schemasvc.UpdateTypeRequest{
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		DefaultPath: schemaUpdateDefaultPath,
+		NameField:   schemaUpdateNameField,
+		Description: schemaUpdateDescription,
+		AddTrait:    schemaUpdateAddTrait,
+		RemoveTrait: schemaUpdateRemoveTrait,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if type exists
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "Use 'rvn schema add type' to create it")
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	types := schemaDoc["types"].(map[string]interface{})
-	typeNode, ok := types[typeName].(map[string]interface{})
-	if !ok {
-		typeNode = make(map[string]interface{})
-		types[typeName] = typeNode
-	}
-
-	changes := []string{}
-
-	// Apply updates
-	if schemaUpdateDefaultPath != "" {
-		typeNode["default_path"] = schemaUpdateDefaultPath
-		changes = append(changes, fmt.Sprintf("default_path=%s", schemaUpdateDefaultPath))
-	}
-	if schemaUpdateDescription != "" {
-		if schemaUpdateDescription == "-" || schemaUpdateDescription == "none" || schemaUpdateDescription == "\"\"" {
-			delete(typeNode, "description")
-			changes = append(changes, "removed description")
-		} else {
-			typeNode["description"] = schemaUpdateDescription
-			changes = append(changes, fmt.Sprintf("description=%s", schemaUpdateDescription))
-		}
-	}
-
-	// Handle name_field update
-	if schemaUpdateNameField != "" {
-		// Empty string means remove name_field
-		if schemaUpdateNameField == "-" || schemaUpdateNameField == "none" || schemaUpdateNameField == "\"\"" {
-			delete(typeNode, "name_field")
-			changes = append(changes, "removed name_field")
-		} else {
-			// Check if field exists; if not, auto-create it
-			fieldExists := false
-			if typeDef.Fields != nil {
-				if fieldDef, ok := typeDef.Fields[schemaUpdateNameField]; ok {
-					fieldExists = true
-					// Validate it's a string type
-					if fieldDef.Type != schema.FieldTypeString {
-						return handleErrorMsg(ErrInvalidInput,
-							fmt.Sprintf("name_field must reference a string field, '%s' is type '%s'", schemaUpdateNameField, fieldDef.Type),
-							"Choose a string field or create a new one")
-					}
-				}
-			}
-
-			typeNode["name_field"] = schemaUpdateNameField
-
-			if !fieldExists {
-				// Auto-create the field
-				fields, ok := typeNode["fields"].(map[string]interface{})
-				if !ok {
-					fields = make(map[string]interface{})
-					typeNode["fields"] = fields
-				}
-				fields[schemaUpdateNameField] = map[string]interface{}{
-					"type":     "string",
-					"required": true,
-				}
-				changes = append(changes, fmt.Sprintf("name_field=%s (auto-created as required string)", schemaUpdateNameField))
-			} else {
-				changes = append(changes, fmt.Sprintf("name_field=%s", schemaUpdateNameField))
-			}
-		}
-	}
-
-	// Handle trait additions/removals
-	if schemaUpdateAddTrait != "" {
-		// Check trait exists
-		if _, exists := sch.Traits[schemaUpdateAddTrait]; !exists {
-			return handleErrorMsg(ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", schemaUpdateAddTrait), "Add it first with 'rvn schema add trait'")
-		}
-
-		traits, ok := typeNode["traits"].([]interface{})
-		if !ok {
-			traits = []interface{}{}
-		}
-		// Check if already present
-		found := false
-		for _, t := range traits {
-			if t.(string) == schemaUpdateAddTrait {
-				found = true
-				break
-			}
-		}
-		if !found {
-			traits = append(traits, schemaUpdateAddTrait)
-			typeNode["traits"] = traits
-			changes = append(changes, fmt.Sprintf("added trait %s", schemaUpdateAddTrait))
-		}
-	}
-
-	if schemaUpdateRemoveTrait != "" {
-		traits, ok := typeNode["traits"].([]interface{})
-		if ok {
-			newTraits := []interface{}{}
-			for _, t := range traits {
-				if t.(string) != schemaUpdateRemoveTrait {
-					newTraits = append(newTraits, t)
-				}
-			}
-			typeNode["traits"] = newTraits
-			changes = append(changes, fmt.Sprintf("removed trait %s", schemaUpdateRemoveTrait))
-		}
-	}
-
-	if len(changes) == 0 {
-		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --default-path, --description, --name-field, --add-trait, --remove-trait")
-	}
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -696,80 +559,28 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 		outputSuccess(map[string]interface{}{
 			"updated": "type",
 			"name":    typeName,
-			"changes": changes,
+			"changes": result.Changes,
 		}, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
 	fmt.Printf("✓ Updated type '%s'\n", typeName)
-	for _, c := range changes {
+	for _, c := range result.Changes {
 		fmt.Printf("  %s\n", c)
 	}
 	return nil
 }
 
 func updateTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.UpdateTrait(schemasvc.UpdateTraitRequest{
+		VaultPath: vaultPath,
+		TraitName: traitName,
+		TraitType: schemaUpdateFieldType,
+		Values:    schemaUpdateValues,
+		Default:   schemaUpdateDefault,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if trait exists
-	if _, exists := sch.Traits[traitName]; !exists {
-		return handleErrorMsg(ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "Use 'rvn schema add trait' to create it")
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	traits := schemaDoc["traits"].(map[string]interface{})
-	traitNode, ok := traits[traitName].(map[string]interface{})
-	if !ok {
-		traitNode = make(map[string]interface{})
-		traits[traitName] = traitNode
-	}
-
-	changes := []string{}
-
-	// Apply updates
-	if schemaUpdateFieldType != "" {
-		traitNode["type"] = schemaUpdateFieldType
-		changes = append(changes, fmt.Sprintf("type=%s", schemaUpdateFieldType))
-	}
-
-	if schemaUpdateValues != "" {
-		traitNode["values"] = strings.Split(schemaUpdateValues, ",")
-		changes = append(changes, fmt.Sprintf("values=%s", schemaUpdateValues))
-	}
-
-	if schemaUpdateDefault != "" {
-		traitNode["default"] = schemaUpdateDefault
-		changes = append(changes, fmt.Sprintf("default=%s", schemaUpdateDefault))
-	}
-
-	if len(changes) == 0 {
-		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --type, --values, --default")
-	}
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -778,152 +589,32 @@ func updateTrait(vaultPath, traitName string, start time.Time) error {
 		outputSuccess(map[string]interface{}{
 			"updated": "trait",
 			"name":    traitName,
-			"changes": changes,
+			"changes": result.Changes,
 		}, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
 	fmt.Printf("✓ Updated trait '%s'\n", traitName)
-	for _, c := range changes {
+	for _, c := range result.Changes {
 		fmt.Printf("  %s\n", c)
 	}
 	return nil
 }
 
 func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.UpdateField(schemasvc.UpdateFieldRequest{
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		FieldName:   fieldName,
+		FieldType:   schemaUpdateFieldType,
+		Required:    schemaUpdateRequired,
+		Default:     schemaUpdateDefault,
+		Values:      schemaUpdateValues,
+		Target:      schemaUpdateTarget,
+		Description: schemaUpdateDescription,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if type exists
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "")
-	}
-
-	// Check if type is a built-in type (cannot be modified)
-	if schema.IsBuiltinType(typeName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot modify fields on built-in type '%s'", typeName), "Built-in types (page, section, date) have fixed definitions.")
-	}
-
-	// Check if field exists
-	if typeDef.Fields == nil {
-		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "Use 'rvn schema add field' to create it")
-	}
-	if _, exists := typeDef.Fields[fieldName]; !exists {
-		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "Use 'rvn schema add field' to create it")
-	}
-
-	// Check data integrity for required changes
-	if schemaUpdateRequired == "true" {
-		// This would make the field required - check all objects have it
-		db, err := index.Open(vaultPath)
-		if err == nil {
-			defer db.Close()
-			objects, err := db.QueryObjects(typeName)
-			if err == nil && len(objects) > 0 {
-				var missing []string
-				for _, obj := range objects {
-					fields := obj.Fields
-					if fields == nil {
-						fields = map[string]interface{}{}
-					}
-					if _, hasField := fields[fieldName]; !hasField {
-						missing = append(missing, obj.ID)
-					}
-				}
-				if len(missing) > 0 {
-					details := map[string]interface{}{
-						"missing_field":    fieldName,
-						"affected_count":   len(missing),
-						"affected_objects": missing,
-					}
-					if len(missing) > 5 {
-						details["affected_objects"] = append(missing[:5], "... and more")
-					}
-					return handleErrorWithDetails(ErrDataIntegrityBlock,
-						fmt.Sprintf("%d objects of type '%s' lack field '%s'", len(missing), typeName, fieldName),
-						"Add the field to these files, then retry",
-						details)
-				}
-			}
-		}
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	types := schemaDoc["types"].(map[string]interface{})
-	typeNode := types[typeName].(map[string]interface{})
-	fields := typeNode["fields"].(map[string]interface{})
-	fieldNode, ok := fields[fieldName].(map[string]interface{})
-	if !ok {
-		fieldNode = make(map[string]interface{})
-		fields[fieldName] = fieldNode
-	}
-
-	changes := []string{}
-
-	// Apply updates
-	if schemaUpdateFieldType != "" {
-		fieldNode["type"] = schemaUpdateFieldType
-		changes = append(changes, fmt.Sprintf("type=%s", schemaUpdateFieldType))
-	}
-
-	if schemaUpdateRequired != "" {
-		required := schemaUpdateRequired == "true"
-		fieldNode["required"] = required
-		changes = append(changes, fmt.Sprintf("required=%v", required))
-	}
-
-	if schemaUpdateDefault != "" {
-		fieldNode["default"] = schemaUpdateDefault
-		changes = append(changes, fmt.Sprintf("default=%s", schemaUpdateDefault))
-	}
-
-	if schemaUpdateValues != "" {
-		fieldNode["values"] = strings.Split(schemaUpdateValues, ",")
-		changes = append(changes, fmt.Sprintf("values=%s", schemaUpdateValues))
-	}
-
-	if schemaUpdateTarget != "" {
-		fieldNode["target"] = schemaUpdateTarget
-		changes = append(changes, fmt.Sprintf("target=%s", schemaUpdateTarget))
-	}
-	if schemaUpdateDescription != "" {
-		if schemaUpdateDescription == "-" || schemaUpdateDescription == "none" || schemaUpdateDescription == "\"\"" {
-			delete(fieldNode, "description")
-			changes = append(changes, "removed description")
-		} else {
-			fieldNode["description"] = schemaUpdateDescription
-			changes = append(changes, fmt.Sprintf("description=%s", schemaUpdateDescription))
-		}
-	}
-
-	if len(changes) == 0 {
-		return handleErrorMsg(ErrInvalidInput, "no changes specified", "Use flags like --type, --required, --default, --description")
-	}
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -933,13 +624,13 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 			"updated": "field",
 			"type":    typeName,
 			"field":   fieldName,
-			"changes": changes,
+			"changes": result.Changes,
 		}, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
 	fmt.Printf("✓ Updated field '%s' on type '%s'\n", fieldName, typeName)
-	for _, c := range changes {
+	for _, c := range result.Changes {
 		fmt.Printf("  %s\n", c)
 	}
 	return nil
@@ -988,88 +679,51 @@ Examples:
 }
 
 func removeType(vaultPath, typeName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Check built-in types
-	if schema.IsBuiltinType(typeName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be removed", typeName), "")
-	}
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	interactive := !isJSONOutput()
+	result, err := schemasvc.RemoveType(schemasvc.RemoveTypeRequest{
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		Force:       schemaRemoveForce,
+		Interactive: interactive,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if type exists
-	if _, exists := sch.Types[typeName]; !exists {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "")
-	}
-
-	// Check for affected objects
-	var warnings []Warning
-	db, err := index.Open(vaultPath)
-	if err == nil {
-		defer db.Close()
-		objects, err := db.QueryObjects(typeName)
-		if err == nil && len(objects) > 0 {
-			warning := Warning{
-				Code:    "ORPHANED_FILES",
-				Message: fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
-			}
-			warnings = append(warnings, warning)
-
-			if !schemaRemoveForce && !isJSONOutput() {
-				fmt.Printf("Warning: %d files of type '%s' will become 'page' type:\n", len(objects), typeName)
-				for i, obj := range objects {
-					if i >= 5 {
-						fmt.Printf("  ... and %d more\n", len(objects)-5)
-						break
-					}
-					fmt.Printf("  - %s\n", obj.FilePath)
+		var svcErr *schemasvc.Error
+		if errors.As(err, &svcErr) && svcErr.Code == schemasvc.ErrorConfirmation && !schemaRemoveForce && !isJSONOutput() {
+			count := detailInt(svcErr.Details, "affected_count")
+			if count > 0 {
+				fmt.Printf("Warning: %d files of type '%s' will become 'page' type:\n", count, typeName)
+				for _, filePath := range detailStringSlice(svcErr.Details, "affected_files") {
+					fmt.Printf("  - %s\n", filePath)
 				}
-				fmt.Print("Continue? [y/N] ")
-				var response string
-				fmt.Scanln(&response)
-				if strings.ToLower(response) != "y" {
-					return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
+				if remaining := detailInt(svcErr.Details, "remaining_count"); remaining > 0 {
+					fmt.Printf("  ... and %d more\n", remaining)
 				}
 			}
+			if !promptForConfirm("Continue?") {
+				return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
+			}
+			result, err = schemasvc.RemoveType(schemasvc.RemoveTypeRequest{
+				VaultPath:   vaultPath,
+				TypeName:    typeName,
+				Force:       true,
+				Interactive: false,
+			})
+			if err != nil {
+				return mapSchemaServiceError(err)
+			}
+		} else {
+			return mapSchemaServiceError(err)
 		}
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	types := schemaDoc["types"].(map[string]interface{})
-	delete(types, typeName)
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		result := map[string]interface{}{
+		data := map[string]interface{}{
 			"removed": "type",
 			"name":    typeName,
 		}
-		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
+		outputSuccessWithWarnings(data, schemaWarnings(result.Warnings), &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
@@ -1078,76 +732,45 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 }
 
 func removeTrait(vaultPath, traitName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	interactive := !isJSONOutput()
+	result, err := schemasvc.RemoveTrait(schemasvc.RemoveTraitRequest{
+		VaultPath:   vaultPath,
+		TraitName:   traitName,
+		Force:       schemaRemoveForce,
+		Interactive: interactive,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if trait exists
-	if _, exists := sch.Traits[traitName]; !exists {
-		return handleErrorMsg(ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "")
-	}
-
-	// Check for affected trait instances
-	var warnings []Warning
-	db, err := index.Open(vaultPath)
-	if err == nil {
-		defer db.Close()
-		instances, err := db.QueryTraits(traitName, nil)
-		if err == nil && len(instances) > 0 {
-			warning := Warning{
-				Code:    "ORPHANED_TRAITS",
-				Message: fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
+		var svcErr *schemasvc.Error
+		if errors.As(err, &svcErr) && svcErr.Code == schemasvc.ErrorConfirmation && !schemaRemoveForce && !isJSONOutput() {
+			count := detailInt(svcErr.Details, "affected_count")
+			if count > 0 {
+				fmt.Printf("Warning: %d instances of @%s will remain in files (no longer indexed)\n", count, traitName)
 			}
-			warnings = append(warnings, warning)
-
-			if !schemaRemoveForce && !isJSONOutput() {
-				fmt.Printf("Warning: %d instances of @%s will remain in files (no longer indexed)\n", len(instances), traitName)
-				fmt.Print("Continue? [y/N] ")
-				var response string
-				fmt.Scanln(&response)
-				if strings.ToLower(response) != "y" {
-					return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
-				}
+			if !promptForConfirm("Continue?") {
+				return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
 			}
+			result, err = schemasvc.RemoveTrait(schemasvc.RemoveTraitRequest{
+				VaultPath:   vaultPath,
+				TraitName:   traitName,
+				Force:       true,
+				Interactive: false,
+			})
+			if err != nil {
+				return mapSchemaServiceError(err)
+			}
+		} else {
+			return mapSchemaServiceError(err)
 		}
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	traits := schemaDoc["traits"].(map[string]interface{})
-	delete(traits, traitName)
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		result := map[string]interface{}{
+		data := map[string]interface{}{
 			"removed": "trait",
 			"name":    traitName,
 		}
-		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
+		outputSuccessWithWarnings(data, schemaWarnings(result.Warnings), &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
@@ -1156,82 +779,13 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 }
 
 func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
+	_, err := schemasvc.RemoveField(schemasvc.RemoveFieldRequest{
+		VaultPath: vaultPath,
+		TypeName:  typeName,
+		FieldName: fieldName,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	// Check if type exists
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "")
-	}
-
-	// Check if type is a built-in type (cannot be modified)
-	if schema.IsBuiltinType(typeName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot remove fields from built-in type '%s'", typeName), "Built-in types (page, section, date) have fixed definitions.")
-	}
-
-	// Check if field exists
-	if typeDef.Fields == nil {
-		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "")
-	}
-	fieldDef, exists := typeDef.Fields[fieldName]
-	if !exists {
-		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName), "")
-	}
-
-	// If field is required, block removal unless user fixes files first
-	if fieldDef.Required {
-		db, err := index.Open(vaultPath)
-		if err == nil {
-			defer db.Close()
-			objects, err := db.QueryObjects(typeName)
-			if err == nil && len(objects) > 0 {
-				return handleErrorWithDetails(ErrDataIntegrityBlock,
-					fmt.Sprintf("cannot remove required field '%s': %d objects have this field", fieldName, len(objects)),
-					"First make the field optional with 'rvn schema update field', then remove it",
-					map[string]interface{}{
-						"field":          fieldName,
-						"type":           typeName,
-						"affected_count": len(objects),
-					})
-			}
-		}
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	types := schemaDoc["types"].(map[string]interface{})
-	typeNode := types[typeName].(map[string]interface{})
-	fields := typeNode["fields"].(map[string]interface{})
-	delete(fields, fieldName)
-
-	// If fields is empty, remove the fields key entirely
-	if len(fields) == 0 {
-		delete(typeNode, "fields")
-	}
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -1247,6 +801,64 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 
 	fmt.Printf("✓ Removed field '%s' from type '%s'\n", fieldName, typeName)
 	return nil
+}
+
+func schemaWarnings(serviceWarnings []schemasvc.Warning) []Warning {
+	if len(serviceWarnings) == 0 {
+		return nil
+	}
+	warnings := make([]Warning, 0, len(serviceWarnings))
+	for _, warning := range serviceWarnings {
+		warnings = append(warnings, Warning{
+			Code:    warning.Code,
+			Message: warning.Message,
+		})
+	}
+	return warnings
+}
+
+func detailInt(details map[string]interface{}, key string) int {
+	if details == nil {
+		return 0
+	}
+	value, ok := details[key]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	default:
+		return 0
+	}
+}
+
+func detailStringSlice(details map[string]interface{}, key string) []string {
+	if details == nil {
+		return nil
+	}
+	raw, ok := details[key]
+	if !ok {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case []string:
+		return typed
+	case []interface{}:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if str, ok := item.(string); ok && strings.TrimSpace(str) != "" {
+				values = append(values, str)
+			}
+		}
+		return values
+	default:
+		return nil
+	}
 }
 
 // =============================================================================

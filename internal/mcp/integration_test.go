@@ -766,6 +766,108 @@ func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
 	v.AssertFileContains("schema.yaml", "- archived")
 }
 
+func TestMCPIntegration_SchemaUpdateTypeAndTraitViaToolCall(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	updateTypeResult := server.callTool("raven_schema_update_type", map[string]interface{}{
+		"name":        "project",
+		"description": "Tracked work items",
+		"add-trait":   "priority",
+	})
+	if updateTypeResult.IsError {
+		t.Fatalf("schema update type failed: %s", updateTypeResult.Text)
+	}
+	v.AssertFileContains("schema.yaml", "description: Tracked work items")
+	v.AssertFileContains("schema.yaml", "- priority")
+
+	updateTraitResult := server.callTool("raven_schema_update_trait", map[string]interface{}{
+		"name":   "priority",
+		"values": "low,medium,high,critical",
+	})
+	if updateTraitResult.IsError {
+		t.Fatalf("schema update trait failed: %s", updateTraitResult.Text)
+	}
+	v.AssertFileContains("schema.yaml", "- critical")
+}
+
+func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	createProject := server.callTool("raven_new", map[string]interface{}{
+		"type":  "project",
+		"title": "Apollo",
+	})
+	if createProject.IsError {
+		t.Fatalf("schema remove setup (project create) failed: %s", createProject.Text)
+	}
+
+	addTraitUsage := server.callTool("raven_add", map[string]interface{}{
+		"text": "@priority(high)",
+		"to":   "projects/apollo.md",
+	})
+	if addTraitUsage.IsError {
+		t.Fatalf("schema remove setup (trait usage) failed: %s", addTraitUsage.Text)
+	}
+
+	removeType := server.callTool("raven_schema_remove_type", map[string]interface{}{
+		"name": "project",
+	})
+	if removeType.IsError {
+		t.Fatalf("schema remove type failed: %s", removeType.Text)
+	}
+
+	var removeTypeResp struct {
+		OK       bool `json:"ok"`
+		Warnings []struct {
+			Code string `json:"code"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(removeType.Text), &removeTypeResp); err != nil {
+		t.Fatalf("failed to parse schema remove type response: %v", err)
+	}
+	if !removeTypeResp.OK {
+		t.Fatalf("expected ok=true in schema remove type response: %s", removeType.Text)
+	}
+	if len(removeTypeResp.Warnings) == 0 || removeTypeResp.Warnings[0].Code != "ORPHANED_FILES" {
+		t.Fatalf("expected ORPHANED_FILES warning, got: %s", removeType.Text)
+	}
+	v.AssertFileNotContains("schema.yaml", "project:")
+
+	removeTrait := server.callTool("raven_schema_remove_trait", map[string]interface{}{
+		"name": "priority",
+	})
+	if removeTrait.IsError {
+		t.Fatalf("schema remove trait failed: %s", removeTrait.Text)
+	}
+
+	var removeTraitResp struct {
+		OK       bool `json:"ok"`
+		Warnings []struct {
+			Code string `json:"code"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(removeTrait.Text), &removeTraitResp); err != nil {
+		t.Fatalf("failed to parse schema remove trait response: %v", err)
+	}
+	if !removeTraitResp.OK {
+		t.Fatalf("expected ok=true in schema remove trait response: %s", removeTrait.Text)
+	}
+	if len(removeTraitResp.Warnings) == 0 || removeTraitResp.Warnings[0].Code != "ORPHANED_TRAITS" {
+		t.Fatalf("expected ORPHANED_TRAITS warning, got: %s", removeTrait.Text)
+	}
+	v.AssertFileNotContains("schema.yaml", "priority:")
+}
+
 // TestMCPIntegration_SchemaRenameTypeWithDefaultPathRename verifies MCP JSON
 // preview/apply behavior for type rename with optional default_path directory
 // migration.
@@ -1567,6 +1669,90 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"added", "type", "field", "field_type", "required", "description"})
 	})
 
+	t.Run("schema_update_type", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_update_type", map[string]interface{}{
+			"name":        "project",
+			"description": "Tracked work items",
+			"add-trait":   "priority",
+		})
+		cliResult := vCLI.RunCLI("schema", "update", "type", "project", "--description", "Tracked work items", "--add-trait", "priority")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"updated", "name", "changes"})
+	})
+
+	t.Run("schema_update_trait", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_update_trait", map[string]interface{}{
+			"name":   "priority",
+			"values": "low,medium,high,critical",
+		})
+		cliResult := vCLI.RunCLI("schema", "update", "trait", "priority", "--values", "low,medium,high,critical")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"updated", "name", "changes"})
+	})
+
+	t.Run("schema_update_field", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+			"type_name":  "project",
+			"field_name": "status",
+			"values":     "active,paused,done,archived",
+		})
+		cliResult := vCLI.RunCLI("schema", "update", "field", "project", "status", "--values", "active,paused,done,archived")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"updated", "type", "field", "changes"})
+	})
+
+	t.Run("schema_remove_type", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_remove_type", map[string]interface{}{
+			"name": "project",
+		})
+		cliResult := vCLI.RunCLI("schema", "remove", "type", "project")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"removed", "name"})
+	})
+
+	t.Run("schema_remove_trait", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_remove_trait", map[string]interface{}{
+			"name": "priority",
+		})
+		cliResult := vCLI.RunCLI("schema", "remove", "trait", "priority")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"removed", "name"})
+	})
+
+	t.Run("schema_remove_field", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_remove_field", map[string]interface{}{
+			"type_name":  "project",
+			"field_name": "owner",
+		})
+		cliResult := vCLI.RunCLI("schema", "remove", "field", "project", "owner")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"removed", "type", "field"})
+	})
+
 	t.Run("schema_template_set", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
@@ -1947,6 +2133,48 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 			"type":       "person",
 		})
 		cliResult := vCLI.RunCLI("schema", "add", "field", "person", "manager", "--type", "person")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("schema_update_field_missing_field", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+			"type_name":  "person",
+			"field_name": "missing",
+			"type":       "string",
+		})
+		cliResult := vCLI.RunCLI("schema", "update", "field", "person", "missing", "--type", "string")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("schema_remove_field_missing_field", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_remove_field", map[string]interface{}{
+			"type_name":  "person",
+			"field_name": "missing",
+		})
+		cliResult := vCLI.RunCLI("schema", "remove", "field", "person", "missing")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("schema_remove_type_missing_type", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_remove_type", map[string]interface{}{
+			"name": "missing_type",
+		})
+		cliResult := vCLI.RunCLI("schema", "remove", "type", "missing_type")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})
