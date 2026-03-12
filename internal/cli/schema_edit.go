@@ -3,24 +3,15 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 // Flags for schema add commands
@@ -921,1200 +912,214 @@ Examples:
 	},
 }
 
-// TypeRenameChange represents a single change to be made
-type TypeRenameChange struct {
-	FilePath    string `json:"file_path"`
-	ChangeType  string `json:"change_type"` // "frontmatter", "embedded", "schema_ref_target", "schema_default_path", "directory_move"
-	Description string `json:"description"`
-	Line        int    `json:"line,omitempty"`
-}
-
-type typeDirectoryMove struct {
-	SourceRelPath      string `json:"source_rel_path"`
-	DestinationRelPath string `json:"destination_rel_path"`
-	SourceID           string `json:"source_id"`
-	DestinationID      string `json:"destination_id"`
-}
-
-type typeDefaultPathRenamePlan struct {
-	OldDefaultPath string              `json:"old_default_path"`
-	NewDefaultPath string              `json:"new_default_path"`
-	Moves          []typeDirectoryMove `json:"moves,omitempty"`
-}
-
-// FieldRenameChange represents a single change to be made when renaming a field.
-type FieldRenameChange struct {
-	FilePath    string `json:"file_path"`
-	ChangeType  string `json:"change_type"` // "schema_field", "schema_name_field", "template_inline", "template_file", "frontmatter", "embedded", "saved_query"
-	Description string `json:"description"`
-	Line        int    `json:"line,omitempty"`
-}
-
-// FieldRenameConflict represents a conflict that blocks renaming a field.
-// Conflicts are hard errors (even with --confirm).
-type FieldRenameConflict struct {
-	FilePath      string `json:"file_path"`
-	ConflictType  string `json:"conflict_type"` // "schema", "frontmatter", "embedded"
-	Message       string `json:"message"`
-	Line          int    `json:"line,omitempty"`
-	OldFieldFound bool   `json:"old_field_found,omitempty"`
-	NewFieldFound bool   `json:"new_field_found,omitempty"`
-}
-
-type fieldRenamePlan struct {
-	Changes []FieldRenameChange
-
-	SchemaYAML []byte
-
-	TemplateFiles map[string][]byte // absolute path -> new content
-	// For human preview grouping.
-	TemplateFileRelPaths map[string]string // absolute path -> relative path
-
-	RavenYAML []byte
-
-	MarkdownFiles map[string][]byte // absolute path -> new content
-	// For human preview grouping.
-	MarkdownFileRelPaths map[string]string // absolute path -> relative path
-
-	Conflicts []FieldRenameConflict
-}
-
 func renameField(vaultPath, typeName, oldField, newField string, start time.Time) error {
-	if typeName == "" || oldField == "" || newField == "" {
-		return handleErrorMsg(ErrInvalidInput, "type and field names cannot be empty", "Usage: rvn schema rename field <type> <old_field> <new_field>")
-	}
-	if oldField == newField {
-		return handleErrorMsg(ErrInvalidInput, "old and new field names are the same", "")
-	}
-
-	// Check built-in types
-	if schema.IsBuiltinType(typeName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot rename fields on built-in type '%s'", typeName), "")
-	}
-
-	// Load existing schema for validation
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.RenameField(schemasvc.RenameFieldRequest{
+		VaultPath: vaultPath,
+		TypeName:  typeName,
+		OldField:  oldField,
+		NewField:  newField,
+		Confirm:   schemaRenameConfirm,
+	})
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	typeDef, exists := sch.Types[typeName]
-	if !exists {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "")
-	}
-	if typeDef == nil || typeDef.Fields == nil {
-		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("type '%s' has no fields", typeName), "")
-	}
-	if _, ok := typeDef.Fields[oldField]; !ok {
-		return handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", oldField, typeName), "")
-	}
-	if _, ok := typeDef.Fields[newField]; ok {
-		return handleErrorMsg(ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName), "")
-	}
-
-	plan, err := buildFieldRenamePlan(vaultPath, typeName, oldField, newField)
-	if err != nil {
-		return err
-	}
-
-	// Hard error on conflicts (even in preview)
-	if len(plan.Conflicts) > 0 {
-		return handleErrorWithDetails(
-			ErrDataIntegrityBlock,
-			fmt.Sprintf("field rename blocked by %d conflicts", len(plan.Conflicts)),
-			"Resolve conflicts (remove one of the duplicate keys) and retry",
-			map[string]interface{}{
-				"type":       typeName,
-				"old_field":  oldField,
-				"new_field":  newField,
-				"conflicts":  plan.Conflicts,
-				"hint":       "Conflicts occur when both old and new field keys are present in the same object/declaration.",
-				"next_steps": "Fix conflicts, then re-run the command (preview first).",
-			},
-		)
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
-
-	// Preview
-	if !schemaRenameConfirm {
-		if isJSONOutput() {
+	if isJSONOutput() {
+		if result.Preview {
 			outputSuccess(map[string]interface{}{
 				"preview":       true,
-				"type":          typeName,
-				"old_field":     oldField,
-				"new_field":     newField,
-				"total_changes": len(plan.Changes),
-				"changes":       plan.Changes,
-				"hint":          "Run with --confirm to apply changes",
+				"type":          result.TypeName,
+				"old_field":     result.OldField,
+				"new_field":     result.NewField,
+				"total_changes": result.TotalChanges,
+				"changes":       result.Changes,
+				"hint":          result.Hint,
 			}, &Meta{QueryTimeMs: elapsed})
 			return nil
 		}
-
-		fmt.Printf("Preview: Rename field '%s.%s' to '%s.%s'\n\n", typeName, oldField, typeName, newField)
-		fmt.Printf("Changes to be made (%d total):\n", len(plan.Changes))
-
-		byFile := make(map[string][]FieldRenameChange)
-		for _, c := range plan.Changes {
-			byFile[c.FilePath] = append(byFile[c.FilePath], c)
-		}
-
-		// Stable order for output
-		var files []string
-		for f := range byFile {
-			files = append(files, f)
-		}
-		sort.Strings(files)
-
-		for _, file := range files {
-			fileChanges := byFile[file]
-			fmt.Printf("\n  %s:\n", file)
-			for _, c := range fileChanges {
-				if c.Line > 0 {
-					fmt.Printf("    Line %d: %s\n", c.Line, c.Description)
-				} else {
-					fmt.Printf("    %s\n", c.Description)
-				}
-			}
-		}
-
-		fmt.Printf("\nRun with --confirm to apply these changes.\n")
-		return nil
-	}
-
-	// Apply (deterministic order, atomic writes)
-	appliedChanges := 0
-
-	// 1) schema.yaml
-	if len(plan.SchemaYAML) > 0 {
-		schemaPath := paths.SchemaPath(vaultPath)
-		if err := atomicfile.WriteFile(schemaPath, plan.SchemaYAML, 0o644); err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
-		appliedChanges++
-	}
-
-	// 2) Template files
-	if len(plan.TemplateFiles) > 0 {
-		var pathsSorted []string
-		for p := range plan.TemplateFiles {
-			pathsSorted = append(pathsSorted, p)
-		}
-		sort.Strings(pathsSorted)
-		for _, p := range pathsSorted {
-			if err := atomicfile.WriteFile(p, plan.TemplateFiles[p], 0o644); err != nil {
-				return handleError(ErrFileWriteError, err, "")
-			}
-			appliedChanges++
-		}
-	}
-
-	// 3) raven.yaml
-	if len(plan.RavenYAML) > 0 {
-		cfgPath := filepath.Join(vaultPath, "raven.yaml")
-		if err := atomicfile.WriteFile(cfgPath, plan.RavenYAML, 0o644); err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
-		appliedChanges++
-	}
-
-	// 4) Markdown files
-	if len(plan.MarkdownFiles) > 0 {
-		var pathsSorted []string
-		for p := range plan.MarkdownFiles {
-			pathsSorted = append(pathsSorted, p)
-		}
-		sort.Strings(pathsSorted)
-		for _, p := range pathsSorted {
-			if err := atomicfile.WriteFile(p, plan.MarkdownFiles[p], 0o644); err != nil {
-				return handleError(ErrFileWriteError, err, "")
-			}
-			appliedChanges++
-		}
-	}
-
-	elapsed = time.Since(start).Milliseconds()
-
-	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
 			"renamed":         true,
-			"type":            typeName,
-			"old_field":       oldField,
-			"new_field":       newField,
-			"changes_applied": appliedChanges,
-			"hint":            "Run 'rvn reindex --full' to update the index",
+			"type":            result.TypeName,
+			"old_field":       result.OldField,
+			"new_field":       result.NewField,
+			"changes_applied": result.ChangesApplied,
+			"hint":            result.Hint,
 		}, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
-	fmt.Printf("✓ Renamed field '%s.%s' to '%s.%s'\n", typeName, oldField, typeName, newField)
-	fmt.Printf("  Applied %d changes\n", appliedChanges)
-	fmt.Printf("\nRun 'rvn reindex --full' to update the index.\n")
-	return nil
-}
-
-func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fieldRenamePlan, error) {
-	tokenOld := "{{field." + oldField + "}}"
-	tokenNew := "{{field." + newField + "}}"
-
-	plan := &fieldRenamePlan{
-		TemplateFiles:        make(map[string][]byte),
-		TemplateFileRelPaths: make(map[string]string),
-		MarkdownFiles:        make(map[string][]byte),
-		MarkdownFileRelPaths: make(map[string]string),
-		Changes:              []FieldRenameChange{},
-		Conflicts:            []FieldRenameConflict{},
-	}
-
-	// -------------------------------------------------------------------------
-	// 1) schema.yaml updates (field key, name_field, template references)
-	// -------------------------------------------------------------------------
-	schemaPath := paths.SchemaPath(vaultPath)
-	schemaData, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return nil, handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(schemaData, &schemaDoc); err != nil {
-		return nil, handleError(ErrSchemaInvalid, err, "")
-	}
-
-	types, ok := schemaDoc["types"].(map[string]interface{})
-	if !ok {
-		return nil, handleErrorMsg(ErrSchemaInvalid, "types section not found", "")
-	}
-	typeNodeAny, ok := types[typeName]
-	if !ok {
-		return nil, handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "")
-	}
-	typeNode, ok := typeNodeAny.(map[string]interface{})
-	if !ok {
-		return nil, handleErrorMsg(ErrSchemaInvalid, fmt.Sprintf("type '%s' has invalid definition", typeName), "")
-	}
-	fieldsAny, ok := typeNode["fields"]
-	if !ok {
-		return nil, handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("type '%s' has no fields", typeName), "")
-	}
-	fields, ok := fieldsAny.(map[string]interface{})
-	if !ok {
-		return nil, handleErrorMsg(ErrSchemaInvalid, fmt.Sprintf("type '%s' fields are invalid", typeName), "")
-	}
-
-	// Schema-level conflicts
-	_, hasOld := fields[oldField]
-	_, hasNew := fields[newField]
-	if hasOld && hasNew {
-		return nil, handleErrorMsg(ErrObjectExists, fmt.Sprintf("type '%s' already has both '%s' and '%s' fields", typeName, oldField, newField), "Choose a different new field name or remove one field first")
-	}
-	if hasNew {
-		return nil, handleErrorMsg(ErrObjectExists, fmt.Sprintf("field '%s' already exists on type '%s'", newField, typeName), "Choose a different new field name")
-	}
-	if !hasOld {
-		return nil, handleErrorMsg(ErrFieldNotFound, fmt.Sprintf("field '%s' not found on type '%s'", oldField, typeName), "")
-	}
-
-	// Rename schema field key
-	fields[newField] = fields[oldField]
-	delete(fields, oldField)
-	plan.Changes = append(plan.Changes, FieldRenameChange{
-		FilePath:    "schema.yaml",
-		ChangeType:  "schema_field",
-		Description: fmt.Sprintf("rename field '%s' → '%s' on type '%s'", oldField, newField, typeName),
-	})
-
-	// Update name_field if needed
-	if nf, ok := typeNode["name_field"].(string); ok && nf == oldField {
-		typeNode["name_field"] = newField
-		plan.Changes = append(plan.Changes, FieldRenameChange{
-			FilePath:    "schema.yaml",
-			ChangeType:  "schema_name_field",
-			Description: fmt.Sprintf("update name_field: %s → %s", oldField, newField),
-		})
-	}
-
-	// Update template file references
-	if tmplSpec, ok := typeNode["template"].(string); ok && tmplSpec != "" {
-		if looksLikeTemplatePath(tmplSpec) {
-			absTmpl := filepath.Join(vaultPath, tmplSpec)
-			if err := paths.ValidateWithinVault(vaultPath, absTmpl); err != nil {
-				if errors.Is(err, paths.ErrPathOutsideVault) {
-					// Silent no-op for security
-				} else {
-					return nil, handleError(ErrFileOutsideVault, err, "")
-				}
-			} else {
-				tmplContent, err := os.ReadFile(absTmpl)
-				if err == nil {
-					newContent := strings.ReplaceAll(string(tmplContent), tokenOld, tokenNew)
-					if newContent != string(tmplContent) {
-						plan.TemplateFiles[absTmpl] = []byte(newContent)
-						rel, _ := filepath.Rel(vaultPath, absTmpl)
-						plan.TemplateFileRelPaths[absTmpl] = rel
-						plan.Changes = append(plan.Changes, FieldRenameChange{
-							FilePath:    rel,
-							ChangeType:  "template_file",
-							Description: fmt.Sprintf("update template variable %s → %s", tokenOld, tokenNew),
-						})
-					}
-				}
-			}
-		}
-	}
-
-	schemaOut, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return nil, handleError(ErrInternal, err, "")
-	}
-	plan.SchemaYAML = schemaOut
-
-	// -------------------------------------------------------------------------
-	// 2) raven.yaml saved query rewrites (best-effort)
-	// -------------------------------------------------------------------------
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return nil, handleError(ErrFileReadError, err, "")
-	}
-
-	changedQueries := false
-	fieldRefPattern := regexp.MustCompile(`\.` + regexp.QuoteMeta(oldField) + `\b`)
-
-	if vaultCfg != nil && vaultCfg.Queries != nil {
-		// Stable order for deterministic output/change list
-		var qNames []string
-		for name := range vaultCfg.Queries {
-			qNames = append(qNames, name)
-		}
-		sort.Strings(qNames)
-		for _, name := range qNames {
-			q := vaultCfg.Queries[name]
-			if q == nil || q.Query == "" {
-				continue
-			}
-			parsed, err := query.Parse(q.Query)
-			if err != nil || parsed == nil {
-				continue // best-effort: skip unparseable queries
-			}
-			if parsed.Type != query.QueryTypeObject || parsed.TypeName != typeName {
-				continue
-			}
-			newQuery := fieldRefPattern.ReplaceAllString(q.Query, "."+newField)
-			if newQuery != q.Query {
-				q.Query = newQuery
-				changedQueries = true
-				plan.Changes = append(plan.Changes, FieldRenameChange{
-					FilePath:    "raven.yaml",
-					ChangeType:  "saved_query",
-					Description: fmt.Sprintf("update saved query '%s': .%s → .%s", name, oldField, newField),
-				})
-			}
-		}
-	}
-
-	if changedQueries {
-		cfgOut, err := yaml.Marshal(vaultCfg)
-		if err != nil {
-			return nil, handleError(ErrInternal, err, "")
-		}
-		plan.RavenYAML = cfgOut
-	}
-
-	// -------------------------------------------------------------------------
-	// 3) Markdown frontmatter + embedded ::type(...) rewrites
-	// -------------------------------------------------------------------------
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
-		if result.Error != nil || result.Document == nil {
-			return nil //nolint:nilerr
-		}
-
-		relPath := result.RelativePath
-		original := result.Document.RawContent
-		lines := strings.Split(original, "\n")
-
-		// Determine frontmatter needs/conflicts.
-		needsFrontmatterRename := false
-		var frontmatterYAML map[string]interface{}
-		startLine, endLine, fmOK := parser.FrontmatterBounds(lines)
-		if fmOK && endLine != -1 {
-			fmContent := strings.Join(lines[startLine+1:endLine], "\n")
-			if err := yaml.Unmarshal([]byte(fmContent), &frontmatterYAML); err == nil {
-				if frontmatterYAML == nil {
-					frontmatterYAML = map[string]interface{}{}
-				}
-				if t, ok := frontmatterYAML["type"].(string); ok && t == typeName {
-					_, oldPresent := frontmatterYAML[oldField]
-					_, newPresent := frontmatterYAML[newField]
-					if oldPresent && newPresent {
-						plan.Conflicts = append(plan.Conflicts, FieldRenameConflict{
-							FilePath:      relPath,
-							ConflictType:  "frontmatter",
-							Message:       fmt.Sprintf("frontmatter contains both '%s' and '%s'", oldField, newField),
-							Line:          1,
-							OldFieldFound: true,
-							NewFieldFound: true,
-						})
-						// Don't attempt any edits for this file.
-						return nil
-					}
-					if oldPresent {
-						needsFrontmatterRename = true
-					}
-				}
-			}
-		}
-
-		// Determine embedded needs/conflicts.
-		typeDeclsToEdit := make([]*parser.EmbeddedTypeInfo, 0)
-		contentStartLine := 1
-		bodyContent := original
-		if fmOK && endLine != -1 {
-			// parser.ParseFrontmatter uses EndLine 1-indexed; we can derive from bounds here.
-			// endLine is 0-indexed line index of closing '---', so body starts at endLine+1 (0-index),
-			// which is (endLine+1)+1 in 1-indexed line numbers.
-			contentStartLine = (endLine + 1) + 1
-			if endLine+1 < len(lines) {
-				bodyContent = strings.Join(lines[endLine+1:], "\n")
-			} else {
-				bodyContent = ""
-			}
-		}
-
-		astContent, err := parser.ExtractFromAST([]byte(bodyContent), contentStartLine)
-		if err == nil && astContent != nil {
-			for _, decl := range astContent.TypeDecls {
-				if decl == nil || decl.TypeName != typeName {
-					continue
-				}
-				_, oldPresent := decl.Fields[oldField]
-				_, newPresent := decl.Fields[newField]
-				if oldPresent && newPresent {
-					plan.Conflicts = append(plan.Conflicts, FieldRenameConflict{
-						FilePath:      relPath,
-						ConflictType:  "embedded",
-						Message:       fmt.Sprintf("embedded ::%s(...) contains both '%s' and '%s'", typeName, oldField, newField),
-						Line:          decl.Line,
-						OldFieldFound: true,
-						NewFieldFound: true,
-					})
-					return nil
-				}
-				if oldPresent {
-					typeDeclsToEdit = append(typeDeclsToEdit, decl)
-				}
-			}
-		}
-
-		// If no changes needed, skip.
-		if !needsFrontmatterRename && len(typeDeclsToEdit) == 0 {
-			return nil
-		}
-
-		// Apply embedded line edits first (on the original lines slice).
-		modified := false
-		if len(typeDeclsToEdit) > 0 {
-			// Stable order by line number
-			sort.Slice(typeDeclsToEdit, func(i, j int) bool {
-				return typeDeclsToEdit[i].Line < typeDeclsToEdit[j].Line
-			})
-			for _, decl := range typeDeclsToEdit {
-				if decl.Line <= 0 || decl.Line-1 >= len(lines) {
-					return nil //nolint:nilerr
-				}
-				declLine := lines[decl.Line-1]
-
-				// Preserve leading whitespace
-				leadingSpace := ""
-				for _, c := range declLine {
-					if c == ' ' || c == '\t' {
-						leadingSpace += string(c)
-					} else {
-						break
-					}
-				}
-
-				newFields := make(map[string]schema.FieldValue, len(decl.Fields))
-				for k, v := range decl.Fields {
-					newFields[k] = v
-				}
-				newFields[newField] = newFields[oldField]
-				delete(newFields, oldField)
-
-				newDecl := leadingSpace + parser.SerializeTypeDeclaration(typeName, newFields)
-				if newDecl != declLine {
-					lines[decl.Line-1] = newDecl
-					modified = true
-					plan.Changes = append(plan.Changes, FieldRenameChange{
-						FilePath:    relPath,
-						ChangeType:  "embedded",
-						Description: fmt.Sprintf("rename field '%s' → '%s' inside ::%s(...)", oldField, newField, typeName),
-						Line:        decl.Line,
-					})
-				}
-			}
-		}
-
-		updatedLines := lines
-
-		// Apply frontmatter rename by reconstructing the file (preserves updated body lines).
-		if needsFrontmatterRename && fmOK && endLine != -1 {
-			// Re-read frontmatter from the original (not from updated lines) to avoid accidental drift.
-			// This ensures we only rename the key and preserve all other frontmatter keys/values.
-			fmContent := strings.Join(strings.Split(original, "\n")[startLine+1:endLine], "\n")
-			var fmMap map[string]interface{}
-			if err := yaml.Unmarshal([]byte(fmContent), &fmMap); err == nil {
-				if fmMap == nil {
-					fmMap = map[string]interface{}{}
-				}
-				if _, ok := fmMap[oldField]; ok {
-					fmMap[newField] = fmMap[oldField]
-					delete(fmMap, oldField)
-
-					newFM, err := yaml.Marshal(fmMap)
-					if err == nil {
-						var b strings.Builder
-						b.WriteString("---\n")
-						b.Write(newFM)
-						b.WriteString("---")
-
-						if endLine+1 < len(updatedLines) {
-							b.WriteString("\n")
-							b.WriteString(strings.Join(updatedLines[endLine+1:], "\n"))
-						}
-
-						updated := b.String()
-						plan.MarkdownFiles[result.Path] = []byte(updated)
-						plan.MarkdownFileRelPaths[result.Path] = relPath
-						plan.Changes = append(plan.Changes, FieldRenameChange{
-							FilePath:    relPath,
-							ChangeType:  "frontmatter",
-							Description: fmt.Sprintf("rename frontmatter key '%s:' → '%s:' for type '%s'", oldField, newField, typeName),
-							Line:        1,
-						})
-						return nil
-					}
-				}
-			}
-		}
-
-		// If we only had embedded changes (or frontmatter rewrite failed), write joined lines.
-		if modified {
-			updated := strings.Join(updatedLines, "\n")
-			plan.MarkdownFiles[result.Path] = []byte(updated)
-			plan.MarkdownFileRelPaths[result.Path] = relPath
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, handleError(ErrInternal, err, "")
-	}
-
-	return plan, nil
-}
-
-// looksLikeTemplatePath checks if a template spec looks like a file path.
-func looksLikeTemplatePath(s string) bool {
-	if s == "" {
-		return false
-	}
-	// If it contains a slash, it's a path
-	if strings.Contains(s, "/") {
-		return true
-	}
-	// If it ends with .md, it's a path
-	if strings.HasSuffix(s, ".md") {
-		return true
-	}
-	// If it starts with "templates" or similar directory patterns
-	if strings.HasPrefix(s, "templates") {
-		return true
-	}
-	// Multi-line values are not valid template file paths.
-	if strings.Contains(s, "\n") {
-		return false
-	}
-	// Single line without slashes - could be a simple filename
-	matched, _ := regexp.MatchString(`^[\w.-]+$`, s)
-	return matched && len(s) < 100
-}
-
-func renameType(vaultPath, oldName, newName string, start time.Time) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Validate names
-	if oldName == "" || newName == "" {
-		return handleErrorMsg(ErrInvalidInput, "type names cannot be empty", "")
-	}
-
-	if oldName == newName {
-		return handleErrorMsg(ErrInvalidInput, "old and new names are the same", "")
-	}
-
-	// Check built-in types
-	if schema.IsBuiltinType(oldName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("'%s' is a built-in type and cannot be renamed", oldName), "")
-	}
-	if schema.IsBuiltinType(newName) {
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("cannot rename to '%s' - it's a built-in type", newName), "")
-	}
-
-	// Load existing schema
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' first")
-	}
-
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-	}
-
-	// Check if old type exists
-	if _, exists := sch.Types[oldName]; !exists {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", oldName), "")
-	}
-
-	// Check if new type already exists
-	if _, exists := sch.Types[newName]; exists {
-		return handleErrorMsg(ErrObjectExists, fmt.Sprintf("type '%s' already exists", newName), "Choose a different name")
-	}
-
-	// Collect all changes needed
-	var changes []TypeRenameChange
-	var optionalChanges []TypeRenameChange
-
-	// 1. Schema changes - the type itself
-	changes = append(changes, TypeRenameChange{
-		FilePath:    "schema.yaml",
-		ChangeType:  "schema_type",
-		Description: fmt.Sprintf("rename type '%s' to '%s'", oldName, newName),
-	})
-
-	// 2. Schema changes - ref field targets
-	for typeName, typeDef := range sch.Types {
-		if typeDef == nil || typeDef.Fields == nil {
-			continue
-		}
-		for fieldName, fieldDef := range typeDef.Fields {
-			if fieldDef == nil {
-				continue
-			}
-			if fieldDef.Target == oldName {
-				changes = append(changes, TypeRenameChange{
-					FilePath:    "schema.yaml",
-					ChangeType:  "schema_ref_target",
-					Description: fmt.Sprintf("update field '%s.%s' target from '%s' to '%s'", typeName, fieldName, oldName, newName),
-				})
-			}
-		}
-	}
-
-	// Optional: if default_path appears to be derived from the old type name,
-	// offer renaming the directory as part of the operation.
-	var defaultPathPlan *typeDefaultPathRenamePlan
-	if oldTypeDef := sch.Types[oldName]; oldTypeDef != nil {
-		if suggestedPath, ok := suggestRenamedDefaultPath(oldTypeDef.DefaultPath, oldName, newName); ok {
-			defaultPathPlan = &typeDefaultPathRenamePlan{
-				OldDefaultPath: paths.NormalizeDirRoot(oldTypeDef.DefaultPath),
-				NewDefaultPath: suggestedPath,
-			}
-			optionalChanges = append(optionalChanges, TypeRenameChange{
-				FilePath:    "schema.yaml",
-				ChangeType:  "schema_default_path",
-				Description: fmt.Sprintf("update default_path '%s' → '%s' for type '%s'", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath, newName),
-			})
-		}
-	}
-
-	movesBySource := make(map[string]typeDirectoryMove)
-
-	// 3. File changes - walk all markdown files
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
-		if result.Error != nil {
-			return nil //nolint:nilerr // skip errors
-		}
-
-		content, err := os.ReadFile(result.Path)
-		if err != nil {
-			return nil //nolint:nilerr
-		}
-		lines := strings.Split(string(content), "\n")
-
-		// Check frontmatter for type: old_name
-		hasFileLevelOldType := false
-		for _, obj := range result.Document.Objects {
-			if obj.ObjectType == oldName && !strings.Contains(obj.ID, "#") {
-				// This is a file-level object with the old type
-				hasFileLevelOldType = true
-				changes = append(changes, TypeRenameChange{
-					FilePath:    result.RelativePath,
-					ChangeType:  "frontmatter",
-					Description: fmt.Sprintf("change type: %s → type: %s", oldName, newName),
-					Line:        1, // Frontmatter is at the start
-				})
-			}
-		}
-		if hasFileLevelOldType && defaultPathPlan != nil {
-			if move, ok := planTypeDirectoryMove(result.RelativePath, newName, defaultPathPlan, vaultCfg); ok {
-				if _, exists := movesBySource[move.SourceRelPath]; !exists {
-					movesBySource[move.SourceRelPath] = move
-					defaultPathPlan.Moves = append(defaultPathPlan.Moves, move)
-					optionalChanges = append(optionalChanges, TypeRenameChange{
-						FilePath:    move.SourceRelPath,
-						ChangeType:  "directory_move",
-						Description: fmt.Sprintf("move file '%s' → '%s'", move.SourceRelPath, move.DestinationRelPath),
-					})
-				}
-			}
-		}
-
-		// Check for embedded type declarations ::old_name(...)
-		embeddedPattern := fmt.Sprintf("::%s(", oldName)
-		for lineNum, line := range lines {
-			if strings.Contains(line, embeddedPattern) {
-				changes = append(changes, TypeRenameChange{
-					FilePath:    result.RelativePath,
-					ChangeType:  "embedded",
-					Description: fmt.Sprintf("change ::%s(...) → ::%s(...)", oldName, newName),
-					Line:        lineNum + 1,
-				})
-			}
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
-	// If not confirming, show preview
-	if !schemaRenameConfirm {
-		hint := "Run with --confirm to apply changes"
-		if defaultPathPlan != nil {
-			hint = "Run with --confirm to apply changes. Add --rename-default-path to also rename the default directory and move matching files."
-		}
-
-		if isJSONOutput() {
-			result := map[string]interface{}{
-				"preview":       true,
-				"old_name":      oldName,
-				"new_name":      newName,
-				"total_changes": len(changes),
-				"changes":       changes,
-				"hint":          hint,
-			}
-			if defaultPathPlan != nil {
-				result["default_path_rename_available"] = true
-				result["default_path_old"] = defaultPathPlan.OldDefaultPath
-				result["default_path_new"] = defaultPathPlan.NewDefaultPath
-				result["optional_total_changes"] = len(optionalChanges)
-				result["optional_changes"] = optionalChanges
-				result["files_to_move"] = len(defaultPathPlan.Moves)
-			}
-			outputSuccess(result, &Meta{QueryTimeMs: elapsed})
-			return nil
-		}
-
-		fmt.Printf("Preview: Rename type '%s' to '%s'\n\n", oldName, newName)
-		fmt.Printf("Changes to be made (%d total):\n", len(changes))
-
-		// Group by file
-		byFile := make(map[string][]TypeRenameChange)
-		for _, c := range changes {
-			byFile[c.FilePath] = append(byFile[c.FilePath], c)
-		}
-
-		for file, fileChanges := range byFile {
-			fmt.Printf("\n  %s:\n", file)
-			for _, c := range fileChanges {
-				if c.Line > 0 {
-					fmt.Printf("    Line %d: %s\n", c.Line, c.Description)
-				} else {
-					fmt.Printf("    %s\n", c.Description)
-				}
-			}
-		}
-
-		if defaultPathPlan != nil {
-			fmt.Printf("\nOptional default directory rename (%d changes):\n", len(optionalChanges))
-			fmt.Printf("  default_path: %s → %s\n", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
-			if len(defaultPathPlan.Moves) > 0 {
-				fmt.Printf("  files to move: %d\n", len(defaultPathPlan.Moves))
-			}
-			fmt.Printf("  (add --rename-default-path to apply these optional changes)\n")
-		}
-
+	if result.Preview {
+		fmt.Printf("Preview: Rename field '%s.%s' to '%s.%s'\n\n", result.TypeName, result.OldField, result.TypeName, result.NewField)
+		fmt.Printf("Changes to be made (%d total):\n", result.TotalChanges)
+		printFieldRenameChanges(result.Changes)
 		fmt.Printf("\nRun with --confirm to apply these changes.\n")
 		return nil
 	}
 
-	applyDefaultPathRename := false
-	if defaultPathPlan != nil {
-		applyDefaultPathRename = schemaRenameDefaultPathRename
-		if !applyDefaultPathRename && shouldPromptForConfirm() {
-			prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
-			if len(defaultPathPlan.Moves) > 0 {
-				prompt = fmt.Sprintf("Also rename default_path '%s' -> '%s' and move %d files with reference updates?",
-					defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath, len(defaultPathPlan.Moves))
-			}
-			applyDefaultPathRename = promptForConfirm(prompt)
-		}
+	fmt.Printf("✓ Renamed field '%s.%s' to '%s.%s'\n", result.TypeName, result.OldField, result.TypeName, result.NewField)
+	fmt.Printf("  Applied %d changes\n", result.ChangesApplied)
+	fmt.Printf("\n%s.\n", result.Hint)
+	return nil
+}
+
+func renameType(vaultPath, oldName, newName string, start time.Time) error {
+	preview, err := schemasvc.RenameType(schemasvc.RenameTypeRequest{
+		VaultPath: vaultPath,
+		OldName:   oldName,
+		NewName:   newName,
+		Confirm:   false,
+	})
+	if err != nil {
+		return mapSchemaServiceError(err)
 	}
-	if applyDefaultPathRename {
-		if err := validateTypeDirectoryMoves(vaultPath, defaultPathPlan.Moves); err != nil {
-			return handleErrorMsg(
-				ErrValidationFailed,
-				fmt.Sprintf("cannot rename default directory: %v", err),
-				"Use --confirm without --rename-default-path, or resolve destination conflicts and try again",
+
+	elapsed := time.Since(start).Milliseconds()
+	if !schemaRenameConfirm {
+		if isJSONOutput() {
+			data := map[string]interface{}{
+				"preview":       true,
+				"old_name":      preview.OldName,
+				"new_name":      preview.NewName,
+				"total_changes": preview.TotalChanges,
+				"changes":       preview.Changes,
+				"hint":          preview.Hint,
+			}
+			if preview.DefaultPathRenameAvailable {
+				data["default_path_rename_available"] = true
+				data["default_path_old"] = preview.DefaultPathOld
+				data["default_path_new"] = preview.DefaultPathNew
+				data["optional_total_changes"] = preview.OptionalTotalChanges
+				data["optional_changes"] = preview.OptionalChanges
+				data["files_to_move"] = preview.FilesToMove
+			}
+			outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+			return nil
+		}
+
+		fmt.Printf("Preview: Rename type '%s' to '%s'\n\n", preview.OldName, preview.NewName)
+		fmt.Printf("Changes to be made (%d total):\n", preview.TotalChanges)
+		printTypeRenameChanges(preview.Changes)
+		if preview.DefaultPathRenameAvailable {
+			fmt.Printf("\nOptional default directory rename (%d changes):\n", preview.OptionalTotalChanges)
+			fmt.Printf("  default_path: %s → %s\n", preview.DefaultPathOld, preview.DefaultPathNew)
+			if preview.FilesToMove > 0 {
+				fmt.Printf("  files to move: %d\n", preview.FilesToMove)
+			}
+			fmt.Printf("  (add --rename-default-path to apply these optional changes)\n")
+		}
+		fmt.Printf("\nRun with --confirm to apply these changes.\n")
+		return nil
+	}
+
+	applyDefaultPathRename := schemaRenameDefaultPathRename
+	if preview.DefaultPathRenameAvailable && !applyDefaultPathRename && shouldPromptForConfirm() {
+		prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", preview.DefaultPathOld, preview.DefaultPathNew)
+		if preview.FilesToMove > 0 {
+			prompt = fmt.Sprintf(
+				"Also rename default_path '%s' -> '%s' and move %d files with reference updates?",
+				preview.DefaultPathOld,
+				preview.DefaultPathNew,
+				preview.FilesToMove,
 			)
 		}
+		applyDefaultPathRename = promptForConfirm(prompt)
 	}
 
-	// Apply changes
-	appliedChanges := 0
-
-	// 1. Update schema.yaml
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return handleError(ErrSchemaInvalid, err, "")
-	}
-
-	types, ok := schemaDoc["types"].(map[string]interface{})
-	if !ok {
-		return handleErrorMsg(ErrSchemaInvalid, "types section not found", "")
-	}
-
-	// Rename the type
-	if typeDef, exists := types[oldName]; exists {
-		types[newName] = typeDef
-		delete(types, oldName)
-		appliedChanges++
-	}
-
-	if applyDefaultPathRename {
-		if typeDefAny, exists := types[newName]; exists {
-			if typeDefMap, ok := typeDefAny.(map[string]interface{}); ok {
-				typeDefMap["default_path"] = defaultPathPlan.NewDefaultPath
-				appliedChanges++
-			}
-		}
-	}
-
-	// Update ref field targets
-	for _, typeDef := range types {
-		typeMap, ok := typeDef.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		fields, ok := typeMap["fields"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		for _, fieldDef := range fields {
-			fieldMap, ok := fieldDef.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if target, ok := fieldMap["target"].(string); ok && target == oldName {
-				fieldMap["target"] = newName
-				appliedChanges++
-			}
-		}
-	}
-
-	// Write schema back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return handleError(ErrFileWriteError, err, "")
-	}
-
-	// 2. Update markdown files
-	err = vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
-		if result.Error != nil {
-			return nil //nolint:nilerr
-		}
-
-		content, err := os.ReadFile(result.Path)
-		if err != nil {
-			return nil //nolint:nilerr
-		}
-
-		originalContent := string(content)
-		newContent := originalContent
-		modified := false
-
-		// Update frontmatter type: old_name → type: new_name
-		// Pattern matches "type: old_name" at start of line in frontmatter
-		frontmatterPattern := regexp.MustCompile(`(?m)^type:\s*` + regexp.QuoteMeta(oldName) + `\s*$`)
-		if frontmatterPattern.MatchString(newContent) {
-			newContent = frontmatterPattern.ReplaceAllString(newContent, "type: "+newName)
-			modified = true
-			appliedChanges++
-		}
-
-		// Update embedded ::old_name(...) → ::new_name(...)
-		embeddedPattern := regexp.MustCompile(`::` + regexp.QuoteMeta(oldName) + `\(`)
-		if embeddedPattern.MatchString(newContent) {
-			newContent = embeddedPattern.ReplaceAllString(newContent, "::"+newName+"(")
-			modified = true
-			appliedChanges++
-		}
-
-		if modified {
-			if err := atomicfile.WriteFile(result.Path, []byte(newContent), 0o644); err != nil {
-				return err
-			}
-		}
-
-		return nil
+	result, err := schemasvc.RenameType(schemasvc.RenameTypeRequest{
+		VaultPath:         vaultPath,
+		OldName:           oldName,
+		NewName:           newName,
+		Confirm:           true,
+		RenameDefaultPath: applyDefaultPathRename,
 	})
-
 	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	movedFiles := 0
-	updatedReferenceFiles := 0
-	if applyDefaultPathRename {
-		movedFiles, updatedReferenceFiles, err = applyTypeDirectoryRename(vaultPath, vaultCfg, defaultPathPlan.Moves)
-		if err != nil {
-			return handleError(ErrFileWriteError, err, "Some files may have been renamed; review the vault and run 'rvn reindex --full'")
-		}
-		appliedChanges += movedFiles + updatedReferenceFiles
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed = time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		result := map[string]interface{}{
+		data := map[string]interface{}{
 			"renamed":         true,
-			"old_name":        oldName,
-			"new_name":        newName,
-			"changes_applied": appliedChanges,
-			"hint":            "Run 'rvn reindex --full' to update the index",
+			"old_name":        result.OldName,
+			"new_name":        result.NewName,
+			"changes_applied": result.ChangesApplied,
+			"hint":            result.Hint,
 		}
-		if defaultPathPlan != nil {
-			result["default_path_rename_available"] = true
-			result["default_path_renamed"] = applyDefaultPathRename
-			result["default_path_old"] = defaultPathPlan.OldDefaultPath
-			result["default_path_new"] = defaultPathPlan.NewDefaultPath
-			result["files_moved"] = movedFiles
-			result["reference_files_updated"] = updatedReferenceFiles
-			if !applyDefaultPathRename {
-				result["hint"] = "Run 'rvn reindex --full' to update the index. Use --rename-default-path to also rename the default directory."
+		if result.DefaultPathRenameAvailable {
+			data["default_path_rename_available"] = true
+			data["default_path_renamed"] = result.DefaultPathRenamed
+			data["default_path_old"] = result.DefaultPathOld
+			data["default_path_new"] = result.DefaultPathNew
+			data["files_moved"] = result.FilesMoved
+			data["reference_files_updated"] = result.ReferenceFilesUpdated
+		}
+		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+		return nil
+	}
+
+	fmt.Printf("✓ Renamed type '%s' to '%s'\n", result.OldName, result.NewName)
+	fmt.Printf("  Applied %d changes\n", result.ChangesApplied)
+	if result.DefaultPathRenameAvailable {
+		if result.DefaultPathRenamed {
+			fmt.Printf("  Renamed default_path %s → %s\n", result.DefaultPathOld, result.DefaultPathNew)
+			fmt.Printf("  Moved %d files and updated references in %d files\n", result.FilesMoved, result.ReferenceFilesUpdated)
+		} else {
+			fmt.Printf("  Default path remains %s (use --rename-default-path to rename to %s)\n", result.DefaultPathOld, result.DefaultPathNew)
+		}
+	}
+	fmt.Printf("\n%s.\n", result.Hint)
+	return nil
+}
+
+func printFieldRenameChanges(changes []schemasvc.FieldRenameChange) {
+	byFile := make(map[string][]schemasvc.FieldRenameChange)
+	for _, change := range changes {
+		byFile[change.FilePath] = append(byFile[change.FilePath], change)
+	}
+
+	files := make([]string, 0, len(byFile))
+	for file := range byFile {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+
+	for _, file := range files {
+		fileChanges := byFile[file]
+		fmt.Printf("\n  %s:\n", file)
+		for _, change := range fileChanges {
+			if change.Line > 0 {
+				fmt.Printf("    Line %d: %s\n", change.Line, change.Description)
+			} else {
+				fmt.Printf("    %s\n", change.Description)
 			}
 		}
-		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
-		return nil
 	}
-
-	fmt.Printf("✓ Renamed type '%s' to '%s'\n", oldName, newName)
-	fmt.Printf("  Applied %d changes\n", appliedChanges)
-	if applyDefaultPathRename {
-		fmt.Printf("  Renamed default_path %s → %s\n", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
-		fmt.Printf("  Moved %d files and updated references in %d files\n", movedFiles, updatedReferenceFiles)
-	} else if defaultPathPlan != nil {
-		fmt.Printf("  Default path remains %s (use --rename-default-path to rename to %s)\n", defaultPathPlan.OldDefaultPath, defaultPathPlan.NewDefaultPath)
-	}
-	fmt.Printf("\nRun 'rvn reindex --full' to update the index.\n")
-	return nil
 }
 
-func suggestRenamedDefaultPath(oldDefaultPath, oldName, newName string) (string, bool) {
-	normalized := paths.NormalizeDirRoot(oldDefaultPath)
-	if normalized == "" {
-		return "", false
-	}
-	trimmed := strings.TrimSuffix(normalized, "/")
-	if trimmed == "" {
-		return "", false
+func printTypeRenameChanges(changes []schemasvc.TypeRenameChange) {
+	byFile := make(map[string][]schemasvc.TypeRenameChange)
+	for _, change := range changes {
+		byFile[change.FilePath] = append(byFile[change.FilePath], change)
 	}
 
-	lastSlash := strings.LastIndex(trimmed, "/")
-	parent := ""
-	base := trimmed
-	if lastSlash >= 0 {
-		parent = trimmed[:lastSlash]
-		base = trimmed[lastSlash+1:]
+	files := make([]string, 0, len(byFile))
+	for file := range byFile {
+		files = append(files, file)
 	}
+	sort.Strings(files)
 
-	newBase := ""
-	switch base {
-	case oldName:
-		newBase = newName
-	case oldName + "s":
-		newBase = newName + "s"
-	default:
-		return "", false
-	}
-
-	next := newBase
-	if parent != "" {
-		next = parent + "/" + newBase
-	}
-	next = paths.NormalizeDirRoot(next)
-	if next == normalized {
-		return "", false
-	}
-	return next, true
-}
-
-func planTypeDirectoryMove(relPath, newName string, plan *typeDefaultPathRenamePlan, vaultCfg *config.VaultConfig) (typeDirectoryMove, bool) {
-	if plan == nil || vaultCfg == nil {
-		return typeDirectoryMove{}, false
-	}
-
-	sourceRel := filepath.ToSlash(strings.TrimPrefix(relPath, "./"))
-	sourceID := vaultCfg.FilePathToObjectID(sourceRel)
-	if !strings.HasPrefix(sourceID, plan.OldDefaultPath) {
-		return typeDirectoryMove{}, false
-	}
-	suffix := strings.TrimPrefix(sourceID, plan.OldDefaultPath)
-	if suffix == "" {
-		return typeDirectoryMove{}, false
-	}
-	destID := plan.NewDefaultPath + suffix
-	destRel := filepath.ToSlash(vaultCfg.ObjectIDToFilePath(destID, newName))
-	if sourceRel == destRel {
-		return typeDirectoryMove{}, false
-	}
-	return typeDirectoryMove{
-		SourceRelPath:      sourceRel,
-		DestinationRelPath: destRel,
-		SourceID:           sourceID,
-		DestinationID:      destID,
-	}, true
-}
-
-func validateTypeDirectoryMoves(vaultPath string, moves []typeDirectoryMove) error {
-	if len(moves) == 0 {
-		return nil
-	}
-
-	destinations := make(map[string]string, len(moves))
-	sources := make(map[string]struct{}, len(moves))
-	for _, move := range moves {
-		sourceAbs := filepath.Join(vaultPath, move.SourceRelPath)
-		destAbs := filepath.Join(vaultPath, move.DestinationRelPath)
-		sources[filepath.Clean(sourceAbs)] = struct{}{}
-
-		if _, err := os.Stat(sourceAbs); err != nil {
-			return fmt.Errorf("source file does not exist: %s", move.SourceRelPath)
-		}
-
-		if existingSource, exists := destinations[filepath.Clean(destAbs)]; exists && existingSource != move.SourceRelPath {
-			return fmt.Errorf("multiple files would move to '%s'", move.DestinationRelPath)
-		}
-		destinations[filepath.Clean(destAbs)] = move.SourceRelPath
-	}
-
-	for _, move := range moves {
-		destAbs := filepath.Clean(filepath.Join(vaultPath, move.DestinationRelPath))
-		if _, isSource := sources[destAbs]; isSource {
-			continue
-		}
-		if _, err := os.Stat(destAbs); err == nil {
-			return fmt.Errorf("destination already exists: %s", move.DestinationRelPath)
+	for _, file := range files {
+		fileChanges := byFile[file]
+		fmt.Printf("\n  %s:\n", file)
+		for _, change := range fileChanges {
+			if change.Line > 0 {
+				fmt.Printf("    Line %d: %s\n", change.Line, change.Description)
+			} else {
+				fmt.Printf("    %s\n", change.Description)
+			}
 		}
 	}
-
-	return nil
-}
-
-func applyTypeDirectoryRename(vaultPath string, vaultCfg *config.VaultConfig, moves []typeDirectoryMove) (int, int, error) {
-	if len(moves) == 0 {
-		return 0, 0, nil
-	}
-
-	orderedMoves := make([]typeDirectoryMove, len(moves))
-	copy(orderedMoves, moves)
-	sort.SliceStable(orderedMoves, func(i, j int) bool {
-		return len(orderedMoves[i].SourceRelPath) > len(orderedMoves[j].SourceRelPath)
-	})
-
-	idMoves := make(map[string]string, len(orderedMoves))
-	for _, move := range orderedMoves {
-		sourceAbs := filepath.Join(vaultPath, move.SourceRelPath)
-		destAbs := filepath.Join(vaultPath, move.DestinationRelPath)
-
-		if err := os.MkdirAll(filepath.Dir(destAbs), 0o755); err != nil {
-			return 0, 0, err
-		}
-		if err := os.Rename(sourceAbs, destAbs); err != nil {
-			return 0, 0, err
-		}
-		idMoves[move.SourceID] = move.DestinationID
-	}
-
-	updatedReferenceFiles, err := updateReferencesForTypeDirectoryMoves(vaultPath, vaultCfg, idMoves)
-	if err != nil {
-		return len(orderedMoves), updatedReferenceFiles, err
-	}
-	return len(orderedMoves), updatedReferenceFiles, nil
-}
-
-func updateReferencesForTypeDirectoryMoves(vaultPath string, vaultCfg *config.VaultConfig, idMoves map[string]string) (int, error) {
-	if len(idMoves) == 0 {
-		return 0, nil
-	}
-
-	objectRoot := ""
-	pageRoot := ""
-	if vaultCfg != nil {
-		objectRoot = vaultCfg.GetObjectsRoot()
-		pageRoot = vaultCfg.GetPagesRoot()
-	}
-
-	oldIDs := make([]string, 0, len(idMoves))
-	for oldID := range idMoves {
-		oldIDs = append(oldIDs, oldID)
-	}
-	sort.SliceStable(oldIDs, func(i, j int) bool {
-		return len(oldIDs[i]) > len(oldIDs[j])
-	})
-
-	updatedFiles := 0
-	err := vault.WalkMarkdownFiles(vaultPath, func(result vault.WalkResult) error {
-		if result.Path == "" {
-			return nil
-		}
-
-		content, err := os.ReadFile(result.Path)
-		if err != nil {
-			return nil //nolint:nilerr
-		}
-
-		original := string(content)
-		updated := original
-		for _, oldID := range oldIDs {
-			updated = replaceAllRefVariants(updated, oldID, oldID, idMoves[oldID], objectRoot, pageRoot)
-		}
-
-		if updated == original {
-			return nil
-		}
-		if err := atomicfile.WriteFile(result.Path, []byte(updated), 0o644); err != nil {
-			return err
-		}
-		updatedFiles++
-		return nil
-	})
-	if err != nil {
-		return updatedFiles, err
-	}
-
-	return updatedFiles, nil
 }
 
 func init() {

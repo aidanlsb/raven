@@ -116,6 +116,12 @@ func (s *Server) callToolDirect(name string, args map[string]interface{}) (strin
 	case "raven_schema_remove_field":
 		out, isErr := s.callDirectSchemaRemoveField(args)
 		return out, isErr, true
+	case "raven_schema_rename_field":
+		out, isErr := s.callDirectSchemaRenameField(args)
+		return out, isErr, true
+	case "raven_schema_rename_type":
+		out, isErr := s.callDirectSchemaRenameType(args)
+		return out, isErr, true
 	case "raven_schema_template_list":
 		out, isErr := s.callDirectSchemaTemplateList(args)
 		return out, isErr, true
@@ -1988,6 +1994,102 @@ func (s *Server) callDirectSchemaRemoveField(args map[string]interface{}) (strin
 		"type":    typeName,
 		"field":   fieldName,
 	}, nil), false
+}
+
+func (s *Server) callDirectSchemaRenameField(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+
+	result, err := schemasvc.RenameField(schemasvc.RenameFieldRequest{
+		VaultPath: vaultPath,
+		TypeName:  strings.TrimSpace(toString(normalized["type_name"])),
+		OldField:  strings.TrimSpace(toString(normalized["old_field"])),
+		NewField:  strings.TrimSpace(toString(normalized["new_field"])),
+		Confirm:   boolValue(normalized["confirm"]),
+	})
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+
+	if result.Preview {
+		return successEnvelope(map[string]interface{}{
+			"preview":       true,
+			"type":          result.TypeName,
+			"old_field":     result.OldField,
+			"new_field":     result.NewField,
+			"total_changes": result.TotalChanges,
+			"changes":       result.Changes,
+			"hint":          result.Hint,
+		}, nil), false
+	}
+
+	return successEnvelope(map[string]interface{}{
+		"renamed":         true,
+		"type":            result.TypeName,
+		"old_field":       result.OldField,
+		"new_field":       result.NewField,
+		"changes_applied": result.ChangesApplied,
+		"hint":            result.Hint,
+	}, nil), false
+}
+
+func (s *Server) callDirectSchemaRenameType(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+
+	result, err := schemasvc.RenameType(schemasvc.RenameTypeRequest{
+		VaultPath:         vaultPath,
+		OldName:           strings.TrimSpace(toString(normalized["old_name"])),
+		NewName:           strings.TrimSpace(toString(normalized["new_name"])),
+		Confirm:           boolValue(normalized["confirm"]),
+		RenameDefaultPath: boolValue(normalized["rename-default-path"]),
+	})
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+
+	if result.Preview {
+		data := map[string]interface{}{
+			"preview":       true,
+			"old_name":      result.OldName,
+			"new_name":      result.NewName,
+			"total_changes": result.TotalChanges,
+			"changes":       result.Changes,
+			"hint":          result.Hint,
+		}
+		if result.DefaultPathRenameAvailable {
+			data["default_path_rename_available"] = true
+			data["default_path_old"] = result.DefaultPathOld
+			data["default_path_new"] = result.DefaultPathNew
+			data["optional_total_changes"] = result.OptionalTotalChanges
+			data["optional_changes"] = result.OptionalChanges
+			data["files_to_move"] = result.FilesToMove
+		}
+		return successEnvelope(data, nil), false
+	}
+
+	data := map[string]interface{}{
+		"renamed":         true,
+		"old_name":        result.OldName,
+		"new_name":        result.NewName,
+		"changes_applied": result.ChangesApplied,
+		"hint":            result.Hint,
+	}
+	if result.DefaultPathRenameAvailable {
+		data["default_path_rename_available"] = true
+		data["default_path_renamed"] = result.DefaultPathRenamed
+		data["default_path_old"] = result.DefaultPathOld
+		data["default_path_new"] = result.DefaultPathNew
+		data["files_moved"] = result.FilesMoved
+		data["reference_files_updated"] = result.ReferenceFilesUpdated
+	}
+	return successEnvelope(data, nil), false
 }
 
 func (s *Server) callDirectSchemaTemplateList(args map[string]interface{}) (string, bool) {

@@ -1753,6 +1753,203 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"removed", "type", "field"})
 	})
 
+	t.Run("schema_rename_field_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/alex.md", `---
+type: person
+name: Alex
+email: alex@example.com
+---
+# Alex
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/alex.md", `---
+type: person
+name: Alex
+email: alex@example.com
+---
+# Alex
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_rename_field", map[string]interface{}{
+			"type_name": "person",
+			"old_field": "email",
+			"new_field": "primary_email",
+		})
+		cliResult := vCLI.RunCLI("schema", "rename", "field", "person", "email", "primary_email")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "type", "old_field", "new_field", "total_changes", "hint"})
+	})
+
+	t.Run("schema_rename_field_apply", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/alex.md", `---
+type: person
+name: Alex
+email: alex@example.com
+---
+# Alex
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/alex.md", `---
+type: person
+name: Alex
+email: alex@example.com
+---
+# Alex
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_rename_field", map[string]interface{}{
+			"type_name": "person",
+			"old_field": "email",
+			"new_field": "primary_email",
+			"confirm":   true,
+		})
+		cliResult := vCLI.RunCLI("schema", "rename", "field", "person", "email", "primary_email", "--confirm")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"renamed", "type", "old_field", "new_field", "changes_applied", "hint"})
+	})
+
+	t.Run("schema_rename_type_preview", func(t *testing.T) {
+		schemaYAML := `version: 2
+types:
+  event:
+    default_path: events/
+    fields:
+      title: { type: string }
+  project:
+    default_path: projects/
+    fields:
+      kickoff:
+        type: ref
+        target: event
+traits: {}
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(schemaYAML).
+			WithFile("events/kickoff.md", `---
+type: event
+title: Kickoff
+---
+# Kickoff
+`).
+			WithFile("projects/roadmap.md", `---
+type: project
+kickoff: events/kickoff
+---
+# Roadmap
+
+Kickoff: [[events/kickoff]]
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(schemaYAML).
+			WithFile("events/kickoff.md", `---
+type: event
+title: Kickoff
+---
+# Kickoff
+`).
+			WithFile("projects/roadmap.md", `---
+type: project
+kickoff: events/kickoff
+---
+# Roadmap
+
+Kickoff: [[events/kickoff]]
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_rename_type", map[string]interface{}{
+			"old_name": "event",
+			"new_name": "meeting",
+		})
+		cliResult := vCLI.RunCLI("schema", "rename", "type", "event", "meeting")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{
+			"preview", "old_name", "new_name", "total_changes", "hint",
+			"default_path_rename_available", "default_path_old", "default_path_new",
+			"optional_total_changes", "files_to_move",
+		})
+	})
+
+	t.Run("schema_rename_type_apply", func(t *testing.T) {
+		schemaYAML := `version: 2
+types:
+  event:
+    default_path: events/
+    fields:
+      title: { type: string }
+  project:
+    default_path: projects/
+    fields:
+      kickoff:
+        type: ref
+        target: event
+traits: {}
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(schemaYAML).
+			WithFile("events/kickoff.md", `---
+type: event
+title: Kickoff
+---
+# Kickoff
+`).
+			WithFile("projects/roadmap.md", `---
+type: project
+kickoff: events/kickoff
+---
+# Roadmap
+
+Kickoff: [[events/kickoff]]
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(schemaYAML).
+			WithFile("events/kickoff.md", `---
+type: event
+title: Kickoff
+---
+# Kickoff
+`).
+			WithFile("projects/roadmap.md", `---
+type: project
+kickoff: events/kickoff
+---
+# Roadmap
+
+Kickoff: [[events/kickoff]]
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_rename_type", map[string]interface{}{
+			"old_name":            "event",
+			"new_name":            "meeting",
+			"confirm":             true,
+			"rename_default_path": true,
+		})
+		cliResult := vCLI.RunCLI("schema", "rename", "type", "event", "meeting", "--confirm", "--rename-default-path")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{
+			"renamed", "old_name", "new_name", "changes_applied", "hint",
+			"default_path_rename_available", "default_path_renamed", "default_path_old", "default_path_new",
+			"files_moved", "reference_files_updated",
+		})
+	})
+
 	t.Run("schema_template_set", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
@@ -2245,6 +2442,39 @@ status: active
 			"source": "sam",
 		})
 		cliResult := vCLI.RunCLI("outlinks", "sam")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+}
+
+func TestMCPIntegration_DirectDispatchSchemaRenameErrorsParity(t *testing.T) {
+	binary := testutil.BuildCLI(t)
+
+	t.Run("schema_rename_field_missing_type", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_rename_field", map[string]interface{}{
+			"type_name": "ghost",
+			"old_field": "email",
+			"new_field": "primary_email",
+		})
+		cliResult := vCLI.RunCLI("schema", "rename", "field", "ghost", "email", "primary_email")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("schema_rename_type_target_exists", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_rename_type", map[string]interface{}{
+			"old_name": "person",
+			"new_name": "project",
+		})
+		cliResult := vCLI.RunCLI("schema", "rename", "type", "person", "project")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})
