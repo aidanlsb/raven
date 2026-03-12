@@ -1738,11 +1738,18 @@ func dedupeIDs(ids []string) []string {
 	return out
 }
 
-func (s *Server) callDirectSchemaValidate(args map[string]interface{}) (string, bool) {
-	_ = args
+func (s *Server) resolveDirectSchemaArgs(args map[string]interface{}) (string, map[string]interface{}, string, bool) {
 	vaultPath, err := s.resolveVaultPath()
 	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+		return "", nil, errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	return vaultPath, normalizeArgs(args), "", false
+}
+
+func (s *Server) callDirectSchemaValidate(args map[string]interface{}) (string, bool) {
+	vaultPath, _, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
 
 	result, err := schemasvc.Validate(vaultPath)
@@ -1759,11 +1766,10 @@ func (s *Server) callDirectSchemaValidate(args map[string]interface{}) (string, 
 }
 
 func (s *Server) callDirectSchemaAddType(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	typeName := strings.TrimSpace(toString(normalized["name"]))
 	defaultPath := toString(normalized["default-path"])
@@ -1797,11 +1803,10 @@ func (s *Server) callDirectSchemaAddType(args map[string]interface{}) (string, b
 }
 
 func (s *Server) callDirectSchemaAddTrait(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	result, err := schemasvc.AddTrait(schemasvc.AddTraitRequest{
 		VaultPath: vaultPath,
@@ -1826,11 +1831,10 @@ func (s *Server) callDirectSchemaAddTrait(args map[string]interface{}) (string, 
 }
 
 func (s *Server) callDirectSchemaAddField(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	result, err := schemasvc.AddField(schemasvc.AddFieldRequest{
 		VaultPath:   vaultPath,
@@ -1861,11 +1865,10 @@ func (s *Server) callDirectSchemaAddField(args map[string]interface{}) (string, 
 }
 
 func (s *Server) callDirectSchemaUpdateType(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	typeName := strings.TrimSpace(toString(normalized["name"]))
 	result, err := schemasvc.UpdateType(schemasvc.UpdateTypeRequest{
@@ -1889,11 +1892,10 @@ func (s *Server) callDirectSchemaUpdateType(args map[string]interface{}) (string
 }
 
 func (s *Server) callDirectSchemaUpdateTrait(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	traitName := strings.TrimSpace(toString(normalized["name"]))
 	result, err := schemasvc.UpdateTrait(schemasvc.UpdateTraitRequest{
@@ -1915,11 +1917,10 @@ func (s *Server) callDirectSchemaUpdateTrait(args map[string]interface{}) (strin
 }
 
 func (s *Server) callDirectSchemaUpdateField(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	typeName := strings.TrimSpace(toString(normalized["type_name"]))
 	fieldName := strings.TrimSpace(toString(normalized["field_name"]))
@@ -1947,11 +1948,10 @@ func (s *Server) callDirectSchemaUpdateField(args map[string]interface{}) (strin
 }
 
 func (s *Server) callDirectSchemaRemoveType(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	typeName := strings.TrimSpace(toString(normalized["name"]))
 	result, err := schemasvc.RemoveType(schemasvc.RemoveTypeRequest{
@@ -1971,11 +1971,10 @@ func (s *Server) callDirectSchemaRemoveType(args map[string]interface{}) (string
 }
 
 func (s *Server) callDirectSchemaRemoveTrait(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	traitName := strings.TrimSpace(toString(normalized["name"]))
 	result, err := schemasvc.RemoveTrait(schemasvc.RemoveTraitRequest{
@@ -1995,15 +1994,14 @@ func (s *Server) callDirectSchemaRemoveTrait(args map[string]interface{}) (strin
 }
 
 func (s *Server) callDirectSchemaRemoveField(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	typeName := strings.TrimSpace(toString(normalized["type_name"]))
 	fieldName := strings.TrimSpace(toString(normalized["field_name"]))
-	_, err = schemasvc.RemoveField(schemasvc.RemoveFieldRequest{
+	_, err := schemasvc.RemoveField(schemasvc.RemoveFieldRequest{
 		VaultPath: vaultPath,
 		TypeName:  typeName,
 		FieldName: fieldName,
@@ -2020,11 +2018,10 @@ func (s *Server) callDirectSchemaRemoveField(args map[string]interface{}) (strin
 }
 
 func (s *Server) callDirectSchemaRenameField(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	result, err := schemasvc.RenameField(schemasvc.RenameFieldRequest{
 		VaultPath: vaultPath,
@@ -2060,11 +2057,10 @@ func (s *Server) callDirectSchemaRenameField(args map[string]interface{}) (strin
 }
 
 func (s *Server) callDirectSchemaRenameType(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 
 	result, err := schemasvc.RenameType(schemasvc.RenameTypeRequest{
 		VaultPath:         vaultPath,
@@ -2116,9 +2112,9 @@ func (s *Server) callDirectSchemaRenameType(args map[string]interface{}) (string
 }
 
 func (s *Server) callDirectSchemaTemplateList(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, _, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
 
 	items, err := schemasvc.ListTemplates(vaultPath)
@@ -2129,12 +2125,10 @@ func (s *Server) callDirectSchemaTemplateList(args map[string]interface{}) (stri
 }
 
 func (s *Server) callDirectSchemaTemplateGet(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-
-	normalized := normalizeArgs(args)
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 	item, err := schemasvc.GetTemplate(vaultPath, templateID)
 	if err != nil {
@@ -2148,12 +2142,10 @@ func (s *Server) callDirectSchemaTemplateGet(args map[string]interface{}) (strin
 }
 
 func (s *Server) callDirectSchemaTemplateSet(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-
-	normalized := normalizeArgs(args)
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 	description := toString(normalized["description"])
 	item, err := schemasvc.SetTemplate(schemasvc.SetTemplateRequest{
@@ -2173,12 +2165,10 @@ func (s *Server) callDirectSchemaTemplateSet(args map[string]interface{}) (strin
 }
 
 func (s *Server) callDirectSchemaTemplateRemove(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-
-	normalized := normalizeArgs(args)
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 	if err := schemasvc.RemoveTemplate(vaultPath, templateID); err != nil {
 		return mapDirectSchemaServiceError(err)
@@ -2190,11 +2180,10 @@ func (s *Server) callDirectSchemaTemplateRemove(args map[string]interface{}) (st
 }
 
 func (s *Server) callDirectSchemaTypeTemplateList(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	typeName := strings.TrimSpace(toString(normalized["type_name"]))
 
 	state, err := schemasvc.ListTypeTemplates(vaultPath, typeName)
@@ -2209,11 +2198,10 @@ func (s *Server) callDirectSchemaTypeTemplateList(args map[string]interface{}) (
 }
 
 func (s *Server) callDirectSchemaTypeTemplateSet(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	typeName := strings.TrimSpace(toString(normalized["type_name"]))
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 
@@ -2237,11 +2225,10 @@ func (s *Server) callDirectSchemaTypeTemplateSet(args map[string]interface{}) (s
 }
 
 func (s *Server) callDirectSchemaTypeTemplateRemove(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	typeName := strings.TrimSpace(toString(normalized["type_name"]))
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 
@@ -2256,11 +2243,10 @@ func (s *Server) callDirectSchemaTypeTemplateRemove(args map[string]interface{})
 }
 
 func (s *Server) callDirectSchemaTypeTemplateDefault(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	typeName := strings.TrimSpace(toString(normalized["type_name"]))
 	clearDefault := boolValue(normalized["clear"])
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
@@ -2276,11 +2262,10 @@ func (s *Server) callDirectSchemaTypeTemplateDefault(args map[string]interface{}
 }
 
 func (s *Server) callDirectSchemaCoreTemplateList(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	coreType := strings.TrimSpace(toString(normalized["core_type"]))
 
 	state, err := schemasvc.ListCoreTemplates(vaultPath, coreType)
@@ -2295,11 +2280,10 @@ func (s *Server) callDirectSchemaCoreTemplateList(args map[string]interface{}) (
 }
 
 func (s *Server) callDirectSchemaCoreTemplateSet(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	coreType := strings.TrimSpace(toString(normalized["core_type"]))
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 
@@ -2323,11 +2307,10 @@ func (s *Server) callDirectSchemaCoreTemplateSet(args map[string]interface{}) (s
 }
 
 func (s *Server) callDirectSchemaCoreTemplateRemove(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	coreType := strings.TrimSpace(toString(normalized["core_type"]))
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 
@@ -2342,11 +2325,10 @@ func (s *Server) callDirectSchemaCoreTemplateRemove(args map[string]interface{})
 }
 
 func (s *Server) callDirectSchemaCoreTemplateDefault(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	if isErr {
+		return errOut, true
 	}
-	normalized := normalizeArgs(args)
 	coreType := strings.TrimSpace(toString(normalized["core_type"]))
 	clearDefault := boolValue(normalized["clear"])
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
