@@ -114,22 +114,8 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		data := map[string]interface{}{
-			"added":        "type",
-			"name":         result.Name,
-			"default_path": result.DefaultPath,
-		}
-		if result.Description != "" {
-			data["description"] = result.Description
-		}
-		if result.NameField != "" {
-			data["name_field"] = result.NameField
-			data["auto_created_field"] = result.AutoCreatedField
-		}
-		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaAddTypeData(result))
 		return nil
 	}
 
@@ -156,18 +142,8 @@ func addTrait(vaultPath, traitName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		data := map[string]interface{}{
-			"added": "trait",
-			"name":  result.Name,
-			"type":  result.Type,
-		}
-		if len(result.Values) > 0 {
-			data["values"] = result.Values
-		}
-		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaAddTraitData(result))
 		return nil
 	}
 
@@ -365,20 +341,8 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		data := map[string]interface{}{
-			"added":      "field",
-			"type":       result.TypeName,
-			"field":      result.FieldName,
-			"field_type": result.FieldType,
-			"required":   result.Required,
-		}
-		if result.Description != "" {
-			data["description"] = result.Description
-		}
-		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaAddFieldData(result))
 		return nil
 	}
 
@@ -433,6 +397,162 @@ func detailExamples(raw interface{}) []string {
 	}
 }
 
+func outputSchemaSuccess(start time.Time, data map[string]interface{}) {
+	outputSuccess(data, &Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+}
+
+func outputSchemaSuccessWithWarnings(start time.Time, data map[string]interface{}, serviceWarnings []schemasvc.Warning) {
+	outputSuccessWithWarnings(data, schemaWarnings(serviceWarnings), &Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+}
+
+func schemaValidateData(result *schemasvc.ValidateResult) map[string]interface{} {
+	return map[string]interface{}{
+		"valid":  result.Valid,
+		"issues": result.Issues,
+		"types":  result.Types,
+		"traits": result.Traits,
+	}
+}
+
+func schemaAddTypeData(result *schemasvc.AddTypeResult) map[string]interface{} {
+	data := map[string]interface{}{
+		"added":        "type",
+		"name":         result.Name,
+		"default_path": result.DefaultPath,
+	}
+	if result.Description != "" {
+		data["description"] = result.Description
+	}
+	if result.NameField != "" {
+		data["name_field"] = result.NameField
+		data["auto_created_field"] = result.AutoCreatedField
+	}
+	return data
+}
+
+func schemaAddTraitData(result *schemasvc.AddTraitResult) map[string]interface{} {
+	data := map[string]interface{}{
+		"added": "trait",
+		"name":  result.Name,
+		"type":  result.Type,
+	}
+	if len(result.Values) > 0 {
+		data["values"] = result.Values
+	}
+	return data
+}
+
+func schemaAddFieldData(result *schemasvc.AddFieldResult) map[string]interface{} {
+	data := map[string]interface{}{
+		"added":      "field",
+		"type":       result.TypeName,
+		"field":      result.FieldName,
+		"field_type": result.FieldType,
+		"required":   result.Required,
+	}
+	if result.Description != "" {
+		data["description"] = result.Description
+	}
+	return data
+}
+
+func schemaUpdateData(kind, name, typeName, fieldName string, changes []string) map[string]interface{} {
+	data := map[string]interface{}{
+		"updated": kind,
+		"changes": changes,
+	}
+	switch kind {
+	case "type", "trait":
+		data["name"] = name
+	case "field":
+		data["type"] = typeName
+		data["field"] = fieldName
+	}
+	return data
+}
+
+func schemaRemoveData(kind, name, typeName, fieldName string) map[string]interface{} {
+	data := map[string]interface{}{
+		"removed": kind,
+	}
+	switch kind {
+	case "type", "trait":
+		data["name"] = name
+	case "field":
+		data["type"] = typeName
+		data["field"] = fieldName
+	}
+	return data
+}
+
+func schemaRenameFieldData(result *schemasvc.RenameFieldResult) map[string]interface{} {
+	if result.Preview {
+		return map[string]interface{}{
+			"preview":       true,
+			"type":          result.TypeName,
+			"old_field":     result.OldField,
+			"new_field":     result.NewField,
+			"total_changes": result.TotalChanges,
+			"changes":       result.Changes,
+			"hint":          result.Hint,
+		}
+	}
+	return map[string]interface{}{
+		"renamed":         true,
+		"type":            result.TypeName,
+		"old_field":       result.OldField,
+		"new_field":       result.NewField,
+		"changes_applied": result.ChangesApplied,
+		"hint":            result.Hint,
+	}
+}
+
+func schemaRenameTypeData(result *schemasvc.RenameTypeResult) map[string]interface{} {
+	if result.Preview {
+		data := map[string]interface{}{
+			"preview":       true,
+			"old_name":      result.OldName,
+			"new_name":      result.NewName,
+			"total_changes": result.TotalChanges,
+			"changes":       result.Changes,
+			"hint":          result.Hint,
+		}
+		if result.DefaultPathRenameAvailable {
+			data["default_path_rename_available"] = true
+			data["default_path_old"] = result.DefaultPathOld
+			data["default_path_new"] = result.DefaultPathNew
+			data["optional_total_changes"] = result.OptionalTotalChanges
+			data["optional_changes"] = result.OptionalChanges
+			data["files_to_move"] = result.FilesToMove
+		}
+		return data
+	}
+
+	data := map[string]interface{}{
+		"renamed":         true,
+		"old_name":        result.OldName,
+		"new_name":        result.NewName,
+		"changes_applied": result.ChangesApplied,
+		"hint":            result.Hint,
+	}
+	if result.DefaultPathRenameAvailable {
+		data["default_path_rename_available"] = true
+		data["default_path_renamed"] = result.DefaultPathRenamed
+		data["default_path_old"] = result.DefaultPathOld
+		data["default_path_new"] = result.DefaultPathNew
+		data["files_moved"] = result.FilesMoved
+		data["reference_files_updated"] = result.ReferenceFilesUpdated
+	}
+	return data
+}
+
+func printSchemaChangeList(header string, changes []string) {
+	fmt.Println(header)
+	for _, c := range changes {
+		fmt.Printf("  %s\n", c)
+	}
+}
+
 var schemaValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate the schema",
@@ -459,15 +579,8 @@ Examples:
 			return mapSchemaServiceError(err)
 		}
 
-		elapsed := time.Since(start).Milliseconds()
-
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"valid":  result.Valid,
-				"issues": result.Issues,
-				"types":  result.Types,
-				"traits": result.Traits,
-			}, &Meta{QueryTimeMs: elapsed})
+			outputSchemaSuccess(start, schemaValidateData(result))
 			return nil
 		}
 
@@ -539,21 +652,12 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"updated": "type",
-			"name":    typeName,
-			"changes": result.Changes,
-		}, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaUpdateData("type", typeName, "", "", result.Changes))
 		return nil
 	}
 
-	fmt.Printf("✓ Updated type '%s'\n", typeName)
-	for _, c := range result.Changes {
-		fmt.Printf("  %s\n", c)
-	}
+	printSchemaChangeList(fmt.Sprintf("✓ Updated type '%s'", typeName), result.Changes)
 	return nil
 }
 
@@ -569,21 +673,12 @@ func updateTrait(vaultPath, traitName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"updated": "trait",
-			"name":    traitName,
-			"changes": result.Changes,
-		}, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaUpdateData("trait", traitName, "", "", result.Changes))
 		return nil
 	}
 
-	fmt.Printf("✓ Updated trait '%s'\n", traitName)
-	for _, c := range result.Changes {
-		fmt.Printf("  %s\n", c)
-	}
+	printSchemaChangeList(fmt.Sprintf("✓ Updated trait '%s'", traitName), result.Changes)
 	return nil
 }
 
@@ -603,22 +698,12 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"updated": "field",
-			"type":    typeName,
-			"field":   fieldName,
-			"changes": result.Changes,
-		}, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaUpdateData("field", "", typeName, fieldName, result.Changes))
 		return nil
 	}
 
-	fmt.Printf("✓ Updated field '%s' on type '%s'\n", fieldName, typeName)
-	for _, c := range result.Changes {
-		fmt.Printf("  %s\n", c)
-	}
+	printSchemaChangeList(fmt.Sprintf("✓ Updated field '%s' on type '%s'", fieldName, typeName), result.Changes)
 	return nil
 }
 
@@ -702,14 +787,8 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 		}
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		data := map[string]interface{}{
-			"removed": "type",
-			"name":    typeName,
-		}
-		outputSuccessWithWarnings(data, schemaWarnings(result.Warnings), &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccessWithWarnings(start, schemaRemoveData("type", typeName, "", ""), result.Warnings)
 		return nil
 	}
 
@@ -749,14 +828,8 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 		}
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		data := map[string]interface{}{
-			"removed": "trait",
-			"name":    traitName,
-		}
-		outputSuccessWithWarnings(data, schemaWarnings(result.Warnings), &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccessWithWarnings(start, schemaRemoveData("trait", traitName, "", ""), result.Warnings)
 		return nil
 	}
 
@@ -774,14 +847,8 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
-
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"removed": "field",
-			"type":    typeName,
-			"field":   fieldName,
-		}, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaRemoveData("field", "", typeName, fieldName))
 		return nil
 	}
 
@@ -919,28 +986,8 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
 	if isJSONOutput() {
-		if result.Preview {
-			outputSuccess(map[string]interface{}{
-				"preview":       true,
-				"type":          result.TypeName,
-				"old_field":     result.OldField,
-				"new_field":     result.NewField,
-				"total_changes": result.TotalChanges,
-				"changes":       result.Changes,
-				"hint":          result.Hint,
-			}, &Meta{QueryTimeMs: elapsed})
-			return nil
-		}
-		outputSuccess(map[string]interface{}{
-			"renamed":         true,
-			"type":            result.TypeName,
-			"old_field":       result.OldField,
-			"new_field":       result.NewField,
-			"changes_applied": result.ChangesApplied,
-			"hint":            result.Hint,
-		}, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaRenameFieldData(result))
 		return nil
 	}
 
@@ -969,26 +1016,9 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
 	if !schemaRenameConfirm {
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"preview":       true,
-				"old_name":      preview.OldName,
-				"new_name":      preview.NewName,
-				"total_changes": preview.TotalChanges,
-				"changes":       preview.Changes,
-				"hint":          preview.Hint,
-			}
-			if preview.DefaultPathRenameAvailable {
-				data["default_path_rename_available"] = true
-				data["default_path_old"] = preview.DefaultPathOld
-				data["default_path_new"] = preview.DefaultPathNew
-				data["optional_total_changes"] = preview.OptionalTotalChanges
-				data["optional_changes"] = preview.OptionalChanges
-				data["files_to_move"] = preview.FilesToMove
-			}
-			outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+			outputSchemaSuccess(start, schemaRenameTypeData(preview))
 			return nil
 		}
 
@@ -1031,25 +1061,8 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	if err != nil {
 		return mapSchemaServiceError(err)
 	}
-
-	elapsed = time.Since(start).Milliseconds()
 	if isJSONOutput() {
-		data := map[string]interface{}{
-			"renamed":         true,
-			"old_name":        result.OldName,
-			"new_name":        result.NewName,
-			"changes_applied": result.ChangesApplied,
-			"hint":            result.Hint,
-		}
-		if result.DefaultPathRenameAvailable {
-			data["default_path_rename_available"] = true
-			data["default_path_renamed"] = result.DefaultPathRenamed
-			data["default_path_old"] = result.DefaultPathOld
-			data["default_path_new"] = result.DefaultPathNew
-			data["files_moved"] = result.FilesMoved
-			data["reference_files_updated"] = result.ReferenceFilesUpdated
-		}
-		outputSuccess(data, &Meta{QueryTimeMs: elapsed})
+		outputSchemaSuccess(start, schemaRenameTypeData(result))
 		return nil
 	}
 
