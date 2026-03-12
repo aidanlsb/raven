@@ -98,6 +98,9 @@ func (s *Server) callToolDirect(name string, args map[string]interface{}) (strin
 	case "raven_schema_add_field":
 		out, isErr := s.callDirectSchemaAddField(args)
 		return out, isErr, true
+	case "raven_schema_validate":
+		out, isErr := s.callDirectSchemaValidate(args)
+		return out, isErr, true
 	case "raven_schema_update_type":
 		out, isErr := s.callDirectSchemaUpdateType(args)
 		return out, isErr, true
@@ -1733,6 +1736,26 @@ func dedupeIDs(ids []string) []string {
 		out = append(out, id)
 	}
 	return out
+}
+
+func (s *Server) callDirectSchemaValidate(args map[string]interface{}) (string, bool) {
+	_ = args
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+
+	result, err := schemasvc.Validate(vaultPath)
+	if err != nil {
+		return mapDirectSchemaServiceError(err)
+	}
+
+	return successEnvelope(map[string]interface{}{
+		"valid":  result.Valid,
+		"issues": result.Issues,
+		"types":  result.Types,
+		"traits": result.Traits,
+	}, nil), false
 }
 
 func (s *Server) callDirectSchemaAddType(args map[string]interface{}) (string, bool) {

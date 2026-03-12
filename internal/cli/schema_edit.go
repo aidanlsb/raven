@@ -454,37 +454,32 @@ Examples:
 		vaultPath := getVaultPath()
 		start := time.Now()
 
-		// Try to load the schema - this validates most things
-		sch, err := schema.Load(vaultPath)
+		result, err := schemasvc.Validate(vaultPath)
 		if err != nil {
-			return handleError(ErrSchemaInvalid, err, "Fix the errors and try again")
+			return mapSchemaServiceError(err)
 		}
-
-		// Use the comprehensive validation function
-		issues := schema.ValidateSchema(sch)
 
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
-			result := map[string]interface{}{
-				"valid":  len(issues) == 0,
-				"issues": issues,
-				"types":  len(sch.Types),
-				"traits": len(sch.Traits),
-			}
-			outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+			outputSuccess(map[string]interface{}{
+				"valid":  result.Valid,
+				"issues": result.Issues,
+				"types":  result.Types,
+				"traits": result.Traits,
+			}, &Meta{QueryTimeMs: elapsed})
 			return nil
 		}
 
-		if len(issues) > 0 {
-			fmt.Printf("Schema validation found %d issues:\n", len(issues))
-			for _, issue := range issues {
+		if len(result.Issues) > 0 {
+			fmt.Printf("Schema validation found %d issues:\n", len(result.Issues))
+			for _, issue := range result.Issues {
 				fmt.Printf("  ⚠ %s\n", issue)
 			}
 			return nil
 		}
 
-		fmt.Printf("✓ Schema is valid (%d types, %d traits)\n", len(sch.Types), len(sch.Traits))
+		fmt.Printf("✓ Schema is valid (%d types, %d traits)\n", result.Types, result.Traits)
 		return nil
 	},
 }

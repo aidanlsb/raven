@@ -1638,6 +1638,17 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"added", "name", "default_path"})
 	})
 
+	t.Run("schema_validate", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema_validate", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("schema", "validate")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"valid", "issues", "types", "traits"})
+	})
+
 	t.Run("schema_add_trait", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
@@ -2372,6 +2383,20 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 			"name": "missing_type",
 		})
 		cliResult := vCLI.RunCLI("schema", "remove", "type", "missing_type")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("schema_validate_invalid_schema", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("schema.yaml", "version: [")
+		vCLI.WriteFile("schema.yaml", "version: [")
+
+		mcpResult := server.callTool("raven_schema_validate", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("schema", "validate")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})
