@@ -41,6 +41,12 @@ const (
 	semanticSchemaCoreTemplateSet     semanticOp = "schema.core_template_set"
 	semanticSchemaCoreTemplateRemove  semanticOp = "schema.core_template_remove"
 	semanticSchemaCoreTemplateDefault semanticOp = "schema.core_template_default"
+	semanticWorkflowList              semanticOp = "workflow.list"
+	semanticWorkflowShow              semanticOp = "workflow.show"
+	semanticWorkflowValidate          semanticOp = "workflow.validate"
+	semanticWorkflowRunsList          semanticOp = "workflow.runs_list"
+	semanticWorkflowRunsStep          semanticOp = "workflow.runs_step"
+	semanticWorkflowRunsPrune         semanticOp = "workflow.runs_prune"
 )
 
 var semanticToolHandlers = map[semanticOp]semanticToolHandler{
@@ -80,6 +86,12 @@ var semanticToolHandlers = map[semanticOp]semanticToolHandler{
 	semanticSchemaCoreTemplateSet:     (*Server).callDirectSchemaCoreTemplateSet,
 	semanticSchemaCoreTemplateRemove:  (*Server).callDirectSchemaCoreTemplateRemove,
 	semanticSchemaCoreTemplateDefault: (*Server).callDirectSchemaCoreTemplateDefault,
+	semanticWorkflowList:              (*Server).callDirectWorkflowList,
+	semanticWorkflowShow:              (*Server).callDirectWorkflowShow,
+	semanticWorkflowValidate:          (*Server).callDirectWorkflowValidate,
+	semanticWorkflowRunsList:          (*Server).callDirectWorkflowRunsList,
+	semanticWorkflowRunsStep:          (*Server).callDirectWorkflowRunsStep,
+	semanticWorkflowRunsPrune:         (*Server).callDirectWorkflowRunsPrune,
 }
 
 var compatibilityToolSemanticMap = map[string]semanticOp{
@@ -119,6 +131,12 @@ var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_schema_core_template_set":     semanticSchemaCoreTemplateSet,
 	"raven_schema_core_template_remove":  semanticSchemaCoreTemplateRemove,
 	"raven_schema_core_template_default": semanticSchemaCoreTemplateDefault,
+	"raven_workflow_list":                semanticWorkflowList,
+	"raven_workflow_show":                semanticWorkflowShow,
+	"raven_workflow_validate":            semanticWorkflowValidate,
+	"raven_workflow_runs_list":           semanticWorkflowRunsList,
+	"raven_workflow_runs_step":           semanticWorkflowRunsStep,
+	"raven_workflow_runs_prune":          semanticWorkflowRunsPrune,
 }
 
 func (s *Server) callToolDirect(name string, args map[string]interface{}) (string, bool, bool) {
