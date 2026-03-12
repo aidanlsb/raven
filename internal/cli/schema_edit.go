@@ -11,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemapayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 )
 
@@ -115,7 +116,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaAddTypeData(result))
+		outputSchemaSuccess(start, schemapayload.AddType(result))
 		return nil
 	}
 
@@ -143,7 +144,7 @@ func addTrait(vaultPath, traitName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaAddTraitData(result))
+		outputSchemaSuccess(start, schemapayload.AddTrait(result))
 		return nil
 	}
 
@@ -342,7 +343,7 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaAddFieldData(result))
+		outputSchemaSuccess(start, schemapayload.AddField(result))
 		return nil
 	}
 
@@ -405,147 +406,6 @@ func outputSchemaSuccessWithWarnings(start time.Time, data map[string]interface{
 	outputSuccessWithWarnings(data, schemaWarnings(serviceWarnings), &Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
-func schemaValidateData(result *schemasvc.ValidateResult) map[string]interface{} {
-	return map[string]interface{}{
-		"valid":  result.Valid,
-		"issues": result.Issues,
-		"types":  result.Types,
-		"traits": result.Traits,
-	}
-}
-
-func schemaAddTypeData(result *schemasvc.AddTypeResult) map[string]interface{} {
-	data := map[string]interface{}{
-		"added":        "type",
-		"name":         result.Name,
-		"default_path": result.DefaultPath,
-	}
-	if result.Description != "" {
-		data["description"] = result.Description
-	}
-	if result.NameField != "" {
-		data["name_field"] = result.NameField
-		data["auto_created_field"] = result.AutoCreatedField
-	}
-	return data
-}
-
-func schemaAddTraitData(result *schemasvc.AddTraitResult) map[string]interface{} {
-	data := map[string]interface{}{
-		"added": "trait",
-		"name":  result.Name,
-		"type":  result.Type,
-	}
-	if len(result.Values) > 0 {
-		data["values"] = result.Values
-	}
-	return data
-}
-
-func schemaAddFieldData(result *schemasvc.AddFieldResult) map[string]interface{} {
-	data := map[string]interface{}{
-		"added":      "field",
-		"type":       result.TypeName,
-		"field":      result.FieldName,
-		"field_type": result.FieldType,
-		"required":   result.Required,
-	}
-	if result.Description != "" {
-		data["description"] = result.Description
-	}
-	return data
-}
-
-func schemaUpdateData(kind, name, typeName, fieldName string, changes []string) map[string]interface{} {
-	data := map[string]interface{}{
-		"updated": kind,
-		"changes": changes,
-	}
-	switch kind {
-	case "type", "trait":
-		data["name"] = name
-	case "field":
-		data["type"] = typeName
-		data["field"] = fieldName
-	}
-	return data
-}
-
-func schemaRemoveData(kind, name, typeName, fieldName string) map[string]interface{} {
-	data := map[string]interface{}{
-		"removed": kind,
-	}
-	switch kind {
-	case "type", "trait":
-		data["name"] = name
-	case "field":
-		data["type"] = typeName
-		data["field"] = fieldName
-	}
-	return data
-}
-
-func schemaRenameFieldData(result *schemasvc.RenameFieldResult) map[string]interface{} {
-	if result.Preview {
-		return map[string]interface{}{
-			"preview":       true,
-			"type":          result.TypeName,
-			"old_field":     result.OldField,
-			"new_field":     result.NewField,
-			"total_changes": result.TotalChanges,
-			"changes":       result.Changes,
-			"hint":          result.Hint,
-		}
-	}
-	return map[string]interface{}{
-		"renamed":         true,
-		"type":            result.TypeName,
-		"old_field":       result.OldField,
-		"new_field":       result.NewField,
-		"changes_applied": result.ChangesApplied,
-		"hint":            result.Hint,
-	}
-}
-
-func schemaRenameTypeData(result *schemasvc.RenameTypeResult) map[string]interface{} {
-	if result.Preview {
-		data := map[string]interface{}{
-			"preview":       true,
-			"old_name":      result.OldName,
-			"new_name":      result.NewName,
-			"total_changes": result.TotalChanges,
-			"changes":       result.Changes,
-			"hint":          result.Hint,
-		}
-		if result.DefaultPathRenameAvailable {
-			data["default_path_rename_available"] = true
-			data["default_path_old"] = result.DefaultPathOld
-			data["default_path_new"] = result.DefaultPathNew
-			data["optional_total_changes"] = result.OptionalTotalChanges
-			data["optional_changes"] = result.OptionalChanges
-			data["files_to_move"] = result.FilesToMove
-		}
-		return data
-	}
-
-	data := map[string]interface{}{
-		"renamed":         true,
-		"old_name":        result.OldName,
-		"new_name":        result.NewName,
-		"changes_applied": result.ChangesApplied,
-		"hint":            result.Hint,
-	}
-	if result.DefaultPathRenameAvailable {
-		data["default_path_rename_available"] = true
-		data["default_path_renamed"] = result.DefaultPathRenamed
-		data["default_path_old"] = result.DefaultPathOld
-		data["default_path_new"] = result.DefaultPathNew
-		data["files_moved"] = result.FilesMoved
-		data["reference_files_updated"] = result.ReferenceFilesUpdated
-	}
-	return data
-}
-
 func printSchemaChangeList(header string, changes []string) {
 	fmt.Println(header)
 	for _, c := range changes {
@@ -580,7 +440,7 @@ Examples:
 		}
 
 		if isJSONOutput() {
-			outputSchemaSuccess(start, schemaValidateData(result))
+			outputSchemaSuccess(start, schemapayload.Validate(result))
 			return nil
 		}
 
@@ -653,7 +513,7 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaUpdateData("type", typeName, "", "", result.Changes))
+		outputSchemaSuccess(start, schemapayload.Update("type", typeName, "", "", result.Changes))
 		return nil
 	}
 
@@ -674,7 +534,7 @@ func updateTrait(vaultPath, traitName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaUpdateData("trait", traitName, "", "", result.Changes))
+		outputSchemaSuccess(start, schemapayload.Update("trait", traitName, "", "", result.Changes))
 		return nil
 	}
 
@@ -699,7 +559,7 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaUpdateData("field", "", typeName, fieldName, result.Changes))
+		outputSchemaSuccess(start, schemapayload.Update("field", "", typeName, fieldName, result.Changes))
 		return nil
 	}
 
@@ -788,7 +648,7 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccessWithWarnings(start, schemaRemoveData("type", typeName, "", ""), result.Warnings)
+		outputSchemaSuccessWithWarnings(start, schemapayload.Remove("type", typeName, "", ""), result.Warnings)
 		return nil
 	}
 
@@ -829,7 +689,7 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccessWithWarnings(start, schemaRemoveData("trait", traitName, "", ""), result.Warnings)
+		outputSchemaSuccessWithWarnings(start, schemapayload.Remove("trait", traitName, "", ""), result.Warnings)
 		return nil
 	}
 
@@ -848,7 +708,7 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaRemoveData("field", "", typeName, fieldName))
+		outputSchemaSuccess(start, schemapayload.Remove("field", "", typeName, fieldName))
 		return nil
 	}
 
@@ -857,17 +717,12 @@ func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
 }
 
 func schemaWarnings(serviceWarnings []schemasvc.Warning) []Warning {
-	if len(serviceWarnings) == 0 {
-		return nil
-	}
-	warnings := make([]Warning, 0, len(serviceWarnings))
-	for _, warning := range serviceWarnings {
-		warnings = append(warnings, Warning{
-			Code:    warning.Code,
-			Message: warning.Message,
-		})
-	}
-	return warnings
+	return schemapayload.MapWarnings(serviceWarnings, func(code, message string) Warning {
+		return Warning{
+			Code:    code,
+			Message: message,
+		}
+	})
 }
 
 func detailInt(details map[string]interface{}, key string) int {
@@ -987,7 +842,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 	}
 
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaRenameFieldData(result))
+		outputSchemaSuccess(start, schemapayload.RenameField(result))
 		return nil
 	}
 
@@ -1018,7 +873,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 
 	if !schemaRenameConfirm {
 		if isJSONOutput() {
-			outputSchemaSuccess(start, schemaRenameTypeData(preview))
+			outputSchemaSuccess(start, schemapayload.RenameType(preview))
 			return nil
 		}
 
@@ -1062,7 +917,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		return mapSchemaServiceError(err)
 	}
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemaRenameTypeData(result))
+		outputSchemaSuccess(start, schemapayload.RenameType(result))
 		return nil
 	}
 

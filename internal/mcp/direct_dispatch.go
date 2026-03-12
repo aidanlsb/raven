@@ -24,6 +24,7 @@ import (
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemapayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -1754,147 +1755,6 @@ func schemaSuccessWithWarnings(data map[string]interface{}, warnings []directWar
 	return successEnvelope(data, warnings), false
 }
 
-func schemaValidatePayload(result *schemasvc.ValidateResult) map[string]interface{} {
-	return map[string]interface{}{
-		"valid":  result.Valid,
-		"issues": result.Issues,
-		"types":  result.Types,
-		"traits": result.Traits,
-	}
-}
-
-func schemaAddTypePayload(result *schemasvc.AddTypeResult) map[string]interface{} {
-	data := map[string]interface{}{
-		"added":        "type",
-		"name":         result.Name,
-		"default_path": result.DefaultPath,
-	}
-	if result.Description != "" {
-		data["description"] = result.Description
-	}
-	if result.NameField != "" {
-		data["name_field"] = result.NameField
-		data["auto_created_field"] = result.AutoCreatedField
-	}
-	return data
-}
-
-func schemaAddTraitPayload(result *schemasvc.AddTraitResult) map[string]interface{} {
-	data := map[string]interface{}{
-		"added": "trait",
-		"name":  result.Name,
-		"type":  result.Type,
-	}
-	if len(result.Values) > 0 {
-		data["values"] = result.Values
-	}
-	return data
-}
-
-func schemaAddFieldPayload(result *schemasvc.AddFieldResult) map[string]interface{} {
-	data := map[string]interface{}{
-		"added":      "field",
-		"type":       result.TypeName,
-		"field":      result.FieldName,
-		"field_type": result.FieldType,
-		"required":   result.Required,
-	}
-	if result.Description != "" {
-		data["description"] = result.Description
-	}
-	return data
-}
-
-func schemaUpdatePayload(kind, name, typeName, fieldName string, changes []string) map[string]interface{} {
-	data := map[string]interface{}{
-		"updated": kind,
-		"changes": changes,
-	}
-	switch kind {
-	case "type", "trait":
-		data["name"] = name
-	case "field":
-		data["type"] = typeName
-		data["field"] = fieldName
-	}
-	return data
-}
-
-func schemaRemovePayload(kind, name, typeName, fieldName string) map[string]interface{} {
-	data := map[string]interface{}{
-		"removed": kind,
-	}
-	switch kind {
-	case "type", "trait":
-		data["name"] = name
-	case "field":
-		data["type"] = typeName
-		data["field"] = fieldName
-	}
-	return data
-}
-
-func schemaRenameFieldPayload(result *schemasvc.RenameFieldResult) map[string]interface{} {
-	if result.Preview {
-		return map[string]interface{}{
-			"preview":       true,
-			"type":          result.TypeName,
-			"old_field":     result.OldField,
-			"new_field":     result.NewField,
-			"total_changes": result.TotalChanges,
-			"changes":       result.Changes,
-			"hint":          result.Hint,
-		}
-	}
-	return map[string]interface{}{
-		"renamed":         true,
-		"type":            result.TypeName,
-		"old_field":       result.OldField,
-		"new_field":       result.NewField,
-		"changes_applied": result.ChangesApplied,
-		"hint":            result.Hint,
-	}
-}
-
-func schemaRenameTypePayload(result *schemasvc.RenameTypeResult) map[string]interface{} {
-	if result.Preview {
-		data := map[string]interface{}{
-			"preview":       true,
-			"old_name":      result.OldName,
-			"new_name":      result.NewName,
-			"total_changes": result.TotalChanges,
-			"changes":       result.Changes,
-			"hint":          result.Hint,
-		}
-		if result.DefaultPathRenameAvailable {
-			data["default_path_rename_available"] = true
-			data["default_path_old"] = result.DefaultPathOld
-			data["default_path_new"] = result.DefaultPathNew
-			data["optional_total_changes"] = result.OptionalTotalChanges
-			data["optional_changes"] = result.OptionalChanges
-			data["files_to_move"] = result.FilesToMove
-		}
-		return data
-	}
-
-	data := map[string]interface{}{
-		"renamed":         true,
-		"old_name":        result.OldName,
-		"new_name":        result.NewName,
-		"changes_applied": result.ChangesApplied,
-		"hint":            result.Hint,
-	}
-	if result.DefaultPathRenameAvailable {
-		data["default_path_rename_available"] = true
-		data["default_path_renamed"] = result.DefaultPathRenamed
-		data["default_path_old"] = result.DefaultPathOld
-		data["default_path_new"] = result.DefaultPathNew
-		data["files_moved"] = result.FilesMoved
-		data["reference_files_updated"] = result.ReferenceFilesUpdated
-	}
-	return data
-}
-
 func schemaTemplateDefinitionPayload(id, file, description string) map[string]interface{} {
 	return map[string]interface{}{
 		"id":          id,
@@ -1949,7 +1809,7 @@ func (s *Server) callDirectSchemaValidate(args map[string]interface{}) (string, 
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaValidatePayload(result))
+	return schemaSuccess(schemapayload.Validate(result))
 }
 
 func (s *Server) callDirectSchemaAddType(args map[string]interface{}) (string, bool) {
@@ -1974,7 +1834,7 @@ func (s *Server) callDirectSchemaAddType(args map[string]interface{}) (string, b
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaAddTypePayload(result))
+	return schemaSuccess(schemapayload.AddType(result))
 }
 
 func (s *Server) callDirectSchemaAddTrait(args map[string]interface{}) (string, bool) {
@@ -1994,7 +1854,7 @@ func (s *Server) callDirectSchemaAddTrait(args map[string]interface{}) (string, 
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaAddTraitPayload(result))
+	return schemaSuccess(schemapayload.AddTrait(result))
 }
 
 func (s *Server) callDirectSchemaAddField(args map[string]interface{}) (string, bool) {
@@ -2018,7 +1878,7 @@ func (s *Server) callDirectSchemaAddField(args map[string]interface{}) (string, 
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaAddFieldPayload(result))
+	return schemaSuccess(schemapayload.AddField(result))
 }
 
 func (s *Server) callDirectSchemaUpdateType(args map[string]interface{}) (string, bool) {
@@ -2041,7 +1901,7 @@ func (s *Server) callDirectSchemaUpdateType(args map[string]interface{}) (string
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaUpdatePayload("type", typeName, "", "", result.Changes))
+	return schemaSuccess(schemapayload.Update("type", typeName, "", "", result.Changes))
 }
 
 func (s *Server) callDirectSchemaUpdateTrait(args map[string]interface{}) (string, bool) {
@@ -2062,7 +1922,7 @@ func (s *Server) callDirectSchemaUpdateTrait(args map[string]interface{}) (strin
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaUpdatePayload("trait", traitName, "", "", result.Changes))
+	return schemaSuccess(schemapayload.Update("trait", traitName, "", "", result.Changes))
 }
 
 func (s *Server) callDirectSchemaUpdateField(args map[string]interface{}) (string, bool) {
@@ -2088,7 +1948,7 @@ func (s *Server) callDirectSchemaUpdateField(args map[string]interface{}) (strin
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaUpdatePayload("field", "", typeName, fieldName, result.Changes))
+	return schemaSuccess(schemapayload.Update("field", "", typeName, fieldName, result.Changes))
 }
 
 func (s *Server) callDirectSchemaRemoveType(args map[string]interface{}) (string, bool) {
@@ -2108,7 +1968,7 @@ func (s *Server) callDirectSchemaRemoveType(args map[string]interface{}) (string
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccessWithWarnings(schemaRemovePayload("type", typeName, "", ""), schemaWarningsToDirect(result.Warnings))
+	return schemaSuccessWithWarnings(schemapayload.Remove("type", typeName, "", ""), schemaWarningsToDirect(result.Warnings))
 }
 
 func (s *Server) callDirectSchemaRemoveTrait(args map[string]interface{}) (string, bool) {
@@ -2128,7 +1988,7 @@ func (s *Server) callDirectSchemaRemoveTrait(args map[string]interface{}) (strin
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccessWithWarnings(schemaRemovePayload("trait", traitName, "", ""), schemaWarningsToDirect(result.Warnings))
+	return schemaSuccessWithWarnings(schemapayload.Remove("trait", traitName, "", ""), schemaWarningsToDirect(result.Warnings))
 }
 
 func (s *Server) callDirectSchemaRemoveField(args map[string]interface{}) (string, bool) {
@@ -2148,7 +2008,7 @@ func (s *Server) callDirectSchemaRemoveField(args map[string]interface{}) (strin
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaRemovePayload("field", "", typeName, fieldName))
+	return schemaSuccess(schemapayload.Remove("field", "", typeName, fieldName))
 }
 
 func (s *Server) callDirectSchemaRenameField(args map[string]interface{}) (string, bool) {
@@ -2168,7 +2028,7 @@ func (s *Server) callDirectSchemaRenameField(args map[string]interface{}) (strin
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaRenameFieldPayload(result))
+	return schemaSuccess(schemapayload.RenameField(result))
 }
 
 func (s *Server) callDirectSchemaRenameType(args map[string]interface{}) (string, bool) {
@@ -2188,7 +2048,7 @@ func (s *Server) callDirectSchemaRenameType(args map[string]interface{}) (string
 		return mapDirectSchemaServiceError(err)
 	}
 
-	return schemaSuccess(schemaRenameTypePayload(result))
+	return schemaSuccess(schemapayload.RenameType(result))
 }
 
 func (s *Server) callDirectSchemaTemplateList(args map[string]interface{}) (string, bool) {
@@ -2637,17 +2497,12 @@ func mapDirectSchemaServiceError(err error) (string, bool) {
 }
 
 func schemaWarningsToDirect(warnings []schemasvc.Warning) []directWarning {
-	if len(warnings) == 0 {
-		return nil
-	}
-	direct := make([]directWarning, 0, len(warnings))
-	for _, warning := range warnings {
-		direct = append(direct, directWarning{
-			Code:    warning.Code,
-			Message: warning.Message,
-		})
-	}
-	return direct
+	return schemapayload.MapWarnings(warnings, func(code, message string) directWarning {
+		return directWarning{
+			Code:    code,
+			Message: message,
+		}
+	})
 }
 
 func warningMessagesToDirectWarnings(messages []string, code string) []directWarning {
