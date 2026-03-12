@@ -1410,6 +1410,45 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "moved", "destination"})
 	})
 
+	t.Run("read_raw", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/read-target.md", `---
+type: person
+name: Read Target
+---
+# Read Target
+
+Line one
+Line two
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("people/read-target.md", `---
+type: person
+name: Read Target
+---
+# Read Target
+
+Line one
+Line two
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_read", map[string]interface{}{
+			"path":       "people/read-target",
+			"raw":        true,
+			"lines":      true,
+			"start_line": 1,
+			"end_line":   5,
+		})
+		cliResult := vCLI.RunCLI("read", "people/read-target", "--raw", "--lines", "--start-line", "1", "--end-line", "5")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"path", "content", "line_count", "start_line", "end_line", "lines"})
+	})
+
 	t.Run("search", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).
 			WithSchema(testutil.PersonProjectSchema()).
@@ -2102,6 +2141,19 @@ Kickoff: [[events/kickoff]]
 
 func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 	binary := testutil.BuildCLI(t)
+
+	t.Run("read_missing_reference", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_read", map[string]interface{}{
+			"path": "people/missing",
+		})
+		cliResult := vCLI.RunCLI("read", "people/missing")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
 
 	t.Run("set_missing_reference", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()

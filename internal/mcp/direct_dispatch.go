@@ -1480,6 +1480,106 @@ func parseApplySetArgs(args []string) (map[string]string, error) {
 	return updates, nil
 }
 
+func (s *Server) callDirectRead(args map[string]interface{}) (string, bool) {
+	vaultPath, err := s.resolveVaultPath()
+	if err != nil {
+		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
+	}
+	normalized := normalizeArgs(args)
+
+	reference := strings.TrimSpace(toString(normalized["path"]))
+	if reference == "" {
+		return errorEnvelope("MISSING_ARGUMENT", "requires path argument", "Usage: rvn read <reference>", nil), true
+	}
+
+	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: false})
+	if err != nil {
+		return errorEnvelope("CONFIG_INVALID", "failed to load vault config", "Fix raven.yaml and try again", nil), true
+	}
+	defer rt.Close()
+
+	result, err := readsvc.Read(rt, readsvc.ReadRequest{
+		Reference: reference,
+		Raw:       boolValue(normalized["raw"]),
+		Lines:     boolValue(normalized["lines"]),
+		StartLine: intValueDefault(normalized["start-line"], 0),
+		EndLine:   intValueDefault(normalized["end-line"], 0),
+	})
+	if err != nil {
+		var ambiguous *readsvc.AmbiguousRefError
+		if errors.As(err, &ambiguous) {
+			return errorEnvelope("REF_AMBIGUOUS", ambiguous.Error(), "Use a full object ID/path to disambiguate", nil), true
+		}
+
+		var notFound *readsvc.RefNotFoundError
+		if errors.As(err, &notFound) {
+			return errorEnvelope("REF_NOT_FOUND", notFound.Error(), "Check the reference and try again", nil), true
+		}
+
+		var invalidRange *readsvc.InvalidLineRangeError
+		if errors.As(err, &invalidRange) {
+			return errorEnvelope("INVALID_INPUT", invalidRange.Error(), invalidRange.Suggestion(), nil), true
+		}
+
+		if os.IsNotExist(err) {
+			return errorEnvelope("FILE_NOT_FOUND", err.Error(), "Check the path and try again", nil), true
+		}
+		return errorEnvelope("FILE_READ_ERROR", err.Error(), "", nil), true
+	}
+
+	data := map[string]interface{}{
+		"path":       result.Path,
+		"content":    result.Content,
+		"line_count": result.LineCount,
+	}
+
+	rawMode := boolValue(normalized["raw"]) ||
+		boolValue(normalized["lines"]) ||
+		intValueDefault(normalized["start-line"], 0) > 0 ||
+		intValueDefault(normalized["end-line"], 0) > 0
+
+	if rawMode {
+		if result.StartLine > 0 {
+			data["start_line"] = result.StartLine
+			data["end_line"] = result.EndLine
+		}
+		if len(result.Lines) > 0 {
+			lines := make([]map[string]interface{}, 0, len(result.Lines))
+			for _, line := range result.Lines {
+				lines = append(lines, map[string]interface{}{
+					"num":  line.Num,
+					"text": line.Text,
+				})
+			}
+			data["lines"] = lines
+		}
+		return successEnvelope(data, nil), false
+	}
+
+	refs := make([]map[string]interface{}, 0, len(result.References))
+	for _, ref := range result.References {
+		entry := map[string]interface{}{
+			"text": ref.Text,
+		}
+		if ref.Path != nil {
+			entry["path"] = *ref.Path
+		}
+		refs = append(refs, entry)
+	}
+
+	backlinks := make([]map[string]interface{}, 0, len(result.Backlinks))
+	for _, group := range result.Backlinks {
+		backlinks = append(backlinks, map[string]interface{}{
+			"source": group.Source,
+			"lines":  group.Lines,
+		})
+	}
+
+	data["references"] = refs
+	data["backlinks"] = backlinks
+	return successEnvelope(data, nil), false
+}
+
 func directSavedQueriesList(vaultCfg *config.VaultConfig) []map[string]interface{} {
 	if vaultCfg == nil || len(vaultCfg.Queries) == 0 {
 		return []map[string]interface{}{}

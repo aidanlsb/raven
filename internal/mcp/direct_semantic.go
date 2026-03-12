@@ -12,6 +12,7 @@ const (
 	semanticObjectDelete              semanticOp = "object.delete"
 	semanticObjectMove                semanticOp = "object.move"
 	semanticReadSearch                semanticOp = "read.search"
+	semanticReadFile                  semanticOp = "read.file"
 	semanticReadBacklinks             semanticOp = "read.backlinks"
 	semanticReadOutlinks              semanticOp = "read.outlinks"
 	semanticReadResolve               semanticOp = "read.resolve"
@@ -50,6 +51,7 @@ var semanticToolHandlers = map[semanticOp]semanticToolHandler{
 	semanticObjectDelete:              (*Server).callDirectDelete,
 	semanticObjectMove:                (*Server).callDirectMove,
 	semanticReadSearch:                (*Server).callDirectSearch,
+	semanticReadFile:                  (*Server).callDirectRead,
 	semanticReadBacklinks:             (*Server).callDirectBacklinks,
 	semanticReadOutlinks:              (*Server).callDirectOutlinks,
 	semanticReadResolve:               (*Server).callDirectResolve,
@@ -88,6 +90,7 @@ var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_delete":                       semanticObjectDelete,
 	"raven_move":                         semanticObjectMove,
 	"raven_search":                       semanticReadSearch,
+	"raven_read":                         semanticReadFile,
 	"raven_backlinks":                    semanticReadBacklinks,
 	"raven_outlinks":                     semanticReadOutlinks,
 	"raven_resolve":                      semanticReadResolve,
