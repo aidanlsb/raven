@@ -1543,6 +1543,196 @@ Line two
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "status", "step_id", "step_output", "step_summaries"})
 	})
 
+	t.Run("workflow_add", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("workflows/from-file.yaml", `description: "Loaded from file"
+inputs:
+  topic:
+    type: string
+    required: true
+steps:
+  - id: context
+    type: tool
+    tool: raven_search
+    arguments:
+      query: "{{inputs.topic}}"
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("workflows/from-file.yaml", `description: "Loaded from file"
+inputs:
+  topic:
+    type: string
+    required: true
+steps:
+  - id: context
+    type: tool
+    tool: raven_search
+    arguments:
+      query: "{{inputs.topic}}"
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_workflow_add", map[string]interface{}{
+			"name": "from-file",
+			"file": "workflows/from-file.yaml",
+		})
+		cliResult := vCLI.RunCLI("workflow", "add", "from-file", "--file", "workflows/from-file.yaml")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "description", "source", "file", "inputs", "steps"})
+	})
+
+	t.Run("workflow_scaffold", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_workflow_scaffold", map[string]interface{}{
+			"name":        "draft-plan",
+			"description": "Draft planning workflow",
+		})
+		cliResult := vCLI.RunCLI("workflow", "scaffold", "draft-plan", "--description", "Draft planning workflow")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "description", "file", "source", "scaffolded"})
+	})
+
+	t.Run("workflow_remove", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "cleanup").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "cleanup").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_workflow_remove", map[string]interface{}{
+			"name": "cleanup",
+		})
+		cliResult := vCLI.RunCLI("workflow", "remove", "cleanup")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "removed"})
+	})
+
+	t.Run("workflow_step_add", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_workflow_step_add", map[string]interface{}{
+			"workflow_name": "prep",
+			"step_json": map[string]interface{}{
+				"id":   "enrich",
+				"type": "tool",
+				"tool": "raven_search",
+				"arguments": map[string]interface{}{
+					"query": "workflow enrichment",
+					"limit": 3,
+				},
+			},
+			"after": "context",
+		})
+		cliResult := vCLI.RunCLI(
+			"workflow", "step", "add", "prep",
+			"--step-json", `{"id":"enrich","type":"tool","tool":"raven_search","arguments":{"query":"workflow enrichment","limit":3}}`,
+			"--after", "context",
+		)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "file", "action", "step_id", "step", "index"})
+	})
+
+	t.Run("workflow_step_update", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_workflow_step_update", map[string]interface{}{
+			"workflow_name": "prep",
+			"step_id":       "compose",
+			"step_json": map[string]interface{}{
+				"description": "Compose a concise response",
+			},
+		})
+		cliResult := vCLI.RunCLI(
+			"workflow", "step", "update", "prep", "compose",
+			"--step-json", `{"description":"Compose a concise response"}`,
+		)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "file", "action", "step_id", "previous_id", "step", "index"})
+	})
+
+	t.Run("workflow_step_remove", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_workflow_step_remove", map[string]interface{}{
+			"workflow_name": "prep",
+			"step_id":       "compose",
+		})
+		cliResult := vCLI.RunCLI("workflow", "step", "remove", "prep", "compose")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "file", "action", "step_id", "index"})
+	})
+
+	t.Run("workflow_run", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_workflow_run", map[string]interface{}{
+			"name":  "prep",
+			"input": map[string]interface{}{"topic": "alpha"},
+		})
+		cliResult := vCLI.RunCLI("workflow", "run", "prep", "--input", "topic=alpha")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "status", "revision", "cursor", "awaiting_step_id", "inputs", "step_summaries", "next"})
+	})
+
+	t.Run("workflow_continue", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+
+		runMCP := vMCP.RunCLI("workflow", "run", "prep", "--input", "topic=alpha")
+		runCLI := vCLI.RunCLI("workflow", "run", "prep", "--input", "topic=alpha")
+		runMCP.MustSucceed(t)
+		runCLI.MustSucceed(t)
+
+		runIDMCP, _ := runMCP.Data["run_id"].(string)
+		runIDCLI, _ := runCLI.Data["run_id"].(string)
+		if strings.TrimSpace(runIDMCP) == "" || strings.TrimSpace(runIDCLI) == "" {
+			t.Fatalf("expected run_id in workflow run results, mcp=%v cli=%v", runMCP.Data["run_id"], runCLI.Data["run_id"])
+		}
+
+		mcpResult := server.callTool("raven_workflow_continue", map[string]interface{}{
+			"run_id":            runIDMCP,
+			"agent_output_json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "# Draft\\n\\nDone."}},
+		})
+		cliResult := vCLI.RunCLI(
+			"workflow", "continue", runIDCLI,
+			"--agent-output-json", `{"outputs":{"markdown":"# Draft\n\nDone."}}`,
+		)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "status", "revision", "cursor", "inputs", "step_summaries", "result"})
+	})
+
 	t.Run("search", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).
 			WithSchema(testutil.PersonProjectSchema()).
@@ -2569,6 +2759,42 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 			"name": "missing",
 		})
 		cliResult := vCLI.RunCLI("workflow", "show", "missing")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("workflow_step_update_missing_step", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_workflow_step_update", map[string]interface{}{
+			"workflow_name": "prep",
+			"step_id":       "missing",
+			"step_json": map[string]interface{}{
+				"description": "no-op",
+			},
+		})
+		cliResult := vCLI.RunCLI(
+			"workflow", "step", "update", "prep", "missing",
+			"--step-json", `{"description":"no-op"}`,
+		)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("workflow_continue_missing_output", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_workflow_continue", map[string]interface{}{
+			"run_id": "wrf_missing",
+		})
+		cliResult := vCLI.RunCLI("workflow", "continue", "wrf_missing")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})

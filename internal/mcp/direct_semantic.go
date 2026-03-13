@@ -42,8 +42,16 @@ const (
 	semanticSchemaCoreTemplateRemove  semanticOp = "schema.core_template_remove"
 	semanticSchemaCoreTemplateDefault semanticOp = "schema.core_template_default"
 	semanticWorkflowList              semanticOp = "workflow.list"
+	semanticWorkflowAdd               semanticOp = "workflow.add"
+	semanticWorkflowScaffold          semanticOp = "workflow.scaffold"
+	semanticWorkflowRemove            semanticOp = "workflow.remove"
 	semanticWorkflowShow              semanticOp = "workflow.show"
 	semanticWorkflowValidate          semanticOp = "workflow.validate"
+	semanticWorkflowStepAdd           semanticOp = "workflow.step_add"
+	semanticWorkflowStepUpdate        semanticOp = "workflow.step_update"
+	semanticWorkflowStepRemove        semanticOp = "workflow.step_remove"
+	semanticWorkflowRun               semanticOp = "workflow.run"
+	semanticWorkflowContinue          semanticOp = "workflow.continue"
 	semanticWorkflowRunsList          semanticOp = "workflow.runs_list"
 	semanticWorkflowRunsStep          semanticOp = "workflow.runs_step"
 	semanticWorkflowRunsPrune         semanticOp = "workflow.runs_prune"
@@ -87,8 +95,16 @@ var semanticToolHandlers = map[semanticOp]semanticToolHandler{
 	semanticSchemaCoreTemplateRemove:  (*Server).callDirectSchemaCoreTemplateRemove,
 	semanticSchemaCoreTemplateDefault: (*Server).callDirectSchemaCoreTemplateDefault,
 	semanticWorkflowList:              (*Server).callDirectWorkflowList,
+	semanticWorkflowAdd:               (*Server).callDirectWorkflowAdd,
+	semanticWorkflowScaffold:          (*Server).callDirectWorkflowScaffold,
+	semanticWorkflowRemove:            (*Server).callDirectWorkflowRemove,
 	semanticWorkflowShow:              (*Server).callDirectWorkflowShow,
 	semanticWorkflowValidate:          (*Server).callDirectWorkflowValidate,
+	semanticWorkflowStepAdd:           (*Server).callDirectWorkflowStepAdd,
+	semanticWorkflowStepUpdate:        (*Server).callDirectWorkflowStepUpdate,
+	semanticWorkflowStepRemove:        (*Server).callDirectWorkflowStepRemove,
+	semanticWorkflowRun:               (*Server).callDirectWorkflowRun,
+	semanticWorkflowContinue:          (*Server).callDirectWorkflowContinue,
 	semanticWorkflowRunsList:          (*Server).callDirectWorkflowRunsList,
 	semanticWorkflowRunsStep:          (*Server).callDirectWorkflowRunsStep,
 	semanticWorkflowRunsPrune:         (*Server).callDirectWorkflowRunsPrune,
@@ -132,8 +148,16 @@ var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_schema_core_template_remove":  semanticSchemaCoreTemplateRemove,
 	"raven_schema_core_template_default": semanticSchemaCoreTemplateDefault,
 	"raven_workflow_list":                semanticWorkflowList,
+	"raven_workflow_add":                 semanticWorkflowAdd,
+	"raven_workflow_scaffold":            semanticWorkflowScaffold,
+	"raven_workflow_remove":              semanticWorkflowRemove,
 	"raven_workflow_show":                semanticWorkflowShow,
 	"raven_workflow_validate":            semanticWorkflowValidate,
+	"raven_workflow_step_add":            semanticWorkflowStepAdd,
+	"raven_workflow_step_update":         semanticWorkflowStepUpdate,
+	"raven_workflow_step_remove":         semanticWorkflowStepRemove,
+	"raven_workflow_run":                 semanticWorkflowRun,
+	"raven_workflow_continue":            semanticWorkflowContinue,
 	"raven_workflow_runs_list":           semanticWorkflowRunsList,
 	"raven_workflow_runs_step":           semanticWorkflowRunsStep,
 	"raven_workflow_runs_prune":          semanticWorkflowRunsPrune,
