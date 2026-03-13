@@ -4,7 +4,7 @@ import "testing"
 
 func TestSemanticCompatibilityMapHasHandlers(t *testing.T) {
 	for toolName, op := range compatibilityToolSemanticMap {
-		if _, ok := semanticToolHandlers[op]; !ok {
+		if !semanticHandlerExists(op) {
 			t.Fatalf("tool %q maps to semantic op %q without a handler", toolName, op)
 		}
 	}

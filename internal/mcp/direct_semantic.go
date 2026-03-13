@@ -2,8 +2,6 @@ package mcp
 
 type semanticOp string
 
-type semanticToolHandler func(*Server, map[string]interface{}) (string, bool)
-
 const (
 	semanticObjectCreate              semanticOp = "object.create"
 	semanticObjectUpsert              semanticOp = "object.upsert"
@@ -56,59 +54,6 @@ const (
 	semanticWorkflowRunsStep          semanticOp = "workflow.runs_step"
 	semanticWorkflowRunsPrune         semanticOp = "workflow.runs_prune"
 )
-
-var semanticToolHandlers = map[semanticOp]semanticToolHandler{
-	semanticObjectCreate:              (*Server).callDirectNew,
-	semanticObjectUpsert:              (*Server).callDirectUpsert,
-	semanticObjectAppend:              (*Server).callDirectAdd,
-	semanticObjectSetFields:           (*Server).callDirectSet,
-	semanticObjectDelete:              (*Server).callDirectDelete,
-	semanticObjectMove:                (*Server).callDirectMove,
-	semanticReadSearch:                (*Server).callDirectSearch,
-	semanticReadFile:                  (*Server).callDirectRead,
-	semanticReadBacklinks:             (*Server).callDirectBacklinks,
-	semanticReadOutlinks:              (*Server).callDirectOutlinks,
-	semanticReadResolve:               (*Server).callDirectResolve,
-	semanticReadQuery:                 (*Server).callDirectQuery,
-	semanticSchemaAddType:             (*Server).callDirectSchemaAddType,
-	semanticSchemaAddTrait:            (*Server).callDirectSchemaAddTrait,
-	semanticSchemaAddField:            (*Server).callDirectSchemaAddField,
-	semanticSchemaValidate:            (*Server).callDirectSchemaValidate,
-	semanticSchemaUpdateType:          (*Server).callDirectSchemaUpdateType,
-	semanticSchemaUpdateTrait:         (*Server).callDirectSchemaUpdateTrait,
-	semanticSchemaUpdateField:         (*Server).callDirectSchemaUpdateField,
-	semanticSchemaRemoveType:          (*Server).callDirectSchemaRemoveType,
-	semanticSchemaRemoveTrait:         (*Server).callDirectSchemaRemoveTrait,
-	semanticSchemaRemoveField:         (*Server).callDirectSchemaRemoveField,
-	semanticSchemaRenameField:         (*Server).callDirectSchemaRenameField,
-	semanticSchemaRenameType:          (*Server).callDirectSchemaRenameType,
-	semanticSchemaTemplateList:        (*Server).callDirectSchemaTemplateList,
-	semanticSchemaTemplateGet:         (*Server).callDirectSchemaTemplateGet,
-	semanticSchemaTemplateSet:         (*Server).callDirectSchemaTemplateSet,
-	semanticSchemaTemplateRemove:      (*Server).callDirectSchemaTemplateRemove,
-	semanticSchemaTypeTemplateList:    (*Server).callDirectSchemaTypeTemplateList,
-	semanticSchemaTypeTemplateSet:     (*Server).callDirectSchemaTypeTemplateSet,
-	semanticSchemaTypeTemplateRemove:  (*Server).callDirectSchemaTypeTemplateRemove,
-	semanticSchemaTypeTemplateDefault: (*Server).callDirectSchemaTypeTemplateDefault,
-	semanticSchemaCoreTemplateList:    (*Server).callDirectSchemaCoreTemplateList,
-	semanticSchemaCoreTemplateSet:     (*Server).callDirectSchemaCoreTemplateSet,
-	semanticSchemaCoreTemplateRemove:  (*Server).callDirectSchemaCoreTemplateRemove,
-	semanticSchemaCoreTemplateDefault: (*Server).callDirectSchemaCoreTemplateDefault,
-	semanticWorkflowList:              (*Server).callDirectWorkflowList,
-	semanticWorkflowAdd:               (*Server).callDirectWorkflowAdd,
-	semanticWorkflowScaffold:          (*Server).callDirectWorkflowScaffold,
-	semanticWorkflowRemove:            (*Server).callDirectWorkflowRemove,
-	semanticWorkflowShow:              (*Server).callDirectWorkflowShow,
-	semanticWorkflowValidate:          (*Server).callDirectWorkflowValidate,
-	semanticWorkflowStepAdd:           (*Server).callDirectWorkflowStepAdd,
-	semanticWorkflowStepUpdate:        (*Server).callDirectWorkflowStepUpdate,
-	semanticWorkflowStepRemove:        (*Server).callDirectWorkflowStepRemove,
-	semanticWorkflowRun:               (*Server).callDirectWorkflowRun,
-	semanticWorkflowContinue:          (*Server).callDirectWorkflowContinue,
-	semanticWorkflowRunsList:          (*Server).callDirectWorkflowRunsList,
-	semanticWorkflowRunsStep:          (*Server).callDirectWorkflowRunsStep,
-	semanticWorkflowRunsPrune:         (*Server).callDirectWorkflowRunsPrune,
-}
 
 var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_new":                          semanticObjectCreate,
@@ -163,14 +108,229 @@ var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_workflow_runs_prune":          semanticWorkflowRunsPrune,
 }
 
+func semanticHandlerExists(op semanticOp) bool {
+	switch op {
+	case semanticObjectCreate,
+		semanticObjectUpsert,
+		semanticObjectAppend,
+		semanticObjectSetFields,
+		semanticObjectDelete,
+		semanticObjectMove,
+		semanticReadSearch,
+		semanticReadFile,
+		semanticReadBacklinks,
+		semanticReadOutlinks,
+		semanticReadResolve,
+		semanticReadQuery,
+		semanticSchemaAddType,
+		semanticSchemaAddTrait,
+		semanticSchemaAddField,
+		semanticSchemaValidate,
+		semanticSchemaUpdateType,
+		semanticSchemaUpdateTrait,
+		semanticSchemaUpdateField,
+		semanticSchemaRemoveType,
+		semanticSchemaRemoveTrait,
+		semanticSchemaRemoveField,
+		semanticSchemaRenameField,
+		semanticSchemaRenameType,
+		semanticSchemaTemplateList,
+		semanticSchemaTemplateGet,
+		semanticSchemaTemplateSet,
+		semanticSchemaTemplateRemove,
+		semanticSchemaTypeTemplateList,
+		semanticSchemaTypeTemplateSet,
+		semanticSchemaTypeTemplateRemove,
+		semanticSchemaTypeTemplateDefault,
+		semanticSchemaCoreTemplateList,
+		semanticSchemaCoreTemplateSet,
+		semanticSchemaCoreTemplateRemove,
+		semanticSchemaCoreTemplateDefault,
+		semanticWorkflowList,
+		semanticWorkflowAdd,
+		semanticWorkflowScaffold,
+		semanticWorkflowRemove,
+		semanticWorkflowShow,
+		semanticWorkflowValidate,
+		semanticWorkflowStepAdd,
+		semanticWorkflowStepUpdate,
+		semanticWorkflowStepRemove,
+		semanticWorkflowRun,
+		semanticWorkflowContinue,
+		semanticWorkflowRunsList,
+		semanticWorkflowRunsStep,
+		semanticWorkflowRunsPrune:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (string, bool, bool) {
+	switch op {
+	case semanticObjectCreate:
+		out, isErr := s.callDirectNew(args)
+		return out, isErr, true
+	case semanticObjectUpsert:
+		out, isErr := s.callDirectUpsert(args)
+		return out, isErr, true
+	case semanticObjectAppend:
+		out, isErr := s.callDirectAdd(args)
+		return out, isErr, true
+	case semanticObjectSetFields:
+		out, isErr := s.callDirectSet(args)
+		return out, isErr, true
+	case semanticObjectDelete:
+		out, isErr := s.callDirectDelete(args)
+		return out, isErr, true
+	case semanticObjectMove:
+		out, isErr := s.callDirectMove(args)
+		return out, isErr, true
+	case semanticReadSearch:
+		out, isErr := s.callDirectSearch(args)
+		return out, isErr, true
+	case semanticReadFile:
+		out, isErr := s.callDirectRead(args)
+		return out, isErr, true
+	case semanticReadBacklinks:
+		out, isErr := s.callDirectBacklinks(args)
+		return out, isErr, true
+	case semanticReadOutlinks:
+		out, isErr := s.callDirectOutlinks(args)
+		return out, isErr, true
+	case semanticReadResolve:
+		out, isErr := s.callDirectResolve(args)
+		return out, isErr, true
+	case semanticReadQuery:
+		out, isErr := s.callDirectQuery(args)
+		return out, isErr, true
+	case semanticSchemaAddType:
+		out, isErr := s.callDirectSchemaAddType(args)
+		return out, isErr, true
+	case semanticSchemaAddTrait:
+		out, isErr := s.callDirectSchemaAddTrait(args)
+		return out, isErr, true
+	case semanticSchemaAddField:
+		out, isErr := s.callDirectSchemaAddField(args)
+		return out, isErr, true
+	case semanticSchemaValidate:
+		out, isErr := s.callDirectSchemaValidate(args)
+		return out, isErr, true
+	case semanticSchemaUpdateType:
+		out, isErr := s.callDirectSchemaUpdateType(args)
+		return out, isErr, true
+	case semanticSchemaUpdateTrait:
+		out, isErr := s.callDirectSchemaUpdateTrait(args)
+		return out, isErr, true
+	case semanticSchemaUpdateField:
+		out, isErr := s.callDirectSchemaUpdateField(args)
+		return out, isErr, true
+	case semanticSchemaRemoveType:
+		out, isErr := s.callDirectSchemaRemoveType(args)
+		return out, isErr, true
+	case semanticSchemaRemoveTrait:
+		out, isErr := s.callDirectSchemaRemoveTrait(args)
+		return out, isErr, true
+	case semanticSchemaRemoveField:
+		out, isErr := s.callDirectSchemaRemoveField(args)
+		return out, isErr, true
+	case semanticSchemaRenameField:
+		out, isErr := s.callDirectSchemaRenameField(args)
+		return out, isErr, true
+	case semanticSchemaRenameType:
+		out, isErr := s.callDirectSchemaRenameType(args)
+		return out, isErr, true
+	case semanticSchemaTemplateList:
+		out, isErr := s.callDirectSchemaTemplateList(args)
+		return out, isErr, true
+	case semanticSchemaTemplateGet:
+		out, isErr := s.callDirectSchemaTemplateGet(args)
+		return out, isErr, true
+	case semanticSchemaTemplateSet:
+		out, isErr := s.callDirectSchemaTemplateSet(args)
+		return out, isErr, true
+	case semanticSchemaTemplateRemove:
+		out, isErr := s.callDirectSchemaTemplateRemove(args)
+		return out, isErr, true
+	case semanticSchemaTypeTemplateList:
+		out, isErr := s.callDirectSchemaTypeTemplateList(args)
+		return out, isErr, true
+	case semanticSchemaTypeTemplateSet:
+		out, isErr := s.callDirectSchemaTypeTemplateSet(args)
+		return out, isErr, true
+	case semanticSchemaTypeTemplateRemove:
+		out, isErr := s.callDirectSchemaTypeTemplateRemove(args)
+		return out, isErr, true
+	case semanticSchemaTypeTemplateDefault:
+		out, isErr := s.callDirectSchemaTypeTemplateDefault(args)
+		return out, isErr, true
+	case semanticSchemaCoreTemplateList:
+		out, isErr := s.callDirectSchemaCoreTemplateList(args)
+		return out, isErr, true
+	case semanticSchemaCoreTemplateSet:
+		out, isErr := s.callDirectSchemaCoreTemplateSet(args)
+		return out, isErr, true
+	case semanticSchemaCoreTemplateRemove:
+		out, isErr := s.callDirectSchemaCoreTemplateRemove(args)
+		return out, isErr, true
+	case semanticSchemaCoreTemplateDefault:
+		out, isErr := s.callDirectSchemaCoreTemplateDefault(args)
+		return out, isErr, true
+	case semanticWorkflowList:
+		out, isErr := s.callDirectWorkflowList(args)
+		return out, isErr, true
+	case semanticWorkflowAdd:
+		out, isErr := s.callDirectWorkflowAdd(args)
+		return out, isErr, true
+	case semanticWorkflowScaffold:
+		out, isErr := s.callDirectWorkflowScaffold(args)
+		return out, isErr, true
+	case semanticWorkflowRemove:
+		out, isErr := s.callDirectWorkflowRemove(args)
+		return out, isErr, true
+	case semanticWorkflowShow:
+		out, isErr := s.callDirectWorkflowShow(args)
+		return out, isErr, true
+	case semanticWorkflowValidate:
+		out, isErr := s.callDirectWorkflowValidate(args)
+		return out, isErr, true
+	case semanticWorkflowStepAdd:
+		out, isErr := s.callDirectWorkflowStepAdd(args)
+		return out, isErr, true
+	case semanticWorkflowStepUpdate:
+		out, isErr := s.callDirectWorkflowStepUpdate(args)
+		return out, isErr, true
+	case semanticWorkflowStepRemove:
+		out, isErr := s.callDirectWorkflowStepRemove(args)
+		return out, isErr, true
+	case semanticWorkflowRun:
+		out, isErr := s.callDirectWorkflowRun(args)
+		return out, isErr, true
+	case semanticWorkflowContinue:
+		out, isErr := s.callDirectWorkflowContinue(args)
+		return out, isErr, true
+	case semanticWorkflowRunsList:
+		out, isErr := s.callDirectWorkflowRunsList(args)
+		return out, isErr, true
+	case semanticWorkflowRunsStep:
+		out, isErr := s.callDirectWorkflowRunsStep(args)
+		return out, isErr, true
+	case semanticWorkflowRunsPrune:
+		out, isErr := s.callDirectWorkflowRunsPrune(args)
+		return out, isErr, true
+	default:
+		return "", false, false
+	}
+}
+
 func (s *Server) callToolDirect(name string, args map[string]interface{}) (string, bool, bool) {
 	op, ok := compatibilityToolSemanticMap[name]
 	if !ok {
 		return "", false, false
 	}
 
-	handler, ok := semanticToolHandlers[op]
-	if !ok {
+	out, isErr, handled := s.callSemanticTool(op, args)
+	if !handled {
 		return errorEnvelope(
 			"INTERNAL_ERROR",
 			"semantic handler is not configured",
@@ -178,7 +338,5 @@ func (s *Server) callToolDirect(name string, args map[string]interface{}) (strin
 			map[string]interface{}{"tool_name": name, "semantic_op": op},
 		), true, true
 	}
-
-	out, isErr := handler(s, args)
 	return out, isErr, true
 }

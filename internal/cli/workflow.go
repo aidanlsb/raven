@@ -18,7 +18,6 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/rvnexec"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -1200,35 +1199,11 @@ var workflowRunsCmd = &cobra.Command{
 // CLI argument mapping used by MCP.
 func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{}) (interface{}, error) {
 	return func(tool string, args map[string]interface{}) (interface{}, error) {
-		cliArgs := mcp.BuildCLIArgs(tool, args)
-		if len(cliArgs) == 0 {
-			return nil, fmt.Errorf("unknown tool: %s", tool)
-		}
-
-		exe, err := os.Executable()
+		envelope, err := mcp.ExecuteToolDirect(vaultPath, tool, args)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve executable: %w", err)
+			return nil, err
 		}
-
-		cmdArgs := append([]string{"--vault-path", vaultPath}, cliArgs...)
-		result, err := rvnexec.Run(exe, cmdArgs)
-		if err != nil {
-			if result.HasEnvelope {
-				return nil, fmt.Errorf("tool '%s' failed: %s", tool, result.TrimmedOutput())
-			}
-			return nil, fmt.Errorf("tool '%s' execution error: %w (%s)", tool, err, result.TrimmedOutput())
-		}
-
-		if !result.HasEnvelope {
-			return nil, fmt.Errorf("tool '%s' returned non-JSON output", tool)
-		}
-
-		if result.OK != nil && !*result.OK {
-			b, _ := json.Marshal(result.Envelope)
-			return nil, fmt.Errorf("tool '%s' returned error: %s", tool, string(b))
-		}
-
-		return result.Envelope, nil
+		return envelope, nil
 	}
 }
 

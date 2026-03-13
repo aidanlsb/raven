@@ -580,36 +580,9 @@ func runStateErrorDetails(wf *workflow.Workflow, state *workflow.WorkflowRunStat
 
 func (s *Server) makeDirectWorkflowToolFunc() func(tool string, args map[string]interface{}) (interface{}, error) {
 	return func(tool string, args map[string]interface{}) (interface{}, error) {
-		cliArgs := BuildCLIArgs(tool, args)
-		if len(cliArgs) == 0 {
-			return nil, fmt.Errorf("unknown tool: %s", tool)
-		}
-
-		result, isErr := s.executeRvn(cliArgs)
-		trimmed := strings.TrimSpace(result)
-		if trimmed == "" {
-			if isErr {
-				return nil, fmt.Errorf("tool '%s' failed", tool)
-			}
-			return nil, fmt.Errorf("tool '%s' returned non-JSON output", tool)
-		}
-
-		var envelope map[string]interface{}
-		if err := json.Unmarshal([]byte(trimmed), &envelope); err != nil {
-			if isErr {
-				return nil, fmt.Errorf("tool '%s' failed: %s", tool, trimmed)
-			}
-			return nil, fmt.Errorf("tool '%s' returned non-JSON output", tool)
-		}
-
-		if okValue, present := envelope["ok"]; present {
-			if okFlag, ok := okValue.(bool); ok && !okFlag {
-				b, _ := json.Marshal(envelope)
-				return nil, fmt.Errorf("tool '%s' returned error: %s", tool, string(b))
-			}
-		}
-		if isErr {
-			return nil, fmt.Errorf("tool '%s' failed: %s", tool, trimmed)
+		envelope, err := ExecuteToolDirect(s.vaultPath, tool, args)
+		if err != nil {
+			return nil, err
 		}
 		return envelope, nil
 	}
