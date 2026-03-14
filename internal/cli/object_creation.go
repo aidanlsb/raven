@@ -71,10 +71,6 @@ func (c objectCreationContext) resolveTargetPath(targetPath, typeName string) st
 	return pages.ResolveTargetPathWithRoots(targetPath, typeName, c.schema, c.objectsRoot, c.pagesRoot)
 }
 
-func (c objectCreationContext) resolveAndSlugifyTargetPath(targetPath, typeName string) string {
-	return pages.SlugifyPath(c.resolveTargetPath(targetPath, typeName))
-}
-
 func (c objectCreationContext) exists(targetPath, typeName string) bool {
 	return pages.Exists(c.vaultPath, c.resolveTargetPath(targetPath, typeName))
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -49,7 +50,7 @@ types:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := createMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "templates/"); err != nil {
+			if err := checksvc.CreateMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "templates/"); err != nil {
 				t.Fatalf("createMissingPage failed: %v", err)
 			}
 

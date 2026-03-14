@@ -8,12 +8,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checksvc"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -550,42 +547,19 @@ func printIssuesVerbose(issues []check.Issue, schemaIssues []check.SchemaIssue) 
 }
 
 func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
-
-	// Categorize refs by confidence
-	var certain, inferred, unknown []*check.MissingRef
-	for _, ref := range refs {
-		switch ref.Confidence {
-		case check.ConfidenceCertain:
-			certain = append(certain, ref)
-		case check.ConfidenceInferred:
-			inferred = append(inferred, ref)
-		default:
-			unknown = append(unknown, ref)
-		}
-	}
-
-	// Sort each category by path for consistent output
-	sortRefs := func(refs []*check.MissingRef) {
-		sort.Slice(refs, func(i, j int) bool {
-			return refs[i].TargetPath < refs[j].TargetPath
-		})
-	}
-	sortRefs(certain)
-	sortRefs(inferred)
-	sortRefs(unknown)
+	groups := checksvc.GroupMissingRefsForInteractive(refs)
 
 	fmt.Printf("\n%s\n", ui.SectionHeader("Missing References"))
 	reader := bufio.NewReader(os.Stdin)
 	created := 0
 	resolvePath := func(targetPath, typeName string) string {
-		return creator.resolveAndSlugifyTargetPath(targetPath, typeName)
+		return checksvc.ResolveAndSlugifyTargetPath(targetPath, typeName, s, objectsRoot, pagesRoot)
 	}
 
 	// Handle certain refs (from typed fields)
-	if len(certain) > 0 {
+	if len(groups.Certain) > 0 {
 		fmt.Printf("\n%s\n", ui.Bold.Render("Certain (from typed fields):"))
-		for _, ref := range certain {
+		for _, ref := range groups.Certain {
 			source := ref.SourceObjectID
 			if source == "" {
 				source = ref.SourceFile
@@ -602,9 +576,9 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response == "" || response == "y" || response == "yes" {
-			for _, ref := range certain {
+			for _, ref := range groups.Certain {
 				resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
-				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
+				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -615,9 +589,9 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	}
 
 	// Handle inferred refs (from path matching)
-	if len(inferred) > 0 {
+	if len(groups.Inferred) > 0 {
 		fmt.Printf("\n%s\n", ui.Bold.Render("Inferred (from path matching default_path):"))
-		for _, ref := range inferred {
+		for _, ref := range groups.Inferred {
 			resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
 			item := fmt.Sprintf("? %s → %s %s",
 				ui.Bold.Render(ref.TargetPath),
@@ -626,13 +600,13 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			fmt.Println(ui.Bullet(item))
 		}
 
-		for _, ref := range inferred {
+		for _, ref := range groups.Inferred {
 			resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
 			fmt.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
-				if err := createMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
+				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
 					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -643,24 +617,19 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 	}
 
 	// Handle unknown refs
-	if len(unknown) > 0 {
+	if len(groups.Unknown) > 0 {
 		fmt.Printf("\n%s\n", ui.Bold.Render("Unknown type (please specify):"))
-		for _, ref := range unknown {
+		for _, ref := range groups.Unknown {
 			item := fmt.Sprintf("? %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.Muted.Render(fmt.Sprintf("(referenced in %s:%d)", ref.SourceFile, ref.Line)))
 			fmt.Println(ui.Bullet(item))
 		}
 
-		// List available types
-		var typeNames []string
-		for name := range s.Types {
-			typeNames = append(typeNames, name)
-		}
-		sort.Strings(typeNames)
+		typeNames := checksvc.AvailableTypeNames(s)
 		fmt.Printf("\nAvailable types: %s\n", ui.Bold.Render(strings.Join(typeNames, ", ")))
 
-		for _, ref := range unknown {
+		for _, ref := range groups.Unknown {
 			fmt.Printf("\nType for %s %s: ", ui.Bold.Render(ref.TargetPath), ui.Muted.Render("(or 'skip')"))
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
@@ -677,7 +646,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 			}
 
 			resolvedPath := resolvePath(ref.TargetPath, response)
-			if err := createMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, templateDir); err != nil {
+			if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, templateDir); err != nil {
 				fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 			} else {
 				fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
@@ -762,7 +731,7 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		}
 
 		// Create the trait
-		if err := createNewTrait(vaultPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
+		if err := checksvc.AddTrait(vaultPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
 			fmt.Printf("  %s\n", ui.Errorf("Failed to add @%s: %v", trait.TraitName, err))
 			continue
 		}
@@ -817,78 +786,6 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 	return response
 }
 
-// createNewTrait adds a new trait to schema.yaml.
-func createNewTrait(vaultPath string, s *schema.Schema, traitName, traitType string, enumValues []string, defaultValue string) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
-	}
-
-	// Parse as YAML to modify
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return fmt.Errorf("failed to parse schema: %w", err)
-	}
-
-	// Ensure traits map exists
-	traits, ok := schemaDoc["traits"].(map[string]interface{})
-	if !ok {
-		traits = make(map[string]interface{})
-		schemaDoc["traits"] = traits
-	}
-
-	// Build new trait definition
-	newTrait := make(map[string]interface{})
-	newTrait["type"] = traitType
-
-	if len(enumValues) > 0 {
-		newTrait["values"] = enumValues
-	}
-
-	if defaultValue != "" {
-		// Convert "true"/"false" to boolean for boolean traits
-		if traitType == "boolean" {
-			if defaultValue == "true" {
-				newTrait["default"] = true
-			} else if defaultValue == "false" {
-				newTrait["default"] = false
-			}
-		} else {
-			newTrait["default"] = defaultValue
-		}
-	}
-
-	traits[traitName] = newTrait
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return fmt.Errorf("failed to write schema: %w", err)
-	}
-
-	// Update the in-memory schema
-	s.Traits[traitName] = &schema.TraitDefinition{
-		Type:   schema.FieldType(traitType),
-		Values: enumValues,
-	}
-	if defaultValue != "" {
-		if traitType == "boolean" {
-			s.Traits[traitName].Default = defaultValue == "true"
-		} else {
-			s.Traits[traitName].Default = defaultValue
-		}
-	}
-
-	return nil
-}
-
 // handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
 // Returns the number of pages created (0 or 1).
 func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader, objectsRoot, pagesRoot, templateDir string) int {
@@ -909,7 +806,7 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 	defaultPath = strings.TrimSpace(defaultPath)
 
 	// Create the type
-	if err := createNewType(vaultPath, s, typeName, defaultPath); err != nil {
+	if err := checksvc.AddType(vaultPath, s, typeName, defaultPath); err != nil {
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeName, err))
 		return 0
 	}
@@ -919,80 +816,13 @@ func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.Missin
 	}
 
 	// Now create the page with the new type (resolving path with new default_path)
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
-	resolvedPath := creator.resolveAndSlugifyTargetPath(ref.TargetPath, typeName)
-	if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err != nil {
+	resolvedPath := checksvc.ResolveAndSlugifyTargetPath(ref.TargetPath, typeName, s, objectsRoot, pagesRoot)
+	if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err != nil {
 		fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
 	}
 	fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, typeName))
 	return 1
-}
-
-// createNewType adds a new type to schema.yaml.
-func createNewType(vaultPath string, s *schema.Schema, typeName, defaultPath string) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	// Check built-in types
-	if schema.IsBuiltinType(typeName) {
-		return fmt.Errorf("'%s' is a built-in type", typeName)
-	}
-
-	// Read current schema file
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
-	}
-
-	// Parse as YAML to modify
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return fmt.Errorf("failed to parse schema: %w", err)
-	}
-
-	// Ensure types map exists
-	types, ok := schemaDoc["types"].(map[string]interface{})
-	if !ok {
-		types = make(map[string]interface{})
-		schemaDoc["types"] = types
-	}
-
-	// Build new type definition
-	newType := make(map[string]interface{})
-	if defaultPath != "" {
-		newType["default_path"] = defaultPath
-	}
-
-	types[typeName] = newType
-
-	// Write back
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return fmt.Errorf("failed to write schema: %w", err)
-	}
-
-	// Update the in-memory schema so subsequent page creation works
-	s.Types[typeName] = &schema.TypeDefinition{
-		DefaultPath: defaultPath,
-	}
-
-	return nil
-}
-
-// createMissingPage creates a new page file using the pages package.
-// pages.Create handles default_path resolution automatically via the schema.
-func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot, templateDir string) error {
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
-	_, err := creator.create(objectCreateParams{
-		typeName:                    typeName,
-		targetPath:                  targetPath,
-		includeRequiredPlaceholders: true,
-	})
-	return err
 }
 
 // pluralize returns "es" for counts != 1
