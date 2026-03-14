@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -139,27 +140,44 @@ func (s *Server) callDirectReindex(args map[string]interface{}) (string, bool) {
 }
 
 func (s *Server) callDirectCheck(args map[string]interface{}) (string, bool) {
-	cliArgs := BuildCLIArgs("raven_check", args)
-	if len(cliArgs) == 0 {
-		return errorEnvelope("UNKNOWN_TOOL", "Unknown tool: raven_check", "", nil), true
+	vaultPath, vaultCfg, sch, normalized, errOut, isErr := s.directContext(args)
+	if isErr {
+		return errOut, true
 	}
 
-	out, isErr := s.executeRvn(cliArgs)
-	if !isErr {
-		return out, false
+	result, err := checksvc.Run(vaultPath, vaultCfg, sch, checksvc.Options{
+		PathArg:     strings.TrimSpace(toString(normalized["path"])),
+		TypeFilter:  strings.TrimSpace(toString(normalized["type"])),
+		TraitFilter: strings.TrimSpace(toString(normalized["trait"])),
+		Issues:      strings.TrimSpace(toString(normalized["issues"])),
+		Exclude:     strings.TrimSpace(toString(normalized["exclude"])),
+		ErrorsOnly:  boolValue(normalized["errors-only"]),
+	})
+	if err != nil {
+		return errorEnvelope("VALIDATION_FAILED", err.Error(), "", nil), true
 	}
 
-	// `rvn check --json` can exit non-zero when issues are found while still
-	// returning a successful Raven envelope that callers should treat as data.
-	trimmed := strings.TrimSpace(out)
-	if trimmed != "" {
-		var envelope struct {
-			OK *bool `json:"ok"`
-		}
-		if err := json.Unmarshal([]byte(trimmed), &envelope); err == nil && envelope.OK != nil && *envelope.OK {
-			return out, false
-		}
+	if boolValue(normalized["create-missing"]) &&
+		boolValue(normalized["confirm"]) &&
+		result.Scope.Type == "full" {
+		checksvc.CreateMissingRefsNonInteractive(
+			vaultPath,
+			sch,
+			result.MissingRefs,
+			vaultCfg.GetObjectsRoot(),
+			vaultCfg.GetPagesRoot(),
+			vaultCfg.GetTemplateDirectory(),
+		)
 	}
 
-	return out, true
+	jsonResult := checksvc.BuildJSON(vaultPath, result)
+	encoded, err := json.Marshal(jsonResult)
+	if err != nil {
+		return errorEnvelope("INTERNAL_ERROR", "failed to build check response", "", nil), true
+	}
+	var data map[string]interface{}
+	if err := json.Unmarshal(encoded, &data); err != nil {
+		return errorEnvelope("INTERNAL_ERROR", "failed to build check response", "", nil), true
+	}
+	return successEnvelope(data, nil), false
 }
