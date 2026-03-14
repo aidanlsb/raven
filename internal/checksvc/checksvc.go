@@ -251,6 +251,40 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	result.MissingRefs = validator.MissingRefs()
 	result.UndefinedTraits = validator.UndefinedTraits()
 	result.ShortRefs = validator.ShortRefs()
+	sort.Slice(result.Issues, func(i, j int) bool {
+		a := result.Issues[i]
+		b := result.Issues[j]
+		if a.FilePath != b.FilePath {
+			return a.FilePath < b.FilePath
+		}
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		if a.Level != b.Level {
+			return a.Level.String() < b.Level.String()
+		}
+		if a.Type != b.Type {
+			return string(a.Type) < string(b.Type)
+		}
+		if a.Value != b.Value {
+			return a.Value < b.Value
+		}
+		return a.Message < b.Message
+	})
+	sort.Slice(result.SchemaIssues, func(i, j int) bool {
+		a := result.SchemaIssues[i]
+		b := result.SchemaIssues[j]
+		if a.Level != b.Level {
+			return a.Level.String() < b.Level.String()
+		}
+		if a.Type != b.Type {
+			return string(a.Type) < string(b.Type)
+		}
+		if a.Value != b.Value {
+			return a.Value < b.Value
+		}
+		return a.Message < b.Message
+	})
 	return result, nil
 }
 
@@ -318,7 +352,10 @@ func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
 			sortedValues = append(sortedValues, valueCount{value: value, count: valueCountValue})
 		}
 		sort.Slice(sortedValues, func(i, j int) bool {
-			return sortedValues[i].count > sortedValues[j].count
+			if sortedValues[i].count != sortedValues[j].count {
+				return sortedValues[i].count > sortedValues[j].count
+			}
+			return sortedValues[i].value < sortedValues[j].value
 		})
 
 		topValues := make([]string, 0, 10)
@@ -346,7 +383,10 @@ func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
 		})
 	}
 	sort.Slice(jsonResult.Summary, func(i, j int) bool {
-		return jsonResult.Summary[i].Count > jsonResult.Summary[j].Count
+		if jsonResult.Summary[i].Count != jsonResult.Summary[j].Count {
+			return jsonResult.Summary[i].Count > jsonResult.Summary[j].Count
+		}
+		return jsonResult.Summary[i].IssueType < jsonResult.Summary[j].IssueType
 	})
 
 	return jsonResult

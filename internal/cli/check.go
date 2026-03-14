@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -38,139 +37,275 @@ type CheckSummaryJSON = checksvc.CheckSummaryJSON
 type CheckScopeJSON = checksvc.CheckScopeJSON
 type CheckResultJSON = checksvc.CheckResultJSON
 
+type checkAction string
+
+const (
+	checkActionValidateOnly  checkAction = "validate"
+	checkActionFix           checkAction = "fix"
+	checkActionCreateMissing checkAction = "create-missing"
+)
+
 var checkCmd = &cobra.Command{
 	Use:   "check [path]",
 	Short: "Validate the vault",
 	Long:  `Checks all files for errors and warnings (type mismatches, broken references, etc.)`,
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
-		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		action := checkActionValidateOnly
+		if checkFix && checkCreateMissing {
+			return handleErrorMsg(ErrInvalidInput, "cannot combine --fix with --create-missing", "Use one action at a time")
 		}
-
-		// Load schema
-		s, err := schema.Load(vaultPath)
-		if err != nil {
-			return fmt.Errorf("failed to load schema: %w", err)
+		if checkFix {
+			action = checkActionFix
 		}
-
-		var pathArg string
-		if len(args) > 0 {
-			pathArg = args[0]
+		if checkCreateMissing {
+			action = checkActionCreateMissing
 		}
+		return runCheckCommand(args, action, true)
+	},
+}
 
-		result, err := checksvc.Run(vaultPath, vaultCfg, s, checksvc.Options{
-			PathArg:     pathArg,
-			TypeFilter:  checkType,
-			TraitFilter: checkTrait,
-			Issues:      checkIssues,
-			Exclude:     checkExclude,
-			ErrorsOnly:  checkErrorsOnly,
-		})
-		if err != nil {
-			return err
-		}
+var checkFixCmd = &cobra.Command{
+	Use:   "fix [path]",
+	Short: "Preview or apply safe auto-fixes for check findings",
+	Long: `Runs check, then previews or applies only unambiguous safe fixes.
 
-		if !jsonOutput {
-			switch result.Scope.Type {
-			case "full":
-				fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
-			case "file":
-				fmt.Printf("Checking file: %s\n", ui.FilePath(result.Scope.Value))
-			case "directory":
-				fmt.Printf("Checking directory: %s\n", ui.FilePath(result.Scope.Value+"/"))
-			case "type_filter":
-				fmt.Printf("Checking type: %s\n", ui.Bold.Render(result.Scope.Value))
-			case "trait_filter":
-				fmt.Printf("Checking trait: %s\n", ui.Bold.Render("@"+result.Scope.Value))
-			}
-		}
+Preview is default; use --confirm to apply.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCheckCommand(args, checkActionFix, false)
+	},
+}
 
-		if jsonOutput && checkCreateMissing && result.Scope.Type == "full" && checkConfirm {
-			checksvc.CreateMissingRefsNonInteractive(
-				vaultPath,
-				s,
-				result.MissingRefs,
-				vaultCfg.GetObjectsRoot(),
-				vaultCfg.GetPagesRoot(),
-				vaultCfg.GetTemplateDirectory(),
-			)
-		}
+var checkCreateMissingCmd = &cobra.Command{
+	Use:   "create-missing",
+	Short: "Create missing references discovered by check",
+	Long: `Runs check, then creates missing referenced pages.
 
-		if jsonOutput {
-			outputSuccess(checksvc.BuildJSON(vaultPath, result), nil)
-		} else if checkByFile {
-			// Group issues by file
-			printIssuesByFile(result.Issues, result.SchemaIssues, result.StaleWarningShown)
-			fmt.Println()
-			if result.ErrorCount == 0 && result.WarningCount == 0 {
-				fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
+Non-JSON mode prompts interactively.
+JSON mode requires --confirm and creates only deterministic typed targets.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCheckCommand(args, checkActionCreateMissing, false)
+	},
+}
+
+func runCheckCommand(args []string, action checkAction, legacyFlagInvocation bool) error {
+	vaultPath := getVaultPath()
+
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
+
+	s, err := schema.Load(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to load schema: %w", err)
+	}
+
+	var pathArg string
+	if len(args) > 0 {
+		pathArg = args[0]
+	}
+
+	result, err := checksvc.Run(vaultPath, vaultCfg, s, checksvc.Options{
+		PathArg:     pathArg,
+		TypeFilter:  checkType,
+		TraitFilter: checkTrait,
+		Issues:      checkIssues,
+		Exclude:     checkExclude,
+		ErrorsOnly:  checkErrorsOnly,
+	})
+	if err != nil {
+		return err
+	}
+
+	if !jsonOutput {
+		printCheckScopeHeader(vaultPath, result.Scope)
+	}
+
+	switch action {
+	case checkActionValidateOnly:
+		runCheckValidateOutput(vaultPath, result)
+	case checkActionFix:
+		runCheckFixOutput(vaultPath, s, result)
+	case checkActionCreateMissing:
+		if result.Scope.Type != "full" {
+			if legacyFlagInvocation {
+				if !jsonOutput {
+					fmt.Println(ui.Hint("`--create-missing` is ignored for scoped checks; run on full vault to create pages."))
+				}
 			} else {
-				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
-			}
-		} else if checkVerbose {
-			// Verbose mode: print all issues inline
-			printIssuesVerbose(result.Issues, result.SchemaIssues)
-			fmt.Println()
-			if result.ErrorCount == 0 && result.WarningCount == 0 {
-				fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
-			} else {
-				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
+				return handleErrorMsg(ErrInvalidInput, "check create-missing only supports full-vault scope", "Run without path/--type/--trait filters")
 			}
 		} else {
-			// Default: summary by issue type
-			fmt.Println()
-			if result.ErrorCount == 0 && result.WarningCount == 0 {
-				fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
-			} else {
-				printIssueSummary(result.Issues, result.SchemaIssues)
-				fmt.Println()
-				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
-				fmt.Println(ui.Hint("Use --verbose to see all issues, or --by-file to group by file."))
-			}
+			runCheckCreateMissingOutput(vaultPath, vaultCfg, s, result)
+		}
+	default:
+		return handleErrorMsg(ErrInvalidInput, "unknown check action", "")
+	}
 
-			// Handle --create-missing (interactive mode only, full vault check only)
-			if checkCreateMissing && result.Scope.Type == "full" {
-				if len(result.MissingRefs) > 0 {
-					created := handleMissingRefs(vaultPath, s, result.MissingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
-					if created > 0 {
-						fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
-					}
-				}
+	if result.ErrorCount > 0 || (checkStrict && result.WarningCount > 0) {
+		os.Exit(1)
+	}
 
-				if len(result.UndefinedTraits) > 0 {
-					added := handleUndefinedTraits(vaultPath, s, result.UndefinedTraits)
-					if added > 0 {
-						fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
-					}
-				}
-			}
+	return nil
+}
 
-			// Handle --fix: auto-fix simple issues
-			if checkFix {
-				fixableIssues := collectFixableIssues(result.Issues, result.ShortRefs, s)
+func printCheckScopeHeader(vaultPath string, scope checksvc.Scope) {
+	switch scope.Type {
+	case "full":
+		fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
+	case "file":
+		fmt.Printf("Checking file: %s\n", ui.FilePath(scope.Value))
+	case "directory":
+		fmt.Printf("Checking directory: %s\n", ui.FilePath(scope.Value+"/"))
+	case "type_filter":
+		fmt.Printf("Checking type: %s\n", ui.Bold.Render(scope.Value))
+	case "trait_filter":
+		fmt.Printf("Checking trait: %s\n", ui.Bold.Render("@"+scope.Value))
+	}
+}
 
-				if len(fixableIssues) == 0 {
-					fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
-				} else {
-					fixed, err := handleAutoFix(vaultPath, fixableIssues, checkConfirm)
-					if err != nil {
-						fmt.Printf("\n%s\n", ui.Errorf("Fix failed: %v", err))
-					} else if checkConfirm {
-						fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", fixed.issueCount, fixed.fileCount))
-					}
-				}
+func runCheckValidateOutput(vaultPath string, result *checksvc.RunResult) {
+	if jsonOutput {
+		outputSuccess(checksvc.BuildJSON(vaultPath, result), nil)
+		return
+	}
+
+	if checkByFile {
+		printIssuesByFile(result.Issues, result.SchemaIssues, result.StaleWarningShown)
+		fmt.Println()
+		if result.ErrorCount == 0 && result.WarningCount == 0 {
+			fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
+		} else {
+			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
+		}
+		return
+	}
+
+	if checkVerbose {
+		printIssuesVerbose(result.Issues, result.SchemaIssues)
+		fmt.Println()
+		if result.ErrorCount == 0 && result.WarningCount == 0 {
+			fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
+		} else {
+			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
+		}
+		return
+	}
+
+	fmt.Println()
+	if result.ErrorCount == 0 && result.WarningCount == 0 {
+		fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
+	} else {
+		printIssueSummary(result.Issues, result.SchemaIssues)
+		fmt.Println()
+		fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
+		fmt.Println(ui.Hint("Use --verbose to see all issues, or --by-file to group by file."))
+	}
+}
+
+func runCheckFixOutput(vaultPath string, sch *schema.Schema, result *checksvc.RunResult) {
+	fixes := checksvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch)
+	grouped := checksvc.GroupFixesByFile(fixes)
+
+	if jsonOutput {
+		if !checkConfirm {
+			outputSuccess(map[string]interface{}{
+				"preview":        true,
+				"fixable_issues": len(fixes),
+				"files":          grouped,
+			}, nil)
+			return
+		}
+		applied, err := checksvc.ApplyFixes(vaultPath, fixes)
+		if err != nil {
+			outputError(ErrValidationFailed, err.Error(), nil, "")
+			return
+		}
+		outputSuccess(map[string]interface{}{
+			"preview":        false,
+			"fixable_issues": len(fixes),
+			"fixed_issues":   applied.IssueCount,
+			"fixed_files":    applied.FileCount,
+		}, nil)
+		return
+	}
+
+	if len(fixes) == 0 {
+		fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
+		return
+	}
+
+	if !checkConfirm {
+		fmt.Printf("\n%s\n", ui.SectionHeader("Auto-fixable Issues"))
+		fmt.Println(ui.Hint("Use --confirm to apply these fixes."))
+		fmt.Println()
+		for _, file := range grouped {
+			fmt.Printf("%s %s\n", ui.FilePath(file.FilePath), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(file.Fixes), pluralize(len(file.Fixes)))))
+			for _, fix := range file.Fixes {
+				fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", fix.Line)), fix.Description)
 			}
 		}
+		fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", len(fixes), len(grouped))))
+		return
+	}
 
-		if result.ErrorCount > 0 || (checkStrict && result.WarningCount > 0) {
-			os.Exit(1)
+	applied, err := checksvc.ApplyFixes(vaultPath, fixes)
+	if err != nil {
+		fmt.Printf("\n%s\n", ui.Errorf("Fix failed: %v", err))
+		return
+	}
+	fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", applied.IssueCount, applied.FileCount))
+}
+
+func runCheckCreateMissingOutput(vaultPath string, vaultCfg interface {
+	GetObjectsRoot() string
+	GetPagesRoot() string
+	GetTemplateDirectory() string
+}, sch *schema.Schema, result *checksvc.RunResult) {
+	if jsonOutput {
+		if !checkConfirm {
+			outputSuccess(map[string]interface{}{
+				"preview":              true,
+				"missing_refs":         len(result.MissingRefs),
+				"undefined_traits":     len(result.UndefinedTraits),
+				"requires_confirm":     true,
+				"non_interactive_only": true,
+			}, nil)
+			return
 		}
+		created := checksvc.CreateMissingRefsNonInteractive(
+			vaultPath,
+			sch,
+			result.MissingRefs,
+			vaultCfg.GetObjectsRoot(),
+			vaultCfg.GetPagesRoot(),
+			vaultCfg.GetTemplateDirectory(),
+		)
+		outputSuccess(map[string]interface{}{
+			"preview":               false,
+			"created_pages":         created,
+			"missing_refs":          len(result.MissingRefs),
+			"undefined_traits":      len(result.UndefinedTraits),
+			"undefined_traits_note": "undefined traits are interactive-only and were not changed in JSON mode",
+		}, nil)
+		return
+	}
 
-		return nil
-	},
+	if len(result.MissingRefs) > 0 {
+		created := handleMissingRefs(vaultPath, sch, result.MissingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+		if created > 0 {
+			fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
+		}
+	}
+	if len(result.UndefinedTraits) > 0 {
+		added := handleUndefinedTraits(vaultPath, sch, result.UndefinedTraits)
+		if added > 0 {
+			fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
+		}
+	}
 }
 
 // printIssuesByFile groups and prints issues by file path
@@ -860,223 +995,6 @@ func createMissingPage(vaultPath string, s *schema.Schema, targetPath, typeName,
 	return err
 }
 
-// fixType describes how to apply a fix
-type fixType string
-
-const (
-	fixTypeWikilink fixType = "wikilink" // Replace [[old]] with [[new]]
-	fixTypeTrait    fixType = "trait"    // Replace @trait(old) with @trait(new)
-)
-
-// fixableIssue represents an issue that can be auto-fixed
-type fixableIssue struct {
-	filePath    string
-	line        int
-	issueType   check.IssueType
-	fixType     fixType
-	oldValue    string // The current value (e.g., short ref)
-	newValue    string // The replacement value (e.g., full path)
-	traitName   string // For trait fixes, the trait name
-	description string // Human-readable description
-}
-
-// fixResult tracks the result of fix operations
-type fixResult struct {
-	fileCount  int
-	issueCount int
-}
-
-// collectFixableIssues identifies issues that can be auto-fixed.
-// Only truly unambiguous fixes are included - we never guess about user intent.
-func collectFixableIssues(issues []check.Issue, shortRefMap map[string]string, s *schema.Schema) []fixableIssue {
-	var fixable []fixableIssue
-
-	for _, issue := range issues {
-		switch issue.Type {
-		case check.IssueShortRefCouldBeFullPath:
-			// Look up the full path for this short ref
-			if fullPath, ok := shortRefMap[issue.Value]; ok {
-				fixable = append(fixable, fixableIssue{
-					filePath:    issue.FilePath,
-					line:        issue.Line,
-					issueType:   issue.Type,
-					fixType:     fixTypeWikilink,
-					oldValue:    issue.Value,
-					newValue:    fullPath,
-					description: fmt.Sprintf("[[%s]] → [[%s]]", issue.Value, fullPath),
-				})
-			}
-
-		case check.IssueInvalidEnumValue:
-			// Check if the value is quoted and the unquoted value is valid
-			if fix := tryFixQuotedEnumValue(issue, s); fix != nil {
-				fixable = append(fixable, *fix)
-			}
-
-			// Note: We intentionally do NOT auto-fix missing references.
-			// Even "obvious" typos like project/ → projects/ are ambiguous -
-			// we can't know if the user meant the singular or plural form.
-		}
-	}
-
-	return fixable
-}
-
-// tryFixQuotedEnumValue checks if an invalid enum value is just quoted
-// and the unquoted value is valid.
-func tryFixQuotedEnumValue(issue check.Issue, s *schema.Schema) *fixableIssue {
-	value := issue.Value
-
-	// Check for single or double quotes
-	var unquoted string
-	if len(value) >= 2 {
-		if (value[0] == '\'' && value[len(value)-1] == '\'') ||
-			(value[0] == '"' && value[len(value)-1] == '"') {
-			unquoted = value[1 : len(value)-1]
-		}
-	}
-
-	if unquoted == "" {
-		return nil
-	}
-
-	// Extract trait name from the message
-	// Message format: "Invalid value 'X' for trait '@traitname' (allowed: [...])"
-	traitName := extractTraitNameFromMessage(issue.Message)
-	if traitName == "" {
-		return nil
-	}
-
-	// Check if unquoted value is valid for this trait
-	traitDef, exists := s.Traits[traitName]
-	if !exists || traitDef.Type != schema.FieldTypeEnum {
-		return nil
-	}
-
-	for _, allowed := range traitDef.Values {
-		if allowed == unquoted {
-			return &fixableIssue{
-				filePath:    issue.FilePath,
-				line:        issue.Line,
-				issueType:   issue.Type,
-				fixType:     fixTypeTrait,
-				oldValue:    value,
-				newValue:    unquoted,
-				traitName:   traitName,
-				description: fmt.Sprintf("@%s(%s) → @%s(%s)", traitName, value, traitName, unquoted),
-			}
-		}
-	}
-
-	return nil
-}
-
-// extractTraitNameFromMessage extracts the trait name from an error message.
-func extractTraitNameFromMessage(msg string) string {
-	// Look for pattern: "for trait '@traitname'"
-	const prefix = "for trait '@"
-	idx := strings.Index(msg, prefix)
-	if idx == -1 {
-		return ""
-	}
-	start := idx + len(prefix)
-	end := strings.Index(msg[start:], "'")
-	if end == -1 {
-		return ""
-	}
-	return msg[start : start+end]
-}
-
-// handleAutoFix applies auto-fixes to the vault
-func handleAutoFix(vaultPath string, fixes []fixableIssue, confirm bool) (fixResult, error) {
-	result := fixResult{}
-
-	// Group fixes by file
-	fixesByFile := make(map[string][]fixableIssue)
-	for _, fix := range fixes {
-		fixesByFile[fix.filePath] = append(fixesByFile[fix.filePath], fix)
-	}
-
-	// Sort files for consistent output
-	var filePaths []string
-	for fp := range fixesByFile {
-		filePaths = append(filePaths, fp)
-	}
-	sort.Strings(filePaths)
-
-	if !confirm {
-		// Preview mode
-		fmt.Printf("\n%s\n", ui.SectionHeader("Auto-fixable Issues"))
-		fmt.Println(ui.Hint("Use --confirm to apply these fixes."))
-		fmt.Println()
-
-		for _, filePath := range filePaths {
-			fileFixest := fixesByFile[filePath]
-			fmt.Printf("%s %s\n", ui.FilePath(filePath), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(fileFixest), pluralize(len(fileFixest)))))
-			for _, fix := range fileFixest {
-				fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", fix.line)), fix.description)
-			}
-		}
-		fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", len(fixes), len(filePaths))))
-		return result, nil
-	}
-
-	// Apply mode
-	fmt.Printf("\n%s\n", ui.SectionHeader("Applying Fixes"))
-
-	for _, filePath := range filePaths {
-		fileFixes := fixesByFile[filePath]
-		fullPath := filepath.Join(vaultPath, filePath)
-
-		content, err := os.ReadFile(fullPath)
-		if err != nil {
-			return result, fmt.Errorf("failed to read %s: %w", filePath, err)
-		}
-
-		newContent := string(content)
-		fixedCount := 0
-
-		// Apply each fix
-		// Sort by line descending so we don't mess up line numbers as we edit
-		sort.Slice(fileFixes, func(i, j int) bool {
-			return fileFixes[i].line > fileFixes[j].line
-		})
-
-		for _, fix := range fileFixes {
-			var oldPattern, newPattern string
-
-			switch fix.fixType {
-			case fixTypeWikilink:
-				oldPattern = "[[" + fix.oldValue + "]]"
-				newPattern = "[[" + fix.newValue + "]]"
-			case fixTypeTrait:
-				// Replace @trait(oldValue) with @trait(newValue)
-				oldPattern = "@" + fix.traitName + "(" + fix.oldValue + ")"
-				newPattern = "@" + fix.traitName + "(" + fix.newValue + ")"
-			default:
-				continue
-			}
-
-			// Replace in content
-			if strings.Contains(newContent, oldPattern) {
-				newContent = strings.ReplaceAll(newContent, oldPattern, newPattern)
-				fixedCount++
-			}
-		}
-
-		if fixedCount > 0 {
-			if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
-				return result, fmt.Errorf("failed to write %s: %w", filePath, err)
-			}
-			fmt.Printf("%s %s\n", ui.SymbolCheck, ui.FilePath(filePath))
-			result.fileCount++
-			result.issueCount += fixedCount
-		}
-	}
-
-	return result, nil
-}
-
 // pluralize returns "es" for counts != 1
 func pluralize(n int) string {
 	if n == 1 {
@@ -1086,16 +1004,31 @@ func pluralize(n int) string {
 }
 
 func init() {
+	bindCheckScopeFlags := func(cmd *cobra.Command) {
+		cmd.Flags().StringVarP(&checkType, "type", "t", "", "Check only objects of this type")
+		cmd.Flags().StringVar(&checkTrait, "trait", "", "Check only usages of this trait")
+		cmd.Flags().StringVar(&checkIssues, "issues", "", "Only check these issue types (comma-separated)")
+		cmd.Flags().StringVar(&checkExclude, "exclude", "", "Exclude these issue types (comma-separated)")
+		cmd.Flags().BoolVar(&checkErrorsOnly, "errors-only", false, "Only report errors, skip warnings")
+	}
+
+	bindCheckScopeFlags(checkCmd)
+	bindCheckScopeFlags(checkFixCmd)
+
 	checkCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
 	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Create missing referenced pages (interactive by default; with --json requires --confirm)")
 	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
 	checkCmd.Flags().BoolVarP(&checkVerbose, "verbose", "V", false, "Show all issues with full details")
-	checkCmd.Flags().StringVarP(&checkType, "type", "t", "", "Check only objects of this type")
-	checkCmd.Flags().StringVar(&checkTrait, "trait", "", "Check only usages of this trait")
-	checkCmd.Flags().StringVar(&checkIssues, "issues", "", "Only check these issue types (comma-separated)")
-	checkCmd.Flags().StringVar(&checkExclude, "exclude", "", "Exclude these issue types (comma-separated)")
-	checkCmd.Flags().BoolVar(&checkErrorsOnly, "errors-only", false, "Only report errors, skip warnings")
 	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Auto-fix simple issues (short refs → full paths)")
 	checkCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes/create-missing in non-interactive mode (without this flag, shows preview only)")
+
+	checkFixCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
+	checkFixCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes (without this flag, shows preview only)")
+
+	checkCreateMissingCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
+	checkCreateMissingCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply create-missing changes in non-interactive mode (without this flag, shows preview only)")
+
+	checkCmd.AddCommand(checkFixCmd)
+	checkCmd.AddCommand(checkCreateMissingCmd)
 	rootCmd.AddCommand(checkCmd)
 }

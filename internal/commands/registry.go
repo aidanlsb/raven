@@ -869,6 +869,56 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			"Focus on specific issue types",
 		},
 	},
+	"check_fix": {
+		Name:        "check fix",
+		Description: "Preview or apply safe auto-fixes for check findings",
+		LongDesc: `Runs check, then previews or applies only unambiguous safe fixes.
+
+Preview is default; use --confirm to apply.`,
+		Args: []ArgMeta{
+			{Name: "path", Description: "File, directory, or reference to check before fixing (optional, defaults to entire vault)", Required: false},
+		},
+		Flags: []FlagMeta{
+			{Name: "strict", Description: "Treat warnings as errors", Type: FlagTypeBool},
+			{Name: "type", Short: "t", Description: "Check only objects of this type", Type: FlagTypeString},
+			{Name: "trait", Description: "Check only usages of this trait", Type: FlagTypeString},
+			{Name: "issues", Description: "Only check these issue types (comma-separated)", Type: FlagTypeString},
+			{Name: "exclude", Description: "Exclude these issue types (comma-separated)", Type: FlagTypeString},
+			{Name: "errors-only", Description: "Only report errors, skip warnings", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply fixes (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn check fix --json",
+			"rvn check fix people/freya.md --json",
+			"rvn check fix --type project --confirm --json",
+		},
+		UseCases: []string{
+			"Preview deterministic auto-fixes before applying",
+			"Apply short-reference and quoted-enum fixes safely",
+		},
+		HideFromMCP: true,
+	},
+	"check create-missing": {
+		Name:        "check create-missing",
+		Description: "Create missing references discovered by check",
+		LongDesc: `Runs check, then creates missing referenced pages.
+
+Non-JSON mode prompts interactively.
+JSON mode requires --confirm and creates only deterministic typed targets.`,
+		Flags: []FlagMeta{
+			{Name: "strict", Description: "Treat warnings as errors", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply create-missing changes in non-interactive mode (without this flag, shows preview only)", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn check create-missing --json",
+			"rvn check create-missing --confirm --json",
+		},
+		UseCases: []string{
+			"Create missing pages from check findings",
+			"Run interactive missing-reference creation in terminal mode",
+		},
+		HideFromMCP: true,
+	},
 	"schema": {
 		Name:        "schema",
 		Description: "Introspect the schema",

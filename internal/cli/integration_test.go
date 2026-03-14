@@ -739,6 +739,77 @@ See [[nonexistent/page]] for details.
 	}
 }
 
+func TestIntegration_CheckFixSubcommandAppliesShortRefFixes(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", `---
+type: person
+name: Freya
+---`).
+		WithFile("projects/roadmap.md", `---
+type: project
+title: Roadmap
+owner: "[[freya]]"
+---`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	preview := v.RunCLI("check", "fix")
+	preview.MustSucceed(t)
+	if got, ok := preview.Data["preview"].(bool); !ok || !got {
+		t.Fatalf("expected preview=true, got %#v", preview.Data["preview"])
+	}
+	if got, ok := preview.Data["fixable_issues"].(float64); !ok || int(got) < 1 {
+		t.Fatalf("expected at least 1 fixable issue, got %#v", preview.Data["fixable_issues"])
+	}
+
+	apply := v.RunCLI("check", "fix", "--confirm")
+	apply.MustSucceed(t)
+	if got, ok := apply.Data["preview"].(bool); !ok || got {
+		t.Fatalf("expected preview=false after apply, got %#v", apply.Data["preview"])
+	}
+	if got, ok := apply.Data["fixed_issues"].(float64); !ok || int(got) < 1 {
+		t.Fatalf("expected at least 1 fixed issue, got %#v", apply.Data["fixed_issues"])
+	}
+
+	v.AssertFileContains("projects/roadmap.md", "owner: \"[[people/freya]]\"")
+}
+
+func TestIntegration_CheckCreateMissingSubcommandJSONConfirmRespectsDirectoryRoots(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  meeting:
+    default_path: meeting/
+  project:
+    default_path: projects/
+    fields:
+      meeting:
+        type: ref
+        target: meeting
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		WithFile("projects/weekly.md", `---
+type: project
+meeting: "[[meeting/all-hands]]"
+---
+# Weekly
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	// check create-missing may still exit non-zero due pre-existing validation issues;
+	// validate side effects through file creation.
+	_ = v.RunCLI("check", "create-missing", "--confirm")
+
+	v.AssertFileExists("objects/meeting/all-hands.md")
+	v.AssertFileNotExists("meeting/all-hands.md")
+}
+
 // TestIntegration_CheckCreateMissingRespectsDirectoryRoots verifies that
 // `check --create-missing` creates typed objects under configured directory roots.
 func TestIntegration_CheckCreateMissingRespectsDirectoryRoots(t *testing.T) {
