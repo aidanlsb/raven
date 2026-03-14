@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"sort"
@@ -292,13 +291,23 @@ func runCheckCreateMissingOutput(vaultPath string, vaultCfg interface {
 	}
 
 	if len(result.MissingRefs) > 0 {
-		created := handleMissingRefs(vaultPath, sch, result.MissingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+		interaction := newCheckInteraction(os.Stdin, os.Stdout)
+		created := handleMissingRefsInteractive(vaultPath, sch, result.MissingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
 		if created > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 		}
+		added := 0
+		if len(result.UndefinedTraits) > 0 {
+			added = handleUndefinedTraitsInteractive(vaultPath, sch, result.UndefinedTraits, interaction)
+		}
+		if added > 0 {
+			fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
+		}
+		return
 	}
 	if len(result.UndefinedTraits) > 0 {
-		added := handleUndefinedTraits(vaultPath, sch, result.UndefinedTraits)
+		interaction := newCheckInteraction(os.Stdin, os.Stdout)
+		added := handleUndefinedTraitsInteractive(vaultPath, sch, result.UndefinedTraits, interaction)
 		if added > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
 		}
@@ -546,11 +555,10 @@ func printIssuesVerbose(issues []check.Issue, schemaIssues []check.SchemaIssue) 
 	}
 }
 
-func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
+func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, objectsRoot, pagesRoot, templateDir string) int {
 	groups := checksvc.GroupMissingRefsForInteractive(refs)
 
-	fmt.Printf("\n%s\n", ui.SectionHeader("Missing References"))
-	reader := bufio.NewReader(os.Stdin)
+	interaction.Printf("\n%s\n", ui.SectionHeader("Missing References"))
 	created := 0
 	resolvePath := func(targetPath, typeName string) string {
 		return checksvc.ResolveAndSlugifyTargetPath(targetPath, typeName, s, objectsRoot, pagesRoot)
@@ -558,7 +566,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 	// Handle certain refs (from typed fields)
 	if len(groups.Certain) > 0 {
-		fmt.Printf("\n%s\n", ui.Bold.Render("Certain (from typed fields):"))
+		interaction.Printf("\n%s\n", ui.Bold.Render("Certain (from typed fields):"))
 		for _, ref := range groups.Certain {
 			source := ref.SourceObjectID
 			if source == "" {
@@ -569,19 +577,18 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
 				ui.Muted.Render(fmt.Sprintf("(from %s.%s)", source, ref.FieldSource)))
-			fmt.Println(ui.Bullet(item))
+			interaction.Println(ui.Bullet(item))
 		}
 
-		fmt.Printf("\nCreate these pages? %s ", ui.Muted.Render("[Y/n]"))
-		response, _ := reader.ReadString('\n')
-		response = strings.TrimSpace(strings.ToLower(response))
+		interaction.Printf("\nCreate these pages? %s ", ui.Muted.Render("[Y/n]"))
+		response := readTrimmedLowerLine(interaction)
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range groups.Certain {
 				resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
 				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
-					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
+					interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
-					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
+					interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
 					created++
 				}
 			}
@@ -590,26 +597,25 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 	// Handle inferred refs (from path matching)
 	if len(groups.Inferred) > 0 {
-		fmt.Printf("\n%s\n", ui.Bold.Render("Inferred (from path matching default_path):"))
+		interaction.Printf("\n%s\n", ui.Bold.Render("Inferred (from path matching default_path):"))
 		for _, ref := range groups.Inferred {
 			resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
 			item := fmt.Sprintf("? %s → %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.FilePath(resolvedPath+".md"),
 				ui.Muted.Render(fmt.Sprintf("(type: %s)", ref.InferredType)))
-			fmt.Println(ui.Bullet(item))
+			interaction.Println(ui.Bullet(item))
 		}
 
 		for _, ref := range groups.Inferred {
 			resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
-			fmt.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
-			response, _ := reader.ReadString('\n')
-			response = strings.TrimSpace(strings.ToLower(response))
+			interaction.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
+			response := readTrimmedLowerLine(interaction)
 			if response == "y" || response == "yes" {
 				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
-					fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
+					interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
-					fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
+					interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
 					created++
 				}
 			}
@@ -618,38 +624,37 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 	// Handle unknown refs
 	if len(groups.Unknown) > 0 {
-		fmt.Printf("\n%s\n", ui.Bold.Render("Unknown type (please specify):"))
+		interaction.Printf("\n%s\n", ui.Bold.Render("Unknown type (please specify):"))
 		for _, ref := range groups.Unknown {
 			item := fmt.Sprintf("? %s %s",
 				ui.Bold.Render(ref.TargetPath),
 				ui.Muted.Render(fmt.Sprintf("(referenced in %s:%d)", ref.SourceFile, ref.Line)))
-			fmt.Println(ui.Bullet(item))
+			interaction.Println(ui.Bullet(item))
 		}
 
 		typeNames := checksvc.AvailableTypeNames(s)
-		fmt.Printf("\nAvailable types: %s\n", ui.Bold.Render(strings.Join(typeNames, ", ")))
+		interaction.Printf("\nAvailable types: %s\n", ui.Bold.Render(strings.Join(typeNames, ", ")))
 
 		for _, ref := range groups.Unknown {
-			fmt.Printf("\nType for %s %s: ", ui.Bold.Render(ref.TargetPath), ui.Muted.Render("(or 'skip')"))
-			response, _ := reader.ReadString('\n')
-			response = strings.TrimSpace(response)
+			interaction.Printf("\nType for %s %s: ", ui.Bold.Render(ref.TargetPath), ui.Muted.Render("(or 'skip')"))
+			response := readTrimmedLine(interaction)
 
 			if response == "" || response == "skip" || response == "s" {
-				fmt.Printf("  %s\n", ui.Muted.Render("Skipped "+ref.TargetPath))
+				interaction.Printf("  %s\n", ui.Muted.Render("Skipped "+ref.TargetPath))
 				continue
 			}
 
 			// Validate type exists, offer to create if not
 			if _, exists := s.Types[response]; !exists {
-				created += handleNewTypeCreation(vaultPath, s, ref, response, reader, objectsRoot, pagesRoot, templateDir)
+				created += handleNewTypeCreationInteractive(vaultPath, s, ref, response, interaction, objectsRoot, pagesRoot, templateDir)
 				continue
 			}
 
 			resolvedPath := resolvePath(ref.TargetPath, response)
 			if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, templateDir); err != nil {
-				fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
+				interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 			} else {
-				fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
+				interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
 				created++
 			}
 		}
@@ -660,7 +665,7 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 
 // handleUndefinedTraits prompts the user to add undefined traits to the schema.
 // Returns the number of traits added.
-func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.UndefinedTrait) int {
+func handleUndefinedTraitsInteractive(vaultPath string, s *schema.Schema, traits []*check.UndefinedTrait, interaction checkInteraction) int {
 	if len(traits) == 0 {
 		return 0
 	}
@@ -670,8 +675,8 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		return traits[i].UsageCount > traits[j].UsageCount
 	})
 
-	fmt.Printf("\n%s\n", ui.SectionHeader("Undefined Traits"))
-	fmt.Println("\nThe following traits are used but not defined in schema.yaml:")
+	interaction.Printf("\n%s\n", ui.SectionHeader("Undefined Traits"))
+	interaction.Println("\nThe following traits are used but not defined in schema.yaml:")
 	for _, trait := range traits {
 		valueInfo := "no value"
 		if trait.HasValue {
@@ -680,31 +685,29 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		item := fmt.Sprintf("%s %s",
 			ui.Bold.Render("@"+trait.TraitName),
 			ui.Muted.Render(fmt.Sprintf("(%d usages, %s)", trait.UsageCount, valueInfo)))
-		fmt.Println(ui.Bullet(item))
+		interaction.Println(ui.Bullet(item))
 		for _, loc := range trait.Locations {
-			fmt.Printf("      %s\n", ui.Muted.Render(loc))
+			interaction.Printf("      %s\n", ui.Muted.Render(loc))
 		}
 	}
 
-	reader := bufio.NewReader(os.Stdin)
 	added := 0
 
-	fmt.Println("\nWould you like to add these traits to the schema?")
+	interaction.Println("\nWould you like to add these traits to the schema?")
 
 	for _, trait := range traits {
-		fmt.Printf("\nAdd %s to schema? %s ", ui.Bold.Render("@"+trait.TraitName), ui.Muted.Render("[y/N]"))
-		response, _ := reader.ReadString('\n')
-		response = strings.TrimSpace(strings.ToLower(response))
+		interaction.Printf("\nAdd %s to schema? %s ", ui.Bold.Render("@"+trait.TraitName), ui.Muted.Render("[y/N]"))
+		response := readTrimmedLowerLine(interaction)
 
 		if response != "y" && response != "yes" {
-			fmt.Printf("  %s\n", ui.Muted.Render("Skipped @"+trait.TraitName))
+			interaction.Printf("  %s\n", ui.Muted.Render("Skipped @"+trait.TraitName))
 			continue
 		}
 
 		// Determine trait type
-		traitType := promptTraitType(trait, reader)
+		traitType := promptTraitType(trait, interaction)
 		if traitType == "" {
-			fmt.Printf("  %s\n", ui.Muted.Render("Skipped @"+trait.TraitName))
+			interaction.Printf("  %s\n", ui.Muted.Render("Skipped @"+trait.TraitName))
 			continue
 		}
 
@@ -713,9 +716,8 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		var defaultValue string
 
 		if traitType == "enum" {
-			fmt.Printf("  Enum values %s: ", ui.Muted.Render("(comma-separated, e.g., 'low,medium,high')"))
-			valuesStr, _ := reader.ReadString('\n')
-			valuesStr = strings.TrimSpace(valuesStr)
+			interaction.Printf("  Enum values %s: ", ui.Muted.Render("(comma-separated, e.g., 'low,medium,high')"))
+			valuesStr := readTrimmedLine(interaction)
 			if valuesStr != "" {
 				enumValues = strings.Split(valuesStr, ",")
 				for i := range enumValues {
@@ -725,18 +727,17 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 		}
 
 		if traitType == "boolean" || traitType == "enum" {
-			fmt.Printf("  Default value %s: ", ui.Muted.Render("(or leave empty)"))
-			defaultValue, _ = reader.ReadString('\n')
-			defaultValue = strings.TrimSpace(defaultValue)
+			interaction.Printf("  Default value %s: ", ui.Muted.Render("(or leave empty)"))
+			defaultValue = readTrimmedLine(interaction)
 		}
 
 		// Create the trait
 		if err := checksvc.AddTrait(vaultPath, s, trait.TraitName, traitType, enumValues, defaultValue); err != nil {
-			fmt.Printf("  %s\n", ui.Errorf("Failed to add @%s: %v", trait.TraitName, err))
+			interaction.Printf("  %s\n", ui.Errorf("Failed to add @%s: %v", trait.TraitName, err))
 			continue
 		}
 
-		fmt.Printf("  %s\n", ui.Checkf("Added trait '@%s' (type: %s) to schema.yaml", trait.TraitName, traitType))
+		interaction.Printf("  %s\n", ui.Checkf("Added trait '@%s' (type: %s) to schema.yaml", trait.TraitName, traitType))
 		added++
 	}
 
@@ -744,19 +745,18 @@ func handleUndefinedTraits(vaultPath string, s *schema.Schema, traits []*check.U
 }
 
 // promptTraitType asks the user what type a trait should be.
-func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
+func promptTraitType(trait *check.UndefinedTrait, interaction checkInteraction) string {
 	// Suggest a type based on usage
 	suggested := "boolean"
 	if trait.HasValue {
 		suggested = "string"
 	}
 
-	fmt.Printf("  Type for %s? %s %s: ",
+	interaction.Printf("  Type for %s? %s %s: ",
 		ui.Bold.Render("@"+trait.TraitName),
 		ui.Muted.Render("[boolean/string/number/date/datetime/enum/ref/url]"),
 		ui.Muted.Render(fmt.Sprintf("(default: %s)", suggested)))
-	response, _ := reader.ReadString('\n')
-	response = strings.TrimSpace(strings.ToLower(response))
+	response := readTrimmedLowerLine(interaction)
 
 	if response == "" {
 		return suggested
@@ -779,7 +779,7 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 	}
 
 	if !validTypes[response] {
-		fmt.Printf("  %s\n", ui.Errorf("Invalid type '%s'", response))
+		interaction.Printf("  %s\n", ui.Errorf("Invalid type '%s'", response))
 		return ""
 	}
 
@@ -788,40 +788,38 @@ func promptTraitType(trait *check.UndefinedTrait, reader *bufio.Reader) string {
 
 // handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
 // Returns the number of pages created (0 or 1).
-func handleNewTypeCreation(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, reader *bufio.Reader, objectsRoot, pagesRoot, templateDir string) int {
-	fmt.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
+func handleNewTypeCreationInteractive(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, interaction checkInteraction, objectsRoot, pagesRoot, templateDir string) int {
+	interaction.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
 		ui.Bold.Render("'"+typeName+"'"),
 		ui.Muted.Render("[y/N]"))
-	response, _ := reader.ReadString('\n')
-	response = strings.TrimSpace(strings.ToLower(response))
+	response := readTrimmedLowerLine(interaction)
 
 	if response != "y" && response != "yes" {
-		fmt.Printf("  %s\n", ui.Muted.Render("Skipped "+ref.TargetPath))
+		interaction.Printf("  %s\n", ui.Muted.Render("Skipped "+ref.TargetPath))
 		return 0
 	}
 
 	// Prompt for default_path (optional)
-	fmt.Printf("  Default path for '%s' files %s: ", typeName, ui.Muted.Render(fmt.Sprintf("(e.g., '%s/', or leave empty)", typeName+"s")))
-	defaultPath, _ := reader.ReadString('\n')
-	defaultPath = strings.TrimSpace(defaultPath)
+	interaction.Printf("  Default path for '%s' files %s: ", typeName, ui.Muted.Render(fmt.Sprintf("(e.g., '%s/', or leave empty)", typeName+"s")))
+	defaultPath := readTrimmedLine(interaction)
 
 	// Create the type
 	if err := checksvc.AddType(vaultPath, s, typeName, defaultPath); err != nil {
-		fmt.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeName, err))
+		interaction.Printf("  %s\n", ui.Errorf("Failed to create type '%s': %v", typeName, err))
 		return 0
 	}
-	fmt.Printf("  %s\n", ui.Checkf("Created type '%s' in schema.yaml", typeName))
+	interaction.Printf("  %s\n", ui.Checkf("Created type '%s' in schema.yaml", typeName))
 	if defaultPath != "" {
-		fmt.Printf("    %s\n", ui.Muted.Render("default_path: "+defaultPath))
+		interaction.Printf("    %s\n", ui.Muted.Render("default_path: "+defaultPath))
 	}
 
 	// Now create the page with the new type (resolving path with new default_path)
 	resolvedPath := checksvc.ResolveAndSlugifyTargetPath(ref.TargetPath, typeName, s, objectsRoot, pagesRoot)
 	if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err != nil {
-		fmt.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
+		interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
 	}
-	fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, typeName))
+	interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, typeName))
 	return 1
 }
 

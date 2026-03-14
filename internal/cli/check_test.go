@@ -1,13 +1,36 @@
 package cli
 
 import (
-	"bufio"
 	"encoding/json"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
 )
+
+type fakeCheckInteraction struct {
+	inputs []string
+	output strings.Builder
+}
+
+func (f *fakeCheckInteraction) Printf(format string, args ...interface{}) {
+	_, _ = fmt.Fprintf(&f.output, format, args...)
+}
+
+func (f *fakeCheckInteraction) Println(args ...interface{}) {
+	_, _ = fmt.Fprintln(&f.output, args...)
+}
+
+func (f *fakeCheckInteraction) ReadLine() (string, error) {
+	if len(f.inputs) == 0 {
+		return "", io.EOF
+	}
+	line := f.inputs[0]
+	f.inputs = f.inputs[1:]
+	return line, nil
+}
 
 func TestCheckJSONUsesStandardEnvelope(t *testing.T) {
 	vaultPath := t.TempDir()
@@ -81,16 +104,14 @@ func TestPromptTraitTypeAcceptsNumber(t *testing.T) {
 		TraitName: "estimate",
 		HasValue:  true,
 	}
-	reader := bufio.NewReader(strings.NewReader("number\n"))
+	interaction := &fakeCheckInteraction{inputs: []string{"number\n"}}
 
-	got := captureStdout(t, func() {
-		selected := promptTraitType(trait, reader)
-		if selected != "number" {
-			t.Fatalf("selected type = %q, want %q", selected, "number")
-		}
-	})
+	selected := promptTraitType(trait, interaction)
+	if selected != "number" {
+		t.Fatalf("selected type = %q, want %q", selected, "number")
+	}
 
-	if strings.Contains(got, "Invalid type") {
-		t.Fatalf("prompt unexpectedly rejected number type: %s", got)
+	if strings.Contains(interaction.output.String(), "Invalid type") {
+		t.Fatalf("prompt unexpectedly rejected number type: %s", interaction.output.String())
 	}
 }
