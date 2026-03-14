@@ -13,15 +13,10 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/check"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/pages"
-	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/checksvc"
 	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -38,178 +33,10 @@ var (
 	checkConfirm       bool
 )
 
-// CheckIssueJSON represents an issue in JSON output
-type CheckIssueJSON struct {
-	Type       string `json:"type"`
-	Level      string `json:"level"`
-	FilePath   string `json:"file_path"`
-	Line       int    `json:"line"`
-	Message    string `json:"message"`
-	Value      string `json:"value,omitempty"`
-	FixCommand string `json:"fix_command,omitempty"`
-	FixHint    string `json:"fix_hint,omitempty"`
-}
-
-// CheckSummaryJSON groups issues by type for easier agent processing
-type CheckSummaryJSON struct {
-	IssueType    string   `json:"issue_type"`
-	Count        int      `json:"count"`
-	UniqueValues int      `json:"unique_values,omitempty"` // Number of unique values (e.g., 5 different types)
-	FixCommand   string   `json:"fix_command,omitempty"`
-	FixHint      string   `json:"fix_hint,omitempty"`
-	TopValues    []string `json:"top_values,omitempty"` // Top 10 unique values (most common first)
-}
-
-// CheckScopeJSON describes the scope of the check
-type CheckScopeJSON struct {
-	Type  string `json:"type"`            // "full", "file", "directory", "type_filter", "trait_filter"
-	Value string `json:"value,omitempty"` // The path, type name, or trait name
-}
-
-// CheckResultJSON is the top-level JSON output
-type CheckResultJSON struct {
-	VaultPath  string             `json:"vault_path"`
-	Scope      *CheckScopeJSON    `json:"scope,omitempty"`
-	FileCount  int                `json:"file_count"`
-	ErrorCount int                `json:"error_count"`
-	WarnCount  int                `json:"warning_count"`
-	Issues     []CheckIssueJSON   `json:"issues"`
-	Summary    []CheckSummaryJSON `json:"summary"`
-}
-
-// checkScope describes what subset of the vault to check
-type checkScope struct {
-	scopeType   string   // "full", "file", "directory", "type_filter", "trait_filter"
-	scopeValue  string   // The path, type name, or trait name
-	targetFiles []string // For file/directory scopes, the absolute paths to check
-}
-
-// resolveCheckScope determines what to check based on args and flags
-func resolveCheckScope(vaultPath string, args []string, vaultCfg *config.VaultConfig) (*checkScope, error) {
-	scope := &checkScope{scopeType: "full"}
-
-	// Type filter takes precedence
-	if checkType != "" {
-		scope.scopeType = "type_filter"
-		scope.scopeValue = checkType
-		return scope, nil
-	}
-
-	// Trait filter
-	if checkTrait != "" {
-		scope.scopeType = "trait_filter"
-		scope.scopeValue = checkTrait
-		return scope, nil
-	}
-
-	// No positional arg means full vault
-	if len(args) == 0 {
-		return scope, nil
-	}
-
-	pathArg := args[0]
-
-	// Try as literal file/directory first
-	fullPath := filepath.Join(vaultPath, pathArg)
-
-	// Check if it's a directory
-	if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
-		scope.scopeType = "directory"
-		scope.scopeValue = pathArg
-		return scope, nil
-	}
-
-	// Check if it's a file (with or without .md)
-	filePath := fullPath
-	if !strings.HasSuffix(filePath, ".md") {
-		filePath = fullPath + ".md"
-	}
-	if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-		scope.scopeType = "file"
-		relPath, _ := filepath.Rel(vaultPath, filePath)
-		scope.scopeValue = relPath
-		scope.targetFiles = []string{filePath}
-		return scope, nil
-	}
-
-	// Try resolving as a reference
-	result, err := ResolveReference(pathArg, ResolveOptions{VaultPath: vaultPath, VaultConfig: vaultCfg})
-	if err != nil {
-		return nil, fmt.Errorf("could not resolve '%s': %w", pathArg, err)
-	}
-
-	scope.scopeType = "file"
-	relPath, _ := filepath.Rel(vaultPath, result.FilePath)
-	scope.scopeValue = relPath
-	scope.targetFiles = []string{result.FilePath}
-	return scope, nil
-}
-
-// parseIssueFilter parses the --issues and --exclude flags
-func parseIssueFilter() (include map[check.IssueType]bool, exclude map[check.IssueType]bool) {
-	include = make(map[check.IssueType]bool)
-	exclude = make(map[check.IssueType]bool)
-
-	if checkIssues != "" {
-		for _, issueType := range strings.Split(checkIssues, ",") {
-			issueType = strings.TrimSpace(issueType)
-			if issueType != "" {
-				include[check.IssueType(issueType)] = true
-			}
-		}
-	}
-
-	if checkExclude != "" {
-		for _, issueType := range strings.Split(checkExclude, ",") {
-			issueType = strings.TrimSpace(issueType)
-			if issueType != "" {
-				exclude[check.IssueType(issueType)] = true
-			}
-		}
-	}
-
-	return include, exclude
-}
-
-// shouldIncludeIssue checks if an issue should be included based on filters
-func shouldIncludeIssue(issue check.Issue, include, exclude map[check.IssueType]bool) bool {
-	// Check errors-only filter
-	if checkErrorsOnly && issue.Level == check.LevelWarning {
-		return false
-	}
-
-	// If include filter is set, issue must be in it
-	if len(include) > 0 && !include[issue.Type] {
-		return false
-	}
-
-	// If exclude filter is set, issue must not be in it
-	if exclude[issue.Type] {
-		return false
-	}
-
-	return true
-}
-
-// shouldIncludeSchemaIssue checks if a schema issue should be included based on filters
-func shouldIncludeSchemaIssue(issue check.SchemaIssue, include, exclude map[check.IssueType]bool) bool {
-	// Check errors-only filter
-	if checkErrorsOnly && issue.Level == check.LevelWarning {
-		return false
-	}
-
-	// If include filter is set, issue must be in it
-	if len(include) > 0 && !include[issue.Type] {
-		return false
-	}
-
-	// If exclude filter is set, issue must not be in it
-	if exclude[issue.Type] {
-		return false
-	}
-
-	return true
-}
+type CheckIssueJSON = checksvc.CheckIssueJSON
+type CheckSummaryJSON = checksvc.CheckSummaryJSON
+type CheckScopeJSON = checksvc.CheckScopeJSON
+type CheckResultJSON = checksvc.CheckResultJSON
 
 var checkCmd = &cobra.Command{
 	Use:   "check [path]",
@@ -223,300 +50,98 @@ var checkCmd = &cobra.Command{
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
-		// Resolve the check scope
-		scope, err := resolveCheckScope(vaultPath, args, vaultCfg)
-		if err != nil {
-			return err
-		}
-
-		if !jsonOutput {
-			switch scope.scopeType {
-			case "full":
-				fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
-			case "file":
-				fmt.Printf("Checking file: %s\n", ui.FilePath(scope.scopeValue))
-			case "directory":
-				fmt.Printf("Checking directory: %s\n", ui.FilePath(scope.scopeValue+"/"))
-			case "type_filter":
-				fmt.Printf("Checking type: %s\n", ui.Bold.Render(scope.scopeValue))
-			case "trait_filter":
-				fmt.Printf("Checking trait: %s\n", ui.Bold.Render("@"+scope.scopeValue))
-			}
-		}
-
-		// Parse issue filters
-		includeIssues, excludeIssues := parseIssueFilter()
-
 		// Load schema
 		s, err := schema.Load(vaultPath)
 		if err != nil {
 			return fmt.Errorf("failed to load schema: %w", err)
 		}
 
-		var errorCount, warningCount, fileCount int
-		var allDocs []*parser.ParsedDocument
-		var allObjectInfos []check.ObjectInfo
-		var allIssues []check.Issue
-		var parseErrors []check.Issue
-		var schemaIssues []check.SchemaIssue
-
-		// Check for stale index first and fetch aliases
-		staleWarningShown := false
-		var aliases map[string]string
-		var duplicateAliases []index.DuplicateAlias
-		var canonicalResolver *resolver.Resolver
-		db, err := index.Open(vaultPath)
-		if err == nil {
-			defer db.Close()
-			stalenessInfo, err := db.CheckStaleness(vaultPath)
-			if err == nil && stalenessInfo.IsStale {
-				staleCount := len(stalenessInfo.StaleFiles)
-				if !jsonOutput {
-					fmt.Println(ui.Warningf("Index may be stale (%d file(s) modified since last reindex)", staleCount))
-					if staleCount <= 5 {
-						for _, f := range stalenessInfo.StaleFiles {
-							fmt.Printf("       - %s\n", ui.FilePath(f))
-						}
-					} else {
-						for i := 0; i < 3; i++ {
-							fmt.Printf("       - %s\n", ui.FilePath(stalenessInfo.StaleFiles[i]))
-						}
-						fmt.Printf("       %s\n", ui.Muted.Render(fmt.Sprintf("... and %d more", staleCount-3)))
-					}
-					fmt.Printf("       %s\n\n", ui.Hint("Run 'rvn reindex' to update the index."))
-				}
-				// Add to issues for JSON output (only for full vault checks)
-				if scope.scopeType == "full" {
-					staleIssue := check.Issue{
-						Level:      check.LevelWarning,
-						Type:       check.IssueStaleIndex,
-						FilePath:   "",
-						Line:       0,
-						Message:    fmt.Sprintf("Index may be stale (%d file(s) modified since last reindex)", staleCount),
-						FixCommand: "rvn reindex",
-						FixHint:    "Run 'rvn reindex' to update the index",
-					}
-					if shouldIncludeIssue(staleIssue, includeIssues, excludeIssues) {
-						allIssues = append(allIssues, staleIssue)
-						warningCount++
-					}
-				}
-				staleWarningShown = true
-			}
-
-			// Fetch aliases for validation
-			aliases, _ = db.AllAliases()
-
-			// Fetch duplicate aliases
-			duplicateAliases, _ = db.FindDuplicateAliases()
-
-			// Build canonical resolver (includes aliases + schema-aware name_field resolution).
-			canonicalResolver, _ = db.Resolver(index.ResolverOptions{
-				DailyDirectory: vaultCfg.GetDailyDirectory(),
-				Schema:         s,
-			})
+		var pathArg string
+		if len(args) > 0 {
+			pathArg = args[0]
 		}
 
-		// Determine which files to walk based on scope
-		var walkPath string
-		var targetFileSet map[string]bool
-
-		switch scope.scopeType {
-		case "file":
-			// For single file, we still need all object IDs for reference validation
-			// but we only validate the target file
-			walkPath = vaultPath
-			targetFileSet = make(map[string]bool)
-			for _, f := range scope.targetFiles {
-				targetFileSet[f] = true
-			}
-		case "directory":
-			walkPath = filepath.Join(vaultPath, scope.scopeValue)
-		default:
-			walkPath = vaultPath
-		}
-
-		// First pass: parse all documents in the vault to collect object IDs
-		// (needed for reference validation even when checking a subset)
-		walkOpts := &vault.WalkOptions{
-			ParseOptions: &parser.ParseOptions{
-				ObjectsRoot: vaultCfg.GetObjectsRoot(),
-				PagesRoot:   vaultCfg.GetPagesRoot(),
-			},
-		}
-		err = vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(result vault.WalkResult) error {
-			if result.Error != nil {
-				// Only count files in scope
-				if isFileInScope(result.Path, scope, walkPath, targetFileSet) {
-					fileCount++
-					parseErrors = append(parseErrors, check.Issue{
-						Level:    check.LevelError,
-						Type:     check.IssueParseError,
-						FilePath: result.RelativePath,
-						Line:     1,
-						Message:  result.Error.Error(),
-						FixHint:  "Fix the YAML frontmatter or markdown syntax",
-					})
-					errorCount++
-				}
-				return nil
-			}
-
-			// Collect all object infos for reference resolution
-			for _, obj := range result.Document.Objects {
-				allObjectInfos = append(allObjectInfos, check.ObjectInfo{
-					ID:   obj.ID,
-					Type: obj.ObjectType,
-				})
-			}
-
-			// Only include documents that are in scope for validation
-			if isFileInScope(result.Path, scope, walkPath, targetFileSet) {
-				fileCount++
-				allDocs = append(allDocs, result.Document)
-			}
-
-			return nil
+		result, err := checksvc.Run(vaultPath, vaultCfg, s, checksvc.Options{
+			PathArg:     pathArg,
+			TypeFilter:  checkType,
+			TraitFilter: checkTrait,
+			Issues:      checkIssues,
+			Exclude:     checkExclude,
+			ErrorsOnly:  checkErrorsOnly,
 		})
-
 		if err != nil {
-			return fmt.Errorf("error walking vault: %w", err)
+			return err
 		}
 
-		// Second pass: validate with full context (including type information and aliases)
-		validator := check.NewValidatorWithTypesAliasesAndResolver(s, allObjectInfos, aliases, canonicalResolver)
-		validator.SetDuplicateAliases(duplicateAliases)
-
-		// Set directory roots for cleaner path suggestions (e.g., [[people/freya]] instead of [[objects/people/freya]])
-		if vaultCfg.HasDirectoriesConfig() {
-			validator.SetDirectoryRoots(vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot())
-		}
-		if canonicalResolver == nil {
-			validator.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-		}
-
-		for _, doc := range allDocs {
-			issues := validator.ValidateDocument(doc)
-
-			for _, issue := range issues {
-				// Apply type/trait filter
-				if !isIssueInScope(issue, doc, scope, s) {
-					continue
-				}
-
-				// Apply issue type filter
-				if !shouldIncludeIssue(issue, includeIssues, excludeIssues) {
-					continue
-				}
-
-				allIssues = append(allIssues, issue)
-
-				if issue.Level == check.LevelWarning {
-					warningCount++
-				} else {
-					errorCount++
-				}
+		if !jsonOutput {
+			switch result.Scope.Type {
+			case "full":
+				fmt.Printf("Checking vault: %s\n", ui.Muted.Render(vaultPath))
+			case "file":
+				fmt.Printf("Checking file: %s\n", ui.FilePath(result.Scope.Value))
+			case "directory":
+				fmt.Printf("Checking directory: %s\n", ui.FilePath(result.Scope.Value+"/"))
+			case "type_filter":
+				fmt.Printf("Checking type: %s\n", ui.Bold.Render(result.Scope.Value))
+			case "trait_filter":
+				fmt.Printf("Checking trait: %s\n", ui.Bold.Render("@"+result.Scope.Value))
 			}
 		}
 
-		// Add filtered parse errors to all issues
-		for _, pe := range parseErrors {
-			if shouldIncludeIssue(pe, includeIssues, excludeIssues) {
-				allIssues = append([]check.Issue{pe}, allIssues...)
-			}
-		}
-
-		// Run schema integrity checks (only for full vault checks, or when checking types/traits)
-		if scope.scopeType == "full" || scope.scopeType == "type_filter" || scope.scopeType == "trait_filter" {
-			schemaIssues = validator.ValidateSchema()
-
-			// Filter schema issues based on scope
-			var filteredSchemaIssues []check.SchemaIssue
-			for _, issue := range schemaIssues {
-				// For type_filter, only show schema issues related to that type
-				if scope.scopeType == "type_filter" {
-					if !strings.Contains(issue.Value, scope.scopeValue) &&
-						!strings.HasPrefix(issue.Value, scope.scopeValue+".") {
-						continue
-					}
-				}
-
-				// For trait_filter, only show schema issues related to that trait
-				if scope.scopeType == "trait_filter" {
-					if issue.Value != scope.scopeValue {
-						continue
-					}
-				}
-
-				if !shouldIncludeSchemaIssue(issue, includeIssues, excludeIssues) {
-					continue
-				}
-
-				filteredSchemaIssues = append(filteredSchemaIssues, issue)
-
-				if issue.Level == check.LevelWarning {
-					warningCount++
-				} else {
-					errorCount++
-				}
-			}
-			schemaIssues = filteredSchemaIssues
-		}
-
-		// JSON output mode
-		if jsonOutput && checkCreateMissing && scope.scopeType == "full" && checkConfirm {
-			missingRefs := validator.MissingRefs()
-			if len(missingRefs) > 0 {
-				createMissingRefsNonInteractive(vaultPath, s, missingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
-			}
+		if jsonOutput && checkCreateMissing && result.Scope.Type == "full" && checkConfirm {
+			checksvc.CreateMissingRefsNonInteractive(
+				vaultPath,
+				s,
+				result.MissingRefs,
+				vaultCfg.GetObjectsRoot(),
+				vaultCfg.GetPagesRoot(),
+				vaultCfg.GetTemplateDirectory(),
+			)
 		}
 
 		if jsonOutput {
-			result := buildCheckJSONWithScope(vaultPath, scope, fileCount, errorCount, warningCount, allIssues, schemaIssues)
-			outputSuccess(result, nil)
+			outputSuccess(checksvc.BuildJSON(vaultPath, result), nil)
 		} else if checkByFile {
 			// Group issues by file
-			printIssuesByFile(allIssues, schemaIssues, staleWarningShown)
+			printIssuesByFile(result.Issues, result.SchemaIssues, result.StaleWarningShown)
 			fmt.Println()
-			if errorCount == 0 && warningCount == 0 {
-				fmt.Println(ui.Starf("No issues found in %d files.", fileCount))
+			if result.ErrorCount == 0 && result.WarningCount == 0 {
+				fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
 			} else {
-				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
+				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
 			}
 		} else if checkVerbose {
 			// Verbose mode: print all issues inline
-			printIssuesVerbose(allIssues, schemaIssues)
+			printIssuesVerbose(result.Issues, result.SchemaIssues)
 			fmt.Println()
-			if errorCount == 0 && warningCount == 0 {
-				fmt.Println(ui.Starf("No issues found in %d files.", fileCount))
+			if result.ErrorCount == 0 && result.WarningCount == 0 {
+				fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
 			} else {
-				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
+				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
 			}
 		} else {
 			// Default: summary by issue type
 			fmt.Println()
-			if errorCount == 0 && warningCount == 0 {
-				fmt.Println(ui.Starf("No issues found in %d files.", fileCount))
+			if result.ErrorCount == 0 && result.WarningCount == 0 {
+				fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
 			} else {
-				printIssueSummary(allIssues, schemaIssues)
+				printIssueSummary(result.Issues, result.SchemaIssues)
 				fmt.Println()
-				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", errorCount, warningCount, fileCount)
+				fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
 				fmt.Println(ui.Hint("Use --verbose to see all issues, or --by-file to group by file."))
 			}
 
 			// Handle --create-missing (interactive mode only, full vault check only)
-			if checkCreateMissing && scope.scopeType == "full" {
-				missingRefs := validator.MissingRefs()
-				if len(missingRefs) > 0 {
-					created := handleMissingRefs(vaultPath, s, missingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+			if checkCreateMissing && result.Scope.Type == "full" {
+				if len(result.MissingRefs) > 0 {
+					created := handleMissingRefs(vaultPath, s, result.MissingRefs, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
 					if created > 0 {
 						fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 					}
 				}
 
-				undefinedTraits := validator.UndefinedTraits()
-				if len(undefinedTraits) > 0 {
-					added := handleUndefinedTraits(vaultPath, s, undefinedTraits)
+				if len(result.UndefinedTraits) > 0 {
+					added := handleUndefinedTraits(vaultPath, s, result.UndefinedTraits)
 					if added > 0 {
 						fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
 					}
@@ -525,8 +150,7 @@ var checkCmd = &cobra.Command{
 
 			// Handle --fix: auto-fix simple issues
 			if checkFix {
-				shortRefMap := validator.ShortRefs()
-				fixableIssues := collectFixableIssues(allIssues, shortRefMap, s)
+				fixableIssues := collectFixableIssues(result.Issues, result.ShortRefs, s)
 
 				if len(fixableIssues) == 0 {
 					fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
@@ -541,57 +165,12 @@ var checkCmd = &cobra.Command{
 			}
 		}
 
-		if errorCount > 0 || (checkStrict && warningCount > 0) {
+		if result.ErrorCount > 0 || (checkStrict && result.WarningCount > 0) {
 			os.Exit(1)
 		}
 
 		return nil
 	},
-}
-
-// isFileInScope checks if a file path is within the check scope
-func isFileInScope(filePath string, scope *checkScope, walkPath string, targetFileSet map[string]bool) bool {
-	switch scope.scopeType {
-	case "file":
-		return targetFileSet[filePath]
-	case "directory":
-		return strings.HasPrefix(filePath, walkPath)
-	default:
-		return true
-	}
-}
-
-// isIssueInScope checks if an issue matches the type/trait filter
-func isIssueInScope(issue check.Issue, doc *parser.ParsedDocument, scope *checkScope, s *schema.Schema) bool {
-	switch scope.scopeType {
-	case "type_filter":
-		// Check if any object in the document matches the type
-		for _, obj := range doc.Objects {
-			if obj.ObjectType == scope.scopeValue {
-				return true
-			}
-		}
-		return false
-
-	case "trait_filter":
-		// Check if the issue is related to the trait
-		// Issues about traits include the trait name in the Value field
-		if issue.Type == check.IssueUndefinedTrait ||
-			issue.Type == check.IssueInvalidTraitValue ||
-			issue.Type == check.IssueMissingRequiredTrait {
-			return issue.Value == scope.scopeValue || strings.HasPrefix(issue.Value, scope.scopeValue)
-		}
-		// For other issues, include them if the document uses the trait
-		for _, trait := range doc.Traits {
-			if trait.TraitType == scope.scopeValue {
-				return true
-			}
-		}
-		return false
-
-	default:
-		return true
-	}
 }
 
 // printIssuesByFile groups and prints issues by file path
@@ -835,123 +414,6 @@ func printIssuesVerbose(issues []check.Issue, schemaIssues []check.SchemaIssue) 
 	}
 }
 
-// buildCheckJSONWithScope creates the structured JSON output for check command with scope info
-func buildCheckJSONWithScope(vaultPath string, scope *checkScope, fileCount, errorCount, warnCount int, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
-	result := CheckResultJSON{
-		VaultPath:  vaultPath,
-		FileCount:  fileCount,
-		ErrorCount: errorCount,
-		WarnCount:  warnCount,
-		Issues:     make([]CheckIssueJSON, 0, len(issues)+len(schemaIssues)),
-	}
-
-	// Add scope information
-	if scope != nil && scope.scopeType != "full" {
-		result.Scope = &CheckScopeJSON{
-			Type:  scope.scopeType,
-			Value: scope.scopeValue,
-		}
-	}
-
-	return buildCheckJSONInternal(result, issues, schemaIssues)
-}
-
-// buildCheckJSONInternal is the shared implementation for building check JSON output
-func buildCheckJSONInternal(result CheckResultJSON, issues []check.Issue, schemaIssues []check.SchemaIssue) CheckResultJSON {
-	// Convert issues to JSON format
-	for _, issue := range issues {
-		result.Issues = append(result.Issues, CheckIssueJSON{
-			Type:       string(issue.Type),
-			Level:      issue.Level.String(),
-			FilePath:   issue.FilePath,
-			Line:       issue.Line,
-			Message:    issue.Message,
-			Value:      issue.Value,
-			FixCommand: issue.FixCommand,
-			FixHint:    issue.FixHint,
-		})
-	}
-
-	// Convert schema issues to JSON format
-	for _, issue := range schemaIssues {
-		result.Issues = append(result.Issues, CheckIssueJSON{
-			Type:       string(issue.Type),
-			Level:      issue.Level.String(),
-			FilePath:   "schema.yaml",
-			Line:       0,
-			Message:    issue.Message,
-			Value:      issue.Value,
-			FixCommand: issue.FixCommand,
-			FixHint:    issue.FixHint,
-		})
-	}
-
-	// Build summary - group by issue type, count unique values
-	typeCountMap := make(map[string]int)
-	typeValueCountMap := make(map[string]map[string]int) // issueType -> value -> count
-
-	for _, issue := range issues {
-		typeCountMap[string(issue.Type)]++
-		if typeValueCountMap[string(issue.Type)] == nil {
-			typeValueCountMap[string(issue.Type)] = make(map[string]int)
-		}
-		if issue.Value != "" {
-			typeValueCountMap[string(issue.Type)][issue.Value]++
-		}
-	}
-
-	// Convert to slice sorted by count
-	for issueType, count := range typeCountMap {
-		valueCounts := typeValueCountMap[issueType]
-
-		// Sort values by frequency (most common first)
-		type valueCount struct {
-			value string
-			count int
-		}
-		var sortedValues []valueCount
-		for v, c := range valueCounts {
-			sortedValues = append(sortedValues, valueCount{v, c})
-		}
-		sort.Slice(sortedValues, func(i, j int) bool {
-			return sortedValues[i].count > sortedValues[j].count
-		})
-
-		// Take top 10 values
-		topValues := make([]string, 0, 10)
-		for i := 0; i < len(sortedValues) && i < 10; i++ {
-			topValues = append(topValues, sortedValues[i].value)
-		}
-
-		// Find a representative fix command
-		fixCmd := ""
-		fixHint := ""
-		for _, issue := range issues {
-			if string(issue.Type) == issueType && issue.FixCommand != "" {
-				fixCmd = issue.FixCommand
-				fixHint = issue.FixHint
-				break
-			}
-		}
-
-		result.Summary = append(result.Summary, CheckSummaryJSON{
-			IssueType:    issueType,
-			Count:        count,
-			UniqueValues: len(valueCounts),
-			FixCommand:   fixCmd,
-			FixHint:      fixHint,
-			TopValues:    topValues,
-		})
-	}
-
-	// Sort summary by count descending
-	sort.Slice(result.Summary, func(i, j int) bool {
-		return result.Summary[i].Count > result.Summary[j].Count
-	})
-
-	return result
-}
-
 func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
 	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
 
@@ -1086,43 +548,6 @@ func handleMissingRefs(vaultPath string, s *schema.Schema, refs []*check.Missing
 				fmt.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
 				created++
 			}
-		}
-	}
-
-	return created
-}
-
-// createMissingRefsNonInteractive creates missing refs deterministically for agent/json mode.
-// It only creates refs with a known type and skips unknown-type refs that require user input.
-func createMissingRefsNonInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, objectsRoot, pagesRoot, templateDir string) int {
-	creator := newObjectCreationContext(vaultPath, s, objectsRoot, pagesRoot, templateDir)
-	created := 0
-	seen := make(map[string]struct{})
-
-	for _, ref := range refs {
-		typeName := ref.InferredType
-		if typeName == "" {
-			// Unknown type requires user input; skip in non-interactive mode.
-			continue
-		}
-		if _, exists := s.Types[typeName]; !exists && !schema.IsBuiltinType(typeName) {
-			// Defensive check: skip refs whose inferred type isn't currently known.
-			continue
-		}
-
-		resolvedPath := creator.resolveTargetPath(ref.TargetPath, typeName)
-		slugPath := pages.SlugifyPath(resolvedPath)
-		if _, alreadyHandled := seen[slugPath]; alreadyHandled {
-			continue
-		}
-		seen[slugPath] = struct{}{}
-
-		if creator.exists(ref.TargetPath, typeName) {
-			continue
-		}
-
-		if err := createMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err == nil {
-			created++
 		}
 	}
 
