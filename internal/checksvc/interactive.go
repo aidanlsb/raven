@@ -2,17 +2,13 @@ package checksvc
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/pages"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemasvc"
 )
 
 type MissingRefGroups struct {
@@ -76,56 +72,6 @@ func AvailableTypeNames(s *schema.Schema) []string {
 }
 
 func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, enumValues []string, defaultValue string) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	data, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
-	}
-
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return fmt.Errorf("failed to parse schema: %w", err)
-	}
-
-	traits, ok := schemaDoc["traits"].(map[string]interface{})
-	if !ok {
-		traits = make(map[string]interface{})
-		schemaDoc["traits"] = traits
-	}
-
-	newTrait := make(map[string]interface{})
-	newTrait["type"] = traitType
-
-	if len(enumValues) > 0 {
-		newTrait["values"] = enumValues
-	}
-
-	if defaultValue != "" {
-		if traitType == "boolean" || traitType == "bool" {
-			if defaultValue == "true" {
-				newTrait["default"] = true
-			} else if defaultValue == "false" {
-				newTrait["default"] = false
-			} else {
-				newTrait["default"] = defaultValue
-			}
-		} else {
-			newTrait["default"] = defaultValue
-		}
-	}
-
-	traits[traitName] = newTrait
-
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return fmt.Errorf("failed to write schema: %w", err)
-	}
-
 	trimmedValues := make([]string, 0, len(enumValues))
 	for _, value := range enumValues {
 		v := strings.TrimSpace(value)
@@ -134,63 +80,57 @@ func AddTrait(vaultPath string, s *schema.Schema, traitName, traitType string, e
 		}
 	}
 
-	s.Traits[traitName] = &schema.TraitDefinition{
-		Type:   schema.FieldType(traitType),
-		Values: trimmedValues,
+	_, err := schemasvc.AddTrait(schemasvc.AddTraitRequest{
+		VaultPath: vaultPath,
+		TraitName: traitName,
+		TraitType: traitType,
+		Values:    strings.Join(trimmedValues, ","),
+		Default:   strings.TrimSpace(defaultValue),
+	})
+	if err != nil {
+		return err
 	}
-	if defaultValue != "" {
-		if traitType == "boolean" || traitType == "bool" {
-			s.Traits[traitName].Default = defaultValue == "true"
-		} else {
-			s.Traits[traitName].Default = defaultValue
-		}
+
+	loaded, err := schema.Load(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to reload schema after adding trait: %w", err)
 	}
+	traitDef, ok := loaded.Traits[traitName]
+	if !ok {
+		return fmt.Errorf("added trait '%s' was not found after reload", traitName)
+	}
+
+	if s.Traits == nil {
+		s.Traits = make(map[string]*schema.TraitDefinition)
+	}
+	s.Traits[traitName] = traitDef
 
 	return nil
 }
 
 func AddType(vaultPath string, s *schema.Schema, typeName, defaultPath string) error {
-	schemaPath := paths.SchemaPath(vaultPath)
-
-	if schema.IsBuiltinType(typeName) {
-		return fmt.Errorf("'%s' is a built-in type", typeName)
-	}
-
-	data, err := os.ReadFile(schemaPath)
+	_, err := schemasvc.AddType(schemasvc.AddTypeRequest{
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		DefaultPath: strings.TrimSpace(defaultPath),
+	})
 	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
+		return err
 	}
 
-	var schemaDoc map[string]interface{}
-	if err := yaml.Unmarshal(data, &schemaDoc); err != nil {
-		return fmt.Errorf("failed to parse schema: %w", err)
+	loaded, err := schema.Load(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to reload schema after adding type: %w", err)
 	}
-
-	types, ok := schemaDoc["types"].(map[string]interface{})
+	typeDef, ok := loaded.Types[typeName]
 	if !ok {
-		types = make(map[string]interface{})
-		schemaDoc["types"] = types
+		return fmt.Errorf("added type '%s' was not found after reload", typeName)
 	}
 
-	newType := make(map[string]interface{})
-	if defaultPath != "" {
-		newType["default_path"] = defaultPath
+	if s.Types == nil {
+		s.Types = make(map[string]*schema.TypeDefinition)
 	}
-
-	types[typeName] = newType
-
-	output, err := yaml.Marshal(schemaDoc)
-	if err != nil {
-		return fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	if err := atomicfile.WriteFile(schemaPath, output, 0o644); err != nil {
-		return fmt.Errorf("failed to write schema: %w", err)
-	}
-
-	s.Types[typeName] = &schema.TypeDefinition{
-		DefaultPath: defaultPath,
-	}
+	s.Types[typeName] = typeDef
 
 	return nil
 }
