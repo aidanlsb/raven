@@ -11,7 +11,11 @@ import (
 // Raven JSON envelope.
 func ExecuteToolDirect(vaultPath, toolName string, args map[string]interface{}) (map[string]interface{}, error) {
 	server := &Server{
-		vaultPath: vaultPath,
+		vaultPath:  vaultPath,
+		executable: resolveExecutablePath(),
+	}
+	if strings.TrimSpace(vaultPath) != "" {
+		server.baseArgs = []string{"--vault-path", vaultPath}
 	}
 
 	out, isErr, handled := server.callToolDirect(toolName, args)

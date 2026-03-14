@@ -1410,6 +1410,83 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "moved", "destination"})
 	})
 
+	t.Run("reindex", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/roadmap.md", `---
+type: project
+status: active
+---
+# Roadmap
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/roadmap.md", `---
+type: project
+status: active
+---
+# Roadmap
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_reindex", map[string]interface{}{
+			"full": true,
+		})
+		cliResult := vCLI.RunCLI("reindex", "--full")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{
+			"files_indexed",
+			"files_skipped",
+			"files_deleted",
+			"objects",
+			"traits",
+			"references",
+			"schema_rebuilt",
+			"incremental",
+			"dry_run",
+			"errors",
+			"refs_resolved",
+			"refs_unresolved",
+		})
+	})
+
+	t.Run("check", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/security.md", `---
+type: project
+status: active
+owner: people/missing-owner
+---
+# Security
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/security.md", `---
+type: project
+status: active
+owner: people/missing-owner
+---
+# Security
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_check", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("check")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{
+			"file_count",
+			"error_count",
+			"warning_count",
+			"issues",
+			"summary",
+		})
+	})
+
 	t.Run("read_raw", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).
 			WithSchema(testutil.PersonProjectSchema()).

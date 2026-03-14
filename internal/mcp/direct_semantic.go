@@ -9,6 +9,8 @@ const (
 	semanticObjectSetFields           semanticOp = "object.set_fields"
 	semanticObjectDelete              semanticOp = "object.delete"
 	semanticObjectMove                semanticOp = "object.move"
+	semanticVaultReindex              semanticOp = "vault.reindex"
+	semanticVaultCheck                semanticOp = "vault.check"
 	semanticReadSearch                semanticOp = "read.search"
 	semanticReadFile                  semanticOp = "read.file"
 	semanticReadBacklinks             semanticOp = "read.backlinks"
@@ -62,6 +64,8 @@ var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_set":                          semanticObjectSetFields,
 	"raven_delete":                       semanticObjectDelete,
 	"raven_move":                         semanticObjectMove,
+	"raven_reindex":                      semanticVaultReindex,
+	"raven_check":                        semanticVaultCheck,
 	"raven_search":                       semanticReadSearch,
 	"raven_read":                         semanticReadFile,
 	"raven_backlinks":                    semanticReadBacklinks,
@@ -116,6 +120,8 @@ func semanticHandlerExists(op semanticOp) bool {
 		semanticObjectSetFields,
 		semanticObjectDelete,
 		semanticObjectMove,
+		semanticVaultReindex,
+		semanticVaultCheck,
 		semanticReadSearch,
 		semanticReadFile,
 		semanticReadBacklinks,
@@ -185,6 +191,12 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 		return out, isErr, true
 	case semanticObjectMove:
 		out, isErr := s.callDirectMove(args)
+		return out, isErr, true
+	case semanticVaultReindex:
+		out, isErr := s.callDirectReindex(args)
+		return out, isErr, true
+	case semanticVaultCheck:
+		out, isErr := s.callDirectCheck(args)
 		return out, isErr, true
 	case semanticReadSearch:
 		out, isErr := s.callDirectSearch(args)
