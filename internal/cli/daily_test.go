@@ -87,8 +87,9 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 			if !resp.OK {
 				t.Fatalf("expected ok=true; out=%s", out)
 			}
-			if resp.Data.File != relPath {
-				t.Fatalf("file = %q, want %q", resp.Data.File, relPath)
+			wantFile := filepath.ToSlash(relPath)
+			if resp.Data.File != wantFile {
+				t.Fatalf("file = %q, want %q", resp.Data.File, wantFile)
 			}
 			if resp.Data.Date != date {
 				t.Fatalf("date = %q, want %q", resp.Data.Date, date)
