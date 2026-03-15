@@ -4,8 +4,26 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+func writeFakeTool(t *testing.T, dir string, unixName, unixBody, windowsName, windowsBody string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		path := filepath.Join(dir, windowsName)
+		if err := os.WriteFile(path, []byte(windowsBody), 0o644); err != nil {
+			t.Fatalf("write windows script: %v", err)
+		}
+		return path
+	}
+
+	path := filepath.Join(dir, unixName)
+	if err := os.WriteFile(path, []byte(unixBody), 0o755); err != nil {
+		t.Fatalf("write unix script: %v", err)
+	}
+	return path
+}
 
 func TestExecute_ExecutableRequired(t *testing.T) {
 	_, err := Execute("", "", "raven_stats", nil)
@@ -23,7 +41,7 @@ func TestExecute_ExecutableRequired(t *testing.T) {
 }
 
 func TestExecute_UnknownTool(t *testing.T) {
-	_, err := Execute("", "/bin/echo", "raven_not_a_tool", nil)
+	_, err := Execute("", "non-empty-executable", "raven_not_a_tool", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -38,7 +56,17 @@ func TestExecute_UnknownTool(t *testing.T) {
 }
 
 func TestExecute_InvalidJSONOutput(t *testing.T) {
-	_, err := Execute("", "/bin/echo", "raven_stats", nil)
+	dir := t.TempDir()
+	executable := writeFakeTool(
+		t,
+		dir,
+		"fake-rvn.sh",
+		"#!/bin/sh\necho not-json\n",
+		"fake-rvn.cmd",
+		"@echo off\r\necho not-json\r\n",
+	)
+
+	_, err := Execute("", executable, "raven_stats", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -54,12 +82,14 @@ func TestExecute_InvalidJSONOutput(t *testing.T) {
 
 func TestExecute_EnvelopeError(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := filepath.Join(dir, "fake-rvn.sh")
-	script := "#!/bin/sh\n" +
-		"echo '{\"ok\":false,\"error\":{\"code\":\"X\",\"message\":\"bad\"}}'\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatalf("write script: %v", err)
-	}
+	scriptPath := writeFakeTool(
+		t,
+		dir,
+		"fake-rvn.sh",
+		"#!/bin/sh\necho '{\"ok\":false,\"error\":{\"code\":\"X\",\"message\":\"bad\"}}'\n",
+		"fake-rvn.cmd",
+		"@echo off\r\necho {\"ok\":false,\"error\":{\"code\":\"X\",\"message\":\"bad\"}}\r\n",
+	)
 
 	_, err := Execute("", scriptPath, "raven_stats", nil)
 	if err == nil {

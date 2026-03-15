@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -67,7 +68,7 @@ func TestApplyAddBulk(t *testing.T) {
 	if summary.Added != 1 || summary.Skipped != 1 || summary.Errors != 0 {
 		t.Fatalf("summary = %#v, want added=1 skipped=1 errors=0", summary)
 	}
-	if len(reindexed) != 1 || !strings.HasSuffix(reindexed[0], "people/alice.md") {
+	if len(reindexed) != 1 || !strings.HasSuffix(filepath.ToSlash(reindexed[0]), "people/alice.md") {
 		t.Fatalf("reindex callbacks = %#v, want one callback for people/alice.md", reindexed)
 	}
 	content := v.ReadFile("people/alice.md")

@@ -66,6 +66,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 			return nil, err
 		}
 		relPath, _ := filepath.Rel(req.VaultPath, resolved.FilePath)
+		relPath = filepath.ToSlash(relPath)
 		_, slug, _ := paths.ParseEmbeddedID(resolved.ObjectID)
 		return &SetByReferenceResult{
 			FilePath:        resolved.FilePath,
@@ -93,6 +94,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 	}
 
 	relPath, _ := filepath.Rel(req.VaultPath, resolved.FilePath)
+	relPath = filepath.ToSlash(relPath)
 	return &SetByReferenceResult{
 		FilePath:        resolved.FilePath,
 		RelativePath:    relPath,
