@@ -14,6 +14,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/rvnexec"
+	"github.com/aidanlsb/raven/internal/toolargs"
 )
 
 // Server is an MCP server that wraps Raven CLI commands.
@@ -98,11 +99,13 @@ type ToolContent struct {
 }
 
 func resolveExecutablePath() string {
-	// Get the path to the current executable so we can call it for tool execution
+	// Strict resolution: use only the current process binary path.
 	executable, err := os.Executable()
 	if err != nil {
-		// Fall back to "rvn" and hope it's in PATH
-		executable = "rvn"
+		return ""
+	}
+	if strings.TrimSpace(executable) == "" {
+		return ""
 	}
 	return executable
 }
@@ -494,18 +497,33 @@ func (s *Server) callTool(name string, args map[string]interface{}) (string, boo
 		return out, isErr
 	}
 
-	// Build CLI args from the registry - single source of truth!
-	cmdArgs := BuildCLIArgs(name, args)
-
-	if len(cmdArgs) == 0 {
+	// No subprocess fallback: all supported tools must have direct semantic handlers.
+	// Unknown tool names still return UNKNOWN_TOOL for protocol compatibility.
+	if len(toolargs.BuildCLIArgs(name, args)) == 0 {
 		return fmt.Sprintf(`{"ok":false,"error":{"code":"UNKNOWN_TOOL","message":"Unknown tool: %s"}}`, name), true
 	}
 
-	// Execute the rvn command
-	return s.executeRvn(cmdArgs)
+	return errorEnvelope(
+		"INTERNAL_ERROR",
+		"direct semantic handler is not configured",
+		"report this issue with the failing tool name",
+		map[string]interface{}{"tool_name": name},
+	), true
 }
 
 func (s *Server) executeRvn(args []string) (string, bool) {
+	if strings.TrimSpace(s.executable) == "" {
+		wrapped := map[string]interface{}{
+			"ok": false,
+			"error": map[string]interface{}{
+				"code":    "EXECUTION_ERROR",
+				"message": "failed to resolve current executable path",
+			},
+		}
+		b, _ := json.Marshal(wrapped)
+		return string(b), true
+	}
+
 	args = s.withBaseArgs(args)
 
 	// Log to stderr for debugging

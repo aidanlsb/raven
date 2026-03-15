@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/toolargs"
 )
 
 // TestMCPToolsMatchRegistry verifies that all registry commands
@@ -585,7 +586,7 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.toolName, func(t *testing.T) {
-			cliArgs := BuildCLIArgs(tt.toolName, tt.args)
+			cliArgs := toolargs.BuildCLIArgs(tt.toolName, tt.args)
 
 			// Check command name
 			if len(cliArgs) == 0 {
@@ -607,7 +608,7 @@ func TestBuildCLIArgsRoundtrip(t *testing.T) {
 }
 
 func TestBuildCLIArgs_PreservesEmptyPositionalArgs(t *testing.T) {
-	cliArgs := BuildCLIArgs("raven_edit", map[string]interface{}{
+	cliArgs := toolargs.BuildCLIArgs("raven_edit", map[string]interface{}{
 		"path":    "daily/2026-01-02.md",
 		"old_str": "- old task",
 		"new_str": "",
@@ -630,7 +631,7 @@ func TestBuildCLIArgs_PreservesEmptyPositionalArgs(t *testing.T) {
 }
 
 func TestBuildCLIArgs_SchemaTypeSubcommandUsesSeparatePositionals(t *testing.T) {
-	cliArgs := BuildCLIArgs("raven_schema", map[string]interface{}{
+	cliArgs := toolargs.BuildCLIArgs("raven_schema", map[string]interface{}{
 		"subcommand": "type",
 		"name":       "meeting",
 	})

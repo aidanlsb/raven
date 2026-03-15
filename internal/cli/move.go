@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,8 +12,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -206,8 +203,6 @@ func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Wa
 // moveSingleObject handles single move operation (non-bulk mode).
 func moveSingleObject(vaultPath, source, destination string) error {
 	start := time.Now()
-	originalDestination := destination
-	destinationIsDirectory := strings.HasSuffix(originalDestination, "/") || strings.HasSuffix(originalDestination, "\\")
 
 	// Load vault config for directory roots
 	vaultCfg, err := loadVaultConfigSafe(vaultPath)
@@ -215,143 +210,58 @@ func moveSingleObject(vaultPath, source, destination string) error {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
-	// Resolve source using unified resolver (supports short names, aliases, etc.)
-	sourceResult, err := ResolveReference(source, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-	})
-	if err != nil {
-		return handleResolveError(err, source)
-	}
-	sourceFile := sourceResult.FilePath
-
-	// Security: Validate source is within vault
-	if err := paths.ValidateWithinVault(vaultPath, sourceFile); err != nil {
-		return handleErrorMsg(ErrValidationFailed,
-			"Source path is outside vault",
-			"Files can only be moved within the vault")
-	}
-	sourceRelPath, err := filepath.Rel(vaultPath, sourceFile)
-	if err != nil {
-		return handleError(ErrInternal, err, "Failed to resolve source path")
-	}
-	sourceID := vaultCfg.FilePathToObjectID(sourceRelPath)
-
-	// If destination is a directory (trailing slash), keep the source filename.
-	if destinationIsDirectory {
-		sourceBase := strings.TrimSuffix(filepath.Base(sourceRelPath), ".md")
-		if strings.TrimSpace(sourceBase) == "" {
-			return handleErrorMsg(ErrInvalidInput, "source has an invalid filename", "Use an explicit destination file path")
-		}
-		destination = filepath.ToSlash(filepath.Join(originalDestination, sourceBase))
-	}
-
-	// Normalize destination path (add .md if missing)
-	destination = paths.EnsureMDExtension(destination)
-	destinationBase := strings.TrimSuffix(filepath.Base(destination), ".md")
-	if strings.TrimSpace(destinationBase) == "" {
-		return handleErrorMsg(ErrInvalidInput, "destination has an empty filename", "Use a non-empty destination filename or a directory ending with /")
-	}
-
-	// Build destination path - apply directory roots if configured
-	destPath := destination
-	if vaultCfg.HasDirectoriesConfig() {
-		// If destination is an object ID (like "people/freya.md"), resolve to file path
-		destPath = vaultCfg.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
-	}
-	destFile := filepath.Join(vaultPath, destPath)
-
-	// Security: Validate destination is within vault
-	if err := paths.ValidateWithinVault(vaultPath, destFile); err != nil {
-		return handleErrorMsg(ErrValidationFailed,
-			"Destination path is outside vault",
-			"Files can only be moved within the vault")
-	}
-
-	// Security: Ensure destination is not in .raven directory
-	relDest, _ := filepath.Rel(vaultPath, destFile)
-	if strings.HasPrefix(relDest, ".raven") || strings.HasPrefix(relDest, ".trash") {
-		return handleErrorMsg(ErrValidationFailed,
-			"Cannot move to system directory",
-			"Destination cannot be in .raven or .trash directories")
-	}
-
-	// Check if destination already exists
-	if _, err := os.Stat(destFile); err == nil {
-		return handleErrorMsg(ErrValidationFailed,
-			fmt.Sprintf("Destination '%s' already exists", destination),
-			"Choose a different destination or delete the existing file first")
-	}
-
-	// Load schema for type checking
+	// Load schema for type checks/index updates.
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
 		sch = schema.NewSchema()
 	}
 
-	// Build parse options from vault config
 	parseOpts := buildParseOptions(vaultCfg)
-
-	// Parse source file to get its type
-	content, err := os.ReadFile(sourceFile)
+	serviceResult, err := objectsvc.MoveByReference(objectsvc.MoveByReferenceRequest{
+		VaultPath:      vaultPath,
+		VaultConfig:    vaultCfg,
+		Schema:         sch,
+		Reference:      source,
+		Destination:    destination,
+		UpdateRefs:     moveUpdateRefs,
+		SkipTypeCheck:  moveSkipTypeCheck,
+		ParseOptions:   parseOpts,
+		FailOnIndexErr: false,
+	})
 	if err != nil {
-		return handleError(ErrFileReadError, err, "")
-	}
-	doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, vaultPath, parseOpts)
-	if err != nil {
-		return handleError(ErrInternal, err, "Failed to parse source file")
+		return mapMoveSingleServiceError(err)
 	}
 
-	// Get file type from first object
-	var fileType string
-	if len(doc.Objects) > 0 {
-		fileType = doc.Objects[0].ObjectType
-	}
-
-	// Check for type-directory mismatch
-	var warnings []Warning
-	destDir := filepath.Dir(relDest)
-	mismatchType := ""
-	for typeName, typeDef := range sch.Types {
-		if typeDef.DefaultPath != "" {
-			defaultPath := strings.TrimSuffix(typeDef.DefaultPath, "/")
-			if destDir == defaultPath && typeName != fileType {
-				mismatchType = typeName
-				break
-			}
-		}
-	}
-
-	if mismatchType != "" && !moveSkipTypeCheck {
+	warnings := make([]Warning, 0)
+	if serviceResult.NeedsConfirm && serviceResult.TypeMismatch != nil {
+		mismatch := serviceResult.TypeMismatch
 		warnings = append(warnings, Warning{
 			Code: WarnTypeMismatch,
 			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
-				destDir, mismatchType, fileType),
-			Ref: fmt.Sprintf("Use --skip-type-check to proceed, or change the file's type to '%s'", mismatchType),
+				mismatch.DestinationDir, mismatch.ExpectedType, mismatch.ActualType),
+			Ref: fmt.Sprintf("Use --skip-type-check to proceed, or change the file's type to '%s'", mismatch.ExpectedType),
 		})
 
-		// In JSON mode, return warning for agent to handle
 		if isJSONOutput() {
 			result := MoveResult{
-				Source:       vaultCfg.FilePathToObjectID(source),
-				Destination:  vaultCfg.FilePathToObjectID(destPath),
+				Source:       serviceResult.SourceID,
+				Destination:  serviceResult.DestinationID,
 				NeedsConfirm: true,
-				Reason:       fmt.Sprintf("Type mismatch: file is '%s' but destination is default path for '%s'", fileType, mismatchType),
+				Reason:       serviceResult.Reason,
 			}
 			outputSuccessWithWarnings(result, warnings, nil)
 			return nil
 		}
 
-		// Interactive confirmation
 		if !moveForce {
-			fmt.Fprintf(os.Stderr, "⚠ Warning: Moving to '%s/' which is the default directory for type '%s'\n", destDir, mismatchType)
-			fmt.Fprintf(os.Stderr, "  But this file has type '%s'\n\n", fileType)
+			fmt.Fprintf(os.Stderr, "⚠ Warning: Moving to '%s/' which is the default directory for type '%s'\n", mismatch.DestinationDir, mismatch.ExpectedType)
+			fmt.Fprintf(os.Stderr, "  But this file has type '%s'\n\n", mismatch.ActualType)
 			fmt.Fprint(os.Stderr, "Proceed anyway? [y/N]: ")
 
 			reader := bufio.NewReader(os.Stdin)
-			response, err := reader.ReadString('\n')
-			if err != nil {
-				return handleError(ErrInternal, err, "")
+			response, readErr := reader.ReadString('\n')
+			if readErr != nil {
+				return handleError(ErrInternal, readErr, "")
 			}
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "y" && response != "yes" {
@@ -359,41 +269,23 @@ func moveSingleObject(vaultPath, source, destination string) error {
 				return nil
 			}
 		}
-	}
 
-	// Find backlinks to update
-	serviceResult, err := objectsvc.MoveFile(objectsvc.MoveFileRequest{
-		VaultPath:         vaultPath,
-		SourceFile:        sourceFile,
-		DestinationFile:   destFile,
-		SourceObjectID:    sourceID,
-		DestinationObject: vaultCfg.FilePathToObjectID(destPath),
-		UpdateRefs:        moveUpdateRefs,
-		FailOnIndexError:  false,
-		VaultConfig:       vaultCfg,
-		Schema:            sch,
-		ParseOptions:      parseOpts,
-	})
-	if err != nil {
-		var svcErr *objectsvc.Error
-		if errors.As(err, &svcErr) {
-			switch svcErr.Code {
-			case objectsvc.ErrorInvalidInput:
-				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorFileRead:
-				return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
-			case objectsvc.ErrorFileWrite:
-				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-			case objectsvc.ErrorValidationFailed:
-				return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
-			default:
-				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-			}
+		serviceResult, err = objectsvc.MoveByReference(objectsvc.MoveByReferenceRequest{
+			VaultPath:      vaultPath,
+			VaultConfig:    vaultCfg,
+			Schema:         sch,
+			Reference:      source,
+			Destination:    destination,
+			UpdateRefs:     moveUpdateRefs,
+			SkipTypeCheck:  true,
+			ParseOptions:   parseOpts,
+			FailOnIndexErr: false,
+		})
+		if err != nil {
+			return mapMoveSingleServiceError(err)
 		}
-		return handleError(ErrFileWriteError, err, "")
 	}
 
-	updatedRefs := serviceResult.UpdatedRefs
 	for _, warningMessage := range serviceResult.WarningMessages {
 		warnings = append(warnings, Warning{
 			Code:    WarnIndexUpdateFailed,
@@ -406,17 +298,17 @@ func moveSingleObject(vaultPath, source, destination string) error {
 
 	if isJSONOutput() {
 		result := MoveResult{
-			Source:      sourceID,
-			Destination: vaultCfg.FilePathToObjectID(destPath),
-			UpdatedRefs: updatedRefs,
+			Source:      serviceResult.SourceID,
+			Destination: serviceResult.DestinationID,
+			UpdatedRefs: serviceResult.UpdatedRefs,
 		}
 		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(sourceRelPath), ui.FilePath(destination)))
-	if len(updatedRefs) > 0 {
-		fmt.Printf("  Updated %d references\n", len(updatedRefs))
+	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(serviceResult.SourceRelative), ui.FilePath(serviceResult.DestinationRel)))
+	if len(serviceResult.UpdatedRefs) > 0 {
+		fmt.Printf("  Updated %d references\n", len(serviceResult.UpdatedRefs))
 	}
 
 	return nil
@@ -439,10 +331,6 @@ func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 	return objectsvc.UpdateReferenceAtLine(vaultPath, vaultCfg, sourceID, line, oldRef, newRef)
 }
 
-func updateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
-	return objectsvc.UpdateAllRefVariantsAtLine(vaultPath, vaultCfg, sourceID, line, oldID, oldBase, newRef, objectRoot, pageRoot)
-}
-
 func replaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
 	return objectsvc.ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot)
 }
@@ -458,4 +346,30 @@ func init() {
 	moveCmd.Flags().BoolVar(&moveStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	moveCmd.Flags().BoolVar(&moveConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
 	rootCmd.AddCommand(moveCmd)
+}
+
+func mapMoveSingleServiceError(err error) error {
+	var svcErr *objectsvc.Error
+	if !errors.As(err, &svcErr) {
+		return handleError(ErrInternal, err, "")
+	}
+
+	switch svcErr.Code {
+	case objectsvc.ErrorRefNotFound:
+		return handleErrorMsg(ErrRefNotFound, svcErr.Message, svcErr.Suggestion)
+	case objectsvc.ErrorRefAmbiguous:
+		return handleErrorMsg(ErrRefAmbiguous, svcErr.Message, svcErr.Suggestion)
+	case objectsvc.ErrorInvalidInput:
+		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+	case objectsvc.ErrorFileRead:
+		return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
+	case objectsvc.ErrorFileWrite:
+		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+	case objectsvc.ErrorValidationFailed:
+		return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
+	case objectsvc.ErrorDatabase:
+		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
+	default:
+		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+	}
 }

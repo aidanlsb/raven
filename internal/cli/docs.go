@@ -1,28 +1,19 @@
 package cli
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
 	"io/fs"
-	"net/http"
-	"os"
-	"path"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
-	"github.com/aidanlsb/raven/internal/docsync"
+	"github.com/aidanlsb/raven/internal/docssvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
 const (
 	docsCommandHint = "For command docs, use: rvn help <command>"
-	docsIndexPath   = "index.yaml"
 )
 
 var (
@@ -40,7 +31,6 @@ type docsSectionView struct {
 	ID         string `json:"id"`
 	Title      string `json:"title"`
 	TopicCount int    `json:"topic_count"`
-	sortOrder  *int
 }
 
 type docsTopicView struct {
@@ -59,28 +49,11 @@ type docsSearchMatchView struct {
 }
 
 type docsTopicRecord struct {
-	Section   string
-	ID        string
-	Title     string
-	Path      string
-	FSPath    string
-	sortOrder *int
-}
-
-type docsIndex struct {
-	Sections     map[string]docsIndexSection
-	SectionOrder map[string]int
-}
-
-type docsIndexSection struct {
-	Title      string `yaml:"title"`
-	Topics     map[string]docsIndexTopicMeta
-	TopicOrder map[string]int
-}
-
-type docsIndexTopicMeta struct {
-	Title string `yaml:"title"`
-	Path  string `yaml:"path"`
+	Section string
+	ID      string
+	Title   string
+	Path    string
+	FSPath  string
 }
 
 var docsCmd = &cobra.Command{
@@ -228,40 +201,33 @@ Use --ref to fetch a specific branch/tag/commit; default is "main".`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		info := currentVersionInfo()
-		result, err := docsync.Fetch(docsync.FetchOptions{
-			VaultPath:     getVaultPath(),
-			Ref:           strings.TrimSpace(docsFetchRef),
-			SourceBaseURL: strings.TrimSpace(docsFetchSource),
-			CLIVersion:    info.Version,
-			HTTPClient:    &http.Client{Timeout: 60 * time.Second},
+		result, err := docssvc.Fetch(docssvc.FetchRequest{
+			VaultPath:  getVaultPath(),
+			Ref:        strings.TrimSpace(docsFetchRef),
+			SourceBase: strings.TrimSpace(docsFetchSource),
+			CLIVersion: info.Version,
 		})
 		if err != nil {
 			return handleError(ErrInternal, err, "Check your network connection and run 'rvn docs fetch' again")
 		}
 
-		relPath, relErr := filepath.Rel(getVaultPath(), result.DocsPath)
-		if relErr != nil {
-			relPath = docsync.StoreRelPath
-		}
-		relPath = filepath.ToSlash(relPath)
-
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"path":         relPath,
+				"path":         result.Path,
 				"file_count":   result.FileCount,
 				"byte_count":   result.ByteCount,
-				"source":       result.Manifest.SourceBaseURL,
-				"ref":          result.Manifest.Ref,
-				"archive_url":  result.Manifest.ArchiveURL,
-				"fetched_at":   result.Manifest.FetchedAt,
-				"cli_version":  result.Manifest.CLIVersion,
-				"manifest_ver": result.Manifest.SchemaVersion,
+				"source":       result.Source,
+				"ref":          result.Ref,
+				"archive_url":  result.ArchiveURL,
+				"fetched_at":   result.FetchedAt,
+				"cli_version":  result.CLIVersion,
+				"manifest_ver": result.ManifestVer,
 			}, nil)
 			return nil
 		}
 
-		fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", relPath, result.FileCount, result.ByteCount)
-		fmt.Printf("Source: %s (%s)\n", result.Manifest.SourceBaseURL, result.Manifest.Ref)
+		fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", result.Path, result.FileCount, result.ByteCount)
+		fmt.Printf("Source: %s (%s)\n", result.Source, result.Ref)
 		return nil
 	},
 }
@@ -503,481 +469,77 @@ func docsTopicNotFound(sectionID, topicInput string, topics []docsTopicRecord) e
 }
 
 func listDocsSections(docsRoot string) ([]docsSectionView, error) {
-	return listDocsSectionsFS(os.DirFS(docsRoot), ".")
+	sections, err := docssvc.ListSectionsFromRoot(docsRoot)
+	if err != nil {
+		return nil, err
+	}
+	return docsSectionsFromService(sections), nil
 }
 
 func loadVaultDocsSource(vaultPath string) (fs.FS, error) {
-	if strings.TrimSpace(vaultPath) == "" {
-		return nil, fmt.Errorf("no vault resolved for docs command")
-	}
-
-	docsFS, err := docsync.OpenFS(vaultPath)
-	if err != nil {
-		if errors.Is(err, docsync.ErrDocsNotFetched) {
-			return nil, fmt.Errorf("docs are not available for this vault")
-		}
-		return nil, err
-	}
-	return docsFS, nil
+	return docssvc.LoadVaultDocsSource(vaultPath)
 }
 
 func listDocsSectionsFS(docsFS fs.FS, docsRoot string) ([]docsSectionView, error) {
-	index, err := loadDocsIndexFS(docsFS, docsRoot)
+	sections, err := docssvc.ListSectionsFS(docsFS, docsRoot)
 	if err != nil {
 		return nil, err
 	}
-	if len(index.Sections) == 0 {
-		return nil, fmt.Errorf("docs index has no sections")
-	}
-
-	sections := make([]docsSectionView, 0, len(index.Sections))
-	for sectionID, meta := range index.Sections {
-		topics, err := listDocsTopicsWithIndexFS(docsFS, docsRoot, sectionID, index)
-		if err != nil {
-			return nil, err
-		}
-		title := titleFromSlug(sectionID)
-		if override := strings.TrimSpace(meta.Title); override != "" {
-			title = override
-		}
-		sections = append(sections, docsSectionView{
-			ID:         sectionID,
-			Title:      title,
-			TopicCount: len(topics),
-			sortOrder:  docsSortOrder(index.SectionOrder, sectionID),
-		})
-	}
-
-	sort.Slice(sections, func(i, j int) bool {
-		return docsSortLess(sections[i].sortOrder, sections[j].sortOrder, sections[i].ID, sections[j].ID)
-	})
-
-	return sections, nil
+	return docsSectionsFromService(sections), nil
 }
 
 func listDocsTopics(docsRoot, section string) ([]docsTopicRecord, error) {
-	return listDocsTopicsFS(os.DirFS(docsRoot), ".", section)
+	topics, err := docssvc.ListTopicsFromRoot(docsRoot, section)
+	if err != nil {
+		return nil, err
+	}
+	return docsTopicsFromService(topics), nil
 }
 
 func listDocsTopicsFS(docsFS fs.FS, docsRoot, section string) ([]docsTopicRecord, error) {
-	index, err := loadDocsIndexFS(docsFS, docsRoot)
+	topics, err := docssvc.ListTopicsFS(docsFS, docsRoot, section)
 	if err != nil {
 		return nil, err
 	}
-	return listDocsTopicsWithIndexFS(docsFS, docsRoot, section, index)
-}
-
-func listDocsTopicsWithIndexFS(docsFS fs.FS, docsRoot, section string, index docsIndex) ([]docsTopicRecord, error) {
-	sectionMeta, ok := index.Sections[section]
-	if !ok {
-		return nil, fmt.Errorf("section %q is not declared in docs index", section)
-	}
-
-	sectionPath := path.Join(docsRoot, section)
-	info, err := fs.Stat(docsFS, sectionPath)
-	if err != nil {
-		return nil, fmt.Errorf("section %q not found: %w", section, err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("section path %q is not a directory", sectionPath)
-	}
-
-	records := make([]docsTopicRecord, 0, len(sectionMeta.Topics))
-	seenPaths := make(map[string]string)
-
-	for topicID, meta := range sectionMeta.Topics {
-		normalizedID := normalizeDocsPathSlug(topicID)
-		if normalizedID == "" || normalizedID != topicID {
-			return nil, fmt.Errorf("docs index topic id %q in section %q must use normalized slug format", topicID, section)
-		}
-
-		relPath, fsPath, err := resolveDocsTopicPath(sectionPath, meta.Path)
-		if err != nil {
-			return nil, fmt.Errorf("docs index topic %q in section %q: %w", topicID, section, err)
-		}
-		if previousID, exists := seenPaths[relPath]; exists {
-			return nil, fmt.Errorf("docs index section %q maps duplicate path %q to topics %q and %q", section, relPath, previousID, topicID)
-		}
-		seenPaths[relPath] = topicID
-
-		fileInfo, err := fs.Stat(docsFS, fsPath)
-		if err != nil {
-			return nil, fmt.Errorf("docs index topic %q in section %q points to missing file %q: %w", topicID, section, relPath, err)
-		}
-		if fileInfo.IsDir() {
-			return nil, fmt.Errorf("docs index topic %q in section %q path %q is a directory", topicID, section, relPath)
-		}
-
-		title := extractDocsTitleFS(docsFS, fsPath, topicID)
-		if override := strings.TrimSpace(meta.Title); override != "" {
-			title = override
-		}
-		records = append(records, docsTopicRecord{
-			Section:   section,
-			ID:        topicID,
-			Title:     title,
-			Path:      path.Join("docs", section, relPath),
-			FSPath:    fsPath,
-			sortOrder: docsSortOrder(sectionMeta.TopicOrder, topicID),
-		})
-	}
-
-	sort.Slice(records, func(i, j int) bool {
-		return docsSortLess(records[i].sortOrder, records[j].sortOrder, records[i].ID, records[j].ID)
-	})
-	return records, nil
-}
-
-func loadDocsIndexFS(docsFS fs.FS, docsRoot string) (docsIndex, error) {
-	index := docsIndex{
-		Sections:     make(map[string]docsIndexSection),
-		SectionOrder: make(map[string]int),
-	}
-	raw, err := fs.ReadFile(docsFS, path.Join(docsRoot, docsIndexPath))
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return docsIndex{}, fmt.Errorf("docs index not found at %s", path.Join(docsRoot, docsIndexPath))
-		}
-		return docsIndex{}, fmt.Errorf("read docs index: %w", err)
-	}
-
-	var root yaml.Node
-	if err := yaml.Unmarshal(raw, &root); err != nil {
-		return docsIndex{}, fmt.Errorf("parse docs index: %w", err)
-	}
-	if len(root.Content) == 0 {
-		return index, nil
-	}
-	top := root.Content[0]
-	if top.Kind != yaml.MappingNode {
-		return docsIndex{}, fmt.Errorf("parse docs index: top-level YAML must be a mapping")
-	}
-	for i := 0; i+1 < len(top.Content); i += 2 {
-		key := strings.TrimSpace(top.Content[i].Value)
-		value := top.Content[i+1]
-		switch key {
-		case "sections":
-			if err := decodeDocsSectionsNode(value, &index); err != nil {
-				return docsIndex{}, fmt.Errorf("parse docs index sections: %w", err)
-			}
-		default:
-			return docsIndex{}, fmt.Errorf("parse docs index: unknown top-level field %q", key)
-		}
-	}
-
-	return index, nil
-}
-
-func resolveDocsTopicPath(sectionPath, rawPath string) (string, string, error) {
-	relPath := strings.ReplaceAll(strings.TrimSpace(rawPath), "\\", "/")
-	if relPath == "" {
-		return "", "", fmt.Errorf("missing required field \"path\"")
-	}
-	cleanPath := path.Clean(relPath)
-	if cleanPath == "." || cleanPath == "/" {
-		return "", "", fmt.Errorf("invalid topic path %q", relPath)
-	}
-	if strings.HasPrefix(cleanPath, "/") || cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
-		return "", "", fmt.Errorf("topic path %q must be relative to the section directory", relPath)
-	}
-	if strings.ToLower(filepath.Ext(cleanPath)) != ".md" {
-		return "", "", fmt.Errorf("topic path %q must end with .md", relPath)
-	}
-
-	segments := strings.Split(cleanPath, "/")
-	for _, segment := range segments {
-		if !isPublicDocsName(segment) {
-			return "", "", fmt.Errorf("topic path %q includes hidden/private segment %q", relPath, segment)
-		}
-	}
-
-	return cleanPath, path.Join(sectionPath, cleanPath), nil
-}
-
-func decodeDocsSectionsNode(node *yaml.Node, index *docsIndex) error {
-	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("sections must be a mapping")
-	}
-
-	position := 0
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		sectionID := strings.TrimSpace(node.Content[i].Value)
-		if sectionID == "" {
-			return fmt.Errorf("sections contains an empty section key")
-		}
-		if normalizeDocsSegment(sectionID) != sectionID {
-			return fmt.Errorf("section id %q must use normalized slug format", sectionID)
-		}
-		if _, exists := index.Sections[sectionID]; exists {
-			return fmt.Errorf("duplicate section %q", sectionID)
-		}
-
-		sectionNode := node.Content[i+1]
-		if sectionNode.Kind != yaml.MappingNode {
-			return fmt.Errorf("section %q must be a mapping", sectionID)
-		}
-
-		section := docsIndexSection{
-			Topics:     make(map[string]docsIndexTopicMeta),
-			TopicOrder: make(map[string]int),
-		}
-		hasTopics := false
-		for j := 0; j+1 < len(sectionNode.Content); j += 2 {
-			field := strings.TrimSpace(sectionNode.Content[j].Value)
-			value := sectionNode.Content[j+1]
-			switch field {
-			case "title":
-				var title string
-				if err := value.Decode(&title); err != nil {
-					return fmt.Errorf("section %q field %q: %w", sectionID, field, err)
-				}
-				section.Title = strings.TrimSpace(title)
-			case "topics":
-				if err := decodeDocsTopicsNode(value, sectionID, &section); err != nil {
-					return err
-				}
-				hasTopics = true
-			default:
-				return fmt.Errorf("section %q has unknown field %q", sectionID, field)
-			}
-		}
-		if !hasTopics {
-			return fmt.Errorf("section %q is missing required field \"topics\"", sectionID)
-		}
-
-		index.Sections[sectionID] = section
-		index.SectionOrder[sectionID] = position
-		position++
-	}
-	return nil
-}
-
-func decodeDocsTopicsNode(node *yaml.Node, sectionID string, section *docsIndexSection) error {
-	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("section %q topics must be a mapping", sectionID)
-	}
-
-	position := 0
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		topicID := strings.TrimSpace(node.Content[i].Value)
-		if topicID == "" {
-			return fmt.Errorf("section %q topics contains an empty topic key", sectionID)
-		}
-		if normalizeDocsPathSlug(topicID) != topicID {
-			return fmt.Errorf("topic id %q in section %q must use normalized slug format", topicID, sectionID)
-		}
-		if _, exists := section.Topics[topicID]; exists {
-			return fmt.Errorf("duplicate topic %q in section %q", topicID, sectionID)
-		}
-
-		var meta docsIndexTopicMeta
-		if err := node.Content[i+1].Decode(&meta); err != nil {
-			return fmt.Errorf("topic %q metadata in section %q: %w", topicID, sectionID, err)
-		}
-		meta.Title = strings.TrimSpace(meta.Title)
-		meta.Path = strings.TrimSpace(meta.Path)
-		if meta.Path == "" {
-			return fmt.Errorf("topic %q in section %q is missing required field \"path\"", topicID, sectionID)
-		}
-
-		section.Topics[topicID] = meta
-		section.TopicOrder[topicID] = position
-		position++
-	}
-
-	if len(section.Topics) == 0 {
-		return fmt.Errorf("section %q has an empty topics mapping", sectionID)
-	}
-	return nil
-}
-
-func docsSortOrder(orderByID map[string]int, id string) *int {
-	order, ok := orderByID[id]
-	if !ok {
-		return nil
-	}
-	out := order
-	return &out
-}
-
-func docsSortLess(orderA, orderB *int, idA, idB string) bool {
-	if orderA == nil && orderB == nil {
-		return idA < idB
-	}
-	if orderA == nil {
-		return false
-	}
-	if orderB == nil {
-		return true
-	}
-	if *orderA != *orderB {
-		return *orderA < *orderB
-	}
-	return idA < idB
+	return docsTopicsFromService(topics), nil
 }
 
 func findDocsSection(sections []docsSectionView, raw string) (docsSectionView, bool) {
-	needle := normalizeDocsSegment(raw)
-	for _, section := range sections {
-		if normalizeDocsSegment(section.ID) == needle {
-			return section, true
-		}
+	found, ok := docssvc.FindSection(docsSectionsToService(sections), raw)
+	if !ok {
+		return docsSectionView{}, false
 	}
-	return docsSectionView{}, false
+	return docsSectionView{
+		ID:         found.ID,
+		Title:      found.Title,
+		TopicCount: found.TopicCount,
+	}, true
 }
 
 func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool) {
-	trimmed := strings.TrimSpace(strings.TrimSuffix(raw, ".md"))
-	needle := normalizeDocsPathSlug(trimmed)
-	for _, topic := range topics {
-		if topic.ID == needle {
-			return topic, true
-		}
+	found, ok := docssvc.FindTopic(docsTopicsToService(topics), raw)
+	if !ok {
+		return docsTopicRecord{}, false
 	}
-	return docsTopicRecord{}, false
+	return docsTopicRecord{
+		Section: found.Section,
+		ID:      found.ID,
+		Title:   found.Title,
+		Path:    found.Path,
+		FSPath:  found.FSPath,
+	}, true
 }
 
 func searchDocsFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([]docsSearchMatchView, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return nil, fmt.Errorf("empty query")
-	}
-	if limit < 1 {
-		return nil, fmt.Errorf("limit must be >= 1")
-	}
-
-	sections, err := listDocsSectionsFS(docsFS, docsRoot)
+	matches, err := docssvc.SearchFS(docsFS, docsRoot, query, sectionFilter, limit)
 	if err != nil {
 		return nil, err
 	}
-
-	selected := make([]docsSectionView, 0)
-	if strings.TrimSpace(sectionFilter) == "" {
-		selected = sections
-	} else {
-		section, ok := findDocsSection(sections, sectionFilter)
-		if !ok {
-			return nil, fmt.Errorf("unknown section: %s", sectionFilter)
-		}
-		selected = append(selected, section)
-	}
-
-	queryLower := strings.ToLower(query)
-	matches := make([]docsSearchMatchView, 0, limit)
-
-	for _, section := range selected {
-		topics, err := listDocsTopicsFS(docsFS, docsRoot, section.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, topic := range topics {
-			content, err := fs.ReadFile(docsFS, topic.FSPath)
-			if err != nil {
-				return nil, fmt.Errorf("read %s: %w", topic.Path, err)
-			}
-
-			lines := strings.Split(string(content), "\n")
-			for i, line := range lines {
-				if !strings.Contains(strings.ToLower(line), queryLower) {
-					continue
-				}
-
-				matches = append(matches, docsSearchMatchView{
-					Section: section.ID,
-					Topic:   topic.ID,
-					Title:   topic.Title,
-					Path:    topic.Path,
-					Line:    i + 1,
-					Snippet: shortenDocsSnippet(line, queryLower),
-				})
-				if len(matches) >= limit {
-					return matches, nil
-				}
-			}
-		}
-	}
-
-	return matches, nil
-}
-
-func shortenDocsSnippet(line, queryLower string) string {
-	const maxLen = 160
-	snippet := strings.TrimSpace(line)
-	if snippet == "" {
-		return "(blank line)"
-	}
-	if len(snippet) <= maxLen {
-		return snippet
-	}
-
-	idx := strings.Index(strings.ToLower(snippet), queryLower)
-	if idx < 0 {
-		return snippet[:maxLen-1] + "..."
-	}
-
-	start := idx - 50
-	if start < 0 {
-		start = 0
-	}
-	end := start + maxLen
-	if end > len(snippet) {
-		end = len(snippet)
-	}
-	out := snippet[start:end]
-	if start > 0 {
-		out = "..." + out
-	}
-	if end < len(snippet) {
-		out += "..."
-	}
-	return out
-}
-
-func extractDocsTitleFS(docsFS fs.FS, docsPath, fallbackSlug string) string {
-	f, err := docsFS.Open(docsPath)
-	if err != nil {
-		return titleFromSlug(path.Base(fallbackSlug))
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "# ") {
-			title := strings.TrimSpace(strings.TrimPrefix(line, "# "))
-			if title != "" {
-				return title
-			}
-		}
-	}
-
-	return titleFromSlug(path.Base(fallbackSlug))
-}
-
-func isPublicDocsName(name string) bool {
-	if name == "" {
-		return false
-	}
-	return !strings.HasPrefix(name, ".") && !strings.HasPrefix(name, "_")
+	return docsMatchesFromService(matches), nil
 }
 
 func normalizeDocsPathSlug(input string) string {
-	input = strings.ReplaceAll(strings.TrimSpace(input), "\\", "/")
-	if input == "" {
-		return ""
-	}
-
-	parts := strings.Split(input, "/")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		norm := normalizeDocsSegment(part)
-		if norm == "" {
-			continue
-		}
-		out = append(out, norm)
-	}
-	return strings.Join(out, "/")
+	return docssvc.NormalizePathSlug(input)
 }
 
 func normalizeDocsSegment(input string) string {
@@ -991,22 +553,6 @@ func normalizeDocsSegment(input string) string {
 		s = strings.ReplaceAll(s, "--", "-")
 	}
 	return strings.Trim(s, "-")
-}
-
-func titleFromSlug(slug string) string {
-	parts := strings.FieldsFunc(slug, func(r rune) bool {
-		return r == '-' || r == '_'
-	})
-	if len(parts) == 0 {
-		return slug
-	}
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(part[:1]) + part[1:]
-	}
-	return strings.Join(parts, " ")
 }
 
 func docsTopicCountSummary(topicCount int) string {
@@ -1058,6 +604,73 @@ func findCommandByPathRuntime(root *cobra.Command, path string) (*cobra.Command,
 		cur = next
 	}
 	return cur, true
+}
+
+func docsSectionsToService(in []docsSectionView) []docssvc.SectionView {
+	out := make([]docssvc.SectionView, 0, len(in))
+	for _, section := range in {
+		out = append(out, docssvc.SectionView{
+			ID:         section.ID,
+			Title:      section.Title,
+			TopicCount: section.TopicCount,
+		})
+	}
+	return out
+}
+
+func docsSectionsFromService(in []docssvc.SectionView) []docsSectionView {
+	out := make([]docsSectionView, 0, len(in))
+	for _, section := range in {
+		out = append(out, docsSectionView{
+			ID:         section.ID,
+			Title:      section.Title,
+			TopicCount: section.TopicCount,
+		})
+	}
+	return out
+}
+
+func docsTopicsToService(in []docsTopicRecord) []docssvc.TopicRecord {
+	out := make([]docssvc.TopicRecord, 0, len(in))
+	for _, topic := range in {
+		out = append(out, docssvc.TopicRecord{
+			Section: topic.Section,
+			ID:      topic.ID,
+			Title:   topic.Title,
+			Path:    topic.Path,
+			FSPath:  topic.FSPath,
+		})
+	}
+	return out
+}
+
+func docsTopicsFromService(in []docssvc.TopicRecord) []docsTopicRecord {
+	out := make([]docsTopicRecord, 0, len(in))
+	for _, topic := range in {
+		out = append(out, docsTopicRecord{
+			Section: topic.Section,
+			ID:      topic.ID,
+			Title:   topic.Title,
+			Path:    topic.Path,
+			FSPath:  topic.FSPath,
+		})
+	}
+	return out
+}
+
+func docsMatchesFromService(in []docssvc.SearchMatchView) []docsSearchMatchView {
+	out := make([]docsSearchMatchView, 0, len(in))
+	for _, match := range in {
+		out = append(out, docsSearchMatchView{
+			Section: match.Section,
+			Topic:   match.Topic,
+			Title:   match.Title,
+			Path:    match.Path,
+			Line:    match.Line,
+			Snippet: match.Snippet,
+		})
+	}
+	return out
 }
 
 func init() {

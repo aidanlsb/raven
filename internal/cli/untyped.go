@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/maintsvc"
 )
 
 var untypedCmd = &cobra.Command{
@@ -13,17 +13,17 @@ var untypedCmd = &cobra.Command{
 	Short: "List untyped pages",
 	Long:  `Lists all files that are using the fallback 'page' type.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-
-		db, err := index.Open(vaultPath)
+		pages, err := maintsvc.Untyped(getVaultPath())
 		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
+			return mapMaintSvcError(err)
 		}
-		defer db.Close()
 
-		pages, err := db.UntypedPages()
-		if err != nil {
-			return fmt.Errorf("failed to query untyped pages: %w", err)
+		if isJSONOutput() {
+			outputSuccess(map[string]interface{}{
+				"count": len(pages),
+				"items": pages,
+			}, &Meta{Count: len(pages)})
+			return nil
 		}
 
 		if len(pages) == 0 {

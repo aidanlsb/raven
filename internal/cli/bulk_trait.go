@@ -5,82 +5,24 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/traitsvc"
 )
 
-// getTraitDefault returns the default value for a trait from the schema.
-func getTraitDefault(sch *schema.Schema, traitType string) string {
-	if sch == nil {
-		return ""
-	}
-	if traitDef, ok := sch.Traits[traitType]; ok {
-		if def, ok := traitDef.Default.(string); ok {
-			return def
-		}
-	}
-	return ""
-}
+type TraitBulkResult = traitsvc.BulkResult
 
-// TraitBulkResult represents the result of a bulk trait operation.
-type TraitBulkResult struct {
-	ID       string `json:"id"`
-	FilePath string `json:"file_path"`
-	Line     int    `json:"line"`
-	Status   string `json:"status"` // "modified", "skipped", "error"
-	Reason   string `json:"reason,omitempty"`
-	OldValue string `json:"old_value,omitempty"`
-	NewValue string `json:"new_value,omitempty"`
-}
+type TraitBulkPreviewItem = traitsvc.BulkPreviewItem
 
-// TraitBulkPreviewItem represents a preview item for trait bulk operations.
-type TraitBulkPreviewItem struct {
-	ID        string `json:"id"`
-	FilePath  string `json:"file_path"`
-	Line      int    `json:"line"`
-	TraitType string `json:"trait_type"`
-	Content   string `json:"content"`
-	OldValue  string `json:"old_value"`
-	NewValue  string `json:"new_value"`
-}
+type TraitBulkPreview = traitsvc.BulkPreview
 
-// TraitBulkPreview represents a preview of trait bulk operations.
-type TraitBulkPreview struct {
-	Action  string                 `json:"action"`
-	Items   []TraitBulkPreviewItem `json:"items"`
-	Skipped []TraitBulkResult      `json:"skipped,omitempty"`
-	Total   int                    `json:"total"`
-}
+type TraitBulkSummary = traitsvc.BulkSummary
 
-// TraitBulkSummary represents the summary of completed trait bulk operations.
-type TraitBulkSummary struct {
-	Action   string            `json:"action"`
-	Results  []TraitBulkResult `json:"results"`
-	Total    int               `json:"total"`
-	Modified int               `json:"modified"`
-	Skipped  int               `json:"skipped"`
-	Errors   int               `json:"errors"`
-}
-
-type traitValueValidationError struct {
-	traitType string
-	cause     error
-}
-
-func (e *traitValueValidationError) Error() string {
-	return fmt.Sprintf("invalid value for trait '@%s': %v", e.traitType, e.cause)
-}
-
-func (e *traitValueValidationError) Suggestion() string {
-	return fmt.Sprintf("Use a value compatible with trait '@%s' in schema.yaml", e.traitType)
-}
+type traitValueValidationError = traitsvc.ValueValidationError
 
 func parseTraitUpdateValueArgs(args []string, usageHint string) (string, error) {
 	value := strings.TrimSpace(strings.Join(args, " "))
@@ -99,40 +41,6 @@ func ensureTraitSchema(vaultPath string, sch *schema.Schema) (*schema.Schema, er
 		return nil, handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
 	}
 	return loaded, nil
-}
-
-func resolvedAndValidatedTraitValue(rawValue string, traitType string, sch *schema.Schema) (string, error) {
-	if sch == nil {
-		return rawValue, nil
-	}
-
-	traitDef, ok := sch.Traits[traitType]
-	if !ok || traitDef == nil {
-		return rawValue, nil
-	}
-
-	resolved := resolveDateKeywordForTraitValue(rawValue, traitDef)
-	parsed := parser.ParseTraitValue(resolved)
-	if err := schema.ValidateTraitValue(traitDef, parsed); err != nil {
-		return "", &traitValueValidationError{
-			traitType: traitType,
-			cause:     err,
-		}
-	}
-
-	return resolved, nil
-}
-
-func precomputeTraitUpdateValues(traits []model.Trait, newValue string, sch *schema.Schema) (map[string]string, error) {
-	resolved := make(map[string]string, len(traits))
-	for _, t := range traits {
-		val, err := resolvedAndValidatedTraitValue(newValue, t.TraitType, sch)
-		if err != nil {
-			return nil, err
-		}
-		resolved[t.ID] = val
-	}
-	return resolved, nil
 }
 
 // applyUpdateTraitFromQuery applies update operation to trait query results.
@@ -161,56 +69,9 @@ func applyUpdateTraitFromQuery(vaultPath string, traits []model.Trait, args []st
 
 // previewUpdateTraitBulk shows a preview of trait update operations.
 func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue string, sch *schema.Schema, extraSkipped []TraitBulkResult) error {
-	var items []TraitBulkPreviewItem
-	var skipped []TraitBulkResult
-
-	resolvedValues, err := precomputeTraitUpdateValues(traits, newValue, sch)
+	preview, err := traitsvc.BuildPreview(traits, newValue, sch, extraSkipped)
 	if err != nil {
 		return err
-	}
-
-	for _, t := range traits {
-		resolvedNewValue := resolvedValues[t.ID]
-
-		oldValue := ""
-		if t.Value != nil {
-			oldValue = *t.Value
-		} else {
-			// For bare traits, get the default value from schema
-			oldValue = getTraitDefault(sch, t.TraitType)
-		}
-
-		// Skip if value is already the target
-		if oldValue == resolvedNewValue {
-			skipped = append(skipped, TraitBulkResult{
-				ID:       t.ID,
-				FilePath: t.FilePath,
-				Line:     t.Line,
-				Status:   "skipped",
-				Reason:   "already has target value",
-			})
-			continue
-		}
-
-		items = append(items, TraitBulkPreviewItem{
-			ID:        t.ID,
-			FilePath:  t.FilePath,
-			Line:      t.Line,
-			TraitType: t.TraitType,
-			Content:   t.Content,
-			OldValue:  oldValue,
-			NewValue:  resolvedNewValue,
-		})
-	}
-	if len(extraSkipped) > 0 {
-		skipped = append(skipped, extraSkipped...)
-	}
-
-	preview := TraitBulkPreview{
-		Action:  "update-trait",
-		Items:   items,
-		Skipped: skipped,
-		Total:   len(items),
 	}
 
 	if isJSONOutput() {
@@ -224,7 +85,7 @@ func previewUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue str
 		return nil
 	}
 
-	printTraitBulkPreview(&preview)
+	printTraitBulkPreview(preview)
 	return nil
 }
 
@@ -241,7 +102,6 @@ func printTraitBulkPreview(preview *TraitBulkPreview) {
 			fmt.Printf("  %s:%d\n", item.FilePath, item.Line)
 			fmt.Printf("    @%s: %s → %s\n", item.TraitType, item.OldValue, item.NewValue)
 			if item.Content != "" {
-				// Truncate content for display
 				content := item.Content
 				if len(content) > 50 {
 					content = content[:47] + "..."
@@ -267,143 +127,21 @@ func printTraitBulkPreview(preview *TraitBulkPreview) {
 
 // applyUpdateTraitBulk applies update operations to traits.
 func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue string, sch *schema.Schema, vaultCfg *config.VaultConfig, extraSkipped []TraitBulkResult) error {
-	resolvedValues, err := precomputeTraitUpdateValues(traits, newValue, sch)
+	summary, err := traitsvc.ApplyUpdates(vaultPath, traits, newValue, sch, extraSkipped)
 	if err != nil {
 		return err
 	}
 
-	// Group traits by file for efficient file I/O
-	traitsByFile := make(map[string][]model.Trait)
-	for _, t := range traits {
-		traitsByFile[t.FilePath] = append(traitsByFile[t.FilePath], t)
-	}
-
-	results := make([]TraitBulkResult, 0, len(traits)+len(extraSkipped))
-	modified := 0
-	skipped := 0
-	errors := 0
-
-	if len(extraSkipped) > 0 {
-		results = append(results, extraSkipped...)
-		skipped += len(extraSkipped)
-	}
-
-	for filePath, fileTraits := range traitsByFile {
-		fullPath := filePath
-		if !strings.HasPrefix(filePath, vaultPath) {
-			fullPath = vaultPath + "/" + filePath
-		}
-
-		// Read the file
-		content, err := os.ReadFile(fullPath)
-		if err != nil {
-			for _, t := range fileTraits {
-				results = append(results, TraitBulkResult{
-					ID:       t.ID,
-					FilePath: t.FilePath,
-					Line:     t.Line,
-					Status:   "error",
-					Reason:   fmt.Sprintf("failed to read file: %v", err),
-				})
-				errors++
-			}
+	reindexed := make(map[string]struct{}, len(summary.ChangedFilePaths))
+	for _, filePath := range summary.ChangedFilePaths {
+		if filePath == "" {
 			continue
 		}
-
-		lines := strings.Split(string(content), "\n")
-		fileModified := false
-
-		for _, t := range fileTraits {
-			resolvedNewValue := resolvedValues[t.ID]
-
-			// Lines are 1-indexed
-			lineIdx := t.Line - 1
-			if lineIdx < 0 || lineIdx >= len(lines) {
-				results = append(results, TraitBulkResult{
-					ID:       t.ID,
-					FilePath: t.FilePath,
-					Line:     t.Line,
-					Status:   "error",
-					Reason:   "line number out of range",
-				})
-				errors++
-				continue
-			}
-
-			oldValue := ""
-			if t.Value != nil {
-				oldValue = *t.Value
-			} else {
-				oldValue = getTraitDefault(sch, t.TraitType)
-			}
-
-			// Skip if already target value
-			if oldValue == resolvedNewValue {
-				results = append(results, TraitBulkResult{
-					ID:       t.ID,
-					FilePath: t.FilePath,
-					Line:     t.Line,
-					Status:   "skipped",
-					Reason:   "already has target value",
-				})
-				skipped++
-				continue
-			}
-
-			// Rewrite the trait on this line
-			oldLine := lines[lineIdx]
-			newLine, ok := rewriteTraitValue(oldLine, t.TraitType, resolvedNewValue)
-			if !ok {
-				results = append(results, TraitBulkResult{
-					ID:       t.ID,
-					FilePath: t.FilePath,
-					Line:     t.Line,
-					Status:   "error",
-					Reason:   "trait not found on line",
-				})
-				errors++
-				continue
-			}
-
-			lines[lineIdx] = newLine
-			fileModified = true
-			results = append(results, TraitBulkResult{
-				ID:       t.ID,
-				FilePath: t.FilePath,
-				Line:     t.Line,
-				Status:   "modified",
-				OldValue: oldValue,
-				NewValue: resolvedNewValue,
-			})
-			modified++
+		if _, seen := reindexed[filePath]; seen {
+			continue
 		}
-
-		// Write the file back if modified
-		if fileModified {
-			newContent := strings.Join(lines, "\n")
-			if err := atomicfile.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
-				// Mark all modified traits in this file as errors
-				for i, r := range results {
-					if r.FilePath == filePath && r.Status == "modified" {
-						results[i].Status = "error"
-						results[i].Reason = fmt.Sprintf("failed to write file: %v", err)
-						modified--
-						errors++
-					}
-				}
-				continue
-			}
-			maybeReindex(vaultPath, fullPath, vaultCfg)
-		}
-	}
-
-	summary := TraitBulkSummary{
-		Action:   "update-trait",
-		Results:  results,
-		Total:    len(traits) + len(extraSkipped),
-		Modified: modified,
-		Skipped:  skipped,
-		Errors:   errors,
+		reindexed[filePath] = struct{}{}
+		maybeReindex(vaultPath, filePath, vaultCfg)
 	}
 
 	if isJSONOutput() {
@@ -418,7 +156,7 @@ func applyUpdateTraitBulk(vaultPath string, traits []model.Trait, newValue strin
 		return nil
 	}
 
-	printTraitBulkSummary(&summary)
+	printTraitBulkSummary(summary)
 	return nil
 }
 
@@ -431,25 +169,6 @@ func printTraitBulkSummary(summary *TraitBulkSummary) {
 	if summary.Errors > 0 {
 		fmt.Printf("  Errors: %d\n", summary.Errors)
 	}
-}
-
-// rewriteTraitValue rewrites a trait's value on a line.
-// It handles both bare traits (@todo) and valued traits (@todo(doing)).
-// Returns the modified line and true if successful, or the original line and false if the trait wasn't found.
-func rewriteTraitValue(line, traitType, newValue string) (string, bool) {
-	// Pattern to match the specific trait, with or without value
-	// Matches: @traitType or @traitType(value) or @traitType (value)
-	pattern := regexp.MustCompile(`@` + regexp.QuoteMeta(traitType) + `(?:\s*\([^)]*\))?`)
-
-	if !pattern.MatchString(line) {
-		return line, false
-	}
-
-	// Replace with new value
-	newTrait := fmt.Sprintf("@%s(%s)", traitType, newValue)
-	newLine := pattern.ReplaceAllString(line, newTrait)
-
-	return newLine, true
 }
 
 // ReadTraitIDsFromStdin reads trait IDs from stdin for bulk operations.
@@ -466,9 +185,8 @@ func ReadTraitIDsFromStdin() (ids []string, err error) {
 			continue
 		}
 
-		// Trait IDs contain ":trait:" in them
 		if !strings.Contains(id, ":trait:") {
-			continue // Skip non-trait IDs
+			continue
 		}
 		ids = append(ids, id)
 	}
@@ -482,7 +200,6 @@ func ReadTraitIDsFromStdin() (ids []string, err error) {
 
 // applyUpdateTraitsByID updates traits identified by IDs, with preview/confirm behavior.
 func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string, confirm bool, prompt bool, vaultCfg *config.VaultConfig) error {
-	// Load schema for validation/date keyword resolution.
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
 		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
@@ -496,7 +213,7 @@ func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string,
 
 	traits, skipped, err := resolveTraitIDs(db, traitIDs)
 	if err != nil {
-		return handleError(ErrDatabaseError, err, "")
+		return err
 	}
 
 	if !confirm {
@@ -513,36 +230,12 @@ func applyUpdateTraitsByID(vaultPath string, traitIDs []string, newValue string,
 
 // resolveTraitIDs resolves trait IDs to concrete trait results using the index.
 func resolveTraitIDs(db *index.Database, ids []string) ([]model.Trait, []TraitBulkResult, error) {
-	results := make([]model.Trait, 0, len(ids))
-	var skipped []TraitBulkResult
-
-	for _, id := range ids {
-		if !strings.Contains(id, ":trait:") {
-			skipped = append(skipped, TraitBulkResult{
-				ID:     id,
-				Status: "skipped",
-				Reason: "invalid trait ID format",
-			})
-			continue
+	traits, skipped, err := traitsvc.ResolveTraitIDs(db, ids)
+	if err != nil {
+		if svcErr, ok := traitsvc.AsError(err); ok {
+			return nil, nil, handleErrorMsg(ErrDatabaseError, svcErr.Message, svcErr.Suggestion)
 		}
-
-		trait, err := db.GetTrait(id)
-		if err != nil {
-			return nil, nil, err
-		}
-		if trait == nil {
-			filePath := strings.SplitN(id, ":trait:", 2)[0]
-			skipped = append(skipped, TraitBulkResult{
-				ID:       id,
-				FilePath: filePath,
-				Status:   "skipped",
-				Reason:   "trait not found in index",
-			})
-			continue
-		}
-
-		results = append(results, *trait)
+		return nil, nil, handleError(ErrDatabaseError, err, "")
 	}
-
-	return results, skipped, nil
+	return traits, skipped, nil
 }

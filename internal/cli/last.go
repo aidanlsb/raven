@@ -5,15 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/lastquery"
 	"github.com/aidanlsb/raven/internal/lastresults"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -52,39 +51,39 @@ With --apply, applies an operation directly to selected query results:
 			SetPipeFormat(&f)
 		}
 
-		// Load the last results
-		lr, err := lastresults.Read(vaultPath)
+		selection, err := readsvc.SelectLast(readsvc.SelectLastRequest{
+			VaultPath:  vaultPath,
+			NumberArgs: args,
+		})
 		if err != nil {
-			if errors.Is(err, lastresults.ErrNoLastResults) {
+			var noResultsErr *readsvc.NoLastResultsError
+			if errors.As(err, &noResultsErr) {
 				return handleErrorMsg(ErrMissingArgument,
 					"no results available",
 					"Run a query, search, or backlinks command first, then use 'rvn last'")
 			}
+			var invalidSelErr *readsvc.InvalidSelectionError
+			if errors.As(err, &invalidSelErr) {
+				suggestion := ""
+				if invalidSelErr.Total > 0 {
+					suggestion = fmt.Sprintf("Valid range: 1-%d", invalidSelErr.Total)
+				}
+				return handleErrorMsg(ErrInvalidInput, invalidSelErr.Error(), suggestion)
+			}
 			return handleError(ErrInternal, err, "")
 		}
+		lr := selection.Last
 
 		// Check for --apply flag
 		applyStr, _ := cmd.Flags().GetString("apply")
 		confirmApply, _ := cmd.Flags().GetBool("confirm")
 
-		// If no number args, display all results
 		if len(args) == 0 {
 			return displayLastResults(lr, applyStr, confirmApply, vaultPath)
 		}
 
-		// Parse the number arguments
-		nums, err := lastquery.ParseNumberArgs(args)
-		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(),
-				fmt.Sprintf("Valid range: 1-%d", len(lr.Results)))
-		}
-
-		// Get the selected entries
-		entries, err := lr.GetByNumbers(nums)
-		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(),
-				fmt.Sprintf("Last results returned %d results", len(lr.Results)))
-		}
+		entries := selection.Selected
+		nums := selection.Numbers
 
 		// If --apply is set, apply the operation
 		if applyStr != "" {
@@ -99,7 +98,7 @@ With --apply, applies an operation directly to selected query results:
 					"num":      nums[i],
 					"id":       e.GetID(),
 					"kind":     e.GetKind(),
-					"content":  resultContentForOutput(e),
+					"content":  readsvc.ResultContentForOutput(e),
 					"location": e.GetLocation(),
 				}
 			}
@@ -139,7 +138,7 @@ func displayLastResults(lr *lastresults.LastResults, applyStr string, confirm bo
 				"num":      i + 1,
 				"id":       r.GetID(),
 				"kind":     r.GetKind(),
-				"content":  resultContentForOutput(r),
+				"content":  readsvc.ResultContentForOutput(r),
 				"location": r.GetLocation(),
 			}
 		}
@@ -288,7 +287,7 @@ func writeLastResultsPipe(lr *lastresults.LastResults) error {
 			pipeItems[i] = PipeableItem{
 				Num:      i + 1,
 				ID:       r.GetID(),
-				Content:  TruncateContent(resultContentForOutput(r), 60),
+				Content:  TruncateContent(readsvc.ResultContentForOutput(r), 60),
 				Location: r.GetLocation(),
 			}
 		}
@@ -384,19 +383,7 @@ func applyToResults(vaultPath string, results []model.Result, applyStr string, c
 }
 
 func queryTypeFromResults(lr *lastresults.LastResults, results []model.Result) (string, error) {
-	if len(results) > 0 {
-		kind := results[0].GetKind()
-		if kind == "trait" || kind == "object" {
-			return kind, nil
-		}
-	}
-
-	if lr.Query == "" {
-		return "", fmt.Errorf("missing query string for last results")
-	}
-
-	kind, _, err := queryTypeFromString(lr.Query)
-	return kind, err
+	return readsvc.QueryTypeFromLast(lr, results)
 }
 
 func queryTypeFromString(queryStr string) (string, string, error) {
@@ -408,17 +395,6 @@ func queryTypeFromString(queryStr string) (string, string, error) {
 		return "trait", q.TypeName, nil
 	}
 	return "object", q.TypeName, nil
-}
-
-func resultContentForOutput(result model.Result) string {
-	switch r := result.(type) {
-	case model.Object:
-		return filepath.Base(r.ID)
-	case *model.Object:
-		return filepath.Base(r.ID)
-	default:
-		return result.GetContent()
-	}
 }
 
 func init() {

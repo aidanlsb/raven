@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -11,10 +10,8 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var (
@@ -241,35 +238,23 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
-	// Resolve the reference using unified resolver
-	result, err := ResolveReference(reference, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-	})
-	if err != nil {
-		return handleResolveError(err, reference)
-	}
-
-	// Check if this is an embedded object (section)
-	if result.IsSection {
-		return setEmbeddedObject(vaultPath, result.ObjectID, updates, typedUpdates, sch, vaultCfg)
-	}
-
-	objectID := result.ObjectID
-	filePath := result.FilePath
-
-	serviceResult, err := objectsvc.SetObjectFile(objectsvc.SetObjectFileRequest{
-		FilePath:      filePath,
-		ObjectID:      objectID,
-		Updates:       updates,
-		TypedUpdates:  typedUpdates,
-		Schema:        sch,
-		AllowedFields: map[string]bool{"alias": true},
+	serviceResult, err := objectsvc.SetByReference(objectsvc.SetByReferenceRequest{
+		VaultPath:    vaultPath,
+		VaultConfig:  vaultCfg,
+		Schema:       sch,
+		Reference:    reference,
+		Updates:      updates,
+		TypedUpdates: typedUpdates,
+		ParseOptions: buildParseOptions(vaultCfg),
 	})
 	if err != nil {
 		var svcErr *objectsvc.Error
 		if errors.As(err, &svcErr) {
 			switch svcErr.Code {
+			case objectsvc.ErrorRefAmbiguous:
+				return handleErrorMsg(ErrRefAmbiguous, svcErr.Message, svcErr.Suggestion)
+			case objectsvc.ErrorRefNotFound:
+				return handleErrorMsg(ErrRefNotFound, svcErr.Message, svcErr.Suggestion)
 			case objectsvc.ErrorInvalidInput:
 				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
 			case objectsvc.ErrorValidationFailed:
@@ -294,23 +279,21 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	}
 
 	// Auto-reindex if configured
-	maybeReindex(vaultPath, filePath, vaultCfg)
-
-	relPath, _ := filepath.Rel(vaultPath, filePath)
-	objectType := serviceResult.ObjectType
-	resolvedUpdates := serviceResult.ResolvedUpdates
-	validationWarnings := serviceResult.WarningMessages
+	maybeReindex(vaultPath, serviceResult.FilePath, vaultCfg)
 
 	// Output
 	if isJSONOutput() {
 		result := map[string]interface{}{
-			"file":           relPath,
-			"object_id":      objectID,
-			"type":           objectType,
-			"updated_fields": resolvedUpdates,
+			"file":           serviceResult.RelativePath,
+			"object_id":      serviceResult.ObjectID,
+			"type":           serviceResult.ObjectType,
+			"updated_fields": serviceResult.ResolvedUpdates,
 		}
-		if len(validationWarnings) > 0 {
-			warnings := warningMessagesToWarnings(validationWarnings)
+		if serviceResult.Embedded {
+			result["embedded"] = true
+		}
+		if len(serviceResult.WarningMessages) > 0 {
+			warnings := warningMessagesToWarnings(serviceResult.WarningMessages)
 			outputSuccessWithWarnings(result, warnings, nil)
 		} else {
 			outputSuccess(result, nil)
@@ -319,143 +302,30 @@ func setSingleObject(vaultPath, reference string, updates map[string]string, typ
 	}
 
 	// Human-readable output with diff-style changes
-	fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relPath)))
+	if serviceResult.Embedded {
+		fmt.Println(ui.Checkf("Updated %s %s", ui.FilePath(serviceResult.RelativePath), ui.Hint("(embedded: "+serviceResult.EmbeddedSlug+")")))
+	} else {
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(serviceResult.RelativePath)))
+	}
 	var fieldNames []string
-	for name := range resolvedUpdates {
+	for name := range serviceResult.ResolvedUpdates {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
 		oldVal := ""
-		if serviceResult.PreviousFields != nil {
-			if v, ok := serviceResult.PreviousFields[name]; ok {
-				oldVal = fmt.Sprintf("%v", v)
-			}
+		if v, ok := serviceResult.PreviousFields[name]; ok {
+			oldVal = fmt.Sprintf("%v", v)
 		}
-		if oldVal != "" && oldVal != resolvedUpdates[name] {
-			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, resolvedUpdates[name]))
+		if oldVal != "" && oldVal != serviceResult.ResolvedUpdates[name] {
+			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, serviceResult.ResolvedUpdates[name]))
 		} else if oldVal == "" {
-			fmt.Printf("  %s\n", ui.FieldAdd(name, resolvedUpdates[name]))
+			fmt.Printf("  %s\n", ui.FieldAdd(name, serviceResult.ResolvedUpdates[name]))
 		} else {
-			fmt.Printf("  %s\n", ui.FieldSet(name, resolvedUpdates[name]))
+			fmt.Printf("  %s\n", ui.FieldSet(name, serviceResult.ResolvedUpdates[name]))
 		}
 	}
-	for _, warning := range validationWarnings {
-		fmt.Printf("  %s\n", ui.Warning(warning))
-	}
-
-	return nil
-}
-
-// setEmbeddedObject sets fields on an embedded object.
-func setEmbeddedObject(vaultPath, objectID string, updates map[string]string, typedUpdates map[string]schema.FieldValue, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	// Parse the embedded ID: fileID#slug
-	fileID, slug, isEmbedded := paths.ParseEmbeddedID(objectID)
-	if !isEmbedded {
-		return handleErrorMsg(ErrInvalidInput, "invalid embedded object ID", "Expected format: file-id#embedded-id")
-	}
-
-	// Resolve file ID to file path
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileID, vaultCfg)
-	if err != nil {
-		return handleError(ErrFileDoesNotExist, err, "")
-	}
-
-	serviceResult, err := objectsvc.SetEmbeddedObject(objectsvc.SetEmbeddedObjectRequest{
-		VaultPath:      vaultPath,
-		FilePath:       filePath,
-		ObjectID:       objectID,
-		Updates:        updates,
-		TypedUpdates:   typedUpdates,
-		Schema:         sch,
-		AllowedFields:  map[string]bool{"alias": true, "id": true},
-		DocumentParser: buildParseOptions(vaultCfg),
-	})
-	if err != nil {
-		var svcErr *objectsvc.Error
-		if errors.As(err, &svcErr) {
-			switch svcErr.Code {
-			case objectsvc.ErrorInvalidInput:
-				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorValidationFailed:
-				return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorFileRead:
-				return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
-			case objectsvc.ErrorFileWrite:
-				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-			default:
-				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-			}
-		}
-		var unknownErr *unknownFieldMutationError
-		var validationErr *fieldValidationError
-		if errors.As(err, &unknownErr) {
-			return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
-		}
-		if errors.As(err, &validationErr) {
-			return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
-		}
-		return handleError(ErrFileWriteError, err, "Failed to update embedded fields")
-	}
-
-	// Auto-reindex if configured
-	maybeReindex(vaultPath, filePath, vaultCfg)
-
-	relPath, _ := filepath.Rel(vaultPath, filePath)
-	objectType := serviceResult.ObjectType
-	resolvedUpdates := serviceResult.ResolvedUpdates
-	validationWarnings := serviceResult.WarningMessages
-	previousFields := serviceResult.PreviousFields
-
-	// Output
-	if isJSONOutput() {
-		result := map[string]interface{}{
-			"file":           relPath,
-			"object_id":      objectID,
-			"type":           objectType,
-			"embedded":       true,
-			"updated_fields": resolvedUpdates,
-		}
-		if len(validationWarnings) > 0 {
-			warnings := warningMessagesToWarnings(validationWarnings)
-			outputSuccessWithWarnings(result, warnings, nil)
-		} else {
-			outputSuccess(result, nil)
-		}
-		return nil
-	}
-
-	// Human-readable output with diff-style changes
-	fmt.Println(ui.Checkf("Updated %s %s", ui.FilePath(relPath), ui.Hint("(embedded: "+slug+")")))
-	var fieldNames []string
-	for name := range resolvedUpdates {
-		fieldNames = append(fieldNames, name)
-	}
-	sort.Strings(fieldNames)
-	for _, name := range fieldNames {
-		oldVal := ""
-		if previousFields != nil {
-			if v, ok := previousFields[name]; ok {
-				if s, ok := v.AsString(); ok {
-					oldVal = s
-				} else if n, ok := v.AsNumber(); ok {
-					oldVal = fmt.Sprintf("%v", n)
-				} else if b, ok := v.AsBool(); ok {
-					oldVal = fmt.Sprintf("%v", b)
-				} else {
-					oldVal = fmt.Sprintf("%v", v.Raw())
-				}
-			}
-		}
-		if oldVal != "" && oldVal != resolvedUpdates[name] {
-			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, resolvedUpdates[name]))
-		} else if oldVal == "" {
-			fmt.Printf("  %s\n", ui.FieldAdd(name, resolvedUpdates[name]))
-		} else {
-			fmt.Printf("  %s\n", ui.FieldSet(name, resolvedUpdates[name]))
-		}
-	}
-	for _, warning := range validationWarnings {
+	for _, warning := range serviceResult.WarningMessages {
 		fmt.Printf("  %s\n", ui.Warning(warning))
 	}
 

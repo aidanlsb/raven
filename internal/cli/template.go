@@ -2,19 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/atomicfile"
-	"github.com/aidanlsb/raven/internal/paths"
-	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/template"
+	"github.com/aidanlsb/raven/internal/templatesvc"
 )
 
 var (
@@ -50,28 +43,30 @@ var templateListCmd = &cobra.Command{
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
-		templateDir := vaultCfg.GetTemplateDirectory()
-		files, err := listTemplateFiles(vaultPath, templateDir)
+		result, err := templatesvc.List(templatesvc.ListRequest{
+			VaultPath:   vaultPath,
+			TemplateDir: vaultCfg.GetTemplateDirectory(),
+		})
 		if err != nil {
-			return handleError(ErrFileReadError, err, "Check directories.template and filesystem permissions")
+			return mapTemplateSvcError(err)
 		}
 
 		elapsed := time.Since(start).Milliseconds()
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"template_dir": templateDir,
-				"templates":    files,
-			}, &Meta{Count: len(files), QueryTimeMs: elapsed})
+				"template_dir": result.TemplateDir,
+				"templates":    result.Templates,
+			}, &Meta{Count: len(result.Templates), QueryTimeMs: elapsed})
 			return nil
 		}
 
-		if len(files) == 0 {
-			fmt.Printf("No template files found under %s\n", templateDir)
+		if len(result.Templates) == 0 {
+			fmt.Printf("No template files found under %s\n", result.TemplateDir)
 			return nil
 		}
 
-		fmt.Printf("Template files (%s):\n", templateDir)
-		for _, f := range files {
+		fmt.Printf("Template files (%s):\n", result.TemplateDir)
+		for _, f := range result.Templates {
 			fmt.Printf("  - %s (%d bytes)\n", f.Path, f.SizeBytes)
 		}
 		return nil
@@ -98,52 +93,33 @@ Use it for both initial template creation and iterative updates.`,
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		templateDir := vaultCfg.GetTemplateDirectory()
 
-		fileRef, err := template.ResolveFileRef(args[0], templateDir)
+		result, err := templatesvc.Write(templatesvc.WriteRequest{
+			VaultPath:   vaultPath,
+			TemplateDir: vaultCfg.GetTemplateDirectory(),
+			Path:        args[0],
+			Content:     templateWriteContent,
+		})
 		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(), fmt.Sprintf("Use a file path under %s", templateDir))
+			return mapTemplateSvcError(err)
 		}
 
-		fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-			return handleError(ErrFileOutsideVault, err, "Template files must be within the vault")
-		}
-
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
-			return handleError(ErrFileWriteError, err, "Unable to create template directory")
-		}
-
-		status := "created"
-		if existing, readErr := os.ReadFile(fullPath); readErr == nil {
-			if string(existing) == templateWriteContent {
-				status = "unchanged"
-			} else {
-				status = "updated"
-			}
-		} else if !os.IsNotExist(readErr) {
-			return handleError(ErrFileReadError, readErr, "")
-		}
-
-		if status != "unchanged" {
-			if err := atomicfile.WriteFile(fullPath, []byte(templateWriteContent), 0o644); err != nil {
-				return handleError(ErrFileWriteError, err, "")
-			}
-			maybeReindex(vaultPath, fullPath, vaultCfg)
+		if result.Changed {
+			maybeReindex(vaultPath, filepath.Join(vaultPath, filepath.FromSlash(result.Path)), vaultCfg)
 		}
 
 		elapsed := time.Since(start).Milliseconds()
-		result := map[string]interface{}{
-			"path":         fileRef,
-			"status":       status,
-			"template_dir": templateDir,
+		payload := map[string]interface{}{
+			"path":         result.Path,
+			"status":       result.Status,
+			"template_dir": result.TemplateDir,
 		}
 		if isJSONOutput() {
-			outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+			outputSuccess(payload, &Meta{QueryTimeMs: elapsed})
 			return nil
 		}
 
-		fmt.Printf("Template %s: %s\n", status, fileRef)
+		fmt.Printf("Template %s: %s\n", result.Status, result.Path)
 		return nil
 	},
 }
@@ -166,76 +142,34 @@ The file is moved to .trash/ for recovery.`,
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
-		templateDir := vaultCfg.GetTemplateDirectory()
-
-		fileRef, err := template.ResolveFileRef(args[0], templateDir)
+		result, err := templatesvc.Delete(templatesvc.DeleteRequest{
+			VaultPath:   vaultPath,
+			TemplateDir: vaultCfg.GetTemplateDirectory(),
+			Path:        args[0],
+			Force:       templateDeleteForce,
+		})
 		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(), fmt.Sprintf("Use a file path under %s", templateDir))
+			return mapTemplateSvcError(err)
 		}
-
-		fullPath := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
-			return handleError(ErrFileOutsideVault, err, "Template files must be within the vault")
-		}
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			return handleErrorMsg(ErrFileNotFound, fmt.Sprintf("template file not found: %s", fileRef), "")
-		} else if err != nil {
-			return handleError(ErrFileReadError, err, "")
-		}
-
-		templateIDs, err := schemaTemplateRefsForFile(vaultPath, fileRef, templateDir)
-		if err != nil {
-			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
-		}
-		if len(templateIDs) > 0 && !templateDeleteForce {
-			return handleErrorMsg(
-				ErrValidationFailed,
-				fmt.Sprintf("template file %q is referenced by schema templates: %s", fileRef, strings.Join(templateIDs, ", ")),
-				"Remove those template definitions first with `rvn schema template remove <template_id>` or use --force",
-			)
-		}
-
-		trashRef, err := moveTemplateToTrash(vaultPath, fileRef)
-		if err != nil {
-			return handleError(ErrFileWriteError, err, "Unable to move template file to .trash")
-		}
-
-		var warnings []Warning
-		db, err := openDatabaseWithConfig(vaultPath, vaultCfg)
-		if err != nil {
-			warnings = append(warnings, Warning{
-				Code:    WarnIndexUpdateFailed,
-				Message: fmt.Sprintf("failed to open index for cleanup: %v", err),
-				Ref:     "Run 'rvn reindex' to rebuild the index",
-			})
-		} else {
-			if err := db.RemoveFile(fileRef); err != nil {
-				warnings = append(warnings, Warning{
-					Code:    WarnIndexUpdateFailed,
-					Message: fmt.Sprintf("failed to remove file from index: %v", err),
-					Ref:     "Run 'rvn reindex' to rebuild the index",
-				})
-			}
-			_ = db.Close()
-		}
+		warnings := templateSvcWarnings(result.Warnings)
 
 		elapsed := time.Since(start).Milliseconds()
-		result := map[string]interface{}{
-			"deleted":      fileRef,
-			"trash_path":   trashRef,
-			"forced":       templateDeleteForce,
-			"template_ids": templateIDs,
+		payload := map[string]interface{}{
+			"deleted":      result.DeletedPath,
+			"trash_path":   result.TrashPath,
+			"forced":       result.Forced,
+			"template_ids": result.TemplateIDs,
 		}
 		if isJSONOutput() {
 			if len(warnings) > 0 {
-				outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
+				outputSuccessWithWarnings(payload, warnings, &Meta{QueryTimeMs: elapsed})
 			} else {
-				outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+				outputSuccess(payload, &Meta{QueryTimeMs: elapsed})
 			}
 			return nil
 		}
 
-		fmt.Printf("Deleted template %s -> %s\n", fileRef, trashRef)
+		fmt.Printf("Deleted template %s -> %s\n", result.DeletedPath, result.TrashPath)
 		for _, w := range warnings {
 			fmt.Printf("warning: %s\n", w.Message)
 		}
@@ -243,114 +177,45 @@ The file is moved to .trash/ for recovery.`,
 	},
 }
 
-type templateFileInfo struct {
-	Path      string `json:"path"`
-	SizeBytes int64  `json:"size_bytes"`
+func mapTemplateSvcError(err error) error {
+	svcErr, ok := templatesvc.AsError(err)
+	if !ok {
+		return handleError(ErrInternal, err, "")
+	}
+
+	switch svcErr.Code {
+	case templatesvc.CodeInvalidInput:
+		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+	case templatesvc.CodeFileNotFound:
+		return handleErrorMsg(ErrFileNotFound, svcErr.Message, svcErr.Suggestion)
+	case templatesvc.CodeFileReadError:
+		return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
+	case templatesvc.CodeFileWriteError:
+		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+	case templatesvc.CodeFileOutsideVault:
+		return handleError(ErrFileOutsideVault, svcErr, svcErr.Suggestion)
+	case templatesvc.CodeSchemaInvalid:
+		return handleError(ErrSchemaInvalid, svcErr, svcErr.Suggestion)
+	case templatesvc.CodeValidationFailed:
+		return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
+	default:
+		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+	}
 }
 
-func listTemplateFiles(vaultPath, templateDir string) ([]templateFileInfo, error) {
-	root := filepath.Join(vaultPath, filepath.FromSlash(templateDir))
-	if err := paths.ValidateWithinVault(vaultPath, root); err != nil {
-		return nil, err
-	}
-	if _, err := os.Stat(root); os.IsNotExist(err) {
-		return []templateFileInfo{}, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	files := make([]templateFileInfo, 0)
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(vaultPath, path)
-		if err != nil {
-			return err
-		}
-		files = append(files, templateFileInfo{
-			Path:      filepath.ToSlash(rel),
-			SizeBytes: info.Size(),
-		})
+func templateSvcWarnings(serviceWarnings []templatesvc.Warning) []Warning {
+	if len(serviceWarnings) == 0 {
 		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
-	return files, nil
-}
-
-func schemaTemplateRefsForFile(vaultPath, fileRef, templateDir string) ([]string, error) {
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return nil, err
+	warnings := make([]Warning, 0, len(serviceWarnings))
+	for _, warning := range serviceWarnings {
+		warnings = append(warnings, Warning{
+			Code:    warning.Code,
+			Message: warning.Message,
+			Ref:     warning.Ref,
+		})
 	}
-
-	var refs []string
-	target := filepath.ToSlash(fileRef)
-	for templateID, def := range sch.Templates {
-		if def == nil {
-			continue
-		}
-		candidate := filepath.ToSlash(strings.TrimSpace(def.File))
-		resolved, err := template.ResolveFileRef(candidate, templateDir)
-		if err == nil {
-			candidate = filepath.ToSlash(resolved)
-		}
-		if candidate == target {
-			refs = append(refs, templateID)
-		}
-	}
-
-	sort.Strings(refs)
-	return refs, nil
-}
-
-func moveTemplateToTrash(vaultPath, fileRef string) (string, error) {
-	sourceAbs := filepath.Join(vaultPath, filepath.FromSlash(fileRef))
-	trashRef, err := uniqueTrashRef(vaultPath, filepath.ToSlash(filepath.Join(".trash", filepath.FromSlash(fileRef))))
-	if err != nil {
-		return "", err
-	}
-	destAbs := filepath.Join(vaultPath, filepath.FromSlash(trashRef))
-
-	if err := paths.ValidateWithinVault(vaultPath, destAbs); err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(filepath.Dir(destAbs), 0o755); err != nil {
-		return "", err
-	}
-	if err := os.Rename(sourceAbs, destAbs); err != nil {
-		return "", err
-	}
-	return trashRef, nil
-}
-
-func uniqueTrashRef(vaultPath, initial string) (string, error) {
-	candidate := initial
-	ext := filepath.Ext(initial)
-	base := strings.TrimSuffix(initial, ext)
-
-	for i := 0; i < 1000; i++ {
-		candidateAbs := filepath.Join(vaultPath, filepath.FromSlash(candidate))
-		if _, err := os.Stat(candidateAbs); os.IsNotExist(err) {
-			return candidate, nil
-		} else if err != nil {
-			return "", err
-		}
-		candidate = fmt.Sprintf("%s-%d%s", base, time.Now().UTC().UnixNano(), ext)
-	}
-
-	return "", fmt.Errorf("failed to generate unique trash path for %s", initial)
+	return warnings
 }
 
 func init() {

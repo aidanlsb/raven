@@ -2,29 +2,18 @@ package cli
 
 import (
 	"fmt"
-	"runtime"
 	"runtime/debug"
-	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/buildinfo"
+	"github.com/aidanlsb/raven/internal/maintsvc"
 )
 
-const defaultModulePath = "github.com/aidanlsb/raven"
+const defaultModulePath = "github.com/aidanlsb/raven" // Kept for test compatibility.
 
-type versionInfo struct {
-	Version    string `json:"version"`
-	ModulePath string `json:"module_path"`
-	Commit     string `json:"commit,omitempty"`
-	CommitTime string `json:"commit_time,omitempty"`
-	Modified   bool   `json:"modified"`
-	GoVersion  string `json:"go_version"`
-	GOOS       string `json:"goos"`
-	GOARCH     string `json:"goarch"`
-}
+type versionInfo = maintsvc.VersionInfo
 
-var readBuildInfo = debug.ReadBuildInfo
+var readBuildInfo maintsvc.BuildInfoReader = debug.ReadBuildInfo
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -55,77 +44,11 @@ var versionCmd = &cobra.Command{
 }
 
 func currentVersionInfo() versionInfo {
-	info := versionInfo{
-		Version:    "devel",
-		ModulePath: defaultModulePath,
-		GoVersion:  runtime.Version(),
-		GOOS:       runtime.GOOS,
-		GOARCH:     runtime.GOARCH,
+	info := maintsvc.CurrentVersionInfoWithReader(readBuildInfo)
+	if info.ModulePath == "" {
+		info.ModulePath = defaultModulePath
 	}
-
-	buildInfo, ok := readBuildInfo()
-	if !ok || buildInfo == nil {
-		applyLdflagsFallback(&info)
-		return info
-	}
-
-	if buildInfo.Main.Path != "" {
-		info.ModulePath = buildInfo.Main.Path
-	}
-	info.Version = normalizeVersion(buildInfo.Main.Version)
-
-	if buildInfo.GoVersion != "" {
-		info.GoVersion = buildInfo.GoVersion
-	}
-
-	if val := buildSetting(buildInfo, "GOOS"); val != "" {
-		info.GOOS = val
-	}
-	if val := buildSetting(buildInfo, "GOARCH"); val != "" {
-		info.GOARCH = val
-	}
-
-	info.Commit = buildSetting(buildInfo, "vcs.revision")
-	info.CommitTime = buildSetting(buildInfo, "vcs.time")
-	info.Modified = strings.EqualFold(buildSetting(buildInfo, "vcs.modified"), "true")
-	applyLdflagsFallback(&info)
-
 	return info
-}
-
-func normalizeVersion(version string) string {
-	if version == "" || version == "(devel)" {
-		return "devel"
-	}
-	return version
-}
-
-func buildSetting(info *debug.BuildInfo, key string) string {
-	if info == nil {
-		return ""
-	}
-	for _, setting := range info.Settings {
-		if setting.Key == key {
-			return setting.Value
-		}
-	}
-	return ""
-}
-
-func applyLdflagsFallback(info *versionInfo) {
-	if info == nil {
-		return
-	}
-
-	if info.Version == "devel" && buildinfo.Version != "" {
-		info.Version = normalizeVersion(buildinfo.Version)
-	}
-	if info.Commit == "" && buildinfo.Commit != "" {
-		info.Commit = buildinfo.Commit
-	}
-	if info.CommitTime == "" && buildinfo.Date != "" {
-		info.CommitTime = buildinfo.Date
-	}
 }
 
 func init() {

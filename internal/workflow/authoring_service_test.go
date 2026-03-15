@@ -119,6 +119,107 @@ func TestAuthoringService_MutateStep_NotFound(t *testing.T) {
 	}
 }
 
+func TestAuthoringService_WorkflowLifecycleOps(t *testing.T) {
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+
+	workflowPath := filepath.Join(vault, "workflows", "demo.yaml")
+	initial := `description: demo
+steps:
+  - id: fetch
+    type: tool
+    tool: raven_query
+`
+	if err := os.WriteFile(workflowPath, []byte(initial), 0o644); err != nil {
+		t.Fatalf("write workflow file: %v", err)
+	}
+
+	cfg := config.DefaultVaultConfig()
+	cfg.Workflows = nil
+	svc := NewAuthoringService(vault, cfg)
+
+	addResult, err := svc.AddWorkflow(AddWorkflowRequest{
+		Name: "demo",
+		File: "workflows/demo.yaml",
+	})
+	if err != nil {
+		t.Fatalf("AddWorkflow error: %v", err)
+	}
+	if addResult.FileRef != "workflows/demo.yaml" {
+		t.Fatalf("AddWorkflow file_ref = %q, want workflows/demo.yaml", addResult.FileRef)
+	}
+
+	validateResult, err := svc.ValidateWorkflows(ValidateWorkflowsRequest{})
+	if err != nil {
+		t.Fatalf("ValidateWorkflows error: %v", err)
+	}
+	if !validateResult.Valid || validateResult.Checked != 1 || validateResult.Invalid != 0 {
+		t.Fatalf("unexpected validate result: %#v", validateResult)
+	}
+
+	removeResult, err := svc.RemoveWorkflow(RemoveWorkflowRequest{Name: "demo"})
+	if err != nil {
+		t.Fatalf("RemoveWorkflow error: %v", err)
+	}
+	if !removeResult.Removed {
+		t.Fatalf("RemoveWorkflow removed = false")
+	}
+	if cfg.Workflows != nil {
+		t.Fatalf("expected workflows map cleared after remove, got %#v", cfg.Workflows)
+	}
+}
+
+func TestAuthoringService_ScaffoldWorkflow(t *testing.T) {
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+
+	cfg := config.DefaultVaultConfig()
+	cfg.Workflows = nil
+	svc := NewAuthoringService(vault, cfg)
+
+	result, err := svc.ScaffoldWorkflow(ScaffoldWorkflowRequest{Name: "starter"})
+	if err != nil {
+		t.Fatalf("ScaffoldWorkflow error: %v", err)
+	}
+	if result.FileRef != "workflows/starter.yaml" {
+		t.Fatalf("ScaffoldWorkflow file_ref = %q, want workflows/starter.yaml", result.FileRef)
+	}
+	if _, err := os.Stat(filepath.Join(vault, "workflows", "starter.yaml")); err != nil {
+		t.Fatalf("stat scaffold file: %v", err)
+	}
+
+	_, err = svc.ScaffoldWorkflow(ScaffoldWorkflowRequest{Name: "starter"})
+	if err == nil {
+		t.Fatal("expected duplicate scaffold file error")
+	}
+	de, ok := AsDomainError(err)
+	if !ok || de.Code != CodeFileExists {
+		t.Fatalf("expected CodeFileExists, got %#v", err)
+	}
+}
+
+func TestAuthoringService_ReservedWorkflowName(t *testing.T) {
+	vault := t.TempDir()
+	cfg := config.DefaultVaultConfig()
+	svc := NewAuthoringService(vault, cfg)
+
+	_, err := svc.AddWorkflow(AddWorkflowRequest{
+		Name: "runs",
+		File: "workflows/runs.yaml",
+	})
+	if err == nil {
+		t.Fatal("expected reserved name error")
+	}
+	de, ok := AsDomainError(err)
+	if !ok || de.Code != CodeInvalidInput {
+		t.Fatalf("expected CodeInvalidInput, got %#v", err)
+	}
+}
+
 func readWorkflowStepIDs(t *testing.T, path string) []string {
 	t.Helper()
 	content, err := os.ReadFile(path)

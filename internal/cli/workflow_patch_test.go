@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/workflow"
 )
 
 func TestApplyWorkflowStepPatch_DeepMergesForEachConfig(t *testing.T) {
@@ -23,9 +24,9 @@ func TestApplyWorkflowStepPatch_DeepMergesForEachConfig(t *testing.T) {
 		},
 	}
 
-	updated, err := applyWorkflowStepPatch(existing, `{"foreach":{"on_error":"continue"}}`)
+	updated, err := workflow.ApplyStepPatch(existing, `{"foreach":{"on_error":"continue"}}`)
 	if err != nil {
-		t.Fatalf("applyWorkflowStepPatch() error: %v", err)
+		t.Fatalf("ApplyStepPatch() error: %v", err)
 	}
 	if updated.ForEach == nil {
 		t.Fatal("expected foreach config to remain present")
@@ -63,9 +64,9 @@ func TestApplyWorkflowStepPatch_DeepMergesSwitchConfig(t *testing.T) {
 		},
 	}
 
-	updated, err := applyWorkflowStepPatch(existing, `{"switch":{"default":{"emit":{"action":"fallback"}}}}`)
+	updated, err := workflow.ApplyStepPatch(existing, `{"switch":{"default":{"emit":{"action":"fallback"}}}}`)
 	if err != nil {
-		t.Fatalf("applyWorkflowStepPatch() error: %v", err)
+		t.Fatalf("ApplyStepPatch() error: %v", err)
 	}
 	if updated.Switch == nil {
 		t.Fatal("expected switch config to remain present")

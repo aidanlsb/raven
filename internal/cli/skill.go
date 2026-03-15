@@ -2,13 +2,13 @@ package cli
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/skills"
+	"github.com/aidanlsb/raven/internal/skillsvc"
 )
 
 var skillCmd = &cobra.Command{
@@ -29,64 +29,38 @@ var skillListCmd = &cobra.Command{
 	Short: commands.Registry["skill_list"].Description,
 	Long:  commands.Registry["skill_list"].LongDesc,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		catalog, err := skills.LoadCatalog()
+		result, err := skillsvc.List(skillsvc.ListRequest{
+			Target:        skillListTarget,
+			Scope:         skillListScope,
+			Dest:          skillListDest,
+			InstalledOnly: skillListInstalledOnly,
+		})
 		if err != nil {
-			return handleError(ErrInternal, err, "")
+			return mapSkillServiceError(err)
 		}
 
-		if strings.TrimSpace(skillListTarget) == "" {
-			if skillListInstalledOnly {
-				return handleErrorMsg(ErrInvalidInput, "--installed requires --target", "Specify --target codex|claude|cursor")
+		if isJSONOutput() {
+			data := map[string]interface{}{
+				"skills": result.Skills,
 			}
-			items := skills.SortedSummaries(catalog)
-			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"skills": items,
-				}, &Meta{Count: len(items)})
-				return nil
+			if strings.TrimSpace(result.Target) != "" {
+				data["target"] = result.Target
+				data["scope"] = result.Scope
+				data["root"] = result.Root
 			}
-			for _, item := range items {
+			outputSuccess(data, &Meta{Count: len(result.Skills)})
+			return nil
+		}
+
+		if strings.TrimSpace(result.Target) == "" {
+			for _, item := range result.Skills {
 				fmt.Printf("%-16s v%d  %s\n", item.Name, item.Version, item.Summary)
 			}
 			return nil
 		}
 
-		target, err := skills.ParseTarget(skillListTarget)
-		if err != nil {
-			return handleError(ErrSkillTargetUnsupported, err, "Use --target codex|claude|cursor")
-		}
-		scope, err := skills.ParseScope(skillListScope)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "Use --scope user|project")
-		}
-		root, err := skills.ResolveInstallRoot(target, scope, skillListDest, "")
-		if err != nil {
-			return handleError(ErrSkillPathUnresolved, err, "Use --dest to set an explicit install root")
-		}
-
-		items := skills.InstalledSummaries(catalog, root)
-		if skillListInstalledOnly {
-			filtered := make([]skills.Summary, 0, len(items))
-			for _, item := range items {
-				if item.Installed {
-					filtered = append(filtered, item)
-				}
-			}
-			items = filtered
-		}
-
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"target": string(target),
-				"scope":  string(scope),
-				"root":   root,
-				"skills": items,
-			}, &Meta{Count: len(items)})
-			return nil
-		}
-
-		fmt.Printf("target=%s scope=%s root=%s\n", target, scope, root)
-		for _, item := range items {
+		fmt.Printf("target=%s scope=%s root=%s\n", result.Target, result.Scope, result.Root)
+		for _, item := range result.Skills {
 			status := "available"
 			if item.Installed {
 				status = "installed"
@@ -111,91 +85,47 @@ var skillInstallCmd = &cobra.Command{
 	Long:  commands.Registry["skill_install"].LongDesc,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		skillName := strings.TrimSpace(args[0])
-		catalog, err := skills.LoadCatalog()
+		result, err := skillsvc.Install(skillsvc.InstallRequest{
+			Name:    strings.TrimSpace(args[0]),
+			Target:  skillInstallTarget,
+			Scope:   skillInstallScope,
+			Dest:    skillInstallDest,
+			Force:   skillInstallForce,
+			Confirm: skillInstallConfirm,
+		})
 		if err != nil {
-			return handleError(ErrInternal, err, "")
+			return mapSkillServiceError(err)
 		}
-		skill, ok := catalog[skillName]
-		if !ok {
-			available := skills.SortedSummaries(catalog)
-			names := make([]string, 0, len(available))
-			for _, item := range available {
-				names = append(names, item.Name)
+
+		if isJSONOutput() {
+			data := map[string]interface{}{
+				"mode": result.Mode,
+				"plan": result.Plan,
 			}
-			return handleErrorWithDetails(
-				ErrSkillNotFound,
-				fmt.Sprintf("skill '%s' not found", skillName),
-				"Run 'rvn skill list' to see available skills",
-				map[string]interface{}{"available": names},
-			)
-		}
-
-		target, err := skills.ParseTarget(skillInstallTarget)
-		if err != nil {
-			return handleError(ErrSkillTargetUnsupported, err, "Use --target codex|claude|cursor")
-		}
-		scope, err := skills.ParseScope(skillInstallScope)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "Use --scope user|project")
-		}
-		root, err := skills.ResolveInstallRoot(target, scope, skillInstallDest, "")
-		if err != nil {
-			return handleError(ErrSkillPathUnresolved, err, "Use --dest to set an explicit install root")
-		}
-
-		plan, err := skills.PlanInstall(skill, target, scope, root, skillInstallForce)
-		if err != nil {
-			return handleError(ErrSkillRenderFailed, err, "")
-		}
-
-		if len(plan.Conflicts) > 0 {
-			return handleErrorWithDetails(
-				ErrSkillInstallConflict,
-				"install has conflicts",
-				"Use --force to overwrite conflicting files",
-				map[string]interface{}{
-					"conflicts": plan.Conflicts,
-					"plan":      plan,
-				},
-			)
-		}
-
-		if !skillInstallConfirm {
-			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"mode": "preview",
-					"plan": plan,
-				}, nil)
-				return nil
+			if result.ActionsApplied > 0 {
+				data["actions_applied"] = result.ActionsApplied
 			}
-			fmt.Printf("Preview install: %s -> %s\n", skillName, plan.SkillPath)
-			for _, action := range plan.Actions {
+			if result.Receipt != nil {
+				data["receipt"] = result.Receipt
+			}
+			outputSuccess(data, nil)
+			return nil
+		}
+
+		if result.Mode == "preview" {
+			fmt.Printf("Preview install: %s -> %s\n", result.SkillName, result.Plan.SkillPath)
+			for _, action := range result.Plan.Actions {
 				fmt.Printf("  %-8s %s\n", action.Op, action.Path)
 			}
-			if len(plan.Actions) == 0 {
+			if len(result.Plan.Actions) == 0 {
 				fmt.Println("  no changes")
 			}
 			fmt.Println("Re-run with --confirm to apply.")
 			return nil
 		}
 
-		receipt, applied, err := skills.ApplyInstall(plan)
-		if err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
-
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"mode":            "applied",
-				"plan":            plan,
-				"actions_applied": applied,
-				"receipt":         receipt,
-			}, nil)
-			return nil
-		}
-		fmt.Printf("Installed %s for %s at %s\n", skillName, target, plan.SkillPath)
-		fmt.Printf("Applied %d file changes\n", applied)
+		fmt.Printf("Installed %s for %s at %s\n", result.SkillName, result.Target, result.Plan.SkillPath)
+		fmt.Printf("Applied %d file changes\n", result.ActionsApplied)
 		return nil
 	},
 }
@@ -213,65 +143,39 @@ var skillRemoveCmd = &cobra.Command{
 	Long:  commands.Registry["skill_remove"].LongDesc,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		skillName := strings.TrimSpace(args[0])
-		catalog, err := skills.LoadCatalog()
+		result, err := skillsvc.Remove(skillsvc.RemoveRequest{
+			Name:    strings.TrimSpace(args[0]),
+			Target:  skillRemoveTarget,
+			Scope:   skillRemoveScope,
+			Dest:    skillRemoveDest,
+			Confirm: skillRemoveConfirm,
+		})
 		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-		if _, ok := catalog[skillName]; !ok {
-			return handleErrorMsg(ErrSkillNotFound, fmt.Sprintf("skill '%s' not found", skillName), "Run 'rvn skill list' to see available skills")
+			return mapSkillServiceError(err)
 		}
 
-		target, err := skills.ParseTarget(skillRemoveTarget)
-		if err != nil {
-			return handleError(ErrSkillTargetUnsupported, err, "Use --target codex|claude|cursor")
-		}
-		scope, err := skills.ParseScope(skillRemoveScope)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "Use --scope user|project")
-		}
-		root, err := skills.ResolveInstallRoot(target, scope, skillRemoveDest, "")
-		if err != nil {
-			return handleError(ErrSkillPathUnresolved, err, "Use --dest to set an explicit install root")
-		}
-
-		plan, err := skills.PlanRemove(skillName, target, scope, root)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "")
-		}
-		if !plan.Exists {
-			return handleErrorMsg(ErrSkillNotInstalled, fmt.Sprintf("skill '%s' is not installed for target '%s'", skillName, target), "Run 'rvn skill list --target ... --installed' to see installed skills")
-		}
-
-		if !skillRemoveConfirm {
-			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"mode": "preview",
-					"plan": plan,
-				}, nil)
-				return nil
+		if isJSONOutput() {
+			data := map[string]interface{}{
+				"mode": result.Mode,
+				"plan": result.Plan,
 			}
-			fmt.Printf("Preview remove: %s\n", plan.SkillPath)
-			for _, action := range plan.Actions {
+			if result.Removed {
+				data["removed"] = true
+			}
+			outputSuccess(data, nil)
+			return nil
+		}
+
+		if result.Mode == "preview" {
+			fmt.Printf("Preview remove: %s\n", result.Plan.SkillPath)
+			for _, action := range result.Plan.Actions {
 				fmt.Printf("  %-8s %s\n", action.Op, action.Path)
 			}
 			fmt.Println("Re-run with --confirm to apply.")
 			return nil
 		}
 
-		if err := skills.ApplyRemove(plan); err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
-
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"mode":    "applied",
-				"removed": true,
-				"plan":    plan,
-			}, nil)
-			return nil
-		}
-		fmt.Printf("Removed %s from %s\n", skillName, plan.SkillPath)
+		fmt.Printf("Removed %s from %s\n", result.SkillName, result.Plan.SkillPath)
 		return nil
 	},
 }
@@ -287,54 +191,21 @@ var skillDoctorCmd = &cobra.Command{
 	Short: commands.Registry["skill_doctor"].Description,
 	Long:  commands.Registry["skill_doctor"].LongDesc,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		catalog, err := skills.LoadCatalog()
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-		scope, err := skills.ParseScope(skillDoctorScope)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "Use --scope user|project")
-		}
-
-		reports := make([]skills.DoctorReport, 0)
-		if strings.TrimSpace(skillDoctorTarget) == "" {
-			if strings.TrimSpace(skillDoctorDest) != "" {
-				return handleErrorMsg(ErrInvalidInput, "--dest requires --target", "Specify --target codex|claude|cursor when using --dest")
-			}
-			for _, target := range skills.AllTargets() {
-				root, err := skills.ResolveInstallRoot(target, scope, "", "")
-				if err != nil {
-					reports = append(reports, skills.DoctorReport{
-						Target: string(target),
-						Scope:  string(scope),
-						Issues: []string{fmt.Sprintf("failed to resolve root: %v", err)},
-					})
-					continue
-				}
-				reports = append(reports, skills.Doctor(catalog, target, scope, root))
-			}
-		} else {
-			target, err := skills.ParseTarget(skillDoctorTarget)
-			if err != nil {
-				return handleError(ErrSkillTargetUnsupported, err, "Use --target codex|claude|cursor")
-			}
-			root, err := skills.ResolveInstallRoot(target, scope, skillDoctorDest, "")
-			if err != nil {
-				return handleError(ErrSkillPathUnresolved, err, "Use --dest to set an explicit install root")
-			}
-			reports = append(reports, skills.Doctor(catalog, target, scope, root))
-		}
-
-		sort.Slice(reports, func(i, j int) bool {
-			return reports[i].Target < reports[j].Target
+		result, err := skillsvc.Doctor(skillsvc.DoctorRequest{
+			Target: skillDoctorTarget,
+			Scope:  skillDoctorScope,
+			Dest:   skillDoctorDest,
 		})
+		if err != nil {
+			return mapSkillServiceError(err)
+		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{"reports": reports}, &Meta{Count: len(reports)})
+			outputSuccess(map[string]interface{}{"reports": result.Reports}, &Meta{Count: len(result.Reports)})
 			return nil
 		}
 
-		for _, report := range reports {
+		for _, report := range result.Reports {
 			fmt.Printf("target=%s scope=%s root=%s\n", report.Target, report.Scope, report.Root)
 			if len(report.Installed) == 0 {
 				fmt.Println("  installed: none")
@@ -381,4 +252,30 @@ func init() {
 	skillCmd.AddCommand(skillRemoveCmd)
 	skillCmd.AddCommand(skillDoctorCmd)
 	rootCmd.AddCommand(skillCmd)
+}
+
+func mapSkillServiceError(err error) error {
+	svcErr, ok := skillsvc.AsError(err)
+	if !ok {
+		return handleError(ErrInternal, err, "")
+	}
+
+	switch svcErr.Code {
+	case skillsvc.CodeInvalidInput:
+		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+	case skillsvc.CodeSkillNotFound:
+		return handleErrorWithDetails(ErrSkillNotFound, svcErr.Message, svcErr.Suggestion, svcErr.Details)
+	case skillsvc.CodeSkillNotInstalled:
+		return handleErrorMsg(ErrSkillNotInstalled, svcErr.Message, svcErr.Suggestion)
+	case skillsvc.CodeSkillTargetUnsupported:
+		return handleErrorMsg(ErrSkillTargetUnsupported, svcErr.Message, svcErr.Suggestion)
+	case skillsvc.CodeSkillInstallConflict:
+		return handleErrorWithDetails(ErrSkillInstallConflict, svcErr.Message, svcErr.Suggestion, svcErr.Details)
+	case skillsvc.CodeSkillPathUnresolved:
+		return handleErrorMsg(ErrSkillPathUnresolved, svcErr.Message, svcErr.Suggestion)
+	case skillsvc.CodeFileWriteError:
+		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+	default:
+		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+	}
 }

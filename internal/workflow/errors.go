@@ -10,6 +10,7 @@ const (
 	CodeDuplicateName               Code = "DUPLICATE_NAME"
 	CodeRefNotFound                 Code = "REF_NOT_FOUND"
 	CodeFileNotFound                Code = "FILE_NOT_FOUND"
+	CodeFileExists                  Code = "FILE_EXISTS"
 	CodeFileReadError               Code = "FILE_READ_ERROR"
 	CodeFileWriteError              Code = "FILE_WRITE_ERROR"
 	CodeFileOutsideVault            Code = "FILE_OUTSIDE_VAULT"

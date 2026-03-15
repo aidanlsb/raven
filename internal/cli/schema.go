@@ -3,14 +3,11 @@ package cli
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/commands"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/schemasvc"
 )
 
 var schemaCmd = &cobra.Command{
@@ -98,64 +95,70 @@ Examples:
 }
 
 func dumpFullSchema(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.FullSchema(vaultPath)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
-	}
-
-	vaultCfg, err := config.LoadVaultConfig(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, fmt.Errorf("failed to load raven.yaml: %w", err), "Fix raven.yaml and try again")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		schemaJSON := buildSchemaResult(sch, vaultCfg)
-		outputSuccess(schemaJSON, &Meta{QueryTimeMs: elapsed})
+		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
 	// Human-readable output
-	fmt.Printf("Schema (version %d)\n\n", sch.Version)
+	fmt.Printf("Schema (version %d)\n\n", result.Version)
 
 	fmt.Println("Types:")
-	for name := range sch.Types {
-		if schema.IsBuiltinType(name) {
-			continue
+	var typeNames []string
+	for name, typeSchema := range result.Types {
+		if !typeSchema.Builtin {
+			typeNames = append(typeNames, name)
 		}
+	}
+	sort.Strings(typeNames)
+	for _, name := range typeNames {
 		fmt.Printf("  %s\n", name)
 	}
 	fmt.Println("  page (built-in)")
 	fmt.Println("  section (built-in)")
 	fmt.Println("  date (built-in)")
 
-	if len(sch.Core) > 0 {
-		fmt.Println("\nCore:")
-		coreNames := []string{"date", "page", "section"}
-		for _, name := range coreNames {
-			coreDef := sch.Core[name]
-			if coreDef == nil {
-				continue
-			}
-			if coreDef.DefaultTemplate != "" {
-				fmt.Printf("  %s: default_template=%s\n", name, coreDef.DefaultTemplate)
-			} else if len(coreDef.Templates) > 0 {
-				fmt.Printf("  %s: templates=%v\n", name, coreDef.Templates)
-			} else {
-				fmt.Printf("  %s: {}\n", name)
-			}
+	fmt.Println("\nCore:")
+	coreNames := []string{"date", "page", "section"}
+	for _, name := range coreNames {
+		coreDef, ok := result.Core[name]
+		if !ok {
+			continue
+		}
+		if coreDef.DefaultTemplate != "" {
+			fmt.Printf("  %s: default_template=%s\n", name, coreDef.DefaultTemplate)
+		} else if len(coreDef.Templates) > 0 {
+			fmt.Printf("  %s: templates=%v\n", name, coreDef.Templates)
+		} else {
+			fmt.Printf("  %s: {}\n", name)
 		}
 	}
 
 	fmt.Println("\nTraits:")
-	for name := range sch.Traits {
+	var traitNames []string
+	for name := range result.Traits {
+		traitNames = append(traitNames, name)
+	}
+	sort.Strings(traitNames)
+	for _, name := range traitNames {
 		fmt.Printf("  %s\n", name)
 	}
 
-	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
+	if len(result.Queries) > 0 {
 		fmt.Println("\nSaved Queries:")
-		for name := range vaultCfg.Queries {
+		var queryNames []string
+		for name := range result.Queries {
+			queryNames = append(queryNames, name)
+		}
+		sort.Strings(queryNames)
+		for _, name := range queryNames {
 			fmt.Printf("  %s\n", name)
 		}
 	}
@@ -164,68 +167,33 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 }
 
 func listSchemaTypes(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.Types(vaultPath)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
-	// Collect types
-	types := make(map[string]TypeSchema)
-
-	// User-defined types
-	for name, typeDef := range sch.Types {
-		types[name] = buildTypeSchema(name, typeDef, false)
-	}
-
-	// Built-in types
-	types["page"] = TypeSchema{Name: "page", Builtin: true}
-	types["section"] = TypeSchema{Name: "section", Builtin: true}
-	types["date"] = TypeSchema{Name: "date", Builtin: true}
-
 	if isJSONOutput() {
-		// Count types without name_field that have required string fields
-		var typesWithoutNameField []string
-		for name, typeDef := range sch.Types {
-			if typeDef != nil && typeDef.NameField == "" && !isBuiltinType(name) {
-				// Check if type has a required string field that could be a name_field
-				for _, fieldDef := range typeDef.Fields {
-					if fieldDef != nil && fieldDef.Required && fieldDef.Type == schema.FieldTypeString {
-						typesWithoutNameField = append(typesWithoutNameField, name)
-						break
-					}
-				}
-			}
+		data := map[string]interface{}{
+			"types": result.Types,
 		}
-
-		result := map[string]interface{}{
-			"types": types,
+		if result.Hint != nil {
+			data["hint"] = result.Hint
 		}
-
-		// Add hint for agents about name_field
-		if len(typesWithoutNameField) > 0 {
-			sort.Strings(typesWithoutNameField)
-			result["hint"] = map[string]interface{}{
-				"message":                  "Some types have required string fields but no name_field configured. Setting name_field enables auto-population from the title argument in raven_new.",
-				"types_without_name_field": typesWithoutNameField,
-				"fix_command":              "rvn schema update type <type_name> --name-field <field_name>",
-			}
-		}
-
-		outputSuccess(result, &Meta{Count: len(types), QueryTimeMs: elapsed})
+		outputSuccess(data, &Meta{Count: len(result.Types), QueryTimeMs: elapsed})
 		return nil
 	}
 
 	// Human-readable output
 	fmt.Println("Types:")
 	var names []string
-	for name := range types {
+	for name := range result.Types {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		t := types[name]
+		t := result.Types[name]
 		if t.Builtin {
 			fmt.Printf("  %s (built-in)\n", name)
 		} else {
@@ -237,35 +205,29 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 }
 
 func listSchemaTraits(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.Traits(vaultPath)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
-	// Collect traits
-	traits := make(map[string]TraitSchema)
-	for name, traitDef := range sch.Traits {
-		traits[name] = buildTraitSchema(name, traitDef)
-	}
-
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
-			"traits": traits,
-		}, &Meta{Count: len(traits), QueryTimeMs: elapsed})
+			"traits": result.Traits,
+		}, &Meta{Count: len(result.Traits), QueryTimeMs: elapsed})
 		return nil
 	}
 
 	// Human-readable output
 	fmt.Println("Traits:")
 	var names []string
-	for name := range traits {
+	for name := range result.Traits {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		t := traits[name]
+		t := result.Traits[name]
 		if t.Type != "" {
 			fmt.Printf("  %s (%s)\n", name, t.Type)
 		} else {
@@ -277,27 +239,24 @@ func listSchemaTraits(vaultPath string, start time.Time) error {
 }
 
 func listSchemaCore(vaultPath string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.CoreList(vaultPath)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+		return mapSchemaServiceError(err)
 	}
 	elapsed := time.Since(start).Milliseconds()
 
-	result := map[string]CoreTypeSchema{
-		"date":    buildCoreTypeSchema("date", sch.Core["date"]),
-		"page":    buildCoreTypeSchema("page", sch.Core["page"]),
-		"section": buildCoreTypeSchema("section", sch.Core["section"]),
-	}
-
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{"core": result}, &Meta{Count: len(result), QueryTimeMs: elapsed})
+		outputSuccess(map[string]interface{}{"core": result.Core}, &Meta{Count: len(result.Core), QueryTimeMs: elapsed})
 		return nil
 	}
 
 	fmt.Println("Core types:")
 	names := []string{"date", "page", "section"}
 	for _, name := range names {
-		core := result[name]
+		core, ok := result.Core[name]
+		if !ok {
+			continue
+		}
 		if len(core.Templates) > 0 {
 			fmt.Printf("  %s templates=%v", name, core.Templates)
 			if core.DefaultTemplate != "" {
@@ -316,16 +275,12 @@ func listSchemaCore(vaultPath string, start time.Time) error {
 }
 
 func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.CoreByName(vaultPath, coreTypeName)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
-	}
-
-	if !schema.IsBuiltinType(coreTypeName) {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("core type '%s' not found", coreTypeName), "Available core types: date, page, section")
+		return mapSchemaServiceError(err)
 	}
 	elapsed := time.Since(start).Milliseconds()
-	coreJSON := buildCoreTypeSchema(coreTypeName, sch.Core[coreTypeName])
+	coreJSON := result.Core
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{"core": coreJSON}, &Meta{QueryTimeMs: elapsed})
@@ -348,30 +303,13 @@ func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
 }
 
 func getSchemaType(vaultPath, typeName string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.TypeByName(vaultPath, typeName)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
-
-	// Check for built-in types
-	if schema.IsBuiltinType(typeName) {
-		typeJSON := TypeSchema{Name: typeName, Builtin: true}
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{"type": typeJSON}, &Meta{QueryTimeMs: elapsed})
-			return nil
-		}
-		fmt.Printf("Type: %s (built-in)\n", typeName)
-		return nil
-	}
-
-	typeDef, ok := sch.Types[typeName]
-	if !ok {
-		return handleErrorMsg(ErrTypeNotFound, fmt.Sprintf("type '%s' not found", typeName), "Run 'rvn schema types' to see available types")
-	}
-
-	typeJSON := buildTypeSchema(typeName, typeDef, false)
+	typeJSON := result.Type
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{"type": typeJSON}, &Meta{QueryTimeMs: elapsed})
@@ -380,46 +318,56 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 
 	// Human-readable output
 	fmt.Printf("Type: %s\n", typeName)
-	if typeDef.Description != "" {
-		fmt.Printf("  Description: %s\n", typeDef.Description)
+	if typeJSON.Builtin {
+		fmt.Printf("  Built-in: true\n")
+		return nil
 	}
-	if typeDef.DefaultPath != "" {
-		fmt.Printf("  Default path: %s\n", typeDef.DefaultPath)
+	if typeJSON.Description != "" {
+		fmt.Printf("  Description: %s\n", typeJSON.Description)
 	}
-	if typeDef.NameField != "" {
-		fmt.Printf("  Name field: %s\n", typeDef.NameField)
+	if typeJSON.DefaultPath != "" {
+		fmt.Printf("  Default path: %s\n", typeJSON.DefaultPath)
 	}
-	if typeDef.Template != "" {
-		fmt.Printf("  Template: %s\n", typeDef.Template)
+	if typeJSON.NameField != "" {
+		fmt.Printf("  Name field: %s\n", typeJSON.NameField)
 	}
-	if len(typeDef.Templates) > 0 {
+	if typeJSON.Template != "" {
+		fmt.Printf("  Template: %s\n", typeJSON.Template)
+	}
+	if len(typeJSON.Templates) > 0 {
 		fmt.Println("  Templates:")
-		templateIDs := append([]string(nil), typeDef.Templates...)
+		templateIDs := append([]string(nil), typeJSON.Templates...)
 		sort.Strings(templateIDs)
 		for _, templateID := range templateIDs {
 			fmt.Printf("    - %s\n", templateID)
 		}
 	}
-	if typeDef.DefaultTemplate != "" {
-		fmt.Printf("  Default template: %s\n", typeDef.DefaultTemplate)
+	if typeJSON.DefaultTemplate != "" {
+		fmt.Printf("  Default template: %s\n", typeJSON.DefaultTemplate)
 	}
-	if len(typeDef.Fields) > 0 {
+	if len(typeJSON.Fields) > 0 {
 		fmt.Println("  Fields:")
-		for name, field := range typeDef.Fields {
+		fieldNames := make([]string, 0, len(typeJSON.Fields))
+		for name := range typeJSON.Fields {
+			fieldNames = append(fieldNames, name)
+		}
+		sort.Strings(fieldNames)
+		for _, name := range fieldNames {
+			field := typeJSON.Fields[name]
 			required := ""
-			if field != nil && field.Required {
+			if field.Required {
 				required = " (required)"
 			}
-			fieldType := "string"
-			if field != nil && field.Type != "" {
-				fieldType = string(field.Type)
+			fieldType := field.Type
+			if fieldType == "" {
+				fieldType = "string"
 			}
 			isNameField := ""
-			if name == typeDef.NameField {
+			if name == typeJSON.NameField {
 				isNameField = " [name_field]"
 			}
 			fieldDescription := ""
-			if field != nil && field.Description != "" {
+			if field.Description != "" {
 				fieldDescription = " - " + field.Description
 			}
 			fmt.Printf("    %s: %s%s%s%s\n", name, fieldType, required, isNameField, fieldDescription)
@@ -430,19 +378,13 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 }
 
 func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
-	sch, err := schema.Load(vaultPath)
+	result, err := schemasvc.TraitByName(vaultPath, traitName)
 	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
+		return mapSchemaServiceError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
-
-	traitDef, ok := sch.Traits[traitName]
-	if !ok {
-		return handleErrorMsg(ErrTraitNotFound, fmt.Sprintf("trait '%s' not found", traitName), "Run 'rvn schema traits' to see available traits")
-	}
-
-	traitJSON := buildTraitSchema(traitName, traitDef)
+	traitJSON := result.Trait
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{"trait": traitJSON}, &Meta{QueryTimeMs: elapsed})
@@ -451,14 +393,14 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 
 	// Human-readable output
 	fmt.Printf("Trait: %s\n", traitName)
-	if traitDef.Type != "" {
-		fmt.Printf("  Type: %s\n", traitDef.Type)
+	if traitJSON.Type != "" {
+		fmt.Printf("  Type: %s\n", traitJSON.Type)
 	}
-	if len(traitDef.Values) > 0 {
-		fmt.Printf("  Values: %v\n", traitDef.Values)
+	if len(traitJSON.Values) > 0 {
+		fmt.Printf("  Values: %v\n", traitJSON.Values)
 	}
-	if traitDef.Default != "" {
-		fmt.Printf("  Default: %s\n", traitDef.Default)
+	if traitJSON.Default != "" {
+		fmt.Printf("  Default: %s\n", traitJSON.Default)
 	}
 
 	return nil
@@ -467,7 +409,7 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 func listSchemaCommands(start time.Time) error {
 	elapsed := time.Since(start).Milliseconds()
 
-	cmds := buildSchemaCommands()
+	cmds := schemasvc.SchemaCommands().Commands
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
@@ -490,165 +432,6 @@ func listSchemaCommands(start time.Time) error {
 	fmt.Println("\nUse 'rvn schema commands --json' for full details.")
 
 	return nil
-}
-
-func buildSchemaCommands() map[string]CommandSchema {
-	// Generate schema command metadata from the registry (single source of truth).
-	cmds := make(map[string]CommandSchema)
-	for name, meta := range commands.Registry {
-		if name != "schema" && !strings.HasPrefix(name, "schema_") {
-			continue
-		}
-
-		cmd := CommandSchema{
-			Description: meta.Description,
-			Examples:    meta.Examples,
-			UseCases:    meta.UseCases,
-		}
-
-		for _, arg := range meta.Args {
-			cmd.Args = append(cmd.Args, arg.Name)
-		}
-
-		if len(meta.Flags) > 0 {
-			cmd.Flags = make(map[string]FlagSchema)
-			for _, flag := range meta.Flags {
-				cmd.Flags["--"+flag.Name] = FlagSchema{
-					Type:        string(flag.Type),
-					Description: flag.Description,
-					Examples:    flag.Examples,
-				}
-			}
-		}
-
-		cmds[name] = cmd
-	}
-
-	return cmds
-}
-
-func buildSchemaResult(sch *schema.Schema, vaultCfg *config.VaultConfig) SchemaResult {
-	result := SchemaResult{
-		Version: sch.Version,
-		Types:   make(map[string]TypeSchema),
-		Core:    make(map[string]CoreTypeSchema),
-		Traits:  make(map[string]TraitSchema),
-	}
-
-	// User-defined types
-	for name, typeDef := range sch.Types {
-		result.Types[name] = buildTypeSchema(name, typeDef, false)
-	}
-
-	// Built-in types
-	result.Types["page"] = TypeSchema{Name: "page", Builtin: true}
-	result.Types["section"] = TypeSchema{Name: "section", Builtin: true}
-	result.Types["date"] = TypeSchema{Name: "date", Builtin: true}
-
-	// Core type config
-	result.Core["date"] = buildCoreTypeSchema("date", sch.Core["date"])
-	result.Core["page"] = buildCoreTypeSchema("page", sch.Core["page"])
-	result.Core["section"] = buildCoreTypeSchema("section", sch.Core["section"])
-
-	// Traits
-	for name, traitDef := range sch.Traits {
-		result.Traits[name] = buildTraitSchema(name, traitDef)
-	}
-
-	if len(sch.Templates) > 0 {
-		result.Templates = make(map[string]TemplateSchema, len(sch.Templates))
-		for id, templateDef := range sch.Templates {
-			if templateDef == nil {
-				continue
-			}
-			result.Templates[id] = TemplateSchema{
-				ID:          id,
-				File:        templateDef.File,
-				Description: templateDef.Description,
-			}
-		}
-	}
-
-	// Queries from vault config
-	if vaultCfg != nil && len(vaultCfg.Queries) > 0 {
-		result.Queries = make(map[string]SavedQueryInfo)
-		for name, q := range vaultCfg.Queries {
-			result.Queries[name] = SavedQueryInfo{
-				Name:        name,
-				Query:       q.Query,
-				Args:        q.Args,
-				Description: q.Description,
-			}
-		}
-	}
-
-	return result
-}
-
-func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) TypeSchema {
-	result := TypeSchema{
-		Name:    name,
-		Builtin: builtin,
-	}
-
-	if typeDef != nil {
-		result.DefaultPath = typeDef.DefaultPath
-		result.Description = typeDef.Description
-		result.NameField = typeDef.NameField
-		result.Template = typeDef.Template
-		result.Templates = append([]string(nil), typeDef.Templates...)
-		result.DefaultTemplate = typeDef.DefaultTemplate
-
-		if len(typeDef.Fields) > 0 {
-			result.Fields = make(map[string]FieldSchema)
-			for fieldName, fieldDef := range typeDef.Fields {
-				if fieldDef != nil {
-					defaultStr := ""
-					if fieldDef.Default != nil {
-						defaultStr = fmt.Sprintf("%v", fieldDef.Default)
-					}
-					result.Fields[fieldName] = FieldSchema{
-						Type:        string(fieldDef.Type),
-						Required:    fieldDef.Required,
-						Default:     defaultStr,
-						Values:      fieldDef.Values,
-						Target:      fieldDef.Target,
-						Description: fieldDef.Description,
-					}
-				}
-			}
-		}
-	}
-
-	return result
-}
-
-func buildCoreTypeSchema(name string, coreDef *schema.CoreTypeDefinition) CoreTypeSchema {
-	result := CoreTypeSchema{Name: name}
-	if coreDef == nil {
-		return result
-	}
-	result.Templates = append([]string(nil), coreDef.Templates...)
-	result.DefaultTemplate = coreDef.DefaultTemplate
-	return result
-}
-
-func buildTraitSchema(name string, traitDef *schema.TraitDefinition) TraitSchema {
-	result := TraitSchema{Name: name}
-	if traitDef != nil {
-		result.Type = string(traitDef.Type)
-		result.Values = traitDef.Values
-		if traitDef.Default != nil {
-			result.Default = fmt.Sprintf("%v", traitDef.Default)
-		}
-	}
-	return result
-}
-
-// isBuiltinType is deprecated - use schema.IsBuiltinType instead.
-// Keeping for now to avoid breaking any internal callers.
-func isBuiltinType(name string) bool {
-	return schema.IsBuiltinType(name)
 }
 
 func init() {

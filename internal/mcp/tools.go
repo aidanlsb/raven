@@ -2,11 +2,8 @@
 package mcp
 
 import (
-	"encoding/json"
 	"fmt"
-	"math"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commands"
@@ -165,173 +162,6 @@ func CLICommandName(toolName string) string {
 	return strings.ReplaceAll(raw, "_", " ")
 }
 
-// BuildCLIArgs builds CLI arguments from MCP tool arguments using the registry.
-//
-// ARGUMENT ORDERING STANDARD (strictly enforced):
-//  1. Command name (e.g., "edit", "schema add type")
-//  2. All flags with their values (--flag value)
-//  3. "--json" flag (always added for MCP)
-//  4. "--" separator (always added to prevent args starting with "-" from being parsed as flags)
-//  5. Positional arguments in registry-defined order
-//
-// This standard ensures consistent, predictable parsing regardless of argument content.
-// No special cases allowed - all commands must follow this pattern.
-//
-// FLAG NAME NORMALIZATION:
-// MCP clients may send property names with either hyphens or underscores
-// (e.g., "default-path" or "default_path"). This function accepts both forms
-// and normalizes them to match the registry's canonical names (which use hyphens).
-func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
-	cmdID, ok := commands.ResolveToolCommandID(toolName)
-	if !ok {
-		// Commands MUST be in the registry. No fallback behavior.
-		// Return empty to trigger "unknown tool" error upstream.
-		return nil
-	}
-	meta := commands.Registry[cmdID]
-
-	var cliArgs []string
-
-	// Normalize args to handle both hyphen and underscore variants
-	// (e.g., accept both "default-path" and "default_path")
-	normalizedArgs := normalizeArgs(args)
-
-	// Step 1: Command name
-	cliArgs = strings.Fields(meta.Name)
-
-	// Step 2: Collect all flags
-	for _, flag := range meta.Flags {
-		val, ok := normalizedArgs[flag.Name]
-		if !ok {
-			continue
-		}
-
-		switch flag.Type {
-		case commands.FlagTypeBool:
-			if boolVal, ok := val.(bool); ok && boolVal {
-				cliArgs = append(cliArgs, "--"+flag.Name)
-			}
-		case commands.FlagTypeInt:
-			if intVal, ok := intFlagValue(val); ok {
-				cliArgs = append(cliArgs, "--"+flag.Name, intVal)
-			}
-		case commands.FlagTypeStringSlice:
-			for _, item := range stringSliceValues(val) {
-				if item != "" {
-					cliArgs = append(cliArgs, "--"+flag.Name, item)
-				}
-			}
-		case commands.FlagTypeJSON:
-			switch typed := val.(type) {
-			case string:
-				if strings.TrimSpace(typed) != "" {
-					cliArgs = append(cliArgs, "--"+flag.Name, typed)
-				}
-			default:
-				b, err := json.Marshal(typed)
-				if err == nil {
-					cliArgs = append(cliArgs, "--"+flag.Name, string(b))
-				}
-			}
-		case commands.FlagTypeKeyValue:
-			if isObjectArg(val) && hasFlag(meta.Flags, flag.Name+"-json") {
-				// Prefer JSON companion flags (e.g., --field-json) when available so
-				// typed values survive end-to-end without key=value coercion.
-				continue
-			}
-			// Key-value flags are represented as a JSON object in MCP, but some clients may
-			// send a single "k=v" string or an array of "k=v" strings. Accept all.
-			for _, pair := range keyValuePairs(val) {
-				cliArgs = append(cliArgs, "--"+flag.Name, pair)
-			}
-		case commands.FlagTypePosKeyValue:
-			// Positional key=value args are handled in step 5b below.
-			continue
-		default: // FlagTypeString
-			if strVal := toString(val); strVal != "" {
-				cliArgs = append(cliArgs, "--"+flag.Name, strVal)
-			}
-		}
-	}
-
-	// Step 3: Always add --json for MCP
-	cliArgs = append(cliArgs, "--json")
-
-	// Step 4: ALWAYS add "--" separator before positional arguments
-	// This prevents ANY argument starting with "-" from being interpreted as a flag
-	cliArgs = append(cliArgs, "--")
-
-	// Step 5: Add positional arguments in registry-defined order
-	for _, arg := range meta.Args {
-		if val, ok := normalizedArgs[arg.Name]; ok {
-			// Preserve empty strings for positional args (e.g., `edit` new_str="" for deletion).
-			if strVal, ok := val.(string); ok {
-				cliArgs = append(cliArgs, strVal)
-			}
-		}
-	}
-
-	// Step 5b: Add positional key=value pairs (e.g., "set" command's fields)
-	for _, flag := range meta.Flags {
-		if flag.Type == commands.FlagTypePosKeyValue {
-			if val, ok := normalizedArgs[flag.Name]; ok {
-				if isObjectArg(val) && hasFlag(meta.Flags, flag.Name+"-json") {
-					continue
-				}
-				// Like FlagTypeKeyValue: primarily a JSON object, but accept "k=v" strings/arrays too.
-				cliArgs = append(cliArgs, keyValuePairs(val)...)
-			}
-		}
-	}
-
-	return cliArgs
-}
-
-func intFlagValue(v interface{}) (string, bool) {
-	switch val := v.(type) {
-	case int:
-		return strconv.Itoa(val), true
-	case int8:
-		return strconv.FormatInt(int64(val), 10), true
-	case int16:
-		return strconv.FormatInt(int64(val), 10), true
-	case int32:
-		return strconv.FormatInt(int64(val), 10), true
-	case int64:
-		return strconv.FormatInt(val, 10), true
-	case uint:
-		return strconv.FormatUint(uint64(val), 10), true
-	case uint8:
-		return strconv.FormatUint(uint64(val), 10), true
-	case uint16:
-		return strconv.FormatUint(uint64(val), 10), true
-	case uint32:
-		return strconv.FormatUint(uint64(val), 10), true
-	case uint64:
-		return strconv.FormatUint(val, 10), true
-	case float32:
-		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
-			return "", false
-		}
-		return strconv.FormatInt(int64(val), 10), true
-	case float64:
-		if math.IsNaN(val) || math.IsInf(val, 0) {
-			return "", false
-		}
-		return strconv.FormatInt(int64(val), 10), true
-	case json.Number:
-		if i, err := val.Int64(); err == nil {
-			return strconv.FormatInt(i, 10), true
-		}
-		if f, err := val.Float64(); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
-			return strconv.FormatInt(int64(f), 10), true
-		}
-		return "", false
-	default:
-		return "", false
-	}
-}
-
 func toString(v interface{}) string {
 	switch val := v.(type) {
 	case string:
@@ -467,15 +297,6 @@ func keyValuePairs(v interface{}) []string {
 	default:
 		return nil
 	}
-}
-
-func hasFlag(flags []commands.FlagMeta, name string) bool {
-	for _, flag := range flags {
-		if flag.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 func isObjectArg(v interface{}) bool {

@@ -2,15 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"path"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/pages"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/datesvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -36,75 +31,22 @@ Examples:
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-
-		// Load vault config for daily directory
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return fmt.Errorf("failed to load vault config: %w", err)
-		}
-
-		// Parse date argument
 		var dateArg string
 		if len(args) > 0 {
 			dateArg = args[0]
 		}
-		targetDate, err := vault.ParseDateArg(dateArg)
+		result, err := datesvc.EnsureDaily(datesvc.EnsureDailyRequest{
+			VaultPath:  vaultPath,
+			DateArg:    dateArg,
+			TemplateID: dailyTemplate,
+		})
 		if err != nil {
-			return err
+			return mapDateSvcError(err)
 		}
 
-		dateStr := vault.FormatDateISO(targetDate)
-		targetPath := path.Join(vaultCfg.GetDailyDirectory(), dateStr)
-		dailyPath := filepath.Join(vaultPath, vaultCfg.GetDailyDirectory(), dateStr+".md")
-
-		// Check if daily note already exists, create if needed
-		created := false
-		if !pages.Exists(vaultPath, targetPath) {
-			friendlyDate := vault.FormatDateFriendly(targetDate)
-			s, err := schema.Load(vaultPath)
-			if err != nil {
-				return fmt.Errorf("failed to load schema: %w", err)
-			}
-			var result *pages.CreateResult
-			if strings.TrimSpace(dailyTemplate) != "" {
-				templateOverride, err := schema.ResolveTypeTemplateFile(s, "date", dailyTemplate)
-				if err != nil {
-					return handleErrorMsg(ErrInvalidInput, err.Error(), "Use `rvn schema core date template list` to see available template IDs")
-				}
-				result, err = pages.CreateDailyNoteWithTemplate(
-					vaultPath,
-					vaultCfg.GetDailyDirectory(),
-					dateStr,
-					friendlyDate,
-					templateOverride,
-					vaultCfg.GetTemplateDirectory(),
-				)
-				if err != nil {
-					return fmt.Errorf("failed to create daily note: %w", err)
-				}
-			} else {
-				result, err = pages.CreateDailyNoteWithSchema(
-					vaultPath,
-					vaultCfg.GetDailyDirectory(),
-					dateStr,
-					friendlyDate,
-					s,
-					vaultCfg.GetTemplateDirectory(),
-				)
-				if err != nil {
-					return fmt.Errorf("failed to create daily note: %w", err)
-				}
-			}
-
-			if !isJSONOutput() {
-				fmt.Printf("Created %s\n", result.RelativePath)
-			}
-			dailyPath = result.FilePath
-			created = true
+		if !isJSONOutput() && result.Created {
+			fmt.Printf("Created %s\n", result.RelativePath)
 		}
-
-		// Open in editor using shared logic
-		relPath, _ := filepath.Rel(vaultPath, dailyPath)
 
 		if isJSONOutput() {
 			editor := ""
@@ -114,25 +56,47 @@ Examples:
 
 			opened := false
 			if dailyEdit {
-				opened = vault.OpenInEditor(getConfig(), dailyPath)
+				opened = vault.OpenInEditor(getConfig(), result.FilePath)
 			}
 
 			outputSuccess(map[string]interface{}{
-				"file":    relPath,
-				"date":    dateStr,
-				"created": created,
+				"file":    result.RelativePath,
+				"date":    result.Date,
+				"created": result.Created,
 				"opened":  opened,
 				"editor":  editor,
 			}, nil)
 			return nil
 		}
 
-		// In human CLI mode, preserve the historical behavior:
-		// open daily notes by default. --edit is still used by JSON/agent callers.
-		openFileInEditor(dailyPath, relPath, created)
+		openFileInEditor(result.FilePath, result.RelativePath, result.Created)
 
 		return nil
 	},
+}
+
+func mapDateSvcError(err error) error {
+	svcErr, ok := datesvc.AsError(err)
+	if !ok {
+		return handleError(ErrInternal, err, "")
+	}
+
+	switch svcErr.Code {
+	case datesvc.CodeInvalidInput:
+		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+	case datesvc.CodeConfigInvalid:
+		return handleError(ErrConfigInvalid, svcErr, svcErr.Suggestion)
+	case datesvc.CodeSchemaInvalid:
+		return handleError(ErrSchemaInvalid, svcErr, svcErr.Suggestion)
+	case datesvc.CodeDatabaseError:
+		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
+	case datesvc.CodeQueryFailed:
+		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
+	case datesvc.CodeFileWriteErr:
+		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+	default:
+		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+	}
 }
 
 func init() {

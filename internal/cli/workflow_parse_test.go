@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/workflow"
 )
 
 func TestParseAgentOutputEnvelope_SourcePrecedence(t *testing.T) {
@@ -47,9 +49,9 @@ func TestParseAgentOutputEnvelope_SourcePrecedence(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			env, err := parseAgentOutputEnvelope(tt.file, tt.jsonFlag, tt.inlineString)
+			env, err := workflow.ParseAgentOutputEnvelope(tt.file, tt.jsonFlag, tt.inlineString)
 			if err != nil {
-				t.Fatalf("parseAgentOutputEnvelope() error = %v", err)
+				t.Fatalf("ParseAgentOutputEnvelope() error = %v", err)
 			}
 			got, ok := env.Outputs["markdown"].(string)
 			if !ok {
@@ -65,7 +67,7 @@ func TestParseAgentOutputEnvelope_SourcePrecedence(t *testing.T) {
 func TestParseAgentOutputEnvelope_RequiresInput(t *testing.T) {
 	t.Parallel()
 
-	_, err := parseAgentOutputEnvelope("", "", "")
+	_, err := workflow.ParseAgentOutputEnvelope("", "", "")
 	if err == nil {
 		t.Fatal("expected error when no agent output source is provided")
 	}

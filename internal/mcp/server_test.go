@@ -378,3 +378,31 @@ exit 1
 		t.Fatalf("expected error.details.output to be present; out=%s", out)
 	}
 }
+
+func TestExecuteRvnReturnsErrorWhenExecutablePathMissing(t *testing.T) {
+	s := &Server{executable: ""}
+	out, isErr := s.executeRvn([]string{"stats", "--json"})
+	if !isErr {
+		t.Fatalf("expected isError=true, got false; out=%s", out)
+	}
+
+	var parsed struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v; out=%s", err, out)
+	}
+	if parsed.OK {
+		t.Fatalf("expected ok=false, got ok=true; out=%s", out)
+	}
+	if parsed.Error.Code != "EXECUTION_ERROR" {
+		t.Fatalf("expected error.code=EXECUTION_ERROR, got %q; out=%s", parsed.Error.Code, out)
+	}
+	if parsed.Error.Message == "" {
+		t.Fatalf("expected error.message to be present; out=%s", out)
+	}
+}

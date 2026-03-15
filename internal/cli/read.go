@@ -1,13 +1,15 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 var (
@@ -81,96 +83,68 @@ Examples:
 			reference = args[0]
 		}
 
-		// Resolve the reference using unified resolver
-		result, err := ResolveReference(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-		})
-		if err != nil {
-			return handleResolveError(err, reference)
+		// If the caller requested line-based output/ranges, force raw mode so the content is stable.
+		if readLinesFlag || readStartLine > 0 || readEndLine > 0 {
+			readRawFlag = true
 		}
 
-		fullPath := result.FilePath
-		relPath, _ := filepath.Rel(vaultPath, fullPath)
-
-		// Read file
-		content, err := os.ReadFile(fullPath)
+		rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: false})
 		if err != nil {
+			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
+		defer rt.Close()
+
+		result, err := readsvc.Read(rt, readsvc.ReadRequest{
+			Reference: reference,
+			Raw:       readRawFlag,
+			Lines:     readLinesFlag,
+			StartLine: readStartLine,
+			EndLine:   readEndLine,
+		})
+		if err != nil {
+			var ambiguous *readsvc.AmbiguousRefError
+			if errors.As(err, &ambiguous) {
+				return handleErrorMsg(ErrRefAmbiguous, ambiguous.Error(), "Use a full object ID/path to disambiguate")
+			}
+
+			var notFound *readsvc.RefNotFoundError
+			if errors.As(err, &notFound) {
+				return handleErrorMsg(ErrRefNotFound, notFound.Error(), "Check the reference and try again")
+			}
+
+			var invalidRange *readsvc.InvalidLineRangeError
+			if errors.As(err, &invalidRange) {
+				return handleErrorMsg(ErrInvalidInput, invalidRange.Error(), invalidRange.Suggestion())
+			}
+
 			if os.IsNotExist(err) {
-				return handleErrorMsg(ErrFileNotFound, fmt.Sprintf("file not found: %s", relPath), "Check the path and try again")
+				return handleErrorMsg(ErrFileNotFound, err.Error(), "Check the path and try again")
+			}
+
+			if strings.Contains(err.Error(), "failed to open database") || strings.Contains(err.Error(), "failed to create resolver") {
+				return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
 			}
 			return handleError(ErrFileReadError, err, "")
 		}
 
 		elapsed := time.Since(start).Milliseconds()
 
-		// Count lines
-		lineCount := strings.Count(string(content), "\n")
-		if len(content) > 0 && content[len(content)-1] != '\n' {
-			lineCount++ // Account for last line without newline
-		}
-
-		// If the caller requested line-based output/ranges, force raw mode so the content is stable.
-		if readLinesFlag || readStartLine > 0 || readEndLine > 0 {
-			readRawFlag = true
-		}
-
 		if readRawFlag {
-			contentStr := string(content)
-			startLine := 1
-			endLine := lineCount
-			if readStartLine > 0 {
-				startLine = readStartLine
-			}
-			if readEndLine > 0 {
-				endLine = readEndLine
-			}
-
-			if startLine < 1 || endLine < 1 || startLine > endLine || endLine > lineCount {
-				return handleErrorMsg(ErrInvalidInput,
-					fmt.Sprintf("invalid line range: start_line=%d end_line=%d (file has %d lines)", startLine, endLine, lineCount),
-					"Use 1-indexed inclusive line numbers within the file's line_count")
-			}
-
-			// Build exact byte ranges for each line so we can return a substring without transcription risk.
-			type rng struct {
-				start int
-				end   int // exclusive, includes trailing '\n' if present
-			}
-			ranges := make([]rng, 0, lineCount)
-			lineStart := 0
-			for i := 0; i < len(contentStr) && len(ranges) < lineCount; i++ {
-				if contentStr[i] == '\n' {
-					ranges = append(ranges, rng{start: lineStart, end: i + 1})
-					lineStart = i + 1
-				}
-			}
-			// If file doesn't end with '\n', record the last line.
-			if len(ranges) < lineCount {
-				ranges = append(ranges, rng{start: lineStart, end: len(contentStr)})
-			}
-
-			rangeStart := ranges[startLine-1].start
-			rangeEnd := ranges[endLine-1].end
-			contentRange := contentStr[rangeStart:rangeEnd]
-
 			if isJSONOutput() {
 				res := FileResult{
-					Path:      relPath,
-					Content:   contentRange,
-					LineCount: lineCount,
+					Path:      result.Path,
+					Content:   result.Content,
+					LineCount: result.LineCount,
 				}
 				// Only include range metadata when it's not the full file, or when lines are requested.
-				if startLine != 1 || endLine != lineCount || readLinesFlag {
-					res.StartLine = startLine
-					res.EndLine = endLine
+				if result.StartLine > 0 {
+					res.StartLine = result.StartLine
+					res.EndLine = result.EndLine
 				}
-				if readLinesFlag {
-					lines := make([]FileLine, 0, endLine-startLine+1)
-					for n := startLine; n <= endLine; n++ {
-						seg := contentStr[ranges[n-1].start:ranges[n-1].end]
-						seg = strings.TrimSuffix(seg, "\n")
-						lines = append(lines, FileLine{Num: n, Text: seg})
+				if len(result.Lines) > 0 {
+					lines := make([]FileLine, 0, len(result.Lines))
+					for _, line := range result.Lines {
+						lines = append(lines, FileLine{Num: line.Num, Text: line.Text})
 					}
 					res.Lines = lines
 				}
@@ -179,21 +153,18 @@ Examples:
 			}
 
 			// Human-readable: just output the content
-			fmt.Print(contentRange)
+			fmt.Print(result.Content)
 			return nil
 		}
 
 		return readEnriched(readEnrichedOptions{
-			vaultPath:   vaultPath,
-			vaultCfg:    vaultCfg,
-			reference:   reference,
-			objectID:    result.ObjectID,
-			fileAbsPath: fullPath,
-			fileRelPath: relPath,
-			content:     string(content),
-			lineCount:   lineCount,
-			start:       start,
-			elapsedMs:   elapsed,
+			fileRelPath:    result.Path,
+			content:        result.Content,
+			lineCount:      result.LineCount,
+			elapsedMs:      elapsed,
+			references:     result.References,
+			backlinks:      result.Backlinks,
+			backlinksCount: result.BacklinksCount,
 		})
 	},
 }

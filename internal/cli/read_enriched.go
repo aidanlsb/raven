@@ -2,40 +2,22 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
 type readEnrichedOptions struct {
-	vaultPath   string
-	vaultCfg    *config.VaultConfig
-	reference   string
-	objectID    string
-	fileAbsPath string
-	fileRelPath string
-	content     string
-	lineCount   int
-	start       time.Time
-	elapsedMs   int64
-}
-
-type readReference struct {
-	Text string  `json:"text"`
-	Path *string `json:"path,omitempty"`
-}
-
-type readBacklinkGroup struct {
-	Source string   `json:"source"`
-	Lines  []string `json:"lines"`
+	fileRelPath    string
+	content        string
+	lineCount      int
+	elapsedMs      int64
+	references     []readsvc.ReadReference
+	backlinks      []readsvc.ReadBacklinkGroup
+	backlinksCount int
 }
 
 const readRenderMargin = ui.MarkdownRenderMargin
@@ -44,23 +26,16 @@ func readEnriched(opts readEnrichedOptions) error {
 	// Split content into frontmatter and body
 	frontmatter, body := splitFrontmatterBody(opts.content)
 
-	// Pre-process wikilinks in body: convert [[links]] to markdown links
-	processedBody, refs := preprocessWikilinks(body, opts.vaultPath, opts.vaultCfg)
-
-	// Fetch backlinks and extract context lines
-	backlinkGroups, backlinksCount, err := readBacklinksWithContext(opts.vaultPath, opts.vaultCfg, opts.objectID)
-	if err != nil {
-		return err
-	}
+	processedBody := body
 
 	if isJSONOutput() {
 		outputSuccess(map[string]interface{}{
 			"path":       opts.fileRelPath,
 			"content":    opts.content,
 			"line_count": opts.lineCount,
-			"references": refs,
-			"backlinks":  backlinkGroups,
-		}, &Meta{QueryTimeMs: opts.elapsedMs, Count: backlinksCount})
+			"references": opts.references,
+			"backlinks":  opts.backlinks,
+		}, &Meta{QueryTimeMs: opts.elapsedMs, Count: opts.backlinksCount})
 		return nil
 	}
 
@@ -107,15 +82,15 @@ func readEnriched(opts readEnrichedOptions) error {
 	}
 
 	fmt.Println()
-	fmt.Println(marginPrefix + ui.DividerWithAccentLabel(fmt.Sprintf("Backlinks (%d)", backlinksCount), width))
+	fmt.Println(marginPrefix + ui.DividerWithAccentLabel(fmt.Sprintf("Backlinks (%d)", opts.backlinksCount), width))
 	fmt.Println()
 
-	if backlinksCount == 0 {
+	if opts.backlinksCount == 0 {
 		fmt.Println(marginPrefix + ui.Muted.Render("(none)"))
 		return nil
 	}
 
-	for i, g := range backlinkGroups {
+	for i, g := range opts.backlinks {
 		if i > 0 {
 			fmt.Println()
 		}
@@ -145,48 +120,6 @@ func splitFrontmatterBody(content string) (frontmatter string, body string) {
 	return frontmatter, body
 }
 
-// preprocessWikilinks collects wikilink reference metadata from the body while
-// preserving the original [[wikilink]] text for display.
-func preprocessWikilinks(body string, vaultPath string, vaultCfg *config.VaultConfig) (string, []readReference) {
-	lines := strings.Split(body, "\n")
-	outLines := make([]string, 0, len(lines))
-	var refs []readReference
-
-	fs := parser.FenceState{}
-
-	for _, line := range lines {
-		// Keep fence marker lines as-is; don't render wikilinks on those lines.
-		if fs.UpdateFenceState(line) {
-			outLines = append(outLines, line)
-			continue
-		}
-		if fs.InFence {
-			outLines = append(outLines, line)
-			continue
-		}
-
-		sanitized := parser.RemoveInlineCode(line)
-		matches := wikilink.FindAllInLine(sanitized, false)
-		if len(matches) == 0 {
-			outLines = append(outLines, line)
-			continue
-		}
-
-		for _, m := range matches {
-			refs = append(refs, readReference{Text: m.Target})
-
-			// Resolve to file path for JSON metadata/backlinks context.
-			path, ok := resolveTargetToRelPath(m.Target, vaultPath, vaultCfg)
-			if ok {
-				refs[len(refs)-1].Path = &path
-			}
-		}
-		outLines = append(outLines, line)
-	}
-
-	return strings.Join(outLines, "\n"), refs
-}
-
 func renderTraitsStyled(content string) string {
 	return ui.HighlightTraits(content)
 }
@@ -204,92 +137,6 @@ func indentBlock(content string, spaces int) string {
 		parts[i] = prefix + part
 	}
 	return strings.Join(parts, "")
-}
-
-func resolveTargetToRelPath(target string, vaultPath string, vaultCfg *config.VaultConfig) (string, bool) {
-	res, err := ResolveReference(target, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-	})
-	if err != nil {
-		return "", false
-	}
-	rel, err := filepath.Rel(vaultPath, res.FilePath)
-	if err != nil {
-		return "", false
-	}
-	return rel, true
-}
-
-func readBacklinksWithContext(vaultPath string, vaultCfg *config.VaultConfig, targetObjectID string) ([]readBacklinkGroup, int, error) {
-	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
-	if err != nil {
-		return nil, 0, handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
-	}
-	defer rt.Close()
-	if vaultCfg != nil {
-		rt.VaultCfg = vaultCfg
-		rt.DB.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-	}
-
-	links, err := readsvc.Backlinks(rt, targetObjectID)
-	if err != nil {
-		return nil, 0, handleError(ErrDatabaseError, err, "")
-	}
-
-	// Group by file_path
-	grouped := make(map[string][]model.Reference)
-	order := make([]string, 0)
-	for _, l := range links {
-		if _, exists := grouped[l.FilePath]; !exists {
-			order = append(order, l.FilePath)
-		}
-		grouped[l.FilePath] = append(grouped[l.FilePath], l)
-	}
-
-	// Read each file once to extract referenced lines
-	fileCache := make(map[string][]string)
-
-	out := make([]readBacklinkGroup, 0, len(order))
-	for _, filePath := range order {
-		lines, ok := fileCache[filePath]
-		if !ok {
-			full := filepath.Join(vaultPath, filePath)
-			b, readErr := os.ReadFile(full)
-			if readErr != nil {
-				// If we can't read the file, still include the group but with a placeholder
-				out = append(out, readBacklinkGroup{
-					Source: filePath,
-					Lines:  []string{fmt.Sprintf("(failed to read: %v)", readErr)},
-				})
-				continue
-			}
-			lines = strings.Split(string(b), "\n")
-			fileCache[filePath] = lines
-		}
-
-		var ctx []string
-		for _, ref := range grouped[filePath] {
-			if ref.Line == nil || *ref.Line <= 0 {
-				ctx = append(ctx, "(frontmatter)")
-				continue
-			}
-			idx := *ref.Line - 1
-			if idx < 0 || idx >= len(lines) {
-				ctx = append(ctx, fmt.Sprintf("(line %d out of range)", *ref.Line))
-				continue
-			}
-			ctx = append(ctx, strings.TrimRight(lines[idx], "\r"))
-		}
-
-		ctx = dedupePreserveOrder(ctx)
-		out = append(out, readBacklinkGroup{
-			Source: filePath,
-			Lines:  ctx,
-		})
-	}
-
-	return out, len(links), nil
 }
 
 func formatFileLink(relPath string) string {

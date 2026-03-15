@@ -6,10 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/datesvc"
 	"github.com/aidanlsb/raven/internal/ui"
-	"github.com/aidanlsb/raven/internal/vault"
 )
 
 var dateCmd = &cobra.Command{
@@ -29,106 +27,88 @@ Examples:
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-
-		// Load vault config for daily directory
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return fmt.Errorf("failed to load vault config: %w", err)
-		}
-
-		// Parse date argument
 		var dateArg string
 		if len(args) > 0 {
 			dateArg = args[0]
 		}
-		targetDate, err := vault.ParseDateArg(dateArg)
+		result, err := datesvc.DateHub(datesvc.DateHubRequest{
+			VaultPath: vaultPath,
+			DateArg:   dateArg,
+		})
 		if err != nil {
-			return err
+			return mapDateSvcError(err)
 		}
 
-		dateStr := vault.FormatDateISO(targetDate)
-		dayOfWeek := targetDate.Format("Monday")
-
-		db, err := index.Open(vaultPath)
-		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
+		if isJSONOutput() {
+			data := map[string]interface{}{
+				"date":          result.Date,
+				"day_of_week":   result.DayOfWeek,
+				"daily_note_id": result.DailyNoteID,
+				"daily_path":    result.DailyPath,
+				"daily_exists":  result.DailyExists,
+				"items":         result.Items,
+				"backlinks":     result.Backlinks,
+			}
+			if result.DailyNote != nil {
+				data["daily_note"] = result.DailyNote
+			}
+			outputSuccess(data, &Meta{Count: len(result.Items)})
+			return nil
 		}
-		defer db.Close()
 
 		display := ui.NewDisplayContext()
-		fmt.Printf("%s %s\n\n", ui.SectionHeader(dateStr), ui.Hint(fmt.Sprintf("(%s)", dayOfWeek)))
-
-		// Check for daily note
-		dailyNoteID := vaultCfg.DailyNoteID(dateStr)
-		dailyNote, err := db.GetObject(dailyNoteID)
-		if err != nil {
-			return fmt.Errorf("failed to query daily note: %w", err)
-		}
+		fmt.Printf("%s %s\n\n", ui.SectionHeader(result.Date), ui.Hint(fmt.Sprintf("(%s)", result.DayOfWeek)))
 
 		fmt.Println(ui.Divider("Daily Note", display.TermWidth))
-		if dailyNote != nil {
-			fmt.Printf("%s\n\n", ui.Bullet(ui.FilePath(dailyNote.FilePath)))
+		if result.DailyNote != nil {
+			fmt.Printf("%s\n\n", ui.Bullet(ui.FilePath(result.DailyNote.FilePath)))
 		} else {
-			fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", dateStr))))
+			fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", result.Date))))
 		}
 
-		// Query date index for this date
-		items, err := db.QueryDateIndex(dateStr)
-		if err != nil {
-			return fmt.Errorf("failed to query date index: %w", err)
-		}
-
-		// Group by field name
-		byField := make(map[string][]index.DateIndexResult)
-		for _, item := range items {
+		byField := make(map[string][]datesvc.DateAssociation)
+		for _, item := range result.Items {
 			byField[item.FieldName] = append(byField[item.FieldName], item)
 		}
 
-		// Display grouped results
 		for fieldName, fieldItems := range byField {
 			prettyField := fieldName
 			if prettyField != "" {
 				prettyField = strings.ToUpper(prettyField[:1]) + prettyField[1:]
 			}
-			label := fmt.Sprintf("%s: %s (%d)", prettyField, dateStr, len(fieldItems))
+			label := fmt.Sprintf("%s: %s (%d)", prettyField, result.Date, len(fieldItems))
 			fmt.Println(ui.Divider(label, display.TermWidth))
 			for _, item := range fieldItems {
 				if item.SourceType == "trait" {
-					// Get trait content
-					trait, err := db.GetTrait(item.SourceID)
-					if err == nil && trait != nil {
+					if item.Trait != nil {
 						valueStr := ""
-						if trait.Value != nil && *trait.Value != "" {
-							valueStr = *trait.Value
+						if item.Trait.Value != nil && *item.Trait.Value != "" {
+							valueStr = *item.Trait.Value
 						}
-						line := fmt.Sprintf("%s %s", ui.Trait(trait.TraitType, valueStr), trait.Content)
+						line := fmt.Sprintf("%s %s", ui.Trait(item.Trait.TraitType, valueStr), item.Trait.Content)
 						fmt.Println(ui.Bullet(line))
-						fmt.Println(ui.Indent(2, ui.Hint(trait.FilePath)))
+						fmt.Println(ui.Indent(2, ui.Hint(item.Trait.FilePath)))
+					} else {
+						fmt.Println(ui.Bullet(item.SourceID))
 					}
 				} else {
-					// Object
-					obj, err := db.GetObject(item.SourceID)
-					if err == nil && obj != nil {
+					if item.Object != nil {
 						meta := ""
-						if obj.Type != "" {
-							meta = ui.Hint(fmt.Sprintf("(%s)", obj.Type))
+						if item.Object.Type != "" {
+							meta = ui.Hint(fmt.Sprintf("(%s)", item.Object.Type))
 						}
 						fmt.Println(ui.Bullet(strings.TrimSpace(fmt.Sprintf("%s %s", item.SourceID, meta))))
+					} else {
+						fmt.Println(ui.Bullet(item.SourceID))
 					}
 				}
 			}
 			fmt.Println()
 		}
 
-		// Query for references to this date
-		backlinks, err := db.Backlinks(dateStr)
-		if err != nil {
-			return fmt.Errorf("failed to query backlinks: %w", err)
-		}
-
-		if len(backlinks) > 0 {
-			fmt.Println(ui.Divider(fmt.Sprintf("References (%d)", len(backlinks)), display.TermWidth))
-			for _, bl := range backlinks {
+		if len(result.Backlinks) > 0 {
+			fmt.Println(ui.Divider(fmt.Sprintf("References (%d)", len(result.Backlinks)), display.TermWidth))
+			for _, bl := range result.Backlinks {
 				location := bl.FilePath
 				if bl.Line != nil {
 					location = fmt.Sprintf("%s:%d", bl.FilePath, *bl.Line)

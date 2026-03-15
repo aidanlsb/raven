@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -22,17 +22,10 @@ Examples:
 		vaultPath := getVaultPath()
 		start := time.Now()
 
-		db, err := index.Open(vaultPath)
+		stats, err := maintsvc.Stats(vaultPath)
 		if err != nil {
-			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
+			return mapMaintSvcError(err)
 		}
-		defer db.Close()
-
-		stats, err := db.Stats()
-		if err != nil {
-			return handleError(ErrDatabaseError, err, "")
-		}
-
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
@@ -54,6 +47,22 @@ Examples:
 
 		return nil
 	},
+}
+
+func mapMaintSvcError(err error) error {
+	svcErr, ok := maintsvc.AsError(err)
+	if !ok {
+		return handleError(ErrInternal, err, "")
+	}
+
+	switch svcErr.Code {
+	case maintsvc.CodeInvalidInput:
+		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+	case maintsvc.CodeDatabaseError:
+		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
+	default:
+		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+	}
 }
 
 func init() {

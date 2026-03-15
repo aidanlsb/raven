@@ -9,8 +9,41 @@ const (
 	semanticObjectSetFields           semanticOp = "object.set_fields"
 	semanticObjectDelete              semanticOp = "object.delete"
 	semanticObjectMove                semanticOp = "object.move"
+	semanticObjectReclassify          semanticOp = "object.reclassify"
+	semanticObjectImport              semanticOp = "object.import"
+	semanticObjectEdit                semanticOp = "object.edit"
+	semanticTraitUpdate               semanticOp = "trait.update"
+	semanticVaultInit                 semanticOp = "vault.init"
 	semanticVaultReindex              semanticOp = "vault.reindex"
 	semanticVaultCheck                semanticOp = "vault.check"
+	semanticVaultStats                semanticOp = "vault.stats"
+	semanticVaultUntyped              semanticOp = "vault.untyped"
+	semanticVaultList                 semanticOp = "vault.list"
+	semanticVaultCurrent              semanticOp = "vault.current"
+	semanticVaultUse                  semanticOp = "vault.use"
+	semanticVaultClear                semanticOp = "vault.clear"
+	semanticVaultPin                  semanticOp = "vault.pin"
+	semanticVaultAdd                  semanticOp = "vault.add"
+	semanticVaultRemove               semanticOp = "vault.remove"
+	semanticVaultPath                 semanticOp = "vault.path"
+	semanticConfigShow                semanticOp = "config.show"
+	semanticConfigInit                semanticOp = "config.init"
+	semanticConfigSet                 semanticOp = "config.set"
+	semanticConfigUnset               semanticOp = "config.unset"
+	semanticDaily                     semanticOp = "date.daily"
+	semanticDate                      semanticOp = "date.hub"
+	semanticLast                      semanticOp = "read.last"
+	semanticOpen                      semanticOp = "read.open"
+	semanticQueryAdd                  semanticOp = "query.add_saved"
+	semanticQueryRemove               semanticOp = "query.remove_saved"
+	semanticDocsBrowse                semanticOp = "docs.browse"
+	semanticDocsFetch                 semanticOp = "docs.fetch"
+	semanticDocsList                  semanticOp = "docs.list"
+	semanticDocsSearch                semanticOp = "docs.search"
+	semanticSkillList                 semanticOp = "skill.list"
+	semanticSkillInstall              semanticOp = "skill.install"
+	semanticSkillRemove               semanticOp = "skill.remove"
+	semanticSkillDoctor               semanticOp = "skill.doctor"
 	semanticReadSearch                semanticOp = "read.search"
 	semanticReadFile                  semanticOp = "read.file"
 	semanticReadBacklinks             semanticOp = "read.backlinks"
@@ -18,6 +51,7 @@ const (
 	semanticReadResolve               semanticOp = "read.resolve"
 	semanticReadQuery                 semanticOp = "read.query"
 	semanticSchemaAddType             semanticOp = "schema.add_type"
+	semanticSchemaIntrospect          semanticOp = "schema.introspect"
 	semanticSchemaAddTrait            semanticOp = "schema.add_trait"
 	semanticSchemaAddField            semanticOp = "schema.add_field"
 	semanticSchemaValidate            semanticOp = "schema.validate"
@@ -41,6 +75,9 @@ const (
 	semanticSchemaCoreTemplateSet     semanticOp = "schema.core_template_set"
 	semanticSchemaCoreTemplateRemove  semanticOp = "schema.core_template_remove"
 	semanticSchemaCoreTemplateDefault semanticOp = "schema.core_template_default"
+	semanticTemplateList              semanticOp = "template.list"
+	semanticTemplateWrite             semanticOp = "template.write"
+	semanticTemplateDelete            semanticOp = "template.delete"
 	semanticWorkflowList              semanticOp = "workflow.list"
 	semanticWorkflowAdd               semanticOp = "workflow.add"
 	semanticWorkflowScaffold          semanticOp = "workflow.scaffold"
@@ -55,6 +92,7 @@ const (
 	semanticWorkflowRunsList          semanticOp = "workflow.runs_list"
 	semanticWorkflowRunsStep          semanticOp = "workflow.runs_step"
 	semanticWorkflowRunsPrune         semanticOp = "workflow.runs_prune"
+	semanticSystemVersion             semanticOp = "system.version"
 )
 
 var compatibilityToolSemanticMap = map[string]semanticOp{
@@ -64,14 +102,52 @@ var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_set":                          semanticObjectSetFields,
 	"raven_delete":                       semanticObjectDelete,
 	"raven_move":                         semanticObjectMove,
+	"raven_reclassify":                   semanticObjectReclassify,
+	"raven_import":                       semanticObjectImport,
+	"raven_edit":                         semanticObjectEdit,
+	"raven_update":                       semanticTraitUpdate,
+	"raven_init":                         semanticVaultInit,
 	"raven_reindex":                      semanticVaultReindex,
 	"raven_check":                        semanticVaultCheck,
+	"raven_stats":                        semanticVaultStats,
+	"raven_untyped":                      semanticVaultUntyped,
+	"raven_vault":                        semanticVaultList,
+	"raven_vault_list":                   semanticVaultList,
+	"raven_vault_current":                semanticVaultCurrent,
+	"raven_vault_use":                    semanticVaultUse,
+	"raven_vault_clear":                  semanticVaultClear,
+	"raven_vault_pin":                    semanticVaultPin,
+	"raven_vault_add":                    semanticVaultAdd,
+	"raven_vault_remove":                 semanticVaultRemove,
+	"raven_vault_path":                   semanticVaultPath,
+	"raven_path":                         semanticVaultPath,
+	"raven_config":                       semanticConfigShow,
+	"raven_config_show":                  semanticConfigShow,
+	"raven_config_init":                  semanticConfigInit,
+	"raven_config_set":                   semanticConfigSet,
+	"raven_config_unset":                 semanticConfigUnset,
+	"raven_version":                      semanticSystemVersion,
+	"raven_daily":                        semanticDaily,
+	"raven_date":                         semanticDate,
+	"raven_last":                         semanticLast,
+	"raven_open":                         semanticOpen,
+	"raven_query_add":                    semanticQueryAdd,
+	"raven_query_remove":                 semanticQueryRemove,
+	"raven_docs":                         semanticDocsBrowse,
+	"raven_docs_fetch":                   semanticDocsFetch,
+	"raven_docs_list":                    semanticDocsList,
+	"raven_docs_search":                  semanticDocsSearch,
+	"raven_skill_list":                   semanticSkillList,
+	"raven_skill_install":                semanticSkillInstall,
+	"raven_skill_remove":                 semanticSkillRemove,
+	"raven_skill_doctor":                 semanticSkillDoctor,
 	"raven_search":                       semanticReadSearch,
 	"raven_read":                         semanticReadFile,
 	"raven_backlinks":                    semanticReadBacklinks,
 	"raven_outlinks":                     semanticReadOutlinks,
 	"raven_resolve":                      semanticReadResolve,
 	"raven_query":                        semanticReadQuery,
+	"raven_schema":                       semanticSchemaIntrospect,
 	"raven_schema_add_type":              semanticSchemaAddType,
 	"raven_schema_add_trait":             semanticSchemaAddTrait,
 	"raven_schema_add_field":             semanticSchemaAddField,
@@ -96,6 +172,10 @@ var compatibilityToolSemanticMap = map[string]semanticOp{
 	"raven_schema_core_template_set":     semanticSchemaCoreTemplateSet,
 	"raven_schema_core_template_remove":  semanticSchemaCoreTemplateRemove,
 	"raven_schema_core_template_default": semanticSchemaCoreTemplateDefault,
+	"raven_template":                     semanticTemplateList,
+	"raven_template_list":                semanticTemplateList,
+	"raven_template_write":               semanticTemplateWrite,
+	"raven_template_delete":              semanticTemplateDelete,
 	"raven_workflow_list":                semanticWorkflowList,
 	"raven_workflow_add":                 semanticWorkflowAdd,
 	"raven_workflow_scaffold":            semanticWorkflowScaffold,
@@ -120,14 +200,48 @@ func semanticHandlerExists(op semanticOp) bool {
 		semanticObjectSetFields,
 		semanticObjectDelete,
 		semanticObjectMove,
+		semanticObjectReclassify,
+		semanticObjectImport,
+		semanticObjectEdit,
+		semanticTraitUpdate,
+		semanticVaultInit,
 		semanticVaultReindex,
 		semanticVaultCheck,
+		semanticVaultStats,
+		semanticVaultUntyped,
+		semanticVaultList,
+		semanticVaultCurrent,
+		semanticVaultUse,
+		semanticVaultClear,
+		semanticVaultPin,
+		semanticVaultAdd,
+		semanticVaultRemove,
+		semanticVaultPath,
+		semanticConfigShow,
+		semanticConfigInit,
+		semanticConfigSet,
+		semanticConfigUnset,
+		semanticDaily,
+		semanticDate,
+		semanticLast,
+		semanticOpen,
+		semanticQueryAdd,
+		semanticQueryRemove,
+		semanticDocsBrowse,
+		semanticDocsFetch,
+		semanticDocsList,
+		semanticDocsSearch,
+		semanticSkillList,
+		semanticSkillInstall,
+		semanticSkillRemove,
+		semanticSkillDoctor,
 		semanticReadSearch,
 		semanticReadFile,
 		semanticReadBacklinks,
 		semanticReadOutlinks,
 		semanticReadResolve,
 		semanticReadQuery,
+		semanticSchemaIntrospect,
 		semanticSchemaAddType,
 		semanticSchemaAddTrait,
 		semanticSchemaAddField,
@@ -152,6 +266,9 @@ func semanticHandlerExists(op semanticOp) bool {
 		semanticSchemaCoreTemplateSet,
 		semanticSchemaCoreTemplateRemove,
 		semanticSchemaCoreTemplateDefault,
+		semanticTemplateList,
+		semanticTemplateWrite,
+		semanticTemplateDelete,
 		semanticWorkflowList,
 		semanticWorkflowAdd,
 		semanticWorkflowScaffold,
@@ -165,7 +282,8 @@ func semanticHandlerExists(op semanticOp) bool {
 		semanticWorkflowContinue,
 		semanticWorkflowRunsList,
 		semanticWorkflowRunsStep,
-		semanticWorkflowRunsPrune:
+		semanticWorkflowRunsPrune,
+		semanticSystemVersion:
 		return true
 	default:
 		return false
@@ -192,11 +310,113 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 	case semanticObjectMove:
 		out, isErr := s.callDirectMove(args)
 		return out, isErr, true
+	case semanticObjectReclassify:
+		out, isErr := s.callDirectReclassify(args)
+		return out, isErr, true
+	case semanticObjectImport:
+		out, isErr := s.callDirectImport(args)
+		return out, isErr, true
+	case semanticObjectEdit:
+		out, isErr := s.callDirectEdit(args)
+		return out, isErr, true
+	case semanticTraitUpdate:
+		out, isErr := s.callDirectUpdate(args)
+		return out, isErr, true
+	case semanticVaultInit:
+		out, isErr := s.callDirectInit(args)
+		return out, isErr, true
 	case semanticVaultReindex:
 		out, isErr := s.callDirectReindex(args)
 		return out, isErr, true
 	case semanticVaultCheck:
 		out, isErr := s.callDirectCheck(args)
+		return out, isErr, true
+	case semanticVaultStats:
+		out, isErr := s.callDirectStats(args)
+		return out, isErr, true
+	case semanticVaultUntyped:
+		out, isErr := s.callDirectUntyped(args)
+		return out, isErr, true
+	case semanticVaultList:
+		out, isErr := s.callDirectVaultList(args)
+		return out, isErr, true
+	case semanticVaultCurrent:
+		out, isErr := s.callDirectVaultCurrent(args)
+		return out, isErr, true
+	case semanticVaultUse:
+		out, isErr := s.callDirectVaultUse(args)
+		return out, isErr, true
+	case semanticVaultClear:
+		out, isErr := s.callDirectVaultClear(args)
+		return out, isErr, true
+	case semanticVaultPin:
+		out, isErr := s.callDirectVaultPin(args)
+		return out, isErr, true
+	case semanticVaultAdd:
+		out, isErr := s.callDirectVaultAdd(args)
+		return out, isErr, true
+	case semanticVaultRemove:
+		out, isErr := s.callDirectVaultRemove(args)
+		return out, isErr, true
+	case semanticVaultPath:
+		out, isErr := s.callDirectVaultPath(args)
+		return out, isErr, true
+	case semanticConfigShow:
+		out, isErr := s.callDirectConfigShow(args)
+		return out, isErr, true
+	case semanticConfigInit:
+		out, isErr := s.callDirectConfigInit(args)
+		return out, isErr, true
+	case semanticConfigSet:
+		out, isErr := s.callDirectConfigSet(args)
+		return out, isErr, true
+	case semanticConfigUnset:
+		out, isErr := s.callDirectConfigUnset(args)
+		return out, isErr, true
+	case semanticSystemVersion:
+		out, isErr := s.callDirectVersion(args)
+		return out, isErr, true
+	case semanticDaily:
+		out, isErr := s.callDirectDaily(args)
+		return out, isErr, true
+	case semanticDate:
+		out, isErr := s.callDirectDate(args)
+		return out, isErr, true
+	case semanticLast:
+		out, isErr := s.callDirectLast(args)
+		return out, isErr, true
+	case semanticOpen:
+		out, isErr := s.callDirectOpen(args)
+		return out, isErr, true
+	case semanticQueryAdd:
+		out, isErr := s.callDirectQueryAdd(args)
+		return out, isErr, true
+	case semanticQueryRemove:
+		out, isErr := s.callDirectQueryRemove(args)
+		return out, isErr, true
+	case semanticDocsBrowse:
+		out, isErr := s.callDirectDocs(args)
+		return out, isErr, true
+	case semanticDocsFetch:
+		out, isErr := s.callDirectDocsFetch(args)
+		return out, isErr, true
+	case semanticDocsList:
+		out, isErr := s.callDirectDocsList(args)
+		return out, isErr, true
+	case semanticDocsSearch:
+		out, isErr := s.callDirectDocsSearch(args)
+		return out, isErr, true
+	case semanticSkillList:
+		out, isErr := s.callDirectSkillList(args)
+		return out, isErr, true
+	case semanticSkillInstall:
+		out, isErr := s.callDirectSkillInstall(args)
+		return out, isErr, true
+	case semanticSkillRemove:
+		out, isErr := s.callDirectSkillRemove(args)
+		return out, isErr, true
+	case semanticSkillDoctor:
+		out, isErr := s.callDirectSkillDoctor(args)
 		return out, isErr, true
 	case semanticReadSearch:
 		out, isErr := s.callDirectSearch(args)
@@ -215,6 +435,9 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 		return out, isErr, true
 	case semanticReadQuery:
 		out, isErr := s.callDirectQuery(args)
+		return out, isErr, true
+	case semanticSchemaIntrospect:
+		out, isErr := s.callDirectSchema(args)
 		return out, isErr, true
 	case semanticSchemaAddType:
 		out, isErr := s.callDirectSchemaAddType(args)
@@ -287,6 +510,15 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 		return out, isErr, true
 	case semanticSchemaCoreTemplateDefault:
 		out, isErr := s.callDirectSchemaCoreTemplateDefault(args)
+		return out, isErr, true
+	case semanticTemplateList:
+		out, isErr := s.callDirectTemplateList(args)
+		return out, isErr, true
+	case semanticTemplateWrite:
+		out, isErr := s.callDirectTemplateWrite(args)
+		return out, isErr, true
+	case semanticTemplateDelete:
+		out, isErr := s.callDirectTemplateDelete(args)
 		return out, isErr, true
 	case semanticWorkflowList:
 		out, isErr := s.callDirectWorkflowList(args)

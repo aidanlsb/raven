@@ -2,14 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/configsvc"
 )
 
 type vaultContext struct {
@@ -41,109 +39,46 @@ var (
 )
 
 func loadVaultContext() (*vaultContext, error) {
-	loadedCfg, resolvedConfigPath, err := loadGlobalConfigWithPath()
-	if err != nil {
-		return nil, err
-	}
-	if loadedCfg == nil {
-		loadedCfg = &config.Config{}
-	}
-
-	resolvedStatePath := config.ResolveStatePath(statePathFlag, resolvedConfigPath, loadedCfg)
-	state, err := config.LoadState(resolvedStatePath)
+	serviceCtx, err := configsvc.LoadVaultContext(configsvc.ContextOptions{
+		ConfigPathOverride: configPath,
+		StatePathOverride:  statePathFlag,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &vaultContext{
-		cfg:        loadedCfg,
-		state:      state,
-		configPath: resolvedConfigPath,
-		statePath:  resolvedStatePath,
+		cfg:        serviceCtx.Cfg,
+		state:      serviceCtx.State,
+		configPath: serviceCtx.ConfigPath,
+		statePath:  serviceCtx.StatePath,
 	}, nil
 }
 
-func defaultVaultName(cfg *config.Config) string {
-	if cfg == nil {
-		return ""
-	}
-	if strings.TrimSpace(cfg.DefaultVault) != "" {
-		return strings.TrimSpace(cfg.DefaultVault)
-	}
-	if strings.TrimSpace(cfg.Vault) != "" && len(cfg.Vaults) == 0 {
-		return "default"
-	}
-	return ""
-}
-
 func vaultRows(cfg *config.Config, state *config.State) ([]vaultRow, string, string, bool) {
-	vaults := cfg.ListVaults()
-	defaultName := defaultVaultName(cfg)
-	activeName := ""
-	if state != nil {
-		activeName = strings.TrimSpace(state.ActiveVault)
-	}
-
-	rows := make([]vaultRow, 0, len(vaults))
-	names := make([]string, 0, len(vaults))
-	for name := range vaults {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	activeMissing := activeName != ""
-	for _, name := range names {
+	serviceRows, defaultName, activeName, activeMissing := configsvc.VaultRows(cfg, state)
+	rows := make([]vaultRow, 0, len(serviceRows))
+	for _, r := range serviceRows {
 		rows = append(rows, vaultRow{
-			Name:      name,
-			Path:      vaults[name],
-			IsDefault: name == defaultName,
-			IsActive:  name == activeName,
+			Name:      r.Name,
+			Path:      r.Path,
+			IsDefault: r.IsDefault,
+			IsActive:  r.IsActive,
 		})
-		if name == activeName {
-			activeMissing = false
-		}
 	}
-
 	return rows, defaultName, activeName, activeMissing
 }
 
 func resolveCurrentVault(cfg *config.Config, state *config.State) (*currentVaultInfo, error) {
-	activeName := ""
-	if state != nil {
-		activeName = strings.TrimSpace(state.ActiveVault)
-	}
-
-	if activeName != "" {
-		path, err := cfg.GetVaultPath(activeName)
-		if err == nil {
-			return &currentVaultInfo{
-				Name:   activeName,
-				Path:   path,
-				Source: "active_vault",
-			}, nil
-		}
-	}
-
-	defaultPath, err := cfg.GetDefaultVaultPath()
+	current, err := configsvc.ResolveCurrentVault(cfg, state)
 	if err != nil {
-		if activeName != "" {
-			return nil, fmt.Errorf("active vault '%s' not found in config and no default vault configured", activeName)
-		}
 		return nil, err
 	}
-
-	source := "default_vault"
-	activeMissing := false
-	if activeName != "" {
-		source = "default_vault_fallback"
-		activeMissing = true
-	}
-
 	return &currentVaultInfo{
-		Name:          defaultVaultName(cfg),
-		Path:          defaultPath,
-		Source:        source,
-		ActiveMissing: activeMissing,
+		Name:          current.Name,
+		Path:          current.Path,
+		Source:        current.Source,
+		ActiveMissing: current.ActiveMissing,
 	}, nil
 }
 
@@ -226,33 +161,31 @@ var vaultCurrentCmd = &cobra.Command{
 	Short: "Show the current resolved vault",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := loadVaultContext()
+		result, err := configsvc.CurrentVault(configsvc.ContextOptions{
+			ConfigPathOverride: configPath,
+			StatePathOverride:  statePathFlag,
+		})
 		if err != nil {
-			return handleError(ErrConfigInvalid, err, "")
-		}
-
-		current, err := resolveCurrentVault(ctx.cfg, ctx.state)
-		if err != nil {
-			return handleError(ErrVaultNotSpecified, err, "Use 'rvn vault use <name>' or set default_vault in config.toml")
+			return handleConfigSvcError(err, "Use 'rvn vault use <name>' or set default_vault in config.toml")
 		}
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"name":           current.Name,
-				"path":           current.Path,
-				"source":         current.Source,
-				"active_missing": current.ActiveMissing,
-				"config_path":    ctx.configPath,
-				"state_path":     ctx.statePath,
+				"name":           result.Current.Name,
+				"path":           result.Current.Path,
+				"source":         result.Current.Source,
+				"active_missing": result.Current.ActiveMissing,
+				"config_path":    result.ConfigPath,
+				"state_path":     result.StatePath,
 			}, nil)
 			return nil
 		}
 
-		fmt.Printf("current: %s\n", current.Name)
-		fmt.Printf("path:    %s\n", current.Path)
-		fmt.Printf("source:  %s\n", current.Source)
-		if current.ActiveMissing {
-			fmt.Printf("warning: active vault '%s' is missing; using default\n", strings.TrimSpace(ctx.state.ActiveVault))
+		fmt.Printf("current: %s\n", result.Current.Name)
+		fmt.Printf("path:    %s\n", result.Current.Path)
+		fmt.Printf("source:  %s\n", result.Current.Source)
+		if result.Current.ActiveMissing {
+			fmt.Printf("warning: active vault '%s' is missing; using default\n", result.ActiveVault)
 		}
 		return nil
 	},
@@ -264,32 +197,25 @@ var vaultUseCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.TrimSpace(args[0])
-		ctx, err := loadVaultContext()
+		result, err := configsvc.UseVault(configsvc.ContextOptions{
+			ConfigPathOverride: configPath,
+			StatePathOverride:  statePathFlag,
+		}, name)
 		if err != nil {
-			return handleError(ErrConfigInvalid, err, "")
-		}
-
-		path, err := ctx.cfg.GetVaultPath(name)
-		if err != nil {
-			return handleError(ErrVaultNotFound, err, "Run 'rvn vault list' to see configured vaults")
-		}
-
-		ctx.state.ActiveVault = name
-		if err := config.SaveState(ctx.statePath, ctx.state); err != nil {
-			return handleError(ErrFileWriteError, err, "")
+			return handleConfigSvcError(err, "Run 'rvn vault list' to see configured vaults")
 		}
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"active_vault": name,
-				"path":         path,
-				"state_path":   ctx.statePath,
+				"active_vault": result.ActiveVault,
+				"path":         result.Path,
+				"state_path":   result.StatePath,
 			}, nil)
 			return nil
 		}
 
-		fmt.Printf("Active vault set to '%s' -> %s\n", name, path)
-		fmt.Printf("state: %s\n", ctx.statePath)
+		fmt.Printf("Active vault set to '%s' -> %s\n", result.ActiveVault, result.Path)
+		fmt.Printf("state: %s\n", result.StatePath)
 		return nil
 	},
 }
@@ -299,32 +225,29 @@ var vaultClearCmd = &cobra.Command{
 	Short: "Clear active vault from state.toml",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := loadVaultContext()
+		result, err := configsvc.ClearActiveVault(configsvc.ContextOptions{
+			ConfigPathOverride: configPath,
+			StatePathOverride:  statePathFlag,
+		})
 		if err != nil {
-			return handleError(ErrConfigInvalid, err, "")
-		}
-
-		prev := strings.TrimSpace(ctx.state.ActiveVault)
-		ctx.state.ActiveVault = ""
-		if err := config.SaveState(ctx.statePath, ctx.state); err != nil {
-			return handleError(ErrFileWriteError, err, "")
+			return handleConfigSvcError(err, "")
 		}
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"cleared":    true,
-				"previous":   prev,
-				"state_path": ctx.statePath,
+				"cleared":    result.Cleared,
+				"previous":   result.Previous,
+				"state_path": result.StatePath,
 			}, nil)
 			return nil
 		}
 
-		if prev == "" {
+		if result.Previous == "" {
 			fmt.Println("Active vault already clear.")
 		} else {
-			fmt.Printf("Cleared active vault '%s'.\n", prev)
+			fmt.Printf("Cleared active vault '%s'.\n", result.Previous)
 		}
-		fmt.Printf("state: %s\n", ctx.statePath)
+		fmt.Printf("state: %s\n", result.StatePath)
 		return nil
 	},
 }
@@ -335,32 +258,25 @@ var vaultPinCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.TrimSpace(args[0])
-		ctx, err := loadVaultContext()
+		result, err := configsvc.PinVault(configsvc.ContextOptions{
+			ConfigPathOverride: configPath,
+			StatePathOverride:  statePathFlag,
+		}, name)
 		if err != nil {
-			return handleError(ErrConfigInvalid, err, "")
-		}
-
-		path, err := ctx.cfg.GetVaultPath(name)
-		if err != nil {
-			return handleError(ErrVaultNotFound, err, "Run 'rvn vault list' to see configured vaults")
-		}
-
-		ctx.cfg.DefaultVault = name
-		if err := config.SaveTo(ctx.configPath, ctx.cfg); err != nil {
-			return handleError(ErrFileWriteError, err, "")
+			return handleConfigSvcError(err, "Run 'rvn vault list' to see configured vaults")
 		}
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"default_vault": name,
-				"path":          path,
-				"config_path":   ctx.configPath,
+				"default_vault": result.DefaultVault,
+				"path":          result.Path,
+				"config_path":   result.ConfigPath,
 			}, nil)
 			return nil
 		}
 
-		fmt.Printf("Default vault set to '%s' -> %s\n", name, path)
-		fmt.Printf("config: %s\n", ctx.configPath)
+		fmt.Printf("Default vault set to '%s' -> %s\n", result.DefaultVault, result.Path)
+		fmt.Printf("config: %s\n", result.ConfigPath)
 		return nil
 	},
 }
@@ -372,74 +288,48 @@ var vaultAddCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.TrimSpace(args[0])
 		rawPath := strings.TrimSpace(args[1])
-		if name == "" {
-			return handleErrorMsg(ErrMissingArgument, "vault name is required", "")
-		}
-		if rawPath == "" {
-			return handleErrorMsg(ErrMissingArgument, "vault path is required", "")
-		}
-
-		ctx, err := loadVaultContext()
+		result, err := configsvc.AddVault(configsvc.VaultAddRequest{
+			ContextOptions: configsvc.ContextOptions{
+				ConfigPathOverride: configPath,
+				StatePathOverride:  statePathFlag,
+			},
+			Name:    name,
+			RawPath: rawPath,
+			Replace: vaultAddReplace,
+			Pin:     vaultAddPin,
+		})
 		if err != nil {
-			return handleError(ErrConfigInvalid, err, "")
-		}
-
-		absPath, err := filepath.Abs(rawPath)
-		if err != nil {
-			return handleError(ErrInvalidInput, fmt.Errorf("failed to resolve vault path: %w", err), "")
-		}
-
-		info, err := os.Stat(absPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return handleErrorMsg(ErrFileNotFound, fmt.Sprintf("vault path does not exist: %s", absPath), "Run 'rvn init "+absPath+"' to create it first")
+			if svcErr, ok := configsvc.AsError(err); ok && svcErr.Code == configsvc.CodeFileNotFound {
+				return handleConfigSvcError(err, "Run 'rvn init "+rawPath+"' to create it first")
 			}
-			return handleError(ErrFileReadError, err, "")
-		}
-		if !info.IsDir() {
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("vault path must be a directory: %s", absPath), "")
-		}
-
-		if ctx.cfg.Vaults == nil {
-			ctx.cfg.Vaults = make(map[string]string)
-		}
-
-		prevPath, existed := ctx.cfg.Vaults[name]
-		if existed && !vaultAddReplace {
-			return handleErrorMsg(ErrDuplicateName, fmt.Sprintf("vault '%s' already exists", name), "Use --replace to update the path")
-		}
-
-		ctx.cfg.Vaults[name] = absPath
-		if vaultAddPin {
-			ctx.cfg.DefaultVault = name
-		}
-
-		if err := config.SaveTo(ctx.configPath, ctx.cfg); err != nil {
-			return handleError(ErrFileWriteError, err, "")
+			if svcErr, ok := configsvc.AsError(err); ok && svcErr.Code == configsvc.CodeDuplicateName {
+				return handleConfigSvcError(err, "Use --replace to update the path")
+			}
+			return handleConfigSvcError(err, "")
 		}
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"name":          name,
-				"path":          absPath,
-				"config_path":   ctx.configPath,
-				"replaced":      existed,
-				"previous_path": prevPath,
-				"pinned":        vaultAddPin,
-				"default_vault": ctx.cfg.DefaultVault,
+				"name":          result.Name,
+				"path":          result.Path,
+				"config_path":   result.ConfigPath,
+				"replaced":      result.Replaced,
+				"previous_path": result.PreviousPath,
+				"pinned":        result.Pinned,
+				"default_vault": result.DefaultVault,
 			}, nil)
 			return nil
 		}
 
-		if existed {
-			fmt.Printf("Updated vault '%s' -> %s\n", name, absPath)
+		if result.Replaced {
+			fmt.Printf("Updated vault '%s' -> %s\n", result.Name, result.Path)
 		} else {
-			fmt.Printf("Added vault '%s' -> %s\n", name, absPath)
+			fmt.Printf("Added vault '%s' -> %s\n", result.Name, result.Path)
 		}
-		if vaultAddPin {
-			fmt.Printf("Default vault set to '%s'.\n", name)
+		if result.Pinned {
+			fmt.Printf("Default vault set to '%s'.\n", result.Name)
 		}
-		fmt.Printf("config: %s\n", ctx.configPath)
+		fmt.Printf("config: %s\n", result.ConfigPath)
 		return nil
 	},
 }
@@ -450,90 +340,50 @@ var vaultRemoveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.TrimSpace(args[0])
-		if name == "" {
-			return handleErrorMsg(ErrMissingArgument, "vault name is required", "")
-		}
-
-		ctx, err := loadVaultContext()
+		result, err := configsvc.RemoveVault(configsvc.VaultRemoveRequest{
+			ContextOptions: configsvc.ContextOptions{
+				ConfigPathOverride: configPath,
+				StatePathOverride:  statePathFlag,
+			},
+			Name:         name,
+			ClearDefault: vaultRemoveClearDefault,
+			ClearActive:  vaultRemoveClearActive,
+		})
 		if err != nil {
-			return handleError(ErrConfigInvalid, err, "")
-		}
-
-		activeName := strings.TrimSpace(ctx.state.ActiveVault)
-		defaultName := defaultVaultName(ctx.cfg)
-		removingActive := activeName != "" && name == activeName
-		removingDefault := defaultName != "" && name == defaultName
-
-		if removingDefault && !vaultRemoveClearDefault {
-			return handleErrorMsg(ErrConfirmationRequired, fmt.Sprintf("vault '%s' is the current default vault", name), "Use --clear-default to clear default_vault as part of removal, or pin another vault first")
-		}
-		if removingActive && !vaultRemoveClearActive {
-			return handleErrorMsg(ErrConfirmationRequired, fmt.Sprintf("vault '%s' is the current active vault", name), "Use --clear-active to clear active_vault as part of removal, or switch active vault first")
-		}
-
-		removedPath := ""
-		removedLegacy := false
-		if ctx.cfg.Vaults != nil {
-			if p, ok := ctx.cfg.Vaults[name]; ok {
-				removedPath = p
-				delete(ctx.cfg.Vaults, name)
+			if svcErr, ok := configsvc.AsError(err); ok && svcErr.Code == configsvc.CodeConfirmationNeeded {
+				if strings.Contains(svcErr.Message, "default vault") {
+					return handleConfigSvcError(err, "Use --clear-default to clear default_vault as part of removal, or pin another vault first")
+				}
+				if strings.Contains(svcErr.Message, "active vault") {
+					return handleConfigSvcError(err, "Use --clear-active to clear active_vault as part of removal, or switch active vault first")
+				}
 			}
-		}
-		if removedPath == "" && name == "default" && strings.TrimSpace(ctx.cfg.Vault) != "" && len(ctx.cfg.Vaults) == 0 {
-			removedPath = strings.TrimSpace(ctx.cfg.Vault)
-			ctx.cfg.Vault = ""
-			removedLegacy = true
-		}
-		if removedPath == "" {
-			return handleErrorMsg(ErrVaultNotFound, fmt.Sprintf("vault '%s' not found in config", name), "Run 'rvn vault list' to see configured vaults")
-		}
-
-		defaultCleared := false
-		if removingDefault && vaultRemoveClearDefault {
-			if strings.TrimSpace(ctx.cfg.DefaultVault) == name {
-				ctx.cfg.DefaultVault = ""
-			}
-			defaultCleared = true
-		}
-
-		activeCleared := false
-		if removingActive && vaultRemoveClearActive {
-			ctx.state.ActiveVault = ""
-			activeCleared = true
-		}
-
-		if err := config.SaveTo(ctx.configPath, ctx.cfg); err != nil {
-			return handleError(ErrFileWriteError, err, "")
-		}
-		if activeCleared {
-			if err := config.SaveState(ctx.statePath, ctx.state); err != nil {
-				return handleError(ErrFileWriteError, err, "")
-			}
+			return handleConfigSvcError(err, "Run 'rvn vault list' to see configured vaults")
 		}
 
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
-				"name":            name,
-				"removed_path":    removedPath,
-				"removed_legacy":  removedLegacy,
-				"default_cleared": defaultCleared,
-				"active_cleared":  activeCleared,
-				"config_path":     ctx.configPath,
-				"state_path":      ctx.statePath,
+				"name":            result.Name,
+				"removed_path":    result.RemovedPath,
+				"removed_legacy":  result.RemovedLegacy,
+				"default_cleared": result.DefaultCleared,
+				"active_cleared":  result.ActiveCleared,
+				"config_path":     result.ConfigPath,
+				"state_path":      result.StatePath,
 			}, nil)
 			return nil
 		}
 
-		fmt.Printf("Removed vault '%s' (%s)\n", name, removedPath)
-		if defaultCleared {
+		fmt.Printf("Removed vault '%s' (%s)\n", result.Name, result.RemovedPath)
+		if result.DefaultCleared {
 			fmt.Println("Cleared default vault.")
 		}
-		if activeCleared {
+		if result.ActiveCleared {
 			fmt.Println("Cleared active vault.")
 		}
-		fmt.Printf("config: %s\n", ctx.configPath)
-		if activeCleared {
-			fmt.Printf("state:  %s\n", ctx.statePath)
+		fmt.Printf("config: %s\n", result.ConfigPath)
+		if result.ActiveCleared {
+			fmt.Printf("state:  %s\n", result.StatePath)
 		}
 		return nil
 	},

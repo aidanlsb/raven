@@ -3,9 +3,14 @@
 package mcp_test
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -13,6 +18,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/toolargs"
 )
 
 // TestMCPIntegration_ToolsList tests that the MCP server returns tool schemas.
@@ -2025,6 +2031,380 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_type", "type", "items", "total", "returned", "offset", "limit"})
 	})
 
+	t.Run("query_add", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_query_add", map[string]interface{}{
+			"name":         "overdue",
+			"query_string": "trait:due .value<today",
+			"description":  "Overdue tasks",
+		})
+		cliResult := vCLI.RunCLI("query", "add", "overdue", "trait:due .value<today", "--description", "Overdue tasks")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "query", "args", "description"})
+	})
+
+	t.Run("query_remove", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("query", "add", "overdue", "trait:due .value<today").MustSucceed(t)
+		vCLI.RunCLI("query", "add", "overdue", "trait:due .value<today").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_query_remove", map[string]interface{}{
+			"name": "overdue",
+		})
+		cliResult := vCLI.RunCLI("query", "remove", "overdue")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "removed"})
+	})
+
+	t.Run("docs", func(t *testing.T) {
+		docsIndex := `sections:
+  getting-started:
+    topics:
+      getting-started:
+        path: getting-started.md
+  querying:
+    topics:
+      query-language:
+        path: query-language.md
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile(".raven/docs/index.yaml", docsIndex).
+			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile(".raven/docs/index.yaml", docsIndex).
+			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_docs", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("docs")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
+	})
+
+	t.Run("docs_list", func(t *testing.T) {
+		docsIndex := `sections:
+  getting-started:
+    topics:
+      getting-started:
+        path: getting-started.md
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile(".raven/docs/index.yaml", docsIndex).
+			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile(".raven/docs/index.yaml", docsIndex).
+			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_docs_list", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("docs", "list")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
+	})
+
+	t.Run("docs_search", func(t *testing.T) {
+		docsIndex := `sections:
+  querying:
+    topics:
+      query-language:
+        path: query-language.md
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile(".raven/docs/index.yaml", docsIndex).
+			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile(".raven/docs/index.yaml", docsIndex).
+			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_docs_search", map[string]interface{}{
+			"query":   "query",
+			"section": "querying",
+			"limit":   5,
+		})
+		cliResult := vCLI.RunCLI("docs", "search", "query", "--section", "querying", "--limit", "5")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "count", "matches"})
+	})
+
+	t.Run("docs_fetch", func(t *testing.T) {
+		archive := buildDocsArchiveBytes(t, map[string]string{
+			"raven-main/docs/index.yaml":                 "sections:\n  guide:\n    topics:\n      start:\n        path: start.md\n",
+			"raven-main/docs/guide/start.md":             "# Start\n",
+			"raven-main/internal/mcp/agent-guide/foo.md": "ignored\n",
+		})
+
+		httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/archive/main" {
+				http.NotFound(w, r)
+				return
+			}
+			_, _ = w.Write(archive)
+		}))
+		defer httpServer.Close()
+
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		source := httpServer.URL + "/archive"
+		mcpResult := server.callTool("raven_docs_fetch", map[string]interface{}{
+			"source": source,
+			"ref":    "main",
+		})
+		cliResult := vCLI.RunCLI("docs", "fetch", "--source", source, "--ref", "main")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"path", "file_count", "byte_count", "source", "ref", "archive_url", "fetched_at", "cli_version", "manifest_ver"})
+	})
+
+	t.Run("stats", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_stats", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("stats")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file_count", "object_count", "trait_count", "ref_count"})
+	})
+
+	t.Run("untyped", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("notes/scratch.md", "# Scratch\n").
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("notes/scratch.md", "# Scratch\n").
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_untyped", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("untyped")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"count", "items"})
+	})
+
+	t.Run("version", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_version", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("version")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"version", "module_path", "commit", "commit_time", "modified", "go_version", "goos", "goarch"})
+	})
+
+	t.Run("init", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpInitPath := filepath.Join(vMCP.Path, "new-vault")
+		cliInitPath := filepath.Join(vCLI.Path, "new-vault")
+
+		mcpResult := server.callTool("raven_init", map[string]interface{}{
+			"path": mcpInitPath,
+		})
+		cliResult := vCLI.RunCLI("init", cliInitPath)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "created_config", "created_schema", "gitignore_state", "docs"})
+	})
+
+	t.Run("daily", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_daily", map[string]interface{}{
+			"date": "2026-02-18",
+		})
+		cliResult := vCLI.RunCLI("daily", "2026-02-18")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "date", "created", "opened"})
+	})
+
+	t.Run("date", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("daily", "2026-02-18").MustSucceed(t)
+		vCLI.RunCLI("daily", "2026-02-18").MustSucceed(t)
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_date", map[string]interface{}{
+			"date": "2026-02-18",
+		})
+		cliResult := vCLI.RunCLI("date", "2026-02-18")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"date", "day_of_week", "daily_note_id", "daily_path", "daily_exists", "items", "backlinks"})
+	})
+
+	t.Run("last", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/alpha.md", `---
+type: project
+status: active
+---
+# Alpha
+`).
+			WithFile("projects/beta.md", `---
+type: project
+status: paused
+---
+# Beta
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/alpha.md", `---
+type: project
+status: active
+---
+# Alpha
+`).
+			WithFile("projects/beta.md", `---
+type: project
+status: paused
+---
+# Beta
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+		_ = server.callTool("raven_query", map[string]interface{}{
+			"query_string": "object:project",
+		})
+		vCLI.RunCLI("query", "object:project").MustSucceed(t)
+
+		mcpResult := server.callTool("raven_last", map[string]interface{}{
+			"nums": "1",
+		})
+		cliResult := vCLI.RunCLI("last", "1")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"selected"})
+	})
+
+	t.Run("skill_list", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_skill_list", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("skill", "list")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"skills"})
+	})
+
+	t.Run("skill_install_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+		dest := filepath.Join(t.TempDir(), "skills")
+
+		mcpResult := server.callTool("raven_skill_install", map[string]interface{}{
+			"name":   "raven-core",
+			"target": "codex",
+			"scope":  "user",
+			"dest":   dest,
+		})
+		cliResult := vCLI.RunCLI("skill", "install", "raven-core", "--target", "codex", "--scope", "user", "--dest", dest)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"mode", "plan"})
+	})
+
+	t.Run("skill_remove_not_installed", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+		dest := filepath.Join(t.TempDir(), "skills")
+
+		mcpResult := server.callTool("raven_skill_remove", map[string]interface{}{
+			"name":   "raven-core",
+			"target": "codex",
+			"scope":  "user",
+			"dest":   dest,
+		})
+		cliResult := vCLI.RunCLI("skill", "remove", "raven-core", "--target", "codex", "--scope", "user", "--dest", dest)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("skill_doctor", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+		dest := filepath.Join(t.TempDir(), "skills")
+
+		mcpResult := server.callTool("raven_skill_doctor", map[string]interface{}{
+			"target": "codex",
+			"scope":  "user",
+			"dest":   dest,
+		})
+		cliResult := vCLI.RunCLI("skill", "doctor", "--target", "codex", "--scope", "user", "--dest", dest)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"reports"})
+	})
+
+	t.Run("schema", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema", map[string]interface{}{
+			"subcommand": "types",
+		})
+		cliResult := vCLI.RunCLI("schema", "types")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"types", "hint"})
+	})
+
+	t.Run("schema_type", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_schema", map[string]interface{}{
+			"subcommand": "type",
+			"name":       "person",
+		})
+		cliResult := vCLI.RunCLI("schema", "type", "person")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type"})
+	})
+
 	t.Run("schema_add_type", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
@@ -2359,6 +2739,50 @@ Kickoff: [[events/kickoff]]
 			"default_path_rename_available", "default_path_renamed", "default_path_old", "default_path_new",
 			"files_moved", "reference_files_updated",
 		})
+	})
+
+	t.Run("template_list", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/meeting.md", "# Meeting Template\n")
+		vCLI.WriteFile("templates/meeting.md", "# Meeting Template\n")
+
+		mcpResult := server.callTool("raven_template_list", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("template", "list")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"template_dir", "templates"})
+	})
+
+	t.Run("template_write", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("raven_template_write", map[string]interface{}{
+			"path":    "meeting.md",
+			"content": "# Meeting Template\n",
+		})
+		cliResult := vCLI.RunCLI("template", "write", "meeting.md", "--content", "# Meeting Template\n")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"path", "status", "template_dir"})
+	})
+
+	t.Run("template_delete", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("templates/meeting.md", "# Meeting Template\n")
+		vCLI.WriteFile("templates/meeting.md", "# Meeting Template\n")
+
+		mcpResult := server.callTool("raven_template_delete", map[string]interface{}{
+			"path": "meeting.md",
+		})
+		cliResult := vCLI.RunCLI("template", "delete", "meeting.md")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"deleted", "trash_path", "forced", "template_ids"})
 	})
 
 	t.Run("schema_template_set", func(t *testing.T) {
@@ -3050,6 +3474,36 @@ func assertEnvelopeParity(t *testing.T, mcpResult toolResult, cliResult *testuti
 	}
 }
 
+func buildDocsArchiveBytes(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+
+	for name, content := range files {
+		hdr := &tar.Header{
+			Name: name,
+			Mode: 0o644,
+			Size: int64(len(content)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatalf("WriteHeader(%q): %v", name, err)
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			t.Fatalf("Write(%q): %v", name, err)
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatalf("tar close: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	return buf.Bytes()
+}
+
 // testServer wraps the MCP Server for testing purposes.
 type testServer struct {
 	t          *testing.T
@@ -3077,7 +3531,7 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 	s.t.Helper()
 
 	// Build the CLI args using the public function
-	cmdArgs := mcp.BuildCLIArgs(name, args)
+	cmdArgs := toolargs.BuildCLIArgs(name, args)
 	if len(cmdArgs) == 0 {
 		return toolResult{Text: `{"ok":false,"error":{"code":"UNKNOWN_TOOL","message":"Unknown tool"}}`, IsError: true}
 	}
@@ -3127,7 +3581,7 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 
 // Verify the integration test helpers compile correctly by importing from mcp package
 var _ = mcp.GenerateToolSchemas
-var _ = mcp.BuildCLIArgs
+var _ = toolargs.BuildCLIArgs
 
 // testServerInterface is used to verify we're implementing the expected pattern.
 type testServerInterface interface {

@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -192,51 +192,27 @@ func deleteSingleObject(vaultPath, reference string) error {
 		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 	}
 
-	// Resolve the reference using unified resolver
-	result, err := ResolveReference(reference, ResolveOptions{
+	deletionCfg := vaultCfg.GetDeletionConfig()
+	preview, err := objectsvc.PreviewDeleteByReference(objectsvc.DeleteByReferenceRequest{
 		VaultPath:   vaultPath,
 		VaultConfig: vaultCfg,
+		Reference:   reference,
+		Behavior:    deletionCfg.Behavior,
+		TrashDir:    deletionCfg.TrashDir,
 	})
 	if err != nil {
-		return handleResolveError(err, reference)
-	}
-
-	objectID := result.ObjectID
-	filePath := result.FilePath
-	deletionCfg := vaultCfg.GetDeletionConfig()
-
-	// Find backlinks
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
-	}
-	defer db.Close()
-
-	backlinks, err := db.Backlinks(objectID)
-	if err != nil {
-		return handleError(ErrDatabaseError, err, "")
+		return mapDeleteSingleServiceError(err)
 	}
 
 	// Build response data
-	var warnings []Warning
-	if len(backlinks) > 0 {
-		var backlinkIDs []string
-		for _, bl := range backlinks {
-			backlinkIDs = append(backlinkIDs, bl.SourceID)
-		}
-		warnings = append(warnings, Warning{
-			Code:    WarnBacklinks,
-			Message: fmt.Sprintf("Object is referenced by %d other objects", len(backlinks)),
-			Ref:     strings.Join(backlinkIDs, ", "),
-		})
-	}
+	warnings := deleteBacklinkWarnings(preview.Backlinks)
 
 	// In JSON mode or with --force, proceed without interactive confirmation
 	if !isJSONOutput() && !deleteForce {
-		fmt.Fprintf(os.Stderr, "Delete %s?\n", objectID)
-		if len(backlinks) > 0 {
-			fmt.Fprintf(os.Stderr, "  ⚠ Warning: Referenced by %d objects:\n", len(backlinks))
-			for _, bl := range backlinks {
+		fmt.Fprintf(os.Stderr, "Delete %s?\n", preview.ObjectID)
+		if len(preview.Backlinks) > 0 {
+			fmt.Fprintf(os.Stderr, "  ⚠ Warning: Referenced by %d objects:\n", len(preview.Backlinks))
+			for _, bl := range preview.Backlinks {
 				line := 0
 				if bl.Line != nil {
 					line = *bl.Line
@@ -265,67 +241,84 @@ func deleteSingleObject(vaultPath, reference string) error {
 	}
 
 	// Perform the deletion
-	serviceResult, err := objectsvc.DeleteFile(objectsvc.DeleteFileRequest{
-		VaultPath: vaultPath,
-		FilePath:  filePath,
-		Behavior:  deletionCfg.Behavior,
-		TrashDir:  deletionCfg.TrashDir,
+	serviceResult, err := objectsvc.DeleteByReference(objectsvc.DeleteByReferenceRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: vaultCfg,
+		Reference:   reference,
+		Behavior:    deletionCfg.Behavior,
+		TrashDir:    deletionCfg.TrashDir,
 	})
 	if err != nil {
-		var svcErr *objectsvc.Error
-		if errors.As(err, &svcErr) {
-			switch svcErr.Code {
-			case objectsvc.ErrorInvalidInput:
-				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorFileWrite:
-				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-			default:
-				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-			}
-		}
-		return handleError(ErrFileWriteError, err, "")
+		return mapDeleteSingleServiceError(err)
 	}
-	destPath := serviceResult.TrashPath
-
-	// Remove from index
-	if err := db.RemoveDocument(objectID); err != nil {
-		warningMsg := fmt.Sprintf("Failed to remove deleted object from index: %v", err)
-		if errors.Is(err, index.ErrObjectNotFound) {
-			warningMsg = "Object not found in index; consider running 'rvn reindex'"
-		}
+	for _, warningMsg := range serviceResult.WarningMessages {
 		warnings = append(warnings, Warning{
 			Code:    WarnIndexUpdateFailed,
 			Message: warningMsg,
 			Ref:     "Run 'rvn reindex' to rebuild the database",
 		})
-		if !isJSONOutput() {
-			fmt.Printf("  (warning: %s)\n", warningMsg)
-		}
 	}
 
 	elapsed := time.Since(start).Milliseconds()
 
 	if isJSONOutput() {
-		result := map[string]interface{}{
-			"deleted":  objectID,
-			"behavior": deletionCfg.Behavior,
+		payload := map[string]interface{}{
+			"deleted":  serviceResult.ObjectID,
+			"behavior": serviceResult.Behavior,
 		}
-		if destPath != "" {
-			relDest, _ := filepath.Rel(vaultPath, destPath)
-			result["trash_path"] = relDest
+		if serviceResult.TrashPath != "" {
+			relDest, _ := filepath.Rel(vaultPath, serviceResult.TrashPath)
+			payload["trash_path"] = relDest
 		}
-		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
+		outputSuccessWithWarnings(payload, warnings, &Meta{QueryTimeMs: elapsed})
 		return nil
 	}
 
-	if deletionCfg.Behavior == "trash" {
-		relDest, _ := filepath.Rel(vaultPath, destPath)
+	if serviceResult.Behavior == "trash" {
+		relDest, _ := filepath.Rel(vaultPath, serviceResult.TrashPath)
 		fmt.Println(ui.Checkf("Moved to %s", ui.FilePath(relDest)))
 	} else {
-		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(objectID)))
+		fmt.Println(ui.Checkf("Deleted %s", ui.FilePath(serviceResult.ObjectID)))
 	}
 
 	return nil
+}
+
+func deleteBacklinkWarnings(backlinks []model.Reference) []Warning {
+	if len(backlinks) == 0 {
+		return nil
+	}
+	backlinkIDs := make([]string, 0, len(backlinks))
+	for _, bl := range backlinks {
+		backlinkIDs = append(backlinkIDs, bl.SourceID)
+	}
+	return []Warning{{
+		Code:    WarnBacklinks,
+		Message: fmt.Sprintf("Object is referenced by %d other objects", len(backlinks)),
+		Ref:     strings.Join(backlinkIDs, ", "),
+	}}
+}
+
+func mapDeleteSingleServiceError(err error) error {
+	var svcErr *objectsvc.Error
+	if !errors.As(err, &svcErr) {
+		return handleError(ErrInternal, err, "")
+	}
+
+	switch svcErr.Code {
+	case objectsvc.ErrorRefNotFound:
+		return handleErrorMsg(ErrRefNotFound, svcErr.Message, svcErr.Suggestion)
+	case objectsvc.ErrorRefAmbiguous:
+		return handleErrorMsg(ErrRefAmbiguous, svcErr.Message, svcErr.Suggestion)
+	case objectsvc.ErrorDatabase:
+		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
+	case objectsvc.ErrorInvalidInput:
+		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
+	case objectsvc.ErrorFileWrite:
+		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+	default:
+		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+	}
 }
 
 func init() {

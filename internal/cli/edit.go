@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/commands"
+	"github.com/aidanlsb/raven/internal/editsvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -21,24 +20,9 @@ var (
 	editEditsJSON string
 )
 
-type editSpec struct {
-	OldStr string `json:"old_str"`
-	NewStr string `json:"new_str"`
-}
+type editSpec = editsvc.EditSpec
 
-type editBatchInput struct {
-	Edits []editSpec `json:"edits"`
-}
-
-type editResult struct {
-	Index   int
-	Line    int
-	OldStr  string
-	NewStr  string
-	Before  string
-	After   string
-	Context string
-}
+type editResult = editsvc.EditResult
 
 type editCommandError struct {
 	code       string
@@ -69,13 +53,11 @@ var editCmd = &cobra.Command{
 
 		vaultPath := getVaultPath()
 
-		// Load vault config
 		vaultCfg, err := loadVaultConfigSafe(vaultPath)
 		if err != nil {
 			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
 		}
 
-		// Resolve the reference using unified resolver
 		resolvedRef, err := ResolveReference(reference, ResolveOptions{
 			VaultPath:   vaultPath,
 			VaultConfig: vaultCfg,
@@ -87,15 +69,12 @@ var editCmd = &cobra.Command{
 		filePath := resolvedRef.FilePath
 		relPath, _ := filepath.Rel(vaultPath, filePath)
 
-		// Read file content
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return handleError("READ_ERROR", err, "")
 		}
 
-		contentStr := string(content)
-
-		newContent, results, err := applyEditsInMemory(contentStr, relPath, edits)
+		newContent, results, err := applyEditsInMemory(string(content), relPath, edits)
 		if err != nil {
 			return renderEditError(err)
 		}
@@ -104,7 +83,6 @@ var editCmd = &cobra.Command{
 		}
 
 		if !editConfirm {
-			// Preview mode
 			if jsonOutput {
 				if batchMode {
 					editsPreview := make([]map[string]interface{}, 0, len(results))
@@ -148,7 +126,6 @@ var editCmd = &cobra.Command{
 					},
 					Meta: &Meta{},
 				})
-				// Add suggestion as a separate print since Meta doesn't have suggestion
 				return nil
 			}
 
@@ -177,12 +154,10 @@ var editCmd = &cobra.Command{
 			return nil
 		}
 
-		// Apply the edit
 		if err := atomicfile.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
 			return handleError("WRITE_ERROR", err, "")
 		}
 
-		// Auto-reindex if configured
 		maybeReindex(vaultPath, filePath, vaultCfg)
 
 		if jsonOutput {
@@ -250,12 +225,7 @@ func parseEditArgs(args []string, editsJSON string) (string, []editSpec, bool, e
 				suggestion: `Usage: rvn edit <reference> <old_str> <new_str> or rvn edit <reference> --edits-json '{"edits":[...]}'`,
 			}
 		}
-		return reference, []editSpec{
-			{
-				OldStr: args[1],
-				NewStr: args[2],
-			},
-		}, false, nil
+		return reference, []editSpec{{OldStr: args[1], NewStr: args[2]}}, false, nil
 	}
 
 	if len(args) != 1 {
@@ -268,92 +238,17 @@ func parseEditArgs(args []string, editsJSON string) (string, []editSpec, bool, e
 
 	edits, err := parseEditsJSON(raw)
 	if err != nil {
-		return "", nil, false, &editCommandError{
-			code:       ErrInvalidInput,
-			message:    "invalid --edits-json payload",
-			suggestion: `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`,
-			details: map[string]string{
-				"error": err.Error(),
-			},
-		}
+		return "", nil, false, err
 	}
 	return reference, edits, true, nil
 }
 
 func parseEditsJSON(raw string) ([]editSpec, error) {
-	var input editBatchInput
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		return nil, err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return nil, fmt.Errorf("unexpected trailing content")
-		}
-		return nil, err
-	}
-	if len(input.Edits) == 0 {
-		return nil, fmt.Errorf("edits must contain at least one item")
-	}
-	for i, edit := range input.Edits {
-		if edit.OldStr == "" {
-			return nil, fmt.Errorf("edits[%d].old_str must be non-empty", i)
-		}
-	}
-	return input.Edits, nil
+	return editsvc.ParseEditsJSON(raw)
 }
 
 func applyEditsInMemory(content, relPath string, edits []editSpec) (string, []editResult, error) {
-	updated := content
-	results := make([]editResult, 0, len(edits))
-
-	for i, edit := range edits {
-		count := strings.Count(updated, edit.OldStr)
-		editIndex := i + 1
-		if count == 0 {
-			return "", nil, &editCommandError{
-				code:       "STRING_NOT_FOUND",
-				message:    "old_str not found in file",
-				suggestion: "Check the exact string including whitespace",
-				details: map[string]string{
-					"path":       relPath,
-					"edit_index": fmt.Sprintf("%d", editIndex),
-					"old_str":    edit.OldStr,
-				},
-			}
-		}
-		if count > 1 {
-			return "", nil, &editCommandError{
-				code:       "MULTIPLE_MATCHES",
-				message:    fmt.Sprintf("old_str found %d times in file", count),
-				suggestion: "Include more surrounding context to make the match unique",
-				details: map[string]string{
-					"path":       relPath,
-					"edit_index": fmt.Sprintf("%d", editIndex),
-					"count":      fmt.Sprintf("%d", count),
-				},
-			}
-		}
-
-		matchIndex := strings.Index(updated, edit.OldStr)
-		lineNumber := strings.Count(updated[:matchIndex], "\n") + 1
-		beforeContext := extractContext(updated, matchIndex, len(edit.OldStr))
-		afterContext := extractContextAfterReplace(updated, edit.OldStr, edit.NewStr, matchIndex)
-
-		updated = strings.Replace(updated, edit.OldStr, edit.NewStr, 1)
-		results = append(results, editResult{
-			Index:   editIndex,
-			Line:    lineNumber,
-			OldStr:  edit.OldStr,
-			NewStr:  edit.NewStr,
-			Before:  beforeContext,
-			After:   afterContext,
-			Context: afterContext,
-		})
-	}
-
-	return updated, results, nil
+	return editsvc.ApplyEditsInMemory(content, relPath, edits)
 }
 
 func renderEditError(err error) error {
@@ -364,52 +259,18 @@ func renderEditError(err error) error {
 		}
 		return handleErrorMsg(cmdErr.code, cmdErr.message, cmdErr.suggestion)
 	}
+
+	svcErr, ok := editsvc.AsError(err)
+	if ok {
+		if len(svcErr.Details) > 0 {
+			return handleErrorWithDetails(string(svcErr.Code), svcErr.Message, svcErr.Suggestion, svcErr.Details)
+		}
+		return handleErrorMsg(string(svcErr.Code), svcErr.Message, svcErr.Suggestion)
+	}
+
 	return handleError(ErrInternal, err, "")
 }
 
-// extractContext extracts ~3 lines of context around a match
-func extractContext(content string, matchIndex int, matchLen int) string {
-	lines := strings.Split(content, "\n")
-
-	// Find line containing the match
-	charCount := 0
-	startLine := 0
-	for i, line := range lines {
-		if charCount+len(line)+1 > matchIndex {
-			startLine = i
-			break
-		}
-		charCount += len(line) + 1 // +1 for newline
-	}
-
-	// Get 1 line before and 2 lines after
-	contextStart := startLine
-	if contextStart > 0 {
-		contextStart--
-	}
-	contextEnd := startLine + 3
-	if contextEnd > len(lines) {
-		contextEnd = len(lines)
-	}
-
-	return strings.Join(lines[contextStart:contextEnd], "\n")
-}
-
-// extractContextAfterReplace shows context after the replacement
-func extractContextAfterReplace(content, oldStr, newStr string, matchIndex int) string {
-	newContent := strings.Replace(content, oldStr, newStr, 1)
-	// Find approximate position in new content
-	newMatchIndex := matchIndex
-	if newMatchIndex > len(newContent) {
-		newMatchIndex = len(newContent) - 1
-	}
-	if newMatchIndex < 0 {
-		newMatchIndex = 0
-	}
-	return extractContext(newContent, newMatchIndex, len(newStr))
-}
-
-// indent adds a prefix to each line
 func indent(s, prefix string) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {

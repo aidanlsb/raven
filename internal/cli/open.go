@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -91,16 +92,15 @@ Examples:
 
 		reference := args[0]
 
-		// Resolve the reference using unified resolver, then dynamic date keywords.
-		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-		}, false)
+		rt := &readsvc.Runtime{
+			VaultPath: vaultPath,
+			VaultCfg:  vaultCfg,
+		}
+
+		target, err := readsvc.ResolveOpenTarget(rt, reference)
 		if err != nil {
 			return handleResolveError(err, reference)
 		}
-
-		relPath, _ := filepath.Rel(vaultPath, result.FilePath)
 
 		// JSON output
 		if isJSONOutput() {
@@ -110,9 +110,9 @@ Examples:
 				editor = cfg.GetEditor()
 			}
 
-			opened := vault.OpenInEditor(cfg, result.FilePath)
+			opened := vault.OpenInEditor(cfg, target.FilePath)
 			outputSuccess(map[string]interface{}{
-				"file":   relPath,
+				"file":   target.RelativePath,
 				"opened": opened,
 				"editor": editor,
 			}, nil)
@@ -120,7 +120,7 @@ Examples:
 		}
 
 		// Human output - open in editor
-		openFileInEditor(result.FilePath, relPath, false)
+		openFileInEditor(target.FilePath, target.RelativePath, false)
 
 		return nil
 	},
@@ -136,28 +136,25 @@ func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
 		return fmt.Errorf("no object IDs provided on stdin")
 	}
 
-	var filePaths []string
-	var relPaths []string
-	var errors []string
+	allRefs := make([]string, 0, len(ids)+len(embedded))
+	allRefs = append(allRefs, ids...)
+	allRefs = append(allRefs, embedded...)
 
-	// Warn about skipped embedded IDs
-	for _, id := range embedded {
-		errors = append(errors, fmt.Sprintf("%s: embedded objects not supported", id))
+	rt := &readsvc.Runtime{
+		VaultPath: vaultPath,
+		VaultCfg:  vaultCfg,
 	}
+	targets, failures := readsvc.ResolveOpenTargets(rt, allRefs)
 
-	// Resolve each ID to a file path
-	for _, id := range ids {
-		result, err := ResolveReference(id, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-		})
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", id, err))
-			continue
-		}
-		filePaths = append(filePaths, result.FilePath)
-		relPath, _ := filepath.Rel(vaultPath, result.FilePath)
-		relPaths = append(relPaths, relPath)
+	filePaths := make([]string, 0, len(targets))
+	relPaths := make([]string, 0, len(targets))
+	var errors []string
+	for _, target := range targets {
+		filePaths = append(filePaths, target.FilePath)
+		relPaths = append(relPaths, target.RelativePath)
+	}
+	for _, failure := range failures {
+		errors = append(errors, fmt.Sprintf("%s: %s", failure.Reference, failure.Message))
 	}
 
 	if len(filePaths) == 0 {
