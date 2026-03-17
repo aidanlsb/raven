@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.7] - 2026-03-17
+
+### Added
+- `raven_describe` now returns an explicit `invoke` contract block (envelope shape, notes, and example) to guide compact-surface invocation.
+- Agent guide response contract now includes a compact flow (`discover -> describe -> invoke`) with nested-`args` examples.
+
+### Changed
+- `raven_invoke` now requires command arguments strictly under `args`; top-level command arguments are rejected.
+- MCP docs and compact tool descriptions now consistently document nested-`args` invocation as the only supported argument shape.
+
+### Fixed
+- `raven_invoke` validation errors now include a targeted hint when agents pass command parameters at top level.
+
 ## [v0.0.6] - 2026-03-17
 
 ### Added
@@ -75,7 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.7...HEAD
+[v0.0.7]: https://github.com/aidanlsb/raven/compare/v0.0.6...v0.0.7
 [v0.0.6]: https://github.com/aidanlsb/raven/compare/v0.0.5...v0.0.6
 [v0.0.5]: https://github.com/aidanlsb/raven/compare/v0.0.4...v0.0.5
 [v0.0.4]: https://github.com/aidanlsb/raven/compare/v0.0.3...v0.0.4
