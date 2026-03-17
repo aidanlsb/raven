@@ -67,7 +67,7 @@ func GenerateToolSchemas() []Tool {
 		},
 		{
 			Name:        compactToolInvoke,
-			Description: "Invoke any registry command with strict typed validation and policy checks.",
+			Description: "Invoke any registry command with strict typed validation and policy checks (command args must be nested inside args).",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]interface{}{

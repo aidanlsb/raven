@@ -112,6 +112,24 @@ The MCP surface is intentionally compact:
 - `raven_describe` returns the strict invocation contract for one command
 - `raven_invoke` executes commands with validation and policy checks
 
+### `raven_invoke` argument passing
+
+`raven_invoke` requires command arguments to be nested inside `args`:
+
+```json
+{
+  "command": "query",
+  "args": {
+    "query_string": "object:project .status==active",
+    "limit": 20
+  }
+}
+```
+
+Notes:
+- Top-level keys are reserved for invoke envelope fields only: `command`, `args`, `schema_hash`, `strict_schema`.
+- Passing command arguments at top-level (for example `query_string` next to `command`) fails with `INVALID_ARGS` (`UNKNOWN_ARGUMENT`).
+
 ---
 
 ## Available Tools
@@ -123,7 +141,7 @@ This tool list is generated from the command registry and should stay in sync wi
 |------|-------------|
 | `raven_describe` | Fetch the strict invocation contract for one Raven command. |
 | `raven_discover` | Search and browse discoverable Raven commands with compact metadata. |
-| `raven_invoke` | Invoke any registry command with strict typed validation and policy checks. |
+| `raven_invoke` | Invoke any registry command with strict typed validation and policy checks (command args must be nested inside args). |
 <!-- END MCP TOOL LIST -->
 
 ## Tool Parameter Conventions

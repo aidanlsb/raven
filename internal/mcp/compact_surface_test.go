@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -20,6 +21,9 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 			Command       string `json:"command"`
 			SchemaHash    string `json:"schema_hash"`
 			SchemaVersion string `json:"schema_version"`
+			Invoke        struct {
+				Tool string `json:"tool"`
+			} `json:"invoke"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -36,6 +40,9 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	}
 	if envelope.Data.SchemaVersion != commandContractSchemaVersion {
 		t.Fatalf("schema_version=%q, want %q", envelope.Data.SchemaVersion, commandContractSchemaVersion)
+	}
+	if envelope.Data.Invoke.Tool != compactToolInvoke {
+		t.Fatalf("invoke.tool=%q, want %q", envelope.Data.Invoke.Tool, compactToolInvoke)
 	}
 }
 
@@ -107,5 +114,26 @@ func TestCompactInvokeSuccess(t *testing.T) {
 
 	if !v.FileExists("people/alice.md") {
 		t.Fatal("expected people/alice.md to exist")
+	}
+}
+
+func TestCompactInvokeRejectsTopLevelCommandArgumentsWithHint(t *testing.T) {
+	server := NewServer("")
+
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command":      "query",
+		"query_string": "object:project .status==active",
+	})
+	if !isErr {
+		t.Fatalf("expected invoke error, got: %s", out)
+	}
+	if !strings.Contains(out, `"code":"INVALID_ARGS"`) {
+		t.Fatalf("expected INVALID_ARGS, got: %s", out)
+	}
+	if !strings.Contains(out, "put command parameters inside args") {
+		t.Fatalf("expected nested-args hint, got: %s", out)
+	}
+	if !strings.Contains(out, "UNKNOWN_ARGUMENT") {
+		t.Fatalf("expected UNKNOWN_ARGUMENT issue, got: %s", out)
 	}
 }

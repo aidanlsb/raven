@@ -23,6 +23,30 @@ Field meanings:
 - `warnings`: non-fatal issues that still require agent attention.
 - `meta`: optional context (counts, pagination, scope, etc.).
 
+## Compact invoke contract
+
+For the compact MCP surface, use this flow:
+1. `raven_discover` to find a command id.
+2. `raven_describe(command="...")` to get the strict parameter schema.
+3. `raven_invoke(command="...", args={...})` to execute.
+
+Important:
+- Command parameters must be nested under `args`.
+- `raven_invoke` top-level keys are envelope keys only: `command`, `args`, `schema_hash`, `strict_schema`.
+- If you place command parameters at top level (for example `query_string` beside `command`), expect `INVALID_ARGS` with `UNKNOWN_ARGUMENT`.
+
+Example:
+
+```json
+{
+  "command": "query",
+  "args": {
+    "query_string": "object:project .status==active",
+    "limit": 20
+  }
+}
+```
+
 ## Error handling rules
 
 1. If `ok=false`, treat the operation as failed.
