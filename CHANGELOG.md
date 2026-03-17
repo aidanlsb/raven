@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.6] - 2026-03-17
+
+### Added
+- Shared command policy layer (`invokable`, `discoverable`, `workflow_allowed`) with tests, used by MCP compact discovery/invoke and workflow validation.
+- Strict compact MCP surface implementation (`raven_discover`, `raven_describe`, `raven_invoke`) with typed command contracts and schema hash support.
+
+### Changed
+- MCP `tools/list` now exposes only the compact 3-tool surface; direct legacy `raven_*` tool calls via `tools/call` are rejected.
+- `raven_invoke` now enforces strict typed arguments (removed permissive structured-string coercions), with improved contract-driven errors.
+- Workflow tool execution (CLI and MCP workflow runners) now uses shared in-process semantic dispatch instead of subprocess CLI execution.
+
+### Fixed
+- MCP server startup logging now correctly reports pinned vault mode when `--vault-path` or `--vault` is provided via base args.
+- Added integration coverage for live `rvn serve` JSON-RPC behavior to ensure legacy tool-name calls return `UNKNOWN_TOOL`.
+
 ## [v0.0.5] - 2026-03-08
 
 ### Fixed
@@ -60,7 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.6...HEAD
+[v0.0.6]: https://github.com/aidanlsb/raven/compare/v0.0.5...v0.0.6
 [v0.0.5]: https://github.com/aidanlsb/raven/compare/v0.0.4...v0.0.5
 [v0.0.4]: https://github.com/aidanlsb/raven/compare/v0.0.3...v0.0.4
 [v0.0.3]: https://github.com/aidanlsb/raven/compare/v0.0.2...v0.0.3
