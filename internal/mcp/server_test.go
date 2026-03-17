@@ -311,6 +311,53 @@ func firstNonEmptyLine(content string) string {
 	return ""
 }
 
+func TestStartupModeMessage(t *testing.T) {
+	t.Run("uses explicit vaultPath field", func(t *testing.T) {
+		s := &Server{vaultPath: "/tmp/explicit"}
+		msg := s.startupModeMessage()
+		want := "[raven-mcp] Server starting with pinned vault: /tmp/explicit"
+		if msg != want {
+			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+		}
+	})
+
+	t.Run("detects --vault-path value in base args", func(t *testing.T) {
+		s := &Server{baseArgs: []string{"--vault-path", "/tmp/base"}}
+		msg := s.startupModeMessage()
+		want := "[raven-mcp] Server starting with pinned vault: /tmp/base"
+		if msg != want {
+			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+		}
+	})
+
+	t.Run("detects --vault-path=value in base args", func(t *testing.T) {
+		s := &Server{baseArgs: []string{"--vault-path=/tmp/inline"}}
+		msg := s.startupModeMessage()
+		want := "[raven-mcp] Server starting with pinned vault: /tmp/inline"
+		if msg != want {
+			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+		}
+	})
+
+	t.Run("detects --vault name in base args", func(t *testing.T) {
+		s := &Server{baseArgs: []string{"--vault", "work"}}
+		msg := s.startupModeMessage()
+		want := "[raven-mcp] Server starting with pinned named vault: work"
+		if msg != want {
+			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+		}
+	})
+
+	t.Run("defaults to dynamic mode", func(t *testing.T) {
+		s := &Server{}
+		msg := s.startupModeMessage()
+		want := "[raven-mcp] Server starting with dynamic vault resolution"
+		if msg != want {
+			t.Fatalf("startup message mismatch\ngot:  %q\nwant: %q", msg, want)
+		}
+	})
+}
+
 func TestExecuteRvnTreatsOkFalseAsErrorEvenWithExit0(t *testing.T) {
 	// Skip on Windows just in case; Raven targets mac/linux.
 	if runtime.GOOS == "windows" {

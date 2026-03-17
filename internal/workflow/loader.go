@@ -458,10 +458,14 @@ func isValidOutputType(outputType string) bool {
 }
 
 func validateToolName(tool string) error {
-	if _, ok := commands.ResolveToolCommandID(strings.TrimSpace(tool)); ok {
-		return nil
+	commandID, ok := commands.ResolveToolCommandID(strings.TrimSpace(tool))
+	if !ok {
+		return fmt.Errorf("references unknown tool '%s'", tool)
 	}
-	return fmt.Errorf("references unknown tool '%s'", tool)
+	if !commands.IsWorkflowAllowedCommandID(commandID) {
+		return fmt.Errorf("references tool '%s' which is not allowed in workflow steps", tool)
+	}
+	return nil
 }
 
 // Get retrieves a workflow by name from the vault configuration.

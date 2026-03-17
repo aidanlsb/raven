@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/toolexec"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -53,7 +52,7 @@ func workflowWarningsToDirect(warnings []workflow.RunStoreWarning) []directWarni
 
 func (s *Server) makeDirectWorkflowToolFunc(vaultPath string) func(tool string, args map[string]interface{}) (interface{}, error) {
 	return func(tool string, args map[string]interface{}) (interface{}, error) {
-		envelope, err := toolexec.Execute(vaultPath, s.executable, tool, args)
+		envelope, err := ExecuteWorkflowToolDirect(vaultPath, tool, args)
 		if err != nil {
 			return nil, err
 		}

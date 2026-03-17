@@ -86,6 +86,24 @@ steps:
 		}
 	})
 
+	t.Run("rejects top-level workflow-disallowed tool name", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "disallowed-tool.yaml")
+		content := `description: disallowed tool
+steps:
+  - id: q
+    type: tool
+    tool: raven_open
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "disallowed-tool", &config.WorkflowRef{File: "workflows/disallowed-tool.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "not allowed in workflow steps") {
+			t.Fatalf("expected workflow-disallowed tool error, got %v", err)
+		}
+	})
+
 	t.Run("accepts typed array agent outputs", func(t *testing.T) {
 		path := filepath.Join(vaultDir, "workflows", "typed-output.yaml")
 		content := `description: typed output
@@ -230,6 +248,29 @@ steps:
 		_, err := Load(vaultDir, "foreach-unknown-tool", &config.WorkflowRef{File: "workflows/foreach-unknown-tool.yaml"})
 		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
 			t.Fatalf("expected unknown tool error, got %v", err)
+		}
+	})
+
+	t.Run("rejects foreach nested workflow-disallowed tool name", func(t *testing.T) {
+		path := filepath.Join(vaultDir, "workflows", "foreach-disallowed-tool.yaml")
+		content := `description: foreach
+steps:
+  - id: fanout
+    type: foreach
+    foreach:
+      items: "{{steps.seed.data.results}}"
+      steps:
+        - id: open_note
+          type: tool
+          tool: raven_open
+`
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		_, err := Load(vaultDir, "foreach-disallowed-tool", &config.WorkflowRef{File: "workflows/foreach-disallowed-tool.yaml"})
+		if err == nil || !strings.Contains(err.Error(), "not allowed in workflow steps") {
+			t.Fatalf("expected workflow-disallowed tool error, got %v", err)
 		}
 	})
 

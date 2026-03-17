@@ -1,18 +1,24 @@
 package mcp
 
-import "testing"
+import (
+	"testing"
 
-func TestAllGeneratedToolsHaveDirectSemanticMapping(t *testing.T) {
-	tools := GenerateToolSchemas()
+	"github.com/aidanlsb/raven/internal/commands"
+)
 
+func TestAllInvokableCommandsHaveDirectSemanticMapping(t *testing.T) {
 	missing := make([]string, 0)
-	for _, tool := range tools {
-		if _, ok := compatibilityToolSemanticMap[tool.Name]; !ok {
-			missing = append(missing, tool.Name)
+	for commandID, meta := range commands.Registry {
+		if meta.HideFromMCP || !commands.IsInvokableCommandID(commandID) {
+			continue
+		}
+		toolName := mcpToolName(commandID)
+		if _, ok := compatibilityToolSemanticMap[toolName]; !ok {
+			missing = append(missing, commandID)
 		}
 	}
 
 	if len(missing) > 0 {
-		t.Fatalf("generated MCP tools missing direct semantic mappings: %v", missing)
+		t.Fatalf("invokable commands missing direct semantic mappings: %v", missing)
 	}
 }

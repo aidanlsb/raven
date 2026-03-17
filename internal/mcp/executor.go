@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 // ExecuteToolDirect executes a Raven MCP tool using in-process semantic direct
@@ -48,4 +50,18 @@ func ExecuteToolDirect(vaultPath, toolName string, args map[string]interface{}) 
 	}
 
 	return envelope, nil
+}
+
+// ExecuteWorkflowToolDirect executes a workflow tool step through in-process
+// semantic direct dispatch while enforcing workflow policy.
+func ExecuteWorkflowToolDirect(vaultPath, toolName string, args map[string]interface{}) (map[string]interface{}, error) {
+	commandID, ok := commands.ResolveToolCommandID(strings.TrimSpace(toolName))
+	if !ok {
+		return nil, fmt.Errorf("unknown tool: %s", toolName)
+	}
+	if !commands.IsWorkflowAllowedCommandID(commandID) {
+		return nil, fmt.Errorf("tool '%s' is not allowed in workflow steps", toolName)
+	}
+
+	return ExecuteToolDirect(vaultPath, mcpToolName(commandID), args)
 }

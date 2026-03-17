@@ -10,15 +10,16 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/testutil"
-	"github.com/aidanlsb/raven/internal/toolargs"
 )
 
 // TestMCPIntegration_ToolsList tests that the MCP server returns tool schemas.
@@ -54,17 +55,15 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 	}
 
 	tools := response.Result.Tools
-	if len(tools) == 0 {
-		t.Fatal("expected at least one tool, got none")
+	if len(tools) != 3 {
+		t.Fatalf("expected 3 compact tools, got %d", len(tools))
 	}
 
-	// Verify some expected tools exist
-	expectedTools := []string{"raven_new", "raven_query", "raven_search", "raven_read", "raven_set", "raven_delete"}
+	// Verify compact tools exist
+	expectedTools := []string{"raven_discover", "raven_describe", "raven_invoke"}
 	foundTools := make(map[string]bool)
-	toolByName := make(map[string]mcp.Tool)
 	for _, tool := range tools {
 		foundTools[tool.Name] = true
-		toolByName[tool.Name] = tool
 	}
 
 	for _, expected := range expectedTools {
@@ -72,24 +71,69 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 			t.Errorf("expected tool %s not found in tool list", expected)
 		}
 	}
+}
 
-	// Verify schema field tools expose description in JSON-RPC tools/list output.
-	for _, toolName := range []string{"raven_schema_add_field", "raven_schema_update_field"} {
-		tool, ok := toolByName[toolName]
-		if !ok {
-			t.Fatalf("expected tool %s in tools/list response", toolName)
-		}
-		prop, ok := tool.InputSchema.Properties["description"]
-		if !ok {
-			t.Fatalf("expected %s to include description property", toolName)
-		}
-		propMap, ok := prop.(map[string]interface{})
-		if !ok {
-			t.Fatalf("expected %s description property to be an object, got %T", toolName, prop)
-		}
-		if got := propMap["type"]; got != "string" {
-			t.Fatalf("expected %s description property type=string, got %#v", toolName, got)
-		}
+// TestMCPIntegration_ServeRejectsLegacyToolNames ensures the live `rvn serve`
+// JSON-RPC path only accepts compact tools and rejects legacy names.
+func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+
+	requests := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"raven_new","arguments":{"type":"page","title":"Legacy Path"}}}`,
+	}, "\n") + "\n"
+
+	cmd := exec.Command(binary, "--vault-path", v.Path, "serve")
+	cmd.Stdin = strings.NewReader(requests)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("serve command failed: %v\nstderr: %s\nstdout: %s", err, stderr.String(), stdout.String())
+	}
+
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 JSON-RPC responses, got %d\nstdout: %s", len(lines), stdout.String())
+	}
+
+	var initResp struct {
+		Result map[string]interface{} `json:"result"`
+		Error  *mcp.RPCError          `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &initResp); err != nil {
+		t.Fatalf("failed to parse initialize response: %v\nraw: %s", err, lines[0])
+	}
+	if initResp.Error != nil {
+		t.Fatalf("initialize returned rpc error: %+v", initResp.Error)
+	}
+
+	var toolCallResp struct {
+		Result mcp.ToolResult `json:"result"`
+		Error  *mcp.RPCError  `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &toolCallResp); err != nil {
+		t.Fatalf("failed to parse tools/call response: %v\nraw: %s", err, lines[1])
+	}
+	if toolCallResp.Error != nil {
+		t.Fatalf("tools/call returned rpc error: %+v", toolCallResp.Error)
+	}
+	if !toolCallResp.Result.IsError {
+		t.Fatalf("expected tools/call isError=true for legacy tool name\nresponse: %s", lines[1])
+	}
+	if len(toolCallResp.Result.Content) == 0 {
+		t.Fatalf("expected tool response content, got none: %s", lines[1])
+	}
+
+	env := parseMCPEnvelope(t, toolCallResp.Result.Content[0].Text)
+	if env.Error == nil || env.Error.Code != "UNKNOWN_TOOL" {
+		t.Fatalf("expected UNKNOWN_TOOL envelope error, got: %s", toolCallResp.Result.Content[0].Text)
 	}
 }
 
@@ -345,8 +389,8 @@ func TestMCPIntegration_SetFields(t *testing.T) {
 	v.AssertFileContains("people/carol.md", "email: carol@example.com")
 }
 
-// TestMCPIntegration_StringEncodedStructuredInputs verifies that MCP tool calls
-// succeed when structured inputs are provided as strings (strict-client compatibility).
+// TestMCPIntegration_StringEncodedStructuredInputs verifies strict invoke typing:
+// string-encoded structured payloads are rejected, while typed objects succeed.
 func TestMCPIntegration_StringEncodedStructuredInputs(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
@@ -400,43 +444,74 @@ steps:
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	// JSON-typed flag provided as JSON string (not object).
-	upsertResult := server.callTool("raven_upsert", map[string]interface{}{
+	// JSON-typed flag provided as JSON string is rejected.
+	upsertInvalid := server.callTool("raven_upsert", map[string]interface{}{
 		"type":       "project",
 		"title":      "MCP Compat Project",
 		"field-json": `{"status":"active"}`,
 	})
-	if upsertResult.IsError {
-		t.Fatalf("upsert with field-json string failed: %s", upsertResult.Text)
+	upsertInvalidEnv := parseMCPEnvelope(t, upsertInvalid.Text)
+	if !upsertInvalid.IsError || upsertInvalidEnv.OK {
+		t.Fatalf("expected upsert field-json string to fail, got: %s", upsertInvalid.Text)
+	}
+	if upsertInvalidEnv.Error == nil || upsertInvalidEnv.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("expected INVALID_ARGS for upsert field-json string, got: %s", upsertInvalid.Text)
+	}
+
+	// JSON-typed flag provided as an object succeeds.
+	upsertValid := server.callTool("raven_upsert", map[string]interface{}{
+		"type":       "project",
+		"title":      "MCP Compat Project",
+		"field-json": map[string]interface{}{"status": "active"},
+	})
+	if upsertValid.IsError {
+		t.Fatalf("upsert with field-json object failed: %s", upsertValid.Text)
 	}
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: active")
 
-	// Key-value structured input provided as a single "k=v" string.
-	setResult := server.callTool("raven_set", map[string]interface{}{
+	// Key-value map provided as a single "k=v" string is rejected.
+	setInvalid := server.callTool("raven_set", map[string]interface{}{
 		"object_id": "projects/mcp-compat-project",
 		"fields":    "status=done",
 	})
-	if setResult.IsError {
-		t.Fatalf("set with fields string failed: %s", setResult.Text)
+	setInvalidEnv := parseMCPEnvelope(t, setInvalid.Text)
+	if !setInvalid.IsError || setInvalidEnv.OK {
+		t.Fatalf("expected set fields string to fail, got: %s", setInvalid.Text)
+	}
+	if setInvalidEnv.Error == nil || setInvalidEnv.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("expected INVALID_ARGS for set fields string, got: %s", setInvalid.Text)
+	}
+
+	// Typed object for fields succeeds.
+	setValid := server.callTool("raven_set", map[string]interface{}{
+		"object_id": "projects/mcp-compat-project",
+		"fields":    map[string]interface{}{"status": "done"},
+	})
+	if setValid.IsError {
+		t.Fatalf("set with fields object failed: %s", setValid.Text)
 	}
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: done")
 
-	// Update trait value uses a plain string positional value.
-	updateResult := server.callTool("raven_update", map[string]interface{}{
-		"trait_id": "tasks/missing.md:trait:0",
-		"value":    "done",
-	})
-	if updateResult.IsError {
-		t.Fatalf("update with plain string value failed: %s", updateResult.Text)
-	}
-
-	// JSON-typed workflow input provided as string (underscore key variant).
-	runResult := server.callTool("raven_workflow_run", map[string]interface{}{
+	// JSON-typed workflow input provided as string is rejected.
+	runInvalid := server.callTool("raven_workflow_run", map[string]interface{}{
 		"name":       "string-compat",
 		"input_json": `{"date":"2026-02-16"}`,
 	})
+	runInvalidEnv := parseMCPEnvelope(t, runInvalid.Text)
+	if !runInvalid.IsError || runInvalidEnv.OK {
+		t.Fatalf("expected workflow run input_json string to fail, got: %s", runInvalid.Text)
+	}
+	if runInvalidEnv.Error == nil || runInvalidEnv.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("expected INVALID_ARGS for workflow run input_json string, got: %s", runInvalid.Text)
+	}
+
+	// JSON-typed workflow input provided as object succeeds.
+	runResult := server.callTool("raven_workflow_run", map[string]interface{}{
+		"name":       "string-compat",
+		"input-json": map[string]interface{}{"date": "2026-02-16"},
+	})
 	if runResult.IsError {
-		t.Fatalf("workflow run with input_json string failed: %s", runResult.Text)
+		t.Fatalf("workflow run with input-json object failed: %s", runResult.Text)
 	}
 
 	var runResp struct {
@@ -456,13 +531,26 @@ steps:
 		t.Fatalf("expected awaiting_agent status, got %q", runResp.Data.Status)
 	}
 
-	// JSON-typed workflow continue payload provided as string (underscore keys).
+	// JSON-typed workflow continue payload as string is rejected.
+	continueInvalid := server.callTool("raven_workflow_continue", map[string]interface{}{
+		"run-id":            runResp.Data.RunID,
+		"agent-output-json": `{"outputs":{"markdown":"# Brief\nGenerated from strict payloads."}}`,
+	})
+	continueInvalidEnv := parseMCPEnvelope(t, continueInvalid.Text)
+	if !continueInvalid.IsError || continueInvalidEnv.OK {
+		t.Fatalf("expected workflow continue agent-output-json string to fail, got: %s", continueInvalid.Text)
+	}
+	if continueInvalidEnv.Error == nil || continueInvalidEnv.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("expected INVALID_ARGS for workflow continue agent-output-json string, got: %s", continueInvalid.Text)
+	}
+
+	// JSON-typed workflow continue payload as object succeeds.
 	continueResult := server.callTool("raven_workflow_continue", map[string]interface{}{
-		"run_id":            runResp.Data.RunID,
-		"agent_output_json": `{"outputs":{"markdown":"# Brief\nGenerated from string payloads."}}`,
+		"run-id":            runResp.Data.RunID,
+		"agent-output-json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "# Brief\nGenerated from strict payloads."}},
 	})
 	if continueResult.IsError {
-		t.Fatalf("workflow continue with agent_output_json string failed: %s", continueResult.Text)
+		t.Fatalf("workflow continue with agent-output-json object failed: %s", continueResult.Text)
 	}
 
 	var continueResp struct {
@@ -479,7 +567,7 @@ steps:
 	}
 
 	searchResult := server.callTool("raven_search", map[string]interface{}{
-		"query": "Generated from string payloads",
+		"query": "Generated from strict payloads",
 		"limit": float64(5),
 	})
 	if searchResult.IsError {
@@ -958,7 +1046,6 @@ Planning: [[events/planning|Planning]]
 		"old_name":            "event",
 		"new_name":            "meeting",
 		"confirm":             true,
-		"rename-default-path": true,
 		"rename_default_path": true, // underscore variant should normalize
 	})
 	if apply.IsError {
@@ -1262,7 +1349,9 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		mcpResult := server.callTool("raven_set", map[string]interface{}{
 			"stdin":      true,
 			"object_ids": []interface{}{"people/set-bulk-one", "people/set-bulk-two"},
-			"fields":     "email=bulk@example.com",
+			"fields": map[string]interface{}{
+				"email": "bulk@example.com",
+			},
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/set-bulk-one\npeople/set-bulk-two\n", "set", "--stdin", "email=bulk@example.com")
 
@@ -1283,7 +1372,9 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 			"stdin":      true,
 			"confirm":    true,
 			"object_ids": []interface{}{"people/set-apply-one", "people/set-apply-two"},
-			"fields":     "email=apply@example.com",
+			"fields": map[string]interface{}{
+				"email": "apply@example.com",
+			},
 		})
 		cliResult := vCLI.RunCLIWithStdin("people/set-apply-one\npeople/set-apply-two\n", "set", "--stdin", "--confirm", "email=apply@example.com")
 
@@ -2947,7 +3038,9 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 
 		mcpResult := server.callTool("raven_set", map[string]interface{}{
 			"object_id": "people/missing",
-			"fields":    "alias=ghost",
+			"fields": map[string]interface{}{
+				"alias": "ghost",
+			},
 		})
 		cliResult := vCLI.RunCLI("set", "people/missing", "alias=ghost")
 
@@ -2970,7 +3063,9 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 
 		mcpResult := server.callTool("raven_set", map[string]interface{}{
 			"object_id": "alice",
-			"fields":    "alias=ambiguous",
+			"fields": map[string]interface{}{
+				"alias": "ambiguous",
+			},
 		})
 		cliResult := vCLI.RunCLI("set", "alice", "alias=ambiguous")
 
@@ -2984,7 +3079,9 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 
 		mcpResult := server.callTool("raven_set", map[string]interface{}{
 			"stdin":  true,
-			"fields": "email=bulk@example.com",
+			"fields": map[string]interface{}{
+				"email": "bulk@example.com",
+			},
 		})
 		cliResult := vCLI.RunCLIWithStdin("", "set", "--stdin", "email=bulk@example.com")
 
@@ -3007,15 +3104,18 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 
 	t.Run("add_missing_text", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
-		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("raven_add", map[string]interface{}{
 			"to": "people/missing",
 		})
-		cliResult := vCLI.RunCLI("add", "--to", "people/missing")
-
-		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+		env := parseMCPEnvelope(t, mcpResult.Text)
+		if !mcpResult.IsError || env.OK {
+			t.Fatalf("expected invoke validation error, got: %s", mcpResult.Text)
+		}
+		if env.Error == nil || env.Error.Code != "INVALID_ARGS" {
+			t.Fatalf("expected INVALID_ARGS, got: %s", mcpResult.Text)
+		}
 	})
 
 	t.Run("add_bulk_missing_ids", func(t *testing.T) {
@@ -3454,6 +3554,23 @@ func assertEnvelopeParity(t *testing.T, mcpResult toolResult, cliResult *testuti
 		if cliResult.Data != nil {
 			cliVal = cliResult.Data[key]
 		}
+		if key == "fetched_at" {
+			mcpTS, mcpOK := mcpVal.(string)
+			cliTS, cliOK := cliVal.(string)
+			if mcpOK && cliOK && mcpTS != "" && cliTS != "" {
+				if mcpParsed, err := time.Parse(time.RFC3339, mcpTS); err == nil {
+					if cliParsed, err := time.Parse(time.RFC3339, cliTS); err == nil {
+						diff := mcpParsed.Sub(cliParsed)
+						if diff < 0 {
+							diff = -diff
+						}
+						if diff <= 2*time.Second {
+							continue
+						}
+					}
+				}
+			}
+		}
 		if !reflect.DeepEqual(mcpVal, cliVal) {
 			t.Fatalf("data mismatch for key %q: mcp=%#v cli=%#v\nmcp: %s\ncli: %s", key, mcpVal, cliVal, mcpResult.Text, cliResult.RawJSON)
 		}
@@ -3530,10 +3647,14 @@ func newTestServer(t *testing.T, vaultPath, executable string) *testServer {
 func (s *testServer) callTool(name string, args map[string]interface{}) toolResult {
 	s.t.Helper()
 
-	// Build the CLI args using the public function
-	cmdArgs := toolargs.BuildCLIArgs(name, args)
-	if len(cmdArgs) == 0 {
-		return toolResult{Text: `{"ok":false,"error":{"code":"UNKNOWN_TOOL","message":"Unknown tool"}}`, IsError: true}
+	requestName := name
+	requestArgs := args
+	if name != "raven_discover" && name != "raven_describe" && name != "raven_invoke" {
+		requestName = "raven_invoke"
+		requestArgs = map[string]interface{}{"command": name}
+		if args != nil {
+			requestArgs["args"] = args
+		}
 	}
 
 	// Create a real MCP server but with custom executable
@@ -3541,8 +3662,8 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 
 	// Create a simulated JSON-RPC request
 	paramsBytes, _ := json.Marshal(map[string]interface{}{
-		"name":      name,
-		"arguments": args,
+		"name":      requestName,
+		"arguments": requestArgs,
 	})
 	params := json.RawMessage(paramsBytes)
 
@@ -3581,7 +3702,6 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 
 // Verify the integration test helpers compile correctly by importing from mcp package
 var _ = mcp.GenerateToolSchemas
-var _ = toolargs.BuildCLIArgs
 
 // testServerInterface is used to verify we're implementing the expected pattern.
 type testServerInterface interface {

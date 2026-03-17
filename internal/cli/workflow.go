@@ -3,7 +3,6 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -11,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/toolexec"
+	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -998,20 +997,11 @@ var workflowRunsCmd = &cobra.Command{
 	Short: "Manage persisted workflow run records",
 }
 
-// makeToolFunc executes workflow tool steps through the same registry-driven
-// CLI argument mapping used by MCP.
+// makeToolFunc executes workflow tool steps through the shared in-process
+// semantic dispatcher used by MCP (no subprocess CLI path).
 func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{}) (interface{}, error) {
-	executable, err := os.Executable()
-	resolveErr := err
-	if strings.TrimSpace(executable) == "" && resolveErr == nil {
-		resolveErr = fmt.Errorf("os.Executable returned empty path")
-	}
-
 	return func(tool string, args map[string]interface{}) (interface{}, error) {
-		if resolveErr != nil {
-			return nil, fmt.Errorf("failed to resolve current executable path: %w", resolveErr)
-		}
-		envelope, err := toolexec.Execute(vaultPath, executable, tool, args)
+		envelope, err := mcp.ExecuteWorkflowToolDirect(vaultPath, tool, args)
 		if err != nil {
 			return nil, err
 		}

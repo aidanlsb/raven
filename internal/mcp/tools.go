@@ -9,108 +9,89 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-// GenerateToolSchemas generates MCP tool schemas from the command registry.
-// This ensures MCP tools stay in sync with CLI commands automatically.
+const (
+	compactToolDiscover = "raven_discover"
+	compactToolDescribe = "raven_describe"
+	compactToolInvoke   = "raven_invoke"
+)
+
+// GenerateToolSchemas returns the compact MCP surface.
 func GenerateToolSchemas() []Tool {
-	var tools []Tool
-
-	for cmdName, meta := range commands.Registry {
-		if meta.HideFromMCP {
-			continue
-		}
-
-		description := meta.Description
-		if meta.LongDesc != "" {
-			description = meta.LongDesc
-		}
-		description = withExampleSection(description, meta.Examples)
-
-		tool := Tool{
-			Name:        mcpToolName(cmdName),
-			Description: description,
+	return []Tool{
+		{
+			Name:        compactToolDiscover,
+			Description: "Search and browse discoverable Raven commands with compact metadata.",
 			InputSchema: InputSchema{
-				Type:       "object",
-				Properties: make(map[string]interface{}),
+				Type: "object",
+				Properties: map[string]interface{}{
+					"query": map[string]interface{}{
+						"type":        "string",
+						"description": "Filter by keyword against command id/name/summary/category",
+					},
+					"category": map[string]interface{}{
+						"type":        "string",
+						"description": "Filter by category (query, content, schema, workflow, vault, navigation, maintenance)",
+					},
+					"mode": map[string]interface{}{
+						"type":        "string",
+						"description": "Filter by mode (read, write)",
+					},
+					"risk": map[string]interface{}{
+						"type":        "string",
+						"description": "Filter by risk (safe, mutating, destructive)",
+					},
+					"limit": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum results to return (default 25, max 200)",
+					},
+					"cursor": map[string]interface{}{
+						"type":        "string",
+						"description": "Pagination cursor returned by a previous discover call",
+					},
+				},
 			},
-		}
-
-		// Add arguments as properties
-		var required []string
-		for _, arg := range meta.Args {
-			tool.InputSchema.Properties[arg.Name] = map[string]interface{}{
-				"type":        "string",
-				"description": arg.Description,
-			}
-			if arg.Required {
-				required = append(required, arg.Name)
-			}
-		}
-
-		// Add flags as properties
-		for _, flag := range meta.Flags {
-			prop := map[string]interface{}{
-				"description": flag.Description,
-			}
-
-			switch flag.Type {
-			case commands.FlagTypeBool:
-				prop["type"] = "boolean"
-			case commands.FlagTypeInt:
-				prop["type"] = "integer"
-			case commands.FlagTypeJSON:
-				// Some MCP clients can only pass primitive args. Accept JSON payloads
-				// either as structured objects or as JSON-encoded strings.
-				prop["anyOf"] = []map[string]interface{}{
-					{"type": "object"},
-					{"type": "string"},
-				}
-				prop["description"] = flag.Description + " (object or JSON string)"
-			case commands.FlagTypeStringSlice:
-				// Repeatable string flags are represented as arrays in MCP, while
-				// still accepting comma-delimited strings for client compatibility.
-				prop["anyOf"] = []map[string]interface{}{
-					{"type": "string"},
-					{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "string",
-						},
+		},
+		{
+			Name:        compactToolDescribe,
+			Description: "Fetch the strict invocation contract for one Raven command.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]interface{}{
+					"command": map[string]interface{}{
+						"type":        "string",
+						"description": "Command identifier (e.g. query, raven_query, or schema add type)",
 					},
-				}
-				prop["description"] = flag.Description + " (string or array of strings)"
-			case commands.FlagTypeKeyValue, commands.FlagTypePosKeyValue:
-				// Key/value inputs are intentionally flexible for MCP compatibility:
-				// object, single "k=v" string, or array of "k=v" strings.
-				prop["anyOf"] = []map[string]interface{}{
-					{"type": "object"},
-					{"type": "string"},
-					{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "string",
-						},
+				},
+				Required: []string{"command"},
+			},
+		},
+		{
+			Name:        compactToolInvoke,
+			Description: "Invoke any registry command with strict typed validation and policy checks.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]interface{}{
+					"command": map[string]interface{}{
+						"type":        "string",
+						"description": "Command identifier (e.g. query, raven_query, or schema add type)",
 					},
-				}
-				prop["description"] = flag.Description + " (object, k=v string, or array of k=v strings)"
-			default:
-				prop["type"] = "string"
-			}
-
-			if len(flag.Examples) > 0 {
-				prop["examples"] = flag.Examples
-			}
-
-			tool.InputSchema.Properties[flag.Name] = prop
-		}
-
-		if len(required) > 0 {
-			tool.InputSchema.Required = required
-		}
-
-		tools = append(tools, tool)
+					"args": map[string]interface{}{
+						"type":        "object",
+						"description": "Strict arguments object matching raven_describe parameter schema",
+					},
+					"schema_hash": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional schema hash returned by raven_describe",
+					},
+					"strict_schema": map[string]interface{}{
+						"type":        "boolean",
+						"description": "When true (default), reject invocation if provided schema_hash is stale",
+					},
+				},
+				Required: []string{"command"},
+			},
+		},
 	}
-
-	return tools
 }
 
 func withExampleSection(description string, examples []string) string {

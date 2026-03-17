@@ -14,7 +14,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/rvnexec"
-	"github.com/aidanlsb/raven/internal/toolargs"
 )
 
 // Server is an MCP server that wraps Raven CLI commands.
@@ -176,11 +175,7 @@ func (s *Server) Run() error {
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 
 	// Log startup to stderr (not stdout which is for protocol)
-	if strings.TrimSpace(s.vaultPath) != "" {
-		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with pinned vault:", s.vaultPath)
-	} else {
-		fmt.Fprintln(os.Stderr, "[raven-mcp] Server starting with dynamic vault resolution")
-	}
+	fmt.Fprintln(os.Stderr, s.startupModeMessage())
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -208,6 +203,47 @@ func (s *Server) Run() error {
 
 	fmt.Fprintln(os.Stderr, "[raven-mcp] Server shutting down")
 	return nil
+}
+
+func (s *Server) startupModeMessage() string {
+	if vaultPath := strings.TrimSpace(s.vaultPath); vaultPath != "" {
+		return fmt.Sprintf("[raven-mcp] Server starting with pinned vault: %s", vaultPath)
+	}
+	if vaultPath, ok := baseArgValue(s.baseArgs, "--vault-path"); ok {
+		return fmt.Sprintf("[raven-mcp] Server starting with pinned vault: %s", vaultPath)
+	}
+	if vaultName, ok := baseArgValue(s.baseArgs, "--vault"); ok {
+		return fmt.Sprintf("[raven-mcp] Server starting with pinned named vault: %s", vaultName)
+	}
+	return "[raven-mcp] Server starting with dynamic vault resolution"
+}
+
+func baseArgValue(args []string, flag string) (string, bool) {
+	prefix := flag + "="
+	var value string
+	found := false
+
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		if arg == flag {
+			if i+1 < len(args) {
+				if next := strings.TrimSpace(args[i+1]); next != "" {
+					value = next
+					found = true
+				}
+				i++
+			}
+			continue
+		}
+		if strings.HasPrefix(arg, prefix) {
+			if inline := strings.TrimSpace(strings.TrimPrefix(arg, prefix)); inline != "" {
+				value = inline
+				found = true
+			}
+		}
+	}
+
+	return value, found
 }
 
 func (s *Server) handleRequest(req *Request) {
@@ -493,22 +529,11 @@ func (s *Server) readSchemaFile() (string, error) {
 }
 
 func (s *Server) callTool(name string, args map[string]interface{}) (string, bool) {
-	if out, isErr, handled := s.callToolDirect(name, args); handled {
+	if out, isErr, handled := s.callCompactTool(name, args); handled {
 		return out, isErr
 	}
 
-	// No subprocess fallback: all supported tools must have direct semantic handlers.
-	// Unknown tool names still return UNKNOWN_TOOL for protocol compatibility.
-	if len(toolargs.BuildCLIArgs(name, args)) == 0 {
-		return fmt.Sprintf(`{"ok":false,"error":{"code":"UNKNOWN_TOOL","message":"Unknown tool: %s"}}`, name), true
-	}
-
-	return errorEnvelope(
-		"INTERNAL_ERROR",
-		"direct semantic handler is not configured",
-		"report this issue with the failing tool name",
-		map[string]interface{}{"tool_name": name},
-	), true
+	return fmt.Sprintf(`{"ok":false,"error":{"code":"UNKNOWN_TOOL","message":"Unknown tool: %s"}}`, name), true
 }
 
 func (s *Server) executeRvn(args []string) (string, bool) {

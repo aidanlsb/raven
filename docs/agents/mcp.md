@@ -1,6 +1,6 @@
 # MCP Reference
 
-Raven exposes its CLI commands as MCP (Model Context Protocol) tools via `rvn serve`.
+Raven exposes a compact MCP (Model Context Protocol) surface via `rvn serve`.
 
 ## Recommended Setup (Automatic Install)
 
@@ -106,13 +106,11 @@ The schema resource (`raven://schema/current`) returns the raw `schema.yaml` con
 
 ## Tool Discovery
 
-Schema command metadata is exposed via:
+The MCP surface is intentionally compact:
 
-```bash
-rvn schema commands --json
-```
-
-MCP tool descriptions are generated from that same registry and include command-specific example calls for quick copy/paste starts.
+- `raven_discover` returns discoverable commands with compact metadata
+- `raven_describe` returns the strict invocation contract for one command
+- `raven_invoke` executes commands with validation and policy checks
 
 ---
 
@@ -123,99 +121,9 @@ This tool list is generated from the command registry and should stay in sync wi
 <!-- BEGIN MCP TOOL LIST -->
 | Tool | Description |
 |------|-------------|
-| `raven_add` | Quickly capture a thought, task, or note. |
-| `raven_backlinks` | Find objects that reference a target |
-| `raven_check` | Validates all files in the vault against the schema. |
-| `raven_config` | Manage global Raven config.toml settings. |
-| `raven_config_init` | Create a default global config.toml file at the resolved config path. |
-| `raven_config_set` | Set one or more explicit global config fields. |
-| `raven_config_show` | Show current global config.toml values |
-| `raven_config_unset` | Clear one or more global config.toml fields |
-| `raven_daily` | Open or create a daily note for a given date. |
-| `raven_date` | Date hub - all activity for a date |
-| `raven_delete` | Delete a file/object from the vault. |
-| `raven_docs` | Browse long-form documentation stored in .raven/docs for the active vault. |
-| `raven_docs_fetch` | Download docs from Raven's source repository into .raven/docs. |
-| `raven_docs_list` | List docs sections with explicit section command syntax. |
-| `raven_docs_search` | Search long-form Markdown documentation |
-| `raven_edit` | Replace a unique string in a vault file with another string. |
-| `raven_import` | Import objects from external JSON data into the vault. |
-| `raven_init` | Creates a new vault at the specified path with default configuration files. |
-| `raven_last` | Show or select results from the most recent query. |
-| `raven_move` | Move or rename a file/object within the vault. |
-| `raven_new` | Creates a new note with the specified type. |
-| `raven_open` | Opens a file in your configured editor. |
-| `raven_outlinks` | Find links referenced by an object |
-| `raven_query` | Query objects or traits using the Raven query language. |
-| `raven_query_add` | Add a saved query to raven.yaml |
-| `raven_query_remove` | Remove a saved query from raven.yaml |
-| `raven_read` | Read and output a file from the vault. |
-| `raven_reclassify` | Change an object's type, updating frontmatter fields, applying defaults |
-| `raven_reindex` | Parses all markdown files in the vault and rebuilds the SQLite index. |
-| `raven_resolve` | Resolve a reference (short name, alias, path, date, etc.) and return |
-| `raven_schema` | Introspect the schema |
-| `raven_schema_add_field` | Add a field to an existing type definition. |
-| `raven_schema_add_trait` | Add a new trait to the schema |
-| `raven_schema_add_type` | Add a new type definition to schema.yaml. |
-| `raven_schema_core_template_default` | Set or clear a core type default template ID |
-| `raven_schema_core_template_list` | List template IDs bound to a core type |
-| `raven_schema_core_template_remove` | Unbind a schema template ID from a core type |
-| `raven_schema_core_template_set` | Bind a schema template ID to a core type |
-| `raven_schema_remove_field` | Remove a field from a type definition. |
-| `raven_schema_remove_trait` | Remove a trait definition from schema.yaml. |
-| `raven_schema_remove_type` | Remove a type definition from schema.yaml. |
-| `raven_schema_rename_field` | Rename a field on a specific type and update all downstream places that use that field. |
-| `raven_schema_rename_type` | Rename a type in schema.yaml and update all files that use it. |
-| `raven_schema_template_get` | Show a schema template definition |
-| `raven_schema_template_list` | List all schema templates defined in the top-level templates block. |
-| `raven_schema_template_remove` | Remove a schema template definition |
-| `raven_schema_template_set` | Create or update a schema template definition |
-| `raven_schema_type_template_default` | Set or clear a type default template ID |
-| `raven_schema_type_template_list` | List template IDs bound to a type |
-| `raven_schema_type_template_remove` | Unbind a schema template ID from a type |
-| `raven_schema_type_template_set` | Bind a schema template ID to a type |
-| `raven_schema_update_field` | Update an existing field's properties. |
-| `raven_schema_update_trait` | Update an existing trait in the schema |
-| `raven_schema_update_type` | Update an existing type definition in schema.yaml. |
-| `raven_schema_validate` | Validate the schema for correctness |
-| `raven_search` | Search for content across all files in the vault. |
-| `raven_set` | Set one or more frontmatter fields on an existing object. |
-| `raven_skill_doctor` | Inspect resolved install roots and installed Raven skills for one or all targets. |
-| `raven_skill_install` | Install one bundled Raven skill for a target runtime. |
-| `raven_skill_list` | List bundled Raven skills. |
-| `raven_skill_remove` | Remove one installed Raven skill from a target runtime. |
-| `raven_stats` | Show vault statistics |
-| `raven_template` | Manage template files under directories.template. |
-| `raven_template_delete` | Delete a template file under directories.template. |
-| `raven_template_list` | List template files |
-| `raven_template_write` | Create or update a template file under directories.template. |
-| `raven_untyped` | Lists all markdown files that don't have an explicit type in their frontmatter (fallback to 'page' type). |
-| `raven_update` | Update the value of a trait annotation. |
-| `raven_upsert` | Create or update a typed object deterministically. |
-| `raven_vault` | Manage configured vaults and active selection. |
-| `raven_vault_add` | Add or update a named vault entry in the global config file. |
-| `raven_vault_clear` | Clear active vault from state.toml |
-| `raven_vault_current` | Show the current resolved vault |
-| `raven_vault_list` | List configured vaults |
-| `raven_vault_path` | Print the resolved vault directory path |
-| `raven_vault_pin` | Set default_vault in config.toml |
-| `raven_vault_remove` | Remove a named vault entry from the global config file. |
-| `raven_vault_use` | Set the active vault in state.toml |
-| `raven_version` | Shows version and build metadata for the currently running rvn binary. |
-| `raven_workflow_add` | Creates a workflow entry in raven.yaml without manual file editing. |
-| `raven_workflow_continue` | Continues a paused workflow run by validating and applying agent output JSON, |
-| `raven_workflow_list` | Lists all workflows defined in raven.yaml with their descriptions and required inputs. |
-| `raven_workflow_remove` | Remove a workflow definition from raven.yaml |
-| `raven_workflow_run` | Runs a workflow's deterministic tool steps in order until it reaches an agent step. |
-| `raven_workflow_runs_list` | Lists workflow run checkpoints from storage, optionally filtered by workflow name and status. |
-| `raven_workflow_runs_prune` | Prunes workflow run checkpoints by status and age. Preview-only by default; use --confirm to apply deletions. |
-| `raven_workflow_runs_step` | Returns the full stored output for one step in a persisted workflow run. |
-| `raven_workflow_scaffold` | Creates a starter workflow YAML file and registers it in raven.yaml. |
-| `raven_workflow_show` | Shows the full definition of a workflow including inputs and steps. |
-| `raven_workflow_step_add` | Adds one step to a workflow YAML definition file. |
-| `raven_workflow_step_remove` | Removes one step from a workflow YAML definition file. |
-| `raven_workflow_step_update` | Updates one step in a workflow YAML definition file. |
-| `raven_workflow_validate` | Validates one workflow or all workflows defined in raven.yaml. |
+| `raven_describe` | Fetch the strict invocation contract for one Raven command. |
+| `raven_discover` | Search and browse discoverable Raven commands with compact metadata. |
+| `raven_invoke` | Invoke any registry command with strict typed validation and policy checks. |
 <!-- END MCP TOOL LIST -->
 
 ## Tool Parameter Conventions
