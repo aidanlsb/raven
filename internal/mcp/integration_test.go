@@ -3078,7 +3078,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("raven_set", map[string]interface{}{
-			"stdin":  true,
+			"stdin": true,
 			"fields": map[string]interface{}{
 				"email": "bulk@example.com",
 			},
