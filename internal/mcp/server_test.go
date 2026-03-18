@@ -3,6 +3,7 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -451,5 +452,45 @@ func TestExecuteRvnReturnsErrorWhenExecutablePathMissing(t *testing.T) {
 	}
 	if parsed.Error.Message == "" {
 		t.Fatalf("expected error.message to be present; out=%s", out)
+	}
+}
+
+func TestResolveVaultPathUsesExplicitVaultPathDirectly(t *testing.T) {
+	tmp := t.TempDir()
+	s := &Server{baseArgs: []string{"--vault-path", tmp}}
+
+	got, err := s.resolveVaultPath()
+	if err != nil {
+		t.Fatalf("resolveVaultPath returned error: %v", err)
+	}
+	if got != tmp {
+		t.Fatalf("resolveVaultPath = %q, want %q", got, tmp)
+	}
+}
+
+func TestResolveVaultPathUsesNamedVaultDirectly(t *testing.T) {
+	tmp := t.TempDir()
+	vaultPath := filepath.Join(tmp, "work-vault")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+
+	configPath := filepath.Join(tmp, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`[vaults]
+work = %q
+`, vaultPath)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	s := &Server{
+		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml"), "--vault", "work"},
+	}
+
+	got, err := s.resolveVaultPath()
+	if err != nil {
+		t.Fatalf("resolveVaultPath returned error: %v", err)
+	}
+	if got != vaultPath {
+		t.Fatalf("resolveVaultPath = %q, want %q", got, vaultPath)
 	}
 }

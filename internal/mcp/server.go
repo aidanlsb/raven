@@ -4,14 +4,13 @@ package mcp
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/rvnexec"
 )
@@ -604,30 +603,49 @@ func (s *Server) withBaseArgs(args []string) []string {
 }
 
 func (s *Server) resolveVaultPath() (string, error) {
-	if strings.TrimSpace(s.vaultPath) != "" {
-		return s.vaultPath, nil
+	if vaultPath := strings.TrimSpace(s.vaultPath); vaultPath != "" {
+		return s.validateResolvedVaultPath(vaultPath)
+	}
+	if vaultPath, ok := baseArgValue(s.baseArgs, "--vault-path"); ok {
+		return s.validateResolvedVaultPath(vaultPath)
+	}
+	if vaultName, ok := baseArgValue(s.baseArgs, "--vault"); ok {
+		return s.namedVaultPath(vaultName)
 	}
 	return s.currentVaultPath()
 }
 
 func (s *Server) currentVaultPath() (string, error) {
-	args := s.withBaseArgs([]string{"path"})
-	cmd := exec.Command(s.executable, args...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to resolve current vault: %w (%s)", err, strings.TrimSpace(stderr.String()))
+	result, err := configsvc.CurrentVault(s.directConfigContextOptions())
+	if err != nil {
+		return "", err
 	}
+	return s.validateResolvedVaultPath(result.Current.Path)
+}
 
-	resolved := strings.TrimSpace(stdout.String())
+func (s *Server) namedVaultPath(name string) (string, error) {
+	ctx, err := configsvc.LoadVaultContext(s.directConfigContextOptions())
+	if err != nil {
+		return "", err
+	}
+	resolved, err := ctx.Cfg.GetVaultPath(strings.TrimSpace(name))
+	if err != nil {
+		return "", err
+	}
+	return s.validateResolvedVaultPath(resolved)
+}
+
+func (s *Server) validateResolvedVaultPath(vaultPath string) (string, error) {
+	resolved := strings.TrimSpace(vaultPath)
 	if resolved == "" {
 		return "", fmt.Errorf("failed to resolve current vault: empty path")
 	}
-
+	if _, err := os.Stat(resolved); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("vault not found: %s", resolved)
+		}
+		return "", fmt.Errorf("failed to resolve current vault: %w", err)
+	}
 	return resolved, nil
 }
 
