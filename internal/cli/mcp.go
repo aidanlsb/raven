@@ -52,7 +52,7 @@ Examples:
 			return handleError(ErrInternal, err, "")
 		}
 
-		entry := mcpclient.BuildServerEntry(mcpVaultName, mcpVaultPathFlag)
+		entry := mcpclient.BuildServerEntry(configPath, statePathFlag, mcpVaultName, mcpVaultPathFlag)
 		result, err := mcpclient.Install(cfgPath, entry)
 		if err != nil {
 			return handleError(ErrMCPConfigWriteError, err, "")
@@ -230,7 +230,7 @@ Examples:
 				"Supported clients: claude-code, claude-desktop, cursor")
 		}
 
-		entry := mcpclient.BuildServerEntry(mcpVaultName, mcpVaultPathFlag)
+		entry := mcpclient.BuildServerEntry(configPath, statePathFlag, mcpVaultName, mcpVaultPathFlag)
 
 		snippet := map[string]interface{}{
 			"mcpServers": map[string]interface{}{
@@ -267,6 +267,8 @@ func init() {
 	mcpInstallCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
 	mcpInstallCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
 	mcpInstallCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
+	mcpInstallCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
+	mcpInstallCmd.Flags().StringVar(&statePathFlag, "state", "", "Path to state file (overrides state_file in config)")
 	_ = mcpInstallCmd.MarkFlagRequired("client")
 
 	mcpRemoveCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
@@ -275,6 +277,8 @@ func init() {
 	mcpShowCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
 	mcpShowCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
 	mcpShowCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
+	mcpShowCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
+	mcpShowCmd.Flags().StringVar(&statePathFlag, "state", "", "Path to state file (overrides state_file in config)")
 
 	mcpCmd.AddCommand(mcpInstallCmd)
 	mcpCmd.AddCommand(mcpRemoveCmd)

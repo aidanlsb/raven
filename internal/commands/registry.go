@@ -266,12 +266,15 @@ still succeeds and returns a warning with a retry command.`,
 		LongDesc:    "Add raven to a supported MCP client config file.",
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (claude-code, claude-desktop, cursor)", Type: FlagTypeString, Default: "claude-code"},
+			{Name: "config", Description: "Path to config file", Type: FlagTypeString},
+			{Name: "state", Description: "Path to state file (overrides state_file in config)", Type: FlagTypeString},
 			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
 			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn mcp install --client claude-code",
 			"rvn mcp install --client claude-desktop --vault work",
+			"rvn mcp install --client cursor --config ~/.config/raven/work.toml --state ~/.config/raven/work-state.toml",
 		},
 		UseCases: []string{
 			"Install Raven MCP entry into a client config",
@@ -312,12 +315,15 @@ still succeeds and returns a warning with a retry command.`,
 		LongDesc:    "Print the JSON snippet for manually configuring Raven as an MCP server.",
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (claude-code, claude-desktop, cursor)", Type: FlagTypeString},
+			{Name: "config", Description: "Path to config file", Type: FlagTypeString},
+			{Name: "state", Description: "Path to state file (overrides state_file in config)", Type: FlagTypeString},
 			{Name: "vault", Description: "Pin a named vault", Type: FlagTypeString},
 			{Name: "vault-path", Description: "Pin an explicit vault path", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn mcp show --client claude-code",
 			"rvn mcp show --client cursor --vault work",
+			"rvn mcp show --client claude-code --config ~/.config/raven/work.toml --state ~/.config/raven/work-state.toml",
 		},
 		UseCases: []string{
 			"Generate manual MCP configuration snippet",

@@ -14,7 +14,7 @@ func TestMcpInstallAndRemove(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "claude.json")
 
 	// Install
-	entry := mcpclient.BuildServerEntry("", "")
+	entry := mcpclient.BuildServerEntry("", "", "", "")
 	result, err := mcpclient.Install(cfgPath, entry)
 	if err != nil {
 		t.Fatalf("install: %v", err)
@@ -83,7 +83,7 @@ func TestMcpInstallWithVault(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "claude.json")
 
-	entry := mcpclient.BuildServerEntry("work", "")
+	entry := mcpclient.BuildServerEntry("", "", "work", "")
 	result, err := mcpclient.Install(cfgPath, entry)
 	if err != nil {
 		t.Fatalf("install: %v", err)
@@ -109,7 +109,7 @@ func TestMcpInstallWithVault(t *testing.T) {
 }
 
 func TestMcpShowBuildsCorrectSnippet(t *testing.T) {
-	entry := mcpclient.BuildServerEntry("", "")
+	entry := mcpclient.BuildServerEntry("", "", "", "")
 	if entry.Command == "" {
 		t.Fatal("expected non-empty command")
 	}
@@ -117,7 +117,7 @@ func TestMcpShowBuildsCorrectSnippet(t *testing.T) {
 		t.Fatalf("expected args=[serve], got %v", entry.Args)
 	}
 
-	entryWithVault := mcpclient.BuildServerEntry("personal", "")
+	entryWithVault := mcpclient.BuildServerEntry("", "", "personal", "")
 	if len(entryWithVault.Args) != 3 {
 		t.Fatalf("expected 3 args, got %d", len(entryWithVault.Args))
 	}
