@@ -13,7 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-const commandContractSchemaVersion = "1"
+const commandContractSchemaVersion = "2"
 
 type parameterType string
 
@@ -59,6 +59,7 @@ type validationIssue struct {
 	Message  string `json:"message"`
 	Expected string `json:"expected,omitempty"`
 	Actual   string `json:"actual,omitempty"`
+	Hint     string `json:"hint,omitempty"`
 }
 
 func (s *Server) callCompactTool(name string, args map[string]interface{}) (string, bool, bool) {
@@ -287,64 +288,19 @@ func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool)
 	}
 
 	return successEnvelope(map[string]interface{}{
-		"command":     contract.CommandID,
-		"tool_name":   contract.ToolName,
-		"cli_name":    contract.CLIName,
-		"summary":     contract.Summary,
-		"description": contract.Description,
-		"category":    contract.Category,
-		"behavior": map[string]interface{}{
-			"read_only":    contract.ReadOnly,
-			"destructive":  contract.Destructive,
-			"preview_mode": contract.PreviewMode,
+		"command":      contract.CommandID,
+		"summary":      contract.Summary,
+		"args_schema":  compactArgsSchema(contract),
+		"read_only":    contract.ReadOnly,
+		"destructive":  contract.Destructive,
+		"preview_mode": contract.PreviewMode,
+		"invokable":    contract.Policy.Invokable,
+		"schema_hash":  contract.SchemaHash,
+		"invoke_shape": map[string]interface{}{
+			"wrapper": "args",
+			"note":    "Pass command-specific parameters under args when calling raven_invoke.",
 		},
-		"policy": map[string]interface{}{
-			"invokable":        contract.Policy.Invokable,
-			"discoverable":     contract.Policy.Discoverable,
-			"workflow_allowed": contract.Policy.WorkflowAllowed,
-		},
-		"parameters": InputSchema{
-			Type:       "object",
-			Properties: contractParameterSchema(contract),
-			Required:   append([]string{}, contract.Required...),
-		},
-		"invoke": map[string]interface{}{
-			"tool": compactToolInvoke,
-			"envelope": map[string]interface{}{
-				"type":        "object",
-				"description": "Pass command-specific parameters inside args",
-				"required":    []string{"command"},
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
-						"type": "string",
-					},
-					"args": map[string]interface{}{
-						"type":        "object",
-						"description": "Arguments matching the parameters schema above",
-					},
-					"schema_hash": map[string]interface{}{
-						"type": "string",
-					},
-					"strict_schema": map[string]interface{}{
-						"type":    "boolean",
-						"default": true,
-					},
-				},
-				"notes": []string{
-					"Do not pass command parameters at top level",
-					"Put command parameters under args",
-				},
-			},
-			"example": map[string]interface{}{
-				"command":     contract.CommandID,
-				"args":        map[string]interface{}{"<parameter>": "<value>"},
-				"schema_hash": contract.SchemaHash,
-			},
-		},
-		"examples":       append([]string{}, contract.Examples...),
-		"use_cases":      append([]string{}, contract.UseCases...),
-		"schema_version": contract.SchemaVersion,
-		"schema_hash":    contract.SchemaHash,
+		"invoke_example": compactInvokeExample(contract),
 	}, nil), false
 }
 
@@ -369,30 +325,16 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 		},
 	}
 	validated, issues := validateArgumentsStrict(spec, args)
-	if len(issues) > 0 {
-		if hint := topLevelInvokeHint(issues); hint != "" {
-			return errorEnvelope(
-				"INVALID_ARGS",
-				"argument validation failed",
-				hint,
-				map[string]interface{}{
-					"command": "raven_invoke",
-					"issues":  issues,
-					"example": map[string]interface{}{
-						"command": "query",
-						"args": map[string]interface{}{
-							"query_string": "object:project .status==active",
-						},
-					},
-				},
-			), true
-		}
+	commandRef := strings.TrimSpace(toString(validated["command"]))
+	if len(issues) > 0 && commandRef == "" {
 		return validationErrorEnvelope("raven_invoke", issues), true
 	}
 
-	commandRef := strings.TrimSpace(toString(validated["command"]))
 	commandID, ok := commands.ResolveToolCommandID(commandRef)
 	if !ok {
+		if len(issues) > 0 {
+			return validationErrorEnvelope("raven_invoke", issues), true
+		}
 		return errorEnvelope(
 			"COMMAND_NOT_FOUND",
 			fmt.Sprintf("unknown command: %s", commandRef),
@@ -409,6 +351,9 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 			"Call raven_discover to find available commands",
 			map[string]interface{}{"command": commandRef},
 		), true
+	}
+	if len(issues) > 0 {
+		return validationErrorEnvelope("raven_invoke", withInvokeWrapperHints(issues, buildInvokeParamSpec(contract))), true
 	}
 
 	if !contract.Policy.Invokable {
@@ -453,10 +398,8 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 			}
 		}
 	}
-	paramSpec := make(map[string]parameterSpec, len(contract.Parameters))
-	for name, p := range contract.Parameters {
-		paramSpec[name] = p
-	}
+
+	paramSpec := buildInvokeParamSpec(contract)
 	invokeArgs, argIssues := validateArgumentsStrict(paramSpec, rawInvokeArgs)
 	if len(argIssues) > 0 {
 		return errorEnvelope(
@@ -650,6 +593,55 @@ func contractParameterSchema(contract commandContract) map[string]interface{} {
 	return out
 }
 
+func compactArgsSchema(contract commandContract) map[string]interface{} {
+	return map[string]interface{}{
+		"required":   append([]string{}, contract.Required...),
+		"properties": contractParameterSchema(contract),
+	}
+}
+
+func compactInvokeExample(contract commandContract) map[string]interface{} {
+	args := make(map[string]interface{})
+	for _, name := range contract.ParameterOrder {
+		spec := contract.Parameters[name]
+		if !spec.Required {
+			continue
+		}
+		args[name] = exampleValueForParam(spec)
+	}
+	return map[string]interface{}{
+		"command":     contract.CommandID,
+		"schema_hash": contract.SchemaHash,
+		"args":        args,
+	}
+}
+
+func exampleValueForParam(spec parameterSpec) interface{} {
+	if len(spec.Examples) > 0 {
+		return spec.Examples[0]
+	}
+	switch spec.Type {
+	case paramTypeBool:
+		return true
+	case paramTypeInteger:
+		return 1
+	case paramTypeObject:
+		return map[string]interface{}{}
+	case paramTypeStringArray:
+		return []string{}
+	default:
+		return fmt.Sprintf("<%s>", spec.Name)
+	}
+}
+
+func buildInvokeParamSpec(contract commandContract) map[string]parameterSpec {
+	paramSpec := make(map[string]parameterSpec, len(contract.Parameters))
+	for name, p := range contract.Parameters {
+		paramSpec[name] = p
+	}
+	return paramSpec
+}
+
 func validateArgumentsStrict(spec map[string]parameterSpec, raw map[string]interface{}) (map[string]interface{}, []validationIssue) {
 	if raw == nil {
 		raw = map[string]interface{}{}
@@ -710,14 +702,23 @@ func validateArgumentsStrict(spec map[string]parameterSpec, raw map[string]inter
 	return normalized, issues
 }
 
-func topLevelInvokeHint(issues []validationIssue) string {
-	for _, issue := range issues {
-		if issue.Code != "UNKNOWN_ARGUMENT" {
+func withInvokeWrapperHints(issues []validationIssue, invokeArgsSpec map[string]parameterSpec) []validationIssue {
+	if len(issues) == 0 {
+		return issues
+	}
+
+	out := make([]validationIssue, len(issues))
+	copy(out, issues)
+	for i := range out {
+		if out[i].Code != "UNKNOWN_ARGUMENT" {
 			continue
 		}
-		return "raven_invoke only accepts top-level keys command, args, schema_hash, strict_schema; put command parameters inside args"
+		if canonical, ok := canonicalSpecKey(invokeArgsSpec, out[i].Field); ok {
+			out[i].Message = "unknown top-level argument"
+			out[i].Hint = fmt.Sprintf("Did you mean args.%s? Command-specific parameters must be nested under args.", canonical)
+		}
 	}
-	return ""
+	return out
 }
 
 func canonicalSpecKey(spec map[string]parameterSpec, key string) (string, bool) {

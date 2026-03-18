@@ -53,7 +53,7 @@ func GenerateToolSchemas() []Tool {
 		},
 		{
 			Name:        compactToolDescribe,
-			Description: "Fetch the strict invocation contract for one Raven command.",
+			Description: "Fetch the compact invocation contract for one Raven command.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]interface{}{
@@ -77,7 +77,7 @@ func GenerateToolSchemas() []Tool {
 					},
 					"args": map[string]interface{}{
 						"type":        "object",
-						"description": "Strict arguments object matching raven_describe parameter schema",
+						"description": "Command-specific arguments. Put parameters from raven_describe here.",
 					},
 					"schema_hash": map[string]interface{}{
 						"type":        "string",

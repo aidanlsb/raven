@@ -109,7 +109,7 @@ The schema resource (`raven://schema/current`) returns the raw `schema.yaml` con
 The MCP surface is intentionally compact:
 
 - `raven_discover` returns discoverable commands with compact metadata
-- `raven_describe` returns the strict invocation contract for one command
+- `raven_describe` returns a compact invocation contract for one command
 - `raven_invoke` executes commands with validation and policy checks
 
 ### `raven_invoke` argument passing
@@ -139,10 +139,50 @@ This tool list is generated from the command registry and should stay in sync wi
 <!-- BEGIN MCP TOOL LIST -->
 | Tool | Description |
 |------|-------------|
-| `raven_describe` | Fetch the strict invocation contract for one Raven command. |
+| `raven_describe` | Fetch the compact invocation contract for one Raven command. |
 | `raven_discover` | Search and browse discoverable Raven commands with compact metadata. |
 | `raven_invoke` | Invoke any registry command with strict typed validation and policy checks (command args must be nested inside args). |
 <!-- END MCP TOOL LIST -->
+
+### Compact Describe Flow
+
+`raven_describe` is optimized for routing and invocation, not long-form prose. Its response includes:
+- `args_schema.required` and `args_schema.properties`
+- safety metadata such as `read_only`, `destructive`, and `preview_mode`
+- `schema_hash` for stale-schema detection
+- `invoke_shape` and `invoke_example` showing the exact `raven_invoke` wrapper
+
+Example:
+
+```json
+{
+  "command": "read",
+  "summary": "Read raw or rendered file content",
+  "args_schema": {
+    "required": ["path"],
+    "properties": {
+      "path": {"type": "string"},
+      "raw": {"type": "boolean"}
+    }
+  },
+  "read_only": true,
+  "destructive": false,
+  "preview_mode": "none",
+  "invokable": true,
+  "schema_hash": "abcd1234",
+  "invoke_shape": {
+    "wrapper": "args",
+    "note": "Pass command-specific parameters under args when calling raven_invoke."
+  },
+  "invoke_example": {
+    "command": "read",
+    "schema_hash": "abcd1234",
+    "args": {
+      "path": "daily/2026-03-17.md"
+    }
+  }
+}
+```
 
 ## Tool Parameter Conventions
 
