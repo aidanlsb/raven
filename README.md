@@ -4,40 +4,15 @@
 
 <h1 align="center">Raven</h1>
 
----
+**A CLI for plain-text knowledge management, with first-class support for AI agents.**
 
-**A CLI for knowledge management with first-class support for LLM agents.**
+Raven keeps your notes in Markdown and adds just enough structure to make them queryable, automatable, and reliable for agents.
 
-Raven adds a few features on top of markdown:  
-- A lightweight schema for defining types 
-- Syntax for annotating content inline with traits
-- Bidirectional linking 
-
-And enables precise retrieval and powerful workflows with:
-- A full-featured CLI for interacting with your notes
-- An efficient query language
-- First-class agent support
-
-Everything stays local in plain text files.
-
----
-
-## Table of Contents
-
-- [Installation](#installation)
-- [Example Usage](#example-usage)
-- [Agent Setup](#agent-setup)
-- [Vault Structure](#vault-structure)
-- [Core Concepts](#core-concepts)
-  - [Types](#types)
-  - [Traits](#traits)
-  - [References](#references)
-- [Creating Objects](#creating-objects)
-- [Querying](#querying)
-- [Workflows](#workflows)
-- [Documentation](#documentation)
-
----
+- Plain files are the source of truth
+- Types, fields, and traits come from an explicit schema
+- References create bidirectional links across notes
+- Query, search, and bulk operations work over the whole vault
+- MCP tools let agents use Raven directly
 
 ## Installation
 
@@ -56,233 +31,31 @@ go install github.com/aidanlsb/raven/cmd/rvn@latest
 rvn version
 ```
 
-### Quickstart
+## Start With Plain Markdown
+
+Initialize a vault:
 
 ```bash
-rvn init my-vault
-cd my-vault
-rvn new project "My First Project" --field status=active
-rvn query "object:project .status==active"
+rvn init ~/notes
+cd ~/notes
 ```
 
-This creates:
-- `schema.yaml` — type and trait definitions
-- `raven.yaml` — vault configuration and saved queries
-- `.raven/` — index and internal state (disposable, rebuildable)
+Raven creates:
 
-> Requires Go 1.23+. See [Install Go](https://go.dev/doc/install).
->
-> Raven is an early-stage project and subject to change.
-
----
-
-## Example Usage
-
-Hermod (Odin's messenger in Norse mythology and PKM enthusiast for this walkthrough) tracks three things: **projects** that need resolution, **people** involved, and **meetings** where words become binding.
-
-He uses Raven to keep it all straight. Types `project`, `person`, and `meeting` each map to a folder of markdown files with yaml frontmatter for fields. Traits `@todo` and `@decision` are inline annotations that make content queryable. The rest is just markdown.
-
----
-
-**Starting the day**
-
-Each morning, Hermod opens his daily note:
-
-```
-rvn daily
+```text
+notes/
+├── .raven/       # derived cache and local metadata
+├── raven.yaml    # vault configuration
+└── schema.yaml   # types, fields, and traits
 ```
 
-This creates and opens `daily/2026-01-17.md` — a running log for the day.
+Your notes stay as normal Markdown files. The SQLite index under `.raven/` is disposable and can always be rebuilt with `rvn reindex`.
 
-```markdown
----
-type: date
----
+## Add Structure Only Where You Need It
 
-# Saturday
-
-@todo Bring the terms to Vanaheim before the new moon
-@todo Follow up with Skirnir on his contacts there
-
-Still waiting to hear back from Odin.
-```
-
-**Creating the project**
-
-A diplomatic mission to Vanaheim is taking shape. Hermod opens a project to track it:
-
-```
-rvn new project vanaheim-embassy --field status=active
-```
-
-This creates `project/vanaheim-embassy.md` with `status: active` in the frontmatter and the rest free for notes.
-
-**Adding people**
-
-Two names will recur. Skírnir has dealt with Vanaheim before; Forseti must approve any terms that touch on old grievances:
-
-```
-rvn new person skirnir --field realm=asgard --field role=envoy
-rvn new person forseti --field realm=asgard --field role=arbiter
-```
-
-Now `[[person/skirnir]]` and `[[person/forseti]]` can be used as references anywhere in Hermod's notes, which link back to their own pages.
-
-**Recording the meeting**
-
-After the council, Hermod writes up the meeting:
-
-```markdown
----
-type: meeting
-date: 2026-01-17
-project: [[project/vanaheim-embassy]]
----
-
-# Council at Glaðsheim
-
-[[person/skirnir]] reports that Vanaheim is willing to negotiate, but wants concessions
-
-[[person/forseti]] warns this may reopen an older land dispute.
-
-@todo Bring the terms to Odin and await his decision
-@todo Confirm Forseti has reviewed the old grievances
-
-@decision No commitments until Odin speaks.
-```
-
-The traits `@todo` and `@decision` make the content of Hermod's note queryable, and the references connect this meeting to the people and project involved.
-
-**Querying what's open**
-
-Days later, Hermod checks what remains unresolved from meetings linked to the Vanaheim embassy:
-
-```
-rvn query "trait:todo within(object:meeting .project==vanaheim-embassy)"
-```
-
-```
-meeting/2026-01-17-council-gladsheim.md
-  @todo Bring the terms to Odin and await his decision
-  @todo Confirm Forseti has reviewed the old grievances
-```
-
-Two open threads, both traceable to the meeting they came from.
-
-**Reviewing references**
-
-Skírnir arrives at Hermod's hall with news. Before they speak, Hermod pulls up everything connected to him:
-
-```
-rvn backlinks skirnir
-```
-
-```
-meeting/2026-01-17-council-gladsheim.md
-  [[person/skirnir]] reports that Vanaheim is willing to negotiate
-
-meeting/2026-01-08-vanaheim-embassy.md
-  [[person/skirnir]] negotiated the terms with Freyr's blessing
-
-project/vanaheim-embassy.md
-  Prior contact: [[person/skirnir]]
-```
-
-Everything Hermod has ever written about Skírnir, pulled up in one command.
-
-**Asking an agent**
-
-Odin summons him. Before the meeting, Hermod asks his agent:
-
-> "What should I report on the Vanaheim matter?"
-
-The agent calls Raven's MCP tools — querying open todos, recent meetings, and decisions linked to the project — and returns a synthesis:
-
-> Two open todos from the council meeting on Jan 17. Vanaheim wants concessions on the eastern trade routes — no commitment has been made yet (@decision). Forseti's review of old grievances is still outstanding. Bottom line: one blocker before Odin can decide.
-
-The agent doesn't need to search or guess — it queries structured data and reasons over what it finds.
-
----
-
-## Agent Setup
-
-Raven is designed to work with LLM agents. The MCP server exposes every Raven command as a tool.
-
-**MCP Setup (Claude Code, Claude Desktop, Cursor)**
-
-Install Raven into your MCP client config with one command:
-
-```bash
-rvn mcp install --client claude-desktop --vault-path /path/to/your/vault
-```
-
-You can also target other supported clients:
-
-```bash
-rvn mcp install --client claude-code --vault-path /path/to/your/vault
-rvn mcp install --client cursor --vault-path /path/to/your/vault
-```
-
-Check installation status across all clients:
-
-```bash
-rvn mcp status
-```
-
-For unsupported clients or fully manual setup, print the JSON snippet:
-
-```bash
-rvn mcp show --vault-path /path/to/your/vault
-```
-
-Once connected, ask the agent:
-
-> "Help me set up my Raven vault"
-
-The agent will walk through schema creation, creating your first objects, and learning the query language — all through conversation.
-
-See the full [MCP reference](docs/agents/mcp.md) for configuration options and available tools.
-
----
-
-## Vault Structure
-
-Everything is plain text.
-
-```
-hermod-vault/
-├── .raven/
-│   └── index.db          # SQLite index (disposable)
-├── schema.yaml            # type and trait definitions
-├── raven.yaml             # vault config, saved queries, workflows
-├── daily/
-│   └── 2026-02-17.md
-├── project/
-│   └── vanaheim-embassy.md
-├── person/
-│   ├── skirnir.md
-│   └── forseti.md
-└── meeting/
-    └── 2026-01-17-council-gladsheim.md
-```
-
-- **Folders map to types** — `person/` holds all `person` objects
-- **Files are markdown with YAML frontmatter** — structured fields up top, freeform content below
-- **The SQLite index is disposable** — delete it and run `rvn reindex` to rebuild from files
-- **Files are the source of truth** — edit them with any editor, sync with cloud storage or git
-
-See the [file format reference](docs/types-and-traits/file-format.md) for the full specification.
-
----
-
-## Core Concepts
-
-### Types
-
-Types define the kinds of objects in your vault. Each type has fields, a default folder, and a display name field.
+Define types and fields in `schema.yaml`:
 
 ```yaml
-# schema.yaml
 version: 2
 
 types:
@@ -297,168 +70,91 @@ types:
         type: enum
         values: [backlog, active, paused, done]
         default: active
-
-  person:
-    name_field: name
-    default_path: person/
-    fields:
-      name:
-        type: string
-        required: true
-      realm:
-        type: string
-      role:
-        type: string
 ```
 
-Edit `schema.yaml` directly, or build it from the CLI:
+Create typed objects from the CLI:
 
 ```bash
-rvn schema add type meeting --name-field name --default-path meeting/
-rvn schema add field meeting date --type date
-rvn schema add field meeting attendees --type ref[] --target person
+rvn new project website-redesign --field status=active
 ```
 
-### Traits
-
-Traits are inline annotations that make content queryable. They can appear anywhere in the body of a file.
-
-```markdown
-@todo Bring the terms to Vanaheim before the new moon
-@decision No commitments until Odin speaks
-@priority(high) The Bifrost repairs cannot wait
-```
-
-Define traits in the schema:
-
-```bash
-rvn schema add trait priority --type enum --values low,medium,high
-```
-
-### References
-
-References (refs) connect objects using `[[type/name]]` syntax. Use them in both frontmatter and content.
+Or edit the file directly:
 
 ```markdown
 ---
-type: meeting
-project: [[project/vanaheim-embassy]]
-attendees:
-  - [[person/skirnir]]
-  - [[person/forseti]]
+type: project
+name: Website Redesign
+status: active
 ---
-
-[[person/skirnir]] reported back from his talks with Freyr.
 ```
 
-Every ref creates a two-way link. Use `rvn backlinks person/skirnir` to see everything that mentions Skírnir.
+Use inline traits and references inside note content:
 
-See [Core Concepts](docs/getting-started/core-concepts.md) for a deeper introduction, and the [schema reference](docs/types-and-traits/schema.md) for the full specification.
+```markdown
+@todo Confirm launch date with [[person/alex]]
+@decision Delay rollout until analytics is fixed
+```
 
----
+Traits make content queryable. References create two-way links between objects.
 
-## Creating Objects
+## Query the Vault Precisely
 
-**New typed objects**
+Raven has separate query modes for objects and traits.
 
 ```bash
-rvn new project "Vanaheim Embassy" --field status=active
-rvn new person Skirnir --field realm=asgard --field role=envoy
+rvn query 'object:project .status==active'
+rvn query 'trait:todo within(object:project)'
+rvn search "analytics"
+rvn backlinks person/alex
 ```
 
-**Daily notes**
-
-Dates are a built-in type that powers the daily note workflow.
-
-```bash
-rvn daily              # today
-rvn daily yesterday    # yesterday's note
-rvn daily 2026-02-14   # specific date
-```
-
-**Quick capture**
-
-Append to any file from the command line. Defaults to the daily note.
-
-```bash
-rvn add "Heard rumors of unrest in Niflheim — worth investigating"
-rvn add "@todo Confirm Forseti reviewed the old grievances" --to project/vanaheim-embassy
-```
-
-**Editing files**
-
-Files are plain markdown — edit them with any editor:
-
-```bash
-rvn open project/vanaheim-embassy    # opens in $EDITOR
-```
-
----
-
-## Querying
-
-The query language has two modes: **object queries** find files, **trait queries** find annotations.
-
-**Object queries**
-
-```bash
-rvn query 'object:project'                           # all projects
-rvn query 'object:project .status==active'            # active projects
-rvn query 'object:meeting refs([[person/skirnir]])'     # meetings mentioning Skírnir
-```
-
-**Trait queries**
-
-```bash
-rvn query 'trait:todo'                                # all todos
-rvn query 'trait:todo .value==todo'                   # open todos only
-rvn query 'trait:todo within(object:meeting)'         # todos inside meetings
-rvn query 'trait:decision refs([[project/vanaheim-embassy]])'  # decisions on a project
-```
-
-**Full-text search**
-
-```bash
-rvn search "trade routes"                             # search all content
-rvn search "Freyr" --type meeting                     # search within a type
-```
-
-**Bulk operations on query results**
+You can also operate on query results in bulk:
 
 ```bash
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 ```
 
-**Saved queries**
+This makes Raven useful both as a personal CLI and as a reliable retrieval layer for agents.
 
-Define common queries in `raven.yaml`:
+## Work Naturally From the CLI
 
-```yaml
-queries:
-  open-todos:
-    query: "trait:todo .value==todo"
-    description: Open todos
-  active-projects:
-    query: "object:project has(trait:todo)"
-    description: Projects marked with @todo
-```
+Common workflows stay simple:
 
 ```bash
-rvn query open-todos
-rvn query active-projects
+rvn daily
+rvn add "Follow up with finance" --to project/website-redesign
+rvn open project/website-redesign
 ```
 
-See the [query language reference](docs/querying/query-language.md) for the full syntax including boolean composition, nested queries, and date predicates.
+Everything still resolves back to files you can edit with any editor, sync with Git, or store however you want.
 
----
+## Use Raven With Agents
 
-## Workflows
+Raven exposes its command surface through MCP, so agents can query and update the vault through structured tools instead of guessing from raw files.
 
-Workflows are multi-step pipelines that combine Raven tools with agent reasoning. Raven executes deterministic `tool` steps, then hands off to the agent at `agent` steps.
+Install into a supported MCP client:
+
+```bash
+rvn mcp install --client claude-desktop --vault-path /path/to/your/vault
+rvn mcp install --client claude-code --vault-path /path/to/your/vault
+rvn mcp install --client cursor --vault-path /path/to/your/vault
+```
+
+Check status or print a manual config snippet:
+
+```bash
+rvn mcp status
+rvn mcp show --vault-path /path/to/your/vault
+```
+
+See the full [MCP reference](docs/agents/mcp.md) for configuration and tool details.
+
+## Automate Repeatable Work
+
+Raven workflows combine deterministic tool steps with agent reasoning.
 
 ```yaml
-# workflows/meeting-prep.yaml
-description: Prepare a brief for a meeting
+description: Prepare a meeting brief
 inputs:
   meeting_id:
     type: ref
@@ -473,54 +169,35 @@ steps:
       path: "{{inputs.meeting_id}}"
       raw: true
 
-  - id: compose
+  - id: brief
     type: agent
     prompt: |
-      Prepare me for this meeting.
+      Summarize the meeting and list open actions.
       {{steps.meeting.data.content}}
-    outputs:
-      markdown:
-        type: markdown
-        required: true
 ```
 
-Run via CLI or agent:
+Run a workflow from the CLI:
 
 ```bash
-rvn workflow run meeting-prep --input meeting_id=meeting/2026-01-17-council-gladsheim
+rvn workflow run meeting-prep --input meeting_id=meeting/2026-01-17-kickoff
 ```
 
-See the [workflows reference](docs/workflows/workflows.md) for the full specification.
+See the [workflows reference](docs/workflows/workflows.md) for the full format.
 
 ## Documentation
 
-Raven keeps long-form docs in your vault's `.raven/docs` cache. Browse them with `rvn docs` (sync with `rvn docs fetch`), or read them on GitHub:
+- [Getting Started](docs/getting-started/getting-started.md)
+- [Core Concepts](docs/getting-started/core-concepts.md)
+- [Schema Introduction](docs/types-and-traits/schema-intro.md)
+- [Schema Reference](docs/types-and-traits/schema.md)
+- [File Format](docs/types-and-traits/file-format.md)
+- [Query Language](docs/querying/query-language.md)
+- [Bulk Operations](docs/vault-management/bulk-operations.md)
+- [Workflows](docs/workflows/workflows.md)
+- [MCP Reference](docs/agents/mcp.md)
 
-**Getting Started:**
-
-1. [Getting Started](docs/getting-started/getting-started.md) — first-session flow and verification
-2. [Core Concepts](docs/getting-started/core-concepts.md) — types, traits, references
-3. [Configuration](docs/getting-started/configuration.md) — `raven.yaml` and `config.toml`
-
-**Types & Traits:**
-
-- [Schema Introduction](docs/types-and-traits/schema-intro.md) — practical `schema.yaml` basics
-- [Schema Reference](docs/types-and-traits/schema.md) — `schema.yaml` specification
-- [File Format](docs/types-and-traits/file-format.md) — markdown + frontmatter spec
-- [Templates](docs/types-and-traits/templates.md) — type and daily templates
-
-**Querying / Vault Management / Workflows / Agents:**
-
-- [Query Language](docs/querying/query-language.md) — full RQL syntax
-- [Bulk Operations](docs/vault-management/bulk-operations.md) — patterns for operating at scale
-- [Hooks Removal Decision](docs/vault-management/hooks-removal-decision.md) — rationale and alternatives
-- [Workflows](docs/workflows/workflows.md) — pipeline specification
-- [MCP Reference](docs/agents/mcp.md) — agent integration
-
-Interactive learning:
+You can also browse the docs from the CLI:
 
 ```bash
-rvn docs          # browse the full documentation
+rvn docs
 ```
-
----
