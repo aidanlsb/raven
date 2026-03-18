@@ -1,3 +1,3 @@
 name: raven-workflows
 description: Raven workflow authoring, execution, continuation, and run-maintenance patterns.
-default_prompt: Build and run Raven workflows with validation after each mutation and resume paused runs via workflow continue.
+default_prompt: Build and run Raven workflows with validation after each mutation using Raven CLI --json commands or equivalent Raven MCP tools, and resume paused runs via workflow continue.

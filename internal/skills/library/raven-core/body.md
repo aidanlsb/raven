@@ -5,6 +5,7 @@ Use this skill for day-to-day Raven operations.
 ## Operating rules
 
 - Prefer `rvn` CLI with `--json` for deterministic machine-readable output.
+- When operating through Raven MCP, use the equivalent Raven MCP tools instead of shelling out redundantly.
 - Prefer Raven commands over direct file writes.
 - For bulk/destructive operations, preview first, then apply with confirmation.
 

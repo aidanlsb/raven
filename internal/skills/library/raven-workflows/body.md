@@ -5,6 +5,7 @@ Use this skill for workflow definition lifecycle, step mutation, and run operati
 ## Operating rules
 
 - Prefer `rvn workflow scaffold` or `rvn workflow add` over manual `raven.yaml` edits.
+- Prefer Raven MCP workflow tools when operating inside MCP; otherwise use `rvn ... --json`.
 - Validate after any workflow-file or step mutation.
 - Treat run checkpoints as durable state that can be resumed with `rvn workflow continue`.
 

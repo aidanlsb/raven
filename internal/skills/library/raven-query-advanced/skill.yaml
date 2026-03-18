@@ -22,4 +22,4 @@ execution:
   cli_binary: rvn
   cli_args_suffix:
     - --json
-  mcp_fallback: false
+  mcp_fallback: true

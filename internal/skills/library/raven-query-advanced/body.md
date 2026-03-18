@@ -5,6 +5,7 @@ Use this skill when the user needs non-trivial Raven Query Language (RQL) work.
 ## Operating rules
 
 - Prefer `rvn query` for structured filters and `rvn search` for open-ended text discovery.
+- When the agent is already connected through Raven MCP, prefer the matching MCP tool over an extra CLI subprocess.
 - Use single-quoted query strings in shell examples.
 - Decide early whether the result should be objects (`object:<type>`) or traits (`trait:<name>`).
 - For `--apply`, always preview first, then add `--confirm` only when asked to apply.

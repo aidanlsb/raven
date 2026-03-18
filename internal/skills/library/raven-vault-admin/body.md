@@ -6,6 +6,7 @@ Use this skill for vault setup, active/default vault selection, and global Raven
 
 - Use explicit vault naming and avoid guessing which vault should be active.
 - Prefer `rvn vault ...` and `rvn config ...` over manual file edits in machine config.
+- When already connected through Raven MCP, use the matching Raven MCP tools instead of spawning nested CLI calls.
 - Use `--json` for deterministic automation output.
 
 ## Typical flow

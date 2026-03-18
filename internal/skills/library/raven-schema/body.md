@@ -5,6 +5,7 @@ Use this skill for schema modeling and schema migrations.
 ## Operating rules
 
 - Inspect current schema before changes: `rvn schema`.
+- Prefer Raven MCP tool equivalents when already running inside an MCP session; otherwise use `rvn ... --json`.
 - Prefer incremental changes over large one-shot edits.
 - Validate and reindex after structural changes.
 
