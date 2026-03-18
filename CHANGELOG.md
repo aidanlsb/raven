@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.8] - 2026-03-18
+
+### Added
+- Command registry metadata now includes command category/access/risk and lightweight canonical CLI usage strings, which also surface through MCP `raven_describe` as `cli_usage`.
+
+### Changed
+- Simplified the CLI and MCP command surface by consolidating template management under `schema template ...`, moving `stats` and `path` under `vault`, and removing obsolete root commands.
+- Renamed the internal MCP compact-surface implementation files to `surface.go` / `surface_test.go` now that the compact surface is the only MCP surface.
+
+### Removed
+- Removed `last` and all associated stateful tracking machinery, along with legacy `untyped` and `schema commands` surfaces.
+
 ## [v0.0.7] - 2026-03-17
 
 ### Added
@@ -88,7 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.8...HEAD
+[v0.0.8]: https://github.com/aidanlsb/raven/compare/v0.0.7...v0.0.8
 [v0.0.7]: https://github.com/aidanlsb/raven/compare/v0.0.6...v0.0.7
 [v0.0.6]: https://github.com/aidanlsb/raven/compare/v0.0.5...v0.0.6
 [v0.0.5]: https://github.com/aidanlsb/raven/compare/v0.0.4...v0.0.5
