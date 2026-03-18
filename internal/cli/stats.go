@@ -10,43 +10,47 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var statsCmd = &cobra.Command{
+var vaultStatsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Show index statistics",
 	Long: `Displays statistics about the vault index.
 
 Examples:
-  rvn stats
-  rvn stats --json`,
+  rvn vault stats
+  rvn vault stats --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		start := time.Now()
-
-		stats, err := maintsvc.Stats(vaultPath)
-		if err != nil {
-			return mapMaintSvcError(err)
-		}
-		elapsed := time.Since(start).Milliseconds()
-
-		if isJSONOutput() {
-			outputSuccess(StatsResult{
-				FileCount:   stats.FileCount,
-				ObjectCount: stats.ObjectCount,
-				TraitCount:  stats.TraitCount,
-				RefCount:    stats.RefCount,
-			}, &Meta{QueryTimeMs: elapsed})
-			return nil
-		}
-
-		// Human-readable output
-		fmt.Println(ui.SectionHeader("Vault Statistics"))
-		fmt.Println(ui.Bullet(ui.Muted.Render("Files: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.FileCount))))
-		fmt.Println(ui.Bullet(ui.Muted.Render("Objects: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.ObjectCount))))
-		fmt.Println(ui.Bullet(ui.Muted.Render("Traits: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.TraitCount))))
-		fmt.Println(ui.Bullet(ui.Muted.Render("References: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.RefCount))))
-
-		return nil
+		return runVaultStats()
 	},
+}
+
+func runVaultStats() error {
+	vaultPath := getVaultPath()
+	start := time.Now()
+
+	stats, err := maintsvc.Stats(vaultPath)
+	if err != nil {
+		return mapMaintSvcError(err)
+	}
+	elapsed := time.Since(start).Milliseconds()
+
+	if isJSONOutput() {
+		outputSuccess(StatsResult{
+			FileCount:   stats.FileCount,
+			ObjectCount: stats.ObjectCount,
+			TraitCount:  stats.TraitCount,
+			RefCount:    stats.RefCount,
+		}, &Meta{QueryTimeMs: elapsed})
+		return nil
+	}
+
+	fmt.Println(ui.SectionHeader("Vault Statistics"))
+	fmt.Println(ui.Bullet(ui.Muted.Render("Files: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.FileCount))))
+	fmt.Println(ui.Bullet(ui.Muted.Render("Objects: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.ObjectCount))))
+	fmt.Println(ui.Bullet(ui.Muted.Render("Traits: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.TraitCount))))
+	fmt.Println(ui.Bullet(ui.Muted.Render("References: ") + ui.Bold.Render(fmt.Sprintf("%d", stats.RefCount))))
+
+	return nil
 }
 
 func mapMaintSvcError(err error) error {
@@ -63,8 +67,4 @@ func mapMaintSvcError(err error) error {
 	default:
 		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
 	}
-}
-
-func init() {
-	rootCmd.AddCommand(statsCmd)
 }

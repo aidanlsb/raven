@@ -11,9 +11,9 @@ import (
 )
 
 var schemaCmd = &cobra.Command{
-	Use:   "schema [types|traits|type <name>|trait <name>|core [name]|template ...|commands]",
+	Use:   "schema [types|traits|type <name>|trait <name>|core [name]|template ...]",
 	Short: "Introspect the schema",
-	Long: `Query the schema for types, traits, and commands.
+	Long: `Query the schema for types and traits.
 
 This command is useful for agents to discover what's available.
 
@@ -25,10 +25,9 @@ Examples:
   rvn schema core --json      # List core type config
   rvn schema core date --json # Get core date config
   rvn schema trait due --json     # Get trait details
-  rvn schema commands --json      # List schema command metadata
   rvn schema template list --json
-  rvn schema type interview template list --json
-  rvn schema core date template list --json`,
+  rvn schema template list --type interview --json
+  rvn schema template list --core date --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		start := time.Now()
@@ -36,31 +35,6 @@ Examples:
 		// If no subcommand, return full schema
 		if len(args) == 0 {
 			return dumpFullSchema(vaultPath, start)
-		}
-
-		// Template-related subcommands:
-		// - schema template ...
-		// - schema type <type_name> template ...
-		// - schema core <core_type> template ...
-		if args[0] == "template" {
-			return runSchemaTemplateCommand(vaultPath, args[1:], start)
-		}
-		// Also support MCP-style positional order:
-		// - schema type template <action> <type_name> [template_id]
-		// - schema core template <action> <core_type> [template_id]
-		if len(args) >= 4 && args[0] == "type" && args[1] == "template" {
-			templateArgs := append([]string{args[2]}, args[4:]...)
-			return runSchemaTypeTemplateCommand(vaultPath, args[3], templateArgs, start)
-		}
-		if len(args) >= 4 && args[0] == "core" && args[1] == "template" {
-			templateArgs := append([]string{args[2]}, args[4:]...)
-			return runSchemaCoreTemplateCommand(vaultPath, args[3], templateArgs, start)
-		}
-		if len(args) >= 3 && args[0] == "type" && args[2] == "template" {
-			return runSchemaTypeTemplateCommand(vaultPath, args[1], args[3:], start)
-		}
-		if len(args) >= 3 && args[0] == "core" && args[2] == "template" {
-			return runSchemaCoreTemplateCommand(vaultPath, args[1], args[3:], start)
 		}
 
 		switch args[0] {
@@ -73,7 +47,7 @@ Examples:
 				return listSchemaCore(vaultPath, start)
 			}
 			if len(args) > 2 {
-				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema core subcommand: %s", args[2]), "Use: schema core [name] or schema core <name> template ...")
+				return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema core subcommand: %s", args[2]), "Use: schema core [name]")
 			}
 			return getSchemaCore(vaultPath, args[1], start)
 		case "type":
@@ -86,10 +60,8 @@ Examples:
 				return handleErrorMsg(ErrMissingArgument, "specify a trait name", "Usage: rvn schema trait <name>")
 			}
 			return getSchemaTrait(vaultPath, args[1], start)
-		case "commands":
-			return listSchemaCommands(start)
 		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema subcommand: %s", args[0]), "Use: types, traits, type <name>, trait <name>, core [name], template ..., or commands")
+			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema subcommand: %s", args[0]), "Use: types, traits, type <name>, trait <name>, core [name], or template ...")
 		}
 	},
 }
@@ -406,37 +378,6 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 	return nil
 }
 
-func listSchemaCommands(start time.Time) error {
-	elapsed := time.Since(start).Milliseconds()
-
-	cmds := schemasvc.SchemaCommands().Commands
-
-	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"commands": cmds,
-		}, &Meta{Count: len(cmds), QueryTimeMs: elapsed})
-		return nil
-	}
-
-	// Human-readable output
-	fmt.Println("Available schema commands:")
-	var names []string
-	for name := range cmds {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		c := cmds[name]
-		fmt.Printf("  %-18s %s\n", name, c.Description)
-	}
-	fmt.Println("\nUse 'rvn schema commands --json' for full details.")
-
-	return nil
-}
-
 func init() {
-	schemaCmd.Flags().StringVar(&schemaTemplateFileFlag, "file", "", "Template file path under directories.template (for `schema template set`)")
-	schemaCmd.Flags().StringVar(&schemaTemplateDescriptionFlag, "description", "", "Template description (for `schema template set`; use '-' to clear)")
-	schemaCmd.Flags().BoolVar(&schemaTypeTemplateClearFlag, "clear", false, "Clear type/core default template (for `schema type <type_name> template default --clear` and `schema core <core_type> template default --clear`)")
 	rootCmd.AddCommand(schemaCmd)
 }

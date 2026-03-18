@@ -169,7 +169,7 @@ func RemoveTemplate(vaultPath, templateID string) error {
 		return newError(
 			ErrorInvalidInput,
 			fmt.Sprintf("template '%s' is still referenced by: %s", templateID, strings.Join(refs, ", ")),
-			"Remove those bindings first with `rvn schema type <type_name> template remove <template_id>` or `rvn schema core <core_type> template remove <template_id>`",
+			"Remove those bindings first with `rvn schema template unbind <template_id> --type <type>` or `rvn schema template unbind <template_id> --core <core>`",
 			nil,
 			nil,
 		)
@@ -243,7 +243,7 @@ func AddTypeTemplate(vaultPath, typeName, templateID string) (*AddTemplateBindin
 	return &AddTemplateBindingResult{}, nil
 }
 
-func RemoveTypeTemplate(vaultPath, typeName, templateID string) error {
+func RemoveTypeTemplate(vaultPath, typeName, templateID string, clearDefault bool) error {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
@@ -275,6 +275,15 @@ func RemoveTypeTemplate(vaultPath, typeName, templateID string) error {
 		typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
 	}
 	if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
+		if !clearDefault {
+			return newError(
+				ErrorInvalidInput,
+				fmt.Sprintf("template '%s' is the default for type '%s'", templateID, typeName),
+				"Re-run with --clear-default, or change the default first with `rvn schema template default <template_id> --type "+typeName+"`",
+				nil,
+				nil,
+			)
+		}
 		delete(typeNode, "default_template")
 	}
 
@@ -310,7 +319,7 @@ func SetTypeDefaultTemplate(vaultPath, typeName, templateID string, clearDefault
 		return "", newError(
 			ErrorInvalidInput,
 			"default requires template_id or --clear",
-			"Use: rvn schema type <type_name> template default <template_id> OR --clear",
+			"Use: rvn schema template default <template_id> --type "+typeName+" OR --clear",
 			nil,
 			nil,
 		)
@@ -319,7 +328,7 @@ func SetTypeDefaultTemplate(vaultPath, typeName, templateID string, clearDefault
 		return "", newError(
 			ErrorInvalidInput,
 			fmt.Sprintf("type '%s' does not include template '%s'", typeName, templateID),
-			"Use `rvn schema type <type_name> template list` to see available template IDs",
+			"Use `rvn schema template list --type "+typeName+"` to see available template IDs",
 			nil,
 			nil,
 		)
@@ -391,7 +400,7 @@ func AddCoreTemplate(vaultPath, coreTypeName, templateID string) (*AddTemplateBi
 	return &AddTemplateBindingResult{}, nil
 }
 
-func RemoveCoreTemplate(vaultPath, coreTypeName, templateID string) error {
+func RemoveCoreTemplate(vaultPath, coreTypeName, templateID string, clearDefault bool) error {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return newError(ErrorInvalidInput, "template_id cannot be empty", "", nil, nil)
@@ -424,6 +433,15 @@ func RemoveCoreTemplate(vaultPath, coreTypeName, templateID string) error {
 		typeNode["templates"] = toInterfaceSlice(newTemplateIDs)
 	}
 	if currentDefault, ok := typeNode["default_template"].(string); ok && currentDefault == templateID {
+		if !clearDefault {
+			return newError(
+				ErrorInvalidInput,
+				fmt.Sprintf("template '%s' is the default for core type '%s'", templateID, coreTypeName),
+				"Re-run with --clear-default, or change the default first with `rvn schema template default <template_id> --core "+coreTypeName+"`",
+				nil,
+				nil,
+			)
+		}
 		delete(typeNode, "default_template")
 	}
 	return writeSchemaDoc(vaultPath, schemaDoc)
@@ -454,7 +472,7 @@ func SetCoreDefaultTemplate(vaultPath, coreTypeName, templateID string, clearDef
 		return "", newError(
 			ErrorInvalidInput,
 			"default requires template_id or --clear",
-			"Use: rvn schema core <core_type> template default <template_id> OR --clear",
+			"Use: rvn schema template default <template_id> --core "+coreTypeName+" OR --clear",
 			nil,
 			nil,
 		)
@@ -463,7 +481,7 @@ func SetCoreDefaultTemplate(vaultPath, coreTypeName, templateID string, clearDef
 		return "", newError(
 			ErrorInvalidInput,
 			fmt.Sprintf("core type '%s' does not include template '%s'", coreTypeName, templateID),
-			"Use `rvn schema core <core_type> template list` to see available template IDs",
+			"Use `rvn schema template list --core "+coreTypeName+"` to see available template IDs",
 			nil,
 			nil,
 		)
@@ -496,7 +514,7 @@ func loadTypeForTemplateConfig(vaultPath, typeName string) (*schema.Schema, *sch
 	if schema.IsBuiltinType(typeName) {
 		return nil, nil, newError(
 			ErrorInvalidInput,
-			fmt.Sprintf("'%s' is a core type; configure templates with `rvn schema core %s template ...`", typeName, typeName),
+			fmt.Sprintf("'%s' is a core type; configure templates with `rvn schema template ... --core %s`", typeName, typeName),
 			"",
 			nil,
 			nil,

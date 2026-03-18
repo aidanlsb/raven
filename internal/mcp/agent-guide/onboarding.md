@@ -27,7 +27,7 @@ raven_schema(subcommand="types")
 raven_schema(subcommand="traits")
 
 # See if there's any existing content
-raven_stats()
+raven_vault_stats()
 
 # Check for saved queries/workflows
 raven_query(list=true)

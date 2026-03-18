@@ -55,8 +55,6 @@ Examples:
 			return handleError(ErrDatabaseError, err, "")
 		}
 
-		readsvc.SaveBacklinksResults(vaultPath, target, links)
-
 		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {

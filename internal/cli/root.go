@@ -42,11 +42,11 @@ who gathered knowledge from across the world.`,
 			return nil
 		}
 		// Also skip for completion/config/skill/mcp subcommands.
-		// Most vault subcommands do not require resolved vault path, except `vault path`.
+		// Most vault subcommands do not require resolved vault path, except `vault path` and `vault stats`.
 		if cmd.Parent() != nil {
 			parentName := cmd.Parent().Name()
-			if parentName == "vault" && cmd.Name() == "path" {
-				// `vault path` should resolve exactly like vault-bound commands.
+			if parentName == "vault" && (cmd.Name() == "path" || cmd.Name() == "stats") {
+				// `vault path` and `vault stats` should resolve exactly like vault-bound commands.
 			} else if parentName == "completion" || parentName == "vault" || parentName == "config" || parentName == "skill" || parentName == "mcp" {
 				return nil
 			}

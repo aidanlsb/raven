@@ -19,6 +19,7 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 		Data struct {
 			Command    string `json:"command"`
 			Summary    string `json:"summary"`
+			CLIUsage   string `json:"cli_usage"`
 			ReadOnly   bool   `json:"read_only"`
 			Invokable  bool   `json:"invokable"`
 			SchemaHash string `json:"schema_hash"`
@@ -47,6 +48,9 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	}
 	if envelope.Data.Summary == "" {
 		t.Fatalf("expected summary in describe response: %s", out)
+	}
+	if envelope.Data.CLIUsage != "rvn query <query_string|saved-query> [inputs...]" {
+		t.Fatalf("cli_usage=%q, want query usage; response=%s", envelope.Data.CLIUsage, out)
 	}
 	if !envelope.Data.ReadOnly {
 		t.Fatalf("expected query to be read_only: %s", out)

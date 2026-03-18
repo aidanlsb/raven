@@ -3,9 +3,7 @@ package schemasvc
 import (
 	"fmt"
 	"sort"
-	"strings"
 
-	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -285,39 +283,6 @@ func TraitByName(vaultPath, traitName string) (*TraitResult, error) {
 	}
 
 	return &TraitResult{Trait: buildTraitSchema(traitName, traitDef)}, nil
-}
-
-func SchemaCommands() *CommandsResult {
-	cmds := make(map[string]CommandSchema)
-	for name, meta := range commands.Registry {
-		if name != "schema" && !strings.HasPrefix(name, "schema_") {
-			continue
-		}
-
-		cmd := CommandSchema{
-			Description: meta.Description,
-			Examples:    meta.Examples,
-			UseCases:    meta.UseCases,
-		}
-
-		for _, arg := range meta.Args {
-			cmd.Args = append(cmd.Args, arg.Name)
-		}
-
-		if len(meta.Flags) > 0 {
-			cmd.Flags = make(map[string]FlagSchema)
-			for _, flag := range meta.Flags {
-				cmd.Flags["--"+flag.Name] = FlagSchema{
-					Type:        string(flag.Type),
-					Description: flag.Description,
-					Examples:    flag.Examples,
-				}
-			}
-		}
-		cmds[name] = cmd
-	}
-
-	return &CommandsResult{Commands: cmds}
 }
 
 func buildTypeSchema(name string, typeDef *schema.TypeDefinition, builtin bool) TypeSchema {

@@ -20,7 +20,6 @@ var updateCmd = &cobra.Command{
 
 Trait IDs look like "path/file.md:trait:N" and can be obtained via:
   - rvn query "trait:todo" --ids
-  - rvn last <nums>
 
 Bulk operations:
   Use --stdin to read trait IDs from stdin (one per line).

@@ -26,7 +26,7 @@ func writeFakeTool(t *testing.T, dir string, unixName, unixBody, windowsName, wi
 }
 
 func TestExecute_ExecutableRequired(t *testing.T) {
-	_, err := Execute("", "", "raven_stats", nil)
+	_, err := Execute("", "", "raven_vault_stats", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -66,7 +66,7 @@ func TestExecute_InvalidJSONOutput(t *testing.T) {
 		"@echo off\r\necho not-json\r\n",
 	)
 
-	_, err := Execute("", executable, "raven_stats", nil)
+	_, err := Execute("", executable, "raven_vault_stats", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -91,7 +91,7 @@ func TestExecute_EnvelopeError(t *testing.T) {
 		"@echo off\r\necho {\"ok\":false,\"error\":{\"code\":\"X\",\"message\":\"bad\"}}\r\n",
 	)
 
-	_, err := Execute("", scriptPath, "raven_stats", nil)
+	_, err := Execute("", scriptPath, "raven_vault_stats", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}

@@ -15,7 +15,6 @@ coverage:
     - search
     - backlinks
     - outlinks
-    - last
     - resolve
     - read
 execution:

@@ -40,8 +40,6 @@ func (s *Server) callDirectSearch(args map[string]interface{}) (string, bool) {
 		return errorEnvelope("DATABASE_ERROR", fmt.Sprintf("search failed: %v", err), "", nil), true
 	}
 
-	readsvc.SaveSearchResults(vaultPath, queryStr, results)
-
 	data := map[string]interface{}{
 		"query":   queryStr,
 		"results": formatSearchMatches(results),
@@ -76,8 +74,6 @@ func (s *Server) callDirectBacklinks(args map[string]interface{}) (string, bool)
 	if err != nil {
 		return errorEnvelope("DATABASE_ERROR", fmt.Sprintf("failed to read backlinks: %v", err), "", nil), true
 	}
-	readsvc.SaveBacklinksResults(vaultPath, resolved.ObjectID, links)
-
 	data := map[string]interface{}{
 		"target": resolved.ObjectID,
 		"items":  links,
@@ -112,8 +108,6 @@ func (s *Server) callDirectOutlinks(args map[string]interface{}) (string, bool) 
 	if err != nil {
 		return errorEnvelope("DATABASE_ERROR", fmt.Sprintf("failed to read outlinks: %v", err), "", nil), true
 	}
-	readsvc.SaveOutlinksResults(vaultPath, resolved.ObjectID, links)
-
 	data := map[string]interface{}{
 		"source": resolved.ObjectID,
 		"items":  links,
@@ -312,7 +306,6 @@ func (s *Server) callDirectQuery(args map[string]interface{}) (string, bool) {
 				"line":      row.LineStart,
 			}
 		}
-		readsvc.SaveObjectQueryResults(vaultPath, resolvedQuery, result.Objects)
 		typeKey := "type"
 		typeVal := result.TypeName
 		if isSavedQuery && queryName != "" {
@@ -343,7 +336,6 @@ func (s *Server) callDirectQuery(args map[string]interface{}) (string, bool) {
 			"object_id":  row.ParentObjectID,
 		}
 	}
-	readsvc.SaveTraitQueryResults(vaultPath, resolvedQuery, result.Traits)
 	typeKey := "trait"
 	typeVal := result.TypeName
 	if isSavedQuery && queryName != "" {

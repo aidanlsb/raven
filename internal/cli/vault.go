@@ -393,6 +393,7 @@ func init() {
 	vaultCmd.AddCommand(vaultListCmd)
 	vaultCmd.AddCommand(vaultCurrentCmd)
 	vaultCmd.AddCommand(vaultPathCmd)
+	vaultCmd.AddCommand(vaultStatsCmd)
 	vaultCmd.AddCommand(vaultUseCmd)
 	vaultCmd.AddCommand(vaultPinCmd)
 	vaultCmd.AddCommand(vaultClearCmd)

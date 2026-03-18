@@ -88,24 +88,6 @@ func Stats(vaultPath string) (*StatsResult, error) {
 	}, nil
 }
 
-func Untyped(vaultPath string) ([]string, error) {
-	if strings.TrimSpace(vaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
-	}
-
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return nil, newError(CodeDatabaseError, "failed to open database", "Run 'rvn reindex' to rebuild the database", err)
-	}
-	defer db.Close()
-
-	pages, err := db.UntypedPages()
-	if err != nil {
-		return nil, newError(CodeDatabaseError, "failed to query untyped pages", "", err)
-	}
-	return pages, nil
-}
-
 const defaultModulePath = "github.com/aidanlsb/raven"
 
 type VersionInfo struct {

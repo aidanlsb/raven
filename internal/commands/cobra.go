@@ -29,15 +29,7 @@ func GenerateCobraCommand(name string, handler Handler) *cobra.Command {
 		return nil
 	}
 
-	// Build Use string
-	use := name
-	for _, arg := range meta.Args {
-		if arg.Required {
-			use += fmt.Sprintf(" <%s>", arg.Name)
-		} else {
-			use += fmt.Sprintf(" [%s]", arg.Name)
-		}
-	}
+	use := UsageForMeta(name, meta)
 
 	// Build Long description
 	longDesc := meta.Description

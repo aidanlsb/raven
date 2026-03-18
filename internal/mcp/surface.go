@@ -37,6 +37,7 @@ type commandContract struct {
 	CommandID      string
 	ToolName       string
 	CLIName        string
+	CLIUsage       string
 	Summary        string
 	Description    string
 	Category       string
@@ -290,6 +291,7 @@ func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool)
 	return successEnvelope(map[string]interface{}{
 		"command":      contract.CommandID,
 		"summary":      contract.Summary,
+		"cli_usage":    contract.CLIUsage,
 		"args_schema":  compactArgsSchema(contract),
 		"read_only":    contract.ReadOnly,
 		"destructive":  contract.Destructive,
@@ -458,7 +460,7 @@ func discoverableContracts() []commandContract {
 }
 
 func buildCommandContract(commandID string) (commandContract, bool) {
-	meta, ok := commands.Registry[commandID]
+	meta, ok := commands.EffectiveMeta(commandID)
 	if !ok {
 		return commandContract{}, false
 	}
@@ -514,11 +516,12 @@ func buildCommandContract(commandID string) (commandContract, bool) {
 		CommandID:      commandID,
 		ToolName:       mcpToolName(commandID),
 		CLIName:        meta.Name,
+		CLIUsage:       commands.FullCLIUsage(commandID),
 		Summary:        strings.TrimSpace(meta.Description),
 		Description:    description,
-		Category:       categoryForCommandID(commandID),
-		ReadOnly:       isReadOnlyCommand(commandID),
-		Destructive:    isDestructiveCommand(commandID),
+		Category:       string(meta.Category),
+		ReadOnly:       meta.Access == commands.AccessRead,
+		Destructive:    meta.Risk == commands.RiskDestructive,
 		PreviewMode:    previewModeForCommand(meta),
 		Parameters:     parameters,
 		ParameterOrder: paramOrder,
@@ -537,6 +540,7 @@ func commandSchemaHash(contract commandContract, meta commands.Meta) string {
 		SchemaVersion string              `json:"schema_version"`
 		CommandID     string              `json:"command_id"`
 		CLIName       string              `json:"cli_name"`
+		CLIUsage      string              `json:"cli_usage"`
 		Description   string              `json:"description"`
 		Args          []commands.ArgMeta  `json:"args"`
 		Flags         []commands.FlagMeta `json:"flags"`
@@ -549,6 +553,7 @@ func commandSchemaHash(contract commandContract, meta commands.Meta) string {
 		SchemaVersion: contract.SchemaVersion,
 		CommandID:     contract.CommandID,
 		CLIName:       contract.CLIName,
+		CLIUsage:      contract.CLIUsage,
 		Description:   contract.Description,
 		Args:          append([]commands.ArgMeta{}, meta.Args...),
 		Flags:         append([]commands.FlagMeta{}, meta.Flags...),
@@ -876,57 +881,6 @@ func hasStdinFlag(flags []commands.FlagMeta) bool {
 		if flag.Name == "stdin" && flag.Type == commands.FlagTypeBool {
 			return true
 		}
-	}
-	return false
-}
-
-func categoryForCommandID(commandID string) string {
-	switch {
-	case commandID == "query" || commandID == "query_add" || commandID == "query_remove" ||
-		commandID == "search" || commandID == "backlinks" || commandID == "outlinks" || commandID == "resolve":
-		return "query"
-	case commandID == "new" || commandID == "add" || commandID == "upsert" || commandID == "set" ||
-		commandID == "delete" || commandID == "move" || commandID == "reclassify" || commandID == "import" ||
-		commandID == "edit" || commandID == "update":
-		return "content"
-	case commandID == "schema" || strings.HasPrefix(commandID, "schema_") || commandID == "template" || strings.HasPrefix(commandID, "template_"):
-		return "schema"
-	case commandID == "workflow" || strings.HasPrefix(commandID, "workflow_"):
-		return "workflow"
-	case commandID == "read" || commandID == "open" || commandID == "daily" || commandID == "date" || commandID == "last":
-		return "navigation"
-	case commandID == "check" || commandID == "reindex" || commandID == "stats" || commandID == "untyped" || commandID == "version":
-		return "maintenance"
-	default:
-		return "vault"
-	}
-}
-
-func isReadOnlyCommand(commandID string) bool {
-	switch commandID {
-	case "read", "search", "backlinks", "outlinks", "resolve", "query",
-		"schema", "schema_validate", "schema_template_list", "schema_template_get",
-		"schema_type_template_list", "schema_core_template_list",
-		"docs", "docs_list", "docs_search",
-		"stats", "untyped", "version",
-		"vault", "vault_list", "vault_current", "vault_path",
-		"workflow_list", "workflow_show", "workflow_validate", "workflow_runs_list", "workflow_runs_step",
-		"config", "config_show":
-		return true
-	default:
-		return false
-	}
-}
-
-func isDestructiveCommand(commandID string) bool {
-	if commandID == "delete" || commandID == "move" || commandID == "reclassify" {
-		return true
-	}
-	if strings.Contains(commandID, "remove") || strings.Contains(commandID, "delete") {
-		return true
-	}
-	if commandID == "schema_rename_field" || commandID == "schema_rename_type" {
-		return true
 	}
 	return false
 }

@@ -1556,12 +1556,15 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 			t.Errorf("expected file 'templates/person.md', got %q", result.DataString("file"))
 		}
 
-		v.RunCLI("schema", "type", "person", "template", "set", "person_profile").MustSucceed(t)
-		v.RunCLI("schema", "type", "person", "template", "default", "person_profile").MustSucceed(t)
+		v.RunCLI("schema", "template", "bind", "person_profile", "--type", "person").MustSucceed(t)
+		v.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
 		v.RunCLI("new", "person", "Alice").MustSucceed(t)
 		v.AssertFileContains("people/alice.md", "# Person Profile")
 
-		result = v.RunCLI("schema", "type", "person", "template", "remove", "person_profile")
+		result = v.RunCLI("schema", "template", "unbind", "person_profile", "--type", "person")
+		result.MustFailWithMessage(t, "--clear-default")
+
+		result = v.RunCLI("schema", "template", "unbind", "person_profile", "--type", "person", "--clear-default")
 		result.MustSucceed(t)
 		if result.Data["removed"] != true {
 			t.Errorf("expected removed=true")
@@ -1585,16 +1588,16 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 		}
 		v.RunCLI("schema", "template", "set", "daily_brief", "--file", "templates/daily-brief.md").MustSucceed(t)
 
-		v.RunCLI("schema", "core", "date", "template", "set", "daily_default").MustSucceed(t)
-		v.RunCLI("schema", "core", "date", "template", "set", "daily_brief").MustSucceed(t)
-		v.RunCLI("schema", "core", "date", "template", "default", "daily_default").MustSucceed(t)
+		v.RunCLI("schema", "template", "bind", "daily_default", "--core", "date").MustSucceed(t)
+		v.RunCLI("schema", "template", "bind", "daily_brief", "--core", "date").MustSucceed(t)
+		v.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
 
 		v.RunCLI("daily", "2026-02-03").MustSucceed(t)
 		v.AssertFileContains("daily/2026-02-03.md", "## Notes")
 		v.RunCLI("daily", "2026-02-05", "--template", "daily_brief").MustSucceed(t)
 		v.AssertFileContains("daily/2026-02-05.md", "## Brief")
 
-		v.RunCLI("schema", "core", "date", "template", "default", "--clear").MustSucceed(t)
+		v.RunCLI("schema", "template", "default", "--core", "date", "--clear").MustSucceed(t)
 		v.RunCLI("daily", "2026-02-04").MustSucceed(t)
 		v.AssertFileNotContains("daily/2026-02-04.md", "## Notes")
 	})

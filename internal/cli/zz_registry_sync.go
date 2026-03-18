@@ -33,8 +33,10 @@ func applyRegistryMetadata(cmd *cobra.Command, path string) {
 		return
 	}
 
-	// Keep Use strings defined in CLI because the registry does not model
-	// conditional or variadic usage (e.g., positional key=value arguments).
+	if meta.Use != "" {
+		cmd.Use = meta.Use
+	}
+
 	if meta.Description != "" {
 		cmd.Short = meta.Description
 	}
@@ -48,12 +50,12 @@ func applyRegistryMetadata(cmd *cobra.Command, path string) {
 }
 
 func lookupRegistryMeta(path string) (commands.Meta, bool) {
-	if meta, ok := commands.Registry[path]; ok {
+	if meta, ok := commands.EffectiveMeta(path); ok {
 		return meta, true
 	}
 
 	underscored := strings.ReplaceAll(path, " ", "_")
-	if meta, ok := commands.Registry[underscored]; ok {
+	if meta, ok := commands.EffectiveMeta(underscored); ok {
 		return meta, true
 	}
 

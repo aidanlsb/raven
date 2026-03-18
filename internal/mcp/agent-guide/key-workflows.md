@@ -146,7 +146,7 @@ raven_import(type="person", file="contacts.json", confirm=true)
 # Template setup
 raven_template_write(path="meeting.md", content="# {{title}}\n\n## Notes")
 raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
-raven_schema_type_template_default(type_name="meeting", template_id="meeting_standard")
+raven_schema_template_bind(template_id="meeting_standard", type="meeting", default=true)
 ```
 
 ## Related topics

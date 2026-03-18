@@ -154,7 +154,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 
 	templateOverride, err := schema.ResolveTypeTemplateFile(req.Schema, req.TypeName, req.TemplateID)
 	if err != nil {
-		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema type <type_name> template list` to see available template IDs", nil, err)
+		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
 	}
 
 	result, err := pages.Create(pages.CreateOptions{

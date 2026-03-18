@@ -639,10 +639,6 @@ func runFullQueryWithOptions(rt *readsvc.Runtime, queryStr string, start time.Ti
 			return nil
 		}
 
-		if !idsOnly {
-			readsvc.SaveObjectQueryResults(rt.VaultPath, queryStr, result.Objects)
-		}
-
 		if idsOnly {
 			if isJSONOutput() {
 				outputSuccess(map[string]interface{}{
@@ -704,10 +700,6 @@ func runFullQueryWithOptions(rt *readsvc.Runtime, queryStr string, start time.Ti
 		}
 		fmt.Println(result.Total)
 		return nil
-	}
-
-	if !idsOnly {
-		readsvc.SaveTraitQueryResults(rt.VaultPath, queryStr, result.Traits)
 	}
 
 	if idsOnly {

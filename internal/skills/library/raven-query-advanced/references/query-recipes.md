@@ -47,5 +47,4 @@ rvn query remove overdue --json
 rvn search 'meeting notes' --type meeting --json
 rvn backlinks projects/website --json
 rvn outlinks meetings/team-sync --json
-rvn last --json
 ```

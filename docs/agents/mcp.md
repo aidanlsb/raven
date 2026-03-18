@@ -147,6 +147,7 @@ This tool list is generated from the command registry and should stay in sync wi
 ### Compact Describe Flow
 
 `raven_describe` is optimized for routing and invocation, not long-form prose. Its response includes:
+- `cli_usage` for the canonical CLI syntax of the command
 - `args_schema.required` and `args_schema.properties`
 - safety metadata such as `read_only`, `destructive`, and `preview_mode`
 - `schema_hash` for stale-schema detection
@@ -452,10 +453,9 @@ raven_template_list()
 raven_schema_template_list()
 raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
 raven_schema_template_get(template_id="meeting_standard")
-raven_schema_type_template_set(type_name="meeting", template_id="meeting_standard")
-raven_schema_type_template_default(type_name="meeting", template_id="meeting_standard")
-raven_schema_type_template_list(type_name="meeting")
-raven_schema_type_template_remove(type_name="meeting", template_id="meeting_standard")
+raven_schema_template_bind(template_id="meeting_standard", type="meeting", default=true)
+raven_schema_template_list(type="meeting")
+raven_schema_template_unbind(template_id="meeting_standard", type="meeting", clear_default=true)
 raven_schema_template_remove(template_id="meeting_standard")
 
 # Resolve references
@@ -467,8 +467,8 @@ Notes:
 - Templates are file-backed only (no inline template bodies).
 - Template files must be under `directories.template` (default: `templates/`).
 - Daily templates are configured through core type `date`:
-  define a template ID, bind it with `raven_schema_core_template_set(core_type="date", ...)`,
-  and set default with `raven_schema_core_template_default(core_type="date", ...)`.
+  define a template ID, bind it with `raven_schema_template_bind(template_id="...", core="date")`,
+  and set the default with `raven_schema_template_default(template_id="...", core="date")`.
 
 ### Vault Health
 
@@ -503,7 +503,7 @@ raven_reindex()
 raven_reindex(full=true)  # Full rebuild
 
 # Statistics
-raven_stats()
+raven_vault_stats()
 ```
 
 ### Workflows

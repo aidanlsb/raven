@@ -22,7 +22,7 @@ Raven is plain markdown + schema + query:
 ```text
 raven_schema(subcommand="types")
 raven_schema(subcommand="traits")
-raven_stats()
+raven_vault_stats()
 raven_query(list=true)
 raven_workflow_list()
 ```

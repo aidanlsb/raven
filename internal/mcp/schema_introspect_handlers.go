@@ -86,10 +86,7 @@ func (s *Server) callDirectSchema(args map[string]interface{}) (string, bool) {
 			return mapDirectSchemaServiceError(err)
 		}
 		return successEnvelope(map[string]interface{}{"trait": result.Trait}, nil), false
-	case "commands":
-		result := schemasvc.SchemaCommands()
-		return successEnvelope(map[string]interface{}{"commands": result.Commands}, nil), false
 	default:
-		return errorEnvelope("INVALID_INPUT", fmt.Sprintf("unknown schema subcommand: %s", subcommand), "Use: types, traits, type <name>, trait <name>, core [name], template ..., or commands", nil), true
+		return errorEnvelope("INVALID_INPUT", fmt.Sprintf("unknown schema subcommand: %s", subcommand), "Use: types, traits, type <name>, trait <name>, core [name], or template ...", nil), true
 	}
 }

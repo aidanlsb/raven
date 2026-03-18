@@ -21,15 +21,12 @@ func assertCode(t *testing.T, err error, want Code) {
 	}
 }
 
-func TestStatsAndUntyped_InvalidInput(t *testing.T) {
+func TestStats_InvalidInput(t *testing.T) {
 	_, err := Stats(" ")
-	assertCode(t, err, CodeInvalidInput)
-
-	_, err = Untyped("")
 	assertCode(t, err, CodeInvalidInput)
 }
 
-func TestStatsAndUntyped_HappyPath(t *testing.T) {
+func TestStats_HappyPath(t *testing.T) {
 	vaultPath := t.TempDir()
 	db, err := index.Open(vaultPath)
 	if err != nil {
@@ -71,14 +68,6 @@ func TestStatsAndUntyped_HappyPath(t *testing.T) {
 	}
 	if stats.ObjectCount != 2 || stats.TraitCount != 1 || stats.RefCount != 1 || stats.FileCount != 2 {
 		t.Fatalf("unexpected stats: %#v", stats)
-	}
-
-	untyped, err := Untyped(vaultPath)
-	if err != nil {
-		t.Fatalf("Untyped returned error: %v", err)
-	}
-	if len(untyped) != 1 || untyped[0] != "pages/one.md" {
-		t.Fatalf("unexpected untyped pages: %#v", untyped)
 	}
 }
 

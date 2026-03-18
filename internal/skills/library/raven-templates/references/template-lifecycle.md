@@ -5,8 +5,8 @@
 ```bash
 rvn template write meeting/standard.md --content '# Meeting Notes' --json
 rvn schema template set meeting_standard --file templates/meeting/standard.md --json
-rvn schema type meeting template set meeting_standard --json
-rvn schema type meeting template default meeting_standard --json
+rvn schema template bind meeting_standard --type meeting --json
+rvn schema template default meeting_standard --type meeting --json
 ```
 
 ## Core type template quick path (`date`)
@@ -14,8 +14,8 @@ rvn schema type meeting template default meeting_standard --json
 ```bash
 rvn template write daily.md --content '# Daily Note' --json
 rvn schema template set daily_default --file templates/daily.md --json
-rvn schema core date template set daily_default --json
-rvn schema core date template default daily_default --json
+rvn schema template bind daily_default --core date --json
+rvn schema template default daily_default --core date --json
 ```
 
 ## Inspect current template state
@@ -23,21 +23,21 @@ rvn schema core date template default daily_default --json
 ```bash
 rvn template list --json
 rvn schema template list --json
-rvn schema type meeting template list --json
-rvn schema core date template list --json
+rvn schema template list --type meeting --json
+rvn schema template list --core date --json
 ```
 
 ## Safe teardown order
 
 1. Clear or change defaults:
 ```bash
-rvn schema type meeting template default --clear --json
-rvn schema core date template default --clear --json
+rvn schema template default --type meeting --clear --json
+rvn schema template default --core date --clear --json
 ```
 2. Unbind IDs:
 ```bash
-rvn schema type meeting template remove meeting_standard --json
-rvn schema core date template remove daily_default --json
+rvn schema template unbind meeting_standard --type meeting --json
+rvn schema template unbind daily_default --core date --json
 ```
 3. Remove schema template IDs:
 ```bash

@@ -10,7 +10,7 @@ For a structured teaching and setup flow, use `raven://guide/onboarding`.
    - `raven_vault_add(name="personal", path="/path/to/vault", pin=true)`
    - `raven_vault_use(name="personal")`
 1. **Understand the schema**: `raven_schema(subcommand="types")` and `raven_schema(subcommand="traits")`
-2. **Get vault overview**: `raven_stats()` to see object counts and structure
+2. **Get vault overview**: `raven_vault_stats()` to see object counts and structure
 3. **Check saved queries**: `raven://queries/saved` or `raven_query(list=true)`
 4. **Discover workflows**: `raven://workflows/list` or `raven_workflow_list()`
 5. **Fetch vault instructions (if available)**: `raven://vault/agent-instructions`

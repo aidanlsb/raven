@@ -1,7 +1,7 @@
 # Best Practices
 
 1. Start with structure, not file scanning.
-- Use `raven_schema`, `raven_stats`, and targeted `raven_query` first.
+- Use `raven_schema`, `raven_vault_stats`, and targeted `raven_query` first.
 - Read files only after narrowing candidates.
 
 2. Treat the markdown vault as source of truth.

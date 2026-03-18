@@ -2276,30 +2276,10 @@ status: paused
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_stats", map[string]interface{}{})
-		cliResult := vCLI.RunCLI("stats")
+		mcpResult := server.callTool("raven_vault_stats", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("vault", "stats")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file_count", "object_count", "trait_count", "ref_count"})
-	})
-
-	t.Run("untyped", func(t *testing.T) {
-		vMCP := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile("notes/scratch.md", "# Scratch\n").
-			Build()
-		vCLI := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile("notes/scratch.md", "# Scratch\n").
-			Build()
-		server := newTestServer(t, vMCP.Path, binary)
-
-		vMCP.RunCLI("reindex").MustSucceed(t)
-		vCLI.RunCLI("reindex").MustSucceed(t)
-
-		mcpResult := server.callTool("raven_untyped", map[string]interface{}{})
-		cliResult := vCLI.RunCLI("untyped")
-
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"count", "items"})
 	})
 
 	t.Run("version", func(t *testing.T) {
@@ -2358,54 +2338,6 @@ status: paused
 		cliResult := vCLI.RunCLI("date", "2026-02-18")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"date", "day_of_week", "daily_note_id", "daily_path", "daily_exists", "items", "backlinks"})
-	})
-
-	t.Run("last", func(t *testing.T) {
-		vMCP := testutil.NewTestVault(t).
-			WithSchema(testutil.PersonProjectSchema()).
-			WithFile("projects/alpha.md", `---
-type: project
-status: active
----
-# Alpha
-`).
-			WithFile("projects/beta.md", `---
-type: project
-status: paused
----
-# Beta
-`).
-			Build()
-		vCLI := testutil.NewTestVault(t).
-			WithSchema(testutil.PersonProjectSchema()).
-			WithFile("projects/alpha.md", `---
-type: project
-status: active
----
-# Alpha
-`).
-			WithFile("projects/beta.md", `---
-type: project
-status: paused
----
-# Beta
-`).
-			Build()
-		server := newTestServer(t, vMCP.Path, binary)
-
-		vMCP.RunCLI("reindex").MustSucceed(t)
-		vCLI.RunCLI("reindex").MustSucceed(t)
-		_ = server.callTool("raven_query", map[string]interface{}{
-			"query_string": "object:project",
-		})
-		vCLI.RunCLI("query", "object:project").MustSucceed(t)
-
-		mcpResult := server.callTool("raven_last", map[string]interface{}{
-			"nums": "1",
-		})
-		cliResult := vCLI.RunCLI("last", "1")
-
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"selected"})
 	})
 
 	t.Run("skill_list", func(t *testing.T) {
@@ -2930,7 +2862,7 @@ Kickoff: [[events/kickoff]]
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"removed", "id"})
 	})
 
-	t.Run("schema_type_template_set", func(t *testing.T) {
+	t.Run("schema_template_bind_type", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -2940,16 +2872,16 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_type_template_set", map[string]interface{}{
-			"type_name":   "person",
+		mcpResult := server.callTool("raven_schema_template_bind", map[string]interface{}{
+			"type":        "person",
 			"template_id": "person_profile",
 		})
-		cliResult := vCLI.RunCLI("schema", "type", "person", "template", "set", "person_profile")
+		cliResult := vCLI.RunCLI("schema", "template", "bind", "person_profile", "--type", "person")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "template_id"})
 	})
 
-	t.Run("schema_type_template_default_clear", func(t *testing.T) {
+	t.Run("schema_template_default_clear_type", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -2958,21 +2890,21 @@ Kickoff: [[events/kickoff]]
 		vCLI.WriteFile("templates/person.md", "# Person Template\n")
 		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
-		vMCP.RunCLI("schema", "type", "person", "template", "set", "person_profile").MustSucceed(t)
-		vCLI.RunCLI("schema", "type", "person", "template", "set", "person_profile").MustSucceed(t)
-		vMCP.RunCLI("schema", "type", "person", "template", "default", "person_profile").MustSucceed(t)
-		vCLI.RunCLI("schema", "type", "person", "template", "default", "person_profile").MustSucceed(t)
+		vMCP.RunCLI("schema", "template", "bind", "person_profile", "--type", "person").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "bind", "person_profile", "--type", "person").MustSucceed(t)
+		vMCP.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_type_template_default", map[string]interface{}{
-			"type_name": "person",
-			"clear":     true,
+		mcpResult := server.callTool("raven_schema_template_default", map[string]interface{}{
+			"type":  "person",
+			"clear": true,
 		})
-		cliResult := vCLI.RunCLI("schema", "type", "person", "template", "default", "--clear")
+		cliResult := vCLI.RunCLI("schema", "template", "default", "--type", "person", "--clear")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"type", "default_template"})
 	})
 
-	t.Run("schema_core_template_set", func(t *testing.T) {
+	t.Run("schema_template_bind_core", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -2982,16 +2914,16 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_core_template_set", map[string]interface{}{
-			"core_type":   "date",
+		mcpResult := server.callTool("raven_schema_template_bind", map[string]interface{}{
+			"core":        "date",
 			"template_id": "daily_default",
 		})
-		cliResult := vCLI.RunCLI("schema", "core", "date", "template", "set", "daily_default")
+		cliResult := vCLI.RunCLI("schema", "template", "bind", "daily_default", "--core", "date")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core_type", "template_id"})
 	})
 
-	t.Run("schema_core_template_default_clear", func(t *testing.T) {
+	t.Run("schema_template_default_clear_core", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -3000,16 +2932,16 @@ Kickoff: [[events/kickoff]]
 		vCLI.WriteFile("templates/daily.md", "# Daily Template\n")
 		vMCP.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
-		vMCP.RunCLI("schema", "core", "date", "template", "set", "daily_default").MustSucceed(t)
-		vCLI.RunCLI("schema", "core", "date", "template", "set", "daily_default").MustSucceed(t)
-		vMCP.RunCLI("schema", "core", "date", "template", "default", "daily_default").MustSucceed(t)
-		vCLI.RunCLI("schema", "core", "date", "template", "default", "daily_default").MustSucceed(t)
+		vMCP.RunCLI("schema", "template", "bind", "daily_default", "--core", "date").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "bind", "daily_default", "--core", "date").MustSucceed(t)
+		vMCP.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
+		vCLI.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_core_template_default", map[string]interface{}{
-			"core_type": "date",
-			"clear":     true,
+		mcpResult := server.callTool("raven_schema_template_default", map[string]interface{}{
+			"core":  "date",
+			"clear": true,
 		})
-		cliResult := vCLI.RunCLI("schema", "core", "date", "template", "default", "--clear")
+		cliResult := vCLI.RunCLI("schema", "template", "default", "--core", "date", "--clear")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core_type", "default_template"})
 	})

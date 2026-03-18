@@ -38,8 +38,7 @@ Examples:
   rvn open cursor              # Opens companies/cursor.md
   rvn open companies/cursor    # Opens objects/companies/cursor.md
   rvn open people/freya        # Opens people/freya.md
-  rvn open daily/2025-01-09    # Opens a specific daily note
-  rvn last 1,3,5 | rvn open --stdin  # Opens selected query results`,
+  rvn open daily/2025-01-09    # Opens a specific daily note`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		stdin, _ := cmd.Flags().GetBool("stdin")
 		if stdin {

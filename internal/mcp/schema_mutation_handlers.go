@@ -66,6 +66,24 @@ func schemaTemplateDefaultPayload(scopeKey, scopeValue, defaultTemplate string) 
 	}
 }
 
+func schemaTemplateTargetFromArgs(normalized map[string]interface{}, requireTarget bool) (string, string, string, bool, string, bool) {
+	typeName := strings.TrimSpace(toString(normalized["type"]))
+	coreType := strings.TrimSpace(toString(normalized["core"]))
+
+	switch {
+	case typeName != "" && coreType != "":
+		return "", "", "", false, errorEnvelope("INVALID_INPUT", "specify exactly one of type or core", "", nil), true
+	case typeName != "":
+		return "type", "type", typeName, true, "", false
+	case coreType != "":
+		return "core", "core_type", coreType, true, "", false
+	case requireTarget:
+		return "", "", "", false, errorEnvelope("MISSING_ARGUMENT", "specify type or core", "", nil), true
+	default:
+		return "", "", "", false, "", false
+	}
+}
+
 func (s *Server) callDirectSchemaValidate(args map[string]interface{}) (string, bool) {
 	vaultPath, _, errOut, isErr := s.resolveDirectSchemaArgs(args)
 	if isErr {
@@ -320,9 +338,30 @@ func (s *Server) callDirectSchemaRenameType(args map[string]interface{}) (string
 }
 
 func (s *Server) callDirectSchemaTemplateList(args map[string]interface{}) (string, bool) {
-	vaultPath, _, errOut, isErr := s.resolveDirectSchemaArgs(args)
+	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
 	if isErr {
 		return errOut, true
+	}
+
+	targetKind, scopeKey, scopeValue, hasTarget, targetErr, targetIsErr := schemaTemplateTargetFromArgs(normalized, false)
+	if targetIsErr {
+		return targetErr, true
+	}
+	if hasTarget {
+		switch targetKind {
+		case "type":
+			state, err := schemasvc.ListTypeTemplates(vaultPath, scopeValue)
+			if err != nil {
+				return mapDirectSchemaServiceError(err)
+			}
+			return schemaSuccess(schemaTemplateBindingStatePayload(scopeKey, scopeValue, state))
+		case "core":
+			state, err := schemasvc.ListCoreTemplates(vaultPath, scopeValue)
+			if err != nil {
+				return mapDirectSchemaServiceError(err)
+			}
+			return schemaSuccess(schemaTemplateBindingStatePayload(scopeKey, scopeValue, state))
+		}
 	}
 
 	items, err := schemasvc.ListTemplates(vaultPath)
@@ -379,120 +418,115 @@ func (s *Server) callDirectSchemaTemplateRemove(args map[string]interface{}) (st
 	})
 }
 
-func (s *Server) callDirectSchemaTypeTemplateList(args map[string]interface{}) (string, bool) {
+func (s *Server) callDirectSchemaTemplateBind(args map[string]interface{}) (string, bool) {
 	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
 	if isErr {
 		return errOut, true
 	}
-	typeName := strings.TrimSpace(toString(normalized["type_name"]))
-
-	state, err := schemasvc.ListTypeTemplates(vaultPath, typeName)
-	if err != nil {
-		return mapDirectSchemaServiceError(err)
+	targetKind, scopeKey, scopeValue, _, targetErr, targetIsErr := schemaTemplateTargetFromArgs(normalized, true)
+	if targetIsErr {
+		return targetErr, true
 	}
-	return schemaSuccess(schemaTemplateBindingStatePayload("type", typeName, state))
-}
 
-func (s *Server) callDirectSchemaTypeTemplateSet(args map[string]interface{}) (string, bool) {
-	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
-	if isErr {
-		return errOut, true
-	}
-	typeName := strings.TrimSpace(toString(normalized["type_name"]))
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+	setDefault := boolValue(normalized["default"])
 
-	result, err := schemasvc.AddTypeTemplate(vaultPath, typeName, templateID)
-	if err != nil {
-		return mapDirectSchemaServiceError(err)
+	switch targetKind {
+	case "type":
+		result, err := schemasvc.AddTypeTemplate(vaultPath, scopeValue, templateID)
+		if err != nil {
+			return mapDirectSchemaServiceError(err)
+		}
+		if setDefault {
+			if _, err := schemasvc.SetTypeDefaultTemplate(vaultPath, scopeValue, templateID, false); err != nil {
+				return mapDirectSchemaServiceError(err)
+			}
+		}
+		payload := schemaTemplateBindingSetPayload(scopeKey, scopeValue, templateID, result)
+		if setDefault {
+			payload["default_template"] = templateID
+		}
+		return schemaSuccess(payload)
+	case "core":
+		result, err := schemasvc.AddCoreTemplate(vaultPath, scopeValue, templateID)
+		if err != nil {
+			return mapDirectSchemaServiceError(err)
+		}
+		if setDefault {
+			if _, err := schemasvc.SetCoreDefaultTemplate(vaultPath, scopeValue, templateID, false); err != nil {
+				return mapDirectSchemaServiceError(err)
+			}
+		}
+		payload := schemaTemplateBindingSetPayload(scopeKey, scopeValue, templateID, result)
+		if setDefault {
+			payload["default_template"] = templateID
+		}
+		return schemaSuccess(payload)
+	default:
+		return errorEnvelope("INVALID_INPUT", "unknown template target", "", nil), true
 	}
-	return schemaSuccess(schemaTemplateBindingSetPayload("type", typeName, templateID, result))
 }
 
-func (s *Server) callDirectSchemaTypeTemplateRemove(args map[string]interface{}) (string, bool) {
+func (s *Server) callDirectSchemaTemplateUnbind(args map[string]interface{}) (string, bool) {
 	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
 	if isErr {
 		return errOut, true
 	}
-	typeName := strings.TrimSpace(toString(normalized["type_name"]))
+	targetKind, scopeKey, scopeValue, _, targetErr, targetIsErr := schemaTemplateTargetFromArgs(normalized, true)
+	if targetIsErr {
+		return targetErr, true
+	}
+
 	templateID := strings.TrimSpace(toString(normalized["template_id"]))
+	clearDefault := boolValue(normalized["clear-default"])
 
-	if err := schemasvc.RemoveTypeTemplate(vaultPath, typeName, templateID); err != nil {
-		return mapDirectSchemaServiceError(err)
+	switch targetKind {
+	case "type":
+		if err := schemasvc.RemoveTypeTemplate(vaultPath, scopeValue, templateID, clearDefault); err != nil {
+			return mapDirectSchemaServiceError(err)
+		}
+	case "core":
+		if err := schemasvc.RemoveCoreTemplate(vaultPath, scopeValue, templateID, clearDefault); err != nil {
+			return mapDirectSchemaServiceError(err)
+		}
+	default:
+		return errorEnvelope("INVALID_INPUT", "unknown template target", "", nil), true
 	}
-	return schemaSuccess(schemaTemplateBindingRemovePayload("type", typeName, templateID))
+
+	payload := schemaTemplateBindingRemovePayload(scopeKey, scopeValue, templateID)
+	if clearDefault {
+		payload["default_cleared"] = true
+	}
+	return schemaSuccess(payload)
 }
 
-func (s *Server) callDirectSchemaTypeTemplateDefault(args map[string]interface{}) (string, bool) {
+func (s *Server) callDirectSchemaTemplateDefault(args map[string]interface{}) (string, bool) {
 	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
 	if isErr {
 		return errOut, true
 	}
-	typeName := strings.TrimSpace(toString(normalized["type_name"]))
+	targetKind, scopeKey, scopeValue, _, targetErr, targetIsErr := schemaTemplateTargetFromArgs(normalized, true)
+	if targetIsErr {
+		return targetErr, true
+	}
+
+	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 	clearDefault := boolValue(normalized["clear"])
-	templateID := strings.TrimSpace(toString(normalized["template_id"]))
 
-	newDefault, err := schemasvc.SetTypeDefaultTemplate(vaultPath, typeName, templateID, clearDefault)
-	if err != nil {
-		return mapDirectSchemaServiceError(err)
+	switch targetKind {
+	case "type":
+		newDefault, err := schemasvc.SetTypeDefaultTemplate(vaultPath, scopeValue, templateID, clearDefault)
+		if err != nil {
+			return mapDirectSchemaServiceError(err)
+		}
+		return schemaSuccess(schemaTemplateDefaultPayload(scopeKey, scopeValue, newDefault))
+	case "core":
+		newDefault, err := schemasvc.SetCoreDefaultTemplate(vaultPath, scopeValue, templateID, clearDefault)
+		if err != nil {
+			return mapDirectSchemaServiceError(err)
+		}
+		return schemaSuccess(schemaTemplateDefaultPayload(scopeKey, scopeValue, newDefault))
+	default:
+		return errorEnvelope("INVALID_INPUT", "unknown template target", "", nil), true
 	}
-	return schemaSuccess(schemaTemplateDefaultPayload("type", typeName, newDefault))
-}
-
-func (s *Server) callDirectSchemaCoreTemplateList(args map[string]interface{}) (string, bool) {
-	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
-	if isErr {
-		return errOut, true
-	}
-	coreType := strings.TrimSpace(toString(normalized["core_type"]))
-
-	state, err := schemasvc.ListCoreTemplates(vaultPath, coreType)
-	if err != nil {
-		return mapDirectSchemaServiceError(err)
-	}
-	return schemaSuccess(schemaTemplateBindingStatePayload("core_type", coreType, state))
-}
-
-func (s *Server) callDirectSchemaCoreTemplateSet(args map[string]interface{}) (string, bool) {
-	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
-	if isErr {
-		return errOut, true
-	}
-	coreType := strings.TrimSpace(toString(normalized["core_type"]))
-	templateID := strings.TrimSpace(toString(normalized["template_id"]))
-
-	result, err := schemasvc.AddCoreTemplate(vaultPath, coreType, templateID)
-	if err != nil {
-		return mapDirectSchemaServiceError(err)
-	}
-	return schemaSuccess(schemaTemplateBindingSetPayload("core_type", coreType, templateID, result))
-}
-
-func (s *Server) callDirectSchemaCoreTemplateRemove(args map[string]interface{}) (string, bool) {
-	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
-	if isErr {
-		return errOut, true
-	}
-	coreType := strings.TrimSpace(toString(normalized["core_type"]))
-	templateID := strings.TrimSpace(toString(normalized["template_id"]))
-
-	if err := schemasvc.RemoveCoreTemplate(vaultPath, coreType, templateID); err != nil {
-		return mapDirectSchemaServiceError(err)
-	}
-	return schemaSuccess(schemaTemplateBindingRemovePayload("core_type", coreType, templateID))
-}
-
-func (s *Server) callDirectSchemaCoreTemplateDefault(args map[string]interface{}) (string, bool) {
-	vaultPath, normalized, errOut, isErr := s.resolveDirectSchemaArgs(args)
-	if isErr {
-		return errOut, true
-	}
-	coreType := strings.TrimSpace(toString(normalized["core_type"]))
-	clearDefault := boolValue(normalized["clear"])
-	templateID := strings.TrimSpace(toString(normalized["template_id"]))
-
-	newDefault, err := schemasvc.SetCoreDefaultTemplate(vaultPath, coreType, templateID, clearDefault)
-	if err != nil {
-		return mapDirectSchemaServiceError(err)
-	}
-	return schemaSuccess(schemaTemplateDefaultPayload("core_type", coreType, newDefault))
 }

@@ -12,7 +12,7 @@ Use this skill for template file authoring plus schema/type/core bindings.
 
 1. Create or update template files with `rvn template write`.
 2. Register schema template IDs with `rvn schema template set`.
-3. Bind template IDs to types (`rvn schema type ... template set`) or core types (`rvn schema core ... template set`).
+3. Bind template IDs with `rvn schema template bind ... --type ...` or `--core ...`.
 4. Set defaults only after bindings are in place.
 5. Remove in reverse order: unbind from type/core, remove schema template, then delete file.
 

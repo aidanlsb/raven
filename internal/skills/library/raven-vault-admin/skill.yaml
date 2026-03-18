@@ -8,12 +8,12 @@ references:
 coverage:
   commands:
     - init
-    - path
     - vault
     - vault add
     - vault list
     - vault current
     - vault path
+    - vault stats
     - vault use
     - vault pin
     - vault remove

@@ -12,7 +12,7 @@ Use this skill for vault setup, active/default vault selection, and global Raven
 
 1. Bootstrap or register vaults (`rvn init`, `rvn vault add`).
 2. Set routing defaults (`rvn vault use`, optional `rvn vault pin`).
-3. Confirm current resolution (`rvn vault current`, `rvn vault path`, `rvn path`).
+3. Confirm current resolution (`rvn vault current`, `rvn vault path`, `rvn vault stats`).
 4. Manage global settings (`rvn config show`, `rvn config set`, `rvn config unset`).
 
 ## Safety

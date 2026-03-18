@@ -15,7 +15,7 @@ func TestRunner_StopsAtAgentStep(t *testing.T) {
 			{
 				ID:   "fetch",
 				Type: "tool",
-				Tool: "raven_stats",
+				Tool: "raven_vault_stats",
 			},
 			{
 				ID:     "agent",
@@ -106,7 +106,7 @@ func TestRunner_ReturnsStepSummariesInsteadOfStepPayloads(t *testing.T) {
 			{
 				ID:   "fetch",
 				Type: "tool",
-				Tool: "raven_stats",
+				Tool: "raven_vault_stats",
 			},
 			{
 				ID:     "compose",
@@ -407,7 +407,7 @@ func TestRunner_ForEachContinueOnError(t *testing.T) {
 			{
 				ID:   "after",
 				Type: "tool",
-				Tool: "raven_stats",
+				Tool: "raven_vault_stats",
 			},
 		},
 	}
@@ -432,7 +432,7 @@ func TestRunner_ForEachContinueOnError(t *testing.T) {
 				return nil, fmt.Errorf("boom")
 			}
 			return map[string]interface{}{"ok": true}, nil
-		case "raven_stats":
+		case "raven_vault_stats":
 			afterCalled = true
 			return map[string]interface{}{"ok": true}, nil
 		default:
@@ -497,7 +497,7 @@ func TestRunner_ForEachFailFastReturnsError(t *testing.T) {
 			{
 				ID:   "after",
 				Type: "tool",
-				Tool: "raven_stats",
+				Tool: "raven_vault_stats",
 			},
 		},
 	}
@@ -521,7 +521,7 @@ func TestRunner_ForEachFailFastReturnsError(t *testing.T) {
 				return nil, fmt.Errorf("tool failed")
 			}
 			return map[string]interface{}{"ok": true}, nil
-		case "raven_stats":
+		case "raven_vault_stats":
 			afterCalled = true
 			return map[string]interface{}{"ok": true}, nil
 		default:

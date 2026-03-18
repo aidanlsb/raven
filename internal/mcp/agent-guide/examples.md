@@ -101,8 +101,7 @@
 → Register a schema template definition:
   raven_schema_template_set(template_id="meeting_standard", file="templates/meeting.md")
 → Bind it to the meeting type and set as default:
-  raven_schema_type_template_set(type_name="meeting", template_id="meeting_standard")
-  raven_schema_type_template_default(type_name="meeting", template_id="meeting_standard")
+  raven_schema_template_bind(template_id="meeting_standard", type="meeting", default=true)
 → Optional smoke test:
   raven_new(type="meeting", title="Team Sync")
 → "Done! New meeting notes will start with that structure."
@@ -160,8 +159,8 @@
 
 **User**: "Show me pages that need to be organized"
 ```
-→ raven_untyped()
-→ "I found 15 pages without explicit types. Here are the most recent:
+→ raven_query(query_string="object:page")
+→ "I found 15 pages using the built-in page type. Here are the most recent:
   - inbox/random-note.md
   - ideas/app-concept.md
   Would you like to assign types to any of these?"

@@ -7,8 +7,12 @@ package commands
 // generate both Cobra commands and MCP tool schemas.
 type Meta struct {
 	Name        string     // Command name (e.g., "trait", "add", "new")
+	Use         string     // Cobra-style usage string for this command (local, not full invocation)
 	Description string     // Short description
 	LongDesc    string     // Long description (for --help)
+	Category    Category   // Command grouping for discovery surfaces
+	Access      AccessMode // Read/write classification for discovery surfaces
+	Risk        RiskLevel  // Safe/mutating/destructive classification
 	Args        []ArgMeta  // Positional arguments
 	Flags       []FlagMeta // Command flags
 	Examples    []string   // Usage examples
@@ -37,6 +41,33 @@ type FlagMeta struct {
 
 // FlagType represents the type of a flag.
 type FlagType string
+
+type Category string
+
+const (
+	CategoryQuery       Category = "query"
+	CategoryContent     Category = "content"
+	CategorySchema      Category = "schema"
+	CategoryWorkflow    Category = "workflow"
+	CategoryNavigation  Category = "navigation"
+	CategoryMaintenance Category = "maintenance"
+	CategoryVault       Category = "vault"
+)
+
+type AccessMode string
+
+const (
+	AccessRead  AccessMode = "read"
+	AccessWrite AccessMode = "write"
+)
+
+type RiskLevel string
+
+const (
+	RiskSafe        RiskLevel = "safe"
+	RiskMutating    RiskLevel = "mutating"
+	RiskDestructive RiskLevel = "destructive"
+)
 
 const (
 	FlagTypeString      FlagType = "string"
@@ -102,6 +133,7 @@ to understand which fields are auto-populated.`,
 	},
 	"add": {
 		Name:        "add",
+		Use:         "add <text>",
 		Description: "Quick capture - append text to daily note or inbox",
 		LongDesc: `Quickly capture a thought, task, or note.
 
@@ -214,23 +246,6 @@ still succeeds and returns a warning with a retry command.`,
 			"Create required Raven config and schema files in one step",
 			"Initialize first-run setup before any other MCP tool calls",
 		},
-	},
-	"path": {
-		Name:        "path",
-		Description: "Print the resolved vault directory path",
-		LongDesc: `Prints the configured vault directory path.
-
-Useful for shell integration:
-  cd $(rvn path)`,
-		Examples: []string{
-			"rvn path",
-			"rvn path --json",
-		},
-		UseCases: []string{
-			"Inspect the currently resolved vault path",
-			"Integrate Raven vault resolution into shell scripts",
-		},
-		HideFromMCP: true,
 	},
 	"serve": {
 		Name:        "serve",
@@ -588,6 +603,7 @@ References are updated when the file moves (controlled by --update-refs).`,
 	},
 	"query": {
 		Name:        "query",
+		Use:         "query <query_string|saved-query> [inputs...]",
 		Description: "Run a query using the Raven query language",
 		LongDesc: `Query objects or traits using the Raven query language.
 
@@ -726,6 +742,7 @@ For trait queries (trait:...):
 	},
 	"read": {
 		Name:        "read",
+		Use:         "read [reference]",
 		Description: "Read a file (raw or enriched)",
 		LongDesc: `Read and output a file from the vault.
 
@@ -763,13 +780,6 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 			"Inspect file before editing (prefer --raw for exact string matching)",
 			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
 			"Get full content after finding object via query",
-		},
-	},
-	"stats": {
-		Name:        "stats",
-		Description: "Show vault statistics",
-		Examples: []string{
-			"rvn stats --json",
 		},
 	},
 	"version": {
@@ -921,9 +931,10 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 	},
 	"schema": {
 		Name:        "schema",
+		Use:         "schema [types|traits|type <name>|trait <name>|core [name]|template ...]",
 		Description: "Introspect the schema",
 		Args: []ArgMeta{
-			{Name: "subcommand", Description: "types, traits, commands, type, trait, core", Required: false},
+			{Name: "subcommand", Description: "types, traits, type, trait, core", Required: false},
 			{Name: "name", Description: "Type/trait/core name (required for subcommand=type|trait|core)", Required: false},
 		},
 		Examples: []string{
@@ -932,7 +943,6 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 			"rvn schema type person --json",
 			"rvn schema core --json",
 			"rvn schema core date --json",
-			"rvn schema commands --json",
 		},
 	},
 	"schema_add": {
@@ -1333,10 +1343,19 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 	},
 	"schema_template_list": {
 		Name:        "schema template list",
-		Description: "List schema templates",
-		LongDesc:    "List all schema templates defined in the top-level templates block.",
+		Description: "List schema templates or target bindings",
+		LongDesc: `List schema template definitions, or list template bindings for one target.
+
+Without --type/--core, lists all schema templates defined in the top-level templates block.
+With --type or --core, lists the bound template IDs and default template for that target.`,
+		Flags: []FlagMeta{
+			{Name: "type", Description: "List bindings for this schema type", Type: FlagTypeString},
+			{Name: "core", Description: "List bindings for this core type (date or page)", Type: FlagTypeString},
+		},
 		Examples: []string{
 			"rvn schema template list --json",
+			"rvn schema template list --type interview --json",
+			"rvn schema template list --core date --json",
 		},
 	},
 	"schema_template_get": {
@@ -1374,104 +1393,59 @@ For agents: After renaming, run raven_reindex(full=true) to update the index.`,
 			"rvn schema template remove interview_technical --json",
 		},
 	},
-	"schema_type_template_list": {
-		Name:        "schema type template list",
-		Description: "List template IDs bound to a type",
+	"schema_template_bind": {
+		Name:        "schema template bind",
+		Description: "Bind a schema template ID to a type or core type",
 		Args: []ArgMeta{
-			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
-		},
-		Examples: []string{
-			"rvn schema type interview template list --json",
-		},
-	},
-	"schema_type_template_set": {
-		Name:        "schema type template set",
-		Description: "Bind a schema template ID to a type",
-		Args: []ArgMeta{
-			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
 			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
+		Flags: []FlagMeta{
+			{Name: "type", Description: "Target schema type", Type: FlagTypeString},
+			{Name: "core", Description: "Target core type (date or page)", Type: FlagTypeString},
+			{Name: "default", Description: "Also set this template as the target default", Type: FlagTypeBool},
+		},
 		Examples: []string{
-			"rvn schema type interview template set interview_technical --json",
+			"rvn schema template bind interview_technical --type interview --json",
+			"rvn schema template bind interview_technical --type interview --default --json",
+			"rvn schema template bind daily_default --core date --json",
 		},
 	},
-	"schema_type_template_remove": {
-		Name:        "schema type template remove",
-		Description: "Unbind a schema template ID from a type",
+	"schema_template_unbind": {
+		Name:        "schema template unbind",
+		Description: "Unbind a schema template ID from a type or core type",
 		Args: []ArgMeta{
-			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
 			{Name: "template_id", Description: "Schema template ID", Required: true},
 		},
+		Flags: []FlagMeta{
+			{Name: "type", Description: "Target schema type", Type: FlagTypeString},
+			{Name: "core", Description: "Target core type (date or page)", Type: FlagTypeString},
+			{Name: "clear-default", Description: "Allow unbinding the current default by clearing the default first", Type: FlagTypeBool},
+		},
 		Examples: []string{
-			"rvn schema type interview template remove interview_technical --json",
+			"rvn schema template unbind interview_technical --type interview --json",
+			"rvn schema template unbind daily_default --core date --clear-default --json",
 		},
 	},
-	"schema_type_template_default": {
-		Name:        "schema type template default",
-		Description: "Set or clear a type default template ID",
+	"schema_template_default": {
+		Name:        "schema template default",
+		Description: "Set or clear the default template for a type or core type",
 		Args: []ArgMeta{
-			{Name: "type_name", Description: "Type name", Required: true, DynamicComp: "types"},
 			{Name: "template_id", Description: "Schema template ID (omit with --clear)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "clear", Description: "Clear the type default template", Type: FlagTypeBool},
+			{Name: "type", Description: "Target schema type", Type: FlagTypeString},
+			{Name: "core", Description: "Target core type (date or page)", Type: FlagTypeString},
+			{Name: "clear", Description: "Clear the target default template", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn schema type interview template default interview_technical --json",
-			"rvn schema type interview template default --clear --json",
-		},
-	},
-	"schema_core_template_list": {
-		Name:        "schema core template list",
-		Description: "List template IDs bound to a core type",
-		Args: []ArgMeta{
-			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
-		},
-		Examples: []string{
-			"rvn schema core date template list --json",
-			"rvn schema core page template list --json",
-		},
-	},
-	"schema_core_template_set": {
-		Name:        "schema core template set",
-		Description: "Bind a schema template ID to a core type",
-		Args: []ArgMeta{
-			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
-			{Name: "template_id", Description: "Schema template ID", Required: true},
-		},
-		Examples: []string{
-			"rvn schema core date template set daily_default --json",
-			"rvn schema core page template set note_default --json",
-		},
-	},
-	"schema_core_template_remove": {
-		Name:        "schema core template remove",
-		Description: "Unbind a schema template ID from a core type",
-		Args: []ArgMeta{
-			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
-			{Name: "template_id", Description: "Schema template ID", Required: true},
-		},
-		Examples: []string{
-			"rvn schema core date template remove daily_default --json",
-		},
-	},
-	"schema_core_template_default": {
-		Name:        "schema core template default",
-		Description: "Set or clear a core type default template ID",
-		Args: []ArgMeta{
-			{Name: "core_type", Description: "Core type name (date, page, section)", Required: true},
-			{Name: "template_id", Description: "Schema template ID (omit with --clear)", Required: false},
-		},
-		Flags: []FlagMeta{
-			{Name: "clear", Description: "Clear the core type default template", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn schema core date template default daily_default --json",
-			"rvn schema core date template default --clear --json",
+			"rvn schema template default interview_technical --type interview --json",
+			"rvn schema template default daily_default --core date --json",
+			"rvn schema template default --type interview --clear --json",
 		},
 	},
 	"set": {
 		Name:        "set",
+		Use:         "set <object-id> <field=value>...",
 		Description: "Set frontmatter fields on an object",
 		LongDesc: `Set one or more frontmatter fields on an existing object.
 
@@ -1508,12 +1482,12 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 	},
 	"update": {
 		Name:        "update",
+		Use:         "update <trait_id> <new_value>",
 		Description: "Update a trait's value",
 		LongDesc: `Update the value of a trait annotation.
 
 Trait IDs look like "path/file.md:trait:N" and can be obtained via:
   - rvn query "trait:todo" --ids
-  - rvn last <nums>
 
 Bulk operations:
 Use --stdin to read trait IDs from stdin (one per line).
@@ -1636,18 +1610,6 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 			"Navigate to past daily notes",
 		},
 	},
-	"untyped": {
-		Name:        "untyped",
-		Description: "List pages without an explicit type",
-		LongDesc:    `Lists all markdown files that don't have an explicit type in their frontmatter (fallback to 'page' type).`,
-		Examples: []string{
-			"rvn untyped --json",
-		},
-		UseCases: []string{
-			"Find notes that need to be typed",
-			"Identify pages that could benefit from schema",
-		},
-	},
 	"config": {
 		Name:        "config",
 		Description: "Manage global config.toml settings",
@@ -1733,6 +1695,7 @@ Use 'config unset' to clear fields.`,
 	},
 	"vault": {
 		Name:        "vault",
+		Use:         "vault [subcommand]",
 		Description: "Manage configured vaults and active selection",
 		LongDesc: `Manage configured vaults and active selection.
 
@@ -1743,6 +1706,7 @@ The default vault is stored in config.toml and used as fallback.`,
 			"rvn vault list --json",
 			"rvn vault current --json",
 			"rvn vault path --json",
+			"rvn vault stats --json",
 			"rvn vault add work /Users/you/work-notes --json",
 			"rvn vault use work --json",
 			"rvn vault pin personal --json",
@@ -1775,6 +1739,13 @@ The default vault is stored in config.toml and used as fallback.`,
 		Description: "Print the resolved vault directory path",
 		Examples: []string{
 			"rvn vault path --json",
+		},
+	},
+	"vault_stats": {
+		Name:        "vault stats",
+		Description: "Show vault statistics",
+		Examples: []string{
+			"rvn vault stats --json",
 		},
 	},
 	"vault_use": {
@@ -1857,6 +1828,7 @@ Safety checks:
 	},
 	"open": {
 		Name:        "open",
+		Use:         "open [reference]",
 		Description: "Open a file in your editor",
 		LongDesc: `Opens a file in your configured editor.
 
@@ -2276,42 +2248,6 @@ Preview is returned by default. Use --confirm to apply removal.`,
 		UseCases: []string{
 			"Verify skill install roots and installed skill presence",
 			"Debug target-specific skill path resolution",
-		},
-	},
-	"last": {
-		Name:        "last",
-		Description: "Show or select results from the last query",
-		LongDesc: `Show or select results from the most recent query.
-
-Without arguments, displays all results from the last query with their numbers.
-With number arguments, outputs the selected IDs for piping to other commands.
-
-Number formats:
-  1         Single result
-  1,3,5     Multiple results (comma-separated)  
-  1-5       Range of results
-  1,3-5,7   Mixed format
-
-The last query is saved to .raven/last-query.json whenever you run a query.
-Results include a 'num' field that can be used to reference specific items.
-
-With --apply, applies an operation directly to selected results without piping.`,
-		Args: []ArgMeta{
-			{Name: "nums", Description: "Result numbers to select (e.g., '1,3,5' or '1-5')", Required: false},
-		},
-		Flags: []FlagMeta{
-			{Name: "apply", Description: "Apply an operation to selected results (e.g., 'update done')", Type: FlagTypeString},
-			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn last --json",
-			"rvn last 1,3 --json",
-			"rvn last 1-5 --apply \"update done\" --confirm --json",
-		},
-		UseCases: []string{
-			"View results from the most recent query",
-			"Select specific items from query results for bulk operations",
-			"Mark specific todos done without re-running the query",
 		},
 	},
 	"resolve": {

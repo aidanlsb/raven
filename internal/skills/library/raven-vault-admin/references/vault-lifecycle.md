@@ -24,10 +24,10 @@ Use `--pin` when the newly added vault should become `default_vault`.
 
 ```bash
 rvn vault path --json
-rvn path --json
+rvn vault stats --json
 ```
 
-Both are useful when debugging which vault a command resolved to.
+Use `vault path` to confirm resolution and `vault stats` to confirm you are pointed at the expected index.
 
 ## Global config lifecycle
 

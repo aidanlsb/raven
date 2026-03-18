@@ -121,7 +121,7 @@ func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
 	if templateID != "" {
 		templateFile, err := schema.ResolveTypeTemplateFile(sch, "date", templateID)
 		if err != nil {
-			return nil, newError(CodeInvalidInput, err.Error(), "Use `rvn schema core date template list` to see available template IDs", err)
+			return nil, newError(CodeInvalidInput, err.Error(), "Use `rvn schema template list --core date` to see available template IDs", err)
 		}
 		created, err = pages.CreateDailyNoteWithTemplate(
 			req.VaultPath,

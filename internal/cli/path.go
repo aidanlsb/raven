@@ -17,22 +17,6 @@ func outputVaultPath(path string) error {
 	return nil
 }
 
-var pathCmd = &cobra.Command{
-	Use:   "path",
-	Short: "Print the resolved vault directory path",
-	Long: `Prints the configured vault directory path.
-
-Useful for shell integration:
-  cd $(rvn path)
-
-Or add an alias to your ~/.zshrc:
-  alias cdv='cd $(rvn path)'`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return outputVaultPath(getVaultPath())
-	},
-}
-
 var vaultPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Print the resolved vault directory path",
@@ -47,8 +31,4 @@ explicit --vault-path, then --vault, then active/default config.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return outputVaultPath(getVaultPath())
 	},
-}
-
-func init() {
-	rootCmd.AddCommand(pathCmd)
 }

@@ -34,8 +34,6 @@ var searchCmd = &cobra.Command{
 			return fmt.Errorf("search failed: %w", err)
 		}
 
-		readsvc.SaveSearchResults(vaultPath, query, results)
-
 		// Output results
 		if jsonOutput {
 			outputSuccess(map[string]interface{}{

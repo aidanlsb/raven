@@ -15,14 +15,9 @@ coverage:
     - schema template get
     - schema template set
     - schema template remove
-    - schema type template list
-    - schema type template set
-    - schema type template remove
-    - schema type template default
-    - schema core template list
-    - schema core template set
-    - schema core template remove
-    - schema core template default
+    - schema template bind
+    - schema template unbind
+    - schema template default
 execution:
   preferred_transport: cli
   cli_binary: rvn

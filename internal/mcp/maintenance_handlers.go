@@ -45,23 +45,6 @@ func (s *Server) callDirectStats(args map[string]interface{}) (string, bool) {
 	}, nil), false
 }
 
-func (s *Server) callDirectUntyped(args map[string]interface{}) (string, bool) {
-	vaultPath, err := s.resolveVaultPath()
-	if err != nil {
-		return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true
-	}
-
-	pages, svcErr := maintsvc.Untyped(vaultPath)
-	if svcErr != nil {
-		return mapDirectMaintSvcError(svcErr)
-	}
-
-	return successEnvelope(map[string]interface{}{
-		"count": len(pages),
-		"items": pages,
-	}, nil), false
-}
-
 func (s *Server) callDirectVersion(args map[string]interface{}) (string, bool) {
 	info := maintsvc.CurrentVersionInfoFromExecutable(s.executable)
 	return successEnvelope(map[string]interface{}{

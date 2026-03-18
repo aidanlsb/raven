@@ -11,7 +11,7 @@ type Result interface {
 
 // Numbered wraps any Result with a 1-indexed number for user reference.
 // This is used by commands that return lists (query, backlinks, search)
-// to enable selection via `rvn last 1,3,5`.
+// to preserve numbered result output in CLI and MCP responses.
 type Numbered[T Result] struct {
 	// Num is the 1-indexed result number for user reference.
 	Num int `json:"num"`

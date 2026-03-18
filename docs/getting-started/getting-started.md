@@ -38,7 +38,7 @@ cd ~/notes
 Quick sanity check:
 
 ```bash
-rvn stats
+rvn vault stats
 rvn schema types
 ```
 

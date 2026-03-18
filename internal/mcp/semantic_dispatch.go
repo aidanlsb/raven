@@ -3,193 +3,178 @@ package mcp
 type semanticOp string
 
 const (
-	semanticObjectCreate              semanticOp = "object.create"
-	semanticObjectUpsert              semanticOp = "object.upsert"
-	semanticObjectAppend              semanticOp = "object.append"
-	semanticObjectSetFields           semanticOp = "object.set_fields"
-	semanticObjectDelete              semanticOp = "object.delete"
-	semanticObjectMove                semanticOp = "object.move"
-	semanticObjectReclassify          semanticOp = "object.reclassify"
-	semanticObjectImport              semanticOp = "object.import"
-	semanticObjectEdit                semanticOp = "object.edit"
-	semanticTraitUpdate               semanticOp = "trait.update"
-	semanticVaultInit                 semanticOp = "vault.init"
-	semanticVaultReindex              semanticOp = "vault.reindex"
-	semanticVaultCheck                semanticOp = "vault.check"
-	semanticVaultStats                semanticOp = "vault.stats"
-	semanticVaultUntyped              semanticOp = "vault.untyped"
-	semanticVaultList                 semanticOp = "vault.list"
-	semanticVaultCurrent              semanticOp = "vault.current"
-	semanticVaultUse                  semanticOp = "vault.use"
-	semanticVaultClear                semanticOp = "vault.clear"
-	semanticVaultPin                  semanticOp = "vault.pin"
-	semanticVaultAdd                  semanticOp = "vault.add"
-	semanticVaultRemove               semanticOp = "vault.remove"
-	semanticVaultPath                 semanticOp = "vault.path"
-	semanticConfigShow                semanticOp = "config.show"
-	semanticConfigInit                semanticOp = "config.init"
-	semanticConfigSet                 semanticOp = "config.set"
-	semanticConfigUnset               semanticOp = "config.unset"
-	semanticDaily                     semanticOp = "date.daily"
-	semanticDate                      semanticOp = "date.hub"
-	semanticLast                      semanticOp = "read.last"
-	semanticOpen                      semanticOp = "read.open"
-	semanticQueryAdd                  semanticOp = "query.add_saved"
-	semanticQueryRemove               semanticOp = "query.remove_saved"
-	semanticDocsBrowse                semanticOp = "docs.browse"
-	semanticDocsFetch                 semanticOp = "docs.fetch"
-	semanticDocsList                  semanticOp = "docs.list"
-	semanticDocsSearch                semanticOp = "docs.search"
-	semanticSkillList                 semanticOp = "skill.list"
-	semanticSkillInstall              semanticOp = "skill.install"
-	semanticSkillRemove               semanticOp = "skill.remove"
-	semanticSkillDoctor               semanticOp = "skill.doctor"
-	semanticReadSearch                semanticOp = "read.search"
-	semanticReadFile                  semanticOp = "read.file"
-	semanticReadBacklinks             semanticOp = "read.backlinks"
-	semanticReadOutlinks              semanticOp = "read.outlinks"
-	semanticReadResolve               semanticOp = "read.resolve"
-	semanticReadQuery                 semanticOp = "read.query"
-	semanticSchemaAddType             semanticOp = "schema.add_type"
-	semanticSchemaIntrospect          semanticOp = "schema.introspect"
-	semanticSchemaAddTrait            semanticOp = "schema.add_trait"
-	semanticSchemaAddField            semanticOp = "schema.add_field"
-	semanticSchemaValidate            semanticOp = "schema.validate"
-	semanticSchemaUpdateType          semanticOp = "schema.update_type"
-	semanticSchemaUpdateTrait         semanticOp = "schema.update_trait"
-	semanticSchemaUpdateField         semanticOp = "schema.update_field"
-	semanticSchemaRemoveType          semanticOp = "schema.remove_type"
-	semanticSchemaRemoveTrait         semanticOp = "schema.remove_trait"
-	semanticSchemaRemoveField         semanticOp = "schema.remove_field"
-	semanticSchemaRenameField         semanticOp = "schema.rename_field"
-	semanticSchemaRenameType          semanticOp = "schema.rename_type"
-	semanticSchemaTemplateList        semanticOp = "schema.template_list"
-	semanticSchemaTemplateGet         semanticOp = "schema.template_get"
-	semanticSchemaTemplateSet         semanticOp = "schema.template_set"
-	semanticSchemaTemplateRemove      semanticOp = "schema.template_remove"
-	semanticSchemaTypeTemplateList    semanticOp = "schema.type_template_list"
-	semanticSchemaTypeTemplateSet     semanticOp = "schema.type_template_set"
-	semanticSchemaTypeTemplateRemove  semanticOp = "schema.type_template_remove"
-	semanticSchemaTypeTemplateDefault semanticOp = "schema.type_template_default"
-	semanticSchemaCoreTemplateList    semanticOp = "schema.core_template_list"
-	semanticSchemaCoreTemplateSet     semanticOp = "schema.core_template_set"
-	semanticSchemaCoreTemplateRemove  semanticOp = "schema.core_template_remove"
-	semanticSchemaCoreTemplateDefault semanticOp = "schema.core_template_default"
-	semanticTemplateList              semanticOp = "template.list"
-	semanticTemplateWrite             semanticOp = "template.write"
-	semanticTemplateDelete            semanticOp = "template.delete"
-	semanticWorkflowList              semanticOp = "workflow.list"
-	semanticWorkflowAdd               semanticOp = "workflow.add"
-	semanticWorkflowScaffold          semanticOp = "workflow.scaffold"
-	semanticWorkflowRemove            semanticOp = "workflow.remove"
-	semanticWorkflowShow              semanticOp = "workflow.show"
-	semanticWorkflowValidate          semanticOp = "workflow.validate"
-	semanticWorkflowStepAdd           semanticOp = "workflow.step_add"
-	semanticWorkflowStepUpdate        semanticOp = "workflow.step_update"
-	semanticWorkflowStepRemove        semanticOp = "workflow.step_remove"
-	semanticWorkflowRun               semanticOp = "workflow.run"
-	semanticWorkflowContinue          semanticOp = "workflow.continue"
-	semanticWorkflowRunsList          semanticOp = "workflow.runs_list"
-	semanticWorkflowRunsStep          semanticOp = "workflow.runs_step"
-	semanticWorkflowRunsPrune         semanticOp = "workflow.runs_prune"
-	semanticSystemVersion             semanticOp = "system.version"
+	semanticObjectCreate          semanticOp = "object.create"
+	semanticObjectUpsert          semanticOp = "object.upsert"
+	semanticObjectAppend          semanticOp = "object.append"
+	semanticObjectSetFields       semanticOp = "object.set_fields"
+	semanticObjectDelete          semanticOp = "object.delete"
+	semanticObjectMove            semanticOp = "object.move"
+	semanticObjectReclassify      semanticOp = "object.reclassify"
+	semanticObjectImport          semanticOp = "object.import"
+	semanticObjectEdit            semanticOp = "object.edit"
+	semanticTraitUpdate           semanticOp = "trait.update"
+	semanticVaultInit             semanticOp = "vault.init"
+	semanticVaultReindex          semanticOp = "vault.reindex"
+	semanticVaultCheck            semanticOp = "vault.check"
+	semanticVaultStats            semanticOp = "vault.stats"
+	semanticVaultList             semanticOp = "vault.list"
+	semanticVaultCurrent          semanticOp = "vault.current"
+	semanticVaultUse              semanticOp = "vault.use"
+	semanticVaultClear            semanticOp = "vault.clear"
+	semanticVaultPin              semanticOp = "vault.pin"
+	semanticVaultAdd              semanticOp = "vault.add"
+	semanticVaultRemove           semanticOp = "vault.remove"
+	semanticVaultPath             semanticOp = "vault.path"
+	semanticConfigShow            semanticOp = "config.show"
+	semanticConfigInit            semanticOp = "config.init"
+	semanticConfigSet             semanticOp = "config.set"
+	semanticConfigUnset           semanticOp = "config.unset"
+	semanticDaily                 semanticOp = "date.daily"
+	semanticDate                  semanticOp = "date.hub"
+	semanticOpen                  semanticOp = "read.open"
+	semanticQueryAdd              semanticOp = "query.add_saved"
+	semanticQueryRemove           semanticOp = "query.remove_saved"
+	semanticDocsBrowse            semanticOp = "docs.browse"
+	semanticDocsFetch             semanticOp = "docs.fetch"
+	semanticDocsList              semanticOp = "docs.list"
+	semanticDocsSearch            semanticOp = "docs.search"
+	semanticSkillList             semanticOp = "skill.list"
+	semanticSkillInstall          semanticOp = "skill.install"
+	semanticSkillRemove           semanticOp = "skill.remove"
+	semanticSkillDoctor           semanticOp = "skill.doctor"
+	semanticReadSearch            semanticOp = "read.search"
+	semanticReadFile              semanticOp = "read.file"
+	semanticReadBacklinks         semanticOp = "read.backlinks"
+	semanticReadOutlinks          semanticOp = "read.outlinks"
+	semanticReadResolve           semanticOp = "read.resolve"
+	semanticReadQuery             semanticOp = "read.query"
+	semanticSchemaAddType         semanticOp = "schema.add_type"
+	semanticSchemaIntrospect      semanticOp = "schema.introspect"
+	semanticSchemaAddTrait        semanticOp = "schema.add_trait"
+	semanticSchemaAddField        semanticOp = "schema.add_field"
+	semanticSchemaValidate        semanticOp = "schema.validate"
+	semanticSchemaUpdateType      semanticOp = "schema.update_type"
+	semanticSchemaUpdateTrait     semanticOp = "schema.update_trait"
+	semanticSchemaUpdateField     semanticOp = "schema.update_field"
+	semanticSchemaRemoveType      semanticOp = "schema.remove_type"
+	semanticSchemaRemoveTrait     semanticOp = "schema.remove_trait"
+	semanticSchemaRemoveField     semanticOp = "schema.remove_field"
+	semanticSchemaRenameField     semanticOp = "schema.rename_field"
+	semanticSchemaRenameType      semanticOp = "schema.rename_type"
+	semanticSchemaTemplateList    semanticOp = "schema.template_list"
+	semanticSchemaTemplateGet     semanticOp = "schema.template_get"
+	semanticSchemaTemplateSet     semanticOp = "schema.template_set"
+	semanticSchemaTemplateRemove  semanticOp = "schema.template_remove"
+	semanticSchemaTemplateBind    semanticOp = "schema.template_bind"
+	semanticSchemaTemplateUnbind  semanticOp = "schema.template_unbind"
+	semanticSchemaTemplateDefault semanticOp = "schema.template_default"
+	semanticTemplateList          semanticOp = "template.list"
+	semanticTemplateWrite         semanticOp = "template.write"
+	semanticTemplateDelete        semanticOp = "template.delete"
+	semanticWorkflowList          semanticOp = "workflow.list"
+	semanticWorkflowAdd           semanticOp = "workflow.add"
+	semanticWorkflowScaffold      semanticOp = "workflow.scaffold"
+	semanticWorkflowRemove        semanticOp = "workflow.remove"
+	semanticWorkflowShow          semanticOp = "workflow.show"
+	semanticWorkflowValidate      semanticOp = "workflow.validate"
+	semanticWorkflowStepAdd       semanticOp = "workflow.step_add"
+	semanticWorkflowStepUpdate    semanticOp = "workflow.step_update"
+	semanticWorkflowStepRemove    semanticOp = "workflow.step_remove"
+	semanticWorkflowRun           semanticOp = "workflow.run"
+	semanticWorkflowContinue      semanticOp = "workflow.continue"
+	semanticWorkflowRunsList      semanticOp = "workflow.runs_list"
+	semanticWorkflowRunsStep      semanticOp = "workflow.runs_step"
+	semanticWorkflowRunsPrune     semanticOp = "workflow.runs_prune"
+	semanticSystemVersion         semanticOp = "system.version"
 )
 
 var compatibilityToolSemanticMap = map[string]semanticOp{
-	"raven_new":                          semanticObjectCreate,
-	"raven_upsert":                       semanticObjectUpsert,
-	"raven_add":                          semanticObjectAppend,
-	"raven_set":                          semanticObjectSetFields,
-	"raven_delete":                       semanticObjectDelete,
-	"raven_move":                         semanticObjectMove,
-	"raven_reclassify":                   semanticObjectReclassify,
-	"raven_import":                       semanticObjectImport,
-	"raven_edit":                         semanticObjectEdit,
-	"raven_update":                       semanticTraitUpdate,
-	"raven_init":                         semanticVaultInit,
-	"raven_reindex":                      semanticVaultReindex,
-	"raven_check":                        semanticVaultCheck,
-	"raven_stats":                        semanticVaultStats,
-	"raven_untyped":                      semanticVaultUntyped,
-	"raven_vault":                        semanticVaultList,
-	"raven_vault_list":                   semanticVaultList,
-	"raven_vault_current":                semanticVaultCurrent,
-	"raven_vault_use":                    semanticVaultUse,
-	"raven_vault_clear":                  semanticVaultClear,
-	"raven_vault_pin":                    semanticVaultPin,
-	"raven_vault_add":                    semanticVaultAdd,
-	"raven_vault_remove":                 semanticVaultRemove,
-	"raven_vault_path":                   semanticVaultPath,
-	"raven_path":                         semanticVaultPath,
-	"raven_config":                       semanticConfigShow,
-	"raven_config_show":                  semanticConfigShow,
-	"raven_config_init":                  semanticConfigInit,
-	"raven_config_set":                   semanticConfigSet,
-	"raven_config_unset":                 semanticConfigUnset,
-	"raven_version":                      semanticSystemVersion,
-	"raven_daily":                        semanticDaily,
-	"raven_date":                         semanticDate,
-	"raven_last":                         semanticLast,
-	"raven_open":                         semanticOpen,
-	"raven_query_add":                    semanticQueryAdd,
-	"raven_query_remove":                 semanticQueryRemove,
-	"raven_docs":                         semanticDocsBrowse,
-	"raven_docs_fetch":                   semanticDocsFetch,
-	"raven_docs_list":                    semanticDocsList,
-	"raven_docs_search":                  semanticDocsSearch,
-	"raven_skill_list":                   semanticSkillList,
-	"raven_skill_install":                semanticSkillInstall,
-	"raven_skill_remove":                 semanticSkillRemove,
-	"raven_skill_doctor":                 semanticSkillDoctor,
-	"raven_search":                       semanticReadSearch,
-	"raven_read":                         semanticReadFile,
-	"raven_backlinks":                    semanticReadBacklinks,
-	"raven_outlinks":                     semanticReadOutlinks,
-	"raven_resolve":                      semanticReadResolve,
-	"raven_query":                        semanticReadQuery,
-	"raven_schema":                       semanticSchemaIntrospect,
-	"raven_schema_add_type":              semanticSchemaAddType,
-	"raven_schema_add_trait":             semanticSchemaAddTrait,
-	"raven_schema_add_field":             semanticSchemaAddField,
-	"raven_schema_validate":              semanticSchemaValidate,
-	"raven_schema_update_type":           semanticSchemaUpdateType,
-	"raven_schema_update_trait":          semanticSchemaUpdateTrait,
-	"raven_schema_update_field":          semanticSchemaUpdateField,
-	"raven_schema_remove_type":           semanticSchemaRemoveType,
-	"raven_schema_remove_trait":          semanticSchemaRemoveTrait,
-	"raven_schema_remove_field":          semanticSchemaRemoveField,
-	"raven_schema_rename_field":          semanticSchemaRenameField,
-	"raven_schema_rename_type":           semanticSchemaRenameType,
-	"raven_schema_template_list":         semanticSchemaTemplateList,
-	"raven_schema_template_get":          semanticSchemaTemplateGet,
-	"raven_schema_template_set":          semanticSchemaTemplateSet,
-	"raven_schema_template_remove":       semanticSchemaTemplateRemove,
-	"raven_schema_type_template_list":    semanticSchemaTypeTemplateList,
-	"raven_schema_type_template_set":     semanticSchemaTypeTemplateSet,
-	"raven_schema_type_template_remove":  semanticSchemaTypeTemplateRemove,
-	"raven_schema_type_template_default": semanticSchemaTypeTemplateDefault,
-	"raven_schema_core_template_list":    semanticSchemaCoreTemplateList,
-	"raven_schema_core_template_set":     semanticSchemaCoreTemplateSet,
-	"raven_schema_core_template_remove":  semanticSchemaCoreTemplateRemove,
-	"raven_schema_core_template_default": semanticSchemaCoreTemplateDefault,
-	"raven_template":                     semanticTemplateList,
-	"raven_template_list":                semanticTemplateList,
-	"raven_template_write":               semanticTemplateWrite,
-	"raven_template_delete":              semanticTemplateDelete,
-	"raven_workflow_list":                semanticWorkflowList,
-	"raven_workflow_add":                 semanticWorkflowAdd,
-	"raven_workflow_scaffold":            semanticWorkflowScaffold,
-	"raven_workflow_remove":              semanticWorkflowRemove,
-	"raven_workflow_show":                semanticWorkflowShow,
-	"raven_workflow_validate":            semanticWorkflowValidate,
-	"raven_workflow_step_add":            semanticWorkflowStepAdd,
-	"raven_workflow_step_update":         semanticWorkflowStepUpdate,
-	"raven_workflow_step_remove":         semanticWorkflowStepRemove,
-	"raven_workflow_run":                 semanticWorkflowRun,
-	"raven_workflow_continue":            semanticWorkflowContinue,
-	"raven_workflow_runs_list":           semanticWorkflowRunsList,
-	"raven_workflow_runs_step":           semanticWorkflowRunsStep,
-	"raven_workflow_runs_prune":          semanticWorkflowRunsPrune,
+	"raven_new":                     semanticObjectCreate,
+	"raven_upsert":                  semanticObjectUpsert,
+	"raven_add":                     semanticObjectAppend,
+	"raven_set":                     semanticObjectSetFields,
+	"raven_delete":                  semanticObjectDelete,
+	"raven_move":                    semanticObjectMove,
+	"raven_reclassify":              semanticObjectReclassify,
+	"raven_import":                  semanticObjectImport,
+	"raven_edit":                    semanticObjectEdit,
+	"raven_update":                  semanticTraitUpdate,
+	"raven_init":                    semanticVaultInit,
+	"raven_reindex":                 semanticVaultReindex,
+	"raven_check":                   semanticVaultCheck,
+	"raven_vault_stats":             semanticVaultStats,
+	"raven_vault":                   semanticVaultList,
+	"raven_vault_list":              semanticVaultList,
+	"raven_vault_current":           semanticVaultCurrent,
+	"raven_vault_use":               semanticVaultUse,
+	"raven_vault_clear":             semanticVaultClear,
+	"raven_vault_pin":               semanticVaultPin,
+	"raven_vault_add":               semanticVaultAdd,
+	"raven_vault_remove":            semanticVaultRemove,
+	"raven_vault_path":              semanticVaultPath,
+	"raven_config":                  semanticConfigShow,
+	"raven_config_show":             semanticConfigShow,
+	"raven_config_init":             semanticConfigInit,
+	"raven_config_set":              semanticConfigSet,
+	"raven_config_unset":            semanticConfigUnset,
+	"raven_version":                 semanticSystemVersion,
+	"raven_daily":                   semanticDaily,
+	"raven_date":                    semanticDate,
+	"raven_open":                    semanticOpen,
+	"raven_query_add":               semanticQueryAdd,
+	"raven_query_remove":            semanticQueryRemove,
+	"raven_docs":                    semanticDocsBrowse,
+	"raven_docs_fetch":              semanticDocsFetch,
+	"raven_docs_list":               semanticDocsList,
+	"raven_docs_search":             semanticDocsSearch,
+	"raven_skill_list":              semanticSkillList,
+	"raven_skill_install":           semanticSkillInstall,
+	"raven_skill_remove":            semanticSkillRemove,
+	"raven_skill_doctor":            semanticSkillDoctor,
+	"raven_search":                  semanticReadSearch,
+	"raven_read":                    semanticReadFile,
+	"raven_backlinks":               semanticReadBacklinks,
+	"raven_outlinks":                semanticReadOutlinks,
+	"raven_resolve":                 semanticReadResolve,
+	"raven_query":                   semanticReadQuery,
+	"raven_schema":                  semanticSchemaIntrospect,
+	"raven_schema_add_type":         semanticSchemaAddType,
+	"raven_schema_add_trait":        semanticSchemaAddTrait,
+	"raven_schema_add_field":        semanticSchemaAddField,
+	"raven_schema_validate":         semanticSchemaValidate,
+	"raven_schema_update_type":      semanticSchemaUpdateType,
+	"raven_schema_update_trait":     semanticSchemaUpdateTrait,
+	"raven_schema_update_field":     semanticSchemaUpdateField,
+	"raven_schema_remove_type":      semanticSchemaRemoveType,
+	"raven_schema_remove_trait":     semanticSchemaRemoveTrait,
+	"raven_schema_remove_field":     semanticSchemaRemoveField,
+	"raven_schema_rename_field":     semanticSchemaRenameField,
+	"raven_schema_rename_type":      semanticSchemaRenameType,
+	"raven_schema_template_list":    semanticSchemaTemplateList,
+	"raven_schema_template_get":     semanticSchemaTemplateGet,
+	"raven_schema_template_set":     semanticSchemaTemplateSet,
+	"raven_schema_template_remove":  semanticSchemaTemplateRemove,
+	"raven_schema_template_bind":    semanticSchemaTemplateBind,
+	"raven_schema_template_unbind":  semanticSchemaTemplateUnbind,
+	"raven_schema_template_default": semanticSchemaTemplateDefault,
+	"raven_template":                semanticTemplateList,
+	"raven_template_list":           semanticTemplateList,
+	"raven_template_write":          semanticTemplateWrite,
+	"raven_template_delete":         semanticTemplateDelete,
+	"raven_workflow_list":           semanticWorkflowList,
+	"raven_workflow_add":            semanticWorkflowAdd,
+	"raven_workflow_scaffold":       semanticWorkflowScaffold,
+	"raven_workflow_remove":         semanticWorkflowRemove,
+	"raven_workflow_show":           semanticWorkflowShow,
+	"raven_workflow_validate":       semanticWorkflowValidate,
+	"raven_workflow_step_add":       semanticWorkflowStepAdd,
+	"raven_workflow_step_update":    semanticWorkflowStepUpdate,
+	"raven_workflow_step_remove":    semanticWorkflowStepRemove,
+	"raven_workflow_run":            semanticWorkflowRun,
+	"raven_workflow_continue":       semanticWorkflowContinue,
+	"raven_workflow_runs_list":      semanticWorkflowRunsList,
+	"raven_workflow_runs_step":      semanticWorkflowRunsStep,
+	"raven_workflow_runs_prune":     semanticWorkflowRunsPrune,
 }
 
 func semanticHandlerExists(op semanticOp) bool {
@@ -208,7 +193,6 @@ func semanticHandlerExists(op semanticOp) bool {
 		semanticVaultReindex,
 		semanticVaultCheck,
 		semanticVaultStats,
-		semanticVaultUntyped,
 		semanticVaultList,
 		semanticVaultCurrent,
 		semanticVaultUse,
@@ -223,7 +207,6 @@ func semanticHandlerExists(op semanticOp) bool {
 		semanticConfigUnset,
 		semanticDaily,
 		semanticDate,
-		semanticLast,
 		semanticOpen,
 		semanticQueryAdd,
 		semanticQueryRemove,
@@ -258,14 +241,9 @@ func semanticHandlerExists(op semanticOp) bool {
 		semanticSchemaTemplateGet,
 		semanticSchemaTemplateSet,
 		semanticSchemaTemplateRemove,
-		semanticSchemaTypeTemplateList,
-		semanticSchemaTypeTemplateSet,
-		semanticSchemaTypeTemplateRemove,
-		semanticSchemaTypeTemplateDefault,
-		semanticSchemaCoreTemplateList,
-		semanticSchemaCoreTemplateSet,
-		semanticSchemaCoreTemplateRemove,
-		semanticSchemaCoreTemplateDefault,
+		semanticSchemaTemplateBind,
+		semanticSchemaTemplateUnbind,
+		semanticSchemaTemplateDefault,
 		semanticTemplateList,
 		semanticTemplateWrite,
 		semanticTemplateDelete,
@@ -334,9 +312,6 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 	case semanticVaultStats:
 		out, isErr := s.callDirectStats(args)
 		return out, isErr, true
-	case semanticVaultUntyped:
-		out, isErr := s.callDirectUntyped(args)
-		return out, isErr, true
 	case semanticVaultList:
 		out, isErr := s.callDirectVaultList(args)
 		return out, isErr, true
@@ -381,9 +356,6 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 		return out, isErr, true
 	case semanticDate:
 		out, isErr := s.callDirectDate(args)
-		return out, isErr, true
-	case semanticLast:
-		out, isErr := s.callDirectLast(args)
 		return out, isErr, true
 	case semanticOpen:
 		out, isErr := s.callDirectOpen(args)
@@ -487,29 +459,14 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 	case semanticSchemaTemplateRemove:
 		out, isErr := s.callDirectSchemaTemplateRemove(args)
 		return out, isErr, true
-	case semanticSchemaTypeTemplateList:
-		out, isErr := s.callDirectSchemaTypeTemplateList(args)
+	case semanticSchemaTemplateBind:
+		out, isErr := s.callDirectSchemaTemplateBind(args)
 		return out, isErr, true
-	case semanticSchemaTypeTemplateSet:
-		out, isErr := s.callDirectSchemaTypeTemplateSet(args)
+	case semanticSchemaTemplateUnbind:
+		out, isErr := s.callDirectSchemaTemplateUnbind(args)
 		return out, isErr, true
-	case semanticSchemaTypeTemplateRemove:
-		out, isErr := s.callDirectSchemaTypeTemplateRemove(args)
-		return out, isErr, true
-	case semanticSchemaTypeTemplateDefault:
-		out, isErr := s.callDirectSchemaTypeTemplateDefault(args)
-		return out, isErr, true
-	case semanticSchemaCoreTemplateList:
-		out, isErr := s.callDirectSchemaCoreTemplateList(args)
-		return out, isErr, true
-	case semanticSchemaCoreTemplateSet:
-		out, isErr := s.callDirectSchemaCoreTemplateSet(args)
-		return out, isErr, true
-	case semanticSchemaCoreTemplateRemove:
-		out, isErr := s.callDirectSchemaCoreTemplateRemove(args)
-		return out, isErr, true
-	case semanticSchemaCoreTemplateDefault:
-		out, isErr := s.callDirectSchemaCoreTemplateDefault(args)
+	case semanticSchemaTemplateDefault:
+		out, isErr := s.callDirectSchemaTemplateDefault(args)
 		return out, isErr, true
 	case semanticTemplateList:
 		out, isErr := s.callDirectTemplateList(args)

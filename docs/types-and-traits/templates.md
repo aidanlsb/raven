@@ -26,7 +26,7 @@ Templates are file-backed only.
 - Template definitions live in `schema.yaml` under top-level `templates:`.
 - Types opt into template IDs via `types.<type>.templates`.
 - A type can set `default_template`; if unset, creation proceeds without a template.
-- Built-in core types (for example `date`) are configured with `rvn schema core ... template ...`.
+- Built-in core types (for example `date`) are configured with `rvn schema template ... --core ...`.
 
 Example schema:
 
@@ -42,7 +42,7 @@ types:
 ```
 
 Core-type template bindings (for built-ins like `date`) are managed via
-`rvn schema core ... template ...` commands rather than under a user-defined
+`rvn schema template ... --core ...` rather than under a user-defined
 `types.<name>` block.
 
 ## Quick start: type template
@@ -76,8 +76,8 @@ rvn schema template set meeting_standard --file templates/meeting/standard.md
 ### 4) Bind it to the type and set default
 
 ```bash
-rvn schema type meeting template set meeting_standard
-rvn schema type meeting template default meeting_standard
+rvn schema template bind meeting_standard --type meeting
+rvn schema template default meeting_standard --type meeting
 ```
 
 ### 5) Smoke test object creation
@@ -104,8 +104,8 @@ rvn template write daily.md --content "# Daily Note
 
 ```bash
 rvn schema template set daily_default --file templates/daily.md
-rvn schema core date template set daily_default
-rvn schema core date template default daily_default
+rvn schema template bind daily_default --core date
+rvn schema template default daily_default --core date
 ```
 
 ### 3) Create/open a daily note
@@ -135,18 +135,26 @@ rvn daily tomorrow
   Create or update a template definition.
 - `rvn schema template remove <template_id>`
   Remove a template definition (blocked if still bound to any type).
-- `rvn schema type <type_name> template list`
+- `rvn schema template list --type <type_name>`
   List template IDs bound to a type.
-- `rvn schema type <type_name> template set <template_id>`
+- `rvn schema template list --core <core_type>`
+  List template IDs bound to a core type.
+- `rvn schema template bind <template_id> --type <type_name>`
   Bind a template ID to a type.
-- `rvn schema type <type_name> template remove <template_id>`
+- `rvn schema template bind <template_id> --core <core_type>`
+  Bind a template ID to a core type.
+- `rvn schema template unbind <template_id> --type <type_name>`
   Unbind a template ID from a type.
-- `rvn schema type <type_name> template default <template_id>`
+- `rvn schema template unbind <template_id> --core <core_type>`
+  Unbind a template ID from a core type.
+- `rvn schema template default <template_id> --type <type_name>`
   Set default template for a type.
-- `rvn schema type <type_name> template default --clear`
+- `rvn schema template default <template_id> --core <core_type>`
+  Set default template for a core type.
+- `rvn schema template default --type <type_name> --clear`
   Clear default template for a type.
-- `rvn schema core <core_type> template list|set|remove|default`
-  Manage template bindings/default for built-in core types (for example `date`).
+- `rvn schema template default --core <core_type> --clear`
+  Clear default template for a core type.
 
 ## Important behavior
 
@@ -162,13 +170,13 @@ rvn daily tomorrow
 - `template file not found ...`
   Create the file with `rvn template write ...`, then run `rvn schema template set ... --file ...`.
 - `template '<id>' is still referenced by ...`
-  Unbind from types first using `rvn schema type <type> template remove <id>`.
+  Unbind first using `rvn schema template unbind <id> --type <type>` or `--core <core>`.
 - `template file "<path>" is referenced by schema templates: ...`
   Remove schema template definitions first (`rvn schema template remove <id>`) or use `rvn template delete ... --force`.
 
 ## Related docs
 
-- `reference/cli.md` for exact `schema template` and `schema type ... template` command details
+- `reference/cli.md` for exact `schema template` command details
 - `types-and-traits/schema.md` for `templates`, `types.<type>.templates`, and `default_template`
 - `reference/vault-config.md` for `directories.template`
 - `getting-started/configuration.md` for practical vault setup

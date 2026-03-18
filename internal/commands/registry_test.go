@@ -8,7 +8,7 @@ import (
 func TestRegistryHasRequiredCommands(t *testing.T) {
 	requiredCommands := []string{
 		"new", "add", "delete", "read", "move",
-		"query", "backlinks", "stats", "check", "date",
+		"query", "backlinks", "vault_stats", "check", "date",
 		"schema",
 	}
 
@@ -28,6 +28,15 @@ func TestRegistryMetadataComplete(t *testing.T) {
 			}
 			if meta.Description == "" {
 				t.Error("Command has empty Description")
+			}
+			if meta.Category == "" {
+				t.Error("Command has empty Category")
+			}
+			if meta.Access == "" {
+				t.Error("Command has empty Access")
+			}
+			if meta.Risk == "" {
+				t.Error("Command has empty Risk")
 			}
 
 			// Check args have names and descriptions
@@ -64,8 +73,8 @@ func TestCobraCommandGeneration(t *testing.T) {
 		t.Fatal("GenerateCobraCommand returned nil for 'query'")
 	}
 
-	if cmd.Use != "query <query_string>" {
-		t.Errorf("Use = %q, want 'query <query_string>'", cmd.Use)
+	if cmd.Use != "query <query_string|saved-query> [inputs...]" {
+		t.Errorf("Use = %q, want explicit query usage", cmd.Use)
 	}
 
 	// Check flag was added
@@ -77,13 +86,13 @@ func TestCobraCommandGeneration(t *testing.T) {
 
 // TestCobraCommandWithNoArgs verifies commands with no args work.
 func TestCobraCommandWithNoArgs(t *testing.T) {
-	cmd := GenerateCobraCommand("stats", nil)
+	cmd := GenerateCobraCommand("vault_stats", nil)
 	if cmd == nil {
-		t.Fatal("GenerateCobraCommand returned nil for 'stats'")
+		t.Fatal("GenerateCobraCommand returned nil for 'vault_stats'")
 	}
 
-	if cmd.Use != "stats" {
-		t.Errorf("Use = %q, want 'stats'", cmd.Use)
+	if cmd.Use != "vault stats" {
+		t.Errorf("Use = %q, want 'vault stats'", cmd.Use)
 	}
 }
 
@@ -97,6 +106,17 @@ func TestCobraCommandWithOptionalArgs(t *testing.T) {
 	// date has optional [date] arg
 	if cmd.Use != "date [date]" {
 		t.Errorf("Use = %q, want 'date [date]'", cmd.Use)
+	}
+}
+
+func TestCobraCommandUsesExplicitUsageWhenPresent(t *testing.T) {
+	cmd := GenerateCobraCommand("set", nil)
+	if cmd == nil {
+		t.Fatal("GenerateCobraCommand returned nil for 'set'")
+	}
+
+	if cmd.Use != "set <object-id> <field=value>..." {
+		t.Errorf("Use = %q, want explicit set usage", cmd.Use)
 	}
 }
 
