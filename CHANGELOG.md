@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.10] - 2026-03-20
+
+### Changed
+- MCP install/show client resolution now preserves explicit vault selection more reliably across CLI and generated client configs.
+
+### Fixed
+- Query `refs(...)` matching now tolerates rooted and unrooted object ID variants, which fixes missed results for project-linked refs when the index contains mixed forms.
+- Object queries using `has(trait:...)` now apply the full nested trait predicate instead of only `.value` filters.
+
 ## [v0.0.9] - 2026-03-18
 
 ### Changed
@@ -107,7 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.10...HEAD
+[v0.0.10]: https://github.com/aidanlsb/raven/compare/v0.0.9...v0.0.10
 [v0.0.9]: https://github.com/aidanlsb/raven/compare/v0.0.8...v0.0.9
 [v0.0.8]: https://github.com/aidanlsb/raven/compare/v0.0.7...v0.0.8
 [v0.0.7]: https://github.com/aidanlsb/raven/compare/v0.0.6...v0.0.7
