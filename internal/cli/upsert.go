@@ -72,6 +72,7 @@ var upsertCmd = &cobra.Command{
 			Content:          upsertContent,
 			FieldValues:      fieldValues,
 			TypedFieldValues: typedFieldValues,
+			VaultConfig:      vaultCfg,
 			Schema:           s,
 			ObjectsRoot:      vaultCfg.GetObjectsRoot(),
 			PagesRoot:        vaultCfg.GetPagesRoot(),

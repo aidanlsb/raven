@@ -3,6 +3,7 @@ package fieldmutation
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,8 +11,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/readsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -25,6 +29,12 @@ type UnknownFieldMutationError struct {
 	Unknown      []string
 	Allowed      []string
 	AllowedCount int
+}
+
+type RefValidationContext struct {
+	VaultPath    string
+	VaultConfig  *config.VaultConfig
+	ParseOptions *parser.ParseOptions
 }
 
 func (e *ValidationError) Error() string {
@@ -80,6 +90,7 @@ func PrepareValidatedFieldMutation(
 	updates map[string]string,
 	sch *schema.Schema,
 	allowedUnknown map[string]bool,
+	refCtx *RefValidationContext,
 ) (map[string]schema.FieldValue, map[string]string, []string, error) {
 	normalizedType := normalizeMutationType(objectType)
 	fieldDefs := fieldDefsForObjectType(sch, normalizedType)
@@ -90,7 +101,7 @@ func PrepareValidatedFieldMutation(
 		parsedUpdates[fieldName] = parseFieldValueToSchema(value)
 	}
 
-	validatedUpdates, warnings, err := PrepareValidatedFieldMutationValues(normalizedType, existingFields, parsedUpdates, sch, allowedUnknown)
+	validatedUpdates, warnings, err := PrepareValidatedFieldMutationValues(normalizedType, existingFields, parsedUpdates, sch, allowedUnknown, refCtx)
 	if err != nil {
 		return nil, nil, warnings, err
 	}
@@ -105,6 +116,7 @@ func PrepareValidatedFrontmatterMutation(
 	updates map[string]string,
 	sch *schema.Schema,
 	allowedUnknown map[string]bool,
+	refCtx *RefValidationContext,
 ) (string, map[string]string, []string, error) {
 	normalizedType := normalizeMutationType(objectType)
 	fieldDefs := fieldDefsForObjectType(sch, normalizedType)
@@ -114,7 +126,7 @@ func PrepareValidatedFrontmatterMutation(
 		typedUpdates[key] = parseFieldValueToSchema(value)
 	}
 
-	newContent, warnings, err := PrepareValidatedFrontmatterMutationValues(content, fm, normalizedType, typedUpdates, sch, allowedUnknown)
+	newContent, warnings, err := PrepareValidatedFrontmatterMutationValues(content, fm, normalizedType, typedUpdates, sch, allowedUnknown, refCtx)
 	if err != nil {
 		return "", nil, warnings, err
 	}
@@ -128,6 +140,7 @@ func PrepareValidatedFieldMutationValues(
 	updates map[string]schema.FieldValue,
 	sch *schema.Schema,
 	allowedUnknown map[string]bool,
+	refCtx *RefValidationContext,
 ) (map[string]schema.FieldValue, []string, error) {
 	normalizedType := normalizeMutationType(objectType)
 	fieldDefs := fieldDefsForObjectType(sch, normalizedType)
@@ -144,7 +157,7 @@ func PrepareValidatedFieldMutationValues(
 		merged[key] = value
 	}
 
-	if err := validateMergedFields(normalizedType, merged, sch); err != nil {
+	if err := validateMergedFields(normalizedType, merged, sch, refCtx); err != nil {
 		return nil, nil, err
 	}
 
@@ -158,6 +171,7 @@ func PrepareValidatedFrontmatterMutationValues(
 	updates map[string]schema.FieldValue,
 	sch *schema.Schema,
 	allowedUnknown map[string]bool,
+	refCtx *RefValidationContext,
 ) (string, []string, error) {
 	existingFields := make(map[string]schema.FieldValue)
 	if fm != nil && fm.Fields != nil {
@@ -166,7 +180,7 @@ func PrepareValidatedFrontmatterMutationValues(
 		}
 	}
 
-	validatedUpdates, warnings, err := PrepareValidatedFieldMutationValues(objectType, existingFields, updates, sch, allowedUnknown)
+	validatedUpdates, warnings, err := PrepareValidatedFieldMutationValues(objectType, existingFields, updates, sch, allowedUnknown, refCtx)
 	if err != nil {
 		return "", warnings, err
 	}
@@ -183,7 +197,7 @@ func PrepareValidatedFrontmatterMutationValues(
 	if updatedFM == nil {
 		return "", warnings, fmt.Errorf("file has no frontmatter after update")
 	}
-	if err := validateMergedFields(normalizeMutationType(objectType), updatedFM.Fields, sch); err != nil {
+	if err := validateMergedFields(normalizeMutationType(objectType), updatedFM.Fields, sch, refCtx); err != nil {
 		return "", warnings, err
 	}
 
@@ -519,7 +533,7 @@ func fieldNamesFromValueUpdates(updates map[string]schema.FieldValue) []string {
 	return names
 }
 
-func validateMergedFields(objectType string, fields map[string]schema.FieldValue, sch *schema.Schema) error {
+func validateMergedFields(objectType string, fields map[string]schema.FieldValue, sch *schema.Schema, refCtx *RefValidationContext) error {
 	if sch == nil {
 		return nil
 	}
@@ -531,6 +545,9 @@ func validateMergedFields(objectType string, fields map[string]schema.FieldValue
 
 	issues := schema.ValidateFields(fields, typeDef.Fields, sch)
 	if len(issues) == 0 {
+		issues = validateRefTargets(fields, typeDef.Fields, sch, refCtx)
+	}
+	if len(issues) == 0 {
 		return nil
 	}
 
@@ -538,6 +555,97 @@ func validateMergedFields(objectType string, fields map[string]schema.FieldValue
 		ObjectType: objectType,
 		Issues:     issues,
 	}
+}
+
+func validateRefTargets(
+	fields map[string]schema.FieldValue,
+	fieldDefs map[string]*schema.FieldDefinition,
+	sch *schema.Schema,
+	refCtx *RefValidationContext,
+) []schema.ValidationError {
+	if refCtx == nil || strings.TrimSpace(refCtx.VaultPath) == "" || refCtx.VaultConfig == nil {
+		return nil
+	}
+
+	rt := &readsvc.Runtime{
+		VaultPath: refCtx.VaultPath,
+		VaultCfg:  refCtx.VaultConfig,
+		Schema:    sch,
+	}
+
+	db, err := index.Open(refCtx.VaultPath)
+	if err == nil {
+		db.SetDailyDirectory(refCtx.VaultConfig.GetDailyDirectory())
+		rt.DB = db
+		defer db.Close()
+	}
+
+	parseOpts := refCtx.ParseOptions
+	if parseOpts == nil {
+		parseOpts = &parser.ParseOptions{
+			ObjectsRoot: refCtx.VaultConfig.GetObjectsRoot(),
+			PagesRoot:   refCtx.VaultConfig.GetPagesRoot(),
+		}
+	}
+
+	var issues []schema.ValidationError
+	for fieldName, fieldDef := range fieldDefs {
+		if fieldDef == nil || fieldDef.Target == "" {
+			continue
+		}
+		if fieldDef.Type != schema.FieldTypeRef && fieldDef.Type != schema.FieldTypeRefArray {
+			continue
+		}
+
+		value, ok := fields[fieldName]
+		if !ok || value.IsNull() {
+			continue
+		}
+
+		refs := parser.ExtractRefsFromFieldValue(value, parser.RefExtractOptions{
+			AllowBareStrings: true,
+		})
+		for _, ref := range refs {
+			actualType, resolveErr := resolveReferenceType(rt, parseOpts, ref.TargetRaw)
+			if resolveErr != nil || actualType == "" {
+				continue
+			}
+			if actualType != fieldDef.Target {
+				issues = append(issues, schema.ValidationError{
+					Field:   fieldName,
+					Message: fmt.Sprintf("reference [[%s]] resolves to type '%s', expected '%s'", ref.TargetRaw, actualType, fieldDef.Target),
+				})
+				break
+			}
+		}
+	}
+
+	return issues
+}
+
+func resolveReferenceType(rt *readsvc.Runtime, parseOpts *parser.ParseOptions, rawRef string) (string, error) {
+	resolved, err := readsvc.ResolveReference(rawRef, rt, false)
+	if err != nil {
+		return "", err
+	}
+
+	content, err := os.ReadFile(resolved.FilePath)
+	if err != nil {
+		return "", err
+	}
+
+	doc, err := parser.ParseDocumentWithOptions(string(content), resolved.FilePath, rt.VaultPath, parseOpts)
+	if err != nil {
+		return "", err
+	}
+
+	for _, obj := range doc.Objects {
+		if obj.ID == resolved.ObjectID {
+			return obj.ObjectType, nil
+		}
+	}
+
+	return "", fmt.Errorf("resolved object %q not found in parsed document", resolved.ObjectID)
 }
 
 func parseJSONObject(raw string) (map[string]interface{}, error) {

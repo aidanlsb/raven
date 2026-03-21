@@ -487,6 +487,10 @@ func createObject(
 		typedFields,
 		sch,
 		map[string]bool{"type": true, "alias": true},
+		&fieldmutation.RefValidationContext{
+			VaultPath:   vaultPath,
+			VaultConfig: vaultCfg,
+		},
 	)
 	if err != nil {
 		return mutationErrorResult(resolvedTargetPath, err, ""), warnings, ""
@@ -529,6 +533,10 @@ func createObject(
 			validatedTypedFields,
 			sch,
 			map[string]bool{"type": true, "alias": true},
+			&fieldmutation.RefValidationContext{
+				VaultPath:   vaultPath,
+				VaultConfig: vaultCfg,
+			},
 		)
 		if err != nil {
 			return mutationErrorResult(resolvedTargetPath, err, ""), warnings, ""
@@ -590,6 +598,10 @@ func updateObject(
 		typedUpdates,
 		sch,
 		map[string]bool{"type": true, "alias": true},
+		&fieldmutation.RefValidationContext{
+			VaultPath:   vaultPath,
+			VaultConfig: vaultCfg,
+		},
 	)
 	if err != nil {
 		return mutationErrorResult(targetPath, err, "update error"), warnings, ""

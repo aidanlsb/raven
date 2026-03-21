@@ -54,6 +54,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 	if resolved.IsSection {
 		result, err := SetEmbeddedObject(SetEmbeddedObjectRequest{
 			VaultPath:      req.VaultPath,
+			VaultConfig:    req.VaultConfig,
 			FilePath:       resolved.FilePath,
 			ObjectID:       resolved.ObjectID,
 			Updates:        req.Updates,
@@ -82,12 +83,15 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 	}
 
 	result, err := SetObjectFile(SetObjectFileRequest{
+		VaultPath:     req.VaultPath,
+		VaultConfig:   req.VaultConfig,
 		FilePath:      resolved.FilePath,
 		ObjectID:      resolved.ObjectID,
 		Updates:       req.Updates,
 		TypedUpdates:  req.TypedUpdates,
 		Schema:        req.Schema,
 		AllowedFields: map[string]bool{"alias": true},
+		ParseOptions:  req.ParseOptions,
 	})
 	if err != nil {
 		return nil, err

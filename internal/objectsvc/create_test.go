@@ -4,7 +4,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/config"
 )
 
 func TestCreateObjectSuccess(t *testing.T) {
@@ -118,5 +121,63 @@ traits: {}
 	}
 	if svcErr.Code != ErrorFileExists {
 		t.Fatalf("expected ErrorFileExists, got %s", svcErr.Code)
+	}
+}
+
+func TestCreateRejectsWrongRefTargetType(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  note:
+    default_path: notes/
+    fields:
+      title:
+        type: string
+  issue:
+    default_path: issues/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      parent:
+        type: ref
+        target: page
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	notePath := filepath.Join(vaultPath, "notes/overview.md")
+	if err := os.MkdirAll(filepath.Dir(notePath), 0o755); err != nil {
+		t.Fatalf("mkdir notes: %v", err)
+	}
+	if err := os.WriteFile(notePath, []byte("---\ntype: note\ntitle: Overview\n---\n"), 0o644); err != nil {
+		t.Fatalf("seed note: %v", err)
+	}
+
+	_, err := Create(CreateRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: &config.VaultConfig{},
+		TypeName:    "issue",
+		Title:       "Broken parent",
+		TargetPath:  "Broken parent",
+		FieldValues: map[string]string{
+			"parent": "[[notes/overview]]",
+		},
+		Schema: sch,
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != ErrorValidationFailed {
+		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
+	}
+	if !strings.Contains(svcErr.Message, "expected 'page'") {
+		t.Fatalf("expected page target mismatch, got %q", svcErr.Message)
 	}
 }

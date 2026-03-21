@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -14,6 +15,7 @@ import (
 
 type SetEmbeddedObjectRequest struct {
 	VaultPath      string
+	VaultConfig    *config.VaultConfig
 	FilePath       string
 	ObjectID       string
 	Updates        map[string]string
@@ -118,6 +120,11 @@ func SetEmbeddedObject(req SetEmbeddedObjectRequest) (*SetEmbeddedObjectResult, 
 		mergedUpdates,
 		req.Schema,
 		req.AllowedFields,
+		&fieldmutation.RefValidationContext{
+			VaultPath:    req.VaultPath,
+			VaultConfig:  req.VaultConfig,
+			ParseOptions: req.DocumentParser,
+		},
 	)
 	if err != nil {
 		return nil, err

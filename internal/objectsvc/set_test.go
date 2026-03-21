@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 )
 
@@ -143,5 +144,72 @@ traits: {}
 	var unknownErr *fieldmutation.UnknownFieldMutationError
 	if !errors.As(err, &unknownErr) {
 		t.Fatalf("expected UnknownFieldMutationError, got %T", err)
+	}
+}
+
+func TestSetObjectFileRejectsWrongRefTargetType(t *testing.T) {
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  company:
+    default_path: companies/
+    fields:
+      name:
+        type: string
+        required: true
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+      employer:
+        type: ref
+        target: person
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	companyPath := filepath.Join(vaultPath, "companies/acme.md")
+	if err := os.MkdirAll(filepath.Dir(companyPath), 0o755); err != nil {
+		t.Fatalf("mkdir companies: %v", err)
+	}
+	if err := os.WriteFile(companyPath, []byte("---\ntype: company\nname: Acme\n---\n"), 0o644); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+
+	personPath := filepath.Join(vaultPath, "people/freya.md")
+	if err := os.MkdirAll(filepath.Dir(personPath), 0o755); err != nil {
+		t.Fatalf("mkdir people: %v", err)
+	}
+	if err := os.WriteFile(personPath, []byte("---\ntype: person\nname: Freya\n---\n"), 0o644); err != nil {
+		t.Fatalf("seed person: %v", err)
+	}
+
+	_, err := SetObjectFile(SetObjectFileRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: &config.VaultConfig{},
+		FilePath:    personPath,
+		ObjectID:    "people/freya",
+		Updates: map[string]string{
+			"employer": "[[companies/acme]]",
+		},
+		Schema:        sch,
+		AllowedFields: map[string]bool{"alias": true},
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	var validationErr *fieldmutation.ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	if len(validationErr.Issues) != 1 {
+		t.Fatalf("expected 1 validation issue, got %d", len(validationErr.Issues))
+	}
+	if !strings.Contains(validationErr.Issues[0].Message, "expected 'person'") {
+		t.Fatalf("unexpected validation message: %q", validationErr.Issues[0].Message)
 	}
 }

@@ -4,18 +4,22 @@ import (
 	"os"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
 type SetObjectFileRequest struct {
+	VaultPath     string
+	VaultConfig   *config.VaultConfig
 	FilePath      string
 	ObjectID      string
 	Updates       map[string]string
 	TypedUpdates  map[string]schema.FieldValue
 	Schema        *schema.Schema
 	AllowedFields map[string]bool
+	ParseOptions  *parser.ParseOptions
 }
 
 type SetObjectFileResult struct {
@@ -72,6 +76,11 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		mergedUpdates,
 		req.Schema,
 		req.AllowedFields,
+		&fieldmutation.RefValidationContext{
+			VaultPath:    req.VaultPath,
+			VaultConfig:  req.VaultConfig,
+			ParseOptions: req.ParseOptions,
+		},
 	)
 	if err != nil {
 		return nil, err

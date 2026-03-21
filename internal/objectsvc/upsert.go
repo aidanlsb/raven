@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -71,6 +72,7 @@ type UpsertRequest struct {
 	Content          string
 	FieldValues      map[string]string
 	TypedFieldValues map[string]schema.FieldValue
+	VaultConfig      *config.VaultConfig
 	Schema           *schema.Schema
 	ObjectsRoot      string
 	PagesRoot        string
@@ -162,6 +164,10 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			fieldValues,
 			req.Schema,
 			map[string]bool{"type": true},
+			&fieldmutation.RefValidationContext{
+				VaultPath:   req.VaultPath,
+				VaultConfig: req.VaultConfig,
+			},
 		)
 		if err != nil {
 			return nil, err
@@ -214,6 +220,10 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 				resolvedCreateFields,
 				req.Schema,
 				map[string]bool{"type": true, "alias": true},
+				&fieldmutation.RefValidationContext{
+					VaultPath:   req.VaultPath,
+					VaultConfig: req.VaultConfig,
+				},
 			)
 			if err != nil {
 				return nil, err
@@ -288,6 +298,10 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 				updates,
 				req.Schema,
 				map[string]bool{"type": true, "alias": true},
+				&fieldmutation.RefValidationContext{
+					VaultPath:   req.VaultPath,
+					VaultConfig: req.VaultConfig,
+				},
 			)
 			if err != nil {
 				return nil, err

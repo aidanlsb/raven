@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -17,6 +18,7 @@ type CreateRequest struct {
 	TargetPath       string
 	FieldValues      map[string]string
 	TypedFieldValues map[string]schema.FieldValue
+	VaultConfig      *config.VaultConfig
 	Schema           *schema.Schema
 	ObjectsRoot      string
 	PagesRoot        string
@@ -155,6 +157,26 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	templateOverride, err := schema.ResolveTypeTemplateFile(req.Schema, req.TypeName, req.TemplateID)
 	if err != nil {
 		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
+	}
+
+	validatedFields, resolvedFields, _, err := fieldmutation.PrepareValidatedFieldMutation(
+		req.TypeName,
+		nil,
+		fieldValues,
+		req.Schema,
+		nil,
+		&fieldmutation.RefValidationContext{
+			VaultPath:   req.VaultPath,
+			VaultConfig: req.VaultConfig,
+		},
+	)
+	if err != nil {
+		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)
+	}
+
+	fieldValues = resolvedFields
+	for key, value := range validatedFields {
+		fieldValues[key] = fieldmutation.SerializeFieldValueLiteral(value)
 	}
 
 	result, err := pages.Create(pages.CreateOptions{

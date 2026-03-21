@@ -109,6 +109,11 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 			req.Updates,
 			req.Schema,
 			map[string]bool{"alias": true},
+			&fieldmutation.RefValidationContext{
+				VaultPath:    req.VaultPath,
+				VaultConfig:  req.VaultConfig,
+				ParseOptions: req.ParseOptions,
+			},
 		)
 		if err != nil {
 			var validationErr *fieldmutation.ValidationError
@@ -189,11 +194,14 @@ func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBul
 		}
 
 		_, err = SetObjectFile(SetObjectFileRequest{
+			VaultPath:     req.VaultPath,
+			VaultConfig:   req.VaultConfig,
 			FilePath:      filePath,
 			ObjectID:      id,
 			Updates:       req.Updates,
 			Schema:        req.Schema,
 			AllowedFields: map[string]bool{"alias": true},
+			ParseOptions:  req.ParseOptions,
 		})
 		if err != nil {
 			result.Status = "error"
@@ -262,6 +270,11 @@ func previewSetBulkEmbedded(req SetBulkRequest, id string) (*SetBulkPreviewItem,
 		req.Updates,
 		req.Schema,
 		map[string]bool{"alias": true, "id": true},
+		&fieldmutation.RefValidationContext{
+			VaultPath:    req.VaultPath,
+			VaultConfig:  req.VaultConfig,
+			ParseOptions: req.ParseOptions,
+		},
 	)
 	if err != nil {
 		var validationErr *fieldmutation.ValidationError
@@ -310,6 +323,7 @@ func applySetBulkEmbedded(req SetBulkRequest, id string) (string, error) {
 
 	_, err = SetEmbeddedObject(SetEmbeddedObjectRequest{
 		VaultPath:      req.VaultPath,
+		VaultConfig:    req.VaultConfig,
 		FilePath:       filePath,
 		ObjectID:       id,
 		Updates:        req.Updates,
