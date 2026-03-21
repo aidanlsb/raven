@@ -1,10 +1,10 @@
 # Response Contract
 
-Use this guide when you need to interpret Raven tool results safely and consistently.
+Use this guide to interpret Raven MCP results safely and consistently.
 
 ## Standard JSON envelope
 
-All tools return a consistent envelope shape:
+All commands return:
 
 ```json
 {
@@ -16,87 +16,46 @@ All tools return a consistent envelope shape:
 }
 ```
 
-Field meanings:
-- `ok`: command success flag.
-- `data`: command payload when successful.
-- `error`: structured error object when `ok=false`.
-- `warnings`: non-fatal issues that still require agent attention.
-- `meta`: optional context (counts, pagination, scope, etc.).
+## Compact invoke flow
 
-## Compact invoke contract
-
-For the compact MCP surface, use this flow:
-1. `raven_discover` to find a command id.
-2. `raven_describe(command="...")` to get the strict parameter schema.
+1. `raven_discover` to find a command ID.
+2. `raven_describe(command="...")` to fetch the strict arg schema.
 3. `raven_invoke(command="...", args={...})` to execute.
 
 Important:
-- Command parameters must be nested under `args`.
-- `raven_invoke` top-level keys are envelope keys only: `command`, `args`, `schema_hash`, `strict_schema`.
-- If you place command parameters at top level (for example `query_string` beside `command`), expect `INVALID_ARGS` with `UNKNOWN_ARGUMENT`.
-
-Example:
-
-```json
-{
-  "command": "query",
-  "args": {
-    "query_string": "object:project .status==active",
-    "limit": 20
-  }
-}
-```
+- Command params belong under `args`.
+- Top-level keys are only `command`, `args`, `schema_hash`, `strict_schema`.
 
 ## Error handling rules
 
 1. If `ok=false`, treat the operation as failed.
-2. Use stable error codes to branch behavior.
-3. If `error.details.retry_with` exists, use it as the canonical retry template.
-4. Ask the user before retrying with assumptions.
-
-Common error codes and next actions:
-
-| Code | Typical Cause | Agent Action |
-|------|---------------|--------------|
-| `MISSING_ARGUMENT` | Required parameter not provided | Ask for the missing argument, then retry. |
-| `REQUIRED_FIELD_MISSING` | Missing schema-required field | Ask for field values; prefer `retry_with` template. |
-| `REF_AMBIGUOUS` | Short reference matches multiple objects | Show matches; ask user to choose full path. |
-| `TYPE_NOT_FOUND` / `TRAIT_NOT_FOUND` | Schema element missing | Confirm whether to add schema or adjust request. |
-| `UNKNOWN_FIELD` | Invalid frontmatter key for type | Correct field name or update schema intentionally. |
-| `CONFIRMATION_REQUIRED` | Operation needs explicit confirmation | Surface preview and ask user before applying. |
-| `DATA_INTEGRITY_BLOCK` | Protected destructive/schema action blocked | Explain risk and request explicit user decision. |
-| `DATABASE_ERROR` | Query/search execution issue | Re-check syntax and rerun with simpler query. |
-
-## Warning handling rules
-
-Warnings are not errors. They are action items.
-
-- Surface warnings to the user when they affect correctness/safety.
-- Do not silently ignore warnings on destructive operations.
-- If warnings indicate stale state (index/schema mismatch), run corrective steps (`raven_reindex`, schema check) before continuing.
+2. Branch on stable `error.code`.
+3. Prefer `error.details.retry_with` when present.
+4. Ask before retrying with assumptions.
 
 ## Preview and apply semantics
 
-Many mutation tools are preview-first:
-- First call without `confirm=true` to get a preview.
-- Present the preview to the user.
-- Apply only after explicit approval with `confirm=true`.
+Many mutation commands are preview-first.
 
-This applies to bulk and high-impact operations such as:
-- `raven_query(..., apply="...")`
-- `raven_edit(...)`
-- `raven_delete(..., stdin=true)`
-- `raven_move(..., stdin=true)`
+Examples:
 
-## Transport vs tool failures
+```text
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
+raven_invoke(command="edit", args={"path":"projects/website.md", "old_str":"A", "new_str":"B"})
+raven_invoke(command="delete", args={"stdin":true})
+raven_invoke(command="move", args={"stdin":true})
+```
 
-If the client reports no Raven payload (for example, "No result received"), treat it as transport/execution failure:
-- Retry once with the same arguments.
-- Re-validate required args.
-- Do not misclassify as schema/data corruption without a Raven error envelope.
+Apply only after explicit approval with `confirm=true`.
+
+## Warnings
+
+- Warnings are action items, not noise.
+- Surface warnings that affect correctness or safety.
+- If warnings indicate stale state, run corrective steps such as `reindex` before continuing.
 
 ## Related topics
 
-- `raven://guide/error-handling` - recovery patterns by scenario
-- `raven://guide/issue-types` - `raven_check` issue-level fixes
-- `raven://guide/key-workflows` - preview/confirm operational flow
+- `raven://guide/error-handling`
+- `raven://guide/issue-types`
+- `raven://guide/key-workflows`

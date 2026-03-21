@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -36,6 +38,67 @@ func TestMCPDocsToolListMatchesGeneratedTools(t *testing.T) {
 	expected := strings.TrimSpace(generateMCPToolListMarkdown())
 	if actual != expected {
 		t.Fatalf("MCP tool list in %s is out of sync with generated tools", docsPath)
+	}
+}
+
+func TestMCPDocsOnlyUseCompactToolCalls(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to locate test file path")
+	}
+
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
+	targets := []string{
+		filepath.Join(repoRoot, "docs", "agents", "mcp.md"),
+		filepath.Join(repoRoot, "internal", "mcp", "agent-guide"),
+	}
+
+	callPattern := regexp.MustCompile(`\braven_[a-z_]+\s*\(`)
+
+	for _, target := range targets {
+		info, err := os.Stat(target)
+		if err != nil {
+			t.Fatalf("stat %s: %v", target, err)
+		}
+		if !info.IsDir() {
+			assertNoLegacyCallsInDoc(t, target, callPattern)
+			continue
+		}
+
+		err = filepath.WalkDir(target, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() || filepath.Ext(path) != ".md" {
+				return nil
+			}
+			assertNoLegacyCallsInDoc(t, path, callPattern)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", target, err)
+		}
+	}
+}
+
+func assertNoLegacyCallsInDoc(t *testing.T, path string, pattern *regexp.Regexp) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	for _, loc := range pattern.FindAllStringIndex(content, -1) {
+		call := strings.TrimSpace(content[loc[0]:loc[1]])
+		if strings.HasPrefix(call, "raven_discover(") ||
+			strings.HasPrefix(call, "raven_describe(") ||
+			strings.HasPrefix(call, "raven_invoke(") {
+			continue
+		}
+
+		line := 1 + strings.Count(content[:loc[0]], "\n")
+		t.Fatalf("legacy MCP direct-call example found in %s at line %d", path, line)
 	}
 }
 

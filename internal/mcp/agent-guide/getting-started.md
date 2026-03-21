@@ -1,73 +1,55 @@
 # Getting Started
 
-When first interacting with a Raven vault, follow this discovery sequence:
+Use this guide after quickstart when you need an operational first pass through a vault.
 
-For a one-pass conceptual overview, start with `raven://guide/quickstart`.
-For a structured teaching and setup flow, use `raven://guide/onboarding`.
+## First-session sequence
 
-0. **If no vault exists yet**: `raven_init(path="/path/to/vault")`
-0.5. **Register and select it globally**:
-   - `raven_vault_add(name="personal", path="/path/to/vault", pin=true)`
-   - `raven_vault_use(name="personal")`
-1. **Understand the schema**: `raven_schema(subcommand="types")` and `raven_schema(subcommand="traits")`
-2. **Get vault overview**: `raven_vault_stats()` to see object counts and structure
-3. **Check saved queries**: `raven://queries/saved` or `raven_query(list=true)`
-4. **Discover workflows**: `raven://workflows/list` or `raven_workflow_list()`
-5. **Fetch vault instructions (if available)**: `raven://vault/agent-instructions`
-6. **Grab the query cheatsheet**: `raven://guide/query-cheatsheet` for common patterns
-7. **Ask about existing data**: if they have JSON exports, use `raven_import` to seed the vault quickly
+0. If no vault exists yet, initialize one:
+   `raven_invoke(command="init", args={"path":"/path/to/vault"})`
+1. Understand the schema:
+   `raven_invoke(command="schema", args={"subcommand":"types"})`
+   `raven_invoke(command="schema", args={"subcommand":"traits"})`
+2. Get a vault overview:
+   `raven_invoke(command="vault_stats")`
+3. Check saved queries:
+   `raven://queries/saved` or `raven_invoke(command="query", args={"list":true})`
+4. Discover workflows:
+   `raven://workflows/list` or `raven_invoke(command="workflow_list")`
 
-You can also fetch the `raven://schema/current` MCP resource for the complete schema.yaml.
+## Preferred first write flow
 
-## Fast start from existing JSON
-
-If the user already has structured data from another tool, prefer import over manual re-entry:
-
-```
-# Preview first
-raven_import(type="project", file="projects.json", dry_run=true)
-
-# Apply after user confirmation
-raven_import(type="project", file="projects.json", confirm=true)
+```text
+create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
+raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":create.data.file})
+raven_invoke(command="set", args={"object_id":create.data.id, "fields":{"status":"active"}})
 ```
 
-## Creating new notes (recommended flow)
+If the output should converge on reruns, prefer:
 
-Raven is intentionally **not** a free-form file writer. Agents should create new files via the schema, then append content to them:
-
-1. **Create the file** with `raven_new` (applies templates + schema validation)
-2. **Append content** with `raven_add` using the returned `data.file` path
-
-Example:
-
-```
-# Create a new object file
-create = raven_new(type="project", title="Website Redesign")
-
-# Append body content to that file (must already exist)
-raven_add(text="## Notes\n- Kickoff next week", to=create.data.file)
+```text
+raven_invoke(command="upsert", args={
+  "type":"report",
+  "title":"Weekly Status",
+  "content":"# Weekly Status\n..."
+})
 ```
 
-Notes:
-- `raven_add` can auto-create **daily notes**; for other files it requires the file to already exist.
-- If `raven_new` fails in MCP mode, it will usually return `ok:false` with an error code like `MISSING_ARGUMENT` (title required) or `REQUIRED_FIELD_MISSING` (see `error.details.retry_with`).
+## Import flow
 
-## Freeform notes (use built-in `page` type)
+Preview first:
 
-If a user asks to create a note that **doesn't fit an existing schema type**, use the built-in `page` type:
-
-```
-create = raven_new(type="page", title="Quick Note")
-raven_add(text="## Notes\n- ...", to=create.data.file)
+```text
+raven_invoke(command="import", args={"type":"project", "file":"projects.json", "dry_run":true})
 ```
 
-Tip:
-- For long files, `raven_read` supports `start_line`/`end_line` (**1-indexed, inclusive**) and `lines=true` for copy-paste-safe anchors.
+Apply only after approval:
 
-## Related topics
+```text
+raven_invoke(command="import", args={"type":"project", "file":"projects.json", "confirm":true})
+```
 
-- `raven://guide/quickstart` - mental model + first commands
-- `raven://guide/core-concepts` - deeper model details
-- `raven://guide/write-patterns` - safe creation and update primitives
-- `raven://guide/response-contract` - interpreting `ok/data/error/warnings/meta`
-- `raven://guide/key-workflows` - preview/confirm and mutation patterns
+## Notes
+
+- Use `raven_describe(command="...")` before invoking unfamiliar commands.
+- Prefer registry command IDs in docs and prompts.
+- Treat direct `raven_*` compatibility tools as legacy, not public surface.

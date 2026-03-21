@@ -323,6 +323,101 @@ func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
 	}
 }
 
+func TestMCPIntegration_QuerySavedQueryTypedInputs(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`queries:
+  project-by-status:
+    query: "object:project .status=={{args.status}}"
+    args: [status]
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	server.callTool("raven_new", map[string]interface{}{
+		"type":  "project",
+		"title": "Project A",
+		"field": map[string]interface{}{"status": "active"},
+	})
+	server.callTool("raven_new", map[string]interface{}{
+		"type":  "project",
+		"title": "Project B",
+		"field": map[string]interface{}{"status": "done"},
+	})
+
+	result := server.callTool("raven_query", map[string]interface{}{
+		"query_string": "project-by-status",
+		"inputs": map[string]interface{}{
+			"status": "active",
+		},
+	})
+
+	if result.IsError {
+		t.Fatalf("query failed: %s", result.Text)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []interface{} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if len(resp.Data.Items) != 1 {
+		t.Errorf("expected 1 result, got %d", len(resp.Data.Items))
+	}
+}
+
+func TestMCPIntegration_QuerySavedQueryAllowsUnusedDeclaredArgs(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`queries:
+  project-by-status:
+    query: "object:project .status=={{args.status}}"
+    args: [status, project]
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	server.callTool("raven_new", map[string]interface{}{
+		"type":  "project",
+		"title": "Project A",
+		"field": map[string]interface{}{"status": "active"},
+	})
+
+	result := server.callTool("raven_query", map[string]interface{}{
+		"query_string": "project-by-status",
+		"inputs": map[string]interface{}{
+			"status": "active",
+		},
+	})
+
+	if result.IsError {
+		t.Fatalf("query failed: %s", result.Text)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []interface{} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if len(resp.Data.Items) != 1 {
+		t.Errorf("expected 1 result, got %d", len(resp.Data.Items))
+	}
+}
+
 // TestMCPIntegration_ReadObject tests reading an object via MCP tool call.
 func TestMCPIntegration_ReadObject(t *testing.T) {
 	v := testutil.NewTestVault(t).

@@ -1,11 +1,35 @@
 package mcp
 
-import "testing"
+import (
+	"testing"
 
-func TestSemanticCompatibilityMapHasHandlers(t *testing.T) {
-	for toolName, op := range compatibilityToolSemanticMap {
+	"github.com/aidanlsb/raven/internal/commands"
+)
+
+func TestAllInvokableCommandsHaveSemanticHandlers(t *testing.T) {
+	for commandID, meta := range commands.Registry {
+		if meta.HideFromMCP || !commands.IsInvokableCommandID(commandID) {
+			continue
+		}
+
+		op, ok := semanticOpForCommandID(commandID)
+		if !ok {
+			t.Fatalf("command %q has no semantic handler", commandID)
+		}
 		if !semanticHandlerExists(op) {
-			t.Fatalf("tool %q maps to semantic op %q without a handler", toolName, op)
+			t.Fatalf("command %q maps to semantic op %q without a handler", commandID, op)
+		}
+	}
+}
+
+func TestCompatibilityAliasesResolveToHandledCommands(t *testing.T) {
+	for toolName, commandID := range compatibilityToolCommandAliases {
+		op, ok := semanticOpForCommandID(commandID)
+		if !ok {
+			t.Fatalf("compatibility alias %q resolves to unhandled command %q", toolName, commandID)
+		}
+		if !semanticHandlerExists(op) {
+			t.Fatalf("compatibility alias %q maps to semantic op %q without a handler", toolName, op)
 		}
 	}
 }

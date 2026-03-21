@@ -1,65 +1,28 @@
 # Core Concepts
 
-For orientation-first teaching, read `raven://guide/quickstart` before this guide.
+Use this guide to explain Raven's model.
 
-**Raven** is a plain-markdown knowledge system with:
-- **Types**: Schema definitions for what things are (e.g., `person`, `project`, `book`) — defined in `schema.yaml`
-- **Objects**: Instances of types — each file declares its type in frontmatter (e.g., `people/freya.md` is an object of type `person`)
-- **Traits**: Inline annotations on content (`@due`, `@priority`, `@highlight`)
-- **References**: Wiki-style links between notes (`[[people/freya]]`)
-- **Schema**: User-defined in `schema.yaml` — types and traits must be defined here to be queryable
+## Source of truth
 
-Type and field definitions can include optional `description` values in `schema.yaml`. Use `raven_schema`/`raven_schema(subcommand="type", name="<name>")` to read them and ground tool decisions in the user's own terminology.
+- Markdown files are durable state.
+- The SQLite index is derived and rebuildable.
+- Schema drives typed validation and indexing.
 
-**Built-in types:**
+## Main concepts
 
-- `page`: freeform note objects (use this when a new note doesn’t fit a schema type)
-- `date`: daily notes
-- `section`: embedded objects inside a file
+- **Type**: named structure in `schema.yaml`
+- **Object**: one markdown file of a type
+- **Trait**: inline annotation in body content
+- **Reference**: wiki link to another object or section
+- **Saved query**: named query in `raven.yaml`
 
-### File Format Quick Reference
+## How agents should inspect the model
 
-**Frontmatter** (YAML at top of file):
-```markdown
----
-type: project
-status: active
-owner: "[[people/freya]]"
----
+Use schema introspection through the compact surface:
+
+```text
+raven_invoke(command="schema", args={"subcommand":"types"})
+raven_invoke(command="schema", args={"subcommand":"type", "name":"project"})
 ```
 
-**Embedded objects** (typed heading):
-```markdown
-## Weekly Standup
-:::meeting(time=09:00, attendees=[[[people/freya]]])
-```
-
-**Traits** (inline annotations):
-```markdown
-- @due(2026-01-15) Send proposal to [[clients/acme]]
-- @priority(high) Review the API design
-- @highlight This insight is important
-```
-
-**References** (wiki-style links):
-```markdown
-[[people/freya]]              Full path
-[[freya]]                     Short reference (if unambiguous)
-[[people/freya|Freya]]        With display text
-```
-
-### Reference Resolution
-
-When using object IDs in tool calls:
-- **Full path**: `people/freya` — always works
-- **Short reference**: `freya` — works if unambiguous (only one object matches)
-- **With .md extension**: `people/freya.md` — also works
-
-If a short reference is ambiguous, Raven returns an `ambiguous_reference` error listing all matches. Ask the user which one they meant, or use the full path.
-
-## Related topics
-
-- `raven://guide/getting-started` - first-session discovery sequence
-- `raven://guide/querying` - turning questions into structured queries
-- `raven://guide/write-patterns` - creating and updating objects safely
-- `raven://guide/onboarding` - staged teaching and setup sequence for new users
+Type and field descriptions in `schema.yaml` are part of the user's terminology. Read them before making assumptions.

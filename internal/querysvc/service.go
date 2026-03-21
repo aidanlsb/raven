@@ -193,7 +193,11 @@ func NormalizeArgs(args []string) ([]string, error) {
 }
 
 func ParseInputs(queryName string, args []string, declaredArgs []string) (map[string]string, error) {
-	if len(args) == 0 {
+	return ParseInputsWithKeyValues(queryName, args, nil, declaredArgs)
+}
+
+func ParseInputsWithKeyValues(queryName string, args []string, keyValueArgs []string, declaredArgs []string) (map[string]string, error) {
+	if len(args) == 0 && len(keyValueArgs) == 0 {
 		return nil, nil
 	}
 
@@ -211,13 +215,13 @@ func ParseInputs(queryName string, args []string, declaredArgs []string) (map[st
 		declaredSet[name] = struct{}{}
 	}
 
-	keyValues := make(map[string]string, len(args))
+	keyValues := make(map[string]string, len(args)+len(keyValueArgs))
 	positional := make([]string, 0, len(args))
-	for _, arg := range args {
+	parseToken := func(arg string) error {
 		if strings.Contains(arg, "=") {
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) != 2 || parts[0] == "" {
-				return nil, newError(
+				return newError(
 					CodeInvalidInput,
 					fmt.Sprintf("invalid input argument: %s", arg),
 					"Use format: key=value or positional values matching args order",
@@ -226,7 +230,7 @@ func ParseInputs(queryName string, args []string, declaredArgs []string) (map[st
 			}
 			key := parts[0]
 			if _, ok := declaredSet[key]; !ok {
-				return nil, newError(
+				return newError(
 					CodeInvalidInput,
 					fmt.Sprintf("unknown input key for saved query '%s': %s", queryName, key),
 					fmt.Sprintf("Declared args: %s", strings.Join(declaredArgs, ", ")),
@@ -234,7 +238,7 @@ func ParseInputs(queryName string, args []string, declaredArgs []string) (map[st
 				)
 			}
 			if _, exists := keyValues[key]; exists {
-				return nil, newError(
+				return newError(
 					CodeInvalidInput,
 					fmt.Sprintf("duplicate input key: %s", key),
 					"Provide each input at most once",
@@ -242,9 +246,21 @@ func ParseInputs(queryName string, args []string, declaredArgs []string) (map[st
 				)
 			}
 			keyValues[key] = parts[1]
-			continue
+			return nil
 		}
 		positional = append(positional, arg)
+		return nil
+	}
+
+	for _, arg := range args {
+		if err := parseToken(arg); err != nil {
+			return nil, err
+		}
+	}
+	for _, arg := range keyValueArgs {
+		if err := parseToken(arg); err != nil {
+			return nil, err
+		}
 	}
 
 	remaining := make([]string, 0, len(declaredArgs))
@@ -336,6 +352,27 @@ func ResolveQueryString(name string, q *config.SavedQuery, inputs map[string]str
 	}
 
 	return queryStr, nil
+}
+
+func ResolveSavedQuery(name string, q *config.SavedQuery, args []string, keyValueArgs []string) (string, error) {
+	if q == nil {
+		return "", newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query --list' to see available queries", nil)
+	}
+
+	declaredArgs, err := NormalizeArgs(q.Args)
+	if err != nil {
+		return "", err
+	}
+	if err := ValidateInputDeclarations(name, q.Query, declaredArgs); err != nil {
+		return "", err
+	}
+
+	inputs, err := ParseInputsWithKeyValues(name, args, keyValueArgs, declaredArgs)
+	if err != nil {
+		return "", err
+	}
+
+	return ResolveQueryString(name, q, inputs)
 }
 
 func extractSavedQueryInputRefs(queryStr string) []string {

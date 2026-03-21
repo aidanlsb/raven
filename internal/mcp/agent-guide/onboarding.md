@@ -1,284 +1,59 @@
-# Vault Onboarding Guide
+# Onboarding
 
-This guide helps agents onboard users to a new Raven vault through an interactive, conversational setup process.
+Use this guide when teaching a new user how Raven works.
 
-## When to Use This Guide
+## Teaching sequence
 
-- User just ran `rvn init` and has a fresh vault
-- User asks to "set up Raven" or "get started"
-- User runs the `onboard` workflow via `raven_workflow_run(name="onboard")`
-- Vault has only default types (person, project) and no custom content
+1. Show the schema and traits.
+2. Show vault stats and saved queries.
+3. Create one object.
+4. Add body content.
+5. Run one query.
+6. Run one check.
 
-## Onboarding Philosophy
+## Discovery sequence
 
-**Start simple, grow organically.** Don't front-load complexity. Let the schema evolve from the user's actual needs, not hypothetical ones.
-
-**Show, don't just configure.** Create real content so the user sees immediate value. A query that returns results is more compelling than an empty schema.
-
-**Explain decisions.** Help users understand *why* something is a type vs. a trait, or why certain fields make sense. This builds their mental model.
-
-## Discovery Sequence
-
-Before starting the interview, understand what already exists:
-
-```
-# Check current schema
-raven_schema(subcommand="types")
-raven_schema(subcommand="traits")
-
-# See if there's any existing content
-raven_vault_stats()
-
-# Check for saved queries/workflows
-raven_query(list=true)
-raven_workflow_list()
+```text
+raven_invoke(command="schema", args={"subcommand":"types"})
+raven_invoke(command="schema", args={"subcommand":"traits"})
+raven_invoke(command="vault_stats")
+raven_invoke(command="query", args={"list":true})
+raven_invoke(command="workflow_list")
 ```
 
-## Teaching Sequence
+## First create flow
 
-Use this sequence during onboarding to avoid overload and still show immediate value.
-
-1. **Orient**
-   - Fetch `raven://guide/quickstart` and explain the model in plain language.
-   - Confirm the user's domain and what they track.
-2. **Discover**
-   - Run discovery commands from the section above.
-   - Explain what already exists before proposing new structure.
-3. **Create one real object**
-   - Prefer concrete examples from the user's current work.
-   - Use `raven_new` first, then `raven_add` for body content.
-4. **Query it back**
-   - Run one query that proves value immediately.
-   - Example: `raven_query(query_string="trait:todo .value==todo")`.
-5. **Introduce bulk and safety patterns**
-   - Show preview-first behavior and explicit apply/confirm.
-   - Show `raven_check` for validation and cleanup.
-
-## Prerequisite Checks
-
-- Before creating objects:
-  - check required fields (`raven_schema(subcommand="type", name="<type>")`)
-- Before bulk updates:
-  - preview first, get user confirmation, then apply
-- Before deleting:
-  - inspect backlinks and discuss impact
-
-## Interview Flow
-
-### Phase 1: Understand Intent
-
-Ask open-ended questions to understand their use case:
-
-> "What do you want to use this vault for?"
-
-Listen for domains: work, personal, research, creative projects, etc.
-
-> "What kinds of things do you need to keep track of?"
-
-Listen for nouns that become types: meetings, books, articles, recipes, decisions, etc.
-
-### Phase 2: Identify Schema Needs
-
-Based on their answers, identify:
-
-**Types** - Distinct categories of objects with their own structure
-- Each type gets its own directory and fields
-- Good candidates: things with unique fields or templates
-
-**Traits** - Cross-cutting annotations that apply to many types
-- @due, @priority, @todo work across everything
-- Good for temporary states or metadata
-
-**Fields** - Structured data on a specific type
-- Belongs to one type
-- Good for: required info, relationships, type-specific metadata
-
-### Phase 3: Build the Schema
-
-Create types first, then add fields:
-
-```
-# Create a type
-raven_schema_add_type(
-  name="book",
-  default_path="books/",
-  name_field="title"
-)
-
-# Add fields to it
-raven_schema_add_field(
-  type_name="book",
-  field_name="author",
-  type="string"
-)
-
-raven_schema_add_field(
-  type_name="book",
-  field_name="status",
-  type="enum",
-  values="to-read,reading,finished,abandoned"
-)
+```text
+result = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
+raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":result.data.file})
+raven_invoke(command="set", args={"object_id":result.data.id, "fields":{"status":"active"}})
 ```
 
-Add custom traits if needed:
+## First query flow
 
-```
-# Add a trait for ratings
-raven_schema_add_trait(
-  name="rating",
-  type="number"
-)
+```text
+raven_invoke(command="query", args={"query_string":"object:project .status==active"})
+raven_invoke(command="query", args={"query_string":"trait:due in(.value, [today,tomorrow])"})
 ```
 
-### Phase 4: Create Seed Content
+## Saved query example
 
-Ask what they're currently working on and create 2-3 real objects:
-
-```
-# Create a project they mentioned
-result = raven_new(type="project", title="Website Redesign")
-
-# Add some content
-raven_add(
-  text="## Goals\n- Modernize the design\n- Improve mobile experience\n\n## Tasks\n- @due(2026-02-15) Create mockups",
-  to=result.data.file
-)
-
-# Set relevant fields
-raven_set(
-  object_id="projects/website-redesign",
-  fields={"status": "active"}
-)
+```text
+raven_invoke(command="query_add", args={
+  "name":"reading-list",
+  "query_string":"object:book .status==reading"
+})
 ```
 
-If they already have structured JSON exports, offer import instead of manual re-entry:
+## Import example
 
-```
-# Preview import first
-raven_import(type="project", file="projects.json", dry_run=true)
-
-# Apply after user confirmation
-raven_import(type="project", file="projects.json", confirm=true)
+```text
+raven_invoke(command="import", args={"type":"project", "file":"projects.json", "dry_run":true})
+raven_invoke(command="import", args={"type":"project", "file":"projects.json", "confirm":true})
 ```
 
-### Phase 5: Demonstrate Value
+## Practical rules
 
-Run a query to show immediate value:
-
-```
-# Show them their active projects
-raven_query(query_string="object:project .status==active")
-
-# Or tasks due soon
-raven_query(query_string="trait:due in(.value, [today,tomorrow])")
-```
-
-Offer to save useful queries:
-
-```
-raven_query_add(
-  name="active",
-  query_string="object:project .status==active",
-  description="All active projects"
-)
-```
-
-## Common Type Patterns
-
-### Knowledge Work
-- `meeting` - attendees (ref[]), date, action_items
-- `decision` - status, stakeholders, rationale
-- `project` - status, lead (ref), deadline
-- `person` - name, email, company
-
-### Reading/Research
-- `book` - title, author, status, rating
-- `article` - source, url, read_date
-- `quote` - source (ref), page
-- `note` - topics[]
-
-### Personal
-- `recipe` - ingredients, prep_time, servings
-- `goal` - target_date, status, milestones
-- `habit` - frequency, streak
-
-## Common Trait Patterns
-
-Already in default schema:
-- `@due(YYYY-MM-DD)` - deadlines
-- `@priority(low|medium|high)` - importance
-- `@todo` - mark items as todo (boolean)
-
-Common additions:
-- `@rating(1-5)` - quality rating (number)
-- `@context(home|work|errands)` - GTD contexts (enum)
-- `@energy(low|medium|high)` - required energy level (enum)
-- `@waiting(person-ref)` - blocked on someone (string)
-- `@reviewed` - has been processed (boolean)
-
-## Types vs. Traits Decision Guide
-
-**Use a TYPE when:**
-- It's a distinct category with unique fields
-- You want to query "all X" frequently
-- It needs a template or default structure
-- Examples: meeting, book, person, project
-
-**Use a TRAIT when:**
-- It applies across multiple types
-- It's a temporary state or annotation
-- You want to query across type boundaries
-- Examples: @due, @priority, @todo, @rating
-
-**Use a FIELD when:**
-- It's specific to one type
-- It's always present (or should be)
-- It contains structured data (refs, enums)
-- Examples: person.email, book.author, meeting.attendees
-
-## Common Misconceptions to Correct
-
-- "Raven is a freeform file writer"
-  - Correction: create via schema tools first, then append content.
-- "The index is the database"
-  - Correction: markdown files are canonical; index is rebuildable.
-- "Search errors mean data is missing"
-  - Correction: many are query syntax issues; retry with quoting or structured queries.
-- "Bulk apply is safe without preview"
-  - Correction: preview and explicit confirmation are required workflow steps.
-
-## Error Recovery
-
-### User is overwhelmed
-Scale back. Suggest starting with just daily notes and one or two types. They can always add more later.
-
-### User wants everything
-Gently push back. "Let's start with the 2-3 most important things and add more as you use the system."
-
-### Type vs. trait confusion
-Explain with examples: "A book is a type because every book has the same structure. @rating is a trait because you might rate books, articles, recipes—anything."
-
-### Schema mistakes
-Schema changes are easy to make. Use `raven_schema_update_*` or `raven_schema_rename_*` to fix issues. Data is in markdown, so nothing is locked in.
-
-## Completion Checklist
-
-A successful onboarding session should:
-
-- [ ] Create 1-3 custom types based on user needs
-- [ ] Add relevant fields to those types
-- [ ] Optionally add 1-2 custom traits
-- [ ] Create 2-3 seed objects with real content
-- [ ] Demonstrate at least one query
-- [ ] Offer to save useful queries
-- [ ] Explain daily notes if relevant
-- [ ] Leave user with a clear "what's next"
-
-## What's Next Suggestions
-
-After onboarding, suggest:
-
-1. **Daily notes**: "Try `rvn daily` to start capturing daily notes"
-2. **Quick capture**: "Use `rvn add 'your thought'` to quickly capture ideas"
-3. **Query exploration**: "Run `rvn query 'object:project'` to see all projects"
-4. **Backlinks**: "Create references like [[people/sarah]] to link objects together"
+- Teach the compact surface, not legacy direct MCP tools.
+- Use canonical command IDs in examples and prompts.
+- Keep the first session concrete: one create, one query, one check.

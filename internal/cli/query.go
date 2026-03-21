@@ -289,18 +289,7 @@ Examples:
 
 		if savedQuery, ok := vaultCfg.Queries[queryName]; ok {
 			isSavedQuery = true
-			declaredArgs, err := querysvc.NormalizeArgs(savedQuery.Args)
-			if err != nil {
-				return mapQuerySvcError(err)
-			}
-			if err := querysvc.ValidateInputDeclarations(queryName, savedQuery.Query, declaredArgs); err != nil {
-				return mapQuerySvcError(err)
-			}
-			inputs, err := querysvc.ParseInputs(queryName, args[1:], declaredArgs)
-			if err != nil {
-				return mapQuerySvcError(err)
-			}
-			queryStr, err = querysvc.ResolveQueryString(queryName, savedQuery, inputs)
+			queryStr, err = querysvc.ResolveSavedQuery(queryName, savedQuery, args[1:], nil)
 			if err != nil {
 				return mapQuerySvcError(err)
 			}

@@ -74,25 +74,15 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
 	}
 
-	resolved, err := ResolveReference(objectRef, ResolveOptions{
-		VaultPath:   vaultPath,
-		VaultConfig: vaultCfg,
-	})
-	if err != nil {
-		return handleResolveError(err, objectRef)
-	}
-
 	fieldValues := parseReclassifyFieldFlags(reclassifyFieldFlags)
 	force := reclassifyForce
 
 	for {
-		result, err := objectsvc.Reclassify(objectsvc.ReclassifyRequest{
+		result, err := objectsvc.ReclassifyByReference(objectsvc.ReclassifyByReferenceRequest{
 			VaultPath:    vaultPath,
 			VaultConfig:  vaultCfg,
 			Schema:       sch,
-			ObjectRef:    objectRef,
-			ObjectID:     resolved.ObjectID,
-			FilePath:     resolved.FilePath,
+			Reference:    objectRef,
 			NewTypeName:  newTypeName,
 			FieldValues:  fieldValues,
 			NoMove:       reclassifyNoMove,

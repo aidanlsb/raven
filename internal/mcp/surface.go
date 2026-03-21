@@ -415,8 +415,7 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 		), true
 	}
 
-	toolName := mcpToolName(commandID)
-	op, ok := compatibilityToolSemanticMap[toolName]
+	op, ok := semanticOpForCommandID(commandID)
 	if !ok {
 		return errorEnvelope(
 			"INTERNAL_ERROR",

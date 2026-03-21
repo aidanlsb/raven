@@ -34,22 +34,11 @@ func (s *Server) callDirectReclassify(args map[string]interface{}) (string, bool
 		return errorEnvelope("MISSING_ARGUMENT", "requires object and new-type arguments", "Usage: rvn reclassify <object> <new-type>", nil), true
 	}
 
-	resolved, err := resolveReference(vaultPath, vaultCfg, sch, objectRef)
-	if err != nil {
-		var refErr *directRefError
-		if errors.As(err, &refErr) {
-			return errorEnvelope(refErr.Code, refErr.Message, refErr.Suggestion, nil), true
-		}
-		return errorEnvelope("REF_NOT_FOUND", err.Error(), "Check the object reference and run 'rvn reindex' if needed", nil), true
-	}
-
-	serviceResult, err := objectsvc.Reclassify(objectsvc.ReclassifyRequest{
+	serviceResult, err := objectsvc.ReclassifyByReference(objectsvc.ReclassifyByReferenceRequest{
 		VaultPath:    vaultPath,
 		VaultConfig:  vaultCfg,
 		Schema:       sch,
-		ObjectRef:    objectRef,
-		ObjectID:     resolved.ObjectID,
-		FilePath:     resolved.FilePath,
+		Reference:    objectRef,
 		NewTypeName:  newTypeName,
 		FieldValues:  fieldValues,
 		NoMove:       boolValue(normalized["no-move"]),

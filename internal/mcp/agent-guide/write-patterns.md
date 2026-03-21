@@ -1,73 +1,70 @@
 # Write Patterns
 
-Use this guide to choose the correct write primitive and keep operations idempotent.
+Use this guide to choose the right mutation primitive.
 
-## Choose the right tool
+## Which command to use
 
-| Goal | Primary Tool | Why |
-|------|--------------|-----|
-| Create a typed object | `raven_new` | Applies schema + templates + required-field checks. |
-| Append a note/log entry | `raven_add` | Intentional append-only capture. |
-| Deterministic create-or-update | `raven_upsert` | Idempotent convergence for generated artifacts. |
-| Update frontmatter fields | `raven_set` | Schema-validated metadata updates. |
-| Replace body text safely | `raven_edit` | Unique-string replacement with preview/confirm. |
-| Update trait value | `raven_update` | Targeted trait mutation by trait ID. |
+| Goal | Command ID | Why |
+|------|------------|-----|
+| Create a typed object | `new` | Applies schema, templates, and required-field checks |
+| Append a note/log entry | `add` | Intentional append-only capture |
+| Deterministic create-or-update | `upsert` | Idempotent convergence for generated artifacts |
+| Update frontmatter fields | `set` | Schema-validated metadata updates |
+| Replace body text safely | `edit` | Unique-string replacement with preview/confirm |
+| Update trait value | `update` | Targeted trait mutation by trait ID |
 
-## Idempotency guidance
+Rules:
+- Use `upsert` when reruns should produce one current canonical output.
+- Use `add` when history should accumulate.
+- Use `new` only when you intend to create a new object identity.
 
-- Use `raven_upsert` when reruns should produce one current canonical output.
-- Use `raven_add` when history/logging should accumulate entries.
-- Use `raven_new` only when you intend to create a new object identity.
+## Recommended sequences
 
-## Recommended creation flows
-
-### Create structured object + body
-
-```text
-create = raven_new(type="project", title="Website Redesign")
-raven_add(text="## Notes\n- Kickoff next week", to=create.data.file)
-```
-
-### Idempotent generated report
+Create then append:
 
 ```text
-raven_upsert(
-  type="report",
-  title="Weekly Status",
-  field={"status":"draft"},
-  content="# Weekly Status\n..."
-)
+create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
+raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":create.data.file})
 ```
 
-### Update metadata only
+Idempotent generated artifact:
 
 ```text
-raven_set(object_id="projects/website-redesign", fields={"status":"active"})
+raven_invoke(command="upsert", args={
+  "type":"report",
+  "title":"Weekly Status",
+  "content":"# Weekly Status\n..."
+})
 ```
 
-### Update content with preview/apply
+Metadata update:
 
 ```text
-# Preview (default)
-raven_edit(path="projects/website-redesign.md", old_str="Status: draft", new_str="Status: active")
-
-# Apply
-raven_edit(path="projects/website-redesign.md", old_str="Status: draft", new_str="Status: active", confirm=true)
+raven_invoke(command="set", args={
+  "object_id":"projects/website-redesign",
+  "fields":{"status":"active"}
+})
 ```
 
-## Frontmatter vs body decision
+Preview then apply edit:
 
-- If data should be queryable/filterable: use frontmatter (`raven_set`, `raven_new field=...`, `raven_upsert field=...`).
-- If data is narrative/content: use body (`raven_add`, `raven_edit`, `raven_upsert content=...`).
+```text
+raven_invoke(command="edit", args={
+  "path":"projects/website-redesign.md",
+  "old_str":"Status: draft",
+  "new_str":"Status: active"
+})
 
-## Safety notes
+raven_invoke(command="edit", args={
+  "path":"projects/website-redesign.md",
+  "old_str":"Status: draft",
+  "new_str":"Status: active",
+  "confirm":true
+})
+```
 
-- Prefer `raven_read(path="...", raw=true)` before building `old_str` for `raven_edit`.
-- For bulk writes, preview first and require user approval before `confirm=true`.
-- Avoid shell file writes (`echo`, `sed`, `mv`, `rm`) inside vault operations.
+## Practical rules
 
-## Related topics
-
-- `raven://guide/critical-rules` - non-negotiable safety
-- `raven://guide/response-contract` - handling previews/errors/warnings
-- `raven://guide/key-workflows` - end-to-end mutation workflows
+- If data should be queryable/filterable, prefer frontmatter (`set`, `new`, `upsert`).
+- If data is narrative, prefer body content (`add`, `edit`, `upsert content=...`).
+- Prefer raw reads before constructing `old_str` for `edit`.

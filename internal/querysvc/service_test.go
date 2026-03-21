@@ -97,6 +97,62 @@ func TestParseInputs(t *testing.T) {
 	}
 }
 
+func TestParseInputsWithKeyValues(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		keyValueArgs []string
+		declaredArgs []string
+		want         map[string]string
+		wantErr      bool
+	}{
+		{
+			name:         "combines positional args with typed key values",
+			args:         []string{"projects/raven"},
+			keyValueArgs: []string{"status=active"},
+			declaredArgs: []string{"project", "status"},
+			want: map[string]string{
+				"project": "projects/raven",
+				"status":  "active",
+			},
+		},
+		{
+			name:         "allows undeclared trailing args to stay omitted when unused",
+			args:         nil,
+			keyValueArgs: []string{"status=active"},
+			declaredArgs: []string{"status", "project"},
+			want: map[string]string{
+				"status": "active",
+			},
+		},
+		{
+			name:         "duplicate keys across sources fail",
+			args:         []string{"status=active"},
+			keyValueArgs: []string{"status=done"},
+			declaredArgs: []string{"status"},
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseInputsWithKeyValues("project-todos", tt.args, tt.keyValueArgs, tt.declaredArgs)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("ParseInputsWithKeyValues() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeArgs(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -243,6 +299,21 @@ func TestResolveQueryString(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "has no query defined") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveSavedQuery(t *testing.T) {
+	query := &config.SavedQuery{
+		Query: "object:project .status=={{args.status}}",
+		Args:  []string{"status", "project"},
+	}
+
+	got, err := ResolveSavedQuery("project-by-status", query, nil, []string{"status=active"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "object:project .status==active" {
+		t.Fatalf("resolved query = %q, want %q", got, "object:project .status==active")
 	}
 }
 

@@ -1,5 +1,7 @@
 package mcp
 
+import "github.com/aidanlsb/raven/internal/commands"
+
 type semanticOp string
 
 const (
@@ -88,93 +90,190 @@ const (
 	semanticSystemVersion         semanticOp = "system.version"
 )
 
-var compatibilityToolSemanticMap = map[string]semanticOp{
-	"raven_new":                     semanticObjectCreate,
-	"raven_upsert":                  semanticObjectUpsert,
-	"raven_add":                     semanticObjectAppend,
-	"raven_set":                     semanticObjectSetFields,
-	"raven_delete":                  semanticObjectDelete,
-	"raven_move":                    semanticObjectMove,
-	"raven_reclassify":              semanticObjectReclassify,
-	"raven_import":                  semanticObjectImport,
-	"raven_edit":                    semanticObjectEdit,
-	"raven_update":                  semanticTraitUpdate,
-	"raven_init":                    semanticVaultInit,
-	"raven_reindex":                 semanticVaultReindex,
-	"raven_check":                   semanticVaultCheck,
-	"raven_vault_stats":             semanticVaultStats,
-	"raven_vault":                   semanticVaultList,
-	"raven_vault_list":              semanticVaultList,
-	"raven_vault_current":           semanticVaultCurrent,
-	"raven_vault_use":               semanticVaultUse,
-	"raven_vault_clear":             semanticVaultClear,
-	"raven_vault_pin":               semanticVaultPin,
-	"raven_vault_add":               semanticVaultAdd,
-	"raven_vault_remove":            semanticVaultRemove,
-	"raven_vault_path":              semanticVaultPath,
-	"raven_config":                  semanticConfigShow,
-	"raven_config_show":             semanticConfigShow,
-	"raven_config_init":             semanticConfigInit,
-	"raven_config_set":              semanticConfigSet,
-	"raven_config_unset":            semanticConfigUnset,
-	"raven_version":                 semanticSystemVersion,
-	"raven_daily":                   semanticDaily,
-	"raven_date":                    semanticDate,
-	"raven_open":                    semanticOpen,
-	"raven_query_add":               semanticQueryAdd,
-	"raven_query_remove":            semanticQueryRemove,
-	"raven_docs":                    semanticDocsBrowse,
-	"raven_docs_fetch":              semanticDocsFetch,
-	"raven_docs_list":               semanticDocsList,
-	"raven_docs_search":             semanticDocsSearch,
-	"raven_skill_list":              semanticSkillList,
-	"raven_skill_install":           semanticSkillInstall,
-	"raven_skill_remove":            semanticSkillRemove,
-	"raven_skill_doctor":            semanticSkillDoctor,
-	"raven_search":                  semanticReadSearch,
-	"raven_read":                    semanticReadFile,
-	"raven_backlinks":               semanticReadBacklinks,
-	"raven_outlinks":                semanticReadOutlinks,
-	"raven_resolve":                 semanticReadResolve,
-	"raven_query":                   semanticReadQuery,
-	"raven_schema":                  semanticSchemaIntrospect,
-	"raven_schema_add_type":         semanticSchemaAddType,
-	"raven_schema_add_trait":        semanticSchemaAddTrait,
-	"raven_schema_add_field":        semanticSchemaAddField,
-	"raven_schema_validate":         semanticSchemaValidate,
-	"raven_schema_update_type":      semanticSchemaUpdateType,
-	"raven_schema_update_trait":     semanticSchemaUpdateTrait,
-	"raven_schema_update_field":     semanticSchemaUpdateField,
-	"raven_schema_remove_type":      semanticSchemaRemoveType,
-	"raven_schema_remove_trait":     semanticSchemaRemoveTrait,
-	"raven_schema_remove_field":     semanticSchemaRemoveField,
-	"raven_schema_rename_field":     semanticSchemaRenameField,
-	"raven_schema_rename_type":      semanticSchemaRenameType,
-	"raven_schema_template_list":    semanticSchemaTemplateList,
-	"raven_schema_template_get":     semanticSchemaTemplateGet,
-	"raven_schema_template_set":     semanticSchemaTemplateSet,
-	"raven_schema_template_remove":  semanticSchemaTemplateRemove,
-	"raven_schema_template_bind":    semanticSchemaTemplateBind,
-	"raven_schema_template_unbind":  semanticSchemaTemplateUnbind,
-	"raven_schema_template_default": semanticSchemaTemplateDefault,
-	"raven_template":                semanticTemplateList,
-	"raven_template_list":           semanticTemplateList,
-	"raven_template_write":          semanticTemplateWrite,
-	"raven_template_delete":         semanticTemplateDelete,
-	"raven_workflow_list":           semanticWorkflowList,
-	"raven_workflow_add":            semanticWorkflowAdd,
-	"raven_workflow_scaffold":       semanticWorkflowScaffold,
-	"raven_workflow_remove":         semanticWorkflowRemove,
-	"raven_workflow_show":           semanticWorkflowShow,
-	"raven_workflow_validate":       semanticWorkflowValidate,
-	"raven_workflow_step_add":       semanticWorkflowStepAdd,
-	"raven_workflow_step_update":    semanticWorkflowStepUpdate,
-	"raven_workflow_step_remove":    semanticWorkflowStepRemove,
-	"raven_workflow_run":            semanticWorkflowRun,
-	"raven_workflow_continue":       semanticWorkflowContinue,
-	"raven_workflow_runs_list":      semanticWorkflowRunsList,
-	"raven_workflow_runs_step":      semanticWorkflowRunsStep,
-	"raven_workflow_runs_prune":     semanticWorkflowRunsPrune,
+var compatibilityToolCommandAliases = map[string]string{
+	"raven_vault":    "vault_list",
+	"raven_config":   "config_show",
+	"raven_template": "template_list",
+}
+
+func resolveCompatibilityCommandID(name string) (string, bool) {
+	if commandID, ok := compatibilityToolCommandAliases[name]; ok {
+		return commandID, true
+	}
+	return commands.ResolveToolCommandID(name)
+}
+
+func semanticOpForCommandID(commandID string) (semanticOp, bool) {
+	switch commandID {
+	case "new":
+		return semanticObjectCreate, true
+	case "upsert":
+		return semanticObjectUpsert, true
+	case "add":
+		return semanticObjectAppend, true
+	case "set":
+		return semanticObjectSetFields, true
+	case "delete":
+		return semanticObjectDelete, true
+	case "move":
+		return semanticObjectMove, true
+	case "reclassify":
+		return semanticObjectReclassify, true
+	case "import":
+		return semanticObjectImport, true
+	case "edit":
+		return semanticObjectEdit, true
+	case "update":
+		return semanticTraitUpdate, true
+	case "init":
+		return semanticVaultInit, true
+	case "reindex":
+		return semanticVaultReindex, true
+	case "check":
+		return semanticVaultCheck, true
+	case "vault_stats":
+		return semanticVaultStats, true
+	case "vault_list":
+		return semanticVaultList, true
+	case "vault_current":
+		return semanticVaultCurrent, true
+	case "vault_use":
+		return semanticVaultUse, true
+	case "vault_clear":
+		return semanticVaultClear, true
+	case "vault_pin":
+		return semanticVaultPin, true
+	case "vault_add":
+		return semanticVaultAdd, true
+	case "vault_remove":
+		return semanticVaultRemove, true
+	case "vault_path":
+		return semanticVaultPath, true
+	case "config_show":
+		return semanticConfigShow, true
+	case "config_init":
+		return semanticConfigInit, true
+	case "config_set":
+		return semanticConfigSet, true
+	case "config_unset":
+		return semanticConfigUnset, true
+	case "version":
+		return semanticSystemVersion, true
+	case "daily":
+		return semanticDaily, true
+	case "date":
+		return semanticDate, true
+	case "open":
+		return semanticOpen, true
+	case "query_add":
+		return semanticQueryAdd, true
+	case "query_remove":
+		return semanticQueryRemove, true
+	case "docs":
+		return semanticDocsBrowse, true
+	case "docs_fetch":
+		return semanticDocsFetch, true
+	case "docs_list":
+		return semanticDocsList, true
+	case "docs_search":
+		return semanticDocsSearch, true
+	case "skill_list":
+		return semanticSkillList, true
+	case "skill_install":
+		return semanticSkillInstall, true
+	case "skill_remove":
+		return semanticSkillRemove, true
+	case "skill_doctor":
+		return semanticSkillDoctor, true
+	case "search":
+		return semanticReadSearch, true
+	case "read":
+		return semanticReadFile, true
+	case "backlinks":
+		return semanticReadBacklinks, true
+	case "outlinks":
+		return semanticReadOutlinks, true
+	case "resolve":
+		return semanticReadResolve, true
+	case "query":
+		return semanticReadQuery, true
+	case "schema":
+		return semanticSchemaIntrospect, true
+	case "schema_add_type":
+		return semanticSchemaAddType, true
+	case "schema_add_trait":
+		return semanticSchemaAddTrait, true
+	case "schema_add_field":
+		return semanticSchemaAddField, true
+	case "schema_validate":
+		return semanticSchemaValidate, true
+	case "schema_update_type":
+		return semanticSchemaUpdateType, true
+	case "schema_update_trait":
+		return semanticSchemaUpdateTrait, true
+	case "schema_update_field":
+		return semanticSchemaUpdateField, true
+	case "schema_remove_type":
+		return semanticSchemaRemoveType, true
+	case "schema_remove_trait":
+		return semanticSchemaRemoveTrait, true
+	case "schema_remove_field":
+		return semanticSchemaRemoveField, true
+	case "schema_rename_field":
+		return semanticSchemaRenameField, true
+	case "schema_rename_type":
+		return semanticSchemaRenameType, true
+	case "schema_template_list":
+		return semanticSchemaTemplateList, true
+	case "schema_template_get":
+		return semanticSchemaTemplateGet, true
+	case "schema_template_set":
+		return semanticSchemaTemplateSet, true
+	case "schema_template_remove":
+		return semanticSchemaTemplateRemove, true
+	case "schema_template_bind":
+		return semanticSchemaTemplateBind, true
+	case "schema_template_unbind":
+		return semanticSchemaTemplateUnbind, true
+	case "schema_template_default":
+		return semanticSchemaTemplateDefault, true
+	case "template_list":
+		return semanticTemplateList, true
+	case "template_write":
+		return semanticTemplateWrite, true
+	case "template_delete":
+		return semanticTemplateDelete, true
+	case "workflow_list":
+		return semanticWorkflowList, true
+	case "workflow_add":
+		return semanticWorkflowAdd, true
+	case "workflow_scaffold":
+		return semanticWorkflowScaffold, true
+	case "workflow_remove":
+		return semanticWorkflowRemove, true
+	case "workflow_show":
+		return semanticWorkflowShow, true
+	case "workflow_validate":
+		return semanticWorkflowValidate, true
+	case "workflow_step_add":
+		return semanticWorkflowStepAdd, true
+	case "workflow_step_update":
+		return semanticWorkflowStepUpdate, true
+	case "workflow_step_remove":
+		return semanticWorkflowStepRemove, true
+	case "workflow_run":
+		return semanticWorkflowRun, true
+	case "workflow_continue":
+		return semanticWorkflowContinue, true
+	case "workflow_runs_list":
+		return semanticWorkflowRunsList, true
+	case "workflow_runs_step":
+		return semanticWorkflowRunsStep, true
+	case "workflow_runs_prune":
+		return semanticWorkflowRunsPrune, true
+	default:
+		return "", false
+	}
 }
 
 func semanticHandlerExists(op semanticOp) bool {
@@ -525,7 +624,12 @@ func (s *Server) callSemanticTool(op semanticOp, args map[string]interface{}) (s
 }
 
 func (s *Server) callToolDirect(name string, args map[string]interface{}) (string, bool, bool) {
-	op, ok := compatibilityToolSemanticMap[name]
+	commandID, ok := resolveCompatibilityCommandID(name)
+	if !ok {
+		return "", false, false
+	}
+
+	op, ok := semanticOpForCommandID(commandID)
 	if !ok {
 		return "", false, false
 	}
@@ -535,8 +639,8 @@ func (s *Server) callToolDirect(name string, args map[string]interface{}) (strin
 		return errorEnvelope(
 			"INTERNAL_ERROR",
 			"semantic handler is not configured",
-			"report this issue with the failing tool name and semantic operation",
-			map[string]interface{}{"tool_name": name, "semantic_op": op},
+			"report this issue with the failing command id and semantic operation",
+			map[string]interface{}{"tool_name": name, "command": commandID, "semantic_op": op},
 		), true, true
 	}
 	return out, isErr, true

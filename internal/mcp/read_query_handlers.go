@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/query"
+	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
@@ -218,7 +218,7 @@ func (s *Server) callDirectQuery(args map[string]interface{}) (string, bool) {
 
 	resolvedQuery, queryName, isSavedQuery, err := directResolveQueryString(queryString, normalized["inputs"], rt.VaultCfg)
 	if err != nil {
-		return errorEnvelope("QUERY_INVALID", err.Error(), "", nil), true
+		return mapDirectQuerySvcError(err)
 	}
 
 	limit := intValueDefault(normalized["limit"], 0)
@@ -636,96 +636,11 @@ func directResolveQueryString(queryString string, rawInputs interface{}, vaultCf
 		return queryString, "", false, nil
 	}
 
-	inlineArgs := tokens[1:]
-	declaredArgs := directNormalizeSavedQueryArgs(saved.Args)
-	inputs, err := directParseSavedQueryInputs(inlineArgs, rawInputs, declaredArgs)
-	if err != nil {
-		return "", "", true, err
-	}
-	resolvedQuery, err := directResolveSavedQueryTemplate(name, saved.Query, inputs)
+	resolvedQuery, err := querysvc.ResolveSavedQuery(name, saved, tokens[1:], keyValuePairs(rawInputs))
 	if err != nil {
 		return "", "", true, err
 	}
 	return resolvedQuery, name, true, nil
-}
-
-func directNormalizeSavedQueryArgs(args []string) []string {
-	out := make([]string, 0, len(args))
-	seen := make(map[string]struct{}, len(args))
-	for _, arg := range args {
-		name := strings.TrimSpace(arg)
-		if name == "" {
-			continue
-		}
-		if _, exists := seen[name]; exists {
-			continue
-		}
-		seen[name] = struct{}{}
-		out = append(out, name)
-	}
-	return out
-}
-
-func directParseSavedQueryInputs(inlineArgs []string, rawInputs interface{}, declaredArgs []string) (map[string]string, error) {
-	inputs := make(map[string]string)
-	positional := make([]string, 0)
-
-	addToken := func(token string) {
-		if strings.Contains(token, "=") {
-			parts := strings.SplitN(token, "=", 2)
-			key := strings.TrimSpace(parts[0])
-			val := strings.TrimSpace(parts[1])
-			if key != "" {
-				inputs[key] = val
-			}
-			return
-		}
-		positional = append(positional, token)
-	}
-
-	for _, token := range inlineArgs {
-		addToken(token)
-	}
-	for _, pair := range keyValuePairs(rawInputs) {
-		addToken(pair)
-	}
-
-	if len(positional) > len(declaredArgs) {
-		return nil, fmt.Errorf("too many positional inputs: got %d, expected %d", len(positional), len(declaredArgs))
-	}
-
-	for i, value := range positional {
-		argName := declaredArgs[i]
-		if _, exists := inputs[argName]; exists {
-			return nil, fmt.Errorf("input '%s' specified twice", argName)
-		}
-		inputs[argName] = value
-	}
-
-	for _, argName := range declaredArgs {
-		if _, ok := inputs[argName]; !ok {
-			return nil, fmt.Errorf("missing required input '%s'", argName)
-		}
-	}
-
-	return inputs, nil
-}
-
-func directResolveSavedQueryTemplate(name, queryString string, inputs map[string]string) (string, error) {
-	re := regexp.MustCompile(`\{\{\s*args\.([a-zA-Z0-9_-]+)\s*\}\}`)
-	matches := re.FindAllStringSubmatch(queryString, -1)
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-		argName := match[1]
-		val, ok := inputs[argName]
-		if !ok {
-			return "", fmt.Errorf("saved query '%s' is missing input '%s'", name, argName)
-		}
-		queryString = strings.ReplaceAll(queryString, match[0], val)
-	}
-	return queryString, nil
 }
 
 func dedupeIDs(ids []string) []string {

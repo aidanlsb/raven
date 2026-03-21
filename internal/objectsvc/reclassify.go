@@ -35,6 +35,23 @@ type ReclassifyRequest struct {
 	ParseOptions *parser.ParseOptions
 }
 
+type ReclassifyByReferenceRequest struct {
+	VaultPath   string
+	VaultConfig *config.VaultConfig
+	Schema      *schema.Schema
+
+	Reference string
+
+	NewTypeName string
+	FieldValues map[string]string
+
+	NoMove     bool
+	UpdateRefs bool
+	Force      bool
+
+	ParseOptions *parser.ParseOptions
+}
+
 type ReclassifyResult struct {
 	ObjectID      string   `json:"object_id"`
 	OldType       string   `json:"old_type"`
@@ -243,6 +260,32 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 	}
 
 	return result, nil
+}
+
+func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult, error) {
+	if strings.TrimSpace(req.Reference) == "" {
+		return nil, newError(ErrorInvalidInput, "reference is required", "Usage: rvn reclassify <object> <new-type>", nil, nil)
+	}
+
+	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	if err != nil {
+		return nil, err
+	}
+
+	return Reclassify(ReclassifyRequest{
+		VaultPath:    req.VaultPath,
+		VaultConfig:  req.VaultConfig,
+		Schema:       req.Schema,
+		ObjectRef:    req.Reference,
+		ObjectID:     resolved.ObjectID,
+		FilePath:     resolved.FilePath,
+		NewTypeName:  req.NewTypeName,
+		FieldValues:  req.FieldValues,
+		NoMove:       req.NoMove,
+		UpdateRefs:   req.UpdateRefs,
+		Force:        req.Force,
+		ParseOptions: req.ParseOptions,
+	})
 }
 
 func resolveRequiredFieldsForReclassify(
