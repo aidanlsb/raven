@@ -76,6 +76,36 @@ func buildStringFuncCondition(funcType StringFuncType, fieldExpr string, value s
 	}
 }
 
+func buildRefTargetVariantsCondition(refAlias, resolvedTarget, rawTarget string) (string, []interface{}) {
+	variants := make([]string, 0, 2)
+	seen := make(map[string]struct{}, 2)
+	for _, candidate := range []string{resolvedTarget, rawTarget} {
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		variants = append(variants, candidate)
+	}
+
+	clauses := make([]string, 0, len(variants)*2)
+	args := make([]interface{}, 0, len(variants)*2)
+	for _, variant := range variants {
+		clauses = append(clauses, fmt.Sprintf("%s.target_id = ?", refAlias))
+		args = append(args, variant)
+		clauses = append(clauses, fmt.Sprintf("%s.target_raw = ?", refAlias))
+		args = append(args, variant)
+	}
+
+	if len(clauses) == 0 {
+		return "1=0", nil
+	}
+
+	return "(" + strings.Join(clauses, " OR ") + ")", args
+}
+
 // buildRefdPredicateSQL builds SQL for refd:{...} predicates.
 // Matches objects/traits that are referenced by the subquery matches.
 // isTrait indicates if we're building for a trait query (uses different columns).

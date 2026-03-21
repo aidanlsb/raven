@@ -44,15 +44,16 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 		if err != nil {
 			return "", nil, err
 		}
+		targetCond, targetArgs := buildRefTargetVariantsCondition("r", resolvedTarget, p.Target)
 
 		// Match refs on the same line as the trait
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
 			WHERE r.file_path = %s.file_path 
 			  AND r.line_number = %s.line_number
-			  AND (r.target_id = ? OR (r.target_id IS NULL AND r.target_raw = ?))
-		)`, alias, alias)
-		args = append(args, resolvedTarget, p.Target)
+			  AND %s
+		)`, alias, alias, targetCond)
+		args = append(args, targetArgs...)
 	} else if p.SubQuery != nil {
 		// Subquery - reference to objects matching the subquery
 		var targetConditions []string

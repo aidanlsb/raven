@@ -17,19 +17,12 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 	args = append(args, p.SubQuery.TypeName)
 
 	if p.SubQuery.Predicate != nil {
-		switch tp := p.SubQuery.Predicate.(type) {
-		case *ValuePredicate:
-			cond, condArgs := buildValueCondition(tp, "value")
-			traitConditions = append(traitConditions, cond)
-			args = append(args, condArgs...)
-		case *FieldPredicate:
-			// Handle .value predicate for traits
-			if tp.Field == "value" {
-				cond, condArgs := buildCompareCondition(tp.Value, tp.CompareOp, tp.Negated(), "value")
-				traitConditions = append(traitConditions, cond)
-				args = append(args, condArgs...)
-			}
+		cond, condArgs, err := e.buildTraitPredicateSQL(p.SubQuery.Predicate, "traits")
+		if err != nil {
+			return "", nil, err
 		}
+		traitConditions = append(traitConditions, cond)
+		args = append(args, condArgs...)
 	}
 
 	cond := fmt.Sprintf(`EXISTS (
@@ -305,13 +298,13 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 		if err != nil {
 			return "", nil, err
 		}
+		targetCond, targetArgs := buildRefTargetVariantsCondition("r", resolvedTarget, p.Target)
 
-		// Match against resolved target_id, OR fall back to target_raw for unresolved refs
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			WHERE r.source_id = %s.id AND (r.target_id = ? OR (r.target_id IS NULL AND r.target_raw = ?))
-		)`, alias)
-		args = append(args, resolvedTarget, p.Target)
+			WHERE r.source_id = %s.id AND %s
+		)`, alias, targetCond)
+		args = append(args, targetArgs...)
 	} else if p.SubQuery != nil {
 		// Subquery - reference to objects matching the subquery
 		var targetConditions []string

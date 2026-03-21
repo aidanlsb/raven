@@ -133,6 +133,95 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+func setupRefRegressionDB(t *testing.T) *sql.DB {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE objects (
+			id TEXT PRIMARY KEY,
+			file_path TEXT NOT NULL,
+			type TEXT NOT NULL,
+			heading TEXT,
+			heading_level INTEGER,
+			fields TEXT NOT NULL DEFAULT '{}',
+			line_start INTEGER NOT NULL,
+			line_end INTEGER,
+			parent_id TEXT,
+			created_at INTEGER,
+			updated_at INTEGER
+		);
+
+		CREATE TABLE traits (
+			id TEXT PRIMARY KEY,
+			file_path TEXT NOT NULL,
+			parent_object_id TEXT NOT NULL,
+			trait_type TEXT NOT NULL,
+			value TEXT,
+			content TEXT NOT NULL,
+			line_number INTEGER NOT NULL,
+			created_at INTEGER
+		);
+
+		CREATE TABLE refs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source_id TEXT NOT NULL,
+			target_id TEXT,
+			target_raw TEXT NOT NULL,
+			display_text TEXT,
+			file_path TEXT NOT NULL,
+			line_number INTEGER,
+			position_start INTEGER,
+			position_end INTEGER
+		);
+
+		CREATE TABLE field_refs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source_id TEXT NOT NULL,
+			field_name TEXT NOT NULL,
+			target_id TEXT,
+			target_raw TEXT NOT NULL,
+			resolution_status TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			line_number INTEGER
+		);
+
+		CREATE VIRTUAL TABLE fts_content USING fts5(
+			object_id,
+			title,
+			content,
+			file_path UNINDEXED,
+			tokenize='porter unicode61'
+		);
+	`)
+	if err != nil {
+		t.Fatalf("failed to create schema: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start) VALUES
+			('objects/project/raven', 'objects/project/raven.md', 'project', '{"name":"Raven"}', 1),
+			('projects/website', 'projects/website.md', 'project', '{"name":"Website"}', 1),
+			('daily/2026-02-14', 'daily/2026-02-14.md', 'date', '{}', 1),
+			('daily/2026-02-15', 'daily/2026-02-15.md', 'date', '{}', 1);
+
+		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
+			('trait1', 'daily/2026-02-14.md', 'daily/2026-02-14', 'todo', 'todo', 'Investigate [[project/raven]]', 5),
+			('trait2', 'daily/2026-02-15.md', 'daily/2026-02-15', 'todo', 'todo', 'Follow up on [[projects/website]]', 6);
+
+		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number) VALUES
+			('daily/2026-02-14', 'project/raven', 'project/raven', 'daily/2026-02-14.md', 5),
+			('daily/2026-02-15', NULL, 'projects/website', 'daily/2026-02-15.md', 6);
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert regression data: %v", err)
+	}
+
+	return db
+}
+
 func TestExecuteObjectQuery(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
@@ -348,6 +437,52 @@ func TestExecuteObjectQuery(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestExecuteTraitQuery_MatchesDirectRefsAcrossRootVariants(t *testing.T) {
+	db := setupRefRegressionDB(t)
+	defer db.Close()
+
+	executor := NewExecutor(db)
+
+	q, err := Parse("trait:todo .value==todo refs([[project/raven]])")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	results, err := executor.executeTraitQuery(q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if results[0].FilePath != "daily/2026-02-14.md" || results[0].Line != 5 {
+		t.Fatalf("unexpected trait match: %+v", results[0])
+	}
+}
+
+func TestExecuteObjectQuery_HasAppliesNestedTraitPredicates(t *testing.T) {
+	db := setupRefRegressionDB(t)
+	defer db.Close()
+
+	executor := NewExecutor(db)
+
+	q, err := Parse("object:date has(trait:todo refs([[projects/website]]))")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	results, err := executor.executeObjectQuery(q)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if results[0].ID != "daily/2026-02-15" {
+		t.Fatalf("unexpected object match: %+v", results[0])
 	}
 }
 
