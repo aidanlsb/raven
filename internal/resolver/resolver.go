@@ -135,6 +135,7 @@ type ResolveResult struct {
 //  3. Date references (YYYY-MM-DD)
 //  4. Object IDs (exact path match)
 //  5. Short names (filename match)
+//  6. For unresolved path-like refs, leaf-based canonical fallback within the same path family
 func (r *Resolver) Resolve(ref string) ResolveResult {
 	ref = strings.TrimSpace(ref)
 	sluggedRef := pages.Slugify(ref)
@@ -154,6 +155,9 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 
 	if isPathLikeRef(ref) {
 		addPathMatches(r, c, ref)
+		if len(c.matches) == 0 {
+			addPathLeafCanonicalMatches(r, c, ref)
+		}
 	} else {
 		addShortMatches(r, c, ref, sluggedRef)
 	}
@@ -279,6 +283,68 @@ func addPathMatches(r *Resolver, c *matchCollector, ref string) {
 			}
 		}
 	}
+}
+
+func addPathLeafCanonicalMatches(r *Resolver, c *matchCollector, ref string) {
+	baseRef, fragment, isEmbedded := paths.ParseEmbeddedID(ref)
+	if isEmbedded {
+		return
+	}
+
+	familyDir := path.Dir(baseRef)
+	if familyDir == "." || familyDir == "" {
+		return
+	}
+
+	leaf := path.Base(baseRef)
+	if leaf == "." || leaf == "" {
+		return
+	}
+
+	leafCollector := newMatchCollector()
+	sluggedLeaf := pages.Slugify(leaf)
+	lowerLeaf := strings.ToLower(leaf)
+	addAliasMatches(r, leafCollector, leaf, sluggedLeaf)
+	addNameFieldMatches(r, leafCollector, leaf, sluggedLeaf, lowerLeaf)
+	addShortMatches(r, leafCollector, leaf, sluggedLeaf)
+
+	matches := preferParentOverSections(leafCollector.matches)
+	for _, match := range matches {
+		targetID, ok := canonicalTargetWithinPathFamily(r, familyDir, match, fragment)
+		if !ok {
+			continue
+		}
+		c.add(targetID, leafCollector.sources[match])
+	}
+}
+
+func canonicalTargetWithinPathFamily(r *Resolver, familyDir, candidateID, fragment string) (string, bool) {
+	baseID, _, _ := paths.ParseEmbeddedID(candidateID)
+	if !pathFamilyMatches(familyDir, baseID) {
+		return "", false
+	}
+
+	if fragment == "" {
+		if _, exists := r.objectIDs[baseID]; exists {
+			return baseID, true
+		}
+		return "", false
+	}
+
+	targetID := baseID + "#" + fragment
+	if _, exists := r.objectIDs[targetID]; exists {
+		return targetID, true
+	}
+	return "", false
+}
+
+func pathFamilyMatches(requestedDir, candidateID string) bool {
+	candidateDir := path.Dir(candidateID)
+	if candidateDir == "." {
+		candidateDir = ""
+	}
+
+	return candidateDir == requestedDir || strings.HasSuffix(candidateDir, "/"+requestedDir)
 }
 
 func addShortMatches(r *Resolver, c *matchCollector, ref, sluggedRef string) {

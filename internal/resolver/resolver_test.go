@@ -164,6 +164,107 @@ func TestResolverSuffixMatching(t *testing.T) {
 	})
 }
 
+func TestResolverPathLeafCanonicalFallback(t *testing.T) {
+	t.Run("path-like ref resolves via alias within same family", func(t *testing.T) {
+		r := New(
+			[]string{
+				"person/kenan-glasgold",
+				"person/vibhav-joopelli",
+				"project/kenan",
+			},
+			Options{
+				Aliases: map[string]string{
+					"kenan": "person/kenan-glasgold",
+					"vib":   "person/vibhav-joopelli",
+				},
+			},
+		)
+
+		result := r.Resolve("person/kenan")
+		if result.Ambiguous {
+			t.Fatalf("expected non-ambiguous result, got matches: %v", result.Matches)
+		}
+		if result.TargetID != "person/kenan-glasgold" {
+			t.Fatalf("got %q, want %q", result.TargetID, "person/kenan-glasgold")
+		}
+
+		result = r.Resolve("person/vib")
+		if result.Ambiguous {
+			t.Fatalf("expected non-ambiguous result, got matches: %v", result.Matches)
+		}
+		if result.TargetID != "person/vibhav-joopelli" {
+			t.Fatalf("got %q, want %q", result.TargetID, "person/vibhav-joopelli")
+		}
+	})
+
+	t.Run("path-like ref resolves within rooted family", func(t *testing.T) {
+		r := New(
+			[]string{
+				"objects/person/kenan-glasgold",
+			},
+			Options{
+				Aliases: map[string]string{
+					"kenan": "objects/person/kenan-glasgold",
+				},
+			},
+		)
+
+		result := r.Resolve("person/kenan")
+		if result.Ambiguous {
+			t.Fatalf("expected non-ambiguous result, got matches: %v", result.Matches)
+		}
+		if result.TargetID != "objects/person/kenan-glasgold" {
+			t.Fatalf("got %q, want %q", result.TargetID, "objects/person/kenan-glasgold")
+		}
+	})
+
+	t.Run("path-like ref does not cross path families", func(t *testing.T) {
+		r := New(
+			[]string{
+				"person/kenan-glasgold",
+				"project/kenan",
+			},
+			Options{
+				Aliases: map[string]string{
+					"kenan": "project/kenan",
+				},
+			},
+		)
+
+		result := r.Resolve("person/kenan")
+		if result.TargetID != "" || result.Ambiguous {
+			t.Fatalf("expected unresolved result, got %+v", result)
+		}
+	})
+
+	t.Run("path-like ref remains ambiguous when multiple family matches exist", func(t *testing.T) {
+		r := New(
+			[]string{
+				"person/kenan-glasgold",
+				"people/kenan-adams",
+			},
+			Options{
+				Aliases: map[string]string{
+					"kenan": "person/kenan-glasgold",
+				},
+			},
+		)
+
+		result := r.Resolve("kenan")
+		if result.TargetID != "person/kenan-glasgold" {
+			t.Fatalf("expected plain alias resolution to still work, got %+v", result)
+		}
+
+		result = r.Resolve("person/kenan")
+		if result.Ambiguous {
+			t.Fatalf("expected person/kenan to remain bounded, got ambiguous %+v", result)
+		}
+		if result.TargetID != "person/kenan-glasgold" {
+			t.Fatalf("got %q, want %q", result.TargetID, "person/kenan-glasgold")
+		}
+	})
+}
+
 func TestResolverPrefersParentOverSection(t *testing.T) {
 	// When a file and its section have the same short name (e.g., "cursor"),
 	// the resolver should prefer the parent file object.
