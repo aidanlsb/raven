@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -67,24 +68,34 @@ Examples:
 }
 
 func dumpFullSchema(vaultPath string, start time.Time) error {
-	result, err := schemasvc.FullSchema(vaultPath)
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
+	result := executeCanonicalCommand("schema", vaultPath, nil)
 	if isJSONOutput() {
-		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+
+	data := canonicalDataMap(result)
+	version, _ := data["version"].(int)
+	types, err := decodeSchemaValue[map[string]schemasvc.TypeSchema](data["types"])
+	if err != nil {
+		return err
+	}
+	core, _ := decodeSchemaValue[map[string]schemasvc.CoreTypeSchema](data["core"])
+	traits, err := decodeSchemaValue[map[string]schemasvc.TraitSchema](data["traits"])
+	if err != nil {
+		return err
+	}
+	queries, _ := decodeSchemaValue[map[string]schemasvc.SavedQueryInfo](data["queries"])
 
 	// Human-readable output
-	fmt.Printf("Schema (version %d)\n\n", result.Version)
+	fmt.Printf("Schema (version %d)\n\n", version)
 
 	fmt.Println("Types:")
 	var typeNames []string
-	for name, typeSchema := range result.Types {
+	for name, typeSchema := range types {
 		if !typeSchema.Builtin {
 			typeNames = append(typeNames, name)
 		}
@@ -100,7 +111,7 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 	fmt.Println("\nCore:")
 	coreNames := []string{"date", "page", "section"}
 	for _, name := range coreNames {
-		coreDef, ok := result.Core[name]
+		coreDef, ok := core[name]
 		if !ok {
 			continue
 		}
@@ -115,7 +126,7 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 
 	fmt.Println("\nTraits:")
 	var traitNames []string
-	for name := range result.Traits {
+	for name := range traits {
 		traitNames = append(traitNames, name)
 	}
 	sort.Strings(traitNames)
@@ -123,10 +134,10 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 		fmt.Printf("  %s\n", name)
 	}
 
-	if len(result.Queries) > 0 {
+	if len(queries) > 0 {
 		fmt.Println("\nSaved Queries:")
 		var queryNames []string
-		for name := range result.Queries {
+		for name := range queries {
 			queryNames = append(queryNames, name)
 		}
 		sort.Strings(queryNames)
@@ -139,33 +150,29 @@ func dumpFullSchema(vaultPath string, start time.Time) error {
 }
 
 func listSchemaTypes(vaultPath string, start time.Time) error {
-	result, err := schemasvc.Types(vaultPath)
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
+	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "types"})
 	if isJSONOutput() {
-		data := map[string]interface{}{
-			"types": result.Types,
-		}
-		if result.Hint != nil {
-			data["hint"] = result.Hint
-		}
-		outputSuccess(data, &Meta{Count: len(result.Types), QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	types, err := decodeSchemaValue[map[string]schemasvc.TypeSchema](data["types"])
+	if err != nil {
+		return err
 	}
 
 	// Human-readable output
 	fmt.Println("Types:")
 	var names []string
-	for name := range result.Types {
+	for name := range types {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		t := result.Types[name]
+		t := types[name]
 		if t.Builtin {
 			fmt.Printf("  %s (built-in)\n", name)
 		} else {
@@ -177,29 +184,29 @@ func listSchemaTypes(vaultPath string, start time.Time) error {
 }
 
 func listSchemaTraits(vaultPath string, start time.Time) error {
-	result, err := schemasvc.Traits(vaultPath)
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
+	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "traits"})
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"traits": result.Traits,
-		}, &Meta{Count: len(result.Traits), QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	traits, err := decodeSchemaValue[map[string]schemasvc.TraitSchema](data["traits"])
+	if err != nil {
+		return err
 	}
 
 	// Human-readable output
 	fmt.Println("Traits:")
 	var names []string
-	for name := range result.Traits {
+	for name := range traits {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		t := result.Traits[name]
+		t := traits[name]
 		if t.Type != "" {
 			fmt.Printf("  %s (%s)\n", name, t.Type)
 		} else {
@@ -211,34 +218,37 @@ func listSchemaTraits(vaultPath string, start time.Time) error {
 }
 
 func listSchemaCore(vaultPath string, start time.Time) error {
-	result, err := schemasvc.CoreList(vaultPath)
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-	elapsed := time.Since(start).Milliseconds()
-
+	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "core"})
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{"core": result.Core}, &Meta{Count: len(result.Core), QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	core, err := decodeSchemaValue[map[string]schemasvc.CoreTypeSchema](data["core"])
+	if err != nil {
+		return err
 	}
 
 	fmt.Println("Core types:")
 	names := []string{"date", "page", "section"}
 	for _, name := range names {
-		core, ok := result.Core[name]
+		coreType, ok := core[name]
 		if !ok {
 			continue
 		}
-		if len(core.Templates) > 0 {
-			fmt.Printf("  %s templates=%v", name, core.Templates)
-			if core.DefaultTemplate != "" {
-				fmt.Printf(" default=%s", core.DefaultTemplate)
+		if len(coreType.Templates) > 0 {
+			fmt.Printf("  %s templates=%v", name, coreType.Templates)
+			if coreType.DefaultTemplate != "" {
+				fmt.Printf(" default=%s", coreType.DefaultTemplate)
 			}
 			fmt.Println()
 			continue
 		}
-		if core.DefaultTemplate != "" {
-			fmt.Printf("  %s default=%s\n", name, core.DefaultTemplate)
+		if coreType.DefaultTemplate != "" {
+			fmt.Printf("  %s default=%s\n", name, coreType.DefaultTemplate)
 			continue
 		}
 		fmt.Printf("  %s\n", name)
@@ -247,16 +257,18 @@ func listSchemaCore(vaultPath string, start time.Time) error {
 }
 
 func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
-	result, err := schemasvc.CoreByName(vaultPath, coreTypeName)
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-	elapsed := time.Since(start).Milliseconds()
-	coreJSON := result.Core
-
+	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "core", "name": coreTypeName})
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{"core": coreJSON}, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	coreJSON, err := decodeSchemaValue[schemasvc.CoreTypeSchema](data["core"])
+	if err != nil {
+		return err
 	}
 
 	fmt.Printf("Core type: %s\n", coreTypeName)
@@ -275,17 +287,18 @@ func getSchemaCore(vaultPath, coreTypeName string, start time.Time) error {
 }
 
 func getSchemaType(vaultPath, typeName string, start time.Time) error {
-	result, err := schemasvc.TypeByName(vaultPath, typeName)
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-	typeJSON := result.Type
-
+	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "type", "name": typeName})
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{"type": typeJSON}, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	typeJSON, err := decodeSchemaValue[schemasvc.TypeSchema](data["type"])
+	if err != nil {
+		return err
 	}
 
 	// Human-readable output
@@ -350,17 +363,18 @@ func getSchemaType(vaultPath, typeName string, start time.Time) error {
 }
 
 func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
-	result, err := schemasvc.TraitByName(vaultPath, traitName)
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-	traitJSON := result.Trait
-
+	result := executeCanonicalCommand("schema", vaultPath, map[string]interface{}{"subcommand": "trait", "name": traitName})
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{"trait": traitJSON}, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	traitJSON, err := decodeSchemaValue[schemasvc.TraitSchema](data["trait"])
+	if err != nil {
+		return err
 	}
 
 	// Human-readable output
@@ -380,4 +394,19 @@ func getSchemaTrait(vaultPath, traitName string, start time.Time) error {
 
 func init() {
 	rootCmd.AddCommand(schemaCmd)
+}
+
+func decodeSchemaValue[T any](raw interface{}) (T, error) {
+	var out T
+	if raw == nil {
+		return out, nil
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return out, err
+	}
+	return out, nil
 }

@@ -2,6 +2,20 @@ package commands
 
 import "strings"
 
+var compatibilityToolCommandAliases = map[string]string{
+	"raven_vault":    "vault_list",
+	"raven_config":   "config_show",
+	"raven_template": "template_list",
+}
+
+func CompatibilityToolCommandAliases() map[string]string {
+	out := make(map[string]string, len(compatibilityToolCommandAliases))
+	for toolName, commandID := range compatibilityToolCommandAliases {
+		out[toolName] = commandID
+	}
+	return out
+}
+
 // ResolveToolCommandID resolves a workflow/MCP tool name to a registry command ID.
 //
 // Accepted forms:
@@ -12,6 +26,10 @@ func ResolveToolCommandID(toolName string) (string, bool) {
 	toolName = strings.TrimSpace(toolName)
 	if toolName == "" {
 		return "", false
+	}
+
+	if commandID, ok := compatibilityToolCommandAliases[toolName]; ok {
+		return commandID, true
 	}
 
 	candidates := []string{toolName}

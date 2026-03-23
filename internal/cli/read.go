@@ -1,14 +1,14 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
@@ -88,83 +88,52 @@ Examples:
 			readRawFlag = true
 		}
 
-		rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: false})
-		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-		}
-		defer rt.Close()
-
-		result, err := readsvc.Read(rt, readsvc.ReadRequest{
-			Reference: reference,
-			Raw:       readRawFlag,
-			Lines:     readLinesFlag,
-			StartLine: readStartLine,
-			EndLine:   readEndLine,
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "read",
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"path":       reference,
+				"raw":        readRawFlag,
+				"lines":      readLinesFlag,
+				"start-line": readStartLine,
+				"end-line":   readEndLine,
+			},
 		})
-		if err != nil {
-			var ambiguous *readsvc.AmbiguousRefError
-			if errors.As(err, &ambiguous) {
-				return handleErrorMsg(ErrRefAmbiguous, ambiguous.Error(), "Use a full object ID/path to disambiguate")
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
 			}
-
-			var notFound *readsvc.RefNotFoundError
-			if errors.As(err, &notFound) {
-				return handleErrorMsg(ErrRefNotFound, notFound.Error(), "Check the reference and try again")
+			if result.Error != nil {
+				return handleErrorWithDetails(mapReadCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 			}
-
-			var invalidRange *readsvc.InvalidLineRangeError
-			if errors.As(err, &invalidRange) {
-				return handleErrorMsg(ErrInvalidInput, invalidRange.Error(), invalidRange.Suggestion())
-			}
-
-			if os.IsNotExist(err) {
-				return handleErrorMsg(ErrFileNotFound, err.Error(), "Check the path and try again")
-			}
-
-			if strings.Contains(err.Error(), "failed to open database") || strings.Contains(err.Error(), "failed to create resolver") {
-				return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
-			}
-			return handleError(ErrFileReadError, err, "")
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		elapsed := time.Since(start).Milliseconds()
+		data, _ := result.Data.(map[string]interface{})
 
 		if readRawFlag {
 			if isJSONOutput() {
-				res := FileResult{
-					Path:      result.Path,
-					Content:   result.Content,
-					LineCount: result.LineCount,
-				}
-				// Only include range metadata when it's not the full file, or when lines are requested.
-				if result.StartLine > 0 {
-					res.StartLine = result.StartLine
-					res.EndLine = result.EndLine
-				}
-				if len(result.Lines) > 0 {
-					lines := make([]FileLine, 0, len(result.Lines))
-					for _, line := range result.Lines {
-						lines = append(lines, FileLine{Num: line.Num, Text: line.Text})
-					}
-					res.Lines = lines
-				}
-				outputSuccess(res, &Meta{QueryTimeMs: elapsed})
+				outputJSON(result)
 				return nil
 			}
 
 			// Human-readable: just output the content
-			fmt.Print(result.Content)
+			content, _ := data["content"].(string)
+			fmt.Print(content)
 			return nil
 		}
 
 		return readEnriched(readEnrichedOptions{
-			fileRelPath:    result.Path,
-			content:        result.Content,
-			lineCount:      result.LineCount,
+			fileRelPath:    stringFromMap(data, "path"),
+			content:        stringFromMap(data, "content"),
+			lineCount:      intFromMap(data, "line_count"),
 			elapsedMs:      elapsed,
-			references:     result.References,
-			backlinks:      result.Backlinks,
-			backlinksCount: result.BacklinksCount,
+			references:     readReferencesFromMap(data["references"]),
+			backlinks:      readBacklinksFromMap(data["backlinks"]),
+			backlinksCount: metaCount(result.Meta),
 		})
 	},
 }
@@ -176,4 +145,126 @@ func init() {
 	readCmd.Flags().IntVar(&readStartLine, "start-line", 0, "Start line (1-indexed, inclusive) for raw output")
 	readCmd.Flags().IntVar(&readEndLine, "end-line", 0, "End line (1-indexed, inclusive) for raw output")
 	rootCmd.AddCommand(readCmd)
+}
+
+func mapReadCode(code string) string {
+	switch code {
+	case "CONFIG_INVALID":
+		return ErrConfigInvalid
+	case "REF_AMBIGUOUS":
+		return ErrRefAmbiguous
+	case "REF_NOT_FOUND":
+		return ErrRefNotFound
+	case "INVALID_ARGS", "INVALID_INPUT":
+		return ErrInvalidInput
+	case "DATABASE_ERROR":
+		return ErrDatabaseError
+	case "FILE_NOT_FOUND":
+		return ErrFileNotFound
+	case "FILE_READ_ERROR":
+		return ErrFileReadError
+	default:
+		return ErrInternal
+	}
+}
+
+func stringFromMap(data map[string]interface{}, key string) string {
+	if data == nil {
+		return ""
+	}
+	value, _ := data[key].(string)
+	return value
+}
+
+func intFromMap(data map[string]interface{}, key string) int {
+	if data == nil {
+		return 0
+	}
+	switch value := data[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+func metaCount(meta *commandexec.Meta) int {
+	if meta == nil {
+		return 0
+	}
+	return meta.Count
+}
+
+func readReferencesFromMap(raw interface{}) []readsvc.ReadReference {
+	refs, ok := raw.([]readsvc.ReadReference)
+	if ok {
+		return refs
+	}
+
+	rows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	refs = make([]readsvc.ReadReference, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ref := readsvc.ReadReference{}
+		ref.Text, _ = entry["text"].(string)
+		if path, ok := entry["path"].(string); ok {
+			ref.Path = &path
+		}
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
+func readBacklinksFromMap(raw interface{}) []readsvc.ReadBacklinkGroup {
+	backlinks, ok := raw.([]readsvc.ReadBacklinkGroup)
+	if ok {
+		return backlinks
+	}
+
+	rows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	backlinks = make([]readsvc.ReadBacklinkGroup, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		group := readsvc.ReadBacklinkGroup{}
+		group.Source, _ = entry["source"].(string)
+		group.Lines = stringSliceFromAny(entry["lines"])
+		backlinks = append(backlinks, group)
+	}
+	return backlinks
+}
+
+func stringSliceFromAny(raw interface{}) []string {
+	switch values := raw.(type) {
+	case []string:
+		return values
+	case []interface{}:
+		out := make([]string, 0, len(values))
+		for _, value := range values {
+			text, ok := value.(string)
+			if ok {
+				out = append(out, text)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }

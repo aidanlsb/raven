@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/datesvc"
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -35,17 +38,36 @@ Examples:
 		if len(args) > 0 {
 			dateArg = args[0]
 		}
-		result, err := datesvc.EnsureDaily(datesvc.EnsureDailyRequest{
-			VaultPath:  vaultPath,
-			DateArg:    dateArg,
-			TemplateID: dailyTemplate,
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "daily",
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"date":     dateArg,
+				"template": dailyTemplate,
+			},
 		})
-		if err != nil {
-			return mapDateSvcError(err)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
-		if !isJSONOutput() && result.Created {
-			fmt.Printf("Created %s\n", result.RelativePath)
+		data, _ := result.Data.(map[string]interface{})
+		relativePath, _ := data["file"].(string)
+		created, _ := data["created"].(bool)
+		filePath := relativePath
+		if relativePath != "" {
+			filePath = filepath.Join(vaultPath, filepath.FromSlash(relativePath))
+		}
+
+		if !isJSONOutput() && created {
+			fmt.Printf("Created %s\n", relativePath)
 		}
 
 		if isJSONOutput() {
@@ -56,47 +78,23 @@ Examples:
 
 			opened := false
 			if dailyEdit {
-				opened = vault.OpenInEditor(getConfig(), result.FilePath)
+				opened = vault.OpenInEditor(getConfig(), filePath)
 			}
 
-			outputSuccess(map[string]interface{}{
-				"file":    result.RelativePath,
-				"date":    result.Date,
-				"created": result.Created,
-				"opened":  opened,
-				"editor":  editor,
-			}, nil)
+			payload := map[string]interface{}{}
+			for key, value := range data {
+				payload[key] = value
+			}
+			payload["opened"] = opened
+			payload["editor"] = editor
+			outputSuccess(payload, result.Meta)
 			return nil
 		}
 
-		openFileInEditor(result.FilePath, result.RelativePath, result.Created)
+		openFileInEditor(filePath, relativePath, created)
 
 		return nil
 	},
-}
-
-func mapDateSvcError(err error) error {
-	svcErr, ok := datesvc.AsError(err)
-	if !ok {
-		return handleError(ErrInternal, err, "")
-	}
-
-	switch svcErr.Code {
-	case datesvc.CodeInvalidInput:
-		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-	case datesvc.CodeConfigInvalid:
-		return handleError(ErrConfigInvalid, svcErr, svcErr.Suggestion)
-	case datesvc.CodeSchemaInvalid:
-		return handleError(ErrSchemaInvalid, svcErr, svcErr.Suggestion)
-	case datesvc.CodeDatabaseError:
-		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
-	case datesvc.CodeQueryFailed:
-		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
-	case datesvc.CodeFileWriteErr:
-		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-	default:
-		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-	}
 }
 
 func init() {

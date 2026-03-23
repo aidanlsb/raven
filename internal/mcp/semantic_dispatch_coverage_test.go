@@ -13,7 +13,7 @@ func TestCompatibilityToolResolutionCoversInvokableCommands(t *testing.T) {
 			continue
 		}
 		toolName := mcpToolName(commandID)
-		resolved, ok := resolveCompatibilityCommandID(toolName)
+		resolved, ok := commands.ResolveToolCommandID(toolName)
 		if !ok || resolved != commandID {
 			missing = append(missing, commandID)
 		}

@@ -2,17 +2,15 @@ package cli
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -62,38 +60,22 @@ Examples:
 type ReclassifyResult = objectsvc.ReclassifyResult
 
 func runReclassify(vaultPath, objectRef, newTypeName string) error {
-	start := time.Now()
-
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-	}
-
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
-	}
-
 	fieldValues := parseReclassifyFieldFlags(reclassifyFieldFlags)
 	force := reclassifyForce
 
 	for {
-		result, err := objectsvc.ReclassifyByReference(objectsvc.ReclassifyByReferenceRequest{
-			VaultPath:    vaultPath,
-			VaultConfig:  vaultCfg,
-			Schema:       sch,
-			Reference:    objectRef,
-			NewTypeName:  newTypeName,
-			FieldValues:  fieldValues,
-			NoMove:       reclassifyNoMove,
-			UpdateRefs:   reclassifyUpdateRefs,
-			Force:        force,
-			ParseOptions: buildParseOptions(vaultCfg),
+		result := executeCanonicalCommand("reclassify", vaultPath, map[string]interface{}{
+			"object":      objectRef,
+			"new-type":    newTypeName,
+			"field":       fieldValues,
+			"no-move":     reclassifyNoMove,
+			"update-refs": reclassifyUpdateRefs,
+			"force":       force,
 		})
-		if err != nil {
-			var svcErr *objectsvc.Error
-			if errors.As(err, &svcErr) && svcErr.Code == objectsvc.ErrorRequiredField && !isJSONOutput() {
-				prompted, promptErr := promptMissingReclassifyFields(newTypeName, svcErr.Details)
+		if !result.OK {
+			if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredField {
+				details, _ := result.Error.Details.(map[string]interface{})
+				prompted, promptErr := promptMissingReclassifyFields(newTypeName, details)
 				if promptErr != nil {
 					return promptErr
 				}
@@ -102,17 +84,18 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 				}
 				continue
 			}
-			return mapReclassifyServiceError(err)
+			return handleCanonicalReclassifyFailure(result)
 		}
 
-		if result.NeedsConfirm && !force {
+		data := canonicalDataMap(result)
+		if boolValue(data["needs_confirm"]) && !force {
 			if isJSONOutput() {
-				outputSuccess(result, nil)
+				outputJSON(result)
 				return nil
 			}
 
 			fmt.Fprintf(os.Stderr, "The following fields are not defined on type '%s' and will be dropped:\n", newTypeName)
-			for _, f := range result.DroppedFields {
+			for _, f := range stringSliceFromAny(data["dropped_fields"]) {
 				fmt.Fprintf(os.Stderr, "  - %s\n", f)
 			}
 			fmt.Fprint(os.Stderr, "\nProceed? [y/N]: ")
@@ -131,81 +114,41 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 			continue
 		}
 
-		if result.ChangedFilePath != "" {
-			maybeReindex(vaultPath, result.ChangedFilePath, vaultCfg)
-		}
-
-		elapsed := time.Since(start).Milliseconds()
 		if isJSONOutput() {
-			outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+			outputJSON(result)
 			return nil
 		}
 
-		fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(result.File), result.OldType, result.NewType))
-		if len(result.AddedFields) > 0 {
-			fmt.Printf("  Added fields: %s\n", strings.Join(result.AddedFields, ", "))
+		fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(stringValue(data["file"])), stringValue(data["old_type"]), stringValue(data["new_type"])))
+		if added := stringSliceFromAny(data["added_fields"]); len(added) > 0 {
+			fmt.Printf("  Added fields: %s\n", strings.Join(added, ", "))
 		}
-		if len(result.DroppedFields) > 0 {
-			fmt.Printf("  Dropped fields: %s\n", strings.Join(result.DroppedFields, ", "))
+		if dropped := stringSliceFromAny(data["dropped_fields"]); len(dropped) > 0 {
+			fmt.Printf("  Dropped fields: %s\n", strings.Join(dropped, ", "))
 		}
-		if result.Moved {
-			fmt.Printf("  Moved: %s → %s\n", result.OldPath, result.NewPath)
+		if boolValue(data["moved"]) {
+			fmt.Printf("  Moved: %s → %s\n", stringValue(data["old_path"]), stringValue(data["new_path"]))
 		}
-		if len(result.UpdatedRefs) > 0 {
-			fmt.Printf("  Updated %d references\n", len(result.UpdatedRefs))
+		if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
+			fmt.Printf("  Updated %d references\n", len(updatedRefs))
 		}
-		for _, warning := range result.WarningMessages {
-			fmt.Printf("  %s\n", ui.Warning(warning))
+		for _, warning := range result.Warnings {
+			fmt.Printf("  %s\n", ui.Warning(warning.Message))
 		}
 
 		return nil
 	}
 }
 
-func mapReclassifyServiceError(err error) error {
-	var svcErr *objectsvc.Error
-	if !errors.As(err, &svcErr) {
-		return handleError(ErrInternal, err, "")
+func handleCanonicalReclassifyFailure(result commandexec.Result) error {
+	if isJSONOutput() {
+		outputJSON(result)
+		return nil
 	}
-
-	suggestion := svcErr.Suggestion
-	svcCause := svcErr.Cause
-
-	switch svcErr.Code {
-	case objectsvc.ErrorTypeNotFound:
-		if suggestion == "" {
-			suggestion = "Check schema.yaml for available types"
-		}
-		return handleErrorMsg(ErrTypeNotFound, svcErr.Message, suggestion)
-	case objectsvc.ErrorRequiredField:
-		if isJSONOutput() {
-			outputError(ErrRequiredField, svcErr.Message, svcErr.Details, suggestion)
-			return nil
-		}
-		return handleErrorMsg(ErrRequiredField, svcErr.Message, suggestion)
-	case objectsvc.ErrorInvalidInput:
-		return handleErrorMsg(ErrInvalidInput, svcErr.Message, suggestion)
-	case objectsvc.ErrorValidationFailed:
-		if svcCause != nil {
-			return handleError(ErrValidationFailed, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrValidationFailed, svcErr.Message, suggestion)
-	case objectsvc.ErrorFileRead:
-		if svcCause != nil {
-			return handleError(ErrFileReadError, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrFileReadError, svcErr.Message, suggestion)
-	case objectsvc.ErrorFileWrite:
-		if svcCause != nil {
-			return handleError(ErrFileWriteError, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrFileWriteError, svcErr.Message, suggestion)
-	default:
-		if svcCause != nil {
-			return handleError(ErrInternal, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrInternal, svcErr.Message, suggestion)
+	if result.Error != nil {
+		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
 	}
+	return handleErrorMsg(ErrInternal, "command execution failed", "")
 }
 
 func parseReclassifyFieldFlags(flags []string) map[string]string {

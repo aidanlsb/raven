@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/aidanlsb/raven/internal/configsvc"
 )
 
 var (
@@ -27,47 +25,55 @@ var (
 )
 
 func runConfigShow(cmd *cobra.Command, args []string) error {
-	ctx, err := configsvc.ShowContext(configsvc.ContextOptions{
-		ConfigPathOverride: configPath,
-		StatePathOverride:  statePathFlag,
-	})
-	if err != nil {
-		return handleConfigSvcError(err, "")
+	result := executeCanonicalCommand("config_show", "", nil)
+	if !result.OK {
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
+		}
+		if result.Error != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+		}
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 
 	if isJSONOutput() {
-		outputSuccess(ctx.Data(), nil)
+		outputJSON(result)
 		return nil
 	}
 
-	if !ctx.ConfigExists {
-		fmt.Printf("Config file does not exist: %s\n", ctx.ConfigPath)
+	data := canonicalDataMap(result)
+	configFile := stringValue(data["config_path"])
+	stateFile := stringValue(data["state_path"])
+	if !boolValue(data["exists"]) {
+		fmt.Printf("Config file does not exist: %s\n", configFile)
 		fmt.Println("Run 'rvn config init' to create it.")
 		return nil
 	}
 
-	fmt.Printf("config: %s\n", ctx.ConfigPath)
-	fmt.Printf("state:  %s\n", ctx.StatePath)
+	fmt.Printf("config: %s\n", configFile)
+	fmt.Printf("state:  %s\n", stateFile)
 
-	if v := strings.TrimSpace(ctx.Cfg.DefaultVault); v != "" {
+	if v := strings.TrimSpace(stringValue(data["default_vault"])); v != "" {
 		fmt.Printf("default_vault: %s\n", v)
 	}
-	if v := strings.TrimSpace(ctx.Cfg.StateFile); v != "" {
+	if v := strings.TrimSpace(stringValue(data["state_file"])); v != "" {
 		fmt.Printf("state_file: %s\n", v)
 	}
-	if v := strings.TrimSpace(ctx.Cfg.Editor); v != "" {
+	if v := strings.TrimSpace(stringValue(data["editor"])); v != "" {
 		fmt.Printf("editor: %s\n", v)
 	}
-	if v := strings.TrimSpace(ctx.Cfg.EditorMode); v != "" {
+	if v := strings.TrimSpace(stringValue(data["editor_mode"])); v != "" {
 		fmt.Printf("editor_mode: %s\n", v)
 	}
-	if v := strings.TrimSpace(ctx.Cfg.UI.Accent); v != "" {
+	ui, _ := data["ui"].(map[string]interface{})
+	if v := strings.TrimSpace(stringValue(ui["accent"])); v != "" {
 		fmt.Printf("ui.accent: %s\n", v)
 	}
-	if v := strings.TrimSpace(ctx.Cfg.UI.CodeTheme); v != "" {
+	if v := strings.TrimSpace(stringValue(ui["code_theme"])); v != "" {
 		fmt.Printf("ui.code_theme: %s\n", v)
 	}
-	vaults := ctx.Cfg.ListVaults()
+	vaults := stringMap(data["vaults"])
 	if len(vaults) == 0 {
 		fmt.Println("vaults: (none)")
 		return nil
@@ -101,25 +107,28 @@ var configInitCmd = &cobra.Command{
 	Short: "Create default global config.toml if missing",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := configsvc.Init(configsvc.InitRequest{
-			ConfigPathOverride: configPath,
-		})
-		if err != nil {
-			return handleConfigSvcError(err, "")
+		result := executeCanonicalCommand("config_init", "", nil)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"config_path": result.ConfigPath,
-				"created":     result.Created,
-			}, nil)
+			outputJSON(result)
 			return nil
 		}
 
-		if !result.Created {
-			fmt.Printf("Config already exists: %s\n", result.ConfigPath)
+		data := canonicalDataMap(result)
+		if !boolValue(data["created"]) {
+			fmt.Printf("Config already exists: %s\n", stringValue(data["config_path"]))
 		} else {
-			fmt.Printf("Created config: %s\n", result.ConfigPath)
+			fmt.Printf("Created config: %s\n", stringValue(data["config_path"]))
 		}
 		return nil
 	},
@@ -130,54 +139,46 @@ var configSetCmd = &cobra.Command{
 	Short: "Set one or more global config.toml fields",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req := configsvc.SetRequest{
-			ContextOptions: configsvc.ContextOptions{
-				ConfigPathOverride: configPath,
-				StatePathOverride:  statePathFlag,
-			},
-		}
+		argsMap := map[string]interface{}{}
 		if cmd.Flags().Changed("editor") {
-			v := configSetEditor
-			req.Editor = &v
+			argsMap["editor"] = configSetEditor
 		}
 		if cmd.Flags().Changed("editor-mode") {
-			v := configSetEditorMode
-			req.EditorMode = &v
+			argsMap["editor-mode"] = configSetEditorMode
 		}
 		if cmd.Flags().Changed("state-file") {
-			v := configSetStateFile
-			req.StateFile = &v
+			argsMap["state-file"] = configSetStateFile
 		}
 		if cmd.Flags().Changed("default-vault") {
-			v := configSetDefaultVault
-			req.DefaultVault = &v
+			argsMap["default-vault"] = configSetDefaultVault
 		}
 		if cmd.Flags().Changed("ui-accent") {
-			v := configSetUIAccent
-			req.UIAccent = &v
+			argsMap["ui-accent"] = configSetUIAccent
 		}
 		if cmd.Flags().Changed("ui-code-theme") {
-			v := configSetUICodeTheme
-			req.UICodeTheme = &v
+			argsMap["ui-code-theme"] = configSetUICodeTheme
 		}
 
-		result, err := configsvc.Set(req)
-		if err != nil {
-			if svcErr, ok := configsvc.AsError(err); ok && svcErr.Code == configsvc.CodeInvalidInput && strings.Contains(svcErr.Message, "not configured") {
-				return handleConfigSvcError(err, "Run 'rvn vault list' to see configured vaults")
+		result := executeCanonicalCommand("config_set", "", argsMap)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
 			}
-			return handleConfigSvcError(err, "")
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		if isJSONOutput() {
-			data := result.Context.Data()
-			data["changed"] = result.Changed
-			outputSuccess(data, nil)
+			outputJSON(result)
 			return nil
 		}
 
-		fmt.Printf("Updated config: %s\n", result.Context.ConfigPath)
-		fmt.Printf("changed: %s\n", strings.Join(result.Changed, ", "))
+		data := canonicalDataMap(result)
+		fmt.Printf("Updated config: %s\n", stringValue(data["config_path"]))
+		fmt.Printf("changed: %s\n", strings.Join(stringSliceFromAny(data["changed"]), ", "))
 		return nil
 	},
 }
@@ -187,66 +188,35 @@ var configUnsetCmd = &cobra.Command{
 	Short: "Clear one or more global config.toml fields",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := configsvc.Unset(configsvc.UnsetRequest{
-			ContextOptions: configsvc.ContextOptions{
-				ConfigPathOverride: configPath,
-				StatePathOverride:  statePathFlag,
-			},
-			Editor:       configUnsetEditor,
-			EditorMode:   configUnsetEditorMode,
-			StateFile:    configUnsetStateFile,
-			DefaultVault: configUnsetDefaultVault,
-			UIAccent:     configUnsetUIAccent,
-			UICodeTheme:  configUnsetUICodeTheme,
+		result := executeCanonicalCommand("config_unset", "", map[string]interface{}{
+			"editor":        configUnsetEditor,
+			"editor-mode":   configUnsetEditorMode,
+			"state-file":    configUnsetStateFile,
+			"default-vault": configUnsetDefaultVault,
+			"ui-accent":     configUnsetUIAccent,
+			"ui-code-theme": configUnsetUICodeTheme,
 		})
-		if err != nil {
-			return handleConfigSvcError(err, "Run 'rvn config init' first")
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		if isJSONOutput() {
-			data := result.Context.Data()
-			data["changed"] = result.Changed
-			outputSuccess(data, nil)
+			outputJSON(result)
 			return nil
 		}
 
-		fmt.Printf("Updated config: %s\n", result.Context.ConfigPath)
-		fmt.Printf("cleared: %s\n", strings.Join(result.Changed, ", "))
+		data := canonicalDataMap(result)
+		fmt.Printf("Updated config: %s\n", stringValue(data["config_path"]))
+		fmt.Printf("cleared: %s\n", strings.Join(stringSliceFromAny(data["changed"]), ", "))
 		return nil
 	},
-}
-
-func handleConfigSvcError(err error, hint string) error {
-	svcErr, ok := configsvc.AsError(err)
-	if !ok {
-		return handleError(ErrInternal, err, hint)
-	}
-
-	code := ErrInternal
-	switch svcErr.Code {
-	case configsvc.CodeConfigInvalid:
-		code = ErrConfigInvalid
-	case configsvc.CodeVaultNotFound:
-		code = ErrVaultNotFound
-	case configsvc.CodeVaultNotSpecified:
-		code = ErrVaultNotSpecified
-	case configsvc.CodeFileNotFound:
-		code = ErrFileNotFound
-	case configsvc.CodeFileReadError:
-		code = ErrFileReadError
-	case configsvc.CodeFileWriteError:
-		code = ErrFileWriteError
-	case configsvc.CodeInvalidInput:
-		code = ErrInvalidInput
-	case configsvc.CodeMissingArgument:
-		code = ErrMissingArgument
-	case configsvc.CodeDuplicateName:
-		code = ErrDuplicateName
-	case configsvc.CodeConfirmationNeeded:
-		code = ErrConfirmationRequired
-	}
-
-	return handleError(code, svcErr, hint)
 }
 
 func init() {
@@ -275,4 +245,26 @@ func init() {
 	configUnsetCmd.Flags().BoolVar(&configUnsetUICodeTheme, "ui-code-theme", false, "Clear ui.code_theme")
 
 	rootCmd.AddCommand(configCmd)
+}
+
+func stringMap(raw interface{}) map[string]string {
+	switch value := raw.(type) {
+	case map[string]string:
+		out := make(map[string]string, len(value))
+		for key, item := range value {
+			out[key] = item
+		}
+		return out
+	case map[string]interface{}:
+		out := make(map[string]string, len(value))
+		for key, item := range value {
+			text, ok := item.(string)
+			if ok {
+				out[key] = text
+			}
+		}
+		return out
+	default:
+		return map[string]string{}
+	}
 }

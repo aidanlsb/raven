@@ -1,14 +1,15 @@
 package cli
 
 import (
-	"fmt"
+	"context"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
 var searchLimit int
@@ -22,45 +23,93 @@ var searchCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		query := strings.Join(args, " ")
-
-		rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
-		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "search",
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"query": query,
+				"limit": searchLimit,
+				"type":  searchType,
+			},
+		})
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(mapSearchCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
-		defer rt.Close()
 
-		results, err := readsvc.Search(rt, query, searchType, searchLimit)
-		if err != nil {
-			return fmt.Errorf("search failed: %w", err)
-		}
-
-		// Output results
-		if jsonOutput {
-			outputSuccess(map[string]interface{}{
-				"query":   query,
-				"results": formatSearchResults(results),
-			}, &Meta{Count: len(results)})
+		if isJSONOutput() {
+			outputJSON(result)
 			return nil
 		}
 
-		printSearchResults(query, results)
+		data, _ := result.Data.(map[string]interface{})
+		resultQuery, _ := data["query"].(string)
+		printSearchResults(resultQuery, searchMatchesFromResult(data["results"]))
 
 		return nil
 	},
 }
 
-func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {
-	formatted := make([]map[string]interface{}, len(results))
-	for i, r := range results {
-		formatted[i] = map[string]interface{}{
-			"object_id": r.ObjectID,
-			"title":     r.Title,
-			"file_path": r.FilePath,
-			"snippet":   r.Snippet,
-			"rank":      r.Rank,
+func searchMatchesFromResult(raw interface{}) []model.SearchMatch {
+	rows, ok := raw.([]map[string]interface{})
+	if ok {
+		matches := make([]model.SearchMatch, 0, len(rows))
+		for _, row := range rows {
+			matches = append(matches, searchMatchFromMap(row))
 		}
+		return matches
 	}
-	return formatted
+
+	genericRows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	matches := make([]model.SearchMatch, 0, len(genericRows))
+	for _, row := range genericRows {
+		rowMap, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		matches = append(matches, searchMatchFromMap(rowMap))
+	}
+	return matches
+}
+
+func searchMatchFromMap(row map[string]interface{}) model.SearchMatch {
+	match := model.SearchMatch{}
+	if row == nil {
+		return match
+	}
+	match.ObjectID, _ = row["object_id"].(string)
+	match.Title, _ = row["title"].(string)
+	match.FilePath, _ = row["file_path"].(string)
+	match.Snippet, _ = row["snippet"].(string)
+	switch rank := row["rank"].(type) {
+	case float64:
+		match.Rank = rank
+	case float32:
+		match.Rank = float64(rank)
+	}
+	return match
+}
+
+func mapSearchCode(code string) string {
+	switch code {
+	case "DATABASE_ERROR":
+		return ErrDatabaseError
+	case "INVALID_ARGS", "INVALID_INPUT":
+		return ErrInvalidInput
+	default:
+		return ErrInternal
+	}
 }
 
 func init() {

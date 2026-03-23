@@ -2,31 +2,29 @@ package cli
 
 import (
 	"fmt"
-	"runtime/debug"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/maintsvc"
+	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
 const defaultModulePath = "github.com/aidanlsb/raven" // Kept for test compatibility.
 
 type versionInfo = maintsvc.VersionInfo
 
-var readBuildInfo maintsvc.BuildInfoReader = debug.ReadBuildInfo
-
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show Raven version and build information",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		info := currentVersionInfo()
-
 		if isJSONOutput() {
-			outputSuccess(info, nil)
+			result := executeCanonicalCommand("version", "", nil)
+			outputJSON(result)
 			return nil
 		}
 
+		info := currentVersionInfo()
 		fmt.Printf("rvn %s\n", info.Version)
 		fmt.Printf("module: %s\n", info.ModulePath)
 		if info.Commit != "" {
@@ -44,11 +42,7 @@ var versionCmd = &cobra.Command{
 }
 
 func currentVersionInfo() versionInfo {
-	info := maintsvc.CurrentVersionInfoWithReader(readBuildInfo)
-	if info.ModulePath == "" {
-		info.ModulePath = defaultModulePath
-	}
-	return info
+	return versioninfo.Current()
 }
 
 func init() {

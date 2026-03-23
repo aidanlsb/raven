@@ -1,11 +1,7 @@
 package mcp
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,55 +9,23 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-const commandContractSchemaVersion = "2"
+const commandContractSchemaVersion = commands.CommandContractSchemaVersion
 
-type parameterType string
+type parameterType = commands.ParameterType
 
 const (
-	paramTypeString      parameterType = "string"
-	paramTypeBool        parameterType = "boolean"
-	paramTypeInteger     parameterType = "integer"
-	paramTypeObject      parameterType = "object"
-	paramTypeStringArray parameterType = "string_array"
+	paramTypeString      parameterType = commands.ParameterTypeString
+	paramTypeBool        parameterType = commands.ParameterTypeBool
+	paramTypeInteger     parameterType = commands.ParameterTypeInteger
+	paramTypeObject      parameterType = commands.ParameterTypeObject
+	paramTypeStringArray parameterType = commands.ParameterTypeStringArray
 )
 
-type parameterSpec struct {
-	Name        string
-	Type        parameterType
-	Required    bool
-	Description string
-	Examples    []string
-}
+type parameterSpec = commands.ParameterSpec
 
-type commandContract struct {
-	CommandID      string
-	ToolName       string
-	CLIName        string
-	CLIUsage       string
-	Summary        string
-	Description    string
-	Category       string
-	ReadOnly       bool
-	Destructive    bool
-	PreviewMode    string
-	Parameters     map[string]parameterSpec
-	ParameterOrder []string
-	Required       []string
-	Examples       []string
-	UseCases       []string
-	Policy         commands.Policy
-	SchemaVersion  string
-	SchemaHash     string
-}
+type commandContract = commands.CommandContract
 
-type validationIssue struct {
-	Field    string `json:"field"`
-	Code     string `json:"code"`
-	Message  string `json:"message"`
-	Expected string `json:"expected,omitempty"`
-	Actual   string `json:"actual,omitempty"`
-	Hint     string `json:"hint,omitempty"`
-}
+type validationIssue = commands.ValidationIssue
 
 func (s *Server) callCompactTool(name string, args map[string]interface{}) (string, bool, bool) {
 	switch name {
@@ -415,428 +379,44 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 		), true
 	}
 
-	op, ok := semanticOpForCommandID(commandID)
-	if !ok {
-		return errorEnvelope(
-			"INTERNAL_ERROR",
-			"semantic handler is not configured for command",
-			"report this issue with the failing command id",
-			map[string]interface{}{"command": commandID},
-		), true
+	if out, isErr, handled := s.callCanonicalCommand(commandID, invokeArgs); handled {
+		return out, isErr
 	}
 
-	out, isErr, handled := s.callSemanticTool(op, invokeArgs)
-	if !handled {
-		return errorEnvelope(
-			"INTERNAL_ERROR",
-			"semantic handler is not configured",
-			"report this issue with the failing command id",
-			map[string]interface{}{"command": commandID, "semantic_op": op},
-		), true
-	}
-	return out, isErr
+	return errorEnvelope(
+		"INTERNAL_ERROR",
+		"canonical handler is not configured for command",
+		"report this issue with the failing command id",
+		map[string]interface{}{"command": commandID},
+	), true
 }
 
 func discoverableContracts() []commandContract {
-	ids := make([]string, 0, len(commands.Registry))
-	for commandID := range commands.Registry {
-		policy := commands.PolicyForCommandID(commandID)
-		if !policy.Discoverable {
-			continue
-		}
-		ids = append(ids, commandID)
-	}
-	sort.Strings(ids)
-
-	out := make([]commandContract, 0, len(ids))
-	for _, commandID := range ids {
-		contract, ok := buildCommandContract(commandID)
-		if ok {
-			out = append(out, contract)
-		}
-	}
-	return out
+	return commands.DiscoverableContracts()
 }
 
 func buildCommandContract(commandID string) (commandContract, bool) {
-	meta, ok := commands.EffectiveMeta(commandID)
-	if !ok {
-		return commandContract{}, false
-	}
-
-	parameters := make(map[string]parameterSpec, len(meta.Args)+len(meta.Flags))
-	paramOrder := make([]string, 0, len(meta.Args)+len(meta.Flags))
-	required := make([]string, 0, len(meta.Args))
-
-	for _, arg := range meta.Args {
-		spec := parameterSpec{
-			Name:        arg.Name,
-			Type:        paramTypeString,
-			Required:    arg.Required,
-			Description: arg.Description,
-		}
-		parameters[arg.Name] = spec
-		paramOrder = append(paramOrder, arg.Name)
-		if arg.Required {
-			required = append(required, arg.Name)
-		}
-	}
-
-	for _, flag := range meta.Flags {
-		spec := parameterSpec{
-			Name:        flag.Name,
-			Type:        flagTypeToParameterType(flag.Type),
-			Required:    false,
-			Description: flag.Description,
-			Examples:    append([]string{}, flag.Examples...),
-		}
-		parameters[flag.Name] = spec
-		paramOrder = append(paramOrder, flag.Name)
-	}
-	if hasStdinFlag(meta.Flags) {
-		parameters["object_ids"] = parameterSpec{
-			Name:        "object_ids",
-			Type:        paramTypeStringArray,
-			Required:    false,
-			Description: "Object IDs used as MCP stdin replacement for bulk mode",
-		}
-		paramOrder = append(paramOrder, "object_ids")
-	}
-
-	policy := commands.PolicyForCommandID(commandID)
-	description := strings.TrimSpace(meta.LongDesc)
-	if description == "" {
-		description = strings.TrimSpace(meta.Description)
-	} else {
-		description = withExampleSection(description, meta.Examples)
-	}
-
-	contract := commandContract{
-		CommandID:      commandID,
-		ToolName:       mcpToolName(commandID),
-		CLIName:        meta.Name,
-		CLIUsage:       commands.FullCLIUsage(commandID),
-		Summary:        strings.TrimSpace(meta.Description),
-		Description:    description,
-		Category:       string(meta.Category),
-		ReadOnly:       meta.Access == commands.AccessRead,
-		Destructive:    meta.Risk == commands.RiskDestructive,
-		PreviewMode:    previewModeForCommand(meta),
-		Parameters:     parameters,
-		ParameterOrder: paramOrder,
-		Required:       required,
-		Examples:       append([]string{}, meta.Examples...),
-		UseCases:       append([]string{}, meta.UseCases...),
-		Policy:         policy,
-		SchemaVersion:  commandContractSchemaVersion,
-	}
-	contract.SchemaHash = commandSchemaHash(contract, meta)
-	return contract, true
-}
-
-func commandSchemaHash(contract commandContract, meta commands.Meta) string {
-	hashSource := struct {
-		SchemaVersion string              `json:"schema_version"`
-		CommandID     string              `json:"command_id"`
-		CLIName       string              `json:"cli_name"`
-		CLIUsage      string              `json:"cli_usage"`
-		Description   string              `json:"description"`
-		Args          []commands.ArgMeta  `json:"args"`
-		Flags         []commands.FlagMeta `json:"flags"`
-		Policy        commands.Policy     `json:"policy"`
-		Category      string              `json:"category"`
-		ReadOnly      bool                `json:"read_only"`
-		Destructive   bool                `json:"destructive"`
-		PreviewMode   string              `json:"preview_mode"`
-	}{
-		SchemaVersion: contract.SchemaVersion,
-		CommandID:     contract.CommandID,
-		CLIName:       contract.CLIName,
-		CLIUsage:      contract.CLIUsage,
-		Description:   contract.Description,
-		Args:          append([]commands.ArgMeta{}, meta.Args...),
-		Flags:         append([]commands.FlagMeta{}, meta.Flags...),
-		Policy:        contract.Policy,
-		Category:      contract.Category,
-		ReadOnly:      contract.ReadOnly,
-		Destructive:   contract.Destructive,
-		PreviewMode:   contract.PreviewMode,
-	}
-	b, _ := json.Marshal(hashSource)
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:8])
-}
-
-func contractParameterSchema(contract commandContract) map[string]interface{} {
-	out := make(map[string]interface{}, len(contract.Parameters))
-	for _, name := range contract.ParameterOrder {
-		spec := contract.Parameters[name]
-		property := map[string]interface{}{
-			"description": spec.Description,
-		}
-		switch spec.Type {
-		case paramTypeString:
-			property["type"] = "string"
-		case paramTypeBool:
-			property["type"] = "boolean"
-		case paramTypeInteger:
-			property["type"] = "integer"
-		case paramTypeObject:
-			property["type"] = "object"
-		case paramTypeStringArray:
-			property["type"] = "array"
-			property["items"] = map[string]interface{}{"type": "string"}
-		default:
-			property["type"] = "string"
-		}
-		if len(spec.Examples) > 0 {
-			property["examples"] = append([]string{}, spec.Examples...)
-		}
-		out[name] = property
-	}
-	return out
+	return commands.BuildCommandContract(commandID)
 }
 
 func compactArgsSchema(contract commandContract) map[string]interface{} {
-	return map[string]interface{}{
-		"required":   append([]string{}, contract.Required...),
-		"properties": contractParameterSchema(contract),
-	}
+	return commands.CompactArgsSchema(contract)
 }
 
 func compactInvokeExample(contract commandContract) map[string]interface{} {
-	args := make(map[string]interface{})
-	for _, name := range contract.ParameterOrder {
-		spec := contract.Parameters[name]
-		if !spec.Required {
-			continue
-		}
-		args[name] = exampleValueForParam(spec)
-	}
-	return map[string]interface{}{
-		"command":     contract.CommandID,
-		"schema_hash": contract.SchemaHash,
-		"args":        args,
-	}
-}
-
-func exampleValueForParam(spec parameterSpec) interface{} {
-	if len(spec.Examples) > 0 {
-		return spec.Examples[0]
-	}
-	switch spec.Type {
-	case paramTypeBool:
-		return true
-	case paramTypeInteger:
-		return 1
-	case paramTypeObject:
-		return map[string]interface{}{}
-	case paramTypeStringArray:
-		return []string{}
-	default:
-		return fmt.Sprintf("<%s>", spec.Name)
-	}
+	return commands.CompactInvokeExample(contract)
 }
 
 func buildInvokeParamSpec(contract commandContract) map[string]parameterSpec {
-	paramSpec := make(map[string]parameterSpec, len(contract.Parameters))
-	for name, p := range contract.Parameters {
-		paramSpec[name] = p
-	}
-	return paramSpec
+	return commands.BuildInvokeParamSpec(contract)
 }
 
 func validateArgumentsStrict(spec map[string]parameterSpec, raw map[string]interface{}) (map[string]interface{}, []validationIssue) {
-	if raw == nil {
-		raw = map[string]interface{}{}
-	}
-
-	normalized := make(map[string]interface{}, len(raw))
-	issues := make([]validationIssue, 0)
-	seenKeys := make(map[string]string)
-
-	for key, value := range raw {
-		canonical, ok := canonicalSpecKey(spec, key)
-		if !ok {
-			issues = append(issues, validationIssue{
-				Field:   key,
-				Code:    "UNKNOWN_ARGUMENT",
-				Message: "unknown argument",
-			})
-			continue
-		}
-		if first, exists := seenKeys[canonical]; exists {
-			issues = append(issues, validationIssue{
-				Field:   key,
-				Code:    "DUPLICATE_ARGUMENT",
-				Message: fmt.Sprintf("argument duplicates '%s'", first),
-			})
-			continue
-		}
-		seenKeys[canonical] = key
-		normalized[canonical] = value
-	}
-
-	for name, p := range spec {
-		if p.Required {
-			if _, ok := normalized[name]; !ok {
-				issues = append(issues, validationIssue{
-					Field:   name,
-					Code:    "MISSING_REQUIRED_ARGUMENT",
-					Message: "required argument is missing",
-				})
-			}
-		}
-	}
-
-	for name, value := range normalized {
-		p := spec[name]
-		if matchesExpectedType(value, p.Type) {
-			continue
-		}
-		issues = append(issues, validationIssue{
-			Field:    name,
-			Code:     "INVALID_ARGUMENT_TYPE",
-			Message:  fmt.Sprintf("expected %s", expectedTypeLabel(p.Type)),
-			Expected: expectedTypeLabel(p.Type),
-			Actual:   actualTypeLabel(value),
-		})
-	}
-
-	return normalized, issues
+	return commands.ValidateArgumentsStrict(spec, raw)
 }
 
 func withInvokeWrapperHints(issues []validationIssue, invokeArgsSpec map[string]parameterSpec) []validationIssue {
-	if len(issues) == 0 {
-		return issues
-	}
-
-	out := make([]validationIssue, len(issues))
-	copy(out, issues)
-	for i := range out {
-		if out[i].Code != "UNKNOWN_ARGUMENT" {
-			continue
-		}
-		if canonical, ok := canonicalSpecKey(invokeArgsSpec, out[i].Field); ok {
-			out[i].Message = "unknown top-level argument"
-			out[i].Hint = fmt.Sprintf("Did you mean args.%s? Command-specific parameters must be nested under args.", canonical)
-		}
-	}
-	return out
-}
-
-func canonicalSpecKey(spec map[string]parameterSpec, key string) (string, bool) {
-	if _, ok := spec[key]; ok {
-		return key, true
-	}
-	if strings.Contains(key, "_") {
-		alt := strings.ReplaceAll(key, "_", "-")
-		if _, ok := spec[alt]; ok {
-			return alt, true
-		}
-	}
-	if strings.Contains(key, "-") {
-		alt := strings.ReplaceAll(key, "-", "_")
-		if _, ok := spec[alt]; ok {
-			return alt, true
-		}
-	}
-	return "", false
-}
-
-func matchesExpectedType(value interface{}, expected parameterType) bool {
-	switch expected {
-	case paramTypeString:
-		_, ok := value.(string)
-		return ok
-	case paramTypeBool:
-		_, ok := value.(bool)
-		return ok
-	case paramTypeInteger:
-		switch v := value.(type) {
-		case int, int8, int16, int32, int64:
-			return true
-		case uint, uint8, uint16, uint32, uint64:
-			return true
-		case float32:
-			return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0) && math.Trunc(float64(v)) == float64(v)
-		case float64:
-			return !math.IsNaN(v) && !math.IsInf(v, 0) && math.Trunc(v) == v
-		case json.Number:
-			_, err := v.Int64()
-			return err == nil
-		default:
-			return false
-		}
-	case paramTypeObject:
-		if value == nil {
-			return false
-		}
-		if _, ok := value.(map[string]interface{}); ok {
-			return true
-		}
-		if _, ok := value.(map[string]string); ok {
-			return true
-		}
-		return false
-	case paramTypeStringArray:
-		switch typed := value.(type) {
-		case []string:
-			return true
-		case []interface{}:
-			for _, item := range typed {
-				if _, ok := item.(string); !ok {
-					return false
-				}
-			}
-			return true
-		default:
-			return false
-		}
-	default:
-		return false
-	}
-}
-
-func expectedTypeLabel(t parameterType) string {
-	switch t {
-	case paramTypeString:
-		return "string"
-	case paramTypeBool:
-		return "boolean"
-	case paramTypeInteger:
-		return "integer"
-	case paramTypeObject:
-		return "object"
-	case paramTypeStringArray:
-		return "array[string]"
-	default:
-		return "unknown"
-	}
-}
-
-func actualTypeLabel(v interface{}) string {
-	switch typed := v.(type) {
-	case nil:
-		return "null"
-	case string:
-		return "string"
-	case bool:
-		return "boolean"
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return "integer"
-	case float32, float64:
-		return "number"
-	case json.Number:
-		return "number"
-	case map[string]interface{}, map[string]string:
-		return "object"
-	case []interface{}, []string:
-		return "array"
-	default:
-		_ = typed
-		return fmt.Sprintf("%T", v)
-	}
+	return commands.WithInvokeWrapperHints(issues, invokeArgsSpec)
 }
 
 func validationErrorEnvelope(command string, issues []validationIssue) string {
@@ -849,37 +429,4 @@ func validationErrorEnvelope(command string, issues []validationIssue) string {
 			"issues":  issues,
 		},
 	)
-}
-
-func flagTypeToParameterType(flagType commands.FlagType) parameterType {
-	switch flagType {
-	case commands.FlagTypeBool:
-		return paramTypeBool
-	case commands.FlagTypeInt:
-		return paramTypeInteger
-	case commands.FlagTypeStringSlice:
-		return paramTypeStringArray
-	case commands.FlagTypeJSON, commands.FlagTypeKeyValue, commands.FlagTypePosKeyValue:
-		return paramTypeObject
-	default:
-		return paramTypeString
-	}
-}
-
-func previewModeForCommand(meta commands.Meta) string {
-	for _, flag := range meta.Flags {
-		if flag.Name == "confirm" && flag.Type == commands.FlagTypeBool {
-			return "preview_default"
-		}
-	}
-	return "none"
-}
-
-func hasStdinFlag(flags []commands.FlagMeta) bool {
-	for _, flag := range flags {
-		if flag.Name == "stdin" && flag.Type == commands.FlagTypeBool {
-			return true
-		}
-	}
-	return false
 }

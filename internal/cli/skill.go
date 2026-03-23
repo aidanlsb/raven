@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/skills"
-	"github.com/aidanlsb/raven/internal/skillsvc"
 )
 
 var skillCmd = &cobra.Command{
@@ -29,38 +29,33 @@ var skillListCmd = &cobra.Command{
 	Short: commands.Registry["skill_list"].Description,
 	Long:  commands.Registry["skill_list"].LongDesc,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := skillsvc.List(skillsvc.ListRequest{
-			Target:        skillListTarget,
-			Scope:         skillListScope,
-			Dest:          skillListDest,
-			InstalledOnly: skillListInstalledOnly,
+		result := executeCanonicalCommand("skill_list", "", map[string]interface{}{
+			"target":    skillListTarget,
+			"scope":     skillListScope,
+			"dest":      skillListDest,
+			"installed": skillListInstalledOnly,
 		})
-		if err != nil {
-			return mapSkillServiceError(err)
+		if !result.OK {
+			return handleCanonicalSkillFailure(result)
 		}
 
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"skills": result.Skills,
-			}
-			if strings.TrimSpace(result.Target) != "" {
-				data["target"] = result.Target
-				data["scope"] = result.Scope
-				data["root"] = result.Root
-			}
-			outputSuccess(data, &Meta{Count: len(result.Skills)})
+			outputJSON(result)
 			return nil
 		}
 
-		if strings.TrimSpace(result.Target) == "" {
-			for _, item := range result.Skills {
+		data := canonicalDataMap(result)
+		items := skillSummariesFromAny(data["skills"])
+		target := strings.TrimSpace(stringValue(data["target"]))
+		if target == "" {
+			for _, item := range items {
 				fmt.Printf("%-16s v%d  %s\n", item.Name, item.Version, item.Summary)
 			}
 			return nil
 		}
 
-		fmt.Printf("target=%s scope=%s root=%s\n", result.Target, result.Scope, result.Root)
-		for _, item := range result.Skills {
+		fmt.Printf("target=%s scope=%s root=%s\n", target, stringValue(data["scope"]), stringValue(data["root"]))
+		for _, item := range items {
 			status := "available"
 			if item.Installed {
 				status = "installed"
@@ -85,47 +80,39 @@ var skillInstallCmd = &cobra.Command{
 	Long:  commands.Registry["skill_install"].LongDesc,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := skillsvc.Install(skillsvc.InstallRequest{
-			Name:    strings.TrimSpace(args[0]),
-			Target:  skillInstallTarget,
-			Scope:   skillInstallScope,
-			Dest:    skillInstallDest,
-			Force:   skillInstallForce,
-			Confirm: skillInstallConfirm,
+		result := executeCanonicalCommand("skill_install", "", map[string]interface{}{
+			"name":    strings.TrimSpace(args[0]),
+			"target":  skillInstallTarget,
+			"scope":   skillInstallScope,
+			"dest":    skillInstallDest,
+			"force":   skillInstallForce,
+			"confirm": skillInstallConfirm,
 		})
-		if err != nil {
-			return mapSkillServiceError(err)
+		if !result.OK {
+			return handleCanonicalSkillFailure(result)
 		}
 
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"mode": result.Mode,
-				"plan": result.Plan,
-			}
-			if result.ActionsApplied > 0 {
-				data["actions_applied"] = result.ActionsApplied
-			}
-			if result.Receipt != nil {
-				data["receipt"] = result.Receipt
-			}
-			outputSuccess(data, nil)
+			outputJSON(result)
 			return nil
 		}
 
-		if result.Mode == "preview" {
-			fmt.Printf("Preview install: %s -> %s\n", result.SkillName, result.Plan.SkillPath)
-			for _, action := range result.Plan.Actions {
+		data := canonicalDataMap(result)
+		plan := skillInstallPlanFromAny(data["plan"])
+		if stringValue(data["mode"]) == "preview" {
+			fmt.Printf("Preview install: %s -> %s\n", strings.TrimSpace(args[0]), plan.SkillPath)
+			for _, action := range plan.Actions {
 				fmt.Printf("  %-8s %s\n", action.Op, action.Path)
 			}
-			if len(result.Plan.Actions) == 0 {
+			if len(plan.Actions) == 0 {
 				fmt.Println("  no changes")
 			}
 			fmt.Println("Re-run with --confirm to apply.")
 			return nil
 		}
 
-		fmt.Printf("Installed %s for %s at %s\n", result.SkillName, result.Target, result.Plan.SkillPath)
-		fmt.Printf("Applied %d file changes\n", result.ActionsApplied)
+		fmt.Printf("Installed %s for %s at %s\n", stringValue(data["skill_name"]), stringValue(data["target"]), plan.SkillPath)
+		fmt.Printf("Applied %d file changes\n", intValue(data["actions_applied"]))
 		return nil
 	},
 }
@@ -143,39 +130,34 @@ var skillRemoveCmd = &cobra.Command{
 	Long:  commands.Registry["skill_remove"].LongDesc,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := skillsvc.Remove(skillsvc.RemoveRequest{
-			Name:    strings.TrimSpace(args[0]),
-			Target:  skillRemoveTarget,
-			Scope:   skillRemoveScope,
-			Dest:    skillRemoveDest,
-			Confirm: skillRemoveConfirm,
+		result := executeCanonicalCommand("skill_remove", "", map[string]interface{}{
+			"name":    strings.TrimSpace(args[0]),
+			"target":  skillRemoveTarget,
+			"scope":   skillRemoveScope,
+			"dest":    skillRemoveDest,
+			"confirm": skillRemoveConfirm,
 		})
-		if err != nil {
-			return mapSkillServiceError(err)
+		if !result.OK {
+			return handleCanonicalSkillFailure(result)
 		}
 
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"mode": result.Mode,
-				"plan": result.Plan,
-			}
-			if result.Removed {
-				data["removed"] = true
-			}
-			outputSuccess(data, nil)
+			outputJSON(result)
 			return nil
 		}
 
-		if result.Mode == "preview" {
-			fmt.Printf("Preview remove: %s\n", result.Plan.SkillPath)
-			for _, action := range result.Plan.Actions {
+		data := canonicalDataMap(result)
+		plan := skillRemovePlanFromAny(data["plan"])
+		if stringValue(data["mode"]) == "preview" {
+			fmt.Printf("Preview remove: %s\n", plan.SkillPath)
+			for _, action := range plan.Actions {
 				fmt.Printf("  %-8s %s\n", action.Op, action.Path)
 			}
 			fmt.Println("Re-run with --confirm to apply.")
 			return nil
 		}
 
-		fmt.Printf("Removed %s from %s\n", result.SkillName, result.Plan.SkillPath)
+		fmt.Printf("Removed %s from %s\n", stringValue(data["skill_name"]), plan.SkillPath)
 		return nil
 	},
 }
@@ -191,21 +173,21 @@ var skillDoctorCmd = &cobra.Command{
 	Short: commands.Registry["skill_doctor"].Description,
 	Long:  commands.Registry["skill_doctor"].LongDesc,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := skillsvc.Doctor(skillsvc.DoctorRequest{
-			Target: skillDoctorTarget,
-			Scope:  skillDoctorScope,
-			Dest:   skillDoctorDest,
+		result := executeCanonicalCommand("skill_doctor", "", map[string]interface{}{
+			"target": skillDoctorTarget,
+			"scope":  skillDoctorScope,
+			"dest":   skillDoctorDest,
 		})
-		if err != nil {
-			return mapSkillServiceError(err)
+		if !result.OK {
+			return handleCanonicalSkillFailure(result)
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{"reports": result.Reports}, &Meta{Count: len(result.Reports)})
+			outputJSON(result)
 			return nil
 		}
 
-		for _, report := range result.Reports {
+		for _, report := range skillDoctorReportsFromAny(canonicalDataMap(result)["reports"]) {
 			fmt.Printf("target=%s scope=%s root=%s\n", report.Target, report.Scope, report.Root)
 			if len(report.Installed) == 0 {
 				fmt.Println("  installed: none")
@@ -254,28 +236,46 @@ func init() {
 	rootCmd.AddCommand(skillCmd)
 }
 
-func mapSkillServiceError(err error) error {
-	svcErr, ok := skillsvc.AsError(err)
-	if !ok {
-		return handleError(ErrInternal, err, "")
+func handleCanonicalSkillFailure(result commandexec.Result) error {
+	if isJSONOutput() {
+		outputJSON(result)
+		return nil
 	}
+	if result.Error != nil {
+		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+	}
+	return handleErrorMsg(ErrInternal, "command execution failed", "")
+}
 
-	switch svcErr.Code {
-	case skillsvc.CodeInvalidInput:
-		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-	case skillsvc.CodeSkillNotFound:
-		return handleErrorWithDetails(ErrSkillNotFound, svcErr.Message, svcErr.Suggestion, svcErr.Details)
-	case skillsvc.CodeSkillNotInstalled:
-		return handleErrorMsg(ErrSkillNotInstalled, svcErr.Message, svcErr.Suggestion)
-	case skillsvc.CodeSkillTargetUnsupported:
-		return handleErrorMsg(ErrSkillTargetUnsupported, svcErr.Message, svcErr.Suggestion)
-	case skillsvc.CodeSkillInstallConflict:
-		return handleErrorWithDetails(ErrSkillInstallConflict, svcErr.Message, svcErr.Suggestion, svcErr.Details)
-	case skillsvc.CodeSkillPathUnresolved:
-		return handleErrorMsg(ErrSkillPathUnresolved, svcErr.Message, svcErr.Suggestion)
-	case skillsvc.CodeFileWriteError:
-		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
+func skillSummariesFromAny(raw interface{}) []skills.Summary {
+	items, _ := raw.([]skills.Summary)
+	return items
+}
+
+func skillInstallPlanFromAny(raw interface{}) *skills.InstallPlan {
+	plan, _ := raw.(*skills.InstallPlan)
+	return plan
+}
+
+func skillRemovePlanFromAny(raw interface{}) *skills.RemovePlan {
+	plan, _ := raw.(*skills.RemovePlan)
+	return plan
+}
+
+func skillDoctorReportsFromAny(raw interface{}) []skills.DoctorReport {
+	reports, _ := raw.([]skills.DoctorReport)
+	return reports
+}
+
+func intValue(raw interface{}) int {
+	switch value := raw.(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
 	default:
-		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+		return 0
 	}
 }

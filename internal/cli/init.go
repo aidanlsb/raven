@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/initsvc"
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
 var initCmd = &cobra.Command{
@@ -25,43 +27,43 @@ Creates:
 			fmt.Printf("Initializing vault at: %s\n", path)
 		}
 
-		info := currentVersionInfo()
-		result, err := initsvc.Initialize(initsvc.InitializeRequest{
-			Path:       path,
-			CLIVersion: info.Version,
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "init",
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"path": path,
+			},
 		})
-		if err != nil {
-			return mapInitSvcError(err)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"path":            result.Path,
-				"status":          result.Status,
-				"created_config":  result.CreatedConfig,
-				"created_schema":  result.CreatedSchema,
-				"gitignore_state": result.GitignoreState,
-				"docs":            result.Docs,
-			}
-			if len(result.Warnings) > 0 {
-				warnings := make([]Warning, 0, len(result.Warnings))
-				for _, warning := range result.Warnings {
-					warnings = append(warnings, Warning{Code: warning.Code, Message: warning.Message})
-				}
-				outputSuccessWithWarnings(data, warnings, nil)
-				return nil
-			}
-			outputSuccess(data, nil)
+			outputJSON(result)
 			return nil
 		}
 
-		if result.CreatedConfig {
+		data, _ := result.Data.(map[string]interface{})
+		createdConfig, _ := data["created_config"].(bool)
+		createdSchema, _ := data["created_schema"].(bool)
+		gitignoreState, _ := data["gitignore_state"].(string)
+		status, _ := data["status"].(string)
+		docs, _ := data["docs"].(map[string]interface{})
+
+		if createdConfig {
 			fmt.Println("✓ Created raven.yaml (vault configuration)")
 		} else {
 			fmt.Println("• raven.yaml already exists (kept)")
 		}
 
-		if result.CreatedSchema {
+		if createdSchema {
 			fmt.Println("✓ Created schema.yaml (types and traits)")
 		} else {
 			fmt.Println("• schema.yaml already exists (kept)")
@@ -69,7 +71,7 @@ Creates:
 
 		fmt.Println("✓ Ensured .raven/ directory exists")
 
-		switch result.GitignoreState {
+		switch gitignoreState {
 		case "created":
 			fmt.Println("✓ Created .gitignore")
 		case "updated":
@@ -82,11 +84,11 @@ Creates:
 			for _, warning := range result.Warnings {
 				fmt.Printf("! %s\n", warning.Message)
 			}
-		} else if result.Docs.Fetched {
-			fmt.Printf("✓ Fetched docs into %s (%d files)\n", result.Docs.StorePath, result.Docs.FileCount)
+		} else if fetched, _ := docs["fetched"].(bool); fetched {
+			fmt.Printf("✓ Fetched docs into %s (%d files)\n", stringFromMap(docs, "store_path"), intFromMap(docs, "file_count"))
 		}
 
-		if result.Status == "initialized" {
+		if status == "initialized" {
 			fmt.Println("\nVault initialized! Start adding markdown files.")
 		} else {
 			fmt.Println("\nExisting vault detected. Configuration preserved.")
@@ -94,22 +96,6 @@ Creates:
 
 		return nil
 	},
-}
-
-func mapInitSvcError(err error) error {
-	svcErr, ok := initsvc.AsError(err)
-	if !ok {
-		return handleError(ErrInternal, err, "")
-	}
-
-	switch svcErr.Code {
-	case initsvc.CodeInvalidInput:
-		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-	case initsvc.CodeFileWriteError:
-		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-	default:
-		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-	}
 }
 
 func init() {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
-	"github.com/aidanlsb/raven/internal/parser"
 )
 
 // loadVaultConfigSafe loads the vault config.
@@ -21,18 +20,6 @@ func loadVaultConfigSafe(vaultPath string) (*config.VaultConfig, error) {
 	return cfg, nil
 }
 
-// buildParseOptions creates parser.ParseOptions from vault config.
-// Returns nil if no directory configuration is present.
-func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil || !vaultCfg.HasDirectoriesConfig() {
-		return nil
-	}
-	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
-	}
-}
-
 // openDatabaseWithConfig opens the database and sets the daily directory.
 // Caller is responsible for calling db.Close().
 func openDatabaseWithConfig(vaultPath string, vaultCfg *config.VaultConfig) (*index.Database, error) {
@@ -44,17 +31,4 @@ func openDatabaseWithConfig(vaultPath string, vaultCfg *config.VaultConfig) (*in
 		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
 	}
 	return db, nil
-}
-
-// maybeReindex reindexes a file if auto-reindex is enabled in the vault config.
-// Errors are logged but not returned (best-effort reindexing).
-func maybeReindex(vaultPath, filePath string, vaultCfg *config.VaultConfig) {
-	if vaultCfg == nil || !vaultCfg.IsAutoReindexEnabled() {
-		return
-	}
-	if err := reindexFile(vaultPath, filePath, vaultCfg); err != nil {
-		if !isJSONOutput() {
-			fmt.Printf("  (reindex failed: %v)\n", err)
-		}
-	}
 }

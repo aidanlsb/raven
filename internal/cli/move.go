@@ -1,19 +1,17 @@
 package cli
 
 import (
-	"bufio"
-	"errors"
+	"context"
 	"fmt"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/resolver"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -74,20 +72,17 @@ Bulk examples:
 
 // runMoveBulk handles bulk move operations from stdin.
 func runMoveBulk(args []string, vaultPath string) error {
-	// Destination is provided as argument
 	if len(args) == 0 {
 		return handleErrorMsg(ErrMissingArgument, "no destination provided", "Usage: rvn move --stdin <destination-directory/>")
 	}
 	destination := args[0]
 
-	// Destination must be a directory (end with /)
 	if !strings.HasSuffix(destination, "/") {
 		return handleErrorMsg(ErrInvalidInput,
 			"destination must be a directory (end with /)",
 			"Example: rvn move --stdin archive/projects/")
 	}
 
-	// Read IDs from stdin
 	ids, embedded, err := ReadIDsFromStdin()
 	if err != nil {
 		return handleError(ErrInternal, err, "")
@@ -97,230 +92,37 @@ func runMoveBulk(args []string, vaultPath string) error {
 		return handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 	}
 
-	// Build warnings for embedded objects
-	var warnings []Warning
-	if w := BuildEmbeddedSkipWarning(embedded); w != nil {
-		warnings = append(warnings, *w)
+	argsMap := map[string]interface{}{
+		"stdin":       true,
+		"object_ids":  stringsToAny(append(ids, embedded...)),
+		"destination": destination,
+		"update-refs": moveUpdateRefs,
 	}
-
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-	}
-
-	// If not confirming, show preview
-	if !moveConfirm {
-		return previewMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
-	}
-
-	// Apply the moves
-	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
-}
-
-// previewMoveBulk shows a preview of bulk move operations.
-func previewMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	previewResult, err := objectsvc.PreviewMoveBulk(objectsvc.MoveBulkRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    vaultCfg,
-		ObjectIDs:      ids,
-		DestinationDir: destDir,
+	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+		CommandID: "move",
+		VaultPath: vaultPath,
+		Caller:    commandexec.CallerCLI,
+		Args:      argsMap,
+		Confirm:   moveConfirm,
 	})
-	if err != nil {
-		return handleError(ErrInvalidInput, err, "Example: rvn move --stdin archive/projects/")
-	}
-
-	preview := &BulkPreview{
-		Action:   "move",
-		Items:    make([]BulkPreviewItem, 0, len(previewResult.Items)),
-		Skipped:  make([]BulkResult, 0, len(previewResult.Skipped)),
-		Total:    previewResult.Total,
-		Warnings: warnings,
-	}
-	for _, item := range previewResult.Items {
-		preview.Items = append(preview.Items, BulkPreviewItem{
-			ID:      item.ID,
-			Action:  item.Action,
-			Details: item.Details,
-		})
-	}
-	for _, skip := range previewResult.Skipped {
-		preview.Skipped = append(preview.Skipped, BulkResult{
-			ID:     skip.ID,
-			Status: skip.Status,
-			Reason: skip.Reason,
-		})
-	}
-
-	return outputBulkPreview(preview, map[string]interface{}{
-		"destination": destDir,
-	})
-}
-
-// applyMoveBulk applies bulk move operations.
-func applyMoveBulk(vaultPath string, ids []string, destDir string, warnings []Warning, vaultCfg *config.VaultConfig) error {
-	// Load schema for type checking
-	sch, _ := schema.Load(vaultPath)
-	parseOpts := buildParseOptions(vaultCfg)
-	summaryResult, err := objectsvc.ApplyMoveBulk(objectsvc.MoveBulkRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    vaultCfg,
-		Schema:         sch,
-		ObjectIDs:      ids,
-		DestinationDir: destDir,
-		UpdateRefs:     moveUpdateRefs,
-		ParseOptions:   parseOpts,
-	})
-	if err != nil {
-		return handleError(ErrInvalidInput, err, "Example: rvn move --stdin archive/projects/")
-	}
-
-	results := make([]BulkResult, 0, len(summaryResult.Results))
-	for _, result := range summaryResult.Results {
-		results = append(results, BulkResult{
-			ID:      result.ID,
-			Status:  result.Status,
-			Reason:  result.Reason,
-			Details: result.Details,
-		})
-	}
-
-	combinedWarnings := append([]Warning{}, warnings...)
-	for _, warningMessage := range summaryResult.WarningMessages {
-		combinedWarnings = append(combinedWarnings, Warning{
-			Code:    WarnIndexUpdateFailed,
-			Message: warningMessage,
-			Ref:     "Run 'rvn reindex' to rebuild the database",
-		})
-	}
-
-	summary := buildBulkSummary("move", results, combinedWarnings)
-	return outputBulkSummary(summary, combinedWarnings, map[string]interface{}{
-		"destination": destDir,
-	})
+	return handleCanonicalMoveResult(vaultPath, sourceDestinationArgs("", destination), result, true)
 }
 
 // moveSingleObject handles single move operation (non-bulk mode).
 func moveSingleObject(vaultPath, source, destination string) error {
-	start := time.Now()
-
-	// Load vault config for directory roots
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	argsMap := sourceDestinationArgs(source, destination)
+	argsMap["update-refs"] = moveUpdateRefs
+	if moveSkipTypeCheck {
+		argsMap["skip-type-check"] = true
 	}
 
-	// Load schema for type checks/index updates.
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		sch = schema.NewSchema()
-	}
-
-	parseOpts := buildParseOptions(vaultCfg)
-	serviceResult, err := objectsvc.MoveByReference(objectsvc.MoveByReferenceRequest{
-		VaultPath:      vaultPath,
-		VaultConfig:    vaultCfg,
-		Schema:         sch,
-		Reference:      source,
-		Destination:    destination,
-		UpdateRefs:     moveUpdateRefs,
-		SkipTypeCheck:  moveSkipTypeCheck,
-		ParseOptions:   parseOpts,
-		FailOnIndexErr: false,
+	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+		CommandID: "move",
+		VaultPath: vaultPath,
+		Caller:    commandexec.CallerCLI,
+		Args:      argsMap,
 	})
-	if err != nil {
-		return mapMoveSingleServiceError(err)
-	}
-
-	warnings := make([]Warning, 0)
-	if serviceResult.NeedsConfirm && serviceResult.TypeMismatch != nil {
-		mismatch := serviceResult.TypeMismatch
-		warnings = append(warnings, Warning{
-			Code: WarnTypeMismatch,
-			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
-				mismatch.DestinationDir, mismatch.ExpectedType, mismatch.ActualType),
-			Ref: fmt.Sprintf("Use --skip-type-check to proceed, or change the file's type to '%s'", mismatch.ExpectedType),
-		})
-
-		if isJSONOutput() {
-			result := MoveResult{
-				Source:       serviceResult.SourceID,
-				Destination:  serviceResult.DestinationID,
-				NeedsConfirm: true,
-				Reason:       serviceResult.Reason,
-			}
-			outputSuccessWithWarnings(result, warnings, nil)
-			return nil
-		}
-
-		if !moveForce {
-			fmt.Fprintf(os.Stderr, "⚠ Warning: Moving to '%s/' which is the default directory for type '%s'\n", mismatch.DestinationDir, mismatch.ExpectedType)
-			fmt.Fprintf(os.Stderr, "  But this file has type '%s'\n\n", mismatch.ActualType)
-			fmt.Fprint(os.Stderr, "Proceed anyway? [y/N]: ")
-
-			reader := bufio.NewReader(os.Stdin)
-			response, readErr := reader.ReadString('\n')
-			if readErr != nil {
-				return handleError(ErrInternal, readErr, "")
-			}
-			response = strings.TrimSpace(strings.ToLower(response))
-			if response != "y" && response != "yes" {
-				fmt.Fprintln(os.Stderr, "Cancelled.")
-				return nil
-			}
-		}
-
-		serviceResult, err = objectsvc.MoveByReference(objectsvc.MoveByReferenceRequest{
-			VaultPath:      vaultPath,
-			VaultConfig:    vaultCfg,
-			Schema:         sch,
-			Reference:      source,
-			Destination:    destination,
-			UpdateRefs:     moveUpdateRefs,
-			SkipTypeCheck:  true,
-			ParseOptions:   parseOpts,
-			FailOnIndexErr: false,
-		})
-		if err != nil {
-			return mapMoveSingleServiceError(err)
-		}
-	}
-
-	for _, warningMessage := range serviceResult.WarningMessages {
-		warnings = append(warnings, Warning{
-			Code:    WarnIndexUpdateFailed,
-			Message: warningMessage,
-			Ref:     "Run 'rvn reindex' to rebuild the database",
-		})
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
-	if isJSONOutput() {
-		result := MoveResult{
-			Source:      serviceResult.SourceID,
-			Destination: serviceResult.DestinationID,
-			UpdatedRefs: serviceResult.UpdatedRefs,
-		}
-		outputSuccessWithWarnings(result, warnings, &Meta{QueryTimeMs: elapsed})
-		return nil
-	}
-
-	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(serviceResult.SourceRelative), ui.FilePath(serviceResult.DestinationRel)))
-	if len(serviceResult.UpdatedRefs) > 0 {
-		fmt.Printf("  Updated %d references\n", len(serviceResult.UpdatedRefs))
-	}
-
-	return nil
-}
-
-// MoveResult represents the result of a move operation.
-type MoveResult struct {
-	Source       string   `json:"source"`
-	Destination  string   `json:"destination"`
-	UpdatedRefs  []string `json:"updated_refs,omitempty"`
-	NeedsConfirm bool     `json:"needs_confirm,omitempty"`
-	Reason       string   `json:"reason,omitempty"`
+	return handleCanonicalMoveResult(vaultPath, argsMap, result, false)
 }
 
 func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldRef, newRef string) error {
@@ -348,28 +150,83 @@ func init() {
 	rootCmd.AddCommand(moveCmd)
 }
 
-func mapMoveSingleServiceError(err error) error {
-	var svcErr *objectsvc.Error
-	if !errors.As(err, &svcErr) {
-		return handleError(ErrInternal, err, "")
+func handleCanonicalMoveResult(vaultPath string, args map[string]interface{}, result commandexec.Result, bulk bool) error {
+	if !result.OK {
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
+		}
+		if result.Error != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+		}
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 
-	switch svcErr.Code {
-	case objectsvc.ErrorRefNotFound:
-		return handleErrorMsg(ErrRefNotFound, svcErr.Message, svcErr.Suggestion)
-	case objectsvc.ErrorRefAmbiguous:
-		return handleErrorMsg(ErrRefAmbiguous, svcErr.Message, svcErr.Suggestion)
-	case objectsvc.ErrorInvalidInput:
-		return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-	case objectsvc.ErrorFileRead:
-		return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
-	case objectsvc.ErrorFileWrite:
-		return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-	case objectsvc.ErrorValidationFailed:
-		return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
-	case objectsvc.ErrorDatabase:
-		return handleError(ErrDatabaseError, svcErr, svcErr.Suggestion)
-	default:
-		return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+	if isJSONOutput() {
+		outputJSON(result)
+		return nil
 	}
+	if bulk {
+		return renderCanonicalBulkResult(result)
+	}
+
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+	if needsConfirm, _ := data["needs_confirm"].(bool); needsConfirm {
+		if !moveForce {
+			for _, warning := range result.Warnings {
+				fmt.Printf("⚠ Warning: %s\n", warning.Message)
+				if warning.Ref != "" {
+					fmt.Printf("  %s\n\n", warning.Ref)
+				}
+			}
+			if !promptForConfirm("Proceed anyway?") {
+				fmt.Println("Cancelled.")
+				return nil
+			}
+		}
+
+		retryArgs := cloneArgsMap(args)
+		retryArgs["skip-type-check"] = true
+		retryResult := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "move",
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args:      retryArgs,
+		})
+		return handleCanonicalMoveResult(vaultPath, retryArgs, retryResult, false)
+	}
+
+	source, _ := data["source"].(string)
+	destination, _ := data["destination"].(string)
+	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(source), ui.FilePath(destination)))
+	if updatedRefs, ok := data["updated_refs"].([]string); ok && len(updatedRefs) > 0 {
+		fmt.Printf("  Updated %d references\n", len(updatedRefs))
+		return nil
+	}
+	if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
+		fmt.Printf("  Updated %d references\n", len(updatedRefs))
+	}
+	return nil
+}
+
+func sourceDestinationArgs(source, destination string) map[string]interface{} {
+	args := map[string]interface{}{}
+	if strings.TrimSpace(source) != "" {
+		args["source"] = source
+	}
+	if strings.TrimSpace(destination) != "" {
+		args["destination"] = destination
+	}
+	return args
+}
+
+func cloneArgsMap(args map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(args))
+	for key, value := range args {
+		out[key] = value
+	}
+	return out
 }

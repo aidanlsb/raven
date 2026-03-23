@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -144,15 +143,18 @@ func resolveSchemaTemplateTarget(required bool) (*schemaTemplateTarget, error) {
 }
 
 func schemaTemplateListDefinitions(vaultPath string, start time.Time) error {
-	items, err := schemasvc.ListTemplates(vaultPath)
-	if err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
+	result := executeCanonicalCommand("schema_template_list", vaultPath, nil)
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{"templates": items}, &Meta{Count: len(items), QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	items, err := decodeSchemaValue[[]schemasvc.TemplateSchema](data["templates"])
+	if err != nil {
+		return err
 	}
 
 	if len(items) == 0 {
@@ -171,44 +173,33 @@ func schemaTemplateListDefinitions(vaultPath string, start time.Time) error {
 }
 
 func schemaTemplateListBindings(vaultPath, kind, name string, start time.Time) error {
-	var (
-		state *schemasvc.TemplateBindingState
-		err   error
-	)
-	switch kind {
-	case "type":
-		state, err = schemasvc.ListTypeTemplates(vaultPath, name)
-	case "core":
-		state, err = schemasvc.ListCoreTemplates(vaultPath, name)
-	default:
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown template target kind: %s", kind), "")
-	}
-	if err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	key := schemaTemplateTargetKey(kind)
-	elapsed := time.Since(start).Milliseconds()
+	args := map[string]interface{}{kind: name}
+	result := executeCanonicalCommand("schema_template_list", vaultPath, args)
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			key:                name,
-			"templates":        state.Templates,
-			"default_template": state.DefaultTemplate,
-		}, &Meta{Count: len(state.Templates), QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	templates, err := decodeSchemaValue[[]string](data["templates"])
+	if err != nil {
+		return err
+	}
+	defaultTemplate, _ := data["default_template"].(string)
 
 	label := schemaTemplateKindLabel(kind)
 	fmt.Printf("%s templates for %s:\n", label, name)
-	if len(state.Templates) == 0 {
+	if len(templates) == 0 {
 		fmt.Println("  (none)")
 	} else {
-		for _, templateID := range state.Templates {
+		for _, templateID := range templates {
 			fmt.Printf("  - %s\n", templateID)
 		}
 	}
-	if state.DefaultTemplate != "" {
-		fmt.Printf("Default: %s\n", state.DefaultTemplate)
+	if defaultTemplate != "" {
+		fmt.Printf("Default: %s\n", defaultTemplate)
 	} else {
 		fmt.Println("Default: (none)")
 	}
@@ -216,115 +207,73 @@ func schemaTemplateListBindings(vaultPath, kind, name string, start time.Time) e
 }
 
 func schemaTemplateGet(vaultPath, templateID string, start time.Time) error {
-	templateDef, err := schemasvc.GetTemplate(vaultPath, templateID)
-	if err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-	result := map[string]interface{}{
-		"id":          templateDef.ID,
-		"file":        templateDef.File,
-		"description": templateDef.Description,
-	}
+	result := executeCanonicalCommand("schema_template_get", vaultPath, map[string]interface{}{"template_id": templateID})
 	if isJSONOutput() {
-		outputSuccess(result, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
 	}
-	fmt.Printf("Template: %s\n", templateDef.ID)
-	fmt.Printf("  File: %s\n", templateDef.File)
-	if templateDef.Description != "" {
-		fmt.Printf("  Description: %s\n", templateDef.Description)
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	id, _ := data["id"].(string)
+	file, _ := data["file"].(string)
+	description, _ := data["description"].(string)
+	fmt.Printf("Template: %s\n", id)
+	fmt.Printf("  File: %s\n", file)
+	if description != "" {
+		fmt.Printf("  Description: %s\n", description)
 	}
 	return nil
 }
 
 func schemaTemplateSet(vaultPath, templateID string, start time.Time) error {
-	templateDef, err := schemasvc.SetTemplate(schemasvc.SetTemplateRequest{
-		VaultPath:   vaultPath,
-		TemplateID:  templateID,
-		File:        schemaTemplateFileFlag,
-		Description: schemaTemplateDescriptionFlag,
+	result := executeCanonicalCommand("schema_template_set", vaultPath, map[string]interface{}{
+		"template_id": templateID,
+		"file":        schemaTemplateFileFlag,
+		"description": schemaTemplateDescriptionFlag,
 	})
-	if err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			"id":          templateDef.ID,
-			"file":        templateDef.File,
-			"description": strings.TrimSpace(schemaTemplateDescriptionFlag),
-		}, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
 	}
-	fmt.Printf("Set schema template %s -> %s\n", templateDef.ID, templateDef.File)
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	fmt.Printf("Set schema template %s -> %s\n", data["id"], data["file"])
 	return nil
 }
 
 func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
-	if err := schemasvc.RemoveTemplate(vaultPath, templateID); err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
+	result := executeCanonicalCommand("schema_template_remove", vaultPath, map[string]interface{}{"template_id": templateID})
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{"removed": true, "id": strings.TrimSpace(templateID)}, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
 	}
 	fmt.Printf("Removed schema template %s\n", strings.TrimSpace(templateID))
 	return nil
 }
 
 func schemaTemplateBindTarget(vaultPath, kind, name, templateID string, setDefault bool, start time.Time) error {
-	var (
-		result *schemasvc.AddTemplateBindingResult
-		err    error
-	)
-	switch kind {
-	case "type":
-		result, err = schemasvc.AddTypeTemplate(vaultPath, name, templateID)
-	case "core":
-		result, err = schemasvc.AddCoreTemplate(vaultPath, name, templateID)
-	default:
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown template target kind: %s", kind), "")
+	args := map[string]interface{}{
+		"template_id": templateID,
+		kind:          name,
+		"default":     setDefault,
 	}
-	if err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	if setDefault {
-		switch kind {
-		case "type":
-			_, err = schemasvc.SetTypeDefaultTemplate(vaultPath, name, templateID, false)
-		case "core":
-			_, err = schemasvc.SetCoreDefaultTemplate(vaultPath, name, templateID, false)
-		}
-		if err != nil {
-			return mapSchemaTemplateServiceError(err)
-		}
-	}
-
-	key := schemaTemplateTargetKey(kind)
-	elapsed := time.Since(start).Milliseconds()
-	payload := map[string]interface{}{
-		key:           name,
-		"template_id": strings.TrimSpace(templateID),
-	}
-	if result != nil && result.AlreadySet {
-		payload["already_set"] = true
-		payload["default_match"] = result.DefaultMatch
-	}
-	if setDefault {
-		payload["default_template"] = strings.TrimSpace(templateID)
-	}
+	result := executeCanonicalCommand("schema_template_bind", vaultPath, args)
 	if isJSONOutput() {
-		outputSuccess(payload, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
 	}
-
-	if result != nil && result.AlreadySet {
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	if boolValue(data["already_set"]) {
 		fmt.Printf("%s %s already includes template %s\n", schemaTemplateKindLabel(kind), name, strings.TrimSpace(templateID))
 		if setDefault {
 			fmt.Printf("Set default template for %s %s -> %s\n", kind, name, strings.TrimSpace(templateID))
@@ -340,32 +289,17 @@ func schemaTemplateBindTarget(vaultPath, kind, name, templateID string, setDefau
 }
 
 func schemaTemplateUnbindTarget(vaultPath, kind, name, templateID string, clearDefault bool, start time.Time) error {
-	var err error
-	switch kind {
-	case "type":
-		err = schemasvc.RemoveTypeTemplate(vaultPath, name, templateID, clearDefault)
-	case "core":
-		err = schemasvc.RemoveCoreTemplate(vaultPath, name, templateID, clearDefault)
-	default:
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown template target kind: %s", kind), "")
-	}
-	if err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	key := schemaTemplateTargetKey(kind)
-	elapsed := time.Since(start).Milliseconds()
-	payload := map[string]interface{}{
-		key:           name,
-		"template_id": strings.TrimSpace(templateID),
-		"removed":     true,
-	}
-	if clearDefault {
-		payload["default_cleared"] = true
-	}
+	result := executeCanonicalCommand("schema_template_unbind", vaultPath, map[string]interface{}{
+		"template_id":   templateID,
+		kind:            name,
+		"clear-default": clearDefault,
+	})
 	if isJSONOutput() {
-		outputSuccess(payload, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
 	}
 	if clearDefault {
 		fmt.Printf("Cleared default template and unbound %s from %s %s\n", strings.TrimSpace(templateID), kind, name)
@@ -376,44 +310,26 @@ func schemaTemplateUnbindTarget(vaultPath, kind, name, templateID string, clearD
 }
 
 func schemaTemplateSetDefaultTarget(vaultPath, kind, name, templateID string, clearDefault bool, start time.Time) error {
-	var (
-		newDefault string
-		err        error
-	)
-	switch kind {
-	case "type":
-		newDefault, err = schemasvc.SetTypeDefaultTemplate(vaultPath, name, templateID, clearDefault)
-	case "core":
-		newDefault, err = schemasvc.SetCoreDefaultTemplate(vaultPath, name, templateID, clearDefault)
-	default:
-		return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown template target kind: %s", kind), "")
-	}
-	if err != nil {
-		return mapSchemaTemplateServiceError(err)
-	}
-
-	key := schemaTemplateTargetKey(kind)
-	elapsed := time.Since(start).Milliseconds()
+	result := executeCanonicalCommand("schema_template_default", vaultPath, map[string]interface{}{
+		"template_id": templateID,
+		kind:          name,
+		"clear":       clearDefault,
+	})
 	if isJSONOutput() {
-		outputSuccess(map[string]interface{}{
-			key:                name,
-			"default_template": newDefault,
-		}, &Meta{QueryTimeMs: elapsed})
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	newDefault, _ := data["default_template"].(string)
 	if clearDefault {
 		fmt.Printf("Cleared default template for %s %s\n", kind, name)
 		return nil
 	}
 	fmt.Printf("Set default template for %s %s -> %s\n", kind, name, newDefault)
 	return nil
-}
-
-func schemaTemplateTargetKey(kind string) string {
-	if kind == "core" {
-		return "core_type"
-	}
-	return "type"
 }
 
 func schemaTemplateKindLabel(kind string) string {
@@ -423,14 +339,6 @@ func schemaTemplateKindLabel(kind string) string {
 	runes := []rune(kind)
 	runes[0] = unicode.ToUpper(runes[0])
 	return string(runes)
-}
-
-func mapSchemaTemplateServiceError(err error) error {
-	var svcErr *schemasvc.Error
-	if errors.As(err, &svcErr) {
-		return handleErrorMsg(string(svcErr.Code), svcErr.Message, svcErr.Suggestion)
-	}
-	return handleError(ErrInternal, err, "")
 }
 
 func init() {

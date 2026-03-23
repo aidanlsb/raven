@@ -1084,6 +1084,7 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 		Flags: []FlagMeta{
 			{Name: "type", Description: "Trait type (string, number, url, date, datetime, enum, ref, bool)", Type: FlagTypeString, Default: "string"},
 			{Name: "values", Description: "Enum values (comma-separated)", Type: FlagTypeString},
+			{Name: "default", Description: "Default trait value", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn schema add trait priority --type enum --values high,medium,low --json",
@@ -1132,6 +1133,7 @@ The command validates inputs and provides helpful suggestions if the syntax is i
 		Flags: []FlagMeta{
 			{Name: "type", Description: "Field type: string, number, url, date, datetime, bool, enum, ref (add [] for arrays)", Type: FlagTypeString, Default: "string"},
 			{Name: "required", Description: "Mark field as required", Type: FlagTypeBool},
+			{Name: "default", Description: "Default value for the field", Type: FlagTypeString},
 			{Name: "target", Description: "Target type for ref/ref[] fields (required for references)", Type: FlagTypeString},
 			{Name: "values", Description: "Allowed values for enum/enum[] fields (comma-separated)", Type: FlagTypeString},
 			{Name: "description", Description: "Optional description for this field", Type: FlagTypeString},

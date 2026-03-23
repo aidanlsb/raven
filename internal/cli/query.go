@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/bulkops"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
@@ -263,20 +267,22 @@ Examples:
 			SetPipeFormat(&f)
 		}
 
-		// Load vault config for saved queries
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
 		// Handle --list flag
 		listFlag, _ := cmd.Flags().GetBool("list")
 		if listFlag {
-			return listSavedQueries(vaultCfg, start)
+			return runCanonicalQuery("", map[string]interface{}{
+				"list": true,
+			})
 		}
 
 		if len(args) == 0 {
 			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query --list' to see saved queries")
+		}
+
+		// Load vault config for saved queries and unknown-query suggestions.
+		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		if err != nil {
+			return handleError(ErrInternal, err, "")
 		}
 
 		// MCP sends query_string as a single positional arg. Support
@@ -300,38 +306,7 @@ Examples:
 			queryStr = joinQueryArgs(args)
 		}
 
-		db, err := index.Open(vaultPath)
-		if err != nil {
-			return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
-		}
-		defer db.Close()
-		db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-
-		// Check staleness and optionally refresh
 		refresh, _ := cmd.Flags().GetBool("refresh")
-		if refresh {
-			if err := smartReindex(db, vaultPath); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to refresh index: %v\n", err)
-			}
-		} else {
-			// Check for staleness and warn
-			warnIfStale(db, vaultPath)
-		}
-
-		// Load schema for validation
-		sch, schemaErr := schema.Load(vaultPath)
-		if schemaErr != nil {
-			// Schema load failure is not fatal - continue without validation
-			sch = nil
-		}
-		rt := &readsvc.Runtime{
-			VaultPath: vaultPath,
-			VaultCfg:  vaultCfg,
-			Schema:    sch,
-			DB:        db,
-		}
-
-		// Get --ids flag
 		idsOnly, _ := cmd.Flags().GetBool("ids")
 		limit, _ := cmd.Flags().GetInt("limit")
 		offset, _ := cmd.Flags().GetInt("offset")
@@ -349,6 +324,32 @@ Examples:
 
 		// If --apply is set, run query and apply bulk operation
 		if len(applyArgs) > 0 {
+			db, err := index.Open(vaultPath)
+			if err != nil {
+				return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
+			}
+			defer db.Close()
+			db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+
+			if refresh {
+				if err := smartReindex(db, vaultPath); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to refresh index: %v\n", err)
+				}
+			} else {
+				warnIfStale(db, vaultPath)
+			}
+
+			sch, schemaErr := schema.Load(vaultPath)
+			if schemaErr != nil {
+				sch = nil
+			}
+			rt := &readsvc.Runtime{
+				VaultPath: vaultPath,
+				VaultCfg:  vaultCfg,
+				Schema:    sch,
+				DB:        db,
+			}
+
 			if limit > 0 || offset > 0 || countOnly {
 				return handleErrorMsg(
 					ErrInvalidInput,
@@ -359,20 +360,37 @@ Examples:
 			return runQueryWithApply(rt, queryStr, applyArgs, confirmApply, start)
 		}
 
-		// Check if this is a full query string (starts with object: or trait:)
-		if strings.HasPrefix(queryStr, "object:") || strings.HasPrefix(queryStr, "trait:") {
-			return runFullQueryWithOptions(rt, queryStr, start, idsOnly, limit, offset, countOnly)
+		if !strings.HasPrefix(queryStr, "object:") && !strings.HasPrefix(queryStr, "trait:") {
+			if isSavedQuery {
+				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'object:' or 'trait:'", queryName), "")
+			}
+
+			db, err := index.Open(vaultPath)
+			if err != nil {
+				return handleError(ErrDatabaseError, err, "Run 'rvn reindex' to rebuild the database")
+			}
+			defer db.Close()
+			db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+
+			sch, schemaErr := schema.Load(vaultPath)
+			if schemaErr != nil {
+				sch = nil
+			}
+
+			suggestion := buildUnknownQuerySuggestion(db, queryStr, vaultCfg.GetDailyDirectory(), sch)
+			return handleErrorMsg(ErrQueryInvalid,
+				fmt.Sprintf("unknown query: %s", queryStr),
+				suggestion)
 		}
 
-		if isSavedQuery {
-			return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'object:' or 'trait:'", queryName), "")
-		}
-
-		// Unknown query - provide helpful error
-		suggestion := buildUnknownQuerySuggestion(db, queryStr, vaultCfg.GetDailyDirectory(), sch)
-		return handleErrorMsg(ErrQueryInvalid,
-			fmt.Sprintf("unknown query: %s", queryStr),
-			suggestion)
+		return runCanonicalQuery(queryStr, map[string]interface{}{
+			"query_string": joinQueryArgs(args),
+			"refresh":      refresh,
+			"ids":          idsOnly,
+			"limit":        limit,
+			"offset":       offset,
+			"count-only":   countOnly,
+		})
 	},
 }
 
@@ -384,12 +402,10 @@ func runQueryWithApply(rt *readsvc.Runtime, queryStr string, applyArgs []string,
 			"Queries must start with 'object:' or 'trait:', or be a saved query name.")
 	}
 
-	parsedApply, err := querysvc.ParseApplyCommand(applyArgs)
+	rawApply, err := bulkops.ParseRawApply(applyArgs)
 	if err != nil {
-		return mapQuerySvcError(err)
+		return mapBulkopsError(err)
 	}
-	applyCmd := parsedApply.Command
-	applyOperationArgs := parsedApply.Args
 
 	result, err := readsvc.ExecuteQuery(rt, readsvc.ExecuteQueryRequest{
 		QueryString: queryStr,
@@ -400,7 +416,7 @@ func runQueryWithApply(rt *readsvc.Runtime, queryStr string, applyArgs []string,
 
 	// Handle trait queries separately - they operate on traits, not objects.
 	if result.QueryType == "trait" {
-		return runTraitQueryWithApply(rt.VaultPath, queryStr, result.Traits, applyCmd, applyOperationArgs, rt.Schema, rt.VaultCfg, confirm)
+		return runTraitQueryWithApply(rt.VaultPath, queryStr, result.Traits, rawApply, rt.Schema, rt.VaultCfg, confirm)
 	}
 
 	// Object query - collect object IDs
@@ -414,7 +430,7 @@ func runQueryWithApply(rt *readsvc.Runtime, queryStr string, applyArgs []string,
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"preview": !confirm,
-				"action":  applyCmd,
+				"action":  rawApply.Command,
 				"items":   []interface{}{},
 				"total":   0,
 			}, &Meta{Count: 0, QueryTimeMs: time.Since(start).Milliseconds()})
@@ -424,52 +440,51 @@ func runQueryWithApply(rt *readsvc.Runtime, queryStr string, applyArgs []string,
 		return nil
 	}
 
-	// Filter embedded IDs for operations that don't support them
-	// Note: "set" now supports embedded objects, so we pass all IDs to it
-	var fileIDs []string
-	var embedded []string
-	for _, id := range ids {
-		if IsEmbeddedID(id) {
-			embedded = append(embedded, id)
-		} else {
-			fileIDs = append(fileIDs, id)
-		}
+	plan, err := bulkops.PlanObjectApply(rawApply, ids)
+	if err != nil {
+		return mapBulkopsError(err)
 	}
 
-	// Build warnings for embedded objects (only for commands that don't support them)
-	var warnings []Warning
-	if applyCmd != "set" {
-		if w := BuildEmbeddedSkipWarning(embedded); w != nil {
-			warnings = append(warnings, *w)
-		}
-	}
-
-	// Dispatch to the appropriate bulk operation
-	switch applyCmd {
-	case "set":
-		// Set supports embedded objects, so pass all IDs
-		return applySetFromQuery(rt.VaultPath, ids, applyOperationArgs, warnings, rt.Schema, rt.VaultCfg, confirm)
-	case "delete":
-		return applyDeleteFromQuery(rt.VaultPath, fileIDs, warnings, rt.VaultCfg, confirm)
-	case "add":
-		return applyAddFromQuery(rt.VaultPath, fileIDs, applyOperationArgs, warnings, rt.VaultCfg, confirm)
-	case "move":
-		return applyMoveFromQuery(rt.VaultPath, fileIDs, applyOperationArgs, warnings, rt.VaultCfg, confirm)
+	switch plan.Command {
+	case bulkops.ObjectApplySet:
+		return runCanonicalQueryApply(rt.VaultPath, "set", map[string]interface{}{
+			"stdin":      true,
+			"fields":     plan.SetUpdates,
+			"object_ids": stringsToAny(plan.IDs),
+		}, confirm)
+	case bulkops.ObjectApplyDelete:
+		return runCanonicalQueryApply(rt.VaultPath, "delete", map[string]interface{}{
+			"stdin":      true,
+			"object_ids": stringsToAny(plan.IDs),
+		}, confirm)
+	case bulkops.ObjectApplyAdd:
+		return runCanonicalQueryApply(rt.VaultPath, "add", map[string]interface{}{
+			"stdin":      true,
+			"text":       plan.AddText,
+			"object_ids": stringsToAny(plan.IDs),
+		}, confirm)
+	case bulkops.ObjectApplyMove:
+		return runCanonicalQueryApply(rt.VaultPath, "move", map[string]interface{}{
+			"stdin":       true,
+			"destination": plan.MoveDestination,
+			"update-refs": true,
+			"object_ids":  stringsToAny(plan.IDs),
+		}, confirm)
 	default:
 		return handleErrorMsg(ErrInvalidInput,
-			fmt.Sprintf("unknown apply command: %s", applyCmd),
+			fmt.Sprintf("unknown apply command: %s", plan.Command),
 			"Supported commands: set, delete, add, move")
 	}
 }
 
 // runTraitQueryWithApply handles --apply for trait queries.
 // Trait queries operate on traits, not objects.
-func runTraitQueryWithApply(vaultPath, queryStr string, results []model.Trait, applyCmd string, applyArgs []string, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
+func runTraitQueryWithApply(vaultPath, queryStr string, results []model.Trait, rawApply *bulkops.RawApplyCommand, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
 	if len(results) == 0 {
 		if isJSONOutput() {
 			outputSuccess(map[string]interface{}{
 				"preview": !confirm,
-				"action":  applyCmd,
+				"action":  rawApply.Command,
 				"items":   []interface{}{},
 				"total":   0,
 			}, &Meta{Count: 0})
@@ -479,308 +494,335 @@ func runTraitQueryWithApply(vaultPath, queryStr string, results []model.Trait, a
 		return nil
 	}
 
-	// Dispatch to trait-specific operations
-	switch applyCmd {
-	case "update":
-		err := applyUpdateTraitFromQuery(vaultPath, results, applyArgs, sch, vaultCfg, confirm)
-		if err != nil {
-			var validationErr *traitValueValidationError
-			if errors.As(err, &validationErr) {
-				return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
-			}
-		}
-		return err
-	case "delete", "add", "move", "set":
-		return handleErrorMsg(ErrInvalidInput,
-			fmt.Sprintf("'%s' is not supported for trait queries", applyCmd),
-			"For trait queries, use: --apply \"update <new_value>\"")
-	default:
-		return handleErrorMsg(ErrInvalidInput,
-			fmt.Sprintf("unknown apply command: %s", applyCmd),
-			"For trait queries, use: --apply \"update <new_value>\"")
-	}
-}
-
-// applySetFromQuery applies set operation from query results.
-func applySetFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig, confirm bool) error {
-	// Parse field=value arguments
-	updates := make(map[string]string)
-	for _, arg := range args {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			return handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("invalid field format: %s", arg),
-				"Use format: field=value")
-		}
-		updates[parts[0]] = parts[1]
-	}
-
-	if len(updates) == 0 {
-		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: --apply set field=value...")
-	}
-
-	// set requires schema-aware validation.
-	if sch == nil {
-		loadedSchema, err := schema.Load(vaultPath)
-		if err != nil {
-			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
-		}
-		sch = loadedSchema
-	}
-
-	if !confirm {
-		if err := previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg); err != nil {
-			return err
-		}
-		if promptForConfirm("Apply changes?") {
-			return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
-		}
-		return nil
-	}
-	return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
-}
-
-// applyDeleteFromQuery applies delete operation from query results.
-func applyDeleteFromQuery(vaultPath string, ids []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
-	if !confirm {
-		if err := previewDeleteBulk(vaultPath, ids, warnings, vaultCfg); err != nil {
-			return err
-		}
-		if promptForConfirm("Apply changes?") {
-			return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
-		}
-		return nil
-	}
-	return applyDeleteBulk(vaultPath, ids, warnings, vaultCfg)
-}
-
-// applyAddFromQuery applies add operation from query results.
-func applyAddFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
-	if len(args) == 0 {
-		return handleErrorMsg(ErrMissingArgument, "no text to add", "Usage: --apply add <text>")
-	}
-
-	text := strings.Join(args, " ")
-	line := formatCaptureLine(text)
-
-	if !confirm {
-		if err := previewAddBulk(vaultPath, ids, line, "", warnings, vaultCfg); err != nil {
-			return err
-		}
-		if promptForConfirm("Apply changes?") {
-			return applyAddBulk(vaultPath, ids, line, "", warnings, vaultCfg)
-		}
-		return nil
-	}
-	return applyAddBulk(vaultPath, ids, line, "", warnings, vaultCfg)
-}
-
-// applyMoveFromQuery applies move operation from query results.
-func applyMoveFromQuery(vaultPath string, ids []string, args []string, warnings []Warning, vaultCfg *config.VaultConfig, confirm bool) error {
-	if len(args) == 0 {
-		return handleErrorMsg(ErrMissingArgument, "no destination provided", "Usage: --apply move <destination-directory/>")
-	}
-
-	destination := args[0]
-	if !strings.HasSuffix(destination, "/") {
-		return handleErrorMsg(ErrInvalidInput,
-			"destination must be a directory (end with /)",
-			"Example: --apply move archive/projects/")
-	}
-
-	if !confirm {
-		if err := previewMoveBulk(vaultPath, ids, destination, warnings, vaultCfg); err != nil {
-			return err
-		}
-		if promptForConfirm("Apply changes?") {
-			return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
-		}
-		return nil
-	}
-	return applyMoveBulk(vaultPath, ids, destination, warnings, vaultCfg)
-}
-
-func runFullQueryWithOptions(rt *readsvc.Runtime, queryStr string, start time.Time, idsOnly bool, limit, offset int, countOnly bool) error {
-	result, err := readsvc.ExecuteQuery(rt, readsvc.ExecuteQueryRequest{
-		QueryString: queryStr,
-		IDsOnly:     idsOnly,
-		Limit:       limit,
-		Offset:      offset,
-		CountOnly:   countOnly,
-	})
+	plan, err := bulkops.PlanTraitApply(rawApply, results)
 	if err != nil {
-		return mapExecuteQueryError(queryStr, err)
+		return mapBulkopsError(err)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
+	return runCanonicalQueryApply(vaultPath, "update", map[string]interface{}{
+		"stdin":      true,
+		"value":      plan.NewValue,
+		"object_ids": traitIDsToAny(plan.Items),
+	}, confirm)
+}
 
-	if result.QueryType == "object" {
-		if countOnly {
-			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"query_type": "object",
-					"type":       result.TypeName,
-					"total":      result.Total,
-				}, &Meta{Count: result.Total, QueryTimeMs: elapsed})
-				return nil
-			}
-			fmt.Println(result.Total)
-			return nil
-		}
-
-		if idsOnly {
-			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"ids":      result.IDs,
-					"total":    result.Total,
-					"returned": result.Returned,
-					"offset":   result.Offset,
-					"limit":    result.Limit,
-				}, &Meta{Count: result.Returned, QueryTimeMs: elapsed})
-				return nil
-			}
-			for _, id := range result.IDs {
-				fmt.Println(id)
-			}
-			return nil
-		}
-
+func runCanonicalQueryApply(vaultPath, commandID string, args map[string]interface{}, confirm bool) error {
+	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Caller:    commandexec.CallerCLI,
+		Args:      args,
+		Confirm:   confirm,
+	})
+	if !result.OK {
 		if isJSONOutput() {
-			items := make([]map[string]interface{}, len(result.Objects))
-			for i, row := range result.Objects {
-				items[i] = map[string]interface{}{
-					"num":       result.Offset + i + 1,
-					"id":        row.ID,
-					"type":      row.Type,
-					"fields":    row.Fields,
-					"file_path": row.FilePath,
-					"line":      row.LineStart,
-				}
+			outputJSON(result)
+			return nil
+		}
+		if result.Error != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+		}
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+
+	if err := renderCanonicalBulkResult(result); err != nil {
+		return err
+	}
+
+	if !confirm && !isJSONOutput() && promptForConfirm("Apply changes?") {
+		applyResult := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args:      args,
+			Confirm:   true,
+		})
+		if !applyResult.OK {
+			if applyResult.Error != nil {
+				return handleErrorWithDetails(applyResult.Error.Code, applyResult.Error.Message, applyResult.Error.Suggestion, applyResult.Error.Details)
 			}
-			outputSuccess(map[string]interface{}{
-				"query_type": "object",
-				"type":       result.TypeName,
-				"items":      items,
-				"total":      result.Total,
-				"returned":   result.Returned,
-				"offset":     result.Offset,
-				"limit":      result.Limit,
-			}, &Meta{Count: result.Returned, QueryTimeMs: elapsed})
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
+		}
+		return renderCanonicalBulkResult(applyResult)
+	}
+
+	return nil
+}
+
+func stringsToAny(values []string) []interface{} {
+	out := make([]interface{}, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
+}
+
+func traitIDsToAny(items []model.Trait) []interface{} {
+	out := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		out = append(out, item.ID)
+	}
+	return out
+}
+
+func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
+	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+		CommandID: "query",
+		VaultPath: getVaultPath(),
+		Caller:    commandexec.CallerCLI,
+		Args:      args,
+	})
+	if !result.OK {
+		if isJSONOutput() {
+			outputJSON(result)
 			return nil
 		}
-
-		if ShouldUsePipeFormat() {
-			WritePipeableList(os.Stdout, pipeItemsForObjectResults(result.Objects))
-			return nil
+		if result.Error != nil {
+			return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 		}
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
 
-		printQueryObjectResults(queryStr, result.TypeName, result.Objects, rt.Schema)
+	if isJSONOutput() {
+		outputJSON(result)
 		return nil
 	}
 
-	if countOnly {
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"query_type": "trait",
-				"trait":      result.TypeName,
-				"total":      result.Total,
-			}, &Meta{Count: result.Total, QueryTimeMs: elapsed})
-			return nil
-		}
-		fmt.Println(result.Total)
-		return nil
+	data, _ := result.Data.(map[string]interface{})
+	if rawQueries, ok := data["queries"]; ok {
+		return listSavedQueries(savedQueriesFromResult(rawQueries))
 	}
 
-	if idsOnly {
-		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"ids":      result.IDs,
-				"total":    result.Total,
-				"returned": result.Returned,
-				"offset":   result.Offset,
-				"limit":    result.Limit,
-			}, &Meta{Count: result.Returned, QueryTimeMs: elapsed})
-			return nil
+	if total, ok := data["total"]; ok {
+		if _, hasItems := data["items"]; !hasItems {
+			if _, hasIDs := data["ids"]; !hasIDs {
+				fmt.Println(intFromAny(total))
+				return nil
+			}
 		}
-		for _, id := range result.IDs {
+	}
+
+	if rawIDs, ok := data["ids"]; ok {
+		for _, id := range stringSliceFromAny(rawIDs) {
 			fmt.Println(id)
 		}
 		return nil
 	}
 
-	if isJSONOutput() {
-		items := make([]map[string]interface{}, len(result.Traits))
-		for i, row := range result.Traits {
-			items[i] = map[string]interface{}{
-				"num":        result.Offset + i + 1,
-				"id":         row.ID,
-				"trait_type": row.TraitType,
-				"value":      row.Value,
-				"content":    row.Content,
-				"file_path":  row.FilePath,
-				"line":       row.Line,
-				"object_id":  row.ParentObjectID,
-			}
+	queryType, _ := data["query_type"].(string)
+	switch queryType {
+	case "object":
+		objects := objectResultsFromAny(data["items"])
+		if ShouldUsePipeFormat() {
+			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
+			return nil
 		}
-		outputSuccess(map[string]interface{}{
-			"query_type": "trait",
-			"trait":      result.TypeName,
-			"items":      items,
-			"total":      result.Total,
-			"returned":   result.Returned,
-			"offset":     result.Offset,
-			"limit":      result.Limit,
-		}, &Meta{Count: result.Returned, QueryTimeMs: elapsed})
+		sch, _ := schema.Load(getVaultPath())
+		printQueryObjectResults(queryStr, queryLabelFromData(data, queryStr), objects, sch)
 		return nil
-	}
-
-	if ShouldUsePipeFormat() {
-		WritePipeableList(os.Stdout, pipeItemsForTraitResults(result.Traits))
+	case "trait":
+		traits := traitResultsFromAny(data["items"])
+		if ShouldUsePipeFormat() {
+			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
+			return nil
+		}
+		printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
 		return nil
+	default:
+		return handleErrorMsg(ErrInternal, "unexpected query result shape", "")
 	}
-
-	printQueryTraitResults(queryStr, result.TypeName, result.Traits)
-	return nil
 }
 
-func listSavedQueries(vaultCfg *config.VaultConfig, start time.Time) error {
-	elapsed := time.Since(start).Milliseconds()
-
-	if isJSONOutput() {
-		var queries []SavedQueryInfo
-		for name, q := range vaultCfg.Queries {
-			queries = append(queries, SavedQueryInfo{
-				Name:        name,
-				Query:       q.Query,
-				Args:        q.Args,
-				Description: q.Description,
-			})
-		}
-		outputSuccess(map[string]interface{}{
-			"queries": queries,
-		}, &Meta{Count: len(queries), QueryTimeMs: elapsed})
-		return nil
-	}
-
-	// Human-readable output
+func listSavedQueries(queries []SavedQueryInfo) error {
 	fmt.Println("Saved queries:")
-	if len(vaultCfg.Queries) == 0 {
+	if len(queries) == 0 {
 		fmt.Println("  (none defined)")
 		fmt.Println("\nDefine queries in raven.yaml under 'queries:'")
 		return nil
 	}
-	for name, q := range vaultCfg.Queries {
+	for _, q := range queries {
 		desc := q.Description
 		if desc == "" {
 			desc = q.Query
 		}
 		if len(q.Args) > 0 {
-			fmt.Printf("  %-16s %s (args: %s)\n", name, desc, strings.Join(q.Args, ", "))
+			fmt.Printf("  %-16s %s (args: %s)\n", q.Name, desc, strings.Join(q.Args, ", "))
 			continue
 		}
-		fmt.Printf("  %-16s %s\n", name, desc)
+		fmt.Printf("  %-16s %s\n", q.Name, desc)
 	}
 	return nil
+}
+
+func savedQueriesFromResult(raw interface{}) []SavedQueryInfo {
+	if rows, ok := raw.([]map[string]interface{}); ok {
+		queries := make([]SavedQueryInfo, 0, len(rows))
+		for _, entry := range rows {
+			queries = append(queries, SavedQueryInfo{
+				Name:        stringValue(entry["name"]),
+				Query:       stringValue(entry["query"]),
+				Args:        stringSliceFromAny(entry["args"]),
+				Description: stringValue(entry["description"]),
+			})
+		}
+		return queries
+	}
+
+	rows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	queries := make([]SavedQueryInfo, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		queries = append(queries, SavedQueryInfo{
+			Name:        stringValue(entry["name"]),
+			Query:       stringValue(entry["query"]),
+			Args:        stringSliceFromAny(entry["args"]),
+			Description: stringValue(entry["description"]),
+		})
+	}
+	return queries
+}
+
+func objectResultsFromAny(raw interface{}) []model.Object {
+	if rows, ok := raw.([]map[string]interface{}); ok {
+		results := make([]model.Object, 0, len(rows))
+		for _, entry := range rows {
+			results = append(results, model.Object{
+				ID:        stringValue(entry["id"]),
+				Type:      stringValue(entry["type"]),
+				Fields:    mapValue(entry["fields"]),
+				FilePath:  stringValue(entry["file_path"]),
+				LineStart: intFromAny(entry["line"]),
+			})
+		}
+		return results
+	}
+
+	rows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	results := make([]model.Object, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		results = append(results, model.Object{
+			ID:        stringValue(entry["id"]),
+			Type:      stringValue(entry["type"]),
+			Fields:    mapValue(entry["fields"]),
+			FilePath:  stringValue(entry["file_path"]),
+			LineStart: intFromAny(entry["line"]),
+		})
+	}
+	return results
+}
+
+func traitResultsFromAny(raw interface{}) []model.Trait {
+	if rows, ok := raw.([]map[string]interface{}); ok {
+		results := make([]model.Trait, 0, len(rows))
+		for _, entry := range rows {
+			results = append(results, model.Trait{
+				ID:             stringValue(entry["id"]),
+				TraitType:      stringValue(entry["trait_type"]),
+				Value:          stringPointer(entry["value"]),
+				Content:        stringValue(entry["content"]),
+				FilePath:       stringValue(entry["file_path"]),
+				Line:           intFromAny(entry["line"]),
+				ParentObjectID: stringValue(entry["object_id"]),
+			})
+		}
+		return results
+	}
+
+	rows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	results := make([]model.Trait, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		results = append(results, model.Trait{
+			ID:             stringValue(entry["id"]),
+			TraitType:      stringValue(entry["trait_type"]),
+			Value:          stringPointer(entry["value"]),
+			Content:        stringValue(entry["content"]),
+			FilePath:       stringValue(entry["file_path"]),
+			Line:           intFromAny(entry["line"]),
+			ParentObjectID: stringValue(entry["object_id"]),
+		})
+	}
+	return results
+}
+
+func queryLabelFromData(data map[string]interface{}, queryStr string) string {
+	if label := stringValue(data["type"]); label != "" {
+		return label
+	}
+	if label := stringValue(data["trait"]); label != "" {
+		return label
+	}
+	parsed, err := query.Parse(queryStr)
+	if err != nil {
+		return ""
+	}
+	return parsed.TypeName
+}
+
+func stringValue(raw interface{}) string {
+	switch value := raw.(type) {
+	case string:
+		return value
+	default:
+		return ""
+	}
+}
+
+func stringPointer(raw interface{}) *string {
+	switch value := raw.(type) {
+	case nil:
+		return nil
+	case string:
+		return &value
+	case *string:
+		return value
+	default:
+		return nil
+	}
+}
+
+func mapValue(raw interface{}) map[string]interface{} {
+	switch value := raw.(type) {
+	case map[string]interface{}:
+		return value
+	default:
+		return nil
+	}
+}
+
+func intFromAny(raw interface{}) int {
+	switch value := raw.(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
 }
 
 var queryAddCmd = &cobra.Command{
@@ -801,7 +843,6 @@ Examples:
   rvn query add due-soon "trait:due in(.value,[today,tomorrow])" --description "Due today or tomorrow"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
 		queryName := args[0]
 		queryStr := args[1]
 		description, _ := cmd.Flags().GetString("description")
@@ -810,27 +851,29 @@ Examples:
 			return err
 		}
 
-		result, err := querysvc.Add(querysvc.AddRequest{
-			VaultPath:   vaultPath,
-			Name:        queryName,
-			QueryString: queryStr,
-			Args:        declaredArgs,
-			Description: description,
+		result := executeCanonicalCommand("query_add", getVaultPath(), map[string]interface{}{
+			"name":         queryName,
+			"query_string": queryStr,
+			"arg":          declaredArgs,
+			"description":  description,
 		})
-		if err != nil {
-			return mapQuerySvcError(err)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"name":        result.Name,
-				"query":       result.Query,
-				"args":        result.Args,
-				"description": result.Description,
-			}, nil)
+			outputJSON(result)
 		} else {
-			fmt.Println(ui.Checkf("Added query '%s'", result.Name))
-			fmt.Printf("  Run with: %s\n", ui.Bold.Render("rvn query "+result.Name))
+			data := canonicalDataMap(result)
+			fmt.Println(ui.Checkf("Added query '%s'", stringValue(data["name"])))
+			fmt.Printf("  Run with: %s\n", ui.Bold.Render("rvn query "+stringValue(data["name"])))
 		}
 
 		return nil
@@ -847,23 +890,25 @@ Examples:
   rvn query remove my-tasks`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
 		queryName := args[0]
-		result, err := querysvc.Remove(querysvc.RemoveRequest{
-			VaultPath: vaultPath,
-			Name:      queryName,
+		result := executeCanonicalCommand("query_remove", getVaultPath(), map[string]interface{}{
+			"name": queryName,
 		})
-		if err != nil {
-			return mapQuerySvcError(err)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"name":    result.Name,
-				"removed": result.Removed,
-			}, nil)
+			outputJSON(result)
 		} else {
-			fmt.Println(ui.Checkf("Removed query '%s'", result.Name))
+			fmt.Println(ui.Checkf("Removed query '%s'", stringValue(canonicalDataMap(result)["name"])))
 		}
 
 		return nil
@@ -1052,6 +1097,41 @@ func mapExecuteQueryError(queryStr string, err error) error {
 	}
 
 	return handleError(ErrDatabaseError, err, "")
+}
+
+func mapQueryCode(code string) string {
+	switch code {
+	case "MISSING_ARGUMENT":
+		return ErrMissingArgument
+	case "INVALID_ARGS", "INVALID_INPUT":
+		return ErrInvalidInput
+	case "QUERY_INVALID":
+		return ErrQueryInvalid
+	case "QUERY_NOT_FOUND":
+		return ErrQueryNotFound
+	case "CONFIG_INVALID":
+		return ErrConfigInvalid
+	case "DATABASE_ERROR":
+		return ErrDatabaseError
+	default:
+		return ErrInternal
+	}
+}
+
+func mapBulkopsError(err error) error {
+	bulkErr, ok := bulkops.AsError(err)
+	if !ok {
+		return handleError(ErrInternal, err, "")
+	}
+
+	switch bulkErr.Code {
+	case bulkops.CodeMissingArgument:
+		return handleErrorMsg(ErrMissingArgument, bulkErr.Message, bulkErr.Suggestion)
+	case bulkops.CodeInvalidInput:
+		return handleErrorMsg(ErrInvalidInput, bulkErr.Message, bulkErr.Suggestion)
+	default:
+		return handleError(ErrInternal, err, "")
+	}
 }
 
 func mapQuerySvcError(err error) error {

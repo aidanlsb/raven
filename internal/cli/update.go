@@ -2,10 +2,13 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
 var (
@@ -34,10 +37,6 @@ Examples:
 
 func runUpdate(cmd *cobra.Command, args []string) error {
 	vaultPath := getVaultPath()
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-	}
 
 	if updateStdin {
 		newValue, err := parseTraitUpdateValueArgs(args, "Usage: rvn update --stdin <new_value>")
@@ -53,8 +52,11 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			return handleErrorMsg(ErrMissingArgument, "no trait IDs provided via stdin", "Pipe trait IDs to stdin, one per line")
 		}
 
-		err = applyUpdateTraitsByID(vaultPath, ids, newValue, updateConfirm, false, vaultCfg)
-		return handleTraitUpdateError(err)
+		return executeCanonicalUpdate(vaultPath, map[string]interface{}{
+			"stdin":      true,
+			"value":      newValue,
+			"object_ids": stringsToAny(ids),
+		})
 	}
 
 	if len(args) < 2 {
@@ -71,20 +73,37 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Single update applies immediately (no preview/confirm)
-	err = applyUpdateTraitsByID(vaultPath, []string{traitID}, newValue, true, false, vaultCfg)
-	return handleTraitUpdateError(err)
+	return executeCanonicalUpdate(vaultPath, map[string]interface{}{
+		"trait_id": traitID,
+		"value":    newValue,
+	})
 }
 
-func handleTraitUpdateError(err error) error {
-	if err == nil {
+func executeCanonicalUpdate(vaultPath string, args map[string]interface{}) error {
+	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+		CommandID: "update",
+		VaultPath: vaultPath,
+		Caller:    commandexec.CallerCLI,
+		Args:      args,
+		Confirm:   updateConfirm,
+	})
+	if !result.OK {
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
+		}
+		if result.Error != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+		}
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+
+	if isJSONOutput() {
+		outputJSON(result)
 		return nil
 	}
-	var validationErr *traitValueValidationError
-	if errors.As(err, &validationErr) {
-		return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
-	}
-	return err
+
+	return renderCanonicalBulkResult(result)
 }
 
 func init() {

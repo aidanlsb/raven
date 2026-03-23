@@ -1,11 +1,13 @@
 package cli
 
 import (
-	"time"
+	"context"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/model"
 )
 
 var backlinksCmd = &cobra.Command{
@@ -30,42 +32,33 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		reference := args[0]
-		start := time.Now()
-
-		rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: true})
-		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "backlinks",
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"target": reference,
+			},
+		})
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
-		defer rt.Close()
-
-		// Resolve the reference to get the canonical object ID
-		// Use dynamic date resolution so "today", "yesterday", etc. work.
-		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
-			VaultPath:    rt.VaultPath,
-			VaultConfig:  rt.VaultCfg,
-			AllowMissing: true,
-		}, true)
-		if err != nil {
-			return handleResolveError(err, reference)
-		}
-		target := result.ObjectID
-
-		links, err := readsvc.Backlinks(rt, target)
-		if err != nil {
-			return handleError(ErrDatabaseError, err, "")
-		}
-
-		elapsed := time.Since(start).Milliseconds()
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"target": target,
-				"items":  links,
-			}, &Meta{Count: len(links), QueryTimeMs: elapsed})
+			outputJSON(result)
 			return nil
 		}
 
-		// Human-readable output
+		data, _ := result.Data.(map[string]interface{})
+		target, _ := data["target"].(string)
+		links, _ := data["items"].([]model.Reference)
 		printBacklinksResults(target, links)
 
 		return nil

@@ -6,7 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -45,102 +46,83 @@ Examples:
 			}
 		}
 
-		result, err := reindexsvc.Run(reindexsvc.RunRequest{
+		result := app.CommandInvoker().Execute(ctx, commandexec.Request{
+			CommandID: "reindex",
 			VaultPath: vaultPath,
-			Full:      fullReindex,
-			DryRun:    dryRun,
-			Context:   ctx,
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"full":    fullReindex,
+				"dry-run": dryRun,
+			},
 		})
-		if err != nil {
-			return mapReindexServiceError(err)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
 		if jsonOutput {
-			outputSuccess(result.Data(), nil)
+			outputJSON(result)
 			return nil
 		}
 
-		for _, warning := range result.WarningMessages {
-			fmt.Fprintf(os.Stderr, "Warning: %s\n", warning)
+		data, _ := result.Data.(map[string]interface{})
+		for _, warning := range result.Warnings {
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", warning.Message)
 		}
 
 		if dryRun {
-			if result.Incremental {
+			incrementalResult, _ := data["incremental"].(bool)
+			filesIndexed := intFromMap(data, "files_indexed")
+			filesDeleted := intFromMap(data, "files_deleted")
+			filesSkipped := intFromMap(data, "files_skipped")
+			if incrementalResult {
 				fmt.Printf("\nDry run: %d files would be reindexed, %d deleted, %d up-to-date\n",
-					result.FilesIndexed, result.FilesDeleted, result.FilesSkipped)
+					filesIndexed, filesDeleted, filesSkipped)
 			} else {
-				fmt.Printf("\nDry run: %d files would be reindexed\n", result.FilesIndexed)
+				fmt.Printf("\nDry run: %d files would be reindexed\n", filesIndexed)
 			}
 			return nil
 		}
 
+		filesIndexed := intFromMap(data, "files_indexed")
+		filesDeleted := intFromMap(data, "files_deleted")
+		filesSkipped := intFromMap(data, "files_skipped")
+		incrementalResult, _ := data["incremental"].(bool)
 		fmt.Println()
-		if result.Incremental && (result.FilesSkipped > 0 || result.FilesDeleted > 0) {
-			if result.FilesDeleted > 0 {
+		if incrementalResult && (filesSkipped > 0 || filesDeleted > 0) {
+			if filesDeleted > 0 {
 				fmt.Println(ui.Checkf("Indexed %d changed files, removed %d deleted %s",
-					result.FilesIndexed, result.FilesDeleted, ui.Hint(fmt.Sprintf("(%d up-to-date)", result.FilesSkipped))))
+					filesIndexed, filesDeleted, ui.Hint(fmt.Sprintf("(%d up-to-date)", filesSkipped))))
 			} else {
-				fmt.Println(ui.Checkf("Indexed %d changed files %s", result.FilesIndexed, ui.Hint(fmt.Sprintf("(%d up-to-date)", result.FilesSkipped))))
+				fmt.Println(ui.Checkf("Indexed %d changed files %s", filesIndexed, ui.Hint(fmt.Sprintf("(%d up-to-date)", filesSkipped))))
 			}
 		} else {
-			fmt.Println(ui.Checkf("Indexed %d files", result.FilesIndexed))
+			fmt.Println(ui.Checkf("Indexed %d files", filesIndexed))
 		}
-		fmt.Printf("  %s objects\n", ui.Bold.Render(fmt.Sprintf("%d", result.Objects)))
-		fmt.Printf("  %s traits\n", ui.Bold.Render(fmt.Sprintf("%d", result.Traits)))
-		if result.HasRefResult && result.RefsUnresolved > 0 {
+		fmt.Printf("  %s objects\n", ui.Bold.Render(fmt.Sprintf("%d", intFromMap(data, "objects"))))
+		fmt.Printf("  %s traits\n", ui.Bold.Render(fmt.Sprintf("%d", intFromMap(data, "traits"))))
+		if intFromMap(data, "refs_unresolved") > 0 {
 			fmt.Printf("  %s references %s\n",
-				ui.Bold.Render(fmt.Sprintf("%d", result.References)),
-				ui.Hint(fmt.Sprintf("(%d resolved, %d unresolved)", result.RefsResolved, result.RefsUnresolved)))
+				ui.Bold.Render(fmt.Sprintf("%d", intFromMap(data, "references"))),
+				ui.Hint(fmt.Sprintf("(%d resolved, %d unresolved)", intFromMap(data, "refs_resolved"), intFromMap(data, "refs_unresolved"))))
 		} else {
-			fmt.Printf("  %s references\n", ui.Bold.Render(fmt.Sprintf("%d", result.References)))
+			fmt.Printf("  %s references\n", ui.Bold.Render(fmt.Sprintf("%d", intFromMap(data, "references"))))
 		}
 
-		if len(result.Errors) > 0 {
-			fmt.Printf("  %s\n", ui.Errorf("%d errors", len(result.Errors)))
+		if errorsRaw, ok := data["errors"].([]interface{}); ok && len(errorsRaw) > 0 {
+			fmt.Printf("  %s\n", ui.Errorf("%d errors", len(errorsRaw)))
+		} else if errorsRaw, ok := data["errors"].([]string); ok && len(errorsRaw) > 0 {
+			fmt.Printf("  %s\n", ui.Errorf("%d errors", len(errorsRaw)))
 		}
 
 		return nil
 	},
-}
-
-func mapReindexServiceError(err error) error {
-	svcErr, ok := reindexsvc.AsError(err)
-	if !ok {
-		return handleError(ErrInternal, err, "")
-	}
-
-	suggestion := svcErr.Suggestion
-	svcCause := svcErr.Unwrap()
-
-	switch svcErr.Code {
-	case reindexsvc.CodeInvalidInput:
-		return handleErrorMsg(ErrInvalidInput, svcErr.Message, suggestion)
-	case reindexsvc.CodeSchemaInvalid:
-		if svcCause != nil {
-			return handleError(ErrSchemaInvalid, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrSchemaInvalid, svcErr.Message, suggestion)
-	case reindexsvc.CodeConfigInvalid:
-		if svcCause != nil {
-			return handleError(ErrConfigInvalid, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrConfigInvalid, svcErr.Message, suggestion)
-	case reindexsvc.CodeDatabaseError:
-		if svcCause != nil {
-			return handleError(ErrDatabaseError, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrDatabaseError, svcErr.Message, suggestion)
-	case reindexsvc.CodeFileReadError:
-		if svcCause != nil {
-			return handleError(ErrFileReadError, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrFileReadError, svcErr.Message, suggestion)
-	default:
-		if svcCause != nil {
-			return handleError(ErrInternal, svcCause, suggestion)
-		}
-		return handleErrorMsg(ErrInternal, svcErr.Message, suggestion)
-	}
 }
 
 func init() {

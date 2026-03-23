@@ -5,15 +5,17 @@ import (
 	"runtime"
 	"runtime/debug"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
 func TestCurrentVersionInfoFromBuildInfo(t *testing.T) {
-	prevRead := readBuildInfo
+	prevRead := versioninfo.ReadBuildInfo
 	t.Cleanup(func() {
-		readBuildInfo = prevRead
+		versioninfo.ReadBuildInfo = prevRead
 	})
 
-	readBuildInfo = func() (*debug.BuildInfo, bool) {
+	versioninfo.ReadBuildInfo = func() (*debug.BuildInfo, bool) {
 		return &debug.BuildInfo{
 			GoVersion: "go1.23.4",
 			Main: debug.Module{
@@ -59,12 +61,12 @@ func TestCurrentVersionInfoFromBuildInfo(t *testing.T) {
 }
 
 func TestCurrentVersionInfoFallbackWhenBuildInfoMissing(t *testing.T) {
-	prevRead := readBuildInfo
+	prevRead := versioninfo.ReadBuildInfo
 	t.Cleanup(func() {
-		readBuildInfo = prevRead
+		versioninfo.ReadBuildInfo = prevRead
 	})
 
-	readBuildInfo = func() (*debug.BuildInfo, bool) {
+	versioninfo.ReadBuildInfo = func() (*debug.BuildInfo, bool) {
 		return nil, false
 	}
 
@@ -88,14 +90,14 @@ func TestCurrentVersionInfoFallbackWhenBuildInfoMissing(t *testing.T) {
 }
 
 func TestVersionCommandJSONOutput(t *testing.T) {
-	prevRead := readBuildInfo
+	prevRead := versioninfo.ReadBuildInfo
 	prevJSON := jsonOutput
 	t.Cleanup(func() {
-		readBuildInfo = prevRead
+		versioninfo.ReadBuildInfo = prevRead
 		jsonOutput = prevJSON
 	})
 
-	readBuildInfo = func() (*debug.BuildInfo, bool) {
+	versioninfo.ReadBuildInfo = func() (*debug.BuildInfo, bool) {
 		return &debug.BuildInfo{
 			GoVersion: "go1.23.4",
 			Main: debug.Module{

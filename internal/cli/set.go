@@ -1,16 +1,15 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -54,37 +53,52 @@ Bulk examples:
 func runSet(cmd *cobra.Command, args []string) error {
 	vaultPath := getVaultPath()
 
-	// Handle --stdin mode for bulk operations
 	if setStdin {
 		if strings.TrimSpace(setFieldsJSON) != "" {
 			return handleErrorMsg(ErrInvalidInput,
 				"--fields-json is not supported with --stdin",
 				"Use positional field=value updates when using --stdin")
 		}
-		return runSetBulk(cmd, args, vaultPath)
+		updates, err := parseSetFieldArgs(args)
+		if err != nil {
+			return err
+		}
+		if len(updates) == 0 {
+			return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value...")
+		}
+
+		fileIDs, embeddedIDs, err := ReadIDsFromStdin()
+		if err != nil {
+			return handleError(ErrInternal, err, "")
+		}
+		ids := append(fileIDs, embeddedIDs...)
+		if len(ids) == 0 {
+			return handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
+		}
+
+		return executeCanonicalSet(vaultPath, map[string]interface{}{
+			"stdin":      true,
+			"object_ids": stringsToAny(ids),
+			"fields":     stringMapToAny(updates),
+		}, true)
 	}
 
-	// Single object mode - requires object-id and at least one update source.
 	if len(args) < 1 {
 		return handleErrorMsg(ErrMissingArgument, "requires object-id", "Usage: rvn set <object-id> field=value...")
 	}
 
 	objectID := args[0]
 	fieldArgs := args[1:]
-
-	// Parse field=value arguments
-	updates := make(map[string]string)
-	for _, arg := range fieldArgs {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			return handleErrorMsg(ErrInvalidInput,
-				fmt.Sprintf("invalid field format: %s", arg),
-				"Use format: field=value")
-		}
-		updates[parts[0]] = parts[1]
+	updates, err := parseSetFieldArgs(fieldArgs)
+	if err != nil {
+		return err
 	}
 
 	typedUpdates, err := parseFieldValuesJSON(setFieldsJSON)
+	if err != nil {
+		return handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
+	}
+	fieldJSONRaw, err := parseFieldJSONObject(setFieldsJSON)
 	if err != nil {
 		return handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}
@@ -93,243 +107,131 @@ func runSet(cmd *cobra.Command, args []string) error {
 		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set <object-id> field=value... or --fields-json '{...}'")
 	}
 
-	return setSingleObject(vaultPath, objectID, updates, typedUpdates)
+	argsMap := map[string]interface{}{
+		"object_id": objectID,
+	}
+	if len(updates) > 0 {
+		argsMap["fields"] = stringMapToAny(updates)
+	}
+	if len(fieldJSONRaw) > 0 {
+		argsMap["fields-json"] = fieldJSONRaw
+	}
+	return executeCanonicalSet(vaultPath, argsMap, false)
 }
 
-// runSetBulk handles bulk set operations from stdin.
-func runSetBulk(cmd *cobra.Command, args []string, vaultPath string) error {
-	// Parse field=value arguments (all args are field=value in stdin mode)
+func parseSetFieldArgs(args []string) (map[string]string, error) {
 	updates := make(map[string]string)
 	for _, arg := range args {
 		parts := strings.SplitN(arg, "=", 2)
 		if len(parts) != 2 {
-			return handleErrorMsg(ErrInvalidInput,
+			return nil, handleErrorMsg(ErrInvalidInput,
 				fmt.Sprintf("invalid field format: %s", arg),
 				"Use format: field=value")
 		}
 		updates[parts[0]] = parts[1]
 	}
-
-	if len(updates) == 0 {
-		return handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value...")
-	}
-
-	// Read IDs from stdin (both file-level and embedded)
-	fileIDs, embeddedIDs, err := ReadIDsFromStdin()
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	// Combine all IDs - we now support embedded objects
-	ids := append(fileIDs, embeddedIDs...)
-
-	if len(ids) == 0 {
-		return handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
-	}
-
-	var warnings []Warning
-
-	// Load schema for validation
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
-	}
-
-	// Load vault config (optional, used for roots + auto-reindex)
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-	}
-
-	// If not confirming, show preview
-	if !setConfirm {
-		return previewSetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
-	}
-
-	// Apply the changes
-	return applySetBulk(vaultPath, ids, updates, warnings, sch, vaultCfg)
+	return updates, nil
 }
 
-// previewSetBulk shows a preview of bulk set operations.
-func previewSetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	parseOpts := buildParseOptions(vaultCfg)
-	previewResult, err := objectsvc.PreviewSetBulk(objectsvc.SetBulkRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		Schema:       sch,
-		ObjectIDs:    ids,
-		Updates:      updates,
-		ParseOptions: parseOpts,
+func executeCanonicalSet(vaultPath string, args map[string]interface{}, bulk bool) error {
+	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+		CommandID: "set",
+		VaultPath: vaultPath,
+		Caller:    commandexec.CallerCLI,
+		Args:      args,
+		Confirm:   setConfirm,
 	})
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	preview := &BulkPreview{
-		Action:   "set",
-		Items:    make([]BulkPreviewItem, 0, len(previewResult.Items)),
-		Skipped:  make([]BulkResult, 0, len(previewResult.Skipped)),
-		Total:    previewResult.Total,
-		Warnings: warnings,
-	}
-	for _, item := range previewResult.Items {
-		preview.Items = append(preview.Items, BulkPreviewItem{
-			ID:      item.ID,
-			Action:  item.Action,
-			Changes: item.Changes,
-		})
-	}
-	for _, skip := range previewResult.Skipped {
-		preview.Skipped = append(preview.Skipped, BulkResult{
-			ID:     skip.ID,
-			Status: skip.Status,
-			Reason: skip.Reason,
-		})
-	}
-
-	return outputBulkPreview(preview, map[string]interface{}{
-		"fields": updates,
-	})
-}
-
-// applySetBulk applies bulk set operations.
-func applySetBulk(vaultPath string, ids []string, updates map[string]string, warnings []Warning, sch *schema.Schema, vaultCfg *config.VaultConfig) error {
-	parseOpts := buildParseOptions(vaultCfg)
-	summaryResult, err := objectsvc.ApplySetBulk(objectsvc.SetBulkRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		Schema:       sch,
-		ObjectIDs:    ids,
-		Updates:      updates,
-		ParseOptions: parseOpts,
-	}, func(filePath string) {
-		maybeReindex(vaultPath, filePath, vaultCfg)
-	})
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	results := make([]BulkResult, 0, len(summaryResult.Results))
-	for _, result := range summaryResult.Results {
-		results = append(results, BulkResult{
-			ID:     result.ID,
-			Status: result.Status,
-			Reason: result.Reason,
-		})
-	}
-
-	summary := buildBulkSummary("set", results, warnings)
-	return outputBulkSummary(summary, warnings, map[string]interface{}{
-		"fields": updates,
-	})
-}
-
-// setSingleObject sets fields on a single object (non-bulk mode).
-func setSingleObject(vaultPath, reference string, updates map[string]string, typedUpdates map[string]schema.FieldValue) error {
-	// Load schema for validation
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
-	}
-
-	// Load vault config
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-	}
-
-	serviceResult, err := objectsvc.SetByReference(objectsvc.SetByReferenceRequest{
-		VaultPath:    vaultPath,
-		VaultConfig:  vaultCfg,
-		Schema:       sch,
-		Reference:    reference,
-		Updates:      updates,
-		TypedUpdates: typedUpdates,
-		ParseOptions: buildParseOptions(vaultCfg),
-	})
-	if err != nil {
-		var svcErr *objectsvc.Error
-		if errors.As(err, &svcErr) {
-			switch svcErr.Code {
-			case objectsvc.ErrorRefAmbiguous:
-				return handleErrorMsg(ErrRefAmbiguous, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorRefNotFound:
-				return handleErrorMsg(ErrRefNotFound, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorInvalidInput:
-				return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorValidationFailed:
-				return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
-			case objectsvc.ErrorFileRead:
-				return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
-			case objectsvc.ErrorFileWrite:
-				return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-			default:
-				return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-			}
+	if !result.OK {
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
 		}
-		var unknownErr *unknownFieldMutationError
-		var validationErr *fieldValidationError
-		if errors.As(err, &unknownErr) {
-			return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
+		if result.Error != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
 		}
-		if errors.As(err, &validationErr) {
-			return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
-		}
-		return handleError(ErrFileWriteError, err, "Failed to update frontmatter")
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 
-	// Auto-reindex if configured
-	maybeReindex(vaultPath, serviceResult.FilePath, vaultCfg)
-
-	// Output
 	if isJSONOutput() {
-		result := map[string]interface{}{
-			"file":           serviceResult.RelativePath,
-			"object_id":      serviceResult.ObjectID,
-			"type":           serviceResult.ObjectType,
-			"updated_fields": serviceResult.ResolvedUpdates,
-		}
-		if serviceResult.Embedded {
-			result["embedded"] = true
-		}
-		if len(serviceResult.WarningMessages) > 0 {
-			warnings := warningMessagesToWarnings(serviceResult.WarningMessages)
-			outputSuccessWithWarnings(result, warnings, nil)
-		} else {
-			outputSuccess(result, nil)
-		}
+		outputJSON(result)
 		return nil
 	}
-
-	// Human-readable output with diff-style changes
-	if serviceResult.Embedded {
-		fmt.Println(ui.Checkf("Updated %s %s", ui.FilePath(serviceResult.RelativePath), ui.Hint("(embedded: "+serviceResult.EmbeddedSlug+")")))
-	} else {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(serviceResult.RelativePath)))
+	if bulk {
+		return renderCanonicalBulkResult(result)
 	}
-	var fieldNames []string
-	for name := range serviceResult.ResolvedUpdates {
+	return renderCanonicalSetSingleResult(result)
+}
+
+func renderCanonicalSetSingleResult(result commandexec.Result) error {
+	data, ok := result.Data.(map[string]interface{})
+	if !ok {
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+
+	relativePath, _ := data["file"].(string)
+	embedded, _ := data["embedded"].(bool)
+	if embedded {
+		embeddedSlug, _ := data["embedded_slug"].(string)
+		fmt.Println(ui.Checkf("Updated %s %s", ui.FilePath(relativePath), ui.Hint("(embedded: "+embeddedSlug+")")))
+	} else {
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
+	}
+
+	updatedFields := stringMapFromAny(data["updated_fields"])
+	previousFields := interfaceMapFromAny(data["previous_fields"])
+	fieldNames := make([]string, 0, len(updatedFields))
+	for name := range updatedFields {
 		fieldNames = append(fieldNames, name)
 	}
 	sort.Strings(fieldNames)
 	for _, name := range fieldNames {
-		oldVal := ""
-		if v, ok := serviceResult.PreviousFields[name]; ok {
-			oldVal = fmt.Sprintf("%v", v)
+		oldValue := ""
+		if value, ok := previousFields[name]; ok {
+			oldValue = fmt.Sprintf("%v", value)
 		}
-		if oldVal != "" && oldVal != serviceResult.ResolvedUpdates[name] {
-			fmt.Printf("  %s\n", ui.FieldChange(name, oldVal, serviceResult.ResolvedUpdates[name]))
-		} else if oldVal == "" {
-			fmt.Printf("  %s\n", ui.FieldAdd(name, serviceResult.ResolvedUpdates[name]))
+		newValue := updatedFields[name]
+		if oldValue != "" && oldValue != newValue {
+			fmt.Printf("  %s\n", ui.FieldChange(name, oldValue, newValue))
+		} else if oldValue == "" {
+			fmt.Printf("  %s\n", ui.FieldAdd(name, newValue))
 		} else {
-			fmt.Printf("  %s\n", ui.FieldSet(name, serviceResult.ResolvedUpdates[name]))
+			fmt.Printf("  %s\n", ui.FieldSet(name, newValue))
 		}
 	}
-	for _, warning := range serviceResult.WarningMessages {
-		fmt.Printf("  %s\n", ui.Warning(warning))
+	for _, warning := range result.Warnings {
+		fmt.Printf("  %s\n", ui.Warning(warning.Message))
 	}
-
 	return nil
+}
+
+func stringMapFromAny(raw interface{}) map[string]string {
+	switch values := raw.(type) {
+	case map[string]string:
+		return values
+	case map[string]interface{}:
+		out := make(map[string]string, len(values))
+		for key, value := range values {
+			out[key] = fmt.Sprintf("%v", value)
+		}
+		return out
+	default:
+		return map[string]string{}
+	}
+}
+
+func interfaceMapFromAny(raw interface{}) map[string]interface{} {
+	switch values := raw.(type) {
+	case map[string]interface{}:
+		return values
+	case map[string]string:
+		out := make(map[string]interface{}, len(values))
+		for key, value := range values {
+			out[key] = value
+		}
+		return out
+	default:
+		return map[string]interface{}{}
+	}
 }
 
 func init() {

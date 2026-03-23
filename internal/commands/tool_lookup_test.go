@@ -33,6 +33,12 @@ func TestResolveToolCommandID(t *testing.T) {
 			wantID:   "",
 			wantOK:   false,
 		},
+		{
+			name:     "compatibility alias",
+			toolName: "raven_template",
+			wantID:   "template_list",
+			wantOK:   true,
+		},
 	}
 
 	for _, tc := range tests {

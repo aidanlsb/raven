@@ -1,12 +1,16 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/datesvc"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -31,43 +35,46 @@ Examples:
 		if len(args) > 0 {
 			dateArg = args[0]
 		}
-		result, err := datesvc.DateHub(datesvc.DateHubRequest{
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "date",
 			VaultPath: vaultPath,
-			DateArg:   dateArg,
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"date": dateArg,
+			},
 		})
-		if err != nil {
-			return mapDateSvcError(err)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
+		data, _ := result.Data.(map[string]interface{})
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"date":          result.Date,
-				"day_of_week":   result.DayOfWeek,
-				"daily_note_id": result.DailyNoteID,
-				"daily_path":    result.DailyPath,
-				"daily_exists":  result.DailyExists,
-				"items":         result.Items,
-				"backlinks":     result.Backlinks,
-			}
-			if result.DailyNote != nil {
-				data["daily_note"] = result.DailyNote
-			}
-			outputSuccess(data, &Meta{Count: len(result.Items)})
+			outputJSON(result)
 			return nil
 		}
 
 		display := ui.NewDisplayContext()
-		fmt.Printf("%s %s\n\n", ui.SectionHeader(result.Date), ui.Hint(fmt.Sprintf("(%s)", result.DayOfWeek)))
+		dateValue, _ := data["date"].(string)
+		dayOfWeek, _ := data["day_of_week"].(string)
+		fmt.Printf("%s %s\n\n", ui.SectionHeader(dateValue), ui.Hint(fmt.Sprintf("(%s)", dayOfWeek)))
 
 		fmt.Println(ui.Divider("Daily Note", display.TermWidth))
-		if result.DailyNote != nil {
-			fmt.Printf("%s\n\n", ui.Bullet(ui.FilePath(result.DailyNote.FilePath)))
+		if dailyNoteRaw, ok := data["daily_note"]; ok && dailyNoteRaw != nil {
+			dailyNote := objectResultFromAny(dailyNoteRaw)
+			fmt.Printf("%s\n\n", ui.Bullet(ui.FilePath(dailyNote.FilePath)))
 		} else {
-			fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", result.Date))))
+			fmt.Printf("%s\n\n", ui.Bullet(ui.Hint(fmt.Sprintf("(not created yet - use 'rvn daily %s' to create)", dateValue))))
 		}
 
 		byField := make(map[string][]datesvc.DateAssociation)
-		for _, item := range result.Items {
+		for _, item := range dateAssociationsFromAny(data["items"]) {
 			byField[item.FieldName] = append(byField[item.FieldName], item)
 		}
 
@@ -76,7 +83,7 @@ Examples:
 			if prettyField != "" {
 				prettyField = strings.ToUpper(prettyField[:1]) + prettyField[1:]
 			}
-			label := fmt.Sprintf("%s: %s (%d)", prettyField, result.Date, len(fieldItems))
+			label := fmt.Sprintf("%s: %s (%d)", prettyField, dateValue, len(fieldItems))
 			fmt.Println(ui.Divider(label, display.TermWidth))
 			for _, item := range fieldItems {
 				if item.SourceType == "trait" {
@@ -106,9 +113,10 @@ Examples:
 			fmt.Println()
 		}
 
-		if len(result.Backlinks) > 0 {
-			fmt.Println(ui.Divider(fmt.Sprintf("References (%d)", len(result.Backlinks)), display.TermWidth))
-			for _, bl := range result.Backlinks {
+		backlinks := dateBacklinksFromAny(data["backlinks"])
+		if len(backlinks) > 0 {
+			fmt.Println(ui.Divider(fmt.Sprintf("References (%d)", len(backlinks)), display.TermWidth))
+			for _, bl := range backlinks {
 				location := bl.FilePath
 				if bl.Line != nil {
 					location = fmt.Sprintf("%s:%d", bl.FilePath, *bl.Line)
@@ -119,6 +127,24 @@ Examples:
 
 		return nil
 	},
+}
+
+func dateAssociationsFromAny(raw interface{}) []datesvc.DateAssociation {
+	var items []datesvc.DateAssociation
+	_ = decodeResultData(raw, &items)
+	return items
+}
+
+func dateBacklinksFromAny(raw interface{}) []model.Reference {
+	var items []model.Reference
+	_ = decodeResultData(raw, &items)
+	return items
+}
+
+func objectResultFromAny(raw interface{}) model.Object {
+	var item model.Object
+	_ = decodeResultData(raw, &item)
+	return item
 }
 
 func init() {

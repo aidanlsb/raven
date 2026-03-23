@@ -1,15 +1,15 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
-	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -29,7 +29,6 @@ var upsertCmd = &cobra.Command{
 		vaultPath := getVaultPath()
 		typeName := args[0]
 		title := args[1]
-		replaceBody := cmd.Flags().Changed("content")
 
 		if err := validateObjectTitle(title); err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
@@ -43,112 +42,82 @@ var upsertCmd = &cobra.Command{
 			}
 		}
 
-		s, err := schema.Load(vaultPath)
-		if err != nil {
-			return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
-		}
-
 		fieldValues, err := parseFieldFlags(upsertFieldFlags)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
 		}
 
-		typedFieldValues, err := parseFieldValuesJSON(upsertFieldJSON)
+		fieldJSONRaw, err := parseFieldJSONObject(upsertFieldJSON)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 		}
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
-		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-		}
-
-		result, err := objectsvc.Upsert(objectsvc.UpsertRequest{
-			VaultPath:        vaultPath,
-			TypeName:         typeName,
-			Title:            title,
-			TargetPath:       targetPath,
-			ReplaceBody:      replaceBody,
-			Content:          upsertContent,
-			FieldValues:      fieldValues,
-			TypedFieldValues: typedFieldValues,
-			VaultConfig:      vaultCfg,
-			Schema:           s,
-			ObjectsRoot:      vaultCfg.GetObjectsRoot(),
-			PagesRoot:        vaultCfg.GetPagesRoot(),
-			TemplateDir:      vaultCfg.GetTemplateDirectory(),
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "upsert",
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args: buildUpsertCommandArgs(
+				typeName,
+				title,
+				targetPath,
+				fieldValues,
+				fieldJSONRaw,
+				upsertContent,
+				cmd.Flags().Changed("content"),
+			),
 		})
-		if err != nil {
-			var svcErr *objectsvc.Error
-			if errors.As(err, &svcErr) {
-				switch svcErr.Code {
-				case objectsvc.ErrorTypeNotFound:
-					return handleErrorMsg(ErrTypeNotFound, svcErr.Message, svcErr.Suggestion)
-				case objectsvc.ErrorRequiredField:
-					if isJSONOutput() {
-						outputError(ErrRequiredField, svcErr.Message, svcErr.Details, svcErr.Suggestion)
-						return nil
-					}
-					return handleErrorMsg(ErrRequiredField, svcErr.Message, svcErr.Suggestion)
-				case objectsvc.ErrorInvalidInput:
-					return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-				case objectsvc.ErrorValidationFailed:
-					return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
-				case objectsvc.ErrorFileRead:
-					return handleError(ErrFileReadError, svcErr, svcErr.Suggestion)
-				case objectsvc.ErrorFileWrite:
-					return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-				default:
-					return handleError(ErrInternal, svcErr, svcErr.Suggestion)
-				}
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
 			}
-
-			var unknownErr *unknownFieldMutationError
-			var validationErr *fieldValidationError
-			if errors.As(err, &unknownErr) {
-				return handleErrorWithDetails(ErrUnknownField, unknownErr.Error(), unknownErr.Suggestion(), unknownErr.Details())
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
 			}
-			if errors.As(err, &validationErr) {
-				return handleErrorMsg(ErrValidationFailed, validationErr.Error(), validationErr.Suggestion())
-			}
-			return handleError(ErrFileWriteError, err, "")
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
 		}
 
-		if result.Status == "created" || result.Status == "updated" {
-			maybeReindex(vaultPath, result.FilePath, vaultCfg)
-		}
-
-		cliWarnings := warningMessagesToWarnings(result.WarningMessages)
-		objectID := vaultCfg.FilePathToObjectID(result.RelativePath)
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"status": result.Status,
-				"id":     objectID,
-				"file":   result.RelativePath,
-				"type":   typeName,
-				"title":  title,
-			}
-			if len(cliWarnings) > 0 {
-				outputSuccessWithWarnings(data, cliWarnings, nil)
-			} else {
-				outputSuccess(data, nil)
-			}
+			outputJSON(result)
 			return nil
 		}
 
-		switch result.Status {
+		data, _ := result.Data.(map[string]interface{})
+		status, _ := data["status"].(string)
+		relativePath, _ := data["file"].(string)
+		switch status {
 		case "created":
-			fmt.Println(ui.Checkf("Created %s", ui.FilePath(result.RelativePath)))
+			fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
 		case "updated":
-			fmt.Println(ui.Checkf("Updated %s", ui.FilePath(result.RelativePath)))
+			fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
 		default:
-			fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(result.RelativePath)))
+			fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(relativePath)))
 		}
-		for _, warning := range cliWarnings {
+		for _, warning := range result.Warnings {
 			fmt.Println(ui.Warning(warning.Message))
 		}
 		return nil
 	},
+}
+
+func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}, content string, replaceBody bool) map[string]interface{} {
+	args := map[string]interface{}{
+		"type":  typeName,
+		"title": title,
+	}
+	if len(fieldValues) > 0 {
+		args["field"] = stringMapToAny(fieldValues)
+	}
+	if len(fieldJSONRaw) > 0 {
+		args["field-json"] = fieldJSONRaw
+	}
+	if strings.TrimSpace(targetPath) != "" {
+		args["path"] = targetPath
+	}
+	if replaceBody {
+		args["content"] = content
+	}
+	return args
 }
 
 func parseFieldFlags(flags []string) (map[string]string, error) {

@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -25,34 +24,18 @@ var workflowListCmd = &cobra.Command{
 	Short: "List available workflows",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		items, err := workflow.List(vaultPath, vaultCfg)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
+		result := executeCanonicalCommand("workflow_list", vaultPath, nil)
 		if isJSONOutput() {
-			// Convert to JSON-friendly format
-			workflows := make([]map[string]interface{}, len(items))
-			for i, item := range items {
-				w := map[string]interface{}{
-					"name":        item.Name,
-					"description": item.Description,
-				}
-				if len(item.Inputs) > 0 {
-					w["inputs"] = item.Inputs
-				}
-				workflows[i] = w
-			}
-			outputSuccess(map[string]interface{}{
-				"workflows": workflows,
-			}, nil)
+			outputCanonicalResultJSON(result)
 			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		data := canonicalDataMap(result)
+		items, err := decodeSchemaValue[[]workflow.ListItem](data["workflows"])
+		if err != nil {
+			return err
 		}
 
 		if len(items) == 0 {
@@ -80,31 +63,21 @@ var workflowShowCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		name := args[0]
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		wf, err := workflow.Get(vaultPath, name, vaultCfg)
-		if err != nil {
-			return handleError(ErrQueryNotFound, err, "Use 'rvn workflow list' to see available workflows")
-		}
-
+		result := executeCanonicalCommand("workflow_show", vaultPath, map[string]interface{}{"name": name})
 		if isJSONOutput() {
-			out := map[string]interface{}{
-				"name":        wf.Name,
-				"description": wf.Description,
-			}
-			if len(wf.Inputs) > 0 {
-				out["inputs"] = wf.Inputs
-			}
-			if len(wf.Steps) > 0 {
-				out["steps"] = wf.Steps
-			}
-			outputSuccess(out, nil)
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		data := canonicalDataMap(result)
+		wf := &workflow.Workflow{
+			Name:        name,
+			Description: stringValue(data["description"]),
+		}
+		wf.Inputs, _ = decodeSchemaValue[map[string]*config.WorkflowInput](data["inputs"])
+		wf.Steps, _ = decodeSchemaValue[[]*config.WorkflowStep](data["steps"])
 
 		fmt.Printf("name: %s\n", wf.Name)
 		if wf.Description != "" {
@@ -194,48 +167,29 @@ var workflowStepAddCmd = &cobra.Command{
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
 		}
 
-		step, err := workflow.ParseStepObject(workflowStepAddJSON, true)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "")
-		}
-
 		if strings.TrimSpace(workflowStepAddBefore) != "" && strings.TrimSpace(workflowStepAddAfter) != "" {
 			return handleErrorMsg(ErrInvalidInput, "use either --before or --after, not both", "")
 		}
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
+		stepJSON, err := decodeCLIJSONObject(workflowStepAddJSON)
 		if err != nil {
-			return handleError(ErrInternal, err, "")
+			return handleError(ErrInvalidInput, err, "")
 		}
-
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
-		result, err := svc.MutateStep(workflow.StepMutationRequest{
-			WorkflowName: workflowName,
-			Action:       workflow.StepMutationAdd,
-			Step:         step,
-			Position: workflow.PositionHint{
-				BeforeStepID: strings.TrimSpace(workflowStepAddBefore),
-				AfterStepID:  strings.TrimSpace(workflowStepAddAfter),
-			},
+		result := executeCanonicalCommand("workflow_step_add", vaultPath, map[string]interface{}{
+			"workflow-name": workflowName,
+			"step-json":     stepJSON,
+			"before":        strings.TrimSpace(workflowStepAddBefore),
+			"after":         strings.TrimSpace(workflowStepAddAfter),
 		})
-		if err != nil {
-			return handleWorkflowDomainError(err, "Run 'rvn workflow list' to see available workflows")
-		}
-
-		payload := map[string]interface{}{
-			"workflow_name": workflowName,
-			"file":          result.FileRef,
-			"action":        "add",
-			"step_id":       result.StepID,
-			"step":          result.Step,
-			"index":         result.Index,
-		}
 		if isJSONOutput() {
-			outputSuccess(payload, nil)
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
 
-		fmt.Printf("Added step '%s' to workflow '%s'.\n", step.ID, workflowName)
+		data := canonicalDataMap(result)
+		fmt.Printf("Added step '%s' to workflow '%s'.\n", data["step_id"], workflowName)
 		return nil
 	},
 }
@@ -251,75 +205,28 @@ var workflowStepUpdateCmd = &cobra.Command{
 		if workflowName == "" || stepID == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name and step id are required", "")
 		}
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
-
-		wf, err := workflow.Get(vaultPath, workflowName, vaultCfg)
-		if err != nil {
-			return handleError(ErrWorkflowNotFound, err, "Run 'rvn workflow list' to see available workflows")
-		}
-
-		targetIdx := workflow.FindStepIndexInSteps(wf.Steps, stepID)
-		if targetIdx < 0 {
-			return handleErrorWithDetails(
-				ErrRefNotFound,
-				fmt.Sprintf("step '%s' not found", stepID),
-				"Use 'rvn workflow show <name>' to inspect step ids",
-				map[string]interface{}{"workflow_name": workflowName, "step_id": stepID},
-			)
-		}
-
-		updatedStep, err := workflow.ApplyStepPatch(wf.Steps[targetIdx], workflowStepUpdateJSON)
+		stepJSON, err := decodeCLIJSONObject(workflowStepUpdateJSON)
 		if err != nil {
 			return handleError(ErrInvalidInput, err, "")
 		}
-		if updatedStep.ID == "" {
-			updatedStep.ID = stepID
-		}
-
-		if updatedStep.ID != stepID {
-			if idx := workflow.FindStepIndexInSteps(wf.Steps, updatedStep.ID); idx >= 0 {
-				return handleErrorMsg(
-					ErrDuplicateName,
-					fmt.Sprintf("step id '%s' already exists", updatedStep.ID),
-					"Use a unique step id",
-				)
-			}
-		}
-
-		result, err := svc.MutateStep(workflow.StepMutationRequest{
-			WorkflowName: workflowName,
-			Action:       workflow.StepMutationUpdate,
-			TargetStepID: stepID,
-			Step:         updatedStep,
+		result := executeCanonicalCommand("workflow_step_update", vaultPath, map[string]interface{}{
+			"workflow-name": workflowName,
+			"step-id":       stepID,
+			"step-json":     stepJSON,
 		})
-		if err != nil {
-			return handleWorkflowDomainError(err, "Run 'rvn workflow list' to see available workflows")
-		}
-
-		payload := map[string]interface{}{
-			"workflow_name": workflowName,
-			"file":          result.FileRef,
-			"action":        "update",
-			"step_id":       result.StepID,
-			"previous_id":   stepID,
-			"step":          result.Step,
-			"index":         result.Index,
-		}
 		if isJSONOutput() {
-			outputSuccess(payload, nil)
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
 
-		if updatedStep.ID == stepID {
+		data := canonicalDataMap(result)
+		if stringValue(data["step_id"]) == stepID {
 			fmt.Printf("Updated step '%s' in workflow '%s'.\n", stepID, workflowName)
 		} else {
-			fmt.Printf("Updated step '%s' (renamed from '%s') in workflow '%s'.\n", updatedStep.ID, stepID, workflowName)
+			fmt.Printf("Updated step '%s' (renamed from '%s') in workflow '%s'.\n", data["step_id"], stepID, workflowName)
 		}
 		return nil
 	},
@@ -336,32 +243,16 @@ var workflowStepRemoveCmd = &cobra.Command{
 		if workflowName == "" || stepID == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name and step id are required", "")
 		}
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
-		result, err := svc.MutateStep(workflow.StepMutationRequest{
-			WorkflowName: workflowName,
-			Action:       workflow.StepMutationRemove,
-			TargetStepID: stepID,
+		result := executeCanonicalCommand("workflow_step_remove", vaultPath, map[string]interface{}{
+			"workflow-name": workflowName,
+			"step-id":       stepID,
 		})
-		if err != nil {
-			return handleWorkflowDomainError(err, "Run 'rvn workflow list' to see available workflows")
-		}
-
-		payload := map[string]interface{}{
-			"workflow_name": workflowName,
-			"file":          result.FileRef,
-			"action":        "remove",
-			"step_id":       result.StepID,
-			"index":         result.Index,
-		}
 		if isJSONOutput() {
-			outputSuccess(payload, nil)
+			outputCanonicalResultJSON(result)
 			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
 		}
 
 		fmt.Printf("Removed step '%s' from workflow '%s'.\n", stepID, workflowName)
@@ -386,43 +277,19 @@ Examples:
 		if name == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
 		}
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
 		if strings.TrimSpace(workflowAddFile) == "" {
 			return handleErrorMsg(ErrMissingArgument, "--file is required", "Use --file <workflow YAML path>")
 		}
-
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
-		result, err := svc.AddWorkflow(workflow.AddWorkflowRequest{
-			Name: name,
-			File: workflowAddFile,
+		result := executeCanonicalCommand("workflow_add", vaultPath, map[string]interface{}{
+			"name": name,
+			"file": workflowAddFile,
 		})
-		if err != nil {
-			if de, ok := workflow.AsDomainError(err); ok && de.Code == workflow.CodeDuplicateName {
-				return handleWorkflowDomainError(err, fmt.Sprintf("Use 'rvn workflow remove %s' first to replace it", name))
-			}
-			return handleWorkflowDomainError(err, fmt.Sprintf("Use a file path like %s<name>.yaml", vaultCfg.GetWorkflowDirectory()))
-		}
-
 		if isJSONOutput() {
-			out := map[string]interface{}{
-				"name":        result.Workflow.Name,
-				"description": result.Workflow.Description,
-				"source":      result.Source,
-				"file":        result.FileRef,
-			}
-			if len(result.Workflow.Inputs) > 0 {
-				out["inputs"] = result.Workflow.Inputs
-			}
-			if len(result.Workflow.Steps) > 0 {
-				out["steps"] = result.Workflow.Steps
-			}
-			outputSuccess(out, nil)
+			outputCanonicalResultJSON(result)
 			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
 		}
 
 		fmt.Printf("Added workflow '%s'.\n", name)
@@ -450,46 +317,22 @@ existing scaffold file.`,
 		if name == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
 		}
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
-		result, err := svc.ScaffoldWorkflow(workflow.ScaffoldWorkflowRequest{
-			Name:        name,
-			File:        workflowScaffoldFile,
-			Description: workflowScaffoldDescription,
-			Force:       workflowScaffoldForce,
+		result := executeCanonicalCommand("workflow_scaffold", vaultPath, map[string]interface{}{
+			"name":        name,
+			"file":        workflowScaffoldFile,
+			"description": workflowScaffoldDescription,
+			"force":       workflowScaffoldForce,
 		})
-		if err != nil {
-			if de, ok := workflow.AsDomainError(err); ok {
-				if de.Code == workflow.CodeDuplicateName {
-					return handleWorkflowDomainError(
-						err,
-						fmt.Sprintf("A scaffold file was written to %s. Remove the existing workflow first or use a different name.", workflow.ScaffoldErrorFileRef(vaultCfg, name, workflowScaffoldFile)),
-					)
-				}
-				if de.Code == workflow.CodeFileExists {
-					return handleWorkflowDomainError(err, "Use --force to overwrite, or choose a different --file path")
-				}
-			}
-			return handleWorkflowDomainError(err, fmt.Sprintf("Use a file path like %s<name>.yaml", vaultCfg.GetWorkflowDirectory()))
-		}
-
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"name":        result.Workflow.Name,
-				"description": result.Workflow.Description,
-				"file":        result.FileRef,
-				"source":      result.Source,
-				"scaffolded":  result.Scaffolded,
-			}, nil)
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
 
-		fmt.Printf("Scaffolded workflow '%s' at %s\n", name, result.FileRef)
+		data := canonicalDataMap(result)
+		fmt.Printf("Scaffolded workflow '%s' at %s\n", name, data["file"])
 		fmt.Printf("Run with: rvn workflow run %s --input topic=\"...\"\n", name)
 		return nil
 	},
@@ -510,24 +353,13 @@ Examples:
 		if name == "" {
 			return handleErrorMsg(ErrMissingArgument, "workflow name cannot be empty", "")
 		}
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
-		result, err := svc.RemoveWorkflow(workflow.RemoveWorkflowRequest{Name: name})
-		if err != nil {
-			return handleWorkflowDomainError(err, "Run 'rvn workflow list' to see available workflows")
-		}
-
+		result := executeCanonicalCommand("workflow_remove", vaultPath, map[string]interface{}{"name": name})
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"name":    result.Name,
-				"removed": result.Removed,
-			}, nil)
+			outputCanonicalResultJSON(result)
 			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
 		}
 
 		fmt.Printf("Removed workflow '%s'.\n", name)
@@ -547,44 +379,25 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
 		name := ""
 		if len(args) == 1 {
 			name = strings.TrimSpace(args[0])
 		}
-
-		svc := workflow.NewAuthoringService(vaultPath, vaultCfg)
-		result, err := svc.ValidateWorkflows(workflow.ValidateWorkflowsRequest{Name: name})
-		if err != nil {
-			return handleWorkflowDomainError(err, "Run 'rvn workflow list' to see available workflows")
-		}
-
-		payload := map[string]interface{}{
-			"valid":   result.Valid,
-			"checked": result.Checked,
-			"invalid": result.Invalid,
-			"results": result.Results,
-		}
-
-		if result.Invalid > 0 {
-			return handleErrorWithDetails(
-				ErrWorkflowInvalid,
-				fmt.Sprintf("%d workflow(s) invalid", result.Invalid),
-				"Use 'rvn workflow show <name>' to inspect a workflow definition",
-				payload,
-			)
-		}
-
+		result := executeCanonicalCommand("workflow_validate", vaultPath, map[string]interface{}{"name": name})
 		if isJSONOutput() {
-			outputSuccess(payload, &Meta{Count: len(result.Results)})
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		data := canonicalDataMap(result)
+		results, err := decodeSchemaValue[[]workflow.ValidationItem](data["results"])
+		if err != nil {
+			return err
+		}
 
-		fmt.Printf("All %d workflow(s) are valid.\n", len(result.Results))
+		fmt.Printf("All %d workflow(s) are valid.\n", len(results))
 		return nil
 	},
 }
@@ -600,60 +413,47 @@ var workflowRunCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		name := args[0]
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		inputs, err := workflow.ParseInputs(workflowInputFile, workflowInputJSON, workflowInputFlags)
+		argsMap, err := workflowRunArgs(name)
 		if err != nil {
 			return handleError(ErrWorkflowInputInvalid, err, "")
 		}
-
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
-		outcome, err := svc.Start(workflow.StartRunRequest{
-			WorkflowName: name,
-			Inputs:       inputs,
-		})
-		if err != nil {
-			if de, ok := workflow.AsDomainError(err); ok {
-				details := workflow.MergeDetails(de.Details, workflow.OutcomeErrorDetails(outcome, de.StepID))
-				return handleErrorWithDetails(workflow.DomainCodeToErrorCode(de.Code), de.Error(), workflow.DomainCodeHint(de.Code), details)
-			}
-			return handleError(ErrInternal, err, "")
-		}
-		result := outcome.Result
-
+		result := executeCanonicalCommand("workflow_run", vaultPath, argsMap)
 		if isJSONOutput() {
-			outputSuccess(result, nil)
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		runResult, err := workflowRunResultFromCanonical(result)
+		if err != nil {
+			return err
+		}
 
-		fmt.Printf("run_id: %s\n", result.RunID)
-		fmt.Printf("status: %s\n", result.Status)
-		fmt.Printf("revision: %d\n\n", result.Revision)
+		fmt.Printf("run_id: %s\n", runResult.RunID)
+		fmt.Printf("status: %s\n", runResult.Status)
+		fmt.Printf("revision: %d\n\n", runResult.Revision)
 
-		if result.Next != nil {
+		if runResult.Next != nil {
 			fmt.Println("=== AGENT ===")
-			fmt.Println(result.Next.Prompt)
+			fmt.Println(runResult.Next.Prompt)
 			fmt.Println()
 			fmt.Println("=== OUTPUTS ===")
-			outputJSON, _ := json.MarshalIndent(result.Next.Outputs, "", "  ")
+			outputJSON, _ := json.MarshalIndent(runResult.Next.Outputs, "", "  ")
 			fmt.Println(string(outputJSON))
 			fmt.Println()
 			fmt.Println("=== STEP SUMMARIES ===")
-			stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+			stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 			fmt.Println(string(stepSummariesJSON))
 			fmt.Println()
-			fmt.Printf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.\n", result.RunID)
+			fmt.Printf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.\n", runResult.RunID)
 			return nil
 		}
 
 		fmt.Println("Workflow completed (no agent steps).")
 		fmt.Println()
 		fmt.Println("=== STEP SUMMARIES ===")
-		stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+		stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 		fmt.Println(string(stepSummariesJSON))
 		return nil
 	},
@@ -671,61 +471,47 @@ var workflowContinueCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 		runID := args[0]
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		outputEnv, err := workflow.ParseAgentOutputEnvelope(workflowContinueOutputFile, workflowContinueOutputJSON, workflowContinueOutput)
+		argsMap, err := workflowContinueArgs(runID)
 		if err != nil {
 			return handleError(ErrWorkflowAgentOutputInvalid, err, "")
 		}
-
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
-		outcome, err := svc.Continue(workflow.ContinueRunRequest{
-			RunID:            runID,
-			ExpectedRevision: workflowContinueExpectedRevision,
-			AgentOutput:      outputEnv,
-		})
-		if err != nil {
-			if de, ok := workflow.AsDomainError(err); ok {
-				details := workflow.MergeDetails(de.Details, workflow.OutcomeErrorDetails(outcome, de.StepID))
-				return handleErrorWithDetails(workflow.DomainCodeToErrorCode(de.Code), de.Error(), workflow.DomainCodeHint(de.Code), details)
-			}
-			return handleError(ErrInternal, err, "")
-		}
-		result := outcome.Result
-
+		result := executeCanonicalCommand("workflow_continue", vaultPath, argsMap)
 		if isJSONOutput() {
-			outputSuccess(result, nil)
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		runResult, err := workflowRunResultFromCanonical(result)
+		if err != nil {
+			return err
+		}
 
-		fmt.Printf("run_id: %s\n", result.RunID)
-		fmt.Printf("status: %s\n", result.Status)
-		fmt.Printf("revision: %d\n\n", result.Revision)
+		fmt.Printf("run_id: %s\n", runResult.RunID)
+		fmt.Printf("status: %s\n", runResult.Status)
+		fmt.Printf("revision: %d\n\n", runResult.Revision)
 
-		if result.Next != nil {
+		if runResult.Next != nil {
 			fmt.Println("=== AGENT ===")
-			fmt.Println(result.Next.Prompt)
+			fmt.Println(runResult.Next.Prompt)
 			fmt.Println()
 			fmt.Println("=== OUTPUTS ===")
-			outputJSON, _ := json.MarshalIndent(result.Next.Outputs, "", "  ")
+			outputJSON, _ := json.MarshalIndent(runResult.Next.Outputs, "", "  ")
 			fmt.Println(string(outputJSON))
 			fmt.Println()
 			fmt.Println("=== STEP SUMMARIES ===")
-			stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+			stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 			fmt.Println(string(stepSummariesJSON))
 			fmt.Println()
-			fmt.Printf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.\n", result.RunID)
+			fmt.Printf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.\n", runResult.RunID)
 			return nil
 		}
 
 		fmt.Println("Workflow completed.")
 		fmt.Println()
 		fmt.Println("=== STEP SUMMARIES ===")
-		stepSummariesJSON, _ := json.MarshalIndent(result.StepSummaries, "", "  ")
+		stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 		fmt.Println(string(stepSummariesJSON))
 		return nil
 	},
@@ -742,97 +528,25 @@ var workflowRunsListCmd = &cobra.Command{
 	Short: "List persisted workflow runs",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		statuses, err := workflow.ParseRunStatusFilter(workflowRunsStatus)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "")
-		}
-
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
-		runs, runWarnings, err := svc.ListRuns(workflow.RunListFilter{
-			Workflow: workflowRunsWorkflow,
-			Statuses: statuses,
+		result := executeCanonicalCommand("workflow_runs_list", vaultPath, map[string]interface{}{
+			"workflow": workflowRunsWorkflow,
+			"status":   workflowRunsStatus,
 		})
-		if err != nil {
-			if de, ok := workflow.AsDomainError(err); ok {
-				return handleError(workflow.DomainCodeToErrorCode(de.Code), de, workflow.DomainCodeHint(de.Code))
-			}
-			return handleError(ErrInternal, err, "")
-		}
-
 		if isJSONOutput() {
-			wfCache := map[string]*workflow.Workflow{}
-			wfMissing := map[string]bool{}
-			outRuns := make([]map[string]interface{}, 0, len(runs))
-			for _, run := range runs {
-				item := map[string]interface{}{
-					"version":       run.Version,
-					"run_id":        run.RunID,
-					"workflow_name": run.WorkflowName,
-					"workflow_hash": run.WorkflowHash,
-					"status":        run.Status,
-					"cursor":        run.Cursor,
-					"revision":      run.Revision,
-					"created_at":    run.CreatedAt.Format(time.RFC3339),
-					"updated_at":    run.UpdatedAt.Format(time.RFC3339),
-					"history":       run.History,
-					"failure":       run.Failure,
-					"available_steps": func() []string {
-						ids := make([]string, 0, len(run.Steps))
-						for id := range run.Steps {
-							ids = append(ids, id)
-						}
-						sort.Strings(ids)
-						return ids
-					}(),
-				}
-				if run.AwaitingStep != "" {
-					item["awaiting_step_id"] = run.AwaitingStep
-				}
-				if run.CompletedAt != nil {
-					item["completed_at"] = run.CompletedAt.Format(time.RFC3339)
-				}
-				if run.ExpiresAt != nil {
-					item["expires_at"] = run.ExpiresAt.Format(time.RFC3339)
-				}
-
-				if !wfMissing[run.WorkflowName] {
-					wf := wfCache[run.WorkflowName]
-					if wf == nil {
-						loaded, wfErr := workflow.Get(vaultPath, run.WorkflowName, vaultCfg)
-						if wfErr != nil {
-							wfMissing[run.WorkflowName] = true
-						} else {
-							wf = loaded
-							wfCache[run.WorkflowName] = wf
-						}
-					}
-					if wf != nil {
-						item["step_summaries"] = workflow.BuildStepSummaries(wf, run)
-					}
-				}
-
-				outRuns = append(outRuns, item)
-			}
-
-			data := map[string]interface{}{
-				"runs": outRuns,
-			}
-			warnings := runStoreWarningsToCLIWarnings(runWarnings)
-			if len(warnings) > 0 {
-				outputSuccessWithWarnings(data, warnings, &Meta{Count: len(outRuns)})
-			} else {
-				outputSuccess(data, &Meta{Count: len(outRuns)})
-			}
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		data := canonicalDataMap(result)
+		runs, err := decodeSchemaValue[[]map[string]interface{}](data["runs"])
+		if err != nil {
+			return err
+		}
 
-		for _, w := range runWarnings {
-			fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.File)
+		for _, w := range result.Warnings {
+			fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.Ref)
 		}
 
 		if len(runs) == 0 {
@@ -840,12 +554,16 @@ var workflowRunsListCmd = &cobra.Command{
 			return nil
 		}
 		for _, run := range runs {
+			revision, err := decodeSchemaCount(run["revision"])
+			if err != nil {
+				return err
+			}
 			fmt.Printf("%s  %-18s %-14s rev=%d updated=%s\n",
-				run.RunID,
-				run.WorkflowName,
-				run.Status,
-				run.Revision,
-				run.UpdatedAt.Format(time.RFC3339),
+				run["run_id"],
+				run["workflow_name"],
+				run["status"],
+				revision,
+				run["updated_at"],
 			)
 		}
 		return nil
@@ -860,64 +578,32 @@ var workflowRunsStepCmd = &cobra.Command{
 		vaultPath := getVaultPath()
 		runID := args[0]
 		stepID := strings.TrimSpace(args[1])
-
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
+		argsMap := map[string]interface{}{
+			"run-id":  runID,
+			"step-id": stepID,
 		}
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
-		paginationRequested := cmd.Flags().Changed("path") || cmd.Flags().Changed("offset") || cmd.Flags().Changed("limit")
-		stepResult, err := svc.StepOutput(workflow.StepOutputRequest{
-			RunID:      runID,
-			StepID:     stepID,
-			Paginated:  paginationRequested,
-			Path:       workflowRunsStepPath,
-			Offset:     workflowRunsStepOffset,
-			Limit:      workflowRunsStepLimit,
-			IncludeSum: true,
-		})
-		if err != nil {
-			if de, ok := workflow.AsDomainError(err); ok {
-				hint := workflow.DomainCodeHint(de.Code)
-				if de.Code == workflow.CodeInvalidInput {
-					hint = "Use --path for nested fields and provide valid --offset/--limit values"
-				}
-				return handleErrorWithDetails(
-					workflow.DomainCodeToErrorCode(de.Code),
-					de.Error(),
-					hint,
-					de.Details,
-				)
-			}
-			return handleError(ErrInternal, err, "")
+		if cmd.Flags().Changed("path") {
+			argsMap["path"] = workflowRunsStepPath
 		}
-		state := stepResult.State
-
-		payload := map[string]interface{}{
-			"run_id":        state.RunID,
-			"workflow_name": state.WorkflowName,
-			"status":        state.Status,
-			"revision":      state.Revision,
-			"step_id":       stepID,
+		if cmd.Flags().Changed("offset") {
+			argsMap["offset"] = workflowRunsStepOffset
 		}
-
-		if paginationRequested {
-			payload["step_output_page"] = stepResult.StepOutputPage
-		} else {
-			payload["step_output"] = stepResult.StepOutput
+		if cmd.Flags().Changed("limit") {
+			argsMap["limit"] = workflowRunsStepLimit
 		}
-
-		if len(stepResult.Summaries) > 0 {
-			payload["step_summaries"] = stepResult.Summaries
-		}
-
+		result := executeCanonicalCommand("workflow_runs_step", vaultPath, argsMap)
 		if isJSONOutput() {
-			outputSuccess(payload, nil)
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		payload := canonicalDataMap(result)
+		paginationRequested := cmd.Flags().Changed("path") || cmd.Flags().Changed("offset") || cmd.Flags().Changed("limit")
 
-		fmt.Printf("run_id: %s\n", state.RunID)
-		fmt.Printf("workflow: %s\n", state.WorkflowName)
+		fmt.Printf("run_id: %s\n", payload["run_id"])
+		fmt.Printf("workflow: %s\n", payload["workflow_name"])
 		fmt.Printf("step_id: %s\n\n", stepID)
 		stepValue := payload["step_output"]
 		if paginationRequested {
@@ -938,55 +624,32 @@ var workflowRunsPruneCmd = &cobra.Command{
 	Short: "Prune persisted workflow runs",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		vaultCfg, err := config.LoadVaultConfig(vaultPath)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
-		}
-
-		statuses, err := workflow.ParseRunStatusFilter(workflowRunsPruneStatus)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "")
-		}
-		olderThan, err := workflow.ParseOlderThan(workflowRunsPruneOlderThan)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "")
-		}
-
-		svc := workflow.NewRunService(vaultPath, vaultCfg, makeToolFunc(vaultPath))
-		result, err := svc.PruneRuns(workflow.RunPruneOptions{
-			Statuses:  statuses,
-			OlderThan: olderThan,
-			Apply:     workflowRunsPruneConfirm,
+		result := executeCanonicalCommand("workflow_runs_prune", vaultPath, map[string]interface{}{
+			"status":     workflowRunsPruneStatus,
+			"older-than": workflowRunsPruneOlderThan,
+			"confirm":    workflowRunsPruneConfirm,
 		})
-		if err != nil {
-			if de, ok := workflow.AsDomainError(err); ok {
-				return handleError(workflow.DomainCodeToErrorCode(de.Code), de, workflow.DomainCodeHint(de.Code))
-			}
-			return handleError(ErrInternal, err, "")
-		}
-
 		if isJSONOutput() {
-			data := map[string]interface{}{
-				"dry_run": !workflowRunsPruneConfirm,
-				"prune":   result,
-			}
-			warnings := runStoreWarningsToCLIWarnings(result.Warnings)
-			if len(warnings) > 0 {
-				outputSuccessWithWarnings(data, warnings, nil)
-			} else {
-				outputSuccess(data, nil)
-			}
+			outputCanonicalResultJSON(result)
 			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		data := canonicalDataMap(result)
+		prune, err := decodeSchemaValue[workflow.RunPruneResult](data["prune"])
+		if err != nil {
+			return err
 		}
 
 		for _, w := range result.Warnings {
-			fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.File)
+			fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.Ref)
 		}
 
 		if workflowRunsPruneConfirm {
-			fmt.Printf("Deleted %d runs (matched %d of %d scanned).\n", result.Deleted, result.Matched, result.Scanned)
+			fmt.Printf("Deleted %d runs (matched %d of %d scanned).\n", prune.Deleted, prune.Matched, prune.Scanned)
 		} else {
-			fmt.Printf("Would delete %d runs (scanned %d). Use --confirm to apply.\n", result.Matched, result.Scanned)
+			fmt.Printf("Would delete %d runs (scanned %d). Use --confirm to apply.\n", prune.Matched, prune.Scanned)
 		}
 		return nil
 	},
@@ -997,47 +660,76 @@ var workflowRunsCmd = &cobra.Command{
 	Short: "Manage persisted workflow run records",
 }
 
-// makeToolFunc executes workflow tool steps through the shared in-process
-// semantic dispatcher used by MCP (no subprocess CLI path).
-func makeToolFunc(vaultPath string) func(tool string, args map[string]interface{}) (interface{}, error) {
-	return func(tool string, args map[string]interface{}) (interface{}, error) {
-		envelope, err := mcp.ExecuteWorkflowToolDirect(vaultPath, tool, args)
+func workflowRunArgs(name string) (map[string]interface{}, error) {
+	args := map[string]interface{}{
+		"name":       name,
+		"input":      keyValueFlagsToObject(workflowInputFlags),
+		"input-file": workflowInputFile,
+	}
+	if strings.TrimSpace(workflowInputJSON) != "" {
+		obj, err := decodeCLIJSONObject(workflowInputJSON)
 		if err != nil {
 			return nil, err
 		}
-		return envelope, nil
+		args["input-json"] = obj
 	}
+	return args, nil
 }
 
-func runStoreWarningsToCLIWarnings(runWarnings []workflow.RunStoreWarning) []Warning {
-	if len(runWarnings) == 0 {
+func workflowContinueArgs(runID string) (map[string]interface{}, error) {
+	args := map[string]interface{}{
+		"run-id":            runID,
+		"agent-output":      workflowContinueOutput,
+		"agent-output-file": workflowContinueOutputFile,
+		"expected-revision": workflowContinueExpectedRevision,
+	}
+	if strings.TrimSpace(workflowContinueOutputJSON) != "" {
+		obj, err := decodeCLIJSONObject(workflowContinueOutputJSON)
+		if err != nil {
+			return nil, err
+		}
+		args["agent-output-json"] = obj
+	}
+	return args, nil
+}
+
+func workflowRunResultFromCanonical(result commandexec.Result) (*workflow.RunResult, error) {
+	if runResult, ok := result.Data.(*workflow.RunResult); ok && runResult != nil {
+		return runResult, nil
+	}
+	data := canonicalDataMap(result)
+	runResult, err := decodeSchemaValue[workflow.RunResult](data)
+	if err != nil {
+		return nil, err
+	}
+	return &runResult, nil
+}
+
+func decodeCLIJSONObject(raw string) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func keyValueFlagsToObject(flags []string) map[string]interface{} {
+	if len(flags) == 0 {
 		return nil
 	}
-	warnings := make([]Warning, 0, len(runWarnings))
-	for _, w := range runWarnings {
-		warnings = append(warnings, Warning{
-			Code:    w.Code,
-			Message: w.Message,
-			Ref:     w.File,
-		})
+	out := make(map[string]interface{}, len(flags))
+	for _, item := range flags {
+		key, value, found := strings.Cut(item, "=")
+		if !found {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		out[key] = strings.TrimSpace(value)
 	}
-	return warnings
-}
-
-func handleWorkflowDomainError(err error, fallbackHint string) error {
-	de, ok := workflow.AsDomainError(err)
-	if !ok {
-		return handleError(ErrInternal, err, "")
-	}
-	code := workflow.DomainCodeToErrorCode(de.Code)
-	hint := workflow.DomainCodeHint(de.Code)
-	if hint == "" {
-		hint = fallbackHint
-	}
-	if len(de.Details) > 0 {
-		return handleErrorWithDetails(code, de.Error(), hint, de.Details)
-	}
-	return handleError(code, de, hint)
+	return out
 }
 
 func init() {

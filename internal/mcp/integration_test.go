@@ -3598,6 +3598,8 @@ func assertEnvelopeParity(t *testing.T, mcpResult toolResult, cliResult *testuti
 				}
 			}
 		}
+		mcpVal = normalizeParityValue(mcpVal)
+		cliVal = normalizeParityValue(cliVal)
 		if !reflect.DeepEqual(mcpVal, cliVal) {
 			t.Fatalf("data mismatch for key %q: mcp=%#v cli=%#v\nmcp: %s\ncli: %s", key, mcpVal, cliVal, mcpResult.Text, cliResult.RawJSON)
 		}
@@ -3615,6 +3617,28 @@ func assertEnvelopeParity(t *testing.T, mcpResult toolResult, cliResult *testuti
 	sort.Strings(cliWarningCodes)
 	if !reflect.DeepEqual(mcpWarningCodes, cliWarningCodes) {
 		t.Fatalf("warning code mismatch: mcp=%v cli=%v\nmcp: %s\ncli: %s", mcpWarningCodes, cliWarningCodes, mcpResult.Text, cliResult.RawJSON)
+	}
+}
+
+func normalizeParityValue(v interface{}) interface{} {
+	switch typed := v.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			if key == "query_time_ms" {
+				continue
+			}
+			out[key] = normalizeParityValue(value)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(typed))
+		for i, value := range typed {
+			out[i] = normalizeParityValue(value)
+		}
+		return out
+	default:
+		return v
 	}
 }
 

@@ -8,9 +8,9 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-// ExecuteToolDirect executes a Raven MCP tool using in-process semantic direct
-// dispatch only (no CLI subprocess fallback). The returned map is the standard
-// Raven JSON envelope.
+// ExecuteToolDirect executes a Raven MCP tool using the canonical in-process
+// command runtime only (no CLI subprocess fallback). The returned map is the
+// standard Raven JSON envelope.
 func ExecuteToolDirect(vaultPath, toolName string, args map[string]interface{}) (map[string]interface{}, error) {
 	server := &Server{
 		vaultPath:  vaultPath,
@@ -52,8 +52,8 @@ func ExecuteToolDirect(vaultPath, toolName string, args map[string]interface{}) 
 	return envelope, nil
 }
 
-// ExecuteWorkflowToolDirect executes a workflow tool step through in-process
-// semantic direct dispatch while enforcing workflow policy.
+// ExecuteWorkflowToolDirect executes a workflow tool step through the canonical
+// in-process command runtime while enforcing workflow policy.
 func ExecuteWorkflowToolDirect(vaultPath, toolName string, args map[string]interface{}) (map[string]interface{}, error) {
 	commandID, ok := commands.ResolveToolCommandID(strings.TrimSpace(toolName))
 	if !ok {

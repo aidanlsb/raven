@@ -2,15 +2,18 @@ package cli
 
 import (
 	"bufio"
-	"errors"
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/objectsvc"
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -46,15 +49,10 @@ Examples:
 		vaultPath := getVaultPath()
 		typeName := args[0]
 
-		// Load schema
-		s, err := schema.Load(vaultPath)
-		if err != nil {
-			return handleError(ErrSchemaNotFound, err, "Run 'rvn init' to create a schema")
-		}
-
 		// Get title from args or prompt
 		var title string
 		reader := bufio.NewReader(os.Stdin)
+		var err error
 
 		if len(args) >= 2 {
 			title = args[1]
@@ -77,110 +75,81 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
 		}
 
-		// Parse --field and --field-json flags.
 		fieldValues, err := parseFieldFlags(newFieldFlags)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
 		}
-		typedFieldValues, err := parseFieldValuesJSON(newFieldJSON)
+		fieldJSONRaw, err := parseFieldJSONObject(newFieldJSON)
 		if err != nil {
 			return handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 		}
 
-		targetPath := title
-		if cmd.Flags().Changed("path") {
-			targetPath = strings.TrimSpace(newPathFlag)
+		targetPath := strings.TrimSpace(newPathFlag)
+		if targetPath != "" {
 			if err := validateObjectTargetPath(targetPath); err != nil {
 				return handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
 			}
 		}
 
-		// Load vault config for directory roots (optional)
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
-		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-		}
-
 		for {
-			result, err := objectsvc.Create(objectsvc.CreateRequest{
-				VaultPath:        vaultPath,
-				TypeName:         typeName,
-				Title:            title,
-				TargetPath:       targetPath,
-				FieldValues:      fieldValues,
-				TypedFieldValues: typedFieldValues,
-				VaultConfig:      vaultCfg,
-				Schema:           s,
-				ObjectsRoot:      vaultCfg.GetObjectsRoot(),
-				PagesRoot:        vaultCfg.GetPagesRoot(),
-				TemplateDir:      vaultCfg.GetTemplateDirectory(),
-				TemplateID:       newTemplate,
+			result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+				CommandID: "new",
+				VaultPath: vaultPath,
+				Caller:    commandexec.CallerCLI,
+				Args: buildNewCommandArgs(
+					typeName,
+					title,
+					targetPath,
+					newTemplate,
+					fieldValues,
+					fieldJSONRaw,
+				),
 			})
-			if err != nil {
-				var svcErr *objectsvc.Error
-				if errors.As(err, &svcErr) {
-					switch svcErr.Code {
-					case objectsvc.ErrorTypeNotFound:
-						return handleErrorMsg(ErrTypeNotFound, svcErr.Message, svcErr.Suggestion)
-					case objectsvc.ErrorFileExists:
-						return handleErrorMsg(ErrFileExists, svcErr.Message, svcErr.Suggestion)
-					case objectsvc.ErrorInvalidInput:
-						return handleErrorMsg(ErrInvalidInput, svcErr.Message, svcErr.Suggestion)
-					case objectsvc.ErrorRequiredField:
-						if isJSONOutput() {
-							outputError(ErrRequiredField, svcErr.Message, svcErr.Details, svcErr.Suggestion)
-							return nil
-						}
-
-						prompted := false
-						for _, fieldName := range missingFieldNamesFromDetails(svcErr.Details) {
-							if _, exists := fieldValues[fieldName]; exists {
-								continue
-							}
-							fmt.Fprintf(os.Stderr, "%s (required): ", fieldName)
-							value, readErr := reader.ReadString('\n')
-							if readErr != nil {
-								return fmt.Errorf("failed to read input: %w", readErr)
-							}
-							value = strings.TrimSpace(value)
-							if value == "" {
-								return fmt.Errorf("required field '%s' cannot be empty", fieldName)
-							}
-							fieldValues[fieldName] = value
-							prompted = true
-						}
-						if prompted {
+			if !result.OK {
+				if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredField {
+					prompted := false
+					for _, fieldName := range missingFieldNamesFromDetails(result.Error.Details) {
+						if _, exists := fieldValues[fieldName]; exists {
 							continue
 						}
-						return handleErrorMsg(ErrRequiredField, svcErr.Message, svcErr.Suggestion)
-					case objectsvc.ErrorValidationFailed:
-						return handleErrorMsg(ErrValidationFailed, svcErr.Message, svcErr.Suggestion)
-					case objectsvc.ErrorFileWrite:
-						return handleError(ErrFileWriteError, svcErr, svcErr.Suggestion)
-					default:
-						return handleError(ErrInternal, svcErr, svcErr.Suggestion)
+						fmt.Fprintf(os.Stderr, "%s (required): ", fieldName)
+						value, readErr := reader.ReadString('\n')
+						if readErr != nil {
+							return fmt.Errorf("failed to read input: %w", readErr)
+						}
+						value = strings.TrimSpace(value)
+						if value == "" {
+							return fmt.Errorf("required field '%s' cannot be empty", fieldName)
+						}
+						fieldValues[fieldName] = value
+						prompted = true
+					}
+					if prompted {
+						continue
 					}
 				}
-				return handleError(ErrFileWriteError, err, "")
+
+				if isJSONOutput() {
+					outputJSON(result)
+					return nil
+				}
+				if result.Error != nil {
+					return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+				}
+				return handleErrorMsg(ErrInternal, "command execution failed", "")
 			}
 
-			// Auto-reindex if configured (vaultCfg already loaded above)
-			maybeReindex(vaultPath, result.FilePath, vaultCfg)
-
 			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"file":  result.RelativePath,
-					"type":  typeName,
-					"title": title,
-					"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
-				}, nil)
+				outputJSON(result)
 				return nil
 			}
 
-			fmt.Println(ui.Checkf("Created %s", ui.FilePath(result.RelativePath)))
+			data, _ := result.Data.(map[string]interface{})
+			relativePath, _ := data["file"].(string)
+			fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
 
 			// Open in editor (or print path if no editor configured)
-			vault.OpenInEditorOrPrintPath(getConfig(), result.FilePath)
+			vault.OpenInEditorOrPrintPath(getConfig(), filepath.Join(vaultPath, filepath.FromSlash(relativePath)))
 
 			return nil
 		}
@@ -188,8 +157,12 @@ Examples:
 	ValidArgsFunction: completeTypes,
 }
 
-func missingFieldNamesFromDetails(details map[string]interface{}) []string {
-	raw, ok := details["missing_fields"]
+func missingFieldNamesFromDetails(details interface{}) []string {
+	detailMap, ok := details.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	raw, ok := detailMap["missing_fields"]
 	if !ok {
 		return nil
 	}
@@ -221,6 +194,45 @@ func missingFieldNamesFromDetails(details map[string]interface{}) []string {
 		}
 	}
 	return names
+}
+
+func buildNewCommandArgs(typeName, title, targetPath, templateID string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}) map[string]interface{} {
+	args := map[string]interface{}{
+		"type":  typeName,
+		"title": title,
+	}
+	if len(fieldValues) > 0 {
+		args["field"] = stringMapToAny(fieldValues)
+	}
+	if len(fieldJSONRaw) > 0 {
+		args["field-json"] = fieldJSONRaw
+	}
+	if strings.TrimSpace(targetPath) != "" {
+		args["path"] = targetPath
+	}
+	if strings.TrimSpace(templateID) != "" {
+		args["template"] = templateID
+	}
+	return args
+}
+
+func stringMapToAny(values map[string]string) map[string]interface{} {
+	out := make(map[string]interface{}, len(values))
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
+}
+
+func parseFieldJSONObject(raw string) (map[string]interface{}, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // completeTypes provides shell completion for type names

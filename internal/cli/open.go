@@ -6,8 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -59,18 +58,18 @@ Examples:
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
-		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-		}
 
 		// Handle --stdin mode
 		if openStdin {
-			return runOpenStdin(vaultPath, vaultCfg)
+			return runOpenStdin(vaultPath)
 		}
 
 		if len(args) == 0 {
 			if canUseFZFInteractive() {
+				vaultCfg, err := loadVaultConfigSafe(vaultPath)
+				if err != nil {
+					return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+				}
 				relPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "open> ", "Select a file to open (Esc to cancel)")
 				if err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
@@ -90,42 +89,14 @@ Examples:
 		}
 
 		reference := args[0]
-
-		rt := &readsvc.Runtime{
-			VaultPath: vaultPath,
-			VaultCfg:  vaultCfg,
-		}
-
-		target, err := readsvc.ResolveOpenTarget(rt, reference)
-		if err != nil {
-			return handleResolveError(err, reference)
-		}
-
-		// JSON output
-		if isJSONOutput() {
-			cfg := getConfig()
-			editor := ""
-			if cfg != nil {
-				editor = cfg.GetEditor()
-			}
-
-			opened := vault.OpenInEditor(cfg, target.FilePath)
-			outputSuccess(map[string]interface{}{
-				"file":   target.RelativePath,
-				"opened": opened,
-				"editor": editor,
-			}, nil)
-			return nil
-		}
-
-		// Human output - open in editor
-		openFileInEditor(target.FilePath, target.RelativePath, false)
-
-		return nil
+		result := executeCanonicalCommand("open", vaultPath, map[string]interface{}{
+			"reference": reference,
+		})
+		return handleCanonicalOpenResult(result, false)
 	},
 }
 
-func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
+func runOpenStdin(vaultPath string) error {
 	ids, embedded, err := ReadIDsFromStdin()
 	if err != nil {
 		return err
@@ -139,69 +110,11 @@ func runOpenStdin(vaultPath string, vaultCfg *config.VaultConfig) error {
 	allRefs = append(allRefs, ids...)
 	allRefs = append(allRefs, embedded...)
 
-	rt := &readsvc.Runtime{
-		VaultPath: vaultPath,
-		VaultCfg:  vaultCfg,
-	}
-	targets, failures := readsvc.ResolveOpenTargets(rt, allRefs)
-
-	filePaths := make([]string, 0, len(targets))
-	relPaths := make([]string, 0, len(targets))
-	var errors []string
-	for _, target := range targets {
-		filePaths = append(filePaths, target.FilePath)
-		relPaths = append(relPaths, target.RelativePath)
-	}
-	for _, failure := range failures {
-		errors = append(errors, fmt.Sprintf("%s: %s", failure.Reference, failure.Message))
-	}
-
-	if len(filePaths) == 0 {
-		if len(errors) > 0 {
-			return fmt.Errorf("no files to open: %s", errors[0])
-		}
-		return fmt.Errorf("no files to open")
-	}
-
-	cfg := getConfig()
-
-	// JSON output
-	if isJSONOutput() {
-		editor := ""
-		if cfg != nil {
-			editor = cfg.GetEditor()
-		}
-
-		opened := vault.OpenFilesInEditor(cfg, filePaths)
-		outputSuccess(map[string]interface{}{
-			"files":  relPaths,
-			"opened": opened,
-			"editor": editor,
-			"errors": errors,
-		}, nil)
-		return nil
-	}
-
-	// Human output
-	if vault.OpenFilesInEditor(cfg, filePaths) {
-		fmt.Printf("Opening %d file(s)\n", len(filePaths))
-		for _, p := range relPaths {
-			fmt.Printf("  %s\n", p)
-		}
-	} else {
-		fmt.Println("Files:")
-		for _, p := range relPaths {
-			fmt.Printf("  %s\n", p)
-		}
-		fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
-	}
-
-	// Print any errors
-	for _, e := range errors {
-		fmt.Printf("Warning: %s\n", e)
-	}
-
-	return nil
+	result := executeCanonicalCommand("open", vaultPath, map[string]interface{}{
+		"stdin":      true,
+		"object_ids": allRefs,
+	})
+	return handleCanonicalOpenResult(result, true)
 }
 
 // openFileInEditor opens a file in the configured editor and prints appropriate output.
@@ -216,6 +129,55 @@ func openFileInEditor(filePath, relPath string, skipOpenMessage bool) {
 		fmt.Printf("File: %s\n", relPath)
 		fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
 	}
+}
+
+func handleCanonicalOpenResult(result commandexec.Result, bulk bool) error {
+	if !result.OK {
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
+		}
+		if result.Error != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+		}
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+
+	if isJSONOutput() {
+		outputJSON(result)
+		return nil
+	}
+
+	data := canonicalDataMap(result)
+	if bulk {
+		files := stringSliceFromAny(data["files"])
+		errors := stringSliceFromAny(data["errors"])
+		if boolValue(data["opened"]) {
+			fmt.Printf("Opening %d file(s)\n", len(files))
+			for _, p := range files {
+				fmt.Printf("  %s\n", p)
+			}
+		} else {
+			fmt.Println("Files:")
+			for _, p := range files {
+				fmt.Printf("  %s\n", p)
+			}
+			fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
+		}
+		for _, e := range errors {
+			fmt.Printf("Warning: %s\n", e)
+		}
+		return nil
+	}
+
+	file := stringValue(data["file"])
+	if boolValue(data["opened"]) {
+		fmt.Printf("Opening %s\n", file)
+		return nil
+	}
+	fmt.Printf("File: %s\n", file)
+	fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
+	return nil
 }
 
 func init() {

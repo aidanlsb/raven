@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/schemapayload"
 	"github.com/aidanlsb/raven/internal/schemasvc"
 )
 
@@ -104,53 +103,52 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		defaultPath = paths.NormalizeDirRoot(typeName)
 	}
 
-	result, err := schemasvc.AddType(schemasvc.AddTypeRequest{
-		VaultPath:   vaultPath,
-		TypeName:    typeName,
-		DefaultPath: defaultPath,
-		NameField:   nameField,
-		Description: schemaAddDescription,
+	result := executeCanonicalCommand("schema_add_type", vaultPath, map[string]interface{}{
+		"name":         typeName,
+		"default-path": defaultPath,
+		"name-field":   nameField,
+		"description":  schemaAddDescription,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.AddType(result))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
-
-	fmt.Printf("✓ Added type '%s' to schema.yaml\n", result.Name)
-	fmt.Printf("  default_path: %s\n", result.DefaultPath)
-	if result.Description != "" {
-		fmt.Printf("  description: %s\n", result.Description)
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
 	}
-	if result.NameField != "" {
-		fmt.Printf("  name_field: %s (auto-created as required string)\n", result.NameField)
+	data := canonicalDataMap(result)
+
+	fmt.Printf("✓ Added type '%s' to schema.yaml\n", data["name"])
+	fmt.Printf("  default_path: %s\n", data["default_path"])
+	if description, _ := data["description"].(string); description != "" {
+		fmt.Printf("  description: %s\n", description)
+	}
+	if canonicalNameField, _ := data["name_field"].(string); canonicalNameField != "" {
+		fmt.Printf("  name_field: %s (auto-created as required string)\n", canonicalNameField)
 	}
 	return nil
 }
 
 func addTrait(vaultPath, traitName string, start time.Time) error {
-	result, err := schemasvc.AddTrait(schemasvc.AddTraitRequest{
-		VaultPath: vaultPath,
-		TraitName: traitName,
-		TraitType: schemaAddFieldType,
-		Values:    schemaAddValues,
-		Default:   schemaAddDefault,
+	result := executeCanonicalCommand("schema_add_trait", vaultPath, map[string]interface{}{
+		"name":    traitName,
+		"type":    schemaAddFieldType,
+		"values":  schemaAddValues,
+		"default": schemaAddDefault,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.AddTrait(result))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
 
-	fmt.Printf("✓ Added trait '%s' to schema.yaml\n", result.Name)
-	fmt.Printf("  type: %s\n", result.Type)
-	if len(result.Values) > 0 {
+	fmt.Printf("✓ Added trait '%s' to schema.yaml\n", data["name"])
+	fmt.Printf("  type: %s\n", data["type"])
+	values, _ := decodeSchemaValue[[]string](data["values"])
+	if len(values) > 0 {
 		fmt.Printf("  values: %s\n", schemaAddValues)
 	}
 	return nil
@@ -327,83 +325,34 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 }
 
 func addField(vaultPath, typeName, fieldName string, start time.Time) error {
-	result, err := schemasvc.AddField(schemasvc.AddFieldRequest{
-		VaultPath:   vaultPath,
-		TypeName:    typeName,
-		FieldName:   fieldName,
-		FieldType:   schemaAddFieldType,
-		Required:    schemaAddRequired,
-		Default:     schemaAddDefault,
-		Values:      schemaAddValues,
-		Target:      schemaAddTarget,
-		Description: schemaAddDescription,
+	result := executeCanonicalCommand("schema_add_field", vaultPath, map[string]interface{}{
+		"type_name":   typeName,
+		"field_name":  fieldName,
+		"type":        schemaAddFieldType,
+		"required":    schemaAddRequired,
+		"default":     schemaAddDefault,
+		"values":      schemaAddValues,
+		"target":      schemaAddTarget,
+		"description": schemaAddDescription,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.AddField(result))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
 
-	fmt.Printf("✓ Added field '%s' to type '%s'\n", result.FieldName, result.TypeName)
-	fmt.Printf("  type: %s\n", result.FieldType)
-	if result.Required {
+	fmt.Printf("✓ Added field '%s' to type '%s'\n", data["field"], data["type"])
+	fmt.Printf("  type: %s\n", data["field_type"])
+	if boolValue(data["required"]) {
 		fmt.Println("  required: true")
 	}
-	if result.Description != "" {
-		fmt.Printf("  description: %s\n", result.Description)
+	if description, _ := data["description"].(string); description != "" {
+		fmt.Printf("  description: %s\n", description)
 	}
 	return nil
-}
-
-func mapSchemaServiceError(err error) error {
-	var svcErr *schemasvc.Error
-	if errors.As(err, &svcErr) {
-		suggestion := svcErr.Suggestion
-		if !isJSONOutput() && len(svcErr.Details) > 0 {
-			if examples := detailExamples(svcErr.Details["examples"]); len(examples) > 0 {
-				suggestion += "\n\nExamples:\n"
-				for _, ex := range examples {
-					suggestion += "  " + ex + "\n"
-				}
-			}
-		}
-		if len(svcErr.Details) > 0 {
-			return handleErrorWithDetails(string(svcErr.Code), svcErr.Message, suggestion, svcErr.Details)
-		}
-		return handleErrorMsg(string(svcErr.Code), svcErr.Message, suggestion)
-	}
-	return handleError(ErrInternal, err, "")
-}
-
-func detailExamples(raw interface{}) []string {
-	if raw == nil {
-		return nil
-	}
-	switch vals := raw.(type) {
-	case []string:
-		return vals
-	case []interface{}:
-		out := make([]string, 0, len(vals))
-		for _, v := range vals {
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				out = append(out, s)
-			}
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-func outputSchemaSuccess(start time.Time, data map[string]interface{}) {
-	outputSuccess(data, &Meta{QueryTimeMs: time.Since(start).Milliseconds()})
-}
-
-func outputSchemaSuccessWithWarnings(start time.Time, data map[string]interface{}, serviceWarnings []schemasvc.Warning) {
-	outputSuccessWithWarnings(data, schemaWarnings(serviceWarnings), &Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 func printSchemaChangeList(header string, changes []string) {
@@ -432,27 +381,37 @@ Examples:
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		start := time.Now()
-
-		result, err := schemasvc.Validate(vaultPath)
-		if err != nil {
-			return mapSchemaServiceError(err)
-		}
-
+		result := executeCanonicalCommand("schema_validate", vaultPath, nil)
 		if isJSONOutput() {
-			outputSchemaSuccess(start, schemapayload.Validate(result))
+			outputCanonicalResultJSON(result)
 			return nil
 		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		data := canonicalDataMap(result)
+		issues, err := decodeSchemaValue[[]string](data["issues"])
+		if err != nil {
+			return err
+		}
+		types, err := decodeSchemaCount(data["types"])
+		if err != nil {
+			return err
+		}
+		traits, err := decodeSchemaCount(data["traits"])
+		if err != nil {
+			return err
+		}
 
-		if len(result.Issues) > 0 {
-			fmt.Printf("Schema validation found %d issues:\n", len(result.Issues))
-			for _, issue := range result.Issues {
+		if len(issues) > 0 {
+			fmt.Printf("Schema validation found %d issues:\n", len(issues))
+			for _, issue := range issues {
 				fmt.Printf("  ⚠ %s\n", issue)
 			}
 			return nil
 		}
 
-		fmt.Printf("✓ Schema is valid (%d types, %d traits)\n", result.Types, result.Traits)
+		fmt.Printf("✓ Schema is valid (%d types, %d traits)\n", types, traits)
 		return nil
 	},
 }
@@ -499,71 +458,77 @@ Examples:
 }
 
 func updateType(vaultPath, typeName string, start time.Time) error {
-	result, err := schemasvc.UpdateType(schemasvc.UpdateTypeRequest{
-		VaultPath:   vaultPath,
-		TypeName:    typeName,
-		DefaultPath: schemaUpdateDefaultPath,
-		NameField:   schemaUpdateNameField,
-		Description: schemaUpdateDescription,
-		AddTrait:    schemaUpdateAddTrait,
-		RemoveTrait: schemaUpdateRemoveTrait,
+	result := executeCanonicalCommand("schema_update_type", vaultPath, map[string]interface{}{
+		"name":         typeName,
+		"default-path": schemaUpdateDefaultPath,
+		"name-field":   schemaUpdateNameField,
+		"description":  schemaUpdateDescription,
+		"add-trait":    schemaUpdateAddTrait,
+		"remove-trait": schemaUpdateRemoveTrait,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.Update("type", typeName, "", "", result.Changes))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
-
-	printSchemaChangeList(fmt.Sprintf("✓ Updated type '%s'", typeName), result.Changes)
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	changes, err := decodeSchemaValue[[]string](data["changes"])
+	if err != nil {
+		return err
+	}
+	printSchemaChangeList(fmt.Sprintf("✓ Updated type '%s'", typeName), changes)
 	return nil
 }
 
 func updateTrait(vaultPath, traitName string, start time.Time) error {
-	result, err := schemasvc.UpdateTrait(schemasvc.UpdateTraitRequest{
-		VaultPath: vaultPath,
-		TraitName: traitName,
-		TraitType: schemaUpdateFieldType,
-		Values:    schemaUpdateValues,
-		Default:   schemaUpdateDefault,
+	result := executeCanonicalCommand("schema_update_trait", vaultPath, map[string]interface{}{
+		"name":    traitName,
+		"type":    schemaUpdateFieldType,
+		"values":  schemaUpdateValues,
+		"default": schemaUpdateDefault,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.Update("trait", traitName, "", "", result.Changes))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
-
-	printSchemaChangeList(fmt.Sprintf("✓ Updated trait '%s'", traitName), result.Changes)
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	changes, err := decodeSchemaValue[[]string](data["changes"])
+	if err != nil {
+		return err
+	}
+	printSchemaChangeList(fmt.Sprintf("✓ Updated trait '%s'", traitName), changes)
 	return nil
 }
 
 func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
-	result, err := schemasvc.UpdateField(schemasvc.UpdateFieldRequest{
-		VaultPath:   vaultPath,
-		TypeName:    typeName,
-		FieldName:   fieldName,
-		FieldType:   schemaUpdateFieldType,
-		Required:    schemaUpdateRequired,
-		Default:     schemaUpdateDefault,
-		Values:      schemaUpdateValues,
-		Target:      schemaUpdateTarget,
-		Description: schemaUpdateDescription,
+	result := executeCanonicalCommand("schema_update_field", vaultPath, map[string]interface{}{
+		"type_name":   typeName,
+		"field_name":  fieldName,
+		"type":        schemaUpdateFieldType,
+		"required":    schemaUpdateRequired,
+		"default":     schemaUpdateDefault,
+		"values":      schemaUpdateValues,
+		"target":      schemaUpdateTarget,
+		"description": schemaUpdateDescription,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.Update("field", "", typeName, fieldName, result.Changes))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
-
-	printSchemaChangeList(fmt.Sprintf("✓ Updated field '%s' on type '%s'", fieldName, typeName), result.Changes)
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	changes, err := decodeSchemaValue[[]string](data["changes"])
+	if err != nil {
+		return err
+	}
+	printSchemaChangeList(fmt.Sprintf("✓ Updated field '%s' on type '%s'", fieldName, typeName), changes)
 	return nil
 }
 
@@ -610,46 +575,33 @@ Examples:
 }
 
 func removeType(vaultPath, typeName string, start time.Time) error {
-	interactive := !isJSONOutput()
-	result, err := schemasvc.RemoveType(schemasvc.RemoveTypeRequest{
-		VaultPath:   vaultPath,
-		TypeName:    typeName,
-		Force:       schemaRemoveForce,
-		Interactive: interactive,
+	result := executeCanonicalCommand("schema_remove_type", vaultPath, map[string]interface{}{
+		"name":  typeName,
+		"force": schemaRemoveForce,
 	})
-	if err != nil {
-		var svcErr *schemasvc.Error
-		if errors.As(err, &svcErr) && svcErr.Code == schemasvc.ErrorConfirmation && !schemaRemoveForce && !isJSONOutput() {
-			count := detailInt(svcErr.Details, "affected_count")
-			if count > 0 {
-				fmt.Printf("Warning: %d files of type '%s' will become 'page' type:\n", count, typeName)
-				for _, filePath := range detailStringSlice(svcErr.Details, "affected_files") {
-					fmt.Printf("  - %s\n", filePath)
-				}
-				if remaining := detailInt(svcErr.Details, "remaining_count"); remaining > 0 {
-					fmt.Printf("  ... and %d more\n", remaining)
-				}
+	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveForce {
+		details, _ := result.Error.Details.(map[string]interface{})
+		count := detailInt(details, "affected_count")
+		if count > 0 {
+			fmt.Printf("Warning: %d files of type '%s' will become 'page' type:\n", count, typeName)
+			for _, filePath := range detailStringSlice(details, "affected_files") {
+				fmt.Printf("  - %s\n", filePath)
 			}
-			if !promptForConfirm("Continue?") {
-				return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
+			if remaining := detailInt(details, "remaining_count"); remaining > 0 {
+				fmt.Printf("  ... and %d more\n", remaining)
 			}
-			result, err = schemasvc.RemoveType(schemasvc.RemoveTypeRequest{
-				VaultPath:   vaultPath,
-				TypeName:    typeName,
-				Force:       true,
-				Interactive: false,
-			})
-			if err != nil {
-				return mapSchemaServiceError(err)
-			}
-		} else {
-			return mapSchemaServiceError(err)
 		}
+		if !promptForConfirm("Continue?") {
+			return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
+		}
+		result = executeCanonicalCommand("schema_remove_type", vaultPath, map[string]interface{}{"name": typeName, "force": true})
 	}
-
 	if isJSONOutput() {
-		outputSchemaSuccessWithWarnings(start, schemapayload.Remove("type", typeName, "", ""), result.Warnings)
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
 	}
 
 	fmt.Printf("✓ Removed type '%s' from schema.yaml\n", typeName)
@@ -657,40 +609,27 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 }
 
 func removeTrait(vaultPath, traitName string, start time.Time) error {
-	interactive := !isJSONOutput()
-	result, err := schemasvc.RemoveTrait(schemasvc.RemoveTraitRequest{
-		VaultPath:   vaultPath,
-		TraitName:   traitName,
-		Force:       schemaRemoveForce,
-		Interactive: interactive,
+	result := executeCanonicalCommand("schema_remove_trait", vaultPath, map[string]interface{}{
+		"name":  traitName,
+		"force": schemaRemoveForce,
 	})
-	if err != nil {
-		var svcErr *schemasvc.Error
-		if errors.As(err, &svcErr) && svcErr.Code == schemasvc.ErrorConfirmation && !schemaRemoveForce && !isJSONOutput() {
-			count := detailInt(svcErr.Details, "affected_count")
-			if count > 0 {
-				fmt.Printf("Warning: %d instances of @%s will remain in files (no longer indexed)\n", count, traitName)
-			}
-			if !promptForConfirm("Continue?") {
-				return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
-			}
-			result, err = schemasvc.RemoveTrait(schemasvc.RemoveTraitRequest{
-				VaultPath:   vaultPath,
-				TraitName:   traitName,
-				Force:       true,
-				Interactive: false,
-			})
-			if err != nil {
-				return mapSchemaServiceError(err)
-			}
-		} else {
-			return mapSchemaServiceError(err)
+	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveForce {
+		details, _ := result.Error.Details.(map[string]interface{})
+		count := detailInt(details, "affected_count")
+		if count > 0 {
+			fmt.Printf("Warning: %d instances of @%s will remain in files (no longer indexed)\n", count, traitName)
 		}
+		if !promptForConfirm("Continue?") {
+			return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
+		}
+		result = executeCanonicalCommand("schema_remove_trait", vaultPath, map[string]interface{}{"name": traitName, "force": true})
 	}
-
 	if isJSONOutput() {
-		outputSchemaSuccessWithWarnings(start, schemapayload.Remove("trait", traitName, "", ""), result.Warnings)
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
 	}
 
 	fmt.Printf("✓ Removed trait '%s' from schema.yaml\n", traitName)
@@ -698,31 +637,20 @@ func removeTrait(vaultPath, traitName string, start time.Time) error {
 }
 
 func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
-	_, err := schemasvc.RemoveField(schemasvc.RemoveFieldRequest{
-		VaultPath: vaultPath,
-		TypeName:  typeName,
-		FieldName: fieldName,
+	result := executeCanonicalCommand("schema_remove_field", vaultPath, map[string]interface{}{
+		"type_name":  typeName,
+		"field_name": fieldName,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.Remove("field", "", typeName, fieldName))
+		outputCanonicalResultJSON(result)
 		return nil
+	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
 	}
 
 	fmt.Printf("✓ Removed field '%s' from type '%s'\n", fieldName, typeName)
 	return nil
-}
-
-func schemaWarnings(serviceWarnings []schemasvc.Warning) []Warning {
-	return schemapayload.MapWarnings(serviceWarnings, func(code, message string) Warning {
-		return Warning{
-			Code:    code,
-			Message: message,
-		}
-	})
 }
 
 func detailInt(details map[string]interface{}, key string) int {
@@ -766,6 +694,22 @@ func detailStringSlice(details map[string]interface{}, key string) []string {
 		return values
 	default:
 		return nil
+	}
+}
+
+func decodeSchemaCount(raw interface{}) (int, error) {
+	switch typed := raw.(type) {
+	case int:
+		return typed, nil
+	case int64:
+		return int(typed), nil
+	case float64:
+		return int(typed), nil
+	case json.Number:
+		value, err := typed.Int64()
+		return int(value), err
+	default:
+		return 0, fmt.Errorf("unexpected numeric value type %T", raw)
 	}
 }
 
@@ -830,61 +774,86 @@ Examples:
 }
 
 func renameField(vaultPath, typeName, oldField, newField string, start time.Time) error {
-	result, err := schemasvc.RenameField(schemasvc.RenameFieldRequest{
-		VaultPath: vaultPath,
-		TypeName:  typeName,
-		OldField:  oldField,
-		NewField:  newField,
-		Confirm:   schemaRenameConfirm,
+	result := executeCanonicalCommand("schema_rename_field", vaultPath, map[string]interface{}{
+		"type_name": typeName,
+		"old_field": oldField,
+		"new_field": newField,
+		"confirm":   schemaRenameConfirm,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
-
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.RenameField(result))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
 
-	if result.Preview {
-		fmt.Printf("Preview: Rename field '%s.%s' to '%s.%s'\n\n", result.TypeName, result.OldField, result.TypeName, result.NewField)
-		fmt.Printf("Changes to be made (%d total):\n", result.TotalChanges)
-		printFieldRenameChanges(result.Changes)
+	if boolValue(data["preview"]) {
+		changes, err := decodeSchemaValue[[]schemasvc.FieldRenameChange](data["changes"])
+		if err != nil {
+			return err
+		}
+		totalChanges, err := decodeSchemaCount(data["total_changes"])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Preview: Rename field '%s.%s' to '%s.%s'\n\n", typeName, oldField, typeName, newField)
+		fmt.Printf("Changes to be made (%d total):\n", totalChanges)
+		printFieldRenameChanges(changes)
 		fmt.Printf("\nRun with --confirm to apply these changes.\n")
 		return nil
 	}
 
-	fmt.Printf("✓ Renamed field '%s.%s' to '%s.%s'\n", result.TypeName, result.OldField, result.TypeName, result.NewField)
-	fmt.Printf("  Applied %d changes\n", result.ChangesApplied)
-	fmt.Printf("\n%s.\n", result.Hint)
+	changesApplied, err := decodeSchemaCount(data["changes_applied"])
+	if err != nil {
+		return err
+	}
+	fmt.Printf("✓ Renamed field '%s.%s' to '%s.%s'\n", typeName, oldField, typeName, newField)
+	fmt.Printf("  Applied %d changes\n", changesApplied)
+	fmt.Printf("\n%s.\n", data["hint"])
 	return nil
 }
 
 func renameType(vaultPath, oldName, newName string, start time.Time) error {
-	preview, err := schemasvc.RenameType(schemasvc.RenameTypeRequest{
-		VaultPath: vaultPath,
-		OldName:   oldName,
-		NewName:   newName,
-		Confirm:   false,
+	preview := executeCanonicalCommand("schema_rename_type", vaultPath, map[string]interface{}{
+		"old_name": oldName,
+		"new_name": newName,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
+	if isJSONOutput() && !schemaRenameConfirm {
+		outputCanonicalResultJSON(preview)
+		return nil
 	}
+	if err := handleCanonicalFailure(preview); err != nil {
+		return err
+	}
+	previewData := canonicalDataMap(preview)
 
 	if !schemaRenameConfirm {
-		if isJSONOutput() {
-			outputSchemaSuccess(start, schemapayload.RenameType(preview))
-			return nil
+		changes, err := decodeSchemaValue[[]schemasvc.TypeRenameChange](previewData["changes"])
+		if err != nil {
+			return err
 		}
-
-		fmt.Printf("Preview: Rename type '%s' to '%s'\n\n", preview.OldName, preview.NewName)
-		fmt.Printf("Changes to be made (%d total):\n", preview.TotalChanges)
-		printTypeRenameChanges(preview.Changes)
-		if preview.DefaultPathRenameAvailable {
-			fmt.Printf("\nOptional default directory rename (%d changes):\n", preview.OptionalTotalChanges)
-			fmt.Printf("  default_path: %s → %s\n", preview.DefaultPathOld, preview.DefaultPathNew)
-			if preview.FilesToMove > 0 {
-				fmt.Printf("  files to move: %d\n", preview.FilesToMove)
+		totalChanges, err := decodeSchemaCount(previewData["total_changes"])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Preview: Rename type '%s' to '%s'\n\n", oldName, newName)
+		fmt.Printf("Changes to be made (%d total):\n", totalChanges)
+		printTypeRenameChanges(changes)
+		if boolValue(previewData["default_path_rename_available"]) {
+			optionalChanges, err := decodeSchemaCount(previewData["optional_total_changes"])
+			if err != nil {
+				return err
+			}
+			filesToMove, err := decodeSchemaCount(previewData["files_to_move"])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("\nOptional default directory rename (%d changes):\n", optionalChanges)
+			fmt.Printf("  default_path: %s → %s\n", previewData["default_path_old"], previewData["default_path_new"])
+			if filesToMove > 0 {
+				fmt.Printf("  files to move: %d\n", filesToMove)
 			}
 			fmt.Printf("  (add --rename-default-path to apply these optional changes)\n")
 		}
@@ -893,45 +862,63 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	}
 
 	applyDefaultPathRename := schemaRenameDefaultPathRename
-	if preview.DefaultPathRenameAvailable && !applyDefaultPathRename && shouldPromptForConfirm() {
-		prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", preview.DefaultPathOld, preview.DefaultPathNew)
-		if preview.FilesToMove > 0 {
+	if boolValue(previewData["default_path_rename_available"]) && !applyDefaultPathRename && shouldPromptForConfirm() {
+		defaultPathOld, _ := previewData["default_path_old"].(string)
+		defaultPathNew, _ := previewData["default_path_new"].(string)
+		filesToMove, err := decodeSchemaCount(previewData["files_to_move"])
+		if err != nil {
+			return err
+		}
+		prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", defaultPathOld, defaultPathNew)
+		if filesToMove > 0 {
 			prompt = fmt.Sprintf(
 				"Also rename default_path '%s' -> '%s' and move %d files with reference updates?",
-				preview.DefaultPathOld,
-				preview.DefaultPathNew,
-				preview.FilesToMove,
+				defaultPathOld,
+				defaultPathNew,
+				filesToMove,
 			)
 		}
 		applyDefaultPathRename = promptForConfirm(prompt)
 	}
 
-	result, err := schemasvc.RenameType(schemasvc.RenameTypeRequest{
-		VaultPath:         vaultPath,
-		OldName:           oldName,
-		NewName:           newName,
-		Confirm:           true,
-		RenameDefaultPath: applyDefaultPathRename,
+	result := executeCanonicalCommand("schema_rename_type", vaultPath, map[string]interface{}{
+		"old_name":            oldName,
+		"new_name":            newName,
+		"confirm":             true,
+		"rename-default-path": applyDefaultPathRename,
 	})
-	if err != nil {
-		return mapSchemaServiceError(err)
-	}
 	if isJSONOutput() {
-		outputSchemaSuccess(start, schemapayload.RenameType(result))
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	data := canonicalDataMap(result)
+	changesApplied, err := decodeSchemaCount(data["changes_applied"])
+	if err != nil {
+		return err
+	}
 
-	fmt.Printf("✓ Renamed type '%s' to '%s'\n", result.OldName, result.NewName)
-	fmt.Printf("  Applied %d changes\n", result.ChangesApplied)
-	if result.DefaultPathRenameAvailable {
-		if result.DefaultPathRenamed {
-			fmt.Printf("  Renamed default_path %s → %s\n", result.DefaultPathOld, result.DefaultPathNew)
-			fmt.Printf("  Moved %d files and updated references in %d files\n", result.FilesMoved, result.ReferenceFilesUpdated)
+	fmt.Printf("✓ Renamed type '%s' to '%s'\n", oldName, newName)
+	fmt.Printf("  Applied %d changes\n", changesApplied)
+	if boolValue(data["default_path_rename_available"]) {
+		if boolValue(data["default_path_renamed"]) {
+			filesMoved, err := decodeSchemaCount(data["files_moved"])
+			if err != nil {
+				return err
+			}
+			refFilesUpdated, err := decodeSchemaCount(data["reference_files_updated"])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("  Renamed default_path %s → %s\n", data["default_path_old"], data["default_path_new"])
+			fmt.Printf("  Moved %d files and updated references in %d files\n", filesMoved, refFilesUpdated)
 		} else {
-			fmt.Printf("  Default path remains %s (use --rename-default-path to rename to %s)\n", result.DefaultPathOld, result.DefaultPathNew)
+			fmt.Printf("  Default path remains %s (use --rename-default-path to rename to %s)\n", data["default_path_old"], data["default_path_new"])
 		}
 	}
-	fmt.Printf("\n%s.\n", result.Hint)
+	fmt.Printf("\n%s.\n", data["hint"])
 	return nil
 }
 

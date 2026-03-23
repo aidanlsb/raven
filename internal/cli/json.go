@@ -5,42 +5,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
 // Global JSON output flag
 var jsonOutput bool
 
 // Response is the standard JSON envelope for all CLI output.
-type Response struct {
-	OK       bool        `json:"ok"`
-	Data     interface{} `json:"data,omitempty"`
-	Error    *ErrorInfo  `json:"error,omitempty"`
-	Warnings []Warning   `json:"warnings,omitempty"`
-	Meta     *Meta       `json:"meta,omitempty"`
-}
+type Response = commandexec.Result
 
 // ErrorInfo contains structured error information.
-type ErrorInfo struct {
-	Code       string      `json:"code"`
-	Message    string      `json:"message"`
-	Details    interface{} `json:"details,omitempty"`
-	Suggestion string      `json:"suggestion,omitempty"`
-}
+type ErrorInfo = commandexec.ErrorInfo
 
 // Warning represents a non-fatal warning.
-type Warning struct {
-	Code          string `json:"code"`
-	Message       string `json:"message"`
-	Ref           string `json:"ref,omitempty"`
-	SuggestedType string `json:"suggested_type,omitempty"`
-	CreateCommand string `json:"create_command,omitempty"`
-}
+type Warning = commandexec.Warning
 
 // Meta contains metadata about the response.
-type Meta struct {
-	Count       int   `json:"count,omitempty"`
-	QueryTimeMs int64 `json:"query_time_ms,omitempty"`
-}
+type Meta = commandexec.Meta
 
 // outputJSON outputs the response as JSON to stdout.
 func outputJSON(resp Response) {
@@ -51,34 +33,17 @@ func outputJSON(resp Response) {
 
 // outputSuccess outputs a successful JSON response.
 func outputSuccess(data interface{}, meta *Meta) {
-	outputJSON(Response{
-		OK:   true,
-		Data: data,
-		Meta: meta,
-	})
+	outputJSON(commandexec.Success(data, meta))
 }
 
 // outputSuccessWithWarnings outputs a successful JSON response with warnings.
 func outputSuccessWithWarnings(data interface{}, warnings []Warning, meta *Meta) {
-	outputJSON(Response{
-		OK:       true,
-		Data:     data,
-		Warnings: warnings,
-		Meta:     meta,
-	})
+	outputJSON(commandexec.SuccessWithWarnings(data, warnings, meta))
 }
 
 // outputError outputs an error JSON response.
 func outputError(code, message string, details interface{}, suggestion string) {
-	outputJSON(Response{
-		OK: false,
-		Error: &ErrorInfo{
-			Code:       code,
-			Message:    message,
-			Details:    details,
-			Suggestion: suggestion,
-		},
-	})
+	outputJSON(commandexec.Failure(code, message, details, suggestion))
 }
 
 // outputErrorFromErr converts a Go error to a JSON error response.

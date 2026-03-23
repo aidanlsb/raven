@@ -2,11 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/importsvc"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -70,69 +72,51 @@ type importResult = importsvc.ResultItem
 type importItemConfig = importsvc.ItemConfig
 
 func runImport(_ *cobra.Command, args []string) error {
-	vaultPath := getVaultPath()
-
-	mappingCfg, err := buildMappingConfig(args)
-	if err != nil {
-		return handleError(ErrInvalidInput, err, "")
+	argsMap := map[string]interface{}{
+		"file":          importFile,
+		"mapping":       importMapping,
+		"map":           append([]string{}, importMapFlags...),
+		"key":           importKey,
+		"content-field": importContentField,
+		"dry-run":       importDryRun,
+		"create-only":   importCreateOnly,
+		"update-only":   importUpdateOnly,
+		"confirm":       importConfirm,
+	}
+	if len(args) > 0 {
+		argsMap["type"] = args[0]
 	}
 
-	items, err := readJSONInput()
-	if err != nil {
-		return handleError(ErrInvalidInput, err, "Expected a JSON array of objects or a single JSON object")
-	}
-	if len(items) == 0 {
-		return handleErrorMsg(ErrInvalidInput, "no items to import", "Provide a non-empty JSON array")
-	}
-
-	serviceResult, err := importsvc.Run(importsvc.RunRequest{
-		VaultPath:     vaultPath,
-		MappingConfig: mappingCfg,
-		Items:         items,
-		DryRun:        importDryRun,
-		CreateOnly:    importCreateOnly,
-		UpdateOnly:    importUpdateOnly,
-	})
-	if err != nil {
-		return handleImportServiceError(err)
-	}
-
-	if !importDryRun {
-		reindexed := make(map[string]struct{}, len(serviceResult.ChangedFilePaths))
-		for _, changedFile := range serviceResult.ChangedFilePaths {
-			if changedFile == "" {
-				continue
-			}
-			if _, seen := reindexed[changedFile]; seen {
-				continue
-			}
-			reindexed[changedFile] = struct{}{}
-			maybeReindex(vaultPath, changedFile, serviceResult.VaultConfig)
+	var stdinData []byte
+	if strings.TrimSpace(importFile) == "" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return handleError(ErrInvalidInput, err, "Expected a JSON array of objects or a single JSON object")
 		}
+		stdinData = data
 	}
 
-	warnings := warningMessagesToWarnings(serviceResult.WarningMessages)
-	return outputImportResults(serviceResult.Results, warnings)
-}
-
-func handleImportServiceError(err error) error {
-	svcErr, ok := importsvc.AsError(err)
-	if !ok {
-		return handleError(ErrInternal, err, "")
+	result := executeCanonicalRequest(commandexec.Request{
+		CommandID: "import",
+		VaultPath: getVaultPath(),
+		Args:      argsMap,
+		Confirm:   importConfirm,
+		Stdin:     stdinData,
+	})
+	if !result.OK {
+		if result.Error == nil {
+			return handleErrorMsg(ErrInternal, "import failed", "")
+		}
+		if result.Error.Details != nil {
+			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+		}
+		return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
 	}
-
-	switch svcErr.Code {
-	case importsvc.CodeInvalidInput:
-		return handleError(ErrInvalidInput, err, "")
-	case importsvc.CodeTypeNotFound:
-		return handleError(ErrTypeNotFound, err, "Check schema.yaml for available types")
-	case importsvc.CodeSchemaInvalid:
-		return handleError(ErrSchemaInvalid, err, "Fix schema.yaml and try again")
-	case importsvc.CodeConfigInvalid:
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-	default:
-		return handleError(ErrInternal, err, "")
+	if jsonOutput {
+		outputJSON(result)
+		return nil
 	}
+	return renderCanonicalImportResult(result)
 }
 
 func buildMappingConfig(args []string) (*importMappingConfig, error) {
@@ -151,10 +135,6 @@ func buildMappingConfig(args []string) (*importMappingConfig, error) {
 
 func validateMappingTypes(cfg *importMappingConfig, sch *schema.Schema) error {
 	return importsvc.ValidateMappingTypes(cfg, sch)
-}
-
-func readJSONInput() ([]map[string]interface{}, error) {
-	return importsvc.ReadJSONInput(importFile, os.Stdin)
 }
 
 func resolveItemMapping(item map[string]interface{}, cfg *importMappingConfig, sch *schema.Schema) (*importItemConfig, error) {
@@ -256,6 +236,34 @@ func outputImportResults(results []importResult, warnings []Warning) error {
 	}
 
 	return nil
+}
+
+func renderCanonicalImportResult(result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	results := make([]importResult, 0)
+	switch rawResults := data["results"].(type) {
+	case []importResult:
+		results = append(results, rawResults...)
+	case []interface{}:
+		for _, raw := range rawResults {
+			itemMap, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			item := importResult{
+				ID:     stringValue(itemMap["id"]),
+				Action: stringValue(itemMap["action"]),
+				File:   stringValue(itemMap["file"]),
+				Reason: stringValue(itemMap["reason"]),
+				Code:   stringValue(itemMap["code"]),
+			}
+			if details, ok := itemMap["details"].(map[string]interface{}); ok {
+				item.Details = details
+			}
+			results = append(results, item)
+		}
+	}
+	return outputImportResults(results, result.Warnings)
 }
 
 func extractContentField(mapped map[string]interface{}, contentField string) string {

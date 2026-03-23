@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/checksvc"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -88,60 +90,83 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 
 func runCheckCommand(args []string, action checkAction, legacyFlagInvocation bool) error {
 	vaultPath := getVaultPath()
-
-	vaultCfg, err := loadVaultConfigSafe(vaultPath)
-	if err != nil {
-		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	argsMap := map[string]interface{}{
+		"strict":         checkStrict,
+		"type":           checkType,
+		"trait":          checkTrait,
+		"issues":         checkIssues,
+		"exclude":        checkExclude,
+		"errors-only":    checkErrorsOnly,
+		"by-file":        checkByFile,
+		"verbose":        checkVerbose,
+		"fix":            action == checkActionFix,
+		"confirm":        checkConfirm,
+		"create-missing": action == checkActionCreateMissing,
 	}
-
-	s, err := schema.Load(vaultPath)
-	if err != nil {
-		return fmt.Errorf("failed to load schema: %w", err)
-	}
-
-	var pathArg string
 	if len(args) > 0 {
-		pathArg = args[0]
+		argsMap["path"] = args[0]
 	}
 
-	result, err := checksvc.Run(vaultPath, vaultCfg, s, checksvc.Options{
-		PathArg:     pathArg,
-		TypeFilter:  checkType,
-		TraitFilter: checkTrait,
-		Issues:      checkIssues,
-		Exclude:     checkExclude,
-		ErrorsOnly:  checkErrorsOnly,
+	confirm := checkConfirm
+	if action == checkActionCreateMissing && !jsonOutput {
+		confirm = false
+		argsMap["confirm"] = false
+	}
+
+	result := executeCanonicalRequest(commandexec.Request{
+		CommandID: "check",
+		VaultPath: vaultPath,
+		Args:      argsMap,
+		Confirm:   confirm,
 	})
-	if err != nil {
-		return err
+	if !result.OK {
+		if legacyFlagInvocation && action == checkActionCreateMissing && result.Error != nil && result.Error.Code == ErrInvalidInput {
+			if !jsonOutput {
+				fmt.Println(ui.Hint("`--create-missing` is ignored for scoped checks; run on full vault to create pages."))
+			}
+			argsMap["create-missing"] = false
+			action = checkActionValidateOnly
+			result = executeCanonicalRequest(commandexec.Request{
+				CommandID: "check",
+				VaultPath: vaultPath,
+				Args:      argsMap,
+			})
+		}
+		if !result.OK {
+			if result.Error == nil {
+				return handleErrorMsg(ErrInternal, "check failed", "")
+			}
+			if result.Error.Details != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
+		}
 	}
 
-	if !jsonOutput {
-		printCheckScopeHeader(vaultPath, result.Scope)
+	if jsonOutput {
+		outputJSON(result)
+		if checkShouldExit(result) {
+			os.Exit(1)
+		}
+		return nil
 	}
+
+	printCheckScopeHeader(vaultPath, checkScopeFromResult(result))
 
 	switch action {
 	case checkActionValidateOnly:
-		runCheckValidateOutput(vaultPath, result)
+		renderCanonicalCheckValidate(result)
 	case checkActionFix:
-		runCheckFixOutput(vaultPath, s, result)
+		renderCanonicalCheckFix(result)
 	case checkActionCreateMissing:
-		if result.Scope.Type != "full" {
-			if legacyFlagInvocation {
-				if !jsonOutput {
-					fmt.Println(ui.Hint("`--create-missing` is ignored for scoped checks; run on full vault to create pages."))
-				}
-			} else {
-				return handleErrorMsg(ErrInvalidInput, "check create-missing only supports full-vault scope", "Run without path/--type/--trait filters")
-			}
-		} else {
-			runCheckCreateMissingOutput(vaultPath, vaultCfg, s, result)
+		if err := renderCanonicalCheckCreateMissing(vaultPath, result); err != nil {
+			return err
 		}
 	default:
 		return handleErrorMsg(ErrInvalidInput, "unknown check action", "")
 	}
 
-	if result.ErrorCount > 0 || (checkStrict && result.WarningCount > 0) {
+	if checkShouldExit(result) {
 		os.Exit(1)
 	}
 
@@ -163,162 +188,206 @@ func printCheckScopeHeader(vaultPath string, scope checksvc.Scope) {
 	}
 }
 
-func runCheckValidateOutput(vaultPath string, result *checksvc.RunResult) {
-	if jsonOutput {
-		outputSuccess(checksvc.BuildJSON(vaultPath, result), nil)
+func checkScopeFromResult(result commandexec.Result) checksvc.Scope {
+	data := canonicalDataMap(result)
+	if scopeMap, ok := data["scope"].(map[string]interface{}); ok {
+		return checksvc.Scope{
+			Type:  stringValue(scopeMap["type"]),
+			Value: stringValue(scopeMap["value"]),
+		}
+	}
+	if decoded, ok := decodeCanonicalCheckJSON(result); ok && decoded.Scope != nil {
+		return checksvc.Scope{
+			Type:  decoded.Scope.Type,
+			Value: decoded.Scope.Value,
+		}
+	}
+	return checksvc.Scope{Type: "full"}
+}
+
+func checkShouldExit(result commandexec.Result) bool {
+	data := canonicalDataMap(result)
+	errorCount := intValue(data["error_count"])
+	warningCount := intValue(data["warning_count"])
+	if errorCount == 0 && warningCount == 0 {
+		if decoded, ok := decodeCanonicalCheckJSON(result); ok {
+			errorCount = decoded.ErrorCount
+			warningCount = decoded.WarnCount
+		}
+	}
+	return errorCount > 0 || (checkStrict && warningCount > 0)
+}
+
+func decodeCanonicalCheckJSON(result commandexec.Result) (CheckResultJSON, bool) {
+	var decoded CheckResultJSON
+	data := canonicalDataMap(result)
+	if len(data) == 0 {
+		return decoded, false
+	}
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return decoded, false
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		return decoded, false
+	}
+	return decoded, true
+}
+
+func renderCanonicalCheckValidate(result commandexec.Result) {
+	decoded, ok := decodeCanonicalCheckJSON(result)
+	if !ok {
+		fmt.Println(ui.Warning("failed to decode check results"))
 		return
 	}
 
 	if checkByFile {
-		printIssuesByFile(result.Issues, result.SchemaIssues, result.StaleWarningShown)
+		printIssuesByFileFromJSON(decoded.Issues)
 		fmt.Println()
-		if result.ErrorCount == 0 && result.WarningCount == 0 {
-			fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
+		if decoded.ErrorCount == 0 && decoded.WarnCount == 0 {
+			fmt.Println(ui.Starf("No issues found in %d files.", decoded.FileCount))
 		} else {
-			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
+			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", decoded.ErrorCount, decoded.WarnCount, decoded.FileCount)
 		}
 		return
 	}
 
 	if checkVerbose {
-		printIssuesVerbose(result.Issues, result.SchemaIssues)
+		printIssuesVerboseFromJSON(decoded.Issues)
 		fmt.Println()
-		if result.ErrorCount == 0 && result.WarningCount == 0 {
-			fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
+		if decoded.ErrorCount == 0 && decoded.WarnCount == 0 {
+			fmt.Println(ui.Starf("No issues found in %d files.", decoded.FileCount))
 		} else {
-			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
+			fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", decoded.ErrorCount, decoded.WarnCount, decoded.FileCount)
 		}
 		return
 	}
 
 	fmt.Println()
-	if result.ErrorCount == 0 && result.WarningCount == 0 {
-		fmt.Println(ui.Starf("No issues found in %d files.", result.FileCount))
-	} else {
-		printIssueSummary(result.Issues, result.SchemaIssues)
-		fmt.Println()
-		fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", result.ErrorCount, result.WarningCount, result.FileCount)
-		fmt.Println(ui.Hint("Use --verbose to see all issues, or --by-file to group by file."))
-	}
-}
-
-func runCheckFixOutput(vaultPath string, sch *schema.Schema, result *checksvc.RunResult) {
-	fixes := checksvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch)
-	grouped := checksvc.GroupFixesByFile(fixes)
-
-	if jsonOutput {
-		if !checkConfirm {
-			outputSuccess(map[string]interface{}{
-				"preview":        true,
-				"fixable_issues": len(fixes),
-				"files":          grouped,
-			}, nil)
-			return
-		}
-		applied, err := checksvc.ApplyFixes(vaultPath, fixes)
-		if err != nil {
-			outputError(ErrValidationFailed, err.Error(), nil, "")
-			return
-		}
-		outputSuccess(map[string]interface{}{
-			"preview":        false,
-			"fixable_issues": len(fixes),
-			"fixed_issues":   applied.IssueCount,
-			"fixed_files":    applied.FileCount,
-		}, nil)
+	if decoded.ErrorCount == 0 && decoded.WarnCount == 0 {
+		fmt.Println(ui.Starf("No issues found in %d files.", decoded.FileCount))
 		return
 	}
+	printIssueSummaryFromJSON(decoded.Summary, decoded.Issues)
+	fmt.Println()
+	fmt.Printf("Found %d error(s), %d warning(s) in %d files.\n", decoded.ErrorCount, decoded.WarnCount, decoded.FileCount)
+	fmt.Println(ui.Hint("Use --verbose to see all issues, or --by-file to group by file."))
+}
 
-	if len(fixes) == 0 {
+func renderCanonicalCheckFix(result commandexec.Result) {
+	data := canonicalDataMap(result)
+	fixableIssues := intValue(data["fixable_issues"])
+	preview := boolValue(data["preview"])
+
+	if fixableIssues == 0 {
 		fmt.Println(ui.Hint("\nNo auto-fixable issues found."))
 		return
 	}
 
-	if !checkConfirm {
+	if preview {
 		fmt.Printf("\n%s\n", ui.SectionHeader("Auto-fixable Issues"))
 		fmt.Println(ui.Hint("Use --confirm to apply these fixes."))
 		fmt.Println()
-		for _, file := range grouped {
-			fmt.Printf("%s %s\n", ui.FilePath(file.FilePath), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(file.Fixes), pluralize(len(file.Fixes)))))
-			for _, fix := range file.Fixes {
-				fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", fix.Line)), fix.Description)
+		switch grouped := data["files"].(type) {
+		case []checksvc.FileFixes:
+			for _, file := range grouped {
+				fmt.Printf("%s %s\n", ui.FilePath(file.FilePath), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(file.Fixes), pluralize(len(file.Fixes)))))
+				for _, fix := range file.Fixes {
+					fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", fix.Line)), fix.Description)
+				}
 			}
+			fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", fixableIssues, len(grouped))))
+			return
+		case []interface{}:
+			for _, raw := range grouped {
+				file, ok := raw.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				fixes, _ := file["fixes"].([]interface{})
+				fmt.Printf("%s %s\n", ui.FilePath(stringValue(file["file_path"])), ui.Muted.Render(fmt.Sprintf("(%d fix%s)", len(fixes), pluralize(len(fixes)))))
+				for _, fixRaw := range fixes {
+					fix, ok := fixRaw.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					fmt.Printf("  %s %s\n", ui.Muted.Render(fmt.Sprintf("L%d", intValue(fix["line"]))), stringValue(fix["description"]))
+				}
+			}
+			fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", fixableIssues, len(grouped))))
 		}
-		fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Total: %d fixable issue(s) in %d file(s)", len(fixes), len(grouped))))
 		return
 	}
 
-	applied, err := checksvc.ApplyFixes(vaultPath, fixes)
-	if err != nil {
-		fmt.Printf("\n%s\n", ui.Errorf("Fix failed: %v", err))
-		return
-	}
-	fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", applied.IssueCount, applied.FileCount))
+	fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", intValue(data["fixed_issues"]), intValue(data["fixed_files"])))
 }
 
-func runCheckCreateMissingOutput(vaultPath string, vaultCfg interface {
-	GetObjectsRoot() string
-	GetPagesRoot() string
-	GetTemplateDirectory() string
-}, sch *schema.Schema, result *checksvc.RunResult) {
+func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	missingRefs := decodeMissingRefs(data["missing_ref_items"])
+	undefinedTraits := decodeUndefinedTraits(data["undefined_trait_items"])
 	if jsonOutput {
-		if !checkConfirm {
-			outputSuccess(map[string]interface{}{
-				"preview":              true,
-				"missing_refs":         len(result.MissingRefs),
-				"undefined_traits":     len(result.UndefinedTraits),
-				"requires_confirm":     true,
-				"non_interactive_only": true,
-			}, nil)
-			return
-		}
-		created := checksvc.CreateMissingRefsNonInteractive(
-			vaultPath,
-			sch,
-			result.MissingRefs,
-			vaultCfg.GetObjectsRoot(),
-			vaultCfg.GetPagesRoot(),
-			vaultCfg.GetTemplateDirectory(),
-		)
-		outputSuccess(map[string]interface{}{
-			"preview":               false,
-			"created_pages":         created,
-			"missing_refs":          len(result.MissingRefs),
-			"undefined_traits":      len(result.UndefinedTraits),
-			"undefined_traits_note": "undefined traits are interactive-only and were not changed in JSON mode",
-		}, nil)
-		return
+		outputJSON(result)
+		return nil
 	}
 
-	if len(result.MissingRefs) > 0 {
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
+	s, err := schema.Load(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to load schema: %w", err)
+	}
+
+	if len(missingRefs) > 0 {
 		interaction := newCheckInteraction(os.Stdin, os.Stdout)
-		created := handleMissingRefsInteractive(vaultPath, sch, result.MissingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+		created := handleMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
 		if created > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 		}
 		added := 0
-		if len(result.UndefinedTraits) > 0 {
-			added = handleUndefinedTraitsInteractive(vaultPath, sch, result.UndefinedTraits, interaction)
+		if len(undefinedTraits) > 0 {
+			added = handleUndefinedTraitsInteractive(vaultPath, s, undefinedTraits, interaction)
 		}
 		if added > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
 		}
-		return
+		return nil
 	}
-	if len(result.UndefinedTraits) > 0 {
+	if len(undefinedTraits) > 0 {
 		interaction := newCheckInteraction(os.Stdin, os.Stdout)
-		added := handleUndefinedTraitsInteractive(vaultPath, sch, result.UndefinedTraits, interaction)
+		added := handleUndefinedTraitsInteractive(vaultPath, s, undefinedTraits, interaction)
 		if added > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Added %d trait(s) to schema.", added))
 		}
 	}
+	return nil
 }
 
-// printIssuesByFile groups and prints issues by file path
-func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, staleWarningShown bool) {
-	// Group issues by file
-	issuesByFile := make(map[string][]check.Issue)
-	var globalIssues []check.Issue
+func decodeMissingRefs(raw interface{}) []*check.MissingRef {
+	var refs []*check.MissingRef
+	decodeCanonicalValue(raw, &refs)
+	return refs
+}
+
+func decodeUndefinedTraits(raw interface{}) []*check.UndefinedTrait {
+	var traits []*check.UndefinedTrait
+	decodeCanonicalValue(raw, &traits)
+	return traits
+}
+
+func decodeCanonicalValue(raw interface{}, target interface{}) bool {
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return false
+	}
+	return json.Unmarshal(encoded, target) == nil
+}
+
+func printIssuesByFileFromJSON(issues []CheckIssueJSON) {
+	issuesByFile := make(map[string][]CheckIssueJSON)
+	var globalIssues []CheckIssueJSON
 
 	for _, issue := range issues {
 		if issue.FilePath == "" {
@@ -328,65 +397,42 @@ func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, s
 		}
 	}
 
-	// Print global issues first (like stale index)
-	if len(globalIssues) > 0 && !staleWarningShown {
-		for _, issue := range globalIssues {
-			if issue.Level == check.LevelWarning {
-				fmt.Println(ui.Warning(issue.Message))
-			} else {
-				fmt.Println(ui.Error(issue.Message))
-			}
+	for _, issue := range globalIssues {
+		if issue.Level == "warning" {
+			fmt.Println(ui.Warning(issue.Message))
+		} else {
+			fmt.Println(ui.Error(issue.Message))
 		}
+	}
+	if len(globalIssues) > 0 {
 		fmt.Println()
 	}
 
-	// Print schema issues
-	if len(schemaIssues) > 0 {
-		fmt.Println(ui.FilePath("schema.yaml") + ":")
-		for _, issue := range schemaIssues {
-			symbol := ui.SymbolError
-			if issue.Level == check.LevelWarning {
-				symbol = ui.SymbolWarning
-			}
-			fmt.Printf("  %s %s\n", symbol, issue.Message)
-		}
-		fmt.Println()
-	}
-
-	// Get sorted file paths
 	var filePaths []string
-	for fp := range issuesByFile {
-		filePaths = append(filePaths, fp)
+	for filePath := range issuesByFile {
+		filePaths = append(filePaths, filePath)
 	}
 	sort.Strings(filePaths)
 
-	// Print issues for each file
 	for _, filePath := range filePaths {
 		fileIssues := issuesByFile[filePath]
-
-		// Count errors and warnings for this file
 		var errCount, warnCount int
 		for _, issue := range fileIssues {
-			if issue.Level == check.LevelWarning {
+			if issue.Level == "warning" {
 				warnCount++
 			} else {
 				errCount++
 			}
 		}
 
-		// Print file header with styled path and count badge
 		countBadge := ui.Muted.Render(ui.ErrorWarningCounts(errCount, warnCount))
 		fmt.Printf("%s %s:\n", ui.FilePath(filePath), countBadge)
-
-		// Sort issues by line number
 		sort.Slice(fileIssues, func(i, j int) bool {
 			return fileIssues[i].Line < fileIssues[j].Line
 		})
-
-		// Print each issue
 		for _, issue := range fileIssues {
 			symbol := ui.SymbolError
-			if issue.Level == check.LevelWarning {
+			if issue.Level == "warning" {
 				symbol = ui.SymbolWarning
 			}
 			lineNum := ui.Muted.Render(fmt.Sprintf("L%d", issue.Line))
@@ -396,162 +442,81 @@ func printIssuesByFile(issues []check.Issue, schemaIssues []check.SchemaIssue, s
 	}
 }
 
-// issueGroup represents a group of issues of the same type
-type issueGroup struct {
-	issueType check.IssueType
-	level     check.IssueLevel
-	count     int
-	topValues []string // Up to 3 examples
+func printIssuesVerboseFromJSON(issues []CheckIssueJSON) {
+	for _, issue := range issues {
+		symbol := ui.SymbolError
+		if issue.Level == "warning" {
+			symbol = ui.SymbolWarning
+		}
+
+		prefix := issue.FilePath
+		if prefix == "" {
+			prefix = "global"
+		}
+		if issue.Line > 0 {
+			prefix = fmt.Sprintf("%s:%d", prefix, issue.Line)
+		}
+		fmt.Printf("%s %s %s\n", symbol, ui.FilePath(prefix), issue.Message)
+		if issue.FixHint != "" {
+			fmt.Printf("  %s\n", ui.Muted.Render(issue.FixHint))
+		}
+	}
 }
 
-// printIssueSummary prints a compact summary grouped by issue type
-func printIssueSummary(issues []check.Issue, schemaIssues []check.SchemaIssue) {
-	groups := make(map[check.IssueType]*issueGroup)
-	valuesByType := make(map[check.IssueType]map[string]int)
-
-	// Process file issues
+func printIssueSummaryFromJSON(summary []CheckSummaryJSON, issues []CheckIssueJSON) {
+	levels := make(map[string]string, len(issues))
 	for _, issue := range issues {
-		if groups[issue.Type] == nil {
-			groups[issue.Type] = &issueGroup{
-				issueType: issue.Type,
-				level:     issue.Level,
-			}
-			valuesByType[issue.Type] = make(map[string]int)
-		}
-		groups[issue.Type].count++
-		if issue.Value != "" {
-			valuesByType[issue.Type][issue.Value]++
-		} else if issue.FilePath != "" {
-			// Use file path as value for display
-			valuesByType[issue.Type][issue.FilePath]++
+		if _, exists := levels[issue.Type]; !exists {
+			levels[issue.Type] = issue.Level
 		}
 	}
 
-	// Process schema issues
-	for _, issue := range schemaIssues {
-		if groups[issue.Type] == nil {
-			groups[issue.Type] = &issueGroup{
-				issueType: issue.Type,
-				level:     issue.Level,
-			}
-			valuesByType[issue.Type] = make(map[string]int)
-		}
-		groups[issue.Type].count++
-		if issue.Value != "" {
-			valuesByType[issue.Type][issue.Value]++
-		}
-	}
-
-	// Compute top values for each group
-	for issueType, valueCounts := range valuesByType {
-		type vc struct {
-			value string
-			count int
-		}
-		var sorted []vc
-		for v, c := range valueCounts {
-			sorted = append(sorted, vc{v, c})
-		}
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].count > sorted[j].count
-		})
-		// Take top 3
-		for i := 0; i < len(sorted) && i < 3; i++ {
-			groups[issueType].topValues = append(groups[issueType].topValues, sorted[i].value)
-		}
-	}
-
-	// Sort groups: errors first, then by count descending
-	var sortedGroups []*issueGroup
-	for _, g := range groups {
-		sortedGroups = append(sortedGroups, g)
-	}
-	sort.Slice(sortedGroups, func(i, j int) bool {
-		// Errors before warnings
-		if sortedGroups[i].level != sortedGroups[j].level {
-			return sortedGroups[i].level == check.LevelError
-		}
-		// Then by count descending
-		return sortedGroups[i].count > sortedGroups[j].count
-	})
-
-	// Separate errors and warnings
-	var errors, warnings []*issueGroup
-	for _, g := range sortedGroups {
-		if g.level == check.LevelError {
-			errors = append(errors, g)
+	var errorsSummary, warningsSummary []CheckSummaryJSON
+	for _, item := range summary {
+		if levels[item.IssueType] == "warning" || (levels[item.IssueType] == "" && looksLikeWarningIssue(item.IssueType)) {
+			warningsSummary = append(warningsSummary, item)
 		} else {
-			warnings = append(warnings, g)
+			errorsSummary = append(errorsSummary, item)
 		}
 	}
 
-	// Print errors section
-	if len(errors) > 0 {
+	if len(errorsSummary) > 0 {
 		fmt.Printf("%s %s\n", ui.SymbolAttention, ui.Bold.Render("Errors"))
-		for _, g := range errors {
-			printIssueGroup(g)
+		for _, item := range errorsSummary {
+			printIssueSummaryItem(item)
 		}
 	}
-
-	// Print warnings section
-	if len(warnings) > 0 {
-		if len(errors) > 0 {
-			fmt.Println() // blank line between sections
+	if len(warningsSummary) > 0 {
+		if len(errorsSummary) > 0 {
+			fmt.Println()
 		}
 		fmt.Printf("%s %s\n", ui.SymbolAttention, ui.Bold.Render("Warnings"))
-		for _, g := range warnings {
-			printIssueGroup(g)
+		for _, item := range warningsSummary {
+			printIssueSummaryItem(item)
 		}
 	}
 }
 
-// printIssueGroup prints a single issue group on one line
-func printIssueGroup(g *issueGroup) {
-	// Format: issue_type (count)  examples...
-	issueLabel := ui.Bold.Render(string(g.issueType))
-	countStr := fmt.Sprintf("(%d)", g.count)
-
-	if len(g.topValues) > 0 {
-		// Show examples with ellipsis if there might be more
-		examples := strings.Join(g.topValues, ", ")
-		if g.count > len(g.topValues) {
+func printIssueSummaryItem(item CheckSummaryJSON) {
+	issueLabel := ui.Bold.Render(item.IssueType)
+	countStr := fmt.Sprintf("(%d)", item.Count)
+	if len(item.TopValues) > 0 {
+		examples := strings.Join(item.TopValues, ", ")
+		if item.Count > len(item.TopValues) {
 			examples += ", ..."
 		}
 		fmt.Printf("  %s %s  %s\n", issueLabel, countStr, ui.Muted.Render("("+examples+")"))
-	} else {
-		fmt.Printf("  %s %s\n", issueLabel, countStr)
+		return
 	}
+	fmt.Printf("  %s %s\n", issueLabel, countStr)
 }
 
-// printIssuesVerbose prints all issues inline (verbose mode)
-func printIssuesVerbose(issues []check.Issue, schemaIssues []check.SchemaIssue) {
-	// Print schema issues first
-	for _, issue := range schemaIssues {
-		schemaLabel := ui.Muted.Render("[schema]")
-		if issue.Level == check.LevelWarning {
-			fmt.Printf("%s %s %s\n", ui.SymbolWarning, schemaLabel, issue.Message)
-		} else {
-			fmt.Printf("%s %s %s\n", ui.SymbolError, schemaLabel, issue.Message)
-		}
-	}
-
-	// Print file issues
-	for _, issue := range issues {
-		if issue.FilePath == "" {
-			// Global issue (like stale index)
-			if issue.Level == check.LevelWarning {
-				fmt.Println(ui.Warning(issue.Message))
-			} else {
-				fmt.Println(ui.Error(issue.Message))
-			}
-		} else {
-			location := fmt.Sprintf("%s:%s", ui.FilePath(issue.FilePath), ui.LineNum(issue.Line))
-			if issue.Level == check.LevelWarning {
-				fmt.Printf("%s %s %s\n", ui.SymbolWarning, location, issue.Message)
-			} else {
-				fmt.Printf("%s %s %s\n", ui.SymbolError, location, issue.Message)
-			}
-		}
+func looksLikeWarningIssue(issueType string) bool {
+	switch issueType {
+	case string(check.IssueStaleIndex), string(check.IssueUnusedType), string(check.IssueUnusedTrait), string(check.IssueShortRefCouldBeFullPath):
+		return true
+	default:
+		return false
 	}
 }
 

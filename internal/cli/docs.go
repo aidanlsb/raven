@@ -3,11 +3,11 @@ package cli
 import (
 	"fmt"
 	"io/fs"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/docssvc"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -39,15 +39,6 @@ type docsTopicView struct {
 	Path  string `json:"path"`
 }
 
-type docsSearchMatchView struct {
-	Section string `json:"section"`
-	Topic   string `json:"topic"`
-	Title   string `json:"title"`
-	Path    string `json:"path"`
-	Line    int    `json:"line"`
-	Snippet string `json:"snippet"`
-}
-
 type docsTopicRecord struct {
 	Section string
 	ID      string
@@ -76,46 +67,56 @@ Examples:
   rvn docs search refs --section reference`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		source, err := loadVaultDocsSource(getVaultPath())
-		if err != nil {
-			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
-		}
-
-		sections, err := listDocsSectionsFS(source, ".")
-		if err != nil {
-			return handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
-		}
-
 		if len(args) == 0 {
-			if shouldUseDocsFZFNavigator() {
+			if !isJSONOutput() && shouldUseDocsFZFNavigator() {
+				source, err := loadVaultDocsSource(getVaultPath())
+				if err != nil {
+					return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+				}
+
+				sections, err := listDocsSectionsFS(source, ".")
+				if err != nil {
+					return handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
+				}
+
 				if err := runDocsFZFNavigator(source, sections); err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn docs list' for non-interactive output")
 				}
 				return nil
 			}
-			return outputDocsSections(sections)
 		}
 
-		section, ok := findDocsSection(sections, args[0])
-		if !ok {
-			return docsSectionNotFound(args, sections)
+		argsMap := map[string]interface{}{}
+		if len(args) > 0 {
+			argsMap["section"] = args[0]
+		}
+		if len(args) > 1 {
+			argsMap["topic"] = args[1]
 		}
 
-		topics, err := listDocsTopicsFS(source, ".", section.ID)
-		if err != nil {
-			return handleError(ErrInternal, err, "")
+		result := executeCanonicalCommand("docs", getVaultPath(), argsMap)
+		if !result.OK {
+			return handleCanonicalDocsFailure(result, args)
 		}
 
-		if len(args) == 1 {
-			return outputDocsTopics(section, topics)
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
 		}
 
-		topic, ok := findDocsTopic(topics, args[1])
-		if !ok {
-			return docsTopicNotFound(section.ID, args[1], topics)
+		data := canonicalDataMap(result)
+		switch len(args) {
+		case 0:
+			return outputDocsSections(docsSectionsFromCanonical(data["sections"]))
+		case 1:
+			section := docsSectionView{
+				ID:    stringValue(data["section"]),
+				Title: stringValue(data["title"]),
+			}
+			return outputDocsTopics(section, docsTopicsFromCanonical(data["topics"], section.ID))
+		default:
+			return outputDocsTopicContentData(data)
 		}
-
-		return outputDocsTopicContent(source, topic)
 	},
 }
 
@@ -127,16 +128,15 @@ var docsListCmd = &cobra.Command{
 Use this to see exactly which 'rvn docs <section>' commands are available.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		source, err := loadVaultDocsSource(getVaultPath())
-		if err != nil {
-			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+		result := executeCanonicalCommand("docs_list", getVaultPath(), nil)
+		if !result.OK {
+			return handleCanonicalDocsFailure(result, nil)
 		}
-
-		sections, err := listDocsSectionsFS(source, ".")
-		if err != nil {
-			return handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
 		}
-		return outputDocsSections(sections)
+		return outputDocsSections(docsSectionsFromCanonical(canonicalDataMap(result)["sections"]))
 	},
 }
 
@@ -151,39 +151,29 @@ Examples:
   rvn docs search workflow --limit 10`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		source, err := loadVaultDocsSource(getVaultPath())
-		if err != nil {
-			return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
-		}
-
 		query := strings.TrimSpace(strings.Join(args, " "))
-		if query == "" {
-			return handleErrorMsg(ErrMissingArgument, "specify a search query", "Usage: rvn docs search <query>")
-		}
-		if docsSearchLimit < 1 {
-			return handleErrorMsg(ErrInvalidInput, "--limit must be >= 1", "")
-		}
-
-		matches, err := searchDocsFS(source, ".", query, docsSearchSection, docsSearchLimit)
-		if err != nil {
-			return handleError(ErrInvalidInput, err, "Run 'rvn docs' to list sections")
+		result := executeCanonicalCommand("docs_search", getVaultPath(), map[string]interface{}{
+			"query":   query,
+			"section": docsSearchSection,
+			"limit":   docsSearchLimit,
+		})
+		if !result.OK {
+			return handleCanonicalDocsFailure(result, nil)
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"query":   query,
-				"count":   len(matches),
-				"matches": matches,
-			}, &Meta{Count: len(matches)})
+			outputJSON(result)
 			return nil
 		}
 
+		data := canonicalDataMap(result)
+		matches := docsSearchMatchesFromCanonical(data["matches"])
 		if len(matches) == 0 {
-			fmt.Printf("No docs matched %q.\n", query)
+			fmt.Printf("No docs matched %q.\n", stringValue(data["query"]))
 			return nil
 		}
 
-		fmt.Printf("Matches for %q (%d):\n", query, len(matches))
+		fmt.Printf("Matches for %q (%d):\n", stringValue(data["query"]), len(matches))
 		for _, m := range matches {
 			fmt.Printf("- %s/%s:%d %s\n", m.Section, m.Topic, m.Line, m.Snippet)
 		}
@@ -200,34 +190,22 @@ This command replaces the local docs cache for the current vault.
 Use --ref to fetch a specific branch/tag/commit; default is "main".`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		info := currentVersionInfo()
-		result, err := docssvc.Fetch(docssvc.FetchRequest{
-			VaultPath:  getVaultPath(),
-			Ref:        strings.TrimSpace(docsFetchRef),
-			SourceBase: strings.TrimSpace(docsFetchSource),
-			CLIVersion: info.Version,
+		result := executeCanonicalCommand("docs_fetch", getVaultPath(), map[string]interface{}{
+			"ref":    strings.TrimSpace(docsFetchRef),
+			"source": strings.TrimSpace(docsFetchSource),
 		})
-		if err != nil {
-			return handleError(ErrInternal, err, "Check your network connection and run 'rvn docs fetch' again")
+		if !result.OK {
+			return handleCanonicalDocsFailure(result, nil)
 		}
 
 		if isJSONOutput() {
-			outputSuccess(map[string]interface{}{
-				"path":         result.Path,
-				"file_count":   result.FileCount,
-				"byte_count":   result.ByteCount,
-				"source":       result.Source,
-				"ref":          result.Ref,
-				"archive_url":  result.ArchiveURL,
-				"fetched_at":   result.FetchedAt,
-				"cli_version":  result.CLIVersion,
-				"manifest_ver": result.ManifestVer,
-			}, nil)
+			outputJSON(result)
 			return nil
 		}
 
-		fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", result.Path, result.FileCount, result.ByteCount)
-		fmt.Printf("Source: %s (%s)\n", result.Source, result.Ref)
+		data := canonicalDataMap(result)
+		fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", stringValue(data["path"]), intValue(data["file_count"]), int64Value(data["byte_count"]))
+		fmt.Printf("Source: %s (%s)\n", stringValue(data["source"]), stringValue(data["ref"]))
 		return nil
 	},
 }
@@ -332,6 +310,28 @@ func outputDocsTopicContent(docsFS fs.FS, topic docsTopicRecord) error {
 	return nil
 }
 
+func outputDocsTopicContentData(data map[string]interface{}) error {
+	if isJSONOutput() {
+		outputSuccess(data, nil)
+		return nil
+	}
+
+	renderedContent := stringValue(data["content"])
+	display := docsDisplayContext()
+	if display.IsTTY {
+		if rendered, renderErr := docsMarkdownRender(renderedContent, display.TermWidth); renderErr == nil {
+			renderedContent = rendered
+		}
+	}
+
+	fmt.Printf("Path: %s\n\n", stringValue(data["path"]))
+	fmt.Print(renderedContent)
+	if !strings.HasSuffix(renderedContent, "\n") {
+		fmt.Println()
+	}
+	return nil
+}
+
 func shouldUseDocsFZFNavigator() bool {
 	return canUseFZFInteractive()
 }
@@ -419,53 +419,90 @@ func runDocsFZF(lines []string, prompt, header string) (string, bool, error) {
 	})
 }
 
-func docsSectionNotFound(args []string, sections []docsSectionView) error {
-	if cmdPath, ok := resolveCLICommandPath(args); ok {
-		return handleErrorMsg(
-			ErrInvalidInput,
-			fmt.Sprintf("%q is a CLI command, not a docs section", cmdPath),
-			fmt.Sprintf("Use 'rvn help %s' for command documentation", cmdPath),
-		)
+func handleCanonicalDocsFailure(result commandexec.Result, args []string) error {
+	if result.Error == nil {
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
+		}
+		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 
-	if isCommandSectionAlias(args[0]) {
-		return handleErrorMsg(
-			ErrInvalidInput,
-			"command docs are not part of 'rvn docs'",
-			docsCommandHint,
-		)
+	message := result.Error.Message
+	suggestion := result.Error.Suggestion
+	if len(args) > 0 && result.Error.Code == ErrInvalidInput && strings.HasPrefix(result.Error.Message, "unknown docs section: ") {
+		if cmdPath, ok := resolveCLICommandPath(args); ok {
+			message = fmt.Sprintf("%q is a CLI command, not a docs section", cmdPath)
+			suggestion = fmt.Sprintf("Use 'rvn help %s' for command documentation", cmdPath)
+		} else if isCommandSectionAlias(args[0]) {
+			message = "command docs are not part of 'rvn docs'"
+			suggestion = docsCommandHint
+		}
 	}
 
-	available := make([]string, 0, len(sections))
-	for _, s := range sections {
-		available = append(available, s.ID)
+	if isJSONOutput() {
+		result.Error.Message = message
+		result.Error.Suggestion = suggestion
+		outputJSON(result)
+		return nil
 	}
-	sort.Strings(available)
 
-	return handleErrorMsg(
-		ErrInvalidInput,
-		fmt.Sprintf("unknown docs section: %s", args[0]),
-		fmt.Sprintf("Run 'rvn docs' to list sections (available: %s)", strings.Join(available, ", ")),
-	)
+	return handleErrorWithDetails(result.Error.Code, message, suggestion, result.Error.Details)
 }
 
-func docsTopicNotFound(sectionID, topicInput string, topics []docsTopicRecord) error {
-	available := make([]string, 0, len(topics))
-	for _, t := range topics {
-		available = append(available, t.ID)
+func docsSectionsFromCanonical(raw interface{}) []docsSectionView {
+	switch sections := raw.(type) {
+	case []docssvc.SectionView:
+		out := make([]docsSectionView, 0, len(sections))
+		for _, section := range sections {
+			out = append(out, docsSectionView{
+				ID:         section.ID,
+				Title:      section.Title,
+				TopicCount: section.TopicCount,
+			})
+		}
+		return out
+	case []docsSectionView:
+		return sections
+	default:
+		return nil
 	}
-	sort.Strings(available)
+}
 
-	suggestion := fmt.Sprintf("Run 'rvn docs %s' to list topics", sectionID)
-	if len(available) > 0 {
-		suggestion = fmt.Sprintf("%s (available: %s)", suggestion, strings.Join(available, ", "))
+func docsTopicsFromCanonical(raw interface{}, sectionID string) []docsTopicRecord {
+	items, _ := raw.([]map[string]interface{})
+	out := make([]docsTopicRecord, 0, len(items))
+	for _, item := range items {
+		out = append(out, docsTopicRecord{
+			Section: sectionID,
+			ID:      stringValue(item["id"]),
+			Title:   stringValue(item["title"]),
+			Path:    stringValue(item["path"]),
+		})
 	}
+	return out
+}
 
-	return handleErrorMsg(
-		ErrInvalidInput,
-		fmt.Sprintf("unknown topic %q in section %q", topicInput, sectionID),
-		suggestion,
-	)
+func docsSearchMatchesFromCanonical(raw interface{}) []docssvc.SearchMatchView {
+	switch matches := raw.(type) {
+	case []docssvc.SearchMatchView:
+		return matches
+	default:
+		return nil
+	}
+}
+
+func int64Value(raw interface{}) int64 {
+	switch value := raw.(type) {
+	case int64:
+		return value
+	case int:
+		return int64(value)
+	case float64:
+		return int64(value)
+	default:
+		return 0
+	}
 }
 
 func listDocsSections(docsRoot string) ([]docsSectionView, error) {
@@ -528,14 +565,6 @@ func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool)
 		Path:    found.Path,
 		FSPath:  found.FSPath,
 	}, true
-}
-
-func searchDocsFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([]docsSearchMatchView, error) {
-	matches, err := docssvc.SearchFS(docsFS, docsRoot, query, sectionFilter, limit)
-	if err != nil {
-		return nil, err
-	}
-	return docsMatchesFromService(matches), nil
 }
 
 func normalizeDocsPathSlug(input string) string {
@@ -653,21 +682,6 @@ func docsTopicsFromService(in []docssvc.TopicRecord) []docsTopicRecord {
 			Title:   topic.Title,
 			Path:    topic.Path,
 			FSPath:  topic.FSPath,
-		})
-	}
-	return out
-}
-
-func docsMatchesFromService(in []docssvc.SearchMatchView) []docsSearchMatchView {
-	out := make([]docsSearchMatchView, 0, len(in))
-	for _, match := range in {
-		out = append(out, docsSearchMatchView{
-			Section: match.Section,
-			Topic:   match.Topic,
-			Title:   match.Title,
-			Path:    match.Path,
-			Line:    match.Line,
-			Snippet: match.Snippet,
 		})
 	}
 	return out

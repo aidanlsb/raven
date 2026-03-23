@@ -29,6 +29,19 @@ This command resolves the vault the same way regular vault-bound commands do:
 explicit --vault-path, then --vault, then active/default config.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return outputVaultPath(getVaultPath())
+		result := executeCanonicalCommand("vault_path", getVaultPath(), nil)
+		if !result.OK {
+			if isJSONOutput() {
+				outputJSON(result)
+				return nil
+			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
+		}
+
+		data := canonicalDataMap(result)
+		return outputVaultPath(stringValue(data["path"]))
 	},
 }

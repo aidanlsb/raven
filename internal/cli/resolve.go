@@ -1,15 +1,14 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
@@ -100,26 +99,6 @@ func resolveReferenceWithDynamicDates(reference string, opts ResolveOptions, all
 
 // handleResolveError converts a resolve error to an appropriate CLI error output.
 // Returns the error code used.
-func handleResolveError(err error, reference string) error {
-	var ae *AmbiguousRefError
-	if errors.As(err, &ae) {
-		return handleErrorMsg(ErrRefAmbiguous,
-			ae.Error(),
-			"Use a more specific path to disambiguate")
-	}
-
-	var nfe *RefNotFoundError
-	if errors.As(err, &nfe) {
-		return handleErrorMsg(ErrRefNotFound,
-			nfe.Error(),
-			"Check the reference and try again")
-	}
-
-	return handleErrorMsg(ErrInternal,
-		fmt.Sprintf("failed to resolve '%s': %v", reference, err),
-		"Run 'rvn reindex' if the database is out of date")
-}
-
 // =============================================================================
 // RESOLVE COMMAND
 // =============================================================================
@@ -145,127 +124,69 @@ Examples:
 	}),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
-		start := time.Now()
 		reference := args[0]
 
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
-		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-		}
-
-		// Attempt resolution (including dynamic date keywords like "today")
-		result, err := resolveReferenceWithDynamicDates(reference, ResolveOptions{
-			VaultPath:   vaultPath,
-			VaultConfig: vaultCfg,
-		}, true) // allowDynamicMissing=true so "today" resolves even without a file
-
-		elapsed := time.Since(start).Milliseconds()
-
-		// Handle ambiguous reference
-		var ae *AmbiguousRefError
-		if errors.As(err, &ae) {
-			matches := make([]map[string]interface{}, 0, len(ae.Matches))
-			for _, m := range ae.Matches {
-				entry := map[string]interface{}{
-					"object_id": m,
-				}
-				if ae.MatchSources != nil {
-					if src, ok := ae.MatchSources[m]; ok {
-						entry["match_source"] = src
-					}
-				}
-				matches = append(matches, entry)
-			}
-
+		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+			CommandID: "resolve",
+			VaultPath: vaultPath,
+			Caller:    commandexec.CallerCLI,
+			Args: map[string]interface{}{
+				"reference": reference,
+			},
+		})
+		if !result.OK {
 			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"resolved":  false,
-					"ambiguous": true,
-					"reference": reference,
-					"matches":   matches,
-				}, &Meta{QueryTimeMs: elapsed})
+				outputJSON(result)
 				return nil
 			}
+			if result.Error != nil {
+				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+			}
+			return handleErrorMsg(ErrInternal, "command execution failed", "")
+		}
 
+		if isJSONOutput() {
+			outputJSON(result)
+			return nil
+		}
+
+		data, _ := result.Data.(map[string]interface{})
+		if ambiguous, _ := data["ambiguous"].(bool); ambiguous {
 			fmt.Printf("Reference '%s' is ambiguous. Matches:\n", reference)
-			for _, m := range matches {
-				src := ""
-				if s, ok := m["match_source"].(string); ok {
-					src = fmt.Sprintf(" (%s)", s)
+			if matches, ok := data["matches"].([]map[string]interface{}); ok {
+				for _, match := range matches {
+					src := ""
+					if s, ok := match["match_source"].(string); ok {
+						src = fmt.Sprintf(" (%s)", s)
+					}
+					fmt.Printf("  %s%s\n", match["object_id"], src)
 				}
-				fmt.Printf("  %s%s\n", m["object_id"], src)
 			}
 			return nil
 		}
 
-		// Handle not found
-		if err != nil {
-			if isJSONOutput() {
-				outputSuccess(map[string]interface{}{
-					"resolved":  false,
-					"reference": reference,
-				}, &Meta{QueryTimeMs: elapsed})
-				return nil
-			}
-
+		if resolved, _ := data["resolved"].(bool); !resolved {
 			fmt.Printf("Reference '%s' not found.\n", reference)
 			return nil
 		}
 
-		// Successful resolution — enrich with type from the index
-		objectType := ""
-		relFilePath := ""
+		objectID, _ := data["object_id"].(string)
+		objectType, _ := data["type"].(string)
+		relFilePath, _ := data["file_path"].(string)
+		isSection, _ := data["is_section"].(bool)
+		fileObjectID, _ := data["file_object_id"].(string)
+		matchSource, _ := data["match_source"].(string)
 
-		if result.FilePath != "" {
-			rel, relErr := filepath.Rel(vaultPath, result.FilePath)
-			if relErr == nil {
-				relFilePath = rel
-			} else {
-				relFilePath = result.FilePath
-			}
-		}
-
-		// Look up the object type from the database
-		db, dbErr := index.Open(vaultPath)
-		if dbErr == nil {
-			defer db.Close()
-			obj, objErr := db.GetObject(result.ObjectID)
-			if objErr == nil && obj != nil {
-				objectType = obj.Type
-			}
-		}
-
-		if isJSONOutput() {
-			data := map[string]interface{}{
-				"resolved":   true,
-				"object_id":  result.ObjectID,
-				"file_path":  relFilePath,
-				"is_section": result.IsSection,
-			}
-			if objectType != "" {
-				data["type"] = objectType
-			}
-			if result.MatchSource != "" {
-				data["match_source"] = result.MatchSource
-			}
-			if result.IsSection {
-				data["file_object_id"] = result.FileObjectID
-			}
-			outputSuccess(data, &Meta{QueryTimeMs: elapsed})
-			return nil
-		}
-
-		// Human-readable output
-		fmt.Printf("Resolved: %s\n", result.ObjectID)
+		fmt.Printf("Resolved: %s\n", objectID)
 		if objectType != "" {
 			fmt.Printf("  Type: %s\n", objectType)
 		}
 		fmt.Printf("  File: %s\n", relFilePath)
-		if result.IsSection {
-			fmt.Printf("  Parent: %s\n", result.FileObjectID)
+		if isSection {
+			fmt.Printf("  Parent: %s\n", fileObjectID)
 		}
-		if result.MatchSource != "" {
-			fmt.Printf("  Matched via: %s\n", result.MatchSource)
+		if matchSource != "" {
+			fmt.Printf("  Matched via: %s\n", matchSource)
 		}
 		return nil
 	},
