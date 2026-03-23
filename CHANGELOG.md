@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.11] - 2026-03-22
+
+### Added
+- Canonical `commandexec`, `commandimpl`, and `bulkops` layers for registry-driven command execution across Raven surfaces.
+
+### Changed
+- CLI, MCP, and workflow command execution now share one canonical runtime and handler registry, including schema/template and workflow command families.
+- `query --apply` now plans targets and delegates to canonical mutation commands instead of using query-local mutation paths.
+- MCP direct tool compatibility aliases now resolve through shared command lookup rather than MCP-local dispatch metadata.
+
+### Removed
+- Removed the legacy MCP semantic/direct-dispatch layer and its per-command direct handler implementations.
+
 ## [v0.0.10] - 2026-03-20
 
 ### Changed
@@ -116,7 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.11...HEAD
+[v0.0.11]: https://github.com/aidanlsb/raven/compare/v0.0.10...v0.0.11
 [v0.0.10]: https://github.com/aidanlsb/raven/compare/v0.0.9...v0.0.10
 [v0.0.9]: https://github.com/aidanlsb/raven/compare/v0.0.8...v0.0.9
 [v0.0.8]: https://github.com/aidanlsb/raven/compare/v0.0.7...v0.0.8
