@@ -6,13 +6,10 @@
 
 **A CLI for plain-text knowledge management, with first-class support for AI agents.**
 
-Raven keeps your notes in Markdown and adds just enough structure to make them queryable, automatable, and reliable for agents.
-
-- Plain files are the source of truth
-- Types, fields, and traits come from an explicit schema
-- References create bidirectional links across notes
-- Query, search, and bulk operations work over the whole vault
-- MCP tools let agents use Raven directly
+Raven keeps your notes in Markdown and adds a few features:
+- Typed notes: define a `project` type with required yaml frontmatter fields, specified in a schema 
+- Traits for annotations: create a `@priority` trait in your schema that you can use to tag important notes
+- References: link your notes together with to create a `[[graph]]`
 
 ## Installation
 
