@@ -3,6 +3,7 @@ package mcpclient
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -80,6 +81,60 @@ func TestBuildServerEntry(t *testing.T) {
 			if e.Args[i] != want[i] {
 				t.Fatalf("expected %v, got %v", want, e.Args)
 			}
+		}
+	})
+}
+
+func TestResolveCommand(t *testing.T) {
+	prevLookPath := lookPath
+	prevArg0 := arg0
+	prevExecutablePath := executablePath
+	prevAbsPath := absPath
+	t.Cleanup(func() {
+		lookPath = prevLookPath
+		arg0 = prevArg0
+		executablePath = prevExecutablePath
+		absPath = prevAbsPath
+	})
+
+	t.Run("prefers path lookup for rvn", func(t *testing.T) {
+		lookPath = func(file string) (string, error) {
+			if file == "rvn" {
+				return "/opt/homebrew/bin/rvn", nil
+			}
+			return "", exec.ErrNotFound
+		}
+		arg0 = func() string { return "rvn" }
+		executablePath = func() (string, error) {
+			return "/opt/homebrew/Cellar/rvn/0.0.11/bin/rvn", nil
+		}
+
+		if got := ResolveCommand(); got != "/opt/homebrew/bin/rvn" {
+			t.Fatalf("ResolveCommand() = %q, want %q", got, "/opt/homebrew/bin/rvn")
+		}
+	})
+
+	t.Run("preserves invoked absolute path", func(t *testing.T) {
+		lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+		arg0 = func() string { return "/tmp/custom/bin/rvn" }
+		executablePath = func() (string, error) {
+			return "/tmp/other/bin/rvn", nil
+		}
+
+		if got := ResolveCommand(); got != "/tmp/custom/bin/rvn" {
+			t.Fatalf("ResolveCommand() = %q, want %q", got, "/tmp/custom/bin/rvn")
+		}
+	})
+
+	t.Run("falls back to executable path", func(t *testing.T) {
+		lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+		arg0 = func() string { return "rvn" }
+		executablePath = func() (string, error) {
+			return "/tmp/go/bin/rvn", nil
+		}
+
+		if got := ResolveCommand(); got != "/tmp/go/bin/rvn" {
+			t.Fatalf("ResolveCommand() = %q, want %q", got, "/tmp/go/bin/rvn")
 		}
 	})
 }
