@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 )
@@ -50,6 +52,18 @@ type ClientStatus struct {
 	Entry      *ServerEntry `json:"entry,omitempty"`
 }
 
+var (
+	lookPath = exec.LookPath
+	arg0     = func() string {
+		if len(os.Args) == 0 {
+			return ""
+		}
+		return os.Args[0]
+	}
+	executablePath = os.Executable
+	absPath        = filepath.Abs
+)
+
 // ConfigPath returns the config file path for the given client.
 // homeDir can be overridden for testing; pass "" to use os.UserHomeDir.
 func ConfigPath(client Client, homeDir string) (string, error) {
@@ -77,18 +91,48 @@ func ConfigPath(client Client, homeDir string) (string, error) {
 	}
 }
 
-// ResolveCommand returns the absolute path to the running rvn binary.
-// Falls back to "rvn" if the path cannot be determined.
+// ResolveCommand returns the command path that should be written into MCP
+// client config. It prefers the shell-visible rvn path from the current
+// invocation context and only falls back to os.Executable when needed.
 func ResolveCommand() string {
-	exe, err := os.Executable()
+	if command := resolveInvokedCommand(arg0()); command != "" {
+		return command
+	}
+
+	exe, err := executablePath()
 	if err != nil {
 		return "rvn"
 	}
-	resolved, err := filepath.EvalSymlinks(exe)
-	if err != nil {
-		return exe
+	return exe
+}
+
+func resolveInvokedCommand(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		name = "rvn"
 	}
-	return resolved
+
+	if strings.ContainsAny(name, `/\`) {
+		if filepath.IsAbs(name) {
+			return filepath.Clean(name)
+		}
+		absolute, err := absPath(name)
+		if err != nil {
+			return filepath.Clean(name)
+		}
+		return absolute
+	}
+
+	if path, err := lookPath(name); err == nil && strings.TrimSpace(path) != "" {
+		return path
+	}
+	if name != "rvn" {
+		if path, err := lookPath("rvn"); err == nil && strings.TrimSpace(path) != "" {
+			return path
+		}
+	}
+
+	return ""
 }
 
 // BuildServerEntry creates a ServerEntry for the raven MCP server.
