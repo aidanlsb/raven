@@ -1,11 +1,14 @@
 # Command Map
 
-- Create typed object: `rvn new <type> <title> --json`
-- Idempotent state write: `rvn upsert <type> <title> --json`
-- Read file/object: `rvn read <path-or-ref> --json`
-- Query objects/traits: `rvn query <rql-or-saved> --json`
-- Search text: `rvn search <query> --json`
+- Inspect exact file text before editing: `rvn read <path-or-ref> --raw --json`
+- Create a brand-new typed object: `rvn new <type> <title> --json`
+- Append notes or capture text: `rvn add <text> --to <path> --json`
+- Write idempotent canonical output: `rvn upsert <type> <title> --json`
+- Query objects or traits: `rvn query <rql-or-saved> --json`
+- Search text when structure is unknown: `rvn search <query> --json`
 - Update frontmatter fields: `rvn set <object_id> key=value --json`
-- Surgical replacement: `rvn edit <path> <old> <new> --json`
-- Safe move/rename: `rvn move <source> <dest> --json`
-- Safe delete: `rvn delete <object_id> --json`
+- Surgical body replacement: `rvn edit <path> <old> <new> --json`
+- Update a trait value by trait ID: `rvn update <trait_id> <new_value> --json`
+- Change an object's type safely: `rvn reclassify <object> <new-type> --json`
+- Safe move or rename with ref updates: `rvn move <source> <dest> --json`
+- Safe delete with backlink warnings: `rvn delete <object_id> --json`
