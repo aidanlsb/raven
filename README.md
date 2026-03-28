@@ -6,11 +6,15 @@
 
 **A CLI for plain-text knowledge management, with first-class support for AI agents.**
 
-Raven keeps your notes in Markdown and adds a few features:
+A Raven "vault" is a collection of markdown files, with a few additional capabilities:
 - Typed notes: define a `project` type with required yaml frontmatter fields, specified in a schema 
 - Traits for annotations: create a `@priority` trait in your schema that you can use to tag important notes
-- References: link your notes together with to create a `[[graph]]`
+- References: link your notes together with `[[backlinks]]` to create a graph
+- Queries: Raven provides a fully featured query language for fast retrieval of your notes
 
+All of the above is powere by a CLI with native support for agentic workflows.
+
+# Getting Started
 ## Installation
 
 Install with Homebrew:
@@ -28,9 +32,7 @@ go install github.com/aidanlsb/raven/cmd/rvn@latest
 rvn version
 ```
 
-## Start With Plain Markdown
-
-Initialize a vault:
+Then initialize a vault:
 
 ```bash
 rvn init ~/notes
@@ -46,140 +48,153 @@ notes/
 └── schema.yaml   # types, fields, and traits
 ```
 
-Your notes stay as normal Markdown files. The SQLite index under `.raven/` is disposable and can always be rebuilt with `rvn reindex`.
+## Agent Setup
 
-## Add Structure Only Where You Need It
+Once you have a vault, connect Raven to your agent of choice.
 
-Define types and fields in `schema.yaml`:
+### MCP Setup
 
-```yaml
-version: 2
-
-types:
-  project:
-    name_field: name
-    default_path: project/
-    fields:
-      name:
-        type: string
-        required: true
-      status:
-        type: enum
-        values: [backlog, active, paused, done]
-        default: active
-```
-
-Create typed objects from the CLI:
+Install Raven into a supported MCP client:
 
 ```bash
-rvn new project website-redesign --field status=active
-```
-
-Or edit the file directly:
-
-```markdown
----
-type: project
-name: Website Redesign
-status: active
----
-```
-
-Use inline traits and references inside note content:
-
-```markdown
-@todo Confirm launch date with [[person/alex]]
-@decision Delay rollout until analytics is fixed
-```
-
-Traits make content queryable. References create two-way links between objects.
-
-## Query the Vault Precisely
-
-Raven has separate query modes for objects and traits.
-
-```bash
-rvn query 'object:project .status==active'
-rvn query 'trait:todo within(object:project)'
-rvn search "analytics"
-rvn backlinks person/alex
-```
-
-You can also operate on query results in bulk:
-
-```bash
-rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
-```
-
-This makes Raven useful both as a personal CLI and as a reliable retrieval layer for agents.
-
-## Work Naturally From the CLI
-
-Common workflows stay simple:
-
-```bash
-rvn daily
-rvn add "Follow up with finance" --to project/website-redesign
-rvn open project/website-redesign
-```
-
-Everything still resolves back to files you can edit with any editor, sync with Git, or store however you want.
-
-## Use Raven With Agents
-
-Raven exposes its command surface through MCP, so agents can query and update the vault through structured tools instead of guessing from raw files.
-
-Install into a supported MCP client:
-
-```bash
-rvn mcp install --client claude-desktop --vault-path /path/to/your/vault
-rvn mcp install --client claude-code --vault-path /path/to/your/vault
-rvn mcp install --client cursor --vault-path /path/to/your/vault
-```
-
-Check status or print a manual config snippet:
-
-```bash
+rvn mcp install --client claude-desktop
+rvn mcp install --client claude-code
+rvn mcp install --client cursor
 rvn mcp status
-rvn mcp show --vault-path /path/to/your/vault
 ```
 
-See the full [MCP reference](docs/agents/mcp.md) for configuration and tool details.
-
-## Automate Repeatable Work
-
-Raven workflows combine deterministic tool steps with agent reasoning.
-
-```yaml
-description: Prepare a meeting brief
-inputs:
-  meeting_id:
-    type: ref
-    target: meeting
-    required: true
-
-steps:
-  - id: meeting
-    type: tool
-    tool: raven_read
-    arguments:
-      path: "{{inputs.meeting_id}}"
-      raw: true
-
-  - id: brief
-    type: agent
-    prompt: |
-      Summarize the meeting and list open actions.
-      {{steps.meeting.data.content}}
-```
-
-Run a workflow from the CLI:
+Or print a manual config snippet with:
 
 ```bash
-rvn workflow run meeting-prep --input meeting_id=meeting/2026-01-17-kickoff
+rvn mcp show
 ```
 
-See the [workflows reference](docs/workflows/workflows.md) for the full format.
+### Skill Installation
+
+Raven also ships with a few skills for supported agent runtimes:
+
+```bash
+rvn skill list --target codex
+rvn skill install raven-core --target codex --confirm
+```
+
+Available skill targets are `codex`, `claude`, and `cursor`.
+
+### Agent Onboarding
+
+After MCP and skills are in place, a good first prompt is:
+
+> Help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
+
+See the full [MCP reference](docs/agents/mcp.md) and [Getting Started](docs/getting-started/getting-started.md) guide for more setup details.
+
+## Example Usage
+
+Let's say that you want to track people, projects, and meetings in your vault. These are "types." You might also want a quick way to tag when decisions get made, which is a good use case for "traits."
+
+Raven's starter schema already gives you the `project` and `person` types (which you can modify), but `meeting` and `decision` do not yet exist. All types and traits in your vault are defined in `schema.yaml`. To add to your schema, you can edit `schema.yaml` directly, use the CLI, or ask an agent. We'll cover the first two here:
+
+**Editing `schema.yaml`**
+Add your new types under `types` and add the fields you want to track for meetings. Let's say for meetings you'll want to track which project they're associated with, who you met with, and any explicit decisions recorded in the notes. Traits are single valued, so you just need to define what sort of value the trait holds (e.g., `enum`, `boolean`, `date`, etc.) and optionally set a default. Boolean traits default to `true` when left bare so they're a good fit for things like `decision` where you just want to add a structured tag to some content.
+
+```yaml
+types:
+  meeting:
+    default_path: meeting/
+    name_field: title
+    fields:
+      title:
+        required: true
+        type: string
+      project:
+        type: ref
+        target: project
+      with:
+        type: ref[]
+        target: person
+
+traits:
+  decision:
+    type: boolean
+```
+
+**Use the CLI**
+
+```bash
+rvn schema add type meeting --name-field title --default-path meeting/
+rvn schema add field meeting project --type ref --target project
+rvn schema add field meeting with --type ref[] --target person
+rvn schema add trait decision --type bool
+```
+
+Create new instances of these types ("objects") using the CLI:
+
+```bash
+rvn new project "Midgard Security Review" --field status=active
+rvn new person "Freya" --field role=lead
+```
+
+Those commands create ordinary markdown files, saved to directories corresponding to the type (`project/` and `person/`).
+
+You can also create files manually. For example, to take notes for a meeting:
+
+```markdown
+---
+type: meeting
+title: Kickoff
+project: project/midgard-security-review
+with:
+  - person/freya
+---
+
+[[person/freya]] wants the initial scope and timeline confirmed before the review begins.
+
+@todo Send the draft scope to [[person/freya]]
+@todo [[person/freya]] to confirm which systems are in scope for [[project/midgard-security-review]]
+@priority(high)
+@decision Keep the first pass focused on authentication and infrastructure.
+```
+
+Use the Raven query language to retrieve information from your vault:
+
+```bash
+rvn query 'trait:todo within(object:meeting refs(midgard-security-review))'
+rvn query 'trait:decision within(object:meeting refs(midgard-security-review))'
+```
+Results:
+
+```text
+meeting/kickoff.md
+  @todo Send the draft scope to [[person/freya]]
+  @todo [[person/freya]] to confirm which systems are in scope for [[project/midgard-security-review]]
+
+meeting/kickoff.md
+  @decision Keep the first pass focused on authentication and infrastructure.
+```
+
+Trace everything connected to one person:
+
+```bash
+rvn backlinks person/freya
+```
+
+```text
+meeting/kickoff.md
+  [[person/freya]] wants the initial scope and timeline confirmed before the review begins
+
+project/midgard-security-review.md
+  Project lead: [[person/freya]]
+```
+
+Before the next leadership check-in, you can ask your agent for a briefing:
+
+> Summarize what is blocking the Midgard security review, tell me who owns each follow-up, and point me to the source notes.
+
+Because the agent can query Raven directly, it can answer from the project, the meeting note, the todo traits, and the backlinks instead of guessing from raw files:
+
+> The review is waiting on scope confirmation before work begins. Two follow-ups are open from `meeting/kickoff.md`: send the draft scope to Freya, and have Freya confirm which systems are in scope for `project/midgard-security-review`. The current decision on record is to keep the first pass focused on authentication and infrastructure.
+
+That is the core value: Raven keeps the source of truth as markdown, but gives both you and your agent a precise retrieval layer on top of it.
 
 ## Documentation
 
