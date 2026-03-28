@@ -37,8 +37,8 @@ type Schema struct {
 	Templates map[string]*TemplateDefinition `yaml:"templates,omitempty"`
 }
 
-// NewSchema creates a new schema with built-in types.
-func NewSchema() *Schema {
+// New creates a schema with built-in types.
+func New() *Schema {
 	return &Schema{
 		Types: map[string]*TypeDefinition{
 			// Built-in 'page' type as fallback for untyped files

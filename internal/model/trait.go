@@ -3,8 +3,6 @@
 // database, query execution, CLI output, and MCP tools.
 package model
 
-import "strconv"
-
 // Trait represents an instance of a trait annotation in the vault.
 // Examples: @todo, @todo(done), @due(2025-01-25), @highlight
 type Trait struct {
@@ -32,18 +30,4 @@ type Trait struct {
 	// ParentObjectID is the ID of the object containing this trait.
 	// This is the nearest ancestor object in the document hierarchy.
 	ParentObjectID string `json:"parent_object_id"`
-}
-
-// GetID returns the trait's unique identifier.
-func (t Trait) GetID() string { return t.ID }
-
-// GetKind returns "trait" for trait results.
-func (t Trait) GetKind() string { return "trait" }
-
-// GetContent returns a human-readable description for display.
-func (t Trait) GetContent() string { return t.Content }
-
-// GetLocation returns a short location string (file:line).
-func (t Trait) GetLocation() string {
-	return t.FilePath + ":" + strconv.Itoa(t.Line)
 }

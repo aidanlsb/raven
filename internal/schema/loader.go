@@ -38,7 +38,7 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	result := &LoadResult{Warnings: []SchemaWarning{}}
 
 	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
-		result.Schema = NewSchema()
+		result.Schema = New()
 		return result, nil
 	}
 

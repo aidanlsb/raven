@@ -239,8 +239,8 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrRequiredField {
-		t.Fatalf("expected error code %s, got %v; out=%s", ErrRequiredField, resp.Error, out)
+	if resp.Error == nil || resp.Error.Code != ErrRequiredFieldMissing {
+		t.Fatalf("expected error code %s, got %v; out=%s", ErrRequiredFieldMissing, resp.Error, out)
 	}
 	if resp.Error.Details["retry_with"] == nil {
 		t.Fatalf("expected retry_with in details; out=%s", out)

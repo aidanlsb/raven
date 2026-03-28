@@ -794,7 +794,7 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 }
 
 func TestAliasCollisionDetection(t *testing.T) {
-	s := schema.NewSchema()
+	s := schema.New()
 	s.Types["person"] = &schema.TypeDefinition{}
 
 	t.Run("alias conflicts with short name reported as error", func(t *testing.T) {

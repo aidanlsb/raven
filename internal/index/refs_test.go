@@ -15,7 +15,7 @@ func TestResolveReferences(t *testing.T) {
 	defer db.Close()
 	db.SetAutoResolveRefs(false)
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	// Index a document with objects
 	doc1 := &parser.ParsedDocument{
@@ -127,7 +127,7 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 	defer db.Close()
 	db.SetAutoResolveRefs(false)
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	// Index a daily note
 	doc1 := &parser.ParsedDocument{
@@ -199,7 +199,7 @@ func TestResolveReferences_UnresolvedRef(t *testing.T) {
 	defer db.Close()
 	db.SetAutoResolveRefs(false)
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	// Index a document with a broken reference
 	doc := &parser.ParsedDocument{

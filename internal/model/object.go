@@ -1,7 +1,5 @@
 package model
 
-import "strconv"
-
 // Object represents an instance of a typed object in the vault.
 // Objects are markdown files with frontmatter that defines their type and fields.
 type Object struct {
@@ -25,19 +23,4 @@ type Object struct {
 	// ParentID is the ID of the parent object, if this object is nested.
 	// Nil for top-level objects.
 	ParentID *string `json:"parent_id,omitempty"`
-}
-
-// GetID returns the object's unique identifier.
-func (o Object) GetID() string { return o.ID }
-
-// GetKind returns "object" for object results.
-func (o Object) GetKind() string { return "object" }
-
-// GetContent returns a human-readable description for display.
-// Uses the object ID (typically the file basename).
-func (o Object) GetContent() string { return o.ID }
-
-// GetLocation returns a short location string (file:line).
-func (o Object) GetLocation() string {
-	return o.FilePath + ":" + strconv.Itoa(o.LineStart)
 }

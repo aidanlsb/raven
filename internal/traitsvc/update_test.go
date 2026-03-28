@@ -68,7 +68,7 @@ func TestBuildPreviewSkipsUnchangedValues(t *testing.T) {
 		FilePath:  "notes/tasks.md",
 		Line:      1,
 	}}
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Traits["todo"] = &schema.TraitDefinition{
 		Type:   schema.FieldTypeEnum,
 		Values: []string{"open", "done"},
@@ -97,7 +97,7 @@ func TestBuildPreviewResolvesRelativeDate(t *testing.T) {
 		FilePath:  "daily/2026-03-15.md",
 		Line:      1,
 	}}
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Traits["due"] = &schema.TraitDefinition{Type: schema.FieldTypeDate}
 
 	preview, err := BuildPreview(traits, "today", sch, nil)
@@ -131,7 +131,7 @@ func TestApplyUpdatesModifiesFile(t *testing.T) {
 		FilePath:  "notes/tasks.md",
 		Line:      1,
 	}}
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Traits["todo"] = &schema.TraitDefinition{
 		Type:   schema.FieldTypeEnum,
 		Values: []string{"open", "done"},
@@ -161,7 +161,7 @@ func TestApplyUpdatesModifiesFile(t *testing.T) {
 }
 
 func TestResolvedAndValidatedTraitValueValidationError(t *testing.T) {
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Traits["priority"] = &schema.TraitDefinition{
 		Type:   schema.FieldTypeEnum,
 		Values: []string{"high", "low"},

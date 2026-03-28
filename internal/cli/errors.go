@@ -38,10 +38,10 @@ const (
 	ErrDatabaseVersion = "DATABASE_VERSION_MISMATCH"
 
 	// Validation errors
-	ErrValidationFailed = "VALIDATION_FAILED"
-	ErrRequiredField    = "REQUIRED_FIELD_MISSING"
-	ErrInvalidValue     = "INVALID_VALUE"
-	ErrUnknownField     = "UNKNOWN_FIELD"
+	ErrValidationFailed     = "VALIDATION_FAILED"
+	ErrRequiredFieldMissing = "REQUIRED_FIELD_MISSING"
+	ErrInvalidValue         = "INVALID_VALUE"
+	ErrUnknownField         = "UNKNOWN_FIELD"
 
 	// Query errors
 	ErrQueryNotFound = "QUERY_NOT_FOUND"
@@ -86,8 +86,6 @@ const (
 	// Schema modification errors
 	ErrDataIntegrityBlock   = "DATA_INTEGRITY_BLOCK"
 	ErrConfirmationRequired = "CONFIRMATION_REQUIRED"
-	ErrFileDoesNotExist     = "FILE_DOES_NOT_EXIST"
-	ErrRequiredFieldMissing = "REQUIRED_FIELD_MISSING"
 )
 
 // Warning codes for non-fatal issues.
@@ -98,7 +96,7 @@ const (
 	WarnDatabaseOutdated  = "DATABASE_OUTDATED"
 	WarnIndexUpdateFailed = "INDEX_UPDATE_FAILED"
 	WarnDocsFetchFailed   = "DOCS_FETCH_FAILED"
-	WarnMisuse            = "WRONG_COMMAND"
+	WarnWrongCommand      = "WRONG_COMMAND"
 	WarnMissingField      = "MISSING_REQUIRED_FIELD"
 	WarnBacklinks         = "HAS_BACKLINKS"
 	WarnUnknownField      = "UNKNOWN_FIELD"
