@@ -1039,6 +1039,62 @@ func TestAliasIndexing(t *testing.T) {
 		}
 	})
 
+	t.Run("resolver treats duplicate aliases as ambiguous", func(t *testing.T) {
+		db2, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db2.Close()
+
+		docs := []*parser.ParsedDocument{
+			{
+				FilePath: "people/freya.md",
+				Objects: []*parser.ParsedObject{
+					{
+						ID:         "people/freya",
+						ObjectType: "person",
+						Fields: map[string]schema.FieldValue{
+							"alias": schema.String("goddess"),
+						},
+						LineStart: 1,
+					},
+				},
+			},
+			{
+				FilePath: "people/frigg.md",
+				Objects: []*parser.ParsedObject{
+					{
+						ID:         "people/frigg",
+						ObjectType: "person",
+						Fields: map[string]schema.FieldValue{
+							"alias": schema.String("goddess"),
+						},
+						LineStart: 1,
+					},
+				},
+			},
+		}
+
+		for _, doc := range docs {
+			if err := db2.IndexDocument(doc, sch); err != nil {
+				t.Fatalf("failed to index document: %v", err)
+			}
+		}
+
+		res, err := db2.Resolver(ResolverOptions{})
+		if err != nil {
+			t.Fatalf("failed to build resolver: %v", err)
+		}
+
+		result := res.Resolve("goddess")
+		if !result.Ambiguous {
+			t.Fatalf("expected duplicate alias to be ambiguous, got %+v", result)
+		}
+		if len(result.Matches) != 2 {
+			t.Fatalf("expected 2 matches, got %d", len(result.Matches))
+		}
+	})
+
 	t.Run("empty alias is not stored", func(t *testing.T) {
 		db2, err := OpenInMemory()
 		if err != nil {

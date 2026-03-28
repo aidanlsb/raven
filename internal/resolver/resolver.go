@@ -15,7 +15,7 @@ type Resolver struct {
 	objectIDs      map[string]struct{} // Set of all known object IDs
 	shortMap       map[string][]string // Map from short name to full IDs
 	slugMap        map[string]string   // Map from slugified ID to original ID
-	aliasMap       map[string]string   // Map from alias to object ID
+	aliasMap       map[string][]string // Map from alias to object IDs
 	nameFieldMap   map[string][]string // Map from name_field value (slugified) to object IDs
 	dailyDirectory string              // Directory for daily notes (e.g., "daily")
 }
@@ -28,6 +28,10 @@ type Options struct {
 	// Aliases maps alias strings to their target object IDs.
 	// For example: {"The Queen": "people/freya"}
 	Aliases map[string]string
+
+	// AliasMatches maps alias strings to one or more target object IDs.
+	// This preserves ambiguity for duplicate aliases when the caller has that data.
+	AliasMatches map[string][]string
 
 	// NameFieldMap maps name_field values to object IDs for semantic resolution.
 	// Values are multi-mapped to preserve ambiguity when multiple objects share
@@ -63,18 +67,15 @@ func New(objectIDs []string, opts Options) *Resolver {
 	}
 
 	// Copy aliases (skip empty ones)
-	if len(opts.Aliases) > 0 {
-		r.aliasMap = make(map[string]string, len(opts.Aliases)*2)
+	if len(opts.Aliases) > 0 || len(opts.AliasMatches) > 0 {
+		r.aliasMap = make(map[string][]string, len(opts.Aliases)*2+len(opts.AliasMatches)*2)
 	}
 	for alias, targetID := range opts.Aliases {
-		if alias == "" {
-			continue
-		}
-		r.aliasMap[alias] = targetID
-		// Also add slugified version of alias
-		sluggedAlias := pages.Slugify(alias)
-		if sluggedAlias != "" && sluggedAlias != alias {
-			r.aliasMap[sluggedAlias] = targetID
+		addAliasTarget(r.aliasMap, alias, targetID)
+	}
+	for alias, targetIDs := range opts.AliasMatches {
+		for _, targetID := range targetIDs {
+			addAliasTarget(r.aliasMap, alias, targetID)
 		}
 	}
 
@@ -138,13 +139,22 @@ type ResolveResult struct {
 //  6. For unresolved path-like refs, leaf-based canonical fallback within the same path family
 func (r *Resolver) Resolve(ref string) ResolveResult {
 	ref = strings.TrimSpace(ref)
+	normalizedRef := normalizeRefForResolution(ref)
 	sluggedRef := pages.Slugify(ref)
 	lowerRef := strings.ToLower(ref)
+	normalizedSluggedRef := pages.Slugify(normalizedRef)
+	normalizedLowerRef := strings.ToLower(normalizedRef)
 
 	c := newMatchCollector()
 
 	addAliasMatches(r, c, ref, sluggedRef)
+	if normalizedRef != ref {
+		addAliasMatches(r, c, normalizedRef, normalizedSluggedRef)
+	}
 	addNameFieldMatches(r, c, ref, sluggedRef, lowerRef)
+	if normalizedRef != ref {
+		addNameFieldMatches(r, c, normalizedRef, normalizedSluggedRef, normalizedLowerRef)
+	}
 
 	// Date references are special - they always resolve to the daily note path
 	// unless there are already other matches, in which case they participate
@@ -152,14 +162,26 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 	if res, done := maybeResolveDateRef(r, c, ref); done {
 		return res
 	}
+	if normalizedRef != ref {
+		if res, done := maybeResolveDateRef(r, c, normalizedRef); done {
+			return res
+		}
+	}
 
-	if isPathLikeRef(ref) {
-		addPathMatches(r, c, ref)
+	matchRef := normalizedRef
+	matchSluggedRef := normalizedSluggedRef
+	if matchRef == "" {
+		matchRef = ref
+		matchSluggedRef = sluggedRef
+	}
+
+	if isPathLikeRef(matchRef) {
+		addPathMatches(r, c, matchRef)
 		if len(c.matches) == 0 {
-			addPathLeafCanonicalMatches(r, c, ref)
+			addPathLeafCanonicalMatches(r, c, matchRef)
 		}
 	} else {
-		addShortMatches(r, c, ref, sluggedRef)
+		addShortMatches(r, c, matchRef, matchSluggedRef)
 	}
 
 	matches := c.matches
@@ -199,10 +221,17 @@ func (c *matchCollector) add(id, source string) {
 
 func addAliasMatches(r *Resolver, c *matchCollector, ref, sluggedRef string) {
 	// Check aliases (exact and slugified)
-	if targetID, ok := r.aliasMap[ref]; ok {
-		c.add(targetID, "alias")
-	} else if targetID, ok := r.aliasMap[sluggedRef]; ok {
-		c.add(targetID, "alias")
+	if targetIDs, ok := r.aliasMap[ref]; ok {
+		for _, targetID := range targetIDs {
+			c.add(targetID, "alias")
+		}
+	}
+	if sluggedRef != ref {
+		if targetIDs, ok := r.aliasMap[sluggedRef]; ok {
+			for _, targetID := range targetIDs {
+				c.add(targetID, "alias")
+			}
+		}
 	}
 }
 
@@ -393,6 +422,15 @@ func buildResolveResult(matches []string, matchSources map[string]string) Resolv
 	}
 }
 
+func normalizeRefForResolution(ref string) string {
+	baseRef, fragment, isEmbedded := paths.ParseEmbeddedID(ref)
+	baseRef = paths.TrimMDExtension(baseRef)
+	if !isEmbedded {
+		return baseRef
+	}
+	return baseRef + "#" + fragment
+}
+
 func filterMatchSources(matchSources map[string]string, matches []string) map[string]string {
 	if matchSources == nil || len(matches) == 0 {
 		return nil
@@ -535,34 +573,42 @@ type AliasCollision struct {
 func (r *Resolver) FindAliasCollisions() []AliasCollision {
 	var collisions []AliasCollision
 
-	// Build reverse map: alias -> list of object IDs that use it
-	// (aliasMap only stores one, but we need to detect duplicates at index time)
-	// For now, we can detect conflicts with short names and object IDs
+	for alias, targetIDs := range r.aliasMap {
+		if len(targetIDs) > 1 {
+			collisions = append(collisions, AliasCollision{
+				Alias:         alias,
+				ObjectIDs:     append([]string(nil), targetIDs...),
+				ConflictsWith: "alias",
+			})
+		}
 
-	for alias, targetID := range r.aliasMap {
+		if len(targetIDs) == 0 {
+			continue
+		}
+
 		// Check if alias matches any short name (other than the target's own short name)
 		if shortMatches, ok := r.shortMap[alias]; ok {
 			// Filter out the target object itself
 			var conflicts []string
 			for _, id := range shortMatches {
-				if id != targetID {
+				if !containsString(targetIDs, id) {
 					conflicts = append(conflicts, id)
 				}
 			}
 			if len(conflicts) > 0 {
 				collisions = append(collisions, AliasCollision{
 					Alias:         alias,
-					ObjectIDs:     append([]string{targetID}, conflicts...),
+					ObjectIDs:     append(append([]string(nil), targetIDs...), conflicts...),
 					ConflictsWith: "short_name",
 				})
 			}
 		}
 
 		// Check if alias matches any object ID exactly
-		if _, exists := r.objectIDs[alias]; exists && alias != targetID {
+		if _, exists := r.objectIDs[alias]; exists && !containsString(targetIDs, alias) {
 			collisions = append(collisions, AliasCollision{
 				Alias:         alias,
-				ObjectIDs:     []string{targetID, alias},
+				ObjectIDs:     append(append([]string(nil), targetIDs...), alias),
 				ConflictsWith: "object_id",
 			})
 		}
@@ -578,4 +624,32 @@ func (r *Resolver) AllObjectIDs() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+func addAliasTarget(aliasMap map[string][]string, alias, targetID string) {
+	if aliasMap == nil || alias == "" || targetID == "" {
+		return
+	}
+	aliasMap[alias] = appendUnique(aliasMap[alias], targetID)
+
+	sluggedAlias := pages.Slugify(alias)
+	if sluggedAlias != "" && sluggedAlias != alias {
+		aliasMap[sluggedAlias] = appendUnique(aliasMap[sluggedAlias], targetID)
+	}
+}
+
+func appendUnique(values []string, candidate string) []string {
+	if containsString(values, candidate) {
+		return values
+	}
+	return append(values, candidate)
+}
+
+func containsString(values []string, candidate string) bool {
+	for _, value := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }

@@ -157,10 +157,24 @@ company: "[[companies/cursor]]"`,
 			wantBacklinks: map[string]bool{"companies/cursor": true},
 		},
 		{
+			name: "wikilink with full path and .md suffix",
+			yaml: `type: project
+name: Test Project
+company: "[[companies/cursor.md]]"`,
+			wantBacklinks: map[string]bool{"companies/cursor": true},
+		},
+		{
 			name: "wikilink with short name",
 			yaml: `type: project
 name: Test Project
 company: "[[cursor]]"`,
+			wantBacklinks: map[string]bool{"companies/cursor": true},
+		},
+		{
+			name: "wikilink with short name and .md suffix",
+			yaml: `type: project
+name: Test Project
+company: "[[cursor.md]]"`,
 			wantBacklinks: map[string]bool{"companies/cursor": true},
 		},
 		{
