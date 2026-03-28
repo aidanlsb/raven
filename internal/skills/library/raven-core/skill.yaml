@@ -13,9 +13,12 @@ coverage:
     - read
     - query
     - search
+    - backlinks
     - resolve
     - set
+    - update
     - edit
+    - reclassify
     - move
     - delete
 execution:
