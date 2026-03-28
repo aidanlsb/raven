@@ -18,15 +18,3 @@ type SearchMatch struct {
 	// Rank is the FTS5 BM25 ranking score (lower is better match).
 	Rank float64 `json:"rank"`
 }
-
-// GetID returns the object ID as the search match identifier.
-func (s SearchMatch) GetID() string { return s.ObjectID }
-
-// GetKind returns "search" for search match results.
-func (s SearchMatch) GetKind() string { return "search" }
-
-// GetContent returns the snippet for display.
-func (s SearchMatch) GetContent() string { return s.Snippet }
-
-// GetLocation returns the file path as location.
-func (s SearchMatch) GetLocation() string { return s.FilePath }

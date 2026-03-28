@@ -73,7 +73,7 @@ func runReclassify(vaultPath, objectRef, newTypeName string) error {
 			"force":       force,
 		})
 		if !result.OK {
-			if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredField {
+			if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
 				details, _ := result.Error.Details.(map[string]interface{})
 				prompted, promptErr := promptMissingReclassifyFields(newTypeName, details)
 				if promptErr != nil {
@@ -171,7 +171,7 @@ func parseReclassifyFieldFlags(flags []string) map[string]string {
 func promptMissingReclassifyFields(newTypeName string, details map[string]interface{}) (map[string]string, error) {
 	rawMissing, ok := details["missing_fields"]
 	if !ok {
-		return nil, handleErrorMsg(ErrRequiredField, fmt.Sprintf("Missing required fields for type '%s'", newTypeName), "Provide required fields with --field")
+		return nil, handleErrorMsg(ErrRequiredFieldMissing, fmt.Sprintf("Missing required fields for type '%s'", newTypeName), "Provide required fields with --field")
 	}
 
 	entries, ok := rawMissing.([]map[string]interface{})
@@ -195,7 +195,7 @@ func promptMissingReclassifyFields(newTypeName string, details map[string]interf
 		}
 	}
 	if len(fieldNames) == 0 {
-		return nil, handleErrorMsg(ErrRequiredField, fmt.Sprintf("Missing required fields for type '%s'", newTypeName), "Provide required fields with --field")
+		return nil, handleErrorMsg(ErrRequiredFieldMissing, fmt.Sprintf("Missing required fields for type '%s'", newTypeName), "Provide required fields with --field")
 	}
 
 	sort.Strings(fieldNames)
@@ -210,7 +210,7 @@ func promptMissingReclassifyFields(newTypeName string, details map[string]interf
 		}
 		value = strings.TrimSpace(value)
 		if value == "" {
-			return nil, handleErrorMsg(ErrRequiredField, fmt.Sprintf("required field '%s' cannot be empty", fieldName), "Provide a non-empty value")
+			return nil, handleErrorMsg(ErrRequiredFieldMissing, fmt.Sprintf("required field '%s' cannot be empty", fieldName), "Provide a non-empty value")
 		}
 		values[fieldName] = value
 	}

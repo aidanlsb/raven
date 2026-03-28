@@ -105,7 +105,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 
 	sch := req.Schema
 	if sch == nil {
-		sch = schema.NewSchema()
+		sch = schema.New()
 	}
 
 	content, err := os.ReadFile(sourceFile)
