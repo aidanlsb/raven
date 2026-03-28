@@ -314,13 +314,11 @@ func newestRunsByWorkflow(runs []*WorkflowRunState, preserve int) map[string]boo
 }
 
 func runStoreDir(vaultPath string, cfg config.ResolvedWorkflowRunsConfig) (string, error) {
-	rel := filepath.ToSlash(filepath.Clean(cfg.StoragePath))
-	rel = strings.TrimPrefix(rel, "./")
-	rel = strings.TrimPrefix(rel, "/")
+	rel := paths.NormalizeVaultRelPath(cfg.StoragePath)
 	if rel == "" || rel == "." {
 		return "", fmt.Errorf("invalid workflow run storage path")
 	}
-	if rel == ".." || strings.HasPrefix(rel, "../") {
+	if !paths.IsValidVaultRelPath(rel) {
 		return "", fmt.Errorf("workflow run storage path escapes vault")
 	}
 	abs := filepath.Join(vaultPath, rel)

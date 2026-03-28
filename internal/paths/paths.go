@@ -72,18 +72,38 @@ func NormalizeDirRoot(root string) string {
 	return root + "/"
 }
 
-// normalizeRelPath normalizes a vault-relative path-like value:
+// NormalizeVaultRelPath normalizes a vault-relative path-like value:
+// - trims surrounding whitespace
 // - converts OS separators to '/'
 // - trims leading "./" and leading "/"
 // - collapses repeated '/'
-func normalizeRelPath(p string) string {
-	p = strings.ReplaceAll(filepath.ToSlash(p), "\\", "/")
+func NormalizeVaultRelPath(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.ReplaceAll(filepath.ToSlash(filepath.Clean(p)), "\\", "/")
 	p = strings.TrimPrefix(p, "./")
 	p = strings.TrimPrefix(p, "/")
 	for strings.Contains(p, "//") {
 		p = strings.ReplaceAll(p, "//", "/")
 	}
 	return p
+}
+
+// IsValidVaultRelPath reports whether p is a non-empty vault-relative path that
+// does not resolve to "." and does not escape the vault with "..".
+func IsValidVaultRelPath(p string) bool {
+	p = NormalizeVaultRelPath(p)
+	if p == "" || p == "." || p == ".." {
+		return false
+	}
+	return !strings.HasPrefix(p, "../")
+}
+
+// normalizeRelPath normalizes a vault-relative path-like value:
+// - converts OS separators to '/'
+// - trims leading "./" and leading "/"
+// - collapses repeated '/'
+func normalizeRelPath(p string) string {
+	return NormalizeVaultRelPath(p)
 }
 
 // FilePathToObjectID converts a vault-relative file path to an object ID.

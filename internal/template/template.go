@@ -91,14 +91,11 @@ func Load(vaultPath, templateSpec, templateDir string) (string, error) {
 
 func normalizeFileRef(filePath string) (string, error) {
 	trimmed := strings.TrimSpace(filePath)
-	trimmed = strings.ReplaceAll(trimmed, "\\", "/")
-	normalized := filepath.ToSlash(filepath.Clean(trimmed))
-	normalized = strings.TrimPrefix(normalized, "./")
-	normalized = strings.TrimPrefix(normalized, "/")
+	normalized := paths.NormalizeVaultRelPath(trimmed)
 	if normalized == "" || normalized == "." {
 		return "", fmt.Errorf("template declaration must include a non-empty file path")
 	}
-	if normalized == ".." || strings.HasPrefix(normalized, "../") {
+	if !paths.IsValidVaultRelPath(normalized) {
 		return "", fmt.Errorf("template file path cannot escape the vault")
 	}
 	if strings.Contains(normalized, "\n") || strings.Contains(normalized, "\r") {

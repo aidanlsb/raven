@@ -495,10 +495,7 @@ func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
 
 	cfg := vc.WorkflowRuns
 	if cfg.StoragePath != "" {
-		normalized := filepath.ToSlash(filepath.Clean(cfg.StoragePath))
-		normalized = strings.TrimPrefix(normalized, "./")
-		normalized = strings.TrimPrefix(normalized, "/")
-		if normalized != "." && normalized != "" && !strings.HasPrefix(normalized, "..") {
+		if normalized := paths.NormalizeVaultRelPath(cfg.StoragePath); paths.IsValidVaultRelPath(normalized) {
 			defaults.StoragePath = normalized
 		}
 	}
@@ -542,10 +539,8 @@ func (vc *VaultConfig) GetWorkflowDirectory() string {
 		return defaultWorkflowDirectory
 	}
 
-	cleaned := filepath.ToSlash(filepath.Clean(normalized))
-	cleaned = strings.TrimPrefix(cleaned, "./")
-	cleaned = strings.TrimPrefix(cleaned, "/")
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+	cleaned := paths.NormalizeVaultRelPath(normalized)
+	if !paths.IsValidVaultRelPath(cleaned) {
 		return defaultWorkflowDirectory
 	}
 	return paths.NormalizeDirRoot(cleaned)
@@ -567,10 +562,8 @@ func (vc *VaultConfig) GetDailyDirectory() string {
 		return defaultDailyDirectory
 	}
 
-	cleaned := filepath.ToSlash(filepath.Clean(normalized))
-	cleaned = strings.TrimPrefix(cleaned, "./")
-	cleaned = strings.TrimPrefix(cleaned, "/")
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+	cleaned := paths.NormalizeVaultRelPath(normalized)
+	if !paths.IsValidVaultRelPath(cleaned) {
 		return defaultDailyDirectory
 	}
 	return strings.TrimSuffix(cleaned, "/")
@@ -595,10 +588,8 @@ func (vc *VaultConfig) GetTemplateDirectory() string {
 		return defaultTemplateDirectory
 	}
 
-	cleaned := filepath.ToSlash(filepath.Clean(normalized))
-	cleaned = strings.TrimPrefix(cleaned, "./")
-	cleaned = strings.TrimPrefix(cleaned, "/")
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+	cleaned := paths.NormalizeVaultRelPath(normalized)
+	if !paths.IsValidVaultRelPath(cleaned) {
 		return defaultTemplateDirectory
 	}
 	return paths.NormalizeDirRoot(cleaned)

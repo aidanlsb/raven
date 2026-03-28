@@ -116,13 +116,14 @@ func TestResolveCommand(t *testing.T) {
 
 	t.Run("preserves invoked absolute path", func(t *testing.T) {
 		lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
-		arg0 = func() string { return "/tmp/custom/bin/rvn" }
+		invokedPath := filepath.Join(t.TempDir(), "rvn")
+		arg0 = func() string { return invokedPath }
 		executablePath = func() (string, error) {
 			return "/tmp/other/bin/rvn", nil
 		}
 
-		if got := ResolveCommand(); got != "/tmp/custom/bin/rvn" {
-			t.Fatalf("ResolveCommand() = %q, want %q", got, "/tmp/custom/bin/rvn")
+		if got := ResolveCommand(); got != filepath.Clean(invokedPath) {
+			t.Fatalf("ResolveCommand() = %q, want %q", got, filepath.Clean(invokedPath))
 		}
 	})
 

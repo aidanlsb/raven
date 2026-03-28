@@ -118,6 +118,30 @@ func TestLoadVaultConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("defaults invalid configured directories", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := "directories:\n  workflow: ../outside\n  template: ../templates\n  daily: ../journal\n"
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		cfg, err := LoadVaultConfig(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := cfg.GetWorkflowDirectory(); got != "workflows/" {
+			t.Errorf("expected default workflow directory, got %q", got)
+		}
+		if got := cfg.GetTemplateDirectory(); got != "templates/" {
+			t.Errorf("expected default template directory, got %q", got)
+		}
+		if got := cfg.GetDailyDirectory(); got != "daily" {
+			t.Errorf("expected default daily directory, got %q", got)
+		}
+	})
+
 	t.Run("rejects legacy daily_directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
@@ -571,4 +595,28 @@ func TestDefaultVaultConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetWorkflowRunsConfigNormalizesStoragePath(t *testing.T) {
+	t.Run("normalizes vault-relative path", func(t *testing.T) {
+		cfg := &VaultConfig{
+			WorkflowRuns: &WorkflowRunsConfig{StoragePath: "/.raven//workflow-runs/"},
+		}
+
+		got := cfg.GetWorkflowRunsConfig()
+		if got.StoragePath != ".raven/workflow-runs" {
+			t.Fatalf("expected normalized storage path, got %q", got.StoragePath)
+		}
+	})
+
+	t.Run("defaults invalid storage path", func(t *testing.T) {
+		cfg := &VaultConfig{
+			WorkflowRuns: &WorkflowRunsConfig{StoragePath: "../outside"},
+		}
+
+		got := cfg.GetWorkflowRunsConfig()
+		if got.StoragePath != ".raven/workflow-runs" {
+			t.Fatalf("expected default storage path, got %q", got.StoragePath)
+		}
+	})
 }

@@ -27,6 +27,31 @@ func TestNormalizeDirRoot(t *testing.T) {
 	}
 }
 
+func TestNormalizeVaultRelPath(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{" notes//daily.md ", "notes/daily.md", true},
+		{"./workflows/onboard.yaml", "workflows/onboard.yaml", true},
+		{"/templates/meeting.md", "templates/meeting.md", true},
+		{"", ".", false},
+		{".", ".", false},
+		{"..", "..", false},
+		{"../outside", "../outside", false},
+	}
+
+	for _, tc := range tests {
+		if got := NormalizeVaultRelPath(tc.in); got != tc.want {
+			t.Fatalf("NormalizeVaultRelPath(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+		if got := IsValidVaultRelPath(tc.in); got != tc.ok {
+			t.Fatalf("IsValidVaultRelPath(%q) = %v, want %v", tc.in, got, tc.ok)
+		}
+	}
+}
+
 func TestVaultRootFilePaths(t *testing.T) {
 	vaultPath := "/tmp/test-vault"
 	if got, want := SchemaPath(vaultPath), filepath.Join(vaultPath, "schema.yaml"); got != want {

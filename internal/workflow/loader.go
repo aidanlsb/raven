@@ -80,15 +80,11 @@ func Load(vaultPath, name string, ref *config.WorkflowRef) (*Workflow, error) {
 }
 
 func normalizeWorkflowFileRef(filePath string) (string, error) {
-	trimmed := strings.TrimSpace(filePath)
-	trimmed = strings.ReplaceAll(trimmed, "\\", "/")
-	normalized := filepath.ToSlash(filepath.Clean(trimmed))
-	normalized = strings.TrimPrefix(normalized, "./")
-	normalized = strings.TrimPrefix(normalized, "/")
+	normalized := paths.NormalizeVaultRelPath(filePath)
 	if normalized == "" || normalized == "." {
 		return "", fmt.Errorf("workflow declaration must include a non-empty file path")
 	}
-	if normalized == ".." || strings.HasPrefix(normalized, "../") {
+	if !paths.IsValidVaultRelPath(normalized) {
 		return "", fmt.Errorf("workflow file path cannot escape the vault")
 	}
 	return normalized, nil
