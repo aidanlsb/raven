@@ -3,6 +3,8 @@ package readsvc
 import (
 	"fmt"
 
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -23,6 +25,17 @@ func SmartReindex(rt *Runtime) (int, error) {
 		return 0, fmt.Errorf("runtime with database is required")
 	}
 
+	vaultCfg := rt.VaultCfg
+	if vaultCfg == nil {
+		loaded, err := config.LoadVaultConfig(rt.VaultPath)
+		if err != nil {
+			return 0, err
+		}
+		vaultCfg = loaded
+		rt.VaultCfg = loaded
+	}
+	rt.DB.SetDailyDirectory(vaultCfg.GetDailyDirectory())
+
 	sch := rt.Schema
 	if sch == nil {
 		loaded, err := schema.Load(rt.VaultPath)
@@ -32,8 +45,13 @@ func SmartReindex(rt *Runtime) (int, error) {
 		sch = loaded
 	}
 
+	if _, err := rt.DB.RemoveDeletedFiles(rt.VaultPath); err != nil {
+		return 0, err
+	}
+
+	walkOpts := &vault.WalkOptions{ParseOptions: buildParseOptions(vaultCfg)}
 	reindexed := 0
-	err := vault.WalkMarkdownFiles(rt.VaultPath, func(result vault.WalkResult) error {
+	err := vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
 		if result.Error != nil {
 			return nil //nolint:nilerr // skip files with errors
 		}
@@ -55,4 +73,14 @@ func SmartReindex(rt *Runtime) (int, error) {
 	}
 
 	return reindexed, nil
+}
+
+func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
+	if vaultCfg == nil || !vaultCfg.HasDirectoriesConfig() {
+		return nil
+	}
+	return &parser.ParseOptions{
+		ObjectsRoot: vaultCfg.GetObjectsRoot(),
+		PagesRoot:   vaultCfg.GetPagesRoot(),
+	}
 }

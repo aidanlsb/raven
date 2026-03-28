@@ -144,6 +144,91 @@ func TestIntegration_QueryByField(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 }
 
+func TestIntegration_QueryRefreshRespectsDirectoryRoots(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  project:
+    default_path: projects/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      status:
+        type: enum
+        values: [active, done]
+`).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		WithFile("objects/projects/weekly.md", `---
+type: project
+title: Weekly
+status: active
+---
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	updated := `---
+type: project
+title: Weekly
+status: done
+---
+`
+	filePath := filepath.Join(v.Path, "objects/projects/weekly.md")
+	if err := os.WriteFile(filePath, []byte(updated), 0o644); err != nil {
+		t.Fatalf("failed to update project file: %v", err)
+	}
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(filePath, future, future); err != nil {
+		t.Fatalf("failed to bump project mtime: %v", err)
+	}
+
+	result := v.RunCLI("query", "object:project", "--refresh")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 1)
+
+	item, ok := result.DataList("items")[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected query item map, got %#v", result.DataList("items")[0])
+	}
+	if got := item["id"]; got != "projects/weekly" {
+		t.Fatalf("expected refreshed project ID projects/weekly, got %#v", got)
+	}
+	fields, ok := item["fields"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fields map, got %#v", item["fields"])
+	}
+	if got := fields["status"]; got != "done" {
+		t.Fatalf("expected refreshed status done, got %#v", got)
+	}
+}
+
+func TestIntegration_QueryRefreshRemovesDeletedFiles(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+	v.AssertQueryCount("object:person", 1)
+
+	if err := os.Remove(filepath.Join(v.Path, "people/alice.md")); err != nil {
+		t.Fatalf("failed to remove person file: %v", err)
+	}
+
+	result := v.RunCLI("query", "object:person", "--refresh")
+	result.MustSucceed(t)
+	result.AssertResultCount(t, "items", 0)
+}
+
 // TestIntegration_ReferencesAndBacklinks tests reference resolution and backlinks.
 func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 	v := testutil.NewTestVault(t).

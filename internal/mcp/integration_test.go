@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -1232,6 +1233,77 @@ References [[nonexistent/page]] which doesn't exist.
 	}
 }
 
+func TestMCPIntegration_CheckFixPreviewAndConfirm(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", `---
+type: person
+name: Freya
+---`).
+		WithFile("projects/roadmap.md", `---
+type: project
+title: Roadmap
+owner: "[[freya]]"
+---`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	server.callTool("raven_reindex", nil)
+
+	preview := server.callTool("raven_check", map[string]interface{}{
+		"fix": true,
+	})
+	if preview.IsError {
+		t.Fatalf("expected check fix preview to succeed, got error: %s", preview.Text)
+	}
+
+	var previewResp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Preview       bool `json:"preview"`
+			FixableIssues int  `json:"fixable_issues"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(preview.Text), &previewResp); err != nil {
+		t.Fatalf("failed to parse check fix preview response: %v", err)
+	}
+	if !previewResp.Data.Preview {
+		t.Fatalf("expected preview=true, got %#v", previewResp.Data.Preview)
+	}
+	if previewResp.Data.FixableIssues < 1 {
+		t.Fatalf("expected at least 1 fixable issue, got %d", previewResp.Data.FixableIssues)
+	}
+
+	apply := server.callTool("raven_check", map[string]interface{}{
+		"fix":     true,
+		"confirm": true,
+	})
+	if apply.IsError {
+		t.Fatalf("expected check fix apply to succeed, got error: %s", apply.Text)
+	}
+
+	var applyResp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Preview     bool `json:"preview"`
+			FixedIssues int  `json:"fixed_issues"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(apply.Text), &applyResp); err != nil {
+		t.Fatalf("failed to parse check fix apply response: %v", err)
+	}
+	if applyResp.Data.Preview {
+		t.Fatalf("expected preview=false after apply, got %#v", applyResp.Data.Preview)
+	}
+	if applyResp.Data.FixedIssues < 1 {
+		t.Fatalf("expected at least 1 fixed issue, got %d", applyResp.Data.FixedIssues)
+	}
+
+	v.AssertFileContains("projects/roadmap.md", "owner: \"[[people/freya]]\"")
+}
+
 // TestMCPIntegration_CheckCreateMissingWithConfirm verifies non-interactive
 // create-missing behavior via MCP (JSON mode + confirm=true).
 func TestMCPIntegration_CheckCreateMissingWithConfirm(t *testing.T) {
@@ -1261,13 +1333,75 @@ meeting: "[[meeting/all-hands]]"
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	_ = server.callTool("raven_check", map[string]interface{}{
+	result := server.callTool("raven_check", map[string]interface{}{
 		"create-missing": true,
 		"confirm":        true,
 	})
+	if result.IsError {
+		t.Fatalf("expected create-missing to succeed, got error: %s", result.Text)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Preview      bool `json:"preview"`
+			CreatedPages int  `json:"created_pages"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("failed to parse create-missing response: %v", err)
+	}
+	if resp.Data.Preview {
+		t.Fatalf("expected preview=false after confirm, got %#v", resp.Data.Preview)
+	}
+	if resp.Data.CreatedPages != 1 {
+		t.Fatalf("expected created_pages=1, got %#v", resp.Data.CreatedPages)
+	}
 
 	v.AssertFileExists("objects/meeting/all-hands.md")
 	v.AssertFileNotExists("meeting/all-hands.md")
+}
+
+func TestMCPIntegration_QueryRefreshRemovesDeletedFiles(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	server.callTool("raven_reindex", nil)
+
+	if err := os.Remove(filepath.Join(v.Path, "people/alice.md")); err != nil {
+		t.Fatalf("failed to remove person file: %v", err)
+	}
+
+	result := server.callTool("raven_query", map[string]interface{}{
+		"query_string": "object:person",
+		"refresh":      true,
+	})
+	if result.IsError {
+		t.Fatalf("expected query refresh to succeed, got error: %s", result.Text)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []interface{} `json:"items"`
+			Total int           `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("failed to parse query refresh response: %v", err)
+	}
+	if resp.Data.Total != 0 || len(resp.Data.Items) != 0 {
+		t.Fatalf("expected deleted file to be removed from refreshed query, got total=%d items=%d", resp.Data.Total, len(resp.Data.Items))
+	}
 }
 
 // TestMCPIntegration_ErrorHandling tests that MCP errors are properly surfaced.
@@ -2252,8 +2386,8 @@ status: paused
 		docsIndex := `sections:
   getting-started:
     topics:
-      getting-started:
-        path: getting-started.md
+      installation:
+        path: installation.md
   querying:
     topics:
       query-language:
@@ -2262,13 +2396,13 @@ status: paused
 		vMCP := testutil.NewTestVault(t).
 			WithSchema(testutil.MinimalSchema()).
 			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
 			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
 			Build()
 		vCLI := testutil.NewTestVault(t).
 			WithSchema(testutil.MinimalSchema()).
 			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
 			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
@@ -2283,18 +2417,18 @@ status: paused
 		docsIndex := `sections:
   getting-started:
     topics:
-      getting-started:
-        path: getting-started.md
+      installation:
+        path: installation.md
 `
 		vMCP := testutil.NewTestVault(t).
 			WithSchema(testutil.MinimalSchema()).
 			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
 			Build()
 		vCLI := testutil.NewTestVault(t).
 			WithSchema(testutil.MinimalSchema()).
 			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
