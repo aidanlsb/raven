@@ -38,7 +38,7 @@ func ResolveInsertIndex(steps []*config.WorkflowStep, hint PositionHint) (int, e
 	}
 
 	if beforeID != "" {
-		targetIdx := findStepIndexByID(steps, beforeID)
+		targetIdx := FindStepIndexInSteps(steps, beforeID)
 		if targetIdx < 0 {
 			err := newDomainError(CodeRefNotFound, fmt.Sprintf("step '%s' not found", beforeID), nil)
 			err.StepID = beforeID
@@ -48,7 +48,7 @@ func ResolveInsertIndex(steps []*config.WorkflowStep, hint PositionHint) (int, e
 	}
 
 	if afterID != "" {
-		targetIdx := findStepIndexByID(steps, afterID)
+		targetIdx := FindStepIndexInSteps(steps, afterID)
 		if targetIdx < 0 {
 			err := newDomainError(CodeRefNotFound, fmt.Sprintf("step '%s' not found", afterID), nil)
 			err.StepID = afterID

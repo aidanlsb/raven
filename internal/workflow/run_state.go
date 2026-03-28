@@ -56,15 +56,10 @@ func WorkflowHash(wf *Workflow) (string, error) {
 }
 
 func FindStepIndexByID(wf *Workflow, stepID string) int {
-	if wf == nil || stepID == "" {
+	if wf == nil {
 		return -1
 	}
-	for i, step := range wf.Steps {
-		if step != nil && step.ID == stepID {
-			return i
-		}
-	}
-	return -1
+	return FindStepIndexInSteps(wf.Steps, stepID)
 }
 
 func ApplyAgentOutputs(wf *Workflow, state *WorkflowRunState, env AgentOutputEnvelope) error {
@@ -168,6 +163,10 @@ func ApplyRetentionExpiry(state *WorkflowRunState, cfg config.ResolvedWorkflowRu
 	if state == nil {
 		return
 	}
+	base := now.UTC()
+	if !state.UpdatedAt.IsZero() {
+		base = state.UpdatedAt.UTC()
+	}
 	var days int
 	switch state.Status {
 	case RunStatusCompleted:
@@ -184,7 +183,7 @@ func ApplyRetentionExpiry(state *WorkflowRunState, cfg config.ResolvedWorkflowRu
 		state.ExpiresAt = nil
 		return
 	}
-	exp := now.Add(time.Duration(days) * 24 * time.Hour).UTC()
+	exp := base.Add(time.Duration(days) * 24 * time.Hour).UTC()
 	state.ExpiresAt = &exp
 }
 

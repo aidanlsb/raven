@@ -7,14 +7,14 @@ Use this skill for workflow definition lifecycle, step mutation, and run operati
 - Prefer `rvn workflow scaffold` or `rvn workflow add` over manual `raven.yaml` edits.
 - Prefer Raven MCP workflow tools when operating inside MCP; otherwise use `rvn ... --json`.
 - Validate after any workflow-file or step mutation.
-- Treat run checkpoints as durable state that can be resumed with `rvn workflow continue`.
+- Treat run checkpoints as durable state that can be resumed with `rvn workflow continue --expected-revision <revision>`.
 
 ## Typical flow
 
 1. Create or register (`workflow scaffold` or `workflow add`).
 2. Validate (`workflow validate`) and inspect (`workflow show`).
 3. Iterate on steps (`workflow step add|update|remove`), then validate again.
-4. Execute with `workflow run`; if paused on an agent step, resume with `workflow continue`.
+4. Execute with `workflow run`; if paused on an agent step, resume with `workflow continue` using the returned revision.
 5. Inspect retained runs (`workflow runs list`, `workflow runs step`) and prune when needed.
 
 ## Safety

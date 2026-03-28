@@ -2090,6 +2090,10 @@ When an agent step is reached, this command returns:
 		LongDesc: `Continues a paused workflow run by validating and applying agent output JSON,
 then executing subsequent deterministic steps until the next agent step or completion.
 
+You must provide --expected-revision from the latest workflow_run, workflow_continue,
+or workflow_runs_list response. Raven rejects continuation without a revision so agent
+handoff/resume stays concurrency-safe by default.
+
 Responses include step summaries; fetch full step output with workflow runs step.`,
 		Args: []ArgMeta{
 			{Name: "run-id", Description: "Workflow run ID to continue", Required: true},
@@ -2098,15 +2102,15 @@ Responses include step summaries; fetch full step output with workflow runs step
 			{Name: "agent-output-json", Description: "Agent output JSON object with required top-level 'outputs' key", Type: FlagTypeJSON, Examples: []string{`{"outputs":{"markdown":"..."}}`}},
 			{Name: "agent-output", Description: "Agent output JSON object as a string (MCP compatibility)", Type: FlagTypeString, Examples: []string{`{"outputs":{"markdown":"..."}}`}},
 			{Name: "agent-output-file", Description: "Read agent output JSON from file", Type: FlagTypeString, Examples: []string{"./agent-output.json"}},
-			{Name: "expected-revision", Description: "Expected run revision for optimistic concurrency", Type: FlagTypeInt},
+			{Name: "expected-revision", Description: "Required current run revision for optimistic concurrency", Type: FlagTypeInt},
 		},
 		Examples: []string{
-			"rvn workflow continue wrf_abcd1234 --agent-output-json '{\"outputs\":{\"markdown\":\"...\"}}' --json",
-			"rvn workflow continue wrf_abcd1234 --agent-output '{\"outputs\":{\"markdown\":\"...\"}}' --json",
+			"rvn workflow continue wrf_abcd1234 --expected-revision 1 --agent-output-json '{\"outputs\":{\"markdown\":\"...\"}}' --json",
+			"rvn workflow continue wrf_abcd1234 --expected-revision 1 --agent-output '{\"outputs\":{\"markdown\":\"...\"}}' --json",
 		},
 		UseCases: []string{
 			"Resume a workflow after external agent execution",
-			"Enforce optimistic concurrency when multiple workers may continue the same run",
+			"Require explicit optimistic concurrency when continuing a persisted run",
 		},
 	},
 	"workflow_runs_list": {

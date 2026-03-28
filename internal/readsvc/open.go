@@ -19,6 +19,15 @@ type OpenFailure struct {
 }
 
 func ResolveOpenTarget(rt *Runtime, reference string) (*OpenTarget, error) {
+	resolveOp, err := newResolveOperation(rt)
+	if err != nil {
+		return nil, err
+	}
+	defer resolveOp.Close()
+	return resolveOpenTargetWithOperation(rt, reference, resolveOp)
+}
+
+func resolveOpenTargetWithOperation(rt *Runtime, reference string, resolveOp *resolveOperation) (*OpenTarget, error) {
 	if rt == nil {
 		return nil, fmt.Errorf("runtime is required")
 	}
@@ -27,7 +36,15 @@ func ResolveOpenTarget(rt *Runtime, reference string) (*OpenTarget, error) {
 		return nil, fmt.Errorf("reference is required")
 	}
 
-	resolved, err := ResolveReferenceWithDynamicDates(ref, rt, false)
+	var (
+		resolved *ResolveResult
+		err      error
+	)
+	if resolveOp != nil {
+		resolved, err = resolveOp.resolveReferenceWithDynamicDates(ref, false)
+	} else {
+		resolved, err = ResolveReferenceWithDynamicDates(ref, rt, false)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +64,11 @@ func ResolveOpenTarget(rt *Runtime, reference string) (*OpenTarget, error) {
 func ResolveOpenTargets(rt *Runtime, references []string) ([]OpenTarget, []OpenFailure) {
 	targets := make([]OpenTarget, 0, len(references))
 	failures := make([]OpenFailure, 0)
+	resolveOp, err := newResolveOperation(rt)
+	if err != nil {
+		return nil, []OpenFailure{{Reference: "", Message: err.Error()}}
+	}
+	defer resolveOp.Close()
 
 	for _, reference := range references {
 		ref := strings.TrimSpace(reference)
@@ -58,7 +80,7 @@ func ResolveOpenTargets(rt *Runtime, references []string) ([]OpenTarget, []OpenF
 			continue
 		}
 
-		target, err := ResolveOpenTarget(rt, ref)
+		target, err := resolveOpenTargetWithOperation(rt, ref, resolveOp)
 		if err != nil {
 			failures = append(failures, OpenFailure{Reference: ref, Message: err.Error()})
 			continue

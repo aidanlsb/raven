@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 func writeExecutableScript(t *testing.T, dir, name, content string) string {
@@ -273,6 +275,53 @@ func TestGuideIndexMatchesTopics(t *testing.T) {
 	for uri := range expected {
 		if !indexURIs[uri] {
 			t.Fatalf("guide index missing topic: %s", uri)
+		}
+	}
+}
+
+func TestWorkflowContinueGuideExamplesMatchRegistryContract(t *testing.T) {
+	meta, ok := commands.Registry["workflow_continue"]
+	if !ok {
+		t.Fatal("workflow_continue registry entry missing")
+	}
+
+	foundOutputsExample := false
+	foundRevisionExample := false
+	for _, example := range meta.Examples {
+		if strings.Contains(example, `"outputs"`) {
+			foundOutputsExample = true
+		}
+		if strings.Contains(example, "--expected-revision ") {
+			foundRevisionExample = true
+		}
+	}
+	if !foundOutputsExample {
+		t.Fatal("workflow_continue registry examples no longer document the outputs envelope")
+	}
+	if !foundRevisionExample {
+		t.Fatal("workflow_continue registry examples no longer document expected-revision")
+	}
+
+	paths := []string{
+		"agent-guide/workflow-lifecycle.md",
+		"agent-guide/examples.md",
+	}
+	for _, path := range paths {
+		content, ok := readAgentGuideFile(path)
+		if !ok {
+			t.Fatalf("failed to read guide file: %s", path)
+		}
+		if !strings.Contains(content, `command="workflow_continue"`) {
+			t.Fatalf("guide %s missing workflow_continue example", path)
+		}
+		if strings.Contains(content, `"output":"`) {
+			t.Fatalf("guide %s still uses legacy output field", path)
+		}
+		if !strings.Contains(content, `"outputs"`) {
+			t.Fatalf("guide %s missing outputs envelope", path)
+		}
+		if !strings.Contains(content, "expected_revision") {
+			t.Fatalf("guide %s missing expected_revision", path)
 		}
 	}
 }

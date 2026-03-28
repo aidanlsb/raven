@@ -53,7 +53,6 @@ func SaveRunState(vaultPath string, cfg config.ResolvedWorkflowRunsConfig, state
 		return fmt.Errorf("create workflow run storage: %w", err)
 	}
 
-	state.UpdatedAt = time.Now().UTC()
 	b, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal run state: %w", err)
@@ -269,6 +268,13 @@ func chooseRunsForAutoPrune(runs []*WorkflowRunState, cfg config.ResolvedWorkflo
 }
 
 func shouldExpireByTTL(run *WorkflowRunState, cfg config.ResolvedWorkflowRunsConfig, now time.Time) bool {
+	if run == nil {
+		return false
+	}
+	if run.ExpiresAt != nil {
+		return !run.ExpiresAt.After(now)
+	}
+
 	switch run.Status {
 	case RunStatusCompleted:
 		return now.Sub(run.UpdatedAt) > (time.Duration(cfg.KeepCompletedForDays) * 24 * time.Hour)

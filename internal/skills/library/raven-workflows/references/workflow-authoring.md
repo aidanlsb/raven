@@ -28,10 +28,10 @@ rvn workflow validate daily-brief --json
 
 ```bash
 rvn workflow run meeting-prep --input meeting_id=meetings/team-sync --json
-rvn workflow continue wrf_abcd1234 --agent-output-json '{"outputs":{"markdown":"..."}}' --json
+rvn workflow continue wrf_abcd1234 --expected-revision 1 --agent-output-json '{"outputs":{"markdown":"..."}}' --json
 ```
 
-Use `workflow continue` only with the required `{"outputs": ...}` contract.
+Use `workflow continue` only with the required `{"outputs": ...}` contract and the latest run revision.
 
 ## Run inspection and retention
 

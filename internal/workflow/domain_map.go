@@ -58,7 +58,7 @@ func DomainCodeHint(code Code) string {
 	case CodeWorkflowChanged:
 		return "Start a new run to use the latest workflow definition"
 	case CodeWorkflowConflict:
-		return "Fetch latest run state and retry"
+		return "Fetch latest run revision and retry with expected-revision"
 	case CodeWorkflowAgentOutputInvalid:
 		return "Provide valid agent output JSON with top-level 'outputs'"
 	default:

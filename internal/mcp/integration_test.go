@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -613,8 +614,9 @@ steps:
 	var runResp struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			RunID  string `json:"run_id"`
-			Status string `json:"status"`
+			RunID    string `json:"run_id"`
+			Status   string `json:"status"`
+			Revision int    `json:"revision"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(runResult.Text), &runResp); err != nil {
@@ -643,6 +645,7 @@ steps:
 	// JSON-typed workflow continue payload as object succeeds.
 	continueResult := server.callTool("raven_workflow_continue", map[string]interface{}{
 		"run-id":            runResp.Data.RunID,
+		"expected-revision": float64(runResp.Data.Revision),
 		"agent-output-json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "# Brief\nGenerated from strict payloads."}},
 	})
 	if continueResult.IsError {
@@ -2120,16 +2123,23 @@ steps:
 
 		runIDMCP, _ := runMCP.Data["run_id"].(string)
 		runIDCLI, _ := runCLI.Data["run_id"].(string)
+		revisionMCP, _ := runMCP.Data["revision"].(float64)
+		revisionCLI, _ := runCLI.Data["revision"].(float64)
 		if strings.TrimSpace(runIDMCP) == "" || strings.TrimSpace(runIDCLI) == "" {
 			t.Fatalf("expected run_id in workflow run results, mcp=%v cli=%v", runMCP.Data["run_id"], runCLI.Data["run_id"])
+		}
+		if revisionMCP == 0 || revisionCLI == 0 {
+			t.Fatalf("expected revision in workflow run results, mcp=%v cli=%v", runMCP.Data["revision"], runCLI.Data["revision"])
 		}
 
 		mcpResult := server.callTool("raven_workflow_continue", map[string]interface{}{
 			"run_id":            runIDMCP,
+			"expected_revision": revisionMCP,
 			"agent_output_json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "# Draft\\n\\nDone."}},
 		})
 		cliResult := vCLI.RunCLI(
 			"workflow", "continue", runIDCLI,
+			"--expected-revision", fmt.Sprintf("%d", int(revisionCLI)),
 			"--agent-output-json", `{"outputs":{"markdown":"# Draft\n\nDone."}}`,
 		)
 

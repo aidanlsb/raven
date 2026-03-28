@@ -3,7 +3,6 @@ package readsvc
 import (
 	"fmt"
 
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/query"
 )
@@ -52,12 +51,7 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 	}
 
 	executor := query.NewExecutor(rt.DB.DB())
-	if res, err := rt.DB.Resolver(index.ResolverOptions{
-		DailyDirectory: rt.VaultCfg.GetDailyDirectory(),
-		Schema:         rt.Schema,
-	}); err == nil {
-		executor.SetResolver(res)
-	}
+	executor.SetDailyDirectory(rt.VaultCfg.GetDailyDirectory())
 	executor.SetSchema(rt.Schema)
 
 	queryType := "trait"
@@ -70,31 +64,102 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 		Offset:    req.Offset,
 		Limit:     req.Limit,
 	}
+	paginated := req.Limit > 0 || req.Offset > 0
 
 	if q.Type == query.QueryTypeObject {
-		rows, err := executor.ExecuteObjectQuery(q)
-		if err != nil {
-			return nil, err
-		}
-		windowed := applyQueryWindow(rows, req.Offset, req.Limit)
-
-		result.Total = len(rows)
 		if req.CountOnly {
+			total, err := executor.ExecuteObjectCountQuery(q)
+			if err != nil {
+				return nil, err
+			}
+			result.Total = total
 			return result, nil
 		}
 
 		if req.IDsOnly {
-			ids := make([]string, 0, len(windowed))
-			for _, row := range windowed {
-				ids = append(ids, row.ID)
+			ids, err := executor.ExecuteObjectIDQuery(q, req.Limit, req.Offset)
+			if err != nil {
+				return nil, err
+			}
+			if paginated {
+				total, err := executor.ExecuteObjectCountQuery(q)
+				if err != nil {
+					return nil, err
+				}
+				result.Total = total
+			} else {
+				result.Total = len(ids)
 			}
 			result.IDs = ids
 			result.Returned = len(ids)
 			return result, nil
 		}
 
-		result.Objects = windowed
-		result.Returned = len(windowed)
+		if paginated {
+			total, err := executor.ExecuteObjectCountQuery(q)
+			if err != nil {
+				return nil, err
+			}
+			rows, err := executor.ExecuteObjectPageQuery(q, req.Limit, req.Offset)
+			if err != nil {
+				return nil, err
+			}
+			result.Total = total
+			result.Objects = rows
+			result.Returned = len(rows)
+			return result, nil
+		}
+
+		rows, err := executor.ExecuteObjectQuery(q)
+		if err != nil {
+			return nil, err
+		}
+		result.Total = len(rows)
+		result.Objects = rows
+		result.Returned = len(rows)
+		return result, nil
+	}
+
+	if req.CountOnly {
+		total, err := executor.ExecuteTraitCountQuery(q)
+		if err != nil {
+			return nil, err
+		}
+		result.Total = total
+		return result, nil
+	}
+
+	if req.IDsOnly {
+		ids, err := executor.ExecuteTraitIDQuery(q, req.Limit, req.Offset)
+		if err != nil {
+			return nil, err
+		}
+		if paginated {
+			total, err := executor.ExecuteTraitCountQuery(q)
+			if err != nil {
+				return nil, err
+			}
+			result.Total = total
+		} else {
+			result.Total = len(ids)
+		}
+		result.IDs = ids
+		result.Returned = len(ids)
+		return result, nil
+	}
+
+	if paginated {
+		total, err := executor.ExecuteTraitCountQuery(q)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := executor.ExecuteTraitPageQuery(q, req.Limit, req.Offset)
+		if err != nil {
+			return nil, err
+		}
+		result.Total = total
+		result.Traits = rows
+		result.Returned = len(rows)
 		return result, nil
 	}
 
@@ -102,36 +167,8 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 	if err != nil {
 		return nil, err
 	}
-	windowed := applyQueryWindow(rows, req.Offset, req.Limit)
-
 	result.Total = len(rows)
-	if req.CountOnly {
-		return result, nil
-	}
-
-	if req.IDsOnly {
-		ids := make([]string, 0, len(windowed))
-		for _, row := range windowed {
-			ids = append(ids, row.ID)
-		}
-		result.IDs = ids
-		result.Returned = len(ids)
-		return result, nil
-	}
-
-	result.Traits = windowed
-	result.Returned = len(windowed)
+	result.Traits = rows
+	result.Returned = len(rows)
 	return result, nil
-}
-
-func applyQueryWindow[T any](items []T, offset, limit int) []T {
-	if offset >= len(items) {
-		return []T{}
-	}
-
-	window := items[offset:]
-	if limit > 0 && limit < len(window) {
-		window = window[:limit]
-	}
-	return window
 }

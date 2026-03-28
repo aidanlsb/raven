@@ -11,7 +11,18 @@ import (
 
 // FindStepIndexInSteps returns the index of stepID in steps, or -1 when not found.
 func FindStepIndexInSteps(steps []*config.WorkflowStep, stepID string) int {
-	return findStepIndexByID(steps, stepID)
+	if stepID == "" {
+		return -1
+	}
+	for i, step := range steps {
+		if step == nil {
+			continue
+		}
+		if strings.TrimSpace(step.ID) == stepID {
+			return i
+		}
+	}
+	return -1
 }
 
 // MergeDetails combines two detail maps with primary values taking precedence.

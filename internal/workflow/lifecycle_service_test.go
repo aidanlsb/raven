@@ -160,3 +160,143 @@ steps:
 		t.Fatalf("expected CodeWorkflowConflict, got %s", de.Code)
 	}
 }
+
+func TestRunService_ContinueRequiresExpectedRevision(t *testing.T) {
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	content := `description: test
+steps:
+  - id: compose
+    type: agent
+    prompt: "x"
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+`
+	if err := os.WriteFile(filepath.Join(vault, "workflows", "x.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write workflow file: %v", err)
+	}
+
+	cfg := &config.VaultConfig{
+		Workflows: map[string]*config.WorkflowRef{
+			"x": {File: "workflows/x.yaml"},
+		},
+	}
+	svc := NewRunService(vault, cfg, func(tool string, args map[string]interface{}) (interface{}, error) {
+		return map[string]interface{}{"ok": true}, nil
+	})
+
+	start, err := svc.Start(StartRunRequest{WorkflowName: "x", Inputs: map[string]interface{}{}})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	_, err = svc.Continue(ContinueRunRequest{
+		RunID: start.Result.RunID,
+		AgentOutput: AgentOutputEnvelope{
+			Outputs: map[string]interface{}{"markdown": "x"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected missing revision error")
+	}
+	de, ok := AsDomainError(err)
+	if !ok {
+		t.Fatalf("expected domain error, got %T", err)
+	}
+	if de.Code != CodeWorkflowConflict {
+		t.Fatalf("expected CodeWorkflowConflict, got %s", de.Code)
+	}
+	if got, _ := de.Details["expected_revision_required"].(bool); !got {
+		t.Fatalf("expected expected_revision_required detail, got %#v", de.Details)
+	}
+}
+
+func TestRunService_StartClassifiesToolFailuresStructurally(t *testing.T) {
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	content := `description: test
+steps:
+  - id: fetch
+    type: tool
+    tool: raven_query
+    arguments:
+      query_string: "object:project"
+`
+	if err := os.WriteFile(filepath.Join(vault, "workflows", "x.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write workflow file: %v", err)
+	}
+
+	cfg := &config.VaultConfig{
+		Workflows: map[string]*config.WorkflowRef{
+			"x": {File: "workflows/x.yaml"},
+		},
+	}
+	svc := NewRunService(vault, cfg, func(tool string, args map[string]interface{}) (interface{}, error) {
+		return nil, os.ErrPermission
+	})
+
+	_, err := svc.Start(StartRunRequest{WorkflowName: "x"})
+	if err == nil {
+		t.Fatal("expected tool execution error")
+	}
+	de, ok := AsDomainError(err)
+	if !ok {
+		t.Fatalf("expected domain error, got %T", err)
+	}
+	if de.Code != CodeWorkflowToolExecutionFailed {
+		t.Fatalf("expected CodeWorkflowToolExecutionFailed, got %s", de.Code)
+	}
+	if de.StepID != "fetch" {
+		t.Fatalf("expected step id fetch, got %q", de.StepID)
+	}
+}
+
+func TestRunService_StartClassifiesInterpolationFailuresStructurally(t *testing.T) {
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	content := `description: test
+steps:
+  - id: compose
+    type: agent
+    prompt: "missing {{steps.fetch.data.results}}"
+    outputs:
+      markdown:
+        type: markdown
+        required: true
+`
+	if err := os.WriteFile(filepath.Join(vault, "workflows", "x.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write workflow file: %v", err)
+	}
+
+	cfg := &config.VaultConfig{
+		Workflows: map[string]*config.WorkflowRef{
+			"x": {File: "workflows/x.yaml"},
+		},
+	}
+	svc := NewRunService(vault, cfg, func(tool string, args map[string]interface{}) (interface{}, error) {
+		return map[string]interface{}{"ok": true}, nil
+	})
+
+	_, err := svc.Start(StartRunRequest{WorkflowName: "x"})
+	if err == nil {
+		t.Fatal("expected interpolation error")
+	}
+	de, ok := AsDomainError(err)
+	if !ok {
+		t.Fatalf("expected domain error, got %T", err)
+	}
+	if de.Code != CodeWorkflowInterpolationError {
+		t.Fatalf("expected CodeWorkflowInterpolationError, got %s", de.Code)
+	}
+	if de.StepID != "compose" {
+		t.Fatalf("expected step id compose, got %q", de.StepID)
+	}
+}

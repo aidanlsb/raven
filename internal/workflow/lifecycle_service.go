@@ -100,7 +100,7 @@ func (s *RunService) Start(req StartRunRequest) (*RunExecutionOutcome, error) {
 	if err != nil {
 		code, stepID := classifyRunnerFailure(err)
 		markRunFailedState(state, string(code), stepID, err, s.now())
-		ApplyRetentionExpiry(state, runCfg, s.now())
+		ApplyRetentionExpiry(state, runCfg, state.UpdatedAt)
 		_ = SaveRunState(s.vaultPath, runCfg, state)
 
 		de := newDomainError(code, err.Error(), err)
@@ -108,7 +108,8 @@ func (s *RunService) Start(req StartRunRequest) (*RunExecutionOutcome, error) {
 		return &RunExecutionOutcome{Workflow: wf, State: state}, de
 	}
 
-	ApplyRetentionExpiry(state, runCfg, s.now())
+	ApplyRetentionExpiry(state, runCfg, state.UpdatedAt)
+	syncRunResultState(result, state)
 	if err := SaveRunState(s.vaultPath, runCfg, state); err != nil {
 		return nil, newDomainError(CodeFileWriteError, "save workflow run state", err)
 	}
@@ -141,6 +142,21 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 			code = CodeWorkflowStateCorrupt
 		}
 		return nil, newDomainError(code, err.Error(), err)
+	}
+
+	if req.ExpectedRevision <= 0 {
+		de := newDomainError(
+			CodeWorkflowConflict,
+			fmt.Sprintf("expected revision is required; retry with revision %d", state.Revision),
+			nil,
+		)
+		de.Details = map[string]interface{}{
+			"run_id":                     state.RunID,
+			"workflow_name":              state.WorkflowName,
+			"revision":                   state.Revision,
+			"expected_revision_required": true,
+		}
+		return &RunExecutionOutcome{State: state}, de
 	}
 
 	if req.ExpectedRevision > 0 && state.Revision != req.ExpectedRevision {
@@ -189,7 +205,7 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 		code, stepID := classifyRunnerFailure(err)
 		markRunFailedState(state, string(code), stepID, err, s.now())
 		state.Revision++
-		ApplyRetentionExpiry(state, runCfg, s.now())
+		ApplyRetentionExpiry(state, runCfg, state.UpdatedAt)
 		_ = SaveRunState(s.vaultPath, runCfg, state)
 
 		de := newDomainError(code, err.Error(), err)
@@ -197,7 +213,8 @@ func (s *RunService) Continue(req ContinueRunRequest) (*RunExecutionOutcome, err
 		return &RunExecutionOutcome{Workflow: wf, State: state}, de
 	}
 
-	ApplyRetentionExpiry(state, runCfg, s.now())
+	ApplyRetentionExpiry(state, runCfg, state.UpdatedAt)
+	syncRunResultState(result, state)
 	if err := SaveRunState(s.vaultPath, runCfg, state); err != nil {
 		return nil, newDomainError(CodeFileWriteError, "save workflow run state", err)
 	}
@@ -286,6 +303,9 @@ func classifyRunnerFailure(err error) (Code, string) {
 	if err == nil {
 		return CodeWorkflowInvalid, ""
 	}
+	if de, ok := AsDomainError(err); ok {
+		return de.Code, de.StepID
+	}
 	msg := err.Error()
 	stepID := extractStepIDFromError(msg)
 
@@ -308,7 +328,7 @@ func classifyRunnerFailure(err error) (Code, string) {
 func classifyContinueValidationFailure(state *WorkflowRunState, err error) Code {
 	if state != nil {
 		switch state.Status {
-		case RunStatusCompleted, RunStatusFailed, RunStatusCancelled:
+		case RunStatusCompleted, RunStatusFailed:
 			return CodeWorkflowTerminalState
 		}
 	}
@@ -350,4 +370,19 @@ func extractStepIDFromError(msg string) string {
 		return ""
 	}
 	return rest[:end]
+}
+
+func syncRunResultState(result *RunResult, state *WorkflowRunState) {
+	if result == nil || state == nil {
+		return
+	}
+	result.UpdatedAt = state.UpdatedAt.Format(time.RFC3339)
+	if state.CompletedAt != nil {
+		result.CompletedAt = state.CompletedAt.Format(time.RFC3339)
+	}
+	if state.ExpiresAt != nil {
+		result.ExpiresAt = state.ExpiresAt.Format(time.RFC3339)
+	} else {
+		result.ExpiresAt = ""
+	}
 }

@@ -82,7 +82,13 @@ func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {
 		return nil, fmt.Errorf("reference is required")
 	}
 
-	resolved, err := ResolveReference(reference, rt, false)
+	resolveOp, err := newResolveOperation(rt)
+	if err != nil {
+		return nil, err
+	}
+	defer resolveOp.Close()
+
+	resolved, err := resolveOp.resolveReference(reference, false)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +134,7 @@ func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {
 	}
 
 	_, body := splitFrontmatterBody(content)
-	refs := collectReadReferences(body, rt)
+	refs := collectReadReferences(body, rt, resolveOp)
 
 	backlinkGroups, backlinksCount, err := readBacklinksWithContext(rt, resolved.ObjectID)
 	if err != nil {
@@ -220,7 +226,7 @@ func splitFrontmatterBody(content string) (frontmatter, body string) {
 	return frontmatter, body
 }
 
-func collectReadReferences(body string, rt *Runtime) []ReadReference {
+func collectReadReferences(body string, rt *Runtime, resolveOp *resolveOperation) []ReadReference {
 	lines := strings.Split(body, "\n")
 	refs := make([]ReadReference, 0)
 	fence := parser.FenceState{}
@@ -241,7 +247,7 @@ func collectReadReferences(body string, rt *Runtime) []ReadReference {
 
 		for _, match := range matches {
 			ref := ReadReference{Text: match.Target}
-			if relPath, ok := resolveReferenceTargetToRelPath(match.Target, rt); ok {
+			if relPath, ok := resolveReferenceTargetToRelPath(match.Target, rt, resolveOp); ok {
 				ref.Path = &relPath
 			}
 			refs = append(refs, ref)
@@ -251,8 +257,16 @@ func collectReadReferences(body string, rt *Runtime) []ReadReference {
 	return refs
 }
 
-func resolveReferenceTargetToRelPath(target string, rt *Runtime) (string, bool) {
-	resolved, err := ResolveReference(target, rt, false)
+func resolveReferenceTargetToRelPath(target string, rt *Runtime, resolveOp *resolveOperation) (string, bool) {
+	var (
+		resolved *ResolveResult
+		err      error
+	)
+	if resolveOp != nil {
+		resolved, err = resolveOp.resolveReference(target, false)
+	} else {
+		resolved, err = ResolveReference(target, rt, false)
+	}
 	if err != nil {
 		return "", false
 	}

@@ -38,11 +38,14 @@ raven_invoke(command="workflow_runs_step", args={
 ```text
 raven_invoke(command="workflow_continue", args={
   "run_id":"wrf_...",
-  "output":"Final answer text"
+  "expected_revision":1,
+  "outputs":{"markdown":"Final answer text"}
 })
 ```
 
-If the step expects structured output, follow the schema from `workflow_show` or the run payload.
+The continue payload must be an object with a top-level `outputs` key. Follow the
+declared step output schema from `workflow_show` or the run payload, and always pass
+the latest `revision` as `expected_revision`.
 
 ## 5. List runs
 

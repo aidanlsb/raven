@@ -48,7 +48,7 @@ raven_invoke(command="workflow_run", args={"name":"meeting-prep", "input":{"pers
 
 ```text
 raven_invoke(command="workflow_runs_list", args={"status":"awaiting_agent"})
-raven_invoke(command="workflow_continue", args={"run_id":"wrf_...", "output":"Final answer text"})
+raven_invoke(command="workflow_continue", args={"run_id":"wrf_...", "expected_revision":1, "outputs":{"markdown":"Final answer text"}})
 ```
 
 ## Bulk preview then apply

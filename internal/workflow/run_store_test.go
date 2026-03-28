@@ -168,3 +168,102 @@ func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
 		t.Fatalf("unexpected warning run id: %s", warnings[0].RunID)
 	}
 }
+
+func TestRunStore_SavePreservesUpdatedAtAndExpiresAt(t *testing.T) {
+	vault := t.TempDir()
+	cfg := config.ResolvedWorkflowRunsConfig{
+		StoragePath:               ".raven/workflow-runs",
+		AutoPrune:                 true,
+		KeepCompletedForDays:      7,
+		KeepFailedForDays:         7,
+		KeepAwaitingForDays:       7,
+		MaxRuns:                   100,
+		PreserveLatestPerWorkflow: 2,
+	}
+
+	updatedAt := time.Date(2026, 3, 28, 15, 4, 5, 0, time.UTC)
+	expiresAt := updatedAt.Add(72 * time.Hour)
+	state := &WorkflowRunState{
+		Version:      1,
+		RunID:        "wrf_test_preserve_timestamps",
+		WorkflowName: "daily-brief",
+		WorkflowHash: "sha256:abc",
+		Status:       RunStatusAwaitingAgent,
+		Inputs:       map[string]interface{}{},
+		Steps:        map[string]interface{}{},
+		CreatedAt:    updatedAt.Add(-1 * time.Hour),
+		UpdatedAt:    updatedAt,
+		ExpiresAt:    &expiresAt,
+		Revision:     1,
+	}
+
+	if err := SaveRunState(vault, cfg, state); err != nil {
+		t.Fatalf("SaveRunState error: %v", err)
+	}
+	got, err := LoadRunState(vault, cfg, state.RunID)
+	if err != nil {
+		t.Fatalf("LoadRunState error: %v", err)
+	}
+	if !got.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("updated_at mismatch: got %s want %s", got.UpdatedAt, updatedAt)
+	}
+	if got.ExpiresAt == nil || !got.ExpiresAt.Equal(expiresAt) {
+		t.Fatalf("expires_at mismatch: got %#v want %s", got.ExpiresAt, expiresAt)
+	}
+}
+
+func TestRunStore_AutoPruneHonorsStoredExpiry(t *testing.T) {
+	vault := t.TempDir()
+	cfg := config.ResolvedWorkflowRunsConfig{
+		StoragePath:               ".raven/workflow-runs",
+		AutoPrune:                 true,
+		KeepCompletedForDays:      365,
+		KeepFailedForDays:         365,
+		KeepAwaitingForDays:       365,
+		MaxRuns:                   100,
+		PreserveLatestPerWorkflow: 2,
+	}
+
+	now := time.Now().UTC()
+	expiredAt := now.Add(-2 * time.Hour)
+	state := &WorkflowRunState{
+		Version:      1,
+		RunID:        "wrf_expired",
+		WorkflowName: "daily-brief",
+		WorkflowHash: "sha256:abc",
+		Status:       RunStatusCompleted,
+		Inputs:       map[string]interface{}{},
+		Steps:        map[string]interface{}{},
+		CreatedAt:    now.Add(-48 * time.Hour),
+		UpdatedAt:    now.Add(-1 * time.Hour),
+		CompletedAt:  ptrTime(now.Add(-1 * time.Hour)),
+		ExpiresAt:    &expiredAt,
+		Revision:     1,
+	}
+	if err := SaveRunState(vault, cfg, state); err != nil {
+		t.Fatalf("SaveRunState error: %v", err)
+	}
+
+	result, err := AutoPruneRunStates(vault, cfg)
+	if err != nil {
+		t.Fatalf("AutoPruneRunStates error: %v", err)
+	}
+	if result.Deleted != 1 {
+		t.Fatalf("expected 1 deletion, got %#v", result)
+	}
+
+	runs, warnings, err := ListRunStates(vault, cfg, RunListFilter{})
+	if err != nil {
+		t.Fatalf("ListRunStates error: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings, got %#v", warnings)
+	}
+	if len(runs) != 0 {
+		t.Fatalf("expected expired run to be pruned, got %#v", runs)
+	}
+}
+
+func ptrTime(v time.Time) *time.Time {
+	return &v
+}

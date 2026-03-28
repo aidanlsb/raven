@@ -681,7 +681,9 @@ func workflowContinueArgs(runID string) (map[string]interface{}, error) {
 		"run-id":            runID,
 		"agent-output":      workflowContinueOutput,
 		"agent-output-file": workflowContinueOutputFile,
-		"expected-revision": workflowContinueExpectedRevision,
+	}
+	if workflowContinueExpectedRevision > 0 {
+		args["expected-revision"] = workflowContinueExpectedRevision
 	}
 	if strings.TrimSpace(workflowContinueOutputJSON) != "" {
 		obj, err := decodeCLIJSONObject(workflowContinueOutputJSON)
@@ -751,7 +753,7 @@ func init() {
 	workflowContinueCmd.Flags().StringVar(&workflowContinueOutputJSON, "agent-output-json", "", "Agent output JSON object")
 	workflowContinueCmd.Flags().StringVar(&workflowContinueOutput, "agent-output", "", "Agent output JSON object (string form)")
 	workflowContinueCmd.Flags().StringVar(&workflowContinueOutputFile, "agent-output-file", "", "Path to JSON file containing agent output")
-	workflowContinueCmd.Flags().IntVar(&workflowContinueExpectedRevision, "expected-revision", 0, "Expected run revision for optimistic concurrency")
+	workflowContinueCmd.Flags().IntVar(&workflowContinueExpectedRevision, "expected-revision", 0, "Required current run revision for optimistic concurrency")
 
 	workflowRunsListCmd.Flags().StringVar(&workflowRunsStatus, "status", "", "Filter by status (comma-separated)")
 	workflowRunsListCmd.Flags().StringVar(&workflowRunsWorkflow, "workflow", "", "Filter by workflow name")

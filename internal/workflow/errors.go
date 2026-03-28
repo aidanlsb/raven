@@ -65,6 +65,27 @@ func newDomainError(code Code, msg string, err error) *DomainError {
 	}
 }
 
+func newStepDomainError(code Code, stepID, msg string, err error) *DomainError {
+	de := newDomainError(code, msg, err)
+	de.StepID = stepID
+	return de
+}
+
+func withStepDomainError(err error, code Code, stepID string) error {
+	if err == nil {
+		return nil
+	}
+	if de, ok := AsDomainError(err); ok {
+		if de.StepID != "" || stepID == "" {
+			return de
+		}
+		clone := *de
+		clone.StepID = stepID
+		return &clone
+	}
+	return newStepDomainError(code, stepID, err.Error(), err)
+}
+
 func AsDomainError(err error) (*DomainError, bool) {
 	if err == nil {
 		return nil, false

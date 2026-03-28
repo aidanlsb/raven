@@ -164,6 +164,11 @@ func Run(req RunRequest) (*RunResult, error) {
 		dailyDir = "daily"
 	}
 	db.SetDailyDirectory(dailyDir)
+	if !req.DryRun {
+		// Bulk reindex always does a full resolver pass after indexing the walk set.
+		// Avoid rebuilding whole-vault resolver state once per file on the hot path.
+		db.SetAutoResolveRefs(false)
+	}
 
 	parseOpts := buildParseOptions(vaultCfg)
 

@@ -22,7 +22,7 @@ func ParseRunStatusFilter(raw string) (map[RunStatus]bool, error) {
 	for _, part := range strings.Split(raw, ",") {
 		status := RunStatus(strings.TrimSpace(part))
 		switch status {
-		case RunStatusRunning, RunStatusAwaitingAgent, RunStatusCompleted, RunStatusFailed, RunStatusCancelled:
+		case RunStatusRunning, RunStatusAwaitingAgent, RunStatusCompleted, RunStatusFailed:
 			statuses[status] = true
 		default:
 			return nil, fmt.Errorf("unknown status: %s", part)

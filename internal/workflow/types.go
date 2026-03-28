@@ -37,7 +37,6 @@ const (
 	RunStatusAwaitingAgent RunStatus = "awaiting_agent"
 	RunStatusCompleted     RunStatus = "completed"
 	RunStatusFailed        RunStatus = "failed"
-	RunStatusCancelled     RunStatus = "cancelled"
 )
 
 type RunFailure struct {
@@ -90,8 +89,6 @@ type WorkflowRunState struct {
 	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
 	ExpiresAt    *time.Time             `json:"expires_at,omitempty"`
 	Revision     int                    `json:"revision"`
-	LockedBy     *string                `json:"locked_by,omitempty"`
-	LockedAt     *time.Time             `json:"locked_at,omitempty"`
 }
 
 // RunResult is the output of running a workflow until an agent step or completion.

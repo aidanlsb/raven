@@ -502,7 +502,7 @@ func applyStepAdd(def *externalWorkflowDef, req StepMutationRequest) (*StepMutat
 	if step.ID == "" {
 		return nil, newDomainError(CodeInvalidInput, "step id is required", nil)
 	}
-	if findStepIndexByID(def.Steps, step.ID) >= 0 {
+	if FindStepIndexInSteps(def.Steps, step.ID) >= 0 {
 		return nil, newDomainError(CodeDuplicateName, fmt.Sprintf("step '%s' already exists", step.ID), nil)
 	}
 
@@ -529,7 +529,7 @@ func applyStepUpdate(def *externalWorkflowDef, req StepMutationRequest) (*StepMu
 		return nil, newDomainError(CodeInvalidInput, "step payload is required", nil)
 	}
 
-	targetIdx := findStepIndexByID(def.Steps, targetID)
+	targetIdx := FindStepIndexInSteps(def.Steps, targetID)
 	if targetIdx < 0 {
 		err := newDomainError(CodeRefNotFound, fmt.Sprintf("step '%s' not found", targetID), nil)
 		err.StepID = targetID
@@ -542,7 +542,7 @@ func applyStepUpdate(def *externalWorkflowDef, req StepMutationRequest) (*StepMu
 	if updated.ID == "" {
 		updated.ID = targetID
 	}
-	if updated.ID != targetID && findStepIndexByID(def.Steps, updated.ID) >= 0 {
+	if updated.ID != targetID && FindStepIndexInSteps(def.Steps, updated.ID) >= 0 {
 		return nil, newDomainError(CodeDuplicateName, fmt.Sprintf("step id '%s' already exists", updated.ID), nil)
 	}
 
@@ -561,7 +561,7 @@ func applyStepRemove(def *externalWorkflowDef, req StepMutationRequest) (*StepMu
 	if targetID == "" {
 		return nil, newDomainError(CodeInvalidInput, "target step id is required", nil)
 	}
-	targetIdx := findStepIndexByID(def.Steps, targetID)
+	targetIdx := FindStepIndexInSteps(def.Steps, targetID)
 	if targetIdx < 0 {
 		err := newDomainError(CodeRefNotFound, fmt.Sprintf("step '%s' not found", targetID), nil)
 		err.StepID = targetID
@@ -574,18 +574,6 @@ func applyStepRemove(def *externalWorkflowDef, req StepMutationRequest) (*StepMu
 		StepID: targetID,
 		Index:  targetIdx,
 	}, nil
-}
-
-func findStepIndexByID(steps []*config.WorkflowStep, stepID string) int {
-	for i, step := range steps {
-		if step == nil {
-			continue
-		}
-		if strings.TrimSpace(step.ID) == stepID {
-			return i
-		}
-	}
-	return -1
 }
 
 func insertStepAt(steps []*config.WorkflowStep, idx int, step *config.WorkflowStep) []*config.WorkflowStep {

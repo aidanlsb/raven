@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/index"
 )
 
 func assertReindexCode(t *testing.T, err error, want Code) *Error {
@@ -77,6 +78,42 @@ func TestRunDryRunIndexesDiscoveredFiles(t *testing.T) {
 	}
 	if filesIndexed, ok := data["files_indexed"].(int); !ok || filesIndexed != 1 {
 		t.Fatalf("result data has unexpected files_indexed: %#v", data["files_indexed"])
+	}
+}
+
+func TestRunResolvesReferencesAfterBulkReindex(t *testing.T) {
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "source.md"), []byte("# Source\n\nSee [[target]].\n"), 0o644); err != nil {
+		t.Fatalf("failed to write source fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "target.md"), []byte("# Target\n"), 0o644); err != nil {
+		t.Fatalf("failed to write target fixture: %v", err)
+	}
+
+	result, err := Run(RunRequest{
+		VaultPath: vaultPath,
+		Full:      true,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !result.HasRefResult {
+		t.Fatalf("expected reference resolution result, got %#v", result)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to reopen index: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	var targetID string
+	err = db.DB().QueryRow(`SELECT target_id FROM refs WHERE file_path = ?`, "source.md").Scan(&targetID)
+	if err != nil {
+		t.Fatalf("failed to query refs table: %v", err)
+	}
+	if targetID != "target" {
+		t.Fatalf("target_id = %q, want %q", targetID, "target")
 	}
 }
 

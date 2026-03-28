@@ -158,6 +158,7 @@ Supported output types:
 
 `rvn workflow continue`:
 - loads a persisted run by `run_id`
+- requires `--expected-revision` from the latest run payload before applying output
 - validates `{"outputs": ...}` against the awaiting agent step output contract
 - resumes deterministic steps after the agent boundary
 - pauses again at the next agent step or marks the run `completed`
@@ -274,8 +275,8 @@ rvn workflow step update <name> <step-id> --step-json '{"description":"Updated s
 rvn workflow step remove <name> <step-id>
 rvn workflow run <name> --input key=value
 rvn workflow run <name> --input-json '{"date":"2026-02-14"}'
-rvn workflow continue <run-id> --agent-output-json '{"outputs":{"markdown":"..."}}'
-rvn workflow continue <run-id> --agent-output '{"outputs":{"markdown":"..."}}'
+rvn workflow continue <run-id> --expected-revision 1 --agent-output-json '{"outputs":{"markdown":"..."}}'
+rvn workflow continue <run-id> --expected-revision 1 --agent-output '{"outputs":{"markdown":"..."}}'
 rvn workflow runs list --status awaiting_agent
 rvn workflow runs step <run-id> <step-id>
 rvn workflow runs step <run-id> <step-id> --path data.results --offset 0 --limit 50

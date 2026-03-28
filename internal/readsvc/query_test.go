@@ -65,6 +65,17 @@ func TestExecuteQuery_ObjectModes(t *testing.T) {
 	if len(countOnly.Objects) != 0 || len(countOnly.IDs) != 0 {
 		t.Fatalf("count-only should not include rows or ids: %#v", countOnly)
 	}
+
+	paged, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project", Limit: 1, Offset: 1})
+	if err != nil {
+		t.Fatalf("unexpected paged object query error: %v", err)
+	}
+	if paged.Total != 2 || paged.Returned != 1 || len(paged.Objects) != 1 {
+		t.Fatalf("unexpected paged object result: %#v", paged)
+	}
+	if paged.Objects[0].ID != "project/raven" {
+		t.Fatalf("unexpected paged object ID: %#v", paged.Objects[0])
+	}
 }
 
 func TestExecuteQuery_TraitModes(t *testing.T) {
@@ -98,6 +109,50 @@ func TestExecuteQuery_TraitModes(t *testing.T) {
 	}
 	if len(countOnly.Traits) != 0 || len(countOnly.IDs) != 0 {
 		t.Fatalf("count-only should not include rows or ids: %#v", countOnly)
+	}
+
+	paged, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "trait:todo", Limit: 1, Offset: 1})
+	if err != nil {
+		t.Fatalf("unexpected paged trait query error: %v", err)
+	}
+	if paged.Total != 2 || paged.Returned != 1 || len(paged.Traits) != 1 {
+		t.Fatalf("unexpected paged trait result: %#v", paged)
+	}
+	if paged.Traits[0].ID != "projects/raven.md:trait:0" {
+		t.Fatalf("unexpected paged trait ID: %#v", paged.Traits[0])
+	}
+}
+
+func TestExecuteQuery_RefPredicateUsesLazyResolver(t *testing.T) {
+	rt := seededRuntime(t)
+
+	_, err := rt.DB.DB().Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields) VALUES
+			('note/standup', 'notes/standup.md', 'note', 1, '{}')
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed note object: %v", err)
+	}
+
+	_, err = rt.DB.DB().Exec(`
+		INSERT INTO refs (source_id, target_raw, target_id, file_path, line_number) VALUES
+			('note/standup', 'project/raven', 'project/raven', 'notes/standup.md', 3)
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed refs: %v", err)
+	}
+
+	result, err := ExecuteQuery(rt, ExecuteQueryRequest{
+		QueryString: "object:note refs([[raven]])",
+	})
+	if err != nil {
+		t.Fatalf("unexpected ref query error: %v", err)
+	}
+	if result.Total != 1 || result.Returned != 1 {
+		t.Fatalf("unexpected ref query result: %#v", result)
+	}
+	if len(result.Objects) != 1 || result.Objects[0].ID != "note/standup" {
+		t.Fatalf("unexpected ref query objects: %#v", result.Objects)
 	}
 }
 

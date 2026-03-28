@@ -44,10 +44,10 @@ func (r *Runner) Run(wf *Workflow, inputs map[string]string) (*RunResult, error)
 // RunWithState executes or resumes a workflow from the provided persisted state.
 func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult, error) {
 	if wf == nil {
-		return nil, fmt.Errorf("workflow is nil")
+		return nil, newDomainError(CodeWorkflowInvalid, "workflow is nil", nil)
 	}
 	if state == nil {
-		return nil, fmt.Errorf("run state is nil")
+		return nil, newDomainError(CodeWorkflowInvalid, "run state is nil", nil)
 	}
 
 	if state.Inputs == nil {
@@ -59,10 +59,10 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 
 	resolvedInputs, err := applyDefaultsTyped(wf, state.Inputs)
 	if err != nil {
-		return nil, err
+		return nil, withStepDomainError(err, CodeWorkflowInputInvalid, "")
 	}
 	if err := validateInputsTyped(wf, resolvedInputs); err != nil {
-		return nil, err
+		return nil, withStepDomainError(err, CodeWorkflowInputInvalid, "")
 	}
 	state.Inputs = materializeOptionalInputs(wf, resolvedInputs)
 	state.Status = RunStatusRunning
@@ -77,7 +77,7 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 		case "agent":
 			prompt, err := interpolateWithTypedInputs(step.Prompt, state.Inputs, state.Steps)
 			if err != nil {
-				return nil, fmt.Errorf("step '%s': %w", step.ID, err)
+				return nil, fmt.Errorf("step '%s': %w", step.ID, withStepDomainError(err, CodeWorkflowInterpolationError, step.ID))
 			}
 			example := buildOutputExample(step.Outputs)
 			promptWithContract := prompt
@@ -166,7 +166,11 @@ func (r *Runner) RunWithState(wf *Workflow, state *WorkflowRunState) (*RunResult
 			})
 
 		default:
-			return nil, fmt.Errorf("step '%s': unknown step type '%s'", step.ID, step.Type)
+			return nil, fmt.Errorf(
+				"step '%s': %w",
+				step.ID,
+				newStepDomainError(CodeWorkflowInvalid, step.ID, fmt.Sprintf("unknown step type '%s'", step.Type), nil),
+			)
 		}
 	}
 
@@ -279,10 +283,10 @@ func (r *Runner) runForEachStep(
 	steps map[string]interface{},
 ) (map[string]interface{}, string, error) {
 	if step == nil || step.ForEach == nil {
-		return nil, "", fmt.Errorf("foreach step config missing")
+		return nil, "", newDomainError(CodeWorkflowInvalid, "foreach step config missing", nil)
 	}
 	if r.ToolFunc == nil {
-		return nil, "", fmt.Errorf("tool function not configured")
+		return nil, "", newStepDomainError(CodeWorkflowToolExecutionFailed, step.ID, "tool function not configured", nil)
 	}
 
 	itemVar := strings.TrimSpace(step.ForEach.As)
@@ -300,7 +304,7 @@ func (r *Runner) runForEachStep(
 
 	rawItems, err := resolveForEachItems(step.ForEach.Items, inputs, steps)
 	if err != nil {
-		return nil, "", err
+		return nil, "", withStepDomainError(err, CodeWorkflowInterpolationError, step.ID)
 	}
 
 	results := make([]interface{}, 0, len(rawItems))
@@ -331,7 +335,7 @@ func (r *Runner) runForEachStep(
 				if onError == "continue" {
 					goto nextIteration
 				}
-				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", fmt.Errorf("%s", errMsg)
+				return buildForEachStepResult(onError, itemVar, indexVar, successCount, errorCount, results), "error", withStepDomainError(fmt.Errorf("%s", errMsg), CodeWorkflowToolExecutionFailed, step.ID)
 			}
 
 			iterationSteps[nested.ID] = out
@@ -356,12 +360,12 @@ func (r *Runner) runSwitchStep(
 	steps map[string]interface{},
 ) (map[string]interface{}, string, error) {
 	if step == nil || step.Switch == nil {
-		return nil, "", fmt.Errorf("switch step config missing")
+		return nil, "", newDomainError(CodeWorkflowInvalid, "switch step config missing", nil)
 	}
 
 	value, err := resolveSwitchValue(step.Switch.Value, inputs, steps)
 	if err != nil {
-		return nil, "", err
+		return nil, "", withStepDomainError(err, CodeWorkflowInterpolationError, step.ID)
 	}
 
 	selectedCase := value
@@ -371,7 +375,7 @@ func (r *Runner) runSwitchStep(
 		selectedCase = "default"
 	}
 	if branch == nil {
-		return nil, "", fmt.Errorf("switch selected branch is nil")
+		return nil, "", newStepDomainError(CodeWorkflowInvalid, step.ID, "switch selected branch is nil", nil)
 	}
 
 	branchResults := make(map[string]interface{})
@@ -392,10 +396,10 @@ func (r *Runner) runSwitchStep(
 			branchResults[nested.ID] = out
 		default:
 			return nil, "error", fmt.Errorf(
-				"switch branch '%s' nested step '%s' has unsupported type '%s'",
+				"switch branch '%s' nested step '%s': %w",
 				selectedCase,
 				nested.ID,
-				nested.Type,
+				newStepDomainError(CodeWorkflowInvalid, nested.ID, fmt.Sprintf("unsupported type '%s'", nested.Type), nil),
 			)
 		}
 	}
@@ -405,7 +409,7 @@ func (r *Runner) runSwitchStep(
 		effectiveSteps := overlayStepState(steps, branchResults)
 		emit, err = interpolateObjectWithTypedInputs(branch.Emit, inputs, effectiveSteps)
 		if err != nil {
-			return nil, "error", fmt.Errorf("switch branch '%s' emit: %w", selectedCase, err)
+			return nil, "error", fmt.Errorf("switch branch '%s' emit: %w", selectedCase, withStepDomainError(err, CodeWorkflowInterpolationError, step.ID))
 		}
 	} else {
 		emit = map[string]interface{}{}
@@ -413,7 +417,7 @@ func (r *Runner) runSwitchStep(
 
 	if len(step.Switch.Outputs) > 0 {
 		if err := ValidateAgentOutputs(step.Switch.Outputs, emit); err != nil {
-			return nil, "error", fmt.Errorf("switch branch '%s' emit invalid: %w", selectedCase, err)
+			return nil, "error", fmt.Errorf("switch branch '%s' emit invalid: %w", selectedCase, withStepDomainError(err, CodeWorkflowInvalid, step.ID))
 		}
 	}
 
@@ -476,16 +480,24 @@ func (r *Runner) executeToolStep(
 	scope map[string]interface{},
 ) (interface{}, error) {
 	if step == nil {
-		return nil, fmt.Errorf("tool step is nil")
+		return nil, newDomainError(CodeWorkflowInvalid, "tool step is nil", nil)
 	}
 	if r.ToolFunc == nil {
-		return nil, fmt.Errorf("tool function not configured")
+		return nil, newStepDomainError(CodeWorkflowToolExecutionFailed, step.ID, "tool function not configured", nil)
 	}
 	args, err := interpolateObjectWithScope(step.Arguments, inputs, steps, scope)
 	if err != nil {
-		return nil, err
+		return nil, withStepDomainError(err, CodeWorkflowInterpolationError, step.ID)
 	}
-	return r.ToolFunc(step.Tool, args)
+	result, err := r.ToolFunc(step.Tool, args)
+	if err != nil {
+		de := newStepDomainError(CodeWorkflowToolExecutionFailed, step.ID, fmt.Sprintf("tool '%s' failed: %v", step.Tool, err), err)
+		de.Details = map[string]interface{}{
+			"tool": step.Tool,
+		}
+		return nil, de
+	}
+	return result, nil
 }
 
 func resolveForEachItems(
