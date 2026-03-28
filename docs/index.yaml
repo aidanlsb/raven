@@ -4,12 +4,18 @@ sections:
   getting-started:
     title: Getting Started
     topics:
-      getting-started:
-        title: Start Here
-        path: getting-started.md
+      installation:
+        title: Installation
+        path: installation.md
+      first-vault:
+        title: First Vault
+        path: first-vault.md
       core-concepts:
         title: Core Concepts
         path: core-concepts.md
+      agent-setup:
+        title: Agent Setup
+        path: agent-setup.md
       configuration:
         title: Configuration
         path: configuration.md

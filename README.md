@@ -10,9 +10,9 @@ A Raven "vault" is a collection of markdown files, with a few additional capabil
 - Typed notes: define a `project` type with required yaml frontmatter fields, specified in a schema 
 - Traits for annotations: create a `@priority` trait in your schema that you can use to tag important notes
 - References: link your notes together with `[[backlinks]]` to create a graph
-- Queries: Raven provides a fully featured query language for fast retrieval of your notes
+- Queries: retrieve your notes precisely with a fully featured query language
 
-All of the above is powere by a CLI with native support for agentic workflows.
+All of the above is powered by a CLI with native support for agentic workflows.
 
 # Getting Started
 ## Installation
@@ -86,7 +86,7 @@ After MCP and skills are in place, a good first prompt is:
 
 > Help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
 
-See the full [MCP reference](docs/agents/mcp.md) and [Getting Started](docs/getting-started/getting-started.md) guide for more setup details.
+See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
 ## Example Usage
 
@@ -135,6 +135,19 @@ rvn new person "Freya" --field role=lead
 ```
 
 Those commands create ordinary markdown files, saved to directories corresponding to the type (`project/` and `person/`).
+
+Raven also has a built-in daily notes feature, which will create a new note for every day for jotting things down.
+
+```bash
+rvn daily
+```
+You can use the `add` command to append content to existing notes. By default `add` appends to the daily note, but you can use the `--to` argument to write to different files as well.
+
+```
+rvn add "Met with [[person/freya]] about [[project/midgard-security-review]]" --to today
+rvn add "@todo Send the draft scope to [[person/freya]]" --to today
+```
+
 
 You can also create files manually. For example, to take notes for a meeting:
 
@@ -198,7 +211,9 @@ That is the core value: Raven keeps the source of truth as markdown, but gives b
 
 ## Documentation
 
-- [Getting Started](docs/getting-started/getting-started.md)
+- [Installation](docs/getting-started/installation.md)
+- [First Vault](docs/getting-started/first-vault.md)
+- [Agent Setup](docs/getting-started/agent-setup.md)
 - [Core Concepts](docs/getting-started/core-concepts.md)
 - [Schema Introduction](docs/types-and-traits/schema-intro.md)
 - [Schema Reference](docs/types-and-traits/schema.md)
