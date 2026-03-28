@@ -1,6 +1,9 @@
 package mcp
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestGenerateToolSchemasCompactSurface(t *testing.T) {
 	tools := GenerateToolSchemas()
@@ -22,6 +25,16 @@ func TestGenerateToolSchemasCompactSurface(t *testing.T) {
 	describe := toolByName[compactToolDescribe]
 	if len(describe.InputSchema.Required) != 1 || describe.InputSchema.Required[0] != "command" {
 		t.Fatalf("expected raven_describe to require command, got %#v", describe.InputSchema.Required)
+	}
+	discover := toolByName[compactToolDiscover]
+	if _, ok := discover.InputSchema.Properties["query"]; ok {
+		t.Fatal("did not expect raven_discover to expose query")
+	}
+	if _, ok := discover.InputSchema.Properties["limit"]; ok {
+		t.Fatal("did not expect raven_discover to expose limit")
+	}
+	if _, ok := discover.InputSchema.Properties["cursor"]; ok {
+		t.Fatal("did not expect raven_discover to expose cursor")
 	}
 	invoke := toolByName[compactToolInvoke]
 	if len(invoke.InputSchema.Required) != 1 || invoke.InputSchema.Required[0] != "command" {
@@ -94,6 +107,104 @@ func TestMCPToolName(t *testing.T) {
 	for _, tt := range tests {
 		if got := mcpToolName(tt.cliName); got != tt.wantTool {
 			t.Fatalf("mcpToolName(%q) = %q, want %q", tt.cliName, got, tt.wantTool)
+		}
+	}
+}
+
+func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {
+	s := &Server{}
+
+	out, isErr := s.callCompactDiscover(nil)
+	if isErr {
+		t.Fatalf("discover failed: %s", out)
+	}
+
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Matches []struct {
+				Command string `json:"command"`
+			} `json:"matches"`
+			Total      int      `json:"total"`
+			Returned   int      `json:"returned"`
+			Categories []string `json:"categories"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal discover response: %v", err)
+	}
+
+	contracts := discoverableContracts()
+	if got, want := len(resp.Data.Matches), len(contracts); got != want {
+		t.Fatalf("discover returned %d matches, want %d", got, want)
+	}
+	if resp.Data.Total != len(contracts) {
+		t.Fatalf("discover total=%d, want %d", resp.Data.Total, len(contracts))
+	}
+	if resp.Data.Returned != len(contracts) {
+		t.Fatalf("discover returned=%d, want %d", resp.Data.Returned, len(contracts))
+	}
+	for i, contract := range contracts {
+		if resp.Data.Matches[i].Command != contract.CommandID {
+			t.Fatalf("discover match %d command=%q, want %q", i, resp.Data.Matches[i].Command, contract.CommandID)
+		}
+	}
+	if len(resp.Data.Categories) == 0 {
+		t.Fatal("expected discover categories")
+	}
+}
+
+func TestCompactDiscoverRejectsLegacySearchAndPaginationArgs(t *testing.T) {
+	s := &Server{}
+
+	for _, args := range []map[string]interface{}{
+		{"query": "edit"},
+		{"limit": 5},
+		{"cursor": "10"},
+	} {
+		out, isErr := s.callCompactDiscover(args)
+		if !isErr {
+			t.Fatalf("expected discover args %#v to fail, got: %s", args, out)
+		}
+		if !json.Valid([]byte(out)) {
+			t.Fatalf("expected valid json error for args %#v, got: %s", args, out)
+		}
+	}
+}
+
+func TestCompactDiscoverAppliesDeterministicFilters(t *testing.T) {
+	s := &Server{}
+
+	out, isErr := s.callCompactDiscover(map[string]interface{}{
+		"category": "schema",
+		"mode":     "write",
+		"risk":     "mutating",
+	})
+	if isErr {
+		t.Fatalf("discover failed: %s", out)
+	}
+
+	var resp struct {
+		Data struct {
+			Matches []struct {
+				Category    string `json:"category"`
+				ReadOnly    bool   `json:"read_only"`
+				Destructive bool   `json:"destructive"`
+			} `json:"matches"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal discover response: %v", err)
+	}
+	if len(resp.Data.Matches) == 0 {
+		t.Fatal("expected filtered discover matches")
+	}
+	for _, match := range resp.Data.Matches {
+		if match.Category != "schema" {
+			t.Fatalf("unexpected category %q", match.Category)
+		}
+		if match.ReadOnly {
+			t.Fatal("expected write-only results")
 		}
 	}
 }

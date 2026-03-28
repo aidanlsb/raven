@@ -3,7 +3,6 @@ package mcp
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commands"
@@ -45,10 +44,6 @@ func (s *Server) callCompactTool(name string, args map[string]interface{}) (stri
 
 func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool) {
 	spec := map[string]parameterSpec{
-		"query": {
-			Name: "query",
-			Type: paramTypeString,
-		},
 		"category": {
 			Name: "category",
 			Type: paramTypeString,
@@ -61,14 +56,6 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 			Name: "risk",
 			Type: paramTypeString,
 		},
-		"limit": {
-			Name: "limit",
-			Type: paramTypeInteger,
-		},
-		"cursor": {
-			Name: "cursor",
-			Type: paramTypeString,
-		},
 	}
 
 	validated, issues := validateArgumentsStrict(spec, args)
@@ -76,7 +63,6 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 		return validationErrorEnvelope("raven_discover", issues), true
 	}
 
-	query := strings.ToLower(strings.TrimSpace(toString(validated["query"])))
 	category := strings.ToLower(strings.TrimSpace(toString(validated["category"])))
 	mode := strings.ToLower(strings.TrimSpace(toString(validated["mode"])))
 	risk := strings.ToLower(strings.TrimSpace(toString(validated["risk"])))
@@ -104,34 +90,6 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 		}), true
 	}
 
-	limit := 25
-	if raw, ok := validated["limit"]; ok {
-		limit = intValueDefault(raw, 25)
-	}
-	if limit <= 0 {
-		limit = 1
-	}
-	if limit > 200 {
-		limit = 200
-	}
-
-	offset := 0
-	if rawCursor := strings.TrimSpace(toString(validated["cursor"])); rawCursor != "" {
-		n, err := strconv.Atoi(rawCursor)
-		if err != nil || n < 0 {
-			return validationErrorEnvelope("raven_discover", []validationIssue{
-				{
-					Field:    "cursor",
-					Code:     "INVALID_CURSOR",
-					Message:  "cursor must be a non-negative integer string",
-					Expected: "string(int>=0)",
-					Actual:   rawCursor,
-				},
-			}), true
-		}
-		offset = n
-	}
-
 	contracts := discoverableContracts()
 	matches := make([]commandContract, 0, len(contracts))
 	for _, contract := range contracts {
@@ -154,33 +112,11 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 			continue
 		}
 
-		if query != "" {
-			searchable := strings.ToLower(strings.Join([]string{
-				contract.CommandID,
-				contract.ToolName,
-				contract.CLIName,
-				contract.Summary,
-				contract.Category,
-			}, " "))
-			if !strings.Contains(searchable, query) {
-				continue
-			}
-		}
-
 		matches = append(matches, contract)
 	}
 
-	total := len(matches)
-	if offset > total {
-		offset = total
-	}
-	end := offset + limit
-	if end > total {
-		end = total
-	}
-
-	out := make([]map[string]interface{}, 0, end-offset)
-	for _, c := range matches[offset:end] {
+	out := make([]map[string]interface{}, 0, len(matches))
+	for _, c := range matches {
 		out = append(out, map[string]interface{}{
 			"command":     c.CommandID,
 			"tool_name":   c.ToolName,
@@ -191,11 +127,6 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 			"destructive": c.Destructive,
 			"schema_hash": c.SchemaHash,
 		})
-	}
-
-	nextCursor := ""
-	if end < total {
-		nextCursor = strconv.Itoa(end)
 	}
 
 	categories := make(map[string]struct{})
@@ -210,9 +141,8 @@ func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool)
 
 	return successEnvelope(map[string]interface{}{
 		"matches":      out,
-		"total":        total,
+		"total":        len(out),
 		"returned":     len(out),
-		"next_cursor":  nextCursor,
 		"categories":   sortedCategories,
 		"schema_epoch": commandContractSchemaVersion,
 	}, nil), false

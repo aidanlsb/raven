@@ -2,9 +2,11 @@
 
 package cli_test
 
-import "testing"
+import (
+	"testing"
 
-import "github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/testutil"
+)
 
 func TestIntegration_TemplateLifecycle(t *testing.T) {
 	v := testutil.NewTestVault(t).
