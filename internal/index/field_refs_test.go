@@ -15,7 +15,7 @@ func TestFieldRefsResolveUnambiguous(t *testing.T) {
 	defer db.Close()
 	db.SetAutoResolveRefs(false)
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Types["person"] = &schema.TypeDefinition{
 		Fields: map[string]*schema.FieldDefinition{
 			"company": {Type: schema.FieldTypeRef, Target: "company"},
@@ -84,7 +84,7 @@ func TestFieldRefsResolveAmbiguous(t *testing.T) {
 	defer db.Close()
 	db.SetAutoResolveRefs(false)
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Types["person"] = &schema.TypeDefinition{
 		Fields: map[string]*schema.FieldDefinition{
 			"company": {Type: schema.FieldTypeRef, Target: "company"},

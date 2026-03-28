@@ -25,8 +25,25 @@ func TestResolver(t *testing.T) {
 		}
 	})
 
+	t.Run("resolve full path with .md suffix", func(t *testing.T) {
+		result := r.Resolve("people/freya.md")
+		if result.TargetID != "people/freya" {
+			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
+		}
+		if result.Ambiguous {
+			t.Error("expected not ambiguous")
+		}
+	})
+
 	t.Run("resolve short name", func(t *testing.T) {
 		result := r.Resolve("bifrost")
+		if result.TargetID != "projects/bifrost" {
+			t.Errorf("got %q, want %q", result.TargetID, "projects/bifrost")
+		}
+	})
+
+	t.Run("resolve short name with .md suffix", func(t *testing.T) {
+		result := r.Resolve("bifrost.md")
 		if result.TargetID != "projects/bifrost" {
 			t.Errorf("got %q, want %q", result.TargetID, "projects/bifrost")
 		}
@@ -369,6 +386,13 @@ func TestResolverDateShorthand(t *testing.T) {
 
 	t.Run("date reference to existing daily note", func(t *testing.T) {
 		result := r.Resolve("2025-02-01")
+		if result.TargetID != "daily/2025-02-01" {
+			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-02-01")
+		}
+	})
+
+	t.Run("date reference with .md suffix", func(t *testing.T) {
+		result := r.Resolve("2025-02-01.md")
 		if result.TargetID != "daily/2025-02-01" {
 			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-02-01")
 		}
@@ -854,6 +878,13 @@ func TestNameFieldResolution(t *testing.T) {
 		}
 		if !hasMatch(result.Matches, "people/alex-1") || !hasMatch(result.Matches, "people/alex-2") {
 			t.Fatalf("expected matches to include both alex objects, got %v", result.Matches)
+		}
+	})
+
+	t.Run("name_field resolution accepts .md suffix", func(t *testing.T) {
+		result := r.Resolve("The Prose Edda.md")
+		if result.TargetID != "books/the-prose-edda" {
+			t.Errorf("got %q, want %q", result.TargetID, "books/the-prose-edda")
 		}
 	})
 }

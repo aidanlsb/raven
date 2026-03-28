@@ -106,7 +106,7 @@ Examples:
 				),
 			})
 			if !result.OK {
-				if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredField {
+				if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
 					prompted := false
 					for _, fieldName := range missingFieldNamesFromDetails(result.Error.Details) {
 						if _, exists := fieldValues[fieldName]; exists {

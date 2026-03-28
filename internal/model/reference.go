@@ -1,7 +1,5 @@
 package model
 
-import "strconv"
-
 // Reference represents a wikilink reference from one location to another.
 // This is used for both backlinks (who references X?) and outlinks (what does X reference?).
 type Reference struct {
@@ -23,26 +21,4 @@ type Reference struct {
 
 	// DisplayText is the display text of the wikilink, if different from target.
 	DisplayText *string `json:"display_text,omitempty"`
-}
-
-// GetID returns the source ID as the reference identifier.
-func (r Reference) GetID() string { return r.SourceID }
-
-// GetKind returns "reference" for reference results.
-func (r Reference) GetKind() string { return "reference" }
-
-// GetContent returns a human-readable description for display.
-func (r Reference) GetContent() string {
-	if r.DisplayText != nil && *r.DisplayText != "" {
-		return *r.DisplayText
-	}
-	return r.TargetRaw
-}
-
-// GetLocation returns a short location string (file:line).
-func (r Reference) GetLocation() string {
-	if r.Line != nil {
-		return r.FilePath + ":" + strconv.Itoa(*r.Line)
-	}
-	return r.FilePath
 }

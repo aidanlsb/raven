@@ -17,7 +17,7 @@ func TestCheckStaleness(t *testing.T) {
 	}
 	defer db.Close()
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	vaultDir := t.TempDir()
 	now := time.Now().Unix()
@@ -118,7 +118,7 @@ func TestRemoveDeletedFiles(t *testing.T) {
 	defer db.Close()
 	db.SetAutoResolveRefs(false)
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Traits["flag"] = &schema.TraitDefinition{Type: schema.FieldTypeBool}
 
 	vaultDir := t.TempDir()
@@ -195,7 +195,7 @@ func TestRemoveFilesWithPrefix(t *testing.T) {
 	}
 	defer db.Close()
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	docs := []*parser.ParsedDocument{
 		{
@@ -254,7 +254,7 @@ func TestAllNameFieldValues(t *testing.T) {
 	}
 	defer db.Close()
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Types["book"] = &schema.TypeDefinition{
 		NameField: "title",
 		Fields: map[string]*schema.FieldDefinition{

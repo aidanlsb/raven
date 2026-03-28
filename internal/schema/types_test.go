@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestNewSchema(t *testing.T) {
-	s := NewSchema()
+func TestNew(t *testing.T) {
+	s := New()
 
 	if s.Types == nil {
 		t.Fatal("Types should not be nil")

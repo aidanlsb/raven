@@ -106,6 +106,25 @@ name: Thor
 			t.Errorf("Expected RefNotFoundError, got %T", err)
 		}
 	})
+
+	t.Run("absolute path outside vault is not resolved", func(t *testing.T) {
+		outsideDir := t.TempDir()
+		outsidePath := filepath.Join(outsideDir, "outside.md")
+		if err := os.WriteFile(outsidePath, []byte("# Outside\n"), 0o644); err != nil {
+			t.Fatalf("Failed to write outside.md: %v", err)
+		}
+
+		_, err := ResolveReference(outsidePath, ResolveOptions{
+			VaultPath:   tmpDir,
+			VaultConfig: vaultCfg,
+		})
+		if err == nil {
+			t.Fatal("Expected error for outside-vault path")
+		}
+		if !IsRefNotFound(err) {
+			t.Errorf("Expected RefNotFoundError, got %T", err)
+		}
+	})
 }
 
 func TestResolveReferenceErrors(t *testing.T) {
@@ -258,6 +277,43 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 		}
 		if !IsRefNotFound(err) {
 			t.Fatalf("Expected RefNotFoundError, got %T", err)
+		}
+	})
+
+	t.Run("explicit date respects allowMissing=false", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		vaultCfg := &config.VaultConfig{DailyDirectory: "daily"}
+
+		_, err := resolveReferenceWithDynamicDates("2025-02-01", ResolveOptions{
+			VaultPath:   tmpDir,
+			VaultConfig: vaultCfg,
+		}, false)
+		if err == nil {
+			t.Fatal("Expected error for missing explicit date")
+		}
+		if !IsRefNotFound(err) {
+			t.Fatalf("Expected RefNotFoundError, got %T", err)
+		}
+	})
+
+	t.Run("explicit date respects allowMissing=true", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		vaultCfg := &config.VaultConfig{DailyDirectory: "daily"}
+
+		result, err := resolveReferenceWithDynamicDates("2025-02-01", ResolveOptions{
+			VaultPath:   tmpDir,
+			VaultConfig: vaultCfg,
+		}, true)
+		if err != nil {
+			t.Fatalf("resolveReferenceWithDynamicDates failed: %v", err)
+		}
+
+		if result.ObjectID != "daily/2025-02-01" {
+			t.Errorf("ObjectID = %q, want %q", result.ObjectID, "daily/2025-02-01")
+		}
+		expectedPath := filepath.Join(tmpDir, "daily", "2025-02-01.md")
+		if result.FilePath != expectedPath {
+			t.Errorf("FilePath = %q, want %q", result.FilePath, expectedPath)
 		}
 	})
 }

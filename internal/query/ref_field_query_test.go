@@ -33,7 +33,7 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 		t.Fatalf("failed to insert field_refs: %v", err)
 	}
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Types["person"] = &schema.TypeDefinition{
 		Fields: map[string]*schema.FieldDefinition{
 			"company": {Type: schema.FieldTypeRef, Target: "company"},
@@ -96,7 +96,7 @@ func TestRefFieldQueryErrorsOnAmbiguousStoredValue(t *testing.T) {
 		t.Fatalf("failed to insert field_refs: %v", err)
 	}
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Types["person"] = &schema.TypeDefinition{
 		Fields: map[string]*schema.FieldDefinition{
 			"company": {Type: schema.FieldTypeRef, Target: "company"},

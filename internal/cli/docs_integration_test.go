@@ -13,14 +13,14 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 		WithFile(".raven/docs/index.yaml", `sections:
   getting-started:
     topics:
-      getting-started:
-        path: getting-started.md
+      installation:
+        path: installation.md
   querying:
     topics:
       query-language:
         path: query-language.md
 `).
-		WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n\nWelcome.\n").
+		WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
 		WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
 		Build()
 
@@ -73,10 +73,10 @@ func TestIntegration_DocsCommandRedirectToHelp(t *testing.T) {
 		WithFile(".raven/docs/index.yaml", `sections:
   getting-started:
     topics:
-      getting-started:
-        path: getting-started.md
+      installation:
+        path: installation.md
 `).
-		WithFile(".raven/docs/getting-started/getting-started.md", "# Getting Started\n").
+		WithFile(".raven/docs/getting-started/installation.md", "# Installation\n").
 		Build()
 
 	res := v.RunCLI("docs", "query")

@@ -8,7 +8,7 @@ import (
 )
 
 func TestValidateFieldTypeSpecAcceptsDateFieldTypes(t *testing.T) {
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	tests := []struct {
 		name      string
@@ -44,7 +44,7 @@ func TestValidateFieldTypeSpecAcceptsDateFieldTypes(t *testing.T) {
 }
 
 func TestValidateFieldTypeSpecRejectsSchemaTypeName(t *testing.T) {
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Types["person"] = &schema.TypeDefinition{}
 
 	got := validateFieldTypeSpec("person", "", "", sch)

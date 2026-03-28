@@ -10,6 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -64,7 +65,9 @@ func ResolveReference(reference string, rt *Runtime, allowMissing bool) (*Resolv
 		return nil, fmt.Errorf("runtime is required")
 	}
 
-	if result := tryLiteralPath(reference, rt.VaultPath, rt.VaultCfg); result != nil {
+	if result, err := tryLiteralPath(reference, rt.VaultPath, rt.VaultCfg); err != nil {
+		return nil, err
+	} else if result != nil {
 		return result, nil
 	}
 
@@ -140,7 +143,7 @@ func ResolveReference(reference string, rt *Runtime, allowMissing bool) (*Resolv
 }
 
 func ResolveReferenceWithDynamicDates(reference string, rt *Runtime, allowDynamicMissing bool) (*ResolveResult, error) {
-	result, err := ResolveReference(reference, rt, rt != nil && rt.VaultCfg != nil)
+	result, err := ResolveReference(reference, rt, allowDynamicMissing)
 	if err == nil {
 		return result, nil
 	}
@@ -176,7 +179,7 @@ func ResolveReferenceToObjectID(reference string, rt *Runtime, allowMissing bool
 
 func tryLiteralPath(reference, vaultPath string, vaultCfg interface {
 	FilePathToObjectID(string) string
-}) *ResolveResult {
+}) (*ResolveResult, error) {
 	candidates := []string{reference}
 	if !strings.HasSuffix(reference, ".md") {
 		candidates = append(candidates, reference+".md")
@@ -184,6 +187,9 @@ func tryLiteralPath(reference, vaultPath string, vaultCfg interface {
 
 	for _, candidate := range candidates {
 		fullPath := filepath.Join(vaultPath, candidate)
+		if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
+			continue
+		}
 		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
 			objectID := strings.TrimSuffix(candidate, ".md")
 			if vaultCfg != nil {
@@ -195,11 +201,11 @@ func tryLiteralPath(reference, vaultPath string, vaultCfg interface {
 				IsSection:    false,
 				FileObjectID: objectID,
 				MatchSource:  "literal_path",
-			}
+			}, nil
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func resolveDynamicDateReference(reference string, rt *Runtime, allowMissing bool) (*ResolveResult, bool, error) {

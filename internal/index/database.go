@@ -1058,6 +1058,10 @@ func BuildResolver(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get aliases: %w", err)
 	}
+	aliasMatches, err := allAliasMatchesFromDB(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alias matches: %w", err)
+	}
 
 	// Add extra IDs if provided (for hypothetical resolution)
 	objectIDs = appendExtraIDs(objectIDs, opts.ExtraIDs)
@@ -1066,6 +1070,7 @@ func BuildResolver(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, error)
 	resolverOpts := resolver.Options{
 		DailyDirectory: dailyDir,
 		Aliases:        aliases,
+		AliasMatches:   aliasMatches,
 	}
 	if opts.Schema != nil {
 		nameFieldMap, err := allNameFieldValuesFromDB(db, opts.Schema)
@@ -1158,6 +1163,28 @@ func allAliasesFromDB(db *sql.DB) (map[string]string, error) {
 	}
 
 	return aliases, rows.Err()
+}
+
+func allAliasMatchesFromDB(db *sql.DB) (map[string][]string, error) {
+	rows, err := db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
+	if err != nil {
+		if strings.Contains(err.Error(), "no such column: alias") {
+			return map[string][]string{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	aliasMatches := make(map[string][]string)
+	for rows.Next() {
+		var alias, id string
+		if err := rows.Scan(&alias, &id); err != nil {
+			return nil, err
+		}
+		aliasMatches[alias] = append(aliasMatches[alias], id)
+	}
+
+	return aliasMatches, rows.Err()
 }
 
 func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string][]string, error) {

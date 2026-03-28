@@ -13,7 +13,7 @@ import (
 
 func TestDatabase(t *testing.T) {
 	// Create a minimal schema for testing
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	t.Run("initialization", func(t *testing.T) {
 		db, err := OpenInMemory()
@@ -108,7 +108,7 @@ func TestDatabase(t *testing.T) {
 		defer db.Close()
 
 		// Create schema with a boolean trait that has default: true
-		testSchema := schema.NewSchema()
+		testSchema := schema.New()
 		testSchema.Traits["highlight"] = &schema.TraitDefinition{
 			Type:    schema.FieldTypeBool,
 			Default: true,
@@ -163,7 +163,7 @@ func TestDatabase(t *testing.T) {
 		defer db.Close()
 
 		// Create schema with a boolean trait (no explicit default)
-		testSchema := schema.NewSchema()
+		testSchema := schema.New()
 		testSchema.Traits["pinned"] = &schema.TraitDefinition{
 			Type: schema.FieldTypeBool,
 			// No explicit default - boolean traits should default to true when present
@@ -214,7 +214,7 @@ func TestDatabase(t *testing.T) {
 		defer db.Close()
 
 		// Create schema with an enum trait with default
-		testSchema := schema.NewSchema()
+		testSchema := schema.New()
 		testSchema.Traits["priority"] = &schema.TraitDefinition{
 			Type:    schema.FieldTypeEnum,
 			Values:  []string{"low", "medium", "high"},
@@ -312,7 +312,7 @@ func TestDatabase(t *testing.T) {
 		}
 
 		// Define trait so it gets indexed.
-		testSchema := schema.NewSchema()
+		testSchema := schema.New()
 		testSchema.Traits["highlight"] = &schema.TraitDefinition{Type: schema.FieldTypeBool}
 
 		if err := db.IndexDocument(doc, testSchema); err != nil {
@@ -414,7 +414,7 @@ func TestDatabase(t *testing.T) {
 		}
 		defer db.Close()
 
-		testSchema := schema.NewSchema()
+		testSchema := schema.New()
 		testSchema.Types["book"] = &schema.TypeDefinition{
 			NameField: "title",
 			Fields: map[string]*schema.FieldDefinition{
@@ -483,7 +483,7 @@ func TestDatabase(t *testing.T) {
 		defer db.Close()
 
 		// Create schema WITHOUT the "undefined" trait
-		testSchema := schema.NewSchema()
+		testSchema := schema.New()
 		testSchema.Traits["defined"] = &schema.TraitDefinition{
 			Type: schema.FieldTypeBool,
 		}
@@ -608,7 +608,7 @@ func TestTraitIDConsistency(t *testing.T) {
 	defer db.Close()
 
 	// Schema defines "due" but NOT "undefined" — so "undefined" must be skipped.
-	testSchema := schema.NewSchema()
+	testSchema := schema.New()
 	testSchema.Traits["due"] = &schema.TraitDefinition{
 		Type: schema.FieldTypeDate,
 	}
@@ -674,7 +674,7 @@ func TestTraitIDsStableAcrossReindexForMultilineParagraph(t *testing.T) {
 	}
 	defer db.Close()
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 	sch.Traits["todo"] = &schema.TraitDefinition{Type: schema.FieldTypeString}
 
 	content := "First task @todo one\nSecond task @todo two\nThird task @todo three\n"
@@ -754,7 +754,7 @@ func TestAliasIndexing(t *testing.T) {
 	}
 	defer db.Close()
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	t.Run("alias stored in objects table", func(t *testing.T) {
 		doc := &parser.ParsedDocument{
@@ -1039,6 +1039,62 @@ func TestAliasIndexing(t *testing.T) {
 		}
 	})
 
+	t.Run("resolver treats duplicate aliases as ambiguous", func(t *testing.T) {
+		db2, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db2.Close()
+
+		docs := []*parser.ParsedDocument{
+			{
+				FilePath: "people/freya.md",
+				Objects: []*parser.ParsedObject{
+					{
+						ID:         "people/freya",
+						ObjectType: "person",
+						Fields: map[string]schema.FieldValue{
+							"alias": schema.String("goddess"),
+						},
+						LineStart: 1,
+					},
+				},
+			},
+			{
+				FilePath: "people/frigg.md",
+				Objects: []*parser.ParsedObject{
+					{
+						ID:         "people/frigg",
+						ObjectType: "person",
+						Fields: map[string]schema.FieldValue{
+							"alias": schema.String("goddess"),
+						},
+						LineStart: 1,
+					},
+				},
+			},
+		}
+
+		for _, doc := range docs {
+			if err := db2.IndexDocument(doc, sch); err != nil {
+				t.Fatalf("failed to index document: %v", err)
+			}
+		}
+
+		res, err := db2.Resolver(ResolverOptions{})
+		if err != nil {
+			t.Fatalf("failed to build resolver: %v", err)
+		}
+
+		result := res.Resolve("goddess")
+		if !result.Ambiguous {
+			t.Fatalf("expected duplicate alias to be ambiguous, got %+v", result)
+		}
+		if len(result.Matches) != 2 {
+			t.Fatalf("expected 2 matches, got %d", len(result.Matches))
+		}
+	})
+
 	t.Run("empty alias is not stored", func(t *testing.T) {
 		db2, err := OpenInMemory()
 		if err != nil {
@@ -1082,7 +1138,7 @@ func TestAllIndexedFilePaths(t *testing.T) {
 	}
 	defer db.Close()
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	// Index a few documents
 	files := []string{"people/alice.md", "projects/foo.md", "daily/2025-01-01.md"}
@@ -1157,7 +1213,7 @@ func TestResolveReferencesBatched(t *testing.T) {
 	defer db.Close()
 	db.SetAutoResolveRefs(false)
 
-	sch := schema.NewSchema()
+	sch := schema.New()
 
 	targetDoc := &parser.ParsedDocument{
 		FilePath: "people/freya.md",

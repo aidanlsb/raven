@@ -255,7 +255,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
-		sch = schema.NewSchema()
+		sch = schema.New()
 	}
 
 	objectIDs := commandIDsArg(req.Args, "object_ids")

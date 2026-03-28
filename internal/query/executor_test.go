@@ -549,6 +549,11 @@ func TestExecuteTraitQuery(t *testing.T) {
 			wantCount: 1, // trait2 on line 15 has a ref to freya on the same line
 		},
 		{
+			name:      "refs to specific person with .md suffix",
+			query:     "trait:due refs([[people/freya.md]])",
+			wantCount: 1,
+		},
+		{
 			name:      "refs with object subquery",
 			query:     "trait:due refs(object:person)",
 			wantCount: 1, // trait2 refs a person on the same line
