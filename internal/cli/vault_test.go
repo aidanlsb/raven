@@ -317,21 +317,21 @@ func TestVaultAddAddsAndPinsVault(t *testing.T) {
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevReplace := vaultAddReplace
-	prevPin := vaultAddPin
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultAddReplace = prevReplace
-		vaultAddPin = prevPin
+		resetBoolFlag(vaultAddCmd, "replace")
+		resetBoolFlag(vaultAddCmd, "pin")
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = true
-	vaultAddReplace = false
-	vaultAddPin = true
+	resetBoolFlag(vaultAddCmd, "replace")
+	if err := vaultAddCmd.Flags().Set("pin", "true"); err != nil {
+		t.Fatalf("set pin: %v", err)
+	}
 
 	if err := vaultAddCmd.RunE(vaultAddCmd, []string{"personal", vaultPath}); err != nil {
 		t.Fatalf("vaultAddCmd.RunE: %v", err)
@@ -375,21 +375,19 @@ func TestVaultAddRejectsDuplicateWithoutReplace(t *testing.T) {
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevReplace := vaultAddReplace
-	prevPin := vaultAddPin
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultAddReplace = prevReplace
-		vaultAddPin = prevPin
+		resetBoolFlag(vaultAddCmd, "replace")
+		resetBoolFlag(vaultAddCmd, "pin")
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = false
-	vaultAddReplace = false
-	vaultAddPin = false
+	resetBoolFlag(vaultAddCmd, "replace")
+	resetBoolFlag(vaultAddCmd, "pin")
 
 	err := vaultAddCmd.RunE(vaultAddCmd, []string{"work", newPath})
 	if err == nil {
@@ -441,21 +439,19 @@ func TestVaultRemoveRequiresClearFlagsForDefaultAndActive(t *testing.T) {
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevClearDefault := vaultRemoveClearDefault
-	prevClearActive := vaultRemoveClearActive
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultRemoveClearDefault = prevClearDefault
-		vaultRemoveClearActive = prevClearActive
+		resetBoolFlag(vaultRemoveCmd, "clear-default")
+		resetBoolFlag(vaultRemoveCmd, "clear-active")
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = false
-	vaultRemoveClearDefault = false
-	vaultRemoveClearActive = false
+	resetBoolFlag(vaultRemoveCmd, "clear-default")
+	resetBoolFlag(vaultRemoveCmd, "clear-active")
 
 	err := vaultRemoveCmd.RunE(vaultRemoveCmd, []string{"work"})
 	if err == nil {
@@ -499,21 +495,23 @@ func TestVaultRemoveClearsDefaultAndActive(t *testing.T) {
 	prevConfig := configPath
 	prevState := statePathFlag
 	prevJSON := jsonOutput
-	prevClearDefault := vaultRemoveClearDefault
-	prevClearActive := vaultRemoveClearActive
 	t.Cleanup(func() {
 		configPath = prevConfig
 		statePathFlag = prevState
 		jsonOutput = prevJSON
-		vaultRemoveClearDefault = prevClearDefault
-		vaultRemoveClearActive = prevClearActive
+		resetBoolFlag(vaultRemoveCmd, "clear-default")
+		resetBoolFlag(vaultRemoveCmd, "clear-active")
 	})
 
 	configPath = cfgPath
 	statePathFlag = statePath
 	jsonOutput = true
-	vaultRemoveClearDefault = true
-	vaultRemoveClearActive = true
+	if err := vaultRemoveCmd.Flags().Set("clear-default", "true"); err != nil {
+		t.Fatalf("set clear-default: %v", err)
+	}
+	if err := vaultRemoveCmd.Flags().Set("clear-active", "true"); err != nil {
+		t.Fatalf("set clear-active: %v", err)
+	}
 
 	if err := vaultRemoveCmd.RunE(vaultRemoveCmd, []string{"work"}); err != nil {
 		t.Fatalf("vaultRemoveCmd.RunE: %v", err)

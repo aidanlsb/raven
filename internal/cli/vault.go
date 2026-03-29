@@ -2,10 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/configsvc"
 )
@@ -16,13 +16,6 @@ type vaultRow struct {
 	IsDefault bool   `json:"is_default"`
 	IsActive  bool   `json:"is_active"`
 }
-
-var (
-	vaultAddReplace         bool
-	vaultAddPin             bool
-	vaultRemoveClearDefault bool
-	vaultRemoveClearActive  bool
-)
 
 func vaultRows(cfg *config.Config, state *config.State) ([]vaultRow, string, string, bool) {
 	serviceRows, defaultName, activeName, activeMissing := configsvc.VaultRows(cfg, state)
@@ -44,22 +37,70 @@ func resolveCurrentVault(cfg *config.Config, state *config.State) (*configsvc.Cu
 
 func runVaultList(cmd *cobra.Command, args []string) error {
 	result := executeCanonicalCommand("vault_list", "", nil)
-	if !result.OK {
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-		if result.Error != nil {
-			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-		}
-		return handleErrorMsg(ErrInternal, "command execution failed", "")
-	}
-
 	if isJSONOutput() {
-		outputJSON(result)
+		outputCanonicalResultJSON(result)
 		return nil
 	}
+	if err := handleCanonicalFailure(result); err != nil {
+		return err
+	}
+	return renderVaultList(cmd, result)
+}
 
+var vaultCmd = &cobra.Command{
+	Use:   "vault",
+	Short: "Manage configured vaults and active selection",
+	Long: `Manage configured vaults and active selection.
+
+The active vault is stored in state.toml.
+The default vault is stored in config.toml and used as fallback.`,
+	Args: cobra.NoArgs,
+	RunE: runVaultList,
+}
+
+var vaultListCmd = newCanonicalLeafCommand("vault_list", canonicalLeafOptions{
+	RenderHuman: renderVaultList,
+})
+
+var vaultCurrentCmd = newCanonicalLeafCommand("vault_current", canonicalLeafOptions{
+	RenderHuman: renderVaultCurrent,
+})
+
+var vaultUseCmd = newCanonicalLeafCommand("vault_use", canonicalLeafOptions{
+	RenderHuman: renderVaultUse,
+})
+
+var vaultClearCmd = newCanonicalLeafCommand("vault_clear", canonicalLeafOptions{
+	RenderHuman: renderVaultClear,
+})
+
+var vaultPinCmd = newCanonicalLeafCommand("vault_pin", canonicalLeafOptions{
+	RenderHuman: renderVaultPin,
+})
+
+var vaultAddCmd = newCanonicalLeafCommand("vault_add", canonicalLeafOptions{
+	RenderHuman: renderVaultAdd,
+})
+
+var vaultRemoveCmd = newCanonicalLeafCommand("vault_remove", canonicalLeafOptions{
+	RenderHuman: renderVaultRemove,
+})
+
+func init() {
+	vaultCmd.AddCommand(vaultListCmd)
+	vaultCmd.AddCommand(vaultCurrentCmd)
+	vaultCmd.AddCommand(vaultPathCmd)
+	vaultCmd.AddCommand(vaultStatsCmd)
+	vaultCmd.AddCommand(vaultUseCmd)
+	vaultCmd.AddCommand(vaultPinCmd)
+	vaultCmd.AddCommand(vaultClearCmd)
+	vaultCmd.AddCommand(vaultAddCmd)
+	vaultCmd.AddCommand(vaultRemoveCmd)
+
+	rootCmd.AddCommand(vaultCmd)
+}
+
+func renderVaultList(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	rows := vaultRowsFromAny(data["vaults"])
 	activeName := stringValue(data["active_vault"])
@@ -104,253 +145,70 @@ func runVaultList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-var vaultCmd = &cobra.Command{
-	Use:   "vault",
-	Short: "Manage configured vaults and active selection",
-	Long: `Manage configured vaults and active selection.
-
-The active vault is stored in state.toml.
-The default vault is stored in config.toml and used as fallback.`,
-	Args: cobra.NoArgs,
-	RunE: runVaultList,
+func renderVaultCurrent(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("current: %s\n", stringValue(data["name"]))
+	fmt.Printf("path:    %s\n", stringValue(data["path"]))
+	fmt.Printf("source:  %s\n", stringValue(data["source"]))
+	if boolValue(data["active_missing"]) {
+		fmt.Printf("warning: active vault '%s' is missing; using default\n", stringValue(data["active_vault"]))
+	}
+	return nil
 }
 
-var vaultListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List configured vaults",
-	Args:  cobra.NoArgs,
-	RunE:  runVaultList,
+func renderVaultUse(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("Active vault set to '%s' -> %s\n", stringValue(data["active_vault"]), stringValue(data["path"]))
+	fmt.Printf("state: %s\n", stringValue(data["state_path"]))
+	return nil
 }
 
-var vaultCurrentCmd = &cobra.Command{
-	Use:   "current",
-	Short: "Show the current resolved vault",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("vault_current", "", nil)
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data := canonicalDataMap(result)
-		fmt.Printf("current: %s\n", stringValue(data["name"]))
-		fmt.Printf("path:    %s\n", stringValue(data["path"]))
-		fmt.Printf("source:  %s\n", stringValue(data["source"]))
-		if boolValue(data["active_missing"]) {
-			fmt.Printf("warning: active vault '%s' is missing; using default\n", stringValue(data["active_vault"]))
-		}
-		return nil
-	},
+func renderVaultClear(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if stringValue(data["previous"]) == "" {
+		fmt.Println("Active vault already clear.")
+	} else {
+		fmt.Printf("Cleared active vault '%s'.\n", stringValue(data["previous"]))
+	}
+	fmt.Printf("state: %s\n", stringValue(data["state_path"]))
+	return nil
 }
 
-var vaultUseCmd = &cobra.Command{
-	Use:   "use <name>",
-	Short: "Set the active vault in state.toml",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := strings.TrimSpace(args[0])
-		result := executeCanonicalCommand("vault_use", "", map[string]interface{}{"name": name})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data := canonicalDataMap(result)
-		fmt.Printf("Active vault set to '%s' -> %s\n", stringValue(data["active_vault"]), stringValue(data["path"]))
-		fmt.Printf("state: %s\n", stringValue(data["state_path"]))
-		return nil
-	},
+func renderVaultPin(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("Default vault set to '%s' -> %s\n", stringValue(data["default_vault"]), stringValue(data["path"]))
+	fmt.Printf("config: %s\n", stringValue(data["config_path"]))
+	return nil
 }
 
-var vaultClearCmd = &cobra.Command{
-	Use:   "clear",
-	Short: "Clear active vault from state.toml",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("vault_clear", "", nil)
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data := canonicalDataMap(result)
-		if stringValue(data["previous"]) == "" {
-			fmt.Println("Active vault already clear.")
-		} else {
-			fmt.Printf("Cleared active vault '%s'.\n", stringValue(data["previous"]))
-		}
-		fmt.Printf("state: %s\n", stringValue(data["state_path"]))
-		return nil
-	},
+func renderVaultAdd(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["replaced"]) {
+		fmt.Printf("Updated vault '%s' -> %s\n", stringValue(data["name"]), stringValue(data["path"]))
+	} else {
+		fmt.Printf("Added vault '%s' -> %s\n", stringValue(data["name"]), stringValue(data["path"]))
+	}
+	if boolValue(data["pinned"]) {
+		fmt.Printf("Default vault set to '%s'.\n", stringValue(data["name"]))
+	}
+	fmt.Printf("config: %s\n", stringValue(data["config_path"]))
+	return nil
 }
 
-var vaultPinCmd = &cobra.Command{
-	Use:   "pin <name>",
-	Short: "Set default_vault in config.toml",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := strings.TrimSpace(args[0])
-		result := executeCanonicalCommand("vault_pin", "", map[string]interface{}{"name": name})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data := canonicalDataMap(result)
-		fmt.Printf("Default vault set to '%s' -> %s\n", stringValue(data["default_vault"]), stringValue(data["path"]))
-		fmt.Printf("config: %s\n", stringValue(data["config_path"]))
-		return nil
-	},
-}
-
-var vaultAddCmd = &cobra.Command{
-	Use:   "add <name> <path>",
-	Short: "Add a vault to config.toml",
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := strings.TrimSpace(args[0])
-		rawPath := strings.TrimSpace(args[1])
-		result := executeCanonicalCommand("vault_add", "", map[string]interface{}{
-			"name":    name,
-			"path":    rawPath,
-			"replace": vaultAddReplace,
-			"pin":     vaultAddPin,
-		})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data := canonicalDataMap(result)
-		if boolValue(data["replaced"]) {
-			fmt.Printf("Updated vault '%s' -> %s\n", stringValue(data["name"]), stringValue(data["path"]))
-		} else {
-			fmt.Printf("Added vault '%s' -> %s\n", stringValue(data["name"]), stringValue(data["path"]))
-		}
-		if boolValue(data["pinned"]) {
-			fmt.Printf("Default vault set to '%s'.\n", stringValue(data["name"]))
-		}
-		fmt.Printf("config: %s\n", stringValue(data["config_path"]))
-		return nil
-	},
-}
-
-var vaultRemoveCmd = &cobra.Command{
-	Use:   "remove <name>",
-	Short: "Remove a vault from config.toml",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := strings.TrimSpace(args[0])
-		result := executeCanonicalCommand("vault_remove", "", map[string]interface{}{
-			"name":          name,
-			"clear-default": vaultRemoveClearDefault,
-			"clear-active":  vaultRemoveClearActive,
-		})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data := canonicalDataMap(result)
-		fmt.Printf("Removed vault '%s' (%s)\n", stringValue(data["name"]), stringValue(data["removed_path"]))
-		if boolValue(data["default_cleared"]) {
-			fmt.Println("Cleared default vault.")
-		}
-		if boolValue(data["active_cleared"]) {
-			fmt.Println("Cleared active vault.")
-		}
-		fmt.Printf("config: %s\n", stringValue(data["config_path"]))
-		if boolValue(data["active_cleared"]) {
-			fmt.Printf("state:  %s\n", stringValue(data["state_path"]))
-		}
-		return nil
-	},
-}
-
-func init() {
-	vaultCmd.AddCommand(vaultListCmd)
-	vaultCmd.AddCommand(vaultCurrentCmd)
-	vaultCmd.AddCommand(vaultPathCmd)
-	vaultCmd.AddCommand(vaultStatsCmd)
-	vaultCmd.AddCommand(vaultUseCmd)
-	vaultCmd.AddCommand(vaultPinCmd)
-	vaultCmd.AddCommand(vaultClearCmd)
-	vaultCmd.AddCommand(vaultAddCmd)
-	vaultCmd.AddCommand(vaultRemoveCmd)
-
-	vaultAddCmd.Flags().BoolVar(&vaultAddReplace, "replace", false, "Replace existing vault path if name already exists")
-	vaultAddCmd.Flags().BoolVar(&vaultAddPin, "pin", false, "Also set this vault as default_vault")
-	vaultRemoveCmd.Flags().BoolVar(&vaultRemoveClearDefault, "clear-default", false, "Clear default_vault when removing the default")
-	vaultRemoveCmd.Flags().BoolVar(&vaultRemoveClearActive, "clear-active", false, "Clear active_vault when removing the active vault")
-
-	rootCmd.AddCommand(vaultCmd)
+func renderVaultRemove(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("Removed vault '%s' (%s)\n", stringValue(data["name"]), stringValue(data["removed_path"]))
+	if boolValue(data["default_cleared"]) {
+		fmt.Println("Cleared default vault.")
+	}
+	if boolValue(data["active_cleared"]) {
+		fmt.Println("Cleared active vault.")
+	}
+	fmt.Printf("config: %s\n", stringValue(data["config_path"]))
+	if boolValue(data["active_cleared"]) {
+		fmt.Printf("state:  %s\n", stringValue(data["state_path"]))
+	}
+	return nil
 }
 
 func vaultRowsFromAny(raw interface{}) []vaultRow {

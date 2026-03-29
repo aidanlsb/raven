@@ -6,44 +6,45 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/config"
 )
 
 func resetConfigSetFlagsForTest() {
-	configSetEditor = ""
-	configSetEditorMode = ""
-	configSetStateFile = ""
-	configSetDefaultVault = ""
-	configSetUIAccent = ""
-	configSetUICodeTheme = ""
+	resetStringFlag(configSetCmd, "editor")
+	resetStringFlag(configSetCmd, "editor-mode")
+	resetStringFlag(configSetCmd, "state-file")
+	resetStringFlag(configSetCmd, "default-vault")
+	resetStringFlag(configSetCmd, "ui-accent")
+	resetStringFlag(configSetCmd, "ui-code-theme")
+}
 
-	if f := configSetCmd.Flags().Lookup("editor"); f != nil {
-		f.Changed = false
+func resetConfigUnsetFlagsForTest() {
+	resetBoolFlag(configUnsetCmd, "editor")
+	resetBoolFlag(configUnsetCmd, "editor-mode")
+	resetBoolFlag(configUnsetCmd, "state-file")
+	resetBoolFlag(configUnsetCmd, "default-vault")
+	resetBoolFlag(configUnsetCmd, "ui-accent")
+	resetBoolFlag(configUnsetCmd, "ui-code-theme")
+}
+
+func resetStringFlag(cmd *cobra.Command, name string) {
+	if err := cmd.Flags().Set(name, ""); err != nil {
+		panic(err)
 	}
-	if f := configSetCmd.Flags().Lookup("editor-mode"); f != nil {
-		f.Changed = false
-	}
-	if f := configSetCmd.Flags().Lookup("state-file"); f != nil {
-		f.Changed = false
-	}
-	if f := configSetCmd.Flags().Lookup("default-vault"); f != nil {
-		f.Changed = false
-	}
-	if f := configSetCmd.Flags().Lookup("ui-accent"); f != nil {
-		f.Changed = false
-	}
-	if f := configSetCmd.Flags().Lookup("ui-code-theme"); f != nil {
+	if f := cmd.Flags().Lookup(name); f != nil {
 		f.Changed = false
 	}
 }
 
-func resetConfigUnsetFlagsForTest() {
-	configUnsetEditor = false
-	configUnsetEditorMode = false
-	configUnsetStateFile = false
-	configUnsetDefaultVault = false
-	configUnsetUIAccent = false
-	configUnsetUICodeTheme = false
+func resetBoolFlag(cmd *cobra.Command, name string) {
+	if err := cmd.Flags().Set(name, "false"); err != nil {
+		panic(err)
+	}
+	if f := cmd.Flags().Lookup(name); f != nil {
+		f.Changed = false
+	}
 }
 
 func TestConfigInitCreatesConfigFile(t *testing.T) {
@@ -102,17 +103,21 @@ work = "/vault/work"
 	jsonOutput = true
 	resetConfigSetFlagsForTest()
 
-	configSetEditor = "code"
-	configSetEditorMode = "terminal"
-	configSetDefaultVault = "work"
-	configSetUIAccent = "39"
-	configSetUICodeTheme = "dracula"
-
-	configSetCmd.Flags().Lookup("editor").Changed = true
-	configSetCmd.Flags().Lookup("editor-mode").Changed = true
-	configSetCmd.Flags().Lookup("default-vault").Changed = true
-	configSetCmd.Flags().Lookup("ui-accent").Changed = true
-	configSetCmd.Flags().Lookup("ui-code-theme").Changed = true
+	if err := configSetCmd.Flags().Set("editor", "code"); err != nil {
+		t.Fatalf("set editor: %v", err)
+	}
+	if err := configSetCmd.Flags().Set("editor-mode", "terminal"); err != nil {
+		t.Fatalf("set editor-mode: %v", err)
+	}
+	if err := configSetCmd.Flags().Set("default-vault", "work"); err != nil {
+		t.Fatalf("set default-vault: %v", err)
+	}
+	if err := configSetCmd.Flags().Set("ui-accent", "39"); err != nil {
+		t.Fatalf("set ui-accent: %v", err)
+	}
+	if err := configSetCmd.Flags().Set("ui-code-theme", "dracula"); err != nil {
+		t.Fatalf("set ui-code-theme: %v", err)
+	}
 
 	if err := configSetCmd.RunE(configSetCmd, []string{}); err != nil {
 		t.Fatalf("configSetCmd.RunE returned error: %v", err)
@@ -173,11 +178,21 @@ code_theme = "dracula"
 	jsonOutput = true
 	resetConfigUnsetFlagsForTest()
 
-	configUnsetEditor = true
-	configUnsetEditorMode = true
-	configUnsetDefaultVault = true
-	configUnsetUIAccent = true
-	configUnsetUICodeTheme = true
+	if err := configUnsetCmd.Flags().Set("editor", "true"); err != nil {
+		t.Fatalf("set editor: %v", err)
+	}
+	if err := configUnsetCmd.Flags().Set("editor-mode", "true"); err != nil {
+		t.Fatalf("set editor-mode: %v", err)
+	}
+	if err := configUnsetCmd.Flags().Set("default-vault", "true"); err != nil {
+		t.Fatalf("set default-vault: %v", err)
+	}
+	if err := configUnsetCmd.Flags().Set("ui-accent", "true"); err != nil {
+		t.Fatalf("set ui-accent: %v", err)
+	}
+	if err := configUnsetCmd.Flags().Set("ui-code-theme", "true"); err != nil {
+		t.Fatalf("set ui-code-theme: %v", err)
+	}
 
 	if err := configUnsetCmd.RunE(configUnsetCmd, []string{}); err != nil {
 		t.Fatalf("configUnsetCmd.RunE returned error: %v", err)
@@ -226,8 +241,9 @@ func TestConfigSetRejectsUnknownDefaultVault(t *testing.T) {
 	jsonOutput = false
 	resetConfigSetFlagsForTest()
 
-	configSetDefaultVault = "missing"
-	configSetCmd.Flags().Lookup("default-vault").Changed = true
+	if err := configSetCmd.Flags().Set("default-vault", "missing"); err != nil {
+		t.Fatalf("set default-vault: %v", err)
+	}
 
 	err := configSetCmd.RunE(configSetCmd, []string{})
 	if err == nil {
