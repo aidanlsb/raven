@@ -253,8 +253,8 @@ func TestResolveCLICommandPath(t *testing.T) {
 		t.Fatalf("resolveCLICommandPath(query) = (%q, %v), want (query, true)", got, ok)
 	}
 
-	if got, ok := resolveCLICommandPath([]string{"schema", "add", "type"}); !ok || got != "schema add" {
-		t.Fatalf("resolveCLICommandPath(schema add type) = (%q, %v), want (schema add, true)", got, ok)
+	if got, ok := resolveCLICommandPath([]string{"schema", "add", "type"}); !ok || got != "schema add type" {
+		t.Fatalf("resolveCLICommandPath(schema add type) = (%q, %v), want (schema add type, true)", got, ok)
 	}
 
 	if _, ok := resolveCLICommandPath([]string{"not-a-command"}); ok {

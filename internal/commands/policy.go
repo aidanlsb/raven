@@ -77,14 +77,9 @@ var nonInvokableCommandIDs = map[string]struct{}{
 	"mcp_status":  {},
 	"mcp_show":    {},
 
-	// Group/compatibility aliases that are not canonical leaf operations.
-	"schema_add":    {},
-	"schema_update": {},
-	"schema_remove": {},
-	"schema_rename": {},
-	"config":        {},
-	"vault":         {},
-	"template":      {},
+	"config":   {},
+	"vault":    {},
+	"template": {},
 }
 
 var workflowDisallowedExact = map[string]struct{}{

@@ -78,15 +78,22 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 
 func TestRegistryBackedLeafCommandsUseCanonicalAdapterOrAllowlist(t *testing.T) {
 	manualLeafAllowlist := map[string]struct{}{
-		"mcp install":   {},
-		"mcp remove":    {},
-		"mcp show":      {},
-		"mcp status":    {},
-		"schema add":    {},
-		"schema remove": {},
-		"schema rename": {},
-		"schema update": {},
-		"serve":         {},
+		"mcp install":         {},
+		"mcp remove":          {},
+		"mcp show":            {},
+		"mcp status":          {},
+		"schema add field":    {},
+		"schema add trait":    {},
+		"schema add type":     {},
+		"schema remove field": {},
+		"schema remove trait": {},
+		"schema remove type":  {},
+		"schema rename field": {},
+		"schema rename type":  {},
+		"schema update field": {},
+		"schema update trait": {},
+		"schema update type":  {},
+		"serve":               {},
 	}
 
 	paths := commandPaths(rootCmd)

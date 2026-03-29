@@ -12,7 +12,7 @@ import (
 )
 
 var schemaCmd = &cobra.Command{
-	Use:   "schema [types|traits|type <name>|trait <name>|core [name]|template ...]",
+	Use:   "schema [types|traits|type <name>|trait <name>|core [name]|add|update|remove|rename|template ...]",
 	Short: "Introspect the schema",
 	Long: `Query the schema for types and traits.
 

@@ -17,43 +17,57 @@ import (
 
 // Flags for schema add commands
 var (
-	schemaAddDefaultPath string
-	schemaAddNameField   string
-	schemaAddDescription string
-	schemaAddFieldType   string
-	schemaAddRequired    bool
-	schemaAddDefault     string
-	schemaAddValues      string
-	schemaAddTarget      string
+	schemaAddTypeDefaultPath string
+	schemaAddTypeNameField   string
+	schemaAddTypeDescription string
+
+	schemaAddTraitFieldType string
+	schemaAddTraitDefault   string
+	schemaAddTraitValues    string
+
+	schemaAddFieldTypeFlag    string
+	schemaAddFieldRequired    bool
+	schemaAddFieldDefault     string
+	schemaAddFieldValues      string
+	schemaAddFieldTarget      string
+	schemaAddFieldDescription string
 )
 
 // Flags for schema update commands
 var (
-	schemaUpdateDefaultPath string
-	schemaUpdateNameField   string
-	schemaUpdateDescription string
-	schemaUpdateFieldType   string
-	schemaUpdateRequired    string // "true", "false", or "" (no change)
-	schemaUpdateDefault     string
-	schemaUpdateValues      string
-	schemaUpdateTarget      string
-	schemaUpdateAddTrait    string
-	schemaUpdateRemoveTrait string
+	schemaUpdateTypeDefaultPath string
+	schemaUpdateTypeNameField   string
+	schemaUpdateTypeDescription string
+	schemaUpdateTypeAddTrait    string
+	schemaUpdateTypeRemoveTrait string
+
+	schemaUpdateTraitFieldType string
+	schemaUpdateTraitDefault   string
+	schemaUpdateTraitValues    string
+
+	schemaUpdateFieldTypeFlag    string
+	schemaUpdateFieldRequired    string // "true", "false", or "" (no change)
+	schemaUpdateFieldDefault     string
+	schemaUpdateFieldValues      string
+	schemaUpdateFieldTarget      string
+	schemaUpdateFieldDescription string
 )
 
 // Flags for schema remove commands
 var (
-	schemaRemoveForce bool
+	schemaRemoveTypeForce  bool
+	schemaRemoveTraitForce bool
 )
 
 // Flags for schema rename commands
 var (
-	schemaRenameConfirm           bool
-	schemaRenameDefaultPathRename bool
+	schemaRenameTypeConfirm           bool
+	schemaRenameTypeDefaultPathRename bool
+	schemaRenameFieldConfirm          bool
 )
 
 var schemaAddCmd = &cobra.Command{
-	Use:   "add <type|trait|field> <name> [parent-type]",
+	Use:   "add",
 	Short: "Add a type, trait, or field to the schema",
 	Long: `Add new definitions to schema.yaml.
 
@@ -66,31 +80,38 @@ Examples:
   rvn schema add type event --default-path event/
   rvn schema add trait priority --type enum --values high,medium,low
   rvn schema add field person email --type string --required`,
-	Args: cobra.MinimumNArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		start := time.Now()
-		kind := args[0]
+}
 
-		switch kind {
-		case "type":
-			return addType(vaultPath, args[1], start)
-		case "trait":
-			return addTrait(vaultPath, args[1], start)
-		case "field":
-			if len(args) < 3 {
-				return handleErrorMsg(ErrMissingArgument, "field requires type and field name", "Usage: rvn schema add field <type> <field>")
-			}
-			return addField(vaultPath, args[1], args[2], start)
-		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Use: type, trait, or field")
-		}
+var schemaAddTypeCmd = &cobra.Command{
+	Use:   "type <name>",
+	Short: "Add a new type",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return addType(getVaultPath(), args[0], time.Now())
+	},
+}
+
+var schemaAddTraitCmd = &cobra.Command{
+	Use:   "trait <name>",
+	Short: "Add a new trait",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return addTrait(getVaultPath(), args[0], time.Now())
+	},
+}
+
+var schemaAddFieldCmd = &cobra.Command{
+	Use:   "field <type> <field>",
+	Short: "Add a field to an existing type",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return addField(getVaultPath(), args[0], args[1], time.Now())
 	},
 }
 
 func addType(vaultPath, typeName string, start time.Time) error {
 	// Interactive prompt for name_field if not provided and not in JSON mode
-	nameField := schemaAddNameField
+	nameField := schemaAddTypeNameField
 	if nameField == "" && !isJSONOutput() {
 		fmt.Print("Which field should be the display name? (common: name, title; leave blank for none): ")
 		var input string
@@ -99,7 +120,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	}
 
 	// Default to a path that matches the type name exactly unless explicitly overridden.
-	defaultPath := schemaAddDefaultPath
+	defaultPath := schemaAddTypeDefaultPath
 	if strings.TrimSpace(defaultPath) == "" {
 		defaultPath = paths.NormalizeDirRoot(typeName)
 	}
@@ -108,7 +129,7 @@ func addType(vaultPath, typeName string, start time.Time) error {
 		"name":         typeName,
 		"default-path": defaultPath,
 		"name-field":   nameField,
-		"description":  schemaAddDescription,
+		"description":  schemaAddTypeDescription,
 	})
 	if isJSONOutput() {
 		outputCanonicalResultJSON(result)
@@ -133,9 +154,9 @@ func addType(vaultPath, typeName string, start time.Time) error {
 func addTrait(vaultPath, traitName string, start time.Time) error {
 	result := executeCanonicalCommand("schema_add_trait", vaultPath, map[string]interface{}{
 		"name":    traitName,
-		"type":    schemaAddFieldType,
-		"values":  schemaAddValues,
-		"default": schemaAddDefault,
+		"type":    schemaAddTraitFieldType,
+		"values":  schemaAddTraitValues,
+		"default": schemaAddTraitDefault,
 	})
 	if isJSONOutput() {
 		outputCanonicalResultJSON(result)
@@ -150,7 +171,7 @@ func addTrait(vaultPath, traitName string, start time.Time) error {
 	fmt.Printf("  type: %s\n", data["type"])
 	values, _ := decodeSchemaValue[[]string](data["values"])
 	if len(values) > 0 {
-		fmt.Printf("  values: %s\n", schemaAddValues)
+		fmt.Printf("  values: %s\n", schemaAddTraitValues)
 	}
 	return nil
 }
@@ -329,12 +350,12 @@ func addField(vaultPath, typeName, fieldName string, start time.Time) error {
 	result := executeCanonicalCommand("schema_add_field", vaultPath, map[string]interface{}{
 		"type_name":   typeName,
 		"field_name":  fieldName,
-		"type":        schemaAddFieldType,
-		"required":    schemaAddRequired,
-		"default":     schemaAddDefault,
-		"values":      schemaAddValues,
-		"target":      schemaAddTarget,
-		"description": schemaAddDescription,
+		"type":        schemaAddFieldTypeFlag,
+		"required":    schemaAddFieldRequired,
+		"default":     schemaAddFieldDefault,
+		"values":      schemaAddFieldValues,
+		"target":      schemaAddFieldTarget,
+		"description": schemaAddFieldDescription,
 	})
 	if isJSONOutput() {
 		outputCanonicalResultJSON(result)
@@ -400,7 +421,7 @@ func renderSchemaValidate(_ *cobra.Command, result commandexec.Result) error {
 // =============================================================================
 
 var schemaUpdateCmd = &cobra.Command{
-	Use:   "update <type|trait|field> <name> [parent-type]",
+	Use:   "update",
 	Short: "Update a type, trait, or field in the schema",
 	Long: `Update existing definitions in schema.yaml.
 
@@ -414,36 +435,43 @@ Examples:
   rvn schema update trait priority --values critical,high,medium,low
   rvn schema update field person email --required=true
   rvn schema update type meeting --add-trait due`,
-	Args: cobra.MinimumNArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		start := time.Now()
-		kind := args[0]
+}
 
-		switch kind {
-		case "type":
-			return updateType(vaultPath, args[1], start)
-		case "trait":
-			return updateTrait(vaultPath, args[1], start)
-		case "field":
-			if len(args) < 3 {
-				return handleErrorMsg(ErrMissingArgument, "field requires type and field name", "Usage: rvn schema update field <type> <field>")
-			}
-			return updateField(vaultPath, args[1], args[2], start)
-		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Use: type, trait, or field")
-		}
+var schemaUpdateTypeCmd = &cobra.Command{
+	Use:   "type <name>",
+	Short: "Update an existing type",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return updateType(getVaultPath(), args[0], time.Now())
+	},
+}
+
+var schemaUpdateTraitCmd = &cobra.Command{
+	Use:   "trait <name>",
+	Short: "Update an existing trait",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return updateTrait(getVaultPath(), args[0], time.Now())
+	},
+}
+
+var schemaUpdateFieldCmd = &cobra.Command{
+	Use:   "field <type> <field>",
+	Short: "Update a field on an existing type",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return updateField(getVaultPath(), args[0], args[1], time.Now())
 	},
 }
 
 func updateType(vaultPath, typeName string, start time.Time) error {
 	result := executeCanonicalCommand("schema_update_type", vaultPath, map[string]interface{}{
 		"name":         typeName,
-		"default-path": schemaUpdateDefaultPath,
-		"name-field":   schemaUpdateNameField,
-		"description":  schemaUpdateDescription,
-		"add-trait":    schemaUpdateAddTrait,
-		"remove-trait": schemaUpdateRemoveTrait,
+		"default-path": schemaUpdateTypeDefaultPath,
+		"name-field":   schemaUpdateTypeNameField,
+		"description":  schemaUpdateTypeDescription,
+		"add-trait":    schemaUpdateTypeAddTrait,
+		"remove-trait": schemaUpdateTypeRemoveTrait,
 	})
 	if isJSONOutput() {
 		outputCanonicalResultJSON(result)
@@ -464,9 +492,9 @@ func updateType(vaultPath, typeName string, start time.Time) error {
 func updateTrait(vaultPath, traitName string, start time.Time) error {
 	result := executeCanonicalCommand("schema_update_trait", vaultPath, map[string]interface{}{
 		"name":    traitName,
-		"type":    schemaUpdateFieldType,
-		"values":  schemaUpdateValues,
-		"default": schemaUpdateDefault,
+		"type":    schemaUpdateTraitFieldType,
+		"values":  schemaUpdateTraitValues,
+		"default": schemaUpdateTraitDefault,
 	})
 	if isJSONOutput() {
 		outputCanonicalResultJSON(result)
@@ -488,12 +516,12 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 	result := executeCanonicalCommand("schema_update_field", vaultPath, map[string]interface{}{
 		"type_name":   typeName,
 		"field_name":  fieldName,
-		"type":        schemaUpdateFieldType,
-		"required":    schemaUpdateRequired,
-		"default":     schemaUpdateDefault,
-		"values":      schemaUpdateValues,
-		"target":      schemaUpdateTarget,
-		"description": schemaUpdateDescription,
+		"type":        schemaUpdateFieldTypeFlag,
+		"required":    schemaUpdateFieldRequired,
+		"default":     schemaUpdateFieldDefault,
+		"values":      schemaUpdateFieldValues,
+		"target":      schemaUpdateFieldTarget,
+		"description": schemaUpdateFieldDescription,
 	})
 	if isJSONOutput() {
 		outputCanonicalResultJSON(result)
@@ -516,7 +544,7 @@ func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
 // =============================================================================
 
 var schemaRemoveCmd = &cobra.Command{
-	Use:   "remove <type|trait|field> <name> [parent-type]",
+	Use:   "remove",
 	Short: "Remove a type, trait, or field from the schema",
 	Long: `Remove definitions from schema.yaml.
 
@@ -531,34 +559,41 @@ Examples:
   rvn schema remove type event
   rvn schema remove trait priority --force
   rvn schema remove field person nickname`,
-	Args: cobra.MinimumNArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		start := time.Now()
-		kind := args[0]
+}
 
-		switch kind {
-		case "type":
-			return removeType(vaultPath, args[1], start)
-		case "trait":
-			return removeTrait(vaultPath, args[1], start)
-		case "field":
-			if len(args) < 3 {
-				return handleErrorMsg(ErrMissingArgument, "field requires type and field name", "Usage: rvn schema remove field <type> <field>")
-			}
-			return removeField(vaultPath, args[1], args[2], start)
-		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Use: type, trait, or field")
-		}
+var schemaRemoveTypeCmd = &cobra.Command{
+	Use:   "type <name>",
+	Short: "Remove a type from the schema",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return removeType(getVaultPath(), args[0], time.Now())
+	},
+}
+
+var schemaRemoveTraitCmd = &cobra.Command{
+	Use:   "trait <name>",
+	Short: "Remove a trait from the schema",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return removeTrait(getVaultPath(), args[0], time.Now())
+	},
+}
+
+var schemaRemoveFieldCmd = &cobra.Command{
+	Use:   "field <type> <field>",
+	Short: "Remove a field from a type",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return removeField(getVaultPath(), args[0], args[1], time.Now())
 	},
 }
 
 func removeType(vaultPath, typeName string, start time.Time) error {
 	result := executeCanonicalCommand("schema_remove_type", vaultPath, map[string]interface{}{
 		"name":  typeName,
-		"force": schemaRemoveForce,
+		"force": schemaRemoveTypeForce,
 	})
-	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveForce {
+	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveTypeForce {
 		details, _ := result.Error.Details.(map[string]interface{})
 		count := detailInt(details, "affected_count")
 		if count > 0 {
@@ -590,9 +625,9 @@ func removeType(vaultPath, typeName string, start time.Time) error {
 func removeTrait(vaultPath, traitName string, start time.Time) error {
 	result := executeCanonicalCommand("schema_remove_trait", vaultPath, map[string]interface{}{
 		"name":  traitName,
-		"force": schemaRemoveForce,
+		"force": schemaRemoveTraitForce,
 	})
-	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveForce {
+	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveTraitForce {
 		details, _ := result.Error.Details.(map[string]interface{})
 		count := detailInt(details, "affected_count")
 		if count > 0 {
@@ -697,7 +732,7 @@ func decodeSchemaCount(raw interface{}) (int, error) {
 // =============================================================================
 
 var schemaRenameCmd = &cobra.Command{
-	Use:   "rename <type|field> ...",
+	Use:   "rename",
 	Short: "Rename a type or field and update references",
 	Long: `Rename a type or a field in the schema and update downstream usages.
 
@@ -729,26 +764,23 @@ Examples:
 
   rvn schema rename field person email email_address
   rvn schema rename field person email email_address --confirm`,
-	Args: cobra.MinimumNArgs(3),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		start := time.Now()
-		kind := args[0]
+}
 
-		switch kind {
-		case "type":
-			if len(args) != 3 {
-				return handleErrorMsg(ErrMissingArgument, "type rename requires old and new names", "Usage: rvn schema rename type <old_name> <new_name>")
-			}
-			return renameType(vaultPath, args[1], args[2], start)
-		case "field":
-			if len(args) != 4 {
-				return handleErrorMsg(ErrMissingArgument, "field rename requires type, old field, and new field", "Usage: rvn schema rename field <type> <old_field> <new_field>")
-			}
-			return renameField(vaultPath, args[1], args[2], args[3], start)
-		default:
-			return handleErrorMsg(ErrInvalidInput, fmt.Sprintf("unknown schema kind: %s", kind), "Currently supported: type, field")
-		}
+var schemaRenameTypeCmd = &cobra.Command{
+	Use:   "type <old_name> <new_name>",
+	Short: "Rename a type and update references",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return renameType(getVaultPath(), args[0], args[1], time.Now())
+	},
+}
+
+var schemaRenameFieldCmd = &cobra.Command{
+	Use:   "field <type> <old_field> <new_field>",
+	Short: "Rename a field on a type and update downstream uses",
+	Args:  cobra.ExactArgs(3),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return renameField(getVaultPath(), args[0], args[1], args[2], time.Now())
 	},
 }
 
@@ -757,7 +789,7 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 		"type_name": typeName,
 		"old_field": oldField,
 		"new_field": newField,
-		"confirm":   schemaRenameConfirm,
+		"confirm":   schemaRenameFieldConfirm,
 	})
 	if isJSONOutput() {
 		outputCanonicalResultJSON(result)
@@ -799,7 +831,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		"old_name": oldName,
 		"new_name": newName,
 	})
-	if isJSONOutput() && !schemaRenameConfirm {
+	if isJSONOutput() && !schemaRenameTypeConfirm {
 		outputCanonicalResultJSON(preview)
 		return nil
 	}
@@ -808,7 +840,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 	}
 	previewData := canonicalDataMap(preview)
 
-	if !schemaRenameConfirm {
+	if !schemaRenameTypeConfirm {
 		changes, err := decodeSchemaValue[[]schemasvc.TypeRenameChange](previewData["changes"])
 		if err != nil {
 			return err
@@ -840,7 +872,7 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		return nil
 	}
 
-	applyDefaultPathRename := schemaRenameDefaultPathRename
+	applyDefaultPathRename := schemaRenameTypeDefaultPathRename
 	if boolValue(previewData["default_path_rename_available"]) && !applyDefaultPathRename && shouldPromptForConfirm() {
 		defaultPathOld, _ := previewData["default_path_old"].(string)
 		defaultPathNew, _ := previewData["default_path_new"].(string)
@@ -952,36 +984,57 @@ func printTypeRenameChanges(changes []schemasvc.TypeRenameChange) {
 }
 
 func init() {
-	// Add flags to schema add command
-	schemaAddCmd.Flags().StringVar(&schemaAddDefaultPath, "default-path", "", "Default path for new type files (default: <type>/)")
-	schemaAddCmd.Flags().StringVar(&schemaAddNameField, "name-field", "", "Field to use as display name (auto-created if doesn't exist)")
-	schemaAddCmd.Flags().StringVar(&schemaAddDescription, "description", "", "Optional description for the type or field")
-	schemaAddCmd.Flags().StringVar(&schemaAddFieldType, "type", "", "Field/trait type (string, number, url, date, datetime, enum, ref, bool)")
-	schemaAddCmd.Flags().BoolVar(&schemaAddRequired, "required", false, "Mark field as required")
-	schemaAddCmd.Flags().StringVar(&schemaAddDefault, "default", "", "Default value")
-	schemaAddCmd.Flags().StringVar(&schemaAddValues, "values", "", "Enum values (comma-separated)")
-	schemaAddCmd.Flags().StringVar(&schemaAddTarget, "target", "", "Target type for ref fields")
+	schemaAddTypeCmd.Flags().StringVar(&schemaAddTypeDefaultPath, "default-path", "", "Default path for new type files (default: <type>/)")
+	schemaAddTypeCmd.Flags().StringVar(&schemaAddTypeNameField, "name-field", "", "Field to use as display name (auto-created if doesn't exist)")
+	schemaAddTypeCmd.Flags().StringVar(&schemaAddTypeDescription, "description", "", "Optional description for the type")
 
-	// Add flags to schema update command
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDefaultPath, "default-path", "", "Update default path for type")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateNameField, "name-field", "", "Set/update display name field (use '-' to remove)")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDescription, "description", "", "Set/update description (use '-' to remove)")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateFieldType, "type", "", "Update field/trait type")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateRequired, "required", "", "Update required status (true/false)")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateDefault, "default", "", "Update default value")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateValues, "values", "", "Update enum values (comma-separated)")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateTarget, "target", "", "Update target type for ref fields")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateAddTrait, "add-trait", "", "Add a trait to the type")
-	schemaUpdateCmd.Flags().StringVar(&schemaUpdateRemoveTrait, "remove-trait", "", "Remove a trait from the type")
+	schemaAddTraitCmd.Flags().StringVar(&schemaAddTraitFieldType, "type", "", "Trait type (string, number, url, date, datetime, enum, ref, bool)")
+	schemaAddTraitCmd.Flags().StringVar(&schemaAddTraitDefault, "default", "", "Default value")
+	schemaAddTraitCmd.Flags().StringVar(&schemaAddTraitValues, "values", "", "Enum values (comma-separated)")
 
-	// Add flags to schema remove command
-	schemaRemoveCmd.Flags().BoolVar(&schemaRemoveForce, "force", false, "Skip confirmation prompts")
+	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldTypeFlag, "type", "", "Field type (string, number, url, date, datetime, enum, ref, bool)")
+	schemaAddFieldCmd.Flags().BoolVar(&schemaAddFieldRequired, "required", false, "Mark field as required")
+	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldDefault, "default", "", "Default value")
+	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldValues, "values", "", "Enum values (comma-separated)")
+	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldTarget, "target", "", "Target type for ref fields")
+	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldDescription, "description", "", "Optional description for the field")
 
-	// Add flags to schema rename command
-	schemaRenameCmd.Flags().BoolVar(&schemaRenameConfirm, "confirm", false, "Apply the rename (default: preview only)")
-	schemaRenameCmd.Flags().BoolVar(&schemaRenameDefaultPathRename, "rename-default-path", false, "Also rename type default_path directory and move matching files (with reference updates)")
+	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeDefaultPath, "default-path", "", "Update default path for type")
+	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeNameField, "name-field", "", "Set/update display name field (use '-' to remove)")
+	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeDescription, "description", "", "Set/update description (use '-' to remove)")
+	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeAddTrait, "add-trait", "", "Add a trait to the type")
+	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeRemoveTrait, "remove-trait", "", "Remove a trait from the type")
 
-	// Add subcommands to schema command
+	schemaUpdateTraitCmd.Flags().StringVar(&schemaUpdateTraitFieldType, "type", "", "Update trait type")
+	schemaUpdateTraitCmd.Flags().StringVar(&schemaUpdateTraitDefault, "default", "", "Update default value")
+	schemaUpdateTraitCmd.Flags().StringVar(&schemaUpdateTraitValues, "values", "", "Update enum values (comma-separated)")
+
+	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldTypeFlag, "type", "", "Update field type")
+	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldRequired, "required", "", "Update required status (true/false)")
+	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldDefault, "default", "", "Update default value")
+	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldValues, "values", "", "Update enum values (comma-separated)")
+	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldTarget, "target", "", "Update target type for ref fields")
+	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldDescription, "description", "", "Set/update description (use '-' to remove)")
+
+	schemaRemoveTypeCmd.Flags().BoolVar(&schemaRemoveTypeForce, "force", false, "Skip confirmation prompts")
+	schemaRemoveTraitCmd.Flags().BoolVar(&schemaRemoveTraitForce, "force", false, "Skip confirmation prompts")
+
+	schemaRenameTypeCmd.Flags().BoolVar(&schemaRenameTypeConfirm, "confirm", false, "Apply the rename (default: preview only)")
+	schemaRenameTypeCmd.Flags().BoolVar(&schemaRenameTypeDefaultPathRename, "rename-default-path", false, "Also rename type default_path directory and move matching files (with reference updates)")
+	schemaRenameFieldCmd.Flags().BoolVar(&schemaRenameFieldConfirm, "confirm", false, "Apply the rename (default: preview only)")
+
+	schemaAddCmd.AddCommand(schemaAddTypeCmd)
+	schemaAddCmd.AddCommand(schemaAddTraitCmd)
+	schemaAddCmd.AddCommand(schemaAddFieldCmd)
+	schemaUpdateCmd.AddCommand(schemaUpdateTypeCmd)
+	schemaUpdateCmd.AddCommand(schemaUpdateTraitCmd)
+	schemaUpdateCmd.AddCommand(schemaUpdateFieldCmd)
+	schemaRemoveCmd.AddCommand(schemaRemoveTypeCmd)
+	schemaRemoveCmd.AddCommand(schemaRemoveTraitCmd)
+	schemaRemoveCmd.AddCommand(schemaRemoveFieldCmd)
+	schemaRenameCmd.AddCommand(schemaRenameTypeCmd)
+	schemaRenameCmd.AddCommand(schemaRenameFieldCmd)
+
 	schemaCmd.AddCommand(schemaAddCmd)
 	schemaCmd.AddCommand(schemaUpdateCmd)
 	schemaCmd.AddCommand(schemaRemoveCmd)

@@ -25,13 +25,6 @@ func TestPolicyForCommandID(t *testing.T) {
 			wantWorkflowOK: false,
 		},
 		{
-			name:           "non-invokable compatibility alias",
-			commandID:      "schema_add",
-			wantInvokable:  false,
-			wantDiscover:   false,
-			wantWorkflowOK: true,
-		},
-		{
 			name:           "workflow disallowed prefix",
 			commandID:      "workflow_run",
 			wantInvokable:  true,
