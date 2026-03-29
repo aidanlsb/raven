@@ -96,7 +96,7 @@ var guideTopics = []GuideTopic{
 	{
 		Slug:        "issue-types",
 		Name:        "Issue Types Reference",
-		Description: "`raven_check` issue reference and suggested fixes.",
+		Description: "`check` issue reference and suggested fixes.",
 		Path:        "agent-guide/issue-types.md",
 	},
 	{

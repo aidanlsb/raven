@@ -75,6 +75,36 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 	}
 }
 
+func TestMCPIntegration_InvokeVaultPathOverride(t *testing.T) {
+	primary := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+	override := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, primary.Path, binary)
+
+	result := server.callTool("raven_invoke", map[string]interface{}{
+		"command":    "new",
+		"vault_path": override.Path,
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Vault Override",
+		},
+	})
+	if result.IsError {
+		t.Fatalf("expected invoke success, got error: %s", result.Text)
+	}
+	if primary.FileExists("people/vault-override.md") {
+		t.Fatal("expected pinned vault to remain unchanged")
+	}
+	if !override.FileExists("people/vault-override.md") {
+		t.Fatal("expected object to be created in override vault")
+	}
+}
+
 // TestMCPIntegration_ServeRejectsLegacyToolNames ensures the live `rvn serve`
 // JSON-RPC path only accepts compact tools and rejects legacy names.
 func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
@@ -151,7 +181,7 @@ func TestMCPIntegration_CreateObject(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Call the raven_new tool
-	result := server.callTool("raven_new", map[string]interface{}{
+	result := server.callTool("new", map[string]interface{}{
 		"type":  "person",
 		"title": "Alice",
 		"field": map[string]interface{}{
@@ -176,7 +206,7 @@ func TestMCPIntegration_SchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	result := server.callTool("raven_schema_add_type", map[string]interface{}{
+	result := server.callTool("schema_add_type", map[string]interface{}{
 		"name": "meeting",
 	})
 
@@ -215,7 +245,7 @@ func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	result := server.callTool("raven_new", map[string]interface{}{
+	result := server.callTool("new", map[string]interface{}{
 		"type":  "page",
 		"title": "Scratch Note",
 	})
@@ -238,19 +268,19 @@ func TestMCPIntegration_QueryObjects(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Create some objects first
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Project A",
 		"field": map[string]interface{}{"status": "active"},
 	})
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Project B",
 		"field": map[string]interface{}{"status": "done"},
 	})
 
 	// Query for active projects - uses == for equality
-	result := server.callTool("raven_query", map[string]interface{}{
+	result := server.callTool("query", map[string]interface{}{
 		"query_string": "object:project .status==active",
 	})
 
@@ -290,19 +320,19 @@ func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Create some objects first
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Project A",
 		"field": map[string]interface{}{"status": "active"},
 	})
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Project B",
 		"field": map[string]interface{}{"status": "done"},
 	})
 
 	// MCP passes query_string as one arg; ensure saved query + inline input works.
-	result := server.callTool("raven_query", map[string]interface{}{
+	result := server.callTool("query", map[string]interface{}{
 		"query_string": "project-by-status active",
 	})
 
@@ -338,18 +368,18 @@ func TestMCPIntegration_QuerySavedQueryTypedInputs(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Project A",
 		"field": map[string]interface{}{"status": "active"},
 	})
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Project B",
 		"field": map[string]interface{}{"status": "done"},
 	})
 
-	result := server.callTool("raven_query", map[string]interface{}{
+	result := server.callTool("query", map[string]interface{}{
 		"query_string": "project-by-status",
 		"inputs": map[string]interface{}{
 			"status": "active",
@@ -388,13 +418,13 @@ func TestMCPIntegration_QuerySavedQueryAllowsUnusedDeclaredArgs(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Project A",
 		"field": map[string]interface{}{"status": "active"},
 	})
 
-	result := server.callTool("raven_query", map[string]interface{}{
+	result := server.callTool("query", map[string]interface{}{
 		"query_string": "project-by-status",
 		"inputs": map[string]interface{}{
 			"status": "active",
@@ -438,10 +468,10 @@ Bob is a developer.
 	server := newTestServer(t, v.Path, binary)
 
 	// Reindex first to pick up the file
-	server.callTool("raven_reindex", nil)
+	server.callTool("reindex", nil)
 
 	// Read the object
-	result := server.callTool("raven_read", map[string]interface{}{
+	result := server.callTool("read", map[string]interface{}{
 		"path": "people/bob.md",
 	})
 
@@ -465,13 +495,13 @@ func TestMCPIntegration_SetFields(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Create a person
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "person",
 		"title": "Carol",
 	})
 
 	// Update the email field
-	result := server.callTool("raven_set", map[string]interface{}{
+	result := server.callTool("set", map[string]interface{}{
 		"object_id": "people/carol",
 		"fields": map[string]interface{}{
 			"email": "carol@example.com",
@@ -542,7 +572,7 @@ steps:
 	server := newTestServer(t, v.Path, binary)
 
 	// JSON-typed flag provided as JSON string is rejected.
-	upsertInvalid := server.callTool("raven_upsert", map[string]interface{}{
+	upsertInvalid := server.callTool("upsert", map[string]interface{}{
 		"type":       "project",
 		"title":      "MCP Compat Project",
 		"field-json": `{"status":"active"}`,
@@ -556,7 +586,7 @@ steps:
 	}
 
 	// JSON-typed flag provided as an object succeeds.
-	upsertValid := server.callTool("raven_upsert", map[string]interface{}{
+	upsertValid := server.callTool("upsert", map[string]interface{}{
 		"type":       "project",
 		"title":      "MCP Compat Project",
 		"field-json": map[string]interface{}{"status": "active"},
@@ -567,7 +597,7 @@ steps:
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: active")
 
 	// Key-value map provided as a single "k=v" string is rejected.
-	setInvalid := server.callTool("raven_set", map[string]interface{}{
+	setInvalid := server.callTool("set", map[string]interface{}{
 		"object_id": "projects/mcp-compat-project",
 		"fields":    "status=done",
 	})
@@ -580,7 +610,7 @@ steps:
 	}
 
 	// Typed object for fields succeeds.
-	setValid := server.callTool("raven_set", map[string]interface{}{
+	setValid := server.callTool("set", map[string]interface{}{
 		"object_id": "projects/mcp-compat-project",
 		"fields":    map[string]interface{}{"status": "done"},
 	})
@@ -590,7 +620,7 @@ steps:
 	v.AssertFileContains("projects/mcp-compat-project.md", "status: done")
 
 	// JSON-typed workflow input provided as string is rejected.
-	runInvalid := server.callTool("raven_workflow_run", map[string]interface{}{
+	runInvalid := server.callTool("workflow_run", map[string]interface{}{
 		"name":       "string-compat",
 		"input_json": `{"date":"2026-02-16"}`,
 	})
@@ -603,7 +633,7 @@ steps:
 	}
 
 	// JSON-typed workflow input provided as object succeeds.
-	runResult := server.callTool("raven_workflow_run", map[string]interface{}{
+	runResult := server.callTool("workflow_run", map[string]interface{}{
 		"name":       "string-compat",
 		"input-json": map[string]interface{}{"date": "2026-02-16"},
 	})
@@ -630,7 +660,7 @@ steps:
 	}
 
 	// JSON-typed workflow continue payload as string is rejected.
-	continueInvalid := server.callTool("raven_workflow_continue", map[string]interface{}{
+	continueInvalid := server.callTool("workflow_continue", map[string]interface{}{
 		"run-id":            runResp.Data.RunID,
 		"agent-output-json": `{"outputs":{"markdown":"# Brief\nGenerated from strict payloads."}}`,
 	})
@@ -643,7 +673,7 @@ steps:
 	}
 
 	// JSON-typed workflow continue payload as object succeeds.
-	continueResult := server.callTool("raven_workflow_continue", map[string]interface{}{
+	continueResult := server.callTool("workflow_continue", map[string]interface{}{
 		"run-id":            runResp.Data.RunID,
 		"expected-revision": float64(runResp.Data.Revision),
 		"agent-output-json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "# Brief\nGenerated from strict payloads."}},
@@ -665,7 +695,7 @@ steps:
 		t.Fatalf("expected completed status after continue, got %q", continueResp.Data.Status)
 	}
 
-	searchResult := server.callTool("raven_search", map[string]interface{}{
+	searchResult := server.callTool("search", map[string]interface{}{
 		"query": "Generated from strict payloads",
 		"limit": float64(5),
 	})
@@ -702,7 +732,7 @@ type: page
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	result := server.callTool("raven_edit", map[string]interface{}{
+	result := server.callTool("edit", map[string]interface{}{
 		"path":    "daily/2026-01-02.md",
 		"old_str": "- old task",
 		"new_str": "",
@@ -726,14 +756,14 @@ func TestMCPIntegration_DeleteObject(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Create an object
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "person",
 		"title": "Dave",
 	})
 	v.AssertFileExists("people/dave.md")
 
 	// Delete it
-	result := server.callTool("raven_delete", map[string]interface{}{
+	result := server.callTool("delete", map[string]interface{}{
 		"object_id": "people/dave",
 		"force":     true,
 	})
@@ -763,10 +793,10 @@ Discussed the product roadmap and timeline.
 	server := newTestServer(t, v.Path, binary)
 
 	// Reindex
-	server.callTool("raven_reindex", nil)
+	server.callTool("reindex", nil)
 
 	// Search for roadmap
-	result := server.callTool("raven_search", map[string]interface{}{
+	result := server.callTool("search", map[string]interface{}{
 		"query": "roadmap",
 	})
 
@@ -815,10 +845,10 @@ Eve's secret project.
 	server := newTestServer(t, v.Path, binary)
 
 	// Reindex
-	server.callTool("raven_reindex", nil)
+	server.callTool("reindex", nil)
 
 	// Get backlinks for Eve
-	result := server.callTool("raven_backlinks", map[string]interface{}{
+	result := server.callTool("backlinks", map[string]interface{}{
 		"target": "people/eve",
 	})
 
@@ -852,7 +882,7 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Get schema types
-	result := server.callTool("raven_schema", map[string]interface{}{
+	result := server.callTool("schema", map[string]interface{}{
 		"subcommand": "types",
 	})
 
@@ -866,7 +896,7 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 	}
 
 	// Get details for one type using explicit positional args.
-	typeResult := server.callTool("raven_schema", map[string]interface{}{
+	typeResult := server.callTool("schema", map[string]interface{}{
 		"subcommand": "type",
 		"name":       "person",
 	})
@@ -901,7 +931,7 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Add a new field with a description.
-	addFieldResult := server.callTool("raven_schema_add_field", map[string]interface{}{
+	addFieldResult := server.callTool("schema_add_field", map[string]interface{}{
 		"type_name":   "person",
 		"field_name":  "website",
 		"type":        "string",
@@ -914,7 +944,7 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 	v.AssertFileContains("schema.yaml", "description: Primary website URL")
 
 	// Update existing field description.
-	updateFieldResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+	updateFieldResult := server.callTool("schema_update_field", map[string]interface{}{
 		"type_name":   "person",
 		"field_name":  "email",
 		"description": "Primary contact email",
@@ -925,7 +955,7 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 	v.AssertFileContains("schema.yaml", "description: Primary contact email")
 
 	// Remove the description with "-" sentinel.
-	removeDescriptionResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+	removeDescriptionResult := server.callTool("schema_update_field", map[string]interface{}{
 		"type_name":   "person",
 		"field_name":  "email",
 		"description": "-",
@@ -946,7 +976,7 @@ func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	updateFieldResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+	updateFieldResult := server.callTool("schema_update_field", map[string]interface{}{
 		"type_name":  "project",
 		"field_name": "status",
 		"values":     "active,paused,done,archived",
@@ -967,7 +997,7 @@ func TestMCPIntegration_SchemaUpdateTypeAndTraitViaToolCall(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	updateTypeResult := server.callTool("raven_schema_update_type", map[string]interface{}{
+	updateTypeResult := server.callTool("schema_update_type", map[string]interface{}{
 		"name":        "project",
 		"description": "Tracked work items",
 		"add-trait":   "priority",
@@ -978,7 +1008,7 @@ func TestMCPIntegration_SchemaUpdateTypeAndTraitViaToolCall(t *testing.T) {
 	v.AssertFileContains("schema.yaml", "description: Tracked work items")
 	v.AssertFileContains("schema.yaml", "- priority")
 
-	updateTraitResult := server.callTool("raven_schema_update_trait", map[string]interface{}{
+	updateTraitResult := server.callTool("schema_update_trait", map[string]interface{}{
 		"name":   "priority",
 		"values": "low,medium,high,critical",
 	})
@@ -996,7 +1026,7 @@ func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	createProject := server.callTool("raven_new", map[string]interface{}{
+	createProject := server.callTool("new", map[string]interface{}{
 		"type":  "project",
 		"title": "Apollo",
 	})
@@ -1004,7 +1034,7 @@ func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T
 		t.Fatalf("schema remove setup (project create) failed: %s", createProject.Text)
 	}
 
-	addTraitUsage := server.callTool("raven_add", map[string]interface{}{
+	addTraitUsage := server.callTool("add", map[string]interface{}{
 		"text": "@priority(high)",
 		"to":   "projects/apollo.md",
 	})
@@ -1012,7 +1042,7 @@ func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T
 		t.Fatalf("schema remove setup (trait usage) failed: %s", addTraitUsage.Text)
 	}
 
-	removeType := server.callTool("raven_schema_remove_type", map[string]interface{}{
+	removeType := server.callTool("schema_remove_type", map[string]interface{}{
 		"name": "project",
 	})
 	if removeType.IsError {
@@ -1036,7 +1066,7 @@ func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T
 	}
 	v.AssertFileNotContains("schema.yaml", "project:")
 
-	removeTrait := server.callTool("raven_schema_remove_trait", map[string]interface{}{
+	removeTrait := server.callTool("schema_remove_trait", map[string]interface{}{
 		"name": "priority",
 	})
 	if removeTrait.IsError {
@@ -1107,7 +1137,7 @@ Planning: [[events/planning|Planning]]
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	preview := server.callTool("raven_schema_rename_type", map[string]interface{}{
+	preview := server.callTool("schema_rename_type", map[string]interface{}{
 		"old_name": "event",
 		"new_name": "meeting",
 	})
@@ -1141,7 +1171,7 @@ Planning: [[events/planning|Planning]]
 	v.AssertFileExists("events/kickoff.md")
 	v.AssertFileExists("events/planning.md")
 
-	apply := server.callTool("raven_schema_rename_type", map[string]interface{}{
+	apply := server.callTool("schema_rename_type", map[string]interface{}{
 		"old_name":            "event",
 		"new_name":            "meeting",
 		"confirm":             true,
@@ -1220,10 +1250,10 @@ References [[nonexistent/page]] which doesn't exist.
 	server := newTestServer(t, v.Path, binary)
 
 	// Reindex
-	server.callTool("raven_reindex", nil)
+	server.callTool("reindex", nil)
 
 	// Run check - note: check command may return IsError=true when issues are found
-	result := server.callTool("raven_check", nil)
+	result := server.callTool("check", nil)
 
 	// Check returns a different format (not the standard ok/data envelope)
 	// The response should contain "issues" and "missing_reference"
@@ -1253,9 +1283,9 @@ owner: "[[freya]]"
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	server.callTool("raven_reindex", nil)
+	server.callTool("reindex", nil)
 
-	preview := server.callTool("raven_check", map[string]interface{}{
+	preview := server.callTool("check", map[string]interface{}{
 		"fix": true,
 	})
 	if preview.IsError {
@@ -1279,7 +1309,7 @@ owner: "[[freya]]"
 		t.Fatalf("expected at least 1 fixable issue, got %d", previewResp.Data.FixableIssues)
 	}
 
-	apply := server.callTool("raven_check", map[string]interface{}{
+	apply := server.callTool("check", map[string]interface{}{
 		"fix":     true,
 		"confirm": true,
 	})
@@ -1336,7 +1366,7 @@ meeting: "[[meeting/all-hands]]"
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	result := server.callTool("raven_check", map[string]interface{}{
+	result := server.callTool("check", map[string]interface{}{
 		"create-missing": true,
 		"confirm":        true,
 	})
@@ -1378,13 +1408,13 @@ name: Alice
 	binary := testutil.BuildCLI(t)
 	server := newTestServer(t, v.Path, binary)
 
-	server.callTool("raven_reindex", nil)
+	server.callTool("reindex", nil)
 
 	if err := os.Remove(filepath.Join(v.Path, "people/alice.md")); err != nil {
 		t.Fatalf("failed to remove person file: %v", err)
 	}
 
-	result := server.callTool("raven_query", map[string]interface{}{
+	result := server.callTool("query", map[string]interface{}{
 		"query_string": "object:person",
 		"refresh":      true,
 	})
@@ -1417,13 +1447,13 @@ func TestMCPIntegration_ErrorHandling(t *testing.T) {
 	server := newTestServer(t, v.Path, binary)
 
 	// Create a file first
-	server.callTool("raven_new", map[string]interface{}{
+	server.callTool("new", map[string]interface{}{
 		"type":  "person",
 		"title": "Alice",
 	})
 
 	// Try to create a duplicate (should fail)
-	result := server.callTool("raven_new", map[string]interface{}{
+	result := server.callTool("new", map[string]interface{}{
 		"type":  "person",
 		"title": "Alice",
 	})
@@ -1457,7 +1487,7 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_new", map[string]interface{}{
+		mcpResult := server.callTool("new", map[string]interface{}{
 			"type":  "person",
 			"title": "Parity Person",
 			"field": map[string]interface{}{
@@ -1474,7 +1504,7 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_upsert", map[string]interface{}{
+		mcpResult := server.callTool("upsert", map[string]interface{}{
 			"type":    "project",
 			"title":   "Parity Project",
 			"field":   map[string]interface{}{"status": "active"},
@@ -1490,13 +1520,13 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{
+		server.callTool("new", map[string]interface{}{
 			"type":  "person",
 			"title": "Parity Add",
 		})
 		vCLI.RunCLI("new", "person", "Parity Add").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_add", map[string]interface{}{
+		mcpResult := server.callTool("add", map[string]interface{}{
 			"text": "Parity add content",
 			"to":   "people/parity-add",
 		})
@@ -1510,12 +1540,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Bulk One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Bulk Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Add Bulk One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Add Bulk Two"})
 		vCLI.RunCLI("new", "person", "Add Bulk One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Add Bulk Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_add", map[string]interface{}{
+		mcpResult := server.callTool("add", map[string]interface{}{
 			"stdin":      true,
 			"object_ids": []interface{}{"people/add-bulk-one", "people/add-bulk-two"},
 			"text":       "bulk add preview",
@@ -1530,12 +1560,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Apply One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Add Apply Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Add Apply One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Add Apply Two"})
 		vCLI.RunCLI("new", "person", "Add Apply One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Add Apply Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_add", map[string]interface{}{
+		mcpResult := server.callTool("add", map[string]interface{}{
 			"stdin":      true,
 			"confirm":    true,
 			"object_ids": []interface{}{"people/add-apply-one", "people/add-apply-two"},
@@ -1551,13 +1581,13 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{
+		server.callTool("new", map[string]interface{}{
 			"type":  "person",
 			"title": "Parity Set",
 		})
 		vCLI.RunCLI("new", "person", "Parity Set").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_set", map[string]interface{}{
+		mcpResult := server.callTool("set", map[string]interface{}{
 			"object_id": "people/parity-set",
 			"fields": map[string]interface{}{
 				"email": "set@example.com",
@@ -1573,12 +1603,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Bulk One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Bulk Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Set Bulk One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Set Bulk Two"})
 		vCLI.RunCLI("new", "person", "Set Bulk One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Set Bulk Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_set", map[string]interface{}{
+		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin":      true,
 			"object_ids": []interface{}{"people/set-bulk-one", "people/set-bulk-two"},
 			"fields": map[string]interface{}{
@@ -1595,12 +1625,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Apply One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Set Apply Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Set Apply One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Set Apply Two"})
 		vCLI.RunCLI("new", "person", "Set Apply One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Set Apply Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_set", map[string]interface{}{
+		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin":      true,
 			"confirm":    true,
 			"object_ids": []interface{}{"people/set-apply-one", "people/set-apply-two"},
@@ -1618,13 +1648,13 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{
+		server.callTool("new", map[string]interface{}{
 			"type":  "person",
 			"title": "Parity Delete",
 		})
 		vCLI.RunCLI("new", "person", "Parity Delete").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+		mcpResult := server.callTool("delete", map[string]interface{}{
 			"object_id": "people/parity-delete",
 			"force":     true,
 		})
@@ -1638,12 +1668,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Bulk One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Bulk Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Delete Bulk One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Delete Bulk Two"})
 		vCLI.RunCLI("new", "person", "Delete Bulk One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Delete Bulk Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+		mcpResult := server.callTool("delete", map[string]interface{}{
 			"stdin":      true,
 			"object_ids": []interface{}{"people/delete-bulk-one", "people/delete-bulk-two"},
 		})
@@ -1657,12 +1687,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Apply One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Delete Apply Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Delete Apply One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Delete Apply Two"})
 		vCLI.RunCLI("new", "person", "Delete Apply One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Delete Apply Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+		mcpResult := server.callTool("delete", map[string]interface{}{
 			"stdin":      true,
 			"confirm":    true,
 			"object_ids": []interface{}{"people/delete-apply-one", "people/delete-apply-two"},
@@ -1677,8 +1707,8 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Move Me"})
-		server.callTool("raven_new", map[string]interface{}{
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Move Me"})
+		server.callTool("new", map[string]interface{}{
 			"type":  "project",
 			"title": "Move Ref",
 			"field": map[string]interface{}{
@@ -1689,7 +1719,7 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI.RunCLI("new", "person", "Move Me").MustSucceed(t)
 		vCLI.RunCLI("new", "project", "Move Ref", "--field", "status=active", "--field", "owner=people/move-me").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_move", map[string]interface{}{
+		mcpResult := server.callTool("move", map[string]interface{}{
 			"source":      "people/move-me",
 			"destination": "archive/move-me-archived",
 		})
@@ -1703,12 +1733,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Bulk One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Bulk Two"})
 		vCLI.RunCLI("new", "person", "Bulk One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Bulk Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_move", map[string]interface{}{
+		mcpResult := server.callTool("move", map[string]interface{}{
 			"stdin":       true,
 			"destination": "archive/",
 			"object_ids":  []interface{}{"people/bulk-one", "people/bulk-two"},
@@ -1723,12 +1753,12 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk Apply One"})
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Bulk Apply Two"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Bulk Apply One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Bulk Apply Two"})
 		vCLI.RunCLI("new", "person", "Bulk Apply One").MustSucceed(t)
 		vCLI.RunCLI("new", "person", "Bulk Apply Two").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_move", map[string]interface{}{
+		mcpResult := server.callTool("move", map[string]interface{}{
 			"stdin":       true,
 			"confirm":     true,
 			"destination": "archive/",
@@ -1760,7 +1790,7 @@ status: active
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_reindex", map[string]interface{}{
+		mcpResult := server.callTool("reindex", map[string]interface{}{
 			"full": true,
 		})
 		cliResult := vCLI.RunCLI("reindex", "--full")
@@ -1804,7 +1834,7 @@ owner: people/missing-owner
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_check", map[string]interface{}{})
+		mcpResult := server.callTool("check", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("check")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{
@@ -1843,7 +1873,7 @@ Line two
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_read", map[string]interface{}{
+		mcpResult := server.callTool("read", map[string]interface{}{
 			"path":       "people/read-target",
 			"raw":        true,
 			"lines":      true,
@@ -1863,7 +1893,7 @@ Line two
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_list", map[string]interface{}{})
+		mcpResult := server.callTool("workflow_list", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("workflow", "list")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflows"})
@@ -1877,7 +1907,7 @@ Line two
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_show", map[string]interface{}{
+		mcpResult := server.callTool("workflow_show", map[string]interface{}{
 			"name": "prep",
 		})
 		cliResult := vCLI.RunCLI("workflow", "show", "prep")
@@ -1893,7 +1923,7 @@ Line two
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_validate", map[string]interface{}{})
+		mcpResult := server.callTool("workflow_validate", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("workflow", "validate")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"valid", "checked", "invalid", "results"})
@@ -1904,7 +1934,7 @@ Line two
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_workflow_runs_list", map[string]interface{}{})
+		mcpResult := server.callTool("workflow_runs_list", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("workflow", "runs", "list")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"runs"})
@@ -1915,7 +1945,7 @@ Line two
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_workflow_runs_prune", map[string]interface{}{})
+		mcpResult := server.callTool("workflow_runs_prune", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("workflow", "runs", "prune")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"dry_run", "prune"})
@@ -1940,7 +1970,7 @@ Line two
 			t.Fatalf("expected run_id in workflow run results, mcp=%v cli=%v", runMCP.Data["run_id"], runCLI.Data["run_id"])
 		}
 
-		mcpResult := server.callTool("raven_workflow_runs_step", map[string]interface{}{
+		mcpResult := server.callTool("workflow_runs_step", map[string]interface{}{
 			"run_id":  runIDMCP,
 			"step_id": "context",
 		})
@@ -1982,7 +2012,7 @@ steps:
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_workflow_add", map[string]interface{}{
+		mcpResult := server.callTool("workflow_add", map[string]interface{}{
 			"name": "from-file",
 			"file": "workflows/from-file.yaml",
 		})
@@ -1996,7 +2026,7 @@ steps:
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_workflow_scaffold", map[string]interface{}{
+		mcpResult := server.callTool("workflow_scaffold", map[string]interface{}{
 			"name":        "draft-plan",
 			"description": "Draft planning workflow",
 		})
@@ -2013,7 +2043,7 @@ steps:
 		vMCP.RunCLI("workflow", "scaffold", "cleanup").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "cleanup").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_remove", map[string]interface{}{
+		mcpResult := server.callTool("workflow_remove", map[string]interface{}{
 			"name": "cleanup",
 		})
 		cliResult := vCLI.RunCLI("workflow", "remove", "cleanup")
@@ -2029,7 +2059,7 @@ steps:
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_step_add", map[string]interface{}{
+		mcpResult := server.callTool("workflow_step_add", map[string]interface{}{
 			"workflow_name": "prep",
 			"step_json": map[string]interface{}{
 				"id":   "enrich",
@@ -2059,7 +2089,7 @@ steps:
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_step_update", map[string]interface{}{
+		mcpResult := server.callTool("workflow_step_update", map[string]interface{}{
 			"workflow_name": "prep",
 			"step_id":       "compose",
 			"step_json": map[string]interface{}{
@@ -2082,7 +2112,7 @@ steps:
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_step_remove", map[string]interface{}{
+		mcpResult := server.callTool("workflow_step_remove", map[string]interface{}{
 			"workflow_name": "prep",
 			"step_id":       "compose",
 		})
@@ -2099,7 +2129,7 @@ steps:
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_run", map[string]interface{}{
+		mcpResult := server.callTool("workflow_run", map[string]interface{}{
 			"name":  "prep",
 			"input": map[string]interface{}{"topic": "alpha"},
 		})
@@ -2132,7 +2162,7 @@ steps:
 			t.Fatalf("expected revision in workflow run results, mcp=%v cli=%v", runMCP.Data["revision"], runCLI.Data["revision"])
 		}
 
-		mcpResult := server.callTool("raven_workflow_continue", map[string]interface{}{
+		mcpResult := server.callTool("workflow_continue", map[string]interface{}{
 			"run_id":            runIDMCP,
 			"expected_revision": revisionMCP,
 			"agent_output_json": map[string]interface{}{"outputs": map[string]interface{}{"markdown": "# Draft\\n\\nDone."}},
@@ -2174,7 +2204,7 @@ Contains roadmap milestones.
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_search", map[string]interface{}{
+		mcpResult := server.callTool("search", map[string]interface{}{
 			"query": "roadmap milestones",
 			"limit": 5,
 		})
@@ -2225,7 +2255,7 @@ Owner [[people/eve]]
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_backlinks", map[string]interface{}{
+		mcpResult := server.callTool("backlinks", map[string]interface{}{
 			"target": "people/eve",
 		})
 		cliResult := vCLI.RunCLI("backlinks", "people/eve")
@@ -2275,7 +2305,7 @@ Owner [[people/eve]]
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_outlinks", map[string]interface{}{
+		mcpResult := server.callTool("outlinks", map[string]interface{}{
 			"source": "projects/security",
 		})
 		cliResult := vCLI.RunCLI("outlinks", "projects/security")
@@ -2307,7 +2337,7 @@ name: Alex
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_resolve", map[string]interface{}{
+		mcpResult := server.callTool("resolve", map[string]interface{}{
 			"reference": "alex",
 		})
 		cliResult := vCLI.RunCLI("resolve", "alex")
@@ -2351,7 +2381,7 @@ status: paused
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_query", map[string]interface{}{
+		mcpResult := server.callTool("query", map[string]interface{}{
 			"query_string": "object:project .status==active",
 			"limit":        10,
 			"offset":       0,
@@ -2366,7 +2396,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_query_add", map[string]interface{}{
+		mcpResult := server.callTool("query_add", map[string]interface{}{
 			"name":         "overdue",
 			"query_string": "trait:due .value<today",
 			"description":  "Overdue tasks",
@@ -2384,7 +2414,7 @@ status: paused
 		vMCP.RunCLI("query", "add", "overdue", "trait:due .value<today").MustSucceed(t)
 		vCLI.RunCLI("query", "add", "overdue", "trait:due .value<today").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_query_remove", map[string]interface{}{
+		mcpResult := server.callTool("query_remove", map[string]interface{}{
 			"name": "overdue",
 		})
 		cliResult := vCLI.RunCLI("query", "remove", "overdue")
@@ -2417,7 +2447,7 @@ status: paused
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_docs", map[string]interface{}{})
+		mcpResult := server.callTool("docs", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("docs")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
@@ -2442,7 +2472,7 @@ status: paused
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_docs_list", map[string]interface{}{})
+		mcpResult := server.callTool("docs_list", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("docs", "list")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
@@ -2467,7 +2497,7 @@ status: paused
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_docs_search", map[string]interface{}{
+		mcpResult := server.callTool("docs_search", map[string]interface{}{
 			"query":   "query",
 			"section": "querying",
 			"limit":   5,
@@ -2498,7 +2528,7 @@ status: paused
 		server := newTestServer(t, vMCP.Path, binary)
 
 		source := httpServer.URL + "/archive"
-		mcpResult := server.callTool("raven_docs_fetch", map[string]interface{}{
+		mcpResult := server.callTool("docs_fetch", map[string]interface{}{
 			"source": source,
 			"ref":    "main",
 		})
@@ -2515,7 +2545,7 @@ status: paused
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_vault_stats", map[string]interface{}{})
+		mcpResult := server.callTool("vault_stats", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("vault", "stats")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file_count", "object_count", "trait_count", "ref_count"})
@@ -2526,7 +2556,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_version", map[string]interface{}{})
+		mcpResult := server.callTool("version", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("version")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"version", "module_path", "commit", "commit_time", "modified", "go_version", "goos", "goarch"})
@@ -2540,7 +2570,7 @@ status: paused
 		mcpInitPath := filepath.Join(vMCP.Path, "new-vault")
 		cliInitPath := filepath.Join(vCLI.Path, "new-vault")
 
-		mcpResult := server.callTool("raven_init", map[string]interface{}{
+		mcpResult := server.callTool("init", map[string]interface{}{
 			"path": mcpInitPath,
 		})
 		cliResult := vCLI.RunCLI("init", cliInitPath)
@@ -2553,7 +2583,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_daily", map[string]interface{}{
+		mcpResult := server.callTool("daily", map[string]interface{}{
 			"date": "2026-02-18",
 		})
 		cliResult := vCLI.RunCLI("daily", "2026-02-18")
@@ -2571,7 +2601,7 @@ status: paused
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_date", map[string]interface{}{
+		mcpResult := server.callTool("date", map[string]interface{}{
 			"date": "2026-02-18",
 		})
 		cliResult := vCLI.RunCLI("date", "2026-02-18")
@@ -2584,7 +2614,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_skill_list", map[string]interface{}{})
+		mcpResult := server.callTool("skill_list", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("skill", "list")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"skills"})
@@ -2596,7 +2626,7 @@ status: paused
 		server := newTestServer(t, vMCP.Path, binary)
 		dest := filepath.Join(t.TempDir(), "skills")
 
-		mcpResult := server.callTool("raven_skill_install", map[string]interface{}{
+		mcpResult := server.callTool("skill_install", map[string]interface{}{
 			"name":   "raven-core",
 			"target": "codex",
 			"scope":  "user",
@@ -2613,7 +2643,7 @@ status: paused
 		server := newTestServer(t, vMCP.Path, binary)
 		dest := filepath.Join(t.TempDir(), "skills")
 
-		mcpResult := server.callTool("raven_skill_remove", map[string]interface{}{
+		mcpResult := server.callTool("skill_remove", map[string]interface{}{
 			"name":   "raven-core",
 			"target": "codex",
 			"scope":  "user",
@@ -2630,7 +2660,7 @@ status: paused
 		server := newTestServer(t, vMCP.Path, binary)
 		dest := filepath.Join(t.TempDir(), "skills")
 
-		mcpResult := server.callTool("raven_skill_doctor", map[string]interface{}{
+		mcpResult := server.callTool("skill_doctor", map[string]interface{}{
 			"target": "codex",
 			"scope":  "user",
 			"dest":   dest,
@@ -2645,7 +2675,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema", map[string]interface{}{
+		mcpResult := server.callTool("schema", map[string]interface{}{
 			"subcommand": "types",
 		})
 		cliResult := vCLI.RunCLI("schema", "types")
@@ -2658,7 +2688,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema", map[string]interface{}{
+		mcpResult := server.callTool("schema", map[string]interface{}{
 			"subcommand": "type",
 			"name":       "person",
 		})
@@ -2672,7 +2702,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_add_type", map[string]interface{}{
+		mcpResult := server.callTool("schema_add_type", map[string]interface{}{
 			"name": "meeting",
 		})
 		cliResult := vCLI.RunCLI("schema", "add", "type", "meeting")
@@ -2685,7 +2715,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_validate", map[string]interface{}{})
+		mcpResult := server.callTool("schema_validate", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("schema", "validate")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"valid", "issues", "types", "traits"})
@@ -2696,7 +2726,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_add_trait", map[string]interface{}{
+		mcpResult := server.callTool("schema_add_trait", map[string]interface{}{
 			"name":   "priority",
 			"type":   "enum",
 			"values": "high,medium,low",
@@ -2711,7 +2741,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_add_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_add_field", map[string]interface{}{
 			"type_name":   "person",
 			"field_name":  "website",
 			"type":        "string",
@@ -2727,7 +2757,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_update_type", map[string]interface{}{
+		mcpResult := server.callTool("schema_update_type", map[string]interface{}{
 			"name":        "project",
 			"description": "Tracked work items",
 			"add-trait":   "priority",
@@ -2742,7 +2772,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_update_trait", map[string]interface{}{
+		mcpResult := server.callTool("schema_update_trait", map[string]interface{}{
 			"name":   "priority",
 			"values": "low,medium,high,critical",
 		})
@@ -2756,7 +2786,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_update_field", map[string]interface{}{
 			"type_name":  "project",
 			"field_name": "status",
 			"values":     "active,paused,done,archived",
@@ -2771,7 +2801,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_remove_type", map[string]interface{}{
+		mcpResult := server.callTool("schema_remove_type", map[string]interface{}{
 			"name": "project",
 		})
 		cliResult := vCLI.RunCLI("schema", "remove", "type", "project")
@@ -2784,7 +2814,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_remove_trait", map[string]interface{}{
+		mcpResult := server.callTool("schema_remove_trait", map[string]interface{}{
 			"name": "priority",
 		})
 		cliResult := vCLI.RunCLI("schema", "remove", "trait", "priority")
@@ -2797,7 +2827,7 @@ status: paused
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_remove_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_remove_field", map[string]interface{}{
 			"type_name":  "project",
 			"field_name": "owner",
 		})
@@ -2829,7 +2859,7 @@ email: alex@example.com
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_rename_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_rename_field", map[string]interface{}{
 			"type_name": "person",
 			"old_field": "email",
 			"new_field": "primary_email",
@@ -2862,7 +2892,7 @@ email: alex@example.com
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_rename_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_rename_field", map[string]interface{}{
 			"type_name": "person",
 			"old_field": "email",
 			"new_field": "primary_email",
@@ -2924,7 +2954,7 @@ Kickoff: [[events/kickoff]]
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_rename_type", map[string]interface{}{
+		mcpResult := server.callTool("schema_rename_type", map[string]interface{}{
 			"old_name": "event",
 			"new_name": "meeting",
 		})
@@ -2988,7 +3018,7 @@ Kickoff: [[events/kickoff]]
 			Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_rename_type", map[string]interface{}{
+		mcpResult := server.callTool("schema_rename_type", map[string]interface{}{
 			"old_name":            "event",
 			"new_name":            "meeting",
 			"confirm":             true,
@@ -3011,7 +3041,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.WriteFile("templates/meeting.md", "# Meeting Template\n")
 		vCLI.WriteFile("templates/meeting.md", "# Meeting Template\n")
 
-		mcpResult := server.callTool("raven_template_list", map[string]interface{}{})
+		mcpResult := server.callTool("template_list", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("template", "list")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"template_dir", "templates"})
@@ -3022,7 +3052,7 @@ Kickoff: [[events/kickoff]]
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_template_write", map[string]interface{}{
+		mcpResult := server.callTool("template_write", map[string]interface{}{
 			"path":    "meeting.md",
 			"content": "# Meeting Template\n",
 		})
@@ -3039,7 +3069,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.WriteFile("templates/meeting.md", "# Meeting Template\n")
 		vCLI.WriteFile("templates/meeting.md", "# Meeting Template\n")
 
-		mcpResult := server.callTool("raven_template_delete", map[string]interface{}{
+		mcpResult := server.callTool("template_delete", map[string]interface{}{
 			"path": "meeting.md",
 		})
 		cliResult := vCLI.RunCLI("template", "delete", "meeting.md")
@@ -3055,7 +3085,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.WriteFile("templates/person.md", "# Person Template\n")
 		vCLI.WriteFile("templates/person.md", "# Person Template\n")
 
-		mcpResult := server.callTool("raven_schema_template_set", map[string]interface{}{
+		mcpResult := server.callTool("schema_template_set", map[string]interface{}{
 			"template_id": "person_profile",
 			"file":        "templates/person.md",
 			"description": "Person profile template",
@@ -3075,7 +3105,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md", "--description", "Person profile template").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md", "--description", "Person profile template").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_template_get", map[string]interface{}{
+		mcpResult := server.callTool("schema_template_get", map[string]interface{}{
 			"template_id": "person_profile",
 		})
 		cliResult := vCLI.RunCLI("schema", "template", "get", "person_profile")
@@ -3093,7 +3123,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_template_remove", map[string]interface{}{
+		mcpResult := server.callTool("schema_template_remove", map[string]interface{}{
 			"template_id": "person_profile",
 		})
 		cliResult := vCLI.RunCLI("schema", "template", "remove", "person_profile")
@@ -3111,7 +3141,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "person_profile", "--file", "templates/person.md").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_template_bind", map[string]interface{}{
+		mcpResult := server.callTool("schema_template_bind", map[string]interface{}{
 			"type":        "person",
 			"template_id": "person_profile",
 		})
@@ -3134,7 +3164,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "default", "person_profile", "--type", "person").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_template_default", map[string]interface{}{
+		mcpResult := server.callTool("schema_template_default", map[string]interface{}{
 			"type":  "person",
 			"clear": true,
 		})
@@ -3153,7 +3183,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "set", "daily_default", "--file", "templates/daily.md").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_template_bind", map[string]interface{}{
+		mcpResult := server.callTool("schema_template_bind", map[string]interface{}{
 			"core":        "date",
 			"template_id": "daily_default",
 		})
@@ -3176,7 +3206,7 @@ Kickoff: [[events/kickoff]]
 		vMCP.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
 		vCLI.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_schema_template_default", map[string]interface{}{
+		mcpResult := server.callTool("schema_template_default", map[string]interface{}{
 			"core":  "date",
 			"clear": true,
 		})
@@ -3194,7 +3224,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_read", map[string]interface{}{
+		mcpResult := server.callTool("read", map[string]interface{}{
 			"path": "people/missing",
 		})
 		cliResult := vCLI.RunCLI("read", "people/missing")
@@ -3207,7 +3237,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_set", map[string]interface{}{
+		mcpResult := server.callTool("set", map[string]interface{}{
 			"object_id": "people/missing",
 			"fields": map[string]interface{}{
 				"alias": "ghost",
@@ -3223,16 +3253,16 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Alice"})
-		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Alice", "field": map[string]interface{}{"status": "active"}})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Alice"})
+		server.callTool("new", map[string]interface{}{"type": "project", "title": "Alice", "field": map[string]interface{}{"status": "active"}})
 		vCLI.RunCLI("new", "person", "Alice").MustSucceed(t)
 		vCLI.RunCLI("new", "project", "Alice", "--field", "status=active").MustSucceed(t)
 
 		// Ensure resolver-backed reference lookup sees both objects.
-		server.callTool("raven_reindex", nil)
+		server.callTool("reindex", nil)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_set", map[string]interface{}{
+		mcpResult := server.callTool("set", map[string]interface{}{
 			"object_id": "alice",
 			"fields": map[string]interface{}{
 				"alias": "ambiguous",
@@ -3248,7 +3278,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_set", map[string]interface{}{
+		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin": true,
 			"fields": map[string]interface{}{
 				"email": "bulk@example.com",
@@ -3264,7 +3294,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_set", map[string]interface{}{
+		mcpResult := server.callTool("set", map[string]interface{}{
 			"stdin":       true,
 			"fields_json": map[string]interface{}{"email": "bulk@example.com"},
 		})
@@ -3277,7 +3307,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_add", map[string]interface{}{
+		mcpResult := server.callTool("add", map[string]interface{}{
 			"to": "people/missing",
 		})
 		env := parseMCPEnvelope(t, mcpResult.Text)
@@ -3294,7 +3324,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_add", map[string]interface{}{
+		mcpResult := server.callTool("add", map[string]interface{}{
 			"stdin": true,
 			"text":  "bulk add",
 		})
@@ -3308,7 +3338,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_add", map[string]interface{}{
+		mcpResult := server.callTool("add", map[string]interface{}{
 			"text": "missing ref add",
 			"to":   "people/missing",
 		})
@@ -3322,15 +3352,15 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Jordan"})
-		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Jordan", "field": map[string]interface{}{"status": "active"}})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Jordan"})
+		server.callTool("new", map[string]interface{}{"type": "project", "title": "Jordan", "field": map[string]interface{}{"status": "active"}})
 		vCLI.RunCLI("new", "person", "Jordan").MustSucceed(t)
 		vCLI.RunCLI("new", "project", "Jordan", "--field", "status=active").MustSucceed(t)
 
-		server.callTool("raven_reindex", nil)
+		server.callTool("reindex", nil)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_add", map[string]interface{}{
+		mcpResult := server.callTool("add", map[string]interface{}{
 			"text": "ambiguous ref add",
 			"to":   "jordan",
 		})
@@ -3344,7 +3374,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+		mcpResult := server.callTool("delete", map[string]interface{}{
 			"object_id": "people/missing",
 			"force":     true,
 		})
@@ -3358,15 +3388,15 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Robin"})
-		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Robin", "field": map[string]interface{}{"status": "active"}})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Robin"})
+		server.callTool("new", map[string]interface{}{"type": "project", "title": "Robin", "field": map[string]interface{}{"status": "active"}})
 		vCLI.RunCLI("new", "person", "Robin").MustSucceed(t)
 		vCLI.RunCLI("new", "project", "Robin", "--field", "status=active").MustSucceed(t)
 
-		server.callTool("raven_reindex", nil)
+		server.callTool("reindex", nil)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+		mcpResult := server.callTool("delete", map[string]interface{}{
 			"object_id": "robin",
 			"force":     true,
 		})
@@ -3380,7 +3410,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_delete", map[string]interface{}{
+		mcpResult := server.callTool("delete", map[string]interface{}{
 			"stdin": true,
 		})
 		cliResult := vCLI.RunCLIWithStdin("", "delete", "--stdin")
@@ -3393,7 +3423,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_move", map[string]interface{}{
+		mcpResult := server.callTool("move", map[string]interface{}{
 			"source":      "people/missing",
 			"destination": "archive/missing",
 		})
@@ -3407,15 +3437,15 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		server.callTool("raven_new", map[string]interface{}{"type": "person", "title": "Sam"})
-		server.callTool("raven_new", map[string]interface{}{"type": "project", "title": "Sam", "field": map[string]interface{}{"status": "active"}})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Sam"})
+		server.callTool("new", map[string]interface{}{"type": "project", "title": "Sam", "field": map[string]interface{}{"status": "active"}})
 		vCLI.RunCLI("new", "person", "Sam").MustSucceed(t)
 		vCLI.RunCLI("new", "project", "Sam", "--field", "status=active").MustSucceed(t)
 
-		server.callTool("raven_reindex", nil)
+		server.callTool("reindex", nil)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_move", map[string]interface{}{
+		mcpResult := server.callTool("move", map[string]interface{}{
 			"source":      "sam",
 			"destination": "archive/sam",
 		})
@@ -3429,7 +3459,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_move", map[string]interface{}{
+		mcpResult := server.callTool("move", map[string]interface{}{
 			"stdin":       true,
 			"destination": "archive/",
 		})
@@ -3443,7 +3473,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_add_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_add_field", map[string]interface{}{
 			"type_name":  "person",
 			"field_name": "manager",
 			"type":       "person",
@@ -3458,7 +3488,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_update_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_update_field", map[string]interface{}{
 			"type_name":  "person",
 			"field_name": "missing",
 			"type":       "string",
@@ -3473,7 +3503,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_remove_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_remove_field", map[string]interface{}{
 			"type_name":  "person",
 			"field_name": "missing",
 		})
@@ -3487,7 +3517,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_remove_type", map[string]interface{}{
+		mcpResult := server.callTool("schema_remove_type", map[string]interface{}{
 			"name": "missing_type",
 		})
 		cliResult := vCLI.RunCLI("schema", "remove", "type", "missing_type")
@@ -3503,7 +3533,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vMCP.WriteFile("schema.yaml", "version: [")
 		vCLI.WriteFile("schema.yaml", "version: [")
 
-		mcpResult := server.callTool("raven_schema_validate", map[string]interface{}{})
+		mcpResult := server.callTool("schema_validate", map[string]interface{}{})
 		cliResult := vCLI.RunCLI("schema", "validate")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
@@ -3514,7 +3544,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_query", map[string]interface{}{
+		mcpResult := server.callTool("query", map[string]interface{}{
 			"query_string": "object:project .status===",
 		})
 		cliResult := vCLI.RunCLI("query", "object:project .status===")
@@ -3527,7 +3557,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_workflow_show", map[string]interface{}{
+		mcpResult := server.callTool("workflow_show", map[string]interface{}{
 			"name": "missing",
 		})
 		cliResult := vCLI.RunCLI("workflow", "show", "missing")
@@ -3543,7 +3573,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_workflow_step_update", map[string]interface{}{
+		mcpResult := server.callTool("workflow_step_update", map[string]interface{}{
 			"workflow_name": "prep",
 			"step_id":       "missing",
 			"step_json": map[string]interface{}{
@@ -3563,7 +3593,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_workflow_continue", map[string]interface{}{
+		mcpResult := server.callTool("workflow_continue", map[string]interface{}{
 			"run_id": "wrf_missing",
 		})
 		cliResult := vCLI.RunCLI("workflow", "continue", "wrf_missing")
@@ -3576,7 +3606,7 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_backlinks", map[string]interface{}{
+		mcpResult := server.callTool("backlinks", map[string]interface{}{
 			"target": "people/missing",
 		})
 		cliResult := vCLI.RunCLI("backlinks", "people/missing")
@@ -3620,7 +3650,7 @@ status: active
 		vMCP.RunCLI("reindex").MustSucceed(t)
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
-		mcpResult := server.callTool("raven_outlinks", map[string]interface{}{
+		mcpResult := server.callTool("outlinks", map[string]interface{}{
 			"source": "sam",
 		})
 		cliResult := vCLI.RunCLI("outlinks", "sam")
@@ -3637,7 +3667,7 @@ func TestMCPIntegration_DirectDispatchSchemaRenameErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_rename_field", map[string]interface{}{
+		mcpResult := server.callTool("schema_rename_field", map[string]interface{}{
 			"type_name": "ghost",
 			"old_field": "email",
 			"new_field": "primary_email",
@@ -3652,7 +3682,7 @@ func TestMCPIntegration_DirectDispatchSchemaRenameErrorsParity(t *testing.T) {
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("raven_schema_rename_type", map[string]interface{}{
+		mcpResult := server.callTool("schema_rename_type", map[string]interface{}{
 			"old_name": "person",
 			"new_name": "project",
 		})

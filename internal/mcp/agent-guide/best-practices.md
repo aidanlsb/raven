@@ -1,14 +1,14 @@
 # Best Practices
 
 1. Start with structure, not file scanning.
-- Use `raven_schema`, `raven_vault_stats`, and targeted `raven_query` first.
+- Use `raven_invoke(command="schema", ...)`, `raven_invoke(command="vault_stats")`, and targeted `raven_invoke(command="query", ...)` first.
 - Read files only after narrowing candidates.
 
 2. Treat the markdown vault as source of truth.
-- Index is rebuildable; use `raven_reindex` when state looks stale.
+- Index is rebuildable; use `raven_invoke(command="reindex")` when state looks stale.
 
 3. Prefer explicit, schema-safe writes.
-- Use `raven_new`, `raven_set`, `raven_edit`, `raven_move`, `raven_delete`, `raven_upsert`.
+- Use `raven_invoke` with commands like `new`, `set`, `edit`, `move`, `delete`, and `upsert`.
 - Avoid shell-level mutations for vault operations.
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
@@ -23,7 +23,7 @@
 - Use `count-only`, `limit`, and `offset` for large sets.
 
 7. Use issue-driven repair loops.
-- `raven_check` -> prioritize issue types -> apply fixes -> re-check scope.
+- `raven_invoke(command="check")` -> prioritize issue types -> apply fixes -> re-check scope.
 
 8. Keep workflows lifecycle-aware.
 - Before starting a new workflow run, check for existing `awaiting_agent` runs.

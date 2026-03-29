@@ -2,6 +2,9 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/testutil"
@@ -63,6 +66,9 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	}
 	if envelope.Data.InvokeShape.Wrapper != "args" {
 		t.Fatalf("invoke_shape.wrapper=%q, want args; response=%s", envelope.Data.InvokeShape.Wrapper, out)
+	}
+	if envelope.Data.InvokeShape.Wrapper == "" {
+		t.Fatalf("expected invoke wrapper note metadata: %s", out)
 	}
 	if len(envelope.Data.ArgsSchema.Required) == 0 {
 		t.Fatalf("expected required args in compact schema: %s", out)
@@ -130,6 +136,51 @@ func TestCompactInvokeRejectsNonInvokableCommand(t *testing.T) {
 	}
 }
 
+func TestCompactDescribeRejectsLegacyCommandAlias(t *testing.T) {
+	server := NewServer("")
+	out, isErr := server.callCompactDescribe(map[string]interface{}{"command": "raven_query"})
+	if !isErr {
+		t.Fatalf("expected describe error, got: %s", out)
+	}
+
+	var envelope struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal describe error response: %v", err)
+	}
+	if envelope.Error.Code != "COMMAND_NOT_FOUND" {
+		t.Fatalf("error.code=%q, want COMMAND_NOT_FOUND; response=%s", envelope.Error.Code, out)
+	}
+}
+
+func TestCompactInvokeRejectsLegacyCommandAlias(t *testing.T) {
+	server := NewServer("")
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "raven_query",
+		"args": map[string]interface{}{
+			"query_string": "object:project",
+		},
+	})
+	if !isErr {
+		t.Fatalf("expected invoke error, got: %s", out)
+	}
+
+	var envelope struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal invoke error response: %v", err)
+	}
+	if envelope.Error.Code != "COMMAND_NOT_FOUND" {
+		t.Fatalf("error.code=%q, want COMMAND_NOT_FOUND; response=%s", envelope.Error.Code, out)
+	}
+}
+
 func TestCompactInvokeSuccess(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
@@ -149,6 +200,102 @@ func TestCompactInvokeSuccess(t *testing.T) {
 
 	if !v.FileExists("people/alice.md") {
 		t.Fatal("expected people/alice.md to exist")
+	}
+}
+
+func TestCompactInvokeUsesWrapperVaultPathOverride(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	server := NewServer("")
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command":    "new",
+		"vault_path": v.Path,
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Alice",
+		},
+	})
+	if isErr {
+		t.Fatalf("invoke returned error: %s", out)
+	}
+
+	if !v.FileExists("people/alice.md") {
+		t.Fatal("expected people/alice.md to exist")
+	}
+}
+
+func TestCompactInvokeUsesWrapperVaultNameOverride(t *testing.T) {
+	tmp := t.TempDir()
+	configPath := filepath.Join(tmp, "config.toml")
+	statePath := filepath.Join(tmp, "state.toml")
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	configContent := fmt.Sprintf("[vaults]\nwork = %q\n", v.Path)
+	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	server := NewServerWithBaseArgs([]string{"--config", configPath, "--state", statePath})
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "new",
+		"vault":   "work",
+		"args": map[string]interface{}{
+			"type":  "person",
+			"title": "Bob",
+		},
+	})
+	if isErr {
+		t.Fatalf("invoke returned error: %s", out)
+	}
+
+	if !v.FileExists("people/bob.md") {
+		t.Fatal("expected people/bob.md to exist")
+	}
+}
+
+func TestCompactInvokeRejectsConflictingVaultOverrides(t *testing.T) {
+	server := NewServer("")
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command":    "query",
+		"vault":      "work",
+		"vault_path": "/tmp/work",
+		"args": map[string]interface{}{
+			"query_string": "object:project",
+		},
+	})
+	if !isErr {
+		t.Fatalf("expected invoke error, got: %s", out)
+	}
+
+	var envelope struct {
+		Error struct {
+			Code    string `json:"code"`
+			Details struct {
+				Issues []struct {
+					Field string `json:"field"`
+					Code  string `json:"code"`
+				} `json:"issues"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal invoke error response: %v", err)
+	}
+	if envelope.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("error.code=%q, want INVALID_ARGS; response=%s", envelope.Error.Code, out)
+	}
+	if len(envelope.Error.Details.Issues) != 1 {
+		t.Fatalf("expected one issue, got %d; response=%s", len(envelope.Error.Details.Issues), out)
+	}
+	if envelope.Error.Details.Issues[0].Field != "vault_path" {
+		t.Fatalf("issue.field=%q, want vault_path; response=%s", envelope.Error.Details.Issues[0].Field, out)
 	}
 }
 

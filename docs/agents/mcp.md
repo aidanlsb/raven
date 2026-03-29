@@ -7,7 +7,7 @@ The only documented public MCP tools are:
 - `raven_describe`
 - `raven_invoke`
 
-Legacy direct-call compatibility tools may still exist for older clients, but they are not the public contract and should not be used in new agent guidance or examples.
+Legacy direct-call compatibility tools are not part of the MCP surface.
 
 ## Recommended Setup
 
@@ -108,8 +108,12 @@ Command arguments must be nested under `args`.
 Top-level keys are reserved for the invoke envelope only:
 - `command`
 - `args`
+- `vault`
+- `vault_path`
 - `schema_hash`
 - `strict_schema`
+
+Use `vault` to target a configured vault name for a single call, or `vault_path` to target an explicit vault directory for a single call. Do not pass both in the same invocation.
 
 Passing command-specific parameters beside `command` fails with `INVALID_ARGS`.
 
@@ -138,7 +142,7 @@ This tool list is generated from the command registry and should stay in sync wi
 - `schema_add_type`
 - `workflow_run`
 
-`raven_describe` accepts command references in several forms, but new docs and examples should use the canonical command ID.
+Use canonical registry command IDs with `raven_describe` and `raven_invoke`.
 
 ## Parameter Conventions
 

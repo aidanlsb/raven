@@ -3,9 +3,6 @@ package mcp
 
 import (
 	"fmt"
-	"strings"
-
-	"github.com/aidanlsb/raven/internal/commands"
 )
 
 const (
@@ -46,7 +43,7 @@ func GenerateToolSchemas() []Tool {
 				Properties: map[string]interface{}{
 					"command": map[string]interface{}{
 						"type":        "string",
-						"description": "Command identifier (e.g. query, raven_query, or schema add type)",
+						"description": "Command identifier (e.g. query or schema add type)",
 					},
 				},
 				Required: []string{"command"},
@@ -60,11 +57,19 @@ func GenerateToolSchemas() []Tool {
 				Properties: map[string]interface{}{
 					"command": map[string]interface{}{
 						"type":        "string",
-						"description": "Command identifier (e.g. query, raven_query, or schema add type)",
+						"description": "Command identifier (e.g. query or schema add type)",
 					},
 					"args": map[string]interface{}{
 						"type":        "object",
 						"description": "Command-specific arguments. Put parameters from raven_describe here.",
+					},
+					"vault": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional configured vault name to use for this invocation only.",
+					},
+					"vault_path": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional absolute vault path to use for this invocation only.",
 					},
 					"schema_hash": map[string]interface{}{
 						"type":        "string",
@@ -79,28 +84,6 @@ func GenerateToolSchemas() []Tool {
 			},
 		},
 	}
-}
-
-// mcpToolName converts a CLI command name to an MCP tool name.
-// e.g., "new" -> "raven_new", "schema add type" -> "raven_schema_add_type"
-func mcpToolName(cmdName string) string {
-	// Replace spaces with underscores
-	name := strings.ReplaceAll(cmdName, " ", "_")
-	return "raven_" + name
-}
-
-// CLICommandName converts an MCP tool name back to CLI command name.
-// e.g., "raven_new" -> "new", "raven_schema_add_type" -> "schema add type"
-func CLICommandName(toolName string) string {
-	if id, ok := commands.ResolveToolCommandID(toolName); ok {
-		if meta, ok := commands.Registry[id]; ok {
-			return meta.Name
-		}
-		return strings.ReplaceAll(id, "_", " ")
-	}
-
-	raw := strings.TrimPrefix(toolName, "raven_")
-	return strings.ReplaceAll(raw, "_", " ")
 }
 
 func toString(v interface{}) string {

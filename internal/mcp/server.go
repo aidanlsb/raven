@@ -603,6 +603,16 @@ func (s *Server) withBaseArgs(args []string) []string {
 }
 
 func (s *Server) resolveVaultPath() (string, error) {
+	return s.resolveVaultPathForInvocation("", "")
+}
+
+func (s *Server) resolveVaultPathForInvocation(vaultName, vaultPath string) (string, error) {
+	if resolvedVaultPath := strings.TrimSpace(vaultPath); resolvedVaultPath != "" {
+		return s.validateResolvedVaultPath(resolvedVaultPath)
+	}
+	if resolvedVaultName := strings.TrimSpace(vaultName); resolvedVaultName != "" {
+		return s.namedVaultPath(resolvedVaultName)
+	}
 	if vaultPath := strings.TrimSpace(s.vaultPath); vaultPath != "" {
 		return s.validateResolvedVaultPath(vaultPath)
 	}
