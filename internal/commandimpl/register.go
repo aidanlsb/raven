@@ -21,6 +21,8 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("init", HandleInit)
 	registry.Register("reindex", HandleReindex)
 	registry.Register("check", HandleCheck)
+	registry.Register("check_fix", HandleCheckFix)
+	registry.Register("check create-missing", HandleCheckCreateMissing)
 	registry.Register("daily", HandleDaily)
 	registry.Register("date", HandleDate)
 	registry.Register("version", HandleVersion)

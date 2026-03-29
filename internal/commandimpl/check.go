@@ -57,6 +57,18 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 	}
 }
 
+// HandleCheckFix executes the canonical `check_fix` command.
+func HandleCheckFix(ctx context.Context, req commandexec.Request) commandexec.Result {
+	req.Args = withBoolArg(req.Args, "fix")
+	return HandleCheck(ctx, req)
+}
+
+// HandleCheckCreateMissing executes the canonical `check create-missing` command.
+func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) commandexec.Result {
+	req.Args = withBoolArg(req.Args, "create-missing")
+	return HandleCheck(ctx, req)
+}
+
 func handleCheckFix(vaultPath string, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
 	fixes := checksvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch)
 	grouped := checksvc.GroupFixesByFile(fixes)
@@ -147,4 +159,13 @@ func checkScopeData(result *checksvc.RunResult) map[string]interface{} {
 		"type":  result.Scope.Type,
 		"value": result.Scope.Value,
 	}
+}
+
+func withBoolArg(args map[string]interface{}, key string) map[string]interface{} {
+	out := make(map[string]interface{}, len(args)+1)
+	for k, v := range args {
+		out[k] = v
+	}
+	out[key] = true
+	return out
 }

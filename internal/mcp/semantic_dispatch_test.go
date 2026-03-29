@@ -10,8 +10,8 @@ import (
 func TestAllInvokableCommandsHaveCanonicalHandlers(t *testing.T) {
 	invoker := app.CommandInvoker()
 
-	for commandID, meta := range commands.Registry {
-		if meta.HideFromMCP || !commands.IsInvokableCommandID(commandID) {
+	for commandID := range commands.Registry {
+		if !commands.IsInvokableCommandID(commandID) {
 			continue
 		}
 

@@ -17,7 +17,6 @@ type Meta struct {
 	Flags       []FlagMeta // Command flags
 	Examples    []string   // Usage examples
 	UseCases    []string   // Agent use cases (for MCP hints)
-	HideFromMCP bool       // True when command should not be exposed as an MCP tool
 }
 
 // ArgMeta defines a positional argument.
@@ -258,7 +257,6 @@ still succeeds and returns a warning with a retry command.`,
 		UseCases: []string{
 			"Launch Raven MCP server for local clients",
 		},
-		HideFromMCP: true,
 	},
 	"mcp_install": {
 		Name:        "mcp install",
@@ -279,7 +277,6 @@ still succeeds and returns a warning with a retry command.`,
 		UseCases: []string{
 			"Install Raven MCP entry into a client config",
 		},
-		HideFromMCP: true,
 	},
 	"mcp_remove": {
 		Name:        "mcp remove",
@@ -294,7 +291,6 @@ still succeeds and returns a warning with a retry command.`,
 		UseCases: []string{
 			"Remove Raven MCP entry from a client config",
 		},
-		HideFromMCP: true,
 	},
 	"mcp_status": {
 		Name:        "mcp status",
@@ -307,7 +303,6 @@ still succeeds and returns a warning with a retry command.`,
 		UseCases: []string{
 			"Check MCP installation status across clients",
 		},
-		HideFromMCP: true,
 	},
 	"mcp_show": {
 		Name:        "mcp show",
@@ -328,7 +323,6 @@ still succeeds and returns a warning with a retry command.`,
 		UseCases: []string{
 			"Generate manual MCP configuration snippet",
 		},
-		HideFromMCP: true,
 	},
 	"docs": {
 		Name:        "docs",
@@ -912,7 +906,6 @@ Preview is default; use --confirm to apply.`,
 			"Preview deterministic auto-fixes before applying",
 			"Apply short-reference and quoted-enum fixes safely",
 		},
-		HideFromMCP: true,
 	},
 	"check create-missing": {
 		Name:        "check create-missing",
@@ -933,7 +926,6 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 			"Create missing pages from check findings",
 			"Run interactive missing-reference creation in terminal mode",
 		},
-		HideFromMCP: true,
 	},
 	"schema": {
 		Name:        "schema",
@@ -974,7 +966,6 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 			"rvn schema add trait priority --type enum --values high,medium,low",
 			"rvn schema add field person email --type string --required",
 		},
-		HideFromMCP: true,
 	},
 	"schema_update": {
 		Name:        "schema update",
@@ -1001,7 +992,6 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 			"rvn schema update trait priority --values critical,high,medium,low",
 			"rvn schema update field person email --required=true",
 		},
-		HideFromMCP: true,
 	},
 	"schema_remove": {
 		Name:        "schema remove",
@@ -1019,7 +1009,6 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 			"rvn schema remove trait priority --force",
 			"rvn schema remove field person nickname",
 		},
-		HideFromMCP: true,
 	},
 	"schema_rename": {
 		Name:        "schema rename",
@@ -1038,7 +1027,6 @@ JSON mode requires --confirm and creates only deterministic typed targets.`,
 			"rvn schema rename type event meeting --confirm",
 			"rvn schema rename field person email email_address --confirm",
 		},
-		HideFromMCP: true,
 	},
 	"schema_add_type": {
 		Name:        "schema add type",
