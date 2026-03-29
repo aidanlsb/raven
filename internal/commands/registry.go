@@ -732,9 +732,6 @@ For trait queries (trait:...):
 		Args: []ArgMeta{
 			{Name: "date", Description: "Date (today, yesterday, YYYY-MM-DD)", Required: false},
 		},
-		Flags: []FlagMeta{
-			{Name: "edit", Description: "Open the daily note in editor", Type: FlagTypeBool},
-		},
 		Examples: []string{
 			"rvn date today --json",
 			"rvn date 2025-02-01 --json",

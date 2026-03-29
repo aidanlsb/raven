@@ -76,6 +76,47 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 	}
 }
 
+func TestRegistryBackedLeafCommandsUseCanonicalAdapterOrAllowlist(t *testing.T) {
+	manualLeafAllowlist := map[string]struct{}{
+		"mcp install":   {},
+		"mcp remove":    {},
+		"mcp show":      {},
+		"mcp status":    {},
+		"schema add":    {},
+		"schema remove": {},
+		"schema rename": {},
+		"schema update": {},
+		"serve":         {},
+	}
+
+	paths := commandPaths(rootCmd)
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+
+		cmd, ok := findCommandByPath(rootCmd, path)
+		if !ok {
+			t.Errorf("failed to locate command for path %q", path)
+			continue
+		}
+		if !cmd.Runnable() || len(cmd.Commands()) > 0 {
+			continue
+		}
+		if _, ok := lookupRegistryMeta(path); !ok {
+			continue
+		}
+		if cmd.Annotations[canonicalLeafAnnotationKey] == "true" {
+			continue
+		}
+		if _, ok := manualLeafAllowlist[path]; ok {
+			continue
+		}
+
+		t.Errorf("registry-backed CLI leaf %q is still manually wired; use canonical adapter or allowlist it", path)
+	}
+}
+
 func commandPaths(root *cobra.Command) []string {
 	var out []string
 	var walk func(cmd *cobra.Command, prefix string)

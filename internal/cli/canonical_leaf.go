@@ -11,11 +11,18 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
+const canonicalLeafAnnotationKey = "raven.dev/canonical-leaf"
+
 type canonicalLeafOptions struct {
-	VaultPath   func() string
-	BuildArgs   func(cmd *cobra.Command, args []string) (map[string]interface{}, error)
-	HandleError func(result commandexec.Result) error
-	RenderHuman func(cmd *cobra.Command, result commandexec.Result) error
+	VaultPath       func() string
+	Args            cobra.PositionalArgs
+	Prepare         func(cmd *cobra.Command, args []string) (preparedArgs []string, handled bool, err error)
+	BuildArgs       func(cmd *cobra.Command, args []string) (map[string]interface{}, error)
+	Invoke          func(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result
+	HandleError     func(result commandexec.Result) error
+	HandleResult    func(cmd *cobra.Command, result commandexec.Result) error
+	RenderHuman     func(cmd *cobra.Command, result commandexec.Result) error
+	SkipFlagBinding bool
 }
 
 func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra.Command {
@@ -29,13 +36,35 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 		Short: meta.Description,
 		Long:  buildLongDesc(meta),
 		Args:  cobraArgsForMeta(meta),
+		Annotations: map[string]string{
+			canonicalLeafAnnotationKey: "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			argsMap, err := buildCanonicalArgsForMeta(meta, cmd, args)
-			if err != nil {
-				return err
+			if opts.Prepare != nil {
+				preparedArgs, handled, err := opts.Prepare(cmd, args)
+				if err != nil {
+					return err
+				}
+				if handled {
+					return nil
+				}
+				args = preparedArgs
 			}
+
+			var (
+				argsMap map[string]interface{}
+				err     error
+			)
 			if opts.BuildArgs != nil {
 				argsMap, err = opts.BuildArgs(cmd, args)
+				if err != nil {
+					return err
+				}
+				if argsMap == nil {
+					return nil
+				}
+			} else {
+				argsMap, err = buildCanonicalArgsForMeta(meta, cmd, args)
 				if err != nil {
 					return err
 				}
@@ -46,14 +75,33 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 				vaultPath = opts.VaultPath()
 			}
 
-			result := executeCanonicalCommand(commandID, vaultPath, argsMap)
-			if isJSONOutput() {
-				outputCanonicalResultJSON(result)
-				return nil
+			invoke := executeCanonicalCommand
+			if opts.Invoke != nil {
+				invoke = func(commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+					return opts.Invoke(cmd, commandID, vaultPath, args)
+				}
 			}
+			result := invoke(commandID, vaultPath, argsMap)
 			handleFailure := handleCanonicalFailure
 			if opts.HandleError != nil {
 				handleFailure = opts.HandleError
+			}
+			if !result.OK {
+				if isJSONOutput() {
+					outputCanonicalResultJSON(result)
+					return nil
+				}
+				if err := handleFailure(result); err != nil {
+					return err
+				}
+				return nil
+			}
+			if opts.HandleResult != nil {
+				return opts.HandleResult(cmd, result)
+			}
+			if isJSONOutput() {
+				outputCanonicalResultJSON(result)
+				return nil
 			}
 			if err := handleFailure(result); err != nil {
 				return err
@@ -65,7 +113,13 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 		},
 	}
 
-	bindMetaFlags(cmd, meta.Flags)
+	if opts.Args != nil {
+		cmd.Args = opts.Args
+	}
+
+	if !opts.SkipFlagBinding {
+		bindMetaFlags(cmd, meta.Flags)
+	}
 	return cmd
 }
 

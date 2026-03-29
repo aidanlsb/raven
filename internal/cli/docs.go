@@ -17,9 +17,6 @@ const (
 )
 
 var (
-	docsSearchLimit   int
-	docsSearchSection string
-
 	docsFZFRun         = runDocsFZF
 	docsDisplayContext = ui.NewDisplayContext
 	docsMarkdownRender = ui.RenderMarkdown
@@ -124,46 +121,13 @@ var docsListCmd = newCanonicalLeafCommand("docs_list", canonicalLeafOptions{
 	RenderHuman: renderDocsList,
 })
 
-var docsSearchCmd = &cobra.Command{
-	Use:   "search <query>",
-	Short: "Search long-form Markdown documentation",
-	Long: `Search long-form documentation in docs/**/*.md.
-
-Examples:
-  rvn docs search query
-  rvn docs search "saved query" --section reference
-  rvn docs search workflow --limit 10`,
-	Args: cobra.MinimumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		query := strings.TrimSpace(strings.Join(args, " "))
-		result := executeCanonicalCommand("docs_search", getVaultPath(), map[string]interface{}{
-			"query":   query,
-			"section": docsSearchSection,
-			"limit":   docsSearchLimit,
-		})
-		if !result.OK {
-			return handleCanonicalDocsFailure(result, nil)
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data := canonicalDataMap(result)
-		matches := docsSearchMatchesFromCanonical(data["matches"])
-		if len(matches) == 0 {
-			fmt.Printf("No docs matched %q.\n", stringValue(data["query"]))
-			return nil
-		}
-
-		fmt.Printf("Matches for %q (%d):\n", stringValue(data["query"]), len(matches))
-		for _, m := range matches {
-			fmt.Printf("- %s/%s:%d %s\n", m.Section, m.Topic, m.Line, m.Snippet)
-		}
-		return nil
-	},
-}
+var docsSearchCmd = newCanonicalLeafCommand("docs_search", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	Args:        cobra.MinimumNArgs(1),
+	BuildArgs:   buildDocsSearchArgs,
+	HandleError: handleCanonicalDocsLeafFailure,
+	RenderHuman: renderDocsSearch,
+})
 
 var docsFetchCmd = newCanonicalLeafCommand("docs_fetch", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
@@ -183,6 +147,32 @@ func renderDocsFetch(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", stringValue(data["path"]), intValue(data["file_count"]), int64Value(data["byte_count"]))
 	fmt.Printf("Source: %s (%s)\n", stringValue(data["source"]), stringValue(data["ref"]))
+	return nil
+}
+
+func buildDocsSearchArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	query := strings.TrimSpace(strings.Join(args, " "))
+	limit, _ := cmd.Flags().GetInt("limit")
+	section, _ := cmd.Flags().GetString("section")
+	return map[string]interface{}{
+		"query":   query,
+		"section": section,
+		"limit":   limit,
+	}, nil
+}
+
+func renderDocsSearch(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	matches := docsSearchMatchesFromCanonical(data["matches"])
+	if len(matches) == 0 {
+		fmt.Printf("No docs matched %q.\n", stringValue(data["query"]))
+		return nil
+	}
+
+	fmt.Printf("Matches for %q (%d):\n", stringValue(data["query"]), len(matches))
+	for _, m := range matches {
+		fmt.Printf("- %s/%s:%d %s\n", m.Section, m.Topic, m.Line, m.Snippet)
+	}
 	return nil
 }
 
@@ -664,9 +654,6 @@ func docsTopicsFromService(in []docssvc.TopicRecord) []docsTopicRecord {
 }
 
 func init() {
-	docsSearchCmd.Flags().IntVarP(&docsSearchLimit, "limit", "n", 20, "Maximum number of matches")
-	docsSearchCmd.Flags().StringVarP(&docsSearchSection, "section", "s", "", "Filter search to a docs section")
-
 	docsCmd.AddCommand(docsListCmd)
 	docsCmd.AddCommand(docsSearchCmd)
 	docsCmd.AddCommand(docsFetchCmd)

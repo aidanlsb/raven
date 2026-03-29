@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -26,135 +24,103 @@ var (
 	newTemplate   string
 )
 
-var newCmd = &cobra.Command{
-	Use:   "new <type> [title]",
-	Short: "Create a new typed note",
-	Long: `Creates a new note with the specified type.
+var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
+	VaultPath:       getVaultPath,
+	Args:            cobra.RangeArgs(1, 2),
+	BuildArgs:       buildNewArgs,
+	Invoke:          invokeNew,
+	RenderHuman:     renderNewResult,
+	SkipFlagBinding: true,
+})
 
-The type is required. If title is not provided, you will be prompted for it.
-The file location is determined by the type's default_path setting in schema.yaml.
-Required fields (as defined in schema.yaml) will be prompted for interactively,
-or can be provided via --field or --field-json flags.
-
-Examples:
-  rvn new person                       # Prompts for title, creates in people/
-  rvn new person "Freya"               # Creates people/freya.md
-  rvn new person "Freya" --field name="Freya"  # With required field
-  rvn new interview "Jane Doe @ Acme" --template technical
-  rvn new note "Raven Friction" --path note/raven-friction
-  rvn new project "Website Redesign"   # Creates projects/website-redesign.md
-  rvn new page "Quick Note"            # Creates quick-note.md in vault root`,
-	Args: cobra.RangeArgs(1, 2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		typeName := args[0]
-
-		// Get title from args or prompt
-		var title string
+func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
+	typeName := args[0]
+	title := ""
+	if len(args) >= 2 {
+		title = args[1]
+	} else if isJSONOutput() {
+		return nil, handleErrorMsg(ErrMissingArgument, "title is required", "Usage: rvn new <type> <title> --json")
+	} else {
 		reader := bufio.NewReader(os.Stdin)
-		var err error
-
-		if len(args) >= 2 {
-			title = args[1]
-		} else if isJSONOutput() {
-			// Non-interactive mode: require title as argument
-			return handleErrorMsg(ErrMissingArgument, "title is required", "Usage: rvn new <type> <title> --json")
-		} else {
-			fmt.Fprintf(os.Stderr, "Title: ")
-			title, err = reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-			title = strings.TrimSpace(title)
-			if title == "" {
-				return handleErrorMsg(ErrMissingArgument, "title cannot be empty", "")
-			}
-		}
-
-		if err := validateObjectTitle(title); err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
-		}
-
-		fieldValues, err := parseFieldFlags(newFieldFlags)
+		fmt.Fprintf(os.Stderr, "Title: ")
+		value, err := reader.ReadString('\n')
 		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
+			return nil, fmt.Errorf("failed to read input: %w", err)
 		}
-		fieldJSONRaw, err := parseFieldJSONObject(newFieldJSON)
-		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+		title = strings.TrimSpace(value)
+		if title == "" {
+			return nil, handleErrorMsg(ErrMissingArgument, "title cannot be empty", "")
 		}
+	}
 
-		targetPath := strings.TrimSpace(newPathFlag)
-		if targetPath != "" {
-			if err := validateObjectTargetPath(targetPath); err != nil {
-				return handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
-			}
+	if err := validateObjectTitle(title); err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
+	}
+	fieldValues, err := parseFieldFlags(newFieldFlags)
+	if err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
+	}
+	fieldJSONRaw, err := parseFieldJSONObject(newFieldJSON)
+	if err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+	}
+	targetPath := strings.TrimSpace(newPathFlag)
+	if targetPath != "" {
+		if err := validateObjectTargetPath(targetPath); err != nil {
+			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
 		}
+	}
+	return buildNewCommandArgs(typeName, title, targetPath, newTemplate, fieldValues, fieldJSONRaw), nil
+}
 
-		for {
-			result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
-				CommandID: "new",
-				VaultPath: vaultPath,
-				Caller:    commandexec.CallerCLI,
-				Args: buildNewCommandArgs(
-					typeName,
-					title,
-					targetPath,
-					newTemplate,
-					fieldValues,
-					fieldJSONRaw,
-				),
-			})
-			if !result.OK {
-				if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
-					prompted := false
-					for _, fieldName := range missingFieldNamesFromDetails(result.Error.Details) {
-						if _, exists := fieldValues[fieldName]; exists {
-							continue
-						}
-						fmt.Fprintf(os.Stderr, "%s (required): ", fieldName)
-						value, readErr := reader.ReadString('\n')
-						if readErr != nil {
-							return fmt.Errorf("failed to read input: %w", readErr)
-						}
-						value = strings.TrimSpace(value)
-						if value == "" {
-							return fmt.Errorf("required field '%s' cannot be empty", fieldName)
-						}
-						fieldValues[fieldName] = value
-						prompted = true
-					}
-					if prompted {
+func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		result := executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Args:      args,
+		})
+		if !result.OK {
+			if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
+				fieldValues := map[string]string{}
+				for key, value := range stringMapValue(args["field"]) {
+					fieldValues[key] = value
+				}
+				prompted := false
+				for _, fieldName := range missingFieldNamesFromDetails(result.Error.Details) {
+					if _, exists := fieldValues[fieldName]; exists {
 						continue
 					}
+					fmt.Fprintf(os.Stderr, "%s (required): ", fieldName)
+					value, readErr := reader.ReadString('\n')
+					if readErr != nil {
+						return commandexec.Failure(ErrInternal, fmt.Sprintf("failed to read input: %v", readErr), nil, "")
+					}
+					value = strings.TrimSpace(value)
+					if value == "" {
+						return commandexec.Failure(ErrRequiredFieldMissing, fmt.Sprintf("required field '%s' cannot be empty", fieldName), nil, "Provide a non-empty value")
+					}
+					fieldValues[fieldName] = value
+					prompted = true
 				}
-
-				if isJSONOutput() {
-					outputJSON(result)
-					return nil
+				if prompted {
+					args["field"] = stringMapToAny(fieldValues)
+					continue
 				}
-				if result.Error != nil {
-					return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-				}
-				return handleErrorMsg(ErrInternal, "command execution failed", "")
 			}
-
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-
-			data, _ := result.Data.(map[string]interface{})
-			relativePath, _ := data["file"].(string)
-			fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
-
-			// Open in editor (or print path if no editor configured)
-			vault.OpenInEditorOrPrintPath(getConfig(), filepath.Join(vaultPath, filepath.FromSlash(relativePath)))
-
-			return nil
+			return result
 		}
-	},
-	ValidArgsFunction: completeTypes,
+		return result
+	}
+}
+
+func renderNewResult(_ *cobra.Command, result commandexec.Result) error {
+	data, _ := result.Data.(map[string]interface{})
+	relativePath, _ := data["file"].(string)
+	fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
+	vault.OpenInEditorOrPrintPath(getConfig(), filepath.Join(getVaultPath(), filepath.FromSlash(relativePath)))
+	return nil
 }
 
 func missingFieldNamesFromDetails(details interface{}) []string {
@@ -271,5 +237,6 @@ func init() {
 	newCmd.Flags().StringVar(&newFieldJSON, "field-json", "", "Set frontmatter fields via JSON object (typed values)")
 	newCmd.Flags().StringVar(&newPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
 	newCmd.Flags().StringVar(&newTemplate, "template", "", "Type template ID to use for object creation")
+	newCmd.ValidArgsFunction = completeTypes
 	rootCmd.AddCommand(newCmd)
 }

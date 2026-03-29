@@ -10,111 +10,85 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-var openStdin bool
+var openCmd = newCanonicalLeafCommand("open", canonicalLeafOptions{
+	VaultPath:    getVaultPath,
+	Args:         validateOpenArgs,
+	Prepare:      prepareOpenArgs,
+	BuildArgs:    buildOpenArgs,
+	HandleResult: handleOpenResult,
+})
 
-var openCmd = &cobra.Command{
-	Use:   "open [reference]",
-	Short: "Open a file in your editor",
-	Long: `Opens a file in your configured editor.
-
-The reference can be:
-  - A short reference: cursor, freya, bifrost
-  - A partial path: companies/cursor, people/freya
-  - A full path: objects/companies/cursor.md
-
-The editor is determined by (in order):
-  1. The 'editor' setting in ~/.config/raven/config.toml
-  2. The $EDITOR environment variable
-
-Use --stdin to read object IDs from stdin (one per line) and open them all.
-This is useful for piping query results:
-  rvn query 'object:project .status==active' --ids | rvn open --stdin
-
-In an interactive terminal with fzf installed, bare 'rvn open' launches
-an interactive file picker.
-
-Examples:
-  rvn open cursor              # Opens companies/cursor.md
-  rvn open companies/cursor    # Opens objects/companies/cursor.md
-  rvn open people/freya        # Opens people/freya.md
-  rvn open daily/2025-01-09    # Opens a specific daily note`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		stdin, _ := cmd.Flags().GetBool("stdin")
-		if stdin {
-			if len(args) > 0 {
-				return fmt.Errorf("cannot specify reference when using --stdin")
-			}
-			return nil
-		}
-		if len(args) > 1 {
-			return fmt.Errorf("accepts at most 1 argument")
+func validateOpenArgs(cmd *cobra.Command, args []string) error {
+	stdin, _ := cmd.Flags().GetBool("stdin")
+	if stdin {
+		if len(args) > 0 {
+			return fmt.Errorf("cannot specify reference when using --stdin")
 		}
 		return nil
-	},
-	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
-		IncludeDynamicDates: true,
-		DisableWhenStdin:    true,
-		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
-	}),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-
-		// Handle --stdin mode
-		if openStdin {
-			return runOpenStdin(vaultPath)
-		}
-
-		if len(args) == 0 {
-			if canUseFZFInteractive() {
-				vaultCfg, err := loadVaultConfigSafe(vaultPath)
-				if err != nil {
-					return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
-				}
-				relPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "open> ", "Select a file to open (Esc to cancel)")
-				if err != nil {
-					return handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
-				}
-				if !selected {
-					return nil
-				}
-				openFileInEditor(filepath.Join(vaultPath, relPath), relPath, false)
-				return nil
-			}
-
-			return handleErrorMsg(
-				ErrMissingArgument,
-				"specify a reference",
-				interactivePickerMissingArgSuggestion("open", "rvn open <reference>"),
-			)
-		}
-
-		reference := args[0]
-		result := executeCanonicalCommand("open", vaultPath, map[string]interface{}{
-			"reference": reference,
-		})
-		return handleCanonicalOpenResult(result, false)
-	},
+	}
+	if len(args) > 1 {
+		return fmt.Errorf("accepts at most 1 argument")
+	}
+	return nil
 }
 
-func runOpenStdin(vaultPath string) error {
-	ids, embedded, err := ReadIDsFromStdin()
-	if err != nil {
-		return err
+func prepareOpenArgs(cmd *cobra.Command, args []string) ([]string, bool, error) {
+	stdin, _ := cmd.Flags().GetBool("stdin")
+	if stdin {
+		return args, false, nil
+	}
+	if len(args) > 0 {
+		return args, false, nil
 	}
 
-	if len(ids) == 0 && len(embedded) == 0 {
-		return fmt.Errorf("no object IDs provided on stdin")
+	vaultPath := getVaultPath()
+	if canUseFZFInteractive() {
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
+		relPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "open> ", "Select a file to open (Esc to cancel)")
+		if err != nil {
+			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
+		}
+		if !selected {
+			return nil, true, nil
+		}
+		openFileInEditor(filepath.Join(vaultPath, relPath), relPath, false)
+		return nil, true, nil
 	}
 
-	allRefs := make([]string, 0, len(ids)+len(embedded))
-	allRefs = append(allRefs, ids...)
-	allRefs = append(allRefs, embedded...)
+	err := handleErrorMsg(
+		ErrMissingArgument,
+		"specify a reference",
+		interactivePickerMissingArgSuggestion("open", "rvn open <reference>"),
+	)
+	return nil, err == nil, err
+}
 
-	result := executeCanonicalCommand("open", vaultPath, map[string]interface{}{
-		"stdin":      true,
-		"object_ids": allRefs,
-	})
-	return handleCanonicalOpenResult(result, true)
+func buildOpenArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	stdin, _ := cmd.Flags().GetBool("stdin")
+	if stdin {
+		ids, embedded, err := ReadIDsFromStdin()
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 && len(embedded) == 0 {
+			return nil, fmt.Errorf("no object IDs provided on stdin")
+		}
+
+		allRefs := make([]string, 0, len(ids)+len(embedded))
+		allRefs = append(allRefs, ids...)
+		allRefs = append(allRefs, embedded...)
+		return map[string]interface{}{
+			"stdin":      true,
+			"object_ids": allRefs,
+		}, nil
+	}
+
+	return map[string]interface{}{
+		"reference": args[0],
+	}, nil
 }
 
 // openFileInEditor opens a file in the configured editor and prints appropriate output.
@@ -131,23 +105,13 @@ func openFileInEditor(filePath, relPath string, skipOpenMessage bool) {
 	}
 }
 
-func handleCanonicalOpenResult(result commandexec.Result, bulk bool) error {
-	if !result.OK {
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-		if result.Error != nil {
-			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-		}
-		return handleErrorMsg(ErrInternal, "command execution failed", "")
-	}
-
+func handleOpenResult(cmd *cobra.Command, result commandexec.Result) error {
 	if isJSONOutput() {
 		outputJSON(result)
 		return nil
 	}
 
+	bulk, _ := cmd.Flags().GetBool("stdin")
 	data := canonicalDataMap(result)
 	if bulk {
 		files := stringSliceFromAny(data["files"])
@@ -181,6 +145,10 @@ func handleCanonicalOpenResult(result commandexec.Result, bulk bool) error {
 }
 
 func init() {
-	openCmd.Flags().BoolVar(&openStdin, "stdin", false, "Read object IDs from stdin")
+	openCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: true,
+		DisableWhenStdin:    true,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	})
 	rootCmd.AddCommand(openCmd)
 }

@@ -1,13 +1,11 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -19,132 +17,82 @@ var (
 	deleteConfirm bool
 )
 
-var deleteCmd = &cobra.Command{
-	Use:   "delete <object_id>",
-	Short: "Delete an object from the vault",
-	Long: `Delete a file/object from the vault.
+var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
+	VaultPath:       getVaultPath,
+	Args:            cobra.MaximumNArgs(1),
+	BuildArgs:       buildDeleteArgs,
+	Invoke:          invokeDelete,
+	RenderHuman:     renderDeleteResult,
+	SkipFlagBinding: true,
+})
 
-By default, files are moved to a trash directory (.trash/) within the vault.
-This behavior can be changed to permanent deletion via raven.yaml.
-
-The command will warn about any backlinks (objects that reference the deleted item)
-and require confirmation unless --force is used.
-
-Bulk operations:
-  Use --stdin to read object IDs from stdin (one per line).
-  Bulk operations preview changes by default; use --confirm to apply.
-
-Examples:
-  rvn delete people/loki           # Move people/loki.md to trash
-  rvn delete people/loki --force   # Skip confirmation
-  rvn delete projects/old-project --json
-
-Bulk examples:
-  rvn query "object:project .status==archived" --ids | rvn delete --stdin
-  rvn query "object:project .status==archived" --ids | rvn delete --stdin --confirm`,
-	Args: cobra.MaximumNArgs(1),
-	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
-		IncludeDynamicDates: false,
-		DisableWhenStdin:    true,
-		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
-	}),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-
-		// Handle --stdin mode for bulk operations
-		if deleteStdin {
-			return runDeleteBulk(vaultPath)
+func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
+	if deleteStdin {
+		ids, embedded, err := ReadIDsFromStdin()
+		if err != nil {
+			return nil, handleError(ErrInternal, err, "")
 		}
-
-		// Single object mode - requires object-id
-		if len(args) == 0 {
-			return handleErrorMsg(ErrMissingArgument, "requires object-id argument", "Usage: rvn delete <object-id>")
+		if len(ids) == 0 && len(embedded) == 0 {
+			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 		}
+		return map[string]interface{}{
+			"stdin":      true,
+			"object_ids": stringsToAny(append(ids, embedded...)),
+		}, nil
+	}
 
-		return deleteSingleObject(vaultPath, args[0])
-	},
+	if len(args) == 0 {
+		return nil, handleErrorMsg(ErrMissingArgument, "requires object-id argument", "Usage: rvn delete <object-id>")
+	}
+	return map[string]interface{}{
+		"object_id": args[0],
+	}, nil
 }
 
-// runDeleteBulk handles bulk delete operations from stdin.
-func runDeleteBulk(vaultPath string) error {
-	ids, embedded, err := ReadIDsFromStdin()
-	if err != nil {
-		return handleError(ErrInternal, err, "")
-	}
-
-	if len(ids) == 0 && len(embedded) == 0 {
-		return handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
-	}
-
-	args := map[string]interface{}{
-		"stdin":      true,
-		"object_ids": stringsToAny(append(ids, embedded...)),
-	}
-	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
-		CommandID: "delete",
-		VaultPath: vaultPath,
-		Caller:    commandexec.CallerCLI,
-		Args:      args,
-		Confirm:   deleteConfirm,
-	})
-	return handleCanonicalDeleteResult(vaultPath, result, true)
-}
-
-// deleteSingleObject deletes a single object (non-bulk mode).
-func deleteSingleObject(vaultPath, reference string) error {
-	args := map[string]interface{}{
-		"object_id": reference,
-	}
-	if !isJSONOutput() && !deleteForce {
-		preview := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
-			CommandID: "delete",
+func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	if boolValue(args["stdin"]) {
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
 			VaultPath: vaultPath,
-			Caller:    commandexec.CallerCLI,
+			Args:      args,
+			Confirm:   deleteConfirm,
+		})
+	}
+
+	if !isJSONOutput() && !deleteForce {
+		preview := executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
 			Args:      args,
 			Preview:   true,
 		})
 		if !preview.OK {
-			return handleCanonicalDeleteResult(vaultPath, preview, false)
+			return preview
 		}
 		if !renderDeletePreviewPrompt(preview) {
-			fmt.Println("Cancelled.")
-			return nil
+			return commandexec.Success(map[string]interface{}{"cancelled": true}, nil)
 		}
 	}
 
-	result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
-		CommandID: "delete",
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
 		VaultPath: vaultPath,
-		Caller:    commandexec.CallerCLI,
 		Args:      args,
 		Confirm:   true,
 	})
-	return handleCanonicalDeleteResult(vaultPath, result, false)
 }
 
-func handleCanonicalDeleteResult(vaultPath string, result commandexec.Result, bulk bool) error {
-	if !result.OK {
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-		if result.Error != nil {
-			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-		}
-		return handleErrorMsg(ErrInternal, "command execution failed", "")
-	}
-
-	if isJSONOutput() {
-		outputJSON(result)
-		return nil
-	}
-	if bulk {
-		return renderCanonicalBulkResult(result)
-	}
-
+func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 	data, ok := result.Data.(map[string]interface{})
 	if !ok {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
+	}
+	if boolValue(data["cancelled"]) {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+	if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
+		return renderCanonicalBulkResult(result)
 	}
 	behavior, _ := data["behavior"].(string)
 	if behavior == "trash" {
@@ -205,5 +153,10 @@ func init() {
 	deleteCmd.Flags().BoolVar(&deleteForce, "force", false, "Skip confirmation prompt")
 	deleteCmd.Flags().BoolVar(&deleteStdin, "stdin", false, "Read object IDs from stdin (one per line)")
 	deleteCmd.Flags().BoolVar(&deleteConfirm, "confirm", false, "Apply changes (without this flag, shows preview only)")
+	deleteCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    true,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	})
 	rootCmd.AddCommand(deleteCmd)
 }

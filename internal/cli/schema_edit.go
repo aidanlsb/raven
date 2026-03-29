@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
@@ -362,58 +363,36 @@ func printSchemaChangeList(header string, changes []string) {
 	}
 }
 
-var schemaValidateCmd = &cobra.Command{
-	Use:   "validate",
-	Short: "Validate the schema",
-	Long: `Validate schema.yaml for correctness.
+var schemaValidateCmd = newCanonicalLeafCommand("schema_validate", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaValidate,
+})
 
-Checks:
-  - Valid YAML syntax
-  - Valid field types
-  - Valid trait types
-  - Referenced types exist
-  - name_field references valid string fields
-  - No circular references
+func renderSchemaValidate(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	issues, err := decodeSchemaValue[[]string](data["issues"])
+	if err != nil {
+		return err
+	}
+	types, err := decodeSchemaCount(data["types"])
+	if err != nil {
+		return err
+	}
+	traits, err := decodeSchemaCount(data["traits"])
+	if err != nil {
+		return err
+	}
 
-Examples:
-  rvn schema validate
-  rvn schema validate --json`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		result := executeCanonicalCommand("schema_validate", vaultPath, nil)
-		if isJSONOutput() {
-			outputCanonicalResultJSON(result)
-			return nil
+	if len(issues) > 0 {
+		fmt.Printf("Schema validation found %d issues:\n", len(issues))
+		for _, issue := range issues {
+			fmt.Printf("  ⚠ %s\n", issue)
 		}
-		if err := handleCanonicalFailure(result); err != nil {
-			return err
-		}
-		data := canonicalDataMap(result)
-		issues, err := decodeSchemaValue[[]string](data["issues"])
-		if err != nil {
-			return err
-		}
-		types, err := decodeSchemaCount(data["types"])
-		if err != nil {
-			return err
-		}
-		traits, err := decodeSchemaCount(data["traits"])
-		if err != nil {
-			return err
-		}
-
-		if len(issues) > 0 {
-			fmt.Printf("Schema validation found %d issues:\n", len(issues))
-			for _, issue := range issues {
-				fmt.Printf("  ⚠ %s\n", issue)
-			}
-			return nil
-		}
-
-		fmt.Printf("✓ Schema is valid (%d types, %d traits)\n", types, traits)
 		return nil
-	},
+	}
+
+	fmt.Printf("✓ Schema is valid (%d types, %d traits)\n", types, traits)
+	return nil
 }
 
 // =============================================================================

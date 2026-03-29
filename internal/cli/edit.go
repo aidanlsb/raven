@@ -1,68 +1,21 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-var (
-	editConfirm   bool
-	editEditsJSON string
-)
-
-var editCmd = &cobra.Command{
-	Use:   "edit <reference> [old_str] [new_str]",
-	Short: commands.Registry["edit"].Description,
-	Long:  commands.Registry["edit"].LongDesc,
-	Args:  cobra.RangeArgs(1, 3),
-	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
-		IncludeDynamicDates: false,
-		DisableWhenStdin:    false,
-		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
-	}),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		argsMap := map[string]interface{}{
-			"path":    args[0],
-			"confirm": editConfirm,
-		}
-		if editEditsJSON != "" {
-			var payload interface{}
-			if err := json.Unmarshal([]byte(editEditsJSON), &payload); err != nil {
-				return handleErrorMsg(ErrInvalidInput, "invalid --edits-json payload", `Provide an object like: --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`)
-			}
-			argsMap["edits-json"] = payload
-		}
-		if len(args) > 1 {
-			argsMap["old_str"] = args[1]
-		}
-		if len(args) > 2 {
-			argsMap["new_str"] = args[2]
-		}
-
-		result := executeCanonicalRequest(commandexec.Request{
-			CommandID: "edit",
-			VaultPath: getVaultPath(),
-			Args:      argsMap,
-			Confirm:   editConfirm,
-		})
-		if !result.OK {
-			return handleCanonicalEditFailure(result)
-		}
-		if jsonOutput {
-			outputJSON(result)
-			return nil
-		}
-
-		return renderCanonicalEditResult(result)
-	},
-}
+var editCmd = newCanonicalLeafCommand("edit", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	HandleError: handleCanonicalEditFailure,
+	Invoke:      invokeEdit,
+	RenderHuman: renderEditResult,
+})
 
 func handleCanonicalEditFailure(result commandexec.Result) error {
 	if result.Error == nil {
@@ -72,6 +25,21 @@ func handleCanonicalEditFailure(result commandexec.Result) error {
 		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
 	}
 	return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
+}
+
+func invokeEdit(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	confirm, _ := cmd.Flags().GetBool("confirm")
+	args["confirm"] = confirm
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+		Confirm:   confirm,
+	})
+}
+
+func renderEditResult(_ *cobra.Command, result commandexec.Result) error {
+	return renderCanonicalEditResult(result)
 }
 
 func renderCanonicalEditResult(result commandexec.Result) error {
@@ -184,7 +152,10 @@ func indent(s, prefix string) string {
 }
 
 func init() {
-	editCmd.Flags().BoolVar(&editConfirm, "confirm", false, "Apply the edit (default: preview only)")
-	editCmd.Flags().StringVar(&editEditsJSON, "edits-json", "", "JSON object with ordered edits, e.g. '{\"edits\":[{\"old_str\":\"from\",\"new_str\":\"to\"}]}'")
+	editCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    false,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	})
 	rootCmd.AddCommand(editCmd)
 }

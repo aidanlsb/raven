@@ -26,52 +26,20 @@ var (
 	importConfirm      bool
 )
 
-var importCmd = &cobra.Command{
-	Use:   "import [type]",
-	Short: "Import objects from JSON data",
-	Long: `Import objects from external JSON data into the vault.
-
-Reads a JSON array (or single object) and creates or updates vault objects
-by mapping input fields to a schema type's fields.
-
-Input can come from stdin or a file (--file). Field mappings can be specified
-inline (--map) or via a mapping file (--mapping).
-
-For homogeneous imports (single type), specify the type as a positional argument
-or in the mapping file. For heterogeneous imports (mixed types), use a mapping
-file with type_field and per-type mappings.
-
-By default, import performs an upsert: it creates new objects and updates
-existing ones. Use --create-only or --update-only to restrict behavior.
-
-Examples:
-  # Simple import from stdin
-  echo '[{"name": "Freya", "email": "freya@asgard.realm"}]' | rvn import person
-
-  # With field mapping
-  echo '[{"full_name": "Thor"}]' | rvn import person --map full_name=name
-
-  # From a file with a mapping file
-  rvn import --mapping contacts.yaml --file contacts.json
-
-  # Dry run to preview changes
-  echo '[{"name": "Loki"}]' | rvn import person --dry-run
-
-  # Import with content (page body) from a JSON field
-  echo '[{"name": "Freya", "bio": "Goddess of love"}]' | rvn import person --content-field bio
-
-  # Heterogeneous import with mapping file
-  rvn import --mapping migration.yaml --file dump.json`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runImport,
-}
+var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
+	VaultPath:       getVaultPath,
+	BuildArgs:       buildImportArgs,
+	Invoke:          invokeImport,
+	RenderHuman:     renderImportResult,
+	SkipFlagBinding: true,
+})
 
 type importMappingConfig = importsvc.MappingConfig
 type importTypeMapping = importsvc.TypeMapping
 type importResult = importsvc.ResultItem
 type importItemConfig = importsvc.ItemConfig
 
-func runImport(_ *cobra.Command, args []string) error {
+func buildImportArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
 	argsMap := map[string]interface{}{
 		"file":          importFile,
 		"mapping":       importMapping,
@@ -86,36 +54,29 @@ func runImport(_ *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		argsMap["type"] = args[0]
 	}
+	return argsMap, nil
+}
 
+func invokeImport(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
 	var stdinData []byte
 	if strings.TrimSpace(importFile) == "" {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return handleError(ErrInvalidInput, err, "Expected a JSON array of objects or a single JSON object")
+			return commandexec.Failure(ErrInvalidInput, err.Error(), nil, "Expected a JSON array of objects or a single JSON object")
 		}
 		stdinData = data
 	}
 
-	result := executeCanonicalRequest(commandexec.Request{
-		CommandID: "import",
-		VaultPath: getVaultPath(),
-		Args:      argsMap,
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
 		Confirm:   importConfirm,
 		Stdin:     stdinData,
 	})
-	if !result.OK {
-		if result.Error == nil {
-			return handleErrorMsg(ErrInternal, "import failed", "")
-		}
-		if result.Error.Details != nil {
-			return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-		}
-		return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
-	}
-	if jsonOutput {
-		outputJSON(result)
-		return nil
-	}
+}
+
+func renderImportResult(_ *cobra.Command, result commandexec.Result) error {
 	return renderCanonicalImportResult(result)
 }
 

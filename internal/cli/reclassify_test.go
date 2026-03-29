@@ -55,6 +55,18 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	reclassifyForce = false
 }
 
+func runReclassifyCommand(t *testing.T, args ...string) string {
+	t.Helper()
+	return captureStdout(t, func() {
+		if err := reclassifyCmd.Args(reclassifyCmd, args); err != nil {
+			t.Fatalf("reclassifyCmd.Args: %v", err)
+		}
+		if err := reclassifyCmd.RunE(reclassifyCmd, args); err != nil {
+			t.Fatalf("reclassifyCmd.RunE: %v", err)
+		}
+	})
+}
+
 func TestReclassifyBasicTypeChange(t *testing.T) {
 	schemaYAML := `version: 2
 types:
@@ -74,11 +86,7 @@ types:
 	reclassifyNoMove = true // don't move for this test
 	reclassifyForce = true  // skip dropped fields confirmation
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -126,11 +134,7 @@ types:
 	setupReclassifyGlobals(t, vaultPath)
 	reclassifyForce = true
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -176,11 +180,7 @@ types:
 	reclassifyNoMove = true
 	reclassifyForce = true
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -220,11 +220,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -268,11 +264,7 @@ types:
 	reclassifyNoMove = true
 	reclassifyForce = true
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -317,11 +309,7 @@ types:
 	reclassifyNoMove = true
 	reclassifyForce = true
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -376,11 +364,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -419,11 +403,7 @@ types:
 	reclassifyForce = true
 	reclassifyNoMove = true
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`
@@ -462,11 +442,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "books/my-book", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "books/my-book", "book")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -497,11 +473,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "books/my-book", "page"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "books/my-book", "page")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -532,11 +504,7 @@ types:
 
 	setupReclassifyGlobals(t, vaultPath)
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "books/my-book", "unicorn"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "books/my-book", "unicorn")
 
 	var resp struct {
 		OK    bool `json:"ok"`
@@ -577,11 +545,7 @@ types:
 	reclassifyNoMove = true
 	reclassifyForce = true
 
-	out := captureStdout(t, func() {
-		if err := runReclassify(vaultPath, "notes/my-note", "book"); err != nil {
-			t.Fatalf("runReclassify: %v", err)
-		}
-	})
+	out := runReclassifyCommand(t, "notes/my-note", "book")
 
 	var resp struct {
 		OK   bool             `json:"ok"`

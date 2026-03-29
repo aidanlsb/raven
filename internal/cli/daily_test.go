@@ -50,20 +50,24 @@ func TestDailyJSONDoesNotOpenEditorByDefault(t *testing.T) {
 			prevVault := resolvedVaultPath
 			prevJSON := jsonOutput
 			prevCfg := cfg
-			prevEdit := dailyEdit
-			prevTemplate := dailyTemplate
 			t.Cleanup(func() {
 				resolvedVaultPath = prevVault
 				jsonOutput = prevJSON
 				cfg = prevCfg
-				dailyEdit = prevEdit
-				dailyTemplate = prevTemplate
+				if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
+					t.Fatalf("reset daily --edit: %v", err)
+				}
+				if err := dailyCmd.Flags().Set("template", ""); err != nil {
+					t.Fatalf("reset daily --template: %v", err)
+				}
 			})
 
 			resolvedVaultPath = vaultPath
 			jsonOutput = true
 			cfg = &config.Config{Editor: editorPath}
-			dailyEdit = false
+			if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
+				t.Fatalf("set daily --edit: %v", err)
+			}
 
 			out := captureStdout(t, func() {
 				if err := dailyCmd.RunE(dailyCmd, []string{date}); err != nil {
@@ -126,14 +130,16 @@ func TestDailyJSONOpensEditorWhenEditEnabled(t *testing.T) {
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevCfg := cfg
-	prevEdit := dailyEdit
-	prevTemplate := dailyTemplate
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		cfg = prevCfg
-		dailyEdit = prevEdit
-		dailyTemplate = prevTemplate
+		if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
+			t.Fatalf("reset daily --edit: %v", err)
+		}
+		if err := dailyCmd.Flags().Set("template", ""); err != nil {
+			t.Fatalf("reset daily --template: %v", err)
+		}
 	})
 
 	resolvedVaultPath = vaultPath
@@ -142,7 +148,9 @@ func TestDailyJSONOpensEditorWhenEditEnabled(t *testing.T) {
 		Editor:     editorPath,
 		EditorMode: "terminal",
 	}
-	dailyEdit = true
+	if err := dailyCmd.Flags().Set("edit", "true"); err != nil {
+		t.Fatalf("set daily --edit: %v", err)
+	}
 
 	out := captureStdout(t, func() {
 		if err := dailyCmd.RunE(dailyCmd, []string{date}); err != nil {
@@ -187,14 +195,16 @@ func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevCfg := cfg
-	prevEdit := dailyEdit
-	prevTemplate := dailyTemplate
 	t.Cleanup(func() {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		cfg = prevCfg
-		dailyEdit = prevEdit
-		dailyTemplate = prevTemplate
+		if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
+			t.Fatalf("reset daily --edit: %v", err)
+		}
+		if err := dailyCmd.Flags().Set("template", ""); err != nil {
+			t.Fatalf("reset daily --template: %v", err)
+		}
 	})
 
 	resolvedVaultPath = vaultPath
@@ -203,7 +213,9 @@ func TestDailyHumanModeOpensEditorByDefault(t *testing.T) {
 		Editor:     editorPath,
 		EditorMode: "terminal",
 	}
-	dailyEdit = false
+	if err := dailyCmd.Flags().Set("edit", "false"); err != nil {
+		t.Fatalf("set daily --edit: %v", err)
+	}
 
 	captureStdout(t, func() {
 		if err := dailyCmd.RunE(dailyCmd, []string{date}); err != nil {

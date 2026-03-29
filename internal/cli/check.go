@@ -63,30 +63,23 @@ var checkCmd = &cobra.Command{
 	},
 }
 
-var checkFixCmd = &cobra.Command{
-	Use:   "fix [path]",
-	Short: "Preview or apply safe auto-fixes for check findings",
-	Long: `Runs check, then previews or applies only unambiguous safe fixes.
+var checkFixCmd = newCanonicalLeafCommand("check_fix", canonicalLeafOptions{
+	VaultPath:       getVaultPath,
+	BuildArgs:       buildCheckFixArgs,
+	Invoke:          invokeCheckLeaf,
+	HandleError:     handleCheckLeafFailure,
+	HandleResult:    handleCheckFixResult,
+	SkipFlagBinding: true,
+})
 
-Preview is default; use --confirm to apply.`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCheckCommand(args, checkActionFix, false)
-	},
-}
-
-var checkCreateMissingCmd = &cobra.Command{
-	Use:   "create-missing",
-	Short: "Create missing references discovered by check",
-	Long: `Runs check, then creates missing referenced pages.
-
-Non-JSON mode prompts interactively.
-JSON mode requires --confirm and creates only deterministic typed targets.`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCheckCommand(args, checkActionCreateMissing, false)
-	},
-}
+var checkCreateMissingCmd = newCanonicalLeafCommand("check create-missing", canonicalLeafOptions{
+	VaultPath:       getVaultPath,
+	BuildArgs:       buildCheckCreateMissingArgs,
+	Invoke:          invokeCheckLeaf,
+	HandleError:     handleCheckLeafFailure,
+	HandleResult:    handleCheckCreateMissingResult,
+	SkipFlagBinding: true,
+})
 
 func runCheckCommand(args []string, action checkAction, legacyFlagInvocation bool) error {
 	vaultPath := getVaultPath()
@@ -170,6 +163,90 @@ func runCheckCommand(args []string, action checkAction, legacyFlagInvocation boo
 		os.Exit(1)
 	}
 
+	return nil
+}
+
+func buildCheckFixArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
+	argsMap := map[string]interface{}{
+		"strict":      checkStrict,
+		"type":        checkType,
+		"trait":       checkTrait,
+		"issues":      checkIssues,
+		"exclude":     checkExclude,
+		"errors-only": checkErrorsOnly,
+		"confirm":     checkConfirm,
+	}
+	if len(args) > 0 {
+		argsMap["path"] = args[0]
+	}
+	return argsMap, nil
+}
+
+func buildCheckCreateMissingArgs(_ *cobra.Command, _ []string) (map[string]interface{}, error) {
+	confirm := checkConfirm
+	if !jsonOutput {
+		confirm = false
+	}
+	return map[string]interface{}{
+		"strict":  checkStrict,
+		"confirm": confirm,
+	}, nil
+}
+
+func invokeCheckLeaf(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	confirm := checkConfirm
+	if commandID == "check create-missing" && !jsonOutput {
+		confirm = false
+	}
+	return executeCanonicalRequest(commandexec.Request{
+		CommandID: commandID,
+		VaultPath: vaultPath,
+		Args:      args,
+		Confirm:   confirm,
+	})
+}
+
+func handleCheckLeafFailure(result commandexec.Result) error {
+	if result.Error == nil {
+		return handleErrorMsg(ErrInternal, "check failed", "")
+	}
+	if result.Error.Details != nil {
+		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+	}
+	return handleErrorMsg(result.Error.Code, result.Error.Message, result.Error.Suggestion)
+}
+
+func handleCheckFixResult(_ *cobra.Command, result commandexec.Result) error {
+	if jsonOutput {
+		outputJSON(result)
+		if checkShouldExit(result) {
+			os.Exit(1)
+		}
+		return nil
+	}
+	printCheckScopeHeader(getVaultPath(), checkScopeFromResult(result))
+	renderCanonicalCheckFix(result)
+	if checkShouldExit(result) {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func handleCheckCreateMissingResult(_ *cobra.Command, result commandexec.Result) error {
+	if jsonOutput {
+		outputJSON(result)
+		if checkShouldExit(result) {
+			os.Exit(1)
+		}
+		return nil
+	}
+	printCheckScopeHeader(getVaultPath(), checkScopeFromResult(result))
+	if err := renderCanonicalCheckCreateMissing(getVaultPath(), result); err != nil {
+		return err
+	}
+	if checkShouldExit(result) {
+		os.Exit(1)
+	}
 	return nil
 }
 

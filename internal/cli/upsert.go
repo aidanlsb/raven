@@ -1,15 +1,12 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -20,84 +17,66 @@ var (
 	upsertPathFlag   string
 )
 
-var upsertCmd = &cobra.Command{
-	Use:   "upsert <type> <title>",
-	Short: commands.Registry["upsert"].Description,
-	Long:  commands.Registry["upsert"].LongDesc,
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		typeName := args[0]
-		title := args[1]
+var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
+	VaultPath:       getVaultPath,
+	BuildArgs:       buildUpsertArgs,
+	RenderHuman:     renderUpsertResult,
+	SkipFlagBinding: true,
+})
 
-		if err := validateObjectTitle(title); err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
-		}
+func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	typeName := args[0]
+	title := args[1]
 
-		targetPath := title
-		if cmd.Flags().Changed("path") {
-			targetPath = strings.TrimSpace(upsertPathFlag)
-			if err := validateObjectTargetPath(targetPath); err != nil {
-				return handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
-			}
-		}
+	if err := validateObjectTitle(title); err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Provide a plain title without path separators")
+	}
 
-		fieldValues, err := parseFieldFlags(upsertFieldFlags)
-		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
+	targetPath := title
+	if cmd.Flags().Changed("path") {
+		targetPath = strings.TrimSpace(upsertPathFlag)
+		if err := validateObjectTargetPath(targetPath); err != nil {
+			return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use --path with an explicit object path like note/raven-friction")
 		}
+	}
 
-		fieldJSONRaw, err := parseFieldJSONObject(upsertFieldJSON)
-		if err != nil {
-			return handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
-		}
+	fieldValues, err := parseFieldFlags(upsertFieldFlags)
+	if err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
+	}
 
-		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
-			CommandID: "upsert",
-			VaultPath: vaultPath,
-			Caller:    commandexec.CallerCLI,
-			Args: buildUpsertCommandArgs(
-				typeName,
-				title,
-				targetPath,
-				fieldValues,
-				fieldJSONRaw,
-				upsertContent,
-				cmd.Flags().Changed("content"),
-			),
-		})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
+	fieldJSONRaw, err := parseFieldJSONObject(upsertFieldJSON)
+	if err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+	}
 
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
+	return buildUpsertCommandArgs(
+		typeName,
+		title,
+		targetPath,
+		fieldValues,
+		fieldJSONRaw,
+		upsertContent,
+		cmd.Flags().Changed("content"),
+	), nil
+}
 
-		data, _ := result.Data.(map[string]interface{})
-		status, _ := data["status"].(string)
-		relativePath, _ := data["file"].(string)
-		switch status {
-		case "created":
-			fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
-		case "updated":
-			fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
-		default:
-			fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(relativePath)))
-		}
-		for _, warning := range result.Warnings {
-			fmt.Println(ui.Warning(warning.Message))
-		}
-		return nil
-	},
+func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
+	data, _ := result.Data.(map[string]interface{})
+	status, _ := data["status"].(string)
+	relativePath, _ := data["file"].(string)
+	switch status {
+	case "created":
+		fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
+	case "updated":
+		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
+	default:
+		fmt.Println(ui.Checkf("Unchanged %s", ui.FilePath(relativePath)))
+	}
+	for _, warning := range result.Warnings {
+		fmt.Println(ui.Warning(warning.Message))
+	}
+	return nil
 }
 
 func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}, content string, replaceBody bool) map[string]interface{} {

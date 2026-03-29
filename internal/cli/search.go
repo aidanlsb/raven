@@ -1,60 +1,44 @@
 package cli
 
 import (
-	"context"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/model"
 )
 
-var searchLimit int
-var searchType string
+var searchCmd = newCanonicalLeafCommand("search", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	Args:        cobra.MinimumNArgs(1),
+	BuildArgs:   buildSearchArgs,
+	HandleError: handleCanonicalSearchFailure,
+	RenderHuman: renderSearch,
+})
 
-var searchCmd = &cobra.Command{
-	Use:   "search <query>",
-	Short: commands.Registry["search"].Description,
-	Long:  commands.Registry["search"].LongDesc,
-	Args:  cobra.MinimumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		query := strings.Join(args, " ")
-		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
-			CommandID: "search",
-			VaultPath: vaultPath,
-			Caller:    commandexec.CallerCLI,
-			Args: map[string]interface{}{
-				"query": query,
-				"limit": searchLimit,
-				"type":  searchType,
-			},
-		})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(mapSearchCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
+func buildSearchArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	meta, _ := cmd.Flags().GetString("type")
+	limit, _ := cmd.Flags().GetInt("limit")
+	return map[string]interface{}{
+		"query": strings.Join(args, " "),
+		"limit": limit,
+		"type":  meta,
+	}, nil
+}
 
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		data, _ := result.Data.(map[string]interface{})
-		resultQuery, _ := data["query"].(string)
-		printSearchResults(resultQuery, searchMatchesFromResult(data["results"]))
-
+func handleCanonicalSearchFailure(result commandexec.Result) error {
+	if result.Error == nil {
 		return nil
-	},
+	}
+	return handleErrorWithDetails(mapSearchCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+}
+
+func renderSearch(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	resultQuery, _ := data["query"].(string)
+	printSearchResults(resultQuery, searchMatchesFromResult(data["results"]))
+	return nil
 }
 
 func searchMatchesFromResult(raw interface{}) []model.SearchMatch {
@@ -113,7 +97,5 @@ func mapSearchCode(code string) string {
 }
 
 func init() {
-	searchCmd.Flags().IntVarP(&searchLimit, "limit", "n", 20, "Maximum number of results")
-	searchCmd.Flags().StringVarP(&searchType, "type", "t", "", "Filter by object type")
 	rootCmd.AddCommand(searchCmd)
 }

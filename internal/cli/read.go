@@ -1,149 +1,111 @@
 package cli
 
 import (
-	"context"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
-var (
-	readRawFlag     bool
-	readNoLinksFlag bool
-	readLinesFlag   bool
-	readStartLine   int
-	readEndLine     int
-)
+var readCmd = newCanonicalLeafCommand("read", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	Args:        cobra.MaximumNArgs(1),
+	Prepare:     prepareReadArgs,
+	BuildArgs:   buildReadArgs,
+	HandleError: handleCanonicalReadFailure,
+	RenderHuman: renderRead,
+})
 
-var readCmd = &cobra.Command{
-	Use:   "read [reference]",
-	Short: "Read a file with context",
-	Long: `Read and output a file from the vault.
+func prepareReadArgs(cmd *cobra.Command, args []string) ([]string, bool, error) {
+	noLinks, _ := cmd.Flags().GetBool("no-links")
+	setHyperlinksDisabled(noLinks)
 
-The reference can be a short reference (freya), partial path (people/freya),
-or full path (people/freya.md).
+	if len(args) > 0 {
+		return args, false, nil
+	}
 
-By default, this command shows enriched output (rendered wikilinks and backlinks).
-Use --raw to output only the raw file content (useful for agents and scripting).
+	vaultPath := getVaultPath()
+	vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if err != nil {
+		return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+	}
 
-In an interactive terminal with fzf installed, bare 'rvn read' launches
-an interactive file picker.
-
-Examples:
-  rvn read freya                  # Resolves to people/freya.md
-  rvn read people/freya
-  rvn read daily/2025-02-01.md
-  rvn read people/freya --raw
-  rvn read people/freya --raw --lines
-  rvn read people/freya --raw --start-line 10 --end-line 40
-  rvn read people/freya --raw --json`,
-	Args: cobra.MaximumNArgs(1),
-	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
-		IncludeDynamicDates: false,
-		DisableWhenStdin:    false,
-		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
-	}),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		start := time.Now()
-
-		// Apply hyperlink preference for this run.
-		setHyperlinksDisabled(readNoLinksFlag)
-
-		// Load vault config
-		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+	if canUseFZFInteractive() {
+		selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "read> ", "Select a file to read (Esc to cancel)")
 		if err != nil {
-			return handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
 		}
-
-		var reference string
-		if len(args) == 0 {
-			if canUseFZFInteractive() {
-				selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "read> ", "Select a file to read (Esc to cancel)")
-				if err != nil {
-					return handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
-				}
-				if !selected {
-					return nil
-				}
-				reference = selectedPath
-			} else {
-				return handleErrorMsg(
-					ErrMissingArgument,
-					"specify a reference",
-					interactivePickerMissingArgSuggestion("read", "rvn read <reference>"),
-				)
-			}
-		} else {
-			reference = args[0]
+		if !selected {
+			return nil, true, nil
 		}
+		return []string{selectedPath}, false, nil
+	}
 
-		// If the caller requested line-based output/ranges, force raw mode so the content is stable.
-		if readLinesFlag || readStartLine > 0 || readEndLine > 0 {
-			readRawFlag = true
-		}
+	err = handleErrorMsg(
+		ErrMissingArgument,
+		"specify a reference",
+		interactivePickerMissingArgSuggestion("read", "rvn read <reference>"),
+	)
+	return nil, err == nil, err
+}
 
-		result := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
-			CommandID: "read",
-			VaultPath: vaultPath,
-			Caller:    commandexec.CallerCLI,
-			Args: map[string]interface{}{
-				"path":       reference,
-				"raw":        readRawFlag,
-				"lines":      readLinesFlag,
-				"start-line": readStartLine,
-				"end-line":   readEndLine,
-			},
-		})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(mapReadCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
+func buildReadArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	raw, _ := cmd.Flags().GetBool("raw")
+	lines, _ := cmd.Flags().GetBool("lines")
+	startLine, _ := cmd.Flags().GetInt("start-line")
+	endLine, _ := cmd.Flags().GetInt("end-line")
+	if lines || startLine > 0 || endLine > 0 {
+		raw = true
+	}
+	return map[string]interface{}{
+		"path":       args[0],
+		"raw":        raw,
+		"lines":      lines,
+		"start-line": startLine,
+		"end-line":   endLine,
+	}, nil
+}
 
-		elapsed := time.Since(start).Milliseconds()
-		data, _ := result.Data.(map[string]interface{})
+func handleCanonicalReadFailure(result commandexec.Result) error {
+	if result.Error == nil {
+		return nil
+	}
+	return handleErrorWithDetails(mapReadCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+}
 
-		if readRawFlag {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
+func renderRead(cmd *cobra.Command, result commandexec.Result) error {
+	raw, _ := cmd.Flags().GetBool("raw")
+	lines, _ := cmd.Flags().GetBool("lines")
+	startLine, _ := cmd.Flags().GetInt("start-line")
+	endLine, _ := cmd.Flags().GetInt("end-line")
+	rawMode := raw || lines || startLine > 0 || endLine > 0
 
-			// Human-readable: just output the content
-			content, _ := data["content"].(string)
-			fmt.Print(content)
-			return nil
-		}
+	data := canonicalDataMap(result)
+	if rawMode {
+		content, _ := data["content"].(string)
+		fmt.Print(content)
+		return nil
+	}
 
-		return readEnriched(readEnrichedOptions{
-			fileRelPath:    stringFromMap(data, "path"),
-			content:        stringFromMap(data, "content"),
-			lineCount:      intFromMap(data, "line_count"),
-			elapsedMs:      elapsed,
-			references:     readReferencesFromMap(data["references"]),
-			backlinks:      readBacklinksFromMap(data["backlinks"]),
-			backlinksCount: metaCount(result.Meta),
-		})
-	},
+	return readEnriched(readEnrichedOptions{
+		fileRelPath:    stringFromMap(data, "path"),
+		content:        stringFromMap(data, "content"),
+		lineCount:      intFromMap(data, "line_count"),
+		elapsedMs:      queryTimeMs(result.Meta),
+		references:     readReferencesFromMap(data["references"]),
+		backlinks:      readBacklinksFromMap(data["backlinks"]),
+		backlinksCount: metaCount(result.Meta),
+	})
 }
 
 func init() {
-	readCmd.Flags().BoolVar(&readRawFlag, "raw", false, "Output only raw file content (no backlinks, no rendered links)")
-	readCmd.Flags().BoolVar(&readNoLinksFlag, "no-links", false, "Disable clickable hyperlinks in terminal output")
-	readCmd.Flags().BoolVar(&readLinesFlag, "lines", false, "Include structured lines with line numbers (requires --raw)")
-	readCmd.Flags().IntVar(&readStartLine, "start-line", 0, "Start line (1-indexed, inclusive) for raw output")
-	readCmd.Flags().IntVar(&readEndLine, "end-line", 0, "End line (1-indexed, inclusive) for raw output")
+	readCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    false,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	})
 	rootCmd.AddCommand(readCmd)
 }
 
@@ -197,6 +159,13 @@ func metaCount(meta *commandexec.Meta) int {
 		return 0
 	}
 	return meta.Count
+}
+
+func queryTimeMs(meta *commandexec.Meta) int64 {
+	if meta == nil {
+		return 0
+	}
+	return meta.QueryTimeMs
 }
 
 func readReferencesFromMap(raw interface{}) []readsvc.ReadReference {

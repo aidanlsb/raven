@@ -21,134 +21,104 @@ var (
 	reclassifyForce      bool
 )
 
-var reclassifyCmd = &cobra.Command{
-	Use:   "reclassify <object> <new-type>",
-	Short: "Change an object's type",
-	Long: `Change an object's type, updating frontmatter, applying defaults,
-and optionally moving the file to the new type's default directory.
-
-Required fields on the new type are handled as follows:
-- If a required field has a default, it is applied automatically
-- Missing required fields can be supplied via --field flags
-- Interactive mode prompts for missing required fields
-- JSON mode returns an error with retry_with template
-
-Fields present on the old type but not defined on the new type are
-identified as "dropped fields" and require confirmation before removal.
-Use --force to skip this confirmation.
-
-Examples:
-  rvn reclassify inbox/note book --json
-  rvn reclassify people/freya company --field industry=tech --json
-  rvn reclassify pages/draft project --no-move --json
-  rvn reclassify inbox/note book --force --json`,
-	Args: cobra.ExactArgs(2),
-	ValidArgsFunction: completeReferenceArgAt(0, referenceCompletionOptions{
-		IncludeDynamicDates: false,
-		DisableWhenStdin:    false,
-		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
-	}),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultPath := getVaultPath()
-		objectRef := args[0]
-		newTypeName := args[1]
-
-		return runReclassify(vaultPath, objectRef, newTypeName)
-	},
-}
+var reclassifyCmd = newCanonicalLeafCommand("reclassify", canonicalLeafOptions{
+	VaultPath:       getVaultPath,
+	BuildArgs:       buildReclassifyArgs,
+	Invoke:          invokeReclassify,
+	RenderHuman:     renderReclassifyResult,
+	SkipFlagBinding: true,
+})
 
 type ReclassifyResult = objectsvc.ReclassifyResult
 
-func runReclassify(vaultPath, objectRef, newTypeName string) error {
-	fieldValues := parseReclassifyFieldFlags(reclassifyFieldFlags)
-	force := reclassifyForce
+func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"object":      args[0],
+		"new-type":    args[1],
+		"field":       parseReclassifyFieldFlags(reclassifyFieldFlags),
+		"no-move":     reclassifyNoMove,
+		"update-refs": reclassifyUpdateRefs,
+		"force":       reclassifyForce,
+	}, nil
+}
 
+func invokeReclassify(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	fieldValues := cloneArgsMap(args)
 	for {
-		result := executeCanonicalCommand("reclassify", vaultPath, map[string]interface{}{
-			"object":      objectRef,
-			"new-type":    newTypeName,
-			"field":       fieldValues,
-			"no-move":     reclassifyNoMove,
-			"update-refs": reclassifyUpdateRefs,
-			"force":       force,
+		result := executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Args:      fieldValues,
 		})
 		if !result.OK {
 			if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrRequiredFieldMissing {
 				details, _ := result.Error.Details.(map[string]interface{})
-				prompted, promptErr := promptMissingReclassifyFields(newTypeName, details)
+				prompted, promptErr := promptMissingReclassifyFields(stringValue(fieldValues["new-type"]), details)
 				if promptErr != nil {
-					return promptErr
+					return commandexec.Failure(ErrInternal, promptErr.Error(), nil, "")
+				}
+				fields, _ := fieldValues["field"].(map[string]string)
+				if fields == nil {
+					fields = map[string]string{}
 				}
 				for k, v := range prompted {
-					fieldValues[k] = v
+					fields[k] = v
 				}
+				fieldValues["field"] = fields
 				continue
 			}
-			return handleCanonicalReclassifyFailure(result)
+			return result
 		}
 
 		data := canonicalDataMap(result)
-		if boolValue(data["needs_confirm"]) && !force {
+		if boolValue(data["needs_confirm"]) && !boolValue(fieldValues["force"]) {
 			if isJSONOutput() {
-				outputJSON(result)
-				return nil
+				return result
 			}
-
-			fmt.Fprintf(os.Stderr, "The following fields are not defined on type '%s' and will be dropped:\n", newTypeName)
+			fmt.Fprintf(os.Stderr, "The following fields are not defined on type '%s' and will be dropped:\n", stringValue(fieldValues["new-type"]))
 			for _, f := range stringSliceFromAny(data["dropped_fields"]) {
 				fmt.Fprintf(os.Stderr, "  - %s\n", f)
 			}
 			fmt.Fprint(os.Stderr, "\nProceed? [y/N]: ")
-
 			reader := bufio.NewReader(os.Stdin)
 			response, readErr := reader.ReadString('\n')
 			if readErr != nil {
-				return handleError(ErrInternal, readErr, "")
+				return commandexec.Failure(ErrInternal, readErr.Error(), nil, "")
 			}
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "y" && response != "yes" {
-				fmt.Fprintln(os.Stderr, "Cancelled.")
-				return nil
+				return commandexec.Success(map[string]interface{}{"cancelled": true}, nil)
 			}
-			force = true
+			fieldValues["force"] = true
 			continue
 		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-
-		fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(stringValue(data["file"])), stringValue(data["old_type"]), stringValue(data["new_type"])))
-		if added := stringSliceFromAny(data["added_fields"]); len(added) > 0 {
-			fmt.Printf("  Added fields: %s\n", strings.Join(added, ", "))
-		}
-		if dropped := stringSliceFromAny(data["dropped_fields"]); len(dropped) > 0 {
-			fmt.Printf("  Dropped fields: %s\n", strings.Join(dropped, ", "))
-		}
-		if boolValue(data["moved"]) {
-			fmt.Printf("  Moved: %s → %s\n", stringValue(data["old_path"]), stringValue(data["new_path"]))
-		}
-		if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-			fmt.Printf("  Updated %d references\n", len(updatedRefs))
-		}
-		for _, warning := range result.Warnings {
-			fmt.Printf("  %s\n", ui.Warning(warning.Message))
-		}
-
-		return nil
+		return result
 	}
 }
 
-func handleCanonicalReclassifyFailure(result commandexec.Result) error {
-	if isJSONOutput() {
-		outputJSON(result)
+func renderReclassifyResult(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["cancelled"]) {
+		fmt.Fprintln(os.Stderr, "Cancelled.")
 		return nil
 	}
-	if result.Error != nil {
-		return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
+	fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(stringValue(data["file"])), stringValue(data["old_type"]), stringValue(data["new_type"])))
+	if added := stringSliceFromAny(data["added_fields"]); len(added) > 0 {
+		fmt.Printf("  Added fields: %s\n", strings.Join(added, ", "))
 	}
-	return handleErrorMsg(ErrInternal, "command execution failed", "")
+	if dropped := stringSliceFromAny(data["dropped_fields"]); len(dropped) > 0 {
+		fmt.Printf("  Dropped fields: %s\n", strings.Join(dropped, ", "))
+	}
+	if boolValue(data["moved"]) {
+		fmt.Printf("  Moved: %s → %s\n", stringValue(data["old_path"]), stringValue(data["new_path"]))
+	}
+	if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
+		fmt.Printf("  Updated %d references\n", len(updatedRefs))
+	}
+	for _, warning := range result.Warnings {
+		fmt.Printf("  %s\n", ui.Warning(warning.Message))
+	}
+	return nil
 }
 
 func parseReclassifyFieldFlags(flags []string) map[string]string {
@@ -223,5 +193,10 @@ func init() {
 	reclassifyCmd.Flags().BoolVar(&reclassifyNoMove, "no-move", false, "Skip moving file to new type's default_path")
 	reclassifyCmd.Flags().BoolVar(&reclassifyUpdateRefs, "update-refs", true, "Update references when file moves")
 	reclassifyCmd.Flags().BoolVar(&reclassifyForce, "force", false, "Skip confirmation prompts")
+	reclassifyCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
+		IncludeDynamicDates: false,
+		DisableWhenStdin:    false,
+		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
+	})
 	rootCmd.AddCommand(reclassifyCmd)
 }
