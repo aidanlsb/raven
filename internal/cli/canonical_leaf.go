@@ -11,7 +11,10 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-const canonicalLeafAnnotationKey = "raven.dev/canonical-leaf"
+const (
+	canonicalLeafAnnotationKey = "raven.dev/canonical-leaf"
+	localLeafAnnotationKey     = "raven.dev/local-leaf"
+)
 
 type canonicalLeafOptions struct {
 	VaultPath       func() string
@@ -121,6 +124,13 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 		bindMetaFlags(cmd, meta.Flags)
 	}
 	return cmd
+}
+
+func markLocalLeaf(cmd *cobra.Command) {
+	if cmd.Annotations == nil {
+		cmd.Annotations = map[string]string{}
+	}
+	cmd.Annotations[localLeafAnnotationKey] = "true"
 }
 
 func localUsageForMeta(meta commands.Meta) string {

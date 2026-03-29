@@ -76,15 +76,7 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 	}
 }
 
-func TestRegistryBackedLeafCommandsUseCanonicalAdapterOrAllowlist(t *testing.T) {
-	manualLeafAllowlist := map[string]struct{}{
-		"mcp install": {},
-		"mcp remove":  {},
-		"mcp show":    {},
-		"mcp status":  {},
-		"serve":       {},
-	}
-
+func TestRegistryBackedLeafCommandsUseCanonicalAdapterOrMarkLocal(t *testing.T) {
 	paths := commandPaths(rootCmd)
 	for _, path := range paths {
 		if path == "" {
@@ -105,11 +97,11 @@ func TestRegistryBackedLeafCommandsUseCanonicalAdapterOrAllowlist(t *testing.T) 
 		if cmd.Annotations[canonicalLeafAnnotationKey] == "true" {
 			continue
 		}
-		if _, ok := manualLeafAllowlist[path]; ok {
+		if cmd.Annotations[localLeafAnnotationKey] == "true" {
 			continue
 		}
 
-		t.Errorf("registry-backed CLI leaf %q is still manually wired; use canonical adapter or allowlist it", path)
+		t.Errorf("registry-backed CLI leaf %q is still manually wired; use canonical adapter or mark it local", path)
 	}
 }
 

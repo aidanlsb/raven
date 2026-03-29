@@ -58,5 +58,6 @@ For use with Claude Desktop, add to your config:
 }
 
 func init() {
+	markLocalLeaf(serveCmd)
 	rootCmd.AddCommand(serveCmd)
 }

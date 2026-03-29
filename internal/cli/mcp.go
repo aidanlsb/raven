@@ -264,6 +264,11 @@ Examples:
 }
 
 func init() {
+	markLocalLeaf(mcpInstallCmd)
+	markLocalLeaf(mcpRemoveCmd)
+	markLocalLeaf(mcpStatusCmd)
+	markLocalLeaf(mcpShowCmd)
+
 	mcpInstallCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
 	mcpInstallCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
 	mcpInstallCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
