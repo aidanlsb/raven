@@ -357,6 +357,17 @@ func vaultRowsFromAny(raw interface{}) []vaultRow {
 	switch value := raw.(type) {
 	case []vaultRow:
 		return append([]vaultRow(nil), value...)
+	case []configsvc.VaultRow:
+		rows := make([]vaultRow, 0, len(value))
+		for _, row := range value {
+			rows = append(rows, vaultRow{
+				Name:      row.Name,
+				Path:      row.Path,
+				IsDefault: row.IsDefault,
+				IsActive:  row.IsActive,
+			})
+		}
+		return rows
 	case []interface{}:
 		rows := make([]vaultRow, 0, len(value))
 		for _, item := range value {

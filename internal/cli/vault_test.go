@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,6 +138,77 @@ personal = "/vault/personal"
 	}
 	if state.ActiveVault != "personal" {
 		t.Fatalf("expected active_vault=personal, got %q", state.ActiveVault)
+	}
+}
+
+func TestVaultListHumanOutputShowsConfiguredVaults(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.toml")
+	statePath := filepath.Join(tmp, "state.toml")
+
+	if err := config.SaveTo(cfgPath, &config.Config{
+		DefaultVault: "work",
+		Vaults: map[string]string{
+			"work":     "/vault/work",
+			"personal": "/vault/personal",
+		},
+	}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if err := config.SaveState(statePath, &config.State{
+		Version:     config.StateVersion,
+		ActiveVault: "personal",
+	}); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	prevConfig := configPath
+	prevState := statePathFlag
+	prevJSON := jsonOutput
+	prevStdout := os.Stdout
+	t.Cleanup(func() {
+		configPath = prevConfig
+		statePathFlag = prevState
+		jsonOutput = prevJSON
+		os.Stdout = prevStdout
+	})
+
+	configPath = cfgPath
+	statePathFlag = statePath
+	jsonOutput = false
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+
+	runErr := runVaultList(vaultListCmd, nil)
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+	output, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("close reader: %v", err)
+	}
+
+	if runErr != nil {
+		t.Fatalf("runVaultList: %v", runErr)
+	}
+
+	text := string(output)
+	if strings.Contains(text, "No vaults configured.") {
+		t.Fatalf("expected configured vaults in output, got:\n%s", text)
+	}
+	if !strings.Contains(text, "work") {
+		t.Fatalf("expected work vault in output, got:\n%s", text)
+	}
+	if !strings.Contains(text, "personal") {
+		t.Fatalf("expected personal vault in output, got:\n%s", text)
 	}
 }
 
