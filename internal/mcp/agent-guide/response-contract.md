@@ -24,7 +24,9 @@ All commands return:
 
 Important:
 - Command params belong under `args`.
-- Top-level keys are only `command`, `args`, `schema_hash`, `strict_schema`.
+- Top-level keys are only `command`, `args`, `vault`, `vault_path`, `schema_hash`, `strict_schema`.
+- Use `vault` for a configured vault name or `vault_path` for an explicit vault directory on a single invocation.
+- Do not pass both `vault` and `vault_path`.
 
 ## Error handling rules
 

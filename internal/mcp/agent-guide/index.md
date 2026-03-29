@@ -37,6 +37,6 @@ It is split into topic resources so agents can fetch only what they need.
 - `raven://guide/key-workflows` - Common workflows and decision patterns
 - `raven://guide/workflow-lifecycle` - Running, continuing, inspecting, and pruning workflow runs
 - `raven://guide/error-handling` - How to respond to tool errors
-- `raven://guide/issue-types` - `raven_check` issue reference and fixes
+- `raven://guide/issue-types` - `check` issue reference and fixes
 - `raven://guide/best-practices` - Operating principles and safety checks
 - `raven://guide/examples` - Example conversations and query translations

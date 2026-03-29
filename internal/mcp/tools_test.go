@@ -40,6 +40,12 @@ func TestGenerateToolSchemasCompactSurface(t *testing.T) {
 	if len(invoke.InputSchema.Required) != 1 || invoke.InputSchema.Required[0] != "command" {
 		t.Fatalf("expected raven_invoke to require command, got %#v", invoke.InputSchema.Required)
 	}
+	if _, ok := invoke.InputSchema.Properties["vault"]; !ok {
+		t.Fatal("expected raven_invoke to expose wrapper-level vault override")
+	}
+	if _, ok := invoke.InputSchema.Properties["vault_path"]; !ok {
+		t.Fatal("expected raven_invoke to expose wrapper-level vault_path override")
+	}
 }
 
 func TestBuildCommandContractStrictTypes(t *testing.T) {
@@ -75,39 +81,6 @@ func TestDiscoverableContractsApplyPolicy(t *testing.T) {
 	}
 	if _, ok := byID["serve"]; ok {
 		t.Fatal("did not expect serve to be discoverable")
-	}
-}
-
-func TestCLICommandName(t *testing.T) {
-	tests := []struct {
-		toolName string
-		wantCLI  string
-	}{
-		{"raven_new", "new"},
-		{"raven_schema_add_type", "schema add type"},
-		{"query", "query"},
-	}
-
-	for _, tt := range tests {
-		if got := CLICommandName(tt.toolName); got != tt.wantCLI {
-			t.Fatalf("CLICommandName(%q) = %q, want %q", tt.toolName, got, tt.wantCLI)
-		}
-	}
-}
-
-func TestMCPToolName(t *testing.T) {
-	tests := []struct {
-		cliName  string
-		wantTool string
-	}{
-		{"new", "raven_new"},
-		{"schema add type", "raven_schema_add_type"},
-	}
-
-	for _, tt := range tests {
-		if got := mcpToolName(tt.cliName); got != tt.wantTool {
-			t.Fatalf("mcpToolName(%q) = %q, want %q", tt.cliName, got, tt.wantTool)
-		}
 	}
 }
 

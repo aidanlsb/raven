@@ -8,12 +8,12 @@ import (
 )
 
 func TestExecuteToolDirectUnknownTool(t *testing.T) {
-	_, err := ExecuteToolDirect("", "raven_not_real", nil)
+	_, err := ExecuteToolDirect("", "not_real", nil)
 	if err == nil {
-		t.Fatal("expected unknown tool error")
+		t.Fatal("expected unknown command error")
 	}
-	if !strings.Contains(err.Error(), "unknown tool") {
-		t.Fatalf("expected unknown tool error, got: %v", err)
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("expected unknown command error, got: %v", err)
 	}
 }
 
@@ -22,7 +22,7 @@ func TestExecuteToolDirectSuccess(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
-	envelope, err := ExecuteToolDirect(v.Path, "raven_new", map[string]interface{}{
+	envelope, err := ExecuteToolDirect(v.Path, "new", map[string]interface{}{
 		"type":  "person",
 		"title": "Alice",
 	})
@@ -44,7 +44,7 @@ func TestExecuteToolDirectToolError(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
 
-	_, err := ExecuteToolDirect(v.Path, "raven_new", map[string]interface{}{
+	_, err := ExecuteToolDirect(v.Path, "new", map[string]interface{}{
 		"title": "Missing Type",
 	})
 	if err == nil {

@@ -162,7 +162,7 @@ func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool)
 	}
 
 	commandRef := strings.TrimSpace(toString(validated["command"]))
-	commandID, ok := commands.ResolveToolCommandID(commandRef)
+	commandID, ok := commands.ResolveCommandID(commandRef)
 	if !ok {
 		return errorEnvelope(
 			"COMMAND_NOT_FOUND",
@@ -194,7 +194,7 @@ func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool)
 		"schema_hash":  contract.SchemaHash,
 		"invoke_shape": map[string]interface{}{
 			"wrapper": "args",
-			"note":    "Pass command-specific parameters under args when calling raven_invoke.",
+			"note":    "Pass command-specific parameters under args when calling raven_invoke. Optional top-level wrapper fields: vault, vault_path, schema_hash, strict_schema.",
 		},
 		"invoke_example": compactInvokeExample(contract),
 	}, nil), false
@@ -211,6 +211,14 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 			Name: "args",
 			Type: paramTypeObject,
 		},
+		"vault": {
+			Name: "vault",
+			Type: paramTypeString,
+		},
+		"vault_path": {
+			Name: "vault_path",
+			Type: paramTypeString,
+		},
 		"schema_hash": {
 			Name: "schema_hash",
 			Type: paramTypeString,
@@ -225,8 +233,20 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 	if len(issues) > 0 && commandRef == "" {
 		return validationErrorEnvelope("raven_invoke", issues), true
 	}
+	vaultName := strings.TrimSpace(toString(validated["vault"]))
+	vaultPath := strings.TrimSpace(toString(validated["vault_path"]))
+	if vaultName != "" && vaultPath != "" {
+		return validationErrorEnvelope("raven_invoke", []validationIssue{
+			{
+				Field:   "vault_path",
+				Code:    "CONFLICT",
+				Message: "vault and vault_path are mutually exclusive",
+				Hint:    "Pass either vault or vault_path, not both.",
+			},
+		}), true
+	}
 
-	commandID, ok := commands.ResolveToolCommandID(commandRef)
+	commandID, ok := commands.ResolveCommandID(commandRef)
 	if !ok {
 		if len(issues) > 0 {
 			return validationErrorEnvelope("raven_invoke", issues), true
@@ -309,7 +329,7 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 		), true
 	}
 
-	if out, isErr, handled := s.callCanonicalCommand(commandID, invokeArgs); handled {
+	if out, isErr, handled := s.callCanonicalCommand(commandID, invokeArgs, vaultName, vaultPath); handled {
 		return out, isErr
 	}
 

@@ -8,7 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
-func (s *Server) callCanonicalCommand(commandID string, args map[string]interface{}) (string, bool, bool) {
+func (s *Server) callCanonicalCommand(commandID string, args map[string]interface{}, vaultName, vaultPathOverride string) (string, bool, bool) {
 	invoker := app.CommandInvoker()
 	if invoker == nil {
 		return "", false, false
@@ -19,9 +19,9 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 
 	vaultPath := ""
 	if canonicalCommandNeedsVaultPath(commandID) {
-		resolvedVaultPath, err := s.resolveVaultPath()
+		resolvedVaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPathOverride)
 		if err != nil {
-			return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve active vault", err.Error(), nil), true, true
+			return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve vault for invocation", err.Error(), nil), true, true
 		}
 		vaultPath = resolvedVaultPath
 	}
