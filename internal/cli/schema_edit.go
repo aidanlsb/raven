@@ -5,65 +5,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
-)
-
-// Flags for schema add commands
-var (
-	schemaAddTypeDefaultPath string
-	schemaAddTypeNameField   string
-	schemaAddTypeDescription string
-
-	schemaAddTraitFieldType string
-	schemaAddTraitDefault   string
-	schemaAddTraitValues    string
-
-	schemaAddFieldTypeFlag    string
-	schemaAddFieldRequired    bool
-	schemaAddFieldDefault     string
-	schemaAddFieldValues      string
-	schemaAddFieldTarget      string
-	schemaAddFieldDescription string
-)
-
-// Flags for schema update commands
-var (
-	schemaUpdateTypeDefaultPath string
-	schemaUpdateTypeNameField   string
-	schemaUpdateTypeDescription string
-	schemaUpdateTypeAddTrait    string
-	schemaUpdateTypeRemoveTrait string
-
-	schemaUpdateTraitFieldType string
-	schemaUpdateTraitDefault   string
-	schemaUpdateTraitValues    string
-
-	schemaUpdateFieldTypeFlag    string
-	schemaUpdateFieldRequired    string // "true", "false", or "" (no change)
-	schemaUpdateFieldDefault     string
-	schemaUpdateFieldValues      string
-	schemaUpdateFieldTarget      string
-	schemaUpdateFieldDescription string
-)
-
-// Flags for schema remove commands
-var (
-	schemaRemoveTypeForce  bool
-	schemaRemoveTraitForce bool
-)
-
-// Flags for schema rename commands
-var (
-	schemaRenameTypeConfirm           bool
-	schemaRenameTypeDefaultPathRename bool
-	schemaRenameFieldConfirm          bool
 )
 
 var schemaAddCmd = &cobra.Command{
@@ -82,62 +31,54 @@ Examples:
   rvn schema add field person email --type string --required`,
 }
 
-var schemaAddTypeCmd = &cobra.Command{
-	Use:   "type <name>",
-	Short: "Add a new type",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return addType(getVaultPath(), args[0], time.Now())
-	},
+var schemaAddTypeCmd = newCanonicalLeafCommand("schema_add_type", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildSchemaAddTypeArgs,
+	RenderHuman: renderSchemaAddType,
+})
+
+var schemaAddTraitCmd = newCanonicalLeafCommand("schema_add_trait", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaAddTrait,
+})
+
+var schemaAddFieldCmd = newCanonicalLeafCommand("schema_add_field", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaAddField,
+})
+
+func buildSchemaArgs(commandID string, cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	meta, ok := commands.EffectiveMeta(commandID)
+	if !ok {
+		return nil, fmt.Errorf("registry metadata missing for %q", commandID)
+	}
+	return buildCanonicalArgsForMeta(meta, cmd, args)
 }
 
-var schemaAddTraitCmd = &cobra.Command{
-	Use:   "trait <name>",
-	Short: "Add a new trait",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return addTrait(getVaultPath(), args[0], time.Now())
-	},
-}
+func buildSchemaAddTypeArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	argsMap, err := buildSchemaArgs("schema_add_type", cmd, args)
+	if err != nil {
+		return nil, err
+	}
 
-var schemaAddFieldCmd = &cobra.Command{
-	Use:   "field <type> <field>",
-	Short: "Add a field to an existing type",
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return addField(getVaultPath(), args[0], args[1], time.Now())
-	},
-}
-
-func addType(vaultPath, typeName string, start time.Time) error {
-	// Interactive prompt for name_field if not provided and not in JSON mode
-	nameField := schemaAddTypeNameField
-	if nameField == "" && !isJSONOutput() {
+	nameField, _ := cmd.Flags().GetString("name-field")
+	if strings.TrimSpace(nameField) == "" && !isJSONOutput() {
 		fmt.Print("Which field should be the display name? (common: name, title; leave blank for none): ")
 		var input string
 		fmt.Scanln(&input)
 		nameField = strings.TrimSpace(input)
+		argsMap["name-field"] = nameField
 	}
 
-	// Default to a path that matches the type name exactly unless explicitly overridden.
-	defaultPath := schemaAddTypeDefaultPath
+	defaultPath, _ := cmd.Flags().GetString("default-path")
 	if strings.TrimSpace(defaultPath) == "" {
-		defaultPath = paths.NormalizeDirRoot(typeName)
+		argsMap["default-path"] = paths.NormalizeDirRoot(args[0])
 	}
 
-	result := executeCanonicalCommand("schema_add_type", vaultPath, map[string]interface{}{
-		"name":         typeName,
-		"default-path": defaultPath,
-		"name-field":   nameField,
-		"description":  schemaAddTypeDescription,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+	return argsMap, nil
+}
+
+func renderSchemaAddType(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 
 	fmt.Printf("✓ Added type '%s' to schema.yaml\n", data["name"])
@@ -151,27 +92,15 @@ func addType(vaultPath, typeName string, start time.Time) error {
 	return nil
 }
 
-func addTrait(vaultPath, traitName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_add_trait", vaultPath, map[string]interface{}{
-		"name":    traitName,
-		"type":    schemaAddTraitFieldType,
-		"values":  schemaAddTraitValues,
-		"default": schemaAddTraitDefault,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaAddTrait(cmd *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 
 	fmt.Printf("✓ Added trait '%s' to schema.yaml\n", data["name"])
 	fmt.Printf("  type: %s\n", data["type"])
 	values, _ := decodeSchemaValue[[]string](data["values"])
 	if len(values) > 0 {
-		fmt.Printf("  values: %s\n", schemaAddTraitValues)
+		rawValues, _ := cmd.Flags().GetString("values")
+		fmt.Printf("  values: %s\n", rawValues)
 	}
 	return nil
 }
@@ -346,24 +275,7 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 	return result
 }
 
-func addField(vaultPath, typeName, fieldName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_add_field", vaultPath, map[string]interface{}{
-		"type_name":   typeName,
-		"field_name":  fieldName,
-		"type":        schemaAddFieldTypeFlag,
-		"required":    schemaAddFieldRequired,
-		"default":     schemaAddFieldDefault,
-		"values":      schemaAddFieldValues,
-		"target":      schemaAddFieldTarget,
-		"description": schemaAddFieldDescription,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaAddField(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 
 	fmt.Printf("✓ Added field '%s' to type '%s'\n", data["field"], data["type"])
@@ -437,105 +349,48 @@ Examples:
   rvn schema update type meeting --add-trait due`,
 }
 
-var schemaUpdateTypeCmd = &cobra.Command{
-	Use:   "type <name>",
-	Short: "Update an existing type",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return updateType(getVaultPath(), args[0], time.Now())
-	},
-}
+var schemaUpdateTypeCmd = newCanonicalLeafCommand("schema_update_type", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaUpdateType,
+})
 
-var schemaUpdateTraitCmd = &cobra.Command{
-	Use:   "trait <name>",
-	Short: "Update an existing trait",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return updateTrait(getVaultPath(), args[0], time.Now())
-	},
-}
+var schemaUpdateTraitCmd = newCanonicalLeafCommand("schema_update_trait", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaUpdateTrait,
+})
 
-var schemaUpdateFieldCmd = &cobra.Command{
-	Use:   "field <type> <field>",
-	Short: "Update a field on an existing type",
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return updateField(getVaultPath(), args[0], args[1], time.Now())
-	},
-}
+var schemaUpdateFieldCmd = newCanonicalLeafCommand("schema_update_field", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaUpdateField,
+})
 
-func updateType(vaultPath, typeName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_update_type", vaultPath, map[string]interface{}{
-		"name":         typeName,
-		"default-path": schemaUpdateTypeDefaultPath,
-		"name-field":   schemaUpdateTypeNameField,
-		"description":  schemaUpdateTypeDescription,
-		"add-trait":    schemaUpdateTypeAddTrait,
-		"remove-trait": schemaUpdateTypeRemoveTrait,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaUpdateType(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	changes, err := decodeSchemaValue[[]string](data["changes"])
 	if err != nil {
 		return err
 	}
-	printSchemaChangeList(fmt.Sprintf("✓ Updated type '%s'", typeName), changes)
+	printSchemaChangeList(fmt.Sprintf("✓ Updated type '%s'", stringValue(data["name"])), changes)
 	return nil
 }
 
-func updateTrait(vaultPath, traitName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_update_trait", vaultPath, map[string]interface{}{
-		"name":    traitName,
-		"type":    schemaUpdateTraitFieldType,
-		"values":  schemaUpdateTraitValues,
-		"default": schemaUpdateTraitDefault,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaUpdateTrait(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	changes, err := decodeSchemaValue[[]string](data["changes"])
 	if err != nil {
 		return err
 	}
-	printSchemaChangeList(fmt.Sprintf("✓ Updated trait '%s'", traitName), changes)
+	printSchemaChangeList(fmt.Sprintf("✓ Updated trait '%s'", stringValue(data["name"])), changes)
 	return nil
 }
 
-func updateField(vaultPath, typeName, fieldName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_update_field", vaultPath, map[string]interface{}{
-		"type_name":   typeName,
-		"field_name":  fieldName,
-		"type":        schemaUpdateFieldTypeFlag,
-		"required":    schemaUpdateFieldRequired,
-		"default":     schemaUpdateFieldDefault,
-		"values":      schemaUpdateFieldValues,
-		"target":      schemaUpdateFieldTarget,
-		"description": schemaUpdateFieldDescription,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaUpdateField(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	changes, err := decodeSchemaValue[[]string](data["changes"])
 	if err != nil {
 		return err
 	}
-	printSchemaChangeList(fmt.Sprintf("✓ Updated field '%s' on type '%s'", fieldName, typeName), changes)
+	printSchemaChangeList(fmt.Sprintf("✓ Updated field '%s' on type '%s'", stringValue(data["field"]), stringValue(data["type"])), changes)
 	return nil
 }
 
@@ -561,109 +416,84 @@ Examples:
   rvn schema remove field person nickname`,
 }
 
-var schemaRemoveTypeCmd = &cobra.Command{
-	Use:   "type <name>",
-	Short: "Remove a type from the schema",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return removeType(getVaultPath(), args[0], time.Now())
-	},
-}
+var schemaRemoveTypeCmd = newCanonicalLeafCommand("schema_remove_type", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	Invoke:      invokeSchemaRemoveType,
+	RenderHuman: renderSchemaRemoveType,
+})
 
-var schemaRemoveTraitCmd = &cobra.Command{
-	Use:   "trait <name>",
-	Short: "Remove a trait from the schema",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return removeTrait(getVaultPath(), args[0], time.Now())
-	},
-}
+var schemaRemoveTraitCmd = newCanonicalLeafCommand("schema_remove_trait", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	Invoke:      invokeSchemaRemoveTrait,
+	RenderHuman: renderSchemaRemoveTrait,
+})
 
-var schemaRemoveFieldCmd = &cobra.Command{
-	Use:   "field <type> <field>",
-	Short: "Remove a field from a type",
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return removeField(getVaultPath(), args[0], args[1], time.Now())
-	},
-}
+var schemaRemoveFieldCmd = newCanonicalLeafCommand("schema_remove_field", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaRemoveField,
+})
 
-func removeType(vaultPath, typeName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_remove_type", vaultPath, map[string]interface{}{
-		"name":  typeName,
-		"force": schemaRemoveTypeForce,
-	})
-	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveTypeForce {
-		details, _ := result.Error.Details.(map[string]interface{})
-		count := detailInt(details, "affected_count")
-		if count > 0 {
-			fmt.Printf("Warning: %d files of type '%s' will become 'page' type:\n", count, typeName)
-			for _, filePath := range detailStringSlice(details, "affected_files") {
-				fmt.Printf("  - %s\n", filePath)
-			}
-			if remaining := detailInt(details, "remaining_count"); remaining > 0 {
-				fmt.Printf("  ... and %d more\n", remaining)
-			}
+func invokeSchemaRemoveType(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	result := executeCanonicalCommand(commandID, vaultPath, args)
+	if isJSONOutput() || boolValue(args["force"]) || result.OK || result.Error == nil || result.Error.Code != ErrConfirmationRequired {
+		return result
+	}
+
+	details, _ := result.Error.Details.(map[string]interface{})
+	count := detailInt(details, "affected_count")
+	typeName := stringValue(args["name"])
+	if count > 0 {
+		fmt.Printf("Warning: %d files of type '%s' will become 'page' type:\n", count, typeName)
+		for _, filePath := range detailStringSlice(details, "affected_files") {
+			fmt.Printf("  - %s\n", filePath)
 		}
-		if !promptForConfirm("Continue?") {
-			return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
+		if remaining := detailInt(details, "remaining_count"); remaining > 0 {
+			fmt.Printf("  ... and %d more\n", remaining)
 		}
-		result = executeCanonicalCommand("schema_remove_type", vaultPath, map[string]interface{}{"name": typeName, "force": true})
 	}
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
+	if !promptForConfirm("Continue?") {
+		return commandexec.Failure(ErrConfirmationRequired, "operation cancelled", nil, "Use --force to skip confirmation")
 	}
 
-	fmt.Printf("✓ Removed type '%s' from schema.yaml\n", typeName)
+	retry := cloneArgsMap(args)
+	retry["force"] = true
+	return executeCanonicalCommand(commandID, vaultPath, retry)
+}
+
+func invokeSchemaRemoveTrait(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	result := executeCanonicalCommand(commandID, vaultPath, args)
+	if isJSONOutput() || boolValue(args["force"]) || result.OK || result.Error == nil || result.Error.Code != ErrConfirmationRequired {
+		return result
+	}
+
+	details, _ := result.Error.Details.(map[string]interface{})
+	count := detailInt(details, "affected_count")
+	traitName := stringValue(args["name"])
+	if count > 0 {
+		fmt.Printf("Warning: %d instances of @%s will remain in files (no longer indexed)\n", count, traitName)
+	}
+	if !promptForConfirm("Continue?") {
+		return commandexec.Failure(ErrConfirmationRequired, "operation cancelled", nil, "Use --force to skip confirmation")
+	}
+
+	retry := cloneArgsMap(args)
+	retry["force"] = true
+	return executeCanonicalCommand(commandID, vaultPath, retry)
+}
+
+func renderSchemaRemoveType(_ *cobra.Command, result commandexec.Result) error {
+	fmt.Printf("✓ Removed type '%s' from schema.yaml\n", stringValue(canonicalDataMap(result)["name"]))
 	return nil
 }
 
-func removeTrait(vaultPath, traitName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_remove_trait", vaultPath, map[string]interface{}{
-		"name":  traitName,
-		"force": schemaRemoveTraitForce,
-	})
-	if !isJSONOutput() && result.Error != nil && result.Error.Code == ErrConfirmationRequired && !schemaRemoveTraitForce {
-		details, _ := result.Error.Details.(map[string]interface{})
-		count := detailInt(details, "affected_count")
-		if count > 0 {
-			fmt.Printf("Warning: %d instances of @%s will remain in files (no longer indexed)\n", count, traitName)
-		}
-		if !promptForConfirm("Continue?") {
-			return handleErrorMsg(ErrConfirmationRequired, "operation cancelled", "Use --force to skip confirmation")
-		}
-		result = executeCanonicalCommand("schema_remove_trait", vaultPath, map[string]interface{}{"name": traitName, "force": true})
-	}
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-
-	fmt.Printf("✓ Removed trait '%s' from schema.yaml\n", traitName)
+func renderSchemaRemoveTrait(_ *cobra.Command, result commandexec.Result) error {
+	fmt.Printf("✓ Removed trait '%s' from schema.yaml\n", stringValue(canonicalDataMap(result)["name"]))
 	return nil
 }
 
-func removeField(vaultPath, typeName, fieldName string, start time.Time) error {
-	result := executeCanonicalCommand("schema_remove_field", vaultPath, map[string]interface{}{
-		"type_name":  typeName,
-		"field_name": fieldName,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-
-	fmt.Printf("✓ Removed field '%s' from type '%s'\n", fieldName, typeName)
+func renderSchemaRemoveField(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("✓ Removed field '%s' from type '%s'\n", stringValue(data["field"]), stringValue(data["type"]))
 	return nil
 }
 
@@ -766,39 +596,64 @@ Examples:
   rvn schema rename field person email email_address --confirm`,
 }
 
-var schemaRenameTypeCmd = &cobra.Command{
-	Use:   "type <old_name> <new_name>",
-	Short: "Rename a type and update references",
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return renameType(getVaultPath(), args[0], args[1], time.Now())
-	},
+var schemaRenameTypeCmd = newCanonicalLeafCommand("schema_rename_type", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	Invoke:      invokeSchemaRenameType,
+	RenderHuman: renderSchemaRenameType,
+})
+
+var schemaRenameFieldCmd = newCanonicalLeafCommand("schema_rename_field", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaRenameField,
+})
+
+func invokeSchemaRenameType(_ *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {
+	confirm := boolValue(args["confirm"])
+
+	previewArgs := map[string]interface{}{
+		"old_name": args["old_name"],
+		"new_name": args["new_name"],
+	}
+	preview := executeCanonicalCommand(commandID, vaultPath, previewArgs)
+	if !preview.OK {
+		return preview
+	}
+	if !confirm {
+		return preview
+	}
+
+	previewData := canonicalDataMap(preview)
+	applyDefaultPathRename := boolValue(args["rename-default-path"])
+	if boolValue(previewData["default_path_rename_available"]) && !applyDefaultPathRename && shouldPromptForConfirm() {
+		defaultPathOld, _ := previewData["default_path_old"].(string)
+		defaultPathNew, _ := previewData["default_path_new"].(string)
+		filesToMove, err := decodeSchemaCount(previewData["files_to_move"])
+		if err != nil {
+			return commandexec.Failure(ErrInternal, err.Error(), nil, "")
+		}
+		prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", defaultPathOld, defaultPathNew)
+		if filesToMove > 0 {
+			prompt = fmt.Sprintf(
+				"Also rename default_path '%s' -> '%s' and move %d files with reference updates?",
+				defaultPathOld,
+				defaultPathNew,
+				filesToMove,
+			)
+		}
+		applyDefaultPathRename = promptForConfirm(prompt)
+	}
+
+	applyArgs := cloneArgsMap(args)
+	applyArgs["rename-default-path"] = applyDefaultPathRename
+	applyArgs["confirm"] = true
+	return executeCanonicalCommand(commandID, vaultPath, applyArgs)
 }
 
-var schemaRenameFieldCmd = &cobra.Command{
-	Use:   "field <type> <old_field> <new_field>",
-	Short: "Rename a field on a type and update downstream uses",
-	Args:  cobra.ExactArgs(3),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return renameField(getVaultPath(), args[0], args[1], args[2], time.Now())
-	},
-}
-
-func renameField(vaultPath, typeName, oldField, newField string, start time.Time) error {
-	result := executeCanonicalCommand("schema_rename_field", vaultPath, map[string]interface{}{
-		"type_name": typeName,
-		"old_field": oldField,
-		"new_field": newField,
-		"confirm":   schemaRenameFieldConfirm,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaRenameField(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
+	typeName := stringValue(data["type"])
+	oldField := stringValue(data["old_field"])
+	newField := stringValue(data["new_field"])
 
 	if boolValue(data["preview"]) {
 		changes, err := decodeSchemaValue[[]schemasvc.FieldRenameChange](data["changes"])
@@ -826,43 +681,34 @@ func renameField(vaultPath, typeName, oldField, newField string, start time.Time
 	return nil
 }
 
-func renameType(vaultPath, oldName, newName string, start time.Time) error {
-	preview := executeCanonicalCommand("schema_rename_type", vaultPath, map[string]interface{}{
-		"old_name": oldName,
-		"new_name": newName,
-	})
-	if isJSONOutput() && !schemaRenameTypeConfirm {
-		outputCanonicalResultJSON(preview)
-		return nil
-	}
-	if err := handleCanonicalFailure(preview); err != nil {
-		return err
-	}
-	previewData := canonicalDataMap(preview)
+func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	oldName := stringValue(data["old_name"])
+	newName := stringValue(data["new_name"])
 
-	if !schemaRenameTypeConfirm {
-		changes, err := decodeSchemaValue[[]schemasvc.TypeRenameChange](previewData["changes"])
+	if boolValue(data["preview"]) {
+		changes, err := decodeSchemaValue[[]schemasvc.TypeRenameChange](data["changes"])
 		if err != nil {
 			return err
 		}
-		totalChanges, err := decodeSchemaCount(previewData["total_changes"])
+		totalChanges, err := decodeSchemaCount(data["total_changes"])
 		if err != nil {
 			return err
 		}
 		fmt.Printf("Preview: Rename type '%s' to '%s'\n\n", oldName, newName)
 		fmt.Printf("Changes to be made (%d total):\n", totalChanges)
 		printTypeRenameChanges(changes)
-		if boolValue(previewData["default_path_rename_available"]) {
-			optionalChanges, err := decodeSchemaCount(previewData["optional_total_changes"])
+		if boolValue(data["default_path_rename_available"]) {
+			optionalChanges, err := decodeSchemaCount(data["optional_total_changes"])
 			if err != nil {
 				return err
 			}
-			filesToMove, err := decodeSchemaCount(previewData["files_to_move"])
+			filesToMove, err := decodeSchemaCount(data["files_to_move"])
 			if err != nil {
 				return err
 			}
 			fmt.Printf("\nOptional default directory rename (%d changes):\n", optionalChanges)
-			fmt.Printf("  default_path: %s → %s\n", previewData["default_path_old"], previewData["default_path_new"])
+			fmt.Printf("  default_path: %s → %s\n", data["default_path_old"], data["default_path_new"])
 			if filesToMove > 0 {
 				fmt.Printf("  files to move: %d\n", filesToMove)
 			}
@@ -872,40 +718,6 @@ func renameType(vaultPath, oldName, newName string, start time.Time) error {
 		return nil
 	}
 
-	applyDefaultPathRename := schemaRenameTypeDefaultPathRename
-	if boolValue(previewData["default_path_rename_available"]) && !applyDefaultPathRename && shouldPromptForConfirm() {
-		defaultPathOld, _ := previewData["default_path_old"].(string)
-		defaultPathNew, _ := previewData["default_path_new"].(string)
-		filesToMove, err := decodeSchemaCount(previewData["files_to_move"])
-		if err != nil {
-			return err
-		}
-		prompt := fmt.Sprintf("Also rename default_path '%s' -> '%s'?", defaultPathOld, defaultPathNew)
-		if filesToMove > 0 {
-			prompt = fmt.Sprintf(
-				"Also rename default_path '%s' -> '%s' and move %d files with reference updates?",
-				defaultPathOld,
-				defaultPathNew,
-				filesToMove,
-			)
-		}
-		applyDefaultPathRename = promptForConfirm(prompt)
-	}
-
-	result := executeCanonicalCommand("schema_rename_type", vaultPath, map[string]interface{}{
-		"old_name":            oldName,
-		"new_name":            newName,
-		"confirm":             true,
-		"rename-default-path": applyDefaultPathRename,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-	data := canonicalDataMap(result)
 	changesApplied, err := decodeSchemaCount(data["changes_applied"])
 	if err != nil {
 		return err
@@ -984,45 +796,6 @@ func printTypeRenameChanges(changes []schemasvc.TypeRenameChange) {
 }
 
 func init() {
-	schemaAddTypeCmd.Flags().StringVar(&schemaAddTypeDefaultPath, "default-path", "", "Default path for new type files (default: <type>/)")
-	schemaAddTypeCmd.Flags().StringVar(&schemaAddTypeNameField, "name-field", "", "Field to use as display name (auto-created if doesn't exist)")
-	schemaAddTypeCmd.Flags().StringVar(&schemaAddTypeDescription, "description", "", "Optional description for the type")
-
-	schemaAddTraitCmd.Flags().StringVar(&schemaAddTraitFieldType, "type", "", "Trait type (string, number, url, date, datetime, enum, ref, bool)")
-	schemaAddTraitCmd.Flags().StringVar(&schemaAddTraitDefault, "default", "", "Default value")
-	schemaAddTraitCmd.Flags().StringVar(&schemaAddTraitValues, "values", "", "Enum values (comma-separated)")
-
-	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldTypeFlag, "type", "", "Field type (string, number, url, date, datetime, enum, ref, bool)")
-	schemaAddFieldCmd.Flags().BoolVar(&schemaAddFieldRequired, "required", false, "Mark field as required")
-	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldDefault, "default", "", "Default value")
-	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldValues, "values", "", "Enum values (comma-separated)")
-	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldTarget, "target", "", "Target type for ref fields")
-	schemaAddFieldCmd.Flags().StringVar(&schemaAddFieldDescription, "description", "", "Optional description for the field")
-
-	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeDefaultPath, "default-path", "", "Update default path for type")
-	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeNameField, "name-field", "", "Set/update display name field (use '-' to remove)")
-	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeDescription, "description", "", "Set/update description (use '-' to remove)")
-	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeAddTrait, "add-trait", "", "Add a trait to the type")
-	schemaUpdateTypeCmd.Flags().StringVar(&schemaUpdateTypeRemoveTrait, "remove-trait", "", "Remove a trait from the type")
-
-	schemaUpdateTraitCmd.Flags().StringVar(&schemaUpdateTraitFieldType, "type", "", "Update trait type")
-	schemaUpdateTraitCmd.Flags().StringVar(&schemaUpdateTraitDefault, "default", "", "Update default value")
-	schemaUpdateTraitCmd.Flags().StringVar(&schemaUpdateTraitValues, "values", "", "Update enum values (comma-separated)")
-
-	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldTypeFlag, "type", "", "Update field type")
-	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldRequired, "required", "", "Update required status (true/false)")
-	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldDefault, "default", "", "Update default value")
-	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldValues, "values", "", "Update enum values (comma-separated)")
-	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldTarget, "target", "", "Update target type for ref fields")
-	schemaUpdateFieldCmd.Flags().StringVar(&schemaUpdateFieldDescription, "description", "", "Set/update description (use '-' to remove)")
-
-	schemaRemoveTypeCmd.Flags().BoolVar(&schemaRemoveTypeForce, "force", false, "Skip confirmation prompts")
-	schemaRemoveTraitCmd.Flags().BoolVar(&schemaRemoveTraitForce, "force", false, "Skip confirmation prompts")
-
-	schemaRenameTypeCmd.Flags().BoolVar(&schemaRenameTypeConfirm, "confirm", false, "Apply the rename (default: preview only)")
-	schemaRenameTypeCmd.Flags().BoolVar(&schemaRenameTypeDefaultPathRename, "rename-default-path", false, "Also rename type default_path directory and move matching files (with reference updates)")
-	schemaRenameFieldCmd.Flags().BoolVar(&schemaRenameFieldConfirm, "confirm", false, "Apply the rename (default: preview only)")
-
 	schemaAddCmd.AddCommand(schemaAddTypeCmd)
 	schemaAddCmd.AddCommand(schemaAddTraitCmd)
 	schemaAddCmd.AddCommand(schemaAddFieldCmd)
