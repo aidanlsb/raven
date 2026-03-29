@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
 func outputVaultPath(path string) error {
@@ -17,31 +19,11 @@ func outputVaultPath(path string) error {
 	return nil
 }
 
-var vaultPathCmd = &cobra.Command{
-	Use:   "path",
-	Short: "Print the resolved vault directory path",
-	Long: `Print the resolved vault directory path.
+var vaultPathCmd = newCanonicalLeafCommand("vault_path", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultPath,
+})
 
-Useful for shell integration:
-  cd $(rvn vault path)
-
-This command resolves the vault the same way regular vault-bound commands do:
-explicit --vault-path, then --vault, then active/default config.`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("vault_path", getVaultPath(), nil)
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(result.Error.Code, result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		data := canonicalDataMap(result)
-		return outputVaultPath(stringValue(data["path"]))
-	},
+func renderVaultPath(_ *cobra.Command, result commandexec.Result) error {
+	return outputVaultPath(stringValue(canonicalDataMap(result)["path"]))
 }

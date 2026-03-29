@@ -825,94 +825,50 @@ func intFromAny(raw interface{}) int {
 	}
 }
 
-var queryAddCmd = &cobra.Command{
-	Use:   "add <name> <query-string>",
-	Short: "Add a saved query to raven.yaml",
-	Long: `Add a new saved query to raven.yaml.
+var queryAddCmd = newCanonicalLeafCommand("query_add", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildQueryAddArgs,
+	HandleError: handleCanonicalQueryFailure,
+	RenderHuman: renderQueryAdd,
+})
 
-The query string uses the Raven query language (same as 'rvn query "..."').
+var queryRemoveCmd = newCanonicalLeafCommand("query_remove", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	HandleError: handleCanonicalQueryFailure,
+	RenderHuman: renderQueryRemove,
+})
 
-If the query uses {{args.<name>}}, declare accepted input names with --arg
-(repeatable). The order of --arg values defines positional input order.
-
-Examples:
-  rvn query add tasks "trait:due"
-  rvn query add overdue "trait:due .value<today"
-  rvn query add active-projects "object:project .status==active"
-  rvn query add project-todos "trait:todo refs([[{{args.project}}]])" --arg project --description "Todos tied to a project"
-  rvn query add due-soon "trait:due in(.value,[today,tomorrow])" --description "Due today or tomorrow"`,
-	Args: cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		queryName := args[0]
-		queryStr := args[1]
-		description, _ := cmd.Flags().GetString("description")
-		declaredArgs, err := normalizeSavedQueryArgsForCommand(cmd)
-		if err != nil {
-			return err
-		}
-
-		result := executeCanonicalCommand("query_add", getVaultPath(), map[string]interface{}{
-			"name":         queryName,
-			"query_string": queryStr,
-			"arg":          declaredArgs,
-			"description":  description,
-		})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-		} else {
-			data := canonicalDataMap(result)
-			fmt.Println(ui.Checkf("Added query '%s'", stringValue(data["name"])))
-			fmt.Printf("  Run with: %s\n", ui.Bold.Render("rvn query "+stringValue(data["name"])))
-		}
-
-		return nil
-	},
+func buildQueryAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	declaredArgs, err := normalizeSavedQueryArgsForCommand(cmd)
+	if err != nil {
+		return nil, err
+	}
+	description, _ := cmd.Flags().GetString("description")
+	return map[string]interface{}{
+		"name":         args[0],
+		"query_string": args[1],
+		"arg":          declaredArgs,
+		"description":  description,
+	}, nil
 }
 
-var queryRemoveCmd = &cobra.Command{
-	Use:   "remove <name>",
-	Short: "Remove a saved query from raven.yaml",
-	Long: `Remove a saved query from raven.yaml.
-
-Examples:
-  rvn query remove overdue
-  rvn query remove my-tasks`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		queryName := args[0]
-		result := executeCanonicalCommand("query_remove", getVaultPath(), map[string]interface{}{
-			"name": queryName,
-		})
-		if !result.OK {
-			if isJSONOutput() {
-				outputJSON(result)
-				return nil
-			}
-			if result.Error != nil {
-				return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
-			}
-			return handleErrorMsg(ErrInternal, "command execution failed", "")
-		}
-
-		if isJSONOutput() {
-			outputJSON(result)
-		} else {
-			fmt.Println(ui.Checkf("Removed query '%s'", stringValue(canonicalDataMap(result)["name"])))
-		}
-
+func handleCanonicalQueryFailure(result commandexec.Result) error {
+	if result.Error == nil {
 		return nil
-	},
+	}
+	return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+}
+
+func renderQueryAdd(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Println(ui.Checkf("Added query '%s'", stringValue(data["name"])))
+	fmt.Printf("  Run with: %s\n", ui.Bold.Render("rvn query "+stringValue(data["name"])))
+	return nil
+}
+
+func renderQueryRemove(_ *cobra.Command, result commandexec.Result) error {
+	fmt.Println(ui.Checkf("Removed query '%s'", stringValue(canonicalDataMap(result)["name"])))
+	return nil
 }
 
 // warnIfStale checks if the index has stale files and prints a warning.
@@ -1169,10 +1125,6 @@ func init() {
 	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
 	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output format")
 	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
-
-	// query add flags
-	queryAddCmd.Flags().String("description", "", "Human-readable description")
-	queryAddCmd.Flags().StringArray("arg", nil, "Declare saved query input name (repeatable, sets args order)")
 
 	queryCmd.AddCommand(queryAddCmd)
 	queryCmd.AddCommand(queryRemoveCmd)

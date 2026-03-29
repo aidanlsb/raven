@@ -19,8 +19,6 @@ const (
 var (
 	docsSearchLimit   int
 	docsSearchSection string
-	docsFetchRef      string
-	docsFetchSource   string
 
 	docsFZFRun         = runDocsFZF
 	docsDisplayContext = ui.NewDisplayContext
@@ -120,25 +118,11 @@ Examples:
 	},
 }
 
-var docsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List docs sections and section commands",
-	Long: `List docs sections with explicit section command syntax.
-
-Use this to see exactly which 'rvn docs <section>' commands are available.`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("docs_list", getVaultPath(), nil)
-		if !result.OK {
-			return handleCanonicalDocsFailure(result, nil)
-		}
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
-		return outputDocsSections(docsSectionsFromCanonical(canonicalDataMap(result)["sections"]))
-	},
-}
+var docsListCmd = newCanonicalLeafCommand("docs_list", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	HandleError: handleCanonicalDocsLeafFailure,
+	RenderHuman: renderDocsList,
+})
 
 var docsSearchCmd = &cobra.Command{
 	Use:   "search <query>",
@@ -181,33 +165,25 @@ Examples:
 	},
 }
 
-var docsFetchCmd = &cobra.Command{
-	Use:   "fetch",
-	Short: "Fetch docs into .raven/docs for the current vault",
-	Long: `Download docs from Raven's source repository and install them under .raven/docs.
+var docsFetchCmd = newCanonicalLeafCommand("docs_fetch", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	HandleError: handleCanonicalDocsLeafFailure,
+	RenderHuman: renderDocsFetch,
+})
 
-This command replaces the local docs cache for the current vault.
-Use --ref to fetch a specific branch/tag/commit; default is "main".`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("docs_fetch", getVaultPath(), map[string]interface{}{
-			"ref":    strings.TrimSpace(docsFetchRef),
-			"source": strings.TrimSpace(docsFetchSource),
-		})
-		if !result.OK {
-			return handleCanonicalDocsFailure(result, nil)
-		}
+func handleCanonicalDocsLeafFailure(result commandexec.Result) error {
+	return handleCanonicalDocsFailure(result, nil)
+}
 
-		if isJSONOutput() {
-			outputJSON(result)
-			return nil
-		}
+func renderDocsList(_ *cobra.Command, result commandexec.Result) error {
+	return outputDocsSections(docsSectionsFromCanonical(canonicalDataMap(result)["sections"]))
+}
 
-		data := canonicalDataMap(result)
-		fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", stringValue(data["path"]), intValue(data["file_count"]), int64Value(data["byte_count"]))
-		fmt.Printf("Source: %s (%s)\n", stringValue(data["source"]), stringValue(data["ref"]))
-		return nil
-	},
+func renderDocsFetch(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", stringValue(data["path"]), intValue(data["file_count"]), int64Value(data["byte_count"]))
+	fmt.Printf("Source: %s (%s)\n", stringValue(data["source"]), stringValue(data["ref"]))
+	return nil
 }
 
 func outputDocsSections(sections []docsSectionView) error {
@@ -690,8 +666,6 @@ func docsTopicsFromService(in []docssvc.TopicRecord) []docsTopicRecord {
 func init() {
 	docsSearchCmd.Flags().IntVarP(&docsSearchLimit, "limit", "n", 20, "Maximum number of matches")
 	docsSearchCmd.Flags().StringVarP(&docsSearchSection, "section", "s", "", "Filter search to a docs section")
-	docsFetchCmd.Flags().StringVar(&docsFetchRef, "ref", "", "Git ref for docs archive (branch, tag, or commit)")
-	docsFetchCmd.Flags().StringVar(&docsFetchSource, "source", "", "Override docs archive base URL")
 
 	docsCmd.AddCommand(docsListCmd)
 	docsCmd.AddCommand(docsSearchCmd)

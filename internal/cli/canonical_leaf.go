@@ -14,6 +14,7 @@ import (
 type canonicalLeafOptions struct {
 	VaultPath   func() string
 	BuildArgs   func(cmd *cobra.Command, args []string) (map[string]interface{}, error)
+	HandleError func(result commandexec.Result) error
 	RenderHuman func(cmd *cobra.Command, result commandexec.Result) error
 }
 
@@ -50,7 +51,11 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 				outputCanonicalResultJSON(result)
 				return nil
 			}
-			if err := handleCanonicalFailure(result); err != nil {
+			handleFailure := handleCanonicalFailure
+			if opts.HandleError != nil {
+				handleFailure = opts.HandleError
+			}
+			if err := handleFailure(result); err != nil {
 				return err
 			}
 			if opts.RenderHuman != nil {

@@ -3,22 +3,12 @@ package cli
 import (
 	"fmt"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schemasvc"
-)
-
-var (
-	schemaTemplateFileFlag         string
-	schemaTemplateDescriptionFlag  string
-	schemaTemplateTypeFlag         string
-	schemaTemplateCoreFlag         string
-	schemaTemplateBindDefaultFlag  bool
-	schemaTemplateDefaultClearFlag bool
-	schemaTemplateUnbindClearFlag  bool
 )
 
 type schemaTemplateTarget struct {
@@ -35,98 +25,50 @@ var schemaTemplateCmd = &cobra.Command{
 	},
 }
 
-var schemaTemplateListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List schema templates or target bindings",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		start := time.Now()
-		vaultPath := getVaultPath()
+var schemaTemplateListCmd = newCanonicalLeafCommand("schema_template_list", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildSchemaTemplateListArgs,
+	RenderHuman: renderSchemaTemplateList,
+})
 
-		target, err := resolveSchemaTemplateTarget(false)
-		if err != nil {
-			return err
-		}
-		if target == nil {
-			return schemaTemplateListDefinitions(vaultPath, start)
-		}
-		return schemaTemplateListBindings(vaultPath, target.kind, target.name, start)
-	},
-}
+var schemaTemplateGetCmd = newCanonicalLeafCommand("schema_template_get", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaTemplateGet,
+})
 
-var schemaTemplateGetCmd = &cobra.Command{
-	Use:   "get <template_id>",
-	Short: "Show a schema template definition",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return schemaTemplateGet(getVaultPath(), args[0], time.Now())
-	},
-}
+var schemaTemplateSetCmd = newCanonicalLeafCommand("schema_template_set", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaTemplateSet,
+})
 
-var schemaTemplateSetCmd = &cobra.Command{
-	Use:   "set <template_id>",
-	Short: "Create or update a schema template definition",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return schemaTemplateSet(getVaultPath(), args[0], time.Now())
-	},
-}
+var schemaTemplateRemoveCmd = newCanonicalLeafCommand("schema_template_remove", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderSchemaTemplateRemove,
+})
 
-var schemaTemplateRemoveCmd = &cobra.Command{
-	Use:   "remove <template_id>",
-	Short: "Remove a schema template definition",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return schemaTemplateRemove(getVaultPath(), args[0], time.Now())
-	},
-}
+var schemaTemplateBindCmd = newCanonicalLeafCommand("schema_template_bind", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildSchemaTemplateBindArgs,
+	RenderHuman: renderSchemaTemplateBind,
+})
 
-var schemaTemplateBindCmd = &cobra.Command{
-	Use:   "bind <template_id>",
-	Short: "Bind a template to a type or core type",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		target, err := resolveSchemaTemplateTarget(true)
-		if err != nil {
-			return err
-		}
-		return schemaTemplateBindTarget(getVaultPath(), target.kind, target.name, args[0], schemaTemplateBindDefaultFlag, time.Now())
-	},
-}
+var schemaTemplateUnbindCmd = newCanonicalLeafCommand("schema_template_unbind", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildSchemaTemplateUnbindArgs,
+	RenderHuman: renderSchemaTemplateUnbind,
+})
 
-var schemaTemplateUnbindCmd = &cobra.Command{
-	Use:   "unbind <template_id>",
-	Short: "Unbind a template from a type or core type",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		target, err := resolveSchemaTemplateTarget(true)
-		if err != nil {
-			return err
-		}
-		return schemaTemplateUnbindTarget(getVaultPath(), target.kind, target.name, args[0], schemaTemplateUnbindClearFlag, time.Now())
-	},
-}
+var schemaTemplateDefaultCmd = newCanonicalLeafCommand("schema_template_default", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildSchemaTemplateDefaultArgs,
+	RenderHuman: renderSchemaTemplateDefault,
+})
 
-var schemaTemplateDefaultCmd = &cobra.Command{
-	Use:   "default [template_id]",
-	Short: "Set or clear the default template for a type or core type",
-	Args:  cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		target, err := resolveSchemaTemplateTarget(true)
-		if err != nil {
-			return err
-		}
-		templateID := ""
-		if len(args) > 0 {
-			templateID = args[0]
-		}
-		return schemaTemplateSetDefaultTarget(getVaultPath(), target.kind, target.name, templateID, schemaTemplateDefaultClearFlag, time.Now())
-	},
-}
-
-func resolveSchemaTemplateTarget(required bool) (*schemaTemplateTarget, error) {
-	typeName := strings.TrimSpace(schemaTemplateTypeFlag)
-	coreType := strings.TrimSpace(schemaTemplateCoreFlag)
+func resolveSchemaTemplateTarget(cmd *cobra.Command, required bool) (*schemaTemplateTarget, error) {
+	typeName, _ := cmd.Flags().GetString("type")
+	coreType, _ := cmd.Flags().GetString("core")
+	typeName = strings.TrimSpace(typeName)
+	coreType = strings.TrimSpace(coreType)
 
 	switch {
 	case typeName != "" && coreType != "":
@@ -142,15 +84,26 @@ func resolveSchemaTemplateTarget(required bool) (*schemaTemplateTarget, error) {
 	}
 }
 
-func schemaTemplateListDefinitions(vaultPath string, start time.Time) error {
-	result := executeCanonicalCommand("schema_template_list", vaultPath, nil)
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+func buildSchemaTemplateListArgs(cmd *cobra.Command, _ []string) (map[string]interface{}, error) {
+	target, err := resolveSchemaTemplateTarget(cmd, false)
+	if err != nil {
+		return nil, err
 	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
+	if target == nil {
+		return nil, nil
 	}
+	return map[string]interface{}{target.kind: target.name}, nil
+}
+
+func renderSchemaTemplateList(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if _, ok := data["default_template"]; ok || data["type"] != nil || data["core"] != nil {
+		return renderSchemaTemplateBindings(result)
+	}
+	return renderSchemaTemplateDefinitions(result)
+}
+
+func renderSchemaTemplateDefinitions(result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	items, err := decodeSchemaValue[[]schemasvc.TemplateSchema](data["templates"])
 	if err != nil {
@@ -172,23 +125,21 @@ func schemaTemplateListDefinitions(vaultPath string, start time.Time) error {
 	return nil
 }
 
-func schemaTemplateListBindings(vaultPath, kind, name string, start time.Time) error {
-	args := map[string]interface{}{kind: name}
-	result := executeCanonicalCommand("schema_template_list", vaultPath, args)
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaTemplateBindings(result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	templates, err := decodeSchemaValue[[]string](data["templates"])
 	if err != nil {
 		return err
 	}
 	defaultTemplate, _ := data["default_template"].(string)
+	kind := strings.TrimSpace(stringValue(data["type"]))
+	if kind != "" {
+		return renderSchemaTemplateBindingTarget("type", kind, templates, defaultTemplate)
+	}
+	return renderSchemaTemplateBindingTarget("core", strings.TrimSpace(stringValue(data["core"])), templates, defaultTemplate)
+}
 
+func renderSchemaTemplateBindingTarget(kind, name string, templates []string, defaultTemplate string) error {
 	label := schemaTemplateKindLabel(kind)
 	fmt.Printf("%s templates for %s:\n", label, name)
 	if len(templates) == 0 {
@@ -206,15 +157,7 @@ func schemaTemplateListBindings(vaultPath, kind, name string, start time.Time) e
 	return nil
 }
 
-func schemaTemplateGet(vaultPath, templateID string, start time.Time) error {
-	result := executeCanonicalCommand("schema_template_get", vaultPath, map[string]interface{}{"template_id": templateID})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaTemplateGet(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	id, _ := data["id"].(string)
 	file, _ := data["file"].(string)
@@ -227,104 +170,97 @@ func schemaTemplateGet(vaultPath, templateID string, start time.Time) error {
 	return nil
 }
 
-func schemaTemplateSet(vaultPath, templateID string, start time.Time) error {
-	result := executeCanonicalCommand("schema_template_set", vaultPath, map[string]interface{}{
-		"template_id": templateID,
-		"file":        schemaTemplateFileFlag,
-		"description": schemaTemplateDescriptionFlag,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaTemplateSet(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Printf("Set schema template %s -> %s\n", data["id"], data["file"])
 	return nil
 }
 
-func schemaTemplateRemove(vaultPath, templateID string, start time.Time) error {
-	result := executeCanonicalCommand("schema_template_remove", vaultPath, map[string]interface{}{"template_id": templateID})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-	fmt.Printf("Removed schema template %s\n", strings.TrimSpace(templateID))
+func renderSchemaTemplateRemove(_ *cobra.Command, result commandexec.Result) error {
+	fmt.Printf("Removed schema template %s\n", strings.TrimSpace(stringValue(canonicalDataMap(result)["id"])))
 	return nil
 }
 
-func schemaTemplateBindTarget(vaultPath, kind, name, templateID string, setDefault bool, start time.Time) error {
-	args := map[string]interface{}{
-		"template_id": templateID,
-		kind:          name,
-		"default":     setDefault,
+func buildSchemaTemplateBindArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	target, err := resolveSchemaTemplateTarget(cmd, true)
+	if err != nil {
+		return nil, err
 	}
-	result := executeCanonicalCommand("schema_template_bind", vaultPath, args)
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+	argsMap := map[string]interface{}{"template_id": args[0], target.kind: target.name}
+	if cmd.Flags().Changed("default") {
+		value, _ := cmd.Flags().GetBool("default")
+		argsMap["default"] = value
 	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+	return argsMap, nil
+}
+
+func renderSchemaTemplateBind(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
+	kind, name := schemaTemplateResultTarget(data)
+	templateID := strings.TrimSpace(stringValue(data["template_id"]))
+	setDefault := strings.TrimSpace(stringValue(data["default_template"])) != ""
 	if boolValue(data["already_set"]) {
-		fmt.Printf("%s %s already includes template %s\n", schemaTemplateKindLabel(kind), name, strings.TrimSpace(templateID))
+		fmt.Printf("%s %s already includes template %s\n", schemaTemplateKindLabel(kind), name, templateID)
 		if setDefault {
-			fmt.Printf("Set default template for %s %s -> %s\n", kind, name, strings.TrimSpace(templateID))
+			fmt.Printf("Set default template for %s %s -> %s\n", kind, name, templateID)
 		}
 		return nil
 	}
 
-	fmt.Printf("Bound template %s to %s %s\n", strings.TrimSpace(templateID), kind, name)
+	fmt.Printf("Bound template %s to %s %s\n", templateID, kind, name)
 	if setDefault {
-		fmt.Printf("Set default template for %s %s -> %s\n", kind, name, strings.TrimSpace(templateID))
+		fmt.Printf("Set default template for %s %s -> %s\n", kind, name, templateID)
 	}
 	return nil
 }
 
-func schemaTemplateUnbindTarget(vaultPath, kind, name, templateID string, clearDefault bool, start time.Time) error {
-	result := executeCanonicalCommand("schema_template_unbind", vaultPath, map[string]interface{}{
-		"template_id":   templateID,
-		kind:            name,
-		"clear-default": clearDefault,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
+func buildSchemaTemplateUnbindArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	target, err := resolveSchemaTemplateTarget(cmd, true)
+	if err != nil {
+		return nil, err
 	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
+	argsMap := map[string]interface{}{"template_id": args[0], target.kind: target.name}
+	if cmd.Flags().Changed("clear-default") {
+		value, _ := cmd.Flags().GetBool("clear-default")
+		argsMap["clear-default"] = value
 	}
-	if clearDefault {
-		fmt.Printf("Cleared default template and unbound %s from %s %s\n", strings.TrimSpace(templateID), kind, name)
-		return nil
-	}
-	fmt.Printf("Unbound template %s from %s %s\n", strings.TrimSpace(templateID), kind, name)
-	return nil
+	return argsMap, nil
 }
 
-func schemaTemplateSetDefaultTarget(vaultPath, kind, name, templateID string, clearDefault bool, start time.Time) error {
-	result := executeCanonicalCommand("schema_template_default", vaultPath, map[string]interface{}{
-		"template_id": templateID,
-		kind:          name,
-		"clear":       clearDefault,
-	})
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
+func renderSchemaTemplateUnbind(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	newDefault, _ := data["default_template"].(string)
+	kind, name := schemaTemplateResultTarget(data)
+	templateID := strings.TrimSpace(stringValue(data["template_id"]))
+	clearDefault := boolValue(data["default_cleared"])
 	if clearDefault {
+		fmt.Printf("Cleared default template and unbound %s from %s %s\n", templateID, kind, name)
+		return nil
+	}
+	fmt.Printf("Unbound template %s from %s %s\n", templateID, kind, name)
+	return nil
+}
+
+func buildSchemaTemplateDefaultArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+	target, err := resolveSchemaTemplateTarget(cmd, true)
+	if err != nil {
+		return nil, err
+	}
+	argsMap := map[string]interface{}{target.kind: target.name}
+	if len(args) > 0 {
+		argsMap["template_id"] = args[0]
+	}
+	if cmd.Flags().Changed("clear") {
+		value, _ := cmd.Flags().GetBool("clear")
+		argsMap["clear"] = value
+	}
+	return argsMap, nil
+}
+
+func renderSchemaTemplateDefault(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	kind, name := schemaTemplateResultTarget(data)
+	newDefault, _ := data["default_template"].(string)
+	if strings.TrimSpace(newDefault) == "" {
 		fmt.Printf("Cleared default template for %s %s\n", kind, name)
 		return nil
 	}
@@ -341,19 +277,14 @@ func schemaTemplateKindLabel(kind string) string {
 	return string(runes)
 }
 
-func init() {
-	schemaTemplateSetCmd.Flags().StringVar(&schemaTemplateFileFlag, "file", "", "Template file path under directories.template")
-	schemaTemplateSetCmd.Flags().StringVar(&schemaTemplateDescriptionFlag, "description", "", "Template description (use '-' to clear)")
-
-	for _, cmd := range []*cobra.Command{schemaTemplateListCmd, schemaTemplateBindCmd, schemaTemplateUnbindCmd, schemaTemplateDefaultCmd} {
-		cmd.Flags().StringVar(&schemaTemplateTypeFlag, "type", "", "Target schema type")
-		cmd.Flags().StringVar(&schemaTemplateCoreFlag, "core", "", "Target core type (date or page)")
+func schemaTemplateResultTarget(data map[string]interface{}) (kind string, name string) {
+	if typeName := strings.TrimSpace(stringValue(data["type"])); typeName != "" {
+		return "type", typeName
 	}
+	return "core", strings.TrimSpace(stringValue(data["core"]))
+}
 
-	schemaTemplateBindCmd.Flags().BoolVar(&schemaTemplateBindDefaultFlag, "default", false, "Also set this template as the default for the target")
-	schemaTemplateUnbindCmd.Flags().BoolVar(&schemaTemplateUnbindClearFlag, "clear-default", false, "Allow unbinding the current default template by clearing the default first")
-	schemaTemplateDefaultCmd.Flags().BoolVar(&schemaTemplateDefaultClearFlag, "clear", false, "Clear the target default template")
-
+func init() {
 	schemaTemplateCmd.AddCommand(schemaTemplateListCmd)
 	schemaTemplateCmd.AddCommand(schemaTemplateGetCmd)
 	schemaTemplateCmd.AddCommand(schemaTemplateSetCmd)
