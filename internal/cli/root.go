@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -42,7 +43,7 @@ who gathered knowledge from across the world.`,
 		// non-vault commands like `config show` and `version`.
 		cfg, resolvedConfigPath, err = loadGlobalConfigWithPath()
 		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
+			return newRootPreRunError(cmd, ErrConfigInvalid, fmt.Sprintf("failed to load config: %v", err), "")
 		}
 		if cfg == nil {
 			cfg = &config.Config{}
@@ -75,12 +76,17 @@ who gathered knowledge from across the world.`,
 			// Named vault from --vault flag
 			resolvedVaultPath, err = cfg.GetVaultPath(vaultName)
 			if err != nil {
-				return fmt.Errorf("vault '%s' not found\n\nRun 'rvn vault list' to see configured vaults", vaultName)
+				return newRootPreRunError(
+					cmd,
+					ErrVaultNotFound,
+					fmt.Sprintf("vault %q not found", vaultName),
+					"Run 'rvn vault list' to see configured vaults",
+				)
 			}
 		} else {
 			state, stateErr := config.LoadState(resolvedStatePath)
 			if stateErr != nil {
-				return fmt.Errorf("failed to load state: %w", stateErr)
+				return newRootPreRunError(cmd, ErrConfigInvalid, fmt.Sprintf("failed to load state: %v", stateErr), "")
 			}
 
 			activeVaultName := strings.TrimSpace(state.ActiveVault)
@@ -89,7 +95,12 @@ who gathered knowledge from across the world.`,
 				if err != nil {
 					resolvedVaultPath, err = cfg.GetDefaultVaultPath()
 					if err != nil {
-						return fmt.Errorf("active vault '%s' not found in config and no default vault configured\n\nRun 'rvn vault use <name>' or set default_vault in config.toml", activeVaultName)
+						return newRootPreRunError(
+							cmd,
+							ErrVaultNotFound,
+							fmt.Sprintf("active vault %q not found in config and no default vault configured", activeVaultName),
+							"Run 'rvn vault use <name>' or set default_vault in config.toml",
+						)
 					}
 					if !jsonOutput {
 						fmt.Fprintf(os.Stderr, "warning: active vault '%s' not found in config, falling back to default\n", activeVaultName)
@@ -99,21 +110,29 @@ who gathered knowledge from across the world.`,
 				// Default vault
 				resolvedVaultPath, err = cfg.GetDefaultVaultPath()
 				if err != nil {
-					return fmt.Errorf(`no vault specified
-
-Either:
+					return newRootPreRunError(
+						cmd,
+						ErrVaultNotSpecified,
+						"no vault specified",
+						`Either:
   1. Use --vault <name> (from config)
   2. Use --vault-path /path/to/vault
   3. Run 'rvn vault use <name>' to set active_vault in state.toml
   4. Set default_vault in ~/.config/raven/config.toml
-  5. Run 'rvn init /path/to/new/vault' to create one`)
+  5. Run 'rvn init /path/to/new/vault' to create one`,
+					)
 				}
 			}
 		}
 
 		// Verify vault exists
 		if _, err := os.Stat(resolvedVaultPath); os.IsNotExist(err) {
-			return fmt.Errorf("vault not found: %s\n\nRun 'rvn init %s' to create it", resolvedVaultPath, resolvedVaultPath)
+			return newRootPreRunError(
+				cmd,
+				ErrVaultNotFound,
+				fmt.Sprintf("vault not found: %s", resolvedVaultPath),
+				fmt.Sprintf("Run 'rvn init %s' to create it", resolvedVaultPath),
+			)
 		}
 
 		return nil
@@ -123,7 +142,17 @@ Either:
 // Execute runs the CLI.
 func Execute() error {
 	syncRegistryMetadata(rootCmd)
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err == nil {
+		return nil
+	}
+
+	var preRunErr *rootPreRunError
+	if errors.As(err, &preRunErr) {
+		outputError(preRunErr.Code, preRunErr.Message, nil, preRunErr.Suggestion)
+	}
+
+	return err
 }
 
 func init() {
@@ -165,4 +194,41 @@ func loadGlobalConfigWithPath() (*config.Config, string, error) {
 	}
 
 	return loadedCfg, resolvedPath, nil
+}
+
+type rootPreRunError struct {
+	Code       string
+	Message    string
+	Suggestion string
+}
+
+func (e *rootPreRunError) Error() string {
+	if e.Suggestion == "" {
+		return e.Message
+	}
+	return e.Message + "\n\n" + e.Suggestion
+}
+
+func newRootPreRunError(cmd *cobra.Command, code, message, suggestion string) error {
+	if !jsonOutput {
+		if suggestion == "" {
+			return fmt.Errorf("%s", message)
+		}
+		return fmt.Errorf("%s\n\n%s", message, suggestion)
+	}
+
+	silenceCobraForJSON(cmd)
+	return &rootPreRunError{
+		Code:       code,
+		Message:    message,
+		Suggestion: suggestion,
+	}
+}
+
+func silenceCobraForJSON(cmd *cobra.Command) {
+	root := cmd.Root()
+	root.SilenceErrors = true
+	root.SilenceUsage = true
+	cmd.SilenceErrors = true
+	cmd.SilenceUsage = true
 }
