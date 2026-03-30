@@ -886,4 +886,19 @@ func TestValidateSchema(t *testing.T) {
 			t.Fatal("expected issues for unknown field type")
 		}
 	})
+
+	t.Run("null type definition reports issue instead of panicking", func(t *testing.T) {
+		sch := &Schema{
+			Types: map[string]*TypeDefinition{
+				"broken": nil,
+			},
+		}
+		issues := ValidateSchema(sch)
+		if len(issues) != 1 {
+			t.Fatalf("expected 1 issue, got %d", len(issues))
+		}
+		if issues[0] != "Type 'broken' must be an object" {
+			t.Fatalf("unexpected issue: %v", issues)
+		}
+	})
 }

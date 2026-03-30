@@ -84,3 +84,24 @@ func TestObjectFieldComparison_RelativeDateKeywordOrdering(t *testing.T) {
 		t.Fatalf("unexpected results: %#v", results)
 	}
 }
+
+func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	e := NewExecutor(db)
+
+	q, err := Parse(`object:project .due>"2026-13-45"`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	_, err = e.ExecuteObjectQuery(q)
+	if err == nil {
+		t.Fatal("expected invalid date comparison to fail")
+	}
+	if got := err.Error(); got != `invalid date filter: "2026-13-45"` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

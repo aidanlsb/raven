@@ -344,13 +344,21 @@ func sectionHeadingSlug(headingText string, usedIDs map[string]int) string {
 }
 
 func uniqueSlug(baseSlug string, usedIDs map[string]int) string {
-	// Ensure unique ID using counter approach
-	slug := baseSlug
-	usedIDs[baseSlug]++
-	if usedIDs[baseSlug] > 1 {
-		slug = baseSlug + "-" + strconv.Itoa(usedIDs[baseSlug])
+	next := usedIDs[baseSlug] + 1
+	for {
+		slug := baseSlug
+		if next > 1 {
+			slug = baseSlug + "-" + strconv.Itoa(next)
+		}
+		if _, exists := usedIDs[slug]; !exists {
+			usedIDs[baseSlug] = next
+			if slug != baseSlug {
+				usedIDs[slug] = 1
+			}
+			return slug
+		}
+		next++
 	}
-	return slug
 }
 
 // findParentForLine finds the parent object ID for a given line number.

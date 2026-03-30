@@ -63,6 +63,10 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 		result.Warnings = append(result.Warnings, SchemaWarning{
 			Message: fmt.Sprintf("schema.yaml is version %d, current is %d. Update schema.yaml to the current format.", schema.Version, CurrentSchemaVersion),
 		})
+	} else if schema.Version > CurrentSchemaVersion {
+		result.Warnings = append(result.Warnings, SchemaWarning{
+			Message: fmt.Sprintf("schema.yaml is version %d, but this Raven build supports version %d. Newer schema fields may not be fully understood.", schema.Version, CurrentSchemaVersion),
+		})
 	}
 
 	// Initialize maps if nil
@@ -96,7 +100,7 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	// User type template settings must be valid.
 	for typeName, typeDef := range schema.Types {
 		if typeDef == nil {
-			continue
+			return nil, fmt.Errorf("type %q is null; expected an object definition", typeName)
 		}
 		if IsBuiltinType(typeName) {
 			return nil, fmt.Errorf("type %q is a core type; configure it under 'core:' instead of 'types:'", typeName)

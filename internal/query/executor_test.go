@@ -326,6 +326,11 @@ func TestExecuteObjectQuery(t *testing.T) {
 			wantCount: 1, // Website refs Freya
 		},
 		{
+			name:      "project refs target through embedded object",
+			query:     "object:project refs([[projects/website]])",
+			wantCount: 1, // Mobile refs website from its tasks section
+		},
+		{
 			name:      "content search simple",
 			query:     `object:person content("colleague")`,
 			wantCount: 1, // Freya's page mentions "colleague"
@@ -381,6 +386,16 @@ func TestExecuteObjectQuery(t *testing.T) {
 			name:      "contains todo with value filter",
 			query:     "object:project encloses(trait:todo .value==todo)",
 			wantCount: 2, // Both projects have incomplete todos (trait5 on website, trait8 on mobile)
+		},
+		{
+			name:      "contains todo with content filter",
+			query:     `object:project encloses(trait:todo content("Build"))`,
+			wantCount: 1, // Only website has a matching todo trait line
+		},
+		{
+			name:      "contains todo with refs filter",
+			query:     "object:project encloses(trait:todo refs([[projects/website]]))",
+			wantCount: 1, // Only mobile has a todo trait line that references website
 		},
 		{
 			name:      "contains todo value done",

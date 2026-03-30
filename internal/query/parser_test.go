@@ -59,6 +59,36 @@ func TestParseObjectQuery(t *testing.T) {
 	}
 }
 
+func TestParseRejectsUnterminatedLiterals(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "unterminated string literal",
+			input: `object:project .title=="Unclosed`,
+		},
+		{
+			name:  "unterminated raw string literal",
+			input: `object:project content(r"Unclosed)`,
+		},
+		{
+			name:  "unterminated regex literal",
+			input: `object:project matches(.title, /unclosed)`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Parse(tt.input); err == nil {
+				t.Fatal("expected parse error, got nil")
+			}
+		})
+	}
+}
+
 func TestParseFieldPredicates(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

@@ -251,19 +251,12 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 	args = append(args, p.SubQuery.TypeName)
 
 	if p.SubQuery.Predicate != nil {
-		switch tp := p.SubQuery.Predicate.(type) {
-		case *ValuePredicate:
-			cond, condArgs := buildValueCondition(tp, "t.value")
-			traitConditions = append(traitConditions, cond)
-			args = append(args, condArgs...)
-		case *FieldPredicate:
-			// Handle .value predicate for traits
-			if tp.Field == "value" {
-				cond, condArgs := buildCompareCondition(tp.Value, tp.CompareOp, tp.Negated(), "t.value")
-				traitConditions = append(traitConditions, cond)
-				args = append(args, condArgs...)
-			}
+		cond, condArgs, err := e.buildTraitPredicateSQL(p.SubQuery.Predicate, "t")
+		if err != nil {
+			return "", nil, err
 		}
+		traitConditions = append(traitConditions, cond)
+		args = append(args, condArgs...)
 	}
 
 	// Build a query that checks for traits on self OR any descendant
@@ -302,8 +295,8 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			WHERE r.source_id = %s.id AND %s
-		)`, alias, targetCond)
+			WHERE (r.source_id = %s.id OR r.source_id LIKE %s.id || '#%%') AND %s
+		)`, alias, alias, targetCond)
 		args = append(args, targetArgs...)
 	} else if p.SubQuery != nil {
 		// Subquery - reference to objects matching the subquery
@@ -327,8 +320,8 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 				r.target_id = target_obj.id OR 
 				(r.target_id IS NULL AND r.target_raw = target_obj.id)
 			)
-			WHERE r.source_id = %s.id AND %s
-		)`, alias, strings.Join(targetConditions, " AND "))
+			WHERE (r.source_id = %s.id OR r.source_id LIKE %s.id || '#%%') AND %s
+		)`, alias, alias, strings.Join(targetConditions, " AND "))
 	} else {
 		return "", nil, fmt.Errorf("refs predicate must have target or subquery")
 	}

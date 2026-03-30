@@ -3,6 +3,7 @@ package schema
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -62,7 +63,6 @@ traits:
 			t.Error("expected 'person' type to exist")
 		}
 
-		// Fallback types still added
 		if _, ok := schema.Types["page"]; !ok {
 			t.Error("expected 'page' type to exist")
 		}
@@ -364,7 +364,7 @@ types:
 		}
 	})
 
-	t.Run("rejects default_template missing template ID", func(t *testing.T) {
+	t.Run("rejects default_template missing template id", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		schemaContent := `
 templates:
@@ -383,4 +383,39 @@ types:
 			t.Fatal("expected error for invalid default_template template ID, got nil")
 		}
 	})
+
+	t.Run("rejects null type definition", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := "version: 1\ntypes:\n  broken: null\n"
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error for null type definition, got nil")
+		} else if !strings.Contains(err.Error(), `type "broken" is null`) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestLoadWithWarningsWarnsOnFutureVersion(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	schemaPath := filepath.Join(vaultPath, "schema.yaml")
+	if err := os.WriteFile(schemaPath, []byte("version: 2\ntypes: {}\ntraits: {}\n"), 0644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	result, err := LoadWithWarnings(vaultPath)
+	if err != nil {
+		t.Fatalf("LoadWithWarnings: %v", err)
+	}
+	if len(result.Warnings) == 0 {
+		t.Fatal("expected warning for future schema version")
+	}
+	if !strings.Contains(result.Warnings[0].Message, "supports version 1") {
+		t.Fatalf("unexpected warning: %q", result.Warnings[0].Message)
+	}
 }

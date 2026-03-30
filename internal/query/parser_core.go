@@ -17,7 +17,20 @@ func Parse(input string) (*Query, error) {
 	p := &Parser{lexer: NewLexer(input)}
 	p.advance()
 	p.advance()
-	return p.parseQuery()
+	if p.curr.Type == TokenError {
+		return nil, fmt.Errorf("%s at pos %d", p.curr.Value, p.curr.Pos)
+	}
+	q, err := p.parseQuery()
+	if err != nil {
+		if p.curr.Type == TokenError {
+			return nil, fmt.Errorf("%s at pos %d", p.curr.Value, p.curr.Pos)
+		}
+		return nil, err
+	}
+	if p.curr.Type == TokenError {
+		return nil, fmt.Errorf("%s at pos %d", p.curr.Value, p.curr.Pos)
+	}
+	return q, nil
 }
 
 func (p *Parser) advance() {

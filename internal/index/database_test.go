@@ -33,6 +33,43 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("clear all data rolls back on failure", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		if _, err := db.db.Exec(`
+			INSERT INTO objects (id, file_path, type, fields, line_start) VALUES
+				('test', 'test.md', 'page', '{}', 1);
+			INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
+				('trait1', 'test.md', 'test', 'todo', 'todo', 'Line', 1);
+			CREATE TRIGGER fail_trait_delete BEFORE DELETE ON traits
+			BEGIN
+				SELECT RAISE(FAIL, 'boom');
+			END;
+		`); err != nil {
+			t.Fatalf("seed database: %v", err)
+		}
+
+		if err := db.ClearAllData(); err == nil {
+			t.Fatal("expected ClearAllData to fail")
+		}
+
+		var objectCount, traitCount int
+		if err := db.db.QueryRow(`SELECT COUNT(*) FROM objects`).Scan(&objectCount); err != nil {
+			t.Fatalf("count objects: %v", err)
+		}
+		if err := db.db.QueryRow(`SELECT COUNT(*) FROM traits`).Scan(&traitCount); err != nil {
+			t.Fatalf("count traits: %v", err)
+		}
+
+		if objectCount != 1 || traitCount != 1 {
+			t.Fatalf("expected rollback to preserve rows, got objects=%d traits=%d", objectCount, traitCount)
+		}
+	})
+
 	t.Run("index document", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/configsvc"
@@ -689,7 +690,60 @@ func (s *Server) sendError(id interface{}, code int, message, data string) {
 func (s *Server) send(v interface{}) {
 	data, err := json.Marshal(v)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mcp: failed to marshal JSON-RPC response: %v\n", err)
+		fmt.Fprintln(s.out, fallbackRPCResponseJSON(v, err))
 		return
 	}
 	fmt.Fprintln(s.out, string(data))
+}
+
+func fallbackRPCResponseJSON(v interface{}, marshalErr error) string {
+	idJSON := "null"
+	if resp, ok := v.(Response); ok {
+		if encoded, ok := encodeFallbackResponseID(resp.ID); ok {
+			idJSON = encoded
+		}
+	}
+
+	return `{"jsonrpc":"2.0","id":` + idJSON + `,"error":{"code":-32603,"message":"failed to marshal response","data":` + strconv.Quote(marshalErr.Error()) + `}}`
+}
+
+func encodeFallbackResponseID(id interface{}) (string, bool) {
+	switch v := id.(type) {
+	case nil:
+		return "null", true
+	case string:
+		return strconv.Quote(v), true
+	case bool:
+		if v {
+			return "true", true
+		}
+		return "false", true
+	case int:
+		return strconv.Itoa(v), true
+	case int8:
+		return strconv.FormatInt(int64(v), 10), true
+	case int16:
+		return strconv.FormatInt(int64(v), 10), true
+	case int32:
+		return strconv.FormatInt(int64(v), 10), true
+	case int64:
+		return strconv.FormatInt(v, 10), true
+	case uint:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint64:
+		return strconv.FormatUint(v, 10), true
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32), true
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), true
+	default:
+		return "", false
+	}
 }

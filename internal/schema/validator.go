@@ -309,6 +309,10 @@ func ValidateSchema(sch *Schema) []string {
 		if IsBuiltinType(typeName) {
 			continue
 		}
+		if typeDef == nil {
+			issues = append(issues, fmt.Sprintf("Type '%s' must be an object", typeName))
+			continue
+		}
 
 		// Validate name_field
 		if err := ValidateNameField(typeDef); err != nil {

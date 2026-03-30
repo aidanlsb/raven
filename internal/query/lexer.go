@@ -202,12 +202,14 @@ func (l *Lexer) scanString() Token {
 	start := l.pos
 	// Skip opening quote
 	l.pos++
+	closed := false
 
 	// Find closing quote
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]
 		if ch == '"' {
 			l.pos++
+			closed = true
 			break
 		}
 		// Handle escaped quotes
@@ -216,6 +218,10 @@ func (l *Lexer) scanString() Token {
 			continue
 		}
 		l.pos++
+	}
+
+	if !closed {
+		return Token{Type: TokenError, Value: "unterminated string literal", Pos: start}
 	}
 
 	literal := l.input[start:l.pos]
@@ -229,6 +235,7 @@ func (l *Lexer) scanString() Token {
 func (l *Lexer) scanRawString() Token {
 	start := l.pos
 	l.pos += 2 // skip r"
+	closed := false
 
 	// Find closing quote — no escape processing
 	for l.pos < len(l.input) && l.input[l.pos] != '"' {
@@ -237,6 +244,11 @@ func (l *Lexer) scanRawString() Token {
 
 	if l.pos < len(l.input) {
 		l.pos++ // skip closing quote
+		closed = true
+	}
+
+	if !closed {
+		return Token{Type: TokenError, Value: "unterminated raw string literal", Pos: start}
 	}
 
 	literal := l.input[start:l.pos]
@@ -252,12 +264,14 @@ func (l *Lexer) scanRegex() Token {
 	start := l.pos
 	// Skip opening slash
 	l.pos++
+	closed := false
 
 	// Find closing slash
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]
 		if ch == '/' {
 			l.pos++
+			closed = true
 			break
 		}
 		// Handle escaped slashes
@@ -266,6 +280,10 @@ func (l *Lexer) scanRegex() Token {
 			continue
 		}
 		l.pos++
+	}
+
+	if !closed {
+		return Token{Type: TokenError, Value: "unterminated regex literal", Pos: start}
 	}
 
 	literal := l.input[start:l.pos]

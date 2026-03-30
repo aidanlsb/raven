@@ -215,6 +215,41 @@ Second ideas section with same heading.
 		}
 	})
 
+	t.Run("natural slug does not collide with generated duplicate slug", func(t *testing.T) {
+		content := `# Notes
+
+## Foo
+
+First section.
+
+## Foo
+
+Duplicate section.
+
+## Foo 2
+
+Natural foo-2 section.
+`
+		doc, err := ParseDocument(content, "/vault/doc.md", "/vault")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(doc.Objects) != 5 {
+			t.Fatalf("got %d objects, want 5", len(doc.Objects))
+		}
+
+		if doc.Objects[2].ID != "doc#foo" {
+			t.Errorf("first foo ID = %q, want doc#foo", doc.Objects[2].ID)
+		}
+		if doc.Objects[3].ID != "doc#foo-2" {
+			t.Errorf("second foo ID = %q, want doc#foo-2", doc.Objects[3].ID)
+		}
+		if doc.Objects[4].ID != "doc#foo-2-2" {
+			t.Errorf("foo 2 ID = %q, want doc#foo-2-2", doc.Objects[4].ID)
+		}
+	})
+
 	t.Run("trait parented to section", func(t *testing.T) {
 		content := `# Project
 

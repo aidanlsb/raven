@@ -46,7 +46,10 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	// Date/date-keyword values should use date-aware comparisons.
 	if !p.IsRefValue {
 		dateFieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
-		dateCond, dateArgs, ok := buildDateFieldCompareCondition(value, p.CompareOp, dateFieldExpr, jsonPath)
+		dateCond, dateArgs, ok, err := buildDateFieldCompareCondition(value, p.CompareOp, dateFieldExpr, jsonPath)
+		if err != nil {
+			return "", nil, err
+		}
 		if ok {
 			if p.Negated() {
 				dateCond = "NOT (" + dateCond + ")"
@@ -94,7 +97,7 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	return cond, args, nil
 }
 
-func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string) (string, []interface{}, bool) {
+func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string) (string, []interface{}, bool, error) {
 	cond, dateArgs, ok, err := index.TryParseDateComparisonWithOptions(
 		value,
 		compareOpToSQL(compareOp),
@@ -103,8 +106,11 @@ func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr
 			Now: time.Now(),
 		},
 	)
-	if err != nil || !ok {
-		return "", nil, false
+	if err != nil {
+		return "", nil, false, err
+	}
+	if !ok {
+		return "", nil, false, nil
 	}
 
 	// fieldExpr contains a placeholder for the JSON path. Inject one path argument
@@ -116,7 +122,7 @@ func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr
 	}
 	args = append(args, dateArgs...)
 
-	return cond, args, true
+	return cond, args, true, nil
 }
 
 // resolveRefValue resolves a reference token and returns a canonical value plus a

@@ -2,6 +2,9 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/configsvc"
@@ -41,7 +44,11 @@ func successEnvelope(data map[string]interface{}, warnings []directWarning) stri
 	if len(warnings) > 0 {
 		payload["warnings"] = warnings
 	}
-	b, _ := json.Marshal(payload)
+	b, err := json.Marshal(payload)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mcp: failed to marshal success envelope: %v\n", err)
+		return fallbackEnvelopeJSON("INTERNAL_ERROR", "failed to marshal success response", "", nil)
+	}
 	return string(b)
 }
 
@@ -61,8 +68,32 @@ func errorEnvelope(code, message, suggestion string, details map[string]interfac
 		"ok":    false,
 		"error": errPayload,
 	}
-	b, _ := json.Marshal(payload)
+	b, err := json.Marshal(payload)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mcp: failed to marshal error envelope: %v\n", err)
+		return fallbackEnvelopeJSON(code, message, suggestion, nil)
+	}
 	return string(b)
+}
+
+func fallbackEnvelopeJSON(code, message, suggestion string, details map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(`{"ok":false,"error":{"code":`)
+	b.WriteString(strconv.Quote(code))
+	b.WriteString(`,"message":`)
+	b.WriteString(strconv.Quote(message))
+	if suggestion != "" {
+		b.WriteString(`,"suggestion":`)
+		b.WriteString(strconv.Quote(suggestion))
+	}
+	if len(details) > 0 {
+		if detailJSON, err := json.Marshal(details); err == nil {
+			b.WriteString(`,"details":`)
+			b.Write(detailJSON)
+		}
+	}
+	b.WriteString("}}")
+	return b.String()
 }
 
 func boolValue(v interface{}) bool {

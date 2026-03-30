@@ -806,25 +806,26 @@ func (d *Database) RemoveFile(filePath string) error {
 // ClearAllData removes all indexed data from the database.
 // This is used for full reindex to ensure a clean slate.
 func (d *Database) ClearAllData() error {
-	if _, err := d.db.Exec("DELETE FROM objects"); err != nil {
+	tx, err := d.db.Begin()
+	if err != nil {
 		return err
 	}
-	if _, err := d.db.Exec("DELETE FROM traits"); err != nil {
-		return err
+	defer tx.Rollback()
+
+	for _, stmt := range []string{
+		"DELETE FROM objects",
+		"DELETE FROM traits",
+		"DELETE FROM refs",
+		"DELETE FROM field_refs",
+		"DELETE FROM date_index",
+		"DELETE FROM fts_content",
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return err
+		}
 	}
-	if _, err := d.db.Exec("DELETE FROM refs"); err != nil {
-		return err
-	}
-	if _, err := d.db.Exec("DELETE FROM field_refs"); err != nil {
-		return err
-	}
-	if _, err := d.db.Exec("DELETE FROM date_index"); err != nil {
-		return err
-	}
-	if _, err := d.db.Exec("DELETE FROM fts_content"); err != nil {
-		return err
-	}
-	return nil
+
+	return tx.Commit()
 }
 
 // RemoveFilesWithPrefix removes all data for files whose paths start with a given prefix.
