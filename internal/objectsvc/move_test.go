@@ -2,11 +2,13 @@ package objectsvc
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -158,11 +160,14 @@ func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
 	sch := loadTestSchema(t, v.Path)
 	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
 
-	notesDir := filepath.Join(v.Path, "notes")
-	if err := os.Chmod(notesDir, 0o555); err != nil {
-		t.Fatalf("chmod notes dir: %v", err)
-	}
-	defer os.Chmod(notesDir, 0o755)
+	failPath := filepath.Join(v.Path, "notes/ref.md")
+	restoreWriter := swapMoveFileWriterForTest(func(path string, data []byte, perm os.FileMode) error {
+		if path == failPath {
+			return fmt.Errorf("injected ref rewrite failure")
+		}
+		return atomicfile.WriteFile(path, data, perm)
+	})
+	defer restoreWriter()
 
 	_, err := MoveFile(MoveFileRequest{
 		VaultPath:         v.Path,
@@ -238,6 +243,19 @@ func TestMoveFileRollsBackOnStrictIndexFailure(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(v.Path, "archive/freya.md")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected destination file to be removed, got %v", err)
+	}
+}
+
+func swapMoveFileWriterForTest(writer func(path string, data []byte, perm os.FileMode) error) func() {
+	moveFileWriterMu.Lock()
+	previous := moveFileWriter
+	moveFileWriter = writer
+	moveFileWriterMu.Unlock()
+
+	return func() {
+		moveFileWriterMu.Lock()
+		moveFileWriter = previous
+		moveFileWriterMu.Unlock()
 	}
 }
 

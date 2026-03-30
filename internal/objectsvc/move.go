@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
@@ -61,6 +62,11 @@ type moveWritePlan struct {
 	updatedRefs        []string
 }
 
+var (
+	moveFileWriterMu sync.RWMutex
+	moveFileWriter   = atomicfile.WriteFile
+)
+
 func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	if strings.TrimSpace(req.VaultPath) == "" {
 		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
@@ -112,7 +118,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 		return nil, newError(ErrorFileWrite, "failed to create destination directory", "", nil, err)
 	}
 	if len(writePlan.destinationContent) > 0 {
-		if err := atomicfile.WriteFile(req.DestinationFile, writePlan.destinationContent, sourceSnapshot.perm); err != nil {
+		if err := writeMoveFile(req.DestinationFile, writePlan.destinationContent, sourceSnapshot.perm); err != nil {
 			return nil, newError(ErrorFileWrite, "failed to write moved file", "", nil, err)
 		}
 		if err := os.Remove(req.SourceFile); err != nil {
@@ -127,7 +133,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 
 	var appliedRewrites []*fileRewrite
 	for _, rewrite := range writePlan.rewriteFiles {
-		if err := atomicfile.WriteFile(rewrite.path, rewrite.updatedContent, rewrite.perm); err != nil {
+		if err := writeMoveFile(rewrite.path, rewrite.updatedContent, rewrite.perm); err != nil {
 			rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
 			return nil, moveRollbackError("failed to update refs after move", err, rollbackErr)
 		}
@@ -309,12 +315,12 @@ func rollbackMovedFiles(req MoveFileRequest, sourceSnapshot *fileSnapshot, rewri
 
 	for i := len(rewrites) - 1; i >= 0; i-- {
 		rewrite := rewrites[i]
-		if err := atomicfile.WriteFile(rewrite.path, rewrite.content, rewrite.perm); err != nil {
+		if err := writeMoveFile(rewrite.path, rewrite.content, rewrite.perm); err != nil {
 			rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s: %w", rewrite.reportSourceID, err))
 		}
 	}
 
-	if err := atomicfile.WriteFile(req.SourceFile, sourceSnapshot.content, sourceSnapshot.perm); err != nil {
+	if err := writeMoveFile(req.SourceFile, sourceSnapshot.content, sourceSnapshot.perm); err != nil {
 		rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore source file: %w", err))
 	}
 	if err := os.Remove(req.DestinationFile); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -367,6 +373,13 @@ func movedDocumentSource(sourceID, destinationObject string) bool {
 		return true
 	}
 	return strings.HasPrefix(sourceID, destinationObject+"#")
+}
+
+func writeMoveFile(path string, data []byte, perm os.FileMode) error {
+	moveFileWriterMu.RLock()
+	writer := moveFileWriter
+	moveFileWriterMu.RUnlock()
+	return writer(path, data, perm)
 }
 
 func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, pageRoot, dailyDir string, warnings []string) ([]refUpdatePlan, []string) {

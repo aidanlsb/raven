@@ -2,11 +2,13 @@ package objectsvc
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 )
 
@@ -91,14 +93,14 @@ traits: {}
 		t.Fatalf("seed file: %v", err)
 	}
 
-	destDir := filepath.Join(vaultPath, "books")
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		t.Fatalf("mkdir destination dir: %v", err)
-	}
-	if err := os.Chmod(destDir, 0o555); err != nil {
-		t.Fatalf("chmod destination dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(destDir, 0o755) })
+	failPath := filepath.Join(vaultPath, "books/my-note.md")
+	restoreWriter := swapMoveFileWriterForTest(func(path string, data []byte, perm os.FileMode) error {
+		if path == failPath {
+			return fmt.Errorf("injected destination write failure")
+		}
+		return atomicfile.WriteFile(path, data, perm)
+	})
+	defer restoreWriter()
 
 	_, err := Reclassify(ReclassifyRequest{
 		VaultPath:   vaultPath,
