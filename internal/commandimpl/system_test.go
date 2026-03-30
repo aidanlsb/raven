@@ -27,8 +27,8 @@ func TestBuildInitPostInitDataSuggestsRegistration(t *testing.T) {
 		t.Fatalf("commands = %#v, want map", data["commands"])
 	}
 	register, _ := commands["register"].(string)
-	wantPath := filepath.Clean(vaultPath)
-	if got, want := register, `rvn vault add my-notes "`+wantPath+`" --json`; got != want {
+	wantPath := formatSuggestedCommandPath(vaultPath)
+	if got, want := register, `rvn vault add my-notes `+wantPath+` --json`; got != want {
 		t.Fatalf("register command = %q, want %q", got, want)
 	}
 
