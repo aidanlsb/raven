@@ -171,6 +171,80 @@ func TestIntegration_InitReturnsPostInitGuidance(t *testing.T) {
 	}
 }
 
+func TestIntegration_JSONPreRunMissingVaultReturnsEnvelope(t *testing.T) {
+	t.Parallel()
+
+	binary := testutil.BuildCLI(t)
+	missingVault := filepath.Join(t.TempDir(), "missing-vault")
+
+	cmd := exec.Command(binary, "--vault-path", missingVault, "--json", "query", "object:project")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected JSON envelope without process failure: %v\n%s", err, output)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code       string `json:"code"`
+			Message    string `json:"message"`
+			Suggestion string `json:"suggestion"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(output, &resp); err != nil {
+		t.Fatalf("unmarshal prerun response: %v\n%s", err, output)
+	}
+	if resp.OK {
+		t.Fatalf("expected failure envelope, got success: %s", output)
+	}
+	if resp.Error.Code != "VAULT_NOT_FOUND" {
+		t.Fatalf("error.code=%q, want VAULT_NOT_FOUND\n%s", resp.Error.Code, output)
+	}
+	if !strings.Contains(resp.Error.Message, missingVault) {
+		t.Fatalf("message=%q, want vault path", resp.Error.Message)
+	}
+	if !strings.Contains(resp.Error.Suggestion, "rvn init") {
+		t.Fatalf("suggestion=%q, want init hint", resp.Error.Suggestion)
+	}
+}
+
+func TestIntegration_JSONPreRunConfigFailureReturnsEnvelope(t *testing.T) {
+	t.Parallel()
+
+	binary := testutil.BuildCLI(t)
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "broken.toml")
+	if err := os.WriteFile(configFile, []byte("not = [valid"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cmd := exec.Command(binary, "--config", configFile, "--json", "version")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected JSON envelope without process failure: %v\n%s", err, output)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(output, &resp); err != nil {
+		t.Fatalf("unmarshal config response: %v\n%s", err, output)
+	}
+	if resp.OK {
+		t.Fatalf("expected failure envelope, got success: %s", output)
+	}
+	if resp.Error.Code != "CONFIG_INVALID" {
+		t.Fatalf("error.code=%q, want CONFIG_INVALID\n%s", resp.Error.Code, output)
+	}
+	if !strings.Contains(resp.Error.Message, "failed to load config") {
+		t.Fatalf("message=%q, want config failure", resp.Error.Message)
+	}
+}
+
 // TestIntegration_QueryByField tests querying objects by field values.
 func TestIntegration_QueryByField(t *testing.T) {
 	t.Parallel()
