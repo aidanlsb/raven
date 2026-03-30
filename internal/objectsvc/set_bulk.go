@@ -53,10 +53,10 @@ type SetBulkSummary struct {
 
 func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 	if req.Schema == nil {
-		return nil, fmt.Errorf("schema is required")
+		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
 
 	items := make([]SetBulkPreviewItem, 0, len(req.ObjectIDs))
@@ -153,10 +153,10 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 
 func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBulkSummary, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 	if req.Schema == nil {
-		return nil, fmt.Errorf("schema is required")
+		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
 
 	results := make([]SetBulkResult, 0, len(req.ObjectIDs))

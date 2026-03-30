@@ -229,37 +229,13 @@ func HandleWorkflowStepUpdate(_ context.Context, req commandexec.Request) comman
 
 	workflowName := strings.TrimSpace(stringArg(req.Args, "workflow-name"))
 	stepID := strings.TrimSpace(stringArg(req.Args, "step-id"))
-	stepPatchRaw := req.Args["step-json"]
-
-	wf, err := workflow.Get(req.VaultPath, workflowName, vaultCfg)
-	if err != nil {
-		return commandexec.Failure("WORKFLOW_NOT_FOUND", err.Error(), nil, "Run 'rvn workflow list' to see available workflows")
-	}
-
-	targetIdx := workflow.FindStepIndexInSteps(wf.Steps, stepID)
-	if targetIdx < 0 {
-		return commandexec.Failure("REF_NOT_FOUND", fmt.Sprintf("step '%s' not found", stepID), map[string]interface{}{"workflow_name": workflowName, "step_id": stepID}, "Use 'rvn workflow show <name>' to inspect step ids")
-	}
-
-	updatedStep, err := workflow.ApplyStepPatch(wf.Steps[targetIdx], stepPatchRaw)
-	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "")
-	}
-	if updatedStep.ID == "" {
-		updatedStep.ID = stepID
-	}
-	if updatedStep.ID != stepID {
-		if idx := workflow.FindStepIndexInSteps(wf.Steps, updatedStep.ID); idx >= 0 {
-			return commandexec.Failure("DUPLICATE_NAME", fmt.Sprintf("step id '%s' already exists", updatedStep.ID), nil, "Use a unique step id")
-		}
-	}
 
 	svc := workflow.NewAuthoringService(req.VaultPath, vaultCfg)
 	result, err := svc.MutateStep(workflow.StepMutationRequest{
 		WorkflowName: workflowName,
 		Action:       workflow.StepMutationUpdate,
 		TargetStepID: stepID,
-		Step:         updatedStep,
+		StepPatch:    req.Args["step-json"],
 	})
 	if err != nil {
 		return mapWorkflowFailure(err, "Run 'rvn workflow list' to see available workflows")
@@ -287,6 +263,31 @@ func HandleWorkflowStepRemove(_ context.Context, req commandexec.Request) comman
 	}
 
 	return commandexec.Success(workflowStepMutationPayload(workflowName, "remove", result, ""), nil)
+}
+
+// HandleWorkflowStepBatch executes the canonical `workflow_step_batch` command.
+func HandleWorkflowStepBatch(_ context.Context, req commandexec.Request) commandexec.Result {
+	vaultCfg, failure := loadWorkflowConfig(req.VaultPath)
+	if failure.Error != nil {
+		return failure
+	}
+
+	mutations, err := workflow.ParseStepBatchMutations(req.Args["mutations-json"])
+	if err != nil {
+		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "")
+	}
+
+	workflowName := strings.TrimSpace(stringArg(req.Args, "workflow-name"))
+	svc := workflow.NewAuthoringService(req.VaultPath, vaultCfg)
+	result, err := svc.MutateSteps(workflow.StepBatchMutationRequest{
+		WorkflowName: workflowName,
+		Mutations:    mutations,
+	})
+	if err != nil {
+		return mapWorkflowFailure(err, "Run 'rvn workflow list' to see available workflows")
+	}
+
+	return commandexec.Success(workflowStepBatchPayload(result), nil)
 }
 
 // HandleWorkflowRun executes the canonical `workflow_run` command.
@@ -576,6 +577,19 @@ func workflowStepMutationPayload(workflowName, action string, result *workflow.S
 		payload["previous_id"] = previousID
 	}
 	return payload
+}
+
+func workflowStepBatchPayload(result *workflow.StepBatchMutationResult) map[string]interface{} {
+	applied := make([]map[string]interface{}, 0, len(result.Applied))
+	for _, mutation := range result.Applied {
+		applied = append(applied, workflowStepMutationPayload(result.WorkflowName, string(mutation.Action), &mutation, mutation.PreviousID))
+	}
+	return map[string]interface{}{
+		"workflow_name": result.WorkflowName,
+		"file":          result.FileRef,
+		"applied":       applied,
+		"count":         len(applied),
+	}
 }
 
 func parseCanonicalWorkflowInputs(args map[string]interface{}) (map[string]interface{}, error) {

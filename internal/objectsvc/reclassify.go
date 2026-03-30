@@ -205,12 +205,8 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		return nil, newError(ErrorFileWrite, "failed to update frontmatter", "", nil, err)
 	}
 
-	if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
-		return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
-	}
-
-	result.ChangedFilePath = req.FilePath
-
+	moveDestRelPath := ""
+	moveDestAbsPath := ""
 	if !req.NoMove && newTypeDef != nil && strings.TrimSpace(newTypeDef.DefaultPath) != "" {
 		defaultDir := strings.TrimSuffix(newTypeDef.DefaultPath, "/")
 		currentDir := filepath.Dir(relPath)
@@ -225,39 +221,49 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 			destRelPath := req.VaultConfig.ResolveReferenceToFilePath(
 				strings.TrimSuffix(filepath.Join(defaultDir, strings.TrimSuffix(filename, ".md")), ".md"),
 			)
-			destRelPath = paths.EnsureMDExtension(destRelPath)
-			destAbsPath := filepath.Join(req.VaultPath, destRelPath)
-
-			if _, err := os.Stat(destAbsPath); os.IsNotExist(err) {
-				destinationObjectID := req.VaultConfig.FilePathToObjectID(destRelPath)
-
-				moveResult, err := MoveFile(MoveFileRequest{
-					VaultPath:         req.VaultPath,
-					SourceFile:        req.FilePath,
-					DestinationFile:   destAbsPath,
-					SourceObjectID:    req.ObjectID,
-					DestinationObject: destinationObjectID,
-					UpdateRefs:        req.UpdateRefs,
-					FailOnIndexError:  false,
-					VaultConfig:       req.VaultConfig,
-					Schema:            req.Schema,
-					ParseOptions:      req.ParseOptions,
-				})
-				if err != nil {
-					return nil, err
-				}
-
-				result.Moved = true
-				result.OldPath = relPath
-				result.NewPath = destRelPath
-				result.File = destRelPath
-				result.ObjectID = destinationObjectID
-				result.UpdatedRefs = moveResult.UpdatedRefs
-				result.WarningMessages = append(result.WarningMessages, moveResult.WarningMessages...)
-				result.ChangedFilePath = destAbsPath
+			moveDestRelPath = paths.EnsureMDExtension(destRelPath)
+			moveDestAbsPath = filepath.Join(req.VaultPath, moveDestRelPath)
+			if _, err := os.Stat(moveDestAbsPath); err == nil {
+				moveDestRelPath = ""
+				moveDestAbsPath = ""
 			}
 		}
 	}
+
+	if moveDestAbsPath == "" {
+		if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {
+			return nil, newError(ErrorFileWrite, "failed to write file", "", nil, err)
+		}
+		result.ChangedFilePath = req.FilePath
+		return result, nil
+	}
+
+	destinationObjectID := req.VaultConfig.FilePathToObjectID(moveDestRelPath)
+	moveResult, err := MoveFile(MoveFileRequest{
+		VaultPath:          req.VaultPath,
+		SourceFile:         req.FilePath,
+		DestinationFile:    moveDestAbsPath,
+		SourceObjectID:     req.ObjectID,
+		DestinationObject:  destinationObjectID,
+		ReplacementContent: []byte(newContent),
+		UpdateRefs:         req.UpdateRefs,
+		FailOnIndexError:   false,
+		VaultConfig:        req.VaultConfig,
+		Schema:             req.Schema,
+		ParseOptions:       req.ParseOptions,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result.Moved = true
+	result.OldPath = relPath
+	result.NewPath = moveDestRelPath
+	result.File = moveDestRelPath
+	result.ObjectID = destinationObjectID
+	result.UpdatedRefs = moveResult.UpdatedRefs
+	result.WarningMessages = append(result.WarningMessages, moveResult.WarningMessages...)
+	result.ChangedFilePath = moveDestAbsPath
 
 	return result, nil
 }

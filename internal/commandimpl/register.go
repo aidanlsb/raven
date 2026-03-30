@@ -86,6 +86,7 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("workflow_validate", HandleWorkflowValidate)
 	registry.Register("workflow_show", HandleWorkflowShow)
 	registry.Register("workflow_step_add", HandleWorkflowStepAdd)
+	registry.Register("workflow_step_batch", HandleWorkflowStepBatch)
 	registry.Register("workflow_step_update", HandleWorkflowStepUpdate)
 	registry.Register("workflow_step_remove", HandleWorkflowStepRemove)
 	registry.Register("workflow_run", HandleWorkflowRun)

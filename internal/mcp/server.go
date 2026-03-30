@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/configsvc"
+	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/rvnexec"
 )
@@ -278,6 +279,7 @@ func (s *Server) handleRequest(req *Request) {
 }
 
 func (s *Server) handleInitialize(req *Request) {
+	version := maintsvc.CurrentVersionInfoFromExecutable(s.executable).Version
 	result := map[string]interface{}{
 		"protocolVersion": "2024-11-05",
 		"capabilities": ServerCapabilities{
@@ -286,7 +288,7 @@ func (s *Server) handleInitialize(req *Request) {
 		},
 		"serverInfo": ServerInfo{
 			Name:    "raven-mcp",
-			Version: "0.1.0",
+			Version: version,
 		},
 	}
 	s.sendResult(req.ID, result)

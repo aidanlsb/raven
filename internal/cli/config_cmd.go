@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 func runConfigShow(cmd *cobra.Command, args []string) error {
@@ -60,13 +61,13 @@ func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	configFile := stringValue(data["config_path"])
 	stateFile := stringValue(data["state_path"])
 	if !boolValue(data["exists"]) {
-		fmt.Printf("Config file does not exist: %s\n", configFile)
-		fmt.Println("Run 'rvn config init' to create it.")
+		fmt.Printf("Config file does not exist: %s\n", ui.FilePath(configFile))
+		fmt.Println(ui.Hint("Run 'rvn config init' to create it."))
 		return nil
 	}
 
-	fmt.Printf("config: %s\n", configFile)
-	fmt.Printf("state:  %s\n", stateFile)
+	fmt.Printf("config: %s\n", ui.FilePath(configFile))
+	fmt.Printf("state:  %s\n", ui.FilePath(stateFile))
 
 	if v := strings.TrimSpace(stringValue(data["default_vault"])); v != "" {
 		fmt.Printf("default_vault: %s\n", v)
@@ -109,23 +110,23 @@ func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 func renderConfigInit(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	if !boolValue(data["created"]) {
-		fmt.Printf("Config already exists: %s\n", stringValue(data["config_path"]))
+		fmt.Printf("Config already exists: %s\n", ui.FilePath(stringValue(data["config_path"])))
 	} else {
-		fmt.Printf("Created config: %s\n", stringValue(data["config_path"]))
+		fmt.Println(ui.Checkf("Created config: %s", ui.FilePath(stringValue(data["config_path"]))))
 	}
 	return nil
 }
 
 func renderConfigSet(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Updated config: %s\n", stringValue(data["config_path"]))
+	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(stringValue(data["config_path"]))))
 	fmt.Printf("changed: %s\n", strings.Join(stringSliceFromAny(data["changed"]), ", "))
 	return nil
 }
 
 func renderConfigUnset(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Updated config: %s\n", stringValue(data["config_path"]))
+	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(stringValue(data["config_path"]))))
 	fmt.Printf("cleared: %s\n", strings.Join(stringSliceFromAny(data["changed"]), ", "))
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/paths"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 // BulkOperation represents the type of bulk operation.
@@ -136,20 +137,20 @@ func PrintBulkPreview(preview *BulkPreview) {
 		fmt.Printf("\n⚠ Warning: %s\n", w.Message)
 	}
 
-	fmt.Printf("\nRun with --confirm to apply changes.\n")
+	fmt.Println(ui.Hint("\nRun with --confirm to apply changes."))
 }
 
 // PrintBulkSummary prints a human-readable summary of completed bulk operations.
 func PrintBulkSummary(summary *BulkSummary) {
 	switch summary.Action {
 	case "set":
-		fmt.Printf("✓ Updated %d objects\n", summary.Modified)
+		fmt.Println(ui.Checkf("Updated %d objects", summary.Modified))
 	case "delete":
-		fmt.Printf("✓ Deleted %d objects\n", summary.Deleted)
+		fmt.Println(ui.Checkf("Deleted %d objects", summary.Deleted))
 	case "add":
-		fmt.Printf("✓ Added content to %d objects\n", summary.Added)
+		fmt.Println(ui.Checkf("Added content to %d objects", summary.Added))
 	case "move":
-		fmt.Printf("✓ Moved %d objects\n", summary.Moved)
+		fmt.Println(ui.Checkf("Moved %d objects", summary.Moved))
 	}
 
 	if summary.Skipped > 0 {
@@ -190,7 +191,6 @@ func BuildEmbeddedSkipWarning(embedded []string) *Warning {
 
 // Warning codes for bulk operations
 const (
-	WarnEmbeddedSkipped  = "embedded_skipped"
 	WarnObjectNotFound   = "object_not_found"
 	WarnFieldNotInSchema = "field_not_in_schema"
 )

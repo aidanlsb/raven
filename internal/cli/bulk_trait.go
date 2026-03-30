@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/traitsvc"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 type TraitBulkResult = traitsvc.BulkResult
@@ -29,7 +30,7 @@ func parseTraitUpdateValueArgs(args []string, usageHint string) (string, error) 
 // printTraitBulkPreview prints a human-readable preview of trait bulk operations.
 func printTraitBulkPreview(preview *TraitBulkPreview) {
 	if len(preview.Items) == 0 {
-		fmt.Println("No traits to update.")
+		fmt.Println(ui.Star("No traits to update."))
 	} else {
 		fmt.Printf("\nPreview: %d trait(s) will be updated\n\n", len(preview.Items))
 	}
@@ -59,12 +60,12 @@ func printTraitBulkPreview(preview *TraitBulkPreview) {
 		}
 	}
 
-	fmt.Printf("\nRun with --confirm to apply changes.\n")
+	fmt.Println(ui.Hint("\nRun with --confirm to apply changes."))
 }
 
 // printTraitBulkSummary prints a human-readable summary of trait bulk operations.
 func printTraitBulkSummary(summary *TraitBulkSummary) {
-	fmt.Printf("✓ Updated %d trait(s)\n", summary.Modified)
+	fmt.Println(ui.Checkf("Updated %d trait(s)", summary.Modified))
 	if summary.Skipped > 0 {
 		fmt.Printf("  Skipped: %d\n", summary.Skipped)
 	}

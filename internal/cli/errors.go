@@ -50,7 +50,9 @@ const (
 
 	// Input errors
 	ErrInvalidInput    = "INVALID_INPUT"
+	ErrInvalidArgs     = "INVALID_ARGS"
 	ErrMissingArgument = "MISSING_ARGUMENT"
+	ErrCommandNotFound = "COMMAND_NOT_FOUND"
 
 	// Workflow errors
 	ErrWorkflowNotFound            = "WORKFLOW_NOT_FOUND"
@@ -99,6 +101,7 @@ const (
 	WarnWrongCommand      = "WRONG_COMMAND"
 	WarnMissingField      = "MISSING_REQUIRED_FIELD"
 	WarnBacklinks         = "HAS_BACKLINKS"
+	WarnEmbeddedSkipped   = "EMBEDDED_SKIPPED"
 	WarnUnknownField      = "UNKNOWN_FIELD"
 	WarnTypeMismatch      = "TYPE_DIRECTORY_MISMATCH"
 )

@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/templatesvc"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var templateCmd = &cobra.Command{
@@ -65,11 +66,11 @@ func renderTemplateList(_ *cobra.Command, result commandexec.Result) error {
 	}
 
 	if len(templates) == 0 {
-		fmt.Printf("No template files found under %s\n", templateDir)
+		fmt.Println(ui.Starf("No template files found under %s", ui.FilePath(templateDir)))
 		return nil
 	}
 
-	fmt.Printf("Template files (%s):\n", templateDir)
+	fmt.Printf("Template files (%s):\n", ui.FilePath(templateDir))
 	for _, f := range templates {
 		fmt.Printf("  - %s (%d bytes)\n", f.Path, f.SizeBytes)
 	}
@@ -78,13 +79,13 @@ func renderTemplateList(_ *cobra.Command, result commandexec.Result) error {
 
 func renderTemplateWrite(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Template %s: %s\n", data["status"], data["path"])
+	fmt.Println(ui.Checkf("Template %s: %s", data["status"], ui.FilePath(stringValue(data["path"]))))
 	return nil
 }
 
 func renderTemplateDelete(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Deleted template %s -> %s\n", data["deleted"], data["trash_path"])
+	fmt.Println(ui.Checkf("Deleted template %s -> %s", ui.FilePath(stringValue(data["deleted"])), ui.FilePath(stringValue(data["trash_path"]))))
 	for _, w := range result.Warnings {
 		fmt.Printf("warning: %s\n", w.Message)
 	}

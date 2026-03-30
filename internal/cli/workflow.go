@@ -10,6 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/workflow"
 )
 
@@ -39,6 +40,11 @@ var workflowStepAddCmd = newCanonicalLeafCommand("workflow_step_add", canonicalL
 	VaultPath:   getVaultPath,
 	BuildArgs:   buildWorkflowStepAddArgs,
 	RenderHuman: renderWorkflowStepAdd,
+})
+
+var workflowStepBatchCmd = newCanonicalLeafCommand("workflow_step_batch", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderWorkflowStepBatch,
 })
 
 var workflowStepUpdateCmd = newCanonicalLeafCommand("workflow_step_update", canonicalLeafOptions{
@@ -123,7 +129,7 @@ func renderWorkflowList(_ *cobra.Command, result commandexec.Result) error {
 		return err
 	}
 	if len(items) == 0 {
-		fmt.Println("No workflows defined in raven.yaml")
+		fmt.Println(ui.Star("No workflows defined in raven.yaml"))
 		return nil
 	}
 
@@ -242,7 +248,17 @@ func buildWorkflowAddArgs(cmd *cobra.Command, args []string) (map[string]interfa
 
 func renderWorkflowStepAdd(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Added step '%s' to workflow '%s'.\n", data["step_id"], data["workflow_name"])
+	fmt.Println(ui.Checkf("Added step '%s' to workflow '%s'.", data["step_id"], data["workflow_name"]))
+	return nil
+}
+
+func renderWorkflowStepBatch(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	count, err := decodeSchemaCount(data["count"])
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Checkf("Applied %d step edits to workflow '%s'.", count, data["workflow_name"]))
 	return nil
 }
 
@@ -252,37 +268,37 @@ func renderWorkflowStepUpdate(_ *cobra.Command, result commandexec.Result) error
 	previousStepID := stringValue(data["previous_step_id"])
 	stepID := stringValue(data["step_id"])
 	if stepID == previousStepID || previousStepID == "" {
-		fmt.Printf("Updated step '%s' in workflow '%s'.\n", stepID, workflowName)
+		fmt.Println(ui.Checkf("Updated step '%s' in workflow '%s'.", stepID, workflowName))
 		return nil
 	}
-	fmt.Printf("Updated step '%s' (renamed from '%s') in workflow '%s'.\n", stepID, previousStepID, workflowName)
+	fmt.Println(ui.Checkf("Updated step '%s' (renamed from '%s') in workflow '%s'.", stepID, previousStepID, workflowName))
 	return nil
 }
 
 func renderWorkflowStepRemove(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Removed step '%s' from workflow '%s'.\n", data["step_id"], data["workflow_name"])
+	fmt.Println(ui.Checkf("Removed step '%s' from workflow '%s'.", data["step_id"], data["workflow_name"]))
 	return nil
 }
 
 func renderWorkflowAdd(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	name := stringValue(data["name"])
-	fmt.Printf("Added workflow '%s'.\n", name)
-	fmt.Printf("Run with: rvn workflow run %s\n", name)
+	fmt.Println(ui.Checkf("Added workflow '%s'.", name))
+	fmt.Println(ui.Hint(fmt.Sprintf("Run with: rvn workflow run %s", name)))
 	return nil
 }
 
 func renderWorkflowScaffold(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	name := stringValue(data["name"])
-	fmt.Printf("Scaffolded workflow '%s' at %s\n", name, data["file"])
-	fmt.Printf("Run with: rvn workflow run %s --input topic=\"...\"\n", name)
+	fmt.Println(ui.Checkf("Scaffolded workflow '%s' at %s", name, ui.FilePath(stringValue(data["file"]))))
+	fmt.Println(ui.Hint(fmt.Sprintf("Run with: rvn workflow run %s --input topic=\"...\"", name)))
 	return nil
 }
 
 func renderWorkflowRemove(_ *cobra.Command, result commandexec.Result) error {
-	fmt.Printf("Removed workflow '%s'.\n", canonicalDataMap(result)["name"])
+	fmt.Println(ui.Checkf("Removed workflow '%s'.", canonicalDataMap(result)["name"]))
 	return nil
 }
 
@@ -292,7 +308,7 @@ func renderWorkflowValidate(_ *cobra.Command, result commandexec.Result) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("All %d workflow(s) are valid.\n", len(results))
+	fmt.Println(ui.Checkf("All %d workflow(s) are valid.", len(results)))
 	return nil
 }
 
@@ -328,24 +344,24 @@ func renderWorkflowRunResult(result commandexec.Result, completionMessage string
 	fmt.Printf("status: %s\n", runResult.Status)
 	fmt.Printf("revision: %d\n\n", runResult.Revision)
 	if runResult.Next != nil {
-		fmt.Println("=== AGENT ===")
+		fmt.Println(ui.DividerWithAccentLabel("agent", 72))
 		fmt.Println(runResult.Next.Prompt)
 		fmt.Println()
-		fmt.Println("=== OUTPUTS ===")
+		fmt.Println(ui.DividerWithAccentLabel("outputs", 72))
 		outputJSON, _ := json.MarshalIndent(runResult.Next.Outputs, "", "  ")
 		fmt.Println(string(outputJSON))
 		fmt.Println()
-		fmt.Println("=== STEP SUMMARIES ===")
+		fmt.Println(ui.DividerWithAccentLabel("step summaries", 72))
 		stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 		fmt.Println(string(stepSummariesJSON))
 		fmt.Println()
-		fmt.Printf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.\n", runResult.RunID)
+		fmt.Println(ui.Hint(fmt.Sprintf("Use 'rvn workflow runs step %s <step-id>' to fetch a specific step output.", runResult.RunID)))
 		return nil
 	}
 
 	fmt.Println(completionMessage)
 	fmt.Println()
-	fmt.Println("=== STEP SUMMARIES ===")
+	fmt.Println(ui.DividerWithAccentLabel("step summaries", 72))
 	stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 	fmt.Println(string(stepSummariesJSON))
 	return nil
@@ -361,7 +377,7 @@ func renderWorkflowRunsList(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.Ref)
 	}
 	if len(runs) == 0 {
-		fmt.Println("No workflow runs.")
+		fmt.Println(ui.Star("No workflow runs."))
 		return nil
 	}
 	for _, run := range runs {
@@ -407,15 +423,17 @@ func renderWorkflowRunsPrune(cmd *cobra.Command, result commandexec.Result) erro
 	}
 	confirm, _ := cmd.Flags().GetBool("confirm")
 	if confirm {
-		fmt.Printf("Deleted %d runs (matched %d of %d scanned).\n", prune.Deleted, prune.Matched, prune.Scanned)
+		fmt.Println(ui.Checkf("Deleted %d runs (matched %d of %d scanned).", prune.Deleted, prune.Matched, prune.Scanned))
 		return nil
 	}
-	fmt.Printf("Would delete %d runs (scanned %d). Use --confirm to apply.\n", prune.Matched, prune.Scanned)
+	fmt.Printf("Would delete %d runs (scanned %d).\n", prune.Matched, prune.Scanned)
+	fmt.Println(ui.Hint("Use --confirm to apply."))
 	return nil
 }
 
 func init() {
 	_ = workflowStepAddCmd.MarkFlagRequired("step-json")
+	_ = workflowStepBatchCmd.MarkFlagRequired("mutations-json")
 	_ = workflowStepUpdateCmd.MarkFlagRequired("step-json")
 
 	workflowCmd.AddCommand(workflowListCmd)
@@ -425,6 +443,7 @@ func init() {
 	workflowCmd.AddCommand(workflowValidateCmd)
 	workflowCmd.AddCommand(workflowShowCmd)
 	workflowStepCmd.AddCommand(workflowStepAddCmd)
+	workflowStepCmd.AddCommand(workflowStepBatchCmd)
 	workflowStepCmd.AddCommand(workflowStepUpdateCmd)
 	workflowStepCmd.AddCommand(workflowStepRemoveCmd)
 	workflowCmd.AddCommand(workflowStepCmd)

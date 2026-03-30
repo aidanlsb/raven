@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
@@ -15,16 +16,17 @@ import (
 )
 
 type MoveFileRequest struct {
-	VaultPath         string
-	SourceFile        string
-	DestinationFile   string
-	SourceObjectID    string
-	DestinationObject string
-	UpdateRefs        bool
-	FailOnIndexError  bool
-	VaultConfig       *config.VaultConfig
-	Schema            *schema.Schema
-	ParseOptions      *parser.ParseOptions
+	VaultPath          string
+	SourceFile         string
+	DestinationFile    string
+	SourceObjectID     string
+	DestinationObject  string
+	ReplacementContent []byte
+	UpdateRefs         bool
+	FailOnIndexError   bool
+	VaultConfig        *config.VaultConfig
+	Schema             *schema.Schema
+	ParseOptions       *parser.ParseOptions
 }
 
 type MoveFileResult struct {
@@ -82,8 +84,22 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	if err := os.MkdirAll(filepath.Dir(req.DestinationFile), 0o755); err != nil {
 		return nil, newError(ErrorFileWrite, "failed to create destination directory", "", nil, err)
 	}
-	if err := os.Rename(req.SourceFile, req.DestinationFile); err != nil {
-		return nil, newError(ErrorFileWrite, "failed to move file", "", nil, err)
+	if len(req.ReplacementContent) > 0 {
+		perm := os.FileMode(0)
+		if st, err := os.Stat(req.SourceFile); err == nil {
+			perm = st.Mode()
+		}
+		if err := atomicfile.WriteFile(req.DestinationFile, req.ReplacementContent, perm); err != nil {
+			return nil, newError(ErrorFileWrite, "failed to write moved file", "", nil, err)
+		}
+		if err := os.Remove(req.SourceFile); err != nil {
+			_ = os.Remove(req.DestinationFile)
+			return nil, newError(ErrorFileWrite, "failed to remove source file after move", "", nil, err)
+		}
+	} else {
+		if err := os.Rename(req.SourceFile, req.DestinationFile); err != nil {
+			return nil, newError(ErrorFileWrite, "failed to move file", "", nil, err)
+		}
 	}
 
 	for _, plan := range refPlans {

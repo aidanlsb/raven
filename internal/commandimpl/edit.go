@@ -50,7 +50,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	content, err := os.ReadFile(resolved.FilePath)
 	if err != nil {
-		return commandexec.Failure("READ_ERROR", err.Error(), nil, "")
+		return commandexec.Failure("FILE_READ_ERROR", err.Error(), nil, "")
 	}
 
 	relPath, _ := filepath.Rel(vaultPath, resolved.FilePath)
@@ -98,7 +98,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	if err := atomicfile.WriteFile(resolved.FilePath, []byte(newContent), 0o644); err != nil {
-		return commandexec.Failure("WRITE_ERROR", err.Error(), nil, "")
+		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
 	autoReindexFile(vaultPath, resolved.FilePath, vaultCfg)
 

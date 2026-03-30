@@ -21,7 +21,7 @@ import (
 	"github.com/aidanlsb/raven/internal/traitsvc"
 )
 
-const warnEmbeddedSkipped = "embedded_skipped"
+const warnEmbeddedSkipped = "EMBEDDED_SKIPPED"
 
 type canonicalBulkResult struct {
 	ID      string `json:"id"`
@@ -425,7 +425,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 	if !confirm {
 		preview, err := objectsvc.PreviewSetBulk(request)
 		if err != nil {
-			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+			return mapContentMutationError(err)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":  true,
@@ -442,7 +442,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		maybeReindexFile(vaultPath, filePath, vaultCfg)
 	})
 	if err != nil {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+		return mapContentMutationError(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{
@@ -472,7 +472,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, te
 	if !confirm {
 		preview, err := objectsvc.PreviewAddBulk(request)
 		if err != nil {
-			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+			return mapContentMutationError(err)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":  true,
@@ -489,7 +489,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, te
 		maybeReindexFile(vaultPath, filePath, vaultCfg)
 	})
 	if err != nil {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+		return mapContentMutationError(err)
 	}
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
@@ -590,7 +590,7 @@ func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string,
 	if !confirm {
 		preview, err := objectsvc.PreviewDeleteBulk(request)
 		if err != nil {
-			return commandexec.Failure("DATABASE_ERROR", "failed to open index database", nil, "Run 'rvn reindex' to rebuild the database")
+			return mapContentMutationError(err)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":  true,
@@ -605,7 +605,7 @@ func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string,
 
 	summary, err := objectsvc.ApplyDeleteBulk(request)
 	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", "failed to open index database", nil, "Run 'rvn reindex' to rebuild the database")
+		return mapContentMutationError(err)
 	}
 
 	allWarnings := append([]commandexec.Warning{}, warnings...)
@@ -645,7 +645,7 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 	if !confirm {
 		preview, err := objectsvc.PreviewMoveBulk(request)
 		if err != nil {
-			return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Example: rvn move --stdin archive/projects/")
+			return mapContentMutationError(err)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"preview":     true,
@@ -660,7 +660,7 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 
 	summary, err := objectsvc.ApplyMoveBulk(request)
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Example: rvn move --stdin archive/projects/")
+		return mapContentMutationError(err)
 	}
 
 	allWarnings := append([]commandexec.Warning{}, warnings...)

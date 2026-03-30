@@ -1,8 +1,10 @@
 package workflow
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -153,6 +155,52 @@ func ParseStepObject(raw interface{}, requireID bool) (*config.WorkflowStep, err
 	return &step, nil
 }
 
+type stepBatchInput struct {
+	Operations []stepBatchOperationInput `json:"operations"`
+}
+
+type stepBatchOperationInput struct {
+	Action string          `json:"action"`
+	StepID string          `json:"step_id,omitempty"`
+	Step   json.RawMessage `json:"step,omitempty"`
+	Patch  json.RawMessage `json:"patch,omitempty"`
+	Before string          `json:"before,omitempty"`
+	After  string          `json:"after,omitempty"`
+}
+
+func ParseStepBatchMutations(raw interface{}) ([]StepMutationRequest, error) {
+	data, err := normalizeJSONInput(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	var input stepBatchInput
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		return nil, err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("unexpected trailing content")
+		}
+		return nil, err
+	}
+	if len(input.Operations) == 0 {
+		return nil, fmt.Errorf("operations must contain at least one item")
+	}
+
+	mutations := make([]StepMutationRequest, 0, len(input.Operations))
+	for i, op := range input.Operations {
+		mutation, err := parseStepBatchOperation(op)
+		if err != nil {
+			return nil, fmt.Errorf("operations[%d]: %w", i, err)
+		}
+		mutations = append(mutations, mutation)
+	}
+	return mutations, nil
+}
+
 func ApplyStepPatch(existing *config.WorkflowStep, patchRaw interface{}) (*config.WorkflowStep, error) {
 	if existing == nil {
 		return nil, fmt.Errorf("existing step is required")
@@ -219,6 +267,20 @@ func ParseJSONObject(raw interface{}) (map[string]interface{}, error) {
 			return nil, fmt.Errorf("expected JSON object")
 		}
 		return obj, nil
+	}
+}
+
+func normalizeJSONInput(raw interface{}) ([]byte, error) {
+	switch typed := raw.(type) {
+	case nil:
+		return nil, fmt.Errorf("expected JSON object")
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return nil, fmt.Errorf("expected JSON object")
+		}
+		return []byte(typed), nil
+	default:
+		return json.Marshal(typed)
 	}
 }
 
@@ -335,4 +397,96 @@ func toJSONMap(v interface{}) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("expected JSON object")
 	}
 	return out, nil
+}
+
+func parseStepBatchOperation(op stepBatchOperationInput) (StepMutationRequest, error) {
+	action := StepMutationAction(strings.TrimSpace(op.Action))
+	switch action {
+	case StepMutationAdd:
+		if strings.TrimSpace(op.StepID) != "" {
+			return StepMutationRequest{}, fmt.Errorf("step_id is not valid for add")
+		}
+		if hasJSONPayload(op.Patch) {
+			return StepMutationRequest{}, fmt.Errorf("patch is not valid for add")
+		}
+		if strings.TrimSpace(op.Before) != "" && strings.TrimSpace(op.After) != "" {
+			return StepMutationRequest{}, fmt.Errorf("use either before or after, not both")
+		}
+		if !hasJSONPayload(op.Step) {
+			return StepMutationRequest{}, fmt.Errorf("step is required for add")
+		}
+		stepObj, err := parseRawJSONObject(op.Step)
+		if err != nil {
+			return StepMutationRequest{}, fmt.Errorf("parse step: %w", err)
+		}
+		step, err := ParseStepObject(stepObj, true)
+		if err != nil {
+			return StepMutationRequest{}, err
+		}
+		return StepMutationRequest{
+			Action: action,
+			Step:   step,
+			Position: PositionHint{
+				BeforeStepID: strings.TrimSpace(op.Before),
+				AfterStepID:  strings.TrimSpace(op.After),
+			},
+		}, nil
+	case StepMutationUpdate:
+		if strings.TrimSpace(op.StepID) == "" {
+			return StepMutationRequest{}, fmt.Errorf("step_id is required for update")
+		}
+		if !hasJSONPayload(op.Patch) {
+			return StepMutationRequest{}, fmt.Errorf("patch is required for update")
+		}
+		if hasJSONPayload(op.Step) {
+			return StepMutationRequest{}, fmt.Errorf("step is not valid for update")
+		}
+		if strings.TrimSpace(op.Before) != "" || strings.TrimSpace(op.After) != "" {
+			return StepMutationRequest{}, fmt.Errorf("before/after are only valid for add")
+		}
+		patchObj, err := parseRawJSONObject(op.Patch)
+		if err != nil {
+			return StepMutationRequest{}, fmt.Errorf("parse patch: %w", err)
+		}
+		return StepMutationRequest{
+			Action:       action,
+			TargetStepID: strings.TrimSpace(op.StepID),
+			StepPatch:    patchObj,
+		}, nil
+	case StepMutationRemove:
+		if strings.TrimSpace(op.StepID) == "" {
+			return StepMutationRequest{}, fmt.Errorf("step_id is required for remove")
+		}
+		if hasJSONPayload(op.Step) || hasJSONPayload(op.Patch) {
+			return StepMutationRequest{}, fmt.Errorf("step and patch are not valid for remove")
+		}
+		if strings.TrimSpace(op.Before) != "" || strings.TrimSpace(op.After) != "" {
+			return StepMutationRequest{}, fmt.Errorf("before/after are only valid for add")
+		}
+		return StepMutationRequest{
+			Action:       action,
+			TargetStepID: strings.TrimSpace(op.StepID),
+		}, nil
+	default:
+		return StepMutationRequest{}, fmt.Errorf("unknown action %q", op.Action)
+	}
+}
+
+func parseRawJSONObject(raw json.RawMessage) (map[string]interface{}, error) {
+	if !hasJSONPayload(raw) {
+		return nil, fmt.Errorf("expected JSON object")
+	}
+	var obj map[string]interface{}
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, err
+	}
+	if obj == nil {
+		return nil, fmt.Errorf("expected JSON object")
+	}
+	return obj, nil
+}
+
+func hasJSONPayload(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) > 0 && string(trimmed) != "null"
 }

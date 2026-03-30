@@ -52,12 +52,12 @@ type DeleteBulkSummary struct {
 
 func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
 	db, err := index.Open(req.VaultPath)
 	if err != nil {
-		return nil, err
+		return nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
 	defer db.Close()
 
@@ -115,12 +115,12 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 
 func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
 	db, err := index.Open(req.VaultPath)
 	if err != nil {
-		return nil, err
+		return nil, newError(ErrorDatabase, "failed to open index database", "Run 'rvn reindex' to rebuild the database", nil, err)
 	}
 	defer db.Close()
 
