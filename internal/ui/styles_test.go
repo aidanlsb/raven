@@ -37,12 +37,18 @@ func TestNormalizeAccentColor(t *testing.T) {
 }
 
 func TestConfigureThemeAccentColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+
 	origAccent := Accent
+	origBold := Bold
+	origMuted := Muted
 	origSyntax := Syntax
 	origSyntaxSubtle := SyntaxSubtle
 	origAccentColor := accentColor
 	t.Cleanup(func() {
 		Accent = origAccent
+		Bold = origBold
+		Muted = origMuted
 		Syntax = origSyntax
 		SyntaxSubtle = origSyntaxSubtle
 		accentColor = origAccentColor
@@ -61,5 +67,42 @@ func TestConfigureThemeAccentColor(t *testing.T) {
 	_, ok = AccentColor()
 	if ok {
 		t.Fatalf("expected accent color to be disabled")
+	}
+}
+
+func TestConfigureThemeHonorsNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	origAccent := Accent
+	origBold := Bold
+	origMuted := Muted
+	origSyntax := Syntax
+	origSyntaxSubtle := SyntaxSubtle
+	origAccentColor := accentColor
+	t.Cleanup(func() {
+		Accent = origAccent
+		Bold = origBold
+		Muted = origMuted
+		Syntax = origSyntax
+		SyntaxSubtle = origSyntaxSubtle
+		accentColor = origAccentColor
+	})
+
+	ConfigureTheme("39")
+
+	if Accent.Render("value") != "value" {
+		t.Fatalf("expected accent style to be a no-op when NO_COLOR is set")
+	}
+	if Bold.Render("value") != "value" {
+		t.Fatalf("expected bold style to be a no-op when NO_COLOR is set")
+	}
+	if Muted.Render("value") != "value" {
+		t.Fatalf("expected muted style to be a no-op when NO_COLOR is set")
+	}
+	if Syntax.Render("value") != "value" {
+		t.Fatalf("expected syntax style to be a no-op when NO_COLOR is set")
+	}
+	if _, ok := AccentColor(); ok {
+		t.Fatalf("expected configured accent color to be ignored when NO_COLOR is set")
 	}
 }

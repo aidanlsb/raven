@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mattn/go-isatty"
+	"github.com/charmbracelet/x/term"
 
 	"github.com/aidanlsb/raven/internal/config"
 )
@@ -31,7 +31,7 @@ func shouldEmitHyperlinks() bool {
 	}
 
 	// Don't emit hyperlinks for JSON output or non-TTY
-	enabled := !jsonOutput && isatty.IsTerminal(os.Stdout.Fd()) && !hyperlinksDisabled
+	enabled := !jsonOutput && term.IsTerminal(os.Stdout.Fd()) && !hyperlinksDisabled
 	hyperlinkEnabled = &enabled
 	return enabled
 }

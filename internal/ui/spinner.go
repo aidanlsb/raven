@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mattn/go-isatty"
+	"github.com/charmbracelet/x/term"
 )
 
 // Spinner displays an animated spinner with a message.
@@ -34,7 +34,7 @@ func NewSpinner(message string) *Spinner {
 // Start begins the spinner animation.
 func (s *Spinner) Start() {
 	// Only animate if we're in a TTY
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !term.IsTerminal(os.Stdout.Fd()) {
 		fmt.Printf("%s...\n", s.message)
 		return
 	}
@@ -64,7 +64,7 @@ func (s *Spinner) Start() {
 
 // Stop stops the spinner and optionally shows a final message.
 func (s *Spinner) Stop() {
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !term.IsTerminal(os.Stdout.Fd()) {
 		return
 	}
 	close(s.done)
@@ -101,7 +101,7 @@ func NewProgress(message string, total int) *Progress {
 
 // Update updates the progress indicator.
 func (p *Progress) Update(current int) {
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !term.IsTerminal(os.Stdout.Fd()) {
 		return
 	}
 	p.mu.Lock()
@@ -116,14 +116,14 @@ func (p *Progress) Increment() {
 	p.current++
 	current := p.current
 	p.mu.Unlock()
-	if isatty.IsTerminal(os.Stdout.Fd()) {
+	if term.IsTerminal(os.Stdout.Fd()) {
 		fmt.Printf("\r%s %s", p.message, Muted.Render(fmt.Sprintf("(%d/%d)", current, p.total)))
 	}
 }
 
 // Done finishes the progress indicator.
 func (p *Progress) Done() {
-	if isatty.IsTerminal(os.Stdout.Fd()) {
+	if term.IsTerminal(os.Stdout.Fd()) {
 		fmt.Print("\r\033[K") // Clear line
 	}
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"strconv"
 	"strings"
 
@@ -18,10 +19,10 @@ import (
 
 var (
 	// Muted style for secondary info, hints, line numbers
-	Muted = lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // Bright Black (gray)
+	Muted = mutedStyle()
 
 	// Bold style for emphasis and highlights
-	Bold = lipgloss.NewStyle().Bold(true)
+	Bold = boldStyle()
 
 	// Accent style for optional user-configurable highlights.
 	// Defaults to Bold with no color when accent is not configured.
@@ -44,12 +45,25 @@ var (
 //
 // Special values "none", "off", and "default" disable the accent color.
 func ConfigureTheme(accent string) {
+	if NoColorEnabled() {
+		accentColor = ""
+		Muted = lipgloss.NewStyle()
+		Bold = lipgloss.NewStyle()
+		Accent = lipgloss.NewStyle()
+		Syntax = lipgloss.NewStyle()
+		SyntaxSubtle = lipgloss.NewStyle()
+		return
+	}
+
+	Muted = mutedStyle()
+	Bold = boldStyle()
+
 	normalized, ok := normalizeAccentColor(accent)
 	if !ok {
 		accentColor = ""
 		Accent = Bold
-		Syntax = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
-		SyntaxSubtle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+		Syntax = syntaxStyle()
+		SyntaxSubtle = syntaxSubtleStyle()
 		return
 	}
 
@@ -65,6 +79,11 @@ func AccentColor() (string, bool) {
 		return "", false
 	}
 	return accentColor, true
+}
+
+// NoColorEnabled returns true when terminal color output should be suppressed.
+func NoColorEnabled() bool {
+	return os.Getenv("NO_COLOR") != ""
 }
 
 func normalizeAccentColor(raw string) (string, bool) {
@@ -111,4 +130,20 @@ func isHexColor(s string) bool {
 		return false
 	}
 	return true
+}
+
+func mutedStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+}
+
+func boldStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true)
+}
+
+func syntaxStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
+}
+
+func syntaxSubtleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 }

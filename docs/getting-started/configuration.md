@@ -74,6 +74,7 @@ Behavior details:
 - `#RGB` is normalized internally to `#RRGGBB`.
 - If the value is invalid, Raven falls back to its default non-accent style (bold headings, default syntax color).
 - `rvn config set --ui-accent` only enforces non-empty input; format validity is evaluated when output is rendered.
+- If `NO_COLOR` is set in the environment, Raven suppresses ANSI styling entirely, regardless of `[ui].accent`.
 
 Examples:
 
@@ -95,6 +96,7 @@ Behavior details:
 - Current scope: markdown rendering paths (for example `rvn read` without `--raw` in terminal output).
 - Empty or invalid theme values fall back to `monokai`.
 - `rvn config set --ui-code-theme` only enforces non-empty input; theme validity is resolved when markdown is rendered.
+- If `NO_COLOR` is set, Raven renders markdown with a plain no-color style and ignores the configured code theme for that run.
 
 Examples:
 

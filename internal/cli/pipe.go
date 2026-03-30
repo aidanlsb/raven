@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mattn/go-isatty"
+	"github.com/charmbracelet/x/term"
 
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -34,7 +34,7 @@ func SetPipeFormat(usePipe *bool) {
 
 // IsPipedOutput returns true if stdout is being piped (not a TTY).
 func IsPipedOutput() bool {
-	return !isatty.IsTerminal(os.Stdout.Fd())
+	return !term.IsTerminal(os.Stdout.Fd())
 }
 
 // ShouldUsePipeFormat returns true if output should use pipe-friendly format.

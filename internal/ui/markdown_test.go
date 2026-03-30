@@ -92,3 +92,35 @@ func TestConfigureMarkdownCodeThemeIsCaseInsensitive(t *testing.T) {
 		t.Fatalf("expected normalized code theme dracula, got %q", markdownCodeTheme)
 	}
 }
+
+func TestRenderMarkdownHonorsNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	origTheme := markdownCodeTheme
+	origAccent := Accent
+	origBold := Bold
+	origMuted := Muted
+	origSyntax := Syntax
+	origSyntaxSubtle := SyntaxSubtle
+	origAccentColor := accentColor
+	t.Cleanup(func() {
+		markdownCodeTheme = origTheme
+		Accent = origAccent
+		Bold = origBold
+		Muted = origMuted
+		Syntax = origSyntax
+		SyntaxSubtle = origSyntaxSubtle
+		accentColor = origAccentColor
+	})
+
+	ConfigureTheme("39")
+	ConfigureMarkdownCodeTheme("dracula")
+
+	out, err := RenderMarkdown("# Heading\n\n`value`\n\n```go\nfmt.Println(\"hi\")\n```", 80)
+	if err != nil {
+		t.Fatalf("RenderMarkdown() error = %v", err)
+	}
+	if strings.Contains(out, "\x1b[") {
+		t.Fatalf("expected markdown output without ANSI escapes when NO_COLOR is set, got %q", out)
+	}
+}

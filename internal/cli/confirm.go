@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mattn/go-isatty"
+	"github.com/charmbracelet/x/term"
 
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -15,7 +15,7 @@ func shouldPromptForConfirm() bool {
 	if isJSONOutput() {
 		return false
 	}
-	return isatty.IsTerminal(os.Stdout.Fd()) && isatty.IsTerminal(os.Stdin.Fd())
+	return term.IsTerminal(os.Stdout.Fd()) && term.IsTerminal(os.Stdin.Fd())
 }
 
 func promptForConfirm(message string) bool {

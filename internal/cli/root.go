@@ -36,6 +36,21 @@ Built for speed, with plain-text markdown files as the source of truth.
 Named for Odin's ravens Huginn (thought) and Muninn (memory), 
 who gathered knowledge from across the world.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+
+		// Load global config and apply UI settings for every command, including
+		// non-vault commands like `config show` and `version`.
+		cfg, resolvedConfigPath, err = loadGlobalConfigWithPath()
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		if cfg == nil {
+			cfg = &config.Config{}
+		}
+		resolvedStatePath = config.ResolveStatePath(statePathFlag, resolvedConfigPath, cfg)
+		ui.ConfigureTheme(cfg.UI.Accent)
+		ui.ConfigureMarkdownCodeTheme(cfg.UI.CodeTheme)
+
 		// Skip vault resolution for commands that don't need it
 		switch cmd.Name() {
 		case "init", "vault", "config", "completion", "help", "version", "serve", "skill", "mcp":
@@ -51,19 +66,6 @@ who gathered knowledge from across the world.`,
 				return nil
 			}
 		}
-
-		// Load config
-		var err error
-		cfg, resolvedConfigPath, err = loadGlobalConfigWithPath()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-		if cfg == nil {
-			cfg = &config.Config{}
-		}
-		resolvedStatePath = config.ResolveStatePath(statePathFlag, resolvedConfigPath, cfg)
-		ui.ConfigureTheme(cfg.UI.Accent)
-		ui.ConfigureMarkdownCodeTheme(cfg.UI.CodeTheme)
 
 		// Resolve vault path: explicit path > named vault > active state > default
 		if vaultPathFlag != "" {
@@ -148,6 +150,9 @@ func loadGlobalConfigWithPath() (*config.Config, string, error) {
 	var loadedCfg *config.Config
 	var err error
 	if strings.TrimSpace(configPath) != "" {
+		if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
+			return &config.Config{}, resolvedPath, nil
+		}
 		loadedCfg, err = config.LoadFrom(configPath)
 	} else {
 		loadedCfg, err = config.Load()

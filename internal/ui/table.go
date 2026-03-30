@@ -29,8 +29,8 @@ func (t *Table) AddRow(cells ...string) {
 	for i := 0; i < len(t.colWidths) && i < len(cells); i++ {
 		row[i] = cells[i]
 		// Track max width for each column
-		if len(cells[i]) > t.colWidths[i] {
-			t.colWidths[i] = len(cells[i])
+		if visible := VisibleLen(cells[i]); visible > t.colWidths[i] {
+			t.colWidths[i] = visible
 		}
 	}
 	t.rows = append(t.rows, row)
@@ -58,7 +58,7 @@ func (t *Table) String() string {
 			// Left-align all columns, pad to column width (except last)
 			if i < len(row)-1 {
 				sb.WriteString(cell)
-				sb.WriteString(strings.Repeat(" ", t.colWidths[i]-len(cell)))
+				sb.WriteString(strings.Repeat(" ", t.colWidths[i]-VisibleLen(cell)))
 			} else {
 				sb.WriteString(cell)
 			}

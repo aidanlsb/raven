@@ -29,7 +29,7 @@ func printQueryTraitResults(queryStr, traitName string, results []model.Trait) {
 	fmt.Printf("%s %s\n\n", ui.SectionHeader("@"+traitName), ui.Badge(fmt.Sprintf("%d", len(results))))
 
 	display := ui.NewDisplayContext()
-	table := ui.NewResultsTable(display, ui.TraitLayout)
+	table := ui.NewResultsTable(display, ui.TraitLayout())
 
 	// Get the calculated content width for dynamic content sizing
 	// Use 2x width to allow for two-line content
@@ -115,7 +115,7 @@ func printSearchResults(queryStr string, results []model.SearchMatch) {
 	fmt.Printf("%s %s\n\n", ui.SectionHeader(queryStr), ui.Badge(fmt.Sprintf("%d results", len(results))))
 
 	display := ui.NewDisplayContext()
-	table := ui.NewResultsTable(display, ui.SearchLayout)
+	table := ui.NewResultsTable(display, ui.SearchLayout())
 
 	// Get the calculated content width for dynamic snippet sizing
 	// Use 2x width to allow for two-line content
@@ -391,7 +391,7 @@ func printBacklinksResults(target string, links []model.Reference) {
 	fmt.Printf("%s %s\n\n", ui.SectionHeader("Backlinks to "+target), ui.Badge(fmt.Sprintf("%d", len(links))))
 
 	display := ui.NewDisplayContext()
-	table := ui.NewResultsTable(display, ui.BacklinksLayout)
+	table := ui.NewResultsTable(display, ui.BacklinksLayout())
 
 	for i, link := range links {
 		displayText := link.SourceID
@@ -425,7 +425,7 @@ func printOutlinksResults(source string, links []model.Reference) {
 	fmt.Printf("%s %s\n\n", ui.SectionHeader("Outlinks from "+source), ui.Badge(fmt.Sprintf("%d", len(links))))
 
 	display := ui.NewDisplayContext()
-	table := ui.NewResultsTable(display, ui.BacklinksLayout)
+	table := ui.NewResultsTable(display, ui.BacklinksLayout())
 
 	for i, link := range links {
 		target := link.TargetRaw

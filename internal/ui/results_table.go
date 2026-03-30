@@ -24,6 +24,7 @@ type ColumnDef struct {
 	MinWidth   int            // Minimum width in characters
 	MaxWidth   int            // Maximum width (0 = no limit)
 	Align      Alignment      // Text alignment
+	HasStyle   bool           // Whether Style should be applied to cells in this column
 	Style      lipgloss.Style // Style to apply to cells in this column
 }
 
@@ -42,77 +43,89 @@ type ResultsTable struct {
 }
 
 // Standard column definitions shared across retrieval types.
-var (
-	// ColNum is the row number column (fixed width, right-aligned, muted).
-	ColNum = ColumnDef{
+func colNum() ColumnDef {
+	return ColumnDef{
 		Name:     "num",
 		MinWidth: 4,
 		MaxWidth: 6,
 		Align:    AlignRight,
+		HasStyle: true,
 		Style:    Muted,
 	}
+}
 
-	// ColContent is the main content column (flexible width).
-	ColContent = ColumnDef{
+func colContent() ColumnDef {
+	return ColumnDef{
 		Name:       "content",
 		WidthRatio: 0.55,
 		MinWidth:   30,
 		MaxWidth:   100,
 		Align:      AlignLeft,
 	}
+}
 
-	// ColMeta is the metadata column (trait info, title, etc).
-	ColMeta = ColumnDef{
+func colMeta() ColumnDef {
+	return ColumnDef{
 		Name:       "meta",
 		WidthRatio: 0.25,
 		MinWidth:   15,
 		MaxWidth:   35,
 		Align:      AlignLeft,
+		HasStyle:   true,
 		Style:      Muted,
 	}
+}
 
-	// ColFile is the file location column.
-	ColFile = ColumnDef{
+func colFile() ColumnDef {
+	return ColumnDef{
 		Name:       "file",
 		WidthRatio: 0.20,
 		MinWidth:   10,
 		MaxWidth:   30,
 		Align:      AlignLeft,
+		HasStyle:   true,
 		Style:      Muted,
 	}
+}
 
-	// ColBacklinksMeta is a wider metadata/content column used for backlinks/outlinks.
-	ColBacklinksMeta = ColumnDef{
+func colBacklinksMeta() ColumnDef {
+	return ColumnDef{
 		Name:       "meta",
 		WidthRatio: 0.70,
 		MinWidth:   30,
 		MaxWidth:   120,
 		Align:      AlignLeft,
+		HasStyle:   true,
 		Style:      Muted,
 	}
+}
 
-	// ColBacklinksFile is a wider file column used for backlinks/outlinks.
-	ColBacklinksFile = ColumnDef{
+func colBacklinksFile() ColumnDef {
+	return ColumnDef{
 		Name:       "file",
 		WidthRatio: 0.30,
 		MinWidth:   18,
 		MaxWidth:   60,
 		Align:      AlignLeft,
+		HasStyle:   true,
 		Style:      Muted,
 	}
-)
+}
 
-// Standard layouts for each retrieval type.
-var (
-	// SearchLayout is used for search results: [num, content, meta, file]
-	SearchLayout = []ColumnDef{ColNum, ColContent, ColMeta, ColFile}
+// SearchLayout returns the standard search results layout: [num, content, meta, file].
+func SearchLayout() []ColumnDef {
+	return []ColumnDef{colNum(), colContent(), colMeta(), colFile()}
+}
 
-	// TraitLayout is used for trait query results: [num, content, meta, file]
-	TraitLayout = []ColumnDef{ColNum, ColContent, ColMeta, ColFile}
+// TraitLayout returns the standard trait query results layout: [num, content, meta, file].
+func TraitLayout() []ColumnDef {
+	return []ColumnDef{colNum(), colContent(), colMeta(), colFile()}
+}
 
-	// BacklinksLayout is used for backlinks: [num, meta, file]
-	BacklinksLayout = []ColumnDef{ColNum, ColBacklinksMeta, ColBacklinksFile}
-)
+// BacklinksLayout returns the standard backlinks layout: [num, meta, file].
+func BacklinksLayout() []ColumnDef {
+	return []ColumnDef{colNum(), colBacklinksMeta(), colBacklinksFile()}
+}
 
 // NewResultsTable creates a new ResultsTable with the given display context and column layout.
 func NewResultsTable(display *DisplayContext, columns []ColumnDef) *ResultsTable {
@@ -244,9 +257,9 @@ func (t *ResultsTable) Render() string {
 			}
 
 			colDef := t.columns[col]
-			style := colDef.Style
-			if style.Value() == "" {
-				style = lipgloss.NewStyle()
+			style := lipgloss.NewStyle()
+			if colDef.HasStyle {
+				style = colDef.Style
 			}
 
 			// Set width
@@ -277,15 +290,16 @@ func (t *ResultsTable) Render() string {
 // TruncateWithEllipsis truncates a string to maxLen, adding ellipsis if needed.
 // It tries to break at word boundaries.
 func TruncateWithEllipsis(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string(runes[:maxLen])
 	}
 
 	// Try to truncate at a word boundary
-	truncated := s[:maxLen-3]
+	truncated := string(runes[:maxLen-3])
 	lastSpace := strings.LastIndex(truncated, " ")
 	if lastSpace > maxLen/2 {
 		truncated = truncated[:lastSpace]
@@ -295,24 +309,25 @@ func TruncateWithEllipsis(s string, maxLen int) string {
 
 // WrapTextTwoLines wraps text into at most two lines, with the second line truncated.
 func WrapTextTwoLines(text string, maxLen int) (line1, line2 string) {
-	if len(text) <= maxLen {
+	runes := []rune(text)
+	if len(runes) <= maxLen {
 		return text, ""
 	}
 
 	// Find a good break point near maxLen
 	breakPoint := maxLen
 	for i := maxLen; i > maxLen/2; i-- {
-		if i < len(text) && text[i] == ' ' {
+		if i < len(runes) && runes[i] == ' ' {
 			breakPoint = i
 			break
 		}
 	}
 
-	line1 = strings.TrimSpace(text[:breakPoint])
-	line2 = strings.TrimSpace(text[breakPoint:])
+	line1 = strings.TrimSpace(string(runes[:breakPoint]))
+	line2 = strings.TrimSpace(string(runes[breakPoint:]))
 
 	// Truncate line2 if still too long
-	if len(line2) > maxLen {
+	if len([]rune(line2)) > maxLen {
 		line2 = TruncateWithEllipsis(line2, maxLen)
 	}
 

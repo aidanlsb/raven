@@ -6,6 +6,7 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
+	glamourstyles "github.com/charmbracelet/glamour/styles"
 )
 
 // MarkdownRenderMargin is the left margin used for terminal markdown rendering.
@@ -22,10 +23,16 @@ func RenderMarkdown(content string, width int) (string, error) {
 		width = DefaultTermWidth
 	}
 
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStyles(ravenMarkdownStyle()),
-		glamour.WithWordWrap(width),
-	)
+	options := []glamour.TermRendererOption{glamour.WithWordWrap(width)}
+	if NoColorEnabled() {
+		style := glamourstyles.ASCIIStyleConfig
+		style.Document.Margin = mdUintPtr(MarkdownRenderMargin)
+		options = append(options, glamour.WithStyles(style))
+	} else {
+		options = append(options, glamour.WithStyles(ravenMarkdownStyle()))
+	}
+
+	r, err := glamour.NewTermRenderer(options...)
 	if err != nil {
 		return "", err
 	}

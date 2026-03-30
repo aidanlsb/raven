@@ -2,18 +2,16 @@ package ui
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/aidanlsb/raven/internal/parser"
 )
 
-// ansiPattern matches ANSI escape sequences
-var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
 // VisibleLen returns the visible length of a string, excluding ANSI escape codes
 func VisibleLen(s string) int {
-	return len(ansiPattern.ReplaceAllString(s, ""))
+	return ansi.StringWidth(s)
 }
 
 // PadRight pads a string to the specified visible width, accounting for ANSI codes

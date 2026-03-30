@@ -10,15 +10,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mattn/go-isatty"
+	"github.com/charmbracelet/x/term"
 
 	"github.com/aidanlsb/raven/internal/config"
 )
 
 var (
 	fzfLookPath         = exec.LookPath
-	fzfStdinIsTerminal  = func() bool { return isatty.IsTerminal(os.Stdin.Fd()) }
-	fzfStdoutIsTerminal = func() bool { return isatty.IsTerminal(os.Stdout.Fd()) }
+	fzfStdinIsTerminal  = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
+	fzfStdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
 )
 
 type fzfPickerOptions struct {
