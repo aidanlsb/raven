@@ -1,5 +1,9 @@
 .PHONY: all build test test-integration test-all lint fmt check clean install hooks-install hooks-uninstall release-preflight release-next release-auto release-changelog release-tag release
 
+COVERAGE_DIR := .tmp/coverage
+COVERAGE_PROFILE := $(COVERAGE_DIR)/unit.out
+COVERAGE_HTML := $(COVERAGE_DIR)/unit.html
+
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 GO_MOD_VERSION := $(shell sed -n 's/^go //p' go.mod | head -n 1)
@@ -25,8 +29,9 @@ test-all: test test-integration
 
 # Run tests with coverage
 test-coverage:
-	go test -race -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
+	mkdir -p $(COVERAGE_DIR)
+	go test -race -coverprofile=$(COVERAGE_PROFILE) ./...
+	go tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
 
 # Run linter with golangci-lint v2.
 # Explicitly requires a local v2 binary.
@@ -112,7 +117,8 @@ release-changelog:
 
 # Clean build artifacts
 clean:
-	rm -f rvn coverage.out coverage.html
+	rm -f rvn
+	rm -rf $(COVERAGE_DIR)
 
 # Install the binary to $GOPATH/bin
 install:

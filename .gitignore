@@ -26,6 +26,7 @@ __debug_bin*
 *.test
 cover.out
 coverage.out
+.tmp/coverage/
 
 # Environment
 .env
