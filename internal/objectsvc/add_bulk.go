@@ -50,7 +50,7 @@ type AddBulkSummary struct {
 
 func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
 	items := make([]AddBulkPreviewItem, 0, len(req.ObjectIDs))
@@ -136,7 +136,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 
 func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSummary, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 
 	results := make([]AddBulkResult, 0, len(req.ObjectIDs))

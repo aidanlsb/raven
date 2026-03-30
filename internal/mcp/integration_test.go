@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/mcp"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
@@ -147,6 +148,15 @@ func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 	}
 	if initResp.Error != nil {
 		t.Fatalf("initialize returned rpc error: %+v", initResp.Error)
+	}
+	serverInfo, ok := initResp.Result["serverInfo"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("initialize missing serverInfo: %#v", initResp.Result)
+	}
+	version, _ := serverInfo["version"].(string)
+	wantVersion := maintsvc.CurrentVersionInfoFromExecutable(binary).Version
+	if version != wantVersion {
+		t.Fatalf("initialize serverInfo.version=%q, want %q", version, wantVersion)
 	}
 
 	var toolCallResp struct {
@@ -1741,9 +1751,9 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 
 		mcpResult := server.callTool("delete", map[string]interface{}{
 			"object_id": "people/parity-delete",
-			"force":     true,
+			"confirm":   true,
 		})
-		cliResult := vCLI.RunCLI("delete", "people/parity-delete", "--force")
+		cliResult := vCLI.RunCLI("delete", "people/parity-delete", "--confirm")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"deleted", "behavior", "trash_path"})
 	})
@@ -2164,6 +2174,49 @@ steps:
 		)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "file", "action", "step_id", "step", "index"})
+	})
+
+	t.Run("workflow_step_batch", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+		vCLI.RunCLI("workflow", "scaffold", "prep").MustSucceed(t)
+
+		mcpResult := server.callTool("workflow_step_batch", map[string]interface{}{
+			"workflow_name": "prep",
+			"mutations_json": map[string]interface{}{
+				"operations": []map[string]interface{}{
+					{
+						"action": "add",
+						"step": map[string]interface{}{
+							"id":   "enrich",
+							"type": "tool",
+							"tool": "raven_search",
+							"arguments": map[string]interface{}{
+								"query": "workflow enrichment",
+								"limit": 3,
+							},
+						},
+						"after": "context",
+					},
+					{
+						"action":  "update",
+						"step_id": "compose",
+						"patch": map[string]interface{}{
+							"description": "Compose a concise response",
+						},
+					},
+				},
+			},
+		})
+		cliResult := vCLI.RunCLI(
+			"workflow", "step", "batch", "prep",
+			"--mutations-json", `{"operations":[{"action":"add","step":{"id":"enrich","type":"tool","tool":"raven_search","arguments":{"query":"workflow enrichment","limit":3}},"after":"context"},{"action":"update","step_id":"compose","patch":{"description":"Compose a concise response"}}]}`,
+		)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"workflow_name", "file", "applied", "count"})
 	})
 
 	t.Run("workflow_step_update", func(t *testing.T) {
@@ -3669,6 +3722,58 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		cliResult := vCLI.RunCLI(
 			"workflow", "step", "update", "prep", "missing",
 			"--step-json", `{"description":"no-op"}`,
+		)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+	})
+
+	t.Run("workflow_step_batch_invalid_draft", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.WriteFile("workflows/single-step.yaml", `description: Single step workflow
+steps:
+  - id: compose
+    type: agent
+    prompt: "Return JSON: {\"outputs\":{\"markdown\":\"ok\"}}"
+`)
+		vCLI.WriteFile("workflows/single-step.yaml", `description: Single step workflow
+steps:
+  - id: compose
+    type: agent
+    prompt: "Return JSON: {\"outputs\":{\"markdown\":\"ok\"}}"
+`)
+		vMCP.RunCLI("workflow", "add", "single-step", "--file", "workflows/single-step.yaml").MustSucceed(t)
+		vCLI.RunCLI("workflow", "add", "single-step", "--file", "workflows/single-step.yaml").MustSucceed(t)
+
+		mcpResult := server.callTool("workflow_step_batch", map[string]interface{}{
+			"workflow_name": "single-step",
+			"mutations_json": map[string]interface{}{
+				"operations": []map[string]interface{}{
+					{
+						"action": "add",
+						"step": map[string]interface{}{
+							"id":   "fetch",
+							"type": "tool",
+							"tool": "raven_query",
+						},
+						"before": "compose",
+					},
+					{
+						"action":  "remove",
+						"step_id": "compose",
+					},
+					{
+						"action":  "remove",
+						"step_id": "fetch",
+					},
+				},
+			},
+		})
+		cliResult := vCLI.RunCLI(
+			"workflow", "step", "batch", "single-step",
+			"--mutations-json", `{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query"},"before":"compose"},{"action":"remove","step_id":"compose"},{"action":"remove","step_id":"fetch"}]}`,
 		)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)

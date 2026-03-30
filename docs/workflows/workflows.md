@@ -39,6 +39,7 @@ To mutate workflow definition steps without manual YAML edits:
 
 ```bash
 rvn workflow step add <name> --step-json '{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}'
+rvn workflow step batch <name> --mutations-json '{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}},{"action":"update","step_id":"compose","patch":{"description":"Updated step description"}}]}'
 rvn workflow step update <name> <step-id> --step-json '{"description":"Updated step description"}'
 rvn workflow step remove <name> <step-id>
 ```
@@ -275,6 +276,7 @@ rvn workflow remove <name>
 rvn workflow validate [name]
 rvn workflow show <name>
 rvn workflow step add <name> --step-json '{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}'
+rvn workflow step batch <name> --mutations-json '{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}},{"action":"update","step_id":"compose","patch":{"description":"Updated step description"}}]}'
 rvn workflow step update <name> <step-id> --step-json '{"description":"Updated step description"}'
 rvn workflow step remove <name> <step-id>
 rvn workflow run <name> --input key=value

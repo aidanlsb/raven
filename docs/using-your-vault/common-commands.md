@@ -179,6 +179,8 @@ Remove an object. Files are moved to `.trash/` by default.
 ```bash
 rvn delete projects/old-project
 rvn delete projects/old-project --force         # Skip confirmation
+rvn delete projects/old-project --json          # Preview in JSON/agent mode
+rvn delete projects/old-project --confirm --json
 ```
 
 Check backlinks before deleting to avoid broken references:

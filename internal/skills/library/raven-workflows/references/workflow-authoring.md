@@ -19,6 +19,7 @@ rvn workflow validate meeting-prep --json
 
 ```bash
 rvn workflow step add daily-brief --step-json '{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}' --json
+rvn workflow step batch daily-brief --mutations-json '{"operations":[{"action":"add","step":{"id":"enrich","type":"tool","tool":"raven_search","arguments":{"query":"active projects","limit":3}},"after":"fetch"},{"action":"update","step_id":"compose","patch":{"description":"Draft the final response"}}]}' --json
 rvn workflow step update daily-brief fetch --step-json '{"description":"Load active projects"}' --json
 rvn workflow step remove daily-brief fetch --json
 rvn workflow validate daily-brief --json

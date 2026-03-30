@@ -3,6 +3,7 @@ package workflow
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -119,6 +120,136 @@ func TestAuthoringService_MutateStep_NotFound(t *testing.T) {
 	if !ok || de.Code != CodeWorkflowNotFound {
 		t.Fatalf("expected CodeWorkflowNotFound, got %#v", err)
 	}
+}
+
+func TestAuthoringService_MutateSteps(t *testing.T) {
+	t.Parallel()
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	workflowPath := filepath.Join(vault, "workflows", "demo.yaml")
+	initial := `description: demo
+steps:
+  - id: fetch
+    type: tool
+    tool: raven_query
+  - id: compose
+    type: agent
+    prompt: "Summarize"
+`
+	if err := os.WriteFile(workflowPath, []byte(initial), 0o644); err != nil {
+		t.Fatalf("write workflow file: %v", err)
+	}
+
+	cfg := &config.VaultConfig{
+		Workflows: map[string]*config.WorkflowRef{
+			"demo": {File: "workflows/demo.yaml"},
+		},
+	}
+	svc := NewAuthoringService(vault, cfg)
+
+	res, err := svc.MutateSteps(StepBatchMutationRequest{
+		WorkflowName: "demo",
+		Mutations: []StepMutationRequest{
+			{
+				Action: StepMutationAdd,
+				Step: &config.WorkflowStep{
+					ID:   "enrich",
+					Type: "tool",
+					Tool: "raven_search",
+				},
+				Position: PositionHint{AfterStepID: "fetch"},
+			},
+			{
+				Action:       StepMutationUpdate,
+				TargetStepID: "compose",
+				StepPatch: map[string]interface{}{
+					"description": "Draft response",
+				},
+			},
+			{
+				Action:       StepMutationRemove,
+				TargetStepID: "fetch",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("MutateSteps error: %v", err)
+	}
+	if len(res.Applied) != 3 {
+		t.Fatalf("applied len = %d, want 3", len(res.Applied))
+	}
+	got := readWorkflowStepIDs(t, workflowPath)
+	want := []string{"enrich", "compose"}
+	assertStringSliceEqual(t, got, want)
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read workflow file: %v", err)
+	}
+	if !strings.Contains(string(content), "description: Draft response") {
+		t.Fatalf("expected patched description in workflow file:\n%s", string(content))
+	}
+}
+
+func TestAuthoringService_MutateSteps_RollsBackInvalidDraft(t *testing.T) {
+	t.Parallel()
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
+		t.Fatalf("mkdir workflows: %v", err)
+	}
+	workflowPath := filepath.Join(vault, "workflows", "single.yaml")
+	initial := `description: demo
+steps:
+  - id: compose
+    type: agent
+    prompt: "Summarize"
+`
+	if err := os.WriteFile(workflowPath, []byte(initial), 0o644); err != nil {
+		t.Fatalf("write workflow file: %v", err)
+	}
+
+	cfg := &config.VaultConfig{
+		Workflows: map[string]*config.WorkflowRef{
+			"single": {File: "workflows/single.yaml"},
+		},
+	}
+	svc := NewAuthoringService(vault, cfg)
+
+	_, err := svc.MutateSteps(StepBatchMutationRequest{
+		WorkflowName: "single",
+		Mutations: []StepMutationRequest{
+			{
+				Action: StepMutationAdd,
+				Step: &config.WorkflowStep{
+					ID:   "fetch",
+					Type: "tool",
+					Tool: "raven_query",
+				},
+				Position: PositionHint{BeforeStepID: "compose"},
+			},
+			{
+				Action:       StepMutationRemove,
+				TargetStepID: "compose",
+			},
+			{
+				Action:       StepMutationRemove,
+				TargetStepID: "fetch",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid workflow error")
+	}
+	de, ok := AsDomainError(err)
+	if !ok || de.Code != CodeWorkflowInvalid {
+		t.Fatalf("expected CodeWorkflowInvalid, got %#v", err)
+	}
+
+	got := readWorkflowStepIDs(t, workflowPath)
+	want := []string{"compose"}
+	assertStringSliceEqual(t, got, want)
 }
 
 func TestAuthoringService_WorkflowLifecycleOps(t *testing.T) {

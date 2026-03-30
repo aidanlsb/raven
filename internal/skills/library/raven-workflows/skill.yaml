@@ -14,6 +14,7 @@ coverage:
     - workflow validate
     - workflow show
     - workflow step add
+    - workflow step batch
     - workflow step update
     - workflow step remove
     - workflow run

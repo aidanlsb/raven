@@ -15,7 +15,7 @@ Use this skill for workflow definition lifecycle, step mutation, and run operati
 
 1. Create or register (`workflow scaffold` or `workflow add`).
 2. Validate (`workflow validate`) and inspect (`workflow show`).
-3. Iterate on steps (`workflow step add|update|remove`), then validate again.
+3. Iterate on steps (`workflow step add|batch|update|remove`), then validate again.
 ## Run operations
 
 1. Execute with `workflow run`.

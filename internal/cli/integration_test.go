@@ -39,9 +39,35 @@ func TestIntegration_ObjectLifecycle(t *testing.T) {
 	v.AssertFileContains("people/alice.md", "email: alice@newdomain.com")
 
 	// Delete the person
-	result = v.RunCLI("delete", "people/alice", "--force")
+	result = v.RunCLI("delete", "people/alice", "--confirm")
 	result.MustSucceed(t)
 	v.AssertFileNotExists("people/alice.md")
+}
+
+func TestIntegration_DeleteJSONSinglePreviewRequiresConfirm(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Delete Preview").MustSucceed(t)
+
+	preview := v.RunCLI("delete", "people/delete-preview")
+	preview.MustSucceed(t)
+	if preview.Data["preview"] != true {
+		t.Fatalf("expected preview response, got: %s", preview.RawJSON)
+	}
+	if preview.DataString("object_id") != "people/delete-preview" {
+		t.Fatalf("expected preview object_id people/delete-preview, got %q", preview.DataString("object_id"))
+	}
+	v.AssertFileExists("people/delete-preview.md")
+
+	confirm := v.RunCLI("delete", "people/delete-preview", "--confirm")
+	confirm.MustSucceed(t)
+	if confirm.DataString("deleted") != "people/delete-preview" {
+		t.Fatalf("expected deleted object people/delete-preview, got %q", confirm.DataString("deleted"))
+	}
+	v.AssertFileNotExists("people/delete-preview.md")
 }
 
 func TestIntegration_EditWithEditsJSON(t *testing.T) {
@@ -1507,6 +1533,56 @@ steps:
 
 	// Ensure failed validation restored original file content.
 	v.AssertFileContains("workflows/single-step.yaml", "id: compose")
+}
+
+func TestIntegration_WorkflowStepBatchAppliesOrderedMutations(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	v.RunCLI("workflow", "scaffold", "meeting-prep").MustSucceed(t)
+
+	result := v.RunCLI(
+		"workflow", "step", "batch", "meeting-prep",
+		"--mutations-json", `{"operations":[{"action":"add","step":{"id":"enrich","type":"tool","tool":"raven_search","arguments":{"query":"workflow enrichment","limit":3}},"after":"context"},{"action":"update","step_id":"compose","patch":{"description":"Draft the final response"}},{"action":"remove","step_id":"context"}]}`,
+	)
+	result.MustSucceed(t)
+
+	content := v.ReadFile("workflows/meeting-prep.yaml")
+	if strings.Contains(content, "id: context") {
+		t.Fatalf("expected context step removed:\n%s", content)
+	}
+	if !strings.Contains(content, "id: enrich") {
+		t.Fatalf("expected enrich step added:\n%s", content)
+	}
+	if !strings.Contains(content, "description: Draft the final response") {
+		t.Fatalf("expected compose patch applied:\n%s", content)
+	}
+}
+
+func TestIntegration_WorkflowStepBatchRollsBackInvalidDraft(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	v.WriteFile("workflows/single-step.yaml", `description: Single step workflow
+steps:
+  - id: compose
+    type: agent
+    prompt: "Return JSON: {\"outputs\":{\"markdown\":\"ok\"}}"
+`)
+	v.RunCLI("workflow", "add", "single-step", "--file", "workflows/single-step.yaml").MustSucceed(t)
+
+	result := v.RunCLI(
+		"workflow", "step", "batch", "single-step",
+		"--mutations-json", `{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query"},"before":"compose"},{"action":"remove","step_id":"compose"},{"action":"remove","step_id":"fetch"}]}`,
+	)
+	result.MustFail(t, "WORKFLOW_INVALID")
+
+	v.AssertFileContains("workflows/single-step.yaml", "id: compose")
+	v.AssertFileNotContains("workflows/single-step.yaml", "id: fetch")
 }
 
 func TestIntegration_WorkflowValidateReportsInvalidDefinitions(t *testing.T) {

@@ -506,18 +506,22 @@ Warns about backlinks (objects that reference the deleted item).
 
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
-IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
+IMPORTANT:
+- Single-object deletes in JSON/agent mode return preview by default; use --confirm to apply.
+- Interactive single-object deletes show a confirmation prompt unless --force is set.
+- Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "object_id", Description: "Object ID to delete (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply delete (without this flag, JSON/agent mode shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn delete people/freya --json",
-			"rvn delete projects/old --force --json",
+			"rvn delete projects/old --confirm --json",
+			"rvn delete projects/old --force",
 		},
 		UseCases: []string{
 			"Delete a file safely (NEVER use 'rm' shell command)",
@@ -1935,6 +1939,32 @@ Use --before/--after to control insertion order.`,
 			"Add deterministic fanout with foreach nested tool steps",
 			"Add deterministic conditional routing with switch cases/default",
 			"Add an agent boundary without manual file editing",
+		},
+	},
+	"workflow_step_batch": {
+		Name:        "workflow step batch",
+		Description: "Apply ordered step mutations atomically to a workflow definition file",
+		LongDesc: `Applies an ordered list of add/update/remove step mutations to a workflow YAML definition file.
+
+All mutations are applied to an in-memory draft, the workflow is validated once at
+the end, and the file is only written if the entire batch is valid.`,
+		Args: []ArgMeta{
+			{Name: "workflow-name", Description: "Workflow name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "mutations-json", Description: "JSON object with ordered step mutations under operations[]", Type: FlagTypeJSON, Examples: []string{
+				`{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}},{"action":"update","step_id":"compose","patch":{"description":"Summarize active projects"}},{"action":"remove","step_id":"legacy"}]}`,
+				`{"operations":[{"action":"add","step":{"id":"enrich","type":"tool","tool":"raven_search","arguments":{"query":"workflow enrichment","limit":3}},"after":"context"},{"action":"update","step_id":"compose","patch":{"prompt":"Return JSON: {\"outputs\":{\"markdown\":\"...\"}}\n\nUse {{steps.enrich.data.results}}"}}]}`,
+			}},
+		},
+		Examples: []string{
+			`rvn workflow step batch meeting-prep --mutations-json '{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:meeting .status==scheduled"}}},{"action":"update","step_id":"compose","patch":{"prompt":"Draft agenda from {{steps.fetch.data.results}}"}}]}' --json`,
+			`rvn workflow step batch triage --mutations-json '{"operations":[{"action":"add","step":{"id":"route","type":"switch","switch":{"value":"{{steps.classify.validated_outputs.route}}","cases":{"high":{"emit":{"action":"escalate"}}},"default":{"emit":{"action":"backlog"}}}}},{"action":"remove","step_id":"legacy"}]}' --json`,
+		},
+		UseCases: []string{
+			"Apply coordinated workflow refactors without intermediate invalid states",
+			"Add, patch, and remove related steps in one validated write",
+			"Reduce MCP round-trips for multi-step workflow edits",
 		},
 	},
 	"workflow_step_update": {

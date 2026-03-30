@@ -4,9 +4,17 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"regexp"
+	"sync"
 
 	"modernc.org/sqlite"
 )
+
+var regexpCache = struct {
+	mu       sync.RWMutex
+	compiled map[string]*regexp.Regexp
+}{
+	compiled: map[string]*regexp.Regexp{},
+}
 
 func init() {
 	// Provide REGEXP support for matches() predicates.
@@ -28,7 +36,7 @@ func regexpFunc(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, e
 		return int64(0), nil
 	}
 
-	re, err := regexp.Compile(pattern)
+	re, err := cachedRegexp(pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -50,4 +58,26 @@ func driverValueToString(v driver.Value) (string, bool) {
 	default:
 		return fmt.Sprint(val), true
 	}
+}
+
+func cachedRegexp(pattern string) (*regexp.Regexp, error) {
+	regexpCache.mu.RLock()
+	re := regexpCache.compiled[pattern]
+	regexpCache.mu.RUnlock()
+	if re != nil {
+		return re, nil
+	}
+
+	compiled, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	regexpCache.mu.Lock()
+	defer regexpCache.mu.Unlock()
+	if existing := regexpCache.compiled[pattern]; existing != nil {
+		return existing, nil
+	}
+	regexpCache.compiled[pattern] = compiled
+	return compiled, nil
 }

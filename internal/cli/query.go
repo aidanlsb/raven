@@ -862,7 +862,7 @@ func handleCanonicalQueryFailure(result commandexec.Result) error {
 func renderQueryAdd(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf("Added query '%s'", stringValue(data["name"])))
-	fmt.Printf("  Run with: %s\n", ui.Bold.Render("rvn query "+stringValue(data["name"])))
+	fmt.Println(ui.Hint("Run with: " + ui.Bold.Render("rvn query "+stringValue(data["name"]))))
 	return nil
 }
 
@@ -891,7 +891,7 @@ func warnIfStale(db *index.Database, vaultPath string) {
 		} else if staleCount <= 3 {
 			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale: %s",
 				staleCount, strings.Join(staleFiles, ", ")))
-			fmt.Fprintf(os.Stderr, "  Run 'rvn reindex' or use '--refresh' to update.\n")
+			fmt.Fprintln(os.Stderr, ui.Hint("Run 'rvn reindex' or use '--refresh' to update."))
 		} else {
 			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale. Run 'rvn reindex' or use '--refresh'.", staleCount))
 		}

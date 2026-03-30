@@ -28,6 +28,7 @@ type StepMutationRequest struct {
 	Action       StepMutationAction
 	TargetStepID string
 	Step         *config.WorkflowStep
+	StepPatch    interface{}
 	Position     PositionHint
 }
 
@@ -39,6 +40,17 @@ type StepMutationResult struct {
 	PreviousID   string
 	Index        int
 	Step         *config.WorkflowStep
+}
+
+type StepBatchMutationRequest struct {
+	WorkflowName string
+	Mutations    []StepMutationRequest
+}
+
+type StepBatchMutationResult struct {
+	WorkflowName string
+	FileRef      string
+	Applied      []StepMutationResult
 }
 
 type AddWorkflowRequest struct {
@@ -296,11 +308,28 @@ func (s *AuthoringService) ValidateWorkflows(req ValidateWorkflowsRequest) (*Val
 }
 
 func (s *AuthoringService) MutateStep(req StepMutationRequest) (*StepMutationResult, error) {
+	batchResult, err := s.MutateSteps(StepBatchMutationRequest{
+		WorkflowName: req.WorkflowName,
+		Mutations:    []StepMutationRequest{req},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(batchResult.Applied) == 0 {
+		return nil, newDomainError(CodeWorkflowInvalid, "step mutation produced no result", nil)
+	}
+	return &batchResult.Applied[0], nil
+}
+
+func (s *AuthoringService) MutateSteps(req StepBatchMutationRequest) (*StepBatchMutationResult, error) {
 	if s == nil {
 		return nil, newDomainError(CodeWorkflowInvalid, "authoring service is nil", nil)
 	}
 	if strings.TrimSpace(req.WorkflowName) == "" {
 		return nil, newDomainError(CodeInvalidInput, "workflow name cannot be empty", nil)
+	}
+	if len(req.Mutations) == 0 {
+		return nil, newDomainError(CodeInvalidInput, "at least one step mutation is required", nil)
 	}
 	if s.vaultCfg == nil {
 		return nil, newDomainError(CodeWorkflowInvalid, "vault config is nil", nil)
@@ -311,9 +340,13 @@ func (s *AuthoringService) MutateStep(req StepMutationRequest) (*StepMutationRes
 		return nil, err
 	}
 
-	result, err := applyStepMutation(def, req)
-	if err != nil {
-		return nil, err
+	applied := make([]StepMutationResult, 0, len(req.Mutations))
+	for i, mutation := range req.Mutations {
+		result, err := applyStepMutation(def, mutation)
+		if err != nil {
+			return nil, annotateStepMutationError(err, mutation, i)
+		}
+		applied = append(applied, *result)
 	}
 
 	wf, err := buildWorkflow(req.WorkflowName, def.Description, def.Inputs, def.Steps)
@@ -332,9 +365,16 @@ func (s *AuthoringService) MutateStep(req StepMutationRequest) (*StepMutationRes
 		return nil, newDomainError(CodeFileWriteError, fmt.Sprintf("write workflow file %s", fileRef), err)
 	}
 
-	result.WorkflowName = req.WorkflowName
-	result.FileRef = fileRef
-	return result, nil
+	for i := range applied {
+		applied[i].WorkflowName = req.WorkflowName
+		applied[i].FileRef = fileRef
+	}
+
+	return &StepBatchMutationResult{
+		WorkflowName: req.WorkflowName,
+		FileRef:      fileRef,
+		Applied:      applied,
+	}, nil
 }
 
 func (s *AuthoringService) ensureVaultConfig() error {
@@ -525,9 +565,6 @@ func applyStepUpdate(def *externalWorkflowDef, req StepMutationRequest) (*StepMu
 	if targetID == "" {
 		return nil, newDomainError(CodeInvalidInput, "target step id is required", nil)
 	}
-	if req.Step == nil {
-		return nil, newDomainError(CodeInvalidInput, "step payload is required", nil)
-	}
 
 	targetIdx := FindStepIndexInSteps(def.Steps, targetID)
 	if targetIdx < 0 {
@@ -536,7 +573,22 @@ func applyStepUpdate(def *externalWorkflowDef, req StepMutationRequest) (*StepMu
 		return nil, err
 	}
 
-	updated := copyStep(req.Step)
+	var (
+		updated *config.WorkflowStep
+		err     error
+	)
+	switch {
+	case req.Step != nil:
+		updated = copyStep(req.Step)
+	case req.StepPatch != nil:
+		updated, err = ApplyStepPatch(def.Steps[targetIdx], req.StepPatch)
+		if err != nil {
+			return nil, newDomainError(CodeInvalidInput, err.Error(), err)
+		}
+	default:
+		return nil, newDomainError(CodeInvalidInput, "step payload is required", nil)
+	}
+
 	updated.ID = strings.TrimSpace(updated.ID)
 	updated.Type = strings.TrimSpace(updated.Type)
 	if updated.ID == "" {
@@ -554,6 +606,38 @@ func applyStepUpdate(def *externalWorkflowDef, req StepMutationRequest) (*StepMu
 		Step:       updated,
 		Index:      targetIdx,
 	}, nil
+}
+
+func annotateStepMutationError(err error, req StepMutationRequest, index int) error {
+	stepID := strings.TrimSpace(req.TargetStepID)
+	if stepID == "" && req.Step != nil {
+		stepID = strings.TrimSpace(req.Step.ID)
+	}
+
+	details := map[string]interface{}{
+		"operation_index": index,
+		"action":          string(req.Action),
+	}
+	if stepID != "" {
+		details["step_id"] = stepID
+	}
+
+	if de, ok := AsDomainError(err); ok {
+		clone := *de
+		clone.Details = MergeDetails(clone.Details, details)
+		if clone.StepID == "" {
+			clone.StepID = stepID
+		}
+		return &clone
+	}
+
+	return &DomainError{
+		Code:    CodeInvalidInput,
+		Message: err.Error(),
+		StepID:  stepID,
+		Details: details,
+		Err:     err,
+	}
 }
 
 func applyStepRemove(def *externalWorkflowDef, req StepMutationRequest) (*StepMutationResult, error) {

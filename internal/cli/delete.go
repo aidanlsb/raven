@@ -59,7 +59,33 @@ func invokeDelete(_ *cobra.Command, commandID, vaultPath string, args map[string
 		})
 	}
 
-	if !isJSONOutput() && !deleteForce {
+	if isJSONOutput() {
+		if !deleteConfirm {
+			return executeCanonicalRequest(commandexec.Request{
+				CommandID: commandID,
+				VaultPath: vaultPath,
+				Args:      args,
+				Preview:   true,
+			})
+		}
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Args:      args,
+			Confirm:   true,
+		})
+	}
+
+	if deleteForce || deleteConfirm {
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Args:      args,
+			Confirm:   true,
+		})
+	}
+
+	if !deleteForce {
 		preview := executeCanonicalRequest(commandexec.Request{
 			CommandID: commandID,
 			VaultPath: vaultPath,

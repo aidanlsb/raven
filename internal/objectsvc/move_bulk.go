@@ -57,10 +57,10 @@ type MoveBulkSummary struct {
 
 func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 	if !strings.HasSuffix(req.DestinationDir, "/") {
-		return nil, fmt.Errorf("destination must be a directory (end with /)")
+		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
 	}
 
 	items := make([]MoveBulkPreviewItem, 0, len(req.ObjectIDs))
@@ -102,10 +102,10 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 
 func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 	if req.VaultConfig == nil {
-		return nil, fmt.Errorf("vault config is required")
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
 	}
 	if !strings.HasSuffix(req.DestinationDir, "/") {
-		return nil, fmt.Errorf("destination must be a directory (end with /)")
+		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
 	}
 
 	results := make([]MoveBulkResult, 0, len(req.ObjectIDs))
