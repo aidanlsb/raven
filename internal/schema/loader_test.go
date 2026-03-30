@@ -7,6 +7,7 @@ import (
 )
 
 func TestLoad(t *testing.T) {
+	t.Parallel()
 	t.Run("default schema when no file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 

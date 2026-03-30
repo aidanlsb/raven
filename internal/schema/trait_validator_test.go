@@ -3,6 +3,7 @@ package schema
 import "testing"
 
 func TestValidateTraitValue(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		def     *TraitDefinition

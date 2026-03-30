@@ -12,6 +12,7 @@ import (
 )
 
 func TestSetEmbeddedObjectSuccess(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -89,6 +90,7 @@ type: page
 }
 
 func TestSetEmbeddedObjectInvalidID(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -124,6 +126,7 @@ traits: {}
 }
 
 func TestSetEmbeddedObjectUnknownField(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

@@ -8,6 +8,7 @@ import (
 )
 
 func TestFieldRefsResolveUnambiguous(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -77,6 +78,7 @@ func TestFieldRefsResolveUnambiguous(t *testing.T) {
 }
 
 func TestFieldRefsResolveAmbiguous(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)

@@ -11,6 +11,7 @@ import (
 )
 
 func TestUpsertCreateUpdateUnchanged(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -74,6 +75,7 @@ traits: {}
 }
 
 func TestUpsertMissingRequiredField(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -115,6 +117,7 @@ traits: {}
 }
 
 func TestUpsertTypeMismatchExistingObject(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

@@ -5,6 +5,7 @@ import (
 )
 
 func TestParseObjectQuery(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -59,6 +60,7 @@ func TestParseObjectQuery(t *testing.T) {
 }
 
 func TestParseFieldPredicates(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      string
@@ -137,6 +139,7 @@ func TestParseFieldPredicates(t *testing.T) {
 }
 
 func TestParseHasPredicate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		input         string
@@ -185,6 +188,7 @@ func TestParseHasPredicate(t *testing.T) {
 }
 
 func TestParseParentAncestorChild(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		input        string
@@ -256,6 +260,7 @@ func TestParseParentAncestorChild(t *testing.T) {
 }
 
 func TestParseParentAncestorChildTarget(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      string
@@ -347,6 +352,7 @@ func TestParseParentAncestorChildTarget(t *testing.T) {
 }
 
 func TestParseTraitPredicates(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -408,6 +414,7 @@ func TestParseTraitPredicates(t *testing.T) {
 }
 
 func TestParseOnWithin(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		input        string
@@ -468,6 +475,7 @@ func TestParseOnWithin(t *testing.T) {
 }
 
 func TestParseOnWithinTarget(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      string
@@ -527,6 +535,7 @@ func TestParseOnWithinTarget(t *testing.T) {
 }
 
 func TestParseBooleanComposition(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -565,6 +574,7 @@ func TestParseBooleanComposition(t *testing.T) {
 }
 
 func TestParseRefsPredicate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      string
@@ -630,6 +640,7 @@ func TestParseRefsPredicate(t *testing.T) {
 }
 
 func TestParseContentPredicate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -690,6 +701,7 @@ func TestParseContentPredicate(t *testing.T) {
 }
 
 func TestParseDescendantContains(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		input        string
@@ -783,6 +795,7 @@ func TestParseDescendantContains(t *testing.T) {
 }
 
 func TestParseComplexQueries(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		input   string
@@ -842,6 +855,7 @@ func TestParseComplexQueries(t *testing.T) {
 }
 
 func TestParseAtPredicate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		input         string
@@ -895,6 +909,7 @@ func TestParseAtPredicate(t *testing.T) {
 }
 
 func TestParseRefdPredicate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      string
@@ -960,6 +975,7 @@ func TestParseRefdPredicate(t *testing.T) {
 }
 
 func TestParseComparisonOperators(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		input         string
@@ -1025,6 +1041,7 @@ func TestParseComparisonOperators(t *testing.T) {
 }
 
 func TestParseInPredicates(t *testing.T) {
+	t.Parallel()
 	t.Run("trait value in list", func(t *testing.T) {
 		q, err := Parse(`trait:todo in(.value, [todo,done])`)
 		if err != nil {
@@ -1084,6 +1101,7 @@ func TestParseInPredicates(t *testing.T) {
 }
 
 func TestParseFieldComparisonOperators(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		input         string
@@ -1141,6 +1159,7 @@ func TestParseFieldComparisonOperators(t *testing.T) {
 }
 
 func TestParseRefdShorthand(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		input        string
@@ -1177,6 +1196,7 @@ func TestParseRefdShorthand(t *testing.T) {
 }
 
 func TestParseDirectTargetPredicates(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      string
@@ -1299,6 +1319,7 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 }
 
 func TestParseBooleanEdgeCases(t *testing.T) {
+	t.Parallel()
 	t.Run("chained OR produces flat OrPredicate", func(t *testing.T) {
 		q, err := Parse("object:project .status==active | .status==paused | .status==done | .status==archived")
 		if err != nil {

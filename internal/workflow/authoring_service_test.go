@@ -11,6 +11,7 @@ import (
 )
 
 func TestAuthoringService_MutateStep(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
@@ -101,6 +102,7 @@ steps:
 }
 
 func TestAuthoringService_MutateStep_NotFound(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	cfg := &config.VaultConfig{Workflows: map[string]*config.WorkflowRef{}}
 	svc := NewAuthoringService(vault, cfg)
@@ -120,6 +122,7 @@ func TestAuthoringService_MutateStep_NotFound(t *testing.T) {
 }
 
 func TestAuthoringService_WorkflowLifecycleOps(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
@@ -172,6 +175,7 @@ steps:
 }
 
 func TestAuthoringService_ScaffoldWorkflow(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
@@ -203,6 +207,7 @@ func TestAuthoringService_ScaffoldWorkflow(t *testing.T) {
 }
 
 func TestAuthoringService_ReservedWorkflowName(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	cfg := config.DefaultVaultConfig()
 	svc := NewAuthoringService(vault, cfg)

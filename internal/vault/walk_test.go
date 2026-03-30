@@ -7,6 +7,7 @@ import (
 )
 
 func TestWalkMarkdownFiles(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory with test files
 	tmpDir, err := os.MkdirTemp("", "walk-test-*")
 	if err != nil {
@@ -126,6 +127,7 @@ type: person
 }
 
 func TestWalkMarkdownFilesWithErrors(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory with an invalid markdown file
 	tmpDir, err := os.MkdirTemp("", "walk-test-*")
 	if err != nil {
@@ -178,6 +180,7 @@ type: [invalid yaml
 }
 
 func TestCollectDocuments(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory with test files
 	tmpDir, err := os.MkdirTemp("", "collect-test-*")
 	if err != nil {

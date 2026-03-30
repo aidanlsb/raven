@@ -9,6 +9,7 @@ import (
 )
 
 func TestSkillCoverageCommandsExistInRegistry(t *testing.T) {
+	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
@@ -38,6 +39,7 @@ func TestSkillCoverageCommandsExistInRegistry(t *testing.T) {
 }
 
 func TestRenderFilesIncludesDeclaredReferencesForAllTargets(t *testing.T) {
+	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
@@ -71,6 +73,7 @@ func TestRenderFilesIncludesDeclaredReferencesForAllTargets(t *testing.T) {
 }
 
 func TestSkillMarkdownDoesNotUseLegacySyntax(t *testing.T) {
+	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)

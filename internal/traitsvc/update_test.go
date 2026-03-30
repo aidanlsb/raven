@@ -14,6 +14,7 @@ import (
 )
 
 func TestResolveTraitIDs(t *testing.T) {
+	t.Parallel()
 	db, err := index.OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open in-memory db: %v", err)
@@ -59,6 +60,7 @@ func TestResolveTraitIDs(t *testing.T) {
 }
 
 func TestBuildPreviewSkipsUnchangedValues(t *testing.T) {
+	t.Parallel()
 	existing := "done"
 	traits := []model.Trait{{
 		ID:        "notes/tasks.md:trait:0",
@@ -90,6 +92,7 @@ func TestBuildPreviewSkipsUnchangedValues(t *testing.T) {
 }
 
 func TestBuildPreviewResolvesRelativeDate(t *testing.T) {
+	t.Parallel()
 	traits := []model.Trait{{
 		ID:        "daily/2026-03-15.md:trait:0",
 		TraitType: "due",
@@ -113,6 +116,7 @@ func TestBuildPreviewResolvesRelativeDate(t *testing.T) {
 }
 
 func TestApplyUpdatesModifiesFile(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	filePath := filepath.Join(vaultPath, "notes", "tasks.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
@@ -161,6 +165,7 @@ func TestApplyUpdatesModifiesFile(t *testing.T) {
 }
 
 func TestResolvedAndValidatedTraitValueValidationError(t *testing.T) {
+	t.Parallel()
 	sch := schema.New()
 	sch.Traits["priority"] = &schema.TraitDefinition{
 		Type:   schema.FieldTypeEnum,

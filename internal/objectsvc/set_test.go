@@ -12,6 +12,7 @@ import (
 )
 
 func TestSetObjectFileSuccess(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -68,6 +69,7 @@ traits: {}
 }
 
 func TestSetObjectFileNoFrontmatter(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -108,6 +110,7 @@ traits: {}
 }
 
 func TestSetObjectFileUnknownField(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -148,6 +151,7 @@ traits: {}
 }
 
 func TestSetObjectFileRejectsWrongRefTargetType(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

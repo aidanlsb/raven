@@ -5,6 +5,7 @@ import (
 )
 
 func TestParseDocument(t *testing.T) {
+	t.Parallel()
 	t.Run("simple document", func(t *testing.T) {
 		content := `---
 type: person

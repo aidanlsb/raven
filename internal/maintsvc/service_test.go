@@ -22,11 +22,13 @@ func assertCode(t *testing.T, err error, want Code) {
 }
 
 func TestStats_InvalidInput(t *testing.T) {
+	t.Parallel()
 	_, err := Stats(" ")
 	assertCode(t, err, CodeInvalidInput)
 }
 
 func TestStats_HappyPath(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	db, err := index.Open(vaultPath)
 	if err != nil {
@@ -72,6 +74,7 @@ func TestStats_HappyPath(t *testing.T) {
 }
 
 func TestCurrentVersionInfoWithReader(t *testing.T) {
+	t.Parallel()
 	info := CurrentVersionInfoWithReader(func() (*debug.BuildInfo, bool) {
 		return &debug.BuildInfo{
 			GoVersion: "go1.24.2",

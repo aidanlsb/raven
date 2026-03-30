@@ -11,6 +11,7 @@ import (
 )
 
 func TestReclassifyByReferenceSuccess(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -66,6 +67,7 @@ traits: {}
 }
 
 func TestReclassifyByReferenceMissingReference(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

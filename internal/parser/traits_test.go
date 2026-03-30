@@ -5,6 +5,7 @@ import (
 )
 
 func TestParseTraitAnnotations(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		line       string
@@ -67,6 +68,7 @@ func TestParseTraitAnnotations(t *testing.T) {
 }
 
 func TestParseTrait(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		line    string
@@ -108,6 +110,7 @@ func TestParseTrait(t *testing.T) {
 }
 
 func TestParseTraitAnnotations_InlineCode(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		line      string
@@ -156,6 +159,7 @@ func TestParseTraitAnnotations_InlineCode(t *testing.T) {
 }
 
 func TestParseTraitValue_Kinds(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		input        string
@@ -232,6 +236,7 @@ func TestParseTraitValue_Kinds(t *testing.T) {
 }
 
 func TestStripTraitAnnotations(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		line string
@@ -285,6 +290,7 @@ func TestStripTraitAnnotations(t *testing.T) {
 }
 
 func TestParseTraitAnnotations_Content(t *testing.T) {
+	t.Parallel()
 	// This test verifies that traits capture the full line content,
 	// not just content after the trait annotation.
 	tests := []struct {
@@ -341,6 +347,7 @@ func TestParseTraitAnnotations_Content(t *testing.T) {
 }
 
 func TestIsRefOnTraitLine(t *testing.T) {
+	t.Parallel()
 	// This test documents the CONTENT SCOPE RULE:
 	// A reference is associated with a trait if and only if they are on the same line.
 	tests := []struct {

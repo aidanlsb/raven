@@ -17,6 +17,7 @@ import (
 // NOTE: Resolution of short names, aliases, and name_field values happens
 // at index/resolve time, not at parse time. This test focuses on parsing.
 func TestFrontmatterRefParsing(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		yaml       string
@@ -183,6 +184,7 @@ func TestFrontmatterRefParsing(t *testing.T) {
 
 // TestFrontmatterRefArrayParsing tests arrays of refs in frontmatter.
 func TestFrontmatterRefArrayParsing(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		yaml      string
@@ -269,6 +271,7 @@ func TestFrontmatterRefArrayParsing(t *testing.T) {
 // TestExtractRefsFromFrontmatter tests that refs are correctly extracted
 // from frontmatter for indexing (used by backlinks and query refs:[[target]]).
 func TestExtractRefsFromFrontmatter(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		content  string
@@ -409,6 +412,7 @@ Content`,
 // TestFrontmatterRefFieldValues tests that ref-typed fields store the correct
 // FieldValue type that can be retrieved with AsRef().
 func TestFrontmatterRefFieldValues(t *testing.T) {
+	t.Parallel()
 	content := `---
 type: project
 company: "[[companies/cursor]]"
@@ -459,6 +463,7 @@ Content`
 // See TestFrontmatterRefResolution in internal/index/refs_resolution_test.go
 // for the complete end-to-end tests including schema-aware ref extraction.
 func TestBareStringRefFieldsAtParseTime(t *testing.T) {
+	t.Parallel()
 	// This tests PARSE behavior - bare strings are stored as strings
 	// (schema-aware extraction happens at index time, not parse time)
 	tests := []struct {

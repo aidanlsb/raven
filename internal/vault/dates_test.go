@@ -6,6 +6,7 @@ import (
 )
 
 func TestParseDateArg(t *testing.T) {
+	t.Parallel()
 	// Get current time for comparisons
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -92,6 +93,7 @@ func sameDay(a, b time.Time) bool {
 }
 
 func TestFormatDateISO(t *testing.T) {
+	t.Parallel()
 	date := time.Date(2025, 2, 15, 10, 30, 0, 0, time.UTC)
 	result := FormatDateISO(date)
 	if result != "2025-02-15" {
@@ -100,6 +102,7 @@ func TestFormatDateISO(t *testing.T) {
 }
 
 func TestFormatDateFriendly(t *testing.T) {
+	t.Parallel()
 	date := time.Date(2025, 2, 15, 10, 30, 0, 0, time.UTC)
 	result := FormatDateFriendly(date)
 	if result != "Saturday, February 15, 2025" {

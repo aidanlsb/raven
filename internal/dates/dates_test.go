@@ -6,6 +6,7 @@ import (
 )
 
 func TestIsValidDate(t *testing.T) {
+	t.Parallel()
 	valid := []string{"2025-01-01", "2024-12-31", "2000-06-15"}
 	for _, d := range valid {
 		if !IsValidDate(d) {
@@ -22,6 +23,7 @@ func TestIsValidDate(t *testing.T) {
 }
 
 func TestIsValidDatetime(t *testing.T) {
+	t.Parallel()
 	valid := []string{
 		"2025-01-01T10:30:00Z",
 		"2025-01-01T10:30",
@@ -43,6 +45,7 @@ func TestIsValidDatetime(t *testing.T) {
 }
 
 func TestParseDateArg(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2025, 2, 15, 10, 0, 0, 0, time.UTC)
 
 	today, err := ParseDateArg("", now)

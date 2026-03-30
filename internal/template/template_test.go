@@ -8,6 +8,7 @@ import (
 )
 
 func TestApply_BasicVariables(t *testing.T) {
+	t.Parallel()
 	vars := &Variables{
 		Title:    "Team Sync",
 		Slug:     "team-sync",
@@ -104,6 +105,7 @@ func TestApply_BasicVariables(t *testing.T) {
 }
 
 func TestApply_NilVars(t *testing.T) {
+	t.Parallel()
 	result := Apply("# {{title}}", nil)
 	if result != "# {{title}}" {
 		t.Errorf("Apply with nil vars should return original, got %q", result)
@@ -111,6 +113,7 @@ func TestApply_NilVars(t *testing.T) {
 }
 
 func TestNewVariables(t *testing.T) {
+	t.Parallel()
 	fields := map[string]string{"name": "Alice"}
 	vars := NewVariables("My Title", "person", "my-title", fields)
 
@@ -136,6 +139,7 @@ func TestNewVariables(t *testing.T) {
 }
 
 func TestNewDailyVariables(t *testing.T) {
+	t.Parallel()
 	date := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	vars := NewDailyVariables(date)
 
@@ -160,6 +164,7 @@ func TestNewDailyVariables(t *testing.T) {
 }
 
 func TestLoad_InlineTemplateRejected(t *testing.T) {
+	t.Parallel()
 	_, err := Load("/tmp", "# {{title}}\n\n## Notes", "templates/")
 	if err == nil {
 		t.Fatal("Load() expected error for inline template content, got nil")
@@ -167,6 +172,7 @@ func TestLoad_InlineTemplateRejected(t *testing.T) {
 }
 
 func TestLoad_EmptyTemplate(t *testing.T) {
+	t.Parallel()
 	content, err := Load("/tmp", "", "templates/")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -177,6 +183,7 @@ func TestLoad_EmptyTemplate(t *testing.T) {
 }
 
 func TestLoad_FileTemplate(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory and template file
 	tmpDir := t.TempDir()
 	templateDir := filepath.Join(tmpDir, "templates")
@@ -201,6 +208,7 @@ func TestLoad_FileTemplate(t *testing.T) {
 }
 
 func TestLoad_MissingFile(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	_, err := Load(tmpDir, "templates/missing.md", "templates/")
@@ -210,6 +218,7 @@ func TestLoad_MissingFile(t *testing.T) {
 }
 
 func TestLoad_PathOutsideVault(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	_, err := Load(tmpDir, "../etc/passwd", "templates/")
@@ -219,6 +228,7 @@ func TestLoad_PathOutsideVault(t *testing.T) {
 }
 
 func TestResolveFileRef(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		input       string
@@ -253,6 +263,7 @@ func TestResolveFileRef(t *testing.T) {
 }
 
 func TestApply_FullTemplate(t *testing.T) {
+	t.Parallel()
 	vars := &Variables{
 		Title:    "Weekly Team Sync",
 		Slug:     "weekly-team-sync",

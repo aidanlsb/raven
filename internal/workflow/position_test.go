@@ -7,6 +7,7 @@ import (
 )
 
 func TestResolveInsertIndex(t *testing.T) {
+	t.Parallel()
 	steps := []*config.WorkflowStep{
 		{ID: "a"},
 		{ID: "b"},

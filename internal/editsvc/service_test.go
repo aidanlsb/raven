@@ -23,6 +23,7 @@ func assertServiceCode(t *testing.T, err error, want Code) *Error {
 }
 
 func TestParseEditsJSON(t *testing.T) {
+	t.Parallel()
 	t.Run("parses valid payload", func(t *testing.T) {
 		edits, err := ParseEditsJSON(`{"edits":[{"old_str":"from","new_str":"to"}]}`)
 		if err != nil {
@@ -49,6 +50,7 @@ func TestParseEditsJSON(t *testing.T) {
 }
 
 func TestApplyEditsInMemory(t *testing.T) {
+	t.Parallel()
 	t.Run("applies ordered edits", func(t *testing.T) {
 		content := "alpha\nbeta\ngamma\n"
 		updated, results, err := ApplyEditsInMemory(content, "notes/test.md", []EditSpec{
@@ -88,6 +90,7 @@ func TestApplyEditsInMemory(t *testing.T) {
 }
 
 func TestAsErrorWithWrappedError(t *testing.T) {
+	t.Parallel()
 	base := newError(CodeInvalidInput, "bad input", "", nil, nil)
 	wrapped := fmt.Errorf("outer: %w", base)
 

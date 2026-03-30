@@ -5,6 +5,7 @@ import (
 )
 
 func TestExtractRefs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		content string
@@ -71,6 +72,7 @@ func TestExtractRefs(t *testing.T) {
 }
 
 func TestExtractEmbeddedRefs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		value string

@@ -6,6 +6,7 @@ import (
 
 // TestRegistryHasRequiredCommands verifies that essential commands exist.
 func TestRegistryHasRequiredCommands(t *testing.T) {
+	t.Parallel()
 	requiredCommands := []string{
 		"new", "add", "delete", "read", "move",
 		"query", "backlinks", "vault_stats", "check", "date",
@@ -21,6 +22,7 @@ func TestRegistryHasRequiredCommands(t *testing.T) {
 
 // TestRegistryMetadataComplete verifies all commands have required metadata.
 func TestRegistryMetadataComplete(t *testing.T) {
+	t.Parallel()
 	for name, meta := range Registry {
 		t.Run(name, func(t *testing.T) {
 			if meta.Name == "" {
@@ -67,6 +69,7 @@ func TestRegistryMetadataComplete(t *testing.T) {
 
 // TestCobraCommandGeneration verifies Cobra command generation works.
 func TestCobraCommandGeneration(t *testing.T) {
+	t.Parallel()
 	// Test a command with args and flags
 	cmd := GenerateCobraCommand("query", nil)
 	if cmd == nil {
@@ -86,6 +89,7 @@ func TestCobraCommandGeneration(t *testing.T) {
 
 // TestCobraCommandWithNoArgs verifies commands with no args work.
 func TestCobraCommandWithNoArgs(t *testing.T) {
+	t.Parallel()
 	cmd := GenerateCobraCommand("vault_stats", nil)
 	if cmd == nil {
 		t.Fatal("GenerateCobraCommand returned nil for 'vault_stats'")
@@ -98,6 +102,7 @@ func TestCobraCommandWithNoArgs(t *testing.T) {
 
 // TestCobraCommandWithOptionalArgs verifies optional args are handled.
 func TestCobraCommandWithOptionalArgs(t *testing.T) {
+	t.Parallel()
 	cmd := GenerateCobraCommand("date", nil)
 	if cmd == nil {
 		t.Fatal("GenerateCobraCommand returned nil for 'date'")
@@ -110,6 +115,7 @@ func TestCobraCommandWithOptionalArgs(t *testing.T) {
 }
 
 func TestCobraCommandUsesExplicitUsageWhenPresent(t *testing.T) {
+	t.Parallel()
 	cmd := GenerateCobraCommand("set", nil)
 	if cmd == nil {
 		t.Fatal("GenerateCobraCommand returned nil for 'set'")
@@ -122,6 +128,7 @@ func TestCobraCommandUsesExplicitUsageWhenPresent(t *testing.T) {
 
 // TestAllCommandsGeneratable verifies all registry commands can generate Cobra commands.
 func TestAllCommandsGeneratable(t *testing.T) {
+	t.Parallel()
 	for name := range Registry {
 		t.Run(name, func(t *testing.T) {
 			cmd := GenerateCobraCommand(name, nil)

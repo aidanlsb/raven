@@ -3,6 +3,7 @@ package commands
 import "testing"
 
 func TestResolveToolCommandID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		toolName string

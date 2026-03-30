@@ -9,6 +9,7 @@ import (
 )
 
 func TestMoveByReferenceSuccess(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -59,6 +60,7 @@ traits: {}
 }
 
 func TestMoveByReferenceTypeMismatchNeedsConfirm(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

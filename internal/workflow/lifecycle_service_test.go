@@ -9,6 +9,7 @@ import (
 )
 
 func TestRunService_StartAndContinue(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
@@ -110,6 +111,7 @@ steps:
 }
 
 func TestRunService_ContinueRevisionConflict(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
@@ -162,6 +164,7 @@ steps:
 }
 
 func TestRunService_ContinueRequiresExpectedRevision(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
@@ -216,6 +219,7 @@ steps:
 }
 
 func TestRunService_StartClassifiesToolFailuresStructurally(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)
@@ -258,6 +262,7 @@ steps:
 }
 
 func TestRunService_StartClassifiesInterpolationFailuresStructurally(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vault, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir workflows: %v", err)

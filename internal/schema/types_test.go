@@ -6,6 +6,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	if s.Types == nil {
@@ -42,6 +43,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestTraitDefinitionIsBoolean(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		traitDef TraitDefinition
@@ -65,6 +67,7 @@ func TestTraitDefinitionIsBoolean(t *testing.T) {
 }
 
 func TestFieldValueString(t *testing.T) {
+	t.Parallel()
 	t.Run("String value", func(t *testing.T) {
 		fv := String("hello")
 		s, ok := fv.AsString()
@@ -119,6 +122,7 @@ func TestFieldValueString(t *testing.T) {
 }
 
 func TestFieldValueNumber(t *testing.T) {
+	t.Parallel()
 	fv := Number(42.5)
 	n, ok := fv.AsNumber()
 	if !ok {
@@ -137,6 +141,7 @@ func TestFieldValueNumber(t *testing.T) {
 }
 
 func TestFieldValueBool(t *testing.T) {
+	t.Parallel()
 	fv := Bool(true)
 	b, ok := fv.AsBool()
 	if !ok {
@@ -164,6 +169,7 @@ func TestFieldValueBool(t *testing.T) {
 }
 
 func TestFieldValueArray(t *testing.T) {
+	t.Parallel()
 	items := []FieldValue{String("a"), String("b"), String("c")}
 	fv := Array(items)
 
@@ -184,6 +190,7 @@ func TestFieldValueArray(t *testing.T) {
 }
 
 func TestFieldValueRef(t *testing.T) {
+	t.Parallel()
 	fv := Ref("people/freya")
 
 	r, ok := fv.AsRef()
@@ -210,6 +217,7 @@ func TestFieldValueRef(t *testing.T) {
 }
 
 func TestFieldValueNull(t *testing.T) {
+	t.Parallel()
 	fv := Null()
 	if !fv.IsNull() {
 		t.Error("expected IsNull to be true")
@@ -222,6 +230,7 @@ func TestFieldValueNull(t *testing.T) {
 }
 
 func TestFieldValueRaw(t *testing.T) {
+	t.Parallel()
 	t.Run("string", func(t *testing.T) {
 		fv := String("hello")
 		if fv.Raw() != "hello" {
@@ -277,6 +286,7 @@ func TestFieldValueRaw(t *testing.T) {
 }
 
 func TestFieldValueMarshalJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		fv   FieldValue
@@ -316,6 +326,7 @@ func TestFieldValueMarshalJSON(t *testing.T) {
 }
 
 func TestNewFieldValue(t *testing.T) {
+	t.Parallel()
 	fv := NewFieldValue("test")
 	s, ok := fv.AsString()
 	if !ok {
@@ -327,6 +338,7 @@ func TestNewFieldValue(t *testing.T) {
 }
 
 func TestIsBuiltinType(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		typeName string
 		want     bool

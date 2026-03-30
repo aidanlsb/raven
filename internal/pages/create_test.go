@@ -10,6 +10,7 @@ import (
 )
 
 func TestSlugify(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    string
 		expected string
@@ -34,6 +35,7 @@ func TestSlugify(t *testing.T) {
 }
 
 func TestSlugifyPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    string
 		expected string
@@ -57,6 +59,7 @@ func TestSlugifyPath(t *testing.T) {
 }
 
 func TestResolveDefaultPathWithRoots(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"game_notes": {
@@ -123,6 +126,7 @@ func TestResolveDefaultPathWithRoots(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory for testing
 	tmpDir, err := os.MkdirTemp("", "pages-test-*")
 	if err != nil {
@@ -250,6 +254,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestCreateWithTemplate(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory for testing
 	tmpDir, err := os.MkdirTemp("", "pages-template-test-*")
 	if err != nil {
@@ -364,6 +369,7 @@ func TestCreateWithTemplate(t *testing.T) {
 }
 
 func TestExists(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory for testing
 	tmpDir, err := os.MkdirTemp("", "pages-test-*")
 	if err != nil {

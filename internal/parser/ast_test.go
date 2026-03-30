@@ -5,6 +5,7 @@ import (
 )
 
 func TestExtractFromAST(t *testing.T) {
+	t.Parallel()
 	t.Run("extracts headings", func(t *testing.T) {
 		content := `# Title
 

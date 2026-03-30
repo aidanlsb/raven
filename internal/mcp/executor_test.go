@@ -8,6 +8,7 @@ import (
 )
 
 func TestExecuteToolDirectUnknownTool(t *testing.T) {
+	t.Parallel()
 	_, err := ExecuteToolDirect("", "not_real", nil)
 	if err == nil {
 		t.Fatal("expected unknown command error")
@@ -18,6 +19,7 @@ func TestExecuteToolDirectUnknownTool(t *testing.T) {
 }
 
 func TestExecuteToolDirectSuccess(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -40,6 +42,7 @@ func TestExecuteToolDirectSuccess(t *testing.T) {
 }
 
 func TestExecuteToolDirectToolError(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -56,6 +59,7 @@ func TestExecuteToolDirectToolError(t *testing.T) {
 }
 
 func TestExecuteWorkflowToolDirectRejectsDisallowedTool(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
@@ -72,6 +76,7 @@ func TestExecuteWorkflowToolDirectRejectsDisallowedTool(t *testing.T) {
 }
 
 func TestExecuteWorkflowToolDirectNormalizesToolAliases(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()

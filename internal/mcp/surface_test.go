@@ -11,6 +11,7 @@ import (
 )
 
 func TestCompactDescribeReturnsContract(t *testing.T) {
+	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactDescribe(map[string]interface{}{"command": "query"})
 	if isErr {
@@ -88,6 +89,7 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 }
 
 func TestCompactInvokeRejectsInvalidArgumentTypes(t *testing.T) {
+	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "query",
@@ -115,6 +117,7 @@ func TestCompactInvokeRejectsInvalidArgumentTypes(t *testing.T) {
 }
 
 func TestCompactInvokeRejectsNonInvokableCommand(t *testing.T) {
+	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "serve",
@@ -137,6 +140,7 @@ func TestCompactInvokeRejectsNonInvokableCommand(t *testing.T) {
 }
 
 func TestCompactDescribeRejectsLegacyCommandAlias(t *testing.T) {
+	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactDescribe(map[string]interface{}{"command": "raven_query"})
 	if !isErr {
@@ -157,6 +161,7 @@ func TestCompactDescribeRejectsLegacyCommandAlias(t *testing.T) {
 }
 
 func TestCompactInvokeRejectsLegacyCommandAlias(t *testing.T) {
+	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "raven_query",
@@ -182,6 +187,7 @@ func TestCompactInvokeRejectsLegacyCommandAlias(t *testing.T) {
 }
 
 func TestCompactInvokeSuccess(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -204,6 +210,7 @@ func TestCompactInvokeSuccess(t *testing.T) {
 }
 
 func TestCompactInvokeUsesWrapperVaultPathOverride(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -227,6 +234,7 @@ func TestCompactInvokeUsesWrapperVaultPathOverride(t *testing.T) {
 }
 
 func TestCompactInvokeUsesWrapperVaultNameOverride(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.toml")
 	statePath := filepath.Join(tmp, "state.toml")
@@ -261,6 +269,7 @@ func TestCompactInvokeUsesWrapperVaultNameOverride(t *testing.T) {
 }
 
 func TestCompactInvokeRejectsConflictingVaultOverrides(t *testing.T) {
+	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command":    "query",
@@ -300,6 +309,7 @@ func TestCompactInvokeRejectsConflictingVaultOverrides(t *testing.T) {
 }
 
 func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
+	t.Parallel()
 	server := NewServer("")
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "read",

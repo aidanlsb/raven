@@ -9,6 +9,7 @@ import (
 )
 
 func TestValidator_UnknownType(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"person":  {Fields: map[string]*schema.FieldDefinition{}},
@@ -44,6 +45,7 @@ func TestValidator_UnknownType(t *testing.T) {
 }
 
 func TestValidator_UnknownTrait(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{},
 		Traits: map[string]*schema.TraitDefinition{
@@ -79,6 +81,7 @@ func TestValidator_UnknownTrait(t *testing.T) {
 }
 
 func TestValidator_UnknownField(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"person": {
@@ -118,6 +121,7 @@ func TestValidator_UnknownField(t *testing.T) {
 }
 
 func TestValidator_ValidQuery(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"person": {
@@ -165,6 +169,7 @@ func TestValidator_ValidQuery(t *testing.T) {
 }
 
 func TestValidator_TraitRefdRejected(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"project": {Fields: map[string]*schema.FieldDefinition{}},
@@ -191,6 +196,7 @@ func TestValidator_TraitRefdRejected(t *testing.T) {
 }
 
 func TestValidator_FieldNotTrait(t *testing.T) {
+	t.Parallel()
 	// Traits are NOT valid as field access - only actual fields are
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
@@ -221,6 +227,7 @@ func TestValidator_FieldNotTrait(t *testing.T) {
 }
 
 func TestValidator_NestedSubqueryValidation(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"project": {Fields: map[string]*schema.FieldDefinition{}},
@@ -254,6 +261,7 @@ func TestValidator_NestedSubqueryValidation(t *testing.T) {
 }
 
 func TestValidator_DirectTargetPredicates(t *testing.T) {
+	t.Parallel()
 	// Test that [[target]] predicates don't panic and validate correctly
 	// This is a regression test for the nil pointer dereference when SubQuery is nil
 	sch := &schema.Schema{
@@ -309,6 +317,7 @@ func TestValidator_DirectTargetPredicates(t *testing.T) {
 }
 
 func TestValidator_TraitStringFunctionsRequireValueField(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{},
 		Traits: map[string]*schema.TraitDefinition{
@@ -366,6 +375,7 @@ func TestValidator_TraitStringFunctionsRequireValueField(t *testing.T) {
 }
 
 func TestValidator_ObjectStringFunctionsAndArrayQuantifiersValidateFieldTypes(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"project": {

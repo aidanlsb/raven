@@ -10,6 +10,7 @@ import (
 )
 
 func TestRunStore_SaveLoadAndList(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
@@ -59,6 +60,7 @@ func TestRunStore_SaveLoadAndList(t *testing.T) {
 }
 
 func TestRunStore_PruneByStatus(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
@@ -117,6 +119,7 @@ func TestRunStore_PruneByStatus(t *testing.T) {
 }
 
 func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
@@ -170,6 +173,7 @@ func TestRunStore_ListRunStatesReturnsWarningsForCorruptFiles(t *testing.T) {
 }
 
 func TestRunStore_SavePreservesUpdatedAtAndExpiresAt(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",
@@ -213,6 +217,7 @@ func TestRunStore_SavePreservesUpdatedAtAndExpiresAt(t *testing.T) {
 }
 
 func TestRunStore_AutoPruneHonorsStoredExpiry(t *testing.T) {
+	t.Parallel()
 	vault := t.TempDir()
 	cfg := config.ResolvedWorkflowRunsConfig{
 		StoragePath:               ".raven/workflow-runs",

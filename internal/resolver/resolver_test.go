@@ -5,6 +5,7 @@ import (
 )
 
 func TestResolver(t *testing.T) {
+	t.Parallel()
 	objectIDs := []string{
 		"people/freya",
 		"people/thor",
@@ -87,6 +88,7 @@ func TestResolver(t *testing.T) {
 }
 
 func TestResolverAmbiguous(t *testing.T) {
+	t.Parallel()
 	// Two objects with the same short name
 	objectIDs := []string{
 		"people/freya",
@@ -105,6 +107,7 @@ func TestResolverAmbiguous(t *testing.T) {
 }
 
 func TestResolverSuffixMatching(t *testing.T) {
+	t.Parallel()
 	// When objects have a directory prefix (e.g., "objects/") but the user
 	// references by a partial path, suffix matching should find them.
 	t.Run("partial path matches full path with prefix", func(t *testing.T) {
@@ -182,6 +185,7 @@ func TestResolverSuffixMatching(t *testing.T) {
 }
 
 func TestResolverPathLeafCanonicalFallback(t *testing.T) {
+	t.Parallel()
 	t.Run("path-like ref resolves via alias within same family", func(t *testing.T) {
 		r := New(
 			[]string{
@@ -283,6 +287,7 @@ func TestResolverPathLeafCanonicalFallback(t *testing.T) {
 }
 
 func TestResolverPrefersParentOverSection(t *testing.T) {
+	t.Parallel()
 	// When a file and its section have the same short name (e.g., "cursor"),
 	// the resolver should prefer the parent file object.
 	t.Run("parent object is preferred over section with same short name", func(t *testing.T) {
@@ -377,6 +382,7 @@ func TestResolverPrefersParentOverSection(t *testing.T) {
 }
 
 func TestResolverDateShorthand(t *testing.T) {
+	t.Parallel()
 	objectIDs := []string{
 		"daily/2025-02-01",
 		"people/freya",
@@ -423,6 +429,7 @@ func TestResolverDateShorthand(t *testing.T) {
 }
 
 func TestResolverSlugifiedMatching(t *testing.T) {
+	t.Parallel()
 	// Files are stored with slugified names
 	objectIDs := []string{
 		"people/sif",
@@ -470,6 +477,7 @@ func TestResolverSlugifiedMatching(t *testing.T) {
 }
 
 func TestResolverAliases(t *testing.T) {
+	t.Parallel()
 	objectIDs := []string{
 		"people/freya",
 		"people/thor",
@@ -536,6 +544,7 @@ func TestResolverAliases(t *testing.T) {
 }
 
 func TestResolverWithOptions(t *testing.T) {
+	t.Parallel()
 	objectIDs := []string{
 		"people/freya",
 		"projects/bifrost",
@@ -573,6 +582,7 @@ func TestResolverWithOptions(t *testing.T) {
 }
 
 func TestAliasConflicts(t *testing.T) {
+	t.Parallel()
 	t.Run("alias conflicting with short name is ambiguous", func(t *testing.T) {
 		// "thor" is both a short name for people/thor and an alias for people/freya
 		objectIDs := []string{
@@ -724,6 +734,7 @@ func TestAliasConflicts(t *testing.T) {
 }
 
 func TestAliasEdgeCases(t *testing.T) {
+	t.Parallel()
 	t.Run("empty alias is ignored", func(t *testing.T) {
 		objectIDs := []string{"people/freya"}
 		aliases := map[string]string{
@@ -800,6 +811,7 @@ func TestAliasEdgeCases(t *testing.T) {
 }
 
 func TestNameFieldResolution(t *testing.T) {
+	t.Parallel()
 	objectIDs := []string{
 		"books/the-prose-edda",
 		"books/the-poetic-edda",
@@ -899,6 +911,7 @@ func hasMatch(matches []string, target string) bool {
 }
 
 func TestFindCollisions(t *testing.T) {
+	t.Parallel()
 	t.Run("file and its own section is not a collision", func(t *testing.T) {
 		// people/freya and people/freya#freya both have short name "freya"
 		// but this is not a real collision - [[freya]] resolves to the file

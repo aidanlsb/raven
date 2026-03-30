@@ -11,6 +11,7 @@ import (
 )
 
 func TestCheckStaleness(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -111,6 +112,7 @@ func TestCheckStaleness(t *testing.T) {
 }
 
 func TestRemoveDeletedFiles(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -189,6 +191,7 @@ func TestRemoveDeletedFiles(t *testing.T) {
 }
 
 func TestRemoveFilesWithPrefix(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -248,6 +251,7 @@ func TestRemoveFilesWithPrefix(t *testing.T) {
 }
 
 func TestAllNameFieldValues(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)

@@ -5,6 +5,7 @@ import (
 )
 
 func TestParseV3FieldPredicates(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -112,6 +113,7 @@ func TestParseV3FieldPredicates(t *testing.T) {
 }
 
 func TestParseV3ValuePredicates(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -164,6 +166,7 @@ func TestParseV3ValuePredicates(t *testing.T) {
 }
 
 func TestParseV3ComplexQuery(t *testing.T) {
+	t.Parallel()
 	input := `object:project .status==active has(trait:due .value==past)`
 
 	q, err := Parse(input)
@@ -189,6 +192,7 @@ func TestParseV3ComplexQuery(t *testing.T) {
 }
 
 func TestParseStringFunctions(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -335,6 +339,7 @@ func TestParseStringFunctions(t *testing.T) {
 }
 
 func TestParseArrayQuantifiers(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -506,6 +511,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 }
 
 func TestParseRawStrings(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string

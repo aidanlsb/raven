@@ -7,6 +7,7 @@ import (
 )
 
 func TestParseTypeDeclaration(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		line     string
@@ -87,6 +88,7 @@ func TestParseTypeDeclaration(t *testing.T) {
 }
 
 func TestParseEmbeddedType(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		line     string
@@ -158,6 +160,7 @@ func TestParseEmbeddedType(t *testing.T) {
 }
 
 func TestSerializeTypeDeclaration(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		typeName string
@@ -244,6 +247,7 @@ func TestSerializeTypeDeclaration(t *testing.T) {
 }
 
 func TestSerializeRoundTrip(t *testing.T) {
+	t.Parallel()
 	// Test that parsing a declaration and serializing it back produces equivalent output
 	tests := []struct {
 		name  string

@@ -10,6 +10,7 @@ import (
 )
 
 func TestPreviewAddBulk(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/alice.md", "---\ntype: person\nname: Alice\n---\n").
@@ -42,6 +43,7 @@ func TestPreviewAddBulk(t *testing.T) {
 }
 
 func TestApplyAddBulk(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/alice.md", "---\ntype: person\nname: Alice\n---\n").
@@ -78,6 +80,7 @@ func TestApplyAddBulk(t *testing.T) {
 }
 
 func TestApplyAddBulk_HeadingConflictWithEmbeddedID(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("projects/roadmap.md", "---\ntype: project\ntitle: Roadmap\nstatus: active\n---\n\n## Tasks\n").

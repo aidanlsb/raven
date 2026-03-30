@@ -7,6 +7,7 @@ import (
 )
 
 func TestParseRawApply(t *testing.T) {
+	t.Parallel()
 	t.Run("parses command and args", func(t *testing.T) {
 		got, err := ParseRawApply([]string{"set", "status=done"})
 		if err != nil {
@@ -36,6 +37,7 @@ func TestParseRawApply(t *testing.T) {
 }
 
 func TestPlanObjectApply(t *testing.T) {
+	t.Parallel()
 	t.Run("builds set plan and dedupes ids", func(t *testing.T) {
 		raw := &RawApplyCommand{Command: "set", Args: []string{"status=done"}}
 		got, err := PlanObjectApply(raw, []string{"people/freya", "people/freya", "people/thor#tasks"})
@@ -83,6 +85,7 @@ func TestPlanObjectApply(t *testing.T) {
 }
 
 func TestPlanTraitApply(t *testing.T) {
+	t.Parallel()
 	traits := []model.Trait{{ID: "daily/2026-01-01.md:trait:1"}}
 
 	t.Run("builds update plan", func(t *testing.T) {

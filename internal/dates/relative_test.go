@@ -6,6 +6,7 @@ import (
 )
 
 func TestNormalizeRelativeDateKeyword(t *testing.T) {
+	t.Parallel()
 	if got, ok := NormalizeRelativeDateKeyword(" today "); !ok || got != "today" {
 		t.Fatalf("NormalizeRelativeDateKeyword(today) = %q, %v", got, ok)
 	}
@@ -15,6 +16,7 @@ func TestNormalizeRelativeDateKeyword(t *testing.T) {
 }
 
 func TestResolveRelativeDateKeyword_Instants(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, time.March, 4, 14, 30, 0, 0, time.UTC) // Wednesday
 
 	today, ok := ResolveRelativeDateKeyword("today", now, time.Monday)

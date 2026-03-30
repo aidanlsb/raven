@@ -11,6 +11,7 @@ import (
 )
 
 func TestCreateObjectSuccess(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -45,6 +46,7 @@ traits: {}
 }
 
 func TestCreateMissingRequiredField(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -83,6 +85,7 @@ traits: {}
 }
 
 func TestCreateRejectsExistingFile(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -125,6 +128,7 @@ traits: {}
 }
 
 func TestCreateRejectsWrongRefTargetType(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

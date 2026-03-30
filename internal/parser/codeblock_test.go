@@ -5,6 +5,7 @@ import (
 )
 
 func TestFenceState(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		lines    []string
@@ -113,6 +114,7 @@ func TestFenceState(t *testing.T) {
 }
 
 func TestRemoveInlineCode(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -156,6 +158,7 @@ func TestRemoveInlineCode(t *testing.T) {
 }
 
 func TestListMarkerNotConfusedWithFence(t *testing.T) {
+	t.Parallel()
 	// A list item with content should NOT be detected as a fence
 	tests := []struct {
 		line      string

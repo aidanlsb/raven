@@ -10,6 +10,7 @@ import (
 )
 
 func TestResolveObjectToFileWithRoots_DirectCandidates(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vaultDir, "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -29,6 +30,7 @@ func TestResolveObjectToFileWithRoots_DirectCandidates(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithRoots_WithDirectoryRoots(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vaultDir, "objects", "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -64,6 +66,7 @@ func TestResolveObjectToFileWithRoots_WithDirectoryRoots(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithRoots_SlugifiedFallback(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vaultDir, "objects", "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -90,6 +93,7 @@ func TestResolveObjectToFileWithRoots_SlugifiedFallback(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithConfig_NormalizesRoots(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vaultDir, "objects", "people"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -116,6 +120,7 @@ func TestResolveObjectToFileWithConfig_NormalizesRoots(t *testing.T) {
 }
 
 func TestResolveObjectToFileWithRoots_NotFound(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	_, err := ResolveObjectToFileWithRoots(vaultDir, "people/missing.md", "objects/", "pages/")
 	if err == nil || !strings.Contains(err.Error(), "object not found") {

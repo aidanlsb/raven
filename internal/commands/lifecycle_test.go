@@ -3,6 +3,7 @@ package commands
 import "testing"
 
 func TestResolveCommandID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		path   string
 		wantID string

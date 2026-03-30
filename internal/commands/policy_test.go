@@ -3,6 +3,7 @@ package commands
 import "testing"
 
 func TestPolicyForCommandID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		commandID      string
@@ -57,6 +58,7 @@ func TestPolicyForCommandID(t *testing.T) {
 }
 
 func TestResolveToolPolicy(t *testing.T) {
+	t.Parallel()
 	commandID, policy, ok := ResolveToolPolicy("raven_query")
 	if !ok {
 		t.Fatal("expected raven_query to resolve")

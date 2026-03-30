@@ -7,6 +7,7 @@ import (
 )
 
 func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -49,6 +50,7 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 }
 
 func TestObjectFieldComparison_RelativeDateKeywordOrdering(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 

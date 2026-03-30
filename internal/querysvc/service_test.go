@@ -9,6 +9,7 @@ import (
 )
 
 func TestParseInputs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		queryName    string
@@ -98,6 +99,7 @@ func TestParseInputs(t *testing.T) {
 }
 
 func TestParseInputsWithKeyValues(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		args         []string
@@ -154,6 +156,7 @@ func TestParseInputsWithKeyValues(t *testing.T) {
 }
 
 func TestNormalizeArgs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		args      []string
@@ -197,6 +200,7 @@ func TestNormalizeArgs(t *testing.T) {
 }
 
 func TestValidateInputDeclarations(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		query        string
@@ -254,6 +258,7 @@ func TestValidateInputDeclarations(t *testing.T) {
 }
 
 func TestExtractSavedQueryInputRefs(t *testing.T) {
+	t.Parallel()
 	got := extractSavedQueryInputRefs(`trait:todo refs([[{{args.project}}]]) .value=={{inputs.status}} \{{args.ignored}} {{args.project}}`)
 	want := []string{"project", "status"}
 	if !reflect.DeepEqual(got, want) {
@@ -262,6 +267,7 @@ func TestExtractSavedQueryInputRefs(t *testing.T) {
 }
 
 func TestResolveQueryString(t *testing.T) {
+	t.Parallel()
 	query := &config.SavedQuery{
 		Query: "trait:todo refs([[{{args.project}}]])",
 	}
@@ -303,6 +309,7 @@ func TestResolveQueryString(t *testing.T) {
 }
 
 func TestResolveSavedQuery(t *testing.T) {
+	t.Parallel()
 	query := &config.SavedQuery{
 		Query: "object:project .status=={{args.status}}",
 		Args:  []string{"status", "project"},
@@ -318,6 +325,7 @@ func TestResolveSavedQuery(t *testing.T) {
 }
 
 func TestNormalizeSavedQueryTemplateVars(t *testing.T) {
+	t.Parallel()
 	got := normalizeSavedQueryTemplateVars(`trait:todo refs([[{{args.project}}]]) .value=={{args.status}} \{{args.literal}}`)
 	want := `trait:todo refs([[{{inputs.project}}]]) .value=={{inputs.status}} \{{args.literal}}`
 	if got != want {
@@ -326,6 +334,7 @@ func TestNormalizeSavedQueryTemplateVars(t *testing.T) {
 }
 
 func TestParseApplyCommand(t *testing.T) {
+	t.Parallel()
 	parsed, err := ParseApplyCommand([]string{"set", "status=done"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

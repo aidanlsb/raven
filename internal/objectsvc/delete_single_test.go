@@ -9,6 +9,7 @@ import (
 )
 
 func TestDeleteByReferenceSuccess(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

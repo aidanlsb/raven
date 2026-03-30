@@ -7,6 +7,7 @@ import (
 )
 
 func TestParseDateFilter(t *testing.T) {
+	t.Parallel()
 	// Get today's date for relative tests
 	today := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
@@ -68,6 +69,7 @@ func TestParseDateFilter(t *testing.T) {
 }
 
 func TestParseDateFilterInvalidDates(t *testing.T) {
+	t.Parallel()
 	tests := []string{
 		"2025-13-45",
 		"2025-02-30",
@@ -87,6 +89,7 @@ func TestParseDateFilterInvalidDates(t *testing.T) {
 }
 
 func TestParseDateFilterCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	today := time.Now().Format("2006-01-02")
 
 	tests := []string{"TODAY", "Today", "  today  "}
@@ -108,6 +111,7 @@ func TestParseDateFilterCaseInsensitive(t *testing.T) {
 }
 
 func TestTryParseDateComparisonWithOptions_InstantOrdering(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
 
 	cond, args, ok, err := TryParseDateComparisonWithOptions("today", "<", "value", DateFilterOptions{

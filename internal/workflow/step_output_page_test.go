@@ -6,6 +6,7 @@ import (
 )
 
 func TestPaginateStepOutput(t *testing.T) {
+	t.Parallel()
 	t.Run("array root", func(t *testing.T) {
 		page, err := PaginateStepOutput([]interface{}{"a", "b", "c"}, "", 1, 2)
 		if err != nil {
@@ -85,6 +86,7 @@ func TestPaginateStepOutput(t *testing.T) {
 }
 
 func TestPaginateStepOutputErrors(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		root    interface{}

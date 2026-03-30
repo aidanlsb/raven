@@ -12,6 +12,7 @@ import (
 )
 
 func TestMCPDocsToolListMatchesGeneratedTools(t *testing.T) {
+	t.Parallel()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to locate test file path")
@@ -42,6 +43,7 @@ func TestMCPDocsToolListMatchesGeneratedTools(t *testing.T) {
 }
 
 func TestMCPDocsOnlyUseCompactToolCalls(t *testing.T) {
+	t.Parallel()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to locate test file path")

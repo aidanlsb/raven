@@ -5,6 +5,7 @@ import (
 )
 
 func TestValidationError(t *testing.T) {
+	t.Parallel()
 	err := ValidationError{Field: "name", Message: "is required"}
 	expected := "Field 'name': is required"
 	if err.Error() != expected {
@@ -13,6 +14,7 @@ func TestValidationError(t *testing.T) {
 }
 
 func TestValidateFields(t *testing.T) {
+	t.Parallel()
 	t.Run("required field missing", func(t *testing.T) {
 		fields := map[string]FieldValue{}
 		defs := map[string]*FieldDefinition{
@@ -96,6 +98,7 @@ func TestValidateFields(t *testing.T) {
 }
 
 func TestValidateFieldValueString(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"name": {Type: FieldTypeString},
 	}
@@ -118,6 +121,7 @@ func TestValidateFieldValueString(t *testing.T) {
 }
 
 func TestValidateFieldValueStringArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"labels": {Type: FieldTypeStringArray},
 	}
@@ -152,6 +156,7 @@ func TestValidateFieldValueStringArray(t *testing.T) {
 }
 
 func TestValidateFieldValueNumber(t *testing.T) {
+	t.Parallel()
 	t.Run("valid number", func(t *testing.T) {
 		defs := map[string]*FieldDefinition{
 			"age": {Type: FieldTypeNumber},
@@ -213,6 +218,7 @@ func TestValidateFieldValueNumber(t *testing.T) {
 }
 
 func TestValidateFieldValueNumberArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"scores": {Type: FieldTypeNumberArray},
 	}
@@ -247,6 +253,7 @@ func TestValidateFieldValueNumberArray(t *testing.T) {
 }
 
 func TestValidateFieldValueURL(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"website": {Type: FieldTypeURL},
 	}
@@ -285,6 +292,7 @@ func TestValidateFieldValueURL(t *testing.T) {
 }
 
 func TestValidateSchemaTemplateBindings(t *testing.T) {
+	t.Parallel()
 	t.Run("reports unknown type template reference", func(t *testing.T) {
 		sch := &Schema{
 			Types: map[string]*TypeDefinition{
@@ -344,6 +352,7 @@ func TestValidateSchemaTemplateBindings(t *testing.T) {
 }
 
 func TestValidateFieldValueURLArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"links": {Type: FieldTypeURLArray},
 	}
@@ -378,6 +387,7 @@ func TestValidateFieldValueURLArray(t *testing.T) {
 }
 
 func TestValidateFieldValueDate(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"due": {Type: FieldTypeDate},
 	}
@@ -416,6 +426,7 @@ func TestValidateFieldValueDate(t *testing.T) {
 }
 
 func TestValidateFieldValueDateArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"dates": {Type: FieldTypeDateArray},
 	}
@@ -450,6 +461,7 @@ func TestValidateFieldValueDateArray(t *testing.T) {
 }
 
 func TestValidateFieldValueDatetime(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"time": {Type: FieldTypeDatetime},
 	}
@@ -488,6 +500,7 @@ func TestValidateFieldValueDatetime(t *testing.T) {
 }
 
 func TestValidateFieldValueDatetimeArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"times": {Type: FieldTypeDatetimeArray},
 	}
@@ -514,6 +527,7 @@ func TestValidateFieldValueDatetimeArray(t *testing.T) {
 }
 
 func TestValidateFieldValueEnum(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"status": {Type: FieldTypeEnum, Values: []string{"active", "paused", "done"}},
 	}
@@ -555,6 +569,7 @@ func TestValidateFieldValueEnum(t *testing.T) {
 }
 
 func TestValidateFieldValueEnumArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"states": {Type: FieldTypeEnumArray, Values: []string{"low", "medium", "high"}},
 	}
@@ -594,6 +609,7 @@ func TestValidateFieldValueEnumArray(t *testing.T) {
 }
 
 func TestValidateFieldValueBool(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"active": {Type: FieldTypeBool},
 	}
@@ -624,6 +640,7 @@ func TestValidateFieldValueBool(t *testing.T) {
 }
 
 func TestValidateFieldValueBoolArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"flags": {Type: FieldTypeBoolArray},
 	}
@@ -650,6 +667,7 @@ func TestValidateFieldValueBoolArray(t *testing.T) {
 }
 
 func TestValidateFieldValueRef(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"person": {Type: FieldTypeRef, Target: "person"},
 	}
@@ -690,6 +708,7 @@ func TestValidateFieldValueRef(t *testing.T) {
 }
 
 func TestValidateFieldValueRefArray(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"attendees": {Type: FieldTypeRefArray, Target: "person"},
 	}
@@ -747,6 +766,7 @@ func TestValidateFieldValueRefArray(t *testing.T) {
 }
 
 func TestValidateNullValue(t *testing.T) {
+	t.Parallel()
 	defs := map[string]*FieldDefinition{
 		"optional": {Type: FieldTypeString}, // Not required
 	}
@@ -762,6 +782,7 @@ func TestValidateNullValue(t *testing.T) {
 // See internal/dates/dates_test.go for IsValidDate and IsValidDatetime tests.
 
 func TestValidateNameField(t *testing.T) {
+	t.Parallel()
 	t.Run("no name_field is valid", func(t *testing.T) {
 		typeDef := &TypeDefinition{
 			Fields: map[string]*FieldDefinition{
@@ -815,6 +836,7 @@ func TestValidateNameField(t *testing.T) {
 }
 
 func TestValidateSchema(t *testing.T) {
+	t.Parallel()
 	t.Run("valid schema with name_field", func(t *testing.T) {
 		sch := &Schema{
 			Types: map[string]*TypeDefinition{

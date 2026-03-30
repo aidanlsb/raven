@@ -26,6 +26,7 @@ func writeFakeTool(t *testing.T, dir string, unixName, unixBody, windowsName, wi
 }
 
 func TestExecute_ExecutableRequired(t *testing.T) {
+	t.Parallel()
 	_, err := Execute("", "", "raven_vault_stats", nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -41,6 +42,7 @@ func TestExecute_ExecutableRequired(t *testing.T) {
 }
 
 func TestExecute_UnknownTool(t *testing.T) {
+	t.Parallel()
 	_, err := Execute("", "non-empty-executable", "raven_not_a_tool", nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -56,6 +58,7 @@ func TestExecute_UnknownTool(t *testing.T) {
 }
 
 func TestExecute_InvalidJSONOutput(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	executable := writeFakeTool(
 		t,
@@ -81,6 +84,7 @@ func TestExecute_InvalidJSONOutput(t *testing.T) {
 }
 
 func TestExecute_EnvelopeError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	scriptPath := writeFakeTool(
 		t,
@@ -106,6 +110,7 @@ func TestExecute_EnvelopeError(t *testing.T) {
 }
 
 func TestIsCode(t *testing.T) {
+	t.Parallel()
 	err := &Error{Code: CodeUnknownTool}
 	if !IsCode(err, CodeUnknownTool) {
 		t.Fatal("expected IsCode to match")

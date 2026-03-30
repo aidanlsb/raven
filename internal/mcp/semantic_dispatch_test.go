@@ -8,6 +8,7 @@ import (
 )
 
 func TestAllInvokableCommandsHaveCanonicalHandlers(t *testing.T) {
+	t.Parallel()
 	invoker := app.CommandInvoker()
 
 	for commandID := range commands.Registry {

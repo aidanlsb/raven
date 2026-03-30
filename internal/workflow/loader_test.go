@@ -12,6 +12,7 @@ import (
 )
 
 func TestLoad_InlineAndErrors(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 
 	t.Run("nil ref", func(t *testing.T) {
@@ -48,6 +49,7 @@ func TestLoad_InlineAndErrors(t *testing.T) {
 }
 
 func TestLoad_FromFile(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(vaultDir, "workflows"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -574,6 +576,7 @@ steps:
 }
 
 func TestGetAndList(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 
 	t.Run("Get fails when no workflows configured", func(t *testing.T) {
@@ -631,6 +634,7 @@ func TestGetAndList(t *testing.T) {
 }
 
 func TestResolveWorkflowFileRef(t *testing.T) {
+	t.Parallel()
 	t.Run("keeps explicit workflow-relative path", func(t *testing.T) {
 		got, err := ResolveWorkflowFileRef("workflows/brief.yaml", "workflows/")
 		if err != nil {
@@ -670,6 +674,7 @@ func TestResolveWorkflowFileRef(t *testing.T) {
 }
 
 func TestLoad_TestdataForEachFixture(t *testing.T) {
+	t.Parallel()
 	vaultDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
 	if err != nil {
 		t.Fatalf("resolve testdata path: %v", err)
@@ -710,6 +715,7 @@ func TestLoad_TestdataForEachFixture(t *testing.T) {
 }
 
 func TestLoad_TestdataSwitchFixture(t *testing.T) {
+	t.Parallel()
 	vaultDir, err := filepath.Abs(filepath.Join("..", "..", "testdata"))
 	if err != nil {
 		t.Fatalf("resolve testdata path: %v", err)

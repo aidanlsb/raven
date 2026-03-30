@@ -223,6 +223,7 @@ func setupRefRegressionDB(t *testing.T) *sql.DB {
 }
 
 func TestExecuteObjectQuery(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -441,6 +442,7 @@ func TestExecuteObjectQuery(t *testing.T) {
 }
 
 func TestExecuteTraitQuery_MatchesDirectRefsAcrossRootVariants(t *testing.T) {
+	t.Parallel()
 	db := setupRefRegressionDB(t)
 	defer db.Close()
 
@@ -464,6 +466,7 @@ func TestExecuteTraitQuery_MatchesDirectRefsAcrossRootVariants(t *testing.T) {
 }
 
 func TestExecuteObjectQuery_HasAppliesNestedTraitPredicates(t *testing.T) {
+	t.Parallel()
 	db := setupRefRegressionDB(t)
 	defer db.Close()
 
@@ -487,6 +490,7 @@ func TestExecuteObjectQuery_HasAppliesNestedTraitPredicates(t *testing.T) {
 }
 
 func TestExecuteTraitQuery(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -645,6 +649,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 }
 
 func TestDirectTargetPredicates(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -787,6 +792,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 }
 
 func TestOrAndGroupPredicates(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -900,6 +906,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 }
 
 func TestBooleanEdgeCasesExecution(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -959,6 +966,7 @@ func TestBooleanEdgeCasesExecution(t *testing.T) {
 }
 
 func TestAtPredicate(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -1023,6 +1031,7 @@ func TestAtPredicate(t *testing.T) {
 }
 
 func TestRefdPredicate(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -1087,6 +1096,7 @@ func TestRefdPredicate(t *testing.T) {
 }
 
 func TestComparisonOperators(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -1142,6 +1152,7 @@ func TestComparisonOperators(t *testing.T) {
 }
 
 func TestRefdShorthand(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -1182,6 +1193,7 @@ func TestRefdShorthand(t *testing.T) {
 }
 
 func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 

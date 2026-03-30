@@ -3,6 +3,7 @@ package query
 import "testing"
 
 func TestObjectFieldEquality_NumericArrayMembership(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 

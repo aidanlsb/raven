@@ -5,6 +5,7 @@ import (
 )
 
 func TestParseFilterExpression(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		filter         string
@@ -136,6 +137,7 @@ func TestParseFilterExpression(t *testing.T) {
 }
 
 func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
+	t.Parallel()
 	q := BuildFTSContentQuery(`michael-truell OR "Michael Truell"`)
 	if q != `content: ("michael-truell" OR "Michael Truell")` {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, `content: ("michael-truell" OR "Michael Truell")`)
@@ -143,6 +145,7 @@ func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
 }
 
 func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
+	t.Parallel()
 	q := BuildFTSSearchQuery("hello world")
 	want := `{title content}: (hello world)`
 	if q != want {
@@ -163,6 +166,7 @@ func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
 }
 
 func TestSearch_AllowsHyphenatedTokenWithOR(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -197,6 +201,7 @@ func TestSearch_AllowsHyphenatedTokenWithOR(t *testing.T) {
 }
 
 func TestSearch_MatchesTitle(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -233,6 +238,7 @@ func TestSearch_MatchesTitle(t *testing.T) {
 }
 
 func TestQueryTraitsWithFilterExpressions(t *testing.T) {
+	t.Parallel()
 	// Integration tests with actual database
 	db, err := OpenInMemory()
 	if err != nil {
@@ -329,6 +335,7 @@ func TestQueryTraitsWithFilterExpressions(t *testing.T) {
 }
 
 func TestBacklinks(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -382,6 +389,7 @@ func TestBacklinks(t *testing.T) {
 }
 
 func TestOutlinks(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -434,6 +442,7 @@ func TestOutlinks(t *testing.T) {
 }
 
 func TestGetObject(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -474,6 +483,7 @@ func TestGetObject(t *testing.T) {
 }
 
 func TestUntypedPages(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -504,6 +514,7 @@ func TestUntypedPages(t *testing.T) {
 }
 
 func TestQueryObjects(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)

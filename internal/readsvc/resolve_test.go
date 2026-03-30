@@ -10,6 +10,7 @@ import (
 )
 
 func TestResolveOperationCachesResolverWithinOperation(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	for _, relPath := range []string{"projects/raven.md", "projects/atlas.md"} {
 		fullPath := filepath.Join(vaultPath, relPath)

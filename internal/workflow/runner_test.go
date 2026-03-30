@@ -9,6 +9,7 @@ import (
 )
 
 func TestRunner_StopsAtAgentStep(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "x",
 		Steps: []*config.WorkflowStep{
@@ -64,6 +65,7 @@ func TestRunner_StopsAtAgentStep(t *testing.T) {
 }
 
 func TestRunner_AgentStepTypedArrayOutputExample(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "x",
 		Steps: []*config.WorkflowStep{
@@ -100,6 +102,7 @@ func TestRunner_AgentStepTypedArrayOutputExample(t *testing.T) {
 }
 
 func TestRunner_ReturnsStepSummariesInsteadOfStepPayloads(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "x",
 		Steps: []*config.WorkflowStep{
@@ -166,6 +169,7 @@ func TestRunner_ReturnsStepSummariesInsteadOfStepPayloads(t *testing.T) {
 }
 
 func TestRunner_ToolStepTypedInterpolation(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "typed",
 		Steps: []*config.WorkflowStep{
@@ -242,6 +246,7 @@ func TestRunner_ToolStepTypedInterpolation(t *testing.T) {
 }
 
 func TestRunner_OptionalInputOmittedIsAddressable(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "optional-inputs",
 		Inputs: map[string]*config.WorkflowInput{
@@ -288,6 +293,7 @@ func TestRunner_OptionalInputOmittedIsAddressable(t *testing.T) {
 }
 
 func TestRunner_ForEachExecutesNestedToolsWithScopedInterpolation(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "fanout",
 		Steps: []*config.WorkflowStep{
@@ -378,6 +384,7 @@ func TestRunner_ForEachExecutesNestedToolsWithScopedInterpolation(t *testing.T) 
 }
 
 func TestRunner_ForEachContinueOnError(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "fanout-continue",
 		Steps: []*config.WorkflowStep{
@@ -469,6 +476,7 @@ func TestRunner_ForEachContinueOnError(t *testing.T) {
 }
 
 func TestRunner_ForEachFailFastReturnsError(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "fanout-fail-fast",
 		Steps: []*config.WorkflowStep{
@@ -546,6 +554,7 @@ func TestRunner_ForEachFailFastReturnsError(t *testing.T) {
 }
 
 func TestRunner_SwitchRoutesToMatchingCase(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "switch-match",
 		Steps: []*config.WorkflowStep{
@@ -649,6 +658,7 @@ func TestRunner_SwitchRoutesToMatchingCase(t *testing.T) {
 }
 
 func TestRunner_SwitchFallsBackToDefaultCase(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "switch-default",
 		Steps: []*config.WorkflowStep{
@@ -715,6 +725,7 @@ func TestRunner_SwitchFallsBackToDefaultCase(t *testing.T) {
 }
 
 func TestRunner_SwitchReturnsErrorOnInvalidEmitType(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "switch-invalid-emit",
 		Steps: []*config.WorkflowStep{

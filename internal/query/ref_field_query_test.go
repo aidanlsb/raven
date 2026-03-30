@@ -8,6 +8,7 @@ import (
 )
 
 func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 
@@ -70,6 +71,7 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 }
 
 func TestRefFieldQueryErrorsOnAmbiguousStoredValue(t *testing.T) {
+	t.Parallel()
 	db := setupTestDB(t)
 	defer db.Close()
 

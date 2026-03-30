@@ -9,6 +9,7 @@ import (
 )
 
 func TestNormalizeDirRoot(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in   string
 		want string
@@ -28,6 +29,7 @@ func TestNormalizeDirRoot(t *testing.T) {
 }
 
 func TestNormalizeVaultRelPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in   string
 		want string
@@ -53,6 +55,7 @@ func TestNormalizeVaultRelPath(t *testing.T) {
 }
 
 func TestVaultRootFilePaths(t *testing.T) {
+	t.Parallel()
 	vaultPath := "/tmp/test-vault"
 	if got, want := SchemaPath(vaultPath), filepath.Join(vaultPath, "schema.yaml"); got != want {
 		t.Fatalf("SchemaPath() = %q, want %q", got, want)
@@ -63,6 +66,7 @@ func TestVaultRootFilePaths(t *testing.T) {
 }
 
 func TestFilePathToObjectID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		filePath    string
 		objectsRoot string
@@ -86,6 +90,7 @@ func TestFilePathToObjectID(t *testing.T) {
 }
 
 func TestObjectIDToFilePath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		id          string
 		typeName    string
@@ -109,6 +114,7 @@ func TestObjectIDToFilePath(t *testing.T) {
 }
 
 func TestCandidateFilePaths(t *testing.T) {
+	t.Parallel()
 	got := CandidateFilePaths("people/freya", "objects/", "pages/")
 	// Always includes literal, objects-rooted, pages-rooted.
 	want := map[string]struct{}{
@@ -127,6 +133,7 @@ func TestCandidateFilePaths(t *testing.T) {
 }
 
 func TestValidateWithinVault_AllowsInside(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	target := filepath.Join(vaultDir, "notes", "new.md")
 	if err := ValidateWithinVault(vaultDir, target); err != nil {
@@ -135,6 +142,7 @@ func TestValidateWithinVault_AllowsInside(t *testing.T) {
 }
 
 func TestValidateWithinVault_SymlinkEscape(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink tests are not reliable on windows")
 	}

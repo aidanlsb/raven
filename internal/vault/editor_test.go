@@ -7,6 +7,7 @@ import (
 )
 
 func TestEditorCommandName(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -29,6 +30,7 @@ func TestEditorCommandName(t *testing.T) {
 }
 
 func TestIsTerminalEditor(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -51,6 +53,7 @@ func TestIsTerminalEditor(t *testing.T) {
 }
 
 func TestParseEditorMode(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		mode string

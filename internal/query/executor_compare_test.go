@@ -7,6 +7,7 @@ import (
 )
 
 func TestCompareValues_DerefsStringPointers(t *testing.T) {
+	t.Parallel()
 	a := "b"
 	b := "a"
 	if compareValues(&a, &b) <= 0 {
@@ -15,6 +16,7 @@ func TestCompareValues_DerefsStringPointers(t *testing.T) {
 }
 
 func TestCompareValues_Numeric(t *testing.T) {
+	t.Parallel()
 	if compareValues("10", "2") <= 0 {
 		t.Fatalf("expected numeric 10 > 2")
 	}
@@ -24,6 +26,7 @@ func TestCompareValues_Numeric(t *testing.T) {
 }
 
 func TestCompareValues_Temporal(t *testing.T) {
+	t.Parallel()
 	// date vs date
 	if compareValues("2025-02-01", "2025-01-01") <= 0 {
 		t.Fatalf("expected 2025-02-01 > 2025-01-01")
@@ -39,6 +42,7 @@ func TestCompareValues_Temporal(t *testing.T) {
 }
 
 func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
+	t.Parallel()
 	p := &ValuePredicate{
 		Value:     "10",
 		CompareOp: CompareGt,
@@ -56,6 +60,7 @@ func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 }
 
 func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	p := &ValuePredicate{
 		Value:     "TODO",
 		CompareOp: CompareEq,
@@ -67,6 +72,7 @@ func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 }
 
 func TestBuildValueCondition_DateFilterToday(t *testing.T) {
+	t.Parallel()
 	p := &ValuePredicate{
 		Value:     "today",
 		CompareOp: CompareEq,
@@ -85,6 +91,7 @@ func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 }
 
 func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
+	t.Parallel()
 	p := &ValuePredicate{
 		Value:     "tomorrow",
 		CompareOp: CompareNeq,
@@ -103,6 +110,7 @@ func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 }
 
 func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
+	t.Parallel()
 	cond, args := buildCompareCondition("today", CompareLt, false, "t.value")
 	if cond != "t.value < ?" {
 		t.Fatalf("cond = %q", cond)
@@ -117,6 +125,7 @@ func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 }
 
 func TestBuildCompareCondition_UnknownKeywordFallsBackToString(t *testing.T) {
+	t.Parallel()
 	cond, args := buildCompareCondition("this-week", CompareEq, false, "t.value")
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
@@ -127,6 +136,7 @@ func TestBuildCompareCondition_UnknownKeywordFallsBackToString(t *testing.T) {
 }
 
 func TestLikeCond_EscapesWildcards(t *testing.T) {
+	t.Parallel()
 	e := &Executor{}
 	p := &StringFuncPredicate{
 		FuncType:      StringFuncIncludes,
@@ -154,6 +164,7 @@ func TestLikeCond_EscapesWildcards(t *testing.T) {
 }
 
 func TestBuildFieldPredicateSQL_ScalarOrArrayCaseInsensitiveEquality(t *testing.T) {
+	t.Parallel()
 	e := &Executor{}
 	p := &FieldPredicate{
 		Field:     "tags",
@@ -185,6 +196,7 @@ func TestBuildFieldPredicateSQL_ScalarOrArrayCaseInsensitiveEquality(t *testing.
 }
 
 func TestBuildFieldPredicateSQL_ScalarOrArrayCaseInsensitiveNotEquals(t *testing.T) {
+	t.Parallel()
 	e := &Executor{}
 	p := &FieldPredicate{
 		Field:     "tags",
@@ -212,6 +224,7 @@ func TestBuildFieldPredicateSQL_ScalarOrArrayCaseInsensitiveNotEquals(t *testing
 }
 
 func TestBuildElementEqualitySQL_NumericUsesCast(t *testing.T) {
+	t.Parallel()
 	e := &Executor{}
 	p := &ElementEqualityPredicate{
 		Value:     "10",

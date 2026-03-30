@@ -111,6 +111,7 @@ func hasResourceURI(resources []Resource, uri string) bool {
 }
 
 func TestResourcesListIncludesGuideIndexAndTopics(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 	resources := callResourcesList(t, s)
 
@@ -136,6 +137,7 @@ func TestResourcesListIncludesGuideIndexAndTopics(t *testing.T) {
 }
 
 func TestResourcesListOmitsAgentInstructionsWhenMissing(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 	resources := callResourcesList(t, s)
 
@@ -145,6 +147,7 @@ func TestResourcesListOmitsAgentInstructionsWhenMissing(t *testing.T) {
 }
 
 func TestResourcesListIncludesAgentInstructionsWhenPresent(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
 	if err := os.WriteFile(agentPath, []byte("# Agent Rules\n"), 0644); err != nil {
@@ -158,6 +161,7 @@ func TestResourcesListIncludesAgentInstructionsWhenPresent(t *testing.T) {
 }
 
 func TestResourcesReadGuideIndexAndTopics(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 
 	indexContent := callResourcesRead(t, s, "raven://guide/index")
@@ -185,6 +189,7 @@ func TestResourcesReadGuideIndexAndTopics(t *testing.T) {
 }
 
 func TestResourcesReadAgentInstructions(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 	expected := "# Agent Rules\nAlways run checks.\n"
 	agentPath := filepath.Join(s.vaultPath, "AGENTS.md")
@@ -202,6 +207,7 @@ func TestResourcesReadAgentInstructions(t *testing.T) {
 }
 
 func TestResourcesReadAgentInstructionsMissing(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 	resp := callResourcesReadResponse(t, s, vaultAgentInstructionsResourceURI)
 	if resp.Error == nil {
@@ -213,6 +219,7 @@ func TestResourcesReadAgentInstructionsMissing(t *testing.T) {
 }
 
 func TestResourcesReadSchema(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 	content := callResourcesRead(t, s, "raven://schema/current")
 	if strings.TrimSpace(content.Text) == "" {
@@ -227,6 +234,7 @@ func TestResourcesReadSchema(t *testing.T) {
 }
 
 func TestResourcesReadUnknownGuide(t *testing.T) {
+	t.Parallel()
 	s := newTestServerWithVault(t)
 	resp := callResourcesReadResponse(t, s, "raven://guide/does-not-exist")
 	if resp.Error == nil {
@@ -238,6 +246,7 @@ func TestResourcesReadUnknownGuide(t *testing.T) {
 }
 
 func TestGuideTopicsHaveTopLevelHeading(t *testing.T) {
+	t.Parallel()
 	for _, topic := range guideTopics {
 		content, ok := readAgentGuideFile(topic.Path)
 		if !ok {
@@ -251,6 +260,7 @@ func TestGuideTopicsHaveTopLevelHeading(t *testing.T) {
 }
 
 func TestGuideIndexMatchesTopics(t *testing.T) {
+	t.Parallel()
 	indexContent, ok := readAgentGuideFile(agentGuideIndexPath)
 	if !ok {
 		t.Fatalf("failed to read guide index: %s", agentGuideIndexPath)
@@ -280,6 +290,7 @@ func TestGuideIndexMatchesTopics(t *testing.T) {
 }
 
 func TestWorkflowContinueGuideExamplesMatchRegistryContract(t *testing.T) {
+	t.Parallel()
 	meta, ok := commands.Registry["workflow_continue"]
 	if !ok {
 		t.Fatal("workflow_continue registry entry missing")
@@ -362,6 +373,7 @@ func firstNonEmptyLine(content string) string {
 }
 
 func TestStartupModeMessage(t *testing.T) {
+	t.Parallel()
 	t.Run("uses explicit vaultPath field", func(t *testing.T) {
 		s := &Server{vaultPath: "/tmp/explicit"}
 		msg := s.startupModeMessage()
@@ -409,6 +421,7 @@ func TestStartupModeMessage(t *testing.T) {
 }
 
 func TestExecuteRvnTreatsOkFalseAsErrorEvenWithExit0(t *testing.T) {
+	t.Parallel()
 	// Skip on Windows just in case; Raven targets mac/linux.
 	if runtime.GOOS == "windows" {
 		t.Skip("shell scripts not supported on windows in this test")
@@ -436,6 +449,7 @@ exit 0
 }
 
 func TestExecuteRvnWrapsNonJSONOutputOnFailure(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("shell scripts not supported on windows in this test")
 	}
@@ -477,6 +491,7 @@ exit 1
 }
 
 func TestExecuteRvnReturnsErrorWhenExecutablePathMissing(t *testing.T) {
+	t.Parallel()
 	s := &Server{executable: ""}
 	out, isErr := s.executeRvn([]string{"stats", "--json"})
 	if !isErr {
@@ -505,6 +520,7 @@ func TestExecuteRvnReturnsErrorWhenExecutablePathMissing(t *testing.T) {
 }
 
 func TestResolveVaultPathUsesExplicitVaultPathDirectly(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	s := &Server{baseArgs: []string{"--vault-path", tmp}}
 
@@ -518,6 +534,7 @@ func TestResolveVaultPathUsesExplicitVaultPathDirectly(t *testing.T) {
 }
 
 func TestResolveVaultPathUsesNamedVaultDirectly(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	vaultPath := filepath.Join(tmp, "work-vault")
 	if err := os.MkdirAll(vaultPath, 0o755); err != nil {

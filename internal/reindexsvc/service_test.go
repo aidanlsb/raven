@@ -25,11 +25,13 @@ func assertReindexCode(t *testing.T, err error, want Code) *Error {
 }
 
 func TestRunInvalidInput(t *testing.T) {
+	t.Parallel()
 	_, err := Run(RunRequest{VaultPath: "   "})
 	assertReindexCode(t, err, CodeInvalidInput)
 }
 
 func TestRunSchemaInvalid(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("types: [\n"), 0o644); err != nil {
 		t.Fatalf("failed to write malformed schema fixture: %v", err)
@@ -40,6 +42,7 @@ func TestRunSchemaInvalid(t *testing.T) {
 }
 
 func TestRunConfigInvalid(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte("directories: [\n"), 0o644); err != nil {
 		t.Fatalf("failed to write malformed raven.yaml fixture: %v", err)
@@ -50,6 +53,7 @@ func TestRunConfigInvalid(t *testing.T) {
 }
 
 func TestRunDryRunIndexesDiscoveredFiles(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	if err := os.WriteFile(filepath.Join(vaultPath, "note.md"), []byte("# Hello\n"), 0o644); err != nil {
 		t.Fatalf("failed to write markdown fixture: %v", err)
@@ -82,6 +86,7 @@ func TestRunDryRunIndexesDiscoveredFiles(t *testing.T) {
 }
 
 func TestRunResolvesReferencesAfterBulkReindex(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	if err := os.WriteFile(filepath.Join(vaultPath, "source.md"), []byte("# Source\n\nSee [[target]].\n"), 0o644); err != nil {
 		t.Fatalf("failed to write source fixture: %v", err)
@@ -118,6 +123,7 @@ func TestRunResolvesReferencesAfterBulkReindex(t *testing.T) {
 }
 
 func TestBuildParseOptions(t *testing.T) {
+	t.Parallel()
 	if got := buildParseOptions(nil); got != nil {
 		t.Fatalf("expected nil parse options for nil config, got %#v", got)
 	}

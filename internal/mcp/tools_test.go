@@ -6,6 +6,7 @@ import (
 )
 
 func TestGenerateToolSchemasCompactSurface(t *testing.T) {
+	t.Parallel()
 	tools := GenerateToolSchemas()
 	if len(tools) != 3 {
 		t.Fatalf("expected 3 compact MCP tools, got %d", len(tools))
@@ -49,6 +50,7 @@ func TestGenerateToolSchemasCompactSurface(t *testing.T) {
 }
 
 func TestBuildCommandContractStrictTypes(t *testing.T) {
+	t.Parallel()
 	queryContract, ok := buildCommandContract("query")
 	if !ok {
 		t.Fatal("expected query contract")
@@ -70,6 +72,7 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 }
 
 func TestDiscoverableContractsApplyPolicy(t *testing.T) {
+	t.Parallel()
 	contracts := discoverableContracts()
 	byID := make(map[string]commandContract, len(contracts))
 	for _, c := range contracts {
@@ -85,6 +88,7 @@ func TestDiscoverableContractsApplyPolicy(t *testing.T) {
 }
 
 func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {
+	t.Parallel()
 	s := &Server{}
 
 	out, isErr := s.callCompactDiscover(nil)
@@ -128,6 +132,7 @@ func TestCompactDiscoverReturnsFullCatalogByDefault(t *testing.T) {
 }
 
 func TestCompactDiscoverRejectsLegacySearchAndPaginationArgs(t *testing.T) {
+	t.Parallel()
 	s := &Server{}
 
 	for _, args := range []map[string]interface{}{
@@ -146,6 +151,7 @@ func TestCompactDiscoverRejectsLegacySearchAndPaginationArgs(t *testing.T) {
 }
 
 func TestCompactDiscoverAppliesDeterministicFilters(t *testing.T) {
+	t.Parallel()
 	s := &Server{}
 
 	out, isErr := s.callCompactDiscover(map[string]interface{}{

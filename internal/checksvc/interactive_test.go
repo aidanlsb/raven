@@ -10,6 +10,7 @@ import (
 )
 
 func TestGroupMissingRefsForInteractive(t *testing.T) {
+	t.Parallel()
 	refs := []*check.MissingRef{
 		{TargetPath: "zeta/path", Confidence: check.ConfidenceUnknown},
 		{TargetPath: "beta/path", Confidence: check.ConfidenceCertain},
@@ -32,6 +33,7 @@ func TestGroupMissingRefsForInteractive(t *testing.T) {
 }
 
 func TestResolveAndSlugifyTargetPathUsesDirectoryRoots(t *testing.T) {
+	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"meeting": {DefaultPath: "meeting/"},
@@ -46,6 +48,7 @@ func TestResolveAndSlugifyTargetPathUsesDirectoryRoots(t *testing.T) {
 }
 
 func TestAddTypeAndAddTraitUpdateSchemaAndInMemory(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	schemaContent := `version: 2
 types:

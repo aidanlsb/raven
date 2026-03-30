@@ -8,6 +8,7 @@ import (
 // The Slugify function is tested below.
 
 func TestSlugify(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  string

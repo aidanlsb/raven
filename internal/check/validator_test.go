@@ -10,6 +10,7 @@ import (
 )
 
 func TestValidatorBasic(t *testing.T) {
+	t.Parallel()
 	// Create a simple schema
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
@@ -128,6 +129,7 @@ func TestValidatorBasic(t *testing.T) {
 }
 
 func TestValidatorUnknownFrontmatterKey(t *testing.T) {
+	t.Parallel()
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"person": {
@@ -170,6 +172,7 @@ func TestValidatorUnknownFrontmatterKey(t *testing.T) {
 }
 
 func TestValidatorTraitValidation(t *testing.T) {
+	t.Parallel()
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"page": {},
@@ -344,6 +347,7 @@ func TestValidatorTraitValidation(t *testing.T) {
 }
 
 func TestValidatorBooleanTraitValidation(t *testing.T) {
+	t.Parallel()
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"page": {},
@@ -447,6 +451,7 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 }
 
 func TestIssueLevel(t *testing.T) {
+	t.Parallel()
 	t.Run("error string", func(t *testing.T) {
 		if LevelError.String() != "ERROR" {
 			t.Errorf("LevelError.String() = %q, want %q", LevelError.String(), "ERROR")
@@ -461,6 +466,7 @@ func TestIssueLevel(t *testing.T) {
 }
 
 func TestInferConfidence(t *testing.T) {
+	t.Parallel()
 	t.Run("certain string", func(t *testing.T) {
 		if ConfidenceCertain.String() != "certain" {
 			t.Errorf("ConfidenceCertain.String() = %q, want %q", ConfidenceCertain.String(), "certain")
@@ -481,6 +487,7 @@ func TestInferConfidence(t *testing.T) {
 }
 
 func TestValidatorTargetTypeValidation(t *testing.T) {
+	t.Parallel()
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"project": {
@@ -558,6 +565,7 @@ func TestValidatorTargetTypeValidation(t *testing.T) {
 }
 
 func TestValidatorSchemaIntegrity(t *testing.T) {
+	t.Parallel()
 	t.Run("unused type", func(t *testing.T) {
 		s := &schema.Schema{
 			Types: map[string]*schema.TypeDefinition{
@@ -684,6 +692,7 @@ func TestValidatorSchemaIntegrity(t *testing.T) {
 }
 
 func TestValidatorShortRefSuggestion(t *testing.T) {
+	t.Parallel()
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"page": {Fields: map[string]*schema.FieldDefinition{}},
@@ -725,6 +734,7 @@ func TestValidatorShortRefSuggestion(t *testing.T) {
 }
 
 func TestValidatorDatetimeValidation(t *testing.T) {
+	t.Parallel()
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"page": {},
@@ -794,6 +804,7 @@ func TestValidatorDatetimeValidation(t *testing.T) {
 }
 
 func TestAliasCollisionDetection(t *testing.T) {
+	t.Parallel()
 	s := schema.New()
 	s.Types["person"] = &schema.TypeDefinition{}
 
@@ -920,6 +931,7 @@ func TestAliasCollisionDetection(t *testing.T) {
 }
 
 func TestValidatorStaleFragment(t *testing.T) {
+	t.Parallel()
 	s := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
 			"page": {},

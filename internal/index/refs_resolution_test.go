@@ -28,6 +28,7 @@ import (
 // - Quoted wikilinks: "[[target]]"
 // - Bare strings without schema: stored as string, not indexed as ref
 func TestFrontmatterRefResolution(t *testing.T) {
+	t.Parallel()
 	// Create temp directory for test vault
 	tmpDir, err := os.MkdirTemp("", "raven-test-refs-*")
 	if err != nil {
@@ -321,6 +322,7 @@ company: [[cursor]]`,
 
 // TestAliasResolution tests that aliases resolve correctly for refs.
 func TestAliasResolution(t *testing.T) {
+	t.Parallel()
 	tmpDir, err := os.MkdirTemp("", "raven-test-alias-*")
 	if err != nil {
 		t.Fatal(err)
@@ -404,6 +406,7 @@ about: "[[The Queen]]"
 
 // TestNameFieldResolution tests that name_field values resolve correctly.
 func TestNameFieldResolution(t *testing.T) {
+	t.Parallel()
 	tmpDir, err := os.MkdirTemp("", "raven-test-namefield-*")
 	if err != nil {
 		t.Fatal(err)
@@ -510,6 +513,7 @@ about: "[[The Prose Edda]]"
 // TestQueryRefsWithResolution tests that query refs:[[target]] works with
 // various reference styles after resolution.
 func TestQueryRefsWithResolution(t *testing.T) {
+	t.Parallel()
 	tmpDir, err := os.MkdirTemp("", "raven-test-query-refs-*")
 	if err != nil {
 		t.Fatal(err)

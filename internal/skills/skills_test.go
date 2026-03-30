@@ -7,6 +7,7 @@ import (
 )
 
 func TestLoadCatalog(t *testing.T) {
+	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
@@ -27,6 +28,7 @@ func TestLoadCatalog(t *testing.T) {
 }
 
 func TestResolveInstallRootOverride(t *testing.T) {
+	t.Parallel()
 	cwd := t.TempDir()
 	got, err := ResolveInstallRoot(TargetCodex, ScopeUser, "custom/skills", cwd)
 	if err != nil {
@@ -39,6 +41,7 @@ func TestResolveInstallRootOverride(t *testing.T) {
 }
 
 func TestInstallLifecycle(t *testing.T) {
+	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)
@@ -97,6 +100,7 @@ func TestInstallLifecycle(t *testing.T) {
 }
 
 func TestPlanInstallConflictAndForce(t *testing.T) {
+	t.Parallel()
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog() error = %v", err)

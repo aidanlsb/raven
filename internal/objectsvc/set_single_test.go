@@ -11,6 +11,7 @@ import (
 )
 
 func TestSetByReferenceSuccess(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:
@@ -68,6 +69,7 @@ traits: {}
 }
 
 func TestSetByReferenceMissingReference(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	writeTestSchema(t, vaultPath, `
 types:

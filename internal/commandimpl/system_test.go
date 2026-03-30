@@ -8,6 +8,7 @@ import (
 )
 
 func TestBuildInitPostInitDataSuggestsRegistration(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "config.toml")
 	statePath := filepath.Join(root, "state.toml")
@@ -51,6 +52,7 @@ func TestBuildInitPostInitDataSuggestsRegistration(t *testing.T) {
 }
 
 func TestBuildInitPostInitDataReflectsRegisteredVault(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "config.toml")
 	statePath := filepath.Join(root, "state.toml")
@@ -99,6 +101,7 @@ func TestBuildInitPostInitDataReflectsRegisteredVault(t *testing.T) {
 }
 
 func TestFormatSuggestedCommandPathNormalizesWindowsSeparators(t *testing.T) {
+	t.Parallel()
 	got := formatSuggestedCommandPath(`C:\Users\me\New Notes`)
 	want := `"C:/Users/me/New Notes"`
 	if got != want {

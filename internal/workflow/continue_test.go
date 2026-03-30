@@ -7,6 +7,7 @@ import (
 )
 
 func TestRunner_ContinueAfterAgentOutput(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "daily-brief",
 		Steps: []*config.WorkflowStep{
@@ -114,6 +115,7 @@ func TestRunner_ContinueAfterAgentOutput(t *testing.T) {
 }
 
 func TestApplyAgentOutputs_Validation(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "x",
 		Steps: []*config.WorkflowStep{
@@ -142,6 +144,7 @@ func TestApplyAgentOutputs_Validation(t *testing.T) {
 }
 
 func TestApplyAgentOutputs_Validation_TypedArray(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "x",
 		Steps: []*config.WorkflowStep{
@@ -196,6 +199,7 @@ func TestApplyAgentOutputs_Validation_TypedArray(t *testing.T) {
 }
 
 func TestRunner_ContinueAfterAgentOutput_DataNamespaceCompatibility(t *testing.T) {
+	t.Parallel()
 	wf := &Workflow{
 		Name: "daily-brief",
 		Steps: []*config.WorkflowStep{

@@ -12,6 +12,7 @@ import (
 )
 
 func TestDatabase(t *testing.T) {
+	t.Parallel()
 	// Create a minimal schema for testing
 	sch := schema.New()
 
@@ -601,6 +602,7 @@ owner: "[[people/freya]]"
 // the two functions produced different IDs for the same physical trait, causing
 // date queries to reference non-existent trait IDs.
 func TestTraitIDConsistency(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -668,6 +670,7 @@ func TestTraitIDConsistency(t *testing.T) {
 }
 
 func TestTraitIDsStableAcrossReindexForMultilineParagraph(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -748,6 +751,7 @@ func TestTraitIDsStableAcrossReindexForMultilineParagraph(t *testing.T) {
 }
 
 func TestAliasIndexing(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -1132,6 +1136,7 @@ func TestAliasIndexing(t *testing.T) {
 }
 
 func TestAllIndexedFilePaths(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -1182,6 +1187,7 @@ func TestAllIndexedFilePaths(t *testing.T) {
 }
 
 func TestOpenWithRebuildLock(t *testing.T) {
+	t.Parallel()
 	vaultDir := t.TempDir()
 	dbDir := filepath.Join(vaultDir, ".raven")
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
@@ -1206,6 +1212,7 @@ func TestOpenWithRebuildLock(t *testing.T) {
 }
 
 func TestResolveReferencesBatched(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)

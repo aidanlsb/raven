@@ -7,6 +7,7 @@ import (
 )
 
 func TestExecuteQuery_InvalidInput(t *testing.T) {
+	t.Parallel()
 	_, err := ExecuteQuery(nil, ExecuteQueryRequest{QueryString: "object:project"})
 	if err == nil {
 		t.Fatalf("expected error for nil runtime")
@@ -31,6 +32,7 @@ func TestExecuteQuery_InvalidInput(t *testing.T) {
 }
 
 func TestExecuteQuery_ObjectModes(t *testing.T) {
+	t.Parallel()
 	rt := seededRuntime(t)
 
 	result, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project"})
@@ -79,6 +81,7 @@ func TestExecuteQuery_ObjectModes(t *testing.T) {
 }
 
 func TestExecuteQuery_TraitModes(t *testing.T) {
+	t.Parallel()
 	rt := seededRuntime(t)
 
 	result, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "trait:todo"})
@@ -124,6 +127,7 @@ func TestExecuteQuery_TraitModes(t *testing.T) {
 }
 
 func TestExecuteQuery_RefPredicateUsesLazyResolver(t *testing.T) {
+	t.Parallel()
 	rt := seededRuntime(t)
 
 	_, err := rt.DB.DB().Exec(`

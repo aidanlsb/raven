@@ -6,6 +6,7 @@ import (
 )
 
 func TestInterpolateObject_ExactExpressionPreservesType(t *testing.T) {
+	t.Parallel()
 	inputs := map[string]string{
 		"name": "Freya",
 	}
@@ -48,6 +49,7 @@ func TestInterpolateObject_ExactExpressionPreservesType(t *testing.T) {
 }
 
 func TestInterpolateObject_RecursiveAndStringInterpolation(t *testing.T) {
+	t.Parallel()
 	inputs := map[string]string{"name": "Loki"}
 	steps := map[string]interface{}{
 		"a": map[string]interface{}{
@@ -89,6 +91,7 @@ func TestInterpolateObject_RecursiveAndStringInterpolation(t *testing.T) {
 }
 
 func TestInterpolateObject_UnknownVariableReturnsError(t *testing.T) {
+	t.Parallel()
 	args := map[string]interface{}{
 		"x": "{{steps.missing.value}}",
 	}

@@ -3,6 +3,7 @@ package wikilink
 import "testing"
 
 func TestParseExact(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in          string
 		wantTarget  string
@@ -47,6 +48,7 @@ func TestParseExact(t *testing.T) {
 }
 
 func TestFindAllInLine(t *testing.T) {
+	t.Parallel()
 	line := "See [[a]] and [[b|B]] and [[[c]]]"
 	m := FindAllInLine(line, false)
 	if len(m) != 2 {
@@ -66,6 +68,7 @@ func TestFindAllInLine(t *testing.T) {
 }
 
 func TestScanAt(t *testing.T) {
+	t.Parallel()
 	input := `x [[people/freya|Freya]] y`
 	end, target, literal, ok := ScanAt(input, 2)
 	if !ok {

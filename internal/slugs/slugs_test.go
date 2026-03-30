@@ -3,6 +3,7 @@ package slugs
 import "testing"
 
 func TestHeadingSlug(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in   string
 		want string
@@ -27,6 +28,7 @@ func TestHeadingSlug(t *testing.T) {
 }
 
 func TestComponentSlug(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in   string
 		want string
@@ -49,6 +51,7 @@ func TestComponentSlug(t *testing.T) {
 }
 
 func TestPathSlug(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in   string
 		want string

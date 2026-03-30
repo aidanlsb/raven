@@ -3,6 +3,7 @@ package schema
 import "testing"
 
 func TestResolveTypeTemplateFile(t *testing.T) {
+	t.Parallel()
 	t.Run("resolves explicit template ID", func(t *testing.T) {
 		sch := &Schema{
 			Templates: map[string]*TemplateDefinition{

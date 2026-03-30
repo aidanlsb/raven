@@ -8,6 +8,7 @@ import (
 )
 
 func TestResolveReferences(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -120,6 +121,7 @@ func TestResolveReferences(t *testing.T) {
 }
 
 func TestResolveReferences_DateShorthand(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -192,6 +194,7 @@ func TestResolveReferences_DateShorthand(t *testing.T) {
 }
 
 func TestResolveReferences_UnresolvedRef(t *testing.T) {
+	t.Parallel()
 	db, err := OpenInMemory()
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)

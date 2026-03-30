@@ -9,6 +9,7 @@ import (
 )
 
 func TestDeleteFileTrashMovesFile(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
@@ -42,6 +43,7 @@ func TestDeleteFileTrashMovesFile(t *testing.T) {
 }
 
 func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	trashPath := filepath.Join(vaultPath, ".trash/people/freya.md")
@@ -83,6 +85,7 @@ func TestDeleteFileTrashCollisionAddsTimestamp(t *testing.T) {
 }
 
 func TestDeleteFilePermanentRemovesFile(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
@@ -109,6 +112,7 @@ func TestDeleteFilePermanentRemovesFile(t *testing.T) {
 }
 
 func TestDeleteFileInvalidBehavior(t *testing.T) {
+	t.Parallel()
 	vaultPath := t.TempDir()
 	filePath := filepath.Join(vaultPath, "people/freya.md")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {

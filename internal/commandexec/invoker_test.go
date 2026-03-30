@@ -6,6 +6,7 @@ import (
 )
 
 func TestInvokerExecuteCallsRegisteredHandler(t *testing.T) {
+	t.Parallel()
 	registry := NewHandlerRegistry()
 	registry.Register("new", func(_ context.Context, req Request) Result {
 		return Success(map[string]any{
@@ -42,6 +43,7 @@ func TestInvokerExecuteCallsRegisteredHandler(t *testing.T) {
 }
 
 func TestInvokerExecuteRunsValidatorBeforeDispatch(t *testing.T) {
+	t.Parallel()
 	registry := NewHandlerRegistry()
 	registry.Register("new", func(_ context.Context, req Request) Result {
 		return Success(req.Args, nil)
@@ -72,6 +74,7 @@ func TestInvokerExecuteRunsValidatorBeforeDispatch(t *testing.T) {
 }
 
 func TestInvokerExecuteReturnsValidationFailure(t *testing.T) {
+	t.Parallel()
 	invoker := NewInvoker(NewHandlerRegistry(), func(_ context.Context, req Request) (Request, Result, bool) {
 		return req, Failure("INVALID_ARGS", "missing title", nil, "Provide title"), false
 	})
@@ -87,6 +90,7 @@ func TestInvokerExecuteReturnsValidationFailure(t *testing.T) {
 }
 
 func TestInvokerExecuteReturnsCommandNotFound(t *testing.T) {
+	t.Parallel()
 	invoker := NewInvoker(nil, nil)
 
 	result := invoker.Execute(context.Background(), Request{CommandID: "missing"})
