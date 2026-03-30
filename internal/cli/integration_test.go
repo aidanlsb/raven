@@ -4,7 +4,6 @@ package cli_test
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -180,13 +179,8 @@ func TestIntegration_JSONPreRunMissingVaultReturnsEnvelope(t *testing.T) {
 
 	cmd := exec.Command(binary, "--vault-path", missingVault, "--json", "query", "object:project")
 	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("expected command to fail\n%s", output)
-	}
-
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) || exitErr.ExitCode() == 0 {
-		t.Fatalf("expected non-zero exit, got %v", err)
+	if err != nil {
+		t.Fatalf("expected JSON envelope without process failure: %v\n%s", err, output)
 	}
 
 	var resp struct {
@@ -226,13 +220,8 @@ func TestIntegration_JSONPreRunConfigFailureReturnsEnvelope(t *testing.T) {
 
 	cmd := exec.Command(binary, "--config", configFile, "--json", "version")
 	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("expected command to fail\n%s", output)
-	}
-
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) || exitErr.ExitCode() == 0 {
-		t.Fatalf("expected non-zero exit, got %v", err)
+	if err != nil {
+		t.Fatalf("expected JSON envelope without process failure: %v\n%s", err, output)
 	}
 
 	var resp struct {

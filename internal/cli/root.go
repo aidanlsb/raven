@@ -14,6 +14,8 @@ import (
 )
 
 var (
+	errJSONStartupHandled = errors.New("json startup error already handled")
+
 	// Global flags
 	vaultName     string // Named vault from config
 	vaultPathFlag string // Explicit path (rare)
@@ -43,7 +45,7 @@ who gathered knowledge from across the world.`,
 		// non-vault commands like `config show` and `version`.
 		cfg, resolvedConfigPath, err = loadGlobalConfigWithPath()
 		if err != nil {
-			return newRootPreRunError(cmd, ErrConfigInvalid, fmt.Sprintf("failed to load config: %v", err), "")
+			return handleStartupError(ErrConfigInvalid, fmt.Sprintf("failed to load config: %v", err), "")
 		}
 		if cfg == nil {
 			cfg = &config.Config{}
@@ -76,17 +78,16 @@ who gathered knowledge from across the world.`,
 			// Named vault from --vault flag
 			resolvedVaultPath, err = cfg.GetVaultPath(vaultName)
 			if err != nil {
-				return newRootPreRunError(
-					cmd,
+				return handleStartupError(
 					ErrVaultNotFound,
-					fmt.Sprintf("vault %q not found", vaultName),
+					fmt.Sprintf("vault '%s' not found", vaultName),
 					"Run 'rvn vault list' to see configured vaults",
 				)
 			}
 		} else {
 			state, stateErr := config.LoadState(resolvedStatePath)
 			if stateErr != nil {
-				return newRootPreRunError(cmd, ErrConfigInvalid, fmt.Sprintf("failed to load state: %v", stateErr), "")
+				return handleStartupError(ErrConfigInvalid, fmt.Sprintf("failed to load state: %v", stateErr), "")
 			}
 
 			activeVaultName := strings.TrimSpace(state.ActiveVault)
@@ -95,10 +96,9 @@ who gathered knowledge from across the world.`,
 				if err != nil {
 					resolvedVaultPath, err = cfg.GetDefaultVaultPath()
 					if err != nil {
-						return newRootPreRunError(
-							cmd,
+						return handleStartupError(
 							ErrVaultNotFound,
-							fmt.Sprintf("active vault %q not found in config and no default vault configured", activeVaultName),
+							fmt.Sprintf("active vault '%s' not found in config and no default vault configured", activeVaultName),
 							"Run 'rvn vault use <name>' or set default_vault in config.toml",
 						)
 					}
@@ -110,8 +110,7 @@ who gathered knowledge from across the world.`,
 				// Default vault
 				resolvedVaultPath, err = cfg.GetDefaultVaultPath()
 				if err != nil {
-					return newRootPreRunError(
-						cmd,
+					return handleStartupError(
 						ErrVaultNotSpecified,
 						"no vault specified",
 						`Either:
@@ -126,13 +125,15 @@ who gathered knowledge from across the world.`,
 		}
 
 		// Verify vault exists
-		if _, err := os.Stat(resolvedVaultPath); os.IsNotExist(err) {
-			return newRootPreRunError(
-				cmd,
-				ErrVaultNotFound,
-				fmt.Sprintf("vault not found: %s", resolvedVaultPath),
-				fmt.Sprintf("Run 'rvn init %s' to create it", resolvedVaultPath),
-			)
+		if _, err := os.Stat(resolvedVaultPath); err != nil {
+			if os.IsNotExist(err) {
+				return handleStartupError(
+					ErrVaultNotFound,
+					fmt.Sprintf("vault not found: %s", resolvedVaultPath),
+					fmt.Sprintf("Run 'rvn init %s' to create it", resolvedVaultPath),
+				)
+			}
+			return handleStartupError(ErrInternal, fmt.Sprintf("failed to access vault: %v", err), "")
 		}
 
 		return nil
@@ -142,16 +143,21 @@ who gathered knowledge from across the world.`,
 // Execute runs the CLI.
 func Execute() error {
 	syncRegistryMetadata(rootCmd)
+	prevSilenceErrors := rootCmd.SilenceErrors
+	prevSilenceUsage := rootCmd.SilenceUsage
+	if argsRequestJSON(os.Args[1:]) {
+		rootCmd.SilenceErrors = true
+		rootCmd.SilenceUsage = true
+	}
+	defer func() {
+		rootCmd.SilenceErrors = prevSilenceErrors
+		rootCmd.SilenceUsage = prevSilenceUsage
+	}()
+
 	err := rootCmd.Execute()
-	if err == nil {
+	if errors.Is(err, errJSONStartupHandled) {
 		return nil
 	}
-
-	var preRunErr *rootPreRunError
-	if errors.As(err, &preRunErr) {
-		outputError(preRunErr.Code, preRunErr.Message, nil, preRunErr.Suggestion)
-	}
-
 	return err
 }
 
@@ -196,39 +202,26 @@ func loadGlobalConfigWithPath() (*config.Config, string, error) {
 	return loadedCfg, resolvedPath, nil
 }
 
-type rootPreRunError struct {
-	Code       string
-	Message    string
-	Suggestion string
-}
-
-func (e *rootPreRunError) Error() string {
-	if e.Suggestion == "" {
-		return e.Message
+func handleStartupError(code, message, suggestion string) error {
+	if jsonOutput {
+		outputError(code, message, nil, suggestion)
+		return errJSONStartupHandled
 	}
-	return e.Message + "\n\n" + e.Suggestion
-}
-
-func newRootPreRunError(cmd *cobra.Command, code, message, suggestion string) error {
-	if !jsonOutput {
-		if suggestion == "" {
-			return fmt.Errorf("%s", message)
-		}
+	if suggestion != "" {
 		return fmt.Errorf("%s\n\n%s", message, suggestion)
 	}
-
-	silenceCobraForJSON(cmd)
-	return &rootPreRunError{
-		Code:       code,
-		Message:    message,
-		Suggestion: suggestion,
-	}
+	return fmt.Errorf("%s", message)
 }
 
-func silenceCobraForJSON(cmd *cobra.Command) {
-	root := cmd.Root()
-	root.SilenceErrors = true
-	root.SilenceUsage = true
-	cmd.SilenceErrors = true
-	cmd.SilenceUsage = true
+func argsRequestJSON(args []string) bool {
+	for _, arg := range args {
+		trimmed := strings.TrimSpace(arg)
+		if trimmed == "--json" {
+			return true
+		}
+		if strings.HasPrefix(trimmed, "--json=") {
+			return trimmed != "--json=false"
+		}
+	}
+	return false
 }
