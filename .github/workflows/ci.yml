@@ -118,7 +118,6 @@ jobs:
 
   test-cross-platform:
     name: Test (${{ matrix.os }})
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
