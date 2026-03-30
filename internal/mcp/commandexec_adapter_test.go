@@ -70,3 +70,63 @@ func TestCommandVaultRequirementsFollowRegistryMetadata(t *testing.T) {
 		t.Fatal("query should require vault resolution")
 	}
 }
+
+func TestVaultContextInjectedIntoMeta(t *testing.T) {
+	t.Parallel()
+
+	result := commandexec.Success(map[string]interface{}{"items": []string{}}, &commandexec.Meta{Count: 3, QueryTimeMs: 42})
+
+	vc := &commandexec.VaultContext{
+		Name:   "work",
+		Path:   "/tmp/work-vault",
+		Source: "vault",
+	}
+	result.Meta.VaultContext = vc
+
+	if result.Meta.VaultContext == nil {
+		t.Fatal("expected vault_context to be set on meta")
+	}
+	if result.Meta.VaultContext.Name != "work" {
+		t.Fatalf("vault_context.name = %q, want %q", result.Meta.VaultContext.Name, "work")
+	}
+	if result.Meta.VaultContext.Path != "/tmp/work-vault" {
+		t.Fatalf("vault_context.path = %q, want %q", result.Meta.VaultContext.Path, "/tmp/work-vault")
+	}
+	if result.Meta.VaultContext.Source != "vault" {
+		t.Fatalf("vault_context.source = %q, want %q", result.Meta.VaultContext.Source, "vault")
+	}
+	// Existing meta fields preserved
+	if result.Meta.Count != 3 {
+		t.Fatalf("meta.count = %d, want 3", result.Meta.Count)
+	}
+	if result.Meta.QueryTimeMs != 42 {
+		t.Fatalf("meta.query_time_ms = %d, want 42", result.Meta.QueryTimeMs)
+	}
+}
+
+func TestVaultContextNilMetaCreated(t *testing.T) {
+	t.Parallel()
+
+	result := commandexec.Success(map[string]interface{}{}, nil)
+
+	if result.Meta != nil {
+		t.Fatal("expected meta to be nil initially")
+	}
+
+	// Simulate what callCanonicalCommand does when meta is nil
+	vc := &commandexec.VaultContext{
+		Path:   "/tmp/notes",
+		Source: "active_vault",
+	}
+	if result.Meta == nil {
+		result.Meta = &commandexec.Meta{}
+	}
+	result.Meta.VaultContext = vc
+
+	if result.Meta.VaultContext == nil {
+		t.Fatal("expected vault_context to be set")
+	}
+	if result.Meta.VaultContext.Source != "active_vault" {
+		t.Fatalf("vault_context.source = %q, want %q", result.Meta.VaultContext.Source, "active_vault")
+	}
+}

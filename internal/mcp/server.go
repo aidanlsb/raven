@@ -615,30 +615,90 @@ func (s *Server) resolveVaultPath() (string, error) {
 }
 
 func (s *Server) resolveVaultPathForInvocation(vaultName, vaultPath string) (string, error) {
-	if resolvedVaultPath := strings.TrimSpace(vaultPath); resolvedVaultPath != "" {
-		return s.validateResolvedVaultPath(resolvedVaultPath)
-	}
-	if resolvedVaultName := strings.TrimSpace(vaultName); resolvedVaultName != "" {
-		return s.namedVaultPath(resolvedVaultName)
-	}
-	if vaultPath := strings.TrimSpace(s.vaultPath); vaultPath != "" {
-		return s.validateResolvedVaultPath(vaultPath)
-	}
-	if vaultPath, ok := baseArgValue(s.baseArgs, "--vault-path"); ok {
-		return s.validateResolvedVaultPath(vaultPath)
-	}
-	if vaultName, ok := baseArgValue(s.baseArgs, "--vault"); ok {
-		return s.namedVaultPath(vaultName)
-	}
-	return s.currentVaultPath()
-}
-
-func (s *Server) currentVaultPath() (string, error) {
-	result, err := configsvc.CurrentVault(s.directConfigContextOptions())
+	res, err := s.resolveVaultForInvocation(vaultName, vaultPath)
 	if err != nil {
 		return "", err
 	}
-	return s.validateResolvedVaultPath(result.Current.Path)
+	return res.path, nil
+}
+
+// vaultResolution captures how a vault was resolved.
+type vaultResolution struct {
+	path   string
+	source string
+	name   string
+}
+
+func (s *Server) resolveVaultForInvocation(vaultName, vaultPath string) (vaultResolution, error) {
+	if resolved := strings.TrimSpace(vaultPath); resolved != "" {
+		p, err := s.validateResolvedVaultPath(resolved)
+		if err != nil {
+			return vaultResolution{}, err
+		}
+		name := s.lookupVaultName(p)
+		return vaultResolution{path: p, source: "vault_path", name: name}, nil
+	}
+	if resolved := strings.TrimSpace(vaultName); resolved != "" {
+		p, err := s.namedVaultPath(resolved)
+		if err != nil {
+			return vaultResolution{}, err
+		}
+		return vaultResolution{path: p, source: "vault", name: resolved}, nil
+	}
+	if pinned := strings.TrimSpace(s.vaultPath); pinned != "" {
+		p, err := s.validateResolvedVaultPath(pinned)
+		if err != nil {
+			return vaultResolution{}, err
+		}
+		name := s.lookupVaultName(p)
+		return vaultResolution{path: p, source: "pinned", name: name}, nil
+	}
+	if vp, ok := baseArgValue(s.baseArgs, "--vault-path"); ok {
+		p, err := s.validateResolvedVaultPath(vp)
+		if err != nil {
+			return vaultResolution{}, err
+		}
+		name := s.lookupVaultName(p)
+		return vaultResolution{path: p, source: "base_args", name: name}, nil
+	}
+	if vn, ok := baseArgValue(s.baseArgs, "--vault"); ok {
+		p, err := s.namedVaultPath(vn)
+		if err != nil {
+			return vaultResolution{}, err
+		}
+		return vaultResolution{path: p, source: "base_args", name: vn}, nil
+	}
+	return s.currentVaultResolution()
+}
+
+func (s *Server) currentVaultResolution() (vaultResolution, error) {
+	result, err := configsvc.CurrentVault(s.directConfigContextOptions())
+	if err != nil {
+		return vaultResolution{}, err
+	}
+	p, err := s.validateResolvedVaultPath(result.Current.Path)
+	if err != nil {
+		return vaultResolution{}, err
+	}
+	return vaultResolution{
+		path:   p,
+		source: result.Current.Source,
+		name:   result.Current.Name,
+	}, nil
+}
+
+// lookupVaultName attempts a best-effort reverse lookup of vault name from path.
+func (s *Server) lookupVaultName(path string) string {
+	ctx, err := configsvc.LoadVaultContext(s.directConfigContextOptions())
+	if err != nil {
+		return ""
+	}
+	for name, vp := range ctx.Cfg.ListVaults() {
+		if vp == path {
+			return name
+		}
+	}
+	return ""
 }
 
 func (s *Server) namedVaultPath(name string) (string, error) {

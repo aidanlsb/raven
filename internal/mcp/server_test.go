@@ -560,3 +560,88 @@ work = %q
 		t.Fatalf("resolveVaultPath = %q, want %q", got, vaultPath)
 	}
 }
+
+func TestResolveVaultForInvocationVaultPathSource(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	s := &Server{}
+
+	res, err := s.resolveVaultForInvocation("", tmp)
+	if err != nil {
+		t.Fatalf("resolveVaultForInvocation error: %v", err)
+	}
+	if res.path != tmp {
+		t.Fatalf("path = %q, want %q", res.path, tmp)
+	}
+	if res.source != "vault_path" {
+		t.Fatalf("source = %q, want %q", res.source, "vault_path")
+	}
+}
+
+func TestResolveVaultForInvocationNamedVaultSource(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	vaultPath := filepath.Join(tmp, "work-vault")
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+
+	configPath := filepath.Join(tmp, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf(`[vaults]
+work = %q
+`, vaultPath)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	s := &Server{
+		baseArgs: []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+	}
+
+	res, err := s.resolveVaultForInvocation("work", "")
+	if err != nil {
+		t.Fatalf("resolveVaultForInvocation error: %v", err)
+	}
+	if res.path != vaultPath {
+		t.Fatalf("path = %q, want %q", res.path, vaultPath)
+	}
+	if res.source != "vault" {
+		t.Fatalf("source = %q, want %q", res.source, "vault")
+	}
+	if res.name != "work" {
+		t.Fatalf("name = %q, want %q", res.name, "work")
+	}
+}
+
+func TestResolveVaultForInvocationPinnedSource(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	s := &Server{vaultPath: tmp}
+
+	res, err := s.resolveVaultForInvocation("", "")
+	if err != nil {
+		t.Fatalf("resolveVaultForInvocation error: %v", err)
+	}
+	if res.path != tmp {
+		t.Fatalf("path = %q, want %q", res.path, tmp)
+	}
+	if res.source != "pinned" {
+		t.Fatalf("source = %q, want %q", res.source, "pinned")
+	}
+}
+
+func TestResolveVaultForInvocationBaseArgsVaultPathSource(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	s := &Server{baseArgs: []string{"--vault-path", tmp}}
+
+	res, err := s.resolveVaultForInvocation("", "")
+	if err != nil {
+		t.Fatalf("resolveVaultForInvocation error: %v", err)
+	}
+	if res.path != tmp {
+		t.Fatalf("path = %q, want %q", res.path, tmp)
+	}
+	if res.source != "base_args" {
+		t.Fatalf("source = %q, want %q", res.source, "base_args")
+	}
+}

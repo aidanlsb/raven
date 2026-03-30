@@ -18,13 +18,19 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 		return "", false, false
 	}
 
+	var vaultCtx *commandexec.VaultContext
 	vaultPath := ""
 	if commands.RequiresVault(commandID) {
-		resolvedVaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPathOverride)
+		res, err := s.resolveVaultForInvocation(vaultName, vaultPathOverride)
 		if err != nil {
 			return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve vault for invocation", err.Error(), nil), true, true
 		}
-		vaultPath = resolvedVaultPath
+		vaultPath = res.path
+		vaultCtx = &commandexec.VaultContext{
+			Name:   res.name,
+			Path:   res.path,
+			Source: res.source,
+		}
 	}
 
 	args = normalizeCanonicalArgs(commandID, args)
@@ -40,6 +46,14 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 		Args:           args,
 	})
 	result = adaptCanonicalResultForMCP(commandID, result)
+
+	if vaultCtx != nil {
+		if result.Meta == nil {
+			result.Meta = &commandexec.Meta{}
+		}
+		result.Meta.VaultContext = vaultCtx
+	}
+
 	return marshalCanonicalResult(result)
 }
 

@@ -50,6 +50,29 @@ raven_invoke(command="move", args={"stdin":true})
 
 Apply only after explicit approval with `confirm=true`.
 
+## Vault context
+
+Vault-bound responses include a `vault_context` block in `meta`:
+
+```json
+{
+  "meta": {
+    "vault_context": {
+      "name": "work",
+      "path": "/home/user/vaults/work",
+      "source": "active_vault"
+    }
+  }
+}
+```
+
+Fields:
+- `path` — resolved absolute vault path (always present).
+- `source` — how the vault was selected: `vault_path` (explicit path override), `vault` (named vault from invocation), `pinned` (server pinned path), `base_args` (from serve flags), `active_vault`, `default_vault`, or `default_vault_fallback`.
+- `name` — configured vault name (omitted when no name could be resolved).
+
+Commands that do not require vault resolution (e.g. `version`, `config show`) omit `vault_context`.
+
 ## Warnings
 
 - Warnings are action items, not noise.

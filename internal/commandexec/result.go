@@ -26,10 +26,18 @@ type Warning struct {
 	CreateCommand string `json:"create_command,omitempty"`
 }
 
+// VaultContext identifies which vault was used and how it was resolved.
+type VaultContext struct {
+	Name   string `json:"name,omitempty"`
+	Path   string `json:"path"`
+	Source string `json:"source"`
+}
+
 // Meta contains metadata about the response.
 type Meta struct {
-	Count       int   `json:"count,omitempty"`
-	QueryTimeMs int64 `json:"query_time_ms,omitempty"`
+	Count        int           `json:"count,omitempty"`
+	QueryTimeMs  int64         `json:"query_time_ms,omitempty"`
+	VaultContext *VaultContext `json:"vault_context,omitempty"`
 }
 
 // Success builds a successful result envelope.
