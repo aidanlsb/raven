@@ -142,4 +142,5 @@ At that point Raven is installed, the vault exists, and the CLI knows how to fin
 
 - Read `getting-started/core-concepts.md` for the Raven mental model
 - Read `getting-started/agent-setup.md` if you want MCP and skills next
-- Read `getting-started/configuration.md` for the full configuration reference
+- Read `using-your-vault/configuration.md` for the full configuration reference
+- Try `rvn daily` to create your first daily note — see `using-your-vault/daily-notes.md`

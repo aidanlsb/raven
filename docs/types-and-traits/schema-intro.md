@@ -85,4 +85,4 @@ This catches type/field/trait issues early and keeps the index aligned with the 
 - `types-and-traits/schema.md` for complete schema format and evolution rules
 - `types-and-traits/templates.md` for end-to-end template file + schema lifecycle
 - Use `rvn help <command>` for the full `rvn schema ...` command set
-- `getting-started/configuration.md` for `config.toml` and `raven.yaml` setup
+- `using-your-vault/configuration.md` for `config.toml` and `raven.yaml` setup

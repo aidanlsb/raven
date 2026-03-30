@@ -88,5 +88,6 @@ If the agent can do those four things, the integration is in good shape.
 ## Where to go deeper
 
 - Read `agents/mcp.md` for the compact MCP contract
+- Read `using-your-vault/common-commands.md` for the full command surface agents can invoke
 - Read `getting-started/core-concepts.md` if the agent is using terms like object, trait, or reference before you are comfortable with them
 - Read `types-and-traits/schema-intro.md` before asking an agent to make major schema changes

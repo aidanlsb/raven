@@ -1,15 +1,19 @@
-# Workflows Reference
+# Workflows
 
-Workflows are reusable **steps-based pipelines** defined in workflow YAML files and registered in `raven.yaml`.
+Workflows are reusable, multi-step pipelines that automate sequences of Raven operations. They combine deterministic tool calls (queries, reads, writes) with optional agent handoffs — letting you automate things like meeting prep, daily briefs, weekly reviews, or any repeating pattern where you gather context, transform it, and optionally ask an agent to synthesize.
 
-Workflow v3 uses a breaking, steps-only model:
-- top-level `context` / `prompt` / `outputs` are removed
-- deterministic work happens in `type: tool` steps
-- deterministic fanout work happens in `type: foreach` steps
-- deterministic conditional routing happens in `type: switch` steps
-- agent handoff happens at the first `type: agent` step
+**Key ideas:**
 
-Raven executes deterministic steps only. It does not call an LLM.
+- Workflows are defined in YAML files and registered in `raven.yaml`.
+- Deterministic steps (`tool`, `foreach`, `switch`) run automatically. Raven does not call an LLM for these.
+- When a workflow reaches an `agent` step, it pauses and hands off a rendered prompt with all the context gathered so far. The agent responds, and the workflow can continue.
+- Workflows use the same commands available through the CLI and MCP (`query`, `read`, `search`, etc.), orchestrated declaratively.
+
+**When to use workflows:**
+
+- You find yourself running the same 3-5 Raven commands in sequence repeatedly
+- You want to give an agent a structured, reproducible multi-step plan
+- You want deterministic data gathering before an agent synthesis step
 
 ## Definition Location
 
@@ -282,3 +286,9 @@ rvn workflow runs step <run-id> <step-id>
 rvn workflow runs step <run-id> <step-id> --path data.results --offset 0 --limit 50
 rvn workflow runs prune --status completed --older-than 14d --confirm
 ```
+
+## Related docs
+
+- `agents/mcp.md` — MCP tools that workflows call (`raven_query`, `raven_read`, etc.)
+- `querying/query-language.md` — RQL syntax used in `raven_query` tool steps
+- `using-your-vault/configuration.md` — `workflows` and `workflow_runs` settings in `raven.yaml`

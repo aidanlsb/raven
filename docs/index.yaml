@@ -16,6 +16,15 @@ sections:
       agent-setup:
         title: Agent Setup
         path: agent-setup.md
+  using-your-vault:
+    title: Using Your Vault
+    topics:
+      daily-notes:
+        title: Daily Notes
+        path: daily-notes.md
+      common-commands:
+        title: Common Commands
+        path: common-commands.md
       configuration:
         title: Configuration
         path: configuration.md
@@ -31,6 +40,9 @@ sections:
       file-format:
         title: File Format
         path: file-format.md
+      references:
+        title: References
+        path: references.md
       templates:
         title: Templates
         path: templates.md
@@ -46,6 +58,9 @@ sections:
       bulk-operations:
         title: Bulk Operations
         path: bulk-operations.md
+      import:
+        title: Import
+        path: import.md
   workflows:
     title: Workflows
     topics:

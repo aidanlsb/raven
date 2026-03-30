@@ -178,4 +178,4 @@ rvn daily tomorrow
 
 - Run `rvn help schema template` for the full command flag reference
 - `types-and-traits/schema.md` for `templates`, `types.<type>.templates`, and `default_template`
-- `getting-started/configuration.md` for `directories.template` and practical vault setup
+- `using-your-vault/configuration.md` for `directories.template` and practical vault setup

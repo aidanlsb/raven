@@ -2,6 +2,7 @@ package objectsvc
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -132,19 +134,29 @@ func AppendToFile(
 		return appendUnderHeading(destPath, line, cfg.Heading)
 	}
 
-	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_RDWR, 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
 	defer f.Close()
 
-	stat, _ := f.Stat()
-	if stat.Size() > 0 {
-		content, _ := os.ReadFile(destPath)
-		if len(content) > 0 && content[len(content)-1] != '\n' {
-			if _, err := f.WriteString("\n"); err != nil {
-				return fmt.Errorf("failed to write newline: %w", err)
-			}
+	if err := filelock.LockExclusive(f); err != nil {
+		return fmt.Errorf("failed to lock file: %w", err)
+	}
+	defer func() {
+		_ = filelock.Unlock(f)
+	}()
+
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek file: %w", err)
+	}
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+	if len(content) > 0 && content[len(content)-1] != '\n' {
+		if _, err := f.WriteString("\n"); err != nil {
+			return fmt.Errorf("failed to write newline: %w", err)
 		}
 	}
 

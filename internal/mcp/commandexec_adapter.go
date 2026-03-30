@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/app"
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 func (s *Server) callCanonicalCommand(commandID string, args map[string]interface{}, vaultName, vaultPathOverride string) (string, bool, bool) {
@@ -18,7 +19,7 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 	}
 
 	vaultPath := ""
-	if canonicalCommandNeedsVaultPath(commandID) {
+	if commands.RequiresVault(commandID) {
 		resolvedVaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPathOverride)
 		if err != nil {
 			return errorEnvelope("VAULT_RESOLUTION_FAILED", "failed to resolve vault for invocation", err.Error(), nil), true, true
@@ -40,18 +41,6 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 	})
 	result = adaptCanonicalResultForMCP(commandID, result)
 	return marshalCanonicalResult(result)
-}
-
-func canonicalCommandNeedsVaultPath(commandID string) bool {
-	switch commandID {
-	case "init", "version",
-		"config_show", "config_init", "config_set", "config_unset",
-		"vault_list", "vault_current", "vault_use", "vault_add", "vault_remove", "vault_pin", "vault_clear",
-		"skill_list", "skill_install", "skill_remove", "skill_doctor":
-		return false
-	default:
-		return true
-	}
 }
 
 func marshalCanonicalResult(result commandexec.Result) (string, bool, bool) {

@@ -17,6 +17,9 @@ func normalizeRegistryMetadata() {
 		if meta.Risk == "" {
 			meta.Risk = defaultRiskForCommandID(commandID, meta.Access)
 		}
+		if meta.VaultScope == "" {
+			meta.VaultScope = VaultScopeRequired
+		}
 		Registry[commandID] = meta
 	}
 }
@@ -35,7 +38,18 @@ func EffectiveMeta(commandID string) (Meta, bool) {
 	if meta.Risk == "" {
 		meta.Risk = defaultRiskForCommandID(commandID, meta.Access)
 	}
+	if meta.VaultScope == "" {
+		meta.VaultScope = VaultScopeRequired
+	}
 	return meta, true
+}
+
+func RequiresVault(commandID string) bool {
+	meta, ok := EffectiveMeta(commandID)
+	if !ok {
+		return true
+	}
+	return meta.VaultScope != VaultScopeNone
 }
 
 func defaultCategoryForCommandID(commandID string) Category {

@@ -67,6 +67,46 @@ func TestRegistryMetadataComplete(t *testing.T) {
 	}
 }
 
+func TestRequiresVaultMetadata(t *testing.T) {
+	t.Parallel()
+
+	noVaultCommands := []string{
+		"init",
+		"serve",
+		"version",
+		"config",
+		"config_show",
+		"config_init",
+		"config_set",
+		"config_unset",
+		"vault",
+		"vault_list",
+		"vault_current",
+		"vault_use",
+		"vault_add",
+		"vault_remove",
+		"vault_pin",
+		"vault_clear",
+		"skill_list",
+		"skill_install",
+		"skill_remove",
+		"skill_doctor",
+	}
+
+	for _, commandID := range noVaultCommands {
+		if RequiresVault(commandID) {
+			t.Fatalf("expected %q to skip vault resolution", commandID)
+		}
+	}
+
+	vaultCommands := []string{"query", "read", "vault_path", "vault_stats"}
+	for _, commandID := range vaultCommands {
+		if !RequiresVault(commandID) {
+			t.Fatalf("expected %q to require a resolved vault", commandID)
+		}
+	}
+}
+
 // TestCobraCommandGeneration verifies Cobra command generation works.
 func TestCobraCommandGeneration(t *testing.T) {
 	t.Parallel()

@@ -14,6 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -110,9 +111,9 @@ func acquireIndexLock(dbDir string) (*indexLock, error) {
 		return nil, fmt.Errorf("failed to open index lock: %w", err)
 	}
 
-	if err := lockFileExclusiveNonBlocking(lockFile); err != nil {
+	if err := filelock.TryLockExclusive(lockFile); err != nil {
 		lockFile.Close()
-		if isWouldBlockError(err) {
+		if filelock.IsWouldBlock(err) {
 			return nil, ErrIndexLocked
 		}
 		return nil, fmt.Errorf("failed to acquire index lock: %w", err)
@@ -125,7 +126,7 @@ func (l *indexLock) Release() error {
 	if l == nil || l.file == nil {
 		return nil
 	}
-	unlockErr := unlockFile(l.file)
+	unlockErr := filelock.Unlock(l.file)
 	closeErr := l.file.Close()
 	if unlockErr != nil {
 		return unlockErr

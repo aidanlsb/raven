@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/filelock"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -1238,10 +1239,10 @@ func TestOpenWithRebuildLock(t *testing.T) {
 	}
 	defer lockFile.Close()
 
-	if err := lockFileExclusiveNonBlocking(lockFile); err != nil {
+	if err := filelock.TryLockExclusive(lockFile); err != nil {
 		t.Fatalf("failed to acquire test lock: %v", err)
 	}
-	defer unlockFile(lockFile)
+	defer filelock.Unlock(lockFile)
 
 	if _, _, err := OpenWithRebuild(vaultDir); !errors.Is(err, ErrIndexLocked) {
 		t.Fatalf("expected ErrIndexLocked, got %v", err)

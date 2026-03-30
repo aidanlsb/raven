@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 func TestNormalizeCanonicalArgsUpdateTraitIDs(t *testing.T) {
@@ -53,5 +54,19 @@ func TestAdaptCanonicalResultForMCPAddsQuerySuggestionWhenMissing(t *testing.T) 
 	want := "Check the query syntax, quote string literals, and retry."
 	if result.Error.Suggestion != want {
 		t.Fatalf("suggestion = %q, want %q", result.Error.Suggestion, want)
+	}
+}
+
+func TestCommandVaultRequirementsFollowRegistryMetadata(t *testing.T) {
+	t.Parallel()
+
+	if commands.RequiresVault("version") {
+		t.Fatal("version should not require vault resolution")
+	}
+	if commands.RequiresVault("config_show") {
+		t.Fatal("config_show should not require vault resolution")
+	}
+	if !commands.RequiresVault("query") {
+		t.Fatal("query should require vault resolution")
 	}
 }

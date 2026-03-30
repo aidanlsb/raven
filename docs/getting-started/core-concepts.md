@@ -1,7 +1,10 @@
 # Core Concepts
 
+This page gives you the mental model for Raven. After reading it, you should understand the key building blocks — types, references, traits, sections, daily notes, and queries — even if you don't yet know every syntax detail.
+
 ## Types & Objects
-Every file in a Raven vault is an instance of a type; these instances are referred to as "objects." You define the types that you want to use in your vault in the `schema.yaml` file that is created with vault initialization. Raven ships with a couple example types already defined, which you can modify/delete/replace. Here is an example of what a type definition looks like in the schema:
+
+Every file in a Raven vault is an instance of a type; these instances are called "objects." You define types in `schema.yaml`. Raven ships with starter types you can modify or replace. Here is an example:
 
 ```yaml
 types:
@@ -26,7 +29,13 @@ types:
     name_field: name
 ```
 
-This defines a `project` type that has a name and status field (both required) and an optional field to track what company the project is associated with. Once a type is defined in the schema, the best way to create objects (files) of that type is via the CLI: `rvn new project "Midgard Security Review"`. Running this command will create a new file in the `project/` directory. The `name_field` tells Raven which string field should be auto-populated from the positional title you pass to `rvn new`. The created file looks like this:
+This defines a `project` type with a name, status (both required), and an optional company reference. Create objects via the CLI:
+
+```bash
+rvn new project "Midgard Security Review"
+```
+
+This creates a file in `project/` with frontmatter populated from the schema:
 
 ```markdown
 ---
@@ -37,140 +46,154 @@ status: active
 
 ```
 
-Raven checks required fields during object creation.
+The `name_field` tells Raven which field to auto-populate from the positional title. Required fields with defaults are filled automatically — `status` has `default: active`, so you don't need to pass it explicitly.
 
-- If a required field is satisfied by `name_field`, you do not need to pass it separately.
-- If a required field has a schema default, Raven fills that value in automatically.
-- If a required field has no default and you did not provide it, `rvn new` fails and tells you what is missing.
+### Validation
 
-In the example schema above, `status` is marked `required: true` but also has `default: active`, so:
+Raven validates at three levels:
 
-```bash
-rvn new project "Midgard Security Review"
-```
-
-is valid even without `--field status=active`, because the default satisfies the requirement.
-
-### How to validate an object against the schema
-
-There are two different validation questions:
-
-1. Is the schema itself valid?
-2. Does a specific object conform to that schema?
-
-Use:
+| Command | What it checks |
+|---------|---------------|
+| `rvn new` | Validates while creating the object |
+| `rvn schema validate` | Checks `schema.yaml` for internal consistency |
+| `rvn check` | Validates existing vault content against the schema |
 
 ```bash
-rvn schema validate
+rvn check                                # Entire vault
+rvn check project/midgard-security-review  # One object
 ```
 
-to validate `schema.yaml` itself.
-
-Use:
-
-```bash
-rvn check
-rvn check project/midgard-security-review
-```
-
-to validate vault content against the schema. `rvn check` is what tells you about issues in objects such as unknown fields, missing required data, bad references, or other content/schema mismatches.
-
-In practice:
-- `rvn new` validates while creating the object
-- `rvn schema validate` validates the schema definition
-- `rvn check` validates existing content against the schema
-
-### Embedded Types
-
-An embedded type lets you turn a heading inside a markdown file into a typed object without splitting it into its own file. This is useful when one file contains several structured sub-items, such as multiple meetings inside a project note or multiple tasks inside a daily note.
-
-The syntax is:
-- write a markdown heading
-- put a `::type(...)` declaration on the very next line
-- optionally pass fields inside the parentheses
-
-Example:
-
-```markdown
-# Project Notes
-
-## Weekly Standup
-::meeting(id=standup, time=09:00, attendees=[[[people/freya]], [[people/thor]]])
-
-Reviewed blockers and confirmed the rollout plan.
-```
-
-In this example, `## Weekly Standup` is not treated as a plain `section`. Raven indexes it as an embedded object of type `meeting`, with the body content under that heading belonging to that object. If you omit `id=...`, Raven derives the embedded object's fragment ID from the heading.
+`rvn check` reports issues like unknown fields, missing required data, broken references, and schema mismatches.
 
 ### Built-in types
 
-Raven has three built-in types that always exist, even if you never define them in `schema.yaml`:
+Raven has three built-in types that always exist:
 
-- `page`
-- `section`
-- `date`
+| Type | Purpose | Created by |
+|------|---------|------------|
+| `page` | Fallback for files without a `type:` in frontmatter | Any markdown file |
+| `section` | Represents headings inside files | Automatic from markdown structure |
+| `date` | Daily notes | `rvn daily` |
 
-These are Raven-managed types with fixed definitions. You do not redefine them under `types:` in `schema.yaml`.
+Built-in types cannot be redefined. Your custom types (`project`, `meeting`, `person`, etc.) provide the domain model on top of this foundation. See `types-and-traits/schema.md` for the full reference.
 
-#### `page`
+### Embedded types
 
-`page` is the fallback type for ordinary markdown files that do not declare an explicit `type:` in frontmatter.
-
-Example:
-
-```markdown
-# Scratch note
-
-This file has no frontmatter type, so Raven treats it as a `page`.
-```
-
-The built-in `page` type has a `title` field and uses `title` as its `name_field`.
-
-In practice, `page` is useful for:
-- durable notes that do not justify a custom type yet
-- imported markdown
-- scratch notes that you may later reclassify into a richer type
-
-#### `section`
-
-`section` is the built-in type Raven creates automatically for headings inside markdown files.
-
-For a file like:
+You can turn a heading into a typed object without splitting it into a separate file by adding a `::type(...)` declaration on the line immediately after the heading:
 
 ```markdown
-# Website Redesign
+## Weekly Standup
+::meeting(time=09:00, attendees=[[[people/freya]], [[people/thor]]])
 
-## Tasks
-
-- Draft kickoff agenda
+Meeting notes here...
 ```
 
-Raven creates a section object for `# Website Redesign` and another for `## Tasks`.
+This creates an embedded `meeting` object within the file. See `types-and-traits/file-format.md` for the full syntax.
 
-The built-in `section` type has:
-- `title`
-- `level` (heading depth from 1 to 6)
+## References
 
-You do not usually create `section` objects directly. Raven derives them from markdown structure so that headings can participate in references, hierarchy, and queries.
+References are wiki-style links that connect objects into a graph:
 
-#### `date`
+```markdown
+Met with [[people/freya]] about [[projects/website]].
+See the tasks: [[projects/website#tasks]]
+```
 
-`date` is the built-in type Raven uses for daily notes.
+References also appear in frontmatter `ref` fields (`owner: people/freya`) and in embedded type declarations.
 
-When you work with daily-note flows such as:
+Raven resolves references to canonical object IDs. Short references like `[[freya]]` work when unambiguous. Use `rvn backlinks` to see what links to an object:
 
 ```bash
-rvn daily
+rvn backlinks people/freya
 ```
 
-the resulting object is treated as a `date`.
+See `types-and-traits/references.md` for the full reference guide.
 
-Unlike user-defined types, `date` is a Raven-managed core type. You use it when working with daily-note behavior, not when designing your own schema for things like projects or meetings.
+## Traits
 
-### Important constraint
+Traits are inline annotations that add structured, queryable metadata to your content:
 
-Built-in types are always available and Raven overwrites their definitions internally to keep them consistent. That means:
+```markdown
+- @due(2026-02-15) Finish homepage design
+- @priority(high) Review pull request
+- @todo Refactor the auth module
+- @highlight Key insight about the architecture
+```
 
-- you cannot redefine `page`, `section`, or `date` under `types:`
-- you should create your own types for domain concepts like `project`, `meeting`, or `person`
-- built-in types provide Raven’s structural foundation, while your schema provides the domain model
+Traits must be defined in `schema.yaml` to be indexed and queryable. They can have typed values (date, enum, string, boolean) and participate in queries:
+
+```bash
+rvn query 'trait:due .value<today'
+rvn query 'trait:todo within(object:project .status==active)'
+```
+
+See `types-and-traits/file-format.md` for trait syntax and `types-and-traits/schema.md` for defining traits.
+
+## Headings & Sections
+
+Every markdown heading automatically creates a `section` object. This gives your content hierarchy that Raven can query:
+
+```markdown
+# Website Redesign        → section (level 1)
+## Tasks                  → section (level 2), child of above
+### High Priority         → section (level 3), child of Tasks
+```
+
+Section objects can be referenced (`[[projects/website#tasks]]`) and queried with hierarchy predicates like `parent(...)`, `ancestor(...)`, and `descendant(...)`.
+
+## Daily Notes
+
+Daily notes give you a date-stamped file for each day:
+
+```bash
+rvn daily                              # Today's note
+rvn daily yesterday                    # Yesterday's
+rvn add "@todo Review PR"              # Capture to today's note
+```
+
+Daily notes are `date`-typed objects. They support templates, structured headings, and all the same query/trait features as any other object. See `using-your-vault/daily-notes.md` for the full guide.
+
+## Queries
+
+Raven Query Language (RQL) lets you retrieve objects and traits by structure, not just text:
+
+```bash
+# All active projects
+rvn query 'object:project .status==active'
+
+# Todos linked to a specific project
+rvn query 'trait:todo within(object:meeting refs(midgard-security-review))'
+
+# Overdue items
+rvn query 'trait:due .value<today'
+```
+
+Queries return either objects or traits, can nest arbitrarily, and support boolean composition (`AND`, `OR`, `NOT`). See `querying/query-language.md` for the full syntax.
+
+## Agent-friendly descriptions
+
+Add optional `description` text to types and fields in `schema.yaml` to give context to both humans and agents:
+
+```yaml
+types:
+  experiment:
+    description: Controlled product change with hypothesis and measured outcome
+    fields:
+      hypothesis:
+        type: string
+        description: Falsifiable statement of expected behavior change
+```
+
+Good descriptions focus on intent and constraints, not just repeating the field name.
+
+## Where to go next
+
+| Goal | Read |
+|------|------|
+| Set up an AI agent | `getting-started/agent-setup.md` |
+| Work with daily notes | `using-your-vault/daily-notes.md` |
+| Learn everyday commands | `using-your-vault/common-commands.md` |
+| Design your schema | `types-and-traits/schema-intro.md` |
+| Understand file format details | `types-and-traits/file-format.md` |
+| Learn the query language | `querying/query-language.md` |
+| Configure your vault | `using-your-vault/configuration.md` |

@@ -13,6 +13,7 @@ type Meta struct {
 	Category    Category   // Command grouping for discovery surfaces
 	Access      AccessMode // Read/write classification for discovery surfaces
 	Risk        RiskLevel  // Safe/mutating/destructive classification
+	VaultScope  VaultScope // Whether the command requires a resolved vault path
 	Args        []ArgMeta  // Positional arguments
 	Flags       []FlagMeta // Command flags
 	Examples    []string   // Usage examples
@@ -62,10 +63,17 @@ const (
 
 type RiskLevel string
 
+type VaultScope string
+
 const (
 	RiskSafe        RiskLevel = "safe"
 	RiskMutating    RiskLevel = "mutating"
 	RiskDestructive RiskLevel = "destructive"
+)
+
+const (
+	VaultScopeRequired VaultScope = "required"
+	VaultScopeNone     VaultScope = "none"
 )
 
 const (
@@ -223,6 +231,7 @@ converge to one current state rather than append history.`,
 	"init": {
 		Name:        "init",
 		Description: "Initialize a new vault at a path",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Creates a new vault at the specified path with default configuration files.
 
 Creates:
@@ -254,6 +263,7 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 	"serve": {
 		Name:        "serve",
 		Description: "Run Raven as an MCP server",
+		VaultScope:  VaultScopeNone,
 		LongDesc:    "Run Raven as an MCP server over stdio.",
 		Examples: []string{
 			"rvn serve",
@@ -787,6 +797,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 	"version": {
 		Name:        "version",
 		Description: "Show Raven version and build information",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Shows version and build metadata for the currently running rvn binary.
 
 Useful for confirming which binary is on PATH after upgrades, especially when
@@ -1526,6 +1537,7 @@ If no date is provided, opens today's note. Creates the file if it doesn't exist
 	"config": {
 		Name:        "config",
 		Description: "Manage global config.toml settings",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Manage global Raven config.toml settings.
 
 Use this command group to initialize, inspect, and edit machine-level configuration
@@ -1546,6 +1558,7 @@ such as editor settings, state file location, and default vault selection.`,
 	"config_show": {
 		Name:        "config show",
 		Description: "Show current global config.toml values",
+		VaultScope:  VaultScopeNone,
 		Examples: []string{
 			"rvn config show --json",
 		},
@@ -1553,6 +1566,7 @@ such as editor settings, state file location, and default vault selection.`,
 	"config_init": {
 		Name:        "config init",
 		Description: "Create default global config.toml if missing",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Create a default global config.toml file at the resolved config path.
 
 If the file already exists, no changes are made.`,
@@ -1564,6 +1578,7 @@ If the file already exists, no changes are made.`,
 	"config_set": {
 		Name:        "config set",
 		Description: "Set one or more global config.toml fields",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Set one or more explicit global config fields.
 
 Only known fields can be changed with this command.
@@ -1592,6 +1607,7 @@ Use 'config unset' to clear fields.`,
 	"config_unset": {
 		Name:        "config unset",
 		Description: "Clear one or more global config.toml fields",
+		VaultScope:  VaultScopeNone,
 		Flags: []FlagMeta{
 			{Name: "editor", Description: "Clear editor", Type: FlagTypeBool},
 			{Name: "editor-mode", Description: "Clear editor_mode", Type: FlagTypeBool},
@@ -1610,6 +1626,7 @@ Use 'config unset' to clear fields.`,
 		Name:        "vault",
 		Use:         "vault [subcommand]",
 		Description: "Manage configured vaults and active selection",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Manage configured vaults and active selection.
 
 The active vault is stored in state.toml.
@@ -1636,6 +1653,7 @@ The default vault is stored in config.toml and used as fallback.`,
 	"vault_list": {
 		Name:        "vault list",
 		Description: "List configured vaults",
+		VaultScope:  VaultScopeNone,
 		Examples: []string{
 			"rvn vault list --json",
 		},
@@ -1643,6 +1661,7 @@ The default vault is stored in config.toml and used as fallback.`,
 	"vault_current": {
 		Name:        "vault current",
 		Description: "Show the current resolved vault",
+		VaultScope:  VaultScopeNone,
 		Examples: []string{
 			"rvn vault current --json",
 		},
@@ -1664,6 +1683,7 @@ The default vault is stored in config.toml and used as fallback.`,
 	"vault_use": {
 		Name:        "vault use",
 		Description: "Set the active vault in state.toml",
+		VaultScope:  VaultScopeNone,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Configured vault name", Required: true},
 		},
@@ -1674,6 +1694,7 @@ The default vault is stored in config.toml and used as fallback.`,
 	"vault_add": {
 		Name:        "vault add",
 		Description: "Add a vault to config.toml",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Add or update a named vault entry in the global config file.
 
 By default, adding an existing name fails. Use --replace to update the existing path.
@@ -1700,6 +1721,7 @@ Use --pin to also set default_vault to the added vault.`,
 	"vault_remove": {
 		Name:        "vault remove",
 		Description: "Remove a vault from config.toml",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Remove a named vault entry from the global config file.
 
 Safety checks:
@@ -1725,6 +1747,7 @@ Safety checks:
 	"vault_pin": {
 		Name:        "vault pin",
 		Description: "Set default_vault in config.toml",
+		VaultScope:  VaultScopeNone,
 		Args: []ArgMeta{
 			{Name: "name", Description: "Configured vault name", Required: true},
 		},
@@ -1735,6 +1758,7 @@ Safety checks:
 	"vault_clear": {
 		Name:        "vault clear",
 		Description: "Clear active vault from state.toml",
+		VaultScope:  VaultScopeNone,
 		Examples: []string{
 			"rvn vault clear --json",
 		},
@@ -2079,6 +2103,7 @@ incremental retrieval of large workflow context.`,
 	"skill_list": {
 		Name:        "skill list",
 		Description: "List Raven-provided skills",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `List bundled Raven skills.
 
 Use --target to include target-specific installed status and paths.`,
@@ -2101,6 +2126,7 @@ Use --target to include target-specific installed status and paths.`,
 	"skill_install": {
 		Name:        "skill install",
 		Description: "Install a Raven skill for a target runtime",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Install one bundled Raven skill for a target runtime.
 
 Preview is returned by default. Use --confirm to apply writes.`,
@@ -2127,6 +2153,7 @@ Preview is returned by default. Use --confirm to apply writes.`,
 	"skill_remove": {
 		Name:        "skill remove",
 		Description: "Remove an installed Raven skill",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `Remove one installed Raven skill from a target runtime.
 
 Preview is returned by default. Use --confirm to apply removal.`,
@@ -2152,6 +2179,7 @@ Preview is returned by default. Use --confirm to apply removal.`,
 	"skill_doctor": {
 		Name:        "skill doctor",
 		Description: "Inspect skill installation health for target runtimes",
+		VaultScope:  VaultScopeNone,
 		LongDesc:    `Inspect resolved install roots and installed Raven skills for one or all targets.`,
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor (omit to check all)", Type: FlagTypeString, Examples: []string{"codex", "claude", "cursor"}},

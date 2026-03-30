@@ -2,7 +2,7 @@
 
 Bulk operations let you act on many objects found by a query. All bulk operations preview by default—add `--confirm` to apply changes.
 
-Use `querying/query-language.md` for query syntax and `getting-started/configuration.md` for saved query definitions.
+Use `querying/query-language.md` for query syntax and `using-your-vault/configuration.md` for saved query definitions.
 
 ## Overview
 
@@ -341,7 +341,15 @@ Before running bulk operations:
 ```bash
 # Safe workflow
 git add -A && git commit -m "Before bulk update"
-rvn query "object:project .status==archived" --apply "move archive/" 
+rvn query "object:project .status==archived" --apply "move archive/"
 # Review preview...
 rvn query "object:project .status==archived" --apply "move archive/" --confirm
 ```
+
+---
+
+## Related docs
+
+- `vault-management/import.md` — bulk importing from external JSON data
+- `querying/query-language.md` — full RQL syntax for queries
+- `using-your-vault/common-commands.md` — individual commands (`rvn set`, `rvn move`, `rvn delete`, etc.)

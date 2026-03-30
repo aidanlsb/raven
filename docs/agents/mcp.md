@@ -348,3 +348,10 @@ For workflow authoring, use the workflow-specific command IDs via `raven_invoke`
 - `raven://guide/response-contract`
 - `raven://guide/write-patterns`
 - `raven://guide/key-workflows`
+
+## Related Docs
+
+- `querying/query-language.md` — RQL syntax for `query` commands
+- `vault-management/bulk-operations.md` — `--apply` and `--ids` patterns for bulk changes
+- `workflows/workflows.md` — workflow definition and execution
+- `using-your-vault/common-commands.md` — full command surface (read, search, edit, check, etc.)
