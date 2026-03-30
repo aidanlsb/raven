@@ -5,6 +5,7 @@ COVERAGE_PROFILE := $(COVERAGE_DIR)/unit.out
 COVERAGE_INTEGRATION_PROFILE := $(COVERAGE_DIR)/integration.out
 COVERAGE_MERGED_PROFILE := $(COVERAGE_DIR)/coverage.out
 COVERAGE_HTML := $(COVERAGE_DIR)/coverage.html
+COVERAGE_MIN ?= 55.0
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -36,6 +37,13 @@ test-coverage:
 	go test -race -coverpkg=./... -coverprofile=$(COVERAGE_INTEGRATION_PROFILE) -tags=integration -v ./internal/cli ./internal/mcp
 	go run ./scripts/merge_coverprofiles.go $(COVERAGE_MERGED_PROFILE) $(COVERAGE_PROFILE) $(COVERAGE_INTEGRATION_PROFILE)
 	go tool cover -html=$(COVERAGE_MERGED_PROFILE) -o $(COVERAGE_HTML)
+
+coverage-check: test-coverage
+	@summary="$$(go tool cover -func=$(COVERAGE_MERGED_PROFILE) | tail -n 1)"; \
+	echo "$$summary"; \
+	actual="$$(echo "$$summary" | awk '{gsub(/%/, "", $$NF); print $$NF}')"; \
+	awk -v actual="$$actual" -v min="$(COVERAGE_MIN)" 'BEGIN { if (actual + 0 < min + 0) exit 1 }' || \
+		(echo "Coverage $$actual% is below required minimum $(COVERAGE_MIN)%." && exit 1)
 
 # Run linter with golangci-lint v2.
 # Explicitly requires a local v2 binary.
