@@ -70,9 +70,9 @@ func renderTemplateList(_ *cobra.Command, result commandexec.Result) error {
 		return nil
 	}
 
-	fmt.Printf("Template files (%s):\n", ui.FilePath(templateDir))
+	fmt.Println(ui.SectionHeader(fmt.Sprintf("Template files (%s)", ui.FilePath(templateDir))))
 	for _, f := range templates {
-		fmt.Printf("  - %s (%d bytes)\n", f.Path, f.SizeBytes)
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.FilePath(f.Path), ui.Hint(fmt.Sprintf("(%d bytes)", f.SizeBytes)))))
 	}
 	return nil
 }
@@ -87,7 +87,7 @@ func renderTemplateDelete(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf("Deleted template %s -> %s", ui.FilePath(stringValue(data["deleted"])), ui.FilePath(stringValue(data["trash_path"]))))
 	for _, w := range result.Warnings {
-		fmt.Printf("warning: %s\n", w.Message)
+		fmt.Println(ui.Warning(w.Message))
 	}
 	return nil
 }

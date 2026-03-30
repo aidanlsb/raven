@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -97,11 +98,12 @@ func openFileInEditor(filePath, relPath string, skipOpenMessage bool) {
 	cfg := getConfig()
 	if vault.OpenInEditor(cfg, filePath) {
 		if !skipOpenMessage {
-			fmt.Printf("Opening %s\n", relPath)
+			fmt.Println(ui.Checkf("Opening %s", ui.FilePath(relPath)))
 		}
 	} else {
-		fmt.Printf("File: %s\n", relPath)
-		fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
+		fmt.Println(ui.SectionHeader("File"))
+		fmt.Println(ui.Bullet(ui.FilePath(relPath)))
+		fmt.Println(ui.Hint("Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically."))
 	}
 }
 
@@ -117,30 +119,31 @@ func handleOpenResult(cmd *cobra.Command, result commandexec.Result) error {
 		files := stringSliceFromAny(data["files"])
 		errors := stringSliceFromAny(data["errors"])
 		if boolValue(data["opened"]) {
-			fmt.Printf("Opening %d file(s)\n", len(files))
+			fmt.Println(ui.Checkf("Opening %d file(s)", len(files)))
 			for _, p := range files {
-				fmt.Printf("  %s\n", p)
+				fmt.Println(ui.Bullet(ui.FilePath(p)))
 			}
 		} else {
-			fmt.Println("Files:")
+			fmt.Println(ui.SectionHeader("Files"))
 			for _, p := range files {
-				fmt.Printf("  %s\n", p)
+				fmt.Println(ui.Bullet(ui.FilePath(p)))
 			}
-			fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
+			fmt.Println(ui.Hint("Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically."))
 		}
 		for _, e := range errors {
-			fmt.Printf("Warning: %s\n", e)
+			fmt.Println(ui.Warning(e))
 		}
 		return nil
 	}
 
 	file := stringValue(data["file"])
 	if boolValue(data["opened"]) {
-		fmt.Printf("Opening %s\n", file)
+		fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
 		return nil
 	}
-	fmt.Printf("File: %s\n", file)
-	fmt.Println("(Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically)")
+	fmt.Println(ui.SectionHeader("File"))
+	fmt.Println(ui.Bullet(ui.FilePath(file)))
+	fmt.Println(ui.Hint("Set 'editor' in ~/.config/raven/config.toml or $EDITOR to open automatically."))
 	return nil
 }
 

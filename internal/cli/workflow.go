@@ -129,7 +129,7 @@ func renderWorkflowList(_ *cobra.Command, result commandexec.Result) error {
 		return err
 	}
 	if len(items) == 0 {
-		fmt.Println(ui.Star("No workflows defined in raven.yaml"))
+		fmt.Println(ui.Star("No workflows defined in raven.yaml."))
 		return nil
 	}
 
@@ -137,7 +137,11 @@ func renderWorkflowList(_ *cobra.Command, result commandexec.Result) error {
 		return items[i].Name < items[j].Name
 	})
 	for _, item := range items {
-		fmt.Printf("%-20s %s\n", item.Name, item.Description)
+		line := ui.Bold.Render(item.Name)
+		if strings.TrimSpace(item.Description) != "" {
+			line = fmt.Sprintf("%s %s", line, ui.Hint("— "+item.Description))
+		}
+		fmt.Println(ui.Bullet(line))
 	}
 	return nil
 }
@@ -150,57 +154,58 @@ func renderWorkflowShow(_ *cobra.Command, result commandexec.Result) error {
 	}
 	wf.Inputs, _ = decodeSchemaValue[map[string]*config.WorkflowInput](data["inputs"])
 	wf.Steps, _ = decodeSchemaValue[[]*config.WorkflowStep](data["steps"])
+	display := ui.NewDisplayContext()
 
-	fmt.Printf("name: %s\n", wf.Name)
+	fmt.Printf("%s %s\n", ui.SectionHeader("Workflow"), ui.Bold.Render(wf.Name))
 	if wf.Description != "" {
-		fmt.Printf("description: %s\n", wf.Description)
+		fmt.Printf("%s %s\n", ui.Hint("Description:"), wf.Description)
 	}
 	if len(wf.Inputs) > 0 {
-		fmt.Println("\ninputs:")
+		fmt.Printf("\n%s\n", ui.DividerWithAccentLabel("inputs", display.TermWidth))
 		for name, input := range wf.Inputs {
 			req := ""
 			if input.Required {
 				req = " (required)"
 			}
-			fmt.Printf("  %s: %s%s\n", name, input.Type, req)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s: %s%s", name, input.Type, req)))
 			if input.Description != "" {
-				fmt.Printf("    %s\n", input.Description)
+				fmt.Println(ui.Indent(2, ui.Hint(input.Description)))
 			}
 		}
 	}
 	if len(wf.Steps) > 0 {
-		fmt.Println("\nsteps:")
+		fmt.Printf("\n%s\n", ui.DividerWithAccentLabel("steps", display.TermWidth))
 		for i, step := range wf.Steps {
 			if step == nil {
-				fmt.Printf("  %d. (nil)\n", i+1)
+				fmt.Println(ui.Bullet(fmt.Sprintf("%d. (nil)", i+1)))
 				continue
 			}
-			fmt.Printf("  %d. %s (%s)\n", i+1, step.ID, step.Type)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%d. %s (%s)", i+1, step.ID, step.Type)))
 			if step.Description != "" {
-				fmt.Printf("     %s\n", step.Description)
+				fmt.Println(ui.Indent(2, ui.Hint(step.Description)))
 			}
 			switch step.Type {
 			case "agent":
-				fmt.Printf("     outputs: %d\n", len(step.Outputs))
+				fmt.Println(ui.Indent(2, fmt.Sprintf("outputs: %d", len(step.Outputs))))
 			case "tool":
-				fmt.Printf("     tool: %s\n", step.Tool)
+				fmt.Println(ui.Indent(2, fmt.Sprintf("tool: %s", step.Tool)))
 			case "foreach":
 				if step.ForEach != nil {
-					fmt.Printf("     items: %s\n", step.ForEach.Items)
-					fmt.Printf("     nested_steps: %d\n", len(step.ForEach.Steps))
+					fmt.Println(ui.Indent(2, fmt.Sprintf("items: %s", step.ForEach.Items)))
+					fmt.Println(ui.Indent(2, fmt.Sprintf("nested_steps: %d", len(step.ForEach.Steps))))
 					if step.ForEach.OnError != "" {
-						fmt.Printf("     on_error: %s\n", step.ForEach.OnError)
+						fmt.Println(ui.Indent(2, fmt.Sprintf("on_error: %s", step.ForEach.OnError)))
 					}
 				}
 			case "switch":
 				if step.Switch != nil {
-					fmt.Printf("     value: %s\n", step.Switch.Value)
-					fmt.Printf("     cases: %d\n", len(step.Switch.Cases))
+					fmt.Println(ui.Indent(2, fmt.Sprintf("value: %s", step.Switch.Value)))
+					fmt.Println(ui.Indent(2, fmt.Sprintf("cases: %d", len(step.Switch.Cases))))
 					if step.Switch.Default != nil {
-						fmt.Printf("     has_default: true\n")
+						fmt.Println(ui.Indent(2, "has_default: true"))
 					}
 					if len(step.Switch.Outputs) > 0 {
-						fmt.Printf("     outputs: %d\n", len(step.Switch.Outputs))
+						fmt.Println(ui.Indent(2, fmt.Sprintf("outputs: %d", len(step.Switch.Outputs))))
 					}
 				}
 			}
@@ -285,7 +290,7 @@ func renderWorkflowAdd(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	name := stringValue(data["name"])
 	fmt.Println(ui.Checkf("Added workflow '%s'.", name))
-	fmt.Println(ui.Hint(fmt.Sprintf("Run with: rvn workflow run %s", name)))
+	fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Run with: rvn workflow run %s", name)))
 	return nil
 }
 
@@ -293,7 +298,7 @@ func renderWorkflowScaffold(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	name := stringValue(data["name"])
 	fmt.Println(ui.Checkf("Scaffolded workflow '%s' at %s", name, ui.FilePath(stringValue(data["file"]))))
-	fmt.Println(ui.Hint(fmt.Sprintf("Run with: rvn workflow run %s --input topic=\"...\"", name)))
+	fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Run with: rvn workflow run %s --input topic=\"...\"", name)))
 	return nil
 }
 
@@ -308,7 +313,7 @@ func renderWorkflowValidate(_ *cobra.Command, result commandexec.Result) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(ui.Checkf("All %d workflow(s) are valid.", len(results)))
+	fmt.Println(ui.Starf("All %d workflow(s) are valid.", len(results)))
 	return nil
 }
 
@@ -339,19 +344,20 @@ func renderWorkflowRunResult(result commandexec.Result, completionMessage string
 	if err != nil {
 		return err
 	}
+	display := ui.NewDisplayContext()
 
-	fmt.Printf("run_id: %s\n", runResult.RunID)
-	fmt.Printf("status: %s\n", runResult.Status)
-	fmt.Printf("revision: %d\n\n", runResult.Revision)
+	fmt.Printf("%s %s\n", ui.SectionHeader("Run"), ui.Bold.Render(runResult.RunID))
+	fmt.Printf("%s %s\n", ui.Hint("Status:"), runResult.Status)
+	fmt.Printf("%s %d\n\n", ui.Hint("Revision:"), runResult.Revision)
 	if runResult.Next != nil {
-		fmt.Println(ui.DividerWithAccentLabel("agent", 72))
+		fmt.Println(ui.DividerWithAccentLabel("agent", display.TermWidth))
 		fmt.Println(runResult.Next.Prompt)
 		fmt.Println()
-		fmt.Println(ui.DividerWithAccentLabel("outputs", 72))
+		fmt.Println(ui.DividerWithAccentLabel("outputs", display.TermWidth))
 		outputJSON, _ := json.MarshalIndent(runResult.Next.Outputs, "", "  ")
 		fmt.Println(string(outputJSON))
 		fmt.Println()
-		fmt.Println(ui.DividerWithAccentLabel("step summaries", 72))
+		fmt.Println(ui.DividerWithAccentLabel("step summaries", display.TermWidth))
 		stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 		fmt.Println(string(stepSummariesJSON))
 		fmt.Println()
@@ -359,9 +365,9 @@ func renderWorkflowRunResult(result commandexec.Result, completionMessage string
 		return nil
 	}
 
-	fmt.Println(completionMessage)
+	fmt.Println(ui.Star(completionMessage))
 	fmt.Println()
-	fmt.Println(ui.DividerWithAccentLabel("step summaries", 72))
+	fmt.Println(ui.DividerWithAccentLabel("step summaries", display.TermWidth))
 	stepSummariesJSON, _ := json.MarshalIndent(runResult.StepSummaries, "", "  ")
 	fmt.Println(string(stepSummariesJSON))
 	return nil
@@ -374,7 +380,7 @@ func renderWorkflowRunsList(_ *cobra.Command, result commandexec.Result) error {
 		return err
 	}
 	for _, w := range result.Warnings {
-		fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.Ref)
+		fmt.Println(ui.Warningf("[%s] %s (%s)", w.Code, w.Message, w.Ref))
 	}
 	if len(runs) == 0 {
 		fmt.Println(ui.Star("No workflow runs."))
@@ -385,13 +391,12 @@ func renderWorkflowRunsList(_ *cobra.Command, result commandexec.Result) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s  %-18s %-14s rev=%d updated=%s\n",
-			run["run_id"],
-			run["workflow_name"],
-			run["status"],
-			revision,
-			run["updated_at"],
-		)
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s %s %s",
+			ui.Bold.Render(stringValue(run["run_id"])),
+			ui.Hint(fmt.Sprintf("workflow=%s", stringValue(run["workflow_name"]))),
+			ui.Hint(fmt.Sprintf("status=%s", stringValue(run["status"]))),
+			ui.Hint(fmt.Sprintf("rev=%d updated=%s", revision, stringValue(run["updated_at"]))),
+		)))
 	}
 	return nil
 }
@@ -400,9 +405,9 @@ func renderWorkflowRunsStep(cmd *cobra.Command, result commandexec.Result) error
 	payload := canonicalDataMap(result)
 	paginationRequested := cmd.Flags().Changed("path") || cmd.Flags().Changed("offset") || cmd.Flags().Changed("limit")
 
-	fmt.Printf("run_id: %s\n", payload["run_id"])
-	fmt.Printf("workflow: %s\n", payload["workflow_name"])
-	fmt.Printf("step_id: %s\n\n", payload["step_id"])
+	fmt.Printf("%s %s\n", ui.SectionHeader("Workflow step"), ui.Bold.Render(stringValue(payload["step_id"])))
+	fmt.Printf("%s %s\n", ui.Hint("Run:"), stringValue(payload["run_id"]))
+	fmt.Printf("%s %s\n\n", ui.Hint("Workflow:"), stringValue(payload["workflow_name"]))
 	stepValue := payload["step_output"]
 	if paginationRequested {
 		stepValue = payload["step_output_page"]
@@ -419,15 +424,14 @@ func renderWorkflowRunsPrune(cmd *cobra.Command, result commandexec.Result) erro
 		return err
 	}
 	for _, w := range result.Warnings {
-		fmt.Printf("Warning [%s]: %s (%s)\n", w.Code, w.Message, w.Ref)
+		fmt.Println(ui.Warningf("[%s] %s (%s)", w.Code, w.Message, w.Ref))
 	}
 	confirm, _ := cmd.Flags().GetBool("confirm")
 	if confirm {
 		fmt.Println(ui.Checkf("Deleted %d runs (matched %d of %d scanned).", prune.Deleted, prune.Matched, prune.Scanned))
 		return nil
 	}
-	fmt.Printf("Would delete %d runs (scanned %d).\n", prune.Matched, prune.Scanned)
-	fmt.Println(ui.Hint("Use --confirm to apply."))
+	fmt.Println(ui.Hint(fmt.Sprintf("Would delete %d runs (scanned %d). Use --confirm to apply.", prune.Matched, prune.Scanned)))
 	return nil
 }
 

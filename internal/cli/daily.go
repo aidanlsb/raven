@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/ui"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
@@ -25,7 +26,7 @@ func handleDailyResult(cmd *cobra.Command, result commandexec.Result) error {
 	}
 
 	if !isJSONOutput() && created {
-		fmt.Printf("Created %s\n", relativePath)
+		fmt.Println(ui.Checkf("Created %s", ui.FilePath(relativePath)))
 	}
 
 	edit, _ := cmd.Flags().GetBool("edit")

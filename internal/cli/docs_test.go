@@ -280,12 +280,12 @@ func TestOutputDocsSectionsTextListsSectionCommands(t *testing.T) {
 	})
 
 	wantSnippets := []string{
-		"Documentation section commands:",
+		"Documentation section commands",
 		"rvn docs getting-started",
 		"Getting Started (3 topics)",
 		"rvn docs querying",
 		"Querying (1 topic)",
-		"General docs commands:",
+		"General docs commands",
 		"rvn docs list",
 		"rvn docs <section>",
 		"rvn docs <section> <topic>",
@@ -318,12 +318,12 @@ func TestOutputDocsTopicsTextListsTopicCommands(t *testing.T) {
 	})
 
 	wantSnippets := []string{
-		"Documentation topic commands for Reference [reference]:",
+		"Documentation topic commands for Reference [reference]",
 		"rvn docs reference query-language",
 		"Query Language",
 		"rvn docs reference cli",
 		"CLI Reference",
-		"General docs commands:",
+		"General docs commands",
 		"rvn docs reference",
 		"rvn docs search <query> --section reference",
 		"rvn docs list",
@@ -351,9 +351,9 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 	})
 
 	wantSnippets := []string{
-		"Documentation topic commands for Vault Management [vault-management]:",
+		"Documentation topic commands for Vault Management [vault-management]",
 		"(no topics)",
-		"General docs commands:",
+		"General docs commands",
 		"rvn docs list",
 		"rvn docs search <query> --section vault-management",
 	}

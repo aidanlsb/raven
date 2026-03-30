@@ -114,30 +114,30 @@ func IsEmbeddedID(id string) bool {
 
 // PrintBulkPreview prints a human-readable preview of bulk operations.
 func PrintBulkPreview(preview *BulkPreview) {
-	fmt.Printf("\nPreview: %d objects will be %s\n\n", len(preview.Items), getActionVerb(preview.Action))
+	fmt.Printf("\n%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: %d objects will be %s", len(preview.Items), getActionVerb(preview.Action))))
 
 	for _, item := range preview.Items {
-		fmt.Printf("  %s\n", item.ID)
+		fmt.Println(ui.Bullet(item.ID))
 		if item.Details != "" {
-			fmt.Printf("    → %s\n", item.Details)
+			fmt.Println(ui.Indent(2, ui.Hint("→ "+item.Details)))
 		}
 		for field, change := range item.Changes {
-			fmt.Printf("    %s: %s\n", field, change)
+			fmt.Println(ui.Indent(2, fmt.Sprintf("%s: %s", field, change)))
 		}
 	}
 
 	if len(preview.Skipped) > 0 {
-		fmt.Printf("\nSkipped %d items:\n", len(preview.Skipped))
+		fmt.Printf("\n%s\n", ui.Starf("Skipped %d items.", len(preview.Skipped)))
 		for _, skip := range preview.Skipped {
-			fmt.Printf("  %s: %s\n", skip.ID, skip.Reason)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s: %s", skip.ID, skip.Reason)))
 		}
 	}
 
 	for _, w := range preview.Warnings {
-		fmt.Printf("\n⚠ Warning: %s\n", w.Message)
+		fmt.Printf("\n%s\n", ui.Warning(w.Message))
 	}
 
-	fmt.Println(ui.Hint("\nRun with --confirm to apply changes."))
+	fmt.Printf("\n%s\n", ui.Hint("Run with --confirm to apply changes."))
 }
 
 // PrintBulkSummary prints a human-readable summary of completed bulk operations.
@@ -154,10 +154,10 @@ func PrintBulkSummary(summary *BulkSummary) {
 	}
 
 	if summary.Skipped > 0 {
-		fmt.Printf("  Skipped: %d\n", summary.Skipped)
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Skipped: %d", summary.Skipped)))
 	}
 	if summary.Errors > 0 {
-		fmt.Printf("  Errors: %d\n", summary.Errors)
+		fmt.Printf("  %s\n", ui.Errorf("%d errors", summary.Errors))
 	}
 }
 

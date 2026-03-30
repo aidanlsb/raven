@@ -61,36 +61,36 @@ func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	configFile := stringValue(data["config_path"])
 	stateFile := stringValue(data["state_path"])
 	if !boolValue(data["exists"]) {
-		fmt.Printf("Config file does not exist: %s\n", ui.FilePath(configFile))
+		fmt.Printf("%s %s\n", ui.Warning("Config file does not exist:"), ui.FilePath(configFile))
 		fmt.Println(ui.Hint("Run 'rvn config init' to create it."))
 		return nil
 	}
 
-	fmt.Printf("config: %s\n", ui.FilePath(configFile))
-	fmt.Printf("state:  %s\n", ui.FilePath(stateFile))
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(configFile))
+	fmt.Printf("%s %s\n", ui.Hint("state:"), ui.FilePath(stateFile))
 
 	if v := strings.TrimSpace(stringValue(data["default_vault"])); v != "" {
-		fmt.Printf("default_vault: %s\n", v)
+		fmt.Printf("%s %s\n", ui.Hint("default_vault:"), v)
 	}
 	if v := strings.TrimSpace(stringValue(data["state_file"])); v != "" {
-		fmt.Printf("state_file: %s\n", v)
+		fmt.Printf("%s %s\n", ui.Hint("state_file:"), ui.FilePath(v))
 	}
 	if v := strings.TrimSpace(stringValue(data["editor"])); v != "" {
-		fmt.Printf("editor: %s\n", v)
+		fmt.Printf("%s %s\n", ui.Hint("editor:"), v)
 	}
 	if v := strings.TrimSpace(stringValue(data["editor_mode"])); v != "" {
-		fmt.Printf("editor_mode: %s\n", v)
+		fmt.Printf("%s %s\n", ui.Hint("editor_mode:"), v)
 	}
-	ui, _ := data["ui"].(map[string]interface{})
-	if v := strings.TrimSpace(stringValue(ui["accent"])); v != "" {
+	uiConfig, _ := data["ui"].(map[string]interface{})
+	if v := strings.TrimSpace(stringValue(uiConfig["accent"])); v != "" {
 		fmt.Printf("ui.accent: %s\n", v)
 	}
-	if v := strings.TrimSpace(stringValue(ui["code_theme"])); v != "" {
+	if v := strings.TrimSpace(stringValue(uiConfig["code_theme"])); v != "" {
 		fmt.Printf("ui.code_theme: %s\n", v)
 	}
 	vaults := stringMap(data["vaults"])
 	if len(vaults) == 0 {
-		fmt.Println("vaults: (none)")
+		fmt.Printf("%s %s\n", ui.Hint("vaults:"), ui.Hint("(none)"))
 		return nil
 	}
 
@@ -99,9 +99,9 @@ func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	fmt.Println("vaults:")
+	fmt.Println(ui.SectionHeader("vaults"))
 	for _, name := range names {
-		fmt.Printf("  %s = %s\n", name, vaults[name])
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s = %s", name, ui.FilePath(vaults[name]))))
 	}
 
 	return nil
@@ -110,7 +110,7 @@ func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 func renderConfigInit(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	if !boolValue(data["created"]) {
-		fmt.Printf("Config already exists: %s\n", ui.FilePath(stringValue(data["config_path"])))
+		fmt.Println(ui.Starf("Config already exists: %s", ui.FilePath(stringValue(data["config_path"]))))
 	} else {
 		fmt.Println(ui.Checkf("Created config: %s", ui.FilePath(stringValue(data["config_path"]))))
 	}
@@ -120,14 +120,14 @@ func renderConfigInit(_ *cobra.Command, result commandexec.Result) error {
 func renderConfigSet(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(stringValue(data["config_path"]))))
-	fmt.Printf("changed: %s\n", strings.Join(stringSliceFromAny(data["changed"]), ", "))
+	fmt.Printf("%s %s\n", ui.Hint("changed:"), strings.Join(stringSliceFromAny(data["changed"]), ", "))
 	return nil
 }
 
 func renderConfigUnset(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf("Updated config: %s", ui.FilePath(stringValue(data["config_path"]))))
-	fmt.Printf("cleared: %s\n", strings.Join(stringSliceFromAny(data["changed"]), ", "))
+	fmt.Printf("%s %s\n", ui.Hint("cleared:"), strings.Join(stringSliceFromAny(data["changed"]), ", "))
 	return nil
 }
 

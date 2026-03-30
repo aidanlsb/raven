@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/schemasvc"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var schemaAddCmd = &cobra.Command{
@@ -81,13 +82,13 @@ func buildSchemaAddTypeArgs(cmd *cobra.Command, args []string) (map[string]inter
 func renderSchemaAddType(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 
-	fmt.Printf("✓ Added type '%s' to schema.yaml\n", data["name"])
-	fmt.Printf("  default_path: %s\n", data["default_path"])
+	fmt.Println(ui.Checkf("Added type '%s' to schema.yaml", data["name"]))
+	fmt.Printf("  %s %s\n", ui.Hint("default_path:"), data["default_path"])
 	if description, _ := data["description"].(string); description != "" {
-		fmt.Printf("  description: %s\n", description)
+		fmt.Printf("  %s %s\n", ui.Hint("description:"), description)
 	}
 	if canonicalNameField, _ := data["name_field"].(string); canonicalNameField != "" {
-		fmt.Printf("  name_field: %s (auto-created as required string)\n", canonicalNameField)
+		fmt.Printf("  %s %s %s\n", ui.Hint("name_field:"), canonicalNameField, ui.Hint("(auto-created as required string)"))
 	}
 	return nil
 }
@@ -95,12 +96,12 @@ func renderSchemaAddType(_ *cobra.Command, result commandexec.Result) error {
 func renderSchemaAddTrait(cmd *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 
-	fmt.Printf("✓ Added trait '%s' to schema.yaml\n", data["name"])
-	fmt.Printf("  type: %s\n", data["type"])
+	fmt.Println(ui.Checkf("Added trait '%s' to schema.yaml", data["name"]))
+	fmt.Printf("  %s %s\n", ui.Hint("type:"), data["type"])
 	values, _ := decodeSchemaValue[[]string](data["values"])
 	if len(values) > 0 {
 		rawValues, _ := cmd.Flags().GetString("values")
-		fmt.Printf("  values: %s\n", rawValues)
+		fmt.Printf("  %s %s\n", ui.Hint("values:"), rawValues)
 	}
 	return nil
 }
@@ -278,21 +279,21 @@ func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema)
 func renderSchemaAddField(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 
-	fmt.Printf("✓ Added field '%s' to type '%s'\n", data["field"], data["type"])
-	fmt.Printf("  type: %s\n", data["field_type"])
+	fmt.Println(ui.Checkf("Added field '%s' to type '%s'", data["field"], data["type"]))
+	fmt.Printf("  %s %s\n", ui.Hint("type:"), data["field_type"])
 	if boolValue(data["required"]) {
-		fmt.Println("  required: true")
+		fmt.Printf("  %s true\n", ui.Hint("required:"))
 	}
 	if description, _ := data["description"].(string); description != "" {
-		fmt.Printf("  description: %s\n", description)
+		fmt.Printf("  %s %s\n", ui.Hint("description:"), description)
 	}
 	return nil
 }
 
 func printSchemaChangeList(header string, changes []string) {
-	fmt.Println(header)
+	fmt.Println(ui.Check(header))
 	for _, c := range changes {
-		fmt.Printf("  %s\n", c)
+		fmt.Printf("  %s\n", ui.Hint(c))
 	}
 }
 
@@ -317,14 +318,14 @@ func renderSchemaValidate(_ *cobra.Command, result commandexec.Result) error {
 	}
 
 	if len(issues) > 0 {
-		fmt.Printf("Schema validation found %d issues:\n", len(issues))
+		fmt.Println(ui.Warningf("Schema validation found %d issues:", len(issues)))
 		for _, issue := range issues {
-			fmt.Printf("  ⚠ %s\n", issue)
+			fmt.Printf("  %s\n", ui.Warning(issue))
 		}
 		return nil
 	}
 
-	fmt.Printf("✓ Schema is valid (%d types, %d traits)\n", types, traits)
+	fmt.Println(ui.Checkf("Schema is valid (%d types, %d traits)", types, traits))
 	return nil
 }
 
@@ -443,12 +444,12 @@ func invokeSchemaRemoveType(_ *cobra.Command, commandID, vaultPath string, args 
 	count := detailInt(details, "affected_count")
 	typeName := stringValue(args["name"])
 	if count > 0 {
-		fmt.Printf("Warning: %d files of type '%s' will become 'page' type:\n", count, typeName)
+		fmt.Println(ui.Warningf("%d files of type '%s' will become 'page' type:", count, typeName))
 		for _, filePath := range detailStringSlice(details, "affected_files") {
-			fmt.Printf("  - %s\n", filePath)
+			fmt.Println(ui.Bullet(ui.FilePath(filePath)))
 		}
 		if remaining := detailInt(details, "remaining_count"); remaining > 0 {
-			fmt.Printf("  ... and %d more\n", remaining)
+			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("... and %d more", remaining)))
 		}
 	}
 	if !promptForConfirm("Continue?") {
@@ -470,7 +471,7 @@ func invokeSchemaRemoveTrait(_ *cobra.Command, commandID, vaultPath string, args
 	count := detailInt(details, "affected_count")
 	traitName := stringValue(args["name"])
 	if count > 0 {
-		fmt.Printf("Warning: %d instances of @%s will remain in files (no longer indexed)\n", count, traitName)
+		fmt.Println(ui.Warningf("%d instances of @%s will remain in files (no longer indexed)", count, traitName))
 	}
 	if !promptForConfirm("Continue?") {
 		return commandexec.Failure(ErrConfirmationRequired, "operation cancelled", nil, "Use --force to skip confirmation")
@@ -482,18 +483,18 @@ func invokeSchemaRemoveTrait(_ *cobra.Command, commandID, vaultPath string, args
 }
 
 func renderSchemaRemoveType(_ *cobra.Command, result commandexec.Result) error {
-	fmt.Printf("✓ Removed type '%s' from schema.yaml\n", stringValue(canonicalDataMap(result)["name"]))
+	fmt.Println(ui.Checkf("Removed type '%s' from schema.yaml", stringValue(canonicalDataMap(result)["name"])))
 	return nil
 }
 
 func renderSchemaRemoveTrait(_ *cobra.Command, result commandexec.Result) error {
-	fmt.Printf("✓ Removed trait '%s' from schema.yaml\n", stringValue(canonicalDataMap(result)["name"]))
+	fmt.Println(ui.Checkf("Removed trait '%s' from schema.yaml", stringValue(canonicalDataMap(result)["name"])))
 	return nil
 }
 
 func renderSchemaRemoveField(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("✓ Removed field '%s' from type '%s'\n", stringValue(data["field"]), stringValue(data["type"]))
+	fmt.Println(ui.Checkf("Removed field '%s' from type '%s'", stringValue(data["field"]), stringValue(data["type"])))
 	return nil
 }
 
@@ -664,10 +665,10 @@ func renderSchemaRenameField(_ *cobra.Command, result commandexec.Result) error 
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Preview: Rename field '%s.%s' to '%s.%s'\n\n", typeName, oldField, typeName, newField)
-		fmt.Printf("Changes to be made (%d total):\n", totalChanges)
+		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Rename field '%s.%s' to '%s.%s'", typeName, oldField, typeName, newField)))
+		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", totalChanges)))
 		printFieldRenameChanges(changes)
-		fmt.Printf("\nRun with --confirm to apply these changes.\n")
+		fmt.Printf("\n%s\n", ui.Hint("Run with --confirm to apply these changes."))
 		return nil
 	}
 
@@ -675,9 +676,9 @@ func renderSchemaRenameField(_ *cobra.Command, result commandexec.Result) error 
 	if err != nil {
 		return err
 	}
-	fmt.Printf("✓ Renamed field '%s.%s' to '%s.%s'\n", typeName, oldField, typeName, newField)
-	fmt.Printf("  Applied %d changes\n", changesApplied)
-	fmt.Printf("\n%s.\n", data["hint"])
+	fmt.Println(ui.Checkf("Renamed field '%s.%s' to '%s.%s'", typeName, oldField, typeName, newField))
+	fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Applied %d changes", changesApplied)))
+	fmt.Printf("\n%s.\n", ui.Hint(stringValue(data["hint"])))
 	return nil
 }
 
@@ -695,8 +696,8 @@ func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Preview: Rename type '%s' to '%s'\n\n", oldName, newName)
-		fmt.Printf("Changes to be made (%d total):\n", totalChanges)
+		fmt.Printf("%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: Rename type '%s' to '%s'", oldName, newName)))
+		fmt.Printf("%s\n", ui.Hint(fmt.Sprintf("Changes to be made (%d total):", totalChanges)))
 		printTypeRenameChanges(changes)
 		if boolValue(data["default_path_rename_available"]) {
 			optionalChanges, err := decodeSchemaCount(data["optional_total_changes"])
@@ -707,14 +708,14 @@ func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("\nOptional default directory rename (%d changes):\n", optionalChanges)
-			fmt.Printf("  default_path: %s → %s\n", data["default_path_old"], data["default_path_new"])
+			fmt.Printf("\n%s\n", ui.Hint(fmt.Sprintf("Optional default directory rename (%d changes):", optionalChanges)))
+			fmt.Printf("  %s %s → %s\n", ui.Hint("default_path:"), data["default_path_old"], data["default_path_new"])
 			if filesToMove > 0 {
-				fmt.Printf("  files to move: %d\n", filesToMove)
+				fmt.Printf("  %s %d\n", ui.Hint("files to move:"), filesToMove)
 			}
-			fmt.Printf("  (add --rename-default-path to apply these optional changes)\n")
+			fmt.Printf("  %s\n", ui.Hint("(add --rename-default-path to apply these optional changes)"))
 		}
-		fmt.Printf("\nRun with --confirm to apply these changes.\n")
+		fmt.Printf("\n%s\n", ui.Hint("Run with --confirm to apply these changes."))
 		return nil
 	}
 
@@ -723,8 +724,8 @@ func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
 		return err
 	}
 
-	fmt.Printf("✓ Renamed type '%s' to '%s'\n", oldName, newName)
-	fmt.Printf("  Applied %d changes\n", changesApplied)
+	fmt.Println(ui.Checkf("Renamed type '%s' to '%s'", oldName, newName))
+	fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Applied %d changes", changesApplied)))
 	if boolValue(data["default_path_rename_available"]) {
 		if boolValue(data["default_path_renamed"]) {
 			filesMoved, err := decodeSchemaCount(data["files_moved"])
@@ -735,13 +736,13 @@ func renderSchemaRenameType(_ *cobra.Command, result commandexec.Result) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("  Renamed default_path %s → %s\n", data["default_path_old"], data["default_path_new"])
-			fmt.Printf("  Moved %d files and updated references in %d files\n", filesMoved, refFilesUpdated)
+			fmt.Printf("  %s %s → %s\n", ui.Hint("Renamed default_path"), data["default_path_old"], data["default_path_new"])
+			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Moved %d files and updated references in %d files", filesMoved, refFilesUpdated)))
 		} else {
-			fmt.Printf("  Default path remains %s (use --rename-default-path to rename to %s)\n", data["default_path_old"], data["default_path_new"])
+			fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Default path remains %s (use --rename-default-path to rename to %s)", data["default_path_old"], data["default_path_new"])))
 		}
 	}
-	fmt.Printf("\n%s.\n", data["hint"])
+	fmt.Printf("\n%s.\n", ui.Hint(stringValue(data["hint"])))
 	return nil
 }
 
@@ -759,10 +760,10 @@ func printFieldRenameChanges(changes []schemasvc.FieldRenameChange) {
 
 	for _, file := range files {
 		fileChanges := byFile[file]
-		fmt.Printf("\n  %s:\n", file)
+		fmt.Printf("\n  %s:\n", ui.FilePath(file))
 		for _, change := range fileChanges {
 			if change.Line > 0 {
-				fmt.Printf("    Line %d: %s\n", change.Line, change.Description)
+				fmt.Printf("    %s %s\n", ui.Hint(fmt.Sprintf("Line %d:", change.Line)), change.Description)
 			} else {
 				fmt.Printf("    %s\n", change.Description)
 			}
@@ -784,10 +785,10 @@ func printTypeRenameChanges(changes []schemasvc.TypeRenameChange) {
 
 	for _, file := range files {
 		fileChanges := byFile[file]
-		fmt.Printf("\n  %s:\n", file)
+		fmt.Printf("\n  %s:\n", ui.FilePath(file))
 		for _, change := range fileChanges {
 			if change.Line > 0 {
-				fmt.Printf("    Line %d: %s\n", change.Line, change.Description)
+				fmt.Printf("    %s %s\n", ui.Hint(fmt.Sprintf("Line %d:", change.Line)), change.Description)
 			} else {
 				fmt.Printf("    %s\n", change.Description)
 			}

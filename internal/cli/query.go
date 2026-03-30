@@ -436,7 +436,7 @@ func runQueryWithApply(rt *readsvc.Runtime, queryStr string, applyArgs []string,
 			}, &Meta{Count: 0, QueryTimeMs: time.Since(start).Milliseconds()})
 			return nil
 		}
-		fmt.Printf("No results found for query: %s\n", queryStr)
+		fmt.Println(ui.Starf("No results found for query: %s", queryStr))
 		return nil
 	}
 
@@ -490,7 +490,7 @@ func runTraitQueryWithApply(vaultPath, queryStr string, results []model.Trait, r
 			}, &Meta{Count: 0})
 			return nil
 		}
-		fmt.Printf("No results found for query: %s\n", queryStr)
+		fmt.Println(ui.Starf("No results found for query: %s", queryStr))
 		return nil
 	}
 
@@ -634,10 +634,10 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 }
 
 func listSavedQueries(queries []SavedQueryInfo) error {
-	fmt.Println("Saved queries:")
+	fmt.Println(ui.SectionHeader("Saved queries"))
 	if len(queries) == 0 {
-		fmt.Println("  (none defined)")
-		fmt.Println("\nDefine queries in raven.yaml under 'queries:'")
+		fmt.Println(ui.Bullet(ui.Hint("(none defined)")))
+		fmt.Printf("\n%s\n", ui.Hint("Define queries in raven.yaml under 'queries:'"))
 		return nil
 	}
 	for _, q := range queries {
@@ -646,10 +646,10 @@ func listSavedQueries(queries []SavedQueryInfo) error {
 			desc = q.Query
 		}
 		if len(q.Args) > 0 {
-			fmt.Printf("  %-16s %s (args: %s)\n", q.Name, desc, strings.Join(q.Args, ", "))
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s %s %s", ui.Bold.Render(q.Name), desc, ui.Hint("(args: "+strings.Join(q.Args, ", ")+")"))))
 			continue
 		}
-		fmt.Printf("  %-16s %s\n", q.Name, desc)
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(q.Name), desc)))
 	}
 	return nil
 }
@@ -862,7 +862,7 @@ func handleCanonicalQueryFailure(result commandexec.Result) error {
 func renderQueryAdd(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf("Added query '%s'", stringValue(data["name"])))
-	fmt.Println(ui.Hint("Run with: " + ui.Bold.Render("rvn query "+stringValue(data["name"]))))
+	fmt.Printf("  %s %s\n", ui.Hint("Run with:"), ui.Bold.Render("rvn query "+stringValue(data["name"])))
 	return nil
 }
 
@@ -891,7 +891,7 @@ func warnIfStale(db *index.Database, vaultPath string) {
 		} else if staleCount <= 3 {
 			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale: %s",
 				staleCount, strings.Join(staleFiles, ", ")))
-			fmt.Fprintln(os.Stderr, ui.Hint("Run 'rvn reindex' or use '--refresh' to update."))
+			fmt.Fprintf(os.Stderr, "  %s\n", ui.Hint("Run 'rvn reindex' or use '--refresh' to update."))
 		} else {
 			fmt.Fprintln(os.Stderr, ui.Warningf("%d files may be stale. Run 'rvn reindex' or use '--refresh'.", staleCount))
 		}
@@ -911,7 +911,7 @@ func smartReindex(db *index.Database, vaultPath string) error {
 	}
 
 	if reindexed > 0 && !isJSONOutput() {
-		fmt.Fprintf(os.Stderr, "Refreshed %d stale file(s)\n\n", reindexed)
+		fmt.Fprintf(os.Stderr, "%s\n\n", ui.Checkf("Refreshed %d stale file(s)", reindexed))
 	}
 
 	return nil

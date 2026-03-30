@@ -92,9 +92,9 @@ func renderAddResult(_ *cobra.Command, result commandexec.Result) error {
 	relativePath, _ := data["file"].(string)
 	fmt.Println(ui.Checkf("Added to %s", ui.FilePath(relativePath)))
 	for _, warning := range result.Warnings {
-		fmt.Printf("  ⚠ %s: %s\n", warning.Code, warning.Message)
+		fmt.Printf("  %s\n", ui.Warningf("%s: %s", warning.Code, warning.Message))
 		if warning.CreateCommand != "" {
-			fmt.Printf("    → %s\n", warning.CreateCommand)
+			fmt.Printf("    %s\n", ui.Hint("→ "+warning.CreateCommand))
 		}
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/traitsvc"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 func renderCanonicalBulkResult(result commandexec.Result) error {
@@ -67,7 +68,7 @@ func renderCanonicalBulkResult(result commandexec.Result) error {
 	}
 	PrintBulkSummary(summary)
 	for _, warning := range result.Warnings {
-		fmt.Println(warning.Message)
+		fmt.Println(ui.Warning(warning.Message))
 	}
 	return nil
 }

@@ -91,9 +91,9 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 	}
 	if !moveForce {
 		for _, warning := range result.Warnings {
-			fmt.Printf("⚠ Warning: %s\n", warning.Message)
+			fmt.Println(ui.Warningf("Warning: %s", warning.Message))
 			if warning.Ref != "" {
-				fmt.Printf("  %s\n\n", warning.Ref)
+				fmt.Printf("  %s\n\n", ui.FilePath(warning.Ref))
 			}
 		}
 		if !promptForConfirm("Proceed anyway?") {
@@ -146,7 +146,7 @@ func renderMoveResult(_ *cobra.Command, result commandexec.Result) error {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 	if boolValue(data["cancelled"]) {
-		fmt.Println("Cancelled.")
+		fmt.Println(ui.Star("Cancelled."))
 		return nil
 	}
 	if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
@@ -156,11 +156,11 @@ func renderMoveResult(_ *cobra.Command, result commandexec.Result) error {
 	destination, _ := data["destination"].(string)
 	fmt.Println(ui.Checkf("Moved %s → %s", ui.FilePath(source), ui.FilePath(destination)))
 	if updatedRefs, ok := data["updated_refs"].([]string); ok && len(updatedRefs) > 0 {
-		fmt.Printf("  Updated %d references\n", len(updatedRefs))
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
 		return nil
 	}
 	if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-		fmt.Printf("  Updated %d references\n", len(updatedRefs))
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
 	}
 	return nil
 }

@@ -104,16 +104,16 @@ func renderReclassifyResult(_ *cobra.Command, result commandexec.Result) error {
 	}
 	fmt.Println(ui.Checkf("Reclassified %s: %s → %s", ui.FilePath(stringValue(data["file"])), stringValue(data["old_type"]), stringValue(data["new_type"])))
 	if added := stringSliceFromAny(data["added_fields"]); len(added) > 0 {
-		fmt.Printf("  Added fields: %s\n", strings.Join(added, ", "))
+		fmt.Printf("  %s\n", ui.Hint("Added fields: "+strings.Join(added, ", ")))
 	}
 	if dropped := stringSliceFromAny(data["dropped_fields"]); len(dropped) > 0 {
-		fmt.Printf("  Dropped fields: %s\n", strings.Join(dropped, ", "))
+		fmt.Printf("  %s\n", ui.Hint("Dropped fields: "+strings.Join(dropped, ", ")))
 	}
 	if boolValue(data["moved"]) {
-		fmt.Printf("  Moved: %s → %s\n", stringValue(data["old_path"]), stringValue(data["new_path"]))
+		fmt.Printf("  %s %s → %s\n", ui.Hint("Moved:"), ui.FilePath(stringValue(data["old_path"])), ui.FilePath(stringValue(data["new_path"])))
 	}
 	if updatedRefs := stringSliceFromAny(data["updated_refs"]); len(updatedRefs) > 0 {
-		fmt.Printf("  Updated %d references\n", len(updatedRefs))
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Updated %d references", len(updatedRefs))))
 	}
 	for _, warning := range result.Warnings {
 		fmt.Printf("  %s\n", ui.Warning(warning.Message))

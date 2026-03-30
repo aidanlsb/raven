@@ -32,45 +32,45 @@ func printTraitBulkPreview(preview *TraitBulkPreview) {
 	if len(preview.Items) == 0 {
 		fmt.Println(ui.Star("No traits to update."))
 	} else {
-		fmt.Printf("\nPreview: %d trait(s) will be updated\n\n", len(preview.Items))
+		fmt.Printf("\n%s\n\n", ui.SectionHeader(fmt.Sprintf("Preview: %d trait(s) will be updated", len(preview.Items))))
 	}
 
 	if len(preview.Items) > 0 {
 		for _, item := range preview.Items {
-			fmt.Printf("  %s:%d\n", item.FilePath, item.Line)
-			fmt.Printf("    @%s: %s → %s\n", item.TraitType, item.OldValue, item.NewValue)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s:%d", ui.FilePath(item.FilePath), item.Line)))
+			fmt.Println(ui.Indent(2, fmt.Sprintf("@%s: %s → %s", item.TraitType, item.OldValue, item.NewValue)))
 			if item.Content != "" {
 				content := item.Content
 				if len(content) > 50 {
 					content = content[:47] + "..."
 				}
-				fmt.Printf("    content: %s\n", content)
+				fmt.Println(ui.Indent(2, ui.Hint("content: "+content)))
 			}
 		}
 	}
 
 	if len(preview.Skipped) > 0 {
-		fmt.Printf("\nSkipped %d trait(s):\n", len(preview.Skipped))
+		fmt.Printf("\n%s\n", ui.Starf("Skipped %d trait(s).", len(preview.Skipped)))
 		for _, skip := range preview.Skipped {
 			path := skip.FilePath
 			if path == "" {
 				path = skip.ID
 			}
-			fmt.Printf("  %s:%d - %s\n", path, skip.Line, skip.Reason)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s:%d - %s", path, skip.Line, skip.Reason)))
 		}
 	}
 
-	fmt.Println(ui.Hint("\nRun with --confirm to apply changes."))
+	fmt.Printf("\n%s\n", ui.Hint("Run with --confirm to apply changes."))
 }
 
 // printTraitBulkSummary prints a human-readable summary of trait bulk operations.
 func printTraitBulkSummary(summary *TraitBulkSummary) {
 	fmt.Println(ui.Checkf("Updated %d trait(s)", summary.Modified))
 	if summary.Skipped > 0 {
-		fmt.Printf("  Skipped: %d\n", summary.Skipped)
+		fmt.Printf("  %s\n", ui.Hint(fmt.Sprintf("Skipped: %d", summary.Skipped)))
 	}
 	if summary.Errors > 0 {
-		fmt.Printf("  Errors: %d\n", summary.Errors)
+		fmt.Printf("  %s\n", ui.Errorf("%d errors", summary.Errors))
 	}
 }
 

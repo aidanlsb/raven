@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/mcpclient"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var (
@@ -73,13 +74,13 @@ Examples:
 
 		switch result {
 		case mcpclient.Installed:
-			fmt.Printf("Installed raven in %s config.\n", client)
+			fmt.Println(ui.Checkf("Installed raven in %s config.", client))
 		case mcpclient.Updated:
-			fmt.Printf("Updated raven in %s config.\n", client)
+			fmt.Println(ui.Checkf("Updated raven in %s config.", client))
 		case mcpclient.AlreadyInstalled:
-			fmt.Printf("Already installed in %s config.\n", client)
+			fmt.Println(ui.Starf("Raven is already installed in %s config.", client))
 		}
-		fmt.Printf("config: %s\n", cfgPath)
+		fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(cfgPath))
 		return nil
 	},
 }
@@ -121,11 +122,11 @@ Examples:
 		}
 
 		if removed {
-			fmt.Printf("Removed raven from %s config.\n", client)
+			fmt.Println(ui.Checkf("Removed raven from %s config.", client))
 		} else {
-			fmt.Printf("Raven not found in %s config.\n", client)
+			fmt.Println(ui.Starf("Raven was not found in %s config.", client))
 		}
-		fmt.Printf("config: %s\n", cfgPath)
+		fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(cfgPath))
 		return nil
 	},
 }
@@ -161,7 +162,7 @@ Examples:
 						"error":       err.Error(),
 					})
 				} else {
-					fmt.Printf("%-16s error: %v\n", client, err)
+					fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", client, ui.Warning(err.Error()))))
 				}
 				continue
 			}
@@ -191,7 +192,11 @@ Examples:
 				} else if !cs.Exists {
 					status = "no config file"
 				}
-				fmt.Printf("%-16s %s%s\n", client, status, detail)
+				line := fmt.Sprintf("%s %s", ui.Bold.Render(string(client)), status)
+				if detail != "" {
+					line = fmt.Sprintf("%s %s", line, ui.Hint(detail))
+				}
+				fmt.Println(ui.Bullet(line))
 			}
 		}
 
@@ -255,7 +260,7 @@ Examples:
 		if mcpClientFlag != "" {
 			cfgPath, err := mcpclient.ConfigPath(mcpclient.Client(mcpClientFlag), "")
 			if err == nil {
-				fmt.Printf("\nAdd this to: %s\n", cfgPath)
+				fmt.Printf("\n%s %s\n", ui.Hint("Add this to:"), ui.FilePath(cfgPath))
 			}
 		}
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/schemasvc"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 type schemaTemplateTarget struct {
@@ -111,15 +112,15 @@ func renderSchemaTemplateDefinitions(result commandexec.Result) error {
 	}
 
 	if len(items) == 0 {
-		fmt.Println("No schema templates configured.")
+		fmt.Println(ui.Star("No schema templates configured."))
 		return nil
 	}
-	fmt.Println("Schema templates:")
+	fmt.Println(ui.SectionHeader("Schema templates"))
 	for _, it := range items {
 		if it.Description != "" {
-			fmt.Printf("  %s -> %s (%s)\n", it.ID, it.File, it.Description)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s -> %s %s", it.ID, ui.FilePath(it.File), ui.Hint("("+it.Description+")"))))
 		} else {
-			fmt.Printf("  %s -> %s\n", it.ID, it.File)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s -> %s", it.ID, ui.FilePath(it.File))))
 		}
 	}
 	return nil
@@ -141,18 +142,18 @@ func renderSchemaTemplateBindings(result commandexec.Result) error {
 
 func renderSchemaTemplateBindingTarget(kind, name string, templates []string, defaultTemplate string) error {
 	label := schemaTemplateKindLabel(kind)
-	fmt.Printf("%s templates for %s:\n", label, name)
+	fmt.Println(ui.SectionHeader(fmt.Sprintf("%s templates for %s", label, name)))
 	if len(templates) == 0 {
-		fmt.Println("  (none)")
+		fmt.Println(ui.Bullet(ui.Hint("(none)")))
 	} else {
 		for _, templateID := range templates {
-			fmt.Printf("  - %s\n", templateID)
+			fmt.Println(ui.Bullet(templateID))
 		}
 	}
 	if defaultTemplate != "" {
-		fmt.Printf("Default: %s\n", defaultTemplate)
+		fmt.Printf("%s %s\n", ui.Hint("Default:"), defaultTemplate)
 	} else {
-		fmt.Println("Default: (none)")
+		fmt.Printf("%s %s\n", ui.Hint("Default:"), ui.Hint("(none)"))
 	}
 	return nil
 }
@@ -162,22 +163,22 @@ func renderSchemaTemplateGet(_ *cobra.Command, result commandexec.Result) error 
 	id, _ := data["id"].(string)
 	file, _ := data["file"].(string)
 	description, _ := data["description"].(string)
-	fmt.Printf("Template: %s\n", id)
-	fmt.Printf("  File: %s\n", file)
+	fmt.Printf("%s %s\n", ui.Hint("Template:"), id)
+	fmt.Printf("  %s %s\n", ui.Hint("File:"), ui.FilePath(file))
 	if description != "" {
-		fmt.Printf("  Description: %s\n", description)
+		fmt.Printf("  %s %s\n", ui.Hint("Description:"), description)
 	}
 	return nil
 }
 
 func renderSchemaTemplateSet(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Set schema template %s -> %s\n", data["id"], data["file"])
+	fmt.Println(ui.Checkf("Set schema template %s -> %s", data["id"], ui.FilePath(stringValue(data["file"]))))
 	return nil
 }
 
 func renderSchemaTemplateRemove(_ *cobra.Command, result commandexec.Result) error {
-	fmt.Printf("Removed schema template %s\n", strings.TrimSpace(stringValue(canonicalDataMap(result)["id"])))
+	fmt.Println(ui.Checkf("Removed schema template %s", strings.TrimSpace(stringValue(canonicalDataMap(result)["id"]))))
 	return nil
 }
 
@@ -200,16 +201,16 @@ func renderSchemaTemplateBind(_ *cobra.Command, result commandexec.Result) error
 	templateID := strings.TrimSpace(stringValue(data["template_id"]))
 	setDefault := strings.TrimSpace(stringValue(data["default_template"])) != ""
 	if boolValue(data["already_set"]) {
-		fmt.Printf("%s %s already includes template %s\n", schemaTemplateKindLabel(kind), name, templateID)
+		fmt.Println(ui.Starf("%s %s already includes template %s", schemaTemplateKindLabel(kind), name, templateID))
 		if setDefault {
-			fmt.Printf("Set default template for %s %s -> %s\n", kind, name, templateID)
+			fmt.Println(ui.Checkf("Set default template for %s %s -> %s", kind, name, templateID))
 		}
 		return nil
 	}
 
-	fmt.Printf("Bound template %s to %s %s\n", templateID, kind, name)
+	fmt.Println(ui.Checkf("Bound template %s to %s %s", templateID, kind, name))
 	if setDefault {
-		fmt.Printf("Set default template for %s %s -> %s\n", kind, name, templateID)
+		fmt.Println(ui.Checkf("Set default template for %s %s -> %s", kind, name, templateID))
 	}
 	return nil
 }
@@ -233,10 +234,10 @@ func renderSchemaTemplateUnbind(_ *cobra.Command, result commandexec.Result) err
 	templateID := strings.TrimSpace(stringValue(data["template_id"]))
 	clearDefault := boolValue(data["default_cleared"])
 	if clearDefault {
-		fmt.Printf("Cleared default template and unbound %s from %s %s\n", templateID, kind, name)
+		fmt.Println(ui.Checkf("Cleared default template and unbound %s from %s %s", templateID, kind, name))
 		return nil
 	}
-	fmt.Printf("Unbound template %s from %s %s\n", templateID, kind, name)
+	fmt.Println(ui.Checkf("Unbound template %s from %s %s", templateID, kind, name))
 	return nil
 }
 
@@ -261,10 +262,10 @@ func renderSchemaTemplateDefault(_ *cobra.Command, result commandexec.Result) er
 	kind, name := schemaTemplateResultTarget(data)
 	newDefault, _ := data["default_template"].(string)
 	if strings.TrimSpace(newDefault) == "" {
-		fmt.Printf("Cleared default template for %s %s\n", kind, name)
+		fmt.Println(ui.Checkf("Cleared default template for %s %s", kind, name))
 		return nil
 	}
-	fmt.Printf("Set default template for %s %s -> %s\n", kind, name, newDefault)
+	fmt.Println(ui.Checkf("Set default template for %s %s -> %s", kind, name, newDefault))
 	return nil
 }
 

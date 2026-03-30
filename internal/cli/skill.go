@@ -8,6 +8,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/skills"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var skillCmd = &cobra.Command{
@@ -45,19 +46,29 @@ func renderSkillList(_ *cobra.Command, result commandexec.Result) error {
 	items := skillSummariesFromAny(data["skills"])
 	target := strings.TrimSpace(stringValue(data["target"]))
 	if target == "" {
+		if len(items) == 0 {
+			fmt.Println(ui.Star("No skills available."))
+			return nil
+		}
 		for _, item := range items {
-			fmt.Printf("%-16s v%d  %s\n", item.Name, item.Version, item.Summary)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s %s %s", ui.Bold.Render(item.Name), ui.Hint(fmt.Sprintf("v%d", item.Version)), item.Summary)))
 		}
 		return nil
 	}
 
-	fmt.Printf("target=%s scope=%s root=%s\n", target, stringValue(data["scope"]), stringValue(data["root"]))
+	fmt.Printf("%s %s\n", ui.SectionHeader("Target"), ui.Bold.Render(target))
+	fmt.Printf("%s %s\n", ui.Hint("Scope:"), stringValue(data["scope"]))
+	fmt.Printf("%s %s\n", ui.Hint("Root:"), ui.FilePath(stringValue(data["root"])))
+	if len(items) == 0 {
+		fmt.Println(ui.Star("No skills found for this target."))
+		return nil
+	}
 	for _, item := range items {
 		status := "available"
 		if item.Installed {
 			status = "installed"
 		}
-		fmt.Printf("%-16s v%d  %-10s %s\n", item.Name, item.Version, status, item.Summary)
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s %s %s", ui.Bold.Render(item.Name), ui.Hint(fmt.Sprintf("v%d", item.Version)), ui.Hint("["+status+"]"), item.Summary)))
 	}
 	return nil
 }
@@ -66,19 +77,20 @@ func renderSkillInstall(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	plan := skillInstallPlanFromAny(data["plan"])
 	if stringValue(data["mode"]) == "preview" {
-		fmt.Printf("Preview install: %s -> %s\n", stringValue(data["skill_name"]), plan.SkillPath)
+		fmt.Println(ui.SectionHeader(fmt.Sprintf("Preview install: %s", stringValue(data["skill_name"]))))
+		fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(plan.SkillPath))
 		for _, action := range plan.Actions {
-			fmt.Printf("  %-8s %s\n", action.Op, action.Path)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(action.Op), ui.FilePath(action.Path))))
 		}
 		if len(plan.Actions) == 0 {
-			fmt.Println("  no changes")
+			fmt.Println(ui.Bullet(ui.Hint("no changes")))
 		}
-		fmt.Println("Re-run with --confirm to apply.")
+		fmt.Println(ui.Hint("Re-run with --confirm to apply."))
 		return nil
 	}
 
-	fmt.Printf("Installed %s for %s at %s\n", stringValue(data["skill_name"]), stringValue(data["target"]), plan.SkillPath)
-	fmt.Printf("Applied %d file changes\n", intValue(data["actions_applied"]))
+	fmt.Println(ui.Checkf("Installed %s for %s at %s", stringValue(data["skill_name"]), stringValue(data["target"]), ui.FilePath(plan.SkillPath)))
+	fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", intValue(data["actions_applied"]))))
 	return nil
 }
 
@@ -86,33 +98,36 @@ func renderSkillRemove(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	plan := skillRemovePlanFromAny(data["plan"])
 	if stringValue(data["mode"]) == "preview" {
-		fmt.Printf("Preview remove: %s\n", plan.SkillPath)
+		fmt.Println(ui.SectionHeader("Preview remove"))
+		fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(plan.SkillPath))
 		for _, action := range plan.Actions {
-			fmt.Printf("  %-8s %s\n", action.Op, action.Path)
+			fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(action.Op), ui.FilePath(action.Path))))
 		}
-		fmt.Println("Re-run with --confirm to apply.")
+		fmt.Println(ui.Hint("Re-run with --confirm to apply."))
 		return nil
 	}
 
-	fmt.Printf("Removed %s from %s\n", stringValue(data["skill_name"]), plan.SkillPath)
+	fmt.Println(ui.Checkf("Removed %s from %s", stringValue(data["skill_name"]), ui.FilePath(plan.SkillPath)))
 	return nil
 }
 
 func renderSkillDoctor(_ *cobra.Command, result commandexec.Result) error {
 	for _, report := range skillDoctorReportsFromAny(canonicalDataMap(result)["reports"]) {
-		fmt.Printf("target=%s scope=%s root=%s\n", report.Target, report.Scope, report.Root)
+		fmt.Println(ui.SectionHeader(report.Target))
+		fmt.Printf("%s %s\n", ui.Hint("scope:"), report.Scope)
+		fmt.Printf("%s %s\n", ui.Hint("root:"), ui.FilePath(report.Root))
 		if len(report.Installed) == 0 {
-			fmt.Println("  installed: none")
+			fmt.Println(ui.Bullet(ui.Hint("installed: none")))
 		} else {
-			fmt.Println("  installed:")
+			fmt.Println(ui.Bullet("installed:"))
 			for _, item := range report.Installed {
-				fmt.Printf("    - %s\n", item.Name)
+				fmt.Println(ui.Indent(2, ui.Bullet(item.Name)))
 			}
 		}
 		if len(report.Issues) > 0 {
-			fmt.Println("  issues:")
+			fmt.Println(ui.Bullet("issues:"))
 			for _, issue := range report.Issues {
-				fmt.Printf("    - %s\n", issue)
+				fmt.Println(ui.Indent(2, ui.Bullet(ui.Warning(issue))))
 			}
 		}
 	}

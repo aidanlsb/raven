@@ -145,8 +145,8 @@ func renderDocsList(_ *cobra.Command, result commandexec.Result) error {
 
 func renderDocsFetch(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Printf("Fetched docs to %s (%d files, %d bytes)\n", stringValue(data["path"]), intValue(data["file_count"]), int64Value(data["byte_count"]))
-	fmt.Printf("Source: %s (%s)\n", stringValue(data["source"]), stringValue(data["ref"]))
+	fmt.Println(ui.Checkf("Fetched docs to %s (%d files, %d bytes)", ui.FilePath(stringValue(data["path"])), intValue(data["file_count"]), int64Value(data["byte_count"])))
+	fmt.Printf("%s %s %s\n", ui.Hint("Source:"), stringValue(data["source"]), ui.Hint("("+stringValue(data["ref"])+")"))
 	return nil
 }
 
@@ -165,13 +165,13 @@ func renderDocsSearch(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	matches := docsSearchMatchesFromCanonical(data["matches"])
 	if len(matches) == 0 {
-		fmt.Printf("No docs matched %q.\n", stringValue(data["query"]))
+		fmt.Println(ui.Starf("No docs matched %q.", stringValue(data["query"])))
 		return nil
 	}
 
-	fmt.Printf("Matches for %q (%d):\n", stringValue(data["query"]), len(matches))
+	fmt.Printf("%s\n", ui.SectionHeader(fmt.Sprintf("Matches for %q (%d)", stringValue(data["query"]), len(matches))))
 	for _, m := range matches {
-		fmt.Printf("- %s/%s:%d %s\n", m.Section, m.Topic, m.Line, m.Snippet)
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s/%s:%d %s", m.Section, m.Topic, m.Line, m.Snippet)))
 	}
 	return nil
 }
@@ -186,19 +186,19 @@ func outputDocsSections(sections []docsSectionView) error {
 		return nil
 	}
 
-	fmt.Println("Documentation section commands:")
+	fmt.Println(ui.SectionHeader("Documentation section commands"))
 	for _, s := range sections {
 		sectionCommand := fmt.Sprintf("rvn docs %s", s.ID)
-		fmt.Printf("  %-24s %s (%s)\n", sectionCommand, s.Title, docsTopicCountSummary(s.TopicCount))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s %s", ui.Bold.Render(sectionCommand), s.Title, ui.Hint("("+docsTopicCountSummary(s.TopicCount)+")"))))
 	}
 	fmt.Println()
-	fmt.Println("General docs commands:")
-	fmt.Println("  rvn docs list                 List sections and section commands")
-	fmt.Println("  rvn docs <section>            List topics in a section")
-	fmt.Println("  rvn docs <section> <topic>    Open a docs topic")
-	fmt.Println("  rvn docs search <query>       Search docs")
-	fmt.Println("  rvn docs fetch                Sync docs into .raven/docs")
-	fmt.Println("  rvn help <command>            Command docs")
+	fmt.Println(ui.SectionHeader("General docs commands"))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs <section>"), ui.Hint("List topics in a section"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs <section> <topic>"), ui.Hint("Open a docs topic"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs search <query>"), ui.Hint("Search docs"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync docs into .raven/docs"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn help <command>"), ui.Hint("Command docs"))))
 	return nil
 }
 
@@ -220,26 +220,26 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 		return nil
 	}
 
-	fmt.Printf("Documentation topic commands for %s [%s]:\n", section.Title, section.ID)
+	fmt.Println(ui.SectionHeader(fmt.Sprintf("Documentation topic commands for %s [%s]", section.Title, section.ID)))
 	if len(topics) == 0 {
-		fmt.Println("  (no topics)")
+		fmt.Println(ui.Bullet(ui.Hint("(no topics)")))
 		fmt.Println()
-		fmt.Println("General docs commands:")
-		fmt.Printf("  %-48s %s\n", "rvn docs list", "List sections and section commands")
-		fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs search <query> --section %s", section.ID), "Search only this section")
-		fmt.Printf("  %-48s %s\n", "rvn docs fetch", "Sync docs into .raven/docs")
+		fmt.Println(ui.SectionHeader("General docs commands"))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(fmt.Sprintf("rvn docs search <query> --section %s", section.ID)), ui.Hint("Search only this section"))))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync docs into .raven/docs"))))
 		return nil
 	}
 	for _, t := range topics {
 		topicCommand := fmt.Sprintf("rvn docs %s %s", section.ID, t.ID)
-		fmt.Printf("  %-48s %s\n", topicCommand, t.Title)
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(topicCommand), ui.Hint(t.Title))))
 	}
 	fmt.Println()
-	fmt.Println("General docs commands:")
-	fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs %s", section.ID), "List topics in this section")
-	fmt.Printf("  %-48s %s\n", fmt.Sprintf("rvn docs search <query> --section %s", section.ID), "Search only this section")
-	fmt.Printf("  %-48s %s\n", "rvn docs list", "List sections and section commands")
-	fmt.Printf("  %-48s %s\n", "rvn docs fetch", "Sync docs into .raven/docs")
+	fmt.Println(ui.SectionHeader("General docs commands"))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(fmt.Sprintf("rvn docs %s", section.ID)), ui.Hint("List topics in this section"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(fmt.Sprintf("rvn docs search <query> --section %s", section.ID)), ui.Hint("Search only this section"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync docs into .raven/docs"))))
 	return nil
 }
 
@@ -268,7 +268,7 @@ func outputDocsTopicContent(docsFS fs.FS, topic docsTopicRecord) error {
 		}
 	}
 
-	fmt.Printf("Path: %s\n\n", topic.Path)
+	fmt.Printf("%s %s\n\n", ui.Hint("Path:"), ui.FilePath(topic.Path))
 	fmt.Print(renderedContent)
 	if !strings.HasSuffix(renderedContent, "\n") {
 		fmt.Println()
@@ -290,7 +290,7 @@ func outputDocsTopicContentData(data map[string]interface{}) error {
 		}
 	}
 
-	fmt.Printf("Path: %s\n\n", stringValue(data["path"]))
+	fmt.Printf("%s %s\n\n", ui.Hint("Path:"), ui.FilePath(stringValue(data["path"])))
 	fmt.Print(renderedContent)
 	if !strings.HasSuffix(renderedContent, "\n") {
 		fmt.Println()

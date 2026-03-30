@@ -8,6 +8,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/readsvc"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 // ResolveResult contains the resolved reference information.
@@ -110,21 +111,22 @@ func renderResolve(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	reference := stringValue(data["reference"])
 	if ambiguous, _ := data["ambiguous"].(bool); ambiguous {
-		fmt.Printf("Reference '%s' is ambiguous. Matches:\n", reference)
+		fmt.Println(ui.Warningf("Reference '%s' is ambiguous.", reference))
+		fmt.Println(ui.Hint("Matches:"))
 		if matches, ok := data["matches"].([]map[string]interface{}); ok {
 			for _, match := range matches {
 				src := ""
 				if s, ok := match["match_source"].(string); ok {
-					src = fmt.Sprintf(" (%s)", s)
+					src = " " + ui.Hint("("+s+")")
 				}
-				fmt.Printf("  %s%s\n", match["object_id"], src)
+				fmt.Println(ui.Bullet(fmt.Sprintf("%s%s", match["object_id"], src)))
 			}
 		}
 		return nil
 	}
 
 	if resolved, _ := data["resolved"].(bool); !resolved {
-		fmt.Printf("Reference '%s' not found.\n", reference)
+		fmt.Println(ui.Starf("Reference '%s' not found.", reference))
 		return nil
 	}
 
@@ -135,16 +137,16 @@ func renderResolve(_ *cobra.Command, result commandexec.Result) error {
 	fileObjectID, _ := data["file_object_id"].(string)
 	matchSource, _ := data["match_source"].(string)
 
-	fmt.Printf("Resolved: %s\n", objectID)
+	fmt.Printf("%s %s\n", ui.SectionHeader("Resolved"), ui.Bold.Render(objectID))
 	if objectType != "" {
-		fmt.Printf("  Type: %s\n", objectType)
+		fmt.Printf("  %s %s\n", ui.Hint("Type:"), objectType)
 	}
-	fmt.Printf("  File: %s\n", relFilePath)
+	fmt.Printf("  %s %s\n", ui.Hint("File:"), ui.FilePath(relFilePath))
 	if isSection {
-		fmt.Printf("  Parent: %s\n", fileObjectID)
+		fmt.Printf("  %s %s\n", ui.Hint("Parent:"), fileObjectID)
 	}
 	if matchSource != "" {
-		fmt.Printf("  Matched via: %s\n", matchSource)
+		fmt.Printf("  %s %s\n", ui.Hint("Matched via:"), matchSource)
 	}
 	return nil
 }

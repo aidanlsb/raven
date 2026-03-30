@@ -59,7 +59,7 @@ func handleReindexResult(cmd *cobra.Command, result commandexec.Result) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	data := canonicalDataMap(result)
 	for _, warning := range result.Warnings {
-		fmt.Fprintf(os.Stderr, "Warning: %s\n", warning.Message)
+		fmt.Fprintf(os.Stderr, "%s\n", ui.Warning(warning.Message))
 	}
 
 	if dryRun {
@@ -68,10 +68,10 @@ func handleReindexResult(cmd *cobra.Command, result commandexec.Result) error {
 		filesDeleted := intFromMap(data, "files_deleted")
 		filesSkipped := intFromMap(data, "files_skipped")
 		if incrementalResult {
-			fmt.Printf("\nDry run: %d files would be reindexed, %d deleted, %d up-to-date\n",
-				filesIndexed, filesDeleted, filesSkipped)
+			fmt.Printf("\n%s\n", ui.Starf("Dry run: %d files would be reindexed, %d deleted, %d up-to-date",
+				filesIndexed, filesDeleted, filesSkipped))
 		} else {
-			fmt.Printf("\nDry run: %d files would be reindexed\n", filesIndexed)
+			fmt.Printf("\n%s\n", ui.Starf("Dry run: %d files would be reindexed", filesIndexed))
 		}
 		return nil
 	}

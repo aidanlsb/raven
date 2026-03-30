@@ -43,7 +43,7 @@ type initPrompter struct {
 
 func prepareInitArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
 	if !isJSONOutput() {
-		fmt.Printf("Initializing vault at: %s\n", args[0])
+		fmt.Printf("%s %s\n", ui.SectionHeader("Initializing vault"), ui.FilePath(args[0]))
 	}
 	return args, false, nil
 }
@@ -63,40 +63,40 @@ func handleInitResult(_ *cobra.Command, result commandexec.Result) error {
 	info := initPostInitInfoFromAny(stringValue(data["path"]), data["post_init"])
 
 	if createdConfig {
-		fmt.Println("✓ Created raven.yaml (vault configuration)")
+		fmt.Println(ui.Check("Created raven.yaml (vault configuration)"))
 	} else {
-		fmt.Println("• raven.yaml already exists (kept)")
+		fmt.Println(ui.Bullet("raven.yaml already exists (kept)"))
 	}
 
 	if createdSchema {
-		fmt.Println("✓ Created schema.yaml (types and traits)")
+		fmt.Println(ui.Check("Created schema.yaml (types and traits)"))
 	} else {
-		fmt.Println("• schema.yaml already exists (kept)")
+		fmt.Println(ui.Bullet("schema.yaml already exists (kept)"))
 	}
 
-	fmt.Println("✓ Ensured .raven/ directory exists")
+	fmt.Println(ui.Check("Ensured .raven/ directory exists"))
 
 	switch gitignoreState {
 	case "created":
-		fmt.Println("✓ Created .gitignore")
+		fmt.Println(ui.Check("Created .gitignore"))
 	case "updated":
-		fmt.Println("✓ Updated .gitignore (added Raven entries)")
+		fmt.Println(ui.Check("Updated .gitignore (added Raven entries)"))
 	default:
-		fmt.Println("• .gitignore already has Raven entries")
+		fmt.Println(ui.Bullet(".gitignore already has Raven entries"))
 	}
 
 	if len(result.Warnings) > 0 {
 		for _, warning := range result.Warnings {
-			fmt.Printf("! %s\n", warning.Message)
+			fmt.Println(ui.Warning(warning.Message))
 		}
 	} else if fetched, _ := docs["fetched"].(bool); fetched {
-		fmt.Printf("✓ Fetched docs into %s (%d files)\n", stringFromMap(docs, "store_path"), intFromMap(docs, "file_count"))
+		fmt.Println(ui.Checkf("Fetched docs into %s (%d files)", ui.FilePath(stringFromMap(docs, "store_path")), intFromMap(docs, "file_count")))
 	}
 
 	if status == "initialized" {
-		fmt.Println("\nVault initialized! Start adding markdown files.")
+		fmt.Printf("\n%s\n", ui.Star("Vault initialized. Start adding markdown files."))
 	} else {
-		fmt.Println("\nExisting vault detected. Configuration preserved.")
+		fmt.Printf("\n%s\n", ui.Star("Existing vault detected. Configuration preserved."))
 	}
 
 	if initShouldPrompt() {
@@ -177,7 +177,7 @@ func runInitFollowUp(info *initPostInitInfo) {
 	}
 
 	fmt.Println()
-	fmt.Printf("Vault is already registered as '%s'.\n", info.RegisteredName)
+	fmt.Println(ui.Infof("Vault is already registered as '%s'.", info.RegisteredName))
 
 	if !info.IsDefault && prompter.confirm("Set this vault as the default?") {
 		pinResult := executeCanonicalCommand("vault_pin", "", map[string]interface{}{
@@ -239,9 +239,9 @@ func printInitFollowUpFailure(action string, result commandexec.Result) {
 	if result.Error == nil {
 		return
 	}
-	fmt.Printf("! Could not %s: %s\n", action, result.Error.Message)
+	fmt.Println(ui.Warningf("Could not %s: %s", action, result.Error.Message))
 	if strings.TrimSpace(result.Error.Suggestion) != "" {
-		fmt.Printf("  %s\n", result.Error.Suggestion)
+		fmt.Printf("  %s\n", ui.Hint(result.Error.Suggestion))
 	}
 }
 
@@ -254,17 +254,17 @@ func renderInitNextSteps(info initPostInitInfo) {
 	}
 
 	fmt.Println()
-	fmt.Println("Next steps:")
+	fmt.Println(ui.SectionHeader("Next steps"))
 	if !info.AlreadyRegistered {
-		fmt.Printf("  rvn vault add %s %s --pin\n", info.SuggestedName, formatInitSuggestedPath(info.Path))
-		fmt.Printf("  rvn vault use %s\n", info.SuggestedName)
+		fmt.Println(ui.Bullet(ui.Hint(fmt.Sprintf("rvn vault add %s %s --pin", info.SuggestedName, formatInitSuggestedPath(info.Path)))))
+		fmt.Println(ui.Bullet(ui.Hint(fmt.Sprintf("rvn vault use %s", info.SuggestedName))))
 		return
 	}
 	if !info.IsDefault {
-		fmt.Printf("  rvn vault pin %s\n", info.RegisteredName)
+		fmt.Println(ui.Bullet(ui.Hint(fmt.Sprintf("rvn vault pin %s", info.RegisteredName))))
 	}
 	if !info.IsActive {
-		fmt.Printf("  rvn vault use %s\n", info.RegisteredName)
+		fmt.Println(ui.Bullet(ui.Hint(fmt.Sprintf("rvn vault use %s", info.RegisteredName))))
 	}
 }
 

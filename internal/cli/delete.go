@@ -114,7 +114,7 @@ func renderDeleteResult(_ *cobra.Command, result commandexec.Result) error {
 		return handleErrorMsg(ErrInternal, "command execution failed", "")
 	}
 	if boolValue(data["cancelled"]) {
-		fmt.Println("Cancelled.")
+		fmt.Println(ui.Star("Cancelled."))
 		return nil
 	}
 	if boolValue(data["bulk"]) || boolValue(data["stdin"]) {
@@ -140,25 +140,25 @@ func renderDeletePreviewPrompt(result commandexec.Result) bool {
 		return false
 	}
 	objectID, _ := data["object_id"].(string)
-	fmt.Printf("Delete %s?\n", objectID)
+	fmt.Printf("%s %s?\n", ui.SectionHeader("Delete"), ui.Bold.Render(objectID))
 
 	backlinks := deletePreviewBacklinks(data["backlinks"])
 	if len(backlinks) > 0 {
-		fmt.Printf("  ⚠ Warning: Referenced by %d objects:\n", len(backlinks))
+		fmt.Printf("%s\n", ui.Warningf("Referenced by %d objects:", len(backlinks)))
 		for _, bl := range backlinks {
 			line := 0
 			if bl.Line != nil {
 				line = *bl.Line
 			}
-			fmt.Printf("    - %s (line %d)\n", bl.SourceID, line)
+			fmt.Println(ui.Indent(2, ui.Bullet(fmt.Sprintf("%s (line %d)", bl.SourceID, line))))
 		}
 	}
 
 	behavior, _ := data["behavior"].(string)
-	fmt.Printf("\nBehavior: %s", behavior)
+	fmt.Printf("\n%s %s", ui.Hint("Behavior:"), behavior)
 	if behavior == "trash" {
 		if trashDir, ok := data["trash_dir"].(string); ok && strings.TrimSpace(trashDir) != "" {
-			fmt.Printf(" (to %s/)\n", trashDir)
+			fmt.Printf(" %s\n", ui.Hint("(to "+trashDir+"/)"))
 		} else {
 			fmt.Println()
 		}
