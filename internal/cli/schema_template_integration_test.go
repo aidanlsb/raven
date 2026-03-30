@@ -9,6 +9,7 @@ import (
 )
 
 func TestIntegration_SchemaTemplateBindingsDriveNew(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
 types:

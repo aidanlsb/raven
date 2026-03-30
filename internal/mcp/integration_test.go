@@ -26,6 +26,7 @@ import (
 
 // TestMCPIntegration_ToolsList tests that the MCP server returns tool schemas.
 func TestMCPIntegration_ToolsList(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
@@ -76,6 +77,7 @@ func TestMCPIntegration_ToolsList(t *testing.T) {
 }
 
 func TestMCPIntegration_InvokeVaultPathOverride(t *testing.T) {
+	t.Parallel()
 	primary := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -108,6 +110,7 @@ func TestMCPIntegration_InvokeVaultPathOverride(t *testing.T) {
 // TestMCPIntegration_ServeRejectsLegacyToolNames ensures the live `rvn serve`
 // JSON-RPC path only accepts compact tools and rejects legacy names.
 func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
@@ -171,6 +174,7 @@ func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 
 // TestMCPIntegration_CreateObject tests creating an object via MCP tool call.
 func TestMCPIntegration_CreateObject(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -199,6 +203,7 @@ func TestMCPIntegration_CreateObject(t *testing.T) {
 }
 
 func TestMCPIntegration_SchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
@@ -235,6 +240,7 @@ func TestMCPIntegration_SchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
 // TestMCPIntegration_CreatePageWithObjectRootFallback verifies that when
 // directories.page is omitted, it defaults to directories.object for creation.
 func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`directories:
@@ -260,6 +266,7 @@ func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {
 
 // TestMCPIntegration_QueryObjects tests querying objects via MCP tool call.
 func TestMCPIntegration_QueryObjects(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -307,6 +314,7 @@ func TestMCPIntegration_QueryObjects(t *testing.T) {
 // TestMCPIntegration_QuerySavedQueryInlineArgs tests MCP query_string containing
 // "<saved-query-name> <inputs...>" in a single string argument.
 func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
@@ -356,6 +364,7 @@ func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
 }
 
 func TestMCPIntegration_QuerySavedQueryTypedInputs(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
@@ -406,6 +415,7 @@ func TestMCPIntegration_QuerySavedQueryTypedInputs(t *testing.T) {
 }
 
 func TestMCPIntegration_QuerySavedQueryAllowsUnusedDeclaredArgs(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
@@ -452,6 +462,7 @@ func TestMCPIntegration_QuerySavedQueryAllowsUnusedDeclaredArgs(t *testing.T) {
 
 // TestMCPIntegration_ReadObject tests reading an object via MCP tool call.
 func TestMCPIntegration_ReadObject(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/bob.md", `---
@@ -487,6 +498,7 @@ Bob is a developer.
 
 // TestMCPIntegration_SetFields tests updating object fields via MCP tool call.
 func TestMCPIntegration_SetFields(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -519,6 +531,7 @@ func TestMCPIntegration_SetFields(t *testing.T) {
 // TestMCPIntegration_StringEncodedStructuredInputs verifies strict invoke typing:
 // string-encoded structured payloads are rejected, while typed objects succeed.
 func TestMCPIntegration_StringEncodedStructuredInputs(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
 types:
@@ -718,6 +731,7 @@ steps:
 
 // TestMCPIntegration_EditDeleteWithEmptyString tests deleting text via raven_edit with empty new_str.
 func TestMCPIntegration_EditDeleteWithEmptyString(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("daily/2026-01-02.md", `---
@@ -748,6 +762,7 @@ type: page
 
 // TestMCPIntegration_DeleteObject tests deleting an object via MCP tool call.
 func TestMCPIntegration_DeleteObject(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -778,6 +793,7 @@ func TestMCPIntegration_DeleteObject(t *testing.T) {
 
 // TestMCPIntegration_Search tests full-text search via MCP tool call.
 func TestMCPIntegration_Search(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithFile("notes/meeting.md", `---
@@ -822,6 +838,7 @@ Discussed the product roadmap and timeline.
 
 // TestMCPIntegration_Backlinks tests backlinks retrieval via MCP tool call.
 func TestMCPIntegration_Backlinks(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/eve.md", `---
@@ -874,6 +891,7 @@ Eve's secret project.
 
 // TestMCPIntegration_SchemaIntrospection tests schema introspection via MCP.
 func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -923,6 +941,7 @@ func TestMCPIntegration_SchemaIntrospection(t *testing.T) {
 // TestMCPIntegration_SchemaFieldDescriptionsViaToolCall verifies schema field
 // descriptions can be added/updated/removed through MCP tools/call.
 func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -969,6 +988,7 @@ func TestMCPIntegration_SchemaFieldDescriptionsViaToolCall(t *testing.T) {
 // TestMCPIntegration_SchemaFieldEnumValuesViaToolCall verifies enum field values
 // can be updated via MCP without removing/recreating the field.
 func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -990,6 +1010,7 @@ func TestMCPIntegration_SchemaFieldEnumValuesViaToolCall(t *testing.T) {
 }
 
 func TestMCPIntegration_SchemaUpdateTypeAndTraitViaToolCall(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -1019,6 +1040,7 @@ func TestMCPIntegration_SchemaUpdateTypeAndTraitViaToolCall(t *testing.T) {
 }
 
 func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -1095,6 +1117,7 @@ func TestMCPIntegration_SchemaRemoveTypeAndTraitWarningsViaToolCall(t *testing.T
 // preview/apply behavior for type rename with optional default_path directory
 // migration.
 func TestMCPIntegration_SchemaRenameTypeWithDefaultPathRename(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
 types:
@@ -1235,6 +1258,7 @@ Planning: [[events/planning|Planning]]
 
 // TestMCPIntegration_Check tests vault check via MCP tool call.
 func TestMCPIntegration_Check(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("notes/broken.md", `---
@@ -1267,6 +1291,7 @@ References [[nonexistent/page]] which doesn't exist.
 }
 
 func TestMCPIntegration_CheckFixPreviewAndConfirm(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/freya.md", `---
@@ -1340,6 +1365,7 @@ owner: "[[freya]]"
 // TestMCPIntegration_CheckCreateMissingWithConfirm verifies non-interactive
 // create-missing behavior via MCP (JSON mode + confirm=true).
 func TestMCPIntegration_CheckCreateMissingWithConfirm(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(`version: 2
 types:
@@ -1396,6 +1422,7 @@ meeting: "[[meeting/all-hands]]"
 }
 
 func TestMCPIntegration_QueryRefreshRemovesDeletedFiles(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/alice.md", `---
@@ -1439,6 +1466,7 @@ name: Alice
 
 // TestMCPIntegration_ErrorHandling tests that MCP errors are properly surfaced.
 func TestMCPIntegration_ErrorHandling(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		Build()
@@ -1480,6 +1508,7 @@ func TestMCPIntegration_ErrorHandling(t *testing.T) {
 }
 
 func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
+	t.Parallel()
 	binary := testutil.BuildCLI(t)
 
 	t.Run("new", func(t *testing.T) {
@@ -3217,6 +3246,7 @@ Kickoff: [[events/kickoff]]
 }
 
 func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
+	t.Parallel()
 	binary := testutil.BuildCLI(t)
 
 	t.Run("read_missing_reference", func(t *testing.T) {
@@ -3660,6 +3690,7 @@ status: active
 }
 
 func TestMCPIntegration_DirectDispatchSchemaRenameErrorsParity(t *testing.T) {
+	t.Parallel()
 	binary := testutil.BuildCLI(t)
 
 	t.Run("schema_rename_field_missing_type", func(t *testing.T) {

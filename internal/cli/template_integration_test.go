@@ -9,6 +9,7 @@ import (
 )
 
 func TestIntegration_TemplateLifecycle(t *testing.T) {
+	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		Build()
