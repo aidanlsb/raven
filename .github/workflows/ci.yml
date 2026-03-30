@@ -134,7 +134,7 @@ jobs:
           cache: true
 
       - name: Run tests
-        run: go test ./...
+        run: go test -race ./...
 
   cross-build:
     name: Cross-build (${{ matrix.goos }}/${{ matrix.goarch }})
