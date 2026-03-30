@@ -32,6 +32,14 @@ type MoveFileResult struct {
 	WarningMessages []string
 }
 
+type refUpdatePlan struct {
+	reportSourceID string
+	applySourceID  string
+	line           int
+	oldBase        string
+	replacement    string
+}
+
 func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	if strings.TrimSpace(req.VaultPath) == "" {
 		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
@@ -44,6 +52,14 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 
 	result := &MoveFileResult{}
+	objectRoot := ""
+	pageRoot := ""
+	dailyDir := ""
+	if req.VaultConfig != nil {
+		objectRoot = req.VaultConfig.GetObjectsRoot()
+		pageRoot = req.VaultConfig.GetPagesRoot()
+		dailyDir = req.VaultConfig.GetDailyDirectory()
+	}
 
 	var db *index.Database
 	var err error
@@ -55,48 +71,12 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 		result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to open index database for move update: %v", err))
 	} else {
 		defer db.Close()
-		if req.VaultConfig != nil {
-			db.SetDailyDirectory(req.VaultConfig.GetDailyDirectory())
-		}
+		db.SetDailyDirectory(dailyDir)
 	}
 
+	var refPlans []refUpdatePlan
 	if req.UpdateRefs && db != nil {
-		objectRoot := ""
-		pageRoot := ""
-		dailyDir := ""
-		if req.VaultConfig != nil {
-			objectRoot = req.VaultConfig.GetObjectsRoot()
-			pageRoot = req.VaultConfig.GetPagesRoot()
-			dailyDir = req.VaultConfig.GetDailyDirectory()
-		}
-
-		backlinks, _ := db.BacklinksWithRoots(req.SourceObjectID, objectRoot, pageRoot)
-		aliases, _ := db.AllAliases()
-		res, _ := db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir, ExtraIDs: []string{req.DestinationObject}})
-		aliasSlugToID := make(map[string]string, len(aliases))
-		for alias, oid := range aliases {
-			aliasSlugToID[pages.SlugifyPath(alias)] = oid
-		}
-
-		for _, bl := range backlinks {
-			oldRaw := strings.TrimSpace(bl.TargetRaw)
-			oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[")
-			base := oldRaw
-			if i := strings.Index(base, "#"); i >= 0 {
-				base = base[:i]
-			}
-			if base == "" {
-				continue
-			}
-			repl := ChooseReplacementRefBase(base, req.SourceObjectID, req.DestinationObject, aliasSlugToID, res)
-			line := 0
-			if bl.Line != nil {
-				line = *bl.Line
-			}
-			if err := UpdateAllRefVariantsAtLine(req.VaultPath, req.VaultConfig, bl.SourceID, line, req.SourceObjectID, base, repl, objectRoot, pageRoot); err == nil {
-				result.UpdatedRefs = append(result.UpdatedRefs, bl.SourceID)
-			}
-		}
+		refPlans, result.WarningMessages = prepareRefUpdatePlans(db, req, objectRoot, pageRoot, dailyDir, result.WarningMessages)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(req.DestinationFile), 0o755); err != nil {
@@ -104,6 +84,14 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 	if err := os.Rename(req.SourceFile, req.DestinationFile); err != nil {
 		return nil, newError(ErrorFileWrite, "failed to move file", "", nil, err)
+	}
+
+	for _, plan := range refPlans {
+		if err := UpdateAllRefVariantsAtLine(req.VaultPath, req.VaultConfig, plan.applySourceID, plan.line, req.SourceObjectID, plan.oldBase, plan.replacement, objectRoot, pageRoot); err != nil {
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to update refs in %s: %v", plan.reportSourceID, err))
+			continue
+		}
+		result.UpdatedRefs = append(result.UpdatedRefs, plan.reportSourceID)
 	}
 
 	if db == nil {
@@ -156,4 +144,66 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	}
 
 	return result, nil
+}
+
+func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, pageRoot, dailyDir string, warnings []string) ([]refUpdatePlan, []string) {
+	backlinks, err := db.BacklinksWithRoots(req.SourceObjectID, objectRoot, pageRoot)
+	if err != nil {
+		return nil, append(warnings, fmt.Sprintf("Failed to read backlinks for move update: %v", err))
+	}
+
+	aliases, err := db.AllAliases()
+	if err != nil {
+		return nil, append(warnings, fmt.Sprintf("Failed to read aliases for move update: %v", err))
+	}
+
+	res, err := db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir, ExtraIDs: []string{req.DestinationObject}})
+	if err != nil {
+		return nil, append(warnings, fmt.Sprintf("Failed to build resolver for move update: %v", err))
+	}
+
+	aliasSlugToID := make(map[string]string, len(aliases))
+	for alias, oid := range aliases {
+		aliasSlugToID[pages.SlugifyPath(alias)] = oid
+	}
+
+	plans := make([]refUpdatePlan, 0, len(backlinks))
+	for _, bl := range backlinks {
+		oldRaw := strings.TrimSpace(bl.TargetRaw)
+		oldRaw = strings.TrimPrefix(strings.TrimSuffix(oldRaw, "]]"), "[[")
+		base := oldRaw
+		if i := strings.Index(base, "#"); i >= 0 {
+			base = base[:i]
+		}
+		if base == "" {
+			continue
+		}
+
+		line := 0
+		if bl.Line != nil {
+			line = *bl.Line
+		}
+
+		reportSourceID := remapMovedSourceID(bl.SourceID, req.SourceObjectID, req.DestinationObject)
+		plans = append(plans, refUpdatePlan{
+			reportSourceID: reportSourceID,
+			applySourceID:  reportSourceID,
+			line:           line,
+			oldBase:        base,
+			replacement:    ChooseReplacementRefBase(base, req.SourceObjectID, req.DestinationObject, aliasSlugToID, res),
+		})
+	}
+
+	return plans, warnings
+}
+
+func remapMovedSourceID(sourceID, oldID, newID string) string {
+	if sourceID == oldID {
+		return newID
+	}
+	prefix := oldID + "#"
+	if strings.HasPrefix(sourceID, prefix) {
+		return newID + sourceID[len(oldID):]
+	}
+	return sourceID
 }
