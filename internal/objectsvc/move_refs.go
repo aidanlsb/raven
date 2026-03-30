@@ -98,10 +98,6 @@ func UpdateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 }
 
 func UpdateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
-	if line <= 0 {
-		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
-	}
-
 	fileSourceID := sourceID
 	if idx := strings.Index(sourceID, "#"); idx >= 0 {
 		fileSourceID = sourceID[:idx]
@@ -117,45 +113,12 @@ func UpdateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, 
 		return err
 	}
 
-	lines := strings.Split(string(contentBytes), "\n")
-	idx := line - 1
-	if idx < 0 || idx >= len(lines) {
+	updated := ApplyAllRefVariantsAtLine(string(contentBytes), line, oldID, oldBase, newRef, objectRoot, pageRoot)
+	if updated == string(contentBytes) {
 		return nil
 	}
 
-	orig := lines[idx]
-	updated := ReplaceAllRefVariants(orig, oldID, oldBase, newRef, objectRoot, pageRoot)
-
-	if updated == orig {
-		return updateAllRefVariants(vaultPath, vaultCfg, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot)
-	}
-	lines[idx] = updated
-
-	return atomicfile.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0o644)
-}
-
-func updateAllRefVariants(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldID, oldBase, newRef, objectRoot, pageRoot string) error {
-	fileSourceID := sourceID
-	if idx := strings.Index(sourceID, "#"); idx >= 0 {
-		fileSourceID = sourceID[:idx]
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
-	if err != nil {
-		return err
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	newContent := ReplaceAllRefVariants(string(content), oldID, oldBase, newRef, objectRoot, pageRoot)
-	if newContent == string(content) {
-		return nil
-	}
-
-	return atomicfile.WriteFile(filePath, []byte(newContent), 0o644)
+	return atomicfile.WriteFile(filePath, []byte(updated), 0o644)
 }
 
 func ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
@@ -193,6 +156,27 @@ func ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot
 	result = replaceTypeDeclBareRefVariants(result, oldPatterns, newRef)
 
 	return result
+}
+
+func ApplyAllRefVariantsAtLine(content string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
+	if line <= 0 {
+		return ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot)
+	}
+
+	lines := strings.Split(content, "\n")
+	idx := line - 1
+	if idx < 0 || idx >= len(lines) {
+		return content
+	}
+
+	orig := lines[idx]
+	updated := ReplaceAllRefVariants(orig, oldID, oldBase, newRef, objectRoot, pageRoot)
+	if updated == orig {
+		return ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot)
+	}
+
+	lines[idx] = updated
+	return strings.Join(lines, "\n")
 }
 
 func replaceFrontmatterBareRefVariants(content string, oldPatterns []string, newRef string) string {

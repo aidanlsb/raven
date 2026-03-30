@@ -286,7 +286,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		UpdateRefs:     boolArgDefault(req.Args, "update-refs", true),
 		SkipTypeCheck:  boolArg(req.Args, "skip-type-check"),
 		ParseOptions:   parseOptionsFromVaultConfig(vaultCfg),
-		FailOnIndexErr: false,
+		FailOnIndexErr: true,
 	})
 	if err != nil {
 		return mapContentMutationError(err)

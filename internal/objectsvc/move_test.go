@@ -146,6 +146,101 @@ func TestMoveFileWarnsWhenRefRewriteFails(t *testing.T) {
 	}
 }
 
+func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		WithFile("notes/ref.md", "See [[people/freya]].\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "people/freya.md", "notes/ref.md")
+
+	notesDir := filepath.Join(v.Path, "notes")
+	if err := os.Chmod(notesDir, 0o555); err != nil {
+		t.Fatalf("chmod notes dir: %v", err)
+	}
+	defer os.Chmod(notesDir, 0o755)
+
+	_, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       &config.VaultConfig{},
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "people/freya.md"),
+		DestinationFile:   filepath.Join(v.Path, "archive/freya.md"),
+		SourceObjectID:    "people/freya",
+		DestinationObject: "archive/freya",
+		UpdateRefs:        true,
+	})
+	if err == nil {
+		t.Fatal("expected MoveFile() to fail")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != ErrorValidationFailed {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, ErrorValidationFailed)
+	}
+
+	content := v.ReadFile("notes/ref.md")
+	if !strings.Contains(content, "[[people/freya]]") {
+		t.Fatalf("backlink changed despite rollback, content:\n%s", content)
+	}
+	if _, err := os.Stat(filepath.Join(v.Path, "people/freya.md")); err != nil {
+		t.Fatalf("expected source file to be restored: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(v.Path, "archive/freya.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected destination file to be removed, got %v", err)
+	}
+}
+
+func TestMoveFileRollsBackOnStrictIndexFailure(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "people/freya.md")
+
+	_, err := MoveFile(MoveFileRequest{
+		VaultPath:          v.Path,
+		VaultConfig:        &config.VaultConfig{},
+		Schema:             sch,
+		SourceFile:         filepath.Join(v.Path, "people/freya.md"),
+		DestinationFile:    filepath.Join(v.Path, "archive/freya.md"),
+		SourceObjectID:     "people/freya",
+		DestinationObject:  "archive/freya",
+		ReplacementContent: []byte("---\ntype: person\nname: [\n---\n"),
+		UpdateRefs:         true,
+		FailOnIndexError:   true,
+	})
+	if err == nil {
+		t.Fatal("expected MoveFile() to fail")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != ErrorValidationFailed {
+		t.Fatalf("error code = %s, want %s", svcErr.Code, ErrorValidationFailed)
+	}
+
+	if _, err := os.Stat(filepath.Join(v.Path, "people/freya.md")); err != nil {
+		t.Fatalf("expected source file to be restored: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(v.Path, "archive/freya.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected destination file to be removed, got %v", err)
+	}
+}
+
 func TestMoveFileUpdatesSelfRefsAfterRename(t *testing.T) {
 	t.Parallel()
 
