@@ -2,7 +2,9 @@
 
 COVERAGE_DIR := .tmp/coverage
 COVERAGE_PROFILE := $(COVERAGE_DIR)/unit.out
-COVERAGE_HTML := $(COVERAGE_DIR)/unit.html
+COVERAGE_INTEGRATION_PROFILE := $(COVERAGE_DIR)/integration.out
+COVERAGE_MERGED_PROFILE := $(COVERAGE_DIR)/coverage.out
+COVERAGE_HTML := $(COVERAGE_DIR)/coverage.html
 
 GOLANGCI_LINT_VERSION ?= v2.9.0
 GOLANGCI_LINT_MODULE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -31,7 +33,9 @@ test-all: test test-integration
 test-coverage:
 	mkdir -p $(COVERAGE_DIR)
 	go test -race -coverprofile=$(COVERAGE_PROFILE) ./...
-	go tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
+	go test -race -coverpkg=./... -coverprofile=$(COVERAGE_INTEGRATION_PROFILE) -tags=integration -v ./internal/cli ./internal/mcp
+	go run ./scripts/merge_coverprofiles.go $(COVERAGE_MERGED_PROFILE) $(COVERAGE_PROFILE) $(COVERAGE_INTEGRATION_PROFILE)
+	go tool cover -html=$(COVERAGE_MERGED_PROFILE) -o $(COVERAGE_HTML)
 
 # Run linter with golangci-lint v2.
 # Explicitly requires a local v2 binary.

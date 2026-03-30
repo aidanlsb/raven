@@ -51,7 +51,15 @@ jobs:
           cache: true
 
       - name: Run integration tests
-        run: go test -race -tags=integration -v ./internal/cli ./internal/mcp
+        run: |
+          mkdir -p .tmp/coverage
+          go test -race -coverpkg=./... -coverprofile=.tmp/coverage/integration.out -tags=integration -v ./internal/cli ./internal/mcp
+
+      - name: Upload integration coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+        with:
+          files: .tmp/coverage/integration.out
+          fail_ci_if_error: false
 
   lint:
     name: Lint
