@@ -232,7 +232,12 @@ Creates:
   - .gitignore   (ignores derived files)
 
 Also attempts to fetch local docs into .raven/docs. If docs fetch fails, initialization
-still succeeds and returns a warning with a retry command.`,
+still succeeds and returns a warning with a retry command.
+
+In interactive terminal mode, Raven follows up after initialization and can help
+register the new vault in global config, set it as the default vault, and/or
+activate it. In --json mode, init remains non-interactive and returns structured
+post-init setup suggestions instead of mutating global config implicitly.`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "Directory path to initialize as a vault", Required: true},
 		},

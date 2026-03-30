@@ -2,14 +2,19 @@ package commandimpl
 
 import (
 	"context"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/datesvc"
 	"github.com/aidanlsb/raven/internal/initsvc"
 	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
+	"github.com/aidanlsb/raven/internal/slugs"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
@@ -48,6 +53,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		"created_schema":  result.CreatedSchema,
 		"gitignore_state": result.GitignoreState,
 		"docs":            result.Docs,
+		"post_init":       buildInitPostInitData(result.Path, req.ConfigPath, req.StatePath),
 	}, warnings, nil)
 }
 
@@ -164,4 +170,87 @@ func mapDateServiceError(err error) commandexec.Result {
 	}
 
 	return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+}
+
+func buildInitPostInitData(path, configPathOverride, statePathOverride string) map[string]interface{} {
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath == "" {
+		return map[string]interface{}{}
+	}
+
+	absPath, err := filepath.Abs(cleanPath)
+	if err == nil {
+		cleanPath = absPath
+	}
+
+	suggestedName := slugs.ComponentSlug(filepath.Base(cleanPath))
+	if suggestedName == "" {
+		suggestedName = "vault"
+	}
+
+	configPath := config.ResolveConfigPath(configPathOverride)
+	statePath := config.ResolveStatePath(statePathOverride, configPath, &config.Config{})
+	registeredName := ""
+	isActive := false
+	isDefault := false
+
+	ctx, err := configsvc.LoadVaultContext(configsvc.ContextOptions{
+		ConfigPathOverride: configPathOverride,
+		StatePathOverride:  statePathOverride,
+	})
+	if err == nil {
+		configPath = ctx.ConfigPath
+		statePath = ctx.StatePath
+		defaultName := configsvc.DefaultVaultName(ctx.Cfg)
+		activeName := strings.TrimSpace(ctx.State.ActiveVault)
+		for name, vaultPath := range ctx.Cfg.ListVaults() {
+			if filepath.Clean(vaultPath) != filepath.Clean(cleanPath) {
+				continue
+			}
+			registeredName = name
+			isDefault = name == defaultName
+			isActive = name == activeName
+			break
+		}
+	}
+
+	nameForCommands := registeredName
+	if nameForCommands == "" {
+		nameForCommands = suggestedName
+	}
+
+	quotedPath := strconv.Quote(cleanPath)
+	commands := map[string]interface{}{
+		"register":          "rvn vault add " + nameForCommands + " " + quotedPath + " --json",
+		"register_and_pin":  "rvn vault add " + nameForCommands + " " + quotedPath + " --pin --json",
+		"activate":          "rvn vault use " + nameForCommands + " --json",
+		"pin":               "rvn vault pin " + nameForCommands + " --json",
+		"register_activate": "rvn vault add " + nameForCommands + " " + quotedPath + " --json && rvn vault use " + nameForCommands + " --json",
+	}
+
+	nextSteps := make([]string, 0, 3)
+	if registeredName == "" {
+		nextSteps = append(nextSteps, "Register this vault globally: "+commands["register"].(string))
+		nextSteps = append(nextSteps, "Register and set as default: "+commands["register_and_pin"].(string))
+		nextSteps = append(nextSteps, "After registering, make it active: "+commands["activate"].(string))
+	} else {
+		if !isDefault {
+			nextSteps = append(nextSteps, "Set this vault as default: "+commands["pin"].(string))
+		}
+		if !isActive {
+			nextSteps = append(nextSteps, "Set this vault as active: "+commands["activate"].(string))
+		}
+	}
+
+	return map[string]interface{}{
+		"suggested_name":     suggestedName,
+		"registered_name":    registeredName,
+		"already_registered": registeredName != "",
+		"is_active":          isActive,
+		"is_default":         isDefault,
+		"config_path":        configPath,
+		"state_path":         statePath,
+		"commands":           commands,
+		"next_steps":         nextSteps,
+	}
 }

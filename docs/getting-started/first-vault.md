@@ -33,6 +33,13 @@ notes/
 
 Markdown files are still the durable source of truth. `.raven/` can be rebuilt with `rvn reindex`.
 
+In an interactive terminal, `rvn init` now follows up and can help you:
+- register the vault in global config
+- set it as `default_vault`
+- set it as `active_vault`
+
+In `--json` mode, Raven stays non-interactive and returns structured post-init setup guidance instead.
+
 ## Sanity-check the new vault
 
 Run a few basic commands right away:

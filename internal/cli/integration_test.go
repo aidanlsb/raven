@@ -3,6 +3,7 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,6 +121,49 @@ old task
 	result.MustSucceed(t)
 	v.AssertFileContains("daily/2026-02-17.md", "done task")
 	v.AssertFileNotContains("daily/2026-02-17.md", "old task")
+}
+
+func TestIntegration_InitReturnsPostInitGuidance(t *testing.T) {
+	binary := testutil.BuildCLI(t)
+	root := t.TempDir()
+	configFile := filepath.Join(root, "config.toml")
+	stateFile := filepath.Join(root, "state.toml")
+	vaultPath := filepath.Join(root, "New Notes")
+
+	cmd := exec.Command(binary, "--config", configFile, "--state", stateFile, "--json", "init", vaultPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("init failed: %v\n%s", err, output)
+	}
+
+	var resp struct {
+		OK   bool                   `json:"ok"`
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(output, &resp); err != nil {
+		t.Fatalf("unmarshal init response: %v\n%s", err, output)
+	}
+	if !resp.OK {
+		t.Fatalf("expected init success, got: %s", output)
+	}
+
+	postInit, ok := resp.Data["post_init"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("post_init = %#v, want map", resp.Data["post_init"])
+	}
+	if got := postInit["suggested_name"]; got != "new-notes" {
+		t.Fatalf("suggested_name = %#v, want %q", got, "new-notes")
+	}
+	if got := postInit["already_registered"]; got != false {
+		t.Fatalf("already_registered = %#v, want false", got)
+	}
+	commands, ok := postInit["commands"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("commands = %#v, want map", postInit["commands"])
+	}
+	if _, ok := commands["register"]; !ok {
+		t.Fatalf("expected register command in %#v", commands)
+	}
 }
 
 // TestIntegration_QueryByField tests querying objects by field values.

@@ -752,6 +752,12 @@ func loadGlobalConfigWithPath(configPathOverride string) (*config.Config, string
 	var loadedCfg *config.Config
 	var err error
 	if strings.TrimSpace(configPathOverride) != "" {
+		if _, statErr := os.Stat(resolvedPath); statErr != nil {
+			if os.IsNotExist(statErr) {
+				return &config.Config{}, resolvedPath, nil
+			}
+			return nil, "", statErr
+		}
 		loadedCfg, err = config.LoadFrom(configPathOverride)
 	} else {
 		loadedCfg, err = config.Load()
