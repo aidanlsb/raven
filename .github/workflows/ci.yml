@@ -16,6 +16,7 @@ jobs:
   test:
     name: Test (ubuntu, race)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -40,6 +41,7 @@ jobs:
   test-integration:
     name: Test (integration, race)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -64,6 +66,7 @@ jobs:
   coverage:
     name: Coverage Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: [test, test-integration]
 
     steps:
@@ -81,6 +84,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -99,6 +103,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [test, test-integration, lint]
 
     steps:
@@ -119,6 +124,7 @@ jobs:
   test-cross-platform:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -140,6 +146,7 @@ jobs:
     name: Cross-build (${{ matrix.goos }}/${{ matrix.goarch }})
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [test, test-integration, lint]
     strategy:
       fail-fast: false
