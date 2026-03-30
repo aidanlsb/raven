@@ -170,6 +170,9 @@ func TestMCPIntegration_ServeRejectsLegacyToolNames(t *testing.T) {
 	if env.Error == nil || env.Error.Code != "UNKNOWN_TOOL" {
 		t.Fatalf("expected UNKNOWN_TOOL envelope error, got: %s", toolCallResp.Result.Content[0].Text)
 	}
+	if env.Error.Suggestion != "Call raven_discover to list available tools" {
+		t.Fatalf("unexpected UNKNOWN_TOOL suggestion: %q", env.Error.Suggestion)
+	}
 }
 
 // TestMCPIntegration_CreateObject tests creating an object via MCP tool call.
@@ -1504,6 +1507,59 @@ func TestMCPIntegration_ErrorHandling(t *testing.T) {
 
 	if resp.Error.Code != "FILE_EXISTS" {
 		t.Errorf("expected error code FILE_EXISTS, got %s", resp.Error.Code)
+	}
+}
+
+func TestMCPIntegration_QueryParseErrorsIncludeSuggestion(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	result := server.callTool("query", map[string]interface{}{
+		"query_string": "from issue where",
+	})
+	if !result.IsError {
+		t.Fatalf("expected query parse failure, got success: %s", result.Text)
+	}
+
+	env := parseMCPEnvelope(t, result.Text)
+	if env.Error == nil || env.Error.Code != "QUERY_INVALID" {
+		t.Fatalf("expected QUERY_INVALID, got: %s", result.Text)
+	}
+	if env.Error.Suggestion != "Check the query syntax, quote string literals, and retry." {
+		t.Fatalf("unexpected query suggestion: %q", env.Error.Suggestion)
+	}
+}
+
+func TestMCPIntegration_SearchSyntaxErrorsReturnInvalidInput(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	result := server.callTool("search", map[string]interface{}{
+		"query": "@broken",
+	})
+	if !result.IsError {
+		t.Fatalf("expected search syntax failure, got success: %s", result.Text)
+	}
+
+	env := parseMCPEnvelope(t, result.Text)
+	if env.Error == nil || env.Error.Code != "INVALID_INPUT" {
+		t.Fatalf("expected INVALID_INPUT, got: %s", result.Text)
+	}
+	if env.Error.Message != "invalid search query" {
+		t.Fatalf("unexpected search error message: %q", env.Error.Message)
+	}
+	if env.Error.Suggestion != "Quote special characters or use a simpler full-text query and retry." {
+		t.Fatalf("unexpected search suggestion: %q", env.Error.Suggestion)
 	}
 }
 

@@ -38,6 +38,7 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 		Caller:         commandexec.CallerMCP,
 		Args:           args,
 	})
+	result = adaptCanonicalResultForMCP(commandID, result)
 	return marshalCanonicalResult(result)
 }
 

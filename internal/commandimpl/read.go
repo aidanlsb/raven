@@ -34,13 +34,37 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 
 	results, err := readsvc.Search(rt, query, searchType, limit)
 	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("search failed: %v", err), nil, "")
+		return mapSearchFailure(err)
 	}
 
 	return commandexec.Success(map[string]interface{}{
 		"query":   query,
 		"results": formatSearchResults(results),
 	}, &commandexec.Meta{Count: len(results), QueryTimeMs: time.Since(start).Milliseconds()})
+}
+
+func mapSearchFailure(err error) commandexec.Result {
+	if err == nil {
+		return commandexec.Failure("INTERNAL_ERROR", "search failed", nil, "")
+	}
+
+	if isSearchSyntaxError(err) {
+		return commandexec.Failure(
+			"INVALID_INPUT",
+			"invalid search query",
+			map[string]interface{}{"cause": err.Error()},
+			"Quote special characters or use a simpler full-text query and retry.",
+		)
+	}
+
+	return commandexec.Failure("DATABASE_ERROR", fmt.Sprintf("search failed: %v", err), nil, "Run 'rvn reindex' to rebuild the database")
+}
+
+func isSearchSyntaxError(err error) bool {
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(message, "fts5: syntax error") ||
+		strings.Contains(message, "malformed match expression") ||
+		strings.Contains(message, "unterminated string")
 }
 
 // HandleBacklinks executes the canonical `backlinks` command.

@@ -532,7 +532,12 @@ func (s *Server) callTool(name string, args map[string]interface{}) (string, boo
 		return out, isErr
 	}
 
-	return fmt.Sprintf(`{"ok":false,"error":{"code":"UNKNOWN_TOOL","message":"Unknown tool: %s"}}`, name), true
+	return errorEnvelope(
+		"UNKNOWN_TOOL",
+		fmt.Sprintf("unknown tool: %s", name),
+		fmt.Sprintf("Call %s to list available tools", compactToolDiscover),
+		map[string]interface{}{"tool": name},
+	), true
 }
 
 func (s *Server) executeRvn(args []string) (string, bool) {

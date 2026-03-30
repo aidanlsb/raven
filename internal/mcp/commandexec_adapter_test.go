@@ -1,6 +1,10 @@
 package mcp
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/aidanlsb/raven/internal/commandexec"
+)
 
 func TestNormalizeCanonicalArgsUpdateTraitIDs(t *testing.T) {
 	args := map[string]interface{}{
@@ -25,5 +29,29 @@ func TestNormalizeCanonicalArgsLeavesOtherCommandsUntouched(t *testing.T) {
 	got := normalizeCanonicalArgs("set", args)
 	if got["object_ids"] == nil {
 		t.Fatalf("expected object_ids to remain present: %#v", got)
+	}
+}
+
+func TestAdaptCanonicalResultForMCPRewritesValidationSuggestion(t *testing.T) {
+	result := adaptCanonicalResultForMCP("add", commandexec.Failure("INVALID_ARGS", "argument validation failed", nil, "Check command arguments and retry"))
+
+	if result.Error == nil {
+		t.Fatal("expected error")
+	}
+	want := "Call raven_describe with command 'add' for the strict contract and retry"
+	if result.Error.Suggestion != want {
+		t.Fatalf("suggestion = %q, want %q", result.Error.Suggestion, want)
+	}
+}
+
+func TestAdaptCanonicalResultForMCPAddsQuerySuggestionWhenMissing(t *testing.T) {
+	result := adaptCanonicalResultForMCP("query", commandexec.Failure("QUERY_INVALID", "parse error: expected 2, got 1 at pos 5", nil, ""))
+
+	if result.Error == nil {
+		t.Fatal("expected error")
+	}
+	want := "Check the query syntax, quote string literals, and retry."
+	if result.Error.Suggestion != want {
+		t.Fatalf("suggestion = %q, want %q", result.Error.Suggestion, want)
 	}
 }
