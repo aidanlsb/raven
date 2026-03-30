@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -255,7 +256,7 @@ func renderInitNextSteps(info initPostInitInfo) {
 	fmt.Println()
 	fmt.Println("Next steps:")
 	if !info.AlreadyRegistered {
-		fmt.Printf("  rvn vault add %s %q --pin\n", info.SuggestedName, info.Path)
+		fmt.Printf("  rvn vault add %s %s --pin\n", info.SuggestedName, formatInitSuggestedPath(info.Path))
 		fmt.Printf("  rvn vault use %s\n", info.SuggestedName)
 		return
 	}
@@ -265,4 +266,9 @@ func renderInitNextSteps(info initPostInitInfo) {
 	if !info.IsActive {
 		fmt.Printf("  rvn vault use %s\n", info.RegisteredName)
 	}
+}
+
+func formatInitSuggestedPath(path string) string {
+	displayPath := strings.ReplaceAll(filepath.ToSlash(strings.TrimSpace(path)), "\\", "/")
+	return `"` + displayPath + `"`
 }

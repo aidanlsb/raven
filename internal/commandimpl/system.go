@@ -219,7 +219,7 @@ func buildInitPostInitData(path, configPathOverride, statePathOverride string) m
 		nameForCommands = suggestedName
 	}
 
-	quotedPath := strconv.Quote(cleanPath)
+	quotedPath := formatSuggestedCommandPath(cleanPath)
 	commands := map[string]interface{}{
 		"register":          "rvn vault add " + nameForCommands + " " + quotedPath + " --json",
 		"register_and_pin":  "rvn vault add " + nameForCommands + " " + quotedPath + " --pin --json",
@@ -253,4 +253,9 @@ func buildInitPostInitData(path, configPathOverride, statePathOverride string) m
 		"commands":           commands,
 		"next_steps":         nextSteps,
 	}
+}
+
+func formatSuggestedCommandPath(path string) string {
+	displayPath := strings.ReplaceAll(filepath.ToSlash(strings.TrimSpace(path)), "\\", "/")
+	return strconv.Quote(displayPath)
 }

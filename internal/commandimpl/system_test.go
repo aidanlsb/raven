@@ -97,3 +97,11 @@ func TestBuildInitPostInitDataReflectsRegisteredVault(t *testing.T) {
 		t.Fatalf("next_steps = %#v, want empty slice", data["next_steps"])
 	}
 }
+
+func TestFormatSuggestedCommandPathNormalizesWindowsSeparators(t *testing.T) {
+	got := formatSuggestedCommandPath(`C:\Users\me\New Notes`)
+	want := `"C:/Users/me/New Notes"`
+	if got != want {
+		t.Fatalf("formatSuggestedCommandPath() = %q, want %q", got, want)
+	}
+}

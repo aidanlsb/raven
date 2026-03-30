@@ -65,3 +65,11 @@ func TestRunInitFollowUpRegistersPinsAndActivatesVault(t *testing.T) {
 		t.Fatalf("follow-up info = %+v, want registered/default/active", info)
 	}
 }
+
+func TestFormatInitSuggestedPathNormalizesWindowsSeparators(t *testing.T) {
+	got := formatInitSuggestedPath(`C:\Users\me\New Notes`)
+	want := `"C:/Users/me/New Notes"`
+	if got != want {
+		t.Fatalf("formatInitSuggestedPath() = %q, want %q", got, want)
+	}
+}
