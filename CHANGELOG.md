@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.12] - 2026-03-29
+
+### Fixed
+- `move` now rolls file changes back when a post-move backlink rewrite or strict index update fails, instead of leaving the vault in a partially updated state.
+- Move and reclassify rollback regression tests now use deterministic cross-platform failure injection, which restores Windows CI coverage for these cases.
+
 ## [v0.0.11] - 2026-03-22
 
 ### Added
