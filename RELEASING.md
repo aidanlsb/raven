@@ -5,7 +5,7 @@ Maintainer runbook for shipping a tagged release.
 Raven uses a tag-driven release flow:
 1. Create an annotated semver tag from `main`.
 2. Push the tag.
-3. GitHub Actions runs preflight and publishes with GoReleaser.
+3. GitHub Actions validates the tag and publishes with GoReleaser.
 
 ## Preconditions
 
@@ -65,9 +65,11 @@ Supported bump values: `patch`, `minor`, `major`.
 `.github/workflows/release.yml` runs when a `v*.*.*` tag is pushed and:
 1. Validates semver tag format.
 2. Verifies the pushed tag is annotated.
-3. Runs `make release-preflight`.
+3. Verifies the tagged commit is already reachable from `origin/main`.
 4. Runs GoReleaser to publish release artifacts and GitHub release notes.
 5. Updates `aidanlsb/homebrew-tap/Formula/rvn.rb` when `HOMEBREW_TAP_TOKEN` is available.
+
+The full test/lint preflight still runs locally via `make release`, `make release-tag`, or `make release-preflight` before the tag is created. The tag-push workflow intentionally does not rerun the entire suite.
 
 ## Post-Release Verification
 
