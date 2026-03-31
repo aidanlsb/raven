@@ -121,6 +121,8 @@ func mapServiceCode(code objectsvc.ErrorCode) string {
 		return "FILE_READ_ERROR"
 	case objectsvc.ErrorFileWrite:
 		return "FILE_WRITE_ERROR"
+	case objectsvc.ErrorUnexpected:
+		return "INTERNAL_ERROR"
 	default:
 		return "INTERNAL_ERROR"
 	}

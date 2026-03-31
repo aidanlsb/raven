@@ -2,6 +2,7 @@ package objectsvc
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -39,7 +40,7 @@ func resolveReferenceForMutation(vaultPath string, vaultCfg *config.VaultConfig,
 		}
 		return nil, newError(
 			ErrorUnexpected,
-			"failed to resolve object reference",
+			fmt.Sprintf("failed to resolve object reference: %v", err),
 			"Check the object reference and run 'rvn reindex' if needed",
 			nil,
 			err,
