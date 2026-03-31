@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.13] - 2026-03-31
+
+### Removed
+- Removed the workflows feature, including its dedicated runtime, command surface, default config, MCP resources, and user-facing documentation, to keep Raven focused on core knowledge-management primitives.
+
+### Changed
+- Restored the generic agent playbook as the `key-flows` guide after removing workflow-specific guidance.
+
+### Fixed
+- Unexpected reference-resolution failures now surface their underlying cause more clearly and map to a stable internal error code in `new` command responses.
+
 ## [v0.0.12] - 2026-03-29
 
 ### Fixed
