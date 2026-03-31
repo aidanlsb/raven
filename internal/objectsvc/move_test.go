@@ -149,8 +149,6 @@ func TestMoveFileWarnsWhenRefRewriteFails(t *testing.T) {
 }
 
 func TestMoveFileRollsBackWhenRefRewriteWriteFails(t *testing.T) {
-	t.Parallel()
-
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithFile("people/freya.md", "---\ntype: person\nname: Freya\n---\n").
@@ -246,6 +244,8 @@ func TestMoveFileRollsBackOnStrictIndexFailure(t *testing.T) {
 	}
 }
 
+// swapMoveFileWriterForTest mutates package-global state, so tests that use it
+// must not call t.Parallel().
 func swapMoveFileWriterForTest(writer func(path string, data []byte, perm os.FileMode) error) func() {
 	moveFileWriterMu.Lock()
 	previous := moveFileWriter
