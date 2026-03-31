@@ -25,9 +25,9 @@
 7. Use issue-driven repair loops.
 - `raven_invoke(command="check")` -> prioritize issue types -> apply fixes -> re-check scope.
 
-8. Keep workflows lifecycle-aware.
-- Before starting a new workflow run, check for existing `awaiting_agent` runs.
-- Continue existing runs when appropriate.
+8. Keep agent sessions state-aware.
+- Check for existing objects or notes before creating duplicates.
+- Prefer `upsert` when reruns should converge on one canonical object.
 
 9. Report both results and risk.
 - Include what changed, what was validated, and any residual uncertainty.

@@ -48,7 +48,6 @@ const (
 	CategoryQuery       Category = "query"
 	CategoryContent     Category = "content"
 	CategorySchema      Category = "schema"
-	CategoryWorkflow    Category = "workflow"
 	CategoryNavigation  Category = "navigation"
 	CategoryMaintenance Category = "maintenance"
 	CategoryVault       Category = "vault"
@@ -205,7 +204,7 @@ Boundary with add:
 - add: append-only capture/logging, intentionally non-idempotent
 - upsert: canonical state write, idempotent convergence target
 
-Use this for workflow outputs like briefs/reports/summaries where reruns should
+Use this for generated outputs like briefs/reports/summaries where reruns should
 converge to one current state rather than append history.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., brief, report)", Required: true, DynamicComp: "types"},
@@ -223,7 +222,7 @@ converge to one current state rather than append history.`,
 			"rvn upsert report \"Q1 Status\" --field owner=people/freya --field status=draft --json",
 		},
 		UseCases: []string{
-			"Idempotently persist generated workflow outputs",
+			"Idempotently persist generated outputs",
 			"Create-or-update canonical report/brief objects",
 			"Replace an object's body deterministically on reruns",
 		},
@@ -1443,7 +1442,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		LongDesc: `Replace a unique string in a vault file with another string.
 
 ⚠️ IMPORTANT FOR AGENTS: Use this command instead of shell tools like 'sed' or 'awk'
-to edit vault files. This ensures proper preview/confirm workflow and maintains
+to edit vault files. This ensures proper preview/confirm flow and maintains
 file integrity within the vault.
 
 The string to replace must appear exactly once in the file to prevent 
@@ -1801,335 +1800,6 @@ This is useful for piping query results to open multiple files at once.`,
 			"Open multiple files from query results",
 		},
 	},
-	"workflow_list": {
-		Name:        "workflow list",
-		Description: "List available workflows",
-		LongDesc:    `Lists all workflows defined in raven.yaml with their descriptions and required inputs.`,
-		Examples: []string{
-			"rvn workflow list --json",
-		},
-		UseCases: []string{
-			"Discover available workflows",
-			"See what inputs each workflow requires",
-		},
-	},
-	"workflow_add": {
-		Name:        "workflow add",
-		Description: "Add a workflow definition to raven.yaml",
-		LongDesc: `Creates a workflow entry in raven.yaml without manual file editing.
-
-Workflow declarations are file references only. The referenced file must be
-under directories.workflow (default: workflows/). The command validates the file
-before saving so agents get immediate feedback for migration and syntax issues.`,
-		Args: []ArgMeta{
-			{Name: "name", Description: "Workflow name to create", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "file", Description: "Path to external workflow YAML file (relative to vault root)", Type: FlagTypeString, Examples: []string{"workflows/meeting-prep.yaml"}},
-		},
-		Examples: []string{
-			"rvn workflow add meeting-prep --file workflows/meeting-prep.yaml --json",
-		},
-		UseCases: []string{
-			"Register an existing workflow file in raven.yaml",
-			"Validate workflow policy and syntax before persisting to config",
-		},
-	},
-	"workflow_scaffold": {
-		Name:        "workflow scaffold",
-		Description: "Scaffold a starter workflow file and config entry",
-		LongDesc: `Creates a starter workflow YAML file and registers it in raven.yaml.
-
-By default, writes <directories.workflow>/<name>.yaml and adds:
-  workflows:
-    <name>:
-      file: <directories.workflow>/<name>.yaml
-
-Use this when bootstrapping a first workflow from MCP or CLI without manually
-editing raven.yaml.`,
-		Args: []ArgMeta{
-			{Name: "name", Description: "Workflow name to scaffold", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "file", Description: "Path for scaffolded workflow YAML (must be under directories.workflow)", Type: FlagTypeString, Examples: []string{"workflows/daily-brief.yaml"}},
-			{Name: "description", Description: "Description for the scaffolded workflow", Type: FlagTypeString},
-			{Name: "force", Description: "Overwrite scaffold file if it already exists", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn workflow scaffold daily-brief --json",
-			"rvn workflow scaffold meeting-prep --file workflows/meeting-prep.yaml --description \"Prepare for meetings\" --json",
-		},
-		UseCases: []string{
-			"Bootstrap a valid workflow quickly",
-			"Create first workflow via MCP without manual YAML editing",
-		},
-	},
-	"workflow_remove": {
-		Name:        "workflow remove",
-		Description: "Remove a workflow definition from raven.yaml",
-		Args: []ArgMeta{
-			{Name: "name", Description: "Workflow name to remove", Required: true},
-		},
-		Examples: []string{
-			"rvn workflow remove meeting-prep --json",
-		},
-		UseCases: []string{
-			"Delete obsolete workflows from config",
-		},
-	},
-	"workflow_validate": {
-		Name:        "workflow validate",
-		Description: "Validate workflow definitions in raven.yaml",
-		LongDesc: `Validates one workflow or all workflows defined in raven.yaml.
-Reports migration, directory-policy, and file syntax errors.`,
-		Args: []ArgMeta{
-			{Name: "name", Description: "Optional workflow name to validate (validates all when omitted)", Required: false},
-		},
-		Examples: []string{
-			"rvn workflow validate --json",
-			"rvn workflow validate meeting-prep --json",
-		},
-		UseCases: []string{
-			"Debug workflow syntax errors quickly",
-			"Check all workflows after editing definitions",
-		},
-	},
-	"workflow_show": {
-		Name:        "workflow show",
-		Description: "Show workflow details",
-		LongDesc:    `Shows the full definition of a workflow including inputs and steps.`,
-		Args: []ArgMeta{
-			{Name: "name", Description: "Workflow name", Required: true},
-		},
-		Examples: []string{
-			"rvn workflow show meeting-prep --json",
-		},
-		UseCases: []string{
-			"Inspect workflow configuration",
-			"Understand what a workflow does before running it",
-		},
-	},
-	"workflow_step_add": {
-		Name:        "workflow step add",
-		Description: "Add a step to a workflow definition file",
-		LongDesc: `Adds one step to a workflow YAML definition file.
-
-This edits the workflow file referenced by workflows.<name>.file in raven.yaml.
-Use --before/--after to control insertion order.`,
-		Args: []ArgMeta{
-			{Name: "workflow-name", Description: "Workflow name", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "step-json", Description: "Step definition JSON object", Type: FlagTypeJSON, Examples: []string{
-				`{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}`,
-				`{"id":"fanout","type":"foreach","foreach":{"items":"{{steps.collect.data.results}}","as":"item","steps":[{"id":"write","type":"tool","tool":"raven_upsert","arguments":{"type":"task","title":"{{item.title}}"}}]}}`,
-				`{"id":"route","type":"switch","switch":{"value":"{{steps.classify.validated_outputs.route}}","cases":{"high":{"emit":{"action":"escalate"}}},"default":{"emit":{"action":"backlog"}}}}`,
-			}},
-			{Name: "before", Description: "Insert new step before this step id", Type: FlagTypeString},
-			{Name: "after", Description: "Insert new step after this step id", Type: FlagTypeString},
-		},
-		Examples: []string{
-			`rvn workflow step add meeting-prep --step-json '{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:meeting .status==scheduled"}}' --json`,
-			`rvn workflow step add meeting-prep --step-json '{"id":"compose","type":"agent","prompt":"Summarize {{steps.fetch.data.results}}"}' --after fetch --json`,
-			`rvn workflow step add meeting-prep --step-json '{"id":"fanout","type":"foreach","foreach":{"items":"{{steps.fetch.data.results}}","steps":[{"id":"create","type":"tool","tool":"raven_upsert","arguments":{"type":"task","title":"{{item.title}}"}}]}}' --json`,
-			`rvn workflow step add meeting-prep --step-json '{"id":"route","type":"switch","switch":{"value":"{{steps.classify.validated_outputs.route}}","cases":{"high":{"emit":{"action":"escalate"}}},"default":{"emit":{"action":"backlog"}}}}' --json`,
-		},
-		UseCases: []string{
-			"Insert a new tool step while preserving YAML validity",
-			"Add deterministic fanout with foreach nested tool steps",
-			"Add deterministic conditional routing with switch cases/default",
-			"Add an agent boundary without manual file editing",
-		},
-	},
-	"workflow_step_batch": {
-		Name:        "workflow step batch",
-		Description: "Apply ordered step mutations atomically to a workflow definition file",
-		LongDesc: `Applies an ordered list of add/update/remove step mutations to a workflow YAML definition file.
-
-All mutations are applied to an in-memory draft, the workflow is validated once at
-the end, and the file is only written if the entire batch is valid.`,
-		Args: []ArgMeta{
-			{Name: "workflow-name", Description: "Workflow name", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "mutations-json", Description: "JSON object with ordered step mutations under operations[]", Type: FlagTypeJSON, Examples: []string{
-				`{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:project .status==active"}}},{"action":"update","step_id":"compose","patch":{"description":"Summarize active projects"}},{"action":"remove","step_id":"legacy"}]}`,
-				`{"operations":[{"action":"add","step":{"id":"enrich","type":"tool","tool":"raven_search","arguments":{"query":"workflow enrichment","limit":3}},"after":"context"},{"action":"update","step_id":"compose","patch":{"prompt":"Return JSON: {\"outputs\":{\"markdown\":\"...\"}}\n\nUse {{steps.enrich.data.results}}"}}]}`,
-			}},
-		},
-		Examples: []string{
-			`rvn workflow step batch meeting-prep --mutations-json '{"operations":[{"action":"add","step":{"id":"fetch","type":"tool","tool":"raven_query","arguments":{"query_string":"object:meeting .status==scheduled"}}},{"action":"update","step_id":"compose","patch":{"prompt":"Draft agenda from {{steps.fetch.data.results}}"}}]}' --json`,
-			`rvn workflow step batch triage --mutations-json '{"operations":[{"action":"add","step":{"id":"route","type":"switch","switch":{"value":"{{steps.classify.validated_outputs.route}}","cases":{"high":{"emit":{"action":"escalate"}}},"default":{"emit":{"action":"backlog"}}}}},{"action":"remove","step_id":"legacy"}]}' --json`,
-		},
-		UseCases: []string{
-			"Apply coordinated workflow refactors without intermediate invalid states",
-			"Add, patch, and remove related steps in one validated write",
-			"Reduce MCP round-trips for multi-step workflow edits",
-		},
-	},
-	"workflow_step_update": {
-		Name:        "workflow step update",
-		Description: "Update a step in a workflow definition file",
-		LongDesc: `Updates one step in a workflow YAML definition file.
-
-The provided --step-json is treated as a patch over the current step; omitted
-fields keep existing values.`,
-		Args: []ArgMeta{
-			{Name: "workflow-name", Description: "Workflow name", Required: true},
-			{Name: "step-id", Description: "Step ID to update", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "step-json", Description: "Step patch JSON object", Type: FlagTypeJSON, Examples: []string{
-				`{"description":"Load upcoming meetings","arguments":{"query_string":"object:meeting .status==scheduled"}}`,
-				`{"foreach":{"on_error":"continue","as":"entry","index_as":"slot"}}`,
-				`{"switch":{"outputs":{"action":{"type":"string","required":true}}}}`,
-			}},
-		},
-		Examples: []string{
-			`rvn workflow step update meeting-prep fetch --step-json '{"description":"Load upcoming meetings"}' --json`,
-			`rvn workflow step update meeting-prep compose --step-json '{"id":"draft","prompt":"Draft agenda from {{steps.fetch.data.results}}"}' --json`,
-			`rvn workflow step update meeting-prep fanout --step-json '{"foreach":{"on_error":"continue"}}' --json`,
-			`rvn workflow step update triage route --step-json '{"switch":{"outputs":{"action":{"type":"string","required":true}}}}' --json`,
-		},
-		UseCases: []string{
-			"Patch step arguments without rewriting full YAML",
-			"Adjust foreach error policy or aliases",
-			"Adjust switch branch output contract",
-			"Rename a step id while re-validating workflow integrity",
-		},
-	},
-	"workflow_step_remove": {
-		Name:        "workflow step remove",
-		Description: "Remove a step from a workflow definition file",
-		LongDesc: `Removes one step from a workflow YAML definition file.
-
-The command re-validates the workflow and rolls back on invalid edits.`,
-		Args: []ArgMeta{
-			{Name: "workflow-name", Description: "Workflow name", Required: true},
-			{Name: "step-id", Description: "Step ID to remove", Required: true},
-		},
-		Examples: []string{
-			"rvn workflow step remove meeting-prep fetch --json",
-		},
-		UseCases: []string{
-			"Delete obsolete steps safely",
-			"Refactor workflow step order by removing temporary steps",
-		},
-	},
-	"workflow_run": {
-		Name:        "workflow run",
-		Description: "Run a workflow until an agent step",
-		LongDesc: `Runs a workflow's deterministic tool steps in order until it reaches an agent step.
-
-When an agent step is reached, this command returns:
-- the rendered agent prompt string
-- the declared agent outputs (e.g., markdown)
-- step summaries (use workflow runs step for full step output retrieval)
-`,
-		Args: []ArgMeta{
-			{Name: "name", Description: "Workflow name", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "input", Description: "Set input value (repeatable)", Type: FlagTypeKeyValue, Examples: []string{"meeting_id=meetings/alice-1on1", "question=How does auth work?"}},
-			{Name: "input-json", Description: "Set workflow inputs as a JSON object", Type: FlagTypeJSON, Examples: []string{`{"meeting_id":"meetings/alice-1on1","focus":"decisions"}`}},
-			{Name: "input-file", Description: "Read workflow inputs from JSON file", Type: FlagTypeString, Examples: []string{"./inputs.json"}},
-		},
-		Examples: []string{
-			"rvn workflow run meeting-prep --input meeting_id=meetings/alice-1on1 --json",
-			"rvn workflow run meeting-prep --input-json '{\"meeting_id\":\"meetings/alice-1on1\"}' --json",
-		},
-		UseCases: []string{
-			"Get a pre-formatted prompt and grounded context for agent execution",
-			"Run deterministic pre-processing before an agent step",
-		},
-	},
-	"workflow_continue": {
-		Name:        "workflow continue",
-		Description: "Continue a paused workflow run",
-		LongDesc: `Continues a paused workflow run by validating and applying agent output JSON,
-then executing subsequent deterministic steps until the next agent step or completion.
-
-You must provide --expected-revision from the latest workflow_run, workflow_continue,
-or workflow_runs_list response. Raven rejects continuation without a revision so agent
-handoff/resume stays concurrency-safe by default.
-
-Responses include step summaries; fetch full step output with workflow runs step.`,
-		Args: []ArgMeta{
-			{Name: "run-id", Description: "Workflow run ID to continue", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "agent-output-json", Description: "Agent output JSON object with required top-level 'outputs' key", Type: FlagTypeJSON, Examples: []string{`{"outputs":{"markdown":"..."}}`}},
-			{Name: "agent-output", Description: "Agent output JSON object as a string (MCP compatibility)", Type: FlagTypeString, Examples: []string{`{"outputs":{"markdown":"..."}}`}},
-			{Name: "agent-output-file", Description: "Read agent output JSON from file", Type: FlagTypeString, Examples: []string{"./agent-output.json"}},
-			{Name: "expected-revision", Description: "Required current run revision for optimistic concurrency", Type: FlagTypeInt},
-		},
-		Examples: []string{
-			"rvn workflow continue wrf_abcd1234 --expected-revision 1 --agent-output-json '{\"outputs\":{\"markdown\":\"...\"}}' --json",
-			"rvn workflow continue wrf_abcd1234 --expected-revision 1 --agent-output '{\"outputs\":{\"markdown\":\"...\"}}' --json",
-		},
-		UseCases: []string{
-			"Resume a workflow after external agent execution",
-			"Require explicit optimistic concurrency when continuing a persisted run",
-		},
-	},
-	"workflow_runs_list": {
-		Name:        "workflow runs list",
-		Description: "List persisted workflow runs",
-		LongDesc:    `Lists workflow run checkpoints from storage, optionally filtered by workflow name and status.`,
-		Flags: []FlagMeta{
-			{Name: "workflow", Description: "Filter by workflow name", Type: FlagTypeString},
-			{Name: "status", Description: "Filter by status (comma-separated)", Type: FlagTypeString, Examples: []string{"awaiting_agent", "completed,failed"}},
-		},
-		Examples: []string{
-			"rvn workflow runs list --status awaiting_agent --json",
-		},
-		UseCases: []string{
-			"Find paused runs waiting for agent output",
-			"Inspect run history and status",
-		},
-	},
-	"workflow_runs_step": {
-		Name:        "workflow runs step",
-		Description: "Fetch output for a specific step in a workflow run",
-		LongDesc: `Returns the full stored output for one step in a persisted workflow run.
-
-Use this with step IDs from workflow_run/workflow_continue step summaries for
-incremental retrieval of large workflow context.`,
-		Args: []ArgMeta{
-			{Name: "run-id", Description: "Workflow run ID", Required: true},
-			{Name: "step-id", Description: "Step ID to retrieve output for", Required: true},
-		},
-		Flags: []FlagMeta{
-			{Name: "path", Description: "Dot path within step output to paginate (e.g. data.results)", Type: FlagTypeString},
-			{Name: "offset", Description: "Zero-based offset for paginated step output", Type: FlagTypeInt},
-			{Name: "limit", Description: "Page size for paginated step output", Type: FlagTypeInt},
-		},
-		Examples: []string{
-			"rvn workflow runs step wrf_abcd1234 todos --json",
-			"rvn workflow runs step wrf_abcd1234 todos --path data.results --offset 0 --limit 50 --json",
-		},
-		UseCases: []string{
-			"Fetch large step outputs on demand instead of in workflow_run responses",
-			"Inspect a specific tool or agent step output while debugging a run",
-		},
-	},
-	"workflow_runs_prune": {
-		Name:        "workflow runs prune",
-		Description: "Prune persisted workflow runs",
-		LongDesc:    `Prunes workflow run checkpoints by status and age. Preview-only by default; use --confirm to apply deletions.`,
-		Flags: []FlagMeta{
-			{Name: "status", Description: "Prune only statuses (comma-separated)", Type: FlagTypeString, Examples: []string{"completed", "completed,failed"}},
-			{Name: "older-than", Description: "Prune records older than duration (e.g., 72h, 14d)", Type: FlagTypeString},
-			{Name: "confirm", Description: "Apply deletion (without this flag, previews only)", Type: FlagTypeBool},
-		},
-		Examples: []string{
-			"rvn workflow runs prune --status completed --older-than 14d --confirm --json",
-		},
-		UseCases: []string{
-			"Clean up stale workflow runs",
-			"Manually enforce storage limits",
-		},
-	},
 	"skill_list": {
 		Name:        "skill list",
 		Description: "List Raven-provided skills",
@@ -2161,7 +1831,7 @@ Use --target to include target-specific installed status and paths.`,
 
 Preview is returned by default. Use --confirm to apply writes.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin", "raven-workflows"}},
+			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2173,7 +1843,6 @@ Preview is returned by default. Use --confirm to apply writes.`,
 		Examples: []string{
 			"rvn skill install raven-core --target codex --confirm --json",
 			"rvn skill install raven-schema --target claude --scope project --json",
-			"rvn skill install raven-workflows --target codex --confirm --json",
 		},
 		UseCases: []string{
 			"Install Raven core skill guidance into an agent runtime",
@@ -2188,7 +1857,7 @@ Preview is returned by default. Use --confirm to apply writes.`,
 
 Preview is returned by default. Use --confirm to apply removal.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin", "raven-workflows"}},
+			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2199,7 +1868,6 @@ Preview is returned by default. Use --confirm to apply removal.`,
 		Examples: []string{
 			"rvn skill remove raven-core --target codex --confirm --json",
 			"rvn skill remove raven-schema --target cursor --scope project --json",
-			"rvn skill remove raven-workflows --target codex --confirm --json",
 		},
 		UseCases: []string{
 			"Preview skill removal before deleting files",

@@ -61,7 +61,7 @@ func TestCommandsMissingRegistryMetadataAreAllowlisted(t *testing.T) {
 		if !cmd.Runnable() {
 			continue
 		}
-		// Grouping commands (e.g. "schema add", "workflow") intentionally
+		// Grouping commands (e.g. "schema add") intentionally
 		// rely on metadata for runnable leaf commands.
 		if len(cmd.Commands()) > 0 {
 			if _, ok := lookupRegistryMeta(path); !ok {

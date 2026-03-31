@@ -61,12 +61,6 @@ sections:
       import:
         title: Import
         path: import.md
-  workflows:
-    title: Workflows
-    topics:
-      workflows:
-        title: Workflows
-        path: workflows.md
   agents:
     title: Agents
     topics:

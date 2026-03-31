@@ -72,7 +72,7 @@ That prompt forces the agent to inspect the actual vault before making changes a
 Your agent should be able to:
 
 - inspect the schema
-- list or read saved queries and workflows
+- list or read saved queries
 - create a typed object through Raven instead of direct file writes
 - query the vault and explain what it found
 

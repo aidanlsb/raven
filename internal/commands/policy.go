@@ -1,23 +1,19 @@
 package commands
 
-import "strings"
-
 // Policy defines execution/discovery behavior for a command.
 //
 // These defaults are intentionally permissive for canonical leaf commands, with
-// explicit deny overrides for runtime/bootstrap and workflow-unsafe paths.
+// explicit deny overrides for runtime/bootstrap paths.
 type Policy struct {
-	Invokable       bool
-	Discoverable    bool
-	WorkflowAllowed bool
+	Invokable    bool
+	Discoverable bool
 }
 
 // DefaultPolicy returns the default policy for canonical commands.
 func DefaultPolicy() Policy {
 	return Policy{
-		Invokable:       true,
-		Discoverable:    true,
-		WorkflowAllowed: true,
+		Invokable:    true,
+		Discoverable: true,
 	}
 }
 
@@ -28,12 +24,6 @@ func PolicyForCommandID(commandID string) Policy {
 	if _, blocked := nonInvokableCommandIDs[commandID]; blocked {
 		policy.Invokable = false
 		policy.Discoverable = false
-	}
-
-	if _, blocked := workflowDisallowedExact[commandID]; blocked {
-		policy.WorkflowAllowed = false
-	} else if hasAnyPrefix(commandID, workflowDisallowedPrefixes) {
-		policy.WorkflowAllowed = false
 	}
 
 	return policy
@@ -56,19 +46,6 @@ func IsDiscoverableCommandID(commandID string) bool {
 	return PolicyForCommandID(commandID).Discoverable
 }
 
-func IsWorkflowAllowedCommandID(commandID string) bool {
-	return PolicyForCommandID(commandID).WorkflowAllowed
-}
-
-func hasAnyPrefix(s string, prefixes []string) bool {
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(s, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
 var nonInvokableCommandIDs = map[string]struct{}{
 	"path":        {},
 	"serve":       {},
@@ -80,23 +57,4 @@ var nonInvokableCommandIDs = map[string]struct{}{
 	"config":   {},
 	"vault":    {},
 	"template": {},
-}
-
-var workflowDisallowedExact = map[string]struct{}{
-	"path":       {},
-	"serve":      {},
-	"open":       {},
-	"init":       {},
-	"docs_fetch": {},
-	"workflow":   {},
-	"config":     {},
-	"vault":      {},
-}
-
-var workflowDisallowedPrefixes = []string{
-	"mcp_",
-	"config_",
-	"vault_",
-	"skill_",
-	"workflow_",
 }

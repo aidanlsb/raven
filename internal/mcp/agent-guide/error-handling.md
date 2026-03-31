@@ -37,5 +37,3 @@ Then:
 ## Related topics
 
 - `raven://guide/issue-types`
-- `raven://guide/key-workflows`
-- `raven://guide/workflow-lifecycle`

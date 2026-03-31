@@ -76,16 +76,10 @@ var guideTopics = []GuideTopic{
 		Path:        "agent-guide/query-at-scale.md",
 	},
 	{
-		Slug:        "key-workflows",
-		Name:        "Key Workflows",
-		Description: "Operational playbook for validation, mutation, schema, and workflow execution flows.",
-		Path:        "agent-guide/key-workflows.md",
-	},
-	{
-		Slug:        "workflow-lifecycle",
-		Name:        "Workflow Lifecycle",
-		Description: "How to run, continue, inspect, and prune workflow runs.",
-		Path:        "agent-guide/workflow-lifecycle.md",
+		Slug:        "key-flows",
+		Name:        "Key Flows",
+		Description: "Operational playbook for common end-to-end Raven tasks.",
+		Path:        "agent-guide/key-flows.md",
 	},
 	{
 		Slug:        "error-handling",

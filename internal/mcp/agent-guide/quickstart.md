@@ -24,13 +24,11 @@ raven_invoke(command="schema", args={"subcommand":"types"})
 raven_invoke(command="schema", args={"subcommand":"traits"})
 raven_invoke(command="vault_stats")
 raven_invoke(command="query", args={"list":true})
-raven_invoke(command="workflow_list")
 ```
 
 Then fetch:
 - `raven://schema/current`
 - `raven://queries/saved`
-- `raven://workflows/list`
 - `raven://vault/agent-instructions`
 
 ## Recommended first create flow

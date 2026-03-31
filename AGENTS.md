@@ -159,8 +159,7 @@ When adding or modifying a command:
 | `querying.md` | RQL reference and query strategy |
 | `query-cheatsheet.md` | Common query patterns |
 | `query-at-scale.md` | Pagination and narrowing strategy for large result sets |
-| `key-workflows.md` | End-to-end operational playbook |
-| `workflow-lifecycle.md` | Running, continuing, inspecting, and pruning workflow runs |
+| `key-flows.md` | End-to-end operational playbook |
 | `error-handling.md` | Interpreting tool errors |
 | `issue-types.md` | `raven_check` issue reference |
 | `best-practices.md` | Operating principles |
@@ -179,7 +178,6 @@ When adding a new guide topic:
 - `docs/types-and-traits/` — schema intro, schema reference, file format, templates
 - `docs/querying/` — query language reference
 - `docs/vault-management/` — bulk operations
-- `docs/workflows/` — workflow pipelines
 - `docs/agents/` — MCP reference
 
 When making significant changes, check if the relevant docs section needs updating (especially `agents/mcp.md` for MCP changes).

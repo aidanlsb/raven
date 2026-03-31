@@ -28,7 +28,7 @@ func TestListDocsSectionsFSLoadsRepositoryDocs(t *testing.T) {
 	for _, s := range sections {
 		ids = append(ids, s.ID)
 	}
-	for _, expected := range []string{"agents", "getting-started", "querying", "types-and-traits", "vault-management", "workflows"} {
+	for _, expected := range []string{"agents", "getting-started", "querying", "types-and-traits", "vault-management"} {
 		if !slices.Contains(ids, expected) {
 			t.Fatalf("expected section %q in %v", expected, ids)
 		}

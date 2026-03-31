@@ -166,7 +166,7 @@ rvn config unset --ui-accent --ui-code-theme --json
 
 ## Vault config: `raven.yaml`
 
-`raven.yaml` controls per-vault behavior: directories, auto-reindexing, capture, deletion, saved queries, workflow registration, workflow run retention, and protected paths.
+`raven.yaml` controls per-vault behavior: directories, auto-reindexing, capture, deletion, saved queries, and protected paths.
 
 ### Practical baseline
 
@@ -177,7 +177,6 @@ directories:
   daily: daily/
   object: object/
   page: page/
-  workflow: workflows/
   template: templates/
 
 capture:
@@ -192,7 +191,6 @@ directories:
   daily: daily/
   object: object/
   page: page/
-  workflow: workflows/
   template: templates/
 
 auto_reindex: true
@@ -213,19 +211,6 @@ queries:
     query: "trait:todo refs([[{{args.project}}]])"
     args: [project]
     description: "Todos linked to a project"
-
-workflows:
-  meeting-prep:
-    file: workflows/meeting-prep.yaml
-
-workflow_runs:
-  storage_path: .raven/workflow-runs
-  auto_prune: true
-  keep_completed_for_days: 7
-  keep_failed_for_days: 14
-  keep_awaiting_for_days: 30
-  max_runs: 1000
-  preserve_latest_per_workflow: 5
 
 protected_prefixes:
   - templates/
@@ -253,21 +238,19 @@ Directory roots used by Raven.
 | `daily` | string | `daily/` | Daily note files are `<daily>/YYYY-MM-DD.md` |
 | `object` | string | unset | Root for typed objects |
 | `page` | string | unset, but defaults to `object` when `object` is set and `page` is omitted | Root for untyped pages |
-| `workflow` | string | `workflows/` | Root for workflow definition files |
 | `template` | string | `templates/` | Root for template files referenced by schema |
 
 Behavior notes:
 - Paths are normalized as vault-relative paths.
-- `workflow` and `template` are normalized with trailing `/`.
+- `template` is normalized with trailing `/`.
 - `daily` is normalized and used as a directory name (no trailing `/` in resolved internal value).
 - If the entire `directories` block is missing, Raven uses a flat layout (no `object`/`page` roots).
 
 Compatibility notes:
-- Singular keys are canonical: `object`, `page`, `workflow`, `template`.
-- Legacy plural keys are still accepted: `objects`, `pages`, `workflows`, `templates`.
+- Singular keys are canonical: `object`, `page`, `template`.
+- Legacy plural keys are still accepted: `objects`, `pages`, `templates`.
 - If both singular and plural are present, singular wins.
 - `daily_directory` is no longer supported and causes a config error.
-- Legacy top-level `workflow_directory` is still accepted and mapped to `directories.workflow`.
 
 ### `capture`
 
@@ -301,40 +284,6 @@ Each query entry supports:
 
 For parameterized saved queries, use placeholders like `{{args.project}}` and declare `args`.
 
-### `workflows`
-
-Workflow declaration registry (name -> file reference).
-
-```yaml
-workflows:
-  meeting-prep:
-    file: workflows/meeting-prep.yaml
-```
-
-Rules:
-- Declarations are file references only.
-- Inline workflow bodies in `raven.yaml` are not supported.
-- Workflow files must live under `directories.workflow` (default `workflows/`).
-- The workflow name `runs` is reserved.
-
-### `workflow_runs`
-
-Workflow run checkpoint storage and retention policy.
-
-| Key | Type | Default |
-|-----|------|---------|
-| `storage_path` | string | `.raven/workflow-runs` |
-| `auto_prune` | boolean | `true` |
-| `keep_completed_for_days` | integer | `7` |
-| `keep_failed_for_days` | integer | `14` |
-| `keep_awaiting_for_days` | integer | `30` |
-| `max_runs` | integer | `1000` |
-| `preserve_latest_per_workflow` | integer | `5` |
-
-Compatibility:
-- Legacy `workflows.runs` is still read for backward compatibility.
-- Use top-level `workflow_runs` for new config.
-
 ### `protected_prefixes`
 
 Additional vault-relative prefixes treated as protected/system-managed by automation features.
@@ -359,12 +308,11 @@ This is additive. Raven always protects:
 ## Defaults from `rvn init`
 
 `rvn init` creates a default `raven.yaml` with:
-- `directories.daily`, `directories.object`, `directories.page`, `directories.workflow`, `directories.template`
+- `directories.daily`, `directories.object`, `directories.page`, `directories.template`
 - `auto_reindex: true`
 - starter `queries`
-- starter `workflows` entry pointing to `workflows/onboard.yaml`
 
-It also creates the default folders and the onboard workflow file.
+It also creates the default folders.
 
 ---
 

@@ -37,20 +37,6 @@ raven_invoke(command="schema_template_set", args={"template_id":"meeting_standar
 raven_invoke(command="schema_template_bind", args={"template_id":"meeting_standard", "type":"meeting", "default":true})
 ```
 
-## Run a workflow
-
-```text
-raven_invoke(command="workflow_list")
-raven_invoke(command="workflow_run", args={"name":"meeting-prep", "input":{"person_id":"people/freya"}})
-```
-
-## Continue an awaiting-agent run
-
-```text
-raven_invoke(command="workflow_runs_list", args={"status":"awaiting_agent"})
-raven_invoke(command="workflow_continue", args={"run_id":"wrf_...", "expected_revision":1, "outputs":{"markdown":"Final answer text"}})
-```
-
 ## Bulk preview then apply
 
 ```text

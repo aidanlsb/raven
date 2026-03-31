@@ -124,7 +124,6 @@ Use `raven.yaml` for vault behavior that should travel with the vault:
 - auto-reindex behavior
 - capture destination
 - saved queries
-- workflows
 
 ## Minimal recommended setup
 

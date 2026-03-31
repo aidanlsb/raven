@@ -1,10 +1,9 @@
-# Key Workflows
+# Key Flows
 
-This guide is an operational playbook for high-value end-to-end flows.
+This guide is an operational playbook for high-value end-to-end Raven tasks.
 
 For detailed tool semantics, see:
 - `raven://guide/write-patterns`
-- `raven://guide/workflow-lifecycle`
 - `raven://guide/query-at-scale`
 - `raven://guide/response-contract`
 
@@ -92,15 +91,7 @@ raven_invoke(command="schema_validate")
 raven_invoke(command="reindex", args={"full":true})
 ```
 
-## 7. Workflow execution flow
-
-```text
-raven_invoke(command="workflow_list")
-raven_invoke(command="workflow_show", args={"name":"meeting-prep"})
-raven_invoke(command="workflow_run", args={"name":"meeting-prep", "input":{"meeting_id":"meetings/team-sync"}})
-```
-
-## 8. Query-driven analysis flow
+## 7. Query-driven analysis flow
 
 ```text
 raven_invoke(command="query", args={
@@ -110,7 +101,7 @@ raven_invoke(command="query", args={
 })
 ```
 
-## 9. Import and template setup
+## 8. Import and template setup
 
 ```text
 raven_invoke(command="import", args={"type":"person", "file":"contacts.json", "dry_run":true})

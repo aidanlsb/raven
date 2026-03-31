@@ -18,7 +18,6 @@ func TestLoadCatalog(t *testing.T) {
 		"raven-schema",
 		"raven-templates",
 		"raven-vault-admin",
-		"raven-workflows",
 	}
 	for _, skillID := range expected {
 		if _, ok := catalog[skillID]; !ok {

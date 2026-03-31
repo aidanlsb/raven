@@ -351,12 +351,6 @@ func (s *Server) handleResourcesList(req *Request) {
 		Description: "Saved queries defined in raven.yaml.",
 		MimeType:    "application/json",
 	})
-	resources = append(resources, Resource{
-		URI:         "raven://workflows/list",
-		Name:        "Workflows",
-		Description: "List of workflows defined in raven.yaml. Use raven://workflows/<name> for details.",
-		MimeType:    "application/json",
-	})
 	if agentInstructions, ok := s.agentInstructionsResource(); ok {
 		resources = append(resources, agentInstructions)
 	}
@@ -410,17 +404,6 @@ func (s *Server) handleResourcesRead(req *Request) {
 			MimeType: "application/json",
 			Text:     queriesContent,
 		}
-	case "raven://workflows/list":
-		workflowsContent, err := s.readWorkflowsListResource()
-		if err != nil {
-			s.sendError(req.ID, -32603, "Failed to read workflows", err.Error())
-			return
-		}
-		content = ResourceContent{
-			URI:      params.URI,
-			MimeType: "application/json",
-			Text:     workflowsContent,
-		}
 	case vaultAgentInstructionsResourceURI:
 		agentInstructions, err := s.readAgentInstructionsResource()
 		if err != nil {
@@ -437,24 +420,6 @@ func (s *Server) handleResourcesRead(req *Request) {
 			Text:     agentInstructions,
 		}
 	default:
-		if strings.HasPrefix(params.URI, "raven://workflows/") {
-			name := strings.TrimPrefix(params.URI, "raven://workflows/")
-			if name == "" {
-				s.sendError(req.ID, -32602, "Resource not found", params.URI)
-				return
-			}
-			workflowContent, err := s.readWorkflowResource(name)
-			if err != nil {
-				s.sendError(req.ID, -32603, "Failed to read workflow", err.Error())
-				return
-			}
-			content = ResourceContent{
-				URI:      params.URI,
-				MimeType: "application/json",
-				Text:     workflowContent,
-			}
-			break
-		}
 		if strings.HasPrefix(params.URI, "raven://guide/") {
 			slug := strings.TrimPrefix(params.URI, "raven://guide/")
 			if slug == "" {

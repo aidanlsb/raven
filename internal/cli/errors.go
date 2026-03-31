@@ -54,20 +54,6 @@ const (
 	ErrMissingArgument = "MISSING_ARGUMENT"
 	ErrCommandNotFound = "COMMAND_NOT_FOUND"
 
-	// Workflow errors
-	ErrWorkflowNotFound            = "WORKFLOW_NOT_FOUND"
-	ErrWorkflowInvalid             = "WORKFLOW_INVALID"
-	ErrWorkflowChanged             = "WORKFLOW_CHANGED"
-	ErrWorkflowRunNotFound         = "WORKFLOW_RUN_NOT_FOUND"
-	ErrWorkflowNotAwaitingAgent    = "WORKFLOW_NOT_AWAITING_AGENT"
-	ErrWorkflowTerminalState       = "WORKFLOW_TERMINAL_STATE"
-	ErrWorkflowConflict            = "WORKFLOW_CONFLICT"
-	ErrWorkflowStateCorrupt        = "WORKFLOW_STATE_CORRUPT"
-	ErrWorkflowInputInvalid        = "WORKFLOW_INPUT_INVALID"
-	ErrWorkflowAgentOutputInvalid  = "WORKFLOW_AGENT_OUTPUT_INVALID"
-	ErrWorkflowInterpolationError  = "WORKFLOW_INTERPOLATION_ERROR"
-	ErrWorkflowToolExecutionFailed = "WORKFLOW_TOOL_EXECUTION_FAILED"
-
 	// Skill errors
 	ErrSkillNotFound          = "SKILL_NOT_FOUND"
 	ErrSkillNotInstalled      = "SKILL_NOT_INSTALLED"

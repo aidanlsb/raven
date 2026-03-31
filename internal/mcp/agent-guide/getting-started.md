@@ -13,8 +13,6 @@ Use this guide after quickstart when you need an operational first pass through 
    `raven_invoke(command="vault_stats")`
 3. Check saved queries:
    `raven://queries/saved` or `raven_invoke(command="query", args={"list":true})`
-4. Discover workflows:
-   `raven://workflows/list` or `raven_invoke(command="workflow_list")`
 
 ## Preferred first write flow
 

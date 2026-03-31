@@ -83,4 +83,3 @@ Commands that do not require vault resolution (e.g. `version`, `config show`) om
 
 - `raven://guide/error-handling`
 - `raven://guide/issue-types`
-- `raven://guide/key-workflows`

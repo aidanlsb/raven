@@ -10,7 +10,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-// BuildCLIArgs builds CLI arguments from MCP/workflow tool arguments using the command registry.
+// BuildCLIArgs builds CLI arguments from MCP tool arguments using the command registry.
 // It returns nil for unknown tool names.
 func BuildCLIArgs(toolName string, args map[string]interface{}) []string {
 	cmdID, ok := commands.ResolveToolCommandID(toolName)

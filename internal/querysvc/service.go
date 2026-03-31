@@ -8,7 +8,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/query"
-	"github.com/aidanlsb/raven/internal/workflow"
 )
 
 type Code string
@@ -345,7 +344,7 @@ func ResolveQueryString(name string, q *config.SavedQuery, inputs map[string]str
 		return "", newError(CodeQueryInvalid, fmt.Sprintf("saved query '%s' has no query defined", name), "", nil)
 	}
 
-	queryStr, err := workflow.Interpolate(normalizeSavedQueryTemplateVars(q.Query), inputs, nil)
+	queryStr, err := interpolateSavedQueryInputs(normalizeSavedQueryTemplateVars(q.Query), inputs)
 	if err != nil {
 		errMsg := strings.ReplaceAll(err.Error(), "inputs.", "args.")
 		return "", newError(CodeInvalidInput, fmt.Sprintf("failed to resolve saved query '%s': %s", name, errMsg), "", err)
@@ -440,4 +439,44 @@ func normalizeSavedQueryTemplateVars(queryStr string) string {
 
 func hasTemplateVars(s string) bool {
 	return strings.Contains(s, "{{") && strings.Contains(s, "}}")
+}
+
+var savedQueryInterpolationPattern = regexp.MustCompile(`\{\{\s*inputs\.([A-Za-z0-9_-]+)\s*\}\}`)
+
+func interpolateSavedQueryInputs(queryStr string, inputs map[string]string) (string, error) {
+	if queryStr == "" {
+		return queryStr, nil
+	}
+
+	var b strings.Builder
+	b.Grow(len(queryStr))
+	last := 0
+
+	for _, match := range savedQueryInterpolationPattern.FindAllStringSubmatchIndex(queryStr, -1) {
+		if len(match) < 4 {
+			continue
+		}
+		start := match[0]
+		end := match[1]
+		if start > 0 && queryStr[start-1] == '\\' {
+			continue
+		}
+
+		name := queryStr[match[2]:match[3]]
+		value, ok := inputs[name]
+		if !ok {
+			return "", fmt.Errorf("unknown variable: inputs.%s", name)
+		}
+
+		b.WriteString(queryStr[last:start])
+		b.WriteString(value)
+		last = end
+	}
+
+	if last == 0 {
+		return queryStr, nil
+	}
+
+	b.WriteString(queryStr[last:])
+	return b.String(), nil
 }

@@ -339,7 +339,7 @@ Before running bulk operations:
 5. **Start small** — Use `| head -5` to test on a few objects first
 
 ```bash
-# Safe workflow
+# Safe flow
 git add -A && git commit -m "Before bulk update"
 rvn query "object:project .status==archived" --apply "move archive/"
 # Review preview...

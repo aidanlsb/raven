@@ -51,8 +51,6 @@ Raven exposes MCP resources that agents can fetch:
 | `raven://guide/index` | Agent Guide Index | Overview of available agent guide topics |
 | `raven://schema/current` | Current Schema | The vault's `schema.yaml` defining types and traits |
 | `raven://queries/saved` | Saved Queries | Saved queries from `raven.yaml` |
-| `raven://workflows/list` | Workflows List | Workflows defined in `raven.yaml` |
-| `raven://workflows/<name>` | Workflow Details | One workflow definition |
 | `raven://vault/agent-instructions` | Agent Instructions | Vault-root `AGENTS.md` when present |
 
 Additional topic resources are available under `raven://guide/<topic>`.
@@ -140,7 +138,6 @@ This tool list is generated from the command registry and should stay in sync wi
 - `set`
 - `schema`
 - `schema_add_type`
-- `workflow_run`
 
 Use canonical registry command IDs with `raven_describe` and `raven_invoke`.
 
@@ -307,31 +304,6 @@ Apply:
 }
 ```
 
-### Workflow execution
-
-```json
-{
-  "command": "workflow_run",
-  "args": {
-    "name": "meeting-prep",
-    "input": {
-      "meeting_id": "meetings/team-sync"
-    }
-  }
-}
-```
-
-## Notes on Workflows
-
-Workflow YAML still references Raven tool names inside workflow step definitions. That internal workflow syntax is separate from the public MCP surface described here.
-
-For MCP clients and agent guidance, prefer:
-- `raven_discover`
-- `raven_describe`
-- `raven_invoke`
-
-For workflow authoring, use the workflow-specific command IDs via `raven_invoke`, such as `workflow_add`, `workflow_step_add`, and `workflow_validate`.
-
 ## Best Practices
 
 1. Check the schema before creating or mutating typed objects.
@@ -347,11 +319,10 @@ For workflow authoring, use the workflow-specific command IDs via `raven_invoke`
 - `raven://guide/getting-started`
 - `raven://guide/response-contract`
 - `raven://guide/write-patterns`
-- `raven://guide/key-workflows`
+- `raven://guide/key-flows`
 
 ## Related Docs
 
 - `querying/query-language.md` — RQL syntax for `query` commands
 - `vault-management/bulk-operations.md` — `--apply` and `--ids` patterns for bulk changes
-- `workflows/workflows.md` — workflow definition and execution
 - `using-your-vault/common-commands.md` — full command surface (read, search, edit, check, etc.)

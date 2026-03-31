@@ -6,11 +6,10 @@ directories:
   daily: daily/
   object: object/
   page: page/
-  workflow: workflows/
   template: templates/
 
 # Additional protected/system prefixes (additive).
-# Workflows and other automation features refuse to operate on protected paths.
+# Raven automation features refuse to operate on protected paths.
 # Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
 # protected_prefixes:
 #   - templates/
@@ -54,19 +53,3 @@ queries:
     query: "object:project has(trait:todo)"
     description: "Projects marked with @todo"
 
-# Workflows registry - declarations are file references only
-# Workflow definitions live in directories.workflow (default: workflows/)
-workflows:
-  onboard:
-    file: workflows/onboard.yaml
-
-# Workflow run checkpoint retention
-# Add this as a top-level key:
-# workflow_runs:
-#   storage_path: .raven/workflow-runs
-#   auto_prune: true
-#   keep_completed_for_days: 7
-#   keep_failed_for_days: 14
-#   keep_awaiting_for_days: 30
-#   max_runs: 1000
-#   preserve_latest_per_workflow: 5

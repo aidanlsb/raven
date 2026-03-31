@@ -18,7 +18,6 @@ raven_invoke(command="schema", args={"subcommand":"types"})
 raven_invoke(command="schema", args={"subcommand":"traits"})
 raven_invoke(command="vault_stats")
 raven_invoke(command="query", args={"list":true})
-raven_invoke(command="workflow_list")
 ```
 
 ## First create flow

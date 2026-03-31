@@ -16,7 +16,7 @@ func CompatibilityToolCommandAliases() map[string]string {
 	return out
 }
 
-// ResolveToolCommandID resolves a workflow/MCP tool name to a registry command ID.
+// ResolveToolCommandID resolves an MCP tool name to a registry command ID.
 //
 // Accepted forms:
 // - MCP tool names: "raven_query"

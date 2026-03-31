@@ -64,8 +64,6 @@ func defaultCategoryForCommandID(commandID string) Category {
 		return CategoryContent
 	case commandID == "schema" || strings.HasPrefix(commandID, "schema_") || commandID == "template" || strings.HasPrefix(commandID, "template_"):
 		return CategorySchema
-	case commandID == "workflow" || strings.HasPrefix(commandID, "workflow_"):
-		return CategoryWorkflow
 	case commandID == "read" || commandID == "open" || commandID == "daily" || commandID == "date":
 		return CategoryNavigation
 	case commandID == "check" || commandID == "reindex" || commandID == "version":
@@ -83,7 +81,6 @@ func defaultAccessForCommandID(commandID string) AccessMode {
 		"docs", "docs_list", "docs_search",
 		"version",
 		"vault", "vault_list", "vault_current", "vault_path", "vault_stats",
-		"workflow_list", "workflow_show", "workflow_validate", "workflow_runs_list", "workflow_runs_step",
 		"config", "config_show":
 		return AccessRead
 	default:

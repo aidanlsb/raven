@@ -12,8 +12,6 @@ A Raven "vault" is a collection of markdown files, with a few additional capabil
 - References: link your notes together with `[[backlinks]]` to create a graph
 - Queries: retrieve your notes precisely with a fully featured query language
 
-All of the above is powered by a CLI with native support for agentic workflows.
-
 # Getting Started
 ## Installation
 
@@ -226,7 +224,6 @@ That is the core value: Raven keeps the source of truth as markdown, but gives b
 - [Query Language](docs/querying/query-language.md)
 - [Bulk Operations](docs/vault-management/bulk-operations.md)
 - [Import](docs/vault-management/import.md)
-- [Workflows](docs/workflows/workflows.md)
 - [MCP Reference](docs/agents/mcp.md)
 
 You can also browse the docs from the CLI:

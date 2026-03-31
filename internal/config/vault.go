@@ -35,15 +35,8 @@ type VaultConfig struct {
 	// Queries defines saved queries that can be run with `rvn query <name>`
 	Queries map[string]*SavedQuery `yaml:"queries,omitempty"`
 
-	// Workflows defines reusable multi-step workflows.
-	// Declarations are file references keyed by workflow name.
-	Workflows map[string]*WorkflowRef `yaml:"workflows,omitempty"`
-
-	// WorkflowRuns configures persisted workflow run checkpoints and retention.
-	WorkflowRuns *WorkflowRunsConfig `yaml:"workflow_runs,omitempty"`
-
 	// ProtectedPrefixes are additional vault-relative path prefixes that Raven should
-	// treat as protected/system-managed. Workflows and other automation features
+	// treat as protected/system-managed. Raven automation features
 	// should refuse to read/write/move/edit/delete within these prefixes.
 	//
 	// Critical protected prefixes are hardcoded in code (e.g., .raven/, .trash/, .git/).
@@ -71,67 +64,13 @@ func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
 
 	for i := 0; i < len(value.Content)-1; i += 2 {
 		key := value.Content[i]
-		val := value.Content[i+1]
 
 		if key.Value == "daily_directory" {
 			return fmt.Errorf("daily_directory is no longer supported; use directories.daily instead")
 		}
-
-		// Backwards compatibility: migrate top-level workflow_directory into directories.workflow.
-		if key.Value == "workflow_directory" {
-			legacyDir := strings.TrimSpace(val.Value)
-			if legacyDir != "" {
-				if vc.Directories == nil {
-					vc.Directories = &DirectoriesConfig{}
-				}
-				if vc.Directories.Workflow == "" && vc.Directories.Workflows == "" {
-					vc.Directories.Workflow = legacyDir
-				}
-			}
-			continue
-		}
-
-		if key.Value != "workflows" || val.Kind != yaml.MappingNode {
-			continue
-		}
-
-		for j := 0; j < len(val.Content)-1; j += 2 {
-			wfKey := val.Content[j]
-			wfVal := val.Content[j+1]
-			if wfKey.Value != "runs" || wfVal.Kind != yaml.MappingNode {
-				continue
-			}
-			if !isWorkflowRunsConfigNode(wfVal) {
-				continue
-			}
-
-			var runs WorkflowRunsConfig
-			if err := wfVal.Decode(&runs); err != nil {
-				return fmt.Errorf("invalid workflows.runs config: %w", err)
-			}
-			vc.WorkflowRuns = &runs
-			if vc.Workflows != nil {
-				delete(vc.Workflows, "runs")
-			}
-		}
 	}
 	vc.DailyDirectory = vc.GetDailyDirectory()
 	return nil
-}
-
-func isWorkflowRunsConfigNode(node *yaml.Node) bool {
-	if node == nil || node.Kind != yaml.MappingNode {
-		return false
-	}
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		switch node.Content[i].Value {
-		case "storage_path", "auto_prune", "keep_completed_for_days",
-			"keep_failed_for_days", "keep_awaiting_for_days",
-			"max_runs", "preserve_latest_per_workflow":
-			return true
-		}
-	}
-	return false
 }
 
 // DirectoriesConfig configures directory organization for the vault.
@@ -154,11 +93,6 @@ type DirectoriesConfig struct {
 	// If empty, defaults to the same as Object.
 	Page string `yaml:"page,omitempty"`
 
-	// Workflow is the root directory for workflow definition files
-	// referenced by workflows.<name>.file declarations.
-	// If empty, defaults to "workflows/".
-	Workflow string `yaml:"workflow,omitempty"`
-
 	// Template is the root directory for template files referenced by:
 	// - schema types.<type>.template
 	// - daily_template in raven.yaml
@@ -170,9 +104,6 @@ type DirectoriesConfig struct {
 
 	// Deprecated: use Page instead. Kept for backwards compatibility.
 	Pages string `yaml:"pages,omitempty"`
-
-	// Deprecated: use Workflow instead. Kept for backwards compatibility.
-	Workflows string `yaml:"workflows,omitempty"`
 
 	// Deprecated: use Template instead. Kept for backwards compatibility.
 	Templates string `yaml:"templates,omitempty"`
@@ -195,9 +126,6 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	if cfg.Page == "" && cfg.Pages != "" {
 		cfg.Page = cfg.Pages
 	}
-	if cfg.Workflow == "" && cfg.Workflows != "" {
-		cfg.Workflow = cfg.Workflows
-	}
 	if cfg.Template == "" && cfg.Templates != "" {
 		cfg.Template = cfg.Templates
 	}
@@ -206,7 +134,6 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	cfg.Daily = paths.NormalizeDirRoot(cfg.Daily)
 	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
-	cfg.Workflow = paths.NormalizeDirRoot(cfg.Workflow)
 	cfg.Template = paths.NormalizeDirRoot(cfg.Template)
 
 	// If page root is omitted, default it to object root.
@@ -220,7 +147,6 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	// Clear deprecated fields after normalization to avoid confusion
 	cfg.Objects = ""
 	cfg.Pages = ""
-	cfg.Workflows = ""
 	cfg.Templates = ""
 
 	return &cfg
@@ -234,174 +160,6 @@ func (vc *VaultConfig) HasDirectoriesConfig() bool {
 	// Check both new singular keys and old plural keys for backwards compatibility
 	return vc.Directories.Object != "" || vc.Directories.Page != "" ||
 		vc.Directories.Objects != "" || vc.Directories.Pages != ""
-}
-
-// WorkflowRef is a reference to a workflow definition.
-// It can contain an inline definition or a file reference.
-type WorkflowRef struct {
-	// File is a path to an external workflow file (relative to vault root).
-	File string `yaml:"file,omitempty"`
-
-	// Inline definition fields
-	Description string                    `yaml:"description,omitempty"`
-	Inputs      map[string]*WorkflowInput `yaml:"inputs,omitempty"`
-
-	Steps []*WorkflowStep `yaml:"steps,omitempty"`
-}
-
-func (w *WorkflowRef) UnmarshalYAML(value *yaml.Node) error {
-	if w == nil {
-		return fmt.Errorf("workflow reference is nil")
-	}
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("invalid workflow definition (expected mapping)")
-	}
-
-	for i := 0; i < len(value.Content)-1; i += 2 {
-		switch value.Content[i].Value {
-		case "context", "prompt", "outputs":
-			return fmt.Errorf(
-				"workflow uses legacy top-level key '%s': workflows are steps-only in v3; migrate to explicit 'steps' with 'agent' and 'tool' steps",
-				value.Content[i].Value,
-			)
-		}
-	}
-
-	type plain WorkflowRef
-	var p plain
-	if err := value.Decode(&p); err != nil {
-		return err
-	}
-	*w = WorkflowRef(p)
-	return nil
-}
-
-// WorkflowInput defines a workflow input parameter.
-type WorkflowInput struct {
-	Type        string      `yaml:"type" json:"type"`
-	Required    bool        `yaml:"required,omitempty" json:"required,omitempty"`
-	Default     interface{} `yaml:"default,omitempty" json:"default,omitempty"`
-	Description string      `yaml:"description,omitempty" json:"description,omitempty"`
-	Target      string      `yaml:"target,omitempty" json:"target,omitempty"`
-}
-
-// WorkflowStep defines a single step in a workflow.
-//
-// This is a configuration-level type (parsed from YAML). Runtime behavior is
-// implemented in internal/workflow.
-type WorkflowStep struct {
-	ID          string `yaml:"id" json:"id"`
-	Type        string `yaml:"type" json:"type"`
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-
-	// query
-	RQL string `yaml:"rql,omitempty" json:"rql,omitempty"`
-
-	// read
-	Ref string `yaml:"ref,omitempty" json:"ref,omitempty"`
-
-	// search
-	Term  string `yaml:"term,omitempty" json:"term,omitempty"`
-	Limit int    `yaml:"limit,omitempty" json:"limit,omitempty"`
-
-	// backlinks
-	Target string `yaml:"target,omitempty" json:"target,omitempty"`
-
-	// agent
-	Prompt  string                           `yaml:"prompt,omitempty" json:"prompt,omitempty"`
-	Outputs map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty" json:"outputs,omitempty"`
-
-	// tool
-	Tool      string                 `yaml:"tool,omitempty" json:"tool,omitempty"`
-	Arguments map[string]interface{} `yaml:"arguments,omitempty" json:"arguments,omitempty"`
-
-	// foreach
-	ForEach *WorkflowForEach `yaml:"foreach,omitempty" json:"foreach,omitempty"`
-
-	// switch
-	Switch *WorkflowSwitch `yaml:"switch,omitempty" json:"switch,omitempty"`
-}
-
-// WorkflowForEach defines deterministic fanout behavior for workflow steps.
-type WorkflowForEach struct {
-	// Items is an interpolation expression resolving to an array.
-	Items string `yaml:"items" json:"items"`
-
-	// As defines the loop item variable name (default: "item").
-	As string `yaml:"as,omitempty" json:"as,omitempty"`
-
-	// IndexAs defines the loop index variable name (default: "index").
-	IndexAs string `yaml:"index_as,omitempty" json:"index_as,omitempty"`
-
-	// OnError controls failure policy: "fail_fast" (default) or "continue".
-	OnError string `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-
-	// Steps defines tool steps to execute per item.
-	Steps []*WorkflowStep `yaml:"steps" json:"steps"`
-}
-
-// WorkflowSwitch defines deterministic conditional routing for workflow steps.
-type WorkflowSwitch struct {
-	// Value resolves to a case label.
-	Value string `yaml:"value" json:"value"`
-
-	// Outputs declares an optional converged output contract for branch emit values.
-	Outputs map[string]*WorkflowPromptOutput `yaml:"outputs,omitempty" json:"outputs,omitempty"`
-
-	// Cases maps labels to branch definitions.
-	Cases map[string]*WorkflowSwitchCase `yaml:"cases" json:"cases"`
-
-	// Default is the required fallback branch.
-	Default *WorkflowSwitchCase `yaml:"default,omitempty" json:"default,omitempty"`
-}
-
-// WorkflowSwitchCase defines one switch branch body and optional converged output payload.
-type WorkflowSwitchCase struct {
-	// Steps are executed when this branch is selected.
-	Steps []*WorkflowStep `yaml:"steps,omitempty" json:"steps,omitempty"`
-
-	// Emit is optional branch output mapped to switch.outputs when declared.
-	Emit map[string]interface{} `yaml:"emit,omitempty" json:"emit,omitempty"`
-}
-
-type WorkflowPromptOutput struct {
-	Type     string `yaml:"type" json:"type"`
-	Required bool   `yaml:"required,omitempty" json:"required,omitempty"`
-}
-
-// WorkflowRunsConfig configures persisted workflow run checkpoints and pruning.
-type WorkflowRunsConfig struct {
-	// StoragePath is the vault-relative directory for workflow run checkpoints.
-	StoragePath string `yaml:"storage_path,omitempty"`
-
-	// AutoPrune runs retention cleanup on workflow run/continue.
-	AutoPrune *bool `yaml:"auto_prune,omitempty"`
-
-	// KeepCompletedForDays keeps completed runs for this many days.
-	KeepCompletedForDays *int `yaml:"keep_completed_for_days,omitempty"`
-
-	// KeepFailedForDays keeps failed runs for this many days.
-	KeepFailedForDays *int `yaml:"keep_failed_for_days,omitempty"`
-
-	// KeepAwaitingForDays keeps awaiting-agent runs for this many days.
-	KeepAwaitingForDays *int `yaml:"keep_awaiting_for_days,omitempty"`
-
-	// MaxRuns is the hard cap for stored run records.
-	MaxRuns *int `yaml:"max_runs,omitempty"`
-
-	// PreserveLatestPerWorkflow preserves the newest N runs per workflow.
-	PreserveLatestPerWorkflow *int `yaml:"preserve_latest_per_workflow,omitempty"`
-}
-
-// ResolvedWorkflowRunsConfig is WorkflowRunsConfig with defaults applied.
-type ResolvedWorkflowRunsConfig struct {
-	StoragePath               string
-	AutoPrune                 bool
-	KeepCompletedForDays      int
-	KeepFailedForDays         int
-	KeepAwaitingForDays       int
-	MaxRuns                   int
-	PreserveLatestPerWorkflow int
 }
 
 // DeletionConfig configures how file deletion is handled.
@@ -471,80 +229,10 @@ func (vc *VaultConfig) GetCaptureConfig() *CaptureConfig {
 }
 
 const defaultDailyDirectory = "daily"
-const defaultWorkflowDirectory = "workflows/"
 const defaultTemplateDirectory = "templates/"
 
-//go:embed defaults/raven.yaml defaults/workflows/onboard.yaml
+//go:embed defaults/raven.yaml
 var defaultVaultFiles embed.FS
-
-// GetWorkflowRunsConfig returns workflow run checkpoint settings with defaults applied.
-func (vc *VaultConfig) GetWorkflowRunsConfig() ResolvedWorkflowRunsConfig {
-	defaults := ResolvedWorkflowRunsConfig{
-		StoragePath:               ".raven/workflow-runs",
-		AutoPrune:                 true,
-		KeepCompletedForDays:      7,
-		KeepFailedForDays:         14,
-		KeepAwaitingForDays:       30,
-		MaxRuns:                   1000,
-		PreserveLatestPerWorkflow: 5,
-	}
-
-	if vc.WorkflowRuns == nil {
-		return defaults
-	}
-
-	cfg := vc.WorkflowRuns
-	if cfg.StoragePath != "" {
-		if normalized := paths.NormalizeVaultRelPath(cfg.StoragePath); paths.IsValidVaultRelPath(normalized) {
-			defaults.StoragePath = normalized
-		}
-	}
-	if cfg.AutoPrune != nil {
-		defaults.AutoPrune = *cfg.AutoPrune
-	}
-	if cfg.KeepCompletedForDays != nil {
-		defaults.KeepCompletedForDays = *cfg.KeepCompletedForDays
-	}
-	if cfg.KeepFailedForDays != nil {
-		defaults.KeepFailedForDays = *cfg.KeepFailedForDays
-	}
-	if cfg.KeepAwaitingForDays != nil {
-		defaults.KeepAwaitingForDays = *cfg.KeepAwaitingForDays
-	}
-	if cfg.MaxRuns != nil {
-		defaults.MaxRuns = *cfg.MaxRuns
-	}
-	if cfg.PreserveLatestPerWorkflow != nil {
-		defaults.PreserveLatestPerWorkflow = *cfg.PreserveLatestPerWorkflow
-	}
-	return defaults
-}
-
-// GetWorkflowDirectory returns the configured workflow directory with defaults applied.
-// The result is always normalized as a vault-relative directory with trailing slash.
-func (vc *VaultConfig) GetWorkflowDirectory() string {
-	dir := defaultWorkflowDirectory
-	if vc != nil && vc.Directories != nil {
-		raw := vc.Directories.Workflow
-		if raw == "" {
-			raw = vc.Directories.Workflows
-		}
-		if raw != "" {
-			dir = raw
-		}
-	}
-
-	normalized := paths.NormalizeDirRoot(dir)
-	if normalized == "" {
-		return defaultWorkflowDirectory
-	}
-
-	cleaned := paths.NormalizeVaultRelPath(normalized)
-	if !paths.IsValidVaultRelPath(cleaned) {
-		return defaultWorkflowDirectory
-	}
-	return paths.NormalizeDirRoot(cleaned)
-}
 
 // GetDailyDirectory returns the configured daily directory with defaults applied.
 // The result is always normalized as a vault-relative directory without trailing slash.
@@ -657,20 +345,11 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 		return false, fmt.Errorf("failed to write vault config: %w", err)
 	}
 
-	defaultDirectories := []string{"daily", "object", "page", "workflows", "templates"}
+	defaultDirectories := []string{"daily", "object", "page", "templates"}
 	for _, dir := range defaultDirectories {
 		if err := os.MkdirAll(filepath.Join(vaultPath, dir), 0o755); err != nil {
 			return false, fmt.Errorf("failed to create default directory %q: %w", dir, err)
 		}
-	}
-
-	defaultOnboardWorkflow, err := defaultVaultFiles.ReadFile("defaults/workflows/onboard.yaml")
-	if err != nil {
-		return false, fmt.Errorf("failed to load embedded default onboard workflow: %w", err)
-	}
-	onboardPath := filepath.Join(vaultPath, "workflows", "onboard.yaml")
-	if err := atomicfile.WriteFile(onboardPath, defaultOnboardWorkflow, 0o644); err != nil {
-		return false, fmt.Errorf("failed to write default onboard workflow: %w", err)
 	}
 
 	return true, nil

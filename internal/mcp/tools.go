@@ -22,7 +22,7 @@ func GenerateToolSchemas() []Tool {
 				Properties: map[string]interface{}{
 					"category": map[string]interface{}{
 						"type":        "string",
-						"description": "Filter by category (query, content, schema, workflow, vault, navigation, maintenance)",
+						"description": "Filter by category (query, content, schema, vault, navigation, maintenance)",
 					},
 					"mode": map[string]interface{}{
 						"type":        "string",

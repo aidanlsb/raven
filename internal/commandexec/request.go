@@ -4,9 +4,8 @@ package commandexec
 type Caller string
 
 const (
-	CallerCLI      Caller = "cli"
-	CallerMCP      Caller = "mcp"
-	CallerWorkflow Caller = "workflow"
+	CallerCLI Caller = "cli"
+	CallerMCP Caller = "mcp"
 )
 
 // Request is the normalized execution request shared across adapters.

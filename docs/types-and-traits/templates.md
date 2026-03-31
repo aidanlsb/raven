@@ -8,7 +8,7 @@ This guide covers:
 - type template bindings (which template IDs a type can use)
 - core-type templates for built-ins like `date`
 
-Goal: set up complete template workflows with both:
+Goal: set up complete template lifecycles with both:
 - `rvn template ...` for file lifecycle
 - `rvn schema ... template ...` for schema bindings/defaults
 
