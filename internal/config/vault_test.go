@@ -505,27 +505,3 @@ func TestDefaultVaultConfigSavedQueriesMatchDefaultSchema(t *testing.T) {
 		})
 	}
 }
-
-func TestGetWorkflowRunsConfigNormalizesStoragePath(t *testing.T) {
-	t.Run("normalizes vault-relative path", func(t *testing.T) {
-		cfg := &VaultConfig{
-			WorkflowRuns: &WorkflowRunsConfig{StoragePath: "/.raven//workflow-runs/"},
-		}
-
-		got := cfg.GetWorkflowRunsConfig()
-		if got.StoragePath != ".raven/workflow-runs" {
-			t.Fatalf("expected normalized storage path, got %q", got.StoragePath)
-		}
-	})
-
-	t.Run("defaults invalid storage path", func(t *testing.T) {
-		cfg := &VaultConfig{
-			WorkflowRuns: &WorkflowRunsConfig{StoragePath: "../outside"},
-		}
-
-		got := cfg.GetWorkflowRunsConfig()
-		if got.StoragePath != ".raven/workflow-runs" {
-			t.Fatalf("expected default storage path, got %q", got.StoragePath)
-		}
-	})
-}

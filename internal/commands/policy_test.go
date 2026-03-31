@@ -23,8 +23,8 @@ func TestPolicyForCommandID(t *testing.T) {
 			wantDiscover:  false,
 		},
 		{
-			name:          "non-invokable compatibility alias",
-			commandID:     "schema_add",
+			name:          "non-invokable grouping command",
+			commandID:     "template",
 			wantInvokable: false,
 			wantDiscover:  false,
 		},

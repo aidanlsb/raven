@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/commands"
 )
 
 // ExecuteToolDirect executes a canonical Raven command through the compact MCP

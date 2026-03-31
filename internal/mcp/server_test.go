@@ -9,8 +9,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/aidanlsb/raven/internal/commands"
 )
 
 func writeExecutableScript(t *testing.T, dir, name, content string) string {
