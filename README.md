@@ -197,11 +197,10 @@ Before the next leadership check-in, you can ask your agent for a briefing:
 
 > Summarize what is blocking the Midgard security review, tell me who owns each follow-up, and point me to the source notes.
 
-Because the agent can query Raven directly, it can answer from the project, the meeting note, the todo traits, and the backlinks instead of guessing from raw files:
+Because the agent can query Raven directly, it can answer from the project, the meeting note, the todo traits, and the backlinks instead of just searching raw files:
 
 > The review is waiting on scope confirmation before work begins. Two follow-ups are open from `meeting/kickoff.md`: send the draft scope to Freya, and have Freya confirm which systems are in scope for `project/midgard-security-review`. The current decision on record is to keep the first pass focused on authentication and infrastructure.
 
-That is the core value: Raven keeps the source of truth as markdown, but gives both you and your agent a precise retrieval layer on top of it.
 
 ## Documentation
 
