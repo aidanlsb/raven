@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="raven.svg" alt="Raven" width="180" />
-</p>
-
 <h1 align="center">Raven</h1>
 
 **A CLI for plain-text knowledge management, with first-class support for AI agents.**
