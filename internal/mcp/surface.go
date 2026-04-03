@@ -43,80 +43,15 @@ func (s *Server) callCompactTool(name string, args map[string]interface{}) (stri
 }
 
 func (s *Server) callCompactDiscover(args map[string]interface{}) (string, bool) {
-	spec := map[string]parameterSpec{
-		"category": {
-			Name: "category",
-			Type: paramTypeString,
-		},
-		"mode": {
-			Name: "mode",
-			Type: paramTypeString,
-		},
-		"risk": {
-			Name: "risk",
-			Type: paramTypeString,
-		},
-	}
-
-	validated, issues := validateArgumentsStrict(spec, args)
+	_, issues := validateArgumentsStrict(map[string]parameterSpec{}, args)
 	if len(issues) > 0 {
 		return validationErrorEnvelope("raven_discover", issues), true
 	}
 
-	category := strings.ToLower(strings.TrimSpace(toString(validated["category"])))
-	mode := strings.ToLower(strings.TrimSpace(toString(validated["mode"])))
-	risk := strings.ToLower(strings.TrimSpace(toString(validated["risk"])))
-
-	if mode != "" && mode != "read" && mode != "write" {
-		return validationErrorEnvelope("raven_discover", []validationIssue{
-			{
-				Field:    "mode",
-				Code:     "INVALID_ENUM",
-				Message:  "mode must be one of: read, write",
-				Expected: "read|write",
-				Actual:   mode,
-			},
-		}), true
-	}
-	if risk != "" && risk != "safe" && risk != "mutating" && risk != "destructive" {
-		return validationErrorEnvelope("raven_discover", []validationIssue{
-			{
-				Field:    "risk",
-				Code:     "INVALID_ENUM",
-				Message:  "risk must be one of: safe, mutating, destructive",
-				Expected: "safe|mutating|destructive",
-				Actual:   risk,
-			},
-		}), true
-	}
-
 	contracts := discoverableContracts()
-	matches := make([]commandContract, 0, len(contracts))
-	for _, contract := range contracts {
-		if category != "" && contract.Category != category {
-			continue
-		}
-		if mode == "read" && !contract.ReadOnly {
-			continue
-		}
-		if mode == "write" && contract.ReadOnly {
-			continue
-		}
-		if risk == "safe" && (!contract.ReadOnly || contract.Destructive) {
-			continue
-		}
-		if risk == "mutating" && contract.ReadOnly {
-			continue
-		}
-		if risk == "destructive" && !contract.Destructive {
-			continue
-		}
 
-		matches = append(matches, contract)
-	}
-
-	out := make([]map[string]interface{}, 0, len(matches))
-	for _, c := range matches {
+	out := make([]map[string]interface{}, 0, len(contracts))
+	for _, c := range contracts {
 		out = append(out, map[string]interface{}{
 			"command":     c.CommandID,
 			"tool_name":   c.ToolName,
