@@ -381,6 +381,38 @@ name: Alice
 	result.AssertResultCount(t, "items", 0)
 }
 
+func TestIntegration_QueryFailsOnSchemaLoadError(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Schema Query").MustSucceed(t)
+
+	schemaPath := filepath.Join(v.Path, "schema.yaml")
+	if err := os.WriteFile(schemaPath, []byte("version: ["), 0o644); err != nil {
+		t.Fatalf("failed to corrupt schema for test: %v", err)
+	}
+
+	result := v.RunCLI("query", "object:project")
+	result.MustFail(t, "SCHEMA_INVALID")
+	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
+}
+
+func TestIntegration_QueryAmbiguousReferenceReturnsQueryInvalid(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "project", "Alex").MustSucceed(t)
+	v.RunCLI("new", "person", "Alex").MustSucceed(t)
+
+	result := v.RunCLI("query", "object:project refs([[alex]])")
+	result.MustFail(t, "QUERY_INVALID")
+	result.MustFailWithMessage(t, "Use a full object ID/path to disambiguate")
+}
+
 // TestIntegration_ReferencesAndBacklinks tests reference resolution and backlinks.
 func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 	t.Parallel()
@@ -639,6 +671,23 @@ func TestIntegration_SetBulkFailsOnSchemaLoadError(t *testing.T) {
 	result := v.RunCLIWithStdin("people/schema-broken\n", "set", "--stdin", "email=broken@example.com", "--confirm")
 	result.MustFail(t, "SCHEMA_INVALID")
 	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
+}
+
+func TestIntegration_SetResolvesObjectIDsAndWikiLinks(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`directories:
+  object: objects/
+`).
+		Build()
+
+	v.RunCLI("new", "person", "Dana").MustSucceed(t)
+
+	v.RunCLI("set", "people/dana", "email=dana@example.com").MustSucceed(t)
+	v.RunCLI("set", "[[people/dana]]", "email=dana+wiki@example.com").MustSucceed(t)
+
+	v.AssertFileContains("objects/people/dana.md", "email: dana+wiki@example.com")
 }
 
 func TestIntegration_SetValidatesTypedValuesAtWriteTime(t *testing.T) {

@@ -375,6 +375,60 @@ func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
 	}
 }
 
+func TestMCPIntegration_QuerySavedQueryInlineQuotedArgs(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`queries:
+  project-by-name:
+    query: 'object:project .title=="{{args.name}}"'
+    args: [name]
+`).
+		Build()
+
+	binary := testutil.BuildCLI(t)
+	server := newTestServer(t, v.Path, binary)
+
+	server.callTool("new", map[string]interface{}{
+		"type":  "project",
+		"title": "raven app",
+	})
+	server.callTool("new", map[string]interface{}{
+		"type":  "project",
+		"title": "other app",
+	})
+
+	tests := []string{
+		`project-by-name "raven app"`,
+		`project-by-name name="raven app"`,
+	}
+
+	for _, queryString := range tests {
+		result := server.callTool("query", map[string]interface{}{
+			"query_string": queryString,
+		})
+		if result.IsError {
+			t.Fatalf("query %q failed: %s", queryString, result.Text)
+		}
+
+		var resp struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				Items []map[string]interface{} `json:"items"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+			t.Fatalf("failed to parse response for %q: %v", queryString, err)
+		}
+		if len(resp.Data.Items) != 1 {
+			t.Fatalf("query %q expected 1 result, got %d", queryString, len(resp.Data.Items))
+		}
+		if resp.Data.Items[0]["id"] != "projects/raven-app" {
+			t.Fatalf("query %q returned unexpected item: %#v", queryString, resp.Data.Items[0])
+		}
+	}
+}
+
 func TestMCPIntegration_QuerySavedQueryTypedInputs(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

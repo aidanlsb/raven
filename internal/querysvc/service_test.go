@@ -199,6 +199,53 @@ func TestNormalizeArgs(t *testing.T) {
 	}
 }
 
+func TestSplitInlineInvocation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		input  string
+		want   []string
+		wantOK bool
+	}{
+		{
+			name:   "quoted positional input",
+			input:  `proj-todos "raven app"`,
+			want:   []string{"proj-todos", "raven app"},
+			wantOK: true,
+		},
+		{
+			name:   "quoted key value input",
+			input:  `proj-todos project="raven app"`,
+			want:   []string{"proj-todos", "project=raven app"},
+			wantOK: true,
+		},
+		{
+			name:   "single quoted positional input",
+			input:  `proj-todos 'raven app'`,
+			want:   []string{"proj-todos", "raven app"},
+			wantOK: true,
+		},
+		{
+			name:   "invalid quoting",
+			input:  `proj-todos "raven app`,
+			wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := SplitInlineInvocation(tt.input)
+			if ok != tt.wantOK {
+				t.Fatalf("SplitInlineInvocation() ok = %v, want %v", ok, tt.wantOK)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("SplitInlineInvocation() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateInputDeclarations(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

@@ -30,6 +30,9 @@ func Parse(input string) (*Query, error) {
 	if p.curr.Type == TokenError {
 		return nil, fmt.Errorf("%s at pos %d", p.curr.Value, p.curr.Pos)
 	}
+	if p.curr.Type != TokenEOF {
+		return nil, fmt.Errorf("unexpected token %v at pos %d", p.curr.Type, p.curr.Pos)
+	}
 	return q, nil
 }
 
