@@ -59,7 +59,7 @@ Additional topic resources are available under `raven://guide/<topic>`.
 
 The MCP surface is intentionally compact:
 
-- `raven_discover` lists discoverable commands with compact metadata and deterministic filters.
+- `raven_discover` lists all discoverable commands with compact metadata.
 - `raven_describe` returns the strict invocation contract for one command.
 - `raven_invoke` executes a registry command with validation and policy checks.
 
@@ -67,17 +67,11 @@ The MCP surface is intentionally compact:
 
 Use this sequence:
 
-1. `raven_discover` to fetch the authoritative compact command catalog, optionally narrowed by `category`, `mode`, or `risk`.
+1. `raven_discover` to fetch the full command catalog.
 2. `raven_describe(command="...")` to fetch the strict argument contract.
 3. `raven_invoke(command="...", args={...})` to execute.
 
 Example:
-
-```json
-{
-  "category": "query"
-}
-```
 
 ```json
 {
@@ -123,7 +117,7 @@ This tool list is generated from the command registry and should stay in sync wi
 | Tool | Description |
 |------|-------------|
 | `raven_describe` | Fetch the compact invocation contract for one Raven command. |
-| `raven_discover` | List discoverable Raven commands with compact metadata and deterministic filters. |
+| `raven_discover` | List all discoverable Raven commands with compact metadata. |
 | `raven_invoke` | Invoke any registry command with strict typed validation and policy checks (command args must be nested inside args). |
 <!-- END MCP TOOL LIST -->
 

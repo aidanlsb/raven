@@ -18,7 +18,7 @@ All commands return:
 
 ## Compact invoke flow
 
-1. `raven_discover` to fetch the authoritative command catalog, optionally filtered by `category`, `mode`, or `risk`.
+1. `raven_discover` to fetch the authoritative command catalog.
 2. `raven_describe(command="...")` to fetch the strict arg schema.
 3. `raven_invoke(command="...", args={...})` to execute.
 
