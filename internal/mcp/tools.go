@@ -16,23 +16,10 @@ func GenerateToolSchemas() []Tool {
 	return []Tool{
 		{
 			Name:        compactToolDiscover,
-			Description: "List discoverable Raven commands with compact metadata and deterministic filters.",
+			Description: "List all discoverable Raven commands with compact metadata.",
 			InputSchema: InputSchema{
-				Type: "object",
-				Properties: map[string]interface{}{
-					"category": map[string]interface{}{
-						"type":        "string",
-						"description": "Filter by category (query, content, schema, vault, navigation, maintenance)",
-					},
-					"mode": map[string]interface{}{
-						"type":        "string",
-						"description": "Filter by mode (read, write)",
-					},
-					"risk": map[string]interface{}{
-						"type":        "string",
-						"description": "Filter by risk (safe, mutating, destructive)",
-					},
-				},
+				Type:       "object",
+				Properties: map[string]interface{}{},
 			},
 		},
 		{

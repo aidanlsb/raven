@@ -28,14 +28,10 @@ func TestGenerateToolSchemasCompactSurface(t *testing.T) {
 		t.Fatalf("expected raven_describe to require command, got %#v", describe.InputSchema.Required)
 	}
 	discover := toolByName[compactToolDiscover]
-	if _, ok := discover.InputSchema.Properties["query"]; ok {
-		t.Fatal("did not expect raven_discover to expose query")
-	}
-	if _, ok := discover.InputSchema.Properties["limit"]; ok {
-		t.Fatal("did not expect raven_discover to expose limit")
-	}
-	if _, ok := discover.InputSchema.Properties["cursor"]; ok {
-		t.Fatal("did not expect raven_discover to expose cursor")
+	for _, unwanted := range []string{"query", "limit", "cursor", "category", "mode", "risk"} {
+		if _, ok := discover.InputSchema.Properties[unwanted]; ok {
+			t.Fatalf("did not expect raven_discover to expose %q", unwanted)
+		}
 	}
 	invoke := toolByName[compactToolInvoke]
 	if len(invoke.InputSchema.Required) != 1 || invoke.InputSchema.Required[0] != "command" {
@@ -139,6 +135,9 @@ func TestCompactDiscoverRejectsLegacySearchAndPaginationArgs(t *testing.T) {
 		{"query": "edit"},
 		{"limit": 5},
 		{"cursor": "10"},
+		{"category": "schema"},
+		{"mode": "read"},
+		{"risk": "safe"},
 	} {
 		out, isErr := s.callCompactDiscover(args)
 		if !isErr {
@@ -150,40 +149,3 @@ func TestCompactDiscoverRejectsLegacySearchAndPaginationArgs(t *testing.T) {
 	}
 }
 
-func TestCompactDiscoverAppliesDeterministicFilters(t *testing.T) {
-	t.Parallel()
-	s := &Server{}
-
-	out, isErr := s.callCompactDiscover(map[string]interface{}{
-		"category": "schema",
-		"mode":     "write",
-		"risk":     "mutating",
-	})
-	if isErr {
-		t.Fatalf("discover failed: %s", out)
-	}
-
-	var resp struct {
-		Data struct {
-			Matches []struct {
-				Category    string `json:"category"`
-				ReadOnly    bool   `json:"read_only"`
-				Destructive bool   `json:"destructive"`
-			} `json:"matches"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(out), &resp); err != nil {
-		t.Fatalf("unmarshal discover response: %v", err)
-	}
-	if len(resp.Data.Matches) == 0 {
-		t.Fatal("expected filtered discover matches")
-	}
-	for _, match := range resp.Data.Matches {
-		if match.Category != "schema" {
-			t.Fatalf("unexpected category %q", match.Category)
-		}
-		if match.ReadOnly {
-			t.Fatal("expected write-only results")
-		}
-	}
-}
