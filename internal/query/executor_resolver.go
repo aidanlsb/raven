@@ -55,8 +55,11 @@ func (e *Executor) resolveTarget(target string) (string, error) {
 
 	result := res.Resolve(target)
 	if result.Ambiguous {
-		return "", fmt.Errorf("ambiguous reference '%s' - matches: %s",
-			target, strings.Join(result.Matches, ", "))
+		return "", newExecutionError(
+			fmt.Sprintf("ambiguous reference '%s' - matches: %s", target, strings.Join(result.Matches, ", ")),
+			"Use a full object ID/path to disambiguate",
+			nil,
+		)
 	}
 	if result.TargetID == "" {
 		// Not found - return the original target (will match nothing)

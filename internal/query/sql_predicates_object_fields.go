@@ -215,7 +215,11 @@ func (e *Executor) checkAmbiguousFieldRefs(typeName, fieldName, rawValue, resolv
 	if err != nil {
 		return err
 	}
-	return fmt.Errorf("ambiguous reference in field '%s' for value '%s' (disambiguate the field value before querying)", fieldName, rawValue)
+	return newExecutionError(
+		fmt.Sprintf("ambiguous reference in field '%s' for value '%s' (disambiguate the field value before querying)", fieldName, rawValue),
+		"Use a full object ID/path in the query value to disambiguate",
+		nil,
+	)
 }
 
 func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName string) (string, []interface{}, error) {

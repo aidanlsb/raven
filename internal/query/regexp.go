@@ -70,7 +70,11 @@ func cachedRegexp(pattern string) (*regexp.Regexp, error) {
 
 	compiled, err := regexp.Compile(pattern)
 	if err != nil {
-		return nil, err
+		return nil, newExecutionError(
+			fmt.Sprintf("invalid regex pattern %q: %v", pattern, err),
+			"Fix the regex passed to matches() and retry.",
+			err,
+		)
 	}
 
 	regexpCache.mu.Lock()

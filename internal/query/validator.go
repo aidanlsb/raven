@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
@@ -199,6 +200,9 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 				Suggestion: `Use contains(.value, "..."), startswith(.value, "..."), endswith(.value, "..."), or matches(.value, "..."). Use content("...") to search trait line content.`,
 			}
 		}
+		if err := validateRegexPattern(p); err != nil {
+			return err
+		}
 		return nil
 	case *OnPredicate:
 		if p.SubQuery != nil {
@@ -331,6 +335,10 @@ func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, ty
 		}
 	}
 
+	if err := validateRegexPattern(p); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -374,6 +382,9 @@ func (v *Validator) validateArrayElementPredicate(pred Predicate, elemType schem
 				Suggestion: "Use element comparisons (_==value, _!=value, _<value, etc.) for non-string array element types",
 			}
 		}
+		if err := validateRegexPattern(p); err != nil {
+			return err
+		}
 		return nil
 	case *OrPredicate:
 		for _, subPred := range p.Predicates {
@@ -397,6 +408,19 @@ func (v *Validator) validateArrayElementPredicate(pred Predicate, elemType schem
 			Suggestion: `Use _==value, _!=value, or string functions like contains(_, "...")`,
 		}
 	}
+}
+
+func validateRegexPattern(p *StringFuncPredicate) error {
+	if p == nil || p.FuncType != StringFuncMatches {
+		return nil
+	}
+	if _, err := regexp.Compile(p.Value); err != nil {
+		return &ValidationError{
+			Message:    fmt.Sprintf("invalid regex pattern %q: %v", p.Value, err),
+			Suggestion: `Fix the regex passed to matches() and retry.`,
+		}
+	}
+	return nil
 }
 
 func (v *Validator) fieldDefinitionForType(typeName string, typeDef *schema.TypeDefinition, fieldName string) (*schema.FieldDefinition, error) {

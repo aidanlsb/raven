@@ -260,6 +260,51 @@ func TestValidator_NestedSubqueryValidation(t *testing.T) {
 	}
 }
 
+func TestValidator_InvalidRegexPattern(t *testing.T) {
+	t.Parallel()
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"name": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"todo": {},
+		},
+	}
+
+	v := NewValidator(sch)
+
+	tests := []string{
+		`object:project matches(.name, "[")`,
+		`trait:todo matches(.value, "[")`,
+	}
+
+	for _, queryStr := range tests {
+		t.Run(queryStr, func(t *testing.T) {
+			q, err := Parse(queryStr)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+
+			err = v.Validate(q)
+			if err == nil {
+				t.Fatal("expected validation error for invalid regex")
+			}
+
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("expected ValidationError, got %T", err)
+			}
+			if !strings.Contains(ve.Message, "invalid regex pattern") {
+				t.Fatalf("unexpected validation message: %q", ve.Message)
+			}
+		})
+	}
+}
+
 func TestValidator_DirectTargetPredicates(t *testing.T) {
 	t.Parallel()
 	// Test that [[target]] predicates don't panic and validate correctly

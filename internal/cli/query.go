@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -945,7 +944,7 @@ func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.Sa
 		return args
 	}
 
-	parts, ok := splitInlineSavedQueryInvocation(inline)
+	parts, ok := querysvc.SplitInlineInvocation(inline)
 	if !ok || len(parts) < 2 {
 		return args
 	}
@@ -956,80 +955,6 @@ func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.Sa
 
 	return parts
 }
-
-// splitInlineSavedQueryInvocation tokenizes one inline query string like:
-// "proj-todos raven" or `proj-todos project="raven app"`
-// into ["proj-todos", "raven"] / ["proj-todos", "project=raven app"].
-//
-// Quotes are removed and backslash escapes are resolved (outside single quotes).
-// Returns ok=false for invalid quoting/escaping.
-func splitInlineSavedQueryInvocation(s string) ([]string, bool) {
-	var out []string
-	var b strings.Builder
-
-	flush := func() {
-		if b.Len() == 0 {
-			return
-		}
-		out = append(out, b.String())
-		b.Reset()
-	}
-
-	inSingle := false
-	inDouble := false
-	escaped := false
-
-	for _, r := range s {
-		if escaped {
-			b.WriteRune(r)
-			escaped = false
-			continue
-		}
-
-		if inSingle {
-			if r == '\'' {
-				inSingle = false
-				continue
-			}
-			b.WriteRune(r)
-			continue
-		}
-
-		if inDouble {
-			if r == '"' {
-				inDouble = false
-				continue
-			}
-			if r == '\\' {
-				escaped = true
-				continue
-			}
-			b.WriteRune(r)
-			continue
-		}
-
-		switch {
-		case r == '\\':
-			escaped = true
-		case r == '\'':
-			inSingle = true
-		case r == '"':
-			inDouble = true
-		case unicode.IsSpace(r):
-			flush()
-		default:
-			b.WriteRune(r)
-		}
-	}
-
-	if escaped || inSingle || inDouble {
-		return nil, false
-	}
-
-	flush()
-	return out, true
-}
-
 func normalizeSavedQueryArgsForCommand(cmd *cobra.Command) ([]string, error) {
 	rawArgs, err := cmd.Flags().GetStringArray("arg")
 	if err != nil {

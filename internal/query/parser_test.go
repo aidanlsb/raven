@@ -89,6 +89,32 @@ func TestParseRejectsUnterminatedLiterals(t *testing.T) {
 	}
 }
 
+func TestParseRejectsUnexpectedTrailingTokens(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "unmatched closing parenthesis after type",
+			input: `object:project)`,
+		},
+		{
+			name:  "unmatched closing parenthesis after predicate",
+			input: `object:project .status==active)`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Parse(tt.input); err == nil {
+				t.Fatal("expected parse error, got nil")
+			}
+		})
+	}
+}
+
 func TestParseFieldPredicates(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

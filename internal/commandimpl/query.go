@@ -55,7 +55,10 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'object:' or 'trait:'", queryName), nil, "")
 	}
 
-	sch, _ := schema.Load(vaultPath)
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
+	}
 	db, err := index.Open(vaultPath)
 	if err != nil {
 		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
@@ -339,7 +342,17 @@ func resolveQueryString(queryString string, rawInputs interface{}, vaultCfg *con
 		return queryString, "", false, nil
 	}
 
-	tokens := strings.Fields(queryString)
+	trimmed := strings.TrimSpace(queryString)
+	var tokens []string
+	if strings.ContainsAny(trimmed, " \t\r\n") {
+		if parts, ok := querysvc.SplitInlineInvocation(trimmed); ok {
+			tokens = parts
+		} else {
+			tokens = strings.Fields(trimmed)
+		}
+	} else if trimmed != "" {
+		tokens = []string{trimmed}
+	}
 	if len(tokens) == 0 {
 		return "", "", false, fmt.Errorf("empty query string")
 	}
@@ -393,6 +406,10 @@ func mapExecuteQueryFailure(queryString string, err error) commandexec.Result {
 	var validationErr *query.ValidationError
 	if errors.As(err, &validationErr) {
 		return commandexec.Failure("QUERY_INVALID", validationErr.Message, nil, validationErr.Suggestion)
+	}
+	var executionErr *query.ExecutionError
+	if errors.As(err, &executionErr) {
+		return commandexec.Failure("QUERY_INVALID", executionErr.Message, nil, executionErr.Suggestion)
 	}
 
 	if _, parseErr := query.Parse(queryString); parseErr != nil {
