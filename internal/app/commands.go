@@ -36,14 +36,6 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 	}
 
 	spec := commands.BuildInvokeParamSpec(contract)
-	if req.CommandID == "query" {
-		if list, ok := req.Args["list"].(bool); ok && list {
-			if param, exists := spec["query_string"]; exists {
-				param.Required = false
-				spec["query_string"] = param
-			}
-		}
-	}
 
 	normalized, issues := commands.ValidateArgumentsStrict(spec, req.Args)
 	if len(issues) > 0 {

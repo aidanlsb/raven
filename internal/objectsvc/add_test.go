@@ -29,7 +29,8 @@ func TestAppendToFileWaitsForExclusiveLock(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- AppendToFile("", destPath, "appended", nil, nil, false, "", nil)
+		_, err := AppendToFile("", destPath, "appended", nil, nil, false, "", nil)
+		done <- err
 	}()
 
 	select {
@@ -57,5 +58,47 @@ func TestAppendToFileWaitsForExclusiveLock(t *testing.T) {
 	}
 	if got, want := string(content), "existing\nappended\n"; got != want {
 		t.Fatalf("content = %q, want %q", got, want)
+	}
+}
+
+func TestAppendToFileReturnsInsertedLineForEmbeddedTarget(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	destPath := filepath.Join(vaultPath, "project.md")
+	content := `# Project
+
+### Bugs / Fixes
+- Existing item
+
+### Other
+- Keep this below
+`
+	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	line, err := AppendToFile(vaultPath, destPath, "New bug item", nil, nil, false, "project#bugs-fixes", nil)
+	if err != nil {
+		t.Fatalf("append failed: %v", err)
+	}
+	if line != 5 {
+		t.Fatalf("line = %d, want 5", line)
+	}
+
+	updated, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	if got := string(updated); got != `# Project
+
+### Bugs / Fixes
+- Existing item
+New bug item
+
+### Other
+- Keep this below
+` {
+		t.Fatalf("unexpected content:\n%s", got)
 	}
 }

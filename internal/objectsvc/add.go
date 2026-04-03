@@ -94,7 +94,7 @@ func AppendToFile(
 	isDailyNote bool,
 	targetObjectID string,
 	parseOpts *parser.ParseOptions,
-) error {
+) (int, error) {
 	fileExists := true
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
 		fileExists = false
@@ -102,7 +102,7 @@ func AppendToFile(
 
 	if !fileExists {
 		if !isDailyNote {
-			return fmt.Errorf("file does not exist: %s", destPath)
+			return 0, fmt.Errorf("file does not exist: %s", destPath)
 		}
 
 		base := filepath.Base(destPath)
@@ -119,10 +119,10 @@ func AppendToFile(
 		}
 		s, err := schema.Load(vaultPath)
 		if err != nil {
-			return fmt.Errorf("failed to load schema: %w", err)
+			return 0, fmt.Errorf("failed to load schema: %w", err)
 		}
 		if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory()); err != nil {
-			return fmt.Errorf("failed to create daily note: %w", err)
+			return 0, fmt.Errorf("failed to create daily note: %w", err)
 		}
 	}
 
@@ -136,35 +136,36 @@ func AppendToFile(
 
 	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_RDWR, 0o644)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return 0, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer f.Close()
 
 	if err := filelock.LockExclusive(f); err != nil {
-		return fmt.Errorf("failed to lock file: %w", err)
+		return 0, fmt.Errorf("failed to lock file: %w", err)
 	}
 	defer func() {
 		_ = filelock.Unlock(f)
 	}()
 
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek file: %w", err)
+		return 0, fmt.Errorf("failed to seek file: %w", err)
 	}
 	content, err := io.ReadAll(f)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return 0, fmt.Errorf("failed to read file: %w", err)
 	}
+	insertedLine := appendedLineNumber(content)
 	if len(content) > 0 && content[len(content)-1] != '\n' {
 		if _, err := f.WriteString("\n"); err != nil {
-			return fmt.Errorf("failed to write newline: %w", err)
+			return 0, fmt.Errorf("failed to write newline: %w", err)
 		}
 	}
 
 	if _, err := f.WriteString(line + "\n"); err != nil {
-		return fmt.Errorf("failed to write capture: %w", err)
+		return 0, fmt.Errorf("failed to write capture: %w", err)
 	}
 
-	return nil
+	return insertedLine, nil
 }
 
 // FileLineCount returns the number of lines in a file.
@@ -176,17 +177,17 @@ func FileLineCount(path string) int {
 	return strings.Count(string(content), "\n")
 }
 
-func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *parser.ParseOptions) error {
+func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *parser.ParseOptions) (int, error) {
 	contentBytes, err := os.ReadFile(destPath)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return 0, fmt.Errorf("failed to read file: %w", err)
 	}
 	content := string(contentBytes)
 	lines := strings.Split(content, "\n")
 
 	doc, err := parser.ParseDocumentWithOptions(content, destPath, vaultPath, parseOpts)
 	if err != nil {
-		return fmt.Errorf("failed to parse document: %w", err)
+		return 0, fmt.Errorf("failed to parse document: %w", err)
 	}
 
 	var target *parser.ParsedObject
@@ -197,7 +198,7 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 		}
 	}
 	if target == nil {
-		return fmt.Errorf("target section not found: %s", objectID)
+		return 0, fmt.Errorf("target section not found: %s", objectID)
 	}
 
 	insertIdx := len(lines)
@@ -221,19 +222,23 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 	for insertIdx > minInsertIdx && strings.TrimSpace(lines[insertIdx-1]) == "" {
 		insertIdx--
 	}
+	insertedLine := insertIdx + 1
 
 	newLines := make([]string, 0, len(lines)+1)
 	newLines = append(newLines, lines[:insertIdx]...)
 	newLines = append(newLines, line)
 	newLines = append(newLines, lines[insertIdx:]...)
 
-	return atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644)
+	if err := atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644); err != nil {
+		return 0, err
+	}
+	return insertedLine, nil
 }
 
-func appendUnderHeading(destPath, line, heading string) error {
+func appendUnderHeading(destPath, line, heading string) (int, error) {
 	content, err := os.ReadFile(destPath)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return 0, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	lines := strings.Split(string(content), "\n")
@@ -263,14 +268,19 @@ func appendUnderHeading(destPath, line, heading string) error {
 		}
 	}
 
-	var newLines []string
+	var (
+		newLines     []string
+		insertedLine int
+	)
 	if headingIdx == -1 {
 		newLines = append(lines, "", heading, line)
+		insertedLine = len(newLines)
 	} else if nextHeadingIdx == -1 {
 		insertIdx := len(lines)
 		for insertIdx > headingIdx+1 && strings.TrimSpace(lines[insertIdx-1]) == "" {
 			insertIdx--
 		}
+		insertedLine = insertIdx + 1
 		newLines = append(lines[:insertIdx], line)
 		newLines = append(newLines, lines[insertIdx:]...)
 	} else {
@@ -278,11 +288,26 @@ func appendUnderHeading(destPath, line, heading string) error {
 		for insertIdx > headingIdx+1 && strings.TrimSpace(lines[insertIdx-1]) == "" {
 			insertIdx--
 		}
+		insertedLine = insertIdx + 1
 		newLines = append(lines[:insertIdx], line)
 		newLines = append(newLines, lines[insertIdx:]...)
 	}
 
-	return atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644)
+	if err := atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644); err != nil {
+		return 0, err
+	}
+	return insertedLine, nil
+}
+
+func appendedLineNumber(content []byte) int {
+	if len(content) == 0 {
+		return 1
+	}
+	lineCount := strings.Count(string(content), "\n")
+	if content[len(content)-1] != '\n' {
+		return lineCount + 2
+	}
+	return lineCount + 1
 }
 
 func resolveSectionByHeadingText(candidates []*parser.ParsedObject, headingText string) (string, error) {

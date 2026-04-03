@@ -197,6 +197,13 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 }
 
 func (op *resolveOperation) resolveReferenceWithDynamicDates(reference string, allowDynamicMissing bool) (*ResolveResult, error) {
+	if dynResult, handled, dynErr := resolveDynamicDateReference(reference, op.rt, allowDynamicMissing); handled {
+		if dynErr != nil {
+			return nil, dynErr
+		}
+		return dynResult, nil
+	}
+
 	result, err := op.resolveReference(reference, allowDynamicMissing)
 	if err == nil {
 		return result, nil
@@ -204,15 +211,7 @@ func (op *resolveOperation) resolveReferenceWithDynamicDates(reference string, a
 	if !IsRefNotFound(err) {
 		return nil, err
 	}
-
-	dynResult, handled, dynErr := resolveDynamicDateReference(reference, op.rt, allowDynamicMissing)
-	if !handled {
-		return nil, err
-	}
-	if dynErr != nil {
-		return nil, dynErr
-	}
-	return dynResult, nil
+	return nil, err
 }
 
 func ResolveReference(reference string, rt *Runtime, allowMissing bool) (*ResolveResult, error) {

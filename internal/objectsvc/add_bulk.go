@@ -182,7 +182,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 			targetObjectID = resolvedTarget
 		}
 
-		if err := AppendToFile(req.VaultPath, filePath, req.Line, captureCfg, req.VaultConfig, false, targetObjectID, req.ParseOptions); err != nil {
+		if _, err := AppendToFile(req.VaultPath, filePath, req.Line, captureCfg, req.VaultConfig, false, targetObjectID, req.ParseOptions); err != nil {
 			result.Status = "error"
 			result.Reason = fmt.Sprintf("append failed: %v", err)
 			errorCount++

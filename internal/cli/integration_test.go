@@ -1506,6 +1506,70 @@ type: page
 	v.AssertFileContains("project.md", "Another bug item")
 }
 
+func TestIntegration_AddToSectionReportsInsertedLine(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("project.md", `---
+type: page
+---
+# Project
+
+### Bugs / Fixes
+- Existing item
+
+### Other
+- Keep this below
+`).
+		Build()
+
+	result := v.RunCLI("add", "Another bug item", "--to", "project.md", "--heading", "### Bugs / Fixes")
+	result.MustSucceed(t)
+
+	lineValue, ok := result.Data["line"].(float64)
+	if !ok {
+		t.Fatalf("expected numeric line in result data, got %#v", result.Data["line"])
+	}
+	if int(lineValue) != 8 {
+		t.Fatalf("line = %v, want 8", lineValue)
+	}
+}
+
+func TestIntegration_ResolveAndAddPreferDynamicTodayOverSectionShortName(t *testing.T) {
+	t.Parallel()
+	today := time.Now().Format("2006-01-02")
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("daily/2026-03-16.md", `# Archive
+
+# today
+Old note
+`).
+		WithFile("daily/"+today+".md", `# Today
+Current note
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	resolveResult := v.RunCLI("resolve", "today")
+	resolveResult.MustSucceed(t)
+	if resolveResult.DataString("object_id") != "daily/"+today {
+		t.Fatalf("resolve object_id = %q, want %q", resolveResult.DataString("object_id"), "daily/"+today)
+	}
+
+	addResult := v.RunCLI("add", "New task for today", "--to", "today")
+	addResult.MustSucceed(t)
+	currentDaily := v.ReadFile("daily/" + today + ".md")
+	if !strings.Contains(currentDaily, "New task for today") {
+		t.Fatalf("expected current daily note to contain capture, got:\n%s", currentDaily)
+	}
+	archivedDaily := v.ReadFile("daily/2026-03-16.md")
+	if strings.Contains(archivedDaily, "New task for today") {
+		t.Fatalf("expected archived daily note to remain unchanged, got:\n%s", archivedDaily)
+	}
+}
+
 // TestIntegration_DuplicateObjectError tests that creating a duplicate object fails.
 func TestIntegration_DuplicateObjectError(t *testing.T) {
 	t.Parallel()

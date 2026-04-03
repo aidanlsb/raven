@@ -562,7 +562,8 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
-	if err := objectsvc.AppendToFile(vaultPath, destPath, text, captureCfg, vaultCfg, isDailyNote, targetObjectID, parseOpts); err != nil {
+	line, err := objectsvc.AppendToFile(vaultPath, destPath, text, captureCfg, vaultCfg, isDailyNote, targetObjectID, parseOpts)
+	if err != nil {
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
 
@@ -570,7 +571,7 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 	relPath, _ := filepath.Rel(vaultPath, destPath)
 	return commandexec.Success(map[string]interface{}{
 		"file":    filepath.ToSlash(relPath),
-		"line":    objectsvc.FileLineCount(destPath),
+		"line":    line,
 		"content": text,
 	}, nil)
 }

@@ -71,8 +71,8 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	if envelope.Data.InvokeShape.Wrapper == "" {
 		t.Fatalf("expected invoke wrapper note metadata: %s", out)
 	}
-	if len(envelope.Data.ArgsSchema.Required) == 0 {
-		t.Fatalf("expected required args in compact schema: %s", out)
+	if len(envelope.Data.ArgsSchema.Required) != 0 {
+		t.Fatalf("expected query_string to be optional in compact schema when list=true is supported: %s", out)
 	}
 	if _, ok := envelope.Data.ArgsSchema.Properties["query_string"]; !ok {
 		t.Fatalf("expected query_string property in compact schema: %s", out)
@@ -83,8 +83,50 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	if envelope.Data.InvokeExample.SchemaHash != envelope.Data.SchemaHash {
 		t.Fatalf("invoke_example.schema_hash=%q, want %q", envelope.Data.InvokeExample.SchemaHash, envelope.Data.SchemaHash)
 	}
-	if _, ok := envelope.Data.InvokeExample.Args["query_string"]; !ok {
-		t.Fatalf("expected invoke example args to include query_string: %s", out)
+	if _, ok := envelope.Data.InvokeExample.Args["query_string"]; ok {
+		t.Fatalf("expected invoke example args to omit optional query_string: %s", out)
+	}
+}
+
+func TestCompactInvokeAllowsQueryListWithoutQueryString(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML(`queries:
+  open-projects:
+    query: "object:project .status==active"
+    description: "Active projects"
+`).
+		Build()
+	server := NewServer(v.Path)
+
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "query",
+		"args": map[string]interface{}{
+			"list": true,
+		},
+	})
+	if isErr {
+		t.Fatalf("expected query list to succeed without query_string, got: %s", out)
+	}
+
+	var envelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Queries []map[string]interface{} `json:"queries"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal invoke response: %v", err)
+	}
+	if !envelope.OK {
+		t.Fatalf("expected ok=true, got: %s", out)
+	}
+	if len(envelope.Data.Queries) != 1 {
+		t.Fatalf("expected 1 saved query, got %d", len(envelope.Data.Queries))
+	}
+	if envelope.Data.Queries[0]["name"] != "open-projects" {
+		t.Fatalf("unexpected saved query list: %#v", envelope.Data.Queries)
 	}
 }
 

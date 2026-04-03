@@ -240,9 +240,9 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 		}
 	})
 
-	t.Run("normal resolution wins over dynamic keyword", func(t *testing.T) {
+	t.Run("dynamic keyword wins over literal today object", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		vaultCfg := &config.VaultConfig{}
+		vaultCfg := &config.VaultConfig{DailyDirectory: "daily"}
 
 		todayPath := filepath.Join(tmpDir, "today.md")
 		if err := os.WriteFile(todayPath, []byte("# Today"), 0644); err != nil {
@@ -256,11 +256,18 @@ func TestResolveReferenceWithDynamicDates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveReferenceWithDynamicDates failed: %v", err)
 		}
-		if result.ObjectID != "today" {
-			t.Errorf("ObjectID = %q, want %q", result.ObjectID, "today")
+		parsed, err := vault.ParseDateArg("today")
+		if err != nil {
+			t.Fatalf("ParseDateArg failed: %v", err)
 		}
-		if result.FilePath != todayPath {
-			t.Errorf("FilePath = %q, want %q", result.FilePath, todayPath)
+		dateStr := vault.FormatDateISO(parsed)
+		expectedID := path.Join(vaultCfg.DailyDirectory, dateStr)
+		expectedPath := filepath.Join(tmpDir, vaultCfg.DailyDirectory, dateStr+".md")
+		if result.ObjectID != expectedID {
+			t.Errorf("ObjectID = %q, want %q", result.ObjectID, expectedID)
+		}
+		if result.FilePath != expectedPath {
+			t.Errorf("FilePath = %q, want %q", result.FilePath, expectedPath)
 		}
 	})
 

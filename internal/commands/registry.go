@@ -660,7 +660,7 @@ For trait queries (trait:...):
 - Supported command: update <new_value> (updates trait values in-place)
 - Example: trait:todo .value==todo --apply "update done" marks todos as done`,
 		Args: []ArgMeta{
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name) optionally followed by saved-query inputs", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name) optionally followed by saved-query inputs. Required unless list=true.", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
