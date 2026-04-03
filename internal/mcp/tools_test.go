@@ -65,6 +65,14 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 	if got := newContract.Parameters["field-json"].Type; got != paramTypeObject {
 		t.Fatalf("new.field-json type=%q, want %q", got, paramTypeObject)
 	}
+
+	reclassifyContract, ok := buildCommandContract("reclassify")
+	if !ok {
+		t.Fatal("expected reclassify contract")
+	}
+	if got := reclassifyContract.Parameters["field-json"].Type; got != paramTypeObject {
+		t.Fatalf("reclassify.field-json type=%q, want %q", got, paramTypeObject)
+	}
 }
 
 func TestDiscoverableContractsApplyPolicy(t *testing.T) {

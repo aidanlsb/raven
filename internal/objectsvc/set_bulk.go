@@ -19,7 +19,7 @@ type SetBulkRequest struct {
 	VaultConfig  *config.VaultConfig
 	Schema       *schema.Schema
 	ObjectIDs    []string
-	Updates      map[string]string
+	TypedUpdates map[string]schema.FieldValue
 	ParseOptions *parser.ParseOptions
 }
 
@@ -97,16 +97,10 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 		if objectType == "" {
 			objectType = "page"
 		}
-		if unknownErr := fieldmutation.DetectUnknownFieldMutationByNames(objectType, req.Schema, mapKeys(req.Updates), map[string]bool{"alias": true}); unknownErr != nil {
-			skipped = append(skipped, SetBulkResult{ID: id, Status: "skipped", Reason: unknownErr.Error()})
-			continue
-		}
-
-		_, resolvedUpdates, _, err := fieldmutation.PrepareValidatedFrontmatterMutation(
-			string(content),
-			fm,
+		validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
 			objectType,
-			req.Updates,
+			fm.Fields,
+			req.TypedUpdates,
 			req.Schema,
 			map[string]bool{"alias": true},
 			&fieldmutation.RefValidationContext{
@@ -125,21 +119,10 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 			continue
 		}
 
-		changes := make(map[string]string)
-		for field, resolvedVal := range resolvedUpdates {
-			oldVal := "<unset>"
-			if fm.Fields != nil {
-				if v, ok := fm.Fields[field]; ok {
-					oldVal = fmt.Sprintf("%v", v)
-				}
-			}
-			changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
-		}
-
 		items = append(items, SetBulkPreviewItem{
 			ID:      id,
 			Action:  "set",
-			Changes: changes,
+			Changes: formatSetPreviewChanges(fm.Fields, validatedUpdates),
 		})
 	}
 
@@ -198,7 +181,7 @@ func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBul
 			VaultConfig:   req.VaultConfig,
 			FilePath:      filePath,
 			ObjectID:      id,
-			Updates:       req.Updates,
+			TypedUpdates:  req.TypedUpdates,
 			Schema:        req.Schema,
 			AllowedFields: map[string]bool{"alias": true},
 			ParseOptions:  req.ParseOptions,
@@ -260,14 +243,10 @@ func previewSetBulkEmbedded(req SetBulkRequest, id string) (*SetBulkPreviewItem,
 	if targetObj == nil {
 		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
 	}
-	if unknownErr := fieldmutation.DetectUnknownFieldMutationByNames(targetObj.ObjectType, req.Schema, mapKeys(req.Updates), map[string]bool{"alias": true, "id": true}); unknownErr != nil {
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: unknownErr.Error()}
-	}
-
-	_, resolvedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutation(
+	validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
 		targetObj.ObjectType,
 		targetObj.Fields,
-		req.Updates,
+		req.TypedUpdates,
 		req.Schema,
 		map[string]bool{"alias": true, "id": true},
 		&fieldmutation.RefValidationContext{
@@ -284,29 +263,10 @@ func previewSetBulkEmbedded(req SetBulkRequest, id string) (*SetBulkPreviewItem,
 		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("validation error: %v", err)}
 	}
 
-	changes := make(map[string]string)
-	for field, resolvedVal := range resolvedUpdates {
-		oldVal := "<unset>"
-		if targetObj.Fields != nil {
-			if v, ok := targetObj.Fields[field]; ok {
-				if s, ok := v.AsString(); ok {
-					oldVal = s
-				} else if n, ok := v.AsNumber(); ok {
-					oldVal = fmt.Sprintf("%v", n)
-				} else if b, ok := v.AsBool(); ok {
-					oldVal = fmt.Sprintf("%v", b)
-				} else {
-					oldVal = fmt.Sprintf("%v", v.Raw())
-				}
-			}
-		}
-		changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
-	}
-
 	return &SetBulkPreviewItem{
 		ID:      id,
 		Action:  "set",
-		Changes: changes,
+		Changes: formatSetPreviewChanges(targetObj.Fields, validatedUpdates),
 	}, nil
 }
 
@@ -326,7 +286,7 @@ func applySetBulkEmbedded(req SetBulkRequest, id string) (string, error) {
 		VaultConfig:    req.VaultConfig,
 		FilePath:       filePath,
 		ObjectID:       id,
-		Updates:        req.Updates,
+		TypedUpdates:   req.TypedUpdates,
 		Schema:         req.Schema,
 		AllowedFields:  map[string]bool{"alias": true, "id": true},
 		DocumentParser: req.ParseOptions,
@@ -359,10 +319,24 @@ func setBulkReasonFromError(err error) string {
 	}
 }
 
-func mapKeys(values map[string]string) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
+func formatSetPreviewChanges(existingFields map[string]schema.FieldValue, updates map[string]schema.FieldValue) map[string]string {
+	resolvedUpdates := fieldmutation.SerializeFieldValueMap(updates)
+	changes := make(map[string]string, len(resolvedUpdates))
+	for field, resolvedVal := range resolvedUpdates {
+		oldVal := "<unset>"
+		if existingFields != nil {
+			if value, ok := existingFields[field]; ok {
+				oldVal = previewFieldValue(value)
+			}
+		}
+		changes[field] = fmt.Sprintf("%s (was: %s)", resolvedVal, oldVal)
 	}
-	return keys
+	return changes
+}
+
+func previewFieldValue(value schema.FieldValue) string {
+	if value.IsNull() {
+		return "null"
+	}
+	return fieldmutation.SerializeFieldValueLiteral(value)
 }

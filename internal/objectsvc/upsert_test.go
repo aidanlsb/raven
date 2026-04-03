@@ -174,6 +174,50 @@ traits: {}
 	}
 }
 
+func TestUpsertPreservesStringTypeFromTypedFieldValues(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+      email:
+        type: string
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	result, err := Upsert(UpsertRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "person",
+		Title:      "Typed Upsert Freya",
+		TargetPath: "Typed Upsert Freya",
+		FieldValues: map[string]schema.FieldValue{
+			"email": schema.String("true"),
+		},
+		Schema: sch,
+	})
+	if err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	if result.Status != "created" {
+		t.Fatalf("expected created status, got %q", result.Status)
+	}
+
+	created, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	if !strings.Contains(string(created), `email: "true"`) {
+		t.Fatalf("expected email to remain a string, got:\n%s", string(created))
+	}
+}
+
 func writeTestSchema(t *testing.T, vaultPath, content string) {
 	t.Helper()
 	path := filepath.Join(vaultPath, "schema.yaml")

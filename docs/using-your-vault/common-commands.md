@@ -101,12 +101,16 @@ Set frontmatter fields on an existing object. Values are validated against the s
 ```bash
 rvn set projects/website status=published
 rvn set people/freya email=freya@example.com role=lead
+rvn set people/freya --fields-json '{"email":"true"}'
 ```
+
+Use positional `field=value` arguments for shell-friendly literal updates. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
 
 For bulk field updates, pipe IDs from a query:
 
 ```bash
 rvn query 'object:project .status==active' --ids | rvn set --stdin reviewed=true --confirm
+rvn query 'object:person' --ids | rvn set --stdin --confirm --fields-json '{"email":"true"}'
 ```
 
 ### `rvn update`
@@ -131,7 +135,10 @@ Create an object if it does not exist, or update it if it does. Useful for idemp
 ```bash
 rvn upsert project "Website Redesign" --field status=active
 rvn upsert person "Freya" --field email=freya@example.com --content "# Freya\n\nProject lead."
+rvn upsert person "Freya" --field-json '{"email":"true"}'
 ```
+
+Use `--field` for shell-friendly literal values. Use `--field-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
 
 Key flags:
 - `--field` — set field values
@@ -163,11 +170,13 @@ Change an object's type. Raven updates frontmatter, applies defaults for the new
 
 ```bash
 rvn reclassify inbox/meeting-notes meeting --field name="Q1 Planning"
+rvn reclassify people/freya company --field-json '{"legal_name":"false"}'
 rvn reclassify page/scratch note --field title="Research Notes" --no-move
 ```
 
 Key flags:
-- `--field` — supply field values for the new type
+- `--field` — supply field values for the new type using Raven field literals
+- `--field-json` — supply exact typed field values as JSON
 - `--no-move` — keep the file in its current location
 - `--update-refs` — update references if the file moves (default: true)
 - `--force` — skip confirmation for dropped fields

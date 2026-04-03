@@ -497,15 +497,12 @@ func createObject(
 	}
 	warnings = append(warnings, warningMessages...)
 
-	stringFields := FieldsToStringMap(fields, typeName)
-	delete(stringFields, "type")
-
 	createResult, err := pages.Create(pages.CreateOptions{
 		VaultPath:   vaultPath,
 		TypeName:    typeName,
 		Title:       title,
 		TargetPath:  title,
-		Fields:      stringFields,
+		Fields:      validatedTypedFields,
 		Schema:      sch,
 		TemplateDir: templateDir,
 		ObjectsRoot: objectsRoot,
@@ -513,41 +510,6 @@ func createObject(
 	})
 	if err != nil {
 		return ResultItem{ID: resolvedTargetPath, Action: "error", Reason: err.Error()}, warnings, ""
-	}
-
-	createdBytes, err := os.ReadFile(createResult.FilePath)
-	if err != nil {
-		return ResultItem{ID: resolvedTargetPath, Action: "error", Reason: fmt.Sprintf("read error: %v", err)}, warnings, ""
-	}
-	createdContent := string(createdBytes)
-	createdFM, err := parser.ParseFrontmatter(createdContent)
-	if err != nil || createdFM == nil {
-		return ResultItem{ID: resolvedTargetPath, Action: "error", Reason: "failed to parse frontmatter"}, warnings, ""
-	}
-
-	if len(validatedTypedFields) > 0 {
-		updatedContent, _, err := fieldmutation.PrepareValidatedFrontmatterMutationValues(
-			createdContent,
-			createdFM,
-			typeName,
-			validatedTypedFields,
-			sch,
-			map[string]bool{"type": true, "alias": true},
-			&fieldmutation.RefValidationContext{
-				VaultPath:   vaultPath,
-				VaultConfig: vaultCfg,
-			},
-		)
-		if err != nil {
-			return mutationErrorResult(resolvedTargetPath, err, ""), warnings, ""
-		}
-		createdContent = updatedContent
-	}
-
-	if createdContent != string(createdBytes) {
-		if err := atomicfile.WriteFile(createResult.FilePath, []byte(createdContent), 0o644); err != nil {
-			return ResultItem{ID: resolvedTargetPath, Action: "error", Reason: fmt.Sprintf("write error: %v", err)}, warnings, ""
-		}
 	}
 
 	if content != "" {

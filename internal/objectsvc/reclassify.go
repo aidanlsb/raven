@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/aidanlsb/raven/internal/atomicfile"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -26,7 +26,7 @@ type ReclassifyRequest struct {
 	FilePath  string
 
 	NewTypeName string
-	FieldValues map[string]string
+	FieldValues map[string]schema.FieldValue
 
 	NoMove     bool
 	UpdateRefs bool
@@ -43,7 +43,7 @@ type ReclassifyByReferenceRequest struct {
 	Reference string
 
 	NewTypeName string
-	FieldValues map[string]string
+	FieldValues map[string]schema.FieldValue
 
 	NoMove     bool
 	UpdateRefs bool
@@ -145,10 +145,7 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		)
 	}
 
-	fieldValues := make(map[string]string, len(req.FieldValues))
-	for k, v := range req.FieldValues {
-		fieldValues[k] = v
-	}
+	fieldValues := cloneFieldValues(req.FieldValues)
 
 	addedFields, missingFieldNames, missingFieldDetails := resolveRequiredFieldsForReclassify(fm, newTypeDef, fieldValues)
 	if len(missingFieldNames) > 0 {
@@ -200,7 +197,24 @@ func Reclassify(req ReclassifyRequest) (*ReclassifyResult, error) {
 		return result, nil
 	}
 
-	newContent, err := updateFrontmatterForReclassify(content, req.NewTypeName, fieldValues, droppedFields)
+	nextFieldValues := mergeReclassifyFieldValues(fm, fieldValues, droppedFields)
+	validatedFieldValues, warningMessages, err := fieldmutation.PrepareValidatedFieldMutationValues(
+		req.NewTypeName,
+		nil,
+		nextFieldValues,
+		req.Schema,
+		map[string]bool{"type": true, "alias": true},
+		&fieldmutation.RefValidationContext{
+			VaultPath:   req.VaultPath,
+			VaultConfig: req.VaultConfig,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	result.WarningMessages = append(result.WarningMessages, warningMessages...)
+
+	newContent, err := updateFrontmatterForReclassify(content, req.NewTypeName, validatedFieldValues)
 	if err != nil {
 		return nil, newError(ErrorFileWrite, "failed to update frontmatter", "", nil, err)
 	}
@@ -297,7 +311,7 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 func resolveRequiredFieldsForReclassify(
 	fm *parser.Frontmatter,
 	newTypeDef *schema.TypeDefinition,
-	fieldValues map[string]string,
+	fieldValues map[string]schema.FieldValue,
 ) ([]string, []string, []map[string]interface{}) {
 	if newTypeDef == nil {
 		return nil, nil, nil
@@ -331,7 +345,7 @@ func resolveRequiredFieldsForReclassify(
 		}
 
 		if fieldDef.Default != nil {
-			fieldValues[fieldName] = fmt.Sprintf("%v", fieldDef.Default)
+			fieldValues[fieldName] = parser.FieldValueFromYAML(fieldDef.Default)
 			addedFields = append(addedFields, fieldName)
 			continue
 		}
@@ -369,10 +383,37 @@ func collectDroppedFieldsForReclassify(fm *parser.Frontmatter, newTypeDef *schem
 	return dropped
 }
 
-func updateFrontmatterForReclassify(content, newType string, fieldValues map[string]string, droppedFields []string) (string, error) {
+func mergeReclassifyFieldValues(
+	fm *parser.Frontmatter,
+	overrides map[string]schema.FieldValue,
+	droppedFields []string,
+) map[string]schema.FieldValue {
+	merged := make(map[string]schema.FieldValue)
+	droppedSet := make(map[string]bool, len(droppedFields))
+	for _, field := range droppedFields {
+		droppedSet[field] = true
+	}
+
+	if fm != nil {
+		for key, value := range fm.Fields {
+			if droppedSet[key] {
+				continue
+			}
+			merged[key] = value
+		}
+	}
+
+	for key, value := range overrides {
+		merged[key] = value
+	}
+
+	return merged
+}
+
+func updateFrontmatterForReclassify(content, newType string, fieldValues map[string]schema.FieldValue) (string, error) {
 	lines := strings.Split(content, "\n")
 
-	startLine, endLine, ok := parser.FrontmatterBounds(lines)
+	_, endLine, ok := parser.FrontmatterBounds(lines)
 	if !ok {
 		return "", fmt.Errorf("no frontmatter found")
 	}
@@ -380,45 +421,16 @@ func updateFrontmatterForReclassify(content, newType string, fieldValues map[str
 		return "", fmt.Errorf("unclosed frontmatter")
 	}
 
-	frontmatterContent := strings.Join(lines[startLine+1:endLine], "\n")
-	var yamlData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatterContent), &yamlData); err != nil {
-		return "", fmt.Errorf("failed to parse frontmatter: %w", err)
-	}
-	if yamlData == nil {
-		yamlData = make(map[string]interface{})
-	}
-
-	yamlData["type"] = newType
-	for key, value := range fieldValues {
-		yamlData[key] = value
-	}
-
-	droppedSet := make(map[string]bool, len(droppedFields))
-	for _, f := range droppedFields {
-		droppedSet[f] = true
-	}
-	for key := range yamlData {
-		if droppedSet[key] {
-			delete(yamlData, key)
-		}
-	}
-
-	newFrontmatter, err := yaml.Marshal(yamlData)
+	newFrontmatter, err := frontmatter.Render(newType, fieldValues, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal frontmatter: %w", err)
+		return "", err
 	}
 
-	var result strings.Builder
-	result.WriteString("---\n")
-	result.Write(newFrontmatter)
-	result.WriteString("---")
-	if endLine+1 < len(lines) {
-		result.WriteString("\n")
-		result.WriteString(strings.Join(lines[endLine+1:], "\n"))
+	if endLine+1 >= len(lines) {
+		return newFrontmatter, nil
 	}
 
-	return result.String(), nil
+	return newFrontmatter + strings.Join(lines[endLine+1:], "\n"), nil
 }
 
 func buildReclassifyFieldTemplate(missingFields []string) map[string]string {

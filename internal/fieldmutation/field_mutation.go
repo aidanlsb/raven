@@ -13,6 +13,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/readsvc"
@@ -291,6 +292,19 @@ func SerializeFieldValueLiteral(value schema.FieldValue) string {
 	return string(b)
 }
 
+// SerializeFieldValueMap renders typed field values back into Raven/YAML literals.
+func SerializeFieldValueMap(values map[string]schema.FieldValue) map[string]string {
+	if len(values) == 0 {
+		return map[string]string{}
+	}
+
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		out[key] = SerializeFieldValueLiteral(value)
+	}
+	return out
+}
+
 func ParseFieldValuesJSON(raw string) (map[string]schema.FieldValue, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -305,6 +319,19 @@ func ParseFieldValuesJSON(raw string) (map[string]schema.FieldValue, error) {
 		values[key] = parser.FieldValueFromYAML(value)
 	}
 	return values, nil
+}
+
+// ParseFieldValueLiterals parses Raven-style field literals into typed values.
+func ParseFieldValueLiterals(updates map[string]string) map[string]schema.FieldValue {
+	if len(updates) == 0 {
+		return map[string]schema.FieldValue{}
+	}
+
+	values := make(map[string]schema.FieldValue, len(updates))
+	for key, value := range updates {
+		values[key] = parseFieldValueToSchema(value)
+	}
+	return values
 }
 
 func normalizeMutationType(objectType string) string {
@@ -426,51 +453,19 @@ func updateFrontmatterWithFieldValues(content string, updates map[string]schema.
 	}
 
 	for key, value := range updates {
-		yamlData[key] = fieldValueToYAMLValue(value)
+		yamlData[key] = frontmatter.FieldValueToYAMLValue(value)
 	}
 
-	newFrontmatter, err := yaml.Marshal(yamlData)
+	newFrontmatter, err := frontmatter.RenderData(yamlData, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal frontmatter: %w", err)
+		return "", err
 	}
 
-	var result strings.Builder
-	result.WriteString("---\n")
-	result.Write(newFrontmatter)
-	result.WriteString("---")
-
-	if endLine+1 < len(lines) {
-		result.WriteString("\n")
-		result.WriteString(strings.Join(lines[endLine+1:], "\n"))
+	if endLine+1 >= len(lines) {
+		return newFrontmatter, nil
 	}
 
-	return result.String(), nil
-}
-
-func fieldValueToYAMLValue(value schema.FieldValue) interface{} {
-	if value.IsNull() {
-		return nil
-	}
-	if ref, ok := value.AsRef(); ok {
-		return "[[" + ref + "]]"
-	}
-	if arr, ok := value.AsArray(); ok {
-		items := make([]interface{}, 0, len(arr))
-		for _, item := range arr {
-			items = append(items, fieldValueToYAMLValue(item))
-		}
-		return items
-	}
-	if s, ok := value.AsString(); ok {
-		return s
-	}
-	if n, ok := value.AsNumber(); ok {
-		return n
-	}
-	if b, ok := value.AsBool(); ok {
-		return b
-	}
-	return value.Raw()
+	return newFrontmatter + strings.Join(lines[endLine+1:], "\n"), nil
 }
 
 func coerceFieldMutationValues(updates map[string]schema.FieldValue, fieldDefs map[string]*schema.FieldDefinition) map[string]schema.FieldValue {

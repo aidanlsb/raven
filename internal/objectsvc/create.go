@@ -8,22 +8,22 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/pages"
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
 type CreateRequest struct {
-	VaultPath        string
-	TypeName         string
-	Title            string
-	TargetPath       string
-	FieldValues      map[string]string
-	TypedFieldValues map[string]schema.FieldValue
-	VaultConfig      *config.VaultConfig
-	Schema           *schema.Schema
-	ObjectsRoot      string
-	PagesRoot        string
-	TemplateDir      string
-	TemplateID       string
+	VaultPath   string
+	TypeName    string
+	Title       string
+	TargetPath  string
+	FieldValues map[string]schema.FieldValue
+	VaultConfig *config.VaultConfig
+	Schema      *schema.Schema
+	ObjectsRoot string
+	PagesRoot   string
+	TemplateDir string
+	TemplateID  string
 }
 
 type CreateResult struct {
@@ -66,22 +66,8 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		targetPath = req.Title
 	}
 
-	fieldValues := make(map[string]string, len(req.FieldValues)+len(req.TypedFieldValues))
-	for key, value := range req.FieldValues {
-		fieldValues[key] = value
-	}
-
-	if typeDef != nil && typeDef.NameField != "" {
-		if _, provided := fieldValues[typeDef.NameField]; !provided {
-			if _, typedProvided := req.TypedFieldValues[typeDef.NameField]; !typedProvided && req.Title != "" {
-				fieldValues[typeDef.NameField] = req.Title
-			}
-		}
-	}
-
-	for key, value := range req.TypedFieldValues {
-		fieldValues[key] = fieldmutation.SerializeFieldValueLiteral(value)
-	}
+	fieldValues := cloneFieldValues(req.FieldValues)
+	ensureNameFieldValue(fieldValues, typeDef, req.Title)
 
 	var missingFields []string
 	var fieldDetails []map[string]interface{}
@@ -101,7 +87,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 				continue
 			}
 			if fieldDef.Default != nil {
-				fieldValues[fieldName] = fmt.Sprintf("%v", fieldDef.Default)
+				fieldValues[fieldName] = parser.FieldValueFromYAML(fieldDef.Default)
 				continue
 			}
 			missingFields = append(missingFields, fieldName)
@@ -159,7 +145,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
 	}
 
-	validatedFields, resolvedFields, _, err := fieldmutation.PrepareValidatedFieldMutation(
+	validatedFields, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
 		req.TypeName,
 		nil,
 		fieldValues,
@@ -174,17 +160,12 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)
 	}
 
-	fieldValues = resolvedFields
-	for key, value := range validatedFields {
-		fieldValues[key] = fieldmutation.SerializeFieldValueLiteral(value)
-	}
-
 	result, err := pages.Create(pages.CreateOptions{
 		VaultPath:        req.VaultPath,
 		TypeName:         req.TypeName,
 		Title:            req.Title,
 		TargetPath:       targetPath,
-		Fields:           fieldValues,
+		Fields:           validatedFields,
 		Schema:           req.Schema,
 		TemplateOverride: templateOverride,
 		TemplateDir:      req.TemplateDir,

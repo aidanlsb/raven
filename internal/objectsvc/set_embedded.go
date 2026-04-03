@@ -18,7 +18,6 @@ type SetEmbeddedObjectRequest struct {
 	VaultConfig    *config.VaultConfig
 	FilePath       string
 	ObjectID       string
-	Updates        map[string]string
 	TypedUpdates   map[string]schema.FieldValue
 	Schema         *schema.Schema
 	AllowedFields  map[string]bool
@@ -98,26 +97,10 @@ func SetEmbeddedObject(req SetEmbeddedObjectRequest) (*SetEmbeddedObjectResult, 
 		)
 	}
 
-	mergedUpdates := make(map[string]string, len(req.Updates)+len(req.TypedUpdates))
-	for key, value := range req.Updates {
-		mergedUpdates[key] = value
-	}
-	for key, value := range req.TypedUpdates {
-		mergedUpdates[key] = fieldmutation.SerializeFieldValueLiteral(value)
-	}
-
-	fieldNames := make([]string, 0, len(mergedUpdates))
-	for key := range mergedUpdates {
-		fieldNames = append(fieldNames, key)
-	}
-	if unknownErr := fieldmutation.DetectUnknownFieldMutationByNames(targetObj.ObjectType, req.Schema, fieldNames, req.AllowedFields); unknownErr != nil {
-		return nil, unknownErr
-	}
-
-	parsedUpdates, resolvedUpdates, warningMessages, err := fieldmutation.PrepareValidatedFieldMutation(
+	validatedUpdates, warningMessages, err := fieldmutation.PrepareValidatedFieldMutationValues(
 		targetObj.ObjectType,
 		targetObj.Fields,
-		mergedUpdates,
+		req.TypedUpdates,
 		req.Schema,
 		req.AllowedFields,
 		&fieldmutation.RefValidationContext{
@@ -130,11 +113,11 @@ func SetEmbeddedObject(req SetEmbeddedObjectRequest) (*SetEmbeddedObjectResult, 
 		return nil, err
 	}
 
-	newFields := make(map[string]schema.FieldValue, len(targetObj.Fields)+len(parsedUpdates))
+	newFields := make(map[string]schema.FieldValue, len(targetObj.Fields)+len(validatedUpdates))
 	for key, value := range targetObj.Fields {
 		newFields[key] = value
 	}
-	for key, value := range parsedUpdates {
+	for key, value := range validatedUpdates {
 		newFields[key] = value
 	}
 
@@ -162,7 +145,7 @@ func SetEmbeddedObject(req SetEmbeddedObjectRequest) (*SetEmbeddedObjectResult, 
 		ObjectID:        req.ObjectID,
 		ObjectType:      targetObj.ObjectType,
 		Slug:            slug,
-		ResolvedUpdates: resolvedUpdates,
+		ResolvedUpdates: fieldmutation.SerializeFieldValueMap(validatedUpdates),
 		WarningMessages: warningMessages,
 		PreviousFields:  previousFields,
 	}, nil

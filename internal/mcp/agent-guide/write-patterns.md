@@ -46,6 +46,8 @@ raven_invoke(command="set", args={
 })
 ```
 
+Use `fields` for ordinary literal-style updates. Use `fields-json` when exact JSON typing matters, such as preserving the string `"true"` instead of a boolean or sending arrays/nulls explicitly.
+
 Preview then apply edit:
 
 ```text

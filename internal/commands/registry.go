@@ -100,6 +100,10 @@ The type is required. If title is not provided, you will be prompted for it.
 Required fields (as defined in schema.yaml) will be prompted for interactively,
 or can be provided via --field flags or --field-json.
 
+Use --field for shell-friendly literal values. Use --field-json when exact type
+control matters, such as preserving the string "true" instead of a boolean or
+providing arrays/nulls explicitly.
+
 Use --path to explicitly control the object path. Titles are treated as display
 names and must not include path separators.
 
@@ -118,8 +122,8 @@ to understand which fields are auto-populated.`,
 			{Name: "title", Description: "Title/name for the object (auto-populates name_field if configured)", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Set field value (repeatable) (key-value object)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
-			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object (typed values)", Type: FlagTypeJSON},
+			{Name: "field", Description: "Set field value using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"name": "Freya", "email": "a@b.com"}`}},
+			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"people/freya-2026", "note/raven-friction"}},
 			{Name: "template", Description: "Type template ID to use for object creation", Type: FlagTypeString, Examples: []string{"interview_technical", "interview_screen"}},
 		},
@@ -205,14 +209,18 @@ Boundary with add:
 - upsert: canonical state write, idempotent convergence target
 
 Use this for generated outputs like briefs/reports/summaries where reruns should
-converge to one current state rather than append history.`,
+converge to one current state rather than append history.
+
+Use --field for shell-friendly literal values. Use --field-json when exact type
+control matters, such as preserving the string "true" instead of a boolean or
+providing arrays/nulls explicitly.`,
 		Args: []ArgMeta{
 			{Name: "type", Description: "Object type (e.g., brief, report)", Required: true, DynamicComp: "types"},
 			{Name: "title", Description: "Title/name for the object (stable identity key)", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Set/update frontmatter fields (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
-			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object (typed values)", Type: FlagTypeJSON},
+			{Name: "field", Description: "Set/update frontmatter fields using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
+			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "content", Description: "Replace body content (full-body idempotent mode)", Type: FlagTypeString},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
 		},
@@ -586,8 +594,12 @@ for the new type, and optionally moving the file to the new type's default direc
 
 Required fields on the new type:
 - If a required field has a Default value, it is applied automatically
-- Missing required fields can be supplied via --field flags
+- Missing required fields can be supplied via --field flags or --field-json
 - In JSON mode: returns REQUIRED_FIELD_MISSING error with retry_with template
+
+Use --field for shell-friendly Raven field literals. Use --field-json when exact
+type control matters, for example preserving the string "false" instead of a
+boolean false.
 
 Fields present on the old type but not defined on the new type are
 identified as "dropped fields" and require confirmation before removal.
@@ -601,7 +613,8 @@ References are updated when the file moves (controlled by --update-refs).`,
 			{Name: "new-type", Description: "Target type name", Required: true, DynamicComp: "types"},
 		},
 		Flags: []FlagMeta{
-			{Name: "field", Description: "Supply field values (repeatable) (key-value object)", Type: FlagTypeKeyValue, Examples: []string{`{"author": "people/snorri", "genre": "mythology"}`}},
+			{Name: "field", Description: "Supply field values using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"author": "[[people/snorri]]", "genre": "mythology"}`}},
+			{Name: "field-json", Description: "Supply field values as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "no-move", Description: "Skip moving file to new type's default_path", Type: FlagTypeBool},
 			{Name: "update-refs", Description: "Update references when file moves (default: true)", Type: FlagTypeBool, Default: "true"},
 			{Name: "force", Description: "Skip confirmation prompts (dropped fields, etc.)", Type: FlagTypeBool},
@@ -609,6 +622,7 @@ References are updated when the file moves (controlled by --update-refs).`,
 		Examples: []string{
 			"rvn reclassify inbox/note book --json",
 			"rvn reclassify people/freya company --field industry=tech --json",
+			`rvn reclassify people/freya company --field-json '{"legal_name":"false"}' --json`,
 			"rvn reclassify pages/draft project --no-move --json",
 			"rvn reclassify inbox/note book --force --json",
 		},
@@ -1382,20 +1396,26 @@ schema if the object has a known type. Unknown fields are rejected.
 
 Use this to update existing objects' metadata without manually editing files.
 
+Use positional field=value arguments for shell-friendly literal updates.
+Use --fields-json when you need exact type control (for example, preserving the
+string "true" instead of coercing it to a boolean).
+
 Bulk operations:
-Use --stdin to read object IDs from stdin (one per line).
+Use --stdin to read object IDs from stdin (one per line). Bulk updates accept
+both field=value literals and --fields-json typed values.
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "fields", Description: "Fields to update (object with key-value pairs)", Type: FlagTypePosKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
-			{Name: "fields-json", Description: "Fields to update as a JSON object (typed values)", Type: FlagTypeJSON},
+			{Name: "fields", Description: "Fields to update using Raven field literals (key=value semantics)", Type: FlagTypePosKeyValue, Examples: []string{`{"email": "freya@asgard.realm"}`, `{"status": "active", "priority": "high"}`}},
+			{Name: "fields-json", Description: "Fields to update as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn set people/freya email=freya@asgard.realm --json",
+			`rvn set people/freya --fields-json '{"email":"true"}' --json`,
 			"rvn set people/freya name=\"Freya\" status=active --json",
 			"rvn set projects/website priority=high --json",
 		},

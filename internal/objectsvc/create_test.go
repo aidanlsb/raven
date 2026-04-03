@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestCreateObjectSuccess(t *testing.T) {
@@ -165,8 +166,8 @@ traits: {}
 		TypeName:    "issue",
 		Title:       "Broken parent",
 		TargetPath:  "Broken parent",
-		FieldValues: map[string]string{
-			"parent": "[[notes/overview]]",
+		FieldValues: map[string]schema.FieldValue{
+			"parent": schema.Ref("notes/overview"),
 		},
 		Schema: sch,
 	})
@@ -183,5 +184,46 @@ traits: {}
 	}
 	if !strings.Contains(svcErr.Message, "expected 'page'") {
 		t.Fatalf("expected page target mismatch, got %q", svcErr.Message)
+	}
+}
+
+func TestCreatePreservesStringTypeFromTypedFieldValues(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+      email:
+        type: string
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	result, err := Create(CreateRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "person",
+		Title:      "Typed Freya",
+		TargetPath: "Typed Freya",
+		FieldValues: map[string]schema.FieldValue{
+			"email": schema.String("true"),
+		},
+		Schema: sch,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	created, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	if !strings.Contains(string(created), `email: "true"`) {
+		t.Fatalf("expected email to remain a string, got:\n%s", string(created))
 	}
 }

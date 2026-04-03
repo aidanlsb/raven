@@ -51,20 +51,20 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return commandexec.Failure("INVALID_INPUT", "invalid --field-json payload", nil, "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 	}
+	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 
 	result, err := objectsvc.Create(objectsvc.CreateRequest{
-		VaultPath:        vaultPath,
-		TypeName:         typeName,
-		Title:            title,
-		TargetPath:       targetPath,
-		FieldValues:      fieldValues,
-		TypedFieldValues: typedFieldValues,
-		VaultConfig:      vaultCfg,
-		Schema:           sch,
-		ObjectsRoot:      vaultCfg.GetObjectsRoot(),
-		PagesRoot:        vaultCfg.GetPagesRoot(),
-		TemplateDir:      vaultCfg.GetTemplateDirectory(),
-		TemplateID:       stringArg(req.Args, "template"),
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		Title:       title,
+		TargetPath:  targetPath,
+		FieldValues: allFieldValues,
+		VaultConfig: vaultCfg,
+		Schema:      sch,
+		ObjectsRoot: vaultCfg.GetObjectsRoot(),
+		PagesRoot:   vaultCfg.GetPagesRoot(),
+		TemplateDir: vaultCfg.GetTemplateDirectory(),
+		TemplateID:  stringArg(req.Args, "template"),
 	})
 	if err != nil {
 		return mapContentMutationError(err)
@@ -161,24 +161,24 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 	if err != nil {
 		return commandexec.Failure("INVALID_INPUT", "invalid --field-json payload", nil, "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 	}
+	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 
 	_, hasContent := req.Args["content"]
 	content := stringArg(req.Args, "content")
 
 	result, err := objectsvc.Upsert(objectsvc.UpsertRequest{
-		VaultPath:        vaultPath,
-		TypeName:         typeName,
-		Title:            title,
-		TargetPath:       targetPath,
-		ReplaceBody:      hasContent,
-		Content:          content,
-		FieldValues:      fieldValues,
-		TypedFieldValues: typedFieldValues,
-		VaultConfig:      vaultCfg,
-		Schema:           sch,
-		ObjectsRoot:      vaultCfg.GetObjectsRoot(),
-		PagesRoot:        vaultCfg.GetPagesRoot(),
-		TemplateDir:      vaultCfg.GetTemplateDirectory(),
+		VaultPath:   vaultPath,
+		TypeName:    typeName,
+		Title:       title,
+		TargetPath:  targetPath,
+		ReplaceBody: hasContent,
+		Content:     content,
+		FieldValues: allFieldValues,
+		VaultConfig: vaultCfg,
+		Schema:      sch,
+		ObjectsRoot: vaultCfg.GetObjectsRoot(),
+		PagesRoot:   vaultCfg.GetPagesRoot(),
+		TemplateDir: vaultCfg.GetTemplateDirectory(),
 	})
 	if err != nil {
 		return mapContentMutationError(err)

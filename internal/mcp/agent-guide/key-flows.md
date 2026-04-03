@@ -51,6 +51,7 @@ raven_invoke(command="edit", args={
 ```text
 raven_invoke(command="move", args={"source":"people/loki", "destination":"people/loki-archived"})
 raven_invoke(command="reclassify", args={"object":"pages/draft", "new-type":"project"})
+raven_invoke(command="reclassify", args={"object":"people/freya", "new-type":"company", "field-json":{"legal_name":"false"}})
 ```
 
 Deletion flow:

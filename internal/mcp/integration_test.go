@@ -3025,18 +3025,38 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})
 
-	t.Run("set_bulk_fields_json_not_supported", func(t *testing.T) {
+	t.Run("set_bulk_fields_json_apply", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Set Json One"})
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Set Json Two"})
+		vCLI.RunCLI("new", "person", "Set Json One").MustSucceed(t)
+		vCLI.RunCLI("new", "person", "Set Json Two").MustSucceed(t)
+
 		mcpResult := server.callTool("set", map[string]interface{}{
-			"stdin":       true,
-			"fields_json": map[string]interface{}{"email": "bulk@example.com"},
+			"stdin":      true,
+			"confirm":    true,
+			"object_ids": []interface{}{"people/set-json-one", "people/set-json-two"},
+			"fields_json": map[string]interface{}{
+				"email": "true",
+			},
 		})
-		cliResult := vCLI.RunCLIWithStdin("", "set", "--stdin", "--fields-json", "{\"email\":\"bulk@example.com\"}")
+		cliResult := vCLI.RunCLIWithStdin(
+			"people/set-json-one\npeople/set-json-two\n",
+			"set",
+			"--stdin",
+			"--confirm",
+			"--fields-json",
+			"{\"email\":\"true\"}",
+		)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+		vMCP.AssertFileContains("people/set-json-one.md", `email: "true"`)
+		vMCP.AssertFileContains("people/set-json-two.md", `email: "true"`)
+		vCLI.AssertFileContains("people/set-json-one.md", `email: "true"`)
+		vCLI.AssertFileContains("people/set-json-two.md", `email: "true"`)
 	})
 
 	t.Run("add_missing_text", func(t *testing.T) {

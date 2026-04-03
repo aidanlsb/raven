@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestSetObjectFileSuccess(t *testing.T) {
@@ -40,7 +41,7 @@ traits: {}
 	result, err := SetObjectFile(SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
-		Updates:       map[string]string{"email": "new@example.com"},
+		TypedUpdates:  map[string]schema.FieldValue{"email": schema.String("new@example.com")},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
@@ -92,7 +93,7 @@ traits: {}
 	_, err := SetObjectFile(SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "note",
-		Updates:       map[string]string{"status": "done"},
+		TypedUpdates:  map[string]schema.FieldValue{"status": schema.String("done")},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
@@ -136,7 +137,7 @@ traits: {}
 	_, err := SetObjectFile(SetObjectFileRequest{
 		FilePath:      filePath,
 		ObjectID:      "people/freya",
-		Updates:       map[string]string{"unknown": "x"},
+		TypedUpdates:  map[string]schema.FieldValue{"unknown": schema.String("x")},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},
 	})
@@ -196,8 +197,8 @@ traits: {}
 		VaultConfig: &config.VaultConfig{},
 		FilePath:    personPath,
 		ObjectID:    "people/freya",
-		Updates: map[string]string{
-			"employer": "[[companies/acme]]",
+		TypedUpdates: map[string]schema.FieldValue{
+			"employer": schema.Ref("companies/acme"),
 		},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true},

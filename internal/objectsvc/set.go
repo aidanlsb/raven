@@ -15,7 +15,6 @@ type SetObjectFileRequest struct {
 	VaultConfig   *config.VaultConfig
 	FilePath      string
 	ObjectID      string
-	Updates       map[string]string
 	TypedUpdates  map[string]schema.FieldValue
 	Schema        *schema.Schema
 	AllowedFields map[string]bool
@@ -53,27 +52,11 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 		objectType = "page"
 	}
 
-	mergedUpdates := make(map[string]string, len(req.Updates)+len(req.TypedUpdates))
-	for key, value := range req.Updates {
-		mergedUpdates[key] = value
-	}
-	for key, value := range req.TypedUpdates {
-		mergedUpdates[key] = fieldmutation.SerializeFieldValueLiteral(value)
-	}
-
-	fieldNames := make([]string, 0, len(mergedUpdates))
-	for key := range mergedUpdates {
-		fieldNames = append(fieldNames, key)
-	}
-	if unknownErr := fieldmutation.DetectUnknownFieldMutationByNames(objectType, req.Schema, fieldNames, req.AllowedFields); unknownErr != nil {
-		return nil, unknownErr
-	}
-
-	newContent, resolvedUpdates, warningMessages, err := fieldmutation.PrepareValidatedFrontmatterMutation(
+	newContent, warningMessages, err := fieldmutation.PrepareValidatedFrontmatterMutationValues(
 		string(content),
 		fm,
 		objectType,
-		mergedUpdates,
+		req.TypedUpdates,
 		req.Schema,
 		req.AllowedFields,
 		&fieldmutation.RefValidationContext{
@@ -84,6 +67,19 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	updatedFM, err := parser.ParseFrontmatter(newContent)
+	if err != nil {
+		return nil, newError(ErrorInvalidInput, "failed to parse updated frontmatter", "", nil, err)
+	}
+	if updatedFM == nil {
+		return nil, newError(ErrorInvalidInput, "file has no frontmatter after update", "", nil, nil)
+	}
+
+	resolvedUpdates := make(map[string]string, len(req.TypedUpdates))
+	for key := range req.TypedUpdates {
+		resolvedUpdates[key] = fieldmutation.SerializeFieldValueLiteral(updatedFM.Fields[key])
 	}
 
 	if err := atomicfile.WriteFile(req.FilePath, []byte(newContent), 0o644); err != nil {

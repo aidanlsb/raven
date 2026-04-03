@@ -30,17 +30,20 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 	fieldsJSON, _ := cmd.Flags().GetString("fields-json")
 
 	if stdin {
-		if strings.TrimSpace(fieldsJSON) != "" {
-			return nil, handleErrorMsg(ErrInvalidInput,
-				"--fields-json is not supported with --stdin",
-				"Use positional field=value updates when using --stdin")
-		}
 		updates, err := parseSetFieldArgs(args)
 		if err != nil {
 			return nil, err
 		}
-		if len(updates) == 0 {
-			return nil, handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value...")
+		typedUpdates, err := parseFieldValuesJSON(fieldsJSON)
+		if err != nil {
+			return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
+		}
+		fieldJSONRaw, err := parseFieldJSONObject(fieldsJSON)
+		if err != nil {
+			return nil, handleErrorMsg(ErrInvalidInput, "invalid --fields-json payload", "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
+		}
+		if len(updates) == 0 && len(typedUpdates) == 0 {
+			return nil, handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value... or --fields-json '{...}'")
 		}
 
 		fileIDs, embeddedIDs, err := ReadIDsFromStdin()
@@ -52,11 +55,17 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 		}
 
-		return map[string]interface{}{
+		argsMap := map[string]interface{}{
 			"stdin":      true,
 			"object_ids": stringsToAny(ids),
-			"fields":     stringMapToAny(updates),
-		}, nil
+		}
+		if len(updates) > 0 {
+			argsMap["fields"] = stringMapToAny(updates)
+		}
+		if len(fieldJSONRaw) > 0 {
+			argsMap["fields-json"] = fieldJSONRaw
+		}
+		return argsMap, nil
 	}
 
 	if len(args) < 1 {

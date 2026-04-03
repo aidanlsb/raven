@@ -760,6 +760,28 @@ func TestIntegration_SetFieldsJSONPreservesStringType(t *testing.T) {
 	v.AssertFileContains("people/erin.md", `email: "true"`)
 }
 
+func TestIntegration_SetBulkFieldsJSONPreservesStringType(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Bulk Erin One").MustSucceed(t)
+	v.RunCLI("new", "person", "Bulk Erin Two").MustSucceed(t)
+
+	result := v.RunCLIWithStdin(
+		"people/bulk-erin-one\npeople/bulk-erin-two\n",
+		"set",
+		"--stdin",
+		"--confirm",
+		"--fields-json",
+		`{"email":"true"}`,
+	)
+	result.MustSucceed(t)
+	v.AssertFileContains("people/bulk-erin-one.md", `email: "true"`)
+	v.AssertFileContains("people/bulk-erin-two.md", `email: "true"`)
+}
+
 func TestIntegration_UpsertFieldJSONPreservesStringType(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

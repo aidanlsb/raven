@@ -7,10 +7,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/frontmatter"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/slugs"
@@ -37,8 +37,8 @@ type CreateOptions struct {
 	TargetPath string
 
 	// Fields are additional frontmatter fields to include.
-	// Keys are field names, values are the field values.
-	Fields map[string]string
+	// Keys are field names, values are typed field values.
+	Fields map[string]schema.FieldValue
 
 	// Schema is used for:
 	// 1. Resolving default_path for types
@@ -118,56 +118,32 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Build frontmatter
 	var content strings.Builder
-	content.WriteString("---\n")
-	content.WriteString(fmt.Sprintf("type: %s\n", opts.TypeName))
-
-	// Collect all fields to write
-	allFields := make(map[string]string)
-
-	// Add provided fields
-	for k, v := range opts.Fields {
-		allFields[k] = v
+	allFields := make(map[string]schema.FieldValue, len(opts.Fields))
+	for key, value := range opts.Fields {
+		allFields[key] = value
 	}
+	blankFields := map[string]bool{}
 
 	// Add required field placeholders if requested
 	if opts.IncludeRequiredPlaceholders && opts.Schema != nil {
 		if typeDef, ok := opts.Schema.Types[opts.TypeName]; ok && typeDef != nil {
-			// Add required fields
 			for fieldName, fieldDef := range typeDef.Fields {
 				if fieldDef != nil && fieldDef.Required {
 					if _, exists := allFields[fieldName]; !exists {
-						allFields[fieldName] = "" // Empty placeholder
+						blankFields[fieldName] = true
 					}
 				}
 			}
 		}
 	}
 
-	// Sort field names for consistent output
-	var sortedFields []string
-	for name := range allFields {
-		sortedFields = append(sortedFields, name)
+	frontmatterContent, err := frontmatter.Render(opts.TypeName, allFields, blankFields)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render frontmatter: %w", err)
 	}
-	sort.Strings(sortedFields)
-
-	for _, fieldName := range sortedFields {
-		value := allFields[fieldName]
-		if value == "" {
-			content.WriteString(fmt.Sprintf("%s: \n", fieldName))
-		} else if isQuotedYAMLScalar(value) {
-			// Preserve explicit quoted scalars as-is to avoid double-quoting.
-			content.WriteString(fmt.Sprintf("%s: %s\n", fieldName, value))
-		} else if strings.ContainsAny(value, ":\n\"'") {
-			// Quote values that need it
-			content.WriteString(fmt.Sprintf("%s: \"%s\"\n", fieldName, strings.ReplaceAll(value, "\"", "\\\"")))
-		} else {
-			content.WriteString(fmt.Sprintf("%s: %s\n", fieldName, value))
-		}
-	}
-
-	content.WriteString("---\n\n")
+	content.WriteString(frontmatterContent)
+	content.WriteString("\n")
 
 	// Determine template to use
 	templateSpec := opts.TemplateOverride
@@ -210,14 +186,6 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		RelativePath:  relPath,
 		SlugifiedPath: slugifiedPath,
 	}, nil
-}
-
-func isQuotedYAMLScalar(value string) bool {
-	if len(value) < 2 {
-		return false
-	}
-	return (strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")) ||
-		(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'"))
 }
 
 // resolveDefaultPath applies the type's default_path if the target doesn't already have a directory.

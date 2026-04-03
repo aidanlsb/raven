@@ -12,6 +12,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
+	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/objectsvc"
@@ -63,27 +64,25 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err != nil {
 		return commandexec.Failure("INVALID_INPUT", "invalid --fields-json payload", nil, "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
 	}
+	allUpdates := mergeFieldInputs(updates, typedUpdates)
 
 	objectIDs := commandIDsArg(req.Args, "object_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
 	if stdinMode {
-		if _, ok := req.Args["fields-json"]; ok {
-			return commandexec.Failure("INVALID_INPUT", "--fields-json is not supported with --stdin", nil, "Use positional field=value updates when using --stdin")
-		}
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
 		}
-		if len(updates) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, "Usage: rvn set --stdin field=value...")
+		if len(allUpdates) == 0 {
+			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, "Usage: rvn set --stdin field=value... or --fields-json '{...}'")
 		}
-		return runSetBulk(vaultPath, vaultCfg, sch, objectIDs, updates, req.Confirm || boolArg(req.Args, "confirm"))
+		return runSetBulk(vaultPath, vaultCfg, sch, objectIDs, allUpdates, req.Confirm || boolArg(req.Args, "confirm"))
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
 	if reference == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "requires object-id", nil, "Usage: rvn set <object-id> field=value...")
 	}
-	if len(updates) == 0 && len(typedUpdates) == 0 {
+	if len(allUpdates) == 0 {
 		return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, "Usage: rvn set <object-id> field=value... or --fields-json '{...}'")
 	}
 
@@ -92,8 +91,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		VaultConfig:  vaultCfg,
 		Schema:       sch,
 		Reference:    reference,
-		Updates:      updates,
-		TypedUpdates: typedUpdates,
+		TypedUpdates: allUpdates,
 		ParseOptions: parseOptionsFromVaultConfig(vaultCfg),
 	})
 	if err != nil {
@@ -412,15 +410,16 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 	}, &commandexec.Meta{Count: summary.Modified})
 }
 
-func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, updates map[string]string, confirm bool) commandexec.Result {
+func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, updates map[string]schema.FieldValue, confirm bool) commandexec.Result {
 	request := objectsvc.SetBulkRequest{
 		VaultPath:    vaultPath,
 		VaultConfig:  vaultCfg,
 		Schema:       sch,
 		ObjectIDs:    ids,
-		Updates:      updates,
+		TypedUpdates: updates,
 		ParseOptions: parseOptionsFromVaultConfig(vaultCfg),
 	}
+	serializedUpdates := fieldmutation.SerializeFieldValueMap(updates)
 
 	if !confirm {
 		preview, err := objectsvc.PreviewSetBulk(request)
@@ -434,7 +433,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 			"skipped":  canonicalSetResults(preview.Skipped),
 			"total":    preview.Total,
 			"warnings": nil,
-			"fields":   updates,
+			"fields":   serializedUpdates,
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
@@ -453,8 +452,22 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		"skipped":  summary.Skipped,
 		"errors":   summary.Errors,
 		"modified": summary.Modified,
-		"fields":   updates,
+		"fields":   serializedUpdates,
 	}, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+}
+
+func mergeFieldInputs(literalUpdates map[string]string, typedUpdates map[string]schema.FieldValue) map[string]schema.FieldValue {
+	merged := fieldmutation.ParseFieldValueLiterals(literalUpdates)
+	if len(typedUpdates) == 0 {
+		return merged
+	}
+	if len(merged) == 0 {
+		merged = make(map[string]schema.FieldValue, len(typedUpdates))
+	}
+	for key, value := range typedUpdates {
+		merged[key] = value
+	}
+	return merged
 }
 
 func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, text string, headingSpec string, confirm bool) commandexec.Result {

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/parser"
 )
 
 // createTestVaultForReclassify creates a temp vault with schema and a typed file.
@@ -35,6 +37,7 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	prevVault := resolvedVaultPath
 	prevJSON := jsonOutput
 	prevFields := reclassifyFieldFlags
+	prevFieldJSON := reclassifyFieldJSON
 	prevNoMove := reclassifyNoMove
 	prevUpdateRefs := reclassifyUpdateRefs
 	prevForce := reclassifyForce
@@ -42,6 +45,7 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 		resolvedVaultPath = prevVault
 		jsonOutput = prevJSON
 		reclassifyFieldFlags = prevFields
+		reclassifyFieldJSON = prevFieldJSON
 		reclassifyNoMove = prevNoMove
 		reclassifyUpdateRefs = prevUpdateRefs
 		reclassifyForce = prevForce
@@ -50,6 +54,7 @@ func setupReclassifyGlobals(t *testing.T, vaultPath string) {
 	resolvedVaultPath = vaultPath
 	jsonOutput = true
 	reclassifyFieldFlags = nil
+	reclassifyFieldJSON = ""
 	reclassifyNoMove = false
 	reclassifyUpdateRefs = true
 	reclassifyForce = false
@@ -285,6 +290,64 @@ types:
 	content := string(b)
 	if !strings.Contains(content, "author: Tolkien") {
 		t.Fatalf("expected author field in frontmatter, got:\n%s", content)
+	}
+}
+
+func TestReclassifyFieldJSONPreservesStringType(t *testing.T) {
+	schemaYAML := `version: 2
+types:
+  note:
+    default_path: notes/
+  book:
+    default_path: books/
+    fields:
+      status:
+        type: string
+        required: true
+`
+	vaultPath := createTestVaultForReclassify(t, schemaYAML,
+		"notes/my-note.md",
+		"---\ntype: note\ntitle: My Note\n---\n\nContent.\n")
+
+	setupReclassifyGlobals(t, vaultPath)
+	reclassifyFieldJSON = `{"status":"false"}`
+	reclassifyNoMove = true
+	reclassifyForce = true
+
+	out := runReclassifyCommand(t, "notes/my-note", "book")
+
+	var resp struct {
+		OK   bool             `json:"ok"`
+		Data ReclassifyResult `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("parse JSON: %v; out=%s", err, out)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true; out=%s", out)
+	}
+
+	content, err := os.ReadFile(filepath.Join(vaultPath, "notes/my-note.md"))
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	fm, err := parser.ParseFrontmatter(string(content))
+	if err != nil {
+		t.Fatalf("ParseFrontmatter: %v", err)
+	}
+	if fm == nil {
+		t.Fatal("expected frontmatter, got nil")
+	}
+
+	status, ok := fm.Fields["status"]
+	if !ok {
+		t.Fatal("expected status field")
+	}
+	if got, ok := status.AsString(); !ok || got != "false" {
+		t.Fatalf("status = %#v, want string %q", status.Raw(), "false")
+	}
+	if _, ok := status.AsBool(); ok {
+		t.Fatal("status should remain a string, not a bool")
 	}
 }
 

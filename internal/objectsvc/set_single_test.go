@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestSetByReferenceSuccess(t *testing.T) {
@@ -41,7 +42,9 @@ traits: {}
 		VaultConfig: &config.VaultConfig{},
 		Schema:      sch,
 		Reference:   "people/freya",
-		Updates:     map[string]string{"email": "new@example.com"},
+		TypedUpdates: map[string]schema.FieldValue{
+			"email": schema.String("new@example.com"),
+		},
 	})
 	if err != nil {
 		t.Fatalf("SetByReference: %v", err)
@@ -89,7 +92,9 @@ traits: {}
 		VaultConfig: &config.VaultConfig{},
 		Schema:      sch,
 		Reference:   "people/missing",
-		Updates:     map[string]string{"alias": "ghost"},
+		TypedUpdates: map[string]schema.FieldValue{
+			"alias": schema.String("ghost"),
+		},
 	})
 	if err == nil {
 		t.Fatal("expected missing reference error")

@@ -2,7 +2,6 @@ package commandimpl
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -34,6 +33,11 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 	if err != nil {
 		return commandexec.Failure("INVALID_INPUT", err.Error(), nil, "Use --field key=value")
 	}
+	typedFieldValues, err := parseTypedFieldValues(req.Args["field-json"])
+	if err != nil {
+		return commandexec.Failure("INVALID_INPUT", "invalid --field-json payload", nil, "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+	}
+	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 
 	result, err := objectsvc.ReclassifyByReference(objectsvc.ReclassifyByReferenceRequest{
 		VaultPath:    vaultPath,
@@ -41,14 +45,14 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		Schema:       sch,
 		Reference:    strings.TrimSpace(stringArg(req.Args, "object")),
 		NewTypeName:  strings.TrimSpace(stringArg(req.Args, "new-type")),
-		FieldValues:  fieldValues,
+		FieldValues:  allFieldValues,
 		NoMove:       boolArg(req.Args, "no-move"),
 		UpdateRefs:   boolArgDefault(req.Args, "update-refs", true),
 		Force:        boolArg(req.Args, "force"),
 		ParseOptions: buildParseOptions(vaultCfg),
 	})
 	if err != nil {
-		return mapReclassifyFailure(err)
+		return mapContentMutationError(err)
 	}
 
 	if result.ChangedFilePath != "" {
@@ -79,12 +83,4 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 	}
 
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
-}
-
-func mapReclassifyFailure(err error) commandexec.Result {
-	var svcErr *objectsvc.Error
-	if !errors.As(err, &svcErr) {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
-	}
-	return commandexec.Failure(mapServiceCode(svcErr.Code), svcErr.Message, svcErr.Details, svcErr.Suggestion)
 }

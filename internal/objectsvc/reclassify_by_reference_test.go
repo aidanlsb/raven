@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestReclassifyByReferenceSuccess(t *testing.T) {
@@ -42,7 +44,7 @@ traits: {}
 		Schema:      sch,
 		Reference:   "notes/my-note",
 		NewTypeName: "book",
-		FieldValues: map[string]string{"author": "Tolkien"},
+		FieldValues: map[string]schema.FieldValue{"author": schema.String("Tolkien")},
 		NoMove:      true,
 		Force:       true,
 	})
@@ -98,5 +100,69 @@ traits: {}
 	}
 	if svcErr.Code != ErrorRefNotFound {
 		t.Fatalf("expected ErrorRefNotFound, got %s", svcErr.Code)
+	}
+}
+
+func TestReclassifyByReferencePreservesTypedStringFieldValue(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  note:
+    default_path: notes/
+    fields: {}
+  book:
+    default_path: books/
+    fields:
+      status:
+        type: string
+        required: true
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	filePath := filepath.Join(vaultPath, "notes/my-note.md")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("---\ntype: note\n---\n# My Note\n"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	_, err := ReclassifyByReference(ReclassifyByReferenceRequest{
+		VaultPath:   vaultPath,
+		VaultConfig: &config.VaultConfig{},
+		Schema:      sch,
+		Reference:   "notes/my-note",
+		NewTypeName: "book",
+		FieldValues: map[string]schema.FieldValue{"status": schema.String("false")},
+		NoMove:      true,
+		Force:       true,
+	})
+	if err != nil {
+		t.Fatalf("ReclassifyByReference: %v", err)
+	}
+
+	updated, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("read updated file: %v", err)
+	}
+	fm, err := parser.ParseFrontmatter(string(updated))
+	if err != nil {
+		t.Fatalf("ParseFrontmatter: %v", err)
+	}
+	if fm == nil {
+		t.Fatal("expected frontmatter, got nil")
+	}
+
+	status, ok := fm.Fields["status"]
+	if !ok {
+		t.Fatal("expected status field")
+	}
+	if got, ok := status.AsString(); !ok || got != "false" {
+		t.Fatalf("status = %#v, want string %q", status.Raw(), "false")
+	}
+	if _, ok := status.AsBool(); ok {
+		t.Fatal("status should remain a string, not a bool")
 	}
 }

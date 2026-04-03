@@ -15,7 +15,6 @@ type SetByReferenceRequest struct {
 	VaultConfig  *config.VaultConfig
 	Schema       *schema.Schema
 	Reference    string
-	Updates      map[string]string
 	TypedUpdates map[string]schema.FieldValue
 	ParseOptions *parser.ParseOptions
 }
@@ -57,7 +56,6 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 			VaultConfig:    req.VaultConfig,
 			FilePath:       resolved.FilePath,
 			ObjectID:       resolved.ObjectID,
-			Updates:        req.Updates,
 			TypedUpdates:   req.TypedUpdates,
 			Schema:         req.Schema,
 			AllowedFields:  map[string]bool{"alias": true, "id": true},
@@ -87,7 +85,6 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 		VaultConfig:   req.VaultConfig,
 		FilePath:      resolved.FilePath,
 		ObjectID:      resolved.ObjectID,
-		Updates:       req.Updates,
 		TypedUpdates:  req.TypedUpdates,
 		Schema:        req.Schema,
 		AllowedFields: map[string]bool{"alias": true},

@@ -45,11 +45,9 @@ type: page
 		VaultPath: vaultPath,
 		FilePath:  filePath,
 		ObjectID:  "notes/day#standup",
-		Updates: map[string]string{
-			"status": "done",
-		},
 		TypedUpdates: map[string]schema.FieldValue{
-			"count": schema.Number(2),
+			"status": schema.String("done"),
+			"count":  schema.Number(2),
 		},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true, "id": true},
@@ -107,8 +105,8 @@ traits: {}
 		VaultPath: vaultPath,
 		FilePath:  filepath.Join(vaultPath, "notes/day.md"),
 		ObjectID:  "notes/day",
-		Updates: map[string]string{
-			"status": "done",
+		TypedUpdates: map[string]schema.FieldValue{
+			"status": schema.String("done"),
 		},
 		Schema: sch,
 	})
@@ -157,8 +155,8 @@ type: page
 		VaultPath: vaultPath,
 		FilePath:  filePath,
 		ObjectID:  "notes/day#standup",
-		Updates: map[string]string{
-			"unknown": "x",
+		TypedUpdates: map[string]schema.FieldValue{
+			"unknown": schema.String("x"),
 		},
 		Schema:        sch,
 		AllowedFields: map[string]bool{"alias": true, "id": true},

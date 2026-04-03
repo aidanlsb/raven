@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -220,9 +221,9 @@ func TestCreate(t *testing.T) {
 			TypeName:   "project",
 			Title:      "Website",
 			TargetPath: "projects/website",
-			Fields: map[string]string{
-				"status": "active",
-				"owner":  "freya",
+			Fields: map[string]schema.FieldValue{
+				"status": schema.String("active"),
+				"owner":  schema.String("freya"),
 			},
 		})
 		if err != nil {
@@ -237,6 +238,86 @@ func TestCreate(t *testing.T) {
 		}
 		if !strings.Contains(contentStr, "owner: freya") {
 			t.Error("File missing 'owner: freya' field")
+		}
+	})
+
+	t.Run("preserves typed string and ref fields", func(t *testing.T) {
+		result, err := Create(CreateOptions{
+			VaultPath:  tmpDir,
+			TypeName:   "project",
+			Title:      "Typed Website",
+			TargetPath: "projects/typed-website",
+			Fields: map[string]schema.FieldValue{
+				"status":  schema.String("false"),
+				"summary": schema.String("ready: now"),
+				"owner":   schema.Ref("people/freya"),
+			},
+		})
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+
+		content, err := os.ReadFile(result.FilePath)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+
+		fm, err := parser.ParseFrontmatter(string(content))
+		if err != nil {
+			t.Fatalf("ParseFrontmatter failed: %v", err)
+		}
+		if fm == nil {
+			t.Fatal("expected frontmatter, got nil")
+		}
+
+		status, ok := fm.Fields["status"]
+		if !ok {
+			t.Fatal("missing status field")
+		}
+		if got, ok := status.AsString(); !ok || got != "false" {
+			t.Fatalf("status = %#v, want string %q", status.Raw(), "false")
+		}
+		if _, ok := status.AsBool(); ok {
+			t.Fatal("status should remain a string, not a bool")
+		}
+
+		if got, ok := fm.Fields["summary"].AsString(); !ok || got != "ready: now" {
+			t.Fatalf("summary = %#v, want string %q", fm.Fields["summary"].Raw(), "ready: now")
+		}
+		if got, ok := fm.Fields["owner"].AsRef(); !ok || got != "people/freya" {
+			t.Fatalf("owner = %#v, want ref %q", fm.Fields["owner"].Raw(), "people/freya")
+		}
+	})
+
+	t.Run("includes blank placeholders for required fields", func(t *testing.T) {
+		sch := &schema.Schema{
+			Types: map[string]*schema.TypeDefinition{
+				"meeting": {
+					Fields: map[string]*schema.FieldDefinition{
+						"host": {Type: schema.FieldTypeString, Required: true},
+					},
+				},
+			},
+		}
+
+		result, err := Create(CreateOptions{
+			VaultPath:                   tmpDir,
+			TypeName:                    "meeting",
+			Title:                       "Team Sync",
+			TargetPath:                  "meetings/team-sync-placeholders",
+			Schema:                      sch,
+			IncludeRequiredPlaceholders: true,
+		})
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+
+		content, err := os.ReadFile(result.FilePath)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+		if !strings.Contains(string(content), "host: \n") {
+			t.Fatalf("expected blank required placeholder, got:\n%s", string(content))
 		}
 	})
 
@@ -345,7 +426,7 @@ func TestCreateWithTemplate(t *testing.T) {
 			TypeName:         "meeting",
 			Title:            "Project Review",
 			TargetPath:       "meetings/project-review",
-			Fields:           map[string]string{"time": "14:00", "location": "Room A"},
+			Fields:           map[string]schema.FieldValue{"time": schema.String("14:00"), "location": schema.String("Room A")},
 			TemplateOverride: "templates/meeting-fields.md",
 			TemplateDir:      "templates/",
 		})

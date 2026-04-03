@@ -64,19 +64,18 @@ func newError(code ErrorCode, message, suggestion string, details map[string]int
 }
 
 type UpsertRequest struct {
-	VaultPath        string
-	TypeName         string
-	Title            string
-	TargetPath       string
-	ReplaceBody      bool
-	Content          string
-	FieldValues      map[string]string
-	TypedFieldValues map[string]schema.FieldValue
-	VaultConfig      *config.VaultConfig
-	Schema           *schema.Schema
-	ObjectsRoot      string
-	PagesRoot        string
-	TemplateDir      string
+	VaultPath   string
+	TypeName    string
+	Title       string
+	TargetPath  string
+	ReplaceBody bool
+	Content     string
+	FieldValues map[string]schema.FieldValue
+	VaultConfig *config.VaultConfig
+	Schema      *schema.Schema
+	ObjectsRoot string
+	PagesRoot   string
+	TemplateDir string
 }
 
 type UpsertResult struct {
@@ -91,10 +90,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
 
-	fieldValues := make(map[string]string, len(req.FieldValues)+len(req.TypedFieldValues))
-	for key, value := range req.FieldValues {
-		fieldValues[key] = value
-	}
+	fieldValues := cloneFieldValues(req.FieldValues)
 
 	typeDef, typeExists := req.Schema.Types[req.TypeName]
 	if !typeExists && !schema.IsBuiltinType(req.TypeName) {
@@ -112,17 +108,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		)
 	}
 
-	if typeDef != nil && typeDef.NameField != "" {
-		if _, provided := fieldValues[typeDef.NameField]; !provided {
-			if _, typedProvided := req.TypedFieldValues[typeDef.NameField]; !typedProvided && req.Title != "" {
-				fieldValues[typeDef.NameField] = req.Title
-			}
-		}
-	}
-
-	for key, value := range req.TypedFieldValues {
-		fieldValues[key] = fieldmutation.SerializeFieldValueLiteral(value)
-	}
+	ensureNameFieldValue(fieldValues, typeDef, req.Title)
 
 	slugified := pages.SlugifyPath(
 		pages.ResolveTargetPathWithRoots(req.TargetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot),
@@ -137,7 +123,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 	var warningMessages []string
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		missingRequired := requiredFieldGaps(typeDef, fieldValues)
+		missingRequired := requiredFieldGapsValues(typeDef, fieldValues)
 		if len(missingRequired) > 0 {
 			msg := fmt.Sprintf("Missing required fields: %s", strings.Join(missingRequired, ", "))
 			return nil, newError(
@@ -158,7 +144,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			)
 		}
 
-		_, resolvedCreateFields, createWarnings, err := fieldmutation.PrepareValidatedFieldMutation(
+		validatedCreateFields, createWarnings, err := fieldmutation.PrepareValidatedFieldMutationValues(
 			req.TypeName,
 			nil,
 			fieldValues,
@@ -172,7 +158,6 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		fieldValues = resolvedCreateFields
 		warningMessages = append(warningMessages, createWarnings...)
 
 		createResult, err := pages.Create(pages.CreateOptions{
@@ -180,7 +165,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			TypeName:    req.TypeName,
 			Title:       req.Title,
 			TargetPath:  req.TargetPath,
-			Fields:      fieldValues,
+			Fields:      validatedCreateFields,
 			Schema:      req.Schema,
 			TemplateDir: req.TemplateDir,
 			ObjectsRoot: req.ObjectsRoot,
@@ -192,53 +177,16 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		filePath = createResult.FilePath
 		relPath = createResult.RelativePath
 
-		createdBytes, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, newError(ErrorFileRead, "failed to read created object", "", nil, err)
-		}
-		createdContent := string(createdBytes)
-
-		if len(resolvedCreateFields) > 0 {
-			createdFM, err := parser.ParseFrontmatter(createdContent)
-			if err != nil {
-				return nil, newError(ErrorInvalidInput, "failed to parse frontmatter", "The file must have YAML frontmatter (---) for upsert", nil, err)
-			}
-			if createdFM == nil {
-				return nil, newError(
-					ErrorInvalidInput,
-					"file has no frontmatter",
-					"The file must have YAML frontmatter (---) for upsert",
-					nil,
-					nil,
-				)
-			}
-
-			updatedContent, _, contentWarnings, err := fieldmutation.PrepareValidatedFrontmatterMutation(
-				createdContent,
-				createdFM,
-				req.TypeName,
-				resolvedCreateFields,
-				req.Schema,
-				map[string]bool{"type": true, "alias": true},
-				&fieldmutation.RefValidationContext{
-					VaultPath:   req.VaultPath,
-					VaultConfig: req.VaultConfig,
-				},
-			)
-			if err != nil {
-				return nil, err
-			}
-			warningMessages = append(warningMessages, contentWarnings...)
-			createdContent = updatedContent
-		}
-
 		if req.ReplaceBody {
-			createdContent = replaceBodyContent(createdContent, req.Content)
-		}
-
-		if createdContent != string(createdBytes) {
-			if err := atomicfile.WriteFile(filePath, []byte(createdContent), 0o644); err != nil {
-				return nil, newError(ErrorFileWrite, "failed to write updated object", "", nil, err)
+			createdBytes, err := os.ReadFile(filePath)
+			if err != nil {
+				return nil, newError(ErrorFileRead, "failed to read created object", "", nil, err)
+			}
+			createdContent := replaceBodyContent(string(createdBytes), req.Content)
+			if createdContent != string(createdBytes) {
+				if err := atomicfile.WriteFile(filePath, []byte(createdContent), 0o644); err != nil {
+					return nil, newError(ErrorFileWrite, "failed to write updated object", "", nil, err)
+				}
 			}
 		}
 
@@ -275,13 +223,13 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			)
 		}
 
-		updates := make(map[string]string, len(fieldValues)+1)
+		updates := make(map[string]schema.FieldValue, len(fieldValues)+1)
 		if fm.ObjectType == "" {
-			updates["type"] = req.TypeName
+			updates["type"] = schema.String(req.TypeName)
 		}
 		for key, value := range fieldValues {
 			if fm.Fields != nil {
-				if existing, ok := fm.Fields[key]; ok && fieldValueMatchesInput(existing, value) {
+				if existing, ok := fm.Fields[key]; ok && fieldValueMatchesValue(existing, value) {
 					continue
 				}
 			}
@@ -291,7 +239,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		nextContent := original
 		if len(updates) > 0 {
 			var updateWarnings []string
-			nextContent, _, updateWarnings, err = fieldmutation.PrepareValidatedFrontmatterMutation(
+			nextContent, updateWarnings, err = fieldmutation.PrepareValidatedFrontmatterMutationValues(
 				original,
 				fm,
 				req.TypeName,
@@ -327,42 +275,6 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		RelativePath:    relPath,
 		WarningMessages: warningMessages,
 	}, nil
-}
-
-func requiredFieldGaps(typeDef *schema.TypeDefinition, fields map[string]string) []string {
-	if typeDef == nil {
-		return nil
-	}
-
-	var missing []string
-	for fieldName, fieldDef := range typeDef.Fields {
-		if fieldDef == nil || !fieldDef.Required {
-			continue
-		}
-		if _, ok := fields[fieldName]; ok {
-			continue
-		}
-		if fieldDef.Default != nil {
-			fields[fieldName] = fmt.Sprintf("%v", fieldDef.Default)
-			continue
-		}
-		missing = append(missing, fieldName)
-	}
-	sort.Strings(missing)
-	return missing
-}
-
-func fieldValueMatchesInput(v schema.FieldValue, input string) bool {
-	if s, ok := v.AsString(); ok {
-		return s == input
-	}
-	if n, ok := v.AsNumber(); ok {
-		return fmt.Sprintf("%v", n) == input
-	}
-	if b, ok := v.AsBool(); ok {
-		return fmt.Sprintf("%v", b) == input
-	}
-	return fmt.Sprintf("%v", v.Raw()) == input
 }
 
 func replaceBodyContent(fileContent, newBody string) string {
