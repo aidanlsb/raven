@@ -148,4 +148,3 @@ func TestCompactDiscoverRejectsLegacySearchAndPaginationArgs(t *testing.T) {
 		}
 	}
 }
-
