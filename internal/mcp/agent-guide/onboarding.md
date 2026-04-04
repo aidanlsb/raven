@@ -17,7 +17,7 @@ Use this guide when teaching a new user how Raven works.
 raven_invoke(command="schema", args={"subcommand":"types"})
 raven_invoke(command="schema", args={"subcommand":"traits"})
 raven_invoke(command="vault_stats")
-raven_invoke(command="query", args={"list":true})
+raven_invoke(command="query_saved_list")
 ```
 
 ## First create flow
@@ -38,7 +38,7 @@ raven_invoke(command="query", args={"query_string":"trait:due in(.value, [today,
 ## Saved query example
 
 ```text
-raven_invoke(command="query_add", args={
+raven_invoke(command="query_saved_set", args={
   "name":"reading-list",
   "query_string":"object:book .status==reading"
 })

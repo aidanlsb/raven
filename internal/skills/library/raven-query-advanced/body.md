@@ -17,7 +17,7 @@ Use this skill when the user needs non-trivial Raven Query Language (RQL) work.
 2. Estimate result size with `--count-only`, or start with a small `--limit` sample.
 3. Page with `--limit` and `--offset`, and use `--ids` when the next step is another Raven command.
 4. Read only the narrowed results you actually need; switch to `rvn search` only when structure is unknown.
-5. If this is repeated work, save the query with `rvn query add`.
+5. If this is repeated work, save the query with `rvn query saved set`.
 6. For bulk changes, preview `rvn query --apply ...`, inspect the sample or IDs, then add `--confirm` only after approval and follow with a verification query or `rvn check`.
 
 ## Load references only as needed

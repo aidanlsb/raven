@@ -98,6 +98,90 @@ func TestParseInputs(t *testing.T) {
 	}
 }
 
+func TestSavedQueryLifecycle(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+
+	created, err := Set(SetRequest{
+		VaultPath:   vaultPath,
+		Name:        "project-todos",
+		QueryString: "trait:todo refs([[{{args.project}}]])",
+		Args:        []string{"project"},
+		Description: "Todos linked to a project",
+	})
+	if err != nil {
+		t.Fatalf("Set(create) unexpected error: %v", err)
+	}
+	if created.Status != SetStatusCreated {
+		t.Fatalf("Set(create) status = %q, want %q", created.Status, SetStatusCreated)
+	}
+
+	got, err := Get(GetRequest{VaultPath: vaultPath, Name: "project-todos"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if got.Query.Name != "project-todos" || got.Query.Query != "trait:todo refs([[{{args.project}}]])" {
+		t.Fatalf("Get() = %#v", got.Query)
+	}
+
+	listed, err := List(ListRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	wantList := []SavedQueryInfo{{
+		Name:        "project-todos",
+		Query:       "trait:todo refs([[{{args.project}}]])",
+		Args:        []string{"project"},
+		Description: "Todos linked to a project",
+	}}
+	if !reflect.DeepEqual(listed.Queries, wantList) {
+		t.Fatalf("List() = %#v, want %#v", listed.Queries, wantList)
+	}
+
+	unchanged, err := Set(SetRequest{
+		VaultPath:   vaultPath,
+		Name:        "project-todos",
+		QueryString: "trait:todo refs([[{{args.project}}]])",
+		Args:        []string{"project"},
+		Description: "Todos linked to a project",
+	})
+	if err != nil {
+		t.Fatalf("Set(unchanged) unexpected error: %v", err)
+	}
+	if unchanged.Status != SetStatusUnchanged {
+		t.Fatalf("Set(unchanged) status = %q, want %q", unchanged.Status, SetStatusUnchanged)
+	}
+
+	updated, err := Set(SetRequest{
+		VaultPath:   vaultPath,
+		Name:        "project-todos",
+		QueryString: "trait:todo refs([[{{args.project}}]]) .value==todo",
+		Args:        []string{"project"},
+	})
+	if err != nil {
+		t.Fatalf("Set(update) unexpected error: %v", err)
+	}
+	if updated.Status != SetStatusUpdated {
+		t.Fatalf("Set(update) status = %q, want %q", updated.Status, SetStatusUpdated)
+	}
+	if updated.Query.Description != "" {
+		t.Fatalf("Set(update) description = %q, want empty", updated.Query.Description)
+	}
+
+	removed, err := Remove(RemoveRequest{VaultPath: vaultPath, Name: "project-todos"})
+	if err != nil {
+		t.Fatalf("Remove() unexpected error: %v", err)
+	}
+	if !removed.Removed {
+		t.Fatalf("Remove() removed = false, want true")
+	}
+
+	if _, err := Get(GetRequest{VaultPath: vaultPath, Name: "project-todos"}); err == nil {
+		t.Fatal("Get() after remove expected error, got nil")
+	}
+}
+
 func TestParseInputsWithKeyValues(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

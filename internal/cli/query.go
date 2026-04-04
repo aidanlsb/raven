@@ -251,7 +251,7 @@ Examples:
   rvn query tasks                    # Run saved query
   rvn query project-todos raven      # Positional input (args: [project])
   rvn query project-todos project=projects/raven
-  rvn query --list                   # List saved queries`,
+  rvn query saved list               # Manage saved queries`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
@@ -266,16 +266,8 @@ Examples:
 			SetPipeFormat(&f)
 		}
 
-		// Handle --list flag
-		listFlag, _ := cmd.Flags().GetBool("list")
-		if listFlag {
-			return runCanonicalQuery("", map[string]interface{}{
-				"list": true,
-			})
-		}
-
 		if len(args) == 0 {
-			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query --list' to see saved queries")
+			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query saved list' to see saved queries")
 		}
 
 		// Load vault config for saved queries and unknown-query suggestions.
@@ -824,20 +816,41 @@ func intFromAny(raw interface{}) int {
 	}
 }
 
-var queryAddCmd = newCanonicalLeafCommand("query_add", canonicalLeafOptions{
+var querySavedCmd = &cobra.Command{
+	Use:   "saved",
+	Short: "Manage saved queries",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
+	},
+}
+
+var querySavedListCmd = newCanonicalLeafCommand("query_saved_list", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	BuildArgs:   buildQueryAddArgs,
 	HandleError: handleCanonicalQueryFailure,
-	RenderHuman: renderQueryAdd,
+	RenderHuman: renderQuerySavedList,
 })
 
-var queryRemoveCmd = newCanonicalLeafCommand("query_remove", canonicalLeafOptions{
+var querySavedGetCmd = newCanonicalLeafCommand("query_saved_get", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	HandleError: handleCanonicalQueryFailure,
-	RenderHuman: renderQueryRemove,
+	RenderHuman: renderQuerySavedGet,
 })
 
-func buildQueryAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
+var querySavedSetCmd = newCanonicalLeafCommand("query_saved_set", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	BuildArgs:   buildQuerySavedSetArgs,
+	HandleError: handleCanonicalQueryFailure,
+	RenderHuman: renderQuerySavedSet,
+})
+
+var querySavedRemoveCmd = newCanonicalLeafCommand("query_saved_remove", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	HandleError: handleCanonicalQueryFailure,
+	RenderHuman: renderQuerySavedRemove,
+})
+
+func buildQuerySavedSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	declaredArgs, err := normalizeSavedQueryArgsForCommand(cmd)
 	if err != nil {
 		return nil, err
@@ -858,14 +871,42 @@ func handleCanonicalQueryFailure(result commandexec.Result) error {
 	return handleErrorWithDetails(mapQueryCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
 }
 
-func renderQueryAdd(_ *cobra.Command, result commandexec.Result) error {
+func renderQuerySavedList(_ *cobra.Command, result commandexec.Result) error {
+	return listSavedQueries(savedQueriesFromResult(canonicalDataMap(result)["queries"]))
+}
+
+func renderQuerySavedGet(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	fmt.Println(ui.Checkf("Added query '%s'", stringValue(data["name"])))
-	fmt.Printf("  %s %s\n", ui.Hint("Run with:"), ui.Bold.Render("rvn query "+stringValue(data["name"])))
+	fmt.Printf("%s %s\n", ui.Hint("Name:"), stringValue(data["name"]))
+	fmt.Printf("%s %s\n", ui.Hint("Query:"), stringValue(data["query"]))
+	if args := stringSliceFromAny(data["args"]); len(args) > 0 {
+		fmt.Printf("%s %s\n", ui.Hint("Args:"), strings.Join(args, ", "))
+	} else {
+		fmt.Printf("%s %s\n", ui.Hint("Args:"), ui.Hint("(none)"))
+	}
+	if description := stringValue(data["description"]); description != "" {
+		fmt.Printf("%s %s\n", ui.Hint("Description:"), description)
+	}
 	return nil
 }
 
-func renderQueryRemove(_ *cobra.Command, result commandexec.Result) error {
+func renderQuerySavedSet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	status := stringValue(data["status"])
+	name := stringValue(data["name"])
+	switch status {
+	case "created":
+		fmt.Println(ui.Checkf("Created saved query '%s'", name))
+	case "updated":
+		fmt.Println(ui.Checkf("Updated saved query '%s'", name))
+	default:
+		fmt.Println(ui.Starf("Saved query '%s' unchanged", name))
+	}
+	fmt.Printf("  %s %s\n", ui.Hint("Run with:"), ui.Bold.Render("rvn query "+name))
+	return nil
+}
+
+func renderQuerySavedRemove(_ *cobra.Command, result commandexec.Result) error {
 	fmt.Println(ui.Checkf("Removed query '%s'", stringValue(canonicalDataMap(result)["name"])))
 	return nil
 }
@@ -1028,8 +1069,6 @@ func mapQuerySvcError(err error) error {
 		return handleErrorMsg(ErrQueryInvalid, svcErr.Message, svcErr.Suggestion)
 	case querysvc.CodeQueryNotFound:
 		return handleErrorMsg(ErrQueryNotFound, svcErr.Message, svcErr.Suggestion)
-	case querysvc.CodeDuplicateName:
-		return handleErrorMsg(ErrDuplicateName, svcErr.Message, svcErr.Suggestion)
 	case querysvc.CodeConfigInvalid:
 		return handleError(ErrConfigInvalid, svcErr, svcErr.Suggestion)
 	case querysvc.CodeFileWriteError:
@@ -1040,7 +1079,6 @@ func mapQuerySvcError(err error) error {
 }
 
 func init() {
-	queryCmd.Flags().BoolP("list", "l", false, "List saved queries")
 	queryCmd.Flags().Bool("refresh", false, "Refresh stale files before query")
 	queryCmd.Flags().Bool("ids", false, "Output only object/trait IDs, one per line (for piping)")
 	queryCmd.Flags().Int("limit", 0, "Maximum number of query results to return (0 means no limit)")
@@ -1051,7 +1089,10 @@ func init() {
 	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output format")
 	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
 
-	queryCmd.AddCommand(queryAddCmd)
-	queryCmd.AddCommand(queryRemoveCmd)
+	querySavedCmd.AddCommand(querySavedListCmd)
+	querySavedCmd.AddCommand(querySavedGetCmd)
+	querySavedCmd.AddCommand(querySavedSetCmd)
+	querySavedCmd.AddCommand(querySavedRemoveCmd)
+	queryCmd.AddCommand(querySavedCmd)
 	rootCmd.AddCommand(queryCmd)
 }

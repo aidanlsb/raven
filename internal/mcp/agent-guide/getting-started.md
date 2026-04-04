@@ -12,7 +12,7 @@ Use this guide after quickstart when you need an operational first pass through 
 2. Get a vault overview:
    `raven_invoke(command="vault_stats")`
 3. Check saved queries:
-   `raven://queries/saved` or `raven_invoke(command="query", args={"list":true})`
+   `raven://queries/saved` or `raven_invoke(command="query_saved_list")`
 
 ## Preferred first write flow
 

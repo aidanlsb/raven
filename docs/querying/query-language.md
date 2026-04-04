@@ -233,9 +233,9 @@ rvn query 'object:project refs([[companies/acme]])' --refresh --json
 ### Save and Reuse Queries
 
 ```bash
-rvn query add overdue 'trait:due .value<today' --json
+rvn query saved set overdue 'trait:due .value<today' --json
 rvn query overdue --json
-rvn query --list --json
+rvn query saved list --json
 ```
 
 Saved query placeholders (`{{args.name}}`) must be declared in `raven.yaml` under `queries.<name>.args`.

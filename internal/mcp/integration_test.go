@@ -2126,33 +2126,63 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_type", "type", "items", "total", "returned", "offset", "limit"})
 	})
 
-	t.Run("query_add", func(t *testing.T) {
+	t.Run("query_saved_list", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		mcpResult := server.callTool("query_add", map[string]interface{}{
-			"name":         "overdue",
-			"query_string": "trait:due .value<today",
-			"description":  "Overdue tasks",
+		vMCP.RunCLI("query", "saved", "set", "overdue", "trait:due .value<today", "--description", "Overdue tasks").MustSucceed(t)
+		vCLI.RunCLI("query", "saved", "set", "overdue", "trait:due .value<today", "--description", "Overdue tasks").MustSucceed(t)
+
+		mcpResult := server.callTool("query_saved_list", map[string]interface{}{})
+		cliResult := vCLI.RunCLI("query", "saved", "list")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"queries"})
+	})
+
+	t.Run("query_saved_get", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("query", "saved", "set", "overdue", "trait:due .value<today", "--description", "Overdue tasks").MustSucceed(t)
+		vCLI.RunCLI("query", "saved", "set", "overdue", "trait:due .value<today", "--description", "Overdue tasks").MustSucceed(t)
+
+		mcpResult := server.callTool("query_saved_get", map[string]interface{}{
+			"name": "overdue",
 		})
-		cliResult := vCLI.RunCLI("query", "add", "overdue", "trait:due .value<today", "--description", "Overdue tasks")
+		cliResult := vCLI.RunCLI("query", "saved", "get", "overdue")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "query", "args", "description"})
 	})
 
-	t.Run("query_remove", func(t *testing.T) {
+	t.Run("query_saved_set", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
-		vMCP.RunCLI("query", "add", "overdue", "trait:due .value<today").MustSucceed(t)
-		vCLI.RunCLI("query", "add", "overdue", "trait:due .value<today").MustSucceed(t)
+		mcpResult := server.callTool("query_saved_set", map[string]interface{}{
+			"name":         "overdue",
+			"query_string": "trait:due .value<today",
+			"description":  "Overdue tasks",
+		})
+		cliResult := vCLI.RunCLI("query", "saved", "set", "overdue", "trait:due .value<today", "--description", "Overdue tasks")
 
-		mcpResult := server.callTool("query_remove", map[string]interface{}{
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "query", "args", "description", "status"})
+	})
+
+	t.Run("query_saved_remove", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("query", "saved", "set", "overdue", "trait:due .value<today").MustSucceed(t)
+		vCLI.RunCLI("query", "saved", "set", "overdue", "trait:due .value<today").MustSucceed(t)
+
+		mcpResult := server.callTool("query_saved_remove", map[string]interface{}{
 			"name": "overdue",
 		})
-		cliResult := vCLI.RunCLI("query", "remove", "overdue")
+		cliResult := vCLI.RunCLI("query", "saved", "remove", "overdue")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"name", "removed"})
 	})

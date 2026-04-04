@@ -36,9 +36,9 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json
 ## Saved query lifecycle
 
 ```bash
-rvn query add overdue 'trait:due .value<today' --json
+rvn query saved set overdue 'trait:due .value<today' --json
 rvn query overdue --json
-rvn query remove overdue --json
+rvn query saved remove overdue --json
 ```
 
 ## Adjacent helpers

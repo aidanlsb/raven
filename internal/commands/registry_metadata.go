@@ -55,7 +55,8 @@ func RequiresVault(commandID string) bool {
 func defaultCategoryForCommandID(commandID string) Category {
 	commandID = strings.ReplaceAll(commandID, " ", "_")
 	switch {
-	case commandID == "query" || commandID == "query_add" || commandID == "query_remove" ||
+	case commandID == "query" || commandID == "query_saved_list" || commandID == "query_saved_get" ||
+		commandID == "query_saved_set" || commandID == "query_saved_remove" ||
 		commandID == "search" || commandID == "backlinks" || commandID == "outlinks" || commandID == "resolve":
 		return CategoryQuery
 	case commandID == "new" || commandID == "add" || commandID == "upsert" || commandID == "set" ||
@@ -76,7 +77,7 @@ func defaultCategoryForCommandID(commandID string) Category {
 func defaultAccessForCommandID(commandID string) AccessMode {
 	commandID = strings.ReplaceAll(commandID, " ", "_")
 	switch commandID {
-	case "read", "search", "backlinks", "outlinks", "resolve", "query",
+	case "read", "search", "backlinks", "outlinks", "resolve", "query", "query_saved_list", "query_saved_get",
 		"schema", "schema_validate", "schema_template_list", "schema_template_get",
 		"docs", "docs_list", "docs_search",
 		"version",

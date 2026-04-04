@@ -207,6 +207,22 @@ Saved queries still use the `query` command. Pass the saved query name as `query
 }
 ```
 
+### Saved query management
+
+Use the dedicated saved-query commands to inspect or update definitions.
+
+```json
+{
+  "command": "query_saved_set",
+  "args": {
+    "name": "project-todos",
+    "query_string": "trait:todo refs([[{{args.project}}]])",
+    "arg": ["project"],
+    "description": "Todos linked to a project"
+  }
+}
+```
+
 ## Common Patterns
 
 ### Read and search

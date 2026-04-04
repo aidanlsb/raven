@@ -71,8 +71,8 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	if envelope.Data.InvokeShape.Wrapper == "" {
 		t.Fatalf("expected invoke wrapper note metadata: %s", out)
 	}
-	if len(envelope.Data.ArgsSchema.Required) != 0 {
-		t.Fatalf("expected query_string to be optional in compact schema when list=true is supported: %s", out)
+	if len(envelope.Data.ArgsSchema.Required) != 1 || envelope.Data.ArgsSchema.Required[0] != "query_string" {
+		t.Fatalf("expected query_string to be required in compact schema: %s", out)
 	}
 	if _, ok := envelope.Data.ArgsSchema.Properties["query_string"]; !ok {
 		t.Fatalf("expected query_string property in compact schema: %s", out)
@@ -83,12 +83,12 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	if envelope.Data.InvokeExample.SchemaHash != envelope.Data.SchemaHash {
 		t.Fatalf("invoke_example.schema_hash=%q, want %q", envelope.Data.InvokeExample.SchemaHash, envelope.Data.SchemaHash)
 	}
-	if _, ok := envelope.Data.InvokeExample.Args["query_string"]; ok {
-		t.Fatalf("expected invoke example args to omit optional query_string: %s", out)
+	if _, ok := envelope.Data.InvokeExample.Args["query_string"]; !ok {
+		t.Fatalf("expected invoke example args to include required query_string: %s", out)
 	}
 }
 
-func TestCompactInvokeAllowsQueryListWithoutQueryString(t *testing.T) {
+func TestCompactInvokeListsSavedQueriesWithDedicatedCommand(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
@@ -101,13 +101,10 @@ func TestCompactInvokeAllowsQueryListWithoutQueryString(t *testing.T) {
 	server := NewServer(v.Path)
 
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
-		"command": "query",
-		"args": map[string]interface{}{
-			"list": true,
-		},
+		"command": "query_saved_list",
 	})
 	if isErr {
-		t.Fatalf("expected query list to succeed without query_string, got: %s", out)
+		t.Fatalf("expected query_saved_list to succeed, got: %s", out)
 	}
 
 	var envelope struct {

@@ -14,7 +14,7 @@ func isSingleToken(s string) bool {
 }
 
 func buildUnknownQuerySuggestion(db *index.Database, queryStr string, dailyDir string, sch *schema.Schema) string {
-	base := "Queries must start with 'object:' or 'trait:', or be a saved query name. Run 'rvn query --list' to see saved queries."
+	base := "Queries must start with 'object:' or 'trait:', or be a saved query name. Run 'rvn query saved list' to see saved queries."
 
 	q := strings.TrimSpace(queryStr)
 	if !isSingleToken(q) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -32,16 +31,9 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
 	}
 
-	if boolArg(req.Args, "list") {
-		queries := sortedSavedQueries(vaultCfg)
-		return commandexec.Success(map[string]interface{}{
-			"queries": queries,
-		}, &commandexec.Meta{Count: len(queries), QueryTimeMs: time.Since(start).Milliseconds()})
-	}
-
 	queryString := strings.TrimSpace(stringArg(req.Args, "query_string"))
 	if queryString == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "specify a query string", nil, "Run 'rvn query --list' to see saved queries")
+		return commandexec.Failure("MISSING_ARGUMENT", "specify a query string", nil, "Run 'rvn query saved list' to see saved queries")
 	}
 
 	applyArgs := keyValuePairs(req.Args["apply"])
@@ -313,30 +305,6 @@ func dedupeQueryApplyIDs(ids []string) []string {
 	return out
 }
 
-func sortedSavedQueries(vaultCfg *config.VaultConfig) []map[string]interface{} {
-	if vaultCfg == nil || len(vaultCfg.Queries) == 0 {
-		return []map[string]interface{}{}
-	}
-
-	names := make([]string, 0, len(vaultCfg.Queries))
-	for name := range vaultCfg.Queries {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	queries := make([]map[string]interface{}, 0, len(names))
-	for _, name := range names {
-		q := vaultCfg.Queries[name]
-		queries = append(queries, map[string]interface{}{
-			"name":        name,
-			"query":       q.Query,
-			"args":        q.Args,
-			"description": q.Description,
-		})
-	}
-	return queries
-}
-
 func resolveQueryString(queryString string, rawInputs interface{}, vaultCfg *config.VaultConfig) (resolved, queryName string, isSaved bool, err error) {
 	if vaultCfg == nil || len(vaultCfg.Queries) == 0 {
 		return queryString, "", false, nil
@@ -434,6 +402,8 @@ func mapQuerySvcFailure(err error) commandexec.Result {
 		return commandexec.Failure("QUERY_NOT_FOUND", svcErr.Message, nil, svcErr.Suggestion)
 	case querysvc.CodeConfigInvalid:
 		return commandexec.Failure("CONFIG_INVALID", svcErr.Message, nil, svcErr.Suggestion)
+	case querysvc.CodeFileWriteError:
+		return commandexec.Failure("FILE_WRITE_ERROR", svcErr.Message, nil, svcErr.Suggestion)
 	default:
 		return commandexec.Failure("INTERNAL_ERROR", svcErr.Message, nil, svcErr.Suggestion)
 	}
@@ -443,14 +413,53 @@ func isFullQueryString(queryString string) bool {
 	return strings.HasPrefix(queryString, "object:") || strings.HasPrefix(queryString, "trait:")
 }
 
-// HandleQueryAdd executes the canonical `query_add` command.
-func HandleQueryAdd(_ context.Context, req commandexec.Request) commandexec.Result {
+// HandleQuerySavedList executes the canonical `query_saved_list` command.
+func HandleQuerySavedList(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 	if vaultPath == "" {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
 	}
 
-	result, err := querysvc.Add(querysvc.AddRequest{
+	result, err := querysvc.List(querysvc.ListRequest{VaultPath: vaultPath})
+	if err != nil {
+		return mapQuerySvcFailure(err)
+	}
+
+	queries := make([]map[string]interface{}, 0, len(result.Queries))
+	for _, savedQuery := range result.Queries {
+		queries = append(queries, savedQueryData(savedQuery))
+	}
+	return commandexec.Success(map[string]interface{}{
+		"queries": queries,
+	}, &commandexec.Meta{Count: len(queries)})
+}
+
+// HandleQuerySavedGet executes the canonical `query_saved_get` command.
+func HandleQuerySavedGet(_ context.Context, req commandexec.Request) commandexec.Result {
+	vaultPath := strings.TrimSpace(req.VaultPath)
+	if vaultPath == "" {
+		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
+	}
+
+	result, err := querysvc.Get(querysvc.GetRequest{
+		VaultPath: vaultPath,
+		Name:      strings.TrimSpace(stringArg(req.Args, "name")),
+	})
+	if err != nil {
+		return mapQuerySvcFailure(err)
+	}
+
+	return commandexec.Success(savedQueryData(result.Query), nil)
+}
+
+// HandleQuerySavedSet executes the canonical `query_saved_set` command.
+func HandleQuerySavedSet(_ context.Context, req commandexec.Request) commandexec.Result {
+	vaultPath := strings.TrimSpace(req.VaultPath)
+	if vaultPath == "" {
+		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
+	}
+
+	result, err := querysvc.Set(querysvc.SetRequest{
 		VaultPath:   vaultPath,
 		Name:        strings.TrimSpace(stringArg(req.Args, "name")),
 		QueryString: strings.TrimSpace(stringArg(req.Args, "query_string")),
@@ -461,16 +470,13 @@ func HandleQueryAdd(_ context.Context, req commandexec.Request) commandexec.Resu
 		return mapQuerySvcFailure(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"name":        result.Name,
-		"query":       result.Query,
-		"args":        result.Args,
-		"description": result.Description,
-	}, nil)
+	data := savedQueryData(result.Query)
+	data["status"] = string(result.Status)
+	return commandexec.Success(data, nil)
 }
 
-// HandleQueryRemove executes the canonical `query_remove` command.
-func HandleQueryRemove(_ context.Context, req commandexec.Request) commandexec.Result {
+// HandleQuerySavedRemove executes the canonical `query_saved_remove` command.
+func HandleQuerySavedRemove(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 	if vaultPath == "" {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
@@ -488,4 +494,13 @@ func HandleQueryRemove(_ context.Context, req commandexec.Request) commandexec.R
 		"name":    result.Name,
 		"removed": result.Removed,
 	}, nil)
+}
+
+func savedQueryData(q querysvc.SavedQueryInfo) map[string]interface{} {
+	return map[string]interface{}{
+		"name":        q.Name,
+		"query":       q.Query,
+		"args":        q.Args,
+		"description": q.Description,
+	}
 }

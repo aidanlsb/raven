@@ -657,7 +657,7 @@ Common predicates:
 Special date values for trait comparisons:
 - today, tomorrow, yesterday
 
-Saved query inputs must be declared with args: in raven.yaml when using {{args.<name>}}.
+Saved query inputs must be declared in the saved query definition when using {{args.<name>}}.
 You can then pass inputs by position (in args order) or as key=value pairs.
 
 Use --ids to output just IDs (one per line) for piping to other commands.
@@ -674,10 +674,9 @@ For trait queries (trait:...):
 - Supported command: update <new_value> (updates trait values in-place)
 - Example: trait:todo .value==todo --apply "update done" marks todos as done`,
 		Args: []ArgMeta{
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name) optionally followed by saved-query inputs. Required unless list=true.", Required: false},
+			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name) optionally followed by saved-query inputs.", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "list", Description: "List available saved queries", Type: FlagTypeBool},
 			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
 			{Name: "ids", Description: "Output only object/trait IDs, one per line (for piping)", Type: FlagTypeBool},
 			{Name: "limit", Description: "Maximum number of query results to return (0 means no limit)", Type: FlagTypeInt},
@@ -701,7 +700,6 @@ For trait queries (trait:...):
 			"rvn query tasks --json",
 			"rvn query project-todos raven --json",
 			"rvn query project-todos project=projects/raven --json",
-			"rvn query --list --json",
 		},
 		UseCases: []string{
 			"Find objects matching specific criteria",
@@ -710,11 +708,28 @@ For trait queries (trait:...):
 			"Pipe query results to other commands with --ids",
 		},
 	},
-	"query_add": {
-		Name:        "query add",
-		Description: "Add a saved query to raven.yaml",
+	"query_saved_list": {
+		Name:        "query saved list",
+		Description: "List saved queries",
+		Examples: []string{
+			"rvn query saved list --json",
+		},
+	},
+	"query_saved_get": {
+		Name:        "query saved get",
+		Description: "Show one saved query definition",
 		Args: []ArgMeta{
-			{Name: "name", Description: "Name for the new query", Required: true},
+			{Name: "name", Description: "Saved query name", Required: true, DynamicComp: "queries"},
+		},
+		Examples: []string{
+			"rvn query saved get overdue --json",
+		},
+	},
+	"query_saved_set": {
+		Name:        "query saved set",
+		Description: "Create or replace a saved query in raven.yaml",
+		Args: []ArgMeta{
+			{Name: "name", Description: "Name for the saved query", Required: true},
 			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or 'trait:due .value<today')", Required: true},
 		},
 		Flags: []FlagMeta{
@@ -722,20 +737,20 @@ For trait queries (trait:...):
 			{Name: "arg", Description: "Declare saved query input name (repeatable, sets positional order)", Type: FlagTypeStringSlice},
 		},
 		Examples: []string{
-			"rvn query add tasks 'trait:due' --json",
-			"rvn query add overdue 'trait:due .value<today' --json",
-			"rvn query add active-projects 'object:project .status==active' --json",
-			"rvn query add project-todos 'trait:todo refs([[{{args.project}}]])' --arg project --json",
+			"rvn query saved set tasks 'trait:due' --json",
+			"rvn query saved set overdue 'trait:due .value<today' --json",
+			"rvn query saved set active-projects 'object:project .status==active' --json",
+			"rvn query saved set project-todos 'trait:todo refs([[{{args.project}}]])' --arg project --json",
 		},
 	},
-	"query_remove": {
-		Name:        "query remove",
+	"query_saved_remove": {
+		Name:        "query saved remove",
 		Description: "Remove a saved query from raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name of the query to remove", Required: true, DynamicComp: "queries"},
 		},
 		Examples: []string{
-			"rvn query remove overdue --json",
+			"rvn query saved remove overdue --json",
 		},
 	},
 	"backlinks": {

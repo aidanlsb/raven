@@ -120,10 +120,16 @@ func TestCobraCommandGeneration(t *testing.T) {
 		t.Errorf("Use = %q, want explicit query usage", cmd.Use)
 	}
 
-	// Check flag was added
-	listFlag := cmd.Flags().Lookup("list")
-	if listFlag == nil {
-		t.Error("Missing 'list' flag")
+	// Check query_string remains required on the runnable query command.
+	queryStringArgFound := false
+	for _, arg := range Registry["query"].Args {
+		if arg.Name == "query_string" {
+			queryStringArgFound = arg.Required
+			break
+		}
+	}
+	if !queryStringArgFound {
+		t.Error("Expected required query_string arg in registry metadata")
 	}
 }
 

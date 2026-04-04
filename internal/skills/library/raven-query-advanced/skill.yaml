@@ -10,8 +10,8 @@ references:
 coverage:
   commands:
     - query
-    - query add
-    - query remove
+    - query saved set
+    - query saved remove
     - search
     - backlinks
     - outlinks

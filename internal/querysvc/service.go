@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -16,7 +17,6 @@ const (
 	CodeInvalidInput   Code = "INVALID_INPUT"
 	CodeQueryInvalid   Code = "QUERY_INVALID"
 	CodeQueryNotFound  Code = "QUERY_NOT_FOUND"
-	CodeDuplicateName  Code = "DUPLICATE_NAME"
 	CodeConfigInvalid  Code = "CONFIG_INVALID"
 	CodeFileWriteError Code = "FILE_WRITE_ERROR"
 )
@@ -60,7 +60,31 @@ func AsError(err error) (*Error, bool) {
 	return nil, false
 }
 
-type AddRequest struct {
+type SavedQueryInfo struct {
+	Name        string
+	Query       string
+	Args        []string
+	Description string
+}
+
+type ListRequest struct {
+	VaultPath string
+}
+
+type ListResult struct {
+	Queries []SavedQueryInfo
+}
+
+type GetRequest struct {
+	VaultPath string
+	Name      string
+}
+
+type GetResult struct {
+	Query SavedQueryInfo
+}
+
+type SetRequest struct {
 	VaultPath   string
 	Name        string
 	QueryString string
@@ -68,11 +92,17 @@ type AddRequest struct {
 	Description string
 }
 
-type AddResult struct {
-	Name        string
-	Query       string
-	Args        []string
-	Description string
+type SetStatus string
+
+const (
+	SetStatusCreated   SetStatus = "created"
+	SetStatusUpdated   SetStatus = "updated"
+	SetStatusUnchanged SetStatus = "unchanged"
+)
+
+type SetResult struct {
+	Query  SavedQueryInfo
+	Status SetStatus
 }
 
 type RemoveRequest struct {
@@ -90,17 +120,62 @@ type ApplyCommand struct {
 	Args    []string
 }
 
-func Add(req AddRequest) (*AddResult, error) {
+func List(req ListRequest) (*ListResult, error) {
+	if strings.TrimSpace(req.VaultPath) == "" {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	}
+
+	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
+	if err != nil {
+		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+	}
+
+	names := make([]string, 0, len(vaultCfg.Queries))
+	for name := range vaultCfg.Queries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	queries := make([]SavedQueryInfo, 0, len(names))
+	for _, name := range names {
+		queries = append(queries, savedQueryInfo(name, vaultCfg.Queries[name]))
+	}
+
+	return &ListResult{Queries: queries}, nil
+}
+
+func Get(req GetRequest) (*GetResult, error) {
 	if strings.TrimSpace(req.VaultPath) == "" {
 		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query add <name> <query-string>", nil)
+		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved get <name>", nil)
+	}
+
+	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
+	if err != nil {
+		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
+	}
+	saved, exists := vaultCfg.Queries[name]
+	if !exists {
+		return nil, newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query saved list' to see available queries", nil)
+	}
+
+	return &GetResult{Query: savedQueryInfo(name, saved)}, nil
+}
+
+func Set(req SetRequest) (*SetResult, error) {
+	if strings.TrimSpace(req.VaultPath) == "" {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved set <name> <query-string>", nil)
 	}
 	queryStr := strings.TrimSpace(req.QueryString)
 	if queryStr == "" {
-		return nil, newError(CodeInvalidInput, "query string is required", "Usage: rvn query add <name> <query-string>", nil)
+		return nil, newError(CodeInvalidInput, "query string is required", "Usage: rvn query saved set <name> <query-string>", nil)
 	}
 
 	declaredArgs, err := NormalizeArgs(req.Args)
@@ -121,28 +196,35 @@ func Add(req AddRequest) (*AddResult, error) {
 	if err != nil {
 		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
 	}
-	if _, exists := vaultCfg.Queries[name]; exists {
-		return nil, newError(CodeDuplicateName, fmt.Sprintf("query '%s' already exists", name), "Use 'rvn query remove' first to replace it", nil)
-	}
 
 	if vaultCfg.Queries == nil {
 		vaultCfg.Queries = make(map[string]*config.SavedQuery)
 	}
-	vaultCfg.Queries[name] = &config.SavedQuery{
+	next := &config.SavedQuery{
 		Query:       queryStr,
 		Args:        declaredArgs,
 		Description: req.Description,
 	}
+
+	status := SetStatusCreated
+	if existing, exists := vaultCfg.Queries[name]; exists {
+		if savedQueriesEqual(existing, next) {
+			return &SetResult{
+				Query:  savedQueryInfo(name, existing),
+				Status: SetStatusUnchanged,
+			}, nil
+		}
+		status = SetStatusUpdated
+	}
+	vaultCfg.Queries[name] = next
 
 	if err := config.SaveVaultConfig(req.VaultPath, vaultCfg); err != nil {
 		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
 	}
 
-	return &AddResult{
-		Name:        name,
-		Query:       queryStr,
-		Args:        declaredArgs,
-		Description: req.Description,
+	return &SetResult{
+		Query:  savedQueryInfo(name, next),
+		Status: status,
 	}, nil
 }
 
@@ -152,7 +234,7 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query remove <name>", nil)
+		return nil, newError(CodeInvalidInput, "query name is required", "Usage: rvn query saved remove <name>", nil)
 	}
 
 	vaultCfg, err := config.LoadVaultConfig(req.VaultPath)
@@ -160,7 +242,7 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 		return nil, newError(CodeConfigInvalid, "failed to load vault config", "Fix raven.yaml and try again", err)
 	}
 	if _, exists := vaultCfg.Queries[name]; !exists {
-		return nil, newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query --list' to see available queries", nil)
+		return nil, newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query saved list' to see available queries", nil)
 	}
 
 	delete(vaultCfg.Queries, name)
@@ -169,6 +251,36 @@ func Remove(req RemoveRequest) (*RemoveResult, error) {
 	}
 
 	return &RemoveResult{Name: name, Removed: true}, nil
+}
+
+func savedQueryInfo(name string, q *config.SavedQuery) SavedQueryInfo {
+	if q == nil {
+		return SavedQueryInfo{Name: name}
+	}
+	return SavedQueryInfo{
+		Name:        name,
+		Query:       q.Query,
+		Args:        append([]string(nil), q.Args...),
+		Description: q.Description,
+	}
+}
+
+func savedQueriesEqual(a, b *config.SavedQuery) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Query != b.Query || a.Description != b.Description {
+		return false
+	}
+	if len(a.Args) != len(b.Args) {
+		return false
+	}
+	for i := range a.Args {
+		if a.Args[i] != b.Args[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func NormalizeArgs(args []string) ([]string, error) {
@@ -355,7 +467,7 @@ func ResolveQueryString(name string, q *config.SavedQuery, inputs map[string]str
 
 func ResolveSavedQuery(name string, q *config.SavedQuery, args []string, keyValueArgs []string) (string, error) {
 	if q == nil {
-		return "", newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query --list' to see available queries", nil)
+		return "", newError(CodeQueryNotFound, fmt.Sprintf("query '%s' not found", name), "Run 'rvn query saved list' to see available queries", nil)
 	}
 
 	declaredArgs, err := NormalizeArgs(q.Args)
