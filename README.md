@@ -2,11 +2,7 @@
 
 **A CLI for plain-text knowledge management, with first-class support for AI agents.**
 
-A Raven "vault" is a collection of markdown files, with a few additional capabilities:
-- Typed notes: define a `project` type with required yaml frontmatter fields, specified in a schema 
-- Traits for annotations: create a `@priority` trait in your schema that you can use to tag important notes
-- References: link your notes together with `[[backlinks]]` to create a graph
-- Queries: retrieve your notes precisely with a fully featured query language
+Raven turns a folder of markdown files into a queryable knowledge base. You define a lightweight schema for the things you track (e.g., projects, meetings), annotate content with traits, and link notes together with references. Raven gives agents the tools to retrieve content efficiently and manage your notes. 
 
 # Getting Started
 ## Installation
@@ -51,10 +47,10 @@ Once you have a vault, connect Raven to your agent of choice.
 Install Raven into a supported MCP client:
 
 ```bash
-rvn mcp install --client codex
-rvn mcp install --client claude-desktop
 rvn mcp install --client claude-code
+rvn mcp install --client claude-desktop
 rvn mcp install --client cursor
+rvn mcp install --client codex
 rvn mcp status
 ```
 
@@ -62,7 +58,7 @@ Or print a manual config snippet with:
 
 ```bash
 rvn mcp show
-rvn mcp show --client codex
+rvn mcp show --client cursor
 ```
 
 ### Skill Installation
@@ -70,8 +66,8 @@ rvn mcp show --client codex
 Raven also ships with a few skills for supported agent runtimes:
 
 ```bash
-rvn skill list --target codex
-rvn skill install raven-core --target codex --confirm
+rvn skill list --target cursor
+rvn skill install raven-core --target cursor --confirm
 ```
 
 Available skill targets are `codex`, `claude`, and `cursor`.
