@@ -3,13 +3,17 @@
 package mcpclient
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/BurntSushi/toml"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
 )
@@ -18,6 +22,7 @@ import (
 type Client string
 
 const (
+	Codex         Client = "codex"
 	ClaudeCode    Client = "claude-code"
 	ClaudeDesktop Client = "claude-desktop"
 	Cursor        Client = "cursor"
@@ -25,13 +30,13 @@ const (
 
 // AllClients returns all supported MCP clients.
 func AllClients() []Client {
-	return []Client{ClaudeCode, ClaudeDesktop, Cursor}
+	return []Client{Codex, ClaudeCode, ClaudeDesktop, Cursor}
 }
 
 // ValidClient returns true if c is a recognized client name.
 func ValidClient(c string) bool {
 	switch Client(c) {
-	case ClaudeCode, ClaudeDesktop, Cursor:
+	case Codex, ClaudeCode, ClaudeDesktop, Cursor:
 		return true
 	}
 	return false
@@ -39,8 +44,8 @@ func ValidClient(c string) bool {
 
 // ServerEntry describes an MCP server configuration.
 type ServerEntry struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
+	Command string   `json:"command" toml:"command"`
+	Args    []string `json:"args" toml:"args"`
 }
 
 // ClientStatus reports whether raven is configured for a given client.
@@ -76,6 +81,8 @@ func ConfigPath(client Client, homeDir string) (string, error) {
 	}
 
 	switch client {
+	case Codex:
+		return filepath.Join(homeDir, ".codex", "config.toml"), nil
 	case ClaudeCode:
 		return filepath.Join(homeDir, ".claude.json"), nil
 	case ClaudeDesktop:
@@ -89,6 +96,10 @@ func ConfigPath(client Client, homeDir string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown client: %s", client)
 	}
+}
+
+func IsTOMLClient(client Client) bool {
+	return client == Codex
 }
 
 // ResolveCommand returns the command path that should be written into MCP
@@ -180,7 +191,11 @@ func (r InstallResult) String() string {
 }
 
 // Install adds or updates the raven MCP server entry in the client config.
-func Install(configPath string, entry ServerEntry) (InstallResult, error) {
+func Install(client Client, configPath string, entry ServerEntry) (InstallResult, error) {
+	if IsTOMLClient(client) {
+		return installTOML(configPath, entry)
+	}
+
 	data, err := readOrCreateConfig(configPath)
 	if err != nil {
 		return 0, err
@@ -208,7 +223,11 @@ func Install(configPath string, entry ServerEntry) (InstallResult, error) {
 
 // Remove deletes the raven MCP server entry from the client config.
 // Returns true if raven was present and removed.
-func Remove(configPath string) (bool, error) {
+func Remove(client Client, configPath string) (bool, error) {
+	if IsTOMLClient(client) {
+		return removeTOML(configPath)
+	}
+
 	raw, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -247,6 +266,10 @@ func Remove(configPath string) (bool, error) {
 
 // Status checks whether raven is configured in the given client config.
 func Status(client Client, configPath string) (*ClientStatus, error) {
+	if IsTOMLClient(client) {
+		return statusTOML(client, configPath)
+	}
+
 	cs := &ClientStatus{
 		Client:     client,
 		ConfigPath: configPath,
@@ -299,6 +322,28 @@ func Status(client Client, configPath string) (*ClientStatus, error) {
 	}
 
 	return cs, nil
+}
+
+// ShowSnippet returns the client-specific snippet for manual configuration.
+func ShowSnippet(client Client, entry ServerEntry) (string, error) {
+	if IsTOMLClient(client) {
+		return renderTOMLServerSnippet(entry)
+	}
+
+	snippet := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"raven": map[string]interface{}{
+				"command": entry.Command,
+				"args":    entry.Args,
+			},
+		},
+	}
+
+	out, err := json.MarshalIndent(snippet, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal json snippet: %w", err)
+	}
+	return string(out), nil
 }
 
 // readOrCreateConfig reads an existing JSON config or returns an empty map.
@@ -370,4 +415,202 @@ func writeConfig(path string, data map[string]interface{}) error {
 	}
 
 	return atomicfile.WriteFile(path, out, 0)
+}
+
+type tomlClientConfig struct {
+	MCPServers map[string]ServerEntry `toml:"mcp_servers"`
+}
+
+var tomlRavenTable = regexp.MustCompile(`(?m)^[ \t]*\[mcp_servers\.raven\][ \t]*(?:#.*)?$`)
+
+func statusTOML(client Client, configPath string) (*ClientStatus, error) {
+	cs := &ClientStatus{
+		Client:     client,
+		ConfigPath: configPath,
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return cs, nil
+		}
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+	cs.Exists = true
+
+	var data tomlClientConfig
+	if _, err := toml.Decode(string(raw), &data); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	entry, ok := data.MCPServers["raven"]
+	if !ok {
+		return cs, nil
+	}
+
+	cs.Installed = true
+	cs.Entry = &ServerEntry{
+		Command: entry.Command,
+		Args:    append([]string(nil), entry.Args...),
+	}
+	return cs, nil
+}
+
+func installTOML(configPath string, entry ServerEntry) (InstallResult, error) {
+	cs, err := statusTOML(Codex, configPath)
+	if err != nil {
+		return 0, err
+	}
+	if cs.Installed && cs.Entry != nil && cs.Entry.Command == entry.Command && stringSlicesEqual(cs.Entry.Args, entry.Args) {
+		return AlreadyInstalled, nil
+	}
+
+	snippet, err := renderTOMLServerSnippet(entry)
+	if err != nil {
+		return 0, err
+	}
+
+	result := Installed
+	raw, err := os.ReadFile(configPath)
+	switch {
+	case os.IsNotExist(err):
+		raw = nil
+	case err != nil:
+		return 0, fmt.Errorf("read config: %w", err)
+	default:
+		if cs.Installed {
+			result = Updated
+		}
+	}
+
+	var out []byte
+	if cs.Installed {
+		start, end, found := findTableBounds(raw, tomlRavenTable)
+		if !found {
+			return 0, fmt.Errorf("parse config: missing [mcp_servers.raven] table")
+		}
+		out = make([]byte, 0, len(raw)-end+start+len(snippet)+1)
+		out = append(out, raw[:start]...)
+		if start > 0 && out[len(out)-1] != '\n' {
+			out = append(out, '\n')
+		}
+		out = append(out, snippet...)
+		if !strings.HasSuffix(snippet, "\n") {
+			out = append(out, '\n')
+		}
+		out = append(out, raw[end:]...)
+	} else {
+		out = appendTOMLSnippet(raw, snippet)
+	}
+
+	if err := writeRawConfig(configPath, out); err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
+func removeTOML(configPath string) (bool, error) {
+	cs, err := statusTOML(Codex, configPath)
+	if err != nil {
+		return false, err
+	}
+	if !cs.Exists || !cs.Installed {
+		return false, nil
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return false, fmt.Errorf("read config: %w", err)
+	}
+
+	start, end, found := findTableBounds(raw, tomlRavenTable)
+	if !found {
+		return false, fmt.Errorf("parse config: missing [mcp_servers.raven] table")
+	}
+
+	out := make([]byte, 0, len(raw)-(end-start))
+	out = append(out, raw[:start]...)
+	out = append(out, raw[end:]...)
+	out = bytes.TrimLeft(out, "\n")
+	if len(out) > 0 && out[len(out)-1] != '\n' {
+		out = append(out, '\n')
+	}
+
+	if err := writeRawConfig(configPath, out); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func renderTOMLServerSnippet(entry ServerEntry) (string, error) {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(entry); err != nil {
+		return "", fmt.Errorf("marshal toml snippet: %w", err)
+	}
+	return "[mcp_servers.raven]\n" + strings.TrimRight(buf.String(), "\n") + "\n", nil
+}
+
+func findTableBounds(raw []byte, header *regexp.Regexp) (int, int, bool) {
+	loc := header.FindIndex(raw)
+	if loc == nil {
+		return 0, 0, false
+	}
+
+	start := loc[0]
+	for start > 0 && raw[start-1] != '\n' {
+		start--
+	}
+
+	searchFrom := loc[1]
+	if searchFrom < len(raw) && raw[searchFrom] == '\r' {
+		searchFrom++
+	}
+	if searchFrom < len(raw) && raw[searchFrom] == '\n' {
+		searchFrom++
+	}
+
+	end := len(raw)
+	tableLoc := regexp.MustCompile(`(?m)^[ \t]*\[[^\]]+\]`).FindIndex(raw[searchFrom:])
+	if tableLoc != nil {
+		end = searchFrom + tableLoc[0]
+		for end > start && (raw[end-1] == '\n' || raw[end-1] == '\r') {
+			end--
+		}
+		if end < len(raw) {
+			end++
+		}
+	}
+
+	return start, end, true
+}
+
+func appendTOMLSnippet(raw []byte, snippet string) []byte {
+	if len(raw) == 0 {
+		return []byte(snippet)
+	}
+
+	out := append([]byte(nil), raw...)
+	out = bytes.TrimRight(out, "\n")
+	out = append(out, '\n', '\n')
+	out = append(out, []byte(snippet)...)
+	return out
+}
+
+func writeRawConfig(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	return atomicfile.WriteFile(path, data, 0o644)
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

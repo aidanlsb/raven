@@ -5,11 +5,22 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestConfigPath(t *testing.T) {
 	home := "/fakehome"
+
+	t.Run("codex", func(t *testing.T) {
+		got, err := ConfigPath(Codex, home)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != filepath.Join(home, ".codex", "config.toml") {
+			t.Fatalf("unexpected path: %s", got)
+		}
+	})
 
 	t.Run("claude-code", func(t *testing.T) {
 		got, err := ConfigPath(ClaudeCode, home)
@@ -145,7 +156,7 @@ func TestInstallFreshFile(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "config.json")
 
 	entry := BuildServerEntry("", "", "", "")
-	result, err := Install(cfgPath, entry)
+	result, err := Install(ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +188,7 @@ func TestInstallPreservesExistingKeys(t *testing.T) {
 	writeJSON(t, cfgPath, initial)
 
 	entry := BuildServerEntry("", "", "", "")
-	result, err := Install(cfgPath, entry)
+	result, err := Install(ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,11 +214,11 @@ func TestInstallIdempotent(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "config.json")
 
 	entry := BuildServerEntry("", "", "", "")
-	if _, err := Install(cfgPath, entry); err != nil {
+	if _, err := Install(ClaudeCode, cfgPath, entry); err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := Install(cfgPath, entry)
+	result, err := Install(ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,12 +232,12 @@ func TestInstallUpdate(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "config.json")
 
 	entry1 := BuildServerEntry("", "", "", "")
-	if _, err := Install(cfgPath, entry1); err != nil {
+	if _, err := Install(ClaudeCode, cfgPath, entry1); err != nil {
 		t.Fatal(err)
 	}
 
 	entry2 := BuildServerEntry("", "", "work", "")
-	result, err := Install(cfgPath, entry2)
+	result, err := Install(ClaudeCode, cfgPath, entry2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +259,7 @@ func TestInstallCreatesParentDirs(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "deep", "nested", "config.json")
 
 	entry := BuildServerEntry("", "", "", "")
-	result, err := Install(cfgPath, entry)
+	result, err := Install(ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,11 +277,11 @@ func TestRemove(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "config.json")
 
 	entry := BuildServerEntry("", "", "", "")
-	if _, err := Install(cfgPath, entry); err != nil {
+	if _, err := Install(ClaudeCode, cfgPath, entry); err != nil {
 		t.Fatal(err)
 	}
 
-	removed, err := Remove(cfgPath)
+	removed, err := Remove(ClaudeCode, cfgPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +313,7 @@ func TestRemovePreservesOtherServers(t *testing.T) {
 	}
 	writeJSON(t, cfgPath, initial)
 
-	removed, err := Remove(cfgPath)
+	removed, err := Remove(ClaudeCode, cfgPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +332,7 @@ func TestRemovePreservesOtherServers(t *testing.T) {
 }
 
 func TestRemoveNoFile(t *testing.T) {
-	removed, err := Remove("/nonexistent/config.json")
+	removed, err := Remove(ClaudeCode, "/nonexistent/config.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +353,7 @@ func TestRemoveNoRaven(t *testing.T) {
 		},
 	})
 
-	removed, err := Remove(cfgPath)
+	removed, err := Remove(ClaudeCode, cfgPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +383,7 @@ func TestStatusInstalled(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "config.json")
 
 	entry := BuildServerEntry("", "", "work", "")
-	if _, err := Install(cfgPath, entry); err != nil {
+	if _, err := Install(ClaudeCode, cfgPath, entry); err != nil {
 		t.Fatal(err)
 	}
 
@@ -395,6 +406,9 @@ func TestStatusInstalled(t *testing.T) {
 }
 
 func TestValidClient(t *testing.T) {
+	if !ValidClient("codex") {
+		t.Fatal("expected codex to be valid")
+	}
 	if !ValidClient("claude-code") {
 		t.Fatal("expected claude-code to be valid")
 	}
@@ -406,6 +420,153 @@ func TestValidClient(t *testing.T) {
 	}
 	if ValidClient("vscode") {
 		t.Fatal("expected vscode to be invalid")
+	}
+}
+
+func TestInstallTOMLFreshFile(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.toml")
+
+	entry := BuildServerEntry("", "", "", "")
+	result, err := Install(Codex, cfgPath, entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != Installed {
+		t.Fatalf("expected Installed, got %s", result)
+	}
+
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(raw)
+	if !strings.Contains(content, "[mcp_servers.raven]") {
+		t.Fatalf("expected raven table, got %q", content)
+	}
+	if !strings.Contains(content, `command = "`+ResolveCommand()+`"`) {
+		t.Fatalf("expected command in TOML, got %q", content)
+	}
+}
+
+func TestInstallTOMLPreservesExistingConfig(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.toml")
+
+	initial := "model = \"gpt-5\"\n\n[mcp_servers.other]\ncommand = \"other\"\nargs = [\"run\"]\n"
+	if err := os.WriteFile(cfgPath, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	entry := BuildServerEntry("", "", "work", "")
+	result, err := Install(Codex, cfgPath, entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != Installed {
+		t.Fatalf("expected Installed, got %s", result)
+	}
+
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(raw)
+	if !strings.Contains(content, "model = \"gpt-5\"") {
+		t.Fatal("expected existing key to be preserved")
+	}
+	if !strings.Contains(content, "[mcp_servers.other]") {
+		t.Fatal("expected other MCP server to be preserved")
+	}
+	if !strings.Contains(content, "[mcp_servers.raven]") {
+		t.Fatal("expected raven MCP server to be added")
+	}
+}
+
+func TestInstallTOMLUpdate(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.toml")
+
+	entry1 := BuildServerEntry("", "", "", "")
+	if _, err := Install(Codex, cfgPath, entry1); err != nil {
+		t.Fatal(err)
+	}
+
+	entry2 := BuildServerEntry("", "", "work", "")
+	result, err := Install(Codex, cfgPath, entry2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != Updated {
+		t.Fatalf("expected Updated, got %s", result)
+	}
+
+	cs, err := Status(Codex, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cs.Installed || cs.Entry == nil {
+		t.Fatal("expected installed raven entry")
+	}
+	if len(cs.Entry.Args) != 3 || cs.Entry.Args[1] != "--vault" || cs.Entry.Args[2] != "work" {
+		t.Fatalf("unexpected args after TOML update: %v", cs.Entry.Args)
+	}
+}
+
+func TestRemoveTOMLPreservesOtherConfig(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.toml")
+
+	initial := "approval_policy = \"never\"\n\n[mcp_servers.raven]\ncommand = \"rvn\"\nargs = [\"serve\"]\n\n[mcp_servers.other]\ncommand = \"other\"\nargs = [\"run\"]\n"
+	if err := os.WriteFile(cfgPath, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := Remove(Codex, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !removed {
+		t.Fatal("expected removed=true")
+	}
+
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(raw)
+	if strings.Contains(content, "[mcp_servers.raven]") {
+		t.Fatal("expected raven table to be removed")
+	}
+	if !strings.Contains(content, "[mcp_servers.other]") {
+		t.Fatal("expected other MCP server to be preserved")
+	}
+	if !strings.Contains(content, "approval_policy = \"never\"") {
+		t.Fatal("expected other top-level config to be preserved")
+	}
+}
+
+func TestStatusInstalledTOML(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "config.toml")
+
+	content := "[mcp_servers.raven]\ncommand = \"/usr/local/bin/rvn\"\nargs = [\"serve\", \"--vault\", \"work\"]\n"
+	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cs, err := Status(Codex, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cs.Exists {
+		t.Fatal("expected exists=true")
+	}
+	if !cs.Installed {
+		t.Fatal("expected installed=true")
+	}
+	if cs.Entry == nil || cs.Entry.Command != "/usr/local/bin/rvn" {
+		t.Fatalf("unexpected entry: %+v", cs.Entry)
 	}
 }
 

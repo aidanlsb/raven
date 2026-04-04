@@ -15,7 +15,7 @@ func TestMcpInstallAndRemove(t *testing.T) {
 
 	// Install
 	entry := mcpclient.BuildServerEntry("", "", "", "")
-	result, err := mcpclient.Install(cfgPath, entry)
+	result, err := mcpclient.Install(mcpclient.ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatalf("install: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestMcpInstallAndRemove(t *testing.T) {
 	}
 
 	// Idempotent re-install
-	result, err = mcpclient.Install(cfgPath, entry)
+	result, err = mcpclient.Install(mcpclient.ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatalf("re-install: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestMcpInstallAndRemove(t *testing.T) {
 	}
 
 	// Remove
-	removed, err := mcpclient.Remove(cfgPath)
+	removed, err := mcpclient.Remove(mcpclient.ClaudeCode, cfgPath)
 	if err != nil {
 		t.Fatalf("remove: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestMcpInstallWithVault(t *testing.T) {
 	cfgPath := filepath.Join(tmp, "claude.json")
 
 	entry := mcpclient.BuildServerEntry("", "", "work", "")
-	result, err := mcpclient.Install(cfgPath, entry)
+	result, err := mcpclient.Install(mcpclient.ClaudeCode, cfgPath, entry)
 	if err != nil {
 		t.Fatalf("install: %v", err)
 	}

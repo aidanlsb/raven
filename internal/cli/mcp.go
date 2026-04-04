@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -23,7 +22,7 @@ var mcpCmd = &cobra.Command{
 	Long: `Manage MCP client integrations for raven.
 
 Install, remove, or inspect the raven MCP server entry in supported
-client config files (Claude Code, Claude Desktop, Cursor).`,
+client config files (Codex, Claude Code, Claude Desktop, Cursor).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
@@ -35,9 +34,10 @@ var mcpInstallCmd = &cobra.Command{
 	Short: "Add raven to an MCP client config",
 	Long: `Add raven to an MCP client config file.
 
-Supported clients: claude-code, claude-desktop, cursor
+Supported clients: codex, claude-code, claude-desktop, cursor
 
 Examples:
+  rvn mcp install --client codex
   rvn mcp install --client claude-code
   rvn mcp install --client claude-desktop --vault work`,
 	Args: cobra.NoArgs,
@@ -45,7 +45,7 @@ Examples:
 		client := mcpclient.Client(mcpClientFlag)
 		if !mcpclient.ValidClient(mcpClientFlag) {
 			return handleErrorMsg(ErrMCPClientInvalid, fmt.Sprintf("unknown client: %s", mcpClientFlag),
-				"Supported clients: claude-code, claude-desktop, cursor")
+				"Supported clients: codex, claude-code, claude-desktop, cursor")
 		}
 
 		cfgPath, err := mcpclient.ConfigPath(client, "")
@@ -54,7 +54,7 @@ Examples:
 		}
 
 		entry := mcpclient.BuildServerEntry(configPath, statePathFlag, mcpVaultName, mcpVaultPathFlag)
-		result, err := mcpclient.Install(cfgPath, entry)
+		result, err := mcpclient.Install(client, cfgPath, entry)
 		if err != nil {
 			return handleError(ErrMCPConfigWriteError, err, "")
 		}
@@ -90,16 +90,17 @@ var mcpRemoveCmd = &cobra.Command{
 	Short: "Remove raven from an MCP client config",
 	Long: `Remove raven from an MCP client config file.
 
-Supported clients: claude-code, claude-desktop, cursor
+Supported clients: codex, claude-code, claude-desktop, cursor
 
 Examples:
+  rvn mcp remove --client codex
   rvn mcp remove --client claude-code`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := mcpclient.Client(mcpClientFlag)
 		if !mcpclient.ValidClient(mcpClientFlag) {
 			return handleErrorMsg(ErrMCPClientInvalid, fmt.Sprintf("unknown client: %s", mcpClientFlag),
-				"Supported clients: claude-code, claude-desktop, cursor")
+				"Supported clients: codex, claude-code, claude-desktop, cursor")
 		}
 
 		cfgPath, err := mcpclient.ConfigPath(client, "")
@@ -107,7 +108,7 @@ Examples:
 			return handleError(ErrInternal, err, "")
 		}
 
-		removed, err := mcpclient.Remove(cfgPath)
+		removed, err := mcpclient.Remove(client, cfgPath)
 		if err != nil {
 			return handleError(ErrMCPConfigWriteError, err, "")
 		}
@@ -220,45 +221,57 @@ Examples:
 var mcpShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Print the MCP config snippet for manual setup",
-	Long: `Print the JSON config snippet for manual setup.
+	Long: `Print the client config snippet for manual setup.
 
-Outputs the JSON that would be added to the client config file,
+Outputs the config that would be added to the client config file,
 useful for unsupported clients or manual configuration.
 
 Examples:
+  rvn mcp show --client codex
   rvn mcp show --client claude-code
   rvn mcp show --client cursor --vault work`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpClientFlag != "" && !mcpclient.ValidClient(mcpClientFlag) {
 			return handleErrorMsg(ErrMCPClientInvalid, fmt.Sprintf("unknown client: %s", mcpClientFlag),
-				"Supported clients: claude-code, claude-desktop, cursor")
+				"Supported clients: codex, claude-code, claude-desktop, cursor")
 		}
 
+		client := mcpclient.Client(mcpClientFlag)
 		entry := mcpclient.BuildServerEntry(configPath, statePathFlag, mcpVaultName, mcpVaultPathFlag)
 
-		snippet := map[string]interface{}{
-			"mcpServers": map[string]interface{}{
-				"raven": map[string]interface{}{
-					"command": entry.Command,
-					"args":    entry.Args,
-				},
-			},
-		}
-
 		if isJSONOutput() {
-			outputSuccess(snippet, nil)
+			if mcpclient.IsTOMLClient(client) {
+				cfgPath, _ := mcpclient.ConfigPath(client, "")
+				outputSuccess(map[string]interface{}{
+					"client":      string(client),
+					"format":      "toml",
+					"config_path": cfgPath,
+					"snippet": fmt.Sprintf("[mcp_servers.raven]\ncommand = %q\nargs = %s\n",
+						entry.Command, mustMarshalArgs(entry.Args)),
+				}, nil)
+				return nil
+			}
+
+			outputSuccess(map[string]interface{}{
+				"mcpServers": map[string]interface{}{
+					"raven": map[string]interface{}{
+						"command": entry.Command,
+						"args":    entry.Args,
+					},
+				},
+			}, nil)
 			return nil
 		}
 
-		out, err := json.MarshalIndent(snippet, "", "  ")
+		snippet, err := mcpclient.ShowSnippet(client, entry)
 		if err != nil {
 			return handleError(ErrInternal, err, "")
 		}
-		fmt.Println(string(out))
+		fmt.Print(snippet)
 
 		if mcpClientFlag != "" {
-			cfgPath, err := mcpclient.ConfigPath(mcpclient.Client(mcpClientFlag), "")
+			cfgPath, err := mcpclient.ConfigPath(client, "")
 			if err == nil {
 				fmt.Printf("\n%s %s\n", ui.Hint("Add this to:"), ui.FilePath(cfgPath))
 			}
@@ -274,17 +287,17 @@ func init() {
 	markLocalLeaf(mcpStatusCmd)
 	markLocalLeaf(mcpShowCmd)
 
-	mcpInstallCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
+	mcpInstallCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (codex, claude-code, claude-desktop, cursor)")
 	mcpInstallCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
 	mcpInstallCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
 	mcpInstallCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
 	mcpInstallCmd.Flags().StringVar(&statePathFlag, "state", "", "Path to state file (overrides state_file in config)")
 	_ = mcpInstallCmd.MarkFlagRequired("client")
 
-	mcpRemoveCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
+	mcpRemoveCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (codex, claude-code, claude-desktop, cursor)")
 	_ = mcpRemoveCmd.MarkFlagRequired("client")
 
-	mcpShowCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (claude-code, claude-desktop, cursor)")
+	mcpShowCmd.Flags().StringVar(&mcpClientFlag, "client", "", "MCP client (codex, claude-code, claude-desktop, cursor)")
 	mcpShowCmd.Flags().StringVar(&mcpVaultName, "vault", "", "Pin a named vault")
 	mcpShowCmd.Flags().StringVar(&mcpVaultPathFlag, "vault-path", "", "Pin an explicit vault path")
 	mcpShowCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
@@ -296,4 +309,12 @@ func init() {
 	mcpCmd.AddCommand(mcpShowCmd)
 
 	rootCmd.AddCommand(mcpCmd)
+}
+
+func mustMarshalArgs(args []string) string {
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		out = append(out, fmt.Sprintf("%q", arg))
+	}
+	return "[" + strings.Join(out, ", ") + "]"
 }

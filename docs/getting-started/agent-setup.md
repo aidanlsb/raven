@@ -18,6 +18,7 @@ You can use MCP without installing skills, but the experience is better with bot
 Examples:
 
 ```bash
+rvn mcp install --client codex --vault-path /path/to/vault
 rvn mcp install --client claude-desktop --vault-path /path/to/vault
 rvn mcp install --client claude-code --vault-path /path/to/vault
 rvn mcp install --client cursor --vault-path /path/to/vault
@@ -33,6 +34,7 @@ If you need the raw config snippet instead of direct installation:
 
 ```bash
 rvn mcp show --vault-path /path/to/vault
+rvn mcp show --client codex --vault-path /path/to/vault
 ```
 
 If you run the server manually, use:

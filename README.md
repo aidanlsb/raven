@@ -51,6 +51,7 @@ Once you have a vault, connect Raven to your agent of choice.
 Install Raven into a supported MCP client:
 
 ```bash
+rvn mcp install --client codex
 rvn mcp install --client claude-desktop
 rvn mcp install --client claude-code
 rvn mcp install --client cursor
@@ -61,6 +62,7 @@ Or print a manual config snippet with:
 
 ```bash
 rvn mcp show
+rvn mcp show --client codex
 ```
 
 ### Skill Installation

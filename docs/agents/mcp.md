@@ -14,10 +14,12 @@ Legacy direct-call compatibility tools are not part of the MCP surface.
 Install Raven into a supported MCP client config:
 
 ```bash
+rvn mcp install --client codex --vault-path /path/to/vault
 rvn mcp install --client claude-desktop --vault-path /path/to/vault
 ```
 
 Supported clients:
+- `codex`
 - `claude-code`
 - `claude-desktop`
 - `cursor`
@@ -25,16 +27,19 @@ Supported clients:
 Examples:
 
 ```bash
+rvn mcp install --client codex --vault-path /path/to/vault
 rvn mcp install --client claude-code --vault-path /path/to/vault
 rvn mcp install --client cursor --vault-path /path/to/vault
 rvn mcp status
 ```
 
-If your client is unsupported, generate the JSON snippet manually:
+If your client is unsupported, generate the config snippet manually:
 
 ```bash
 rvn mcp show --vault-path /path/to/vault
 ```
+
+For Codex, `rvn mcp show --client codex` prints the TOML snippet for `~/.codex/config.toml`.
 
 Start the server directly with:
 
