@@ -38,6 +38,40 @@ type canonicalBulkPreviewItem struct {
 	Details string            `json:"details,omitempty"`
 }
 
+func setFieldsJSONHint(caller commandexec.Caller) string {
+	if caller == commandexec.CallerMCP {
+		return `Provide a JSON object under fields-json, for example {"status":"active"}`
+	}
+	return `Provide a JSON object, e.g. --fields-json '{"status":"active"}'`
+}
+
+func setMissingBulkObjectIDs(caller commandexec.Caller) (string, string) {
+	if caller == commandexec.CallerMCP {
+		return "no object_ids provided for bulk set", "Provide object_ids for the bulk update and retry"
+	}
+	return "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line"
+}
+
+func setMissingFields(caller commandexec.Caller, bulk bool) string {
+	if caller == commandexec.CallerMCP {
+		if bulk {
+			return "Provide fields or fields-json in args"
+		}
+		return "Provide object_id plus fields or fields-json in args"
+	}
+	if bulk {
+		return "Usage: rvn set --stdin field=value... or --fields-json '{...}'"
+	}
+	return "Usage: rvn set <object-id> field=value... or --fields-json '{...}'"
+}
+
+func setMissingObjectID(caller commandexec.Caller) (string, string) {
+	if caller == commandexec.CallerMCP {
+		return "requires object_id", "Provide object_id and retry"
+	}
+	return "requires object-id", "Usage: rvn set <object-id> field=value..."
+}
+
 // HandleSet executes the canonical `set` command.
 func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
@@ -62,7 +96,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	typedUpdates, err := parseTypedFieldValues(req.Args["fields-json"])
 	if err != nil {
-		return commandexec.Failure("INVALID_INPUT", "invalid --fields-json payload", nil, "Provide a JSON object, e.g. --fields-json '{\"status\":\"active\"}'")
+		return commandexec.Failure("INVALID_INPUT", "invalid fields-json payload", nil, setFieldsJSONHint(req.Caller))
 	}
 	allUpdates := mergeFieldInputs(updates, typedUpdates)
 
@@ -70,20 +104,22 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	stdinMode := boolArg(req.Args, "stdin") || len(objectIDs) > 0
 	if stdinMode {
 		if len(objectIDs) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
+			message, suggestion := setMissingBulkObjectIDs(req.Caller)
+			return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 		}
 		if len(allUpdates) == 0 {
-			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, "Usage: rvn set --stdin field=value... or --fields-json '{...}'")
+			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, true))
 		}
 		return runSetBulk(vaultPath, vaultCfg, sch, objectIDs, allUpdates, req.Confirm || boolArg(req.Args, "confirm"))
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
 	if reference == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "requires object-id", nil, "Usage: rvn set <object-id> field=value...")
+		message, suggestion := setMissingObjectID(req.Caller)
+		return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 	}
 	if len(allUpdates) == 0 {
-		return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, "Usage: rvn set <object-id> field=value... or --fields-json '{...}'")
+		return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, false))
 	}
 
 	serviceResult, err := objectsvc.SetByReference(objectsvc.SetByReferenceRequest{

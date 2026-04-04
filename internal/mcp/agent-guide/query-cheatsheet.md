@@ -51,6 +51,16 @@ This can be very useful to provide lots of information to the user. If a questio
   - `trait:todo within([[projects/raven]]) .value != done`
 - Todos referencing a project:
   - `trait:todo refs([[projects/raven]]) .value != done`
+- Open todos in briefs:
+  - `trait:todo .value == todo within(object:brief)`
+- Real traits, not prose mentions:
+  - `trait:todo .value == todo`
+- Text mentions of a token when structure is unknown:
+  - `search "@todo pricing"`
+- Todos under a topic section:
+  - `trait:todo .value == todo within(object:section content("pricing"))`
+- Path-scoped pages with open todos:
+  - `object:page matches(.path, "^pages/work/") has(trait:todo .value == todo)`
 - Due tomorrow:
   - `trait:due .value == tomorrow`
 - Meetings with an attendee:

@@ -8,6 +8,26 @@ Use these examples as translations from user intent to compact-surface MCP usage
 raven_invoke(command="query", args={"query_string":"trait:due in(.value, [today,tomorrow])"})
 ```
 
+## Find real open todos instead of text mentions
+
+```text
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
+```
+
+Use `search` only when you want broad text discovery and do not yet know whether the result is a real trait or just prose.
+
+## Find open todos in briefs
+
+```text
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(object:brief)"})
+```
+
+## Find open todos under a topic heading
+
+```text
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(object:section content(\"pricing\"))"})
+```
+
 ## Validate project objects
 
 ```text

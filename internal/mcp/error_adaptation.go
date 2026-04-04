@@ -21,9 +21,13 @@ func adaptCanonicalResultForMCP(commandID string, result commandexec.Result) com
 func adaptErrorSuggestionForMCP(commandID string, err commandexec.ErrorInfo) string {
 	describeSuggestion := describeRetrySuggestion(commandID)
 	suggestion := strings.TrimSpace(err.Suggestion)
+	cliSpecific := suggestion == "Check command arguments and retry" || strings.HasPrefix(suggestion, "Usage: rvn ")
 
 	switch err.Code {
 	case "INVALID_ARGS", "MISSING_ARGUMENT":
+		if suggestion != "" && !cliSpecific {
+			return suggestion
+		}
 		if describeSuggestion != "" {
 			return describeSuggestion
 		}
@@ -36,7 +40,7 @@ func adaptErrorSuggestionForMCP(commandID string, err commandexec.ErrorInfo) str
 	if suggestion == "" {
 		return ""
 	}
-	if describeSuggestion != "" && (suggestion == "Check command arguments and retry" || strings.HasPrefix(suggestion, "Usage: rvn ")) {
+	if describeSuggestion != "" && cliSpecific {
 		return describeSuggestion
 	}
 	return suggestion

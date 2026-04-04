@@ -3041,7 +3041,6 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 
 	t.Run("set_bulk_missing_ids", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
-		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("set", map[string]interface{}{
@@ -3050,9 +3049,49 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 				"email": "bulk@example.com",
 			},
 		})
-		cliResult := vCLI.RunCLIWithStdin("", "set", "--stdin", "email=bulk@example.com")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, nil)
+		env := parseMCPEnvelope(t, mcpResult.Text)
+		if !mcpResult.IsError || env.OK {
+			t.Fatalf("expected set bulk missing ids to fail: %s", mcpResult.Text)
+		}
+		if env.Error == nil || env.Error.Code != "MISSING_ARGUMENT" {
+			t.Fatalf("expected MISSING_ARGUMENT, got: %s", mcpResult.Text)
+		}
+		if strings.Contains(env.Error.Message, "stdin") {
+			t.Fatalf("expected MCP error message to avoid stdin wording, got: %q", env.Error.Message)
+		}
+		if env.Error.Message != "no object_ids provided for bulk set" {
+			t.Fatalf("unexpected MCP error message: %q", env.Error.Message)
+		}
+		if env.Error.Suggestion != "Provide object_ids for the bulk update and retry" {
+			t.Fatalf("unexpected MCP suggestion: %q", env.Error.Suggestion)
+		}
+	})
+
+	t.Run("set_bulk_missing_fields_mcp_uses_arg_language", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("new", map[string]interface{}{"type": "person", "title": "Set Bulk Missing Fields"})
+
+		mcpResult := server.callTool("set", map[string]interface{}{
+			"stdin":      true,
+			"object_ids": []interface{}{"people/set-bulk-missing-fields"},
+		})
+
+		env := parseMCPEnvelope(t, mcpResult.Text)
+		if !mcpResult.IsError || env.OK {
+			t.Fatalf("expected set bulk missing fields to fail: %s", mcpResult.Text)
+		}
+		if env.Error == nil || env.Error.Code != "MISSING_ARGUMENT" {
+			t.Fatalf("expected MISSING_ARGUMENT, got: %s", mcpResult.Text)
+		}
+		if strings.Contains(env.Error.Suggestion, "--stdin") || strings.Contains(env.Error.Suggestion, "--fields-json") {
+			t.Fatalf("expected MCP suggestion to avoid CLI flags, got: %q", env.Error.Suggestion)
+		}
+		if env.Error.Suggestion != "Provide fields or fields-json in args" {
+			t.Fatalf("unexpected MCP suggestion: %q", env.Error.Suggestion)
+		}
 	})
 
 	t.Run("set_bulk_fields_json_apply", func(t *testing.T) {

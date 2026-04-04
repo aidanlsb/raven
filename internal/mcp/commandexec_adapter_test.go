@@ -45,6 +45,18 @@ func TestAdaptCanonicalResultForMCPRewritesValidationSuggestion(t *testing.T) {
 	}
 }
 
+func TestAdaptCanonicalResultForMCPKeepsStructuredValidationSuggestion(t *testing.T) {
+	result := adaptCanonicalResultForMCP("set", commandexec.Failure("MISSING_ARGUMENT", "no object_ids provided for bulk set", nil, "Provide object_ids for the bulk update and retry"))
+
+	if result.Error == nil {
+		t.Fatal("expected error")
+	}
+	want := "Provide object_ids for the bulk update and retry"
+	if result.Error.Suggestion != want {
+		t.Fatalf("suggestion = %q, want %q", result.Error.Suggestion, want)
+	}
+}
+
 func TestAdaptCanonicalResultForMCPAddsQuerySuggestionWhenMissing(t *testing.T) {
 	result := adaptCanonicalResultForMCP("query", commandexec.Failure("QUERY_INVALID", "parse error: expected 2, got 1 at pos 5", nil, ""))
 

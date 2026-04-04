@@ -642,6 +642,11 @@ References are updated when the file moves (controlled by --update-refs).`,
 		Description: "Run a query using the Raven query language",
 		LongDesc: `Query objects or traits using the Raven query language.
 
+Prefer query when the structure is known and you need real Raven objects or
+trait instances. Use search for broad text discovery when you do not yet know
+the right type, trait, or structural context. Search returns file/snippet
+matches; query returns schema-aware object rows or real trait rows.
+
 Query syntax:
 - Object queries: object:<type> [predicates...]
   Examples: object:project .status==active, object:meeting refs([[people/freya]])
@@ -656,6 +661,13 @@ Common predicates:
 - within(object:type) — Trait is inside object type (within(object:meeting))
 - .value==X — Trait value equals X (.value==today, .value==high)
 - content("text") — Full-text search within content (content("meeting notes"))
+
+Common agent patterns:
+- Real open todos: trait:todo .value==todo
+- Open todos in briefs: trait:todo .value==todo within(object:brief)
+- Distinguish real traits from plain-text mentions: use trait:todo ... instead of search "@todo"
+- Open todos under a section/topic heading: trait:todo .value==todo within(object:section content("pricing"))
+- Path + structure together: object:page matches(.path, "^pages/work/") has(trait:todo .value==todo)
 
 Special date values for trait comparisons:
 - today, tomorrow, yesterday
