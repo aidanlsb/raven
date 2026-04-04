@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -444,8 +445,19 @@ func TestInstallTOMLFreshFile(t *testing.T) {
 	if !strings.Contains(content, "[mcp_servers.raven]") {
 		t.Fatalf("expected raven table, got %q", content)
 	}
-	if !strings.Contains(content, `command = "`+ResolveCommand()+`"`) {
-		t.Fatalf("expected command in TOML, got %q", content)
+
+	cs, err := Status(Codex, cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cs.Exists || !cs.Installed || cs.Entry == nil {
+		t.Fatalf("expected installed raven entry, got %+v", cs)
+	}
+	if cs.Entry.Command != entry.Command {
+		t.Fatalf("command = %q, want %q", cs.Entry.Command, entry.Command)
+	}
+	if !slices.Equal(cs.Entry.Args, entry.Args) {
+		t.Fatalf("args = %v, want %v", cs.Entry.Args, entry.Args)
 	}
 }
 
