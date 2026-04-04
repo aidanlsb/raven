@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v0.0.14] - 2026-04-04
 
+### Added
+- Dedicated saved-query management commands: `query saved list`, `query saved get`, `query saved set`, and `query saved remove`, along with support for running saved queries directly through `query`.
+- `rvn mcp install`, `rvn mcp show`, and `rvn mcp remove` now support Codex client configuration alongside Claude Code, Claude Desktop, and Cursor.
+
 ### Changed
 - `create` and `reclassify` now share the same typed field pipeline, so frontmatter writes preserve exact value semantics across object mutations. The extra create-then-rewrite pass is removed and `reclassify` gains a matching `--field-json` path.
 - `raven_discover` now always returns the full command catalog; passing filter arguments (category/mode/risk) is an error. The command list is short enough that filtering added confusion without benefit.
+- Query guidance, examples, and MCP error adaptation now steer ambiguous requests toward concrete follow-up queries more consistently.
 
 ### Fixed
 - Query `list` contract and several `add`/`resolve` regressions introduced after the v0.0.13 refactor.
@@ -156,7 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Release workflow tag annotation validation for tag-push events.
 
-[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.13...HEAD
+[Unreleased]: https://github.com/aidanlsb/raven/compare/v0.0.14...HEAD
 [v0.0.14]: https://github.com/aidanlsb/raven/compare/v0.0.13...v0.0.14
 [v0.0.13]: https://github.com/aidanlsb/raven/compare/v0.0.12...v0.0.13
 [v0.0.12]: https://github.com/aidanlsb/raven/compare/v0.0.11...v0.0.12
