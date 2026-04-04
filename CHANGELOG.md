@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.14] - 2026-04-04
+
+### Changed
+- `create` and `reclassify` now share the same typed field pipeline, so frontmatter writes preserve exact value semantics across object mutations. The extra create-then-rewrite pass is removed and `reclassify` gains a matching `--field-json` path.
+- `raven_discover` now always returns the full command catalog; passing filter arguments (category/mode/risk) is an error. The command list is short enough that filtering added confusion without benefit.
+
+### Fixed
+- Query `list` contract and several `add`/`resolve` regressions introduced after the v0.0.13 refactor.
+- Query issue regressions: error propagation, regexp handling, predicate evaluation for object fields, and split-query execution are all restored to correct behaviour.
+
 ## [v0.0.13] - 2026-03-31
 
 ### Removed
