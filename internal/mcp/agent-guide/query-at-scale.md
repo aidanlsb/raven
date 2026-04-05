@@ -24,8 +24,8 @@ raven_invoke(command="query", args={"query_string":"object:project .status==arch
 ## 4. Narrow before reading files
 
 ```text
-raven_invoke(command="query", args={"query_string":"object:meeting refs([[projects/website]])", "limit":20})
-raven_invoke(command="read", args={"path":"meetings/team-sync", "raw":true})
+raven_invoke(command="query", args={"query_string":"object:meeting refs([[project/website]])", "limit":20})
+raven_invoke(command="read", args={"path":"meeting/team-sync", "raw":true})
 ```
 
 ## Practical rules

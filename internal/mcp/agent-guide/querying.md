@@ -30,7 +30,7 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 ```text
 raven_invoke(command="query", args={"query_string":"object:project .status==active"})
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
-raven_invoke(command="query", args={"query_string":"object:meeting refs([[projects/website]])"})
+raven_invoke(command="query", args={"query_string":"object:meeting refs([[project/website]])"})
 ```
 
 For text search inside typed queries, use `content("term")`.

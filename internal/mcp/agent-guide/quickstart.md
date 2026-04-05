@@ -2,6 +2,10 @@
 
 Use this when the user is new to Raven and needs one coherent explanation before details.
 
+## How to explain Raven to a new user
+
+When onboarding, present Raven as a system that makes your notes work harder. The pitch is: "You write in plain markdown, Raven adds just enough structure to make your notes queryable, connected, and validated — without locking you into a proprietary format." Lead with what the user gets (structured retrieval, linked knowledge, schema validation), not implementation details. Use `raven://guide/onboarding` for the full interactive teaching sequence.
+
 ## Raven in 60 seconds
 
 Raven is plain markdown + schema + query:
@@ -12,9 +16,9 @@ Raven is plain markdown + schema + query:
 ## Core model
 
 - **Type**: category with structure (`project`, `person`, `meeting`)
-- **Object**: one file of a type (`projects/website.md`)
+- **Object**: one file of a type (`project/website.md`)
 - **Trait**: inline annotation in body content (`@todo`, `@due`)
-- **Reference**: wiki link (`[[people/freya]]`) connecting files
+- **Reference**: wiki link (`[[person/freya]]`) connecting files
 - **Index**: rebuildable cache, never the source of truth
 
 ## First commands to run
