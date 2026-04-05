@@ -313,3 +313,181 @@ func TestSerializeRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFieldValue(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      string
+		wantString string
+		wantNumber float64
+		wantBool   *bool
+		wantRef    string
+		wantDate   bool
+		wantDT     bool
+		wantNull   bool
+		wantArray  bool
+	}{
+		{
+			name:       "plain string",
+			input:      "hello",
+			wantString: "hello",
+		},
+		{
+			name:       "quoted string",
+			input:      `"hello world"`,
+			wantString: "hello world",
+		},
+		{
+			name:       "number integer",
+			input:      "42",
+			wantNumber: 42,
+		},
+		{
+			name:       "number float",
+			input:      "3.14",
+			wantNumber: 3.14,
+		},
+		{
+			name:     "bool true",
+			input:    "true",
+			wantBool: boolPtr(true),
+		},
+		{
+			name:     "bool false",
+			input:    "false",
+			wantBool: boolPtr(false),
+		},
+		{
+			name:     "date",
+			input:    "2025-06-15",
+			wantDate: true,
+		},
+		{
+			name:   "datetime",
+			input:  "2025-06-15T14:30",
+			wantDT: true,
+		},
+		{
+			name:    "reference",
+			input:   "[[project/website]]",
+			wantRef: "project/website",
+		},
+		{
+			name:    "reference with display text",
+			input:   "[[person/freya|Freya]]",
+			wantRef: "person/freya",
+		},
+		{
+			name:      "array of strings",
+			input:     "[a, b, c]",
+			wantArray: true,
+		},
+		{
+			name:      "array of refs",
+			input:     "[[[person/freya]], [[person/loki]]]",
+			wantArray: true,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			wantNull: true,
+		},
+		{
+			name:     "whitespace-only becomes empty string",
+			input:    "   ",
+			wantNull: true,
+		},
+		{
+			name:       "url-like string",
+			input:      "https://example.com",
+			wantString: "https://example.com",
+		},
+		{
+			name:       "time string",
+			input:      "09:30",
+			wantString: "09:30",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fv := ParseFieldValue(tt.input)
+
+			if tt.wantNull {
+				if !fv.IsNull() {
+					t.Errorf("expected null, got non-null value")
+				}
+				return
+			}
+
+			if tt.wantRef != "" {
+				ref, ok := fv.AsRef()
+				if !ok {
+					t.Fatalf("expected ref, got non-ref")
+				}
+				if ref != tt.wantRef {
+					t.Errorf("expected ref %q, got %q", tt.wantRef, ref)
+				}
+				return
+			}
+
+			if tt.wantBool != nil {
+				b, ok := fv.AsBool()
+				if !ok {
+					t.Fatalf("expected bool, got non-bool")
+				}
+				if b != *tt.wantBool {
+					t.Errorf("expected bool %v, got %v", *tt.wantBool, b)
+				}
+				return
+			}
+
+			if tt.wantNumber != 0 {
+				n, ok := fv.AsNumber()
+				if !ok {
+					t.Fatalf("expected number, got non-number")
+				}
+				if n != tt.wantNumber {
+					t.Errorf("expected number %v, got %v", tt.wantNumber, n)
+				}
+				return
+			}
+
+			if tt.wantDate {
+				if !fv.IsDate() {
+					t.Errorf("expected date, got non-date")
+				}
+				return
+			}
+
+			if tt.wantDT {
+				if !fv.IsDatetime() {
+					t.Errorf("expected datetime, got non-datetime")
+				}
+				return
+			}
+
+			if tt.wantArray {
+				_, ok := fv.AsArray()
+				if !ok {
+					t.Errorf("expected array, got non-array")
+				}
+				return
+			}
+
+			if tt.wantString != "" {
+				s, ok := fv.AsString()
+				if !ok {
+					t.Fatalf("expected string, got non-string")
+				}
+				if s != tt.wantString {
+					t.Errorf("expected string %q, got %q", tt.wantString, s)
+				}
+				return
+			}
+		})
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }

@@ -5,6 +5,58 @@ import (
 	"testing"
 )
 
+func TestFrontmatterBounds(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		lines     []string
+		wantStart int
+		wantEnd   int
+		wantOK    bool
+	}{
+		{
+			name:      "normal frontmatter",
+			lines:     []string{"---", "type: person", "---", "", "content"},
+			wantStart: 0, wantEnd: 2, wantOK: true,
+		},
+		{
+			name:      "empty frontmatter",
+			lines:     []string{"---", "---", "", "content"},
+			wantStart: 0, wantEnd: 1, wantOK: true,
+		},
+		{
+			name:      "unclosed frontmatter",
+			lines:     []string{"---", "type: person", "name: Freya"},
+			wantStart: 0, wantEnd: -1, wantOK: true,
+		},
+		{
+			name:      "no frontmatter",
+			lines:     []string{"# Title", "content"},
+			wantStart: 0, wantEnd: -1, wantOK: false,
+		},
+		{
+			name:      "empty input",
+			lines:     []string{},
+			wantStart: 0, wantEnd: -1, wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end, ok := FrontmatterBounds(tt.lines)
+			if ok != tt.wantOK {
+				t.Errorf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if start != tt.wantStart {
+				t.Errorf("startLine = %d, want %d", start, tt.wantStart)
+			}
+			if end != tt.wantEnd {
+				t.Errorf("endLine = %d, want %d", end, tt.wantEnd)
+			}
+		})
+	}
+}
+
 func TestParseFrontmatter(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -77,6 +129,14 @@ starts_at: 2025-02-01T10:30:00Z
 Content`,
 			wantType:    "meeting",
 			wantEndLine: 4,
+		},
+		{
+			name: "unclosed frontmatter returns nil",
+			content: `---
+type: person
+name: Freya
+`,
+			wantNil: true,
 		},
 	}
 
