@@ -5,8 +5,8 @@ This guide covers global and vault-level configuration.
 - vault-level behavior config in `raven.yaml`
 
 For schema details, see:
-- `docs/types-and-traits/schema-intro.md`
-- `docs/types-and-traits/schema.md`
+- `types-and-traits/schema-intro.md`
+- `types-and-traits/schema.md`
 
 ## Configuration layers
 
@@ -325,5 +325,5 @@ Keep these out of `raven.yaml`:
 - template ID definitions and type template bindings
 
 Use:
-- `docs/types-and-traits/schema-intro.md` for concepts
-- `docs/types-and-traits/schema.md` for full reference
+- `types-and-traits/schema-intro.md` for concepts
+- `types-and-traits/schema.md` for full reference

@@ -103,7 +103,7 @@ rvn query "object:project .status==active" --apply "add ## Reviewed on $(date +%
 rvn query "object:project .status==active" --apply "add @reviewed(2026-01-10)" --confirm
 
 # Add with reference
-rvn query "object:meeting" --apply "add See also: [[projects/website]]" --confirm
+rvn query "object:meeting" --apply "add See also: [[project/website]]" --confirm
 ```
 
 ### Behavior
@@ -154,10 +154,10 @@ Move matching objects to a directory.
 
 ```bash
 # Archive old projects
-rvn query "object:project .status==archived" --apply "move archive/projects/" --confirm
+rvn query "object:project .status==archived" --apply "move archive/project/" --confirm
 
 # Reorganize people
-rvn query "object:person .role==contractor" --apply "move contractors/" --confirm
+rvn query "object:person .role==contractor" --apply "move contractor/" --confirm
 ```
 
 ### Behavior
@@ -198,7 +198,7 @@ rvn query "trait:todo .value==todo" --ids | rvn update --stdin done --confirm
 rvn query "object:project .status==archived" --ids | rvn delete --stdin --confirm
 
 # Move via pipe
-rvn query "object:project .status==archived" --ids | rvn move --stdin archive/projects/ --confirm
+rvn query "object:project .status==archived" --ids | rvn move --stdin archive/project/ --confirm
 ```
 
 ### Combining with Shell Tools
@@ -231,14 +231,14 @@ All stdin commands require `--confirm` to apply (preview by default).
 
 ### File-Level Objects
 
-Full path like `people/freya`:
+Full path like `person/freya`:
 
 - All operations work
 - Can be deleted, moved, have text appended
 
 ### Embedded Objects
 
-Path with fragment like `projects/website#tasks`:
+Path with fragment like `project/website#tasks`:
 
 - `set` works (updates the type declaration)
 - `add`, `delete`, `move` skip these objects
@@ -246,7 +246,7 @@ Path with fragment like `projects/website#tasks`:
 When running bulk operations, embedded objects are skipped with a note in the preview:
 
 ```
-Skipping embedded object: projects/website#tasks (use set for embedded objects)
+Skipping embedded object: project/website#tasks (use set for embedded objects)
 ```
 
 ---
@@ -257,9 +257,9 @@ Bulk operations collect errors and continue processing:
 
 ```bash
 $ rvn query "object:project" --apply "set status=invalid-value" --confirm
-Updated: projects/alpha (status=invalid-value) [ERROR: invalid enum value]
-Updated: projects/beta (status=invalid-value) [ERROR: invalid enum value]
-Updated: projects/gamma (status=invalid-value) [ERROR: invalid enum value]
+Updated: project/alpha (status=invalid-value) [ERROR: invalid enum value]
+Updated: project/beta (status=invalid-value) [ERROR: invalid enum value]
+Updated: project/gamma (status=invalid-value) [ERROR: invalid enum value]
 
 3 errors occurred. See above for details.
 ```
@@ -274,7 +274,7 @@ git status
 git diff
 
 # Restore specific files
-git restore people/freya.md projects/website.md
+git restore person/freya.md project/website.md
 
 # Restore all tracked files in the working tree (use with care)
 git restore .
@@ -295,7 +295,7 @@ rvn query "object:project .status==active" --apply "add @reviewed($(date +%Y-%m-
 
 ```bash
 # Move archived projects to archive folder
-rvn query "object:project .status==archived" --apply "move archive/projects/" --confirm
+rvn query "object:project .status==archived" --apply "move archive/project/" --confirm
 ```
 
 ### Fix Missing Fields

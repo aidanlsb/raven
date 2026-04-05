@@ -6,9 +6,9 @@ References are wiki-style links that connect objects across your vault into a gr
 
 | Format | Description | Example |
 |--------|-------------|---------|
-| `[[target]]` | Basic reference | `[[people/freya]]` |
-| `[[target\|display]]` | Reference with display text | `[[people/freya\|Freya]]` |
-| `[[target#fragment]]` | Reference to a section or embedded object | `[[projects/website#tasks]]` |
+| `[[target]]` | Basic reference | `[[person/freya]]` |
+| `[[target\|display]]` | Reference with display text | `[[person/freya\|Freya]]` |
+| `[[target#fragment]]` | Reference to a section or embedded object | `[[project/website#tasks]]` |
 | `[[YYYY-MM-DD]]` | Date reference (resolves to daily note) | `[[2026-03-15]]` |
 
 ## Where references can appear
@@ -18,7 +18,7 @@ References work in three places:
 **Markdown body content** (most common):
 
 ```markdown
-Met with [[people/freya]] about [[projects/website]].
+Met with [[person/freya]] about [[project/website]].
 ```
 
 **Frontmatter `ref` / `ref[]` fields** (bare IDs, no brackets needed):
@@ -26,10 +26,10 @@ Met with [[people/freya]] about [[projects/website]].
 ```yaml
 ---
 type: project
-owner: people/freya
+owner: person/freya
 collaborators:
-  - people/freya
-  - people/thor
+  - person/freya
+  - person/thor
 ---
 ```
 
@@ -37,7 +37,7 @@ collaborators:
 
 ```markdown
 ## Weekly Standup
-::meeting(attendees=[[[people/freya]], [[people/thor]]])
+::meeting(attendees=[[[person/freya]], [[person/thor]]])
 ```
 
 ## Resolution
@@ -48,7 +48,7 @@ When Raven encounters a reference, it resolves it to a canonical object ID by ch
 2. **Name field** — the type's `name_field` value (e.g., `title`, `name`)
 3. **Date** — absolute `YYYY-MM-DD` patterns resolve to daily notes
 4. **Object ID / path** — full or suffix path match
-5. **Short name** — the last segment of an object ID (e.g., `freya` for `people/freya`)
+5. **Short name** — the last segment of an object ID (e.g., `freya` for `person/freya`)
 
 If multiple candidates match, the reference is ambiguous and is not resolved automatically.
 
@@ -57,16 +57,16 @@ If multiple candidates match, the reference is ambiguous and is not resolved aut
 When a short name uniquely identifies one object, you can use it without the full path:
 
 ```markdown
-[[freya]]       → people/freya (if only one "freya" exists)
-[[website]]     → projects/website
+[[freya]]       → person/freya (if only one "freya" exists)
+[[website]]     → project/website
 [[2026-03-15]]  → daily/2026-03-15
 ```
 
-When short names collide (e.g., `projects/notes` and `meetings/notes`), use the full path to disambiguate:
+When short names collide (e.g., `project/notes` and `meeting/notes`), use the full path to disambiguate:
 
 ```markdown
-[[projects/notes]]    → unambiguous
-[[meetings/notes]]    → unambiguous
+[[project/notes]]    → unambiguous
+[[meeting/notes]]    → unambiguous
 [[notes]]             → ambiguous (not resolved)
 ```
 
@@ -77,25 +77,25 @@ Use `rvn resolve` to debug resolution and `rvn check` to find ambiguous referenc
 Backlinks are incoming references — everything that links *to* an object. Outlinks are outgoing references — everything an object links *to*.
 
 ```bash
-rvn backlinks people/freya
+rvn backlinks person/freya
 ```
 
 ```text
 meeting/kickoff.md
-  [[people/freya]] wants the initial scope confirmed
+  [[person/freya]] wants the initial scope confirmed
 
-projects/website.md
-  Project lead: [[people/freya]]
+project/website.md
+  Project lead: [[person/freya]]
 ```
 
 ```bash
-rvn outlinks projects/website
+rvn outlinks project/website
 ```
 
 ```text
-people/freya (frontmatter: owner)
-people/thor (body)
-companies/acme (body)
+person/freya (frontmatter: owner)
+person/thor (body)
+company/acme (body)
 ```
 
 Backlinks are a powerful way to see how an object is used across the vault without maintaining manual indexes.
@@ -106,14 +106,14 @@ RQL has predicates for querying the reference graph:
 
 ```bash
 # Objects that reference a target
-rvn query 'object:meeting refs([[people/freya]])'
+rvn query 'object:meeting refs([[person/freya]])'
 rvn query 'object:meeting refs(object:project .status==active)'
 
 # Objects referenced by a source
 rvn query 'object:project refd(object:meeting)'
 
 # Traits on lines that reference a target
-rvn query 'trait:todo refs([[people/freya]])'
+rvn query 'trait:todo refs([[person/freya]])'
 ```
 
 | Predicate | Meaning |
@@ -130,8 +130,8 @@ rvn query 'trait:todo refs([[people/freya]])'
 `rvn move` updates all references to a moved file by default:
 
 ```bash
-rvn move people/freya people/freya-odinsdottir
-# All [[people/freya]] references are updated to [[people/freya-odinsdottir]]
+rvn move person/freya person/freya-odinsdottir
+# All [[person/freya]] references are updated to [[person/freya-odinsdottir]]
 ```
 
 Disable with `--update-refs=false` if needed.
@@ -156,13 +156,13 @@ rvn resolve "2026-03-15" --json      # Date resolution
 **Linking people to projects:**
 
 ```markdown
-Project lead: [[people/freya]]
+Project lead: [[person/freya]]
 ```
 
 Or use a `ref` field in frontmatter:
 
 ```yaml
-owner: people/freya
+owner: person/freya
 ```
 
 **Date references in daily notes:**
@@ -175,7 +175,7 @@ See also [[2026-03-14]] for context.
 **Section references:**
 
 ```markdown
-See the tasks list: [[projects/website#tasks]]
+See the tasks list: [[project/website#tasks]]
 ```
 
 ## Related docs

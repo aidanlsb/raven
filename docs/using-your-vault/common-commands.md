@@ -2,7 +2,7 @@
 
 This guide covers the everyday Raven commands that are not covered by dedicated docs elsewhere. Each command gets a brief description, key flags, and examples. Run `rvn help <command>` for the full flag reference.
 
-For query syntax, see `querying/query-language.md`. For bulk operations on query results, see `vault-management/bulk-operations.md`.
+For daily notes and quick capture (`rvn daily`, `rvn add`), see `using-your-vault/daily-notes.md`. For query syntax, see `querying/query-language.md`. For bulk operations on query results, see `vault-management/bulk-operations.md`.
 
 ---
 
@@ -13,9 +13,9 @@ For query syntax, see `querying/query-language.md`. For bulk operations on query
 Display an object's content. By default, Raven renders wiki-links and appends backlinks. Use `--raw` for plain file content (recommended when preparing edits).
 
 ```bash
-rvn read people/freya                     # Enriched output with backlinks
-rvn read people/freya --raw               # Plain markdown, no extras
-rvn read projects/website --raw --start-line 10 --end-line 40   # Line range
+rvn read person/freya                     # Enriched output with backlinks
+rvn read person/freya --raw               # Plain markdown, no extras
+rvn read project/website --raw --start-line 10 --end-line 40   # Line range
 rvn read                                  # Interactive picker (requires fzf)
 ```
 
@@ -26,10 +26,10 @@ Key flags:
 
 ### `rvn open`
 
-Open a file in your configured editor (`editor` in `config.toml` or `$EDITOR`).
+Open a file in your configured editor (`editor` in `config.toml` or `$EDITOR`). The `editor_mode` setting controls launch behavior: `auto` (detect GUI vs terminal), `terminal` (always inline), or `gui` (always detached). See `using-your-vault/configuration.md` for details.
 
 ```bash
-rvn open projects/website
+rvn open project/website
 rvn open                                  # Interactive picker (requires fzf)
 ```
 
@@ -49,6 +49,16 @@ rvn search "rollout" --type project       # Filter by type
 rvn search "auth" --limit 5              # Limit results
 ```
 
+Search syntax:
+
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| `word` | Term search | `rollout` |
+| `"phrase"` | Exact phrase match | `"team meeting"` |
+| `A AND B` | Both terms required | `meeting AND notes` |
+| `A OR B` | Either term | `design OR redesign` |
+| `NOT A` | Exclude term | `meeting NOT standup` |
+
 Key flags:
 - `--type` / `-t` — filter results to a specific type
 - `--limit` / `-n` — maximum results (default 20)
@@ -58,8 +68,8 @@ Key flags:
 Find all incoming references to an object — everything that links *to* it.
 
 ```bash
-rvn backlinks people/freya
-rvn backlinks projects/website
+rvn backlinks person/freya
+rvn backlinks project/website
 ```
 
 ### `rvn outlinks`
@@ -67,7 +77,7 @@ rvn backlinks projects/website
 Find all outgoing references from an object — everything it links *to*.
 
 ```bash
-rvn outlinks projects/website
+rvn outlinks project/website
 rvn outlinks meeting/kickoff
 ```
 
@@ -81,13 +91,13 @@ Surgical string replacement in vault files. The target string must appear exactl
 
 ```bash
 # Preview a replacement
-rvn edit projects/website.md "Status: draft" "Status: published"
+rvn edit project/website.md "Status: draft" "Status: published"
 
 # Apply it
-rvn edit projects/website.md "Status: draft" "Status: published" --confirm
+rvn edit project/website.md "Status: draft" "Status: published" --confirm
 
 # Batch edits via JSON
-rvn edit projects/website.md --edits-json '{"edits":[{"old_str":"draft","new_str":"published"}]}' --confirm
+rvn edit project/website.md --edits-json '{"edits":[{"old_str":"draft","new_str":"published"}]}' --confirm
 ```
 
 Key flags:
@@ -99,9 +109,9 @@ Key flags:
 Set frontmatter fields on an existing object. Values are validated against the schema.
 
 ```bash
-rvn set projects/website status=published
-rvn set people/freya email=freya@example.com role=lead
-rvn set people/freya --fields-json '{"email":"true"}'
+rvn set project/website status=published
+rvn set person/freya email=freya@example.com role=lead
+rvn set person/freya --fields-json '{"email":"true"}'
 ```
 
 Use positional `field=value` arguments for shell-friendly literal updates. Use `--fields-json` when you need exact type control, such as preserving the string `"true"` instead of coercing it to a boolean.
@@ -155,8 +165,8 @@ Key flags:
 Move or rename an object. References are updated automatically by default.
 
 ```bash
-rvn move inbox/idea projects/idea              # Rename/relocate
-rvn move projects/old-name projects/new-name    # Rename
+rvn move inbox/idea project/idea              # Rename/relocate
+rvn move project/old-name project/new-name    # Rename
 ```
 
 Key flags:
@@ -170,7 +180,7 @@ Change an object's type. Raven updates frontmatter, applies defaults for the new
 
 ```bash
 rvn reclassify inbox/meeting-notes meeting --field name="Q1 Planning"
-rvn reclassify people/freya company --field-json '{"legal_name":"false"}'
+rvn reclassify person/freya company --field-json '{"legal_name":"false"}'
 rvn reclassify page/scratch note --field title="Research Notes" --no-move
 ```
 
@@ -186,16 +196,16 @@ Key flags:
 Remove an object. Files are moved to `.trash/` by default.
 
 ```bash
-rvn delete projects/old-project
-rvn delete projects/old-project --force         # Skip confirmation
-rvn delete projects/old-project --json          # Preview in JSON/agent mode
-rvn delete projects/old-project --confirm --json
+rvn delete project/old-project
+rvn delete project/old-project --force         # Skip confirmation
+rvn delete project/old-project --json          # Preview in JSON/agent mode
+rvn delete project/old-project --confirm --json
 ```
 
 Check backlinks before deleting to avoid broken references:
 
 ```bash
-rvn backlinks projects/old-project
+rvn backlinks project/old-project
 ```
 
 ---
@@ -208,7 +218,7 @@ Validate vault files against the schema. Reports issues like unknown types, miss
 
 ```bash
 rvn check                                       # Entire vault
-rvn check projects/website                       # One file or directory
+rvn check project/website                       # One file or directory
 rvn check --type project                         # Only project-type objects
 rvn check --issues missing_reference,unknown_type  # Specific issue types
 rvn check --by-file                              # Group output by file
@@ -240,7 +250,7 @@ Debug reference resolution. Shows how Raven resolves a reference string to an ob
 rvn resolve freya                                # Short name
 rvn resolve "The Queen"                          # Alias
 rvn resolve 2026-03-15                           # Date reference
-rvn resolve projects/website#tasks               # Section reference
+rvn resolve project/website#tasks               # Section reference
 ```
 
 Returns whether the reference resolved, the target object ID, and the match source (alias, name_field, object_id, short_name, etc.).

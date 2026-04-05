@@ -14,7 +14,36 @@ Out of scope:
 - **fields**: validated frontmatter keys per type
 - **traits**: inline annotations like `@due(2026-02-01)` or `@highlight`
 
-When Raven indexes your notes, schema definitions determine what becomes structured/queryable data.
+When Raven indexes your notes, schema definitions determine what becomes structured, queryable data. Only types, fields, and traits defined in `schema.yaml` are indexed — undefined frontmatter keys trigger validation warnings, and undefined traits are treated as plain text.
+
+This means the schema is the bridge between your markdown files and Raven's query engine. If something isn't in the schema, you can't query it structurally.
+
+## Validation levels
+
+Raven validates your schema and data at two levels:
+
+| Command | What it checks |
+|---------|---------------|
+| `rvn schema validate` | Internal consistency of `schema.yaml` (valid types, valid enum values, ref targets exist, etc.) |
+| `rvn check` | Vault files against the schema (unknown types, missing required fields, broken references, undefined traits) |
+
+Run `rvn schema validate` after editing the schema itself. Run `rvn check` to find data issues in your vault files.
+
+## Descriptions for humans and agents
+
+Add `description` to types and fields to give context to both humans and AI agents:
+
+```yaml
+types:
+  experiment:
+    description: Controlled product change with hypothesis and measured outcome
+    fields:
+      hypothesis:
+        type: string
+        description: Falsifiable statement of expected behavior change
+```
+
+Good descriptions focus on intent and constraints, not just restating the field name. Agents use these descriptions to understand your domain model when creating or querying objects.
 
 ## Start from the default schema
 
@@ -38,7 +67,7 @@ Add one type and one trait before attempting bigger model changes.
 ### 1) Add a new type
 
 ```bash
-rvn schema add type book --name-field title --default-path books/
+rvn schema add type book --name-field title --default-path book/
 rvn schema add field book author --type string
 rvn schema add field book status --type enum --values planned,reading,done
 ```
@@ -53,7 +82,7 @@ rvn schema add trait toread --type bool
 
 ```bash
 rvn new book "The Mythical Man-Month" --field author="Frederick P. Brooks Jr."
-rvn add "@toread Read chapter 1 of [[books/the-mythical-man-month]]"
+rvn add "@toread Read chapter 1 of [[book/the-mythical-man-month]]"
 rvn query 'trait:toread'
 ```
 
@@ -78,7 +107,7 @@ This catches type/field/trait issues early and keeps the index aligned with the 
   Add it in schema first, or it will not be indexed/queryable.
 
 - **Assuming references auto-resolve to any text**  
-  Use explicit object IDs when learning (`[[books/the-mythical-man-month]]`).
+  Use explicit object IDs when learning (`[[book/the-mythical-man-month]]`).
 
 ## What to read next
 

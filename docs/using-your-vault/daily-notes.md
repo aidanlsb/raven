@@ -109,7 +109,7 @@ directories:
   daily: daily/
 ```
 
-This means daily notes are stored as `daily/2026-03-15.md`. The directory prefix is stripped from object IDs, so the ID is `2026-03-15` (or `daily/2026-03-15` depending on your directory configuration).
+This means daily notes are stored as `daily/2026-03-15.md`. With the default directory configuration, the `daily/` prefix is stripped from object IDs, so the ID is just `2026-03-15`. Date references like `[[2026-03-15]]` resolve accordingly. If you remove the `directories.daily` setting (flat layout), the file path becomes the full ID (`daily/2026-03-15`).
 
 ## Related docs
 

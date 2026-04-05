@@ -8,6 +8,10 @@ It lives at the root of your vault.
 For first-session schema setup, start with `types-and-traits/schema-intro.md`.
 This page is lookup-oriented and intentionally exhaustive.
 
+## Schema Version
+
+The top-level `version` key declares the schema format version. The current version is `2`. Raven uses this to ensure backward compatibility when the schema format evolves. If omitted, Raven assumes the latest version.
+
 ## Complete Example
 
 ```yaml
@@ -17,7 +21,7 @@ types:
   person:
     description: People and contacts
     name_field: name
-    default_path: people/
+    default_path: person/
     fields:
       name: { type: string, required: true, description: Full name used for display and references }
       email: { type: string, description: Primary contact email }
@@ -26,7 +30,7 @@ types:
 
   project:
     name_field: title
-    default_path: projects/
+    default_path: project/
     templates: [project_standard]
     default_template: project_standard
     fields:
@@ -37,7 +41,7 @@ types:
       owner: { type: ref, target: person }
 
   meeting:
-    default_path: meetings/
+    default_path: meeting/
     fields:
       time: { type: datetime }
       attendees: { type: ref[], target: person }
@@ -109,7 +113,7 @@ This heading creates a section with ID "file-id#tasks"
 **Behavior:**
 - Created automatically when parsing documents
 - Object ID is `<file-id>#<slugified-heading>`
-- Can be referenced like `[[projects/website#tasks]]`
+- Can be referenced like `[[project/website#tasks]]`
 - Overridden when `::type(...)` follows the heading
 
 ### `date`
@@ -171,7 +175,7 @@ types:
 
 2. **Reference resolution:** `[[Display Name]]` can resolve to objects by their name_field value
    ```markdown
-   [[The Prose Edda]]  # Can resolve to books/the-prose-edda.md if it has title: The Prose Edda
+   [[The Prose Edda]]  # Can resolve to book/the-prose-edda.md if it has title: The Prose Edda
    ```
 
 **Setting via CLI:**
@@ -189,7 +193,7 @@ Directory where `rvn new` creates files of this type.
 ```yaml
 types:
   person:
-    default_path: people/
+    default_path: person/
 ```
 
 With `directories` configured in `raven.yaml`, `default_path` is relative to `objects/`.
@@ -327,8 +331,8 @@ In frontmatter, ref values are object IDs:
 ```yaml
 ---
 type: project
-owner: people/freya
-company: companies/stark-industries
+owner: person/freya
+company: company/stark-industries
 ---
 ```
 
@@ -352,8 +356,8 @@ In frontmatter:
 type: project
 tags: [web, frontend, urgent]
 collaborators:
-  - people/freya
-  - people/thor
+  - person/freya
+  - person/thor
 ---
 ```
 
@@ -579,7 +583,7 @@ Validates vault files against the schema. Reports issues like:
 | `invalid_enum_value` | Value not in allowed list | Use valid value |
 | `undefined_trait` | Trait not in schema | Add trait to schema |
 | `missing_reference` | Link to non-existent page | Create the page |
-| `ambiguous_reference` | Reference matches multiple objects | Use full path (e.g., `[[people/freya]]`) |
+| `ambiguous_reference` | Reference matches multiple objects | Use full path (e.g., `[[person/freya]]`) |
 | `id_collision` | Same short name maps to multiple object IDs | Use full paths or rename objects |
 | `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
 | `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use full path |
@@ -603,7 +607,7 @@ These frontmatter keys are always allowed regardless of type:
 The `alias` field enables alternative reference resolution. Any object can have an alias without needing to declare it in the schema:
 
 ```yaml
-# people/freya.md
+# person/freya.md
 ---
 type: person
 name: Freya
@@ -611,7 +615,7 @@ alias: The Queen
 ---
 ```
 
-Now `[[The Queen]]` resolves to `people/freya`.
+Now `[[The Queen]]` resolves to `person/freya`.
 
 Aliases are matched case-insensitively and also in slugified form (e.g., `[[the-queen]]` also works).
 
@@ -627,7 +631,7 @@ rvn schema traits
 rvn schema trait due
 
 # Add to schema
-rvn schema add type book --name-field title --default-path books/
+rvn schema add type book --name-field title --default-path book/
 rvn schema add type book --description "Books and long-form reading material"
 rvn schema add trait priority --type enum --values high,medium,low
 rvn schema add field person email --type string --required

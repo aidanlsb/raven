@@ -83,7 +83,7 @@ You can turn a heading into a typed object without splitting it into a separate 
 
 ```markdown
 ## Weekly Standup
-::meeting(time=09:00, attendees=[[[people/freya]], [[people/thor]]])
+::meeting(time=09:00, attendees=[[[person/freya]], [[person/thor]]])
 
 Meeting notes here...
 ```
@@ -95,16 +95,16 @@ This creates an embedded `meeting` object within the file. See `types-and-traits
 References are wiki-style links that connect objects into a graph:
 
 ```markdown
-Met with [[people/freya]] about [[projects/website]].
-See the tasks: [[projects/website#tasks]]
+Met with [[person/freya]] about [[project/website]].
+See the tasks: [[project/website#tasks]]
 ```
 
-References also appear in frontmatter `ref` fields (`owner: people/freya`) and in embedded type declarations.
+References also appear in frontmatter `ref` fields (`owner: person/freya`) and in embedded type declarations.
 
 Raven resolves references to canonical object IDs. Short references like `[[freya]]` work when unambiguous. Use `rvn backlinks` to see what links to an object:
 
 ```bash
-rvn backlinks people/freya
+rvn backlinks person/freya
 ```
 
 See `types-and-traits/references.md` for the full reference guide.
@@ -139,7 +139,7 @@ Every markdown heading automatically creates a `section` object. This gives your
 ### High Priority         → section (level 3), child of Tasks
 ```
 
-Section objects can be referenced (`[[projects/website#tasks]]`) and queried with hierarchy predicates like `parent(...)`, `ancestor(...)`, and `descendant(...)`.
+Section objects can be referenced (`[[project/website#tasks]]`) and queried with hierarchy predicates like `parent(...)`, `ancestor(...)`, and `descendant(...)`.
 
 ## Daily Notes
 

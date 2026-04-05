@@ -69,7 +69,7 @@ trait:highlight on(object:book .status==reading)
 | Scalar membership | `in(.field, [a,b])` | `in(.status, [active,backlog])` |
 | Array quantifiers | `any()` / `all()` / `none()` | `any(.tags, _ == "urgent")` |
 | String functions | `contains()`, `startswith()`, `endswith()`, `matches()` | `contains(.name, "website")` |
-| References | `[[...]]` | `[[people/freya]]` |
+| References | `[[...]]` | `[[person/freya]]` |
 | Raw string | `r"..."` | `matches(.path, r"C:\Users\.*")` |
 
 Notes:
@@ -152,7 +152,7 @@ Examples:
 object:project has(trait:due)
 object:project encloses(trait:todo .value==todo)
 object:meeting parent(object:date)
-object:meeting refs([[projects/website]])
+object:meeting refs([[project/website]])
 object:meeting refs(object:project .status==active)
 object:project refd(object:meeting)
 ```
@@ -197,7 +197,7 @@ Examples:
 trait:due on(object:meeting)
 trait:todo within(object:project .status==active)
 trait:due at(trait:todo)
-trait:due refs([[people/freya]])
+trait:due refs([[person/freya]])
 trait:todo content("refactor")
 ```
 
@@ -227,8 +227,25 @@ object:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 ```bash
 rvn query 'object:project .status==active' --json
 rvn query 'trait:due .value<today' --ids
-rvn query 'object:project refs([[companies/acme]])' --refresh --json
+rvn query 'object:project refs([[company/acme]])' --refresh --json
 ```
+
+Key flags:
+- `--json` — structured JSON output (recommended for agents and scripts)
+- `--ids` — output one ID per line for piping to other commands
+- `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
+
+### Pagination
+
+Use `--limit` and `--offset` to paginate large result sets:
+
+```bash
+rvn query 'object:project' --limit 20                   # First 20 results
+rvn query 'object:project' --limit 20 --offset 20       # Next 20
+rvn query 'trait:todo' --limit 50 --json                 # Cap results at 50
+```
+
+The response metadata includes total count information so you know whether more results exist.
 
 ### Save and Reuse Queries
 
