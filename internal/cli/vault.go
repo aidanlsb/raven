@@ -97,6 +97,7 @@ func init() {
 	vaultCmd.AddCommand(vaultClearCmd)
 	vaultCmd.AddCommand(vaultAddCmd)
 	vaultCmd.AddCommand(vaultRemoveCmd)
+	vaultCmd.AddCommand(vaultConfigCmd)
 
 	rootCmd.AddCommand(vaultCmd)
 }

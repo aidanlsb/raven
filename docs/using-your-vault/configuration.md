@@ -168,6 +168,17 @@ rvn config unset --ui-accent --ui-code-theme --json
 
 `raven.yaml` controls per-vault behavior: directories, auto-reindexing, capture, deletion, saved queries, and protected paths.
 
+Use structured CLI commands when available instead of editing `raven.yaml` manually:
+
+```bash
+rvn vault config show --json
+rvn vault config auto-reindex set --value=false --json
+rvn vault config auto-reindex unset --json
+rvn vault config protected-prefixes list --json
+rvn vault config protected-prefixes add private --json
+rvn vault config protected-prefixes remove private/ --json
+```
+
 ### Practical baseline
 
 ```yaml

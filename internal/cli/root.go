@@ -56,16 +56,23 @@ who gathered knowledge from across the world.`,
 
 		// Skip vault resolution for commands that don't need it
 		switch cmd.Name() {
-		case "init", "vault", "config", "completion", "help", "version", "serve", "skill", "mcp":
+		case "init", "completion", "help", "version", "serve", "skill", "mcp":
 			return nil
+		case "vault", "config":
+			if isRootChildCommand(cmd) {
+				return nil
+			}
 		}
 		// Also skip for completion/config/skill/mcp subcommands.
 		// Most vault subcommands do not require resolved vault path, except `vault path` and `vault stats`.
 		if cmd.Parent() != nil {
-			parentName := cmd.Parent().Name()
-			if parentName == "vault" && (cmd.Name() == "path" || cmd.Name() == "stats") {
+			parent := cmd.Parent()
+			parentName := parent.Name()
+			if parentName == "vault" && (cmd.Name() == "path" || cmd.Name() == "stats" || cmd.Name() == "config") {
 				// `vault path` and `vault stats` should resolve exactly like vault-bound commands.
-			} else if parentName == "completion" || parentName == "vault" || parentName == "config" || parentName == "skill" || parentName == "mcp" {
+			} else if parentName == "completion" || parentName == "vault" || parentName == "skill" || parentName == "mcp" {
+				return nil
+			} else if parentName == "config" && isRootChildCommand(parent) {
 				return nil
 			}
 		}
@@ -177,6 +184,10 @@ func getVaultPath() string {
 // getConfig returns the loaded config.
 func getConfig() *config.Config {
 	return cfg
+}
+
+func isRootChildCommand(cmd *cobra.Command) bool {
+	return cmd != nil && cmd.Parent() != nil && cmd.Parent().Name() == "rvn"
 }
 
 func loadGlobalConfigWithPath() (*config.Config, string, error) {

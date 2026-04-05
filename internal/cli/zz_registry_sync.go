@@ -55,6 +55,7 @@ func lookupRegistryMeta(path string) (commands.Meta, bool) {
 	}
 
 	underscored := strings.ReplaceAll(path, " ", "_")
+	underscored = strings.ReplaceAll(underscored, "-", "_")
 	if meta, ok := commands.EffectiveMeta(underscored); ok {
 		return meta, true
 	}

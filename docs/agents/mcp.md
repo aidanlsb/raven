@@ -228,6 +228,28 @@ Use the dedicated saved-query commands to inspect or update definitions.
 }
 ```
 
+### Vault config management
+
+Use dedicated vault-config commands for supported `raven.yaml` settings instead of raw file edits.
+
+```json
+{
+  "command": "vault_config_auto_reindex_set",
+  "args": {
+    "value": false
+  }
+}
+```
+
+```json
+{
+  "command": "vault_config_protected_prefixes_add",
+  "args": {
+    "prefix": "private"
+  }
+}
+```
+
 ## Common Patterns
 
 ### Read and search

@@ -1690,6 +1690,7 @@ The default vault is stored in config.toml and used as fallback.`,
 			"rvn vault current --json",
 			"rvn vault path --json",
 			"rvn vault stats --json",
+			"rvn vault config show --json",
 			"rvn vault add work /Users/you/work-notes --json",
 			"rvn vault use work --json",
 			"rvn vault pin personal --json",
@@ -1698,6 +1699,7 @@ The default vault is stored in config.toml and used as fallback.`,
 		},
 		UseCases: []string{
 			"List configured vaults and inspect active/default markers",
+			"Inspect or mutate structured raven.yaml settings via 'vault config'",
 			"Register named vault paths in config.toml",
 			"Switch active vault for subsequent CLI and MCP commands",
 			"Pin a default fallback vault in config.toml",
@@ -1814,6 +1816,72 @@ Safety checks:
 		VaultScope:  VaultScopeNone,
 		Examples: []string{
 			"rvn vault clear --json",
+		},
+	},
+	"vault_config_show": {
+		Name:        "vault config show",
+		Description: "Show current raven.yaml values",
+		Examples: []string{
+			"rvn vault config show --json",
+		},
+		UseCases: []string{
+			"Inspect structured vault-level configuration without reading raven.yaml directly",
+		},
+	},
+	"vault_config_auto_reindex_set": {
+		Name:        "vault config auto-reindex set",
+		Description: "Set an explicit auto_reindex value in raven.yaml",
+		LongDesc: `Set the vault's auto_reindex behavior explicitly.
+
+Use --value=false to disable automatic incremental reindexing after write commands.
+Without --value, this command sets auto_reindex=true explicitly.`,
+		Flags: []FlagMeta{
+			{Name: "value", Description: "Explicit auto_reindex value", Type: FlagTypeBool, Default: "true"},
+		},
+		Examples: []string{
+			"rvn vault config auto-reindex set --json",
+			"rvn vault config auto-reindex set --value=false --json",
+		},
+	},
+	"vault_config_auto_reindex_unset": {
+		Name:        "vault config auto-reindex unset",
+		Description: "Clear the explicit auto_reindex field from raven.yaml",
+		LongDesc: `Remove the explicit auto_reindex field and fall back to Raven's default behavior.
+
+The effective default is auto_reindex=true.`,
+		Examples: []string{
+			"rvn vault config auto-reindex unset --json",
+		},
+	},
+	"vault_config_protected_prefixes_list": {
+		Name:        "vault config protected-prefixes list",
+		Description: "List configured protected_prefixes from raven.yaml",
+		Examples: []string{
+			"rvn vault config protected-prefixes list --json",
+		},
+	},
+	"vault_config_protected_prefixes_add": {
+		Name:        "vault config protected-prefixes add",
+		Description: "Add one protected prefix to raven.yaml",
+		LongDesc: `Add a vault-relative directory prefix to protected_prefixes.
+
+Prefixes are normalized with a trailing slash.`,
+		Args: []ArgMeta{
+			{Name: "prefix", Description: "Vault-relative directory prefix to protect", Required: true},
+		},
+		Examples: []string{
+			"rvn vault config protected-prefixes add private --json",
+			"rvn vault config protected-prefixes add templates/generated --json",
+		},
+	},
+	"vault_config_protected_prefixes_remove": {
+		Name:        "vault config protected-prefixes remove",
+		Description: "Remove one protected prefix from raven.yaml",
+		Args: []ArgMeta{
+			{Name: "prefix", Description: "Configured protected prefix to remove", Required: true},
+		},
+		Examples: []string{
+			"rvn vault config protected-prefixes remove private/ --json",
 		},
 	},
 	"open": {
