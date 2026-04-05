@@ -74,7 +74,7 @@ Available skill targets are `codex`, `claude`, and `cursor`.
 
 ### Agent Onboarding
 
-After MCP and skills are in place, a good first prompt is:
+After MCP and skills are in place, you can use your agent to onboard to Raven:
 
 > Help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
 

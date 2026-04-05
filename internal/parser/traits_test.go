@@ -2,6 +2,8 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestParseTraitAnnotations(t *testing.T) {
@@ -382,6 +384,75 @@ func TestIsRefOnTraitLine(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("IsRefOnTraitLine(%d, %d) = %v, want %v",
 					tt.traitLine, tt.refLine, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTraitAnnotationValueHelpers(t *testing.T) {
+	t.Parallel()
+
+	strVal := schema.String("todo")
+	dateVal := schema.Date("2025-06-15")
+	refVal := schema.Ref("project/website")
+	nullVal := schema.Null()
+
+	tests := []struct {
+		name         string
+		value        *schema.FieldValue
+		wantHasValue bool
+		wantString   string
+	}{
+		{
+			name:         "nil value",
+			value:        nil,
+			wantHasValue: false,
+			wantString:   "",
+		},
+		{
+			name:         "null value",
+			value:        &nullVal,
+			wantHasValue: false,
+			wantString:   "",
+		},
+		{
+			name:         "string value",
+			value:        &strVal,
+			wantHasValue: true,
+			wantString:   "todo",
+		},
+		{
+			name:         "date value",
+			value:        &dateVal,
+			wantHasValue: true,
+			wantString:   "2025-06-15",
+		},
+		{
+			name:         "ref value",
+			value:        &refVal,
+			wantHasValue: true,
+			wantString:   "project/website",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("TraitAnnotation/"+tt.name, func(t *testing.T) {
+			ta := &TraitAnnotation{TraitName: "test", Value: tt.value}
+			if got := ta.HasValue(); got != tt.wantHasValue {
+				t.Errorf("HasValue() = %v, want %v", got, tt.wantHasValue)
+			}
+			if got := ta.ValueString(); got != tt.wantString {
+				t.Errorf("ValueString() = %q, want %q", got, tt.wantString)
+			}
+		})
+
+		t.Run("ParsedTrait/"+tt.name, func(t *testing.T) {
+			pt := &ParsedTrait{TraitType: "test", Value: tt.value}
+			if got := pt.HasValue(); got != tt.wantHasValue {
+				t.Errorf("HasValue() = %v, want %v", got, tt.wantHasValue)
+			}
+			if got := pt.ValueString(); got != tt.wantString {
+				t.Errorf("ValueString() = %q, want %q", got, tt.wantString)
 			}
 		})
 	}

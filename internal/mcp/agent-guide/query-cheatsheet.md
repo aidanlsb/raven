@@ -27,7 +27,7 @@ Quick reference for common Raven Query Language (RQL) patterns.
 Nest queries inside predicates to filter by related objects or traits:
 
 - `refs(object:project .status == active)`
-- `within(object:meeting refs([[projects/raven]]))`
+- `within(object:meeting refs([[project/raven]]))`
 - `has(trait:due .value < today)`
 - `on(object:project .status == active)`
 
@@ -41,16 +41,16 @@ Combine predicates with boolean operators:
 - `(...)` = grouping
 
 Example:
-- `trait:todo (.value == todo | .value == doing) !refs([[projects/legacy]])`
+- `trait:todo (.value == todo | .value == doing) !refs([[project/legacy]])`
 
 This can be very useful to provide lots of information to the user. If a question is vague, err on the side of running a few different versions of a query that could match the description and returning all the results to the user.
 
 ## Examples
 
 - Open todos for a project page:
-  - `trait:todo within([[projects/raven]]) .value != done`
+  - `trait:todo within([[project/raven]]) .value != done`
 - Todos referencing a project:
-  - `trait:todo refs([[projects/raven]]) .value != done`
+  - `trait:todo refs([[project/raven]]) .value != done`
 - Open todos in briefs:
   - `trait:todo .value == todo within(object:brief)`
 - Real traits, not prose mentions:
@@ -64,6 +64,6 @@ This can be very useful to provide lots of information to the user. If a questio
 - Due tomorrow:
   - `trait:due .value == tomorrow`
 - Meetings with an attendee:
-  - `object:meeting .attendees == [[people/freya]]`
+  - `object:meeting .attendees == [[person/freya]]`
 - Active projects:
   - `object:project .status == active`

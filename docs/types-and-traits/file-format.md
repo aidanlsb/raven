@@ -20,7 +20,7 @@ Project description...
 - @todo Finish homepage
 
 ## Standup
-::meeting(time=09:00, attendees=[[[people/freya]], [[people/thor]]])
+::meeting(time=09:00, attendees=[[[person/freya]], [[person/thor]]])
 
 Meeting notes...
 ```
@@ -37,8 +37,8 @@ For file-level objects, the ID is derived from the file path (relative to vault 
 
 | File Path | Object ID |
 |-----------|-----------|
-| `people/freya.md` | `people/freya` |
-| `projects/website.md` | `projects/website` |
+| `person/freya.md` | `person/freya` |
+| `project/website.md` | `project/website` |
 | `random-note.md` | `random-note` |
 | `daily/2026-01-10.md` | `daily/2026-01-10` |
 
@@ -46,8 +46,8 @@ For file-level objects, the ID is derived from the file path (relative to vault 
 
 | File Path | Object ID |
 |-----------|-----------|
-| `objects/people/freya.md` | `people/freya` |
-| `objects/projects/website.md` | `projects/website` |
+| `objects/person/freya.md` | `person/freya` |
+| `objects/project/website.md` | `project/website` |
 | `pages/random-note.md` | `random-note` |
 
 The directory prefix (`objects/`, `pages/`) is stripped from IDs.
@@ -62,9 +62,9 @@ Embedded objects (sections and `::type()` declarations) have IDs that combine th
 
 | Object | ID |
 |--------|-----|
-| `## Tasks` in `projects/website.md` | `projects/website#tasks` |
-| `## Weekly Standup` with `::meeting(...)` | `projects/website#weekly-standup` |
-| `## Tasks` with `::section(id=my-tasks)` | `projects/website#my-tasks` |
+| `## Tasks` in `project/website.md` | `project/website#tasks` |
+| `## Weekly Standup` with `::meeting(...)` | `project/website#weekly-standup` |
+| `## Tasks` with `::section(id=my-tasks)` | `project/website#my-tasks` |
 
 ---
 
@@ -160,11 +160,11 @@ priority: 3                              # number
 due: 2026-02-15                          # date
 time: 2026-01-10T09:00                   # datetime
 archived: false                          # boolean
-owner: people/freya                      # ref (object ID)
+owner: person/freya                      # ref (object ID)
 tags: [web, frontend, urgent]            # string array
 collaborators:                           # ref array
-  - people/freya
-  - people/thor
+  - person/freya
+  - person/thor
 ---
 ```
 
@@ -174,20 +174,7 @@ them as dates (`YYYY-MM-DD`) or normalizes datetimes to RFC3339-ish values (e.g.
 
 ### `alias`
 
-The `alias` field enables alternative reference resolution. It's a reserved key, so any object can have an alias without needing to declare it in the schema:
-
-```yaml
-# people/freya.md
----
-type: person
-name: Freya
-alias: The Queen
----
-```
-
-Now `[[The Queen]]` resolves to `people/freya`.
-
-Aliases are matched case-insensitively and also in slugified form (e.g., `[[the-queen]]` also works).
+The `alias` reserved key lets any object define an alternative name for reference resolution (e.g., `alias: The Queen` makes `[[The Queen]]` resolve to that object). Aliases are matched case-insensitively and in slugified form. See `types-and-traits/schema.md` (Reserved Keys) for full details and examples.
 
 ---
 
@@ -250,7 +237,7 @@ Must appear on the line **immediately after** a heading:
 
 ```markdown
 ## Weekly Standup
-::meeting(time=09:00, attendees=[[[people/freya]]])
+::meeting(time=09:00, attendees=[[[person/freya]]])
 
 Meeting notes go here...
 ```
@@ -271,9 +258,9 @@ Meeting notes go here...
 | Boolean | `true`/`false` | `active=true` |
 | Date | YYYY-MM-DD | `due=2026-02-15` |
 | Datetime | YYYY-MM-DDTHH:MM | `time=2026-01-10T09:00` |
-| Reference | `[[id]]` | `owner=[[people/freya]]` |
+| Reference | `[[id]]` | `owner=[[person/freya]]` |
 | Array | `[item, item]` | `tags=[web, frontend]` |
-| Ref Array | `[[[id]], [[id]]]` | `attendees=[[[people/freya]], [[people/thor]]]` |
+| Ref Array | `[[[id]], [[id]]]` | `attendees=[[[person/freya]], [[person/thor]]]` |
 
 ### Examples
 
@@ -288,7 +275,7 @@ Meeting notes go here...
 
 ```markdown
 ## Project Kickoff
-::meeting(time=14:00, attendees=[[[people/freya]], [[people/thor]]], important=true)
+::meeting(time=14:00, attendees=[[[person/freya]], [[person/thor]]], important=true)
 ```
 
 **Custom ID:**
@@ -316,104 +303,20 @@ Both `::section` and `::section()` are equivalent - parentheses are optional whe
 
 ## References
 
-References connect objects across your vault. They power:
-- Navigation between notes
-- Backlinks (`rvn backlinks`)
-- Query predicates like `refs(...)` / `refd(...)`
-- Safe ref updates when objects move (`rvn move --update-refs`, default true)
-
-Wiki-style links reference other objects:
+Wiki-style links connect objects across your vault:
 
 ```markdown
-[[people/freya]]
-[[people/freya|Freya]]
-[[projects/website#tasks]]
-[[2026-01-10]]
+[[person/freya]]                   # Basic reference
+[[person/freya|Freya]]             # With display text
+[[project/website#tasks]]         # To a section or embedded object
+[[2026-01-10]]                     # Date reference (daily note)
 ```
 
-### Syntax
+References can appear in markdown body content, frontmatter `ref`/`ref[]` fields, and embedded type declarations.
 
-| Format | Description |
-|--------|-------------|
-| `[[target]]` | Basic reference |
-| `[[target\|display text]]` | Reference with display text |
-| `[[target#fragment]]` | Reference to embedded object |
+Raven resolves references to canonical object IDs through alias, name field, date, path, and short name matching. Short references like `[[freya]]` work when unambiguous.
 
-### Where References Can Appear
-
-- Markdown body content (most common)
-- Frontmatter `ref` / `ref[]` fields
-- Embedded object declarations (`::type(field=[[target]])`)
-
-### Resolution Model
-
-Raven resolves each reference to a canonical object ID. It evaluates these match sources:
-
-1. **Alias match** (`alias`)
-2. **Name field match** (`name_field`)
-3. **Date match** (`date`) for absolute `YYYY-MM-DD`
-4. **Object ID/path match** (`object_id`, `suffix_match`)
-5. **Short name match** (`short_name`)
-
-Match sources are exposed by `rvn resolve --json` as `match_source`.
-
-If multiple candidates remain after matching, the reference is ambiguous and is not resolved automatically.
-
-Special-case disambiguation:
-- If both a file and one of its own sections match the same short name, Raven prefers the file object.
-
-Date notes:
-- `[[2026-01-10]]` resolves to your daily note ID (under `directories.daily`).
-- Relative date keywords (`today`, `tomorrow`, `yesterday`) are command-time conveniences (for commands like `rvn resolve today`), not stable reference targets during indexing.
-
-**Short references** work when unambiguous:
-
-```markdown
-[[freya]]              → people/freya (if only one "freya" exists)
-[[website]]            → projects/website
-[[2026-01-10]]         → daily/2026-01-10
-```
-
-### Ambiguous References
-
-An ambiguous reference is one raw reference string that matches multiple objects, for example:
-- Duplicate short names (`projects/notes` and `meetings/notes`)
-- Alias collisions with another object path or short name
-- Duplicate/overlapping `name_field` values
-
-Behavior:
-- In index resolution, ambiguous refs remain unresolved.
-- `rvn check` reports `ambiguous_reference` issues (and related collisions like `id_collision`, `alias_collision`, `duplicate_alias`).
-- Commands that require a single target return `REF_AMBIGUOUS` and list matches.
-
-Inspect ambiguity with:
-
-```bash
-rvn resolve "notes" --json
-rvn check --issues ambiguous_reference,id_collision,alias_collision,duplicate_alias --json
-```
-
-Fix strategy:
-1. Use full canonical paths in links (`[[projects/notes]]`).
-2. Keep aliases unique and descriptive.
-3. Use `name_field` values that are unique within the vault context where you rely on semantic resolution.
-4. Re-run `rvn check` after edits.
-
-### References in Frontmatter
-
-Ref fields can use bare IDs or wiki-link syntax:
-
-```yaml
----
-owner: people/freya          # Bare ID
-owner: "[[people/freya]]"    # Also valid
-collaborators:
-  - people/freya
-  - people/thor
----
-```
-
-For how references are used in queries, see `querying/query-language.md`.
+For the full resolution model, ambiguity handling, frontmatter ref syntax, and maintenance commands, see `types-and-traits/references.md`.
 
 ---
 
@@ -487,7 +390,7 @@ trait:highlight within(object:project .status==active)
 type: project
 title: Website Redesign
 status: active
-owner: people/freya
+owner: person/freya
 tags: [web, frontend]
 ---
 
@@ -495,7 +398,7 @@ tags: [web, frontend]
 
 A complete redesign of the company website.
 
-Project lead: [[people/freya]]
+Project lead: [[person/freya]]
 
 ## Overview
 
@@ -509,7 +412,7 @@ Goals and objectives...
 - @due(2026-02-01) @priority(high) Finalize color palette
 
 ## Weekly Standup
-::meeting(time=09:00, attendees=[[[people/freya]], [[people/thor]]])
+::meeting(time=09:00, attendees=[[[person/freya]], [[person/thor]]])
 
 ### Agenda
 
@@ -523,18 +426,18 @@ Goals and objectives...
 
 ## References
 
-- [[projects/brand-guidelines]]
-- [[companies/acme]]
+- [[project/brand-guidelines]]
+- [[company/acme]]
 ```
 
 This creates:
-- File object: `projects/website` (type: `project`)
-- Section: `projects/website#overview` (type: `section`)
-- Section: `projects/website#tasks` (type: `section`, from `::section()`)
-- Embedded object: `projects/website#weekly-standup` (type: `meeting`)
-- Section: `projects/website#agenda` (type: `section`, parent: weekly-standup)
-- Section: `projects/website#notes` (type: `section`, parent: weekly-standup)
-- Section: `projects/website#references` (type: `section`)
+- File object: `project/website` (type: `project`)
+- Section: `project/website#overview` (type: `section`)
+- Section: `project/website#tasks` (type: `section`, from `::section()`)
+- Embedded object: `project/website#weekly-standup` (type: `meeting`)
+- Section: `project/website#agenda` (type: `section`, parent: weekly-standup)
+- Section: `project/website#notes` (type: `section`, parent: weekly-standup)
+- Section: `project/website#references` (type: `section`)
 
 Plus traits:
 - `@todo` on `#tasks`
@@ -544,7 +447,7 @@ Plus traits:
 - `@highlight` on `#notes`
 
 And references:
-- `[[people/freya]]` (in body and frontmatter)
-- `[[people/thor]]` (in meeting attendees)
-- `[[projects/brand-guidelines]]`
-- `[[companies/acme]]`
+- `[[person/freya]]` (in body and frontmatter)
+- `[[person/thor]]` (in meeting attendees)
+- `[[project/brand-guidelines]]`
+- `[[company/acme]]`

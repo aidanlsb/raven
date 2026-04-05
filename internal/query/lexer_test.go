@@ -4,6 +4,319 @@ import (
 	"testing"
 )
 
+func TestLexerErrorTokens(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		wantType  TokenType
+		wantValue string
+	}{
+		{
+			name:      "unterminated string",
+			input:     `"hello world`,
+			wantType:  TokenError,
+			wantValue: "unterminated string literal",
+		},
+		{
+			name:      "unterminated regex",
+			input:     `/^foo`,
+			wantType:  TokenError,
+			wantValue: "unterminated regex literal",
+		},
+		{
+			name:      "unterminated raw string",
+			input:     `r"hello`,
+			wantType:  TokenError,
+			wantValue: "unterminated raw string literal",
+		},
+		{
+			name:      "malformed wikilink unclosed",
+			input:     `[[foo`,
+			wantType:  TokenError,
+			wantValue: "[",
+		},
+		{
+			name:      "unrecognized character",
+			input:     `~`,
+			wantType:  TokenError,
+			wantValue: "~",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tok := lexer.NextToken()
+			if tok.Type != tt.wantType {
+				t.Errorf("expected type %v, got %v (value: %q)", tt.wantType, tok.Type, tok.Value)
+			}
+			if tok.Value != tt.wantValue {
+				t.Errorf("expected value %q, got %q", tt.wantValue, tok.Value)
+			}
+		})
+	}
+}
+
+func TestLexerWikilinks(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		wantType  TokenType
+		wantValue string
+	}{
+		{
+			name:      "simple wikilink",
+			input:     `[[project/website]]`,
+			wantType:  TokenRef,
+			wantValue: "project/website",
+		},
+		{
+			name:      "wikilink with display text",
+			input:     `[[person/freya|Freya]]`,
+			wantType:  TokenRef,
+			wantValue: "person/freya",
+		},
+		{
+			name:      "wikilink with fragment",
+			input:     `[[daily/2025-01-01#standup]]`,
+			wantType:  TokenRef,
+			wantValue: "daily/2025-01-01#standup",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tok := lexer.NextToken()
+			if tok.Type != tt.wantType {
+				t.Errorf("expected type %v, got %v (value: %q)", tt.wantType, tok.Type, tok.Value)
+			}
+			if tok.Value != tt.wantValue {
+				t.Errorf("expected value %q, got %q", tt.wantValue, tok.Value)
+			}
+		})
+	}
+}
+
+func TestLexerComparisonOperators(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		wantType  TokenType
+		wantValue string
+	}{
+		{"less than", "<", TokenLt, "<"},
+		{"less than or equal", "<=", TokenLte, "<="},
+		{"greater than", ">", TokenGt, ">"},
+		{"greater than or equal", ">=", TokenGte, ">="},
+		{"equals", "==", TokenEqEq, "=="},
+		{"not equals", "!=", TokenBangEq, "!="},
+		{"single equals", "=", TokenEq, "="},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tok := lexer.NextToken()
+			if tok.Type != tt.wantType {
+				t.Errorf("expected type %v, got %v", tt.wantType, tok.Type)
+			}
+			if tok.Value != tt.wantValue {
+				t.Errorf("expected value %q, got %q", tt.wantValue, tok.Value)
+			}
+		})
+	}
+}
+
+func TestLexerRawStrings(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		wantValue string
+	}{
+		{
+			name:      "raw string with backslash",
+			input:     `r"foo\bar"`,
+			wantValue: `foo\bar`,
+		},
+		{
+			name:      "raw string empty",
+			input:     `r""`,
+			wantValue: "",
+		},
+		{
+			name:      "raw string with special chars",
+			input:     `r"^[a-z]+\d{3}$"`,
+			wantValue: `^[a-z]+\d{3}$`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tok := lexer.NextToken()
+			if tok.Type != TokenString {
+				t.Errorf("expected TokenString, got %v (value: %q)", tok.Type, tok.Value)
+			}
+			if tok.Value != tt.wantValue {
+				t.Errorf("expected value %q, got %q", tt.wantValue, tok.Value)
+			}
+		})
+	}
+}
+
+func TestLexerStringEscaping(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		wantValue string
+	}{
+		{
+			name:      "escaped quote inside string",
+			input:     `"say \"hello\""`,
+			wantValue: `say "hello"`,
+		},
+		{
+			name:      "simple string",
+			input:     `"hello world"`,
+			wantValue: "hello world",
+		},
+		{
+			name:      "empty string",
+			input:     `""`,
+			wantValue: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tok := lexer.NextToken()
+			if tok.Type != TokenString {
+				t.Errorf("expected TokenString, got %v (value: %q)", tok.Type, tok.Value)
+			}
+			if tok.Value != tt.wantValue {
+				t.Errorf("expected value %q, got %q", tt.wantValue, tok.Value)
+			}
+		})
+	}
+}
+
+func TestLexerWhitespaceHandling(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      string
+		wantTokens []Token
+	}{
+		{
+			name:  "leading whitespace skipped",
+			input: "   object",
+			wantTokens: []Token{
+				{Type: TokenIdent, Value: "object", Pos: 3},
+				{Type: TokenEOF},
+			},
+		},
+		{
+			name:  "multiple spaces between tokens",
+			input: "a    b",
+			wantTokens: []Token{
+				{Type: TokenIdent, Value: "a", Pos: 0},
+				{Type: TokenIdent, Value: "b", Pos: 5},
+				{Type: TokenEOF},
+			},
+		},
+		{
+			name:  "tabs and newlines treated as whitespace",
+			input: "a\t\nb",
+			wantTokens: []Token{
+				{Type: TokenIdent, Value: "a", Pos: 0},
+				{Type: TokenIdent, Value: "b", Pos: 3},
+				{Type: TokenEOF},
+			},
+		},
+		{
+			name:  "empty input",
+			input: "",
+			wantTokens: []Token{
+				{Type: TokenEOF},
+			},
+		},
+		{
+			name:  "whitespace only",
+			input: "   \t  ",
+			wantTokens: []Token{
+				{Type: TokenEOF},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			for i, expected := range tt.wantTokens {
+				tok := lexer.NextToken()
+				if tok.Type != expected.Type {
+					t.Errorf("token %d: expected type %v, got %v (value: %q)", i, expected.Type, tok.Type, tok.Value)
+				}
+				if expected.Value != "" && tok.Value != expected.Value {
+					t.Errorf("token %d: expected value %q, got %q", i, expected.Value, tok.Value)
+				}
+				if expected.Pos != 0 && tok.Pos != expected.Pos {
+					t.Errorf("token %d: expected pos %d, got %d", i, expected.Pos, tok.Pos)
+				}
+			}
+		})
+	}
+}
+
+func TestLexerUnderscoreToken(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		wantType  TokenType
+		wantValue string
+	}{
+		{
+			name:      "standalone underscore",
+			input:     "_",
+			wantType:  TokenUnderscore,
+			wantValue: "_",
+		},
+		{
+			name:      "underscore before dot",
+			input:     "_.",
+			wantType:  TokenUnderscore,
+			wantValue: "_",
+		},
+		{
+			name:      "underscore as identifier prefix",
+			input:     "_foo",
+			wantType:  TokenIdent,
+			wantValue: "_foo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			tok := lexer.NextToken()
+			if tok.Type != tt.wantType {
+				t.Errorf("expected type %v, got %v (value: %q)", tt.wantType, tok.Type, tok.Value)
+			}
+			if tok.Value != tt.wantValue {
+				t.Errorf("expected value %q, got %q", tt.wantValue, tok.Value)
+			}
+		})
+	}
+}
+
 func TestLexerNewTokens(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

@@ -96,7 +96,7 @@ Command arguments must be nested under `args`.
 {
   "command": "read",
   "args": {
-    "path": "projects/website.md",
+    "path": "project/website.md",
     "raw": true
   }
 }
@@ -268,7 +268,7 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 {
   "command": "read",
   "args": {
-    "path": "projects/website.md",
+    "path": "project/website.md",
     "raw": true,
     "start_line": 10,
     "end_line": 40
@@ -295,7 +295,7 @@ Then append content:
   "command": "add",
   "args": {
     "text": "## Notes\n- Kickoff next week",
-    "to": "projects/website-redesign.md"
+    "to": "project/website-redesign.md"
   }
 }
 ```
@@ -320,7 +320,7 @@ Preview:
 {
   "command": "edit",
   "args": {
-    "path": "projects/website.md",
+    "path": "project/website.md",
     "old_str": "Status: draft",
     "new_str": "Status: published"
   }
@@ -333,7 +333,7 @@ Apply:
 {
   "command": "edit",
   "args": {
-    "path": "projects/website.md",
+    "path": "project/website.md",
     "old_str": "Status: draft",
     "new_str": "Status: published",
     "confirm": true

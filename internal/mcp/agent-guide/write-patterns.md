@@ -41,7 +41,7 @@ Metadata update:
 
 ```text
 raven_invoke(command="set", args={
-  "object_id":"projects/website-redesign",
+  "object_id":"project/website-redesign",
   "fields":{"status":"active"}
 })
 ```
@@ -52,13 +52,13 @@ Preview then apply edit:
 
 ```text
 raven_invoke(command="edit", args={
-  "path":"projects/website-redesign.md",
+  "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
 raven_invoke(command="edit", args={
-  "path":"projects/website-redesign.md",
+  "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active",
   "confirm":true

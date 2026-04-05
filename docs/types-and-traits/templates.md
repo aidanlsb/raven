@@ -13,7 +13,7 @@ Goal: set up complete template lifecycles with both:
 - `rvn schema ... template ...` for schema bindings/defaults
 
 Out of scope:
-- full command/flag reference (see `reference/cli.md`)
+- full command/flag reference (run `rvn help <command>`)
 - full schema format reference (see `types-and-traits/schema.md`)
 
 ## How templates work

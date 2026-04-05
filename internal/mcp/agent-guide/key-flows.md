@@ -11,7 +11,7 @@ For detailed tool semantics, see:
 
 ```text
 raven_invoke(command="check", args={"errors_only":true})
-raven_invoke(command="check", args={"path":"projects/"})
+raven_invoke(command="check", args={"path":"project/"})
 raven_invoke(command="check", args={"issues":"missing_reference,unknown_type"})
 ```
 
@@ -22,24 +22,24 @@ Use issue `fix_command` / `fix_hint` from JSON output when available.
 ```text
 create = raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
 raven_invoke(command="add", args={"text":"## Notes\n- Kickoff next week", "to":create.data.file})
-raven_invoke(command="set", args={"object_id":"projects/website-redesign", "fields":{"status":"active"}})
+raven_invoke(command="set", args={"object_id":"project/website-redesign", "fields":{"status":"active"}})
 ```
 
 ## 3. Edit safely
 
 ```text
-raven_invoke(command="read", args={"path":"projects/website-redesign.md", "raw":true})
+raven_invoke(command="read", args={"path":"project/website-redesign.md", "raw":true})
 
 # Preview
 raven_invoke(command="edit", args={
-  "path":"projects/website-redesign.md",
+  "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active"
 })
 
 # Apply after approval
 raven_invoke(command="edit", args={
-  "path":"projects/website-redesign.md",
+  "path":"project/website-redesign.md",
   "old_str":"Status: draft",
   "new_str":"Status: active",
   "confirm":true
@@ -49,16 +49,16 @@ raven_invoke(command="edit", args={
 ## 4. Move, reclassify, and delete
 
 ```text
-raven_invoke(command="move", args={"source":"people/loki", "destination":"people/loki-archived"})
+raven_invoke(command="move", args={"source":"person/loki", "destination":"person/loki-archived"})
 raven_invoke(command="reclassify", args={"object":"pages/draft", "new-type":"project"})
-raven_invoke(command="reclassify", args={"object":"people/freya", "new-type":"company", "field-json":{"legal_name":"false"}})
+raven_invoke(command="reclassify", args={"object":"person/freya", "new-type":"company", "field-json":{"legal_name":"false"}})
 ```
 
 Deletion flow:
 
 ```text
-raven_invoke(command="backlinks", args={"target":"projects/old-project"})
-raven_invoke(command="delete", args={"object_id":"projects/old-project"})
+raven_invoke(command="backlinks", args={"target":"project/old-project"})
+raven_invoke(command="delete", args={"object_id":"project/old-project"})
 ```
 
 ## 5. Bulk mutation flow
@@ -96,7 +96,7 @@ raven_invoke(command="reindex", args={"full":true})
 
 ```text
 raven_invoke(command="query", args={
-  "query_string":"object:meeting refs([[projects/website]])",
+  "query_string":"object:meeting refs([[project/website]])",
   "limit":25,
   "offset":0
 })

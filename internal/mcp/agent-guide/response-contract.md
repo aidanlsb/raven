@@ -43,7 +43,7 @@ Examples:
 
 ```text
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "apply":["update done"]})
-raven_invoke(command="edit", args={"path":"projects/website.md", "old_str":"A", "new_str":"B"})
+raven_invoke(command="edit", args={"path":"project/website.md", "old_str":"A", "new_str":"B"})
 raven_invoke(command="delete", args={"stdin":true})
 raven_invoke(command="move", args={"stdin":true})
 ```
