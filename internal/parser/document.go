@@ -43,18 +43,12 @@ type ParsedTrait struct {
 
 // HasValue returns true if this trait has a value.
 func (t *ParsedTrait) HasValue() bool {
-	return t.Value != nil && !t.Value.IsNull()
+	return traitHasValue(t.Value)
 }
 
 // ValueString returns the value as a string, or empty string if no value.
 func (t *ParsedTrait) ValueString() string {
-	if t.Value == nil {
-		return ""
-	}
-	if s, ok := t.Value.AsString(); ok {
-		return s
-	}
-	return ""
+	return traitValueString(t.Value)
 }
 
 // ParsedRef represents a parsed reference.
@@ -363,16 +357,11 @@ func uniqueSlug(baseSlug string, usedIDs map[string]int) string {
 
 // findParentForLine finds the parent object ID for a given line number.
 func findParentForLine(objects []*ParsedObject, line int) string {
-	var bestMatch *ParsedObject
-	for _, obj := range objects {
-		if obj.LineStart <= line {
-			if bestMatch == nil || obj.LineStart > bestMatch.LineStart {
-				bestMatch = obj
-			}
-		}
-	}
-	if bestMatch != nil {
-		return bestMatch.ID
+	idx := sort.Search(len(objects), func(i int) bool {
+		return objects[i].LineStart > line
+	})
+	if idx > 0 {
+		return objects[idx-1].ID
 	}
 	if len(objects) > 0 {
 		return objects[0].ID

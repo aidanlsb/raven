@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,12 +28,6 @@ type EmbeddedTypeInfo struct {
 	// This is the declaration line (not the heading line).
 	Line int
 }
-
-// typeDeclWithArgsRegex matches ::type-name(args...)
-var typeDeclWithArgsRegex = regexp.MustCompile(`^::([\w-]+)\s*\(([^)]*)\)\s*$`)
-
-// typeDeclNoArgsRegex matches ::type-name without parentheses (shorthand for ::typename())
-var typeDeclNoArgsRegex = regexp.MustCompile(`^::([\w-]+)\s*$`)
 
 // ParseEmbeddedType parses an embedded type declaration from a line.
 // Returns nil if the line is not a type declaration.
@@ -67,45 +60,117 @@ func ParseTypeDeclaration(line string, lineNumber int) (*TypeDeclaration, error)
 		return nil, nil
 	}
 
-	// Try matching with parentheses first
-	if matches := typeDeclWithArgsRegex.FindStringSubmatch(trimmed); matches != nil {
-		typeName := matches[1]
-		argsStr := matches[2]
+	typeName, argsStr, hasArgs, err := splitTypeDeclaration(trimmed)
+	if err != nil {
+		return nil, err
+	}
 
-		fields, err := parseArguments(argsStr)
+	fields := make(map[string]schema.FieldValue)
+	if hasArgs {
+		fields, err = parseArguments(argsStr)
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		// Extract ID from fields
-		var id string
-		if idVal, ok := fields["id"]; ok {
-			if s, ok := idVal.AsString(); ok {
-				id = s
+	// Extract ID from fields
+	var id string
+	if idVal, ok := fields["id"]; ok {
+		if s, ok := idVal.AsString(); ok {
+			id = s
+		}
+	}
+
+	return &TypeDeclaration{
+		TypeName: typeName,
+		ID:       id,
+		Fields:   fields,
+		Line:     lineNumber,
+	}, nil
+}
+
+func splitTypeDeclaration(trimmed string) (typeName string, args string, hasArgs bool, err error) {
+	rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "::"))
+	if rest == "" {
+		return "", "", false, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
+	}
+
+	nameEnd := 0
+	for nameEnd < len(rest) && isTypeNameChar(rest[nameEnd]) {
+		nameEnd++
+	}
+	if nameEnd == 0 {
+		return "", "", false, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
+	}
+
+	typeName = rest[:nameEnd]
+	tail := strings.TrimSpace(rest[nameEnd:])
+	if tail == "" {
+		return typeName, "", false, nil
+	}
+	if tail[0] != '(' {
+		return "", "", false, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
+	}
+
+	args, trailing, err := extractDelimitedContent(tail, '(', ')')
+	if err != nil {
+		return "", "", false, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
+	}
+	if strings.TrimSpace(trailing) != "" {
+		return "", "", false, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
+	}
+
+	return typeName, args, true, nil
+}
+
+func isTypeNameChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') ||
+		(b >= 'A' && b <= 'Z') ||
+		(b >= '0' && b <= '9') ||
+		b == '_' ||
+		b == '-'
+}
+
+func extractDelimitedContent(s string, open, closeDelim rune) (inner string, trailing string, err error) {
+	if s == "" || rune(s[0]) != open {
+		return "", "", fmt.Errorf("missing opening delimiter")
+	}
+
+	inQuotes := false
+	bracketDepth := 0
+	parenDepth := 0
+
+	for i, r := range s[1:] {
+		switch r {
+		case '"':
+			inQuotes = !inQuotes
+		case '[':
+			if !inQuotes {
+				bracketDepth++
+			}
+		case ']':
+			if !inQuotes && bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '(':
+			if !inQuotes {
+				parenDepth++
+			}
+		case ')':
+			if !inQuotes {
+				if parenDepth > 0 {
+					parenDepth--
+					continue
+				}
+				if closeDelim == ')' && bracketDepth == 0 {
+					end := i + 1
+					return s[1:end], s[end+1:], nil
+				}
 			}
 		}
-
-		return &TypeDeclaration{
-			TypeName: typeName,
-			ID:       id,
-			Fields:   fields,
-			Line:     lineNumber,
-		}, nil
 	}
 
-	// Try matching without parentheses (shorthand for ::typename())
-	if matches := typeDeclNoArgsRegex.FindStringSubmatch(trimmed); matches != nil {
-		typeName := matches[1]
-
-		return &TypeDeclaration{
-			TypeName: typeName,
-			ID:       "",
-			Fields:   make(map[string]schema.FieldValue),
-			Line:     lineNumber,
-		}, nil
-	}
-
-	return nil, fmt.Errorf("invalid type declaration syntax: %s", trimmed)
+	return "", "", fmt.Errorf("missing closing delimiter")
 }
 
 // parseArguments parses comma-separated key=value arguments.
@@ -122,6 +187,7 @@ func parseArguments(args string) (map[string]schema.FieldValue, error) {
 	inKey := true
 	inQuotes := false
 	bracketDepth := 0
+	parenDepth := 0
 
 	for _, c := range args {
 		switch c {
@@ -139,12 +205,30 @@ func parseArguments(args string) (map[string]schema.FieldValue, error) {
 
 		case ']':
 			if !inQuotes {
+				if bracketDepth == 0 {
+					return nil, fmt.Errorf("mismatched brackets in type declaration arguments")
+				}
 				bracketDepth--
 			}
 			currentValue.WriteRune(c)
 
+		case '(':
+			if !inQuotes {
+				parenDepth++
+			}
+			currentValue.WriteRune(c)
+
+		case ')':
+			if !inQuotes {
+				if parenDepth == 0 {
+					return nil, fmt.Errorf("mismatched parentheses in type declaration arguments")
+				}
+				parenDepth--
+			}
+			currentValue.WriteRune(c)
+
 		case '=':
-			if !inQuotes && bracketDepth == 0 && inKey {
+			if !inQuotes && bracketDepth == 0 && parenDepth == 0 && inKey {
 				inKey = false
 			} else if inKey {
 				currentKey.WriteRune(c)
@@ -153,7 +237,7 @@ func parseArguments(args string) (map[string]schema.FieldValue, error) {
 			}
 
 		case ',':
-			if !inQuotes && bracketDepth == 0 {
+			if !inQuotes && bracketDepth == 0 && parenDepth == 0 {
 				// End of argument
 				key := strings.TrimSpace(currentKey.String())
 				if key != "" {
@@ -174,6 +258,16 @@ func parseArguments(args string) (map[string]schema.FieldValue, error) {
 				currentValue.WriteRune(c)
 			}
 		}
+	}
+
+	if inQuotes {
+		return nil, fmt.Errorf("unterminated quoted string in type declaration arguments")
+	}
+	if bracketDepth != 0 {
+		return nil, fmt.Errorf("mismatched brackets in type declaration arguments")
+	}
+	if parenDepth != 0 {
+		return nil, fmt.Errorf("mismatched parentheses in type declaration arguments")
 	}
 
 	// Handle last argument
@@ -258,10 +352,13 @@ func parseValueWithOptions(s string, opts valueParseOptions) schema.FieldValue {
 		}
 	} else if len(s) >= 10 && s[0] >= '0' && s[0] <= '9' {
 		if strings.Contains(s, "T") {
-			return schema.Datetime(s)
-		}
-		if len(s) == 10 && s[4] == '-' && s[7] == '-' {
-			return schema.Date(s)
+			if dates.IsValidDatetime(s) {
+				return schema.Datetime(s)
+			}
+		} else if len(s) == 10 && s[4] == '-' && s[7] == '-' {
+			if dates.IsValidDate(s) {
+				return schema.Date(s)
+			}
 		}
 	}
 
