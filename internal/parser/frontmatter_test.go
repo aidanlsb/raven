@@ -65,6 +65,7 @@ func TestParseFrontmatter(t *testing.T) {
 		wantType    string
 		wantNil     bool
 		wantEndLine int
+		wantErr     bool
 	}{
 		{
 			name: "basic frontmatter",
@@ -138,11 +139,39 @@ name: Freya
 `,
 			wantNil: true,
 		},
+		{
+			name: "nested YAML object is rejected",
+			content: `---
+type: person
+address:
+  city: Oslo
+  country: Norway
+---
+`,
+			wantErr: true,
+		},
+		{
+			name: "nested YAML object inside array is rejected",
+			content: `---
+type: person
+history:
+  - year: 2025
+    city: Oslo
+---
+`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fm, err := ParseFrontmatter(tt.content)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -189,5 +218,47 @@ name: Freya
 				t.Errorf("EndLine = %d, want %d", fm.EndLine, tt.wantEndLine)
 			}
 		})
+	}
+}
+
+func TestFieldValueFromYAML_UnsupportedMapReturnsNull(t *testing.T) {
+	t.Parallel()
+
+	got := FieldValueFromYAML(map[string]interface{}{
+		"city":    "Oslo",
+		"country": "Norway",
+	})
+
+	if !got.IsNull() {
+		t.Fatalf("expected null, got %v", got)
+	}
+}
+
+func TestFieldValueFromYAML_ScalarAndArrayKinds(t *testing.T) {
+	t.Parallel()
+
+	stringVal := FieldValueFromYAML("hello")
+	if s, ok := stringVal.AsString(); !ok || s != "hello" || stringVal.IsRef() || stringVal.IsDate() || stringVal.IsDatetime() {
+		t.Fatalf("expected plain string value, got %v", stringVal)
+	}
+
+	boolVal := FieldValueFromYAML(true)
+	if b, ok := boolVal.AsBool(); !ok || !b {
+		t.Fatalf("expected bool true, got %v", boolVal)
+	}
+
+	arrayVal := FieldValueFromYAML([]interface{}{"a", "b"})
+	arr, ok := arrayVal.AsArray()
+	if !ok {
+		t.Fatalf("expected array value, got %v", arrayVal)
+	}
+	if len(arr) != 2 {
+		t.Fatalf("expected 2 array items, got %d", len(arr))
+	}
+	if s, ok := arr[0].AsString(); !ok || s != "a" {
+		t.Fatalf("first array item = %v, want string %q", arr[0], "a")
+	}
+	if s, ok := arr[1].AsString(); !ok || s != "b" {
+		t.Fatalf("second array item = %v, want string %q", arr[1], "b")
 	}
 }

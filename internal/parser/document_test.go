@@ -582,3 +582,145 @@ Discussed [[projects/website]] progress.
 		}
 	})
 }
+
+func TestParseDocument_OnlyFrontmatterNoBody(t *testing.T) {
+	t.Parallel()
+
+	content := `---
+type: person
+name: Freya
+email: freya@asgard.realm
+---`
+
+	doc, err := ParseDocument(content, "/vault/people/freya.md", "/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(doc.Objects) != 1 {
+		t.Fatalf("got %d objects, want 1", len(doc.Objects))
+	}
+	if doc.Objects[0].ID != "people/freya" {
+		t.Fatalf("object ID = %q, want %q", doc.Objects[0].ID, "people/freya")
+	}
+	if len(doc.Traits) != 0 {
+		t.Fatalf("got %d traits, want 0", len(doc.Traits))
+	}
+	if len(doc.Refs) != 0 {
+		t.Fatalf("got %d refs, want 0", len(doc.Refs))
+	}
+}
+
+func TestParseDocument_EmptyHeadingIgnored(t *testing.T) {
+	t.Parallel()
+
+	content := `# Title
+
+##
+
+Body text.
+`
+
+	doc, err := ParseDocument(content, "/vault/doc.md", "/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(doc.Objects) != 2 {
+		t.Fatalf("got %d objects, want 2", len(doc.Objects))
+	}
+	if doc.Objects[1].ID != "doc#title" {
+		t.Fatalf("section ID = %q, want %q", doc.Objects[1].ID, "doc#title")
+	}
+}
+
+func TestParseDocument_UnicodeHeadingSlugs(t *testing.T) {
+	t.Parallel()
+
+	content := `# Über Alles
+
+## 日本語
+`
+
+	doc, err := ParseDocument(content, "/vault/doc.md", "/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(doc.Objects) != 3 {
+		t.Fatalf("got %d objects, want 3", len(doc.Objects))
+	}
+	if doc.Objects[1].ID != "doc#über-alles" {
+		t.Fatalf("first section ID = %q, want %q", doc.Objects[1].ID, "doc#über-alles")
+	}
+	if doc.Objects[2].ID != "doc#日本語" {
+		t.Fatalf("second section ID = %q, want %q", doc.Objects[2].ID, "doc#日本語")
+	}
+}
+
+func TestParseDocument_DeepHeadingHierarchy(t *testing.T) {
+	t.Parallel()
+
+	content := `# L1
+
+## L2
+
+### L3
+
+#### L4
+
+##### L5
+
+###### L6
+`
+
+	doc, err := ParseDocument(content, "/vault/doc.md", "/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(doc.Objects) != 7 {
+		t.Fatalf("got %d objects, want 7", len(doc.Objects))
+	}
+
+	for i := 2; i < len(doc.Objects); i++ {
+		parent := doc.Objects[i].ParentID
+		if parent == nil {
+			t.Fatalf("object %q missing parent", doc.Objects[i].ID)
+		}
+		if *parent != doc.Objects[i-1].ID {
+			t.Fatalf("object %q parent = %q, want %q", doc.Objects[i].ID, *parent, doc.Objects[i-1].ID)
+		}
+	}
+}
+
+func TestFindParentForLine(t *testing.T) {
+	t.Parallel()
+
+	objects := []*ParsedObject{
+		{ID: "doc", LineStart: 1},
+		{ID: "doc#intro", LineStart: 5},
+		{ID: "doc#details", LineStart: 12},
+	}
+
+	tests := []struct {
+		name string
+		line int
+		want string
+	}{
+		{name: "before first heading stays on file object", line: 1, want: "doc"},
+		{name: "between headings uses nearest parent", line: 8, want: "doc#intro"},
+		{name: "exact heading line matches that object", line: 12, want: "doc#details"},
+		{name: "after last heading uses last object", line: 20, want: "doc#details"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := findParentForLine(objects, tt.line); got != tt.want {
+				t.Fatalf("findParentForLine(..., %d) = %q, want %q", tt.line, got, tt.want)
+			}
+		})
+	}
+}

@@ -111,7 +111,7 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 			}
 
 			// Collect all text from this node, skipping inline code
-			segments := collectTextSegments(processNode, content)
+			segments := collectTextSegments(processNode, content, lineStarts)
 			for _, seg := range segments {
 				line := startLine + offsetToLine(lineStarts, seg.start)
 
@@ -228,19 +228,17 @@ type textSegment struct {
 
 // collectTextSegments collects all text from a node, grouping by line.
 // This is needed because goldmark splits text at special characters like '['.
-func collectTextSegments(node ast.Node, content []byte) []textSegment {
+func collectTextSegments(node ast.Node, content []byte, lineStarts []int) []textSegment {
 	var segments []textSegment
 
 	// We'll collect text by line to preserve line number accuracy
 	lineTexts := make(map[int]*strings.Builder)
-	lineStarts := make(map[int]int) // line -> first byte offset
-
-	localLineStarts := computeLineStarts(string(content))
+	lineOffsets := make(map[int]int) // line -> first byte offset
 
 	ensureLineBuilder := func(line int, startOffset int) *strings.Builder {
 		if _, ok := lineTexts[line]; !ok {
 			lineTexts[line] = &strings.Builder{}
-			lineStarts[line] = startOffset
+			lineOffsets[line] = startOffset
 		}
 		return lineTexts[line]
 	}
@@ -249,7 +247,7 @@ func collectTextSegments(node ast.Node, content []byte) []textSegment {
 	walkNode = func(n ast.Node) {
 		// Preserve inline code spans in the collected text.
 		if codeSpan, ok := n.(*ast.CodeSpan); ok {
-			appendInlineCodeSpan(codeSpan, content, localLineStarts, lineTexts, lineStarts)
+			appendInlineCodeSpan(codeSpan, content, lineStarts, lineTexts, lineOffsets)
 			return
 		}
 
@@ -257,7 +255,7 @@ func collectTextSegments(node ast.Node, content []byte) []textSegment {
 		if textNode, ok := n.(*ast.Text); ok {
 			segment := textNode.Segment
 			text := string(segment.Value(content))
-			line := offsetToLine(localLineStarts, segment.Start)
+			line := offsetToLine(lineStarts, segment.Start)
 
 			ensureLineBuilder(line, segment.Start).WriteString(text)
 		}
@@ -281,7 +279,7 @@ func collectTextSegments(node ast.Node, content []byte) []textSegment {
 		builder := lineTexts[line]
 		segments = append(segments, textSegment{
 			text:  builder.String(),
-			start: lineStarts[line],
+			start: lineOffsets[line],
 		})
 	}
 

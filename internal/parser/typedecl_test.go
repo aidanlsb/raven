@@ -56,6 +56,18 @@ func TestParseTypeDeclaration(t *testing.T) {
 			wantType: "team-sync",
 			wantID:   "weekly",
 		},
+		{
+			name:     "parentheses in unquoted value",
+			line:     "::task(note=fix (urgent))",
+			wantType: "task",
+			wantID:   "",
+		},
+		{
+			name:     "comma inside parenthesized value",
+			line:     "::task(id=fixup, note=fix (urgent, today))",
+			wantType: "task",
+			wantID:   "fixup",
+		},
 	}
 
 	for _, tt := range tests {
@@ -82,6 +94,55 @@ func TestParseTypeDeclaration(t *testing.T) {
 
 			if got.ID != tt.wantID {
 				t.Errorf("ID = %q, want %q", got.ID, tt.wantID)
+			}
+
+			switch tt.name {
+			case "parentheses in unquoted value":
+				note, ok := got.Fields["note"]
+				if !ok {
+					t.Fatal("expected note field")
+				}
+				if s, ok := note.AsString(); !ok || s != "fix (urgent)" {
+					t.Fatalf("note = %v, want string %q", note, "fix (urgent)")
+				}
+			case "comma inside parenthesized value":
+				note, ok := got.Fields["note"]
+				if !ok {
+					t.Fatal("expected note field")
+				}
+				if s, ok := note.AsString(); !ok || s != "fix (urgent, today)" {
+					t.Fatalf("note = %v, want string %q", note, "fix (urgent, today)")
+				}
+			}
+		})
+	}
+}
+
+func TestParseTypeDeclaration_InvalidArguments(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		line string
+	}{
+		{
+			name: "unterminated quote",
+			line: `::task(note="unterminated)`,
+		},
+		{
+			name: "mismatched brackets",
+			line: `::task(attendees=[[[people/freya]], [[people/thor]])`,
+		},
+		{
+			name: "mismatched parentheses in value",
+			line: `::task(note=fix (urgent) today))`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if decl, err := ParseTypeDeclaration(tt.line, 1); err == nil || decl != nil {
+				t.Fatalf("ParseTypeDeclaration(%q) = (%v, %v), want error", tt.line, decl, err)
 			}
 		})
 	}
@@ -273,6 +334,10 @@ func TestSerializeRoundTrip(t *testing.T) {
 			name:  "boolean value",
 			input: "::task(done=true, id=cleanup)",
 		},
+		{
+			name:  "parenthesized string value",
+			input: `::task(id=cleanup, note="fix (urgent, today)")`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -367,6 +432,16 @@ func TestParseFieldValue(t *testing.T) {
 			name:   "datetime",
 			input:  "2025-06-15T14:30",
 			wantDT: true,
+		},
+		{
+			name:       "invalid date-looking string stays string",
+			input:      "2025-99-99",
+			wantString: "2025-99-99",
+		},
+		{
+			name:       "invalid datetime-looking string stays string",
+			input:      "2025-06-15Tabcd",
+			wantString: "2025-06-15Tabcd",
 		},
 		{
 			name:    "reference",

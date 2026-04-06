@@ -86,11 +86,28 @@ func ParseFrontmatter(content string) (*Frontmatter, error) {
 				fm.ObjectType = s
 			}
 		default:
+			if err := validateYAMLFieldValue(value, key); err != nil {
+				return nil, err
+			}
 			fm.Fields[key] = FieldValueFromYAML(value)
 		}
 	}
 
 	return fm, nil
+}
+
+func validateYAMLFieldValue(value interface{}, path string) error {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		return fmt.Errorf("unsupported nested YAML object for field %q", path)
+	case []interface{}:
+		for i, item := range v {
+			if err := validateYAMLFieldValue(item, fmt.Sprintf("%s[%d]", path, i)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // FieldValueFromYAML converts a YAML value to a FieldValue.
@@ -128,6 +145,8 @@ func FieldValueFromYAML(value interface{}) schema.FieldValue {
 	case nil:
 		return schema.Null()
 	default:
+		// Unsupported YAML structures such as nested objects are expected to be
+		// rejected by higher-level validation before reaching this conversion path.
 		return schema.Null()
 	}
 }

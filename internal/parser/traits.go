@@ -20,15 +20,23 @@ type TraitAnnotation struct {
 
 // HasValue returns true if this trait has a value.
 func (t *TraitAnnotation) HasValue() bool {
-	return t.Value != nil && !t.Value.IsNull()
+	return traitHasValue(t.Value)
 }
 
 // ValueString returns the value as a string, or empty string if no value.
 func (t *TraitAnnotation) ValueString() string {
-	if t.Value == nil {
+	return traitValueString(t.Value)
+}
+
+func traitHasValue(value *schema.FieldValue) bool {
+	return value != nil && !value.IsNull()
+}
+
+func traitValueString(value *schema.FieldValue) string {
+	if value == nil {
 		return ""
 	}
-	if s, ok := t.Value.AsString(); ok {
+	if s, ok := value.AsString(); ok {
 		return s
 	}
 	return ""

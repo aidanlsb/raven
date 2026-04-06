@@ -15,23 +15,15 @@ type Reference struct {
 	End         int     // End position in line
 }
 
-// ExtractRefs extracts references from content.
-// It automatically skips refs inside fenced code blocks and inline code spans.
+// ExtractRefs extracts references from plain text content line by line.
+// This is used for frontmatter/raw text scanning; markdown-aware code skipping
+// is handled by the AST parser path instead.
 func ExtractRefs(content string, startLine int) []Reference {
 	var refs []Reference
 
 	lines := strings.Split(content, "\n")
-	state := FenceState{}
 	for lineOffset, line := range lines {
 		lineNum := startLine + lineOffset
-
-		// Skip wiki refs inside fenced code blocks.
-		if state.UpdateFenceState(line) {
-			continue // This line is a fence marker
-		}
-		if state.InFence {
-			continue // Inside a fenced code block
-		}
 
 		// Remove inline code spans to avoid matching refs inside them
 		sanitizedLine := RemoveInlineCode(line)
