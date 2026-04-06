@@ -1,0 +1,25 @@
+id: raven-maintenance
+title: Raven Maintenance
+version: 1
+summary: Vault health checks, reindexing, data import, and documentation access.
+entry: body.md
+references:
+  - references/check-workflow.md
+  - references/import-guide.md
+coverage:
+  commands:
+    - check
+    - check fix
+    - check create-missing
+    - reindex
+    - import
+    - docs
+    - docs fetch
+    - docs list
+    - docs search
+execution:
+  preferred_transport: cli
+  cli_binary: rvn
+  cli_args_suffix:
+    - --json
+  mcp_fallback: true

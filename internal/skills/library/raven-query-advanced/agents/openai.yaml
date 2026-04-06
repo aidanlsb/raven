@@ -1,3 +1,0 @@
-name: raven-query-advanced
-description: Advanced Raven query language patterns, saved queries, and troubleshooting.
-default_prompt: Use Raven query commands with --json, or the equivalent Raven MCP tools in MCP sessions, and build precise object or trait queries before applying changes.

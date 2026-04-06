@@ -14,7 +14,8 @@ func TestLoadCatalog(t *testing.T) {
 	}
 	expected := []string{
 		"raven-core",
-		"raven-query-advanced",
+		"raven-maintenance",
+		"raven-query",
 		"raven-schema",
 		"raven-templates",
 		"raven-vault-admin",

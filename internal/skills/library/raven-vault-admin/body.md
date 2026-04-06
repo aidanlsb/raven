@@ -23,6 +23,12 @@ Use this skill for vault setup, active/default vault selection, and global Raven
 3. Confirm current resolution (`rvn vault current`, `rvn vault path`, `rvn vault stats`).
 4. Manage global settings (`rvn config show`, `rvn config set`, `rvn config unset`).
 
+## Cross-references
+
+- Use `raven-core` for day-to-day vault operations after setup is complete.
+- Use `raven-schema` for schema design after vault initialization.
+- Use `raven-maintenance` for `rvn check` and `rvn reindex` to verify vault health.
+
 ## Safety
 
 - On `rvn vault remove`, respect guard flags when removing active/default entries.

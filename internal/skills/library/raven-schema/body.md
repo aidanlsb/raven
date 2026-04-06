@@ -29,12 +29,18 @@ Use this skill for schema modeling, migrations, and schema-driven data cleanup.
 - Remove: `rvn schema remove type|field|trait`
 5. Validate and refresh derived state:
 - `rvn schema validate` after editing schema definitions
-- `rvn check` after object backfills or migrations
-- `rvn reindex --full` after rename-heavy migrations or broad file changes outside Raven
+- `rvn check` after object backfills or migrations (see `raven-maintenance`)
+- `rvn reindex --full` after rename-heavy migrations or broad file changes (see `raven-maintenance`)
 
 ## Load references as needed
 
 - Multi-step migration loop and sequencing: `references/migration-checklist.md`
+
+## Cross-references
+
+- Use `raven-core` for the backfill commands (`rvn set`, `rvn edit`, `rvn reclassify`) used during migrations.
+- Use `raven-query` for finding affected objects during backfill.
+- Use `raven-maintenance` for `rvn check`, `rvn check fix`, and `rvn reindex` after migrations complete.
 
 ## Safety
 

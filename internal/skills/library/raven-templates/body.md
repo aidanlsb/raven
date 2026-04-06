@@ -19,6 +19,11 @@ Use this skill for template file authoring plus schema/type/core bindings.
 5. Set defaults only after bindings are in place.
 6. Remove in reverse order: clear default if needed, unbind from type/core, remove schema template, then delete the file.
 
+## Cross-references
+
+- Use `raven-schema` for schema template binding commands (`schema template bind`, `schema template set`, etc.).
+- Use `raven-core` for `rvn new --template` to create objects using bound templates.
+
 ## Safety
 
 - `rvn template delete` blocks when schema templates still reference that file unless `--force` is used.

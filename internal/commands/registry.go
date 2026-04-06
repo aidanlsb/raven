@@ -2052,7 +2052,7 @@ Use --target to include target-specific installed status and paths.`,
 
 Preview is returned by default. Use --confirm to apply writes.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin"}},
+			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-maintenance", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2078,7 +2078,7 @@ Preview is returned by default. Use --confirm to apply writes.`,
 
 Preview is returned by default. Use --confirm to apply removal.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-query-advanced", "raven-schema", "raven-templates", "raven-vault-admin"}},
+			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-maintenance", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},

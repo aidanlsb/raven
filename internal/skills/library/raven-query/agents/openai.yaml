@@ -1,0 +1,3 @@
+name: raven-query
+description: Raven query language, saved queries, search, and link traversal.
+default_prompt: Use Raven query commands with --json, or the equivalent Raven MCP tools in MCP sessions. Build precise object or trait queries before applying bulk changes.

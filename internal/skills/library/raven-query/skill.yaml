@@ -1,7 +1,7 @@
-id: raven-query-advanced
-title: Raven Query Advanced
+id: raven-query
+title: Raven Query
 version: 1
-summary: Advanced Raven query language guidance, patterns, and troubleshooting.
+summary: Raven query language, saved queries, search, and link traversal.
 entry: body.md
 references:
   - references/query-language.md
@@ -10,13 +10,13 @@ references:
 coverage:
   commands:
     - query
+    - query saved list
+    - query saved get
     - query saved set
     - query saved remove
     - search
     - backlinks
     - outlinks
-    - resolve
-    - read
 execution:
   preferred_transport: cli
   cli_binary: rvn
