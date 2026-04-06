@@ -284,7 +284,6 @@ title: Open
 	v.AssertFileNotExists("archive/open.md")
 	v.AssertFileContains("private/ref.md", "[[projects/open]]")
 }
-
 func TestIntegration_InitReturnsPostInitGuidance(t *testing.T) {
 	t.Parallel()
 	binary := testutil.BuildCLI(t)
