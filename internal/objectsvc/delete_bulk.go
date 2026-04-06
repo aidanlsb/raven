@@ -79,6 +79,10 @@ func PreviewDeleteBulk(req DeleteBulkRequest) (*DeleteBulkPreview, error) {
 			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+			skipped = append(skipped, DeleteBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			continue
+		}
 
 		details := ""
 		backlinks, _ := db.Backlinks(objectID)
@@ -147,6 +151,13 @@ func ApplyDeleteBulk(req DeleteBulkRequest) (*DeleteBulkSummary, error) {
 			result.Status = "skipped"
 			result.Reason = "object not found"
 			skippedCount++
+			results = append(results, result)
+			continue
+		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+			result.Status = "error"
+			result.Reason = err.Error()
+			errorCount++
 			results = append(results, result)
 			continue
 		}

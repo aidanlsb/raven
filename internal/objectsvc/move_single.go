@@ -68,6 +68,9 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	if err != nil {
 		return nil, newError(ErrorUnexpected, "failed to resolve source path", "", nil, err)
 	}
+	if err := ValidateContentMutationRelPath(req.VaultConfig, sourceRelPath); err != nil {
+		return nil, err
+	}
 	sourceID := req.VaultConfig.FilePathToObjectID(sourceRelPath)
 
 	destination := req.Destination
@@ -96,8 +99,8 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		return nil, newError(ErrorValidationFailed, "destination path is outside vault", "Files can only be moved within the vault", nil, err)
 	}
 	relDest, _ := filepath.Rel(req.VaultPath, destFile)
-	if strings.HasPrefix(relDest, ".raven") || strings.HasPrefix(relDest, ".trash") {
-		return nil, newError(ErrorValidationFailed, "cannot move to system directory", "Destination cannot be in .raven or .trash directories", nil, nil)
+	if err := ValidateContentMutationRelPath(req.VaultConfig, relDest); err != nil {
+		return nil, err
 	}
 	if _, err := os.Stat(destFile); err == nil {
 		return nil, newError(ErrorValidationFailed, fmt.Sprintf("Destination '%s' already exists", destination), "Choose a different destination or delete the existing file first", nil, nil)

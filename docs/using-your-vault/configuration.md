@@ -303,7 +303,7 @@ For parameterized saved queries, use placeholders like `{{args.project}}` and de
 
 ### `protected_prefixes`
 
-Additional vault-relative prefixes treated as protected/system-managed by automation features.
+Additional vault-relative prefixes treated as protected/system-managed by Raven mutation commands and automation features.
 
 | Type | Default |
 |------|---------|

@@ -71,9 +71,17 @@ func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
 			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			continue
+		}
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(req.DestinationDir, filename)
+		if err := ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			continue
+		}
 		fullDestPath := filepath.Join(req.VaultPath, destPath)
 		if _, err := os.Stat(fullDestPath); err == nil {
 			skipped = append(skipped, MoveBulkResult{
@@ -125,9 +133,23 @@ func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
 			results = append(results, result)
 			continue
 		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+			result.Status = "error"
+			result.Reason = err.Error()
+			errorCount++
+			results = append(results, result)
+			continue
+		}
 
 		filename := filepath.Base(sourceFile)
 		destPath := filepath.Join(req.DestinationDir, filename)
+		if err := ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+			result.Status = "error"
+			result.Reason = err.Error()
+			errorCount++
+			results = append(results, result)
+			continue
+		}
 		fullDestPath := filepath.Join(req.VaultPath, destPath)
 		if _, err := os.Stat(fullDestPath); err == nil {
 			result.Status = "skipped"

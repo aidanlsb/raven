@@ -419,7 +419,7 @@ func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Resu
 
 	if len(missingRefs) > 0 {
 		interaction := newCheckInteraction(os.Stdin, os.Stdout)
-		created := handleMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory())
+		created := handleMissingRefsInteractive(vaultPath, s, missingRefs, interaction, vaultCfg.GetObjectsRoot(), vaultCfg.GetPagesRoot(), vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes)
 		if created > 0 {
 			fmt.Printf("\n%s\n", ui.Checkf("Created %d missing page(s).", created))
 		}
@@ -597,7 +597,7 @@ func looksLikeWarningIssue(issueType string) bool {
 	}
 }
 
-func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, objectsRoot, pagesRoot, templateDir string) int {
+func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*check.MissingRef, interaction checkInteraction, objectsRoot, pagesRoot, templateDir string, protectedPrefixes []string) int {
 	groups := checksvc.GroupMissingRefsForInteractive(refs)
 
 	interaction.Printf("\n%s\n", ui.SectionHeader("Missing References"))
@@ -627,7 +627,7 @@ func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*ch
 		if response == "" || response == "y" || response == "yes" {
 			for _, ref := range groups.Certain {
 				resolvedPath := resolvePath(ref.TargetPath, ref.InferredType)
-				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
+				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir, protectedPrefixes); err != nil {
 					interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -654,7 +654,7 @@ func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*ch
 			interaction.Printf("\nCreate %s as '%s'? %s ", ui.FilePath(resolvedPath+".md"), ui.Bold.Render(ref.InferredType), ui.Muted.Render("[y/N]"))
 			response := readTrimmedLowerLine(interaction)
 			if response == "y" || response == "yes" {
-				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir); err != nil {
+				if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, ref.InferredType, objectsRoot, pagesRoot, templateDir, protectedPrefixes); err != nil {
 					interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 				} else {
 					interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, ref.InferredType))
@@ -688,12 +688,12 @@ func handleMissingRefsInteractive(vaultPath string, s *schema.Schema, refs []*ch
 
 			// Validate type exists, offer to create if not
 			if _, exists := s.Types[response]; !exists {
-				created += handleNewTypeCreationInteractive(vaultPath, s, ref, response, interaction, objectsRoot, pagesRoot, templateDir)
+				created += handleNewTypeCreationInteractive(vaultPath, s, ref, response, interaction, objectsRoot, pagesRoot, templateDir, protectedPrefixes)
 				continue
 			}
 
 			resolvedPath := resolvePath(ref.TargetPath, response)
-			if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, templateDir); err != nil {
+			if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, response, objectsRoot, pagesRoot, templateDir, protectedPrefixes); err != nil {
 				interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 			} else {
 				interaction.Printf("  %s\n", ui.Checkf("Created %s.md (type: %s)", resolvedPath, response))
@@ -830,7 +830,7 @@ func promptTraitType(trait *check.UndefinedTrait, interaction checkInteraction) 
 
 // handleNewTypeCreation prompts the user to create a new type when they enter a type that doesn't exist.
 // Returns the number of pages created (0 or 1).
-func handleNewTypeCreationInteractive(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, interaction checkInteraction, objectsRoot, pagesRoot, templateDir string) int {
+func handleNewTypeCreationInteractive(vaultPath string, s *schema.Schema, ref *check.MissingRef, typeName string, interaction checkInteraction, objectsRoot, pagesRoot, templateDir string, protectedPrefixes []string) int {
 	interaction.Printf("\n  Type %s doesn't exist. Would you like to create it? %s ",
 		ui.Bold.Render("'"+typeName+"'"),
 		ui.Muted.Render("[y/N]"))
@@ -857,7 +857,7 @@ func handleNewTypeCreationInteractive(vaultPath string, s *schema.Schema, ref *c
 
 	// Now create the page with the new type (resolving path with new default_path)
 	resolvedPath := checksvc.ResolveAndSlugifyTargetPath(ref.TargetPath, typeName, s, objectsRoot, pagesRoot)
-	if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir); err != nil {
+	if err := checksvc.CreateMissingPage(vaultPath, s, ref.TargetPath, typeName, objectsRoot, pagesRoot, templateDir, protectedPrefixes); err != nil {
 		interaction.Printf("  %s\n", ui.Errorf("Failed to create %s.md: %v", resolvedPath, err))
 		return 0
 	}

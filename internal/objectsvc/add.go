@@ -121,7 +121,7 @@ func AppendToFile(
 		if err != nil {
 			return 0, fmt.Errorf("failed to load schema: %w", err)
 		}
-		if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory()); err != nil {
+		if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes); err != nil {
 			return 0, fmt.Errorf("failed to create daily note: %w", err)
 		}
 	}

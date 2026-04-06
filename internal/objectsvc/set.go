@@ -33,6 +33,9 @@ func SetObjectFile(req SetObjectFileRequest) (*SetObjectFileResult, error) {
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
+	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
+		return nil, err
+	}
 
 	content, err := os.ReadFile(req.FilePath)
 	if err != nil {

@@ -59,6 +59,10 @@ type CreateOptions struct {
 	// Template references are validated against this directory.
 	TemplateDir string
 
+	// ProtectedPrefixes are additional vault-relative directory roots that Raven
+	// should treat as protected/system-managed.
+	ProtectedPrefixes []string
+
 	// ObjectsRoot is the root directory for typed objects (e.g., "objects/").
 	// If set, the type's default_path is nested under this root.
 	ObjectsRoot string
@@ -102,6 +106,9 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 	filePath := filepath.Join(opts.VaultPath, slugifiedPath)
 	if !strings.HasSuffix(filePath, ".md") {
 		filePath += ".md"
+	}
+	if err := validateCreateRelPath(paths.EnsureMDExtension(slugifiedPath), opts.TemplateDir, opts.ProtectedPrefixes); err != nil {
+		return nil, err
 	}
 
 	// Security: verify path is within vault
@@ -186,6 +193,17 @@ func Create(opts CreateOptions) (*CreateResult, error) {
 		RelativePath:  relPath,
 		SlugifiedPath: slugifiedPath,
 	}, nil
+}
+
+func validateCreateRelPath(relPath, templateDir string, protectedPrefixes []string) error {
+	normalized := paths.NormalizeVaultRelPath(relPath)
+	if paths.IsProtectedRelPath(normalized, protectedPrefixes) {
+		return fmt.Errorf("cannot create files in protected or system-managed paths")
+	}
+	if templateDir != "" && strings.HasPrefix(normalized, paths.NormalizeDirRoot(templateDir)) {
+		return fmt.Errorf("cannot create content files in the template directory")
+	}
+	return nil
 }
 
 // resolveDefaultPath applies the type's default_path if the target doesn't already have a directory.
@@ -304,33 +322,35 @@ func Slugify(s string) string {
 
 // CreateDailyNote creates a daily note for the given date.
 func CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle string) (*CreateResult, error) {
-	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "", "")
+	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "", "", nil)
 }
 
 // CreateDailyNoteWithSchema creates a daily note using schema-driven template resolution.
-func CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle string, sch *schema.Schema, templateDir string) (*CreateResult, error) {
+func CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle string, sch *schema.Schema, templateDir string, protectedPrefixes []string) (*CreateResult, error) {
 	targetPath := path.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
-		VaultPath:   vaultPath,
-		TypeName:    "date",
-		Title:       friendlyTitle,
-		TargetPath:  targetPath,
-		Schema:      sch,
-		TemplateDir: templateDir,
+		VaultPath:         vaultPath,
+		TypeName:          "date",
+		Title:             friendlyTitle,
+		TargetPath:        targetPath,
+		Schema:            sch,
+		TemplateDir:       templateDir,
+		ProtectedPrefixes: protectedPrefixes,
 	})
 }
 
 // CreateDailyNoteWithTemplate creates a daily note with an optional template.
-func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, dailyTemplate, templateDir string) (*CreateResult, error) {
+func CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, dailyTemplate, templateDir string, protectedPrefixes []string) (*CreateResult, error) {
 	targetPath := path.Join(dailyDir, dateStr)
 
 	return Create(CreateOptions{
-		VaultPath:        vaultPath,
-		TypeName:         "date",
-		Title:            friendlyTitle,
-		TargetPath:       targetPath,
-		TemplateOverride: dailyTemplate,
-		TemplateDir:      templateDir,
+		VaultPath:         vaultPath,
+		TypeName:          "date",
+		Title:             friendlyTitle,
+		TargetPath:        targetPath,
+		TemplateOverride:  dailyTemplate,
+		TemplateDir:       templateDir,
+		ProtectedPrefixes: protectedPrefixes,
 	})
 }

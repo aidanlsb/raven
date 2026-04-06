@@ -332,6 +332,38 @@ func TestCreate(t *testing.T) {
 			t.Error("Expected error for path escaping, got nil")
 		}
 	})
+
+	t.Run("protected prefix blocked", func(t *testing.T) {
+		_, err := Create(CreateOptions{
+			VaultPath:         tmpDir,
+			TypeName:          "page",
+			Title:             "Private",
+			TargetPath:        "private/private-note",
+			ProtectedPrefixes: []string{"private/"},
+		})
+		if err == nil {
+			t.Fatal("expected error for protected prefix, got nil")
+		}
+		if !strings.Contains(err.Error(), "protected") {
+			t.Fatalf("expected protected-path error, got %v", err)
+		}
+	})
+
+	t.Run("template directory blocked", func(t *testing.T) {
+		_, err := Create(CreateOptions{
+			VaultPath:   tmpDir,
+			TypeName:    "page",
+			Title:       "Templateish",
+			TargetPath:  "templates/private-note",
+			TemplateDir: "templates/",
+		})
+		if err == nil {
+			t.Fatal("expected error for template directory, got nil")
+		}
+		if !strings.Contains(err.Error(), "template directory") {
+			t.Fatalf("expected template-directory error, got %v", err)
+		}
+	})
 }
 
 func TestCreateWithTemplate(t *testing.T) {

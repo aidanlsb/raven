@@ -130,6 +130,7 @@ func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
 			friendlyDate,
 			templateFile,
 			vaultCfg.GetTemplateDirectory(),
+			vaultCfg.ProtectedPrefixes,
 		)
 		if err != nil {
 			return nil, newError(CodeFileWriteErr, "failed to create daily note", "", err)
@@ -142,6 +143,7 @@ func EnsureDaily(req EnsureDailyRequest) (*EnsureDailyResult, error) {
 			friendlyDate,
 			sch,
 			vaultCfg.GetTemplateDirectory(),
+			vaultCfg.ProtectedPrefixes,
 		)
 		if err != nil {
 			return nil, newError(CodeFileWriteErr, "failed to create daily note", "", err)

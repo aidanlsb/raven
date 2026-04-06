@@ -399,6 +399,7 @@ func CreateMissingRefsNonInteractive(
 	objectsRoot string,
 	pagesRoot string,
 	templateDir string,
+	protectedPrefixes []string,
 ) int {
 	created := 0
 	seen := make(map[string]struct{})
@@ -430,6 +431,7 @@ func CreateMissingRefsNonInteractive(
 			Schema:                      sch,
 			IncludeRequiredPlaceholders: true,
 			TemplateDir:                 templateDir,
+			ProtectedPrefixes:           protectedPrefixes,
 			ObjectsRoot:                 objectsRoot,
 			PagesRoot:                   pagesRoot,
 		})

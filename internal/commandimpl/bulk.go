@@ -404,6 +404,24 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 	if err != nil {
 		return mapTraitMutationError(err)
 	}
+	filteredTraits := make([]model.Trait, 0, len(traits))
+	for _, trait := range traits {
+		if err := objectsvc.ValidateContentMutationFilePath(vaultPath, vaultCfg, trait.FilePath); err != nil {
+			if !stdinMode {
+				return mapContentMutationError(err)
+			}
+			skipped = append(skipped, traitsvc.BulkResult{
+				ID:       trait.ID,
+				FilePath: trait.FilePath,
+				Line:     trait.Line,
+				Status:   "skipped",
+				Reason:   err.Error(),
+			})
+			continue
+		}
+		filteredTraits = append(filteredTraits, trait)
+	}
+	traits = filteredTraits
 
 	if !confirm {
 		preview, err := traitsvc.BuildPreview(traits, newValue, sch, skipped)
@@ -595,6 +613,9 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 			return commandexec.Failure("FILE_OUTSIDE_VAULT", fmt.Sprintf("cannot capture outside vault: %s", destPath), nil, "")
 		}
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+	}
+	if err := objectsvc.ValidateContentMutationFilePath(vaultPath, vaultCfg, destPath); err != nil {
+		return mapContentMutationError(err)
 	}
 
 	if headingSpec != "" {

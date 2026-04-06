@@ -50,7 +50,7 @@ types:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := checksvc.CreateMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "templates/"); err != nil {
+			if err := checksvc.CreateMissingPage(vaultPath, s, tc.targetPath, "meeting", "objects/", "", "templates/", nil); err != nil {
 				t.Fatalf("createMissingPage failed: %v", err)
 			}
 
