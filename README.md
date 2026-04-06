@@ -74,19 +74,20 @@ Available skill targets are `codex`, `claude`, and `cursor`.
 
 ### Agent Onboarding
 
-After MCP and skills are in place, you can use your agent to onboard to Raven:
-
-> Help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
+After MCP and skills are in place, you can ask your agent to onboard you to Raven.
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 
 ## Example Usage
 
-Let's say that you want to track people, projects, and meetings in your vault. These are "types." You might also want a quick way to tag when decisions get made, which is a good use case for "traits."
+Each note file in a Raven vault (also referred to as an "object"), has a type indicating what that file represents. Types are defined in `schema.yaml` and can have required or optional frontmatter fields. 
+
+Let's say that you want to track projects, meetings, and the people involved in your vault. These are "types." You might also want a quick way to tag when decisions get made, which is a good use case for "traits."
 
 Raven's starter schema already gives you the `project` and `person` types (which you can modify), but `meeting` and `decision` do not yet exist. All types and traits in your vault are defined in `schema.yaml`. To add to your schema, you can edit `schema.yaml` directly, use the CLI, or ask an agent. We'll cover the first two here:
 
 **Editing `schema.yaml`**
+
 Add your new types under `types` and add the fields you want to track for meetings. Let's say for meetings you'll want to track which project they're associated with, who you met with, and any explicit decisions recorded in the notes. Traits are single valued, so you just need to define what sort of value the trait holds (e.g., `enum`, `boolean`, `date`, etc.) and optionally set a default. Boolean traits default to `true` when left bare so they're a good fit for things like `decision` where you just want to add a structured tag to some content.
 
 ```yaml
@@ -139,7 +140,6 @@ You can use the `add` command to append content to existing notes. By default `a
 rvn add "Met with [[person/freya]] about [[project/midgard-security-review]]" --to today
 rvn add "@todo Send the draft scope to [[person/freya]]" --to today
 ```
-
 
 You can also create files manually. For example, to take notes for a meeting:
 

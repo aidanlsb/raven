@@ -7,6 +7,8 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 )
 
+const recursivePredicateMaxDepth = 100
+
 // buildHasPredicateSQL builds SQL for has:{trait:...} predicates.
 func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, []interface{}, error) {
 	// Build subquery conditions for the trait
@@ -91,17 +93,18 @@ func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string)
 		// Check if target is anywhere in the ancestor chain
 		cond := fmt.Sprintf(`EXISTS (
 			WITH RECURSIVE ancestors AS (
-				SELECT id, parent_id FROM objects WHERE id = %s.parent_id
+				SELECT id, parent_id, 1 AS depth FROM objects WHERE id = %s.parent_id
 				UNION ALL
-				SELECT o.id, o.parent_id FROM objects o
+				SELECT o.id, o.parent_id, a.depth + 1 FROM objects o
 				JOIN ancestors a ON o.id = a.parent_id
+				WHERE a.depth < ?
 			)
 			SELECT 1 FROM ancestors WHERE id = ?
 		)`, alias)
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
-		return cond, []interface{}{resolvedTarget}, nil
+		return cond, []interface{}{recursivePredicateMaxDepth, resolvedTarget}, nil
 	}
 
 	var ancestorConditions []string
@@ -123,13 +126,15 @@ func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string)
 	// Build ancestor query using recursive CTE
 	cond := fmt.Sprintf(`EXISTS (
 		WITH RECURSIVE ancestors AS (
-			SELECT id, parent_id, type, fields FROM objects WHERE id = %s.parent_id
+			SELECT id, parent_id, type, fields, 1 AS depth FROM objects WHERE id = %s.parent_id
 			UNION ALL
-			SELECT o.id, o.parent_id, o.type, o.fields FROM objects o
+			SELECT o.id, o.parent_id, o.type, o.fields, a.depth + 1 FROM objects o
 			JOIN ancestors a ON o.id = a.parent_id
+			WHERE a.depth < ?
 		)
 		SELECT 1 FROM ancestors anc WHERE %s
 	)`, alias, strings.Join(ancestorConditions, " AND "))
+	args = append([]interface{}{recursivePredicateMaxDepth}, args...)
 
 	if p.Negated() {
 		cond = "NOT " + cond
@@ -195,17 +200,18 @@ func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias str
 		// Check if target is anywhere in the descendant tree
 		cond := fmt.Sprintf(`EXISTS (
 			WITH RECURSIVE descendants AS (
-				SELECT id, parent_id FROM objects WHERE parent_id = %s.id
+				SELECT id, parent_id, 1 AS depth FROM objects WHERE parent_id = %s.id
 				UNION ALL
-				SELECT o.id, o.parent_id FROM objects o
+				SELECT o.id, o.parent_id, d.depth + 1 FROM objects o
 				JOIN descendants d ON o.parent_id = d.id
+				WHERE d.depth < ?
 			)
 			SELECT 1 FROM descendants WHERE id = ?
 		)`, alias)
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
-		return cond, []interface{}{resolvedTarget}, nil
+		return cond, []interface{}{recursivePredicateMaxDepth, resolvedTarget}, nil
 	}
 
 	var descendantConditions []string
@@ -226,13 +232,15 @@ func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias str
 	// Build descendant query using recursive CTE
 	cond := fmt.Sprintf(`EXISTS (
 		WITH RECURSIVE descendants AS (
-			SELECT id, parent_id, type, fields FROM objects WHERE parent_id = %s.id
+			SELECT id, parent_id, type, fields, 1 AS depth FROM objects WHERE parent_id = %s.id
 			UNION ALL
-			SELECT o.id, o.parent_id, o.type, o.fields FROM objects o
+			SELECT o.id, o.parent_id, o.type, o.fields, d.depth + 1 FROM objects o
 			JOIN descendants d ON o.parent_id = d.id
+			WHERE d.depth < ?
 		)
 		SELECT 1 FROM descendants desc_obj WHERE %s
 	)`, alias, strings.Join(descendantConditions, " AND "))
+	args = append([]interface{}{recursivePredicateMaxDepth}, args...)
 
 	if p.Negated() {
 		cond = "NOT " + cond
@@ -263,14 +271,16 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 	// Use recursive CTE to find all descendants, then check traits on any of them
 	cond := fmt.Sprintf(`EXISTS (
 		WITH RECURSIVE subtree AS (
-			SELECT id FROM objects WHERE id = %s.id
+			SELECT id, 1 AS depth FROM objects WHERE id = %s.id
 			UNION ALL
-			SELECT o.id FROM objects o
+			SELECT o.id, s.depth + 1 FROM objects o
 			JOIN subtree s ON o.parent_id = s.id
+			WHERE s.depth < ?
 		)
 		SELECT 1 FROM traits t
 		WHERE t.parent_object_id IN (SELECT id FROM subtree) AND %s
 	)`, alias, strings.Join(traitConditions, " AND "))
+	args = append([]interface{}{recursivePredicateMaxDepth}, args...)
 
 	if p.Negated() {
 		cond = "NOT " + cond

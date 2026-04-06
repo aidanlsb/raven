@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestCompareValues_DerefsStringPointers(t *testing.T) {
@@ -43,11 +45,12 @@ func TestCompareValues_Temporal(t *testing.T) {
 
 func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 	t.Parallel()
+	e := &Executor{}
 	p := &ValuePredicate{
 		Value:     "10",
 		CompareOp: CompareGt,
 	}
-	cond, args := buildValueCondition(p, "t.value")
+	cond, args := e.buildValueCondition(p, "t.value")
 	if cond != "CAST(t.value AS REAL) > ?" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -61,11 +64,12 @@ func TestBuildValueCondition_NumericUsesCast(t *testing.T) {
 
 func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 	t.Parallel()
+	e := &Executor{}
 	p := &ValuePredicate{
 		Value:     "TODO",
 		CompareOp: CompareEq,
 	}
-	cond, _ := buildValueCondition(p, "t.value")
+	cond, _ := e.buildValueCondition(p, "t.value")
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -73,18 +77,20 @@ func TestBuildValueCondition_StringEqIsCaseInsensitive(t *testing.T) {
 
 func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 	t.Parallel()
+	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
+	e := &Executor{nowFn: func() time.Time { return now }}
 	p := &ValuePredicate{
 		Value:     "today",
 		CompareOp: CompareEq,
 	}
-	cond, args := buildValueCondition(p, "t.value")
+	cond, args := e.buildValueCondition(p, "t.value")
 	if cond != "t.value = ?" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(args))
 	}
-	today := time.Now().Format("2006-01-02")
+	today := now.Format("2006-01-02")
 	if args[0] != today {
 		t.Fatalf("arg = %#v, want %q", args[0], today)
 	}
@@ -92,18 +98,20 @@ func TestBuildValueCondition_DateFilterToday(t *testing.T) {
 
 func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 	t.Parallel()
+	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
+	e := &Executor{nowFn: func() time.Time { return now }}
 	p := &ValuePredicate{
 		Value:     "tomorrow",
 		CompareOp: CompareNeq,
 	}
-	cond, args := buildValueCondition(p, "t.value")
+	cond, args := e.buildValueCondition(p, "t.value")
 	if cond != "t.value != ?" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(args))
 	}
-	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
 	if args[0] != tomorrow {
 		t.Fatalf("arg = %#v, want %q", args[0], tomorrow)
 	}
@@ -111,14 +119,16 @@ func TestBuildValueCondition_DateFilterTomorrowNotEqual(t *testing.T) {
 
 func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 	t.Parallel()
-	cond, args := buildCompareCondition("today", CompareLt, false, "t.value")
+	now := time.Date(2026, 4, 5, 10, 30, 0, 0, time.UTC)
+	e := &Executor{nowFn: func() time.Time { return now }}
+	cond, args := e.buildCompareCondition("today", CompareLt, false, "t.value")
 	if cond != "t.value < ?" {
 		t.Fatalf("cond = %q", cond)
 	}
 	if len(args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(args))
 	}
-	today := time.Now().Format("2006-01-02")
+	today := now.Format("2006-01-02")
 	if args[0] != today {
 		t.Fatalf("arg = %#v, want %q", args[0], today)
 	}
@@ -126,7 +136,8 @@ func TestBuildCompareCondition_RelativeInstantOrdering(t *testing.T) {
 
 func TestBuildCompareCondition_UnknownKeywordFallsBackToString(t *testing.T) {
 	t.Parallel()
-	cond, args := buildCompareCondition("this-week", CompareEq, false, "t.value")
+	e := &Executor{}
+	cond, args := e.buildCompareCondition("this-week", CompareEq, false, "t.value")
 	if cond != "LOWER(t.value) = LOWER(?)" {
 		t.Fatalf("cond = %q", cond)
 	}
@@ -223,6 +234,76 @@ func TestBuildFieldPredicateSQL_ScalarOrArrayCaseInsensitiveNotEquals(t *testing
 	}
 }
 
+func TestBuildFieldPredicateSQL_SchemaAwareScalarEqualitySkipsJSONArrayPath(t *testing.T) {
+	t.Parallel()
+
+	e := &Executor{}
+	e.SetSchema(&schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"status": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+	})
+
+	p := &FieldPredicate{
+		Field:     "status",
+		Value:     "active",
+		CompareOp: CompareEq,
+	}
+
+	cond, args, err := e.buildFieldPredicateSQL(p, "o", "project")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(args) != 2 {
+		t.Fatalf("args len = %d", len(args))
+	}
+	if strings.Contains(cond, "json_each") {
+		t.Fatalf("expected scalar field SQL without json_each, got %q", cond)
+	}
+	if cond != "LOWER(json_extract(o.fields, ?)) = LOWER(?)" {
+		t.Fatalf("cond = %q", cond)
+	}
+}
+
+func TestBuildFieldPredicateSQL_SchemaAwareArrayEqualitySkipsScalarPath(t *testing.T) {
+	t.Parallel()
+
+	e := &Executor{}
+	e.SetSchema(&schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"tags": {Type: schema.FieldTypeStringArray},
+				},
+			},
+		},
+	})
+
+	p := &FieldPredicate{
+		Field:     "tags",
+		Value:     "urgent",
+		CompareOp: CompareEq,
+	}
+
+	cond, args, err := e.buildFieldPredicateSQL(p, "o", "project")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(args) != 2 {
+		t.Fatalf("args len = %d", len(args))
+	}
+	if strings.Contains(cond, "LOWER(json_extract") {
+		t.Fatalf("expected array field SQL without scalar equality branch, got %q", cond)
+	}
+	if !containsAll(cond, "EXISTS (", "FROM json_each(o.fields, ?)", "LOWER(json_each.value) = LOWER(?)") {
+		t.Fatalf("cond = %q", cond)
+	}
+}
+
 func TestBuildElementEqualitySQL_NumericUsesCast(t *testing.T) {
 	t.Parallel()
 	e := &Executor{}
@@ -239,6 +320,86 @@ func TestBuildElementEqualitySQL_NumericUsesCast(t *testing.T) {
 	}
 	if len(args) != 1 || args[0].(float64) != 10 {
 		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestBuildAncestorPredicateSQL_AddsDepthGuard(t *testing.T) {
+	t.Parallel()
+
+	e := &Executor{}
+	p := &AncestorPredicate{
+		SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
+	}
+
+	cond, args, err := e.buildAncestorPredicateSQL(p, "o")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
+		t.Fatalf("args = %#v", args)
+	}
+	if !containsAll(cond, "WITH RECURSIVE ancestors AS", "1 AS depth", "a.depth + 1", "WHERE a.depth < ?") {
+		t.Fatalf("cond = %q", cond)
+	}
+}
+
+func TestBuildDescendantPredicateSQL_AddsDepthGuard(t *testing.T) {
+	t.Parallel()
+
+	e := &Executor{}
+	p := &DescendantPredicate{
+		SubQuery: &Query{Type: QueryTypeObject, TypeName: "section"},
+	}
+
+	cond, args, err := e.buildDescendantPredicateSQL(p, "o")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
+		t.Fatalf("args = %#v", args)
+	}
+	if !containsAll(cond, "WITH RECURSIVE descendants AS", "1 AS depth", "d.depth + 1", "WHERE d.depth < ?") {
+		t.Fatalf("cond = %q", cond)
+	}
+}
+
+func TestBuildContainsPredicateSQL_AddsDepthGuard(t *testing.T) {
+	t.Parallel()
+
+	e := &Executor{}
+	p := &ContainsPredicate{
+		SubQuery: &Query{Type: QueryTypeTrait, TypeName: "todo"},
+	}
+
+	cond, args, err := e.buildContainsPredicateSQL(p, "o")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
+		t.Fatalf("args = %#v", args)
+	}
+	if !containsAll(cond, "WITH RECURSIVE subtree AS", "1 AS depth", "s.depth + 1", "WHERE s.depth < ?") {
+		t.Fatalf("cond = %q", cond)
+	}
+}
+
+func TestBuildWithinPredicateSQL_AddsDepthGuard(t *testing.T) {
+	t.Parallel()
+
+	e := &Executor{}
+	p := &WithinPredicate{
+		SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
+	}
+
+	cond, args, err := e.buildWithinPredicateSQL(p, "t")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
+		t.Fatalf("args = %#v", args)
+	}
+	if !containsAll(cond, "WITH RECURSIVE ancestors AS", "1 AS depth", "a.depth + 1", "WHERE a.depth < ?") {
+		t.Fatalf("cond = %q", cond)
 	}
 }
 

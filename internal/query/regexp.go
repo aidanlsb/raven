@@ -1,6 +1,7 @@
 package query
 
 import (
+	"container/list"
 	"database/sql/driver"
 	"fmt"
 	"regexp"
@@ -9,11 +10,20 @@ import (
 	"modernc.org/sqlite"
 )
 
+const regexpCacheMaxEntries = 256
+
+type regexpCacheEntry struct {
+	pattern string
+	re      *regexp.Regexp
+}
+
 var regexpCache = struct {
-	mu       sync.RWMutex
-	compiled map[string]*regexp.Regexp
+	mu       sync.Mutex
+	compiled map[string]*list.Element
+	order    *list.List
 }{
-	compiled: map[string]*regexp.Regexp{},
+	compiled: map[string]*list.Element{},
+	order:    list.New(),
 }
 
 func init() {
@@ -61,12 +71,14 @@ func driverValueToString(v driver.Value) (string, bool) {
 }
 
 func cachedRegexp(pattern string) (*regexp.Regexp, error) {
-	regexpCache.mu.RLock()
-	re := regexpCache.compiled[pattern]
-	regexpCache.mu.RUnlock()
-	if re != nil {
+	regexpCache.mu.Lock()
+	if elem := regexpCache.compiled[pattern]; elem != nil {
+		regexpCache.order.MoveToFront(elem)
+		re := elem.Value.(*regexpCacheEntry).re
+		regexpCache.mu.Unlock()
 		return re, nil
 	}
+	regexpCache.mu.Unlock()
 
 	compiled, err := regexp.Compile(pattern)
 	if err != nil {
@@ -79,9 +91,38 @@ func cachedRegexp(pattern string) (*regexp.Regexp, error) {
 
 	regexpCache.mu.Lock()
 	defer regexpCache.mu.Unlock()
-	if existing := regexpCache.compiled[pattern]; existing != nil {
-		return existing, nil
+	if elem := regexpCache.compiled[pattern]; elem != nil {
+		regexpCache.order.MoveToFront(elem)
+		return elem.Value.(*regexpCacheEntry).re, nil
 	}
-	regexpCache.compiled[pattern] = compiled
+
+	elem := regexpCache.order.PushFront(&regexpCacheEntry{
+		pattern: pattern,
+		re:      compiled,
+	})
+	regexpCache.compiled[pattern] = elem
+	if len(regexpCache.compiled) > regexpCacheMaxEntries {
+		oldest := regexpCache.order.Back()
+		if oldest != nil {
+			regexpCache.order.Remove(oldest)
+			delete(regexpCache.compiled, oldest.Value.(*regexpCacheEntry).pattern)
+		}
+	}
+
 	return compiled, nil
+}
+
+func resetRegexpCacheForTest() {
+	regexpCache.mu.Lock()
+	defer regexpCache.mu.Unlock()
+
+	regexpCache.compiled = make(map[string]*list.Element)
+	regexpCache.order.Init()
+}
+
+func regexpCacheLenForTest() int {
+	regexpCache.mu.Lock()
+	defer regexpCache.mu.Unlock()
+
+	return len(regexpCache.compiled)
 }

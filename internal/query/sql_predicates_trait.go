@@ -119,21 +119,21 @@ func (e *Executor) buildTraitStringFuncPredicateSQL(p *StringFuncPredicate, alia
 // buildValuePredicateSQL builds SQL for value==val predicates.
 // Comparisons are case-insensitive for equality, but case-sensitive for ordering comparisons.
 func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (string, []interface{}, error) {
-	cond, args := buildValueCondition(p, fmt.Sprintf("%s.value", alias))
+	cond, args := e.buildValueCondition(p, fmt.Sprintf("%s.value", alias))
 	return cond, args, nil
 }
 
 // buildValueCondition builds a SQL condition for a ValuePredicate.
 // This is a helper for use in subqueries where we don't have the full executor context.
-func buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
-	return buildCompareCondition(p.Value, p.CompareOp, p.Negated(), column)
+func (e *Executor) buildValueCondition(p *ValuePredicate, column string) (string, []interface{}) {
+	return e.buildCompareCondition(p.Value, p.CompareOp, p.Negated(), column)
 }
 
 // buildCompareCondition builds a SQL condition for comparing a column to a value.
 // This is the core comparison logic shared by ValuePredicate and FieldPredicate(.value).
-func buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}) {
+func (e *Executor) buildCompareCondition(value string, compareOp CompareOp, negated bool, column string) (string, []interface{}) {
 	// Date filters (today/tomorrow/yesterday, YYYY-MM-DD, etc.)
-	if cond, args, ok := buildDateFilterConditionForCompare(strings.TrimSpace(value), compareOp, column); ok {
+	if cond, args, ok := buildDateFilterConditionForCompare(strings.TrimSpace(value), compareOp, column, e.queryNow()); ok {
 		if negated {
 			cond = "NOT (" + cond + ")"
 		}
@@ -172,16 +172,16 @@ func buildCompareCondition(value string, compareOp CompareOp, negated bool, colu
 // buildTraitValueFieldPredicateSQL builds SQL for .value==val predicates on traits.
 // This is the newer syntax that replaces the bare value== syntax.
 func (e *Executor) buildTraitValueFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
-	cond, args := buildCompareCondition(p.Value, p.CompareOp, p.Negated(), fmt.Sprintf("%s.value", alias))
+	cond, args := e.buildCompareCondition(p.Value, p.CompareOp, p.Negated(), fmt.Sprintf("%s.value", alias))
 	return cond, args, nil
 }
 
-func buildDateFilterConditionForCompare(value string, compareOp CompareOp, column string) (string, []interface{}, bool) {
+func buildDateFilterConditionForCompare(value string, compareOp CompareOp, column string, now time.Time) (string, []interface{}, bool) {
 	if value == "" {
 		return "", nil, false
 	}
 	cond, args, ok, err := index.TryParseDateComparisonWithOptions(value, compareOpToSQL(compareOp), column, index.DateFilterOptions{
-		Now: time.Now(),
+		Now: now,
 	})
 	if err != nil {
 		return "", nil, false
@@ -246,17 +246,18 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (st
 		// Check if target is the trait's parent or any ancestor of the trait's parent
 		cond := fmt.Sprintf(`EXISTS (
 			WITH RECURSIVE ancestors AS (
-				SELECT id, parent_id FROM objects WHERE id = %s.parent_object_id
+				SELECT id, parent_id, 1 AS depth FROM objects WHERE id = %s.parent_object_id
 				UNION ALL
-				SELECT o.id, o.parent_id FROM objects o
+				SELECT o.id, o.parent_id, a.depth + 1 FROM objects o
 				JOIN ancestors a ON o.id = a.parent_id
+				WHERE a.depth < ?
 			)
 			SELECT 1 FROM ancestors WHERE id = ?
 		)`, alias)
 		if p.Negated() {
 			cond = "NOT " + cond
 		}
-		return cond, []interface{}{resolvedTarget}, nil
+		return cond, []interface{}{recursivePredicateMaxDepth, resolvedTarget}, nil
 	}
 
 	var ancestorConditions []string
@@ -278,13 +279,15 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (st
 	// Build ancestor query using recursive CTE
 	cond := fmt.Sprintf(`EXISTS (
 		WITH RECURSIVE ancestors AS (
-			SELECT id, parent_id, type, fields FROM objects WHERE id = %s.parent_object_id
+			SELECT id, parent_id, type, fields, 1 AS depth FROM objects WHERE id = %s.parent_object_id
 			UNION ALL
-			SELECT o.id, o.parent_id, o.type, o.fields FROM objects o
+			SELECT o.id, o.parent_id, o.type, o.fields, a.depth + 1 FROM objects o
 			JOIN ancestors a ON o.id = a.parent_id
+			WHERE a.depth < ?
 		)
 		SELECT 1 FROM ancestors anc WHERE %s
 	)`, alias, strings.Join(ancestorConditions, " AND "))
+	args = append([]interface{}{recursivePredicateMaxDepth}, args...)
 
 	if p.Negated() {
 		cond = "NOT " + cond

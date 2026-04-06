@@ -105,3 +105,45 @@ func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestObjectFieldComparison_RelativeDateUsesSingleExecutionTimestamp(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	fixedToday := "2026-04-05"
+	_, err := db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start) VALUES
+			('task/fixed-today', 'task/fixed-today.md', 'task', '{"due":"` + fixedToday + `"}', 1);
+	`)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	callCount := 0
+	e := NewExecutor(db)
+	e.nowFn = func() time.Time {
+		callCount++
+		if callCount == 1 {
+			return time.Date(2026, 4, 5, 23, 59, 59, 0, time.UTC)
+		}
+		return time.Date(2026, 4, 6, 0, 0, 1, 0, time.UTC)
+	}
+
+	q, err := Parse("object:task .due>=today .due<=today")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	results, err := e.ExecuteObjectQuery(q)
+	if err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+
+	if len(results) != 1 || results[0].ID != "task/fixed-today" {
+		t.Fatalf("unexpected results: %#v", results)
+	}
+	if callCount != 1 {
+		t.Fatalf("nowFn callCount = %d, want 1", callCount)
+	}
+}

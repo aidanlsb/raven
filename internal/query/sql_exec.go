@@ -169,40 +169,40 @@ func (e *Executor) executeTraitCountQuery(q *Query) (int, error) {
 
 // ExecuteObjectQuery executes an object query and returns matching objects.
 func (e *Executor) ExecuteObjectQuery(q *Query) ([]model.Object, error) {
-	return e.executeObjectQuery(q)
+	return e.withExecutionNow().executeObjectQuery(q)
 }
 
 // ExecuteObjectPageQuery executes an object query with SQL-level pagination.
 func (e *Executor) ExecuteObjectPageQuery(q *Query, limit, offset int) ([]model.Object, error) {
-	return e.executeObjectPageQuery(q, limit, offset)
+	return e.withExecutionNow().executeObjectPageQuery(q, limit, offset)
 }
 
 // ExecuteObjectIDQuery executes an object query returning only object IDs.
 func (e *Executor) ExecuteObjectIDQuery(q *Query, limit, offset int) ([]string, error) {
-	return e.executeObjectIDQuery(q, limit, offset)
+	return e.withExecutionNow().executeObjectIDQuery(q, limit, offset)
 }
 
 // ExecuteObjectCountQuery executes an object query as COUNT(*).
 func (e *Executor) ExecuteObjectCountQuery(q *Query) (int, error) {
-	return e.executeObjectCountQuery(q)
+	return e.withExecutionNow().executeObjectCountQuery(q)
 }
 
 // ExecuteTraitQuery executes a trait query and returns matching traits.
 func (e *Executor) ExecuteTraitQuery(q *Query) ([]model.Trait, error) {
-	return e.executeTraitQuery(q)
+	return e.withExecutionNow().executeTraitQuery(q)
 }
 
 // ExecuteTraitPageQuery executes a trait query with SQL-level pagination.
 func (e *Executor) ExecuteTraitPageQuery(q *Query, limit, offset int) ([]model.Trait, error) {
-	return e.executeTraitPageQuery(q, limit, offset)
+	return e.withExecutionNow().executeTraitPageQuery(q, limit, offset)
 }
 
 // ExecuteTraitIDQuery executes a trait query returning only trait IDs.
 func (e *Executor) ExecuteTraitIDQuery(q *Query, limit, offset int) ([]string, error) {
-	return e.executeTraitIDQuery(q, limit, offset)
+	return e.withExecutionNow().executeTraitIDQuery(q, limit, offset)
 }
 
 // ExecuteTraitCountQuery executes a trait query as COUNT(*).
 func (e *Executor) ExecuteTraitCountQuery(q *Query) (int, error) {
-	return e.executeTraitCountQuery(q)
+	return e.withExecutionNow().executeTraitCountQuery(q)
 }

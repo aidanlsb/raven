@@ -33,6 +33,7 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	var args []interface{}
 	value := p.Value
 	altValue := ""
+	mode := e.fieldEqualityMode(typeName, p.Field)
 
 	if p.IsRefValue && (p.CompareOp == CompareEq || p.CompareOp == CompareNeq) {
 		resolved, alt, err := e.resolveRefValue(p.Value)
@@ -46,7 +47,7 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	// Date/date-keyword values should use date-aware comparisons.
 	if !p.IsRefValue {
 		dateFieldExpr := fmt.Sprintf("json_extract(%s.fields, ?)", alias)
-		dateCond, dateArgs, ok, err := buildDateFieldCompareCondition(value, p.CompareOp, dateFieldExpr, jsonPath)
+		dateCond, dateArgs, ok, err := buildDateFieldCompareCondition(value, p.CompareOp, dateFieldExpr, jsonPath, e.queryNow())
 		if err != nil {
 			return "", nil, err
 		}
@@ -60,12 +61,12 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 
 	if p.CompareOp == CompareNeq {
 		if altValue != "" {
-			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true)
-			cond2, args2 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, altValue, true)
+			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true, mode)
+			cond2, args2 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, altValue, true, mode)
 			cond = "(" + cond1 + " AND " + cond2 + ")"
 			args = append(args1, args2...)
 		} else {
-			cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true)
+			cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true, mode)
 		}
 	} else if p.CompareOp != CompareEq {
 		// Comparison operators: <, >, <=, >=
@@ -81,12 +82,12 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 		}
 	} else {
 		if altValue != "" {
-			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, false)
-			cond2, args2 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, altValue, false)
+			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, false, mode)
+			cond2, args2 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, altValue, false, mode)
 			cond = "(" + cond1 + " OR " + cond2 + ")"
 			args = append(args1, args2...)
 		} else {
-			cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, false)
+			cond, args = fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, false, mode)
 		}
 	}
 
@@ -97,13 +98,13 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	return cond, args, nil
 }
 
-func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string) (string, []interface{}, bool, error) {
+func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string, now time.Time) (string, []interface{}, bool, error) {
 	cond, dateArgs, ok, err := index.TryParseDateComparisonWithOptions(
 		value,
 		compareOpToSQL(compareOp),
 		fieldExpr,
 		index.DateFilterOptions{
-			Now: time.Now(),
+			Now: now,
 		},
 	)
 	if err != nil {
@@ -166,6 +167,24 @@ func (e *Executor) isRefArrayField(typeName, fieldName string) bool {
 		return false
 	}
 	return fieldDef.Type == schema.FieldTypeRefArray
+}
+
+func (e *Executor) fieldEqualityMode(typeName, fieldName string) fieldEqualityMode {
+	if e.schema == nil || typeName == "" {
+		return fieldEqualityModeFallback
+	}
+	typeDef := e.schema.Types[typeName]
+	if typeDef == nil {
+		return fieldEqualityModeFallback
+	}
+	fieldDef := typeDef.Fields[fieldName]
+	if fieldDef == nil {
+		return fieldEqualityModeFallback
+	}
+	if strings.HasSuffix(string(fieldDef.Type), "[]") {
+		return fieldEqualityModeArray
+	}
+	return fieldEqualityModeScalar
 }
 
 func fieldRefMatchCond(alias string) string {
@@ -499,7 +518,7 @@ func (e *Executor) buildElementEqualitySQL(p *ElementEqualityPredicate) (string,
 			Value:     v,
 			CompareOp: p.CompareOp,
 		}
-		return buildValueCondition(vp, "json_each.value")
+		return e.buildValueCondition(vp, "json_each.value")
 	}
 
 	cond, args := condFor(value)
