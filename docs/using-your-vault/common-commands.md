@@ -87,7 +87,9 @@ rvn outlinks meeting/kickoff
 
 ### `rvn edit`
 
-Surgical string replacement in vault files. The target string must appear exactly once in the file. Changes preview by default.
+Surgical string replacement in vault content files. The target string must appear exactly once in the file. Changes preview by default.
+
+Use `rvn edit` for markdown content such as objects, pages, and daily notes. Do not use it for `raven.yaml`, `schema.yaml`, or template files; those have dedicated command surfaces.
 
 ```bash
 # Preview a replacement

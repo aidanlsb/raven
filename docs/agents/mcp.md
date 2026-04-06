@@ -250,6 +250,37 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 }
 ```
 
+```json
+{
+  "command": "vault_config_directories_set",
+  "args": {
+    "daily": "journal",
+    "object": "objects",
+    "template": "templates/custom"
+  }
+}
+```
+
+```json
+{
+  "command": "vault_config_capture_set",
+  "args": {
+    "destination": "inbox.md",
+    "heading": "## Captured"
+  }
+}
+```
+
+```json
+{
+  "command": "vault_config_deletion_set",
+  "args": {
+    "behavior": "permanent",
+    "trash-dir": "archive/trash"
+  }
+}
+```
+
 ## Common Patterns
 
 ### Read and search
@@ -346,9 +377,10 @@ Apply:
 1. Check the schema before creating or mutating typed objects.
 2. Prefer `query` over `search` when the structure is known.
 3. Use raw `read` ranges before building string replacements for `edit`.
-4. Preview destructive or bulk mutations before applying with `confirm=true`.
-5. Reindex after schema-level structural changes when required.
-6. Treat `raven_describe` as the authority for argument shape.
+4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
+5. Preview destructive or bulk mutations before applying with `confirm=true`.
+6. Reindex after schema-level structural changes when required.
+7. Treat `raven_describe` as the authority for argument shape.
 
 ## Related Resources
 

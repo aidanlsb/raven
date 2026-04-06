@@ -153,6 +153,44 @@ old task
 	v.AssertFileNotContains("daily/2026-02-17.md", "old task")
 }
 
+func TestIntegration_EditRejectsSchemaAndTemplateFiles(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("templates/meeting.md", "# {{title}}\n").
+		Build()
+
+	schemaResult := v.RunCLI("edit", "schema.yaml", "version: 1", "version: 2", "--confirm")
+	schemaResult.MustFail(t, "VALIDATION_FAILED")
+	schemaResult.MustFailWithMessage(t, "rvn schema")
+	v.AssertFileContains("schema.yaml", "version: 1")
+
+	templateResult := v.RunCLI("edit", "templates/meeting.md", "{{title}}", "{{name}}", "--confirm")
+	templateResult.MustFail(t, "VALIDATION_FAILED")
+	templateResult.MustFailWithMessage(t, "rvn template write")
+	v.AssertFileContains("templates/meeting.md", "{{title}}")
+}
+
+func TestIntegration_EditRejectsProtectedPrefixAndNonMarkdownFiles(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML("protected_prefixes:\n  - private/\n").
+		WithFile("private/notes.md", "old task\n").
+		WithFile("scratch.txt", "old task\n").
+		Build()
+
+	protectedResult := v.RunCLI("edit", "private/notes.md", "old task", "done task", "--confirm")
+	protectedResult.MustFail(t, "VALIDATION_FAILED")
+	protectedResult.MustFailWithMessage(t, "protected")
+	v.AssertFileContains("private/notes.md", "old task")
+
+	nonMarkdownResult := v.RunCLI("edit", "scratch.txt", "old task", "done task", "--confirm")
+	nonMarkdownResult.MustFail(t, "VALIDATION_FAILED")
+	nonMarkdownResult.MustFailWithMessage(t, "markdown content files")
+	v.AssertFileContains("scratch.txt", "old task")
+}
+
 func TestIntegration_InitReturnsPostInitGuidance(t *testing.T) {
 	t.Parallel()
 	binary := testutil.BuildCLI(t)
@@ -1183,7 +1221,7 @@ meeting: "[[meeting/all-hands]]"
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
 
-	// Ensure the missing-reference workflow ran.
+	// Ensure the missing-reference creation flow ran.
 	if !strings.Contains(outputStr, "Missing References") {
 		t.Fatalf("expected check output to include missing reference prompt, got:\n%s", outputStr)
 	}

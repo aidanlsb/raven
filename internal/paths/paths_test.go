@@ -36,7 +36,7 @@ func TestNormalizeVaultRelPath(t *testing.T) {
 		ok   bool
 	}{
 		{" notes//daily.md ", "notes/daily.md", true},
-		{"./workflows/onboard.yaml", "workflows/onboard.yaml", true},
+		{"./notes/onboard.md", "notes/onboard.md", true},
 		{"/templates/meeting.md", "templates/meeting.md", true},
 		{"", ".", false},
 		{".", ".", false},

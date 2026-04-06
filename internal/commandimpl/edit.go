@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/editsvc"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
 
@@ -46,6 +47,10 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	resolved, err := readsvc.ResolveReference(reference, rt, false)
 	if err != nil {
 		return mapResolveFailure(err, reference)
+	}
+
+	if validation := validateEditableContentPath(vaultPath, vaultCfg, resolved.FilePath); validation != nil {
+		return *validation
 	}
 
 	content, err := os.ReadFile(resolved.FilePath)
@@ -196,4 +201,44 @@ func toAnyString(value any) string {
 	default:
 		return ""
 	}
+}
+
+func validateEditableContentPath(vaultPath string, vaultCfg *config.VaultConfig, filePath string) *commandexec.Result {
+	relPath, err := filepath.Rel(vaultPath, filePath)
+	if err != nil {
+		result := commandexec.Failure("VALIDATION_FAILED", "edit only supports vault content files", nil, "Use edit for markdown content files inside the vault")
+		return &result
+	}
+
+	relPath = paths.NormalizeVaultRelPath(relPath)
+	templateDir := ""
+	protectedPrefixes := []string(nil)
+	if vaultCfg != nil {
+		templateDir = vaultCfg.GetTemplateDirectory()
+		protectedPrefixes = vaultCfg.ProtectedPrefixes
+	}
+
+	if paths.IsProtectedRelPath(relPath, protectedPrefixes) {
+		suggestion := "Use the dedicated Raven command for this protected path"
+		switch relPath {
+		case "raven.yaml":
+			suggestion = "Use 'rvn vault config ...' or 'rvn query saved ...' to mutate raven.yaml"
+		case "schema.yaml":
+			suggestion = "Use 'rvn schema ...' to mutate schema.yaml"
+		}
+		result := commandexec.Failure("VALIDATION_FAILED", "cannot edit protected or system-managed paths", map[string]interface{}{"path": relPath}, suggestion)
+		return &result
+	}
+
+	if templateDir != "" && strings.HasPrefix(relPath, templateDir) {
+		result := commandexec.Failure("VALIDATION_FAILED", "edit only supports vault content files; template files are managed separately", map[string]interface{}{"path": relPath}, "Use 'rvn template write' or 'rvn template delete' for template lifecycle changes")
+		return &result
+	}
+
+	if !paths.HasMDExtension(relPath) {
+		result := commandexec.Failure("VALIDATION_FAILED", "edit only supports markdown content files", map[string]interface{}{"path": relPath}, "Use dedicated Raven commands for vault config, schema, templates, and other non-content files")
+		return &result
+	}
+
+	return nil
 }

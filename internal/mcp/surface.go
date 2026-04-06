@@ -253,6 +253,7 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 	paramSpec := buildInvokeParamSpec(contract)
 	invokeArgs, argIssues := validateArgumentsStrict(paramSpec, rawInvokeArgs)
 	if len(argIssues) > 0 {
+		argIssues = withCommandArgumentHints(commandID, rawInvokeArgs, argIssues)
 		return errorEnvelope(
 			"INVALID_ARGS",
 			"argument validation failed",
@@ -302,6 +303,33 @@ func validateArgumentsStrict(spec map[string]parameterSpec, raw map[string]inter
 
 func withInvokeWrapperHints(issues []validationIssue, invokeArgsSpec map[string]parameterSpec) []validationIssue {
 	return commands.WithInvokeWrapperHints(issues, invokeArgsSpec)
+}
+
+func withCommandArgumentHints(commandID string, rawArgs map[string]interface{}, issues []validationIssue) []validationIssue {
+	if len(issues) == 0 {
+		return issues
+	}
+
+	out := make([]validationIssue, len(issues))
+	copy(out, issues)
+
+	switch commandID {
+	case "query":
+		_, hasSaved := rawArgs["saved"]
+		if !hasSaved {
+			return out
+		}
+		for i := range out {
+			switch {
+			case out[i].Field == "saved" && out[i].Code == "UNKNOWN_ARGUMENT":
+				out[i].Hint = "Pass the saved query name as args.query_string and any saved-query parameters in args.inputs."
+			case out[i].Field == "query_string" && out[i].Code == "MISSING_REQUIRED_ARGUMENT":
+				out[i].Hint = "Use args.query_string for either raw RQL or a saved query name."
+			}
+		}
+	}
+
+	return out
 }
 
 func validationErrorEnvelope(command string, issues []validationIssue) string {
