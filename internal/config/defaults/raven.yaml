@@ -9,7 +9,7 @@ directories:
   template: templates/
 
 # Additional protected/system prefixes (additive).
-# Raven automation features refuse to operate on protected paths.
+# Raven mutation commands and automation features refuse to operate on protected paths.
 # Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).
 # protected_prefixes:
 #   - templates/
@@ -52,4 +52,3 @@ queries:
   active-projects:
     query: "object:project has(trait:todo)"
     description: "Projects marked with @todo"
-

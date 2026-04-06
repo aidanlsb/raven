@@ -498,15 +498,16 @@ func createObject(
 	warnings = append(warnings, warningMessages...)
 
 	createResult, err := pages.Create(pages.CreateOptions{
-		VaultPath:   vaultPath,
-		TypeName:    typeName,
-		Title:       title,
-		TargetPath:  title,
-		Fields:      validatedTypedFields,
-		Schema:      sch,
-		TemplateDir: templateDir,
-		ObjectsRoot: objectsRoot,
-		PagesRoot:   pagesRoot,
+		VaultPath:         vaultPath,
+		TypeName:          typeName,
+		Title:             title,
+		TargetPath:        title,
+		Fields:            validatedTypedFields,
+		Schema:            sch,
+		TemplateDir:       templateDir,
+		ProtectedPrefixes: vaultCfg.ProtectedPrefixes,
+		ObjectsRoot:       objectsRoot,
+		PagesRoot:         pagesRoot,
 	})
 	if err != nil {
 		return ResultItem{ID: resolvedTargetPath, Action: "error", Reason: err.Error()}, warnings, ""

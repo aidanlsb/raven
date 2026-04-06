@@ -111,8 +111,11 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 		return nil, newError(ErrorFileRead, "failed to read source file", "", nil, err)
 	}
 
-	writePlan, warnings := prepareMoveWritePlan(req, refPlans, sourceSnapshot, objectRoot, pageRoot)
+	writePlan, warnings, err := prepareMoveWritePlan(req, refPlans, sourceSnapshot, objectRoot, pageRoot)
 	result.WarningMessages = append(result.WarningMessages, warnings...)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := os.MkdirAll(filepath.Dir(req.DestinationFile), 0o755); err != nil {
 		return nil, newError(ErrorFileWrite, "failed to create destination directory", "", nil, err)
@@ -200,7 +203,7 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	return result, nil
 }
 
-func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceSnapshot *fileSnapshot, objectRoot, pageRoot string) (*moveWritePlan, []string) {
+func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceSnapshot *fileSnapshot, objectRoot, pageRoot string) (*moveWritePlan, []string, error) {
 	plan := &moveWritePlan{}
 
 	destinationContent := sourceSnapshot.content
@@ -240,6 +243,10 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceS
 
 		rewrite, err := planRewriteForSource(req.VaultPath, req.VaultConfig, refPlan)
 		if err != nil {
+			var svcErr *Error
+			if errors.As(err, &svcErr) && svcErr.Code == ErrorValidationFailed {
+				return nil, warnings, err
+			}
 			warnings = append(warnings, fmt.Sprintf("Failed to update refs in %s: %v", refPlan.reportSourceID, err))
 			continue
 		}
@@ -266,7 +273,7 @@ func prepareMoveWritePlan(req MoveFileRequest, refPlans []refUpdatePlan, sourceS
 		plan.rewriteFiles = append(plan.rewriteFiles, rewrite)
 	}
 
-	return plan, warnings
+	return plan, warnings, nil
 }
 
 func planRewriteForSource(vaultPath string, vaultCfg *config.VaultConfig, refPlan refUpdatePlan) (*fileRewrite, error) {
@@ -277,6 +284,9 @@ func planRewriteForSource(vaultPath string, vaultCfg *config.VaultConfig, refPla
 
 	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
 	if err != nil {
+		return nil, err
+	}
+	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
 		return nil, err
 	}
 

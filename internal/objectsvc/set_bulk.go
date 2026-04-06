@@ -80,6 +80,10 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 			skipped = append(skipped, SetBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+			skipped = append(skipped, SetBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			continue
+		}
 
 		content, err := os.ReadFile(filePath)
 		if err != nil {
@@ -221,6 +225,9 @@ func previewSetBulkEmbedded(req SetBulkRequest, id string) (*SetBulkPreviewItem,
 	filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, fileID, req.VaultConfig)
 	if err != nil {
 		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: "parent file not found"}
+	}
+	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: err.Error()}
 	}
 
 	content, err := os.ReadFile(filePath)

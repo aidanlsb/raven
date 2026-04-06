@@ -130,6 +130,13 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	resolvedSlugPath := pages.SlugifyPath(
 		pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot),
 	)
+	plannedRelPath := resolvedSlugPath
+	if !strings.HasSuffix(plannedRelPath, ".md") {
+		plannedRelPath += ".md"
+	}
+	if err := ValidateContentMutationRelPath(req.VaultConfig, plannedRelPath); err != nil {
+		return nil, err
+	}
 	if pages.Exists(req.VaultPath, pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot)) {
 		return nil, newError(
 			ErrorFileExists,
@@ -169,8 +176,14 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		Schema:           req.Schema,
 		TemplateOverride: templateOverride,
 		TemplateDir:      req.TemplateDir,
-		ObjectsRoot:      req.ObjectsRoot,
-		PagesRoot:        req.PagesRoot,
+		ProtectedPrefixes: func() []string {
+			if req.VaultConfig == nil {
+				return nil
+			}
+			return req.VaultConfig.ProtectedPrefixes
+		}(),
+		ObjectsRoot: req.ObjectsRoot,
+		PagesRoot:   req.PagesRoot,
 	})
 	if err != nil {
 		return nil, newError(ErrorFileWrite, "failed to create object", "", nil, err)

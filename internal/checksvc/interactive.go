@@ -48,7 +48,7 @@ func ResolveAndSlugifyTargetPath(targetPath, typeName string, sch *schema.Schema
 	return pages.SlugifyPath(resolvedPath)
 }
 
-func CreateMissingPage(vaultPath string, sch *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot, templateDir string) error {
+func CreateMissingPage(vaultPath string, sch *schema.Schema, targetPath, typeName, objectsRoot, pagesRoot, templateDir string, protectedPrefixes []string) error {
 	_, err := pages.Create(pages.CreateOptions{
 		VaultPath:                   vaultPath,
 		TypeName:                    typeName,
@@ -56,6 +56,7 @@ func CreateMissingPage(vaultPath string, sch *schema.Schema, targetPath, typeNam
 		Schema:                      sch,
 		IncludeRequiredPlaceholders: true,
 		TemplateDir:                 templateDir,
+		ProtectedPrefixes:           protectedPrefixes,
 		ObjectsRoot:                 objectsRoot,
 		PagesRoot:                   pagesRoot,
 	})

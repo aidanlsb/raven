@@ -177,6 +177,12 @@ rvn vault config auto-reindex unset --json
 rvn vault config protected-prefixes list --json
 rvn vault config protected-prefixes add private --json
 rvn vault config protected-prefixes remove private/ --json
+rvn vault config directories set --daily journal --object objects --template templates/custom --json
+rvn vault config directories unset --template --json
+rvn vault config capture set --destination inbox.md --heading "## Captured" --json
+rvn vault config capture unset --heading --json
+rvn vault config deletion set --behavior permanent --trash-dir archive/trash --json
+rvn vault config deletion unset --trash-dir --json
 ```
 
 ### Practical baseline
@@ -297,7 +303,7 @@ For parameterized saved queries, use placeholders like `{{args.project}}` and de
 
 ### `protected_prefixes`
 
-Additional vault-relative prefixes treated as protected/system-managed by automation features.
+Additional vault-relative prefixes treated as protected/system-managed by Raven mutation commands and automation features.
 
 | Type | Default |
 |------|---------|

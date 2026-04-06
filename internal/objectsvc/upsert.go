@@ -116,6 +116,9 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 	if !strings.HasSuffix(slugified, ".md") {
 		slugified += ".md"
 	}
+	if err := ValidateContentMutationRelPath(req.VaultConfig, slugified); err != nil {
+		return nil, err
+	}
 
 	filePath := filepath.Join(req.VaultPath, slugified)
 	relPath := slugified
@@ -168,6 +171,12 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			Fields:      validatedCreateFields,
 			Schema:      req.Schema,
 			TemplateDir: req.TemplateDir,
+			ProtectedPrefixes: func() []string {
+				if req.VaultConfig == nil {
+					return nil
+				}
+				return req.VaultConfig.ProtectedPrefixes
+			}(),
 			ObjectsRoot: req.ObjectsRoot,
 			PagesRoot:   req.PagesRoot,
 		})

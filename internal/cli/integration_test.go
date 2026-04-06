@@ -153,6 +153,138 @@ old task
 	v.AssertFileNotContains("daily/2026-02-17.md", "old task")
 }
 
+func TestIntegration_EditRejectsSchemaAndTemplateFiles(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("templates/meeting.md", "# {{title}}\n").
+		Build()
+
+	schemaResult := v.RunCLI("edit", "schema.yaml", "version: 1", "version: 2", "--confirm")
+	schemaResult.MustFail(t, "VALIDATION_FAILED")
+	schemaResult.MustFailWithMessage(t, "rvn schema")
+	v.AssertFileContains("schema.yaml", "version: 1")
+
+	templateResult := v.RunCLI("edit", "templates/meeting.md", "{{title}}", "{{name}}", "--confirm")
+	templateResult.MustFail(t, "VALIDATION_FAILED")
+	templateResult.MustFailWithMessage(t, "rvn template write")
+	v.AssertFileContains("templates/meeting.md", "{{title}}")
+}
+
+func TestIntegration_EditRejectsProtectedPrefixAndNonMarkdownFiles(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML("protected_prefixes:\n  - private/\n").
+		WithFile("private/notes.md", "old task\n").
+		WithFile("scratch.txt", "old task\n").
+		Build()
+
+	protectedResult := v.RunCLI("edit", "private/notes.md", "old task", "done task", "--confirm")
+	protectedResult.MustFail(t, "VALIDATION_FAILED")
+	protectedResult.MustFailWithMessage(t, "protected")
+	v.AssertFileContains("private/notes.md", "old task")
+
+	nonMarkdownResult := v.RunCLI("edit", "scratch.txt", "old task", "done task", "--confirm")
+	nonMarkdownResult.MustFail(t, "VALIDATION_FAILED")
+	nonMarkdownResult.MustFailWithMessage(t, "markdown content files")
+	v.AssertFileContains("scratch.txt", "old task")
+}
+
+func TestIntegration_ProtectedPrefixesRejectMutationCommands(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  project:
+    fields:
+      title:
+        type: string
+      status:
+        type: enum
+        values: [active, done]
+traits:
+  todo:
+    type: enum
+    values: [open, done]
+`).
+		WithRavenYAML("protected_prefixes:\n  - private/\n").
+		WithFile("private/task.md", `---
+type: project
+title: Protected Task
+status: active
+---
+- task @todo(open)
+`).
+		WithFile("private/notes.md", "# Notes\n").
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	newResult := v.RunCLI("new", "project", "Blocked Project", "--path", "private/blocked-project")
+	newResult.MustFail(t, "VALIDATION_FAILED")
+	newResult.MustFailWithMessage(t, "protected")
+
+	upsertResult := v.RunCLI("upsert", "project", "Blocked Project", "--path", "private/blocked-project", "--content", "# blocked")
+	upsertResult.MustFail(t, "VALIDATION_FAILED")
+	upsertResult.MustFailWithMessage(t, "protected")
+
+	addResult := v.RunCLI("add", "Protected note", "--to", "private/notes.md")
+	addResult.MustFail(t, "VALIDATION_FAILED")
+	addResult.MustFailWithMessage(t, "protected")
+	v.AssertFileNotContains("private/notes.md", "Protected note")
+
+	setResult := v.RunCLI("set", "private/task.md", "status=done")
+	setResult.MustFail(t, "VALIDATION_FAILED")
+	setResult.MustFailWithMessage(t, "protected")
+	v.AssertFileContains("private/task.md", "status: active")
+
+	updateResult := v.RunCLI("update", "private/task.md:trait:0", "done")
+	updateResult.MustFail(t, "VALIDATION_FAILED")
+	updateResult.MustFailWithMessage(t, "protected")
+	v.AssertFileContains("private/task.md", "@todo(open)")
+
+	moveResult := v.RunCLI("move", "private/task.md", "archive/protected-task.md")
+	moveResult.MustFail(t, "VALIDATION_FAILED")
+	moveResult.MustFailWithMessage(t, "protected")
+	v.AssertFileExists("private/task.md")
+
+	deleteResult := v.RunCLI("delete", "private/task.md", "--confirm")
+	deleteResult.MustFail(t, "VALIDATION_FAILED")
+	deleteResult.MustFailWithMessage(t, "protected")
+	v.AssertFileExists("private/task.md")
+}
+
+func TestIntegration_MoveRejectsProtectedBacklinkUpdates(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  project:
+    fields:
+      title:
+        type: string
+`).
+		WithRavenYAML("protected_prefixes:\n  - private/\n").
+		WithFile("projects/open.md", `---
+type: project
+title: Open
+---
+`).
+		WithFile("private/ref.md", `See [[projects/open]] later.
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("move", "projects/open.md", "archive/open.md")
+	result.MustFail(t, "VALIDATION_FAILED")
+	result.MustFailWithMessage(t, "protected")
+	v.AssertFileExists("projects/open.md")
+	v.AssertFileNotExists("archive/open.md")
+	v.AssertFileContains("private/ref.md", "[[projects/open]]")
+}
+
 func TestIntegration_InitReturnsPostInitGuidance(t *testing.T) {
 	t.Parallel()
 	binary := testutil.BuildCLI(t)
@@ -1183,7 +1315,7 @@ meeting: "[[meeting/all-hands]]"
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
 
-	// Ensure the missing-reference workflow ran.
+	// Ensure the missing-reference creation flow ran.
 	if !strings.Contains(outputStr, "Missing References") {
 		t.Fatalf("expected check output to include missing reference prompt, got:\n%s", outputStr)
 	}

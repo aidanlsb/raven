@@ -59,3 +59,52 @@ func TestIntegration_VaultConfigAutoReindexLifecycle(t *testing.T) {
 	result.MustSucceed(t)
 	v.AssertFileNotContains("raven.yaml", "auto_reindex:")
 }
+
+func TestIntegration_VaultConfigDirectoriesLifecycle(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("vault", "config", "directories", "set", "--daily=journal", "--object=objects", "--template=templates/custom")
+	result.MustSucceed(t)
+	v.AssertFileContains("raven.yaml", "directories:")
+	v.AssertFileContains("raven.yaml", "daily: journal/")
+	v.AssertFileContains("raven.yaml", "object: objects/")
+	v.AssertFileContains("raven.yaml", "template: templates/custom/")
+
+	result = v.RunCLI("vault", "config", "directories", "unset", "--daily", "--object", "--template")
+	result.MustSucceed(t)
+	v.AssertFileNotContains("raven.yaml", "directories:")
+}
+
+func TestIntegration_VaultConfigCaptureLifecycle(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("vault", "config", "capture", "set", "--destination=inbox.md", "--heading=## Captured")
+	result.MustSucceed(t)
+	v.AssertFileContains("raven.yaml", "capture:")
+	v.AssertFileContains("raven.yaml", "destination: inbox.md")
+	v.AssertFileContains("raven.yaml", `heading: '## Captured'`)
+
+	result = v.RunCLI("vault", "config", "capture", "unset", "--destination", "--heading")
+	result.MustSucceed(t)
+	v.AssertFileNotContains("raven.yaml", "capture:")
+}
+
+func TestIntegration_VaultConfigDeletionLifecycle(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("vault", "config", "deletion", "set", "--behavior=permanent", "--trash-dir=archive/trash")
+	result.MustSucceed(t)
+	v.AssertFileContains("raven.yaml", "deletion:")
+	v.AssertFileContains("raven.yaml", "behavior: permanent")
+	v.AssertFileContains("raven.yaml", "trash_dir: archive/trash")
+
+	result = v.RunCLI("vault", "config", "deletion", "unset", "--behavior", "--trash-dir")
+	result.MustSucceed(t)
+	v.AssertFileNotContains("raven.yaml", "deletion:")
+}

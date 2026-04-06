@@ -95,7 +95,7 @@ func TestLoadVaultConfig(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
 
-		content := "directories:\n  workflow: ../outside\n  template: ../templates\n  daily: ../journal\n"
+		content := "directories:\n  object: ../outside\n  template: ../templates\n  daily: ../journal\n"
 		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}

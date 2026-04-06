@@ -69,6 +69,10 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
 			continue
 		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			continue
+		}
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "file not found"})
 			continue
@@ -159,6 +163,13 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 			result.Status = "skipped"
 			result.Reason = "object not found"
 			skippedCount++
+			results = append(results, result)
+			continue
+		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
+			result.Status = "error"
+			result.Reason = err.Error()
+			errorCount++
 			results = append(results, result)
 			continue
 		}

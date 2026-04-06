@@ -90,6 +90,102 @@ var vaultConfigProtectedPrefixesRemoveCmd = newCanonicalLeafCommand("vault_confi
 	RenderHuman: renderVaultConfigProtectedPrefixesRemove,
 })
 
+var vaultConfigDirectoriesCmd = &cobra.Command{
+	Use:   "directories",
+	Short: "Manage directories config in raven.yaml",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		result := executeCanonicalCommand("vault_config_directories_get", getVaultPath(), nil)
+		if isJSONOutput() {
+			outputCanonicalResultJSON(result)
+			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		return renderVaultConfigDirectoriesGet(cmd, result)
+	},
+}
+
+var vaultConfigDirectoriesGetCmd = newCanonicalLeafCommand("vault_config_directories_get", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigDirectoriesGet,
+})
+
+var vaultConfigDirectoriesSetCmd = newCanonicalLeafCommand("vault_config_directories_set", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigDirectoriesSet,
+})
+
+var vaultConfigDirectoriesUnsetCmd = newCanonicalLeafCommand("vault_config_directories_unset", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigDirectoriesUnset,
+})
+
+var vaultConfigCaptureCmd = &cobra.Command{
+	Use:   "capture",
+	Short: "Manage capture config in raven.yaml",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		result := executeCanonicalCommand("vault_config_capture_get", getVaultPath(), nil)
+		if isJSONOutput() {
+			outputCanonicalResultJSON(result)
+			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		return renderVaultConfigCaptureGet(cmd, result)
+	},
+}
+
+var vaultConfigCaptureGetCmd = newCanonicalLeafCommand("vault_config_capture_get", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigCaptureGet,
+})
+
+var vaultConfigCaptureSetCmd = newCanonicalLeafCommand("vault_config_capture_set", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigCaptureSet,
+})
+
+var vaultConfigCaptureUnsetCmd = newCanonicalLeafCommand("vault_config_capture_unset", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigCaptureUnset,
+})
+
+var vaultConfigDeletionCmd = &cobra.Command{
+	Use:   "deletion",
+	Short: "Manage deletion config in raven.yaml",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		result := executeCanonicalCommand("vault_config_deletion_get", getVaultPath(), nil)
+		if isJSONOutput() {
+			outputCanonicalResultJSON(result)
+			return nil
+		}
+		if err := handleCanonicalFailure(result); err != nil {
+			return err
+		}
+		return renderVaultConfigDeletionGet(cmd, result)
+	},
+}
+
+var vaultConfigDeletionGetCmd = newCanonicalLeafCommand("vault_config_deletion_get", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigDeletionGet,
+})
+
+var vaultConfigDeletionSetCmd = newCanonicalLeafCommand("vault_config_deletion_set", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigDeletionSet,
+})
+
+var vaultConfigDeletionUnsetCmd = newCanonicalLeafCommand("vault_config_deletion_unset", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigDeletionUnset,
+})
+
 func init() {
 	vaultConfigAutoReindexCmd.AddCommand(vaultConfigAutoReindexSetCmd)
 	vaultConfigAutoReindexCmd.AddCommand(vaultConfigAutoReindexUnsetCmd)
@@ -98,9 +194,24 @@ func init() {
 	vaultConfigProtectedPrefixesCmd.AddCommand(vaultConfigProtectedPrefixesAddCmd)
 	vaultConfigProtectedPrefixesCmd.AddCommand(vaultConfigProtectedPrefixesRemoveCmd)
 
+	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesGetCmd)
+	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesSetCmd)
+	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesUnsetCmd)
+
+	vaultConfigCaptureCmd.AddCommand(vaultConfigCaptureGetCmd)
+	vaultConfigCaptureCmd.AddCommand(vaultConfigCaptureSetCmd)
+	vaultConfigCaptureCmd.AddCommand(vaultConfigCaptureUnsetCmd)
+
+	vaultConfigDeletionCmd.AddCommand(vaultConfigDeletionGetCmd)
+	vaultConfigDeletionCmd.AddCommand(vaultConfigDeletionSetCmd)
+	vaultConfigDeletionCmd.AddCommand(vaultConfigDeletionUnsetCmd)
+
 	vaultConfigCmd.AddCommand(vaultConfigShowCmd)
 	vaultConfigCmd.AddCommand(vaultConfigAutoReindexCmd)
 	vaultConfigCmd.AddCommand(vaultConfigProtectedPrefixesCmd)
+	vaultConfigCmd.AddCommand(vaultConfigDirectoriesCmd)
+	vaultConfigCmd.AddCommand(vaultConfigCaptureCmd)
+	vaultConfigCmd.AddCommand(vaultConfigDeletionCmd)
 }
 
 func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
@@ -208,4 +319,105 @@ func renderVaultConfigProtectedPrefixesRemove(_ *cobra.Command, result commandex
 	fmt.Println(ui.Checkf("Removed protected prefix '%s'", stringValue(data["removed"])))
 	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
 	return nil
+}
+
+func renderVaultConfigDirectoriesGet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	if !boolValue(data["configured"]) {
+		fmt.Println(ui.Hint("directories block not explicitly configured; showing effective values."))
+	}
+	fmt.Printf("%s %s\n", ui.Hint("daily:"), stringValue(data["daily"]))
+	if v := stringValue(data["object"]); v != "" {
+		fmt.Printf("%s %s\n", ui.Hint("object:"), v)
+	}
+	if v := stringValue(data["page"]); v != "" {
+		fmt.Printf("%s %s\n", ui.Hint("page:"), v)
+	}
+	fmt.Printf("%s %s\n", ui.Hint("template:"), stringValue(data["template"]))
+	return nil
+}
+
+func renderVaultConfigDirectoriesSet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Updated directories in %s", ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Star("Directories config unchanged."))
+	}
+	return renderVaultConfigDirectoriesGet(nil, result)
+}
+
+func renderVaultConfigDirectoriesUnset(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Cleared directories fields in %s", ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Star("Directories config unchanged."))
+	}
+	return renderVaultConfigDirectoriesGet(nil, result)
+}
+
+func renderVaultConfigCaptureGet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	if !boolValue(data["configured"]) {
+		fmt.Println(ui.Hint("capture block not explicitly configured; showing effective values."))
+	}
+	fmt.Printf("%s %s\n", ui.Hint("destination:"), stringValue(data["destination"]))
+	if v := stringValue(data["heading"]); v != "" {
+		fmt.Printf("%s %s\n", ui.Hint("heading:"), v)
+	}
+	return nil
+}
+
+func renderVaultConfigCaptureSet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Updated capture config in %s", ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Star("Capture config unchanged."))
+	}
+	return renderVaultConfigCaptureGet(nil, result)
+}
+
+func renderVaultConfigCaptureUnset(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Cleared capture fields in %s", ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Star("Capture config unchanged."))
+	}
+	return renderVaultConfigCaptureGet(nil, result)
+}
+
+func renderVaultConfigDeletionGet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	if !boolValue(data["configured"]) {
+		fmt.Println(ui.Hint("deletion block not explicitly configured; showing effective values."))
+	}
+	fmt.Printf("%s %s\n", ui.Hint("behavior:"), stringValue(data["behavior"]))
+	fmt.Printf("%s %s\n", ui.Hint("trash_dir:"), stringValue(data["trash_dir"]))
+	return nil
+}
+
+func renderVaultConfigDeletionSet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Updated deletion config in %s", ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Star("Deletion config unchanged."))
+	}
+	return renderVaultConfigDeletionGet(nil, result)
+}
+
+func renderVaultConfigDeletionUnset(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Cleared deletion fields in %s", ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Star("Deletion config unchanged."))
+	}
+	return renderVaultConfigDeletionGet(nil, result)
 }

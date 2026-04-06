@@ -186,3 +186,121 @@ func TestProtectedPrefixesRejectInvalidPrefix(t *testing.T) {
 		t.Fatalf("expected CodeInvalidInput, got %q", svcErr.Code)
 	}
 }
+
+func TestDirectoriesSetNormalizesAndUnsetCompactsConfig(t *testing.T) {
+	tmp := t.TempDir()
+
+	setResult, err := SetDirectories(SetDirectoriesRequest{
+		VaultPath: tmp,
+		Daily:     strPtr("./journal"),
+		Object:    strPtr("objects"),
+		Template:  strPtr("templates/custom"),
+	})
+	if err != nil {
+		t.Fatalf("SetDirectories() error = %v", err)
+	}
+	if !setResult.Changed {
+		t.Fatalf("expected Changed=true")
+	}
+	if setResult.Directories.Daily != "journal/" {
+		t.Fatalf("expected daily journal/, got %q", setResult.Directories.Daily)
+	}
+
+	cfg, err := config.LoadVaultConfig(tmp)
+	if err != nil {
+		t.Fatalf("LoadVaultConfig() error = %v", err)
+	}
+	if cfg.Directories == nil || cfg.Directories.Daily != "journal/" || cfg.Directories.Object != "objects/" || cfg.Directories.Template != "templates/custom/" {
+		t.Fatalf("unexpected directories config: %#v", cfg.Directories)
+	}
+
+	unsetResult, err := UnsetDirectories(UnsetDirectoriesRequest{
+		VaultPath: tmp,
+		Daily:     true,
+		Object:    true,
+		Template:  true,
+	})
+	if err != nil {
+		t.Fatalf("UnsetDirectories() error = %v", err)
+	}
+	if !unsetResult.Changed {
+		t.Fatalf("expected Changed=true")
+	}
+
+	cfg, err = config.LoadVaultConfig(tmp)
+	if err != nil {
+		t.Fatalf("LoadVaultConfig() error = %v", err)
+	}
+	if cfg.Directories != nil {
+		t.Fatalf("expected directories block cleared, got %#v", cfg.Directories)
+	}
+}
+
+func TestCaptureSetAndUnsetLifecycle(t *testing.T) {
+	tmp := t.TempDir()
+
+	setResult, err := SetCapture(SetCaptureRequest{
+		VaultPath:   tmp,
+		Destination: strPtr("inbox.md"),
+		Heading:     strPtr("## Captured"),
+	})
+	if err != nil {
+		t.Fatalf("SetCapture() error = %v", err)
+	}
+	if !setResult.Configured {
+		t.Fatalf("expected capture configured")
+	}
+	if setResult.Capture.Destination != "inbox.md" {
+		t.Fatalf("expected inbox.md destination, got %q", setResult.Capture.Destination)
+	}
+
+	unsetResult, err := UnsetCapture(UnsetCaptureRequest{
+		VaultPath:   tmp,
+		Destination: true,
+		Heading:     true,
+	})
+	if err != nil {
+		t.Fatalf("UnsetCapture() error = %v", err)
+	}
+	if unsetResult.Configured {
+		t.Fatalf("expected capture block cleared")
+	}
+	if unsetResult.Capture.Destination != "daily" {
+		t.Fatalf("expected default daily destination, got %q", unsetResult.Capture.Destination)
+	}
+}
+
+func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
+	tmp := t.TempDir()
+
+	setResult, err := SetDeletion(SetDeletionRequest{
+		VaultPath: tmp,
+		Behavior:  strPtr("trash"),
+		TrashDir:  strPtr("./archive//trash"),
+	})
+	if err != nil {
+		t.Fatalf("SetDeletion() error = %v", err)
+	}
+	if setResult.Deletion.TrashDir != "archive/trash" {
+		t.Fatalf("expected archive/trash, got %q", setResult.Deletion.TrashDir)
+	}
+
+	_, err = SetDeletion(SetDeletionRequest{
+		VaultPath: tmp,
+		Behavior:  strPtr("invalid"),
+	})
+	if err == nil {
+		t.Fatalf("expected invalid behavior error")
+	}
+	svcErr, ok := AsError(err)
+	if !ok {
+		t.Fatalf("expected typed error, got %T", err)
+	}
+	if svcErr.Code != CodeInvalidInput {
+		t.Fatalf("expected CodeInvalidInput, got %q", svcErr.Code)
+	}
+}
+
+func strPtr(value string) *string {
+	return &value
+}

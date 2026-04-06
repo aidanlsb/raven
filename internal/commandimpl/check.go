@@ -132,6 +132,7 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		vaultCfg.GetObjectsRoot(),
 		vaultCfg.GetPagesRoot(),
 		vaultCfg.GetTemplateDirectory(),
+		vaultCfg.ProtectedPrefixes,
 	)
 	data["preview"] = false
 	data["created_pages"] = created

@@ -388,3 +388,53 @@ func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
 		t.Fatalf("issue.hint=%q; response=%s", issue.Hint, out)
 	}
 }
+
+func TestCompactInvokeHintsForQuerySavedArgument(t *testing.T) {
+	t.Parallel()
+	server := NewServer("")
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "query",
+		"args": map[string]interface{}{
+			"saved": "issues",
+		},
+	})
+	if !isErr {
+		t.Fatalf("expected invoke error, got: %s", out)
+	}
+
+	var envelope struct {
+		Error struct {
+			Code   string `json:"code"`
+			Detail struct {
+				Issues []struct {
+					Field string `json:"field"`
+					Code  string `json:"code"`
+					Hint  string `json:"hint"`
+				} `json:"issues"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal invoke error response: %v", err)
+	}
+	if envelope.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("error.code=%q, want INVALID_ARGS; response=%s", envelope.Error.Code, out)
+	}
+
+	var savedHint, queryStringHint string
+	for _, issue := range envelope.Error.Detail.Issues {
+		switch issue.Field {
+		case "saved":
+			savedHint = issue.Hint
+		case "query_string":
+			queryStringHint = issue.Hint
+		}
+	}
+
+	if savedHint != "Pass the saved query name as args.query_string and any saved-query parameters in args.inputs." {
+		t.Fatalf("saved hint=%q; response=%s", savedHint, out)
+	}
+	if queryStringHint != "Use args.query_string for either raw RQL or a saved query name." {
+		t.Fatalf("query_string hint=%q; response=%s", queryStringHint, out)
+	}
+}

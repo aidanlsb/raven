@@ -37,6 +37,9 @@ func SetEmbeddedObject(req SetEmbeddedObjectRequest) (*SetEmbeddedObjectResult, 
 	if req.Schema == nil {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
+	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, req.FilePath); err != nil {
+		return nil, err
+	}
 
 	_, slug, isEmbedded := paths.ParseEmbeddedID(req.ObjectID)
 	if !isEmbedded {

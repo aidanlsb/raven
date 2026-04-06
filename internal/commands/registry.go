@@ -1488,12 +1488,18 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 	},
 	"edit": {
 		Name:        "edit",
-		Description: "Surgical text replacement in vault files",
-		LongDesc: `Replace a unique string in a vault file with another string.
+		Description: "Surgical text replacement in vault content files",
+		LongDesc: `Replace a unique string in a vault content file with another string.
 
 ⚠️ IMPORTANT FOR AGENTS: Use this command instead of shell tools like 'sed' or 'awk'
-to edit vault files. This ensures proper preview/confirm flow and maintains
+to edit vault content files. This ensures proper preview/confirm flow and maintains
 file integrity within the vault.
+
+Scope:
+- Supported: markdown content files such as objects, pages, and daily notes
+- Not supported: raven.yaml, schema.yaml, template files, or protected/system-managed paths
+
+Use dedicated Raven command surfaces for vault configuration, schema updates, and template management.
 
 The string to replace must appear exactly once in the file to prevent 
 ambiguous edits.
@@ -1522,7 +1528,7 @@ Supports two input modes:
 			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --confirm --json`,
 		},
 		UseCases: []string{
-			"Edit vault files (use instead of 'sed', 'awk', or direct file writes)",
+			"Edit markdown vault content files (use instead of 'sed', 'awk', or direct file writes)",
 			"Add wiki links to existing text",
 			"Fix typos in notes",
 			"Apply multiple ordered replacements in one command",
@@ -1882,6 +1888,103 @@ Prefixes are normalized with a trailing slash.`,
 		},
 		Examples: []string{
 			"rvn vault config protected-prefixes remove private/ --json",
+		},
+	},
+	"vault_config_directories_get": {
+		Name:        "vault config directories get",
+		Description: "Show current directories config from raven.yaml",
+		Examples: []string{
+			"rvn vault config directories get --json",
+		},
+	},
+	"vault_config_directories_set": {
+		Name:        "vault config directories set",
+		Description: "Set one or more directories fields in raven.yaml",
+		Flags: []FlagMeta{
+			{Name: "daily", Description: "Set directories.daily", Type: FlagTypeString},
+			{Name: "object", Description: "Set directories.object", Type: FlagTypeString},
+			{Name: "page", Description: "Set directories.page", Type: FlagTypeString},
+			{Name: "template", Description: "Set directories.template", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn vault config directories set --daily journal --json",
+			"rvn vault config directories set --object object --page page --template templates --json",
+		},
+	},
+	"vault_config_directories_unset": {
+		Name:        "vault config directories unset",
+		Description: "Clear one or more directories fields from raven.yaml",
+		Flags: []FlagMeta{
+			{Name: "daily", Description: "Clear directories.daily", Type: FlagTypeBool},
+			{Name: "object", Description: "Clear directories.object", Type: FlagTypeBool},
+			{Name: "page", Description: "Clear directories.page", Type: FlagTypeBool},
+			{Name: "template", Description: "Clear directories.template", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn vault config directories unset --page --json",
+			"rvn vault config directories unset --daily --object --page --template --json",
+		},
+	},
+	"vault_config_capture_get": {
+		Name:        "vault config capture get",
+		Description: "Show current capture config from raven.yaml",
+		Examples: []string{
+			"rvn vault config capture get --json",
+		},
+	},
+	"vault_config_capture_set": {
+		Name:        "vault config capture set",
+		Description: "Set one or more capture fields in raven.yaml",
+		Flags: []FlagMeta{
+			{Name: "destination", Description: "Set capture.destination", Type: FlagTypeString},
+			{Name: "heading", Description: "Set capture.heading", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn vault config capture set --destination inbox.md --json",
+			"rvn vault config capture set --heading '## Captured' --json",
+		},
+	},
+	"vault_config_capture_unset": {
+		Name:        "vault config capture unset",
+		Description: "Clear one or more capture fields from raven.yaml",
+		Flags: []FlagMeta{
+			{Name: "destination", Description: "Clear capture.destination", Type: FlagTypeBool},
+			{Name: "heading", Description: "Clear capture.heading", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn vault config capture unset --heading --json",
+			"rvn vault config capture unset --destination --heading --json",
+		},
+	},
+	"vault_config_deletion_get": {
+		Name:        "vault config deletion get",
+		Description: "Show current deletion config from raven.yaml",
+		Examples: []string{
+			"rvn vault config deletion get --json",
+		},
+	},
+	"vault_config_deletion_set": {
+		Name:        "vault config deletion set",
+		Description: "Set one or more deletion fields in raven.yaml",
+		Flags: []FlagMeta{
+			{Name: "behavior", Description: "Set deletion.behavior (trash|permanent)", Type: FlagTypeString, Examples: []string{"trash", "permanent"}},
+			{Name: "trash-dir", Description: "Set deletion.trash_dir", Type: FlagTypeString},
+		},
+		Examples: []string{
+			"rvn vault config deletion set --behavior permanent --json",
+			"rvn vault config deletion set --trash-dir archive/trash --json",
+		},
+	},
+	"vault_config_deletion_unset": {
+		Name:        "vault config deletion unset",
+		Description: "Clear one or more deletion fields from raven.yaml",
+		Flags: []FlagMeta{
+			{Name: "behavior", Description: "Clear deletion.behavior", Type: FlagTypeBool},
+			{Name: "trash-dir", Description: "Clear deletion.trash_dir", Type: FlagTypeBool},
+		},
+		Examples: []string{
+			"rvn vault config deletion unset --trash-dir --json",
+			"rvn vault config deletion unset --behavior --trash-dir --json",
 		},
 	},
 	"open": {

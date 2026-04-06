@@ -47,5 +47,9 @@ func resolveReferenceForMutation(vaultPath string, vaultCfg *config.VaultConfig,
 		)
 	}
 
+	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, resolved.FilePath); err != nil {
+		return nil, err
+	}
+
 	return resolved, nil
 }

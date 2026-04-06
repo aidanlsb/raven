@@ -23,6 +23,9 @@ func UpdateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, o
 	if err != nil {
 		return err
 	}
+	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
+		return err
+	}
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -60,6 +63,9 @@ func UpdateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 
 	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
 	if err != nil {
+		return err
+	}
+	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
 		return err
 	}
 
@@ -105,6 +111,9 @@ func UpdateAllRefVariantsAtLine(vaultPath string, vaultCfg *config.VaultConfig, 
 
 	filePath, err := vault.ResolveObjectToFileWithConfig(vaultPath, fileSourceID, vaultCfg)
 	if err != nil {
+		return err
+	}
+	if err := ValidateContentMutationFilePath(vaultPath, vaultCfg, filePath); err != nil {
 		return err
 	}
 
