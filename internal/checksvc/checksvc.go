@@ -168,7 +168,6 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 					Message:  walkResult.Error.Error(),
 					FixHint:  "Fix the YAML frontmatter or markdown syntax",
 				})
-				result.ErrorCount++
 			}
 			return nil
 		}
@@ -219,6 +218,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	for _, pe := range parseErrors {
 		if shouldIncludeIssue(pe, includeIssues, excludeIssues, opts.ErrorsOnly) {
 			allIssues = append([]check.Issue{pe}, allIssues...)
+			result.ErrorCount++
 		}
 	}
 
