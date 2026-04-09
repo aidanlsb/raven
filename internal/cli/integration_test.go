@@ -2024,6 +2024,58 @@ Second line
 	}
 }
 
+func TestIntegration_ISODateRefsAreAmbiguousOnCollision(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("2025-02-01.md", `---
+type: page
+---
+# Literal ISO Note
+`).
+		WithFile("daily/2025-02-01.md", `---
+type: page
+---
+# Daily ISO Note
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	resolve := v.RunCLI("resolve", "2025-02-01")
+	resolve.MustSucceed(t)
+	if resolve.Data["resolved"] != false {
+		t.Fatalf("expected resolved=false for ambiguous ISO date, got %#v", resolve.Data["resolved"])
+	}
+	if resolve.Data["ambiguous"] != true {
+		t.Fatalf("expected ambiguous=true for ambiguous ISO date, got %#v", resolve.Data["ambiguous"])
+	}
+	matches := resolve.DataList("matches")
+	if len(matches) != 2 {
+		t.Fatalf("expected 2 matches, got %#v", matches)
+	}
+	matchIDs := make(map[string]bool, len(matches))
+	for _, raw := range matches {
+		match, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected match object, got %#v", raw)
+		}
+		id, _ := match["object_id"].(string)
+		matchIDs[id] = true
+	}
+	if !matchIDs["2025-02-01"] || !matchIDs["daily/2025-02-01"] {
+		t.Fatalf("expected ISO collision matches for literal and daily notes, got %#v", matches)
+	}
+
+	read := v.RunCLI("read", "2025-02-01")
+	read.MustFail(t, "REF_AMBIGUOUS")
+
+	query := v.RunCLI("query", "object:page refs([[2025-02-01]])")
+	query.MustFail(t, "QUERY_INVALID")
+	query.MustFailWithMessage(t, "ambiguous reference '2025-02-01'")
+}
+
 func TestIntegration_ReadWithoutArgSuggestsUsage(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).Build()

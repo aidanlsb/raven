@@ -1,6 +1,7 @@
 package readsvc
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -71,4 +72,66 @@ func TestResolveOperationCachesResolverWithinOperation(t *testing.T) {
 	if op.resolver != firstResolver {
 		t.Fatal("expected resolver instance to be reused within one resolve operation")
 	}
+}
+
+func TestResolveReferenceWithDynamicDates_AmbiguousISODateLiteralPath(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vaultPath, "daily"), 0o755); err != nil {
+		t.Fatalf("create daily directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "2025-02-01.md"), []byte("# Literal\n"), 0o644); err != nil {
+		t.Fatalf("write literal date file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "daily", "2025-02-01.md"), []byte("# Daily\n"), 0o644); err != nil {
+		t.Fatalf("write daily date file: %v", err)
+	}
+
+	db, err := index.OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open in-memory db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.DB().Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields) VALUES
+			('daily/2025-02-01', 'daily/2025-02-01.md', 'page', 1, '{}')
+	`); err != nil {
+		t.Fatalf("failed to seed daily object: %v", err)
+	}
+
+	rt := &Runtime{
+		VaultPath: vaultPath,
+		VaultCfg:  &config.VaultConfig{DailyDirectory: "daily"},
+		DB:        db,
+	}
+
+	_, err = ResolveReferenceWithDynamicDates("2025-02-01", rt, false)
+	if err == nil {
+		t.Fatal("expected ambiguous ISO date collision")
+	}
+
+	var ambiguous *AmbiguousRefError
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("expected AmbiguousRefError, got %T: %v", err, err)
+	}
+	if !resolveMatchesContain(ambiguous.Matches, "2025-02-01") {
+		t.Fatalf("expected literal object match in %v", ambiguous.Matches)
+	}
+	if !resolveMatchesContain(ambiguous.Matches, "daily/2025-02-01") {
+		t.Fatalf("expected daily match in %v", ambiguous.Matches)
+	}
+	if got := ambiguous.MatchSources["2025-02-01"]; got != "literal_path" {
+		t.Fatalf("literal match source = %q, want %q", got, "literal_path")
+	}
+}
+
+func resolveMatchesContain(matches []string, want string) bool {
+	for _, match := range matches {
+		if match == want {
+			return true
+		}
+	}
+	return false
 }

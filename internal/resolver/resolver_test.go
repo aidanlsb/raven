@@ -412,6 +412,27 @@ func TestResolverDateShorthand(t *testing.T) {
 		}
 	})
 
+	t.Run("date shorthand is ambiguous with colliding object ID", func(t *testing.T) {
+		r2 := New([]string{
+			"daily/2025-02-01",
+			"2025-02-01",
+		}, Options{})
+
+		result := r2.Resolve("2025-02-01")
+		if !result.Ambiguous {
+			t.Fatalf("expected ambiguous result, got %+v", result)
+		}
+		if len(result.Matches) != 2 {
+			t.Fatalf("expected 2 matches, got %d (%v)", len(result.Matches), result.Matches)
+		}
+		if !resolverMatchesContain(result.Matches, "daily/2025-02-01") {
+			t.Fatalf("expected daily match in %v", result.Matches)
+		}
+		if !resolverMatchesContain(result.Matches, "2025-02-01") {
+			t.Fatalf("expected literal object match in %v", result.Matches)
+		}
+	})
+
 	t.Run("custom daily directory", func(t *testing.T) {
 		r2 := New([]string{"journal/2025-02-01"}, Options{DailyDirectory: "journal"})
 		result := r2.Resolve("2025-02-01")
@@ -426,6 +447,15 @@ func TestResolverDateShorthand(t *testing.T) {
 			t.Errorf("got %q, want %q", result.TargetID, "people/freya")
 		}
 	})
+}
+
+func resolverMatchesContain(matches []string, want string) bool {
+	for _, match := range matches {
+		if match == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestResolverSlugifiedMatching(t *testing.T) {

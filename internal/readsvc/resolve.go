@@ -140,10 +140,13 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 		return nil, fmt.Errorf("runtime is required")
 	}
 
-	if result, err := tryLiteralPath(reference, op.rt.VaultPath, op.rt.VaultCfg); err != nil {
+	ref := strings.TrimSpace(reference)
+	literalPathResult, err := tryLiteralPath(ref, op.rt.VaultPath, op.rt.VaultCfg)
+	if err != nil {
 		return nil, err
-	} else if result != nil {
-		return result, nil
+	}
+	if literalPathResult != nil && !dates.IsValidDate(ref) {
+		return literalPathResult, nil
 	}
 
 	res, err := op.getResolver()
@@ -151,16 +154,24 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 		return nil, err
 	}
 
-	resolved := res.Resolve(reference)
+	resolved := res.Resolve(ref)
+	if literalPathResult != nil {
+		if ambiguousErr := isoDateLiteralPathAmbiguity(ref, literalPathResult, resolved); ambiguousErr != nil {
+			return nil, ambiguousErr
+		}
+	}
 	if resolved.Ambiguous {
 		return nil, &AmbiguousRefError{
-			Reference:    reference,
+			Reference:    ref,
 			Matches:      resolved.Matches,
 			MatchSources: resolved.MatchSources,
 		}
 	}
 	if resolved.TargetID == "" {
-		return nil, &RefNotFoundError{Reference: reference}
+		if literalPathResult != nil {
+			return literalPathResult, nil
+		}
+		return nil, &RefNotFoundError{Reference: ref}
 	}
 
 	matchSource := ""
@@ -187,13 +198,68 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 			return result, nil
 		}
 		return nil, &RefNotFoundError{
-			Reference: reference,
+			Reference: ref,
 			Detail:    fmt.Sprintf("resolved to '%s' but file not found", resolved.TargetID),
 		}
 	}
 
 	result.FilePath = filePath
 	return result, nil
+}
+
+func isoDateLiteralPathAmbiguity(reference string, literalPathResult *ResolveResult, resolved resolver.ResolveResult) error {
+	if literalPathResult == nil || !dates.IsValidDate(reference) {
+		return nil
+	}
+
+	if resolved.Ambiguous {
+		matches := append([]string{}, resolved.Matches...)
+		matchSources := copyMatchSources(resolved.MatchSources)
+		if !containsMatch(matches, literalPathResult.ObjectID) {
+			matches = append(matches, literalPathResult.ObjectID)
+		}
+		matchSources[literalPathResult.ObjectID] = literalPathResult.MatchSource
+		return &AmbiguousRefError{
+			Reference:    reference,
+			Matches:      matches,
+			MatchSources: matchSources,
+		}
+	}
+
+	if resolved.TargetID != "" && resolved.TargetID != literalPathResult.ObjectID {
+		matchSources := copyMatchSources(resolved.MatchSources)
+		matchSources[literalPathResult.ObjectID] = literalPathResult.MatchSource
+		if _, ok := matchSources[resolved.TargetID]; !ok {
+			matchSources[resolved.TargetID] = "date"
+		}
+		return &AmbiguousRefError{
+			Reference:    reference,
+			Matches:      []string{literalPathResult.ObjectID, resolved.TargetID},
+			MatchSources: matchSources,
+		}
+	}
+
+	return nil
+}
+
+func copyMatchSources(sources map[string]string) map[string]string {
+	if len(sources) == 0 {
+		return make(map[string]string)
+	}
+	copied := make(map[string]string, len(sources))
+	for id, source := range sources {
+		copied[id] = source
+	}
+	return copied
+}
+
+func containsMatch(matches []string, want string) bool {
+	for _, match := range matches {
+		if match == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (op *resolveOperation) resolveReferenceWithDynamicDates(reference string, allowDynamicMissing bool) (*ResolveResult, error) {

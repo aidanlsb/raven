@@ -133,9 +133,10 @@ type ResolveResult struct {
 // Resolution priority:
 //  1. Aliases (exact match)
 //  2. Name field values (semantic match by display name)
-//  3. Date references (YYYY-MM-DD)
-//  4. Object IDs (exact path match)
-//  5. Short names (filename match)
+//  3. Object IDs (exact path match)
+//  4. Short names (filename match)
+//  5. Date references (YYYY-MM-DD) participate as candidates and become
+//     ambiguous when they collide with explicit object/short-name matches.
 //  6. For unresolved path-like refs, leaf-based canonical fallback within the same path family
 func (r *Resolver) Resolve(ref string) ResolveResult {
 	ref = strings.TrimSpace(ref)
@@ -156,18 +157,6 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 		addNameFieldMatches(r, c, normalizedRef, normalizedSluggedRef, normalizedLowerRef)
 	}
 
-	// Date references are special - they always resolve to the daily note path
-	// unless there are already other matches, in which case they participate
-	// in ambiguity detection.
-	if res, done := maybeResolveDateRef(r, c, ref); done {
-		return res
-	}
-	if normalizedRef != ref {
-		if res, done := maybeResolveDateRef(r, c, normalizedRef); done {
-			return res
-		}
-	}
-
 	matchRef := normalizedRef
 	matchSluggedRef := normalizedSluggedRef
 	if matchRef == "" {
@@ -182,6 +171,11 @@ func (r *Resolver) Resolve(ref string) ResolveResult {
 		}
 	} else {
 		addShortMatches(r, c, matchRef, matchSluggedRef)
+	}
+
+	addDateRefMatch(r, c, ref)
+	if normalizedRef != ref {
+		addDateRefMatch(r, c, normalizedRef)
 	}
 
 	matches := c.matches
@@ -251,27 +245,12 @@ func addNameFieldMatches(r *Resolver, c *matchCollector, ref, sluggedRef, lowerR
 	}
 }
 
-func maybeResolveDateRef(r *Resolver, c *matchCollector, ref string) (ResolveResult, bool) {
-	// Check if this is a date reference (YYYY-MM-DD)
+func addDateRefMatch(r *Resolver, c *matchCollector, ref string) {
 	if !dates.IsValidDate(ref) {
-		return ResolveResult{}, false
+		return
 	}
 
-	// Convert date reference to daily note path
-	dateID := path.Join(r.dailyDirectory, ref)
-
-	// Date references are special - they always resolve to the daily note path
-	// Don't treat as ambiguous with aliases since dates are a distinct concept
-	if len(c.matches) == 0 {
-		return ResolveResult{
-			TargetID:     dateID,
-			MatchSources: map[string]string{dateID: "date"},
-		}, true
-	}
-
-	// If there's an alias that matches a date pattern, that's ambiguous
-	c.add(dateID, "date")
-	return ResolveResult{}, false
+	c.add(path.Join(r.dailyDirectory, ref), "date")
 }
 
 func isPathLikeRef(ref string) bool {

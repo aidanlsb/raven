@@ -1,6 +1,7 @@
 package readsvc
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/index"
@@ -157,6 +158,30 @@ func TestExecuteQuery_RefPredicateUsesLazyResolver(t *testing.T) {
 	}
 	if len(result.Objects) != 1 || result.Objects[0].ID != "note/standup" {
 		t.Fatalf("unexpected ref query objects: %#v", result.Objects)
+	}
+}
+
+func TestExecuteQuery_AmbiguousISODateRefReturnsError(t *testing.T) {
+	t.Parallel()
+	rt := seededRuntime(t)
+
+	_, err := rt.DB.DB().Exec(`
+		INSERT INTO objects (id, file_path, type, line_start, fields) VALUES
+			('daily/2025-02-01', 'daily/2025-02-01.md', 'page', 1, '{}'),
+			('2025-02-01', '2025-02-01.md', 'page', 1, '{}')
+	`)
+	if err != nil {
+		t.Fatalf("failed to seed ISO date collision objects: %v", err)
+	}
+
+	_, err = ExecuteQuery(rt, ExecuteQueryRequest{
+		QueryString: "object:project refs([[2025-02-01]])",
+	})
+	if err == nil {
+		t.Fatal("expected ambiguous ISO date reference error")
+	}
+	if !strings.Contains(err.Error(), "ambiguous reference '2025-02-01'") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
