@@ -159,11 +159,7 @@ func AddTrait(req AddTraitRequest) (*AddTraitResult, error) {
 		return nil, newError(ErrorObjectExists, fmt.Sprintf("trait '%s' already exists", traitName), "", nil, nil)
 	}
 
-	traitType := strings.TrimSpace(req.TraitType)
-	if traitType == "" {
-		traitType = "string"
-	}
-	normalizedDefault := strings.TrimSpace(req.Default)
+	traitType := normalizeTraitTypeInput(req.TraitType)
 	trimmedValues := splitCommaValues(req.Values)
 
 	schemaDoc, err := readSchemaDoc(req.VaultPath)
@@ -177,18 +173,8 @@ func AddTrait(req AddTraitRequest) (*AddTraitResult, error) {
 	if len(trimmedValues) > 0 {
 		newTrait["values"] = trimmedValues
 	}
-	if normalizedDefault != "" {
-		if traitType == "bool" || traitType == "boolean" {
-			if normalizedDefault == "true" {
-				newTrait["default"] = true
-			} else if normalizedDefault == "false" {
-				newTrait["default"] = false
-			} else {
-				newTrait["default"] = normalizedDefault
-			}
-		} else {
-			newTrait["default"] = normalizedDefault
-		}
+	if normalizedDefault, ok := normalizeTraitDefaultValue(traitType, req.Default); ok {
+		newTrait["default"] = normalizedDefault
 	}
 	traitsNode[traitName] = newTrait
 
@@ -241,7 +227,9 @@ func AddField(req AddFieldRequest) (*AddFieldResult, error) {
 		}
 	}
 
-	validation := validateFieldTypeSpec(req.FieldType, req.Target, req.Values, sch)
+	trimmedTarget := strings.TrimSpace(req.Target)
+	trimmedValues := splitCommaValues(req.Values)
+	validation := validateFieldTypeSpec(req.FieldType, trimmedTarget, strings.Join(trimmedValues, ","), sch)
 	if !validation.Valid {
 		details := map[string]interface{}{
 			"field_type":  req.FieldType,
@@ -279,11 +267,11 @@ func AddField(req AddFieldRequest) (*AddFieldResult, error) {
 	if strings.TrimSpace(req.Default) != "" {
 		newField["default"] = req.Default
 	}
-	if strings.TrimSpace(req.Values) != "" {
-		newField["values"] = strings.Split(req.Values, ",")
+	if len(trimmedValues) > 0 {
+		newField["values"] = trimmedValues
 	}
-	if strings.TrimSpace(req.Target) != "" {
-		newField["target"] = req.Target
+	if trimmedTarget != "" {
+		newField["target"] = trimmedTarget
 	}
 	if strings.TrimSpace(req.Description) != "" {
 		newField["description"] = req.Description
@@ -322,6 +310,30 @@ func splitCommaValues(raw string) []string {
 		}
 	}
 	return values
+}
+
+func normalizeTraitTypeInput(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "string"
+	}
+	return trimmed
+}
+
+func normalizeTraitDefaultValue(traitType, raw string) (interface{}, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, false
+	}
+	if traitType == "bool" || traitType == "boolean" {
+		if trimmed == "true" {
+			return true, true
+		}
+		if trimmed == "false" {
+			return false, true
+		}
+	}
+	return trimmed, true
 }
 
 func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema) FieldTypeValidation {

@@ -117,8 +117,9 @@ func UpdateType(req UpdateTypeRequest) (*UpdateResult, error) {
 	changes := make([]string, 0)
 
 	if strings.TrimSpace(req.DefaultPath) != "" {
-		typeNode["default_path"] = req.DefaultPath
-		changes = append(changes, fmt.Sprintf("default_path=%s", req.DefaultPath))
+		defaultPath := normalizeDirRoot(req.DefaultPath)
+		typeNode["default_path"] = defaultPath
+		changes = append(changes, fmt.Sprintf("default_path=%s", defaultPath))
 	}
 
 	if strings.TrimSpace(req.Description) != "" {
@@ -231,7 +232,8 @@ func UpdateTrait(req UpdateTraitRequest) (*UpdateResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, exists := sch.Traits[traitName]; !exists {
+	traitDef, exists := sch.Traits[traitName]
+	if !exists {
 		return nil, newError(
 			ErrorTraitNotFound,
 			fmt.Sprintf("trait '%s' not found", traitName),
@@ -250,16 +252,28 @@ func UpdateTrait(req UpdateTraitRequest) (*UpdateResult, error) {
 
 	changes := make([]string, 0)
 	if strings.TrimSpace(req.TraitType) != "" {
-		traitNode["type"] = req.TraitType
-		changes = append(changes, fmt.Sprintf("type=%s", req.TraitType))
+		traitType := normalizeTraitTypeInput(req.TraitType)
+		traitNode["type"] = traitType
+		changes = append(changes, fmt.Sprintf("type=%s", traitType))
 	}
 	if strings.TrimSpace(req.Values) != "" {
-		traitNode["values"] = strings.Split(req.Values, ",")
-		changes = append(changes, fmt.Sprintf("values=%s", req.Values))
+		values := splitCommaValues(req.Values)
+		if len(values) > 0 {
+			traitNode["values"] = values
+		} else {
+			delete(traitNode, "values")
+		}
+		changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
 	}
 	if strings.TrimSpace(req.Default) != "" {
-		traitNode["default"] = req.Default
-		changes = append(changes, fmt.Sprintf("default=%s", req.Default))
+		effectiveType := currentTraitType(traitDef)
+		if strings.TrimSpace(req.TraitType) != "" {
+			effectiveType = normalizeTraitTypeInput(req.TraitType)
+		}
+		if normalizedDefault, ok := normalizeTraitDefaultValue(effectiveType, req.Default); ok {
+			traitNode["default"] = normalizedDefault
+			changes = append(changes, fmt.Sprintf("default=%v", normalizedDefault))
+		}
 	}
 
 	if len(changes) == 0 {
@@ -316,7 +330,8 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 			nil,
 		)
 	}
-	if _, ok := typeDef.Fields[fieldName]; !ok {
+	currentFieldDef, ok := typeDef.Fields[fieldName]
+	if !ok {
 		return nil, newError(
 			ErrorFieldNotFound,
 			fmt.Sprintf("field '%s' not found on type '%s'", fieldName, typeName),
@@ -324,6 +339,46 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 			nil,
 			nil,
 		)
+	}
+	requestedBaseType := ""
+	if strings.TrimSpace(req.FieldType) != "" {
+		requestedBaseType = normalizeFieldTypeAlias(strings.TrimSuffix(strings.TrimSpace(req.FieldType), "[]"))
+	}
+	effectiveFieldType := currentFieldType(currentFieldDef)
+	if strings.TrimSpace(req.FieldType) != "" {
+		effectiveFieldType = strings.TrimSpace(req.FieldType)
+	}
+	effectiveTarget := ""
+	if currentFieldDef != nil {
+		effectiveTarget = strings.TrimSpace(currentFieldDef.Target)
+	}
+	if requestedBaseType != "" && requestedBaseType != "ref" && strings.TrimSpace(req.Target) == "" {
+		effectiveTarget = ""
+	} else if strings.TrimSpace(req.Target) != "" {
+		effectiveTarget = strings.TrimSpace(req.Target)
+	}
+	effectiveValues := ""
+	if currentFieldDef != nil {
+		effectiveValues = strings.Join(currentFieldDef.Values, ",")
+	}
+	if requestedBaseType != "" && requestedBaseType != "enum" && strings.TrimSpace(req.Values) == "" {
+		effectiveValues = ""
+	} else if strings.TrimSpace(req.Values) != "" {
+		effectiveValues = strings.Join(splitCommaValues(req.Values), ",")
+	}
+	validation := validateFieldTypeSpec(effectiveFieldType, effectiveTarget, effectiveValues, sch)
+	if !validation.Valid {
+		details := map[string]interface{}{
+			"field_type":  effectiveFieldType,
+			"valid_types": validation.ValidTypes,
+		}
+		if len(validation.Examples) > 0 {
+			details["examples"] = validation.Examples
+		}
+		if validation.TargetHint != "" {
+			details["target_hint"] = validation.TargetHint
+		}
+		return nil, newError(ErrorInvalidInput, validation.Error, validation.Suggestion, details, nil)
 	}
 
 	if req.Required == "true" {
@@ -392,8 +447,27 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 
 	changes := make([]string, 0)
 	if strings.TrimSpace(req.FieldType) != "" {
-		fieldNode["type"] = req.FieldType
-		changes = append(changes, fmt.Sprintf("type=%s", req.FieldType))
+		fieldType := validation.BaseType
+		if fieldType == "" {
+			fieldType = "string"
+		}
+		if validation.IsArray {
+			fieldType += "[]"
+		}
+		fieldNode["type"] = fieldType
+		changes = append(changes, fmt.Sprintf("type=%s", fieldType))
+		if validation.BaseType != "ref" && strings.TrimSpace(req.Target) == "" {
+			if _, exists := fieldNode["target"]; exists {
+				delete(fieldNode, "target")
+				changes = append(changes, "removed target")
+			}
+		}
+		if validation.BaseType != "enum" && strings.TrimSpace(req.Values) == "" {
+			if _, exists := fieldNode["values"]; exists {
+				delete(fieldNode, "values")
+				changes = append(changes, "removed values")
+			}
+		}
 	}
 	if strings.TrimSpace(req.Required) != "" {
 		required := req.Required == "true"
@@ -405,12 +479,17 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 		changes = append(changes, fmt.Sprintf("default=%s", req.Default))
 	}
 	if strings.TrimSpace(req.Values) != "" {
-		fieldNode["values"] = strings.Split(req.Values, ",")
-		changes = append(changes, fmt.Sprintf("values=%s", req.Values))
+		values := splitCommaValues(req.Values)
+		if len(values) > 0 {
+			fieldNode["values"] = values
+		} else {
+			delete(fieldNode, "values")
+		}
+		changes = append(changes, fmt.Sprintf("values=%s", strings.Join(values, ",")))
 	}
 	if strings.TrimSpace(req.Target) != "" {
-		fieldNode["target"] = req.Target
-		changes = append(changes, fmt.Sprintf("target=%s", req.Target))
+		fieldNode["target"] = strings.TrimSpace(req.Target)
+		changes = append(changes, fmt.Sprintf("target=%s", strings.TrimSpace(req.Target)))
 	}
 	if strings.TrimSpace(req.Description) != "" {
 		if isClearSentinel(req.Description) {
@@ -441,6 +520,23 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 		Field:   fieldName,
 		Changes: changes,
 	}, nil
+}
+
+func currentTraitType(def *schema.TraitDefinition) string {
+	if def == nil {
+		return "string"
+	}
+	if strings.TrimSpace(string(def.Type)) == "" {
+		return "boolean"
+	}
+	return strings.TrimSpace(string(def.Type))
+}
+
+func currentFieldType(def *schema.FieldDefinition) string {
+	if def == nil {
+		return "string"
+	}
+	return strings.TrimSpace(string(def.Type))
 }
 
 func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
