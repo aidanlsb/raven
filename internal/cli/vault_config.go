@@ -9,30 +9,6 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-func runVaultConfigShow(cmd *cobra.Command, args []string) error {
-	result := executeCanonicalCommand("vault_config_show", getVaultPath(), nil)
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-	return renderVaultConfigShow(cmd, result)
-}
-
-func runVaultConfigProtectedPrefixesList(cmd *cobra.Command, args []string) error {
-	result := executeCanonicalCommand("vault_config_protected_prefixes_list", getVaultPath(), nil)
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-	return renderVaultConfigProtectedPrefixesList(cmd, result)
-}
-
 var vaultConfigCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage vault-level raven.yaml settings",
@@ -41,7 +17,7 @@ var vaultConfigCmd = &cobra.Command{
 Use this command group for structured vault configuration instead of editing
 raven.yaml directly.`,
 	Args: cobra.NoArgs,
-	RunE: runVaultConfigShow,
+	RunE: canonicalGroupDefaultRunE("vault_config_show", getVaultPath, renderVaultConfigShow),
 }
 
 var vaultConfigShowCmd = newCanonicalLeafCommand("vault_config_show", canonicalLeafOptions{
@@ -72,7 +48,7 @@ var vaultConfigProtectedPrefixesCmd = &cobra.Command{
 	Use:   "protected-prefixes",
 	Short: "Manage protected_prefixes in raven.yaml",
 	Args:  cobra.NoArgs,
-	RunE:  runVaultConfigProtectedPrefixesList,
+	RunE:  canonicalGroupDefaultRunE("vault_config_protected_prefixes_list", getVaultPath, renderVaultConfigProtectedPrefixesList),
 }
 
 var vaultConfigProtectedPrefixesListCmd = newCanonicalLeafCommand("vault_config_protected_prefixes_list", canonicalLeafOptions{
@@ -94,17 +70,7 @@ var vaultConfigDirectoriesCmd = &cobra.Command{
 	Use:   "directories",
 	Short: "Manage directories config in raven.yaml",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("vault_config_directories_get", getVaultPath(), nil)
-		if isJSONOutput() {
-			outputCanonicalResultJSON(result)
-			return nil
-		}
-		if err := handleCanonicalFailure(result); err != nil {
-			return err
-		}
-		return renderVaultConfigDirectoriesGet(cmd, result)
-	},
+	RunE:  canonicalGroupDefaultRunE("vault_config_directories_get", getVaultPath, renderVaultConfigDirectoriesGet),
 }
 
 var vaultConfigDirectoriesGetCmd = newCanonicalLeafCommand("vault_config_directories_get", canonicalLeafOptions{
@@ -126,17 +92,7 @@ var vaultConfigCaptureCmd = &cobra.Command{
 	Use:   "capture",
 	Short: "Manage capture config in raven.yaml",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("vault_config_capture_get", getVaultPath(), nil)
-		if isJSONOutput() {
-			outputCanonicalResultJSON(result)
-			return nil
-		}
-		if err := handleCanonicalFailure(result); err != nil {
-			return err
-		}
-		return renderVaultConfigCaptureGet(cmd, result)
-	},
+	RunE:  canonicalGroupDefaultRunE("vault_config_capture_get", getVaultPath, renderVaultConfigCaptureGet),
 }
 
 var vaultConfigCaptureGetCmd = newCanonicalLeafCommand("vault_config_capture_get", canonicalLeafOptions{
@@ -158,17 +114,7 @@ var vaultConfigDeletionCmd = &cobra.Command{
 	Use:   "deletion",
 	Short: "Manage deletion config in raven.yaml",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		result := executeCanonicalCommand("vault_config_deletion_get", getVaultPath(), nil)
-		if isJSONOutput() {
-			outputCanonicalResultJSON(result)
-			return nil
-		}
-		if err := handleCanonicalFailure(result); err != nil {
-			return err
-		}
-		return renderVaultConfigDeletionGet(cmd, result)
-	},
+	RunE:  canonicalGroupDefaultRunE("vault_config_deletion_get", getVaultPath, renderVaultConfigDeletionGet),
 }
 
 var vaultConfigDeletionGetCmd = newCanonicalLeafCommand("vault_config_deletion_get", canonicalLeafOptions{

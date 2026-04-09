@@ -36,18 +36,6 @@ func resolveCurrentVault(cfg *config.Config, state *config.State) (*configsvc.Cu
 	return configsvc.ResolveCurrentVault(cfg, state)
 }
 
-func runVaultList(cmd *cobra.Command, args []string) error {
-	result := executeCanonicalCommand("vault_list", "", nil)
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-	return renderVaultList(cmd, result)
-}
-
 var vaultCmd = &cobra.Command{
 	Use:   "vault",
 	Short: "Manage configured vaults and active selection",
@@ -56,7 +44,7 @@ var vaultCmd = &cobra.Command{
 The active vault is stored in state.toml.
 The default vault is stored in config.toml and used as fallback.`,
 	Args: cobra.NoArgs,
-	RunE: runVaultList,
+	RunE: canonicalGroupDefaultRunE("vault_list", nil, renderVaultList),
 }
 
 var vaultListCmd = newCanonicalLeafCommand("vault_list", canonicalLeafOptions{

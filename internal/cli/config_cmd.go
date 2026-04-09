@@ -11,18 +11,6 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-func runConfigShow(cmd *cobra.Command, args []string) error {
-	result := executeCanonicalCommand("config_show", "", nil)
-	if isJSONOutput() {
-		outputCanonicalResultJSON(result)
-		return nil
-	}
-	if err := handleCanonicalFailure(result); err != nil {
-		return err
-	}
-	return renderConfigShow(cmd, result)
-}
-
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage global Raven config.toml settings",
@@ -30,7 +18,7 @@ var configCmd = &cobra.Command{
 
 Use this to initialize, inspect, and edit machine-level configuration.`,
 	Args: cobra.NoArgs,
-	RunE: runConfigShow,
+	RunE: canonicalGroupDefaultRunE("config_show", nil, renderConfigShow),
 }
 
 var configInitCmd = newCanonicalLeafCommand("config_init", canonicalLeafOptions{
