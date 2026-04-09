@@ -40,3 +40,11 @@ func boolValue(raw interface{}) bool {
 	value, ok := raw.(bool)
 	return ok && value
 }
+
+func stringsToAny(values []string) []interface{} {
+	out := make([]interface{}, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
+}

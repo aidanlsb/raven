@@ -2159,6 +2159,83 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_type", "type", "items", "total", "returned", "offset", "limit"})
 	})
 
+	t.Run("query_apply_object_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/alpha.md", `---
+type: project
+status: active
+---
+# Alpha
+`).
+			WithFile("projects/beta.md", `---
+type: project
+status: paused
+---
+# Beta
+`).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/alpha.md", `---
+type: project
+status: active
+---
+# Alpha
+`).
+			WithFile("projects/beta.md", `---
+type: project
+status: paused
+---
+# Beta
+`).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("query", map[string]interface{}{
+			"query_string": "object:project .status==active",
+			"apply":        []interface{}{"set status=done"},
+		})
+		cliResult := vCLI.RunCLI("query", "object:project .status==active", "--apply", "set status=done")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "fields"})
+	})
+
+	t.Run("query_apply_trait_confirm", func(t *testing.T) {
+		taskFile := `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+- @priority(low) Second task
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("query", map[string]interface{}{
+			"query_string": "trait:priority .value==low",
+			"apply":        []interface{}{"update high"},
+			"confirm":      true,
+		})
+		cliResult := vCLI.RunCLI("query", "trait:priority .value==low", "--apply", "update high", "--confirm")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"action", "results", "total", "modified", "skipped", "errors"})
+	})
+
 	t.Run("query_saved_list", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
