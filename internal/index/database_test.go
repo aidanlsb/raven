@@ -799,6 +799,128 @@ func TestTraitIDConsistency(t *testing.T) {
 	}
 }
 
+func TestDateIndexTraitIDsTrackIndexedTraitOrder(t *testing.T) {
+	t.Parallel()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	sch := schema.New()
+	sch.Traits["due"] = &schema.TraitDefinition{Type: schema.FieldTypeDate}
+	sch.Traits["review"] = &schema.TraitDefinition{Type: schema.FieldTypeDate}
+	sch.Traits["status"] = &schema.TraitDefinition{Type: schema.FieldTypeString}
+
+	dueValue := schema.Date("2025-03-15")
+	reviewValue := schema.Date("2025-03-20")
+	statusValue := schema.String("active")
+	doc := &parser.ParsedDocument{
+		FilePath: "notes/plan.md",
+		Objects: []*parser.ParsedObject{
+			{
+				ID:         "notes/plan",
+				ObjectType: "note",
+				Fields:     map[string]schema.FieldValue{},
+				LineStart:  1,
+			},
+		},
+		Traits: []*parser.ParsedTrait{
+			{
+				TraitType:      "undefined",
+				Content:        "skip me",
+				Line:           2,
+				ParentObjectID: "notes/plan",
+			},
+			{
+				TraitType:      "due",
+				Value:          &dueValue,
+				Content:        "ship it",
+				Line:           3,
+				ParentObjectID: "notes/plan",
+			},
+			{
+				TraitType:      "status",
+				Value:          &statusValue,
+				Content:        "state",
+				Line:           4,
+				ParentObjectID: "notes/plan",
+			},
+			{
+				TraitType:      "review",
+				Value:          &reviewValue,
+				Content:        "check it",
+				Line:           5,
+				ParentObjectID: "notes/plan",
+			},
+		},
+	}
+
+	if err := db.IndexDocument(doc, sch); err != nil {
+		t.Fatalf("failed to index document: %v", err)
+	}
+
+	traitIDsByType := map[string]string{}
+	rows, err := db.db.Query(`SELECT trait_type, id FROM traits ORDER BY line_number`)
+	if err != nil {
+		t.Fatalf("query traits: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var traitType, traitID string
+		if err := rows.Scan(&traitType, &traitID); err != nil {
+			t.Fatalf("scan trait row: %v", err)
+		}
+		traitIDsByType[traitType] = traitID
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate trait rows: %v", err)
+	}
+
+	wantTraitIDs := map[string]string{
+		"due":    "notes/plan.md:trait:0",
+		"status": "notes/plan.md:trait:1",
+		"review": "notes/plan.md:trait:2",
+	}
+	for traitType, wantID := range wantTraitIDs {
+		if got := traitIDsByType[traitType]; got != wantID {
+			t.Fatalf("%s trait id = %q, want %q", traitType, got, wantID)
+		}
+	}
+
+	dateIDsByType := map[string]string{}
+	dateRows, err := db.db.Query(`
+		SELECT field_name, source_id
+		FROM date_index
+		WHERE source_type = 'trait'
+		ORDER BY date
+	`)
+	if err != nil {
+		t.Fatalf("query date_index: %v", err)
+	}
+	defer dateRows.Close()
+	for dateRows.Next() {
+		var fieldName, sourceID string
+		if err := dateRows.Scan(&fieldName, &sourceID); err != nil {
+			t.Fatalf("scan date_index row: %v", err)
+		}
+		dateIDsByType[fieldName] = sourceID
+	}
+	if err := dateRows.Err(); err != nil {
+		t.Fatalf("iterate date_index rows: %v", err)
+	}
+
+	if len(dateIDsByType) != 2 {
+		t.Fatalf("got %d trait-backed date rows, want 2", len(dateIDsByType))
+	}
+	if got := dateIDsByType["due"]; got != traitIDsByType["due"] {
+		t.Fatalf("due date_index source_id = %q, want %q", got, traitIDsByType["due"])
+	}
+	if got := dateIDsByType["review"]; got != traitIDsByType["review"] {
+		t.Fatalf("review date_index source_id = %q, want %q", got, traitIDsByType["review"])
+	}
+}
+
 func TestTraitIDsStableAcrossReindexForMultilineParagraph(t *testing.T) {
 	t.Parallel()
 	db, err := OpenInMemory()

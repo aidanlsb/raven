@@ -524,19 +524,8 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 	}
 	defer traitStmt.Close()
 
-	traitIdx := 0
-
-	// Index inline traits (only if defined in schema)
-	for _, trait := range doc.Traits {
-		// Skip undefined traits - schema is source of truth
-		if sch != nil {
-			if _, defined := sch.Traits[trait.TraitType]; !defined {
-				continue // Skip indexing undefined traits
-			}
-		}
-
-		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, traitIdx)
-		traitIdx++
+	for _, indexedTrait := range indexedTraits(doc, sch) {
+		trait := indexedTrait.Trait
 
 		// Get value as string, applying schema defaults for bare traits
 		var valueStr interface{}
@@ -550,7 +539,7 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 		}
 
 		_, execErr := traitStmt.Exec(
-			traitID,
+			indexedTrait.ID,
 			doc.FilePath,
 			trait.ParentObjectID,
 			trait.TraitType,
@@ -565,6 +554,27 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 	}
 
 	return nil
+}
+
+type indexedTrait struct {
+	ID    string
+	Trait *parser.ParsedTrait
+}
+
+func indexedTraits(doc *parser.ParsedDocument, sch *schema.Schema) []indexedTrait {
+	indexed := make([]indexedTrait, 0, len(doc.Traits))
+	for _, trait := range doc.Traits {
+		if sch != nil {
+			if _, defined := sch.Traits[trait.TraitType]; !defined {
+				continue
+			}
+		}
+		indexed = append(indexed, indexedTrait{
+			ID:    fmt.Sprintf("%s:trait:%d", doc.FilePath, len(indexed)),
+			Trait: trait,
+		})
+	}
+	return indexed
 }
 
 func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error {
@@ -674,22 +684,12 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 		}
 	}
 
-	traitIdx := 0
-	for _, trait := range doc.Traits {
-		// Skip undefined traits - schema is source of truth.
-		// traitIdx must only increment for defined traits to match indexInlineTraits.
-		if sch != nil {
-			if _, defined := sch.Traits[trait.TraitType]; !defined {
-				continue
-			}
-		}
-
-		traitID := fmt.Sprintf("%s:trait:%d", doc.FilePath, traitIdx)
-		traitIdx++
+	for _, indexedTrait := range indexedTraits(doc, sch) {
+		trait := indexedTrait.Trait
 		// For single-value traits, check if the value is a date
 		if trait.Value != nil {
 			if dateStr := extractDateString(*trait.Value); dateStr != "" {
-				_, err = dateStmt.Exec(dateStr, "trait", traitID, trait.TraitType, doc.FilePath)
+				_, err = dateStmt.Exec(dateStr, "trait", indexedTrait.ID, trait.TraitType, doc.FilePath)
 				if err != nil {
 					return err
 				}
