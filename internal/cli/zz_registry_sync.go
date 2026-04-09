@@ -50,17 +50,51 @@ func applyRegistryMetadata(cmd *cobra.Command, path string) {
 }
 
 func lookupRegistryMeta(path string) (commands.Meta, bool) {
-	if meta, ok := commands.EffectiveMeta(path); ok {
-		return meta, true
+	commandID, ok := lookupRegistryCommandID(path)
+	if !ok {
+		return commands.Meta{}, false
+	}
+	return commands.EffectiveMeta(commandID)
+}
+
+func lookupRegistryCommandID(path string) (string, bool) {
+	if _, ok := commands.EffectiveMeta(path); ok {
+		return path, true
 	}
 
 	underscored := strings.ReplaceAll(path, " ", "_")
 	underscored = strings.ReplaceAll(underscored, "-", "_")
-	if meta, ok := commands.EffectiveMeta(underscored); ok {
-		return meta, true
+	if _, ok := commands.EffectiveMeta(underscored); ok {
+		return underscored, true
 	}
 
-	return commands.Meta{}, false
+	return "", false
+}
+
+func registryCommandIDForCommand(cmd *cobra.Command) (string, bool) {
+	path := commandPathForCommand(cmd)
+	if path == "" {
+		return "", false
+	}
+	return lookupRegistryCommandID(path)
+}
+
+func commandPathForCommand(cmd *cobra.Command) string {
+	if cmd == nil {
+		return ""
+	}
+
+	parts := make([]string, 0)
+	for cur := cmd; cur != nil && cur.Parent() != nil; cur = cur.Parent() {
+		parts = append(parts, cur.Name())
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	for left, right := 0, len(parts)-1; left < right; left, right = left+1, right-1 {
+		parts[left], parts[right] = parts[right], parts[left]
+	}
+	return strings.Join(parts, " ")
 }
 
 func buildLongDesc(meta commands.Meta) string {

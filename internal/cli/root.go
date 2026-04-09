@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/ui"
 )
@@ -54,27 +55,8 @@ who gathered knowledge from across the world.`,
 		ui.ConfigureTheme(cfg.UI.Accent)
 		ui.ConfigureMarkdownCodeTheme(cfg.UI.CodeTheme)
 
-		// Skip vault resolution for commands that don't need it
-		switch cmd.Name() {
-		case "init", "completion", "help", "version", "serve", "skill", "mcp":
+		if !shouldResolveVaultForCommand(cmd) {
 			return nil
-		case "vault", "config":
-			if isRootChildCommand(cmd) {
-				return nil
-			}
-		}
-		// Also skip for completion/config/skill/mcp subcommands.
-		// Most vault subcommands do not require resolved vault path, except `vault path` and `vault stats`.
-		if cmd.Parent() != nil {
-			parent := cmd.Parent()
-			parentName := parent.Name()
-			if parentName == "vault" && (cmd.Name() == "path" || cmd.Name() == "stats" || cmd.Name() == "config") {
-				// `vault path` and `vault stats` should resolve exactly like vault-bound commands.
-			} else if parentName == "completion" || parentName == "vault" || parentName == "skill" || parentName == "mcp" {
-				return nil
-			} else if parentName == "config" && isRootChildCommand(parent) {
-				return nil
-			}
 		}
 
 		// Resolve vault path: explicit path > named vault > active state > default
@@ -188,6 +170,40 @@ func getConfig() *config.Config {
 
 func isRootChildCommand(cmd *cobra.Command) bool {
 	return cmd != nil && cmd.Parent() != nil && cmd.Parent().Name() == "rvn"
+}
+
+func shouldResolveVaultForCommand(cmd *cobra.Command) bool {
+	if isExplicitNoVaultRuntimeCommand(cmd) {
+		return false
+	}
+	commandID, ok := registryCommandIDForCommand(cmd)
+	if !ok {
+		return true
+	}
+	return commands.RequiresVault(commandID)
+}
+
+func isExplicitNoVaultRuntimeCommand(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	name := cmd.Name()
+	if hasCommandAncestorNamed(cmd, "help") || hasCommandAncestorNamed(cmd, "completion") {
+		return true
+	}
+	if strings.HasPrefix(name, "__complete") {
+		return true
+	}
+	return isRootChildCommand(cmd) && (name == "mcp" || name == "skill")
+}
+
+func hasCommandAncestorNamed(cmd *cobra.Command, want string) bool {
+	for cur := cmd; cur != nil; cur = cur.Parent() {
+		if cur.Name() == want {
+			return true
+		}
+	}
+	return false
 }
 
 func loadGlobalConfigWithPath() (*config.Config, string, error) {

@@ -285,6 +285,7 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 	"mcp_install": {
 		Name:        "mcp install",
 		Description: "Add raven to an MCP client config",
+		VaultScope:  VaultScopeNone,
 		LongDesc:    "Add raven to a supported MCP client config file.",
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (codex, claude-code, claude-desktop, cursor)", Type: FlagTypeString, Default: "claude-code"},
@@ -306,6 +307,7 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 	"mcp_remove": {
 		Name:        "mcp remove",
 		Description: "Remove raven from an MCP client config",
+		VaultScope:  VaultScopeNone,
 		LongDesc:    "Remove raven from a supported MCP client config file.",
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (codex, claude-code, claude-desktop, cursor)", Type: FlagTypeString, Default: "claude-code"},
@@ -321,6 +323,7 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 	"mcp_status": {
 		Name:        "mcp status",
 		Description: "Show raven MCP status across all clients",
+		VaultScope:  VaultScopeNone,
 		LongDesc:    "Show whether raven is configured in supported MCP clients.",
 		Examples: []string{
 			"rvn mcp status",
@@ -333,6 +336,7 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 	"mcp_show": {
 		Name:        "mcp show",
 		Description: "Print MCP config snippet for manual setup",
+		VaultScope:  VaultScopeNone,
 		LongDesc:    "Print the client-specific config snippet for manually configuring Raven as an MCP server.",
 		Flags: []FlagMeta{
 			{Name: "client", Description: "MCP client (codex, claude-code, claude-desktop, cursor)", Type: FlagTypeString},

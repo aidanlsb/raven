@@ -105,6 +105,52 @@ func TestRegistryBackedLeafCommandsUseCanonicalAdapterOrMarkLocal(t *testing.T) 
 	}
 }
 
+func TestRegistryBackedCommandsMatchRegistryVaultPolicy(t *testing.T) {
+	paths := commandPaths(rootCmd)
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+
+		cmd, ok := findCommandByPath(rootCmd, path)
+		if !ok {
+			t.Errorf("failed to locate command for path %q", path)
+			continue
+		}
+		if !cmd.Runnable() {
+			continue
+		}
+
+		commandID, ok := registryCommandIDForCommand(cmd)
+		if !ok {
+			continue
+		}
+
+		got := shouldResolveVaultForCommand(cmd)
+		want := commands.RequiresVault(commandID)
+		if got != want {
+			t.Errorf("command %q (registry id %q) resolveVault=%v, want %v", path, commandID, got, want)
+		}
+	}
+}
+
+func TestExplicitNoVaultRuntimeCommands(t *testing.T) {
+	cases := make([]*cobra.Command, 0, 2)
+	for _, path := range []string{"mcp", "skill"} {
+		cmd, ok := findCommandByPath(rootCmd, path)
+		if !ok {
+			t.Fatalf("failed to locate command for path %q", path)
+		}
+		cases = append(cases, cmd)
+	}
+
+	for _, cmd := range cases {
+		if shouldResolveVaultForCommand(cmd) {
+			t.Fatalf("expected %q to skip vault resolution", cmd.CommandPath())
+		}
+	}
+}
+
 func commandPaths(root *cobra.Command) []string {
 	var out []string
 	var walk func(cmd *cobra.Command, prefix string)
