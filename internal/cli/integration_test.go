@@ -1954,6 +1954,54 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 	})
 }
 
+func TestIntegration_ReclassifyRejectsMalformedFieldFlags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		field string
+	}{
+		{name: "missing equals", field: "author"},
+		{name: "empty key", field: "=Tolkien"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := testutil.NewTestVault(t).
+				WithSchema(`version: 2
+types:
+  note:
+    default_path: notes/
+    fields:
+      title:
+        type: string
+  book:
+    default_path: books/
+    fields:
+      title:
+        type: string
+`).
+				WithFile("notes/my-note.md", `---
+type: note
+title: My Note
+---
+
+Body
+`).
+				Build()
+
+			result := v.RunCLI("reclassify", "notes/my-note", "book", "--field", tc.field, "--no-move", "--force")
+			result.MustFail(t, "INVALID_INPUT")
+			result.MustFailWithMessage(t, "expected key=value")
+
+			v.AssertFileExists("notes/my-note.md")
+			v.AssertFileNotExists("books/my-note.md")
+			v.AssertFileContains("notes/my-note.md", "type: note")
+			v.AssertFileNotContains("notes/my-note.md", "type: book")
+		})
+	}
+}
+
 // TestIntegration_BacklinksOutlinksDynamicDates tests that backlinks and outlinks
 // resolve dynamic date keywords like "today" and "yesterday".
 func TestIntegration_BacklinksOutlinksDynamicDates(t *testing.T) {

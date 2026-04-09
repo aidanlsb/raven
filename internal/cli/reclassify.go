@@ -37,11 +37,20 @@ func buildReclassifyArgs(_ *cobra.Command, args []string) (map[string]interface{
 	if err != nil {
 		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 	}
+	parsedFieldFlags, err := parseKeyValueArgs("field", reclassifyFieldFlags)
+	if err != nil {
+		return nil, handleErrorMsg(ErrInvalidInput, err.Error(), "Use format: --field name=value")
+	}
+	fieldFlags := make(map[string]string, len(parsedFieldFlags))
+	for key, value := range parsedFieldFlags {
+		text, _ := value.(string)
+		fieldFlags[key] = text
+	}
 
 	argsMap := map[string]interface{}{
 		"object":      args[0],
 		"new-type":    args[1],
-		"field":       parseReclassifyFieldFlags(reclassifyFieldFlags),
+		"field":       fieldFlags,
 		"no-move":     reclassifyNoMove,
 		"update-refs": reclassifyUpdateRefs,
 		"force":       reclassifyForce,
@@ -129,23 +138,6 @@ func renderReclassifyResult(_ *cobra.Command, result commandexec.Result) error {
 		fmt.Printf("  %s\n", ui.Warning(warning.Message))
 	}
 	return nil
-}
-
-func parseReclassifyFieldFlags(flags []string) map[string]string {
-	values := make(map[string]string)
-	for _, f := range flags {
-		parts := strings.SplitN(f, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		if key == "" {
-			continue
-		}
-		values[key] = value
-	}
-	return values
 }
 
 func promptMissingReclassifyFields(newTypeName string, details map[string]interface{}) (map[string]string, error) {
