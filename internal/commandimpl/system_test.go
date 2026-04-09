@@ -1,11 +1,46 @@
 package commandimpl
 
 import (
+	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 )
+
+func TestHandleReindexPropagatesCallerCancellation(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "note.md"), []byte("# Hello\n"), 0o644); err != nil {
+		t.Fatalf("write markdown fixture: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := HandleReindex(ctx, commandexec.Request{
+		VaultPath: vaultPath,
+		Args: map[string]any{
+			"dry-run": true,
+		},
+	})
+	if result.OK {
+		t.Fatalf("expected failure for canceled context, got success: %#v", result)
+	}
+	if result.Error == nil {
+		t.Fatalf("expected error payload, got %#v", result)
+	}
+	if result.Error.Code != "FILE_READ_ERROR" {
+		t.Fatalf("error code = %q, want %q", result.Error.Code, "FILE_READ_ERROR")
+	}
+	if !strings.Contains(result.Error.Message, "context canceled") {
+		t.Fatalf("error message = %q, want substring %q", result.Error.Message, "context canceled")
+	}
+}
 
 func TestBuildInitPostInitDataSuggestsRegistration(t *testing.T) {
 	t.Parallel()

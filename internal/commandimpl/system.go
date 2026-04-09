@@ -58,7 +58,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 }
 
 // HandleReindex executes the canonical `reindex` command.
-func HandleReindex(_ context.Context, req commandexec.Request) commandexec.Result {
+func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 	if vaultPath == "" {
 		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
@@ -69,7 +69,7 @@ func HandleReindex(_ context.Context, req commandexec.Request) commandexec.Resul
 		VaultPath: vaultPath,
 		Full:      boolArg(req.Args, "full"),
 		DryRun:    boolArg(req.Args, "dry-run"),
-		Context:   context.Background(),
+		Context:   ctx,
 	})
 	if err != nil {
 		svcErr, ok := reindexsvc.AsError(err)
