@@ -57,3 +57,15 @@ func TestExecuteToolDirectToolError(t *testing.T) {
 		t.Fatalf("expected envelope tool error, got: %v", err)
 	}
 }
+
+func TestExecuteToolDirectRejectsNonInvokableCommands(t *testing.T) {
+	t.Parallel()
+
+	_, err := ExecuteToolDirect("", "serve", nil)
+	if err == nil {
+		t.Fatal("expected non-invokable command error")
+	}
+	if !strings.Contains(err.Error(), "COMMAND_NOT_INVOKABLE") {
+		t.Fatalf("expected COMMAND_NOT_INVOKABLE error, got: %v", err)
+	}
+}

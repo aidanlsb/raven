@@ -9,10 +9,6 @@ import (
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-func (s *Server) callCanonicalCommand(commandID string, args map[string]interface{}, vaultName, vaultPathOverride string) (string, bool, bool) {
-	return s.callCanonicalCommandWithContext(context.Background(), commandID, args, vaultName, vaultPathOverride)
-}
-
 func (s *Server) callCanonicalCommandWithContext(ctx context.Context, commandID string, args map[string]interface{}, vaultName, vaultPathOverride string) (string, bool, bool) {
 	invoker := s.commandInvoker()
 	if invoker == nil {
