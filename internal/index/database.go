@@ -788,8 +788,7 @@ func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 // Returns empty string if not a date.
 func extractDateString(fv schema.FieldValue) string {
 	if s, ok := fv.AsString(); ok {
-		// Check if it looks like a date (YYYY-MM-DD)
-		if len(s) >= 10 && s[4] == '-' && s[7] == '-' {
+		if len(s) >= 10 {
 			candidate := s[:10] // Return just the date part (in case of datetime)
 			if dates.IsValidDate(candidate) {
 				return candidate

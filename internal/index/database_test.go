@@ -726,6 +726,45 @@ owner: "[[people/freya]]"
 	})
 }
 
+func TestExtractDateString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value schema.FieldValue
+		want  string
+	}{
+		{
+			name:  "date value",
+			value: schema.Date("2026-04-09"),
+			want:  "2026-04-09",
+		},
+		{
+			name:  "datetime value returns date prefix",
+			value: schema.Datetime("2026-04-09T12:34:56Z"),
+			want:  "2026-04-09",
+		},
+		{
+			name:  "date-shaped junk string is rejected",
+			value: schema.String("ABCD-EF-GH trailing text"),
+			want:  "",
+		},
+		{
+			name:  "short string is rejected",
+			value: schema.String("2026-04"),
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := extractDateString(tt.value); got != tt.want {
+				t.Fatalf("extractDateString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestTraitIDConsistency is a regression test for the bug where indexDates used
 // the raw loop index (idx) while indexInlineTraits used a counter that only
 // incremented for defined traits. When undefined traits preceded defined ones,
