@@ -15,6 +15,7 @@ type Resolver struct {
 	objectIDs      map[string]struct{} // Set of all known object IDs
 	shortMap       map[string][]string // Map from short name to full IDs
 	slugMap        map[string]string   // Map from slugified ID to original ID
+	suffixMap      map[string][]string // Map from slash-delimited suffixes to full IDs
 	aliasMap       map[string][]string // Map from alias to object IDs
 	nameFieldMap   map[string][]string // Map from name_field value (slugified) to object IDs
 	dailyDirectory string              // Directory for daily notes (e.g., "daily")
@@ -51,6 +52,7 @@ func New(objectIDs []string, opts Options) *Resolver {
 		objectIDs:      make(map[string]struct{}, len(objectIDs)),
 		shortMap:       make(map[string][]string, len(objectIDs)),
 		slugMap:        make(map[string]string, len(objectIDs)),
+		suffixMap:      make(map[string][]string, len(objectIDs)*2),
 		dailyDirectory: dailyDir,
 	}
 
@@ -64,6 +66,8 @@ func New(objectIDs []string, opts Options) *Resolver {
 		// Build slugified map for fuzzy matching
 		sluggedID := pages.SlugifyPath(id)
 		r.slugMap[sluggedID] = id
+
+		indexResolverSuffixes(r.suffixMap, id)
 	}
 
 	// Copy aliases (skip empty ones)
@@ -285,8 +289,11 @@ func addPathMatches(r *Resolver, c *matchCollector, ref string) {
 	if len(c.matches) == 0 {
 		suffix := "/" + ref
 		sluggedSuffix := "/" + sluggedRefPath
-		for id := range r.objectIDs {
-			if strings.HasSuffix(id, suffix) || strings.HasSuffix(id, sluggedSuffix) {
+		for _, id := range r.suffixMap[suffix] {
+			c.add(id, "suffix_match")
+		}
+		if sluggedSuffix != suffix {
+			for _, id := range r.suffixMap[sluggedSuffix] {
 				c.add(id, "suffix_match")
 			}
 		}
@@ -363,13 +370,9 @@ func addShortMatches(r *Resolver, c *matchCollector, ref, sluggedRef string) {
 	}
 
 	if len(shortMatches) == 0 {
-		// Try to find partial matches (including slugified)
-		for id := range r.objectIDs {
-			shortName := paths.ShortNameFromID(id)
-			if shortName == ref || shortName == sluggedRef ||
-				strings.HasSuffix(id, "/"+ref) || strings.HasSuffix(id, "/"+sluggedRef) {
-				shortMatches = append(shortMatches, id)
-			}
+		shortMatches = append(shortMatches, r.suffixMap["/"+ref]...)
+		if sluggedRef != ref {
+			shortMatches = append(shortMatches, r.suffixMap["/"+sluggedRef]...)
 		}
 	}
 
@@ -377,6 +380,29 @@ func addShortMatches(r *Resolver, c *matchCollector, ref, sluggedRef string) {
 	for _, id := range shortMatches {
 		c.add(id, "short_name")
 	}
+}
+
+func indexResolverSuffixes(suffixMap map[string][]string, id string) {
+	remaining := id
+	for {
+		slash := strings.IndexByte(remaining, '/')
+		if slash == -1 || slash+1 >= len(remaining) {
+			return
+		}
+		remaining = remaining[slash+1:]
+		addResolverSuffixEntry(suffixMap, "/"+remaining, id)
+		sluggedSuffix := "/" + pages.SlugifyPath(remaining)
+		if sluggedSuffix != "/"+remaining {
+			addResolverSuffixEntry(suffixMap, sluggedSuffix, id)
+		}
+	}
+}
+
+func addResolverSuffixEntry(suffixMap map[string][]string, key, id string) {
+	if key == "" || id == "" {
+		return
+	}
+	suffixMap[key] = append(suffixMap[key], id)
 }
 
 func buildResolveResult(matches []string, matchSources map[string]string) ResolveResult {

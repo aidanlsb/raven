@@ -182,6 +182,23 @@ func TestResolverSuffixMatching(t *testing.T) {
 			t.Errorf("expected 2 matches, got %d", len(result.Matches))
 		}
 	})
+
+	t.Run("slugged partial path matches prefixed object id", func(t *testing.T) {
+		objectIDs := []string{
+			"objects/people/sif",
+			"objects/people/freya",
+		}
+
+		r := New(objectIDs, Options{})
+
+		result := r.Resolve("people/Sif")
+		if result.Ambiguous {
+			t.Fatalf("expected non-ambiguous result, got matches: %v", result.Matches)
+		}
+		if result.TargetID != "objects/people/sif" {
+			t.Fatalf("got %q, want %q", result.TargetID, "objects/people/sif")
+		}
+	})
 }
 
 func TestResolverPathLeafCanonicalFallback(t *testing.T) {
