@@ -12,8 +12,9 @@ func TestValidator_UnknownType(t *testing.T) {
 	t.Parallel()
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{
-			"person":  {Fields: map[string]*schema.FieldDefinition{}},
-			"project": {Fields: map[string]*schema.FieldDefinition{}},
+			"zebra":  {Fields: map[string]*schema.FieldDefinition{}},
+			"alpha":  {Fields: map[string]*schema.FieldDefinition{}},
+			"middle": {Fields: map[string]*schema.FieldDefinition{}},
 		},
 		Traits: map[string]*schema.TraitDefinition{},
 	}
@@ -39,8 +40,8 @@ func TestValidator_UnknownType(t *testing.T) {
 		t.Errorf("expected error about unknown type, got: %s", ve.Message)
 	}
 
-	if !strings.Contains(ve.Suggestion, "person") {
-		t.Errorf("expected suggestion to include available types, got: %s", ve.Suggestion)
+	if ve.Suggestion != "Available types: alpha, middle, zebra" {
+		t.Errorf("suggestion = %q, want sorted available types", ve.Suggestion)
 	}
 }
 
@@ -58,8 +59,9 @@ func TestValidator_UnknownTrait(t *testing.T) {
 	sch := &schema.Schema{
 		Types: map[string]*schema.TypeDefinition{},
 		Traits: map[string]*schema.TraitDefinition{
-			"due":      {},
-			"priority": {},
+			"zeta":  {},
+			"alpha": {},
+			"mid":   {},
 		},
 	}
 
@@ -84,8 +86,8 @@ func TestValidator_UnknownTrait(t *testing.T) {
 		t.Errorf("expected error about unknown trait, got: %s", ve.Message)
 	}
 
-	if !strings.Contains(ve.Suggestion, "due") {
-		t.Errorf("expected suggestion to include available traits, got: %s", ve.Suggestion)
+	if ve.Suggestion != "Available traits: alpha, mid, zeta" {
+		t.Errorf("suggestion = %q, want sorted available traits", ve.Suggestion)
 	}
 }
 
@@ -95,8 +97,9 @@ func TestValidator_UnknownField(t *testing.T) {
 		Types: map[string]*schema.TypeDefinition{
 			"person": {
 				Fields: map[string]*schema.FieldDefinition{
-					"name":  {Type: schema.FieldTypeString},
-					"email": {Type: schema.FieldTypeString},
+					"zeta":  {Type: schema.FieldTypeString},
+					"alpha": {Type: schema.FieldTypeString},
+					"mid":   {Type: schema.FieldTypeString},
 				},
 			},
 		},
@@ -124,8 +127,8 @@ func TestValidator_UnknownField(t *testing.T) {
 		t.Errorf("expected error about unknown field, got: %s", ve.Message)
 	}
 
-	if !strings.Contains(ve.Suggestion, "name") {
-		t.Errorf("expected suggestion to include available fields, got: %s", ve.Suggestion)
+	if ve.Suggestion != "Available fields: alpha, mid, zeta" {
+		t.Errorf("suggestion = %q, want sorted available fields", ve.Suggestion)
 	}
 }
 

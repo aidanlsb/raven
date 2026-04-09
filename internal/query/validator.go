@@ -3,6 +3,7 @@ package query
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
@@ -484,6 +485,7 @@ func (v *Validator) availableTypes() []string {
 	for name := range v.schema.Types {
 		types = append(types, name)
 	}
+	sort.Strings(types)
 	return types
 }
 
@@ -492,6 +494,7 @@ func (v *Validator) availableTraits() []string {
 	for name := range v.schema.Traits {
 		traits = append(traits, name)
 	}
+	sort.Strings(traits)
 	return traits
 }
 
@@ -502,5 +505,6 @@ func (v *Validator) availableFields(typeDef *schema.TypeDefinition) []string {
 			fields = append(fields, name)
 		}
 	}
+	sort.Strings(fields)
 	return fields
 }
