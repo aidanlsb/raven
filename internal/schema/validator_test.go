@@ -116,6 +116,23 @@ func TestValidateFields(t *testing.T) {
 			t.Fatalf("unexpected error message: %q", errors[0].Message)
 		}
 	})
+
+	t.Run("unsupported field type reports validation error", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"broken": String("value"),
+		}
+		defs := map[string]*FieldDefinition{
+			"broken": {Type: FieldType("enum-ish")},
+		}
+
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d: %v", len(errors), errors)
+		}
+		if !strings.Contains(errors[0].Message, "unsupported field type 'enum-ish'") {
+			t.Fatalf("unexpected error message: %q", errors[0].Message)
+		}
+	})
 }
 
 func TestValidateFieldValueString(t *testing.T) {

@@ -187,6 +187,50 @@ traits: {}
 	}
 }
 
+func TestCreateRejectsUnsupportedFieldTypeInSchema(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  task:
+    default_path: task/
+    name_field: title
+    fields:
+      title:
+        type: string
+        required: true
+      status:
+        type: enum-ish
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	_, err := Create(CreateRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "task",
+		Title:      "Broken schema",
+		TargetPath: "Broken schema",
+		FieldValues: map[string]schema.FieldValue{
+			"status": schema.String("open"),
+		},
+		Schema: sch,
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != ErrorValidationFailed {
+		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
+	}
+	if !strings.Contains(svcErr.Message, "unsupported field type 'enum-ish'") {
+		t.Fatalf("unexpected error message: %q", svcErr.Message)
+	}
+}
+
 func TestCreatePreservesStringTypeFromTypedFieldValues(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

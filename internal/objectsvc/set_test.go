@@ -69,6 +69,55 @@ traits: {}
 	}
 }
 
+func TestSetObjectFileRejectsUnsupportedFieldTypeInSchema(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+      status:
+        type: enum-ish
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	filePath := filepath.Join(vaultPath, "people/freya.md")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("---\ntype: person\nname: Freya\n---\n"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	_, err := SetObjectFile(SetObjectFileRequest{
+		FilePath:      filePath,
+		ObjectID:      "people/freya",
+		TypedUpdates:  map[string]schema.FieldValue{"status": schema.String("open")},
+		Schema:        sch,
+		AllowedFields: map[string]bool{"alias": true},
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	var validationErr *fieldmutation.ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	if len(validationErr.Issues) != 1 {
+		t.Fatalf("expected 1 validation issue, got %d", len(validationErr.Issues))
+	}
+	if !strings.Contains(validationErr.Issues[0].Message, "unsupported field type 'enum-ish'") {
+		t.Fatalf("unexpected validation message: %q", validationErr.Issues[0].Message)
+	}
+}
+
 func TestSetObjectFileNoFrontmatter(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

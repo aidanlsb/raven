@@ -262,6 +262,9 @@ func validateFieldValue(name string, value FieldValue, def *FieldDefinition) err
 				return fmt.Errorf("expected array of references")
 			}
 		}
+
+	default:
+		return fmt.Errorf("unsupported field type '%s'", def.Type)
 	}
 
 	return nil
