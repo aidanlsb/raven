@@ -3,6 +3,7 @@ package index
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -153,6 +154,19 @@ func TestRemoveDeletedFiles(t *testing.T) {
 			{SourceID: "notes/missing", TargetRaw: "people/freya", Line: 3},
 		},
 	}
+	alsoMissingDoc := &parser.ParsedDocument{
+		FilePath:   "notes/also-missing.md",
+		RawContent: "also missing",
+		Objects: []*parser.ParsedObject{
+			{ID: "notes/also-missing", ObjectType: "page", Fields: map[string]schema.FieldValue{}, LineStart: 1},
+		},
+		Traits: []*parser.ParsedTrait{
+			{TraitType: "flag", Value: nil, Content: "y", ParentObjectID: "notes/also-missing", Line: 2},
+		},
+		Refs: []*parser.ParsedRef{
+			{SourceID: "notes/also-missing", TargetRaw: "people/thor", Line: 3},
+		},
+	}
 
 	if err := db.IndexDocument(existsDoc, sch); err != nil {
 		t.Fatalf("failed to index exists doc: %v", err)
@@ -160,24 +174,38 @@ func TestRemoveDeletedFiles(t *testing.T) {
 	if err := db.IndexDocument(missingDoc, sch); err != nil {
 		t.Fatalf("failed to index missing doc: %v", err)
 	}
+	if err := db.IndexDocument(alsoMissingDoc, sch); err != nil {
+		t.Fatalf("failed to index also-missing doc: %v", err)
+	}
+	if _, err := db.db.Exec(`
+		INSERT INTO field_refs (source_id, field_name, target_id, target_raw, resolution_status, file_path, line_number)
+		VALUES
+			('notes/missing', 'owner', NULL, 'people/freya', 'unresolved', 'notes/missing.md', 1),
+			('notes/also-missing', 'owner', NULL, 'people/thor', 'unresolved', 'notes/also-missing.md', 1)
+	`); err != nil {
+		t.Fatalf("failed to insert field_refs: %v", err)
+	}
 
 	removed, err := db.RemoveDeletedFiles(vaultDir)
 	if err != nil {
 		t.Fatalf("RemoveDeletedFiles error: %v", err)
 	}
+	sort.Strings(removed)
 
-	if len(removed) != 1 || removed[0] != "notes/missing.md" {
-		t.Fatalf("removed = %v, want [notes/missing.md]", removed)
+	if len(removed) != 2 || removed[0] != "notes/also-missing.md" || removed[1] != "notes/missing.md" {
+		t.Fatalf("removed = %v, want [notes/also-missing.md notes/missing.md]", removed)
 	}
 
-	// Ensure the missing file is removed from the index.
-	for _, table := range []string{"objects", "traits", "refs", "date_index", "fts_content"} {
-		var n int
-		if err := db.db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE file_path = ?", "notes/missing.md").Scan(&n); err != nil {
-			t.Fatalf("failed to query %s: %v", table, err)
-		}
-		if n != 0 {
-			t.Fatalf("expected %s rows for notes/missing.md to be 0, got %d", table, n)
+	// Ensure missing files are removed from every indexed table.
+	for _, missingPath := range []string{"notes/missing.md", "notes/also-missing.md"} {
+		for _, table := range filePathTables {
+			var n int
+			if err := db.db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE file_path = ?", missingPath).Scan(&n); err != nil {
+				t.Fatalf("failed to query %s for %s: %v", table, missingPath, err)
+			}
+			if n != 0 {
+				t.Fatalf("expected %s rows for %s to be 0, got %d", table, missingPath, n)
+			}
 		}
 	}
 	// And the existing file remains.

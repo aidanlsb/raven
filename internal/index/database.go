@@ -800,7 +800,28 @@ func extractDateString(fv schema.FieldValue) string {
 
 // RemoveFile removes all data for a file.
 func (d *Database) RemoveFile(filePath string) error {
-	return deleteByFilePath(d.db, filePath)
+	return d.RemoveFiles([]string{filePath})
+}
+
+// RemoveFiles removes all indexed data for one or more file paths in a single transaction.
+func (d *Database) RemoveFiles(filePaths []string) error {
+	if len(filePaths) == 0 {
+		return nil
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, filePath := range filePaths {
+		if err := deleteByFilePath(tx, filePath); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // ClearAllData removes all indexed data from the database.
@@ -891,12 +912,11 @@ func (d *Database) RemoveDeletedFiles(vaultPath string) ([]string, error) {
 	var removed []string
 	for _, relPath := range indexedPaths {
 		if fileMissing(filepath.Join(vaultPath, relPath)) {
-			// File was deleted - remove from index
-			if err := d.RemoveFile(relPath); err != nil {
-				return removed, fmt.Errorf("failed to remove %s: %w", relPath, err)
-			}
 			removed = append(removed, relPath)
 		}
+	}
+	if err := d.RemoveFiles(removed); err != nil {
+		return nil, fmt.Errorf("failed to remove deleted files: %w", err)
 	}
 
 	return removed, nil
