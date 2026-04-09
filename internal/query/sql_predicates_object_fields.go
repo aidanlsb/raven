@@ -2,6 +2,7 @@ package query
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -191,9 +192,32 @@ func fieldRefMatchCond(alias string) string {
 	return fmt.Sprintf("(%s.target_id = ? OR (%s.target_id IS NULL AND %s.target_raw = ?))", alias, alias, alias)
 }
 
+type fieldRefAmbiguityKey struct {
+	typeName       string
+	fieldName      string
+	rawValue       string
+	resolvedTarget string
+}
+
+type fieldRefAmbiguityResult struct {
+	err error
+}
+
 func (e *Executor) checkAmbiguousFieldRefs(typeName, fieldName, rawValue, resolvedTarget string) error {
 	if e.schema == nil || typeName == "" || e.db == nil {
 		return nil
+	}
+	if e.fieldRefAmbiguityCache == nil {
+		e.fieldRefAmbiguityCache = make(map[fieldRefAmbiguityKey]fieldRefAmbiguityResult)
+	}
+	key := fieldRefAmbiguityKey{
+		typeName:       typeName,
+		fieldName:      fieldName,
+		rawValue:       rawValue,
+		resolvedTarget: resolvedTarget,
+	}
+	if cached, ok := e.fieldRefAmbiguityCache[key]; ok {
+		return cached.err
 	}
 	candidates := []string{rawValue}
 	if resolvedTarget != "" {
@@ -226,19 +250,26 @@ func (e *Executor) checkAmbiguousFieldRefs(typeName, fieldName, rawValue, resolv
 		args = append(args, candidate)
 	}
 
+	if e.ambiguousFieldRefQueryHook != nil {
+		e.ambiguousFieldRefQueryHook()
+	}
 	var exists int
 	err := e.db.QueryRow(query, args...).Scan(&exists)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
+		e.fieldRefAmbiguityCache[key] = fieldRefAmbiguityResult{}
 		return nil
 	}
 	if err != nil {
+		e.fieldRefAmbiguityCache[key] = fieldRefAmbiguityResult{err: err}
 		return err
 	}
-	return newExecutionError(
+	err = newExecutionError(
 		fmt.Sprintf("ambiguous reference in field '%s' for value '%s' (disambiguate the field value before querying)", fieldName, rawValue),
 		"Use a full object ID/path in the query value to disambiguate",
 		nil,
 	)
+	e.fieldRefAmbiguityCache[key] = fieldRefAmbiguityResult{err: err}
+	return err
 }
 
 func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName string) (string, []interface{}, error) {

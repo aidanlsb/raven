@@ -10,12 +10,14 @@ import (
 
 // Executor executes queries against the database.
 type Executor struct {
-	db             *sql.DB
-	resolver       *resolver.Resolver // Cached resolver for target resolution
-	dailyDirectory string             // Used for date shorthand refs (e.g. [[2026-01-01]])
-	schema         *schema.Schema
-	now            time.Time
-	nowFn          func() time.Time
+	db                         *sql.DB
+	resolver                   *resolver.Resolver // Cached resolver for target resolution
+	dailyDirectory             string             // Used for date shorthand refs (e.g. [[2026-01-01]])
+	schema                     *schema.Schema
+	now                        time.Time
+	nowFn                      func() time.Time
+	fieldRefAmbiguityCache     map[fieldRefAmbiguityKey]fieldRefAmbiguityResult
+	ambiguousFieldRefQueryHook func()
 }
 
 // NewExecutor creates a new query executor.
@@ -45,5 +47,6 @@ func (e *Executor) queryNow() time.Time {
 func (e *Executor) withExecutionNow() *Executor {
 	scoped := *e
 	scoped.now = e.currentTime()
+	scoped.fieldRefAmbiguityCache = make(map[fieldRefAmbiguityKey]fieldRefAmbiguityResult)
 	return &scoped
 }
