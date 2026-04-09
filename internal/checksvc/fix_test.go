@@ -1,0 +1,47 @@
+package checksvc
+
+import (
+	"testing"
+
+	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/testutil"
+)
+
+func TestApplyFixes_ReportsSkippedFixes(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithFile("projects/roadmap.md", `---
+type: project
+title: Roadmap
+owner: "[[people/freya]]"
+---`).
+		Build()
+
+	result, err := ApplyFixes(vault.Path, []FixableIssue{
+		{
+			FilePath:    "projects/roadmap.md",
+			Line:        4,
+			IssueType:   check.IssueShortRefCouldBeFullPath,
+			FixType:     FixTypeWikilink,
+			OldValue:    "freya",
+			NewValue:    "people/freya",
+			Description: "[[freya]] -> [[people/freya]]",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ApplyFixes returned error: %v", err)
+	}
+	if result.IssueCount != 0 {
+		t.Fatalf("issue count = %d, want 0", result.IssueCount)
+	}
+	if result.FileCount != 0 {
+		t.Fatalf("file count = %d, want 0", result.FileCount)
+	}
+	if len(result.Skipped) != 1 {
+		t.Fatalf("skipped = %v, want 1 skipped fix", result.Skipped)
+	}
+	if got := result.Skipped[0].Reason; got != "expected content no longer present in file" {
+		t.Fatalf("skip reason = %q, want expected-content message", got)
+	}
+}

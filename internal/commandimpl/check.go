@@ -3,6 +3,7 @@ package commandimpl
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/checksvc"
@@ -10,6 +11,8 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 )
+
+const checkApplyIncompleteWarningCode = "CHECK_APPLY_INCOMPLETE"
 
 // HandleCheck executes the canonical `check` command.
 func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result {
@@ -90,16 +93,33 @@ func handleCheckFix(vaultPath string, sch *schema.Schema, result *checksvc.RunRe
 		return commandexec.Failure("VALIDATION_FAILED", err.Error(), nil, "")
 	}
 
-	return commandexec.Success(map[string]interface{}{
+	data := map[string]interface{}{
 		"preview":        false,
+		"ok":             len(applied.Skipped) == 0,
 		"fixable_issues": len(fixes),
 		"fixed_issues":   applied.IssueCount,
 		"fixed_files":    applied.FileCount,
+		"skipped_issues": len(applied.Skipped),
+		"skipped_items":  applied.Skipped,
 		"scope":          checkScopeData(result),
 		"file_count":     result.FileCount,
 		"error_count":    result.ErrorCount,
 		"warning_count":  result.WarningCount,
-	}, nil)
+	}
+	if len(applied.Skipped) > 0 {
+		return commandexec.SuccessWithWarnings(data, []commandexec.Warning{
+			{
+				Code: checkApplyIncompleteWarningCode,
+				Message: fmt.Sprintf(
+					"Applied %d of %d planned fixes; %d fix(es) were skipped because the expected content was no longer present.",
+					applied.IssueCount,
+					len(fixes),
+					len(applied.Skipped),
+				),
+			},
+		}, nil)
+	}
+	return commandexec.Success(data, nil)
 }
 
 func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
@@ -135,8 +155,24 @@ func handleCheckCreateMissing(vaultPath string, vaultCfg *config.VaultConfig, sc
 		vaultCfg.ProtectedPrefixes,
 	)
 	data["preview"] = false
-	data["created_pages"] = created
+	data["ok"] = len(created.Failures) == 0
+	data["created_pages"] = created.Created
+	data["failed_pages"] = len(created.Failures)
+	data["failed_page_items"] = created.Failures
 	data["undefined_traits_note"] = "undefined traits are interactive-only and were not changed in JSON mode"
+	if len(created.Failures) > 0 {
+		return commandexec.SuccessWithWarnings(data, []commandexec.Warning{
+			{
+				Code: checkApplyIncompleteWarningCode,
+				Message: fmt.Sprintf(
+					"Created %d of %d missing page(s); %d page(s) failed to create.",
+					created.Created,
+					len(result.MissingRefs),
+					len(created.Failures),
+				),
+			},
+		}, nil)
+	}
 	return commandexec.Success(data, nil)
 }
 

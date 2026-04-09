@@ -82,6 +82,17 @@ type CheckResultJSON struct {
 	Summary    []CheckSummaryJSON `json:"summary"`
 }
 
+type CreateMissingResult struct {
+	Created  int                    `json:"created"`
+	Failures []CreateMissingFailure `json:"failures,omitempty"`
+}
+
+type CreateMissingFailure struct {
+	TargetPath string `json:"target_path"`
+	TypeName   string `json:"type_name,omitempty"`
+	Error      string `json:"error"`
+}
+
 func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opts Options) (*RunResult, error) {
 	scope, err := resolveScope(vaultPath, vaultCfg, sch, opts)
 	if err != nil {
@@ -400,8 +411,8 @@ func CreateMissingRefsNonInteractive(
 	pagesRoot string,
 	templateDir string,
 	protectedPrefixes []string,
-) int {
-	created := 0
+) CreateMissingResult {
+	result := CreateMissingResult{}
 	seen := make(map[string]struct{})
 
 	for _, ref := range refs {
@@ -435,12 +446,18 @@ func CreateMissingRefsNonInteractive(
 			ObjectsRoot:                 objectsRoot,
 			PagesRoot:                   pagesRoot,
 		})
-		if err == nil {
-			created++
+		if err != nil {
+			result.Failures = append(result.Failures, CreateMissingFailure{
+				TargetPath: ref.TargetPath,
+				TypeName:   typeName,
+				Error:      err.Error(),
+			})
+			continue
 		}
+		result.Created++
 	}
 
-	return created
+	return result
 }
 
 func resolveScope(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opts Options) (*Scope, error) {

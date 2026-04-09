@@ -32,6 +32,15 @@ type FixableIssue struct {
 type FixResult struct {
 	FileCount  int
 	IssueCount int
+	Skipped    []SkippedFix
+}
+
+type SkippedFix struct {
+	FilePath    string          `json:"file_path"`
+	Line        int             `json:"line"`
+	IssueType   check.IssueType `json:"issue_type"`
+	Description string          `json:"description"`
+	Reason      string          `json:"reason"`
 }
 
 type FileFixes struct {
@@ -134,12 +143,15 @@ func ApplyFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 				oldPattern = "@" + fix.TraitName + "(" + fix.OldValue + ")"
 				newPattern = "@" + fix.TraitName + "(" + fix.NewValue + ")"
 			default:
+				result.Skipped = append(result.Skipped, skippedFix(fix, "unsupported fix type"))
 				continue
 			}
-			if strings.Contains(newContent, oldPattern) {
-				newContent = strings.ReplaceAll(newContent, oldPattern, newPattern)
-				fixedCount++
+			if !strings.Contains(newContent, oldPattern) {
+				result.Skipped = append(result.Skipped, skippedFix(fix, "expected content no longer present in file"))
+				continue
 			}
+			newContent = strings.ReplaceAll(newContent, oldPattern, newPattern)
+			fixedCount++
 		}
 
 		if fixedCount > 0 {
@@ -152,6 +164,16 @@ func ApplyFixes(vaultPath string, fixes []FixableIssue) (FixResult, error) {
 	}
 
 	return result, nil
+}
+
+func skippedFix(fix FixableIssue, reason string) SkippedFix {
+	return SkippedFix{
+		FilePath:    fix.FilePath,
+		Line:        fix.Line,
+		IssueType:   fix.IssueType,
+		Description: fix.Description,
+		Reason:      reason,
+	}
 }
 
 func tryFixQuotedEnumValue(issue check.Issue, sch *schema.Schema) *FixableIssue {

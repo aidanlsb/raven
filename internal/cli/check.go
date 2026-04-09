@@ -397,6 +397,9 @@ func renderCanonicalCheckFix(result commandexec.Result) {
 	}
 
 	fmt.Printf("\n%s\n", ui.Checkf("Fixed %d issue(s) in %d file(s).", intValue(data["fixed_issues"]), intValue(data["fixed_files"])))
+	for _, warning := range result.Warnings {
+		fmt.Printf("  %s\n", ui.Warning(warning.Message))
+	}
 }
 
 func renderCanonicalCheckCreateMissing(vaultPath string, result commandexec.Result) error {
