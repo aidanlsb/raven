@@ -198,7 +198,7 @@ func tryFixQuotedEnumValue(issue check.Issue, sch *schema.Schema) *FixableIssue 
 	}
 
 	traitDef, exists := sch.Traits[traitName]
-	if !exists || traitDef.Type != schema.FieldTypeEnum {
+	if !exists || traitDef == nil || traitDef.Type != schema.FieldTypeEnum {
 		return nil
 	}
 

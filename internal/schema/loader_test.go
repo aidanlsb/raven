@@ -411,6 +411,20 @@ types:
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("rejects null trait definition", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := "version: 1\ntraits:\n  broken: null\n"
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error for null trait definition, got nil")
+		} else if !strings.Contains(err.Error(), `trait "broken" is null`) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestLoadWithWarningsWarnsOnFutureVersion(t *testing.T) {

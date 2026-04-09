@@ -998,6 +998,18 @@ func TestValidateSchema(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("null trait definition reports issue instead of panicking", func(t *testing.T) {
+		sch := &Schema{
+			Traits: map[string]*TraitDefinition{
+				"broken": nil,
+			},
+		}
+		issues := ValidateSchema(sch)
+		if !containsIssueSubstring(issues, "Trait 'broken' must be an object") {
+			t.Fatalf("expected null trait definition issue, got %v", issues)
+		}
+	})
 }
 
 func containsIssueSubstring(issues []string, want string) bool {

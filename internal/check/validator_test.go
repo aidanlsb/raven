@@ -450,6 +450,43 @@ func TestValidatorBooleanTraitValidation(t *testing.T) {
 	})
 }
 
+func TestValidatorNilTraitDefinition(t *testing.T) {
+	t.Parallel()
+
+	s := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"page": {
+				Fields: map[string]*schema.FieldDefinition{},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"broken": nil,
+		},
+	}
+
+	v := NewValidator(s, []string{"notes/test"})
+	doc := &parser.ParsedDocument{
+		FilePath: "notes/test.md",
+		Objects: []*parser.ParsedObject{
+			{ID: "notes/test", ObjectType: "page"},
+		},
+		Traits: []*parser.ParsedTrait{
+			{TraitType: "broken", ParentObjectID: "notes/test", Line: 5},
+		},
+	}
+
+	issues := v.ValidateDocument(doc)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d: %v", len(issues), issues)
+	}
+	if issues[0].Type != IssueInvalidTraitValue {
+		t.Fatalf("issue type = %q, want %q", issues[0].Type, IssueInvalidTraitValue)
+	}
+	if !strings.Contains(issues[0].Message, "invalid schema definition") {
+		t.Fatalf("unexpected issue message: %q", issues[0].Message)
+	}
+}
+
 func TestIssueLevel(t *testing.T) {
 	t.Parallel()
 	t.Run("error string", func(t *testing.T) {

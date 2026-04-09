@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
+	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -43,5 +44,26 @@ owner: "[[people/freya]]"
 	}
 	if got := result.Skipped[0].Reason; got != "expected content no longer present in file" {
 		t.Fatalf("skip reason = %q, want expected-content message", got)
+	}
+}
+
+func TestCollectFixableIssues_IgnoresNilTraitDefinition(t *testing.T) {
+	t.Parallel()
+
+	issues := []check.Issue{
+		{
+			Type:     check.IssueInvalidEnumValue,
+			FilePath: "notes/test.md",
+			Line:     3,
+			Value:    `"high"`,
+			Message:  "Invalid value '\"high\"' for trait '@priority'",
+		},
+	}
+	sch := schema.New()
+	sch.Traits["priority"] = nil
+
+	fixes := CollectFixableIssues(issues, nil, sch)
+	if len(fixes) != 0 {
+		t.Fatalf("expected no fixes for nil trait definition, got %#v", fixes)
 	}
 }

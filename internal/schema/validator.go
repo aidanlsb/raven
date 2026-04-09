@@ -433,7 +433,7 @@ func validateSchemaFieldDefinition(typeName, fieldName string, fieldDef *FieldDe
 
 func validateSchemaTraitDefinition(traitName string, traitDef *TraitDefinition) []string {
 	if traitDef == nil {
-		return nil
+		return []string{fmt.Sprintf("Trait '%s' must be an object", traitName)}
 	}
 
 	var issues []string

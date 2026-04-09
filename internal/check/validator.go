@@ -471,6 +471,18 @@ func (v *Validator) validateTrait(filePath string, trait *parser.ParsedTrait) []
 		v.trackUndefinedTrait(trait.TraitType, filePath, trait.Line, trait.HasValue())
 		return issues
 	}
+	if traitDef == nil {
+		issues = append(issues, Issue{
+			Level:    LevelError,
+			Type:     IssueInvalidTraitValue,
+			FilePath: filePath,
+			Line:     trait.Line,
+			Message:  fmt.Sprintf("Trait '@%s' has invalid schema definition", trait.TraitType),
+			Value:    trait.TraitType,
+			FixHint:  fmt.Sprintf("Fix trait '@%s' in schema.yaml", trait.TraitType),
+		})
+		return issues
+	}
 
 	// Validate value based on trait type
 	if !traitDef.IsBoolean() && !trait.HasValue() && traitDef.Default == nil {

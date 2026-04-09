@@ -176,9 +176,9 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 			fieldDef.Type = normalizeFieldType(fieldDef.Type)
 		}
 	}
-	for _, traitDef := range schema.Traits {
+	for traitName, traitDef := range schema.Traits {
 		if traitDef == nil {
-			continue
+			return nil, fmt.Errorf("trait %q is null; expected an object definition", traitName)
 		}
 		traitDef.Type = normalizeFieldType(traitDef.Type)
 	}

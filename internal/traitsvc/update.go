@@ -294,7 +294,7 @@ func traitExistingValue(sch *schema.Schema, t model.Trait) string {
 	if sch == nil {
 		return ""
 	}
-	if traitDef, ok := sch.Traits[t.TraitType]; ok {
+	if traitDef, ok := sch.Traits[t.TraitType]; ok && traitDef != nil {
 		if def, ok := traitDef.Default.(string); ok {
 			return def
 		}

@@ -188,3 +188,15 @@ func TestResolvedAndValidatedTraitValueValidationError(t *testing.T) {
 		t.Fatalf("unexpected suggestion: %q", valueErr.Suggestion())
 	}
 }
+
+func TestTraitExistingValue_IgnoresNilTraitDefinition(t *testing.T) {
+	t.Parallel()
+
+	sch := schema.New()
+	sch.Traits["todo"] = nil
+
+	got := traitExistingValue(sch, model.Trait{TraitType: "todo"})
+	if got != "" {
+		t.Fatalf("traitExistingValue() = %q, want empty string", got)
+	}
+}
