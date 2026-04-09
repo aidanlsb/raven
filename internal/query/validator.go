@@ -42,17 +42,11 @@ func (v *Validator) validateQuery(q *Query) error {
 		return nil
 	}
 
-	var err error
 	if q.Type == QueryTypeObject {
-		err = v.validateObjectQuery(q)
+		return v.validateObjectQuery(q)
 	} else {
-		err = v.validateTraitQuery(q)
+		return v.validateTraitQuery(q)
 	}
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {

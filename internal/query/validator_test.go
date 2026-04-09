@@ -44,6 +44,15 @@ func TestValidator_UnknownType(t *testing.T) {
 	}
 }
 
+func TestValidator_NilQuery(t *testing.T) {
+	t.Parallel()
+
+	v := NewValidator(schema.New())
+	if err := v.Validate(nil); err != nil {
+		t.Fatalf("Validate(nil) returned error: %v", err)
+	}
+}
+
 func TestValidator_UnknownTrait(t *testing.T) {
 	t.Parallel()
 	sch := &schema.Schema{
