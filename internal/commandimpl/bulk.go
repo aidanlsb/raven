@@ -72,6 +72,13 @@ func setMissingObjectID(caller commandexec.Caller) (string, string) {
 	return "requires object-id", "Usage: rvn set <object-id> field=value..."
 }
 
+func updateMissingBulkTraitIDs(caller commandexec.Caller) (string, string) {
+	if caller == commandexec.CallerMCP {
+		return "no trait_ids provided for bulk update", "Provide trait_ids for the bulk update and retry"
+	}
+	return "no trait IDs provided via stdin", "Pipe trait IDs to stdin, one per line"
+}
+
 // HandleSet executes the canonical `set` command.
 func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
@@ -368,7 +375,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return commandexec.Failure("MISSING_ARGUMENT", "no value specified", nil, "Usage: rvn update <trait_id> <new_value>")
 	}
 
-	traitIDs := commandIDsArg(req.Args, "object_ids")
+	traitIDs := commandIDsArg(req.Args, "trait_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(traitIDs) > 0
 	confirm := req.Confirm || boolArg(req.Args, "confirm")
 	if !stdinMode {
@@ -383,7 +390,8 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		confirm = true
 	}
 	if len(traitIDs) == 0 {
-		return commandexec.Failure("MISSING_ARGUMENT", "no trait IDs provided via stdin", nil, "Provide trait IDs when using bulk update")
+		message, suggestion := updateMissingBulkTraitIDs(req.Caller)
+		return commandexec.Failure("MISSING_ARGUMENT", message, nil, suggestion)
 	}
 
 	sch, err := schema.Load(vaultPath)

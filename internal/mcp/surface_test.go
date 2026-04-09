@@ -88,6 +88,37 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	}
 }
 
+func TestCompactDescribeUpdateUsesTraitIDsForBulkArgs(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer("")
+	out, isErr := server.callCompactDescribe(map[string]interface{}{"command": "update"})
+	if isErr {
+		t.Fatalf("describe returned error: %s", out)
+	}
+
+	var envelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			ArgsSchema struct {
+				Properties map[string]interface{} `json:"properties"`
+			} `json:"args_schema"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal describe response: %v", err)
+	}
+	if !envelope.OK {
+		t.Fatalf("expected ok=true, got: %s", out)
+	}
+	if _, ok := envelope.Data.ArgsSchema.Properties["trait_ids"]; !ok {
+		t.Fatalf("expected trait_ids in update args schema: %s", out)
+	}
+	if _, ok := envelope.Data.ArgsSchema.Properties["object_ids"]; ok {
+		t.Fatalf("did not expect object_ids in update args schema: %s", out)
+	}
+}
+
 func TestCompactInvokeListsSavedQueriesWithDedicatedCommand(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

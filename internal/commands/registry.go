@@ -6,18 +6,20 @@ package commands
 // Meta defines metadata for a CLI command that can be used to
 // generate both Cobra commands and MCP tool schemas.
 type Meta struct {
-	Name        string     // Command name (e.g., "trait", "add", "new")
-	Use         string     // Cobra-style usage string for this command (local, not full invocation)
-	Description string     // Short description
-	LongDesc    string     // Long description (for --help)
-	Category    Category   // Command grouping for discovery surfaces
-	Access      AccessMode // Read/write classification for discovery surfaces
-	Risk        RiskLevel  // Safe/mutating/destructive classification
-	VaultScope  VaultScope // Whether the command requires a resolved vault path
-	Args        []ArgMeta  // Positional arguments
-	Flags       []FlagMeta // Command flags
-	Examples    []string   // Usage examples
-	UseCases    []string   // Agent use cases (for MCP hints)
+	Name                string     // Command name (e.g., "trait", "add", "new")
+	Use                 string     // Cobra-style usage string for this command (local, not full invocation)
+	Description         string     // Short description
+	LongDesc            string     // Long description (for --help)
+	Category            Category   // Command grouping for discovery surfaces
+	Access              AccessMode // Read/write classification for discovery surfaces
+	Risk                RiskLevel  // Safe/mutating/destructive classification
+	VaultScope          VaultScope // Whether the command requires a resolved vault path
+	Args                []ArgMeta  // Positional arguments
+	Flags               []FlagMeta // Command flags
+	BulkStdinArgName    string     // Canonical args key used for bulk IDs when --stdin is available
+	BulkStdinArgAliases []string   // Backward-compatible aliases accepted for the bulk ID arg
+	Examples            []string   // Usage examples
+	UseCases            []string   // Agent use cases (for MCP hints)
 }
 
 // ArgMeta defines a positional argument.
@@ -1477,6 +1479,8 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			{Name: "stdin", Description: "Read trait IDs from stdin for bulk operations", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
+		BulkStdinArgName:    "trait_ids",
+		BulkStdinArgAliases: []string{"object_ids", "ids"},
 		Examples: []string{
 			"rvn update daily/2026-01-25.md:trait:0 done --json",
 			"rvn query 'trait:todo' --ids | rvn update --stdin done --confirm --json",

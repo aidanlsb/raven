@@ -34,9 +34,9 @@ func buildUpdateArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 		}
 
 		return map[string]interface{}{
-			"stdin":      true,
-			"value":      newValue,
-			"object_ids": stringsToAny(ids),
+			"stdin":     true,
+			"value":     newValue,
+			"trait_ids": stringsToAny(ids),
 		}, nil
 	}
 

@@ -180,9 +180,9 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 			return mapBulkopsFailure(err)
 		}
 		return invokeNestedCommand(ctx, req, "update", map[string]interface{}{
-			"stdin":      true,
-			"value":      plan.NewValue,
-			"object_ids": traitIDsToInterfaces(result.Traits),
+			"stdin":     true,
+			"value":     plan.NewValue,
+			"trait_ids": traitIDsToInterfaces(result.Traits),
 		}, queryTimeMs)
 	}
 

@@ -77,28 +77,6 @@ func marshalCanonicalResult(result commandexec.Result) (string, bool, bool) {
 }
 
 func normalizeCanonicalArgs(commandID string, args map[string]interface{}) map[string]interface{} {
-	if args == nil {
-		return nil
-	}
-	if commandID != "update" {
-		return args
-	}
-
-	if _, ok := args["object_ids"]; ok {
-		return args
-	}
-
-	normalized := make(map[string]interface{}, len(args)+1)
-	for key, value := range args {
-		normalized[key] = value
-	}
-	switch {
-	case normalized["trait_ids"] != nil:
-		normalized["object_ids"] = normalized["trait_ids"]
-	case normalized["trait-ids"] != nil:
-		normalized["object_ids"] = normalized["trait-ids"]
-	case normalized["ids"] != nil:
-		normalized["object_ids"] = normalized["ids"]
-	}
-	return normalized
+	_ = commandID
+	return args
 }

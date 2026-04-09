@@ -1669,6 +1669,39 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "modified", "fields"})
 	})
 
+	t.Run("update_bulk_apply", func(t *testing.T) {
+		taskFile := `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+- @priority(low) Second task
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("update", map[string]interface{}{
+			"stdin":     true,
+			"confirm":   true,
+			"trait_ids": []interface{}{"tasks/task1.md:trait:1"},
+			"value":     "high",
+		})
+		cliResult := vCLI.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "--confirm", "high")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"action", "results", "total", "skipped", "errors", "modified"})
+	})
+
 	t.Run("delete", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
@@ -3064,6 +3097,33 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 			t.Fatalf("unexpected MCP error message: %q", env.Error.Message)
 		}
 		if env.Error.Suggestion != "Provide object_ids for the bulk update and retry" {
+			t.Fatalf("unexpected MCP suggestion: %q", env.Error.Suggestion)
+		}
+	})
+
+	t.Run("update_bulk_missing_ids", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("update", map[string]interface{}{
+			"stdin": true,
+			"value": "done",
+		})
+
+		env := parseMCPEnvelope(t, mcpResult.Text)
+		if !mcpResult.IsError || env.OK {
+			t.Fatalf("expected update bulk missing ids to fail: %s", mcpResult.Text)
+		}
+		if env.Error == nil || env.Error.Code != "MISSING_ARGUMENT" {
+			t.Fatalf("expected MISSING_ARGUMENT, got: %s", mcpResult.Text)
+		}
+		if strings.Contains(env.Error.Message, "stdin") {
+			t.Fatalf("expected MCP error message to avoid stdin wording, got: %q", env.Error.Message)
+		}
+		if env.Error.Message != "no trait_ids provided for bulk update" {
+			t.Fatalf("unexpected MCP error message: %q", env.Error.Message)
+		}
+		if env.Error.Suggestion != "Provide trait_ids for the bulk update and retry" {
 			t.Fatalf("unexpected MCP suggestion: %q", env.Error.Suggestion)
 		}
 	})

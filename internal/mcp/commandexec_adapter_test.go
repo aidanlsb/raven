@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/commands"
 )
 
-func TestNormalizeCanonicalArgsUpdateTraitIDs(t *testing.T) {
+func TestNormalizeCanonicalArgsLeavesUpdateArgsUntouched(t *testing.T) {
 	args := map[string]interface{}{
 		"stdin":     true,
 		"trait_ids": []interface{}{"tasks/task1.md:trait:0"},
@@ -20,12 +21,11 @@ func TestNormalizeCanonicalArgsUpdateTraitIDs(t *testing.T) {
 
 	got := normalizeCanonicalArgs("update", args)
 
-	rawIDs, ok := got["object_ids"].([]interface{})
-	if !ok {
-		t.Fatalf("object_ids missing or wrong type: %#v", got["object_ids"])
+	if !reflect.DeepEqual(got, args) {
+		t.Fatalf("normalizeCanonicalArgs changed update args: got %#v want %#v", got, args)
 	}
-	if len(rawIDs) != 1 || rawIDs[0] != "tasks/task1.md:trait:0" {
-		t.Fatalf("object_ids=%#v, want trait IDs copied through", rawIDs)
+	if _, ok := got["object_ids"]; ok {
+		t.Fatalf("expected update args to stay on trait_ids, got %#v", got)
 	}
 }
 

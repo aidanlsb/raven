@@ -27,6 +27,7 @@ type ParameterSpec struct {
 	Type        ParameterType
 	Required    bool
 	Description string
+	Aliases     []string
 	Examples    []string
 }
 
@@ -117,13 +118,9 @@ func BuildCommandContract(commandID string) (CommandContract, bool) {
 		paramOrder = append(paramOrder, flag.Name)
 	}
 	if hasStdinFlag(meta.Flags) {
-		parameters["object_ids"] = ParameterSpec{
-			Name:        "object_ids",
-			Type:        ParameterTypeStringArray,
-			Required:    false,
-			Description: "Object IDs used as MCP stdin replacement for bulk mode",
-		}
-		paramOrder = append(paramOrder, "object_ids")
+		name, spec := stdinReplacementParameter(meta)
+		parameters[name] = spec
+		paramOrder = append(paramOrder, name)
 	}
 
 	policy := PolicyForCommandID(commandID)
@@ -330,31 +327,35 @@ func withExampleSection(description string, examples []string) string {
 
 func commandSchemaHash(contract CommandContract, meta Meta) string {
 	hashSource := struct {
-		SchemaVersion string     `json:"schema_version"`
-		CommandID     string     `json:"command_id"`
-		CLIName       string     `json:"cli_name"`
-		CLIUsage      string     `json:"cli_usage"`
-		Description   string     `json:"description"`
-		Args          []ArgMeta  `json:"args"`
-		Flags         []FlagMeta `json:"flags"`
-		Policy        Policy     `json:"policy"`
-		Category      string     `json:"category"`
-		ReadOnly      bool       `json:"read_only"`
-		Destructive   bool       `json:"destructive"`
-		PreviewMode   string     `json:"preview_mode"`
+		SchemaVersion  string                   `json:"schema_version"`
+		CommandID      string                   `json:"command_id"`
+		CLIName        string                   `json:"cli_name"`
+		CLIUsage       string                   `json:"cli_usage"`
+		Description    string                   `json:"description"`
+		Parameters     map[string]ParameterSpec `json:"parameters"`
+		ParameterOrder []string                 `json:"parameter_order"`
+		Args           []ArgMeta                `json:"args"`
+		Flags          []FlagMeta               `json:"flags"`
+		Policy         Policy                   `json:"policy"`
+		Category       string                   `json:"category"`
+		ReadOnly       bool                     `json:"read_only"`
+		Destructive    bool                     `json:"destructive"`
+		PreviewMode    string                   `json:"preview_mode"`
 	}{
-		SchemaVersion: contract.SchemaVersion,
-		CommandID:     contract.CommandID,
-		CLIName:       contract.CLIName,
-		CLIUsage:      contract.CLIUsage,
-		Description:   contract.Description,
-		Args:          append([]ArgMeta{}, meta.Args...),
-		Flags:         append([]FlagMeta{}, meta.Flags...),
-		Policy:        contract.Policy,
-		Category:      contract.Category,
-		ReadOnly:      contract.ReadOnly,
-		Destructive:   contract.Destructive,
-		PreviewMode:   contract.PreviewMode,
+		SchemaVersion:  contract.SchemaVersion,
+		CommandID:      contract.CommandID,
+		CLIName:        contract.CLIName,
+		CLIUsage:       contract.CLIUsage,
+		Description:    contract.Description,
+		Parameters:     contract.Parameters,
+		ParameterOrder: append([]string{}, contract.ParameterOrder...),
+		Args:           append([]ArgMeta{}, meta.Args...),
+		Flags:          append([]FlagMeta{}, meta.Flags...),
+		Policy:         contract.Policy,
+		Category:       contract.Category,
+		ReadOnly:       contract.ReadOnly,
+		Destructive:    contract.Destructive,
+		PreviewMode:    contract.PreviewMode,
 	}
 	b, _ := json.Marshal(hashSource)
 	sum := sha256.Sum256(b)
@@ -383,16 +384,17 @@ func canonicalSpecKey(spec map[string]ParameterSpec, key string) (string, bool) 
 	if _, ok := spec[key]; ok {
 		return key, true
 	}
-	if strings.Contains(key, "_") {
-		alt := strings.ReplaceAll(key, "_", "-")
-		if _, ok := spec[alt]; ok {
-			return alt, true
+	normalizedKey := normalizeArgumentName(key)
+	for name := range spec {
+		if normalizeArgumentName(name) == normalizedKey {
+			return name, true
 		}
 	}
-	if strings.Contains(key, "-") {
-		alt := strings.ReplaceAll(key, "-", "_")
-		if _, ok := spec[alt]; ok {
-			return alt, true
+	for name, param := range spec {
+		for _, alias := range param.Aliases {
+			if normalizeArgumentName(alias) == normalizedKey {
+				return name, true
+			}
 		}
 	}
 	return "", false
@@ -524,4 +526,52 @@ func hasStdinFlag(flags []FlagMeta) bool {
 		}
 	}
 	return false
+}
+
+func stdinReplacementParameter(meta Meta) (string, ParameterSpec) {
+	name := strings.TrimSpace(meta.BulkStdinArgName)
+	if name == "" {
+		name = "object_ids"
+	}
+	return name, ParameterSpec{
+		Name:        name,
+		Type:        ParameterTypeStringArray,
+		Required:    false,
+		Description: stdinReplacementDescription(name),
+		Aliases:     sanitizeParameterAliases(meta.BulkStdinArgAliases, name),
+	}
+}
+
+func stdinReplacementDescription(name string) string {
+	switch strings.TrimSpace(name) {
+	case "trait_ids":
+		return "Trait IDs used as MCP stdin replacement for bulk mode"
+	default:
+		return "Object IDs used as MCP stdin replacement for bulk mode"
+	}
+}
+
+func sanitizeParameterAliases(aliases []string, canonical string) []string {
+	seen := map[string]struct{}{
+		normalizeArgumentName(canonical): {},
+	}
+	out := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		normalized := normalizeArgumentName(alias)
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, alias)
+	}
+	return out
+}
+
+func normalizeArgumentName(name string) string {
+	name = strings.TrimSpace(name)
+	return strings.ReplaceAll(name, "-", "_")
 }
