@@ -2954,7 +2954,7 @@ Kickoff: [[events/kickoff]]
 		})
 		cliResult := vCLI.RunCLI("schema", "template", "bind", "daily_default", "--core", "date")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core_type", "template_id"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core", "template_id"})
 	})
 
 	t.Run("schema_template_default_clear_core", func(t *testing.T) {
@@ -2977,7 +2977,7 @@ Kickoff: [[events/kickoff]]
 		})
 		cliResult := vCLI.RunCLI("schema", "template", "default", "--core", "date", "--clear")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core_type", "default_template"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"core", "default_template"})
 	})
 }
 

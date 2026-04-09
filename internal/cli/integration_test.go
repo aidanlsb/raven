@@ -1913,16 +1913,42 @@ func TestIntegration_SchemaTemplateLifecycle(t *testing.T) {
 		}
 		v.RunCLI("schema", "template", "set", "daily_brief", "--file", "templates/daily-brief.md").MustSucceed(t)
 
-		v.RunCLI("schema", "template", "bind", "daily_default", "--core", "date").MustSucceed(t)
-		v.RunCLI("schema", "template", "bind", "daily_brief", "--core", "date").MustSucceed(t)
-		v.RunCLI("schema", "template", "default", "daily_default", "--core", "date").MustSucceed(t)
+		result = v.RunCLI("schema", "template", "bind", "daily_default", "--core", "date")
+		result.MustSucceed(t)
+		if got := result.DataString("core"); got != "date" {
+			t.Fatalf("bind core = %q, want %q", got, "date")
+		}
+		result = v.RunCLI("schema", "template", "bind", "daily_brief", "--core", "date")
+		result.MustSucceed(t)
+		if got := result.DataString("core"); got != "date" {
+			t.Fatalf("bind core = %q, want %q", got, "date")
+		}
+		result = v.RunCLI("schema", "template", "default", "daily_default", "--core", "date")
+		result.MustSucceed(t)
+		if got := result.DataString("core"); got != "date" {
+			t.Fatalf("default core = %q, want %q", got, "date")
+		}
+		result = v.RunCLI("schema", "template", "list", "--core", "date")
+		result.MustSucceed(t)
+		if got := result.DataString("core"); got != "date" {
+			t.Fatalf("list core = %q, want %q", got, "date")
+		}
 
 		v.RunCLI("daily", "2026-02-03").MustSucceed(t)
 		v.AssertFileContains("daily/2026-02-03.md", "## Notes")
 		v.RunCLI("daily", "2026-02-05", "--template", "daily_brief").MustSucceed(t)
 		v.AssertFileContains("daily/2026-02-05.md", "## Brief")
 
-		v.RunCLI("schema", "template", "default", "--core", "date", "--clear").MustSucceed(t)
+		result = v.RunCLI("schema", "template", "default", "--core", "date", "--clear")
+		result.MustSucceed(t)
+		if got := result.DataString("core"); got != "date" {
+			t.Fatalf("clear default core = %q, want %q", got, "date")
+		}
+		result = v.RunCLI("schema", "template", "unbind", "daily_brief", "--core", "date")
+		result.MustSucceed(t)
+		if got := result.DataString("core"); got != "date" {
+			t.Fatalf("unbind core = %q, want %q", got, "date")
+		}
 		v.RunCLI("daily", "2026-02-04").MustSucceed(t)
 		v.AssertFileNotContains("daily/2026-02-04.md", "## Notes")
 	})

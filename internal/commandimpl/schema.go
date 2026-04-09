@@ -628,7 +628,7 @@ func schemaTemplateTarget(args map[string]interface{}, requireTarget bool) (stri
 	case typeName != "":
 		return "type", "type", typeName, true, commandexec.Result{}
 	case coreType != "":
-		return "core", "core_type", coreType, true, commandexec.Result{}
+		return "core", "core", coreType, true, commandexec.Result{}
 	case requireTarget:
 		return "", "", "", false, commandexec.Failure("MISSING_ARGUMENT", "specify --type or --core", nil, "")
 	default:
