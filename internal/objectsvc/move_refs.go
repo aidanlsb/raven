@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -77,7 +78,17 @@ func UpdateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourc
 	lines := strings.Split(string(contentBytes), "\n")
 	idx := line - 1
 	if idx < 0 || idx >= len(lines) {
-		return nil
+		return newError(
+			ErrorInvalidInput,
+			fmt.Sprintf("line %d is out of range for %s (%d line(s))", line, fileSourceID, len(lines)),
+			"Use a valid 1-indexed line number from the source file",
+			map[string]interface{}{
+				"line":       line,
+				"line_count": len(lines),
+				"source_id":  fileSourceID,
+			},
+			nil,
+		)
 	}
 
 	orig := lines[idx]

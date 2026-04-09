@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/objectsvc"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/resolver"
 )
@@ -186,6 +188,49 @@ func TestUpdateReferenceAtLineUpdatesRefsOnTraitLines(t *testing.T) {
 	lines := strings.Split(after, "\n")
 	if !strings.Contains(lines[3], "[[projects/old|Old Project]]") {
 		t.Fatalf("expected line 4 to still have old ref, got: %s", lines[3])
+	}
+}
+
+func TestUpdateReferenceAtLineFailsWhenLineOutOfRange(t *testing.T) {
+	vaultPath := t.TempDir()
+
+	sourceRel := filepath.Join("daily", "2026-01-04.md")
+	sourceAbs := filepath.Join(vaultPath, sourceRel)
+	if err := os.MkdirAll(filepath.Dir(sourceAbs), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	before := strings.Join([]string{
+		"# Daily",
+		"",
+		"See [[projects/old]].",
+	}, "\n")
+	if err := os.WriteFile(sourceAbs, []byte(before), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	err := updateReferenceAtLine(vaultPath, &config.VaultConfig{}, "daily/2026-01-04", 99, "projects/old", "projects/new")
+	if err == nil {
+		t.Fatal("expected out-of-range line update to fail")
+	}
+
+	var svcErr *objectsvc.Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected objectsvc error, got %T: %v", err, err)
+	}
+	if svcErr.Code != objectsvc.ErrorInvalidInput {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, objectsvc.ErrorInvalidInput)
+	}
+	if !strings.Contains(svcErr.Message, "out of range") {
+		t.Fatalf("unexpected error message: %q", svcErr.Message)
+	}
+
+	afterBytes, readErr := os.ReadFile(sourceAbs)
+	if readErr != nil {
+		t.Fatalf("read: %v", readErr)
+	}
+	if string(afterBytes) != before {
+		t.Fatalf("expected file to remain unchanged, got:\n%s", string(afterBytes))
 	}
 }
 
