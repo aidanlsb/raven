@@ -5,16 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
-	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -70,14 +67,14 @@ func HandleNew(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapContentMutationError(err)
 	}
 
-	maybeReindexFile(vaultPath, result.FilePath, vaultCfg)
+	warnings := autoReindexWarnings(vaultPath, vaultCfg, result.FilePath)
 
-	return commandexec.Success(map[string]interface{}{
+	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"file":  result.RelativePath,
 		"id":    vaultCfg.FilePathToObjectID(result.RelativePath),
 		"title": title,
 		"type":  typeName,
-	}, nil)
+	}, warnings, nil)
 }
 
 func mapContentMutationError(err error) commandexec.Result {
@@ -184,8 +181,9 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapContentMutationError(err)
 	}
 
+	warnings := warningMessagesToCommandWarnings(result.WarningMessages, "UNKNOWN_FIELD")
 	if result.Status == "created" || result.Status == "updated" {
-		maybeReindexFile(vaultPath, result.FilePath, vaultCfg)
+		warnings = appendCommandWarnings(warnings, autoReindexWarnings(vaultPath, vaultCfg, result.FilePath))
 	}
 
 	return commandexec.SuccessWithWarnings(
@@ -196,7 +194,7 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 			"type":   typeName,
 			"title":  title,
 		},
-		warningMessagesToCommandWarnings(result.WarningMessages, "UNKNOWN_FIELD"),
+		warnings,
 		nil,
 	)
 }
@@ -364,49 +362,5 @@ func parseTypedFieldValues(raw any) (map[string]schema.FieldValue, error) {
 			return nil, err
 		}
 		return fieldmutation.ParseFieldValuesJSON(string(b))
-	}
-}
-
-func maybeReindexFile(vaultPath, filePath string, vaultCfg *config.VaultConfig) {
-	if vaultCfg == nil || !vaultCfg.IsAutoReindexEnabled() {
-		return
-	}
-
-	sch, err := schema.Load(vaultPath)
-	if err != nil {
-		return
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return
-	}
-
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, vaultPath, parseOptionsFromVaultConfig(vaultCfg))
-	if err != nil {
-		return
-	}
-
-	var mtime int64
-	if st, err := os.Stat(filePath); err == nil {
-		mtime = st.ModTime().Unix()
-	}
-
-	db, err := index.Open(vaultPath)
-	if err != nil {
-		return
-	}
-	defer db.Close()
-	db.SetDailyDirectory(vaultCfg.GetDailyDirectory())
-	_ = db.IndexDocumentWithMtime(doc, sch, mtime)
-}
-
-func parseOptionsFromVaultConfig(vaultCfg *config.VaultConfig) *parser.ParseOptions {
-	if vaultCfg == nil {
-		return nil
-	}
-	return &parser.ParseOptions{
-		ObjectsRoot: vaultCfg.GetObjectsRoot(),
-		PagesRoot:   vaultCfg.GetPagesRoot(),
 	}
 }

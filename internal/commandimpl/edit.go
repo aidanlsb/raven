@@ -105,7 +105,7 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	if err := atomicfile.WriteFile(resolved.FilePath, []byte(newContent), 0o644); err != nil {
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
-	autoReindexFile(vaultPath, resolved.FilePath, vaultCfg)
+	warnings := autoReindexWarnings(vaultPath, vaultCfg, resolved.FilePath)
 
 	if batchMode {
 		applied := make([]map[string]interface{}, 0, len(results))
@@ -118,23 +118,23 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 				"context": result.Context,
 			})
 		}
-		return commandexec.Success(map[string]interface{}{
+		return commandexec.SuccessWithWarnings(map[string]interface{}{
 			"status": "applied",
 			"path":   relPath,
 			"count":  len(applied),
 			"edits":  applied,
-		}, nil)
+		}, warnings, nil)
 	}
 
 	result := results[0]
-	return commandexec.Success(map[string]interface{}{
+	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"status":  "applied",
 		"path":    relPath,
 		"line":    result.Line,
 		"old_str": result.OldStr,
 		"new_str": result.NewStr,
 		"context": result.Context,
-	}, nil)
+	}, warnings, nil)
 }
 
 func parseCanonicalEditInput(args map[string]any) ([]editsvc.EditSpec, bool, error) {

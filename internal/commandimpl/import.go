@@ -47,20 +47,6 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapImportFailure(err, "")
 	}
 
-	if !boolArg(req.Args, "dry-run") {
-		reindexed := make(map[string]struct{}, len(serviceResult.ChangedFilePaths))
-		for _, changedFile := range serviceResult.ChangedFilePaths {
-			if changedFile == "" {
-				continue
-			}
-			if _, seen := reindexed[changedFile]; seen {
-				continue
-			}
-			reindexed[changedFile] = struct{}{}
-			maybeReindexFile(vaultPath, changedFile, serviceResult.VaultConfig)
-		}
-	}
-
 	var created, updated, skipped, errored int
 	for _, item := range serviceResult.Results {
 		switch item.Action {
@@ -73,6 +59,33 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		case "error":
 			errored++
 		}
+	}
+
+	if !boolArg(req.Args, "dry-run") {
+		reindexed := make(map[string]struct{}, len(serviceResult.ChangedFilePaths))
+		var reindexWarnings []commandexec.Warning
+		for _, changedFile := range serviceResult.ChangedFilePaths {
+			if changedFile == "" {
+				continue
+			}
+			if _, seen := reindexed[changedFile]; seen {
+				continue
+			}
+			reindexed[changedFile] = struct{}{}
+			reindexWarnings = appendCommandWarnings(
+				reindexWarnings,
+				autoReindexWarnings(vaultPath, serviceResult.VaultConfig, changedFile),
+			)
+		}
+		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, "UNKNOWN_FIELD")
+		return commandexec.SuccessWithWarnings(map[string]interface{}{
+			"total":   len(serviceResult.Results),
+			"created": created,
+			"updated": updated,
+			"skipped": skipped,
+			"errors":  errored,
+			"results": serviceResult.Results,
+		}, appendCommandWarnings(serviceWarnings, reindexWarnings), nil)
 	}
 
 	return commandexec.SuccessWithWarnings(map[string]interface{}{

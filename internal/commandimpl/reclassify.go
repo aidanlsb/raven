@@ -55,10 +55,6 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 		return mapContentMutationError(err)
 	}
 
-	if result.ChangedFilePath != "" {
-		autoReindexFile(vaultPath, result.ChangedFilePath, vaultCfg)
-	}
-
 	data := map[string]interface{}{
 		"object_id":      result.ObjectID,
 		"old_type":       result.OldType,
@@ -77,9 +73,15 @@ func HandleReclassify(_ context.Context, req commandexec.Request) commandexec.Re
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
 	for _, warning := range result.WarningMessages {
 		warnings = append(warnings, commandexec.Warning{
-			Code:    "INDEX_UPDATE_FAILED",
+			Code:    indexUpdateFailedWarningCode,
 			Message: warning,
 		})
+	}
+	if result.ChangedFilePath != "" {
+		warnings = appendCommandWarnings(
+			warnings,
+			autoReindexWarnings(vaultPath, vaultCfg, result.ChangedFilePath),
+		)
 	}
 
 	return commandexec.SuccessWithWarnings(data, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})

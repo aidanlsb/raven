@@ -1490,6 +1490,155 @@ func TestIntegration_ImportUnknownFieldReturnsStructuredItemError(t *testing.T) 
 	v.AssertFileNotExists("people/freya.md")
 }
 
+func TestIntegration_AutoReindexDatabaseFailuresSurfaceStructuredWarnings(t *testing.T) {
+	t.Parallel()
+
+	breakIndex := func(t *testing.T, v *testutil.TestVault) {
+		t.Helper()
+		ravenDir := filepath.Join(v.Path, ".raven")
+		if err := os.RemoveAll(ravenDir); err != nil {
+			t.Fatalf("remove .raven: %v", err)
+		}
+		if err := os.WriteFile(ravenDir, []byte("not a directory"), 0o644); err != nil {
+			t.Fatalf("write .raven file: %v", err)
+		}
+	}
+
+	assertIndexWarning := func(t *testing.T, result *testutil.CLIResult) {
+		t.Helper()
+		result.AssertHasWarning(t, "INDEX_UPDATE_FAILED")
+		for _, warning := range result.Warnings {
+			if warning.Code == "INDEX_UPDATE_FAILED" && strings.Contains(warning.Message, "failed to open index database") {
+				return
+			}
+		}
+		t.Fatalf("expected index warning mentioning database open failure, got warnings: %+v", result.Warnings)
+	}
+
+	tests := []struct {
+		name   string
+		run    func(v *testutil.TestVault) *testutil.CLIResult
+		assert func(t *testing.T, v *testutil.TestVault)
+	}{
+		{
+			name: "new",
+			run: func(v *testutil.TestVault) *testutil.CLIResult {
+				return v.RunCLI("new", "person", "Freya")
+			},
+			assert: func(t *testing.T, v *testutil.TestVault) {
+				v.AssertFileExists("people/freya.md")
+			},
+		},
+		{
+			name: "upsert",
+			run: func(v *testutil.TestVault) *testutil.CLIResult {
+				return v.RunCLI("upsert", "person", "Frigg", "--field", "email=frigg@example.com")
+			},
+			assert: func(t *testing.T, v *testutil.TestVault) {
+				v.AssertFileExists("people/frigg.md")
+				v.AssertFileContains("people/frigg.md", "email: frigg@example.com")
+			},
+		},
+		{
+			name: "set",
+			run: func(v *testutil.TestVault) *testutil.CLIResult {
+				return v.RunCLI("set", "people/alice", "email=alice@newdomain.com")
+			},
+			assert: func(t *testing.T, v *testutil.TestVault) {
+				v.AssertFileContains("people/alice.md", "email: alice@newdomain.com")
+			},
+		},
+		{
+			name: "add",
+			run: func(v *testutil.TestVault) *testutil.CLIResult {
+				return v.RunCLI("add", "Follow up note", "--to", "people/alice")
+			},
+			assert: func(t *testing.T, v *testutil.TestVault) {
+				v.AssertFileContains("people/alice.md", "Follow up note")
+			},
+		},
+		{
+			name: "edit",
+			run: func(v *testutil.TestVault) *testutil.CLIResult {
+				return v.RunCLI("edit", "people/alice", "Body", "Updated body", "--confirm")
+			},
+			assert: func(t *testing.T, v *testutil.TestVault) {
+				v.AssertFileContains("people/alice.md", "Updated body")
+			},
+		},
+		{
+			name: "import",
+			run: func(v *testutil.TestVault) *testutil.CLIResult {
+				return v.RunCLIWithStdin(`[{"name":"Thor"}]`, "import", "person")
+			},
+			assert: func(t *testing.T, v *testutil.TestVault) {
+				v.AssertFileExists("people/thor.md")
+			},
+		},
+		{
+			name: "template write",
+			run: func(v *testutil.TestVault) *testutil.CLIResult {
+				return v.RunCLI("template", "write", "meeting.md", "--content", "# {{title}}\n")
+			},
+			assert: func(t *testing.T, v *testutil.TestVault) {
+				v.AssertFileExists("templates/meeting.md")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := testutil.NewTestVault(t).
+				WithSchema(testutil.PersonProjectSchema()).
+				WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+
+Body
+`).
+				Build()
+
+			breakIndex(t, v)
+			result := tc.run(v)
+			result.MustSucceed(t)
+			assertIndexWarning(t, result)
+			tc.assert(t, v)
+		})
+	}
+}
+
+func TestIntegration_EditSurfacesAutoReindexParseWarnings(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/alice.md", `---
+type: person
+name: Alice
+---
+
+Body
+`).
+		Build()
+
+	result := v.RunCLI("edit", "people/alice", "name: Alice", "name: [", "--confirm")
+	result.MustSucceed(t)
+	result.AssertHasWarning(t, "INDEX_UPDATE_FAILED")
+
+	foundParseWarning := false
+	for _, warning := range result.Warnings {
+		if warning.Code == "INDEX_UPDATE_FAILED" && strings.Contains(warning.Message, "failed to parse file") {
+			foundParseWarning = true
+			break
+		}
+	}
+	if !foundParseWarning {
+		t.Fatalf("expected parse warning, got warnings: %+v", result.Warnings)
+	}
+
+	v.AssertFileContains("people/alice.md", "name: [")
+}
+
 // TestIntegration_NewPageRespectsPagesRoot verifies that creating a page type
 // uses the configured pages root directory.
 func TestIntegration_NewPageRespectsPagesRoot(t *testing.T) {

@@ -531,15 +531,16 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 		return mapTemplateFailure(err)
 	}
 
+	var warnings []commandexec.Warning
 	if result.Changed && result.ChangedPath != "" {
-		autoReindexFile(req.VaultPath, filepath.Clean(result.ChangedPath), vaultCfg)
+		warnings = autoReindexWarnings(req.VaultPath, vaultCfg, filepath.Clean(result.ChangedPath))
 	}
 
-	return commandexec.Success(map[string]interface{}{
+	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"path":         result.Path,
 		"status":       result.Status,
 		"template_dir": result.TemplateDir,
-	}, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
+	}, warnings, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleTemplateDelete executes the canonical `template_delete` command.

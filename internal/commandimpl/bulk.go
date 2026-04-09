@@ -128,13 +128,16 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		Schema:       sch,
 		Reference:    reference,
 		TypedUpdates: allUpdates,
-		ParseOptions: parseOptionsFromVaultConfig(vaultCfg),
+		ParseOptions: buildParseOptions(vaultCfg),
 	})
 	if err != nil {
 		return mapContentMutationError(err)
 	}
 
-	maybeReindexFile(vaultPath, serviceResult.FilePath, vaultCfg)
+	warnings := appendCommandWarnings(
+		warningMessagesToCommandWarnings(serviceResult.WarningMessages, "UNKNOWN_FIELD"),
+		autoReindexWarnings(vaultPath, vaultCfg, serviceResult.FilePath),
+	)
 
 	data := map[string]interface{}{
 		"file":           serviceResult.RelativePath,
@@ -154,7 +157,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 
 	return commandexec.SuccessWithWarnings(
 		data,
-		warningMessagesToCommandWarnings(serviceResult.WarningMessages, "UNKNOWN_FIELD"),
+		warnings,
 		nil,
 	)
 }
@@ -259,7 +262,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 
 	warnings := make([]commandexec.Warning, 0, len(serviceResult.WarningMessages)+1)
 	warnings = append(warnings, deleteBacklinkCommandWarnings(serviceResult.Backlinks)...)
-	warnings = append(warnings, warningMessagesToCommandWarnings(serviceResult.WarningMessages, "INDEX_UPDATE_FAILED")...)
+	warnings = append(warnings, warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)...)
 
 	data := map[string]interface{}{
 		"deleted":  serviceResult.ObjectID,
@@ -319,7 +322,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		Destination:    destination,
 		UpdateRefs:     boolArgDefault(req.Args, "update-refs", true),
 		SkipTypeCheck:  boolArg(req.Args, "skip-type-check"),
-		ParseOptions:   parseOptionsFromVaultConfig(vaultCfg),
+		ParseOptions:   buildParseOptions(vaultCfg),
 		FailOnIndexErr: true,
 	})
 	if err != nil {
@@ -341,7 +344,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		}}, nil)
 	}
 
-	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, "INDEX_UPDATE_FAILED")
+	warnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, indexUpdateFailedWarningCode)
 	data := map[string]interface{}{
 		"source":      serviceResult.SourceID,
 		"destination": serviceResult.DestinationID,
@@ -442,26 +445,16 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapTraitMutationError(err)
 	}
 
-	reindexed := make(map[string]struct{}, len(summary.ChangedFilePaths))
-	for _, filePath := range summary.ChangedFilePaths {
-		if filePath == "" {
-			continue
-		}
-		if _, ok := reindexed[filePath]; ok {
-			continue
-		}
-		reindexed[filePath] = struct{}{}
-		maybeReindexFile(vaultPath, filePath, vaultCfg)
-	}
+	warnings := autoReindexWarnings(vaultPath, vaultCfg, summary.ChangedFilePaths...)
 
-	return commandexec.Success(map[string]interface{}{
+	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"action":   summary.Action,
 		"results":  summary.Results,
 		"total":    summary.Total,
 		"modified": summary.Modified,
 		"skipped":  summary.Skipped,
 		"errors":   summary.Errors,
-	}, &commandexec.Meta{Count: summary.Modified})
+	}, warnings, &commandexec.Meta{Count: summary.Modified})
 }
 
 func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, ids []string, updates map[string]schema.FieldValue, confirm bool) commandexec.Result {
@@ -471,7 +464,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		Schema:       sch,
 		ObjectIDs:    ids,
 		TypedUpdates: updates,
-		ParseOptions: parseOptionsFromVaultConfig(vaultCfg),
+		ParseOptions: buildParseOptions(vaultCfg),
 	}
 	serializedUpdates := fieldmutation.SerializeFieldValueMap(updates)
 
@@ -491,14 +484,15 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
+	var reindexWarnings []commandexec.Warning
 	summary, err := objectsvc.ApplySetBulk(request, func(filePath string) {
-		maybeReindexFile(vaultPath, filePath, vaultCfg)
+		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(vaultPath, vaultCfg, filePath))
 	})
 	if err != nil {
 		return mapContentMutationError(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
+	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"ok":       summary.Errors == 0,
 		"action":   summary.Action,
 		"results":  canonicalSetResults(summary.Results),
@@ -507,7 +501,7 @@ func runSetBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sche
 		"errors":   summary.Errors,
 		"modified": summary.Modified,
 		"fields":   serializedUpdates,
-	}, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
+	}, reindexWarnings, &commandexec.Meta{Count: summary.Total - summary.Skipped - summary.Errors})
 }
 
 func mergeFieldInputs(literalUpdates map[string]string, typedUpdates map[string]schema.FieldValue) map[string]schema.FieldValue {
@@ -533,7 +527,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, te
 		ObjectIDs:    fileIDs,
 		Line:         text,
 		HeadingSpec:  headingSpec,
-		ParseOptions: parseOptionsFromVaultConfig(vaultCfg),
+		ParseOptions: buildParseOptions(vaultCfg),
 	}
 
 	if !confirm {
@@ -552,13 +546,15 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, te
 		}, &commandexec.Meta{Count: len(preview.Items)})
 	}
 
+	var reindexWarnings []commandexec.Warning
 	summary, err := objectsvc.ApplyAddBulk(request, func(filePath string) {
-		maybeReindexFile(vaultPath, filePath, vaultCfg)
+		reindexWarnings = appendCommandWarnings(reindexWarnings, autoReindexWarnings(vaultPath, vaultCfg, filePath))
 	})
 	if err != nil {
 		return mapContentMutationError(err)
 	}
 
+	warnings = appendCommandWarnings(warnings, reindexWarnings)
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"ok":      summary.Errors == 0,
 		"action":  summary.Action,
@@ -573,7 +569,7 @@ func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, te
 
 func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, text, toRef, headingSpec string) commandexec.Result {
 	captureCfg := vaultCfg.GetCaptureConfig()
-	parseOpts := parseOptionsFromVaultConfig(vaultCfg)
+	parseOpts := buildParseOptions(vaultCfg)
 
 	var destPath string
 	var isDailyNote bool
@@ -637,13 +633,13 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
 	}
 
-	maybeReindexFile(vaultPath, destPath, vaultCfg)
+	warnings := autoReindexWarnings(vaultPath, vaultCfg, destPath)
 	relPath, _ := filepath.Rel(vaultPath, destPath)
-	return commandexec.Success(map[string]interface{}{
+	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"file":    filepath.ToSlash(relPath),
 		"line":    line,
 		"content": text,
-	}, nil)
+	}, warnings, nil)
 }
 
 func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, confirm bool) commandexec.Result {
@@ -680,7 +676,7 @@ func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string,
 	}
 
 	allWarnings := append([]commandexec.Warning{}, warnings...)
-	allWarnings = append(allWarnings, warningMessagesToCommandWarnings(summary.WarningMessages, "INDEX_UPDATE_FAILED")...)
+	allWarnings = append(allWarnings, warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)...)
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"ok":       summary.Errors == 0,
 		"action":   summary.Action,
@@ -710,7 +706,7 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 		ObjectIDs:      fileIDs,
 		DestinationDir: destination,
 		UpdateRefs:     updateRefs,
-		ParseOptions:   parseOptionsFromVaultConfig(vaultCfg),
+		ParseOptions:   buildParseOptions(vaultCfg),
 	}
 
 	if !confirm {
@@ -735,7 +731,7 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 	}
 
 	allWarnings := append([]commandexec.Warning{}, warnings...)
-	allWarnings = append(allWarnings, warningMessagesToCommandWarnings(summary.WarningMessages, "INDEX_UPDATE_FAILED")...)
+	allWarnings = append(allWarnings, warningMessagesToCommandWarnings(summary.WarningMessages, indexUpdateFailedWarningCode)...)
 	return commandexec.SuccessWithWarnings(map[string]interface{}{
 		"ok":          summary.Errors == 0,
 		"action":      summary.Action,

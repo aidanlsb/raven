@@ -82,7 +82,7 @@ func HandleReindex(_ context.Context, req commandexec.Request) commandexec.Resul
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
 	for _, warning := range result.WarningMessages {
 		warnings = append(warnings, commandexec.Warning{
-			Code:    "INDEX_UPDATE_FAILED",
+			Code:    indexUpdateFailedWarningCode,
 			Message: warning,
 		})
 	}
