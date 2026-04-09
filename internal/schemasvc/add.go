@@ -229,7 +229,7 @@ func AddField(req AddFieldRequest) (*AddFieldResult, error) {
 
 	trimmedTarget := strings.TrimSpace(req.Target)
 	trimmedValues := splitCommaValues(req.Values)
-	validation := validateFieldTypeSpec(req.FieldType, trimmedTarget, strings.Join(trimmedValues, ","), sch)
+	validation := ValidateFieldTypeSpec(req.FieldType, trimmedTarget, strings.Join(trimmedValues, ","), sch)
 	if !validation.Valid {
 		details := map[string]interface{}{
 			"field_type":  req.FieldType,
@@ -336,7 +336,7 @@ func normalizeTraitDefaultValue(traitType, raw string) (interface{}, bool) {
 	return trimmed, true
 }
 
-func validateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema) FieldTypeValidation {
+func ValidateFieldTypeSpec(fieldType, target, values string, sch *schema.Schema) FieldTypeValidation {
 	result := FieldTypeValidation{
 		ValidTypes: []string{"string", "number", "url", "date", "datetime", "bool", "enum", "ref"},
 	}

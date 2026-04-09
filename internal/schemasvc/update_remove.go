@@ -366,7 +366,7 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 	} else if strings.TrimSpace(req.Values) != "" {
 		effectiveValues = strings.Join(splitCommaValues(req.Values), ",")
 	}
-	validation := validateFieldTypeSpec(effectiveFieldType, effectiveTarget, effectiveValues, sch)
+	validation := ValidateFieldTypeSpec(effectiveFieldType, effectiveTarget, effectiveValues, sch)
 	if !validation.Valid {
 		details := map[string]interface{}{
 			"field_type":  effectiveFieldType,

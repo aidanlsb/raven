@@ -1,4 +1,4 @@
-package cli
+package schemasvc
 
 import (
 	"strings"
@@ -7,34 +7,43 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-func TestValidateFieldTypeSpecAcceptsDateFieldTypes(t *testing.T) {
+func TestValidateFieldTypeSpecAcceptsDateFieldTypesAndAliases(t *testing.T) {
 	sch := schema.New()
 
 	tests := []struct {
 		name      string
 		fieldType string
+		baseType  string
 		isArray   bool
 	}{
 		{
 			name:      "date",
 			fieldType: "date",
+			baseType:  "date",
 			isArray:   false,
 		},
 		{
 			name:      "date array",
 			fieldType: "date[]",
+			baseType:  "date",
 			isArray:   true,
+		},
+		{
+			name:      "boolean alias",
+			fieldType: "boolean",
+			baseType:  "bool",
+			isArray:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := validateFieldTypeSpec(tt.fieldType, "", "", sch)
+			got := ValidateFieldTypeSpec(tt.fieldType, "", "", sch)
 			if !got.Valid {
 				t.Fatalf("expected %q to be valid, got error: %s", tt.fieldType, got.Error)
 			}
-			if got.BaseType != "date" {
-				t.Fatalf("expected base type %q, got %q", "date", got.BaseType)
+			if got.BaseType != tt.baseType {
+				t.Fatalf("expected base type %q, got %q", tt.baseType, got.BaseType)
 			}
 			if got.IsArray != tt.isArray {
 				t.Fatalf("expected IsArray=%v, got %v", tt.isArray, got.IsArray)
@@ -47,7 +56,7 @@ func TestValidateFieldTypeSpecRejectsSchemaTypeName(t *testing.T) {
 	sch := schema.New()
 	sch.Types["person"] = &schema.TypeDefinition{}
 
-	got := validateFieldTypeSpec("person", "", "", sch)
+	got := ValidateFieldTypeSpec("person", "", "", sch)
 	if got.Valid {
 		t.Fatal("expected schema type name to be rejected as field type")
 	}
