@@ -38,7 +38,7 @@ func TestNormalizeCanonicalArgsLeavesOtherCommandsUntouched(t *testing.T) {
 }
 
 func TestAdaptCanonicalResultForMCPRewritesValidationSuggestion(t *testing.T) {
-	result := adaptCanonicalResultForMCP("add", commandexec.Failure("INVALID_ARGS", "argument validation failed", nil, "Check command arguments and retry"))
+	result := adaptCanonicalResultForMCP("add", nil, commandexec.Failure("INVALID_ARGS", "argument validation failed", nil, "Check command arguments and retry"))
 
 	if result.Error == nil {
 		t.Fatal("expected error")
@@ -50,7 +50,7 @@ func TestAdaptCanonicalResultForMCPRewritesValidationSuggestion(t *testing.T) {
 }
 
 func TestAdaptCanonicalResultForMCPKeepsStructuredValidationSuggestion(t *testing.T) {
-	result := adaptCanonicalResultForMCP("set", commandexec.Failure("MISSING_ARGUMENT", "no object_ids provided for bulk set", nil, "Provide object_ids for the bulk update and retry"))
+	result := adaptCanonicalResultForMCP("set", nil, commandexec.Failure("MISSING_ARGUMENT", "no object_ids provided for bulk set", nil, "Provide object_ids for the bulk update and retry"))
 
 	if result.Error == nil {
 		t.Fatal("expected error")
@@ -62,7 +62,7 @@ func TestAdaptCanonicalResultForMCPKeepsStructuredValidationSuggestion(t *testin
 }
 
 func TestAdaptCanonicalResultForMCPAddsQuerySuggestionWhenMissing(t *testing.T) {
-	result := adaptCanonicalResultForMCP("query", commandexec.Failure("QUERY_INVALID", "parse error: expected 2, got 1 at pos 5", nil, ""))
+	result := adaptCanonicalResultForMCP("query", nil, commandexec.Failure("QUERY_INVALID", "parse error: expected 2, got 1 at pos 5", nil, ""))
 
 	if result.Error == nil {
 		t.Fatal("expected error")
@@ -70,6 +70,41 @@ func TestAdaptCanonicalResultForMCPAddsQuerySuggestionWhenMissing(t *testing.T) 
 	want := "Check the query syntax, quote string literals, and retry."
 	if result.Error.Suggestion != want {
 		t.Fatalf("suggestion = %q, want %q", result.Error.Suggestion, want)
+	}
+}
+
+func TestAdaptCanonicalResultForMCPAddsQueryArgumentHints(t *testing.T) {
+	result := adaptCanonicalResultForMCP("query", map[string]interface{}{
+		"saved": "issues",
+	}, commandexec.Failure("INVALID_ARGS", "argument validation failed", map[string]interface{}{
+		"command": "query",
+		"issues": []validationIssue{
+			{Field: "saved", Code: "UNKNOWN_ARGUMENT", Message: "unknown argument"},
+			{Field: "query_string", Code: "MISSING_REQUIRED_ARGUMENT", Message: "required argument is missing"},
+		},
+	}, "Check command arguments and retry"))
+
+	if result.Error == nil {
+		t.Fatal("expected error")
+	}
+
+	details, ok := result.Error.Details.(map[string]interface{})
+	if !ok {
+		t.Fatalf("details type = %T, want map[string]interface{}", result.Error.Details)
+	}
+	issues, ok := details["issues"].([]validationIssue)
+	if !ok {
+		t.Fatalf("issues type = %T, want []validationIssue", details["issues"])
+	}
+
+	if len(issues) != 2 {
+		t.Fatalf("issues len = %d, want 2", len(issues))
+	}
+	if issues[0].Hint != "Pass the saved query name as args.query_string and any saved-query parameters in args.inputs." {
+		t.Fatalf("saved hint = %q", issues[0].Hint)
+	}
+	if issues[1].Hint != "Use args.query_string for either raw RQL or a saved query name." {
+		t.Fatalf("query_string hint = %q", issues[1].Hint)
 	}
 }
 

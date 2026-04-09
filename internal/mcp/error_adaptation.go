@@ -7,15 +7,29 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
-func adaptCanonicalResultForMCP(commandID string, result commandexec.Result) commandexec.Result {
+func adaptCanonicalResultForMCP(commandID string, rawArgs map[string]interface{}, result commandexec.Result) commandexec.Result {
 	if result.OK || result.Error == nil {
 		return result
 	}
 
 	errCopy := *result.Error
 	errCopy.Suggestion = adaptErrorSuggestionForMCP(commandID, errCopy)
+	errCopy.Details = adaptValidationDetailsForMCP(commandID, rawArgs, errCopy)
 	result.Error = &errCopy
 	return result
+}
+
+func adaptValidationDetailsForMCP(commandID string, rawArgs map[string]interface{}, errInfo commandexec.ErrorInfo) interface{} {
+	if errInfo.Code != "INVALID_ARGS" {
+		return errInfo.Details
+	}
+
+	issues, ok := validationIssuesFromDetails(errInfo.Details)
+	if !ok {
+		return errInfo.Details
+	}
+
+	return detailsWithValidationIssues(errInfo.Details, withCommandArgumentHints(commandID, rawArgs, issues))
 }
 
 func adaptErrorSuggestionForMCP(commandID string, err commandexec.ErrorInfo) string {
@@ -52,4 +66,44 @@ func describeRetrySuggestion(commandID string) string {
 		return ""
 	}
 	return fmt.Sprintf("Call %s with command '%s' for the strict contract and retry", compactToolDescribe, commandID)
+}
+
+func validationIssuesFromDetails(details interface{}) ([]validationIssue, bool) {
+	detailMap, ok := details.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	switch value := detailMap["issues"].(type) {
+	case []validationIssue:
+		out := make([]validationIssue, len(value))
+		copy(out, value)
+		return out, true
+	case []interface{}:
+		out := make([]validationIssue, 0, len(value))
+		for _, item := range value {
+			issue, ok := item.(validationIssue)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, issue)
+		}
+		return out, true
+	default:
+		return nil, false
+	}
+}
+
+func detailsWithValidationIssues(details interface{}, issues []validationIssue) interface{} {
+	detailMap, ok := details.(map[string]interface{})
+	if !ok {
+		return details
+	}
+
+	out := make(map[string]interface{}, len(detailMap))
+	for key, value := range detailMap {
+		out[key] = value
+	}
+	out["issues"] = issues
+	return out
 }

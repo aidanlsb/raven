@@ -49,7 +49,7 @@ func (s *Server) callCanonicalCommandWithContext(ctx context.Context, commandID 
 		Caller:         commandexec.CallerMCP,
 		Args:           args,
 	})
-	result = adaptCanonicalResultForMCP(commandID, result)
+	result = adaptCanonicalResultForMCP(commandID, args, result)
 
 	if vaultCtx != nil {
 		if result.Meta == nil {

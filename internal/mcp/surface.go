@@ -255,22 +255,7 @@ func (s *Server) callCompactInvokeWithContext(ctx context.Context, args map[stri
 		}
 	}
 
-	paramSpec := buildInvokeParamSpec(contract)
-	invokeArgs, argIssues := validateArgumentsStrict(paramSpec, rawInvokeArgs)
-	if len(argIssues) > 0 {
-		argIssues = withCommandArgumentHints(commandID, rawInvokeArgs, argIssues)
-		return errorEnvelope(
-			"INVALID_ARGS",
-			"argument validation failed",
-			fmt.Sprintf("Call %s with command '%s' for the strict contract", compactToolDescribe, commandID),
-			map[string]interface{}{
-				"command": commandID,
-				"issues":  argIssues,
-			},
-		), true
-	}
-
-	if out, isErr, handled := s.callCanonicalCommandWithContext(ctx, commandID, invokeArgs, vaultName, vaultPath); handled {
+	if out, isErr, handled := s.callCanonicalCommandWithContext(ctx, commandID, rawInvokeArgs, vaultName, vaultPath); handled {
 		return out, isErr
 	}
 

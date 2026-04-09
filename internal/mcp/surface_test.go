@@ -1,12 +1,18 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/commandexec"
+	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/testutil"
 )
 
@@ -468,4 +474,103 @@ func TestCompactInvokeHintsForQuerySavedArgument(t *testing.T) {
 	if queryStringHint != "Use args.query_string for either raw RQL or a saved query name." {
 		t.Fatalf("query_string hint=%q; response=%s", queryStringHint, out)
 	}
+}
+
+func TestCompactInvokeCommandValidationMatchesCanonicalInvoker(t *testing.T) {
+	t.Parallel()
+	server := NewServer("")
+	rawArgs := map[string]interface{}{
+		"saved": "issues",
+	}
+
+	out, isErr := server.callCompactInvoke(map[string]interface{}{
+		"command": "query",
+		"args":    rawArgs,
+	})
+	if !isErr {
+		t.Fatalf("expected invoke error, got: %s", out)
+	}
+
+	var envelope struct {
+		Error struct {
+			Code   string `json:"code"`
+			Detail struct {
+				Issues []struct {
+					Field   string `json:"field"`
+					Code    string `json:"code"`
+					Message string `json:"message"`
+					Hint    string `json:"hint"`
+				} `json:"issues"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal invoke error response: %v", err)
+	}
+	if envelope.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("error.code=%q, want INVALID_ARGS; response=%s", envelope.Error.Code, out)
+	}
+
+	invokerResult := app.CommandInvoker().Execute(context.Background(), commandexec.Request{
+		CommandID: "query",
+		Caller:    commandexec.CallerMCP,
+		Args: map[string]interface{}{
+			"saved": "issues",
+		},
+	})
+	if invokerResult.OK || invokerResult.Error == nil {
+		t.Fatalf("expected canonical invoker validation failure, got %#v", invokerResult)
+	}
+	if invokerResult.Error.Code != "INVALID_ARGS" {
+		t.Fatalf("invoker error.code=%q, want INVALID_ARGS", invokerResult.Error.Code)
+	}
+
+	details, ok := invokerResult.Error.Details.(map[string]interface{})
+	if !ok {
+		t.Fatalf("invoker details type = %T, want map[string]interface{}", invokerResult.Error.Details)
+	}
+	canonicalIssues, ok := details["issues"].([]commands.ValidationIssue)
+	if !ok {
+		t.Fatalf("invoker issues type = %T, want []commands.ValidationIssue", details["issues"])
+	}
+
+	if !reflect.DeepEqual(compactInvokeIssueSignatures(envelope.Error.Detail.Issues), canonicalIssueSignatures(canonicalIssues)) {
+		t.Fatalf("compact invoke issues did not match canonical invoker\ncompact=%#v\ncanonical=%#v", envelope.Error.Detail.Issues, canonicalIssues)
+	}
+
+	var savedHint, queryStringHint string
+	for _, issue := range envelope.Error.Detail.Issues {
+		switch issue.Field {
+		case "saved":
+			savedHint = issue.Hint
+		case "query_string":
+			queryStringHint = issue.Hint
+		}
+	}
+	if savedHint == "" || queryStringHint == "" {
+		t.Fatalf("expected MCP-specific hints on invoke issues, got %#v", envelope.Error.Detail.Issues)
+	}
+}
+
+func compactInvokeIssueSignatures(issues []struct {
+	Field   string `json:"field"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Hint    string `json:"hint"`
+}) []string {
+	out := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		out = append(out, issue.Field+"|"+issue.Code+"|"+issue.Message)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func canonicalIssueSignatures(issues []commands.ValidationIssue) []string {
+	out := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		out = append(out, issue.Field+"|"+issue.Code+"|"+issue.Message)
+	}
+	sort.Strings(out)
+	return out
 }
