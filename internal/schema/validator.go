@@ -20,9 +20,18 @@ func (e ValidationError) Error() string {
 // ValidateFields validates a set of fields against a type's field definitions.
 func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDefinition, schema *Schema) []ValidationError {
 	var errors []ValidationError
+	invalidDefs := make(map[string]struct{})
 
 	// Check required fields are present
 	for name, def := range fieldDefs {
+		if def == nil {
+			errors = append(errors, ValidationError{
+				Field:   name,
+				Message: "Field definition is null in schema",
+			})
+			invalidDefs[name] = struct{}{}
+			continue
+		}
 		if def.Required {
 			val, exists := fields[name]
 			if !exists || val.IsNull() {
@@ -44,6 +53,15 @@ func ValidateFields(fields map[string]FieldValue, fieldDefs map[string]*FieldDef
 		}
 
 		if def, ok := fieldDefs[name]; ok {
+			if def == nil {
+				if _, reported := invalidDefs[name]; !reported {
+					errors = append(errors, ValidationError{
+						Field:   name,
+						Message: "Field definition is null in schema",
+					})
+				}
+				continue
+			}
 			if err := validateFieldValue(name, value, def); err != nil {
 				errors = append(errors, ValidationError{
 					Field:   name,
@@ -280,6 +298,9 @@ func ValidateNameField(typeDef *TypeDefinition) error {
 	if !exists {
 		return fmt.Errorf("name_field '%s' references non-existent field", typeDef.NameField)
 	}
+	if fieldDef == nil {
+		return fmt.Errorf("name_field '%s' references null field definition", typeDef.NameField)
+	}
 
 	if fieldDef.Type != FieldTypeString {
 		return fmt.Errorf("name_field '%s' must be a string field, got '%s'", typeDef.NameField, fieldDef.Type)
@@ -392,7 +413,7 @@ func ValidateSchema(sch *Schema) []string {
 
 func validateSchemaFieldDefinition(typeName, fieldName string, fieldDef *FieldDefinition, sch *Schema, validTypes string) []string {
 	if fieldDef == nil {
-		return nil
+		return []string{fmt.Sprintf("Type '%s' field '%s' must be an object", typeName, fieldName)}
 	}
 
 	var issues []string

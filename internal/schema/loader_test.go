@@ -397,6 +397,20 @@ types:
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("rejects null field definition", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		schemaContent := "version: 1\ntypes:\n  book:\n    fields:\n      title: null\n"
+		if err := os.WriteFile(filepath.Join(tmpDir, "schema.yaml"), []byte(schemaContent), 0o644); err != nil {
+			t.Fatalf("failed to write schema: %v", err)
+		}
+
+		if _, err := Load(tmpDir); err == nil {
+			t.Fatal("expected error for null field definition, got nil")
+		} else if !strings.Contains(err.Error(), `type "book" field "title" is null`) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestLoadWithWarningsWarnsOnFutureVersion(t *testing.T) {

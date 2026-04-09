@@ -96,6 +96,26 @@ func TestValidateFields(t *testing.T) {
 			t.Fatalf("expected 0 errors for unknown fields, got %d", len(errors))
 		}
 	})
+
+	t.Run("null field definition reports schema error", func(t *testing.T) {
+		fields := map[string]FieldValue{
+			"broken": String("value"),
+		}
+		defs := map[string]*FieldDefinition{
+			"broken": nil,
+		}
+
+		errors := ValidateFields(fields, defs, nil)
+		if len(errors) != 1 {
+			t.Fatalf("expected 1 error, got %d: %v", len(errors), errors)
+		}
+		if errors[0].Field != "broken" {
+			t.Fatalf("expected error on broken field, got %q", errors[0].Field)
+		}
+		if !strings.Contains(errors[0].Message, "null in schema") {
+			t.Fatalf("unexpected error message: %q", errors[0].Message)
+		}
+	})
 }
 
 func TestValidateFieldValueString(t *testing.T) {
@@ -834,6 +854,22 @@ func TestValidateNameField(t *testing.T) {
 			t.Error("expected error for non-string field")
 		}
 	})
+
+	t.Run("name_field referencing null field definition", func(t *testing.T) {
+		typeDef := &TypeDefinition{
+			NameField: "title",
+			Fields: map[string]*FieldDefinition{
+				"title": nil,
+			},
+		}
+		err := ValidateNameField(typeDef)
+		if err == nil {
+			t.Fatal("expected error for null field definition")
+		}
+		if !strings.Contains(err.Error(), "null field definition") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestValidateSchema(t *testing.T) {
@@ -938,6 +974,28 @@ func TestValidateSchema(t *testing.T) {
 		}
 		if issues[0] != "Type 'broken' must be an object" {
 			t.Fatalf("unexpected issue: %v", issues)
+		}
+	})
+
+	t.Run("null field definition and name_field target report issues instead of panicking", func(t *testing.T) {
+		sch := &Schema{
+			Types: map[string]*TypeDefinition{
+				"book": {
+					NameField: "title",
+					Fields: map[string]*FieldDefinition{
+						"title": nil,
+					},
+				},
+			},
+		}
+		issues := ValidateSchema(sch)
+		for _, want := range []string{
+			"Type 'book': name_field 'title' references null field definition",
+			"Type 'book' field 'title' must be an object",
+		} {
+			if !containsIssueSubstring(issues, want) {
+				t.Fatalf("expected issue containing %q, got %v", want, issues)
+			}
 		}
 	})
 }

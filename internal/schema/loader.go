@@ -165,13 +165,13 @@ func LoadWithWarnings(vaultPath string) (*LoadResult, error) {
 	}
 
 	// Initialize nil field maps for types
-	for _, typeDef := range schema.Types {
+	for typeName, typeDef := range schema.Types {
 		if typeDef.Fields == nil {
 			typeDef.Fields = make(map[string]*FieldDefinition)
 		}
-		for _, fieldDef := range typeDef.Fields {
+		for fieldName, fieldDef := range typeDef.Fields {
 			if fieldDef == nil {
-				continue
+				return nil, fmt.Errorf("type %q field %q is null; expected an object definition", typeName, fieldName)
 			}
 			fieldDef.Type = normalizeFieldType(fieldDef.Type)
 		}
