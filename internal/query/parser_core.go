@@ -391,162 +391,104 @@ func (p *Parser) parseEnclosesFuncPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-func (p *Parser) parseObjectNavFuncPredicate(negated bool, kind string) (Predicate, error) {
-	// parent(object:...), ancestor(object:...), child(object:...), descendant(object:...), or ...([[target]])
+type navFuncArgument struct {
+	target   string
+	subQuery *Query
+}
+
+func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	if err := p.expect(TokenLParen); err != nil {
-		return nil, err
+		return navFuncArgument{}, err
 	}
 	if p.curr.Type == TokenLBrace {
-		return nil, fmt.Errorf("brace subqueries are no longer supported; use %s(object:...) or %s([[target]])", kind, kind)
+		return navFuncArgument{}, fmt.Errorf("brace subqueries are no longer supported; use %s(object:...) or %s([[target]])", kind, kind)
 	}
 
-	// Direct reference target
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
 		p.advance()
 		if err := p.expect(TokenRParen); err != nil {
-			return nil, err
+			return navFuncArgument{}, err
 		}
-		switch kind {
-		case "parent":
-			return &ParentPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-		case "ancestor":
-			return &AncestorPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-		case "child":
-			return &ChildPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-		case "descendant":
-			return &DescendantPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-		default:
-			return nil, fmt.Errorf("unknown navigation predicate: %s()", kind)
-		}
+		return navFuncArgument{target: target}, nil
 	}
 
-	// Shorthand target (single word without brackets)
 	if p.curr.Type == TokenIdent {
 		ident := strings.ToLower(p.curr.Value)
 		if ident != "object" || p.peek.Type != TokenColon {
 			target := p.curr.Value
 			p.advance()
 			if err := p.expect(TokenRParen); err != nil {
-				return nil, err
+				return navFuncArgument{}, err
 			}
-			switch kind {
-			case "parent":
-				return &ParentPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-			case "ancestor":
-				return &AncestorPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-			case "child":
-				return &ChildPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-			case "descendant":
-				return &DescendantPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-			default:
-				return nil, fmt.Errorf("unknown navigation predicate: %s()", kind)
-			}
+			return navFuncArgument{target: target}, nil
 		}
 	}
 
 	if p.curr.Type == TokenUnderscore {
-		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
+		return navFuncArgument{}, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
 	}
 
-	// Nested object query
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected object query or target in %s()", kind)
+		return navFuncArgument{}, fmt.Errorf("expected object query or target in %s()", kind)
 	}
 	subq, err := p.parseQuery()
 	if err != nil {
-		return nil, err
+		return navFuncArgument{}, err
 	}
 	if subq.Type != QueryTypeObject {
-		return nil, fmt.Errorf("expected object subquery in %s(), got trait subquery", kind)
+		return navFuncArgument{}, fmt.Errorf("expected object subquery in %s(), got trait subquery", kind)
 	}
 	if err := p.expect(TokenRParen); err != nil {
-		return nil, err
+		return navFuncArgument{}, err
 	}
+	return navFuncArgument{subQuery: subq}, nil
+}
+
+func buildObjectNavPredicate(negated bool, kind, target string, subQuery *Query) (Predicate, error) {
+	base := basePredicate{negated: negated}
 	switch kind {
 	case "parent":
-		return &ParentPredicate{basePredicate: basePredicate{negated: negated}, SubQuery: subq}, nil
+		return &ParentPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	case "ancestor":
-		return &AncestorPredicate{basePredicate: basePredicate{negated: negated}, SubQuery: subq}, nil
+		return &AncestorPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	case "child":
-		return &ChildPredicate{basePredicate: basePredicate{negated: negated}, SubQuery: subq}, nil
+		return &ChildPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	case "descendant":
-		return &DescendantPredicate{basePredicate: basePredicate{negated: negated}, SubQuery: subq}, nil
+		return &DescendantPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	default:
 		return nil, fmt.Errorf("unknown navigation predicate: %s()", kind)
 	}
 }
 
-func (p *Parser) parseTraitNavFuncPredicate(negated bool, kind string) (Predicate, error) {
-	// on(object:...), within(object:...), or ...([[target]])
-	if err := p.expect(TokenLParen); err != nil {
-		return nil, err
-	}
-	if p.curr.Type == TokenLBrace {
-		return nil, fmt.Errorf("brace subqueries are no longer supported; use %s(object:...) or %s([[target]])", kind, kind)
-	}
-
-	if p.curr.Type == TokenRef {
-		target := p.curr.Value
-		p.advance()
-		if err := p.expect(TokenRParen); err != nil {
-			return nil, err
-		}
-		switch kind {
-		case "on":
-			return &OnPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-		case "within":
-			return &WithinPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-		default:
-			return nil, fmt.Errorf("unknown trait navigation predicate: %s()", kind)
-		}
-	}
-
-	// Shorthand target (single word without brackets)
-	if p.curr.Type == TokenIdent {
-		ident := strings.ToLower(p.curr.Value)
-		if ident != "object" || p.peek.Type != TokenColon {
-			target := p.curr.Value
-			p.advance()
-			if err := p.expect(TokenRParen); err != nil {
-				return nil, err
-			}
-			switch kind {
-			case "on":
-				return &OnPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-			case "within":
-				return &WithinPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
-			default:
-				return nil, fmt.Errorf("unknown trait navigation predicate: %s()", kind)
-			}
-		}
-	}
-
-	if p.curr.Type == TokenUnderscore {
-		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
-	}
-
-	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected object query or target in %s()", kind)
-	}
-	subq, err := p.parseQuery()
-	if err != nil {
-		return nil, err
-	}
-	if subq.Type != QueryTypeObject {
-		return nil, fmt.Errorf("expected object subquery in %s(), got trait subquery", kind)
-	}
-	if err := p.expect(TokenRParen); err != nil {
-		return nil, err
-	}
+func buildTraitNavPredicate(negated bool, kind, target string, subQuery *Query) (Predicate, error) {
+	base := basePredicate{negated: negated}
 	switch kind {
 	case "on":
-		return &OnPredicate{basePredicate: basePredicate{negated: negated}, SubQuery: subq}, nil
+		return &OnPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	case "within":
-		return &WithinPredicate{basePredicate: basePredicate{negated: negated}, SubQuery: subq}, nil
+		return &WithinPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	default:
 		return nil, fmt.Errorf("unknown trait navigation predicate: %s()", kind)
 	}
+}
+
+func (p *Parser) parseObjectNavFuncPredicate(negated bool, kind string) (Predicate, error) {
+	// parent(object:...), ancestor(object:...), child(object:...), descendant(object:...), or ...([[target]])
+	arg, err := p.parseNavFuncArgument(kind)
+	if err != nil {
+		return nil, err
+	}
+	return buildObjectNavPredicate(negated, kind, arg.target, arg.subQuery)
+}
+
+func (p *Parser) parseTraitNavFuncPredicate(negated bool, kind string) (Predicate, error) {
+	// on(object:...), within(object:...), or ...([[target]])
+	arg, err := p.parseNavFuncArgument(kind)
+	if err != nil {
+		return nil, err
+	}
+	return buildTraitNavPredicate(negated, kind, arg.target, arg.subQuery)
 }
 
 func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {

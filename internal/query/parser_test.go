@@ -1374,6 +1374,59 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 	}
 }
 
+func TestParseNavigationPredicateErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{
+			name:    "object nav rejects brace subqueries",
+			input:   "object:meeting parent({object:date})",
+			wantErr: "brace subqueries are no longer supported; use parent(object:...) or parent([[target]])",
+		},
+		{
+			name:    "trait nav rejects brace subqueries",
+			input:   "trait:due on({object:meeting})",
+			wantErr: "brace subqueries are no longer supported; use on(object:...) or on([[target]])",
+		},
+		{
+			name:    "object nav rejects self reference",
+			input:   "object:meeting parent(_)",
+			wantErr: "self-reference '_' is no longer supported (pipeline removed)",
+		},
+		{
+			name:    "trait nav rejects self reference",
+			input:   "trait:due on(_)",
+			wantErr: "self-reference '_' is no longer supported (pipeline removed)",
+		},
+		{
+			name:    "object nav requires target or subquery",
+			input:   "object:meeting parent()",
+			wantErr: "expected object query or target in parent()",
+		},
+		{
+			name:    "trait nav requires target or subquery",
+			input:   "trait:due on()",
+			wantErr: "expected object query or target in on()",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.input)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if err.Error() != tt.wantErr {
+				t.Fatalf("error = %q, want %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestParseBooleanEdgeCases(t *testing.T) {
 	t.Parallel()
 	t.Run("chained OR produces flat OrPredicate", func(t *testing.T) {
