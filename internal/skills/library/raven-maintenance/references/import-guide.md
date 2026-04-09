@@ -65,7 +65,7 @@ rvn import person --file contacts.json --dry-run --json
 # 2. Review the preview output
 
 # 3. Apply
-rvn import person --file contacts.json --confirm --json
+rvn import person --file contacts.json --json
 
 # 4. Verify
 rvn check --type person --json

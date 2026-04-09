@@ -23,7 +23,6 @@ var (
 	importDryRun       bool
 	importCreateOnly   bool
 	importUpdateOnly   bool
-	importConfirm      bool
 )
 
 var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
@@ -49,7 +48,6 @@ func buildImportArgs(_ *cobra.Command, args []string) (map[string]interface{}, e
 		"dry-run":       importDryRun,
 		"create-only":   importCreateOnly,
 		"update-only":   importUpdateOnly,
-		"confirm":       importConfirm,
 	}
 	if len(args) > 0 {
 		argsMap["type"] = args[0]
@@ -71,7 +69,6 @@ func invokeImport(_ *cobra.Command, commandID, vaultPath string, args map[string
 		CommandID: commandID,
 		VaultPath: vaultPath,
 		Args:      args,
-		Confirm:   importConfirm,
 		Stdin:     stdinData,
 	})
 }
@@ -244,6 +241,5 @@ func init() {
 	importCmd.Flags().BoolVar(&importDryRun, "dry-run", false, "Preview changes without writing")
 	importCmd.Flags().BoolVar(&importCreateOnly, "create-only", false, "Only create new objects, skip updates")
 	importCmd.Flags().BoolVar(&importUpdateOnly, "update-only", false, "Only update existing objects, skip creation")
-	importCmd.Flags().BoolVar(&importConfirm, "confirm", false, "Apply changes (for future bulk safety)")
 	rootCmd.AddCommand(importCmd)
 }

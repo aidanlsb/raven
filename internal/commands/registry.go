@@ -2168,6 +2168,8 @@ file with type_field and per-type mappings.
 By default, import performs an upsert: creates new objects and updates existing
 ones. Use --create-only or --update-only to restrict behavior.
 
+Without --dry-run, import applies changes immediately.
+
 Mapping file format (homogeneous):
   type: person
   key: name
@@ -2199,7 +2201,6 @@ Mapping file format (heterogeneous):
 			{Name: "dry-run", Description: "Preview changes without writing", Type: FlagTypeBool},
 			{Name: "create-only", Description: "Only create new objects, skip updates", Type: FlagTypeBool},
 			{Name: "update-only", Description: "Only update existing objects, skip creation", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply changes", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			`echo '[{"name": "Freya"}]' | rvn import person --json`,

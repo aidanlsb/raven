@@ -10,16 +10,16 @@ Pipe a JSON array into `rvn import` with a target type:
 echo '[{"name": "Freya", "email": "freya@example.com"}, {"name": "Thor"}]' | rvn import person --dry-run
 ```
 
-The `--dry-run` flag previews what would be created. Remove it and add `--confirm` to apply:
+The `--dry-run` flag previews what would be created. Remove it to apply immediately:
 
 ```bash
-echo '[{"name": "Freya", "email": "freya@example.com"}, {"name": "Thor"}]' | rvn import person --confirm
+echo '[{"name": "Freya", "email": "freya@example.com"}, {"name": "Thor"}]' | rvn import person
 ```
 
 Read from a file instead of stdin:
 
 ```bash
-rvn import person --file contacts.json --confirm
+rvn import person --file contacts.json
 ```
 
 ## Field mapping
@@ -28,7 +28,7 @@ When external field names don't match your schema, use `--map` to translate them
 
 ```bash
 echo '[{"full_name": "Freya", "mail": "freya@example.com"}]' \
-  | rvn import person --map full_name=name --map mail=email --confirm
+  | rvn import person --map full_name=name --map mail=email
 ```
 
 Each `--map` flag maps one external key to a schema field: `external_key=schema_field`.
@@ -47,7 +47,7 @@ mappings:
 ```
 
 ```bash
-rvn import --mapping mappings/contacts.yaml --file contacts.json --confirm
+rvn import --mapping mappings/contacts.yaml --file contacts.json
 ```
 
 ### Heterogeneous imports
@@ -69,7 +69,7 @@ types:
 ```
 
 ```bash
-rvn import --mapping mappings/mixed.yaml --file mixed-data.json --confirm
+rvn import --mapping mappings/mixed.yaml --file mixed-data.json
 ```
 
 ## Import modes
@@ -85,7 +85,7 @@ By default, `rvn import` upserts: it creates new objects and updates existing on
 Change the match key with `--key`:
 
 ```bash
-rvn import person --file contacts.json --key email --confirm
+rvn import person --file contacts.json --key email
 ```
 
 This matches existing objects by their `email` field instead of the default `name_field`.
@@ -96,27 +96,24 @@ Use `--content-field` to populate the markdown body from a JSON field:
 
 ```bash
 echo '[{"name": "Freya", "bio": "Project lead and architect."}]' \
-  | rvn import person --content-field bio --confirm
+  | rvn import person --content-field bio
 ```
 
 The `bio` value becomes the page body content below the frontmatter.
 
 ## Preview and apply
 
-All imports preview by default. Use `--dry-run` for an explicit preview, and `--confirm` to apply:
+Imports apply immediately unless you pass `--dry-run`:
 
 ```bash
-# Preview (default behavior)
-rvn import person --file contacts.json
-
-# Explicit preview
+# Preview
 rvn import person --file contacts.json --dry-run
 
-# Apply changes
-rvn import person --file contacts.json --confirm
+# Apply changes immediately
+rvn import person --file contacts.json
 ```
 
-The preview shows which objects would be created, updated, or skipped.
+The dry-run preview shows which objects would be created, updated, or skipped.
 
 ## Examples
 
@@ -127,8 +124,7 @@ rvn import person \
   --file crm-export.json \
   --map full_name=name \
   --map primary_email=email \
-  --map organization=company \
-  --confirm
+  --map organization=company
 ```
 
 ### Import tasks from a project management tool
@@ -139,8 +135,7 @@ rvn import note \
   --map summary=title \
   --map description=content \
   --content-field description \
-  --create-only \
-  --confirm
+  --create-only
 ```
 
 ### Dry-run to check mappings
@@ -151,7 +146,7 @@ Always preview first when working with unfamiliar data:
 rvn import person --file unknown-format.json --dry-run
 ```
 
-Review the output, add `--map` flags as needed, and re-run until the preview looks right.
+Review the output, add `--map` flags as needed, and then rerun without `--dry-run` to apply.
 
 ## Related docs
 

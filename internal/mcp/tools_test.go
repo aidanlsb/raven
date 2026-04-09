@@ -73,6 +73,17 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 	if got := reclassifyContract.Parameters["field-json"].Type; got != paramTypeObject {
 		t.Fatalf("reclassify.field-json type=%q, want %q", got, paramTypeObject)
 	}
+
+	importContract, ok := buildCommandContract("import")
+	if !ok {
+		t.Fatal("expected import contract")
+	}
+	if _, ok := importContract.Parameters["confirm"]; ok {
+		t.Fatal("did not expect import contract to expose confirm")
+	}
+	if got := importContract.PreviewMode; got != "none" {
+		t.Fatalf("import preview mode=%q, want none", got)
+	}
 }
 
 func TestDiscoverableContractsApplyPolicy(t *testing.T) {

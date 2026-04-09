@@ -6,7 +6,7 @@ Use this skill for vault health checks, index management, data import, and docum
 
 - Prefer `rvn` CLI with `--json` for deterministic machine-readable output.
 - When operating through Raven MCP, use the equivalent MCP tools instead of shelling out.
-- For any fix or import operation, preview first, then apply with `--confirm` only after approval.
+- Preview first when the command supports it. For `rvn import`, use `--dry-run` for preview and rerun without it to apply.
 - Run `rvn check` after schema migrations, bulk edits, or external file changes.
 
 ## Vault health: check
@@ -47,7 +47,7 @@ Use `--full` after schema renames, bulk moves, or broad file changes outside Rav
 - With field mapping: `rvn import person --file contacts.json --map full_name=name --json`
 - With mapping file: `rvn import --mapping migration.yaml --file data.json --json`
 - Dry run first: `rvn import person --file data.json --dry-run --json`
-- Apply: `rvn import person --file data.json --confirm --json`
+- Apply: `rvn import person --file data.json --json`
 
 For complex imports, use a YAML mapping file. See `references/import-guide.md`.
 
