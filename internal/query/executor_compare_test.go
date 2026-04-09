@@ -17,6 +17,28 @@ func TestCompareValues_DerefsStringPointers(t *testing.T) {
 	}
 }
 
+func TestCompareValues_NormalizesNilLikeValues(t *testing.T) {
+	t.Parallel()
+
+	var nilString *string
+
+	if compareValues(nil, nilString) != 0 {
+		t.Fatal("expected plain nil and typed nil pointer to compare equal")
+	}
+	if compareValues(nilString, nil) != 0 {
+		t.Fatal("expected typed nil pointer and plain nil to compare equal")
+	}
+	if compareValues(nil, "a") >= 0 {
+		t.Fatal("expected nil to sort before concrete values")
+	}
+	if compareValues(nilString, "a") >= 0 {
+		t.Fatal("expected typed nil pointer to sort before concrete values")
+	}
+	if compareValues("a", nilString) <= 0 {
+		t.Fatal("expected concrete values to sort after typed nil pointer")
+	}
+}
+
 func TestCompareValues_Numeric(t *testing.T) {
 	t.Parallel()
 	if compareValues("10", "2") <= 0 {

@@ -82,21 +82,11 @@ func normalizeForCompare(v interface{}) cmpVal {
 }
 
 func compareValues(a, b interface{}) int {
-	// Handle nil
-	if a == nil && b == nil {
-		return 0
-	}
-	if a == nil {
-		return -1
-	}
-	if b == nil {
-		return 1
-	}
-
 	av := normalizeForCompare(a)
 	bv := normalizeForCompare(b)
 
-	// Normalized nil handling
+	// Normalize all nil-like values (including typed nil pointers) into one
+	// missing-value bucket before comparing.
 	if av.kind == cmpNil && bv.kind == cmpNil {
 		return 0
 	}
