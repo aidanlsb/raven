@@ -102,7 +102,7 @@ func renderRead(cmd *cobra.Command, result commandexec.Result) error {
 
 func init() {
 	readCmd.ValidArgsFunction = completeReferenceArgAt(0, referenceCompletionOptions{
-		IncludeDynamicDates: false,
+		IncludeDynamicDates: true,
 		DisableWhenStdin:    false,
 		NonTargetDirective:  cobra.ShellCompDirectiveNoFileComp,
 	})

@@ -88,7 +88,7 @@ func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {
 	}
 	defer resolveOp.Close()
 
-	resolved, err := resolveOp.resolveReference(reference, false)
+	resolved, err := resolveOp.resolveReferenceWithDynamicDates(reference, false)
 	if err != nil {
 		return nil, err
 	}

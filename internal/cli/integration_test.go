@@ -1833,6 +1833,48 @@ Bob is a software engineer.
 	}
 }
 
+func TestIntegration_ReadSupportsDynamicDateReferences(t *testing.T) {
+	t.Parallel()
+
+	today := time.Now().Format("2006-01-02")
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("today.md", "# Literal Today\n").
+		WithFile("daily/"+today+".md", `---
+type: page
+---
+# Daily Today
+First line
+Second line
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("read", "today")
+	result.MustSucceed(t)
+	if got := result.DataString("path"); got != "daily/"+today+".md" {
+		t.Fatalf("path = %q, want %q", got, "daily/"+today+".md")
+	}
+	content := result.DataString("content")
+	if !strings.Contains(content, "# Daily Today") {
+		t.Fatalf("expected dynamic daily content, got:\n%s", content)
+	}
+	if strings.Contains(content, "# Literal Today") {
+		t.Fatalf("expected read today to prefer the daily note, got:\n%s", content)
+	}
+
+	raw := v.RunCLI("read", "today", "--raw", "--start-line", "4", "--end-line", "5")
+	raw.MustSucceed(t)
+	if got := raw.DataString("path"); got != "daily/"+today+".md" {
+		t.Fatalf("raw path = %q, want %q", got, "daily/"+today+".md")
+	}
+	rawContent := raw.DataString("content")
+	if !strings.Contains(rawContent, "# Daily Today") {
+		t.Fatalf("expected ranged read to use dynamic daily target, got:\n%s", rawContent)
+	}
+}
+
 func TestIntegration_ReadWithoutArgSuggestsUsage(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).Build()
