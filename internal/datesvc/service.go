@@ -260,7 +260,7 @@ func DateHub(req DateHubRequest) (*DateHubResult, error) {
 	}
 	result.Items = associations
 
-	backlinks, err := db.Backlinks(dateStr)
+	backlinks, err := db.Backlinks(result.DailyNoteID)
 	if err != nil {
 		return nil, newError(CodeQueryFailed, "failed to query backlinks", "", err)
 	}
