@@ -85,6 +85,69 @@ func TestRunDryRunIndexesDiscoveredFiles(t *testing.T) {
 	}
 }
 
+func TestRunDryRunProjectsIndexStats(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(`version: 1
+types: {}
+traits:
+  todo:
+    type: enum
+    values: [todo, done]
+`), 0o644); err != nil {
+		t.Fatalf("failed to write schema fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "source.md"), []byte("# Source\n"), 0o644); err != nil {
+		t.Fatalf("failed to write source fixture: %v", err)
+	}
+
+	fullResult, err := Run(RunRequest{
+		VaultPath: vaultPath,
+		Full:      true,
+	})
+	if err != nil {
+		t.Fatalf("full Run returned error: %v", err)
+	}
+	if fullResult.Objects == 0 || fullResult.Traits != 0 || fullResult.References != 0 {
+		t.Fatalf("unexpected baseline stats: %#v", fullResult)
+	}
+
+	if err := os.WriteFile(filepath.Join(vaultPath, "next.md"), []byte("# Next\n\n- @todo(todo) Link [[source]]\n"), 0o644); err != nil {
+		t.Fatalf("failed to write next fixture: %v", err)
+	}
+
+	result, err := Run(RunRequest{
+		VaultPath: vaultPath,
+		DryRun:    true,
+	})
+	if err != nil {
+		t.Fatalf("dry-run Run returned error: %v", err)
+	}
+	if result.FilesIndexed != 1 {
+		t.Fatalf("files indexed = %d, want 1", result.FilesIndexed)
+	}
+	if result.Objects != fullResult.Objects+2 {
+		t.Fatalf("objects = %d, want %d", result.Objects, fullResult.Objects+2)
+	}
+	if result.Traits != 1 {
+		t.Fatalf("traits = %d, want 1", result.Traits)
+	}
+	if result.References != 1 {
+		t.Fatalf("references = %d, want 1", result.References)
+	}
+
+	data := result.Data()
+	if objects, ok := data["objects"].(int); !ok || objects != fullResult.Objects+2 {
+		t.Fatalf("result data has unexpected objects: %#v", data["objects"])
+	}
+	if traits, ok := data["traits"].(int); !ok || traits != 1 {
+		t.Fatalf("result data has unexpected traits: %#v", data["traits"])
+	}
+	if refs, ok := data["references"].(int); !ok || refs != 1 {
+		t.Fatalf("result data has unexpected references: %#v", data["references"])
+	}
+}
+
 func TestRunResolvesReferencesAfterBulkReindex(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

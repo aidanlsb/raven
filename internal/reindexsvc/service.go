@@ -190,6 +190,8 @@ func Run(req RunRequest) (*RunResult, error) {
 		Traits:          0,
 		References:      0,
 	}
+	dryRunFileStats := make(map[string]index.IndexStats)
+	dryRunStats := index.IndexStats{}
 
 	trashRemoved, err := db.RemoveFilesWithPrefix(".trash/")
 	if err != nil {
@@ -247,6 +249,11 @@ func Run(req RunRequest) (*RunResult, error) {
 
 		if req.DryRun {
 			result.FilesIndexed++
+			docStats := parsedDocumentStats(walkResult.Document)
+			dryRunFileStats[walkResult.RelativePath] = docStats
+			dryRunStats.ObjectCount += docStats.ObjectCount
+			dryRunStats.TraitCount += docStats.TraitCount
+			dryRunStats.RefCount += docStats.RefCount
 			return nil
 		}
 
@@ -260,6 +267,23 @@ func Run(req RunRequest) (*RunResult, error) {
 	})
 	if walkErr != nil {
 		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking vault: %v", walkErr), "", walkErr)
+	}
+
+	if req.DryRun {
+		if incremental {
+			projected, err := projectedDryRunStats(db, result.DeletedFiles, dryRunFileStats)
+			if err != nil {
+				return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to project dry-run stats: %v", err), "", err)
+			}
+			result.Objects = projected.ObjectCount
+			result.Traits = projected.TraitCount
+			result.References = projected.RefCount
+		} else {
+			result.Objects = dryRunStats.ObjectCount
+			result.Traits = dryRunStats.TraitCount
+			result.References = dryRunStats.RefCount
+		}
+		return result, nil
 	}
 
 	if !req.DryRun && result.FilesIndexed > 0 {
@@ -286,6 +310,65 @@ func Run(req RunRequest) (*RunResult, error) {
 	result.References = stats.RefCount
 
 	return result, nil
+}
+
+func parsedDocumentStats(doc *parser.ParsedDocument) index.IndexStats {
+	if doc == nil {
+		return index.IndexStats{}
+	}
+	return index.IndexStats{
+		ObjectCount: len(doc.Objects),
+		TraitCount:  len(doc.Traits),
+		RefCount:    len(doc.Refs),
+	}
+}
+
+func projectedDryRunStats(db *index.Database, deletedFiles []string, reindexedFiles map[string]index.IndexStats) (*index.IndexStats, error) {
+	stats, err := db.Stats()
+	if err != nil {
+		return nil, err
+	}
+	projected := *stats
+
+	for _, filePath := range deletedFiles {
+		current, err := fileIndexStats(db, filePath)
+		if err != nil {
+			return nil, err
+		}
+		projected.ObjectCount -= current.ObjectCount
+		projected.TraitCount -= current.TraitCount
+		projected.RefCount -= current.RefCount
+	}
+
+	for filePath, next := range reindexedFiles {
+		current, err := fileIndexStats(db, filePath)
+		if err != nil {
+			return nil, err
+		}
+		projected.ObjectCount += next.ObjectCount - current.ObjectCount
+		projected.TraitCount += next.TraitCount - current.TraitCount
+		projected.RefCount += next.RefCount - current.RefCount
+	}
+
+	return &projected, nil
+}
+
+func fileIndexStats(db *index.Database, filePath string) (index.IndexStats, error) {
+	if db == nil {
+		return index.IndexStats{}, fmt.Errorf("database is nil")
+	}
+
+	var stats index.IndexStats
+	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM objects WHERE file_path = ?`, filePath).Scan(&stats.ObjectCount); err != nil {
+		return index.IndexStats{}, err
+	}
+	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM traits WHERE file_path = ?`, filePath).Scan(&stats.TraitCount); err != nil {
+		return index.IndexStats{}, err
+	}
+	if err := db.DB().QueryRow(`SELECT COUNT(*) FROM refs WHERE file_path = ?`, filePath).Scan(&stats.RefCount); err != nil {
+		return index.IndexStats{}, err
+	}
+	return stats, nil
 }
 
 func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {
