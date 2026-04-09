@@ -8,10 +8,10 @@ import (
 
 func TestParseDateFilter(t *testing.T) {
 	t.Parallel()
-	// Get today's date for relative tests
-	today := time.Now().Format("2006-01-02")
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
+	today := "2026-03-04"
+	yesterday := "2026-03-03"
+	tomorrow := "2026-03-05"
 
 	tests := []struct {
 		name          string
@@ -47,7 +47,9 @@ func TestParseDateFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			condition, args, err := ParseDateFilter(tt.filter, "field")
+			condition, args, err := ParseDateFilterWithOptions(tt.filter, "field", DateFilterOptions{
+				Now: now,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -70,6 +72,7 @@ func TestParseDateFilter(t *testing.T) {
 
 func TestParseDateFilterInvalidDates(t *testing.T) {
 	t.Parallel()
+	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
 	tests := []string{
 		"2025-13-45",
 		"2025-02-30",
@@ -80,7 +83,9 @@ func TestParseDateFilterInvalidDates(t *testing.T) {
 
 	for _, filter := range tests {
 		t.Run(filter, func(t *testing.T) {
-			_, _, err := ParseDateFilter(filter, "field")
+			_, _, err := ParseDateFilterWithOptions(filter, "field", DateFilterOptions{
+				Now: now,
+			})
 			if err == nil {
 				t.Fatalf("expected error for %q, got nil", filter)
 			}
@@ -90,13 +95,16 @@ func TestParseDateFilterInvalidDates(t *testing.T) {
 
 func TestParseDateFilterCaseInsensitive(t *testing.T) {
 	t.Parallel()
-	today := time.Now().Format("2006-01-02")
+	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
+	today := "2026-03-04"
 
 	tests := []string{"TODAY", "Today", "  today  "}
 
 	for _, filter := range tests {
 		t.Run(filter, func(t *testing.T) {
-			condition, args, err := ParseDateFilter(filter, "field")
+			condition, args, err := ParseDateFilterWithOptions(filter, "field", DateFilterOptions{
+				Now: now,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

@@ -16,9 +16,7 @@ type DateFilterOptions struct {
 // ParseDateFilter parses a date filter string and returns the SQL condition and args
 // for equality semantics.
 func ParseDateFilter(filter string, fieldExpr string) (condition string, args []interface{}, err error) {
-	return ParseDateFilterWithOptions(filter, fieldExpr, DateFilterOptions{
-		Now: time.Now(),
-	})
+	return ParseDateFilterWithOptions(filter, fieldExpr, DateFilterOptions{})
 }
 
 // ParseDateFilterWithOptions parses a date filter string and returns the SQL condition

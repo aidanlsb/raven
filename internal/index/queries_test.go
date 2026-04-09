@@ -2,6 +2,7 @@ package index
 
 import (
 	"testing"
+	"time"
 )
 
 func TestParseFilterExpression(t *testing.T) {
@@ -133,6 +134,27 @@ func TestParseFilterExpression(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestParseFilterExpressionWithOptionsUsesSingleNowAcrossOrBranches(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
+	condition, args, err := parseFilterExpressionWithOptions("today|tomorrow", "value", DateFilterOptions{
+		Now: now,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if condition != "(value = ? OR value = ?)" {
+		t.Fatalf("condition = %q", condition)
+	}
+	if len(args) != 2 {
+		t.Fatalf("args len = %d, want 2", len(args))
+	}
+	if args[0] != "2026-03-04" || args[1] != "2026-03-05" {
+		t.Fatalf("args = %v", args)
 	}
 }
 
