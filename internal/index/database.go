@@ -1122,13 +1122,16 @@ func allObjectIDsFromDB(db *sql.DB) ([]string, error) {
 }
 
 func allAliasesFromDB(db *sql.DB) (map[string]string, error) {
+	hasAliasColumn, err := objectsTableHasColumn(db, "objects", "alias")
+	if err != nil {
+		return nil, err
+	}
+	if !hasAliasColumn {
+		return map[string]string{}, nil
+	}
+
 	rows, err := db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
 	if err != nil {
-		// Some tests build a minimal objects schema without alias support.
-		// Treat that as "no aliases" instead of failing resolver creation.
-		if strings.Contains(err.Error(), "no such column: alias") {
-			return map[string]string{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -1149,11 +1152,16 @@ func allAliasesFromDB(db *sql.DB) (map[string]string, error) {
 }
 
 func allAliasMatchesFromDB(db *sql.DB) (map[string][]string, error) {
+	hasAliasColumn, err := objectsTableHasColumn(db, "objects", "alias")
+	if err != nil {
+		return nil, err
+	}
+	if !hasAliasColumn {
+		return map[string][]string{}, nil
+	}
+
 	rows, err := db.Query("SELECT alias, id FROM objects WHERE alias IS NOT NULL AND alias != '' ORDER BY id")
 	if err != nil {
-		if strings.Contains(err.Error(), "no such column: alias") {
-			return map[string][]string{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -1168,6 +1176,29 @@ func allAliasMatchesFromDB(db *sql.DB) (map[string][]string, error) {
 	}
 
 	return aliasMatches, rows.Err()
+}
+
+func objectsTableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue interface{}
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == columnName {
+			return true, nil
+		}
+	}
+
+	return false, rows.Err()
 }
 
 func allNameFieldValuesFromDB(db *sql.DB, sch *schema.Schema) (map[string][]string, error) {

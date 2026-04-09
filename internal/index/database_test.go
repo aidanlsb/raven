@@ -1387,6 +1387,43 @@ func TestAliasIndexing(t *testing.T) {
 	})
 }
 
+func TestAllAliasesFromDB_LegacySchemaWithoutAliasColumn(t *testing.T) {
+	t.Parallel()
+
+	rawDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+	defer rawDB.Close()
+
+	_, err = rawDB.Exec(`CREATE TABLE objects (
+		id TEXT PRIMARY KEY,
+		file_path TEXT NOT NULL,
+		type TEXT NOT NULL,
+		fields TEXT NOT NULL DEFAULT '{}',
+		line_start INTEGER NOT NULL
+	)`)
+	if err != nil {
+		t.Fatalf("create legacy objects table: %v", err)
+	}
+
+	aliases, err := allAliasesFromDB(rawDB)
+	if err != nil {
+		t.Fatalf("allAliasesFromDB returned error: %v", err)
+	}
+	if len(aliases) != 0 {
+		t.Fatalf("expected no aliases from legacy schema, got %v", aliases)
+	}
+
+	aliasMatches, err := allAliasMatchesFromDB(rawDB)
+	if err != nil {
+		t.Fatalf("allAliasMatchesFromDB returned error: %v", err)
+	}
+	if len(aliasMatches) != 0 {
+		t.Fatalf("expected no alias matches from legacy schema, got %v", aliasMatches)
+	}
+}
+
 func TestAllIndexedFilePaths(t *testing.T) {
 	t.Parallel()
 	db, err := OpenInMemory()
