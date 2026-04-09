@@ -322,14 +322,7 @@ func ValidateSchema(sch *Schema) []string {
 		// Validate ref field targets
 		if typeDef.Fields != nil {
 			for fieldName, fieldDef := range typeDef.Fields {
-				if fieldDef != nil && !IsValidFieldType(fieldDef.Type) {
-					issues = append(issues, fmt.Sprintf("Type '%s' field '%s' has unknown field type '%s' (expected one of: %s)", typeName, fieldName, fieldDef.Type, validTypes))
-				}
-				if fieldDef != nil && (fieldDef.Type == FieldTypeRef || fieldDef.Type == FieldTypeRefArray) && fieldDef.Target != "" {
-					if _, exists := sch.Types[fieldDef.Target]; !exists {
-						issues = append(issues, fmt.Sprintf("Type '%s' field '%s' references unknown type '%s'", typeName, fieldName, fieldDef.Target))
-					}
-				}
+				issues = append(issues, validateSchemaFieldDefinition(typeName, fieldName, fieldDef, sch, validTypes)...)
 			}
 		}
 
@@ -352,6 +345,9 @@ func ValidateSchema(sch *Schema) []string {
 				issues = append(issues, fmt.Sprintf("Type '%s' default_template '%s' is not included in type templates", typeName, typeDef.DefaultTemplate))
 			}
 		}
+	}
+	for traitName, traitDef := range sch.Traits {
+		issues = append(issues, validateSchemaTraitDefinition(traitName, traitDef)...)
 	}
 	for coreName, coreDef := range sch.Core {
 		if !IsBuiltinType(coreName) {
@@ -394,6 +390,42 @@ func ValidateSchema(sch *Schema) []string {
 	return issues
 }
 
+func validateSchemaFieldDefinition(typeName, fieldName string, fieldDef *FieldDefinition, sch *Schema, validTypes string) []string {
+	if fieldDef == nil {
+		return nil
+	}
+
+	var issues []string
+	if !IsValidFieldType(fieldDef.Type) {
+		return append(issues, fmt.Sprintf("Type '%s' field '%s' has unknown field type '%s' (expected one of: %s)", typeName, fieldName, fieldDef.Type, validTypes))
+	}
+	if (fieldDef.Type == FieldTypeEnum || fieldDef.Type == FieldTypeEnumArray) && len(fieldDef.Values) == 0 {
+		issues = append(issues, fmt.Sprintf("Type '%s' field '%s' of type '%s' must define at least one allowed value", typeName, fieldName, fieldDef.Type))
+	}
+	if (fieldDef.Type == FieldTypeRef || fieldDef.Type == FieldTypeRefArray) && fieldDef.Target != "" {
+		if _, exists := sch.Types[fieldDef.Target]; !exists {
+			issues = append(issues, fmt.Sprintf("Type '%s' field '%s' references unknown type '%s'", typeName, fieldName, fieldDef.Target))
+		}
+	}
+	return issues
+}
+
+func validateSchemaTraitDefinition(traitName string, traitDef *TraitDefinition) []string {
+	if traitDef == nil {
+		return nil
+	}
+
+	var issues []string
+	traitType := normalizedTraitType(traitDef.Type, traitDef.IsBoolean())
+	if !IsValidTraitType(traitType) {
+		return append(issues, fmt.Sprintf("Trait '%s' has unknown trait type '%s' (expected one of: %s)", traitName, traitDef.Type, ValidTraitTypes()))
+	}
+	if traitType == FieldTypeEnum && len(traitDef.Values) == 0 {
+		issues = append(issues, fmt.Sprintf("Trait '%s' of type '%s' must define at least one allowed value", traitName, traitType))
+	}
+	return issues
+}
+
 func IsValidFieldType(fieldType FieldType) bool {
 	switch fieldType {
 	case FieldTypeString,
@@ -418,6 +450,26 @@ func IsValidFieldType(fieldType FieldType) bool {
 	}
 }
 
+func IsValidTraitType(fieldType FieldType) bool {
+	switch fieldType {
+	case FieldTypeBool,
+		FieldTypeString,
+		FieldTypeNumber,
+		FieldTypeURL,
+		FieldTypeDate,
+		FieldTypeDatetime,
+		FieldTypeEnum,
+		FieldTypeRef:
+		return true
+	default:
+		return false
+	}
+}
+
 func ValidFieldTypes() string {
 	return "string, string[], number, number[], url, url[], date, date[], datetime, datetime[], enum, enum[], bool, bool[], ref, ref[]"
+}
+
+func ValidTraitTypes() string {
+	return "bool, boolean, string, number, url, date, datetime, enum, ref"
 }

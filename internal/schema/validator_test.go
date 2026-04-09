@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -887,6 +888,44 @@ func TestValidateSchema(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid trait type in schema", func(t *testing.T) {
+		sch := &Schema{
+			Traits: map[string]*TraitDefinition{
+				"priority": {Type: FieldType("enum-ish")},
+			},
+		}
+		issues := ValidateSchema(sch)
+		if !containsIssueSubstring(issues, "Trait 'priority' has unknown trait type 'enum-ish'") {
+			t.Fatalf("expected trait type issue, got %v", issues)
+		}
+	})
+
+	t.Run("enum definitions require values", func(t *testing.T) {
+		sch := &Schema{
+			Types: map[string]*TypeDefinition{
+				"project": {
+					Fields: map[string]*FieldDefinition{
+						"status": {Type: FieldTypeEnum},
+						"tags":   {Type: FieldTypeEnumArray},
+					},
+				},
+			},
+			Traits: map[string]*TraitDefinition{
+				"priority": {Type: FieldTypeEnum},
+			},
+		}
+		issues := ValidateSchema(sch)
+		for _, want := range []string{
+			"Type 'project' field 'status' of type 'enum' must define at least one allowed value",
+			"Type 'project' field 'tags' of type 'enum[]' must define at least one allowed value",
+			"Trait 'priority' of type 'enum' must define at least one allowed value",
+		} {
+			if !containsIssueSubstring(issues, want) {
+				t.Fatalf("expected issue containing %q, got %v", want, issues)
+			}
+		}
+	})
+
 	t.Run("null type definition reports issue instead of panicking", func(t *testing.T) {
 		sch := &Schema{
 			Types: map[string]*TypeDefinition{
@@ -901,4 +940,13 @@ func TestValidateSchema(t *testing.T) {
 			t.Fatalf("unexpected issue: %v", issues)
 		}
 	})
+}
+
+func containsIssueSubstring(issues []string, want string) bool {
+	for _, issue := range issues {
+		if strings.Contains(issue, want) {
+			return true
+		}
+	}
+	return false
 }
