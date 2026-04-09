@@ -126,6 +126,7 @@ func HandleVaultCurrent(_ context.Context, req commandexec.Request) commandexec.
 		"name":           result.Current.Name,
 		"path":           result.Current.Path,
 		"source":         result.Current.Source,
+		"active_vault":   result.ActiveVault,
 		"active_missing": result.Current.ActiveMissing,
 		"config_path":    result.ConfigPath,
 		"state_path":     result.StatePath,
