@@ -918,32 +918,32 @@ func (d *Database) RemoveDocument(objectID string) error {
 	// the markdown file without rewriting content.
 	baseID := baseDocumentID(objectID)
 
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	// Prefer the canonical file_path stored in the DB (important when directory
 	// roots are configured and object IDs do not match file paths).
 	var filePath string
-	err := d.db.QueryRow(
+	err = tx.QueryRow(
 		"SELECT file_path FROM objects WHERE id = ? OR id LIKE ? LIMIT 1",
 		baseID,
 		baseID+"#%",
 	).Scan(&filePath)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return ErrObjectNotFound
 		} else {
 			return err
 		}
 	}
 
-	// Delete all objects in this document (file-level + sections/embedded).
-	if _, err := d.db.Exec("DELETE FROM objects WHERE id = ? OR id LIKE ?", baseID, baseID+"#%"); err != nil {
+	if err := deleteByFilePath(tx, filePath); err != nil {
 		return err
 	}
-
-	// Delete related data by file path
-	if err := deleteRelatedByFilePath(d.db, filePath); err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit()
 }
 
 func baseDocumentID(objectID string) string {
@@ -952,25 +952,6 @@ func baseDocumentID(objectID string) string {
 		baseID = baseID[:hash]
 	}
 	return baseID
-}
-
-func deleteRelatedByFilePath(db *sql.DB, filePath string) error {
-	if _, err := db.Exec("DELETE FROM traits WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := db.Exec("DELETE FROM refs WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := db.Exec("DELETE FROM field_refs WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := db.Exec("DELETE FROM date_index WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	if _, err := db.Exec("DELETE FROM fts_content WHERE file_path = ?", filePath); err != nil {
-		return err
-	}
-	return nil
 }
 
 // Stats returns statistics about the index.

@@ -393,6 +393,98 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("remove document rolls back when cleanup fails", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		doc := &parser.ParsedDocument{
+			FilePath: "objects/people/freya.md",
+			RawContent: `---
+---
+
+# Freya
+
+- @highlight Hello`,
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "people/freya",
+					ObjectType: "person",
+					Fields:     map[string]schema.FieldValue{},
+					LineStart:  1,
+				},
+				{
+					ID:         "people/freya#notes",
+					ObjectType: "section",
+					Fields: map[string]schema.FieldValue{
+						"title": schema.String("Notes"),
+						"level": schema.Number(2),
+					},
+					LineStart: 5,
+				},
+			},
+			Traits: []*parser.ParsedTrait{
+				{
+					TraitType:      "highlight",
+					Value:          nil,
+					Content:        "Hello",
+					ParentObjectID: "people/freya",
+					Line:           7,
+				},
+			},
+			Refs: []*parser.ParsedRef{
+				{
+					SourceID:  "people/freya",
+					TargetRaw: "projects/website",
+					Line:      8,
+					Start:     0,
+					End:       0,
+				},
+			},
+		}
+
+		testSchema := schema.New()
+		testSchema.Traits["highlight"] = &schema.TraitDefinition{Type: schema.FieldTypeBool}
+
+		if err := db.IndexDocument(doc, testSchema); err != nil {
+			t.Fatalf("failed to index document: %v", err)
+		}
+
+		if _, err := db.db.Exec(`
+			CREATE TRIGGER fail_traits_delete
+			BEFORE DELETE ON traits
+			BEGIN
+				SELECT RAISE(ABORT, 'trait delete failed');
+			END;
+		`); err != nil {
+			t.Fatalf("create trigger: %v", err)
+		}
+
+		if err := db.RemoveDocument("people/freya"); err == nil {
+			t.Fatal("expected remove document to fail")
+		}
+
+		for _, tc := range []struct {
+			table string
+			want  int
+		}{
+			{table: "objects", want: 2},
+			{table: "traits", want: 1},
+			{table: "refs", want: 1},
+			{table: "fts_content", want: 2},
+		} {
+			var got int
+			if err := db.db.QueryRow("SELECT COUNT(*) FROM "+tc.table+" WHERE file_path = ?", "objects/people/freya.md").Scan(&got); err != nil {
+				t.Fatalf("count %s: %v", tc.table, err)
+			}
+			if got != tc.want {
+				t.Fatalf("%s rows = %d, want %d", tc.table, got, tc.want)
+			}
+		}
+	})
+
 	t.Run("remove document returns not found when missing", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {
