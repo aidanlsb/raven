@@ -84,6 +84,14 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 	if got := importContract.PreviewMode; got != "none" {
 		t.Fatalf("import preview mode=%q, want none", got)
 	}
+
+	dailyContract, ok := buildCommandContract("daily")
+	if !ok {
+		t.Fatal("expected daily contract")
+	}
+	if _, ok := dailyContract.Parameters["edit"]; ok {
+		t.Fatal("did not expect daily contract to expose edit")
+	}
 }
 
 func TestDiscoverableContractsApplyPolicy(t *testing.T) {

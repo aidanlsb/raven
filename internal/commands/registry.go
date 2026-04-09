@@ -1571,15 +1571,14 @@ Use --type to filter results to specific object types.`,
 	},
 	"daily": {
 		Name:        "daily",
-		Description: "Open or create a daily note",
-		LongDesc: `Open or create a daily note for a given date.
+		Description: "Resolve or create a daily note",
+		LongDesc: `Resolve or create a daily note for a given date.
 
-If no date is provided, opens today's note. Creates the file if it doesn't exist.`,
+If no date is provided, resolves today's note. Creates the file if it doesn't exist.`,
 		Args: []ArgMeta{
 			{Name: "date", Description: "Date (today, yesterday, tomorrow, YYYY-MM-DD)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "edit", Short: "e", Description: "Open the note in the configured editor", Type: FlagTypeBool},
 			{Name: "template", Description: "Core date template ID to use when creating a new daily note", Type: FlagTypeString},
 		},
 		Examples: []string{

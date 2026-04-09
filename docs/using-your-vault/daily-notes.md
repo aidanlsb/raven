@@ -2,17 +2,20 @@
 
 Daily notes give you a date-stamped file for each day. Use them for journaling, quick capture, meeting notes, or anything you want anchored to a date. Each daily note is a `date`-typed object managed by Raven.
 
-## Creating and opening daily notes
+## Creating daily notes
 
 ```bash
-rvn daily              # Today's note (creates if needed)
-rvn daily yesterday    # Yesterday
-rvn daily tomorrow     # Tomorrow
-rvn daily 2026-03-15   # Specific date
-rvn daily --edit       # Create and open in your editor
+rvn daily                    # Today's note (creates if needed)
+rvn daily yesterday          # Yesterday
+rvn daily tomorrow           # Tomorrow
+rvn daily 2026-03-15         # Specific date
+rvn daily --json             # Resolve/create and return structured data
+rvn daily --json --edit      # CLI-only: also launch your editor
 ```
 
-`rvn daily` outputs the note's content. If the file does not exist, Raven creates it first. The file lands under `directories.daily` (default `daily/`) as `YYYY-MM-DD.md`.
+`rvn daily` resolves the note for the requested date and creates it if needed. In the human CLI, Raven opens the note in your configured editor when available; in JSON mode, use `--edit` if you want the CLI to launch the editor as well. The `--edit` flag is CLI-only and is not part of the shared MCP/canonical command contract.
+
+Daily notes land under `directories.daily` (default `daily/`) as `YYYY-MM-DD.md`.
 
 ## Capturing content
 

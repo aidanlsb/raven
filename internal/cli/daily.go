@@ -56,5 +56,8 @@ func handleDailyResult(cmd *cobra.Command, result commandexec.Result) error {
 }
 
 func init() {
+	// `--edit` is a CLI-only affordance and is intentionally excluded from the
+	// shared canonical command contract exposed to MCP callers.
+	dailyCmd.Flags().BoolP("edit", "e", false, "Open the note in the configured editor (CLI only)")
 	rootCmd.AddCommand(dailyCmd)
 }
