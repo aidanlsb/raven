@@ -620,7 +620,7 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 		}
 		resolvedTarget, err := objectsvc.ResolveAddHeadingTarget(vaultPath, destPath, fileObjectID, headingSpec, parseOpts)
 		if err != nil {
-			return commandexec.Failure("REF_NOT_FOUND", err.Error(), nil, "Use an existing section slug/id or heading text")
+			return mapContentMutationError(err)
 		}
 		targetObjectID = resolvedTarget
 	}
@@ -630,7 +630,7 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 	}
 	line, err := objectsvc.AppendToFile(vaultPath, destPath, text, captureCfg, vaultCfg, isDailyNote, targetObjectID, parseOpts)
 	if err != nil {
-		return commandexec.Failure("FILE_WRITE_ERROR", err.Error(), nil, "")
+		return mapContentMutationError(err)
 	}
 
 	warnings := autoReindexWarnings(vaultPath, vaultCfg, destPath)

@@ -21,6 +21,7 @@ const (
 	ErrorTypeNotFound     ErrorCode = "TYPE_NOT_FOUND"
 	ErrorRequiredField    ErrorCode = "REQUIRED_FIELD"
 	ErrorInvalidInput     ErrorCode = "INVALID_INPUT"
+	ErrorFileNotFound     ErrorCode = "FILE_NOT_FOUND"
 	ErrorFileExists       ErrorCode = "FILE_EXISTS"
 	ErrorRefNotFound      ErrorCode = "REF_NOT_FOUND"
 	ErrorRefAmbiguous     ErrorCode = "REF_AMBIGUOUS"

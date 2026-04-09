@@ -104,6 +104,8 @@ func mapServiceCode(code objectsvc.ErrorCode) string {
 		return "REQUIRED_FIELD_MISSING"
 	case objectsvc.ErrorInvalidInput:
 		return "INVALID_INPUT"
+	case objectsvc.ErrorFileNotFound:
+		return "FILE_NOT_FOUND"
 	case objectsvc.ErrorRefNotFound:
 		return "REF_NOT_FOUND"
 	case objectsvc.ErrorRefAmbiguous:

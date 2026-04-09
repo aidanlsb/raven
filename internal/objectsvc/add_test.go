@@ -1,6 +1,7 @@
 package objectsvc
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -100,5 +101,84 @@ New bug item
 - Keep this below
 ` {
 		t.Fatalf("unexpected content:\n%s", got)
+	}
+}
+
+func TestAppendToFileMissingTargetReportsFileNotFound(t *testing.T) {
+	t.Parallel()
+
+	destPath := filepath.Join(t.TempDir(), "missing.md")
+	_, err := AppendToFile("", destPath, "appended", nil, nil, false, "", nil)
+	if err == nil {
+		t.Fatal("expected missing target error")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if svcErr.Code != ErrorFileNotFound {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorFileNotFound)
+	}
+}
+
+func TestResolveAddHeadingTargetReportsAmbiguousHeading(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	destPath := filepath.Join(vaultPath, "project.md")
+	content := `# Project
+
+### Team Notes
+First section
+
+### Team Notes
+Second section
+`
+	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	_, err := ResolveAddHeadingTarget(vaultPath, destPath, "project", "### Team Notes", nil)
+	if err == nil {
+		t.Fatal("expected ambiguous heading error")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if svcErr.Code != ErrorRefAmbiguous {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorRefAmbiguous)
+	}
+}
+
+func TestResolveAddHeadingTargetReportsParseFailure(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	destPath := filepath.Join(vaultPath, "broken.md")
+	content := `---
+type: page
+meta:
+  nested: true
+---
+# Broken
+`
+	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	_, err := ResolveAddHeadingTarget(vaultPath, destPath, "broken", "### Broken", nil)
+	if err == nil {
+		t.Fatal("expected parse failure")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if svcErr.Code != ErrorInvalidInput {
+		t.Fatalf("error code = %q, want %q", svcErr.Code, ErrorInvalidInput)
 	}
 }

@@ -1902,6 +1902,63 @@ type: page
 	}
 }
 
+func TestIntegration_AddReportsStableHeadingErrorCodes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing heading returns ref not found", func(t *testing.T) {
+		v := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("project.md", `---
+type: page
+---
+# Project
+
+### Existing Heading
+- Existing item
+`).
+			Build()
+
+		result := v.RunCLI("add", "New item", "--to", "project.md", "--heading", "### Missing Heading")
+		result.MustFail(t, "REF_NOT_FOUND")
+	})
+
+	t.Run("ambiguous heading text returns ref ambiguous", func(t *testing.T) {
+		v := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("project.md", `---
+type: page
+---
+# Project
+
+### Team Notes
+First section
+
+### Team Notes
+Second section
+`).
+			Build()
+
+		result := v.RunCLI("add", "New item", "--to", "project.md", "--heading", "### Team Notes")
+		result.MustFail(t, "REF_AMBIGUOUS")
+	})
+
+	t.Run("heading parse failure returns invalid input", func(t *testing.T) {
+		v := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("broken.md", `---
+type: page
+meta:
+  nested: true
+---
+# Broken
+`).
+			Build()
+
+		result := v.RunCLI("add", "New item", "--to", "broken.md", "--heading", "### Broken")
+		result.MustFail(t, "INVALID_INPUT")
+	})
+}
+
 func TestIntegration_ResolveAndAddPreferDynamicTodayOverSectionShortName(t *testing.T) {
 	t.Parallel()
 	today := time.Now().Format("2006-01-02")

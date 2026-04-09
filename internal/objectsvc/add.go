@@ -33,11 +33,11 @@ func ResolveAddHeadingTarget(
 
 	contentBytes, err := os.ReadFile(destPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read target file")
+		return "", addFileReadError(destPath, "failed to read target file", "Check that the target file exists and is readable", err)
 	}
 	doc, err := parser.ParseDocumentWithOptions(string(contentBytes), destPath, vaultPath, parseOpts)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse target file")
+		return "", newError(ErrorInvalidInput, "failed to parse target file", "Fix the target file content and try again", nil, err)
 	}
 
 	prefix := fileObjectID + "#"
@@ -51,7 +51,7 @@ func ResolveAddHeadingTarget(
 		}
 	}
 	if len(candidates) == 0 {
-		return "", fmt.Errorf("target file has no embedded sections: %s", fileObjectID)
+		return "", newError(ErrorRefNotFound, fmt.Sprintf("target file has no embedded sections: %s", fileObjectID), "Use an existing section slug/id or heading text", nil, nil)
 	}
 
 	if headingText, ok := parseHeadingTextFromSpec(spec); ok {
@@ -62,26 +62,26 @@ func ResolveAddHeadingTarget(
 	}
 	if strings.Contains(spec, "/") && strings.Contains(spec, "#") {
 		if !strings.HasPrefix(spec, prefix) {
-			return "", fmt.Errorf("section %q does not belong to %s", spec, fileObjectID)
+			return "", newError(ErrorInvalidInput, fmt.Sprintf("section %q does not belong to %s", spec, fileObjectID), "Use a section ID from the target file or change --to", nil, nil)
 		}
 		for _, obj := range candidates {
 			if obj.ID == spec {
 				return obj.ID, nil
 			}
 		}
-		return "", fmt.Errorf("section not found: %s", spec)
+		return "", newError(ErrorRefNotFound, fmt.Sprintf("section not found: %s", spec), "Use an existing section slug/id or heading text", nil, nil)
 	}
 
 	fragment := strings.TrimSpace(strings.TrimPrefix(spec, "#"))
 	if fragment == "" {
-		return "", fmt.Errorf("section fragment cannot be empty")
+		return "", newError(ErrorInvalidInput, "section fragment cannot be empty", "Pass a non-empty section slug or ID", nil, nil)
 	}
 	for _, obj := range candidates {
 		if strings.TrimPrefix(obj.ID, prefix) == fragment {
 			return obj.ID, nil
 		}
 	}
-	return "", fmt.Errorf("section fragment not found: %s", fragment)
+	return "", newError(ErrorRefNotFound, fmt.Sprintf("section fragment not found: %s", fragment), "Use an existing section slug/id or heading text", nil, nil)
 }
 
 // AppendToFile appends a capture line to the target file, creating daily notes when needed.
@@ -102,7 +102,7 @@ func AppendToFile(
 
 	if !fileExists {
 		if !isDailyNote {
-			return 0, fmt.Errorf("file does not exist: %s", destPath)
+			return 0, addFileNotFoundError(destPath, nil)
 		}
 
 		base := filepath.Base(destPath)
@@ -119,10 +119,10 @@ func AppendToFile(
 		}
 		s, err := schema.Load(vaultPath)
 		if err != nil {
-			return 0, fmt.Errorf("failed to load schema: %w", err)
+			return 0, newError(ErrorValidationFailed, "failed to load schema", "Fix schema.yaml and try again", nil, err)
 		}
 		if _, err := pages.CreateDailyNoteWithSchema(vaultPath, dailyDir, dateStr, friendlyTitle, s, vaultCfg.GetTemplateDirectory(), vaultCfg.ProtectedPrefixes); err != nil {
-			return 0, fmt.Errorf("failed to create daily note: %w", err)
+			return 0, addFileWriteError(destPath, "failed to create daily note", "Check the daily note path and try again", err)
 		}
 	}
 
@@ -136,33 +136,33 @@ func AppendToFile(
 
 	f, err := os.OpenFile(destPath, os.O_APPEND|os.O_RDWR, 0o644)
 	if err != nil {
-		return 0, fmt.Errorf("failed to open file: %w", err)
+		return 0, addFileWriteError(destPath, "failed to open target file", "Check that the target file is writable", err)
 	}
 	defer f.Close()
 
 	if err := filelock.LockExclusive(f); err != nil {
-		return 0, fmt.Errorf("failed to lock file: %w", err)
+		return 0, addFileWriteError(destPath, "failed to lock target file", "Close other writers and try again", err)
 	}
 	defer func() {
 		_ = filelock.Unlock(f)
 	}()
 
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return 0, fmt.Errorf("failed to seek file: %w", err)
+		return 0, addFileReadError(destPath, "failed to seek target file", "Try again", err)
 	}
 	content, err := io.ReadAll(f)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read file: %w", err)
+		return 0, addFileReadError(destPath, "failed to read target file", "Check that the target file is readable", err)
 	}
 	insertedLine := appendedLineNumber(content)
 	if len(content) > 0 && content[len(content)-1] != '\n' {
 		if _, err := f.WriteString("\n"); err != nil {
-			return 0, fmt.Errorf("failed to write newline: %w", err)
+			return 0, addFileWriteError(destPath, "failed to write capture newline", "Check that the target file is writable", err)
 		}
 	}
 
 	if _, err := f.WriteString(line + "\n"); err != nil {
-		return 0, fmt.Errorf("failed to write capture: %w", err)
+		return 0, addFileWriteError(destPath, "failed to write capture", "Check that the target file is writable", err)
 	}
 
 	return insertedLine, nil
@@ -180,14 +180,14 @@ func FileLineCount(path string) int {
 func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *parser.ParseOptions) (int, error) {
 	contentBytes, err := os.ReadFile(destPath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read file: %w", err)
+		return 0, addFileReadError(destPath, "failed to read target file", "Check that the target file exists and is readable", err)
 	}
 	content := string(contentBytes)
 	lines := strings.Split(content, "\n")
 
 	doc, err := parser.ParseDocumentWithOptions(content, destPath, vaultPath, parseOpts)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse document: %w", err)
+		return 0, newError(ErrorInvalidInput, "failed to parse target file", "Fix the target file content and try again", nil, err)
 	}
 
 	var target *parser.ParsedObject
@@ -198,7 +198,7 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 		}
 	}
 	if target == nil {
-		return 0, fmt.Errorf("target section not found: %s", objectID)
+		return 0, newError(ErrorRefNotFound, fmt.Sprintf("target section not found: %s", objectID), "Use an existing section slug/id or heading text", nil, nil)
 	}
 
 	insertIdx := len(lines)
@@ -230,7 +230,7 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 	newLines = append(newLines, lines[insertIdx:]...)
 
 	if err := atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644); err != nil {
-		return 0, err
+		return 0, addFileWriteError(destPath, "failed to write updated file", "Check that the target file is writable", err)
 	}
 	return insertedLine, nil
 }
@@ -238,7 +238,7 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 func appendUnderHeading(destPath, line, heading string) (int, error) {
 	content, err := os.ReadFile(destPath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read file: %w", err)
+		return 0, addFileReadError(destPath, "failed to read target file", "Check that the target file exists and is readable", err)
 	}
 
 	lines := strings.Split(string(content), "\n")
@@ -294,7 +294,7 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 	}
 
 	if err := atomicfile.WriteFile(destPath, []byte(strings.Join(newLines, "\n")), 0o644); err != nil {
-		return 0, err
+		return 0, addFileWriteError(destPath, "failed to write updated file", "Check that the target file is writable", err)
 	}
 	return insertedLine, nil
 }
@@ -313,7 +313,7 @@ func appendedLineNumber(content []byte) int {
 func resolveSectionByHeadingText(candidates []*parser.ParsedObject, headingText string) (string, error) {
 	text := strings.TrimSpace(headingText)
 	if text == "" {
-		return "", fmt.Errorf("heading text cannot be empty")
+		return "", newError(ErrorInvalidInput, "heading text cannot be empty", "Pass a non-empty heading", nil, nil)
 	}
 
 	matches := make([]string, 0, 2)
@@ -328,11 +328,11 @@ func resolveSectionByHeadingText(candidates []*parser.ParsedObject, headingText 
 
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("heading not found: %q", text)
+		return "", newError(ErrorRefNotFound, fmt.Sprintf("heading not found: %q", text), "Use an existing section slug/id or heading text", nil, nil)
 	case 1:
 		return matches[0], nil
 	default:
-		return "", fmt.Errorf("heading %q is ambiguous; use a section slug/id", text)
+		return "", newError(ErrorRefAmbiguous, fmt.Sprintf("heading %q is ambiguous; use a section slug/id", text), "Use a unique section slug/id instead of heading text", nil, nil)
 	}
 }
 
@@ -353,4 +353,28 @@ func parseHeadingTextFromSpec(spec string) (string, bool) {
 		return "", false
 	}
 	return headingText, true
+}
+
+func addFileNotFoundError(destPath string, cause error) error {
+	return newError(
+		ErrorFileNotFound,
+		fmt.Sprintf("file does not exist: %s", destPath),
+		"Create the file first or choose an existing file",
+		nil,
+		cause,
+	)
+}
+
+func addFileReadError(destPath, message, suggestion string, cause error) error {
+	if os.IsNotExist(cause) {
+		return addFileNotFoundError(destPath, cause)
+	}
+	return newError(ErrorFileRead, message, suggestion, nil, cause)
+}
+
+func addFileWriteError(destPath, message, suggestion string, cause error) error {
+	if os.IsNotExist(cause) {
+		return addFileNotFoundError(destPath, cause)
+	}
+	return newError(ErrorFileWrite, message, suggestion, nil, cause)
 }
