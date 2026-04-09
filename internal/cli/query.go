@@ -845,7 +845,7 @@ func init() {
 	queryCmd.Flags().Bool("count-only", false, "Return only the total count of matches (no items or IDs)")
 	queryCmd.Flags().StringArray("apply", nil, "Apply a bulk operation to query results (format: command args...)")
 	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
-	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output format")
+	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output for shell pipelines (jq, head, sort)")
 	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
 
 	querySavedCmd.AddCommand(querySavedListCmd)

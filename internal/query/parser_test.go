@@ -1,6 +1,7 @@
 package query
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -112,6 +113,38 @@ func TestParseRejectsUnexpectedTrailingTokens(t *testing.T) {
 				t.Fatal("expected parse error, got nil")
 			}
 		})
+	}
+}
+
+func TestParseReportsShellPipeGuidance(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`object:experiment_review | sort -field:created_at | head 1`)
+	if err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "'|' (pipe) is not a shell pipe") {
+		t.Fatalf("expected pipe guidance, got %q", msg)
+	}
+	if !strings.Contains(msg, "--pipe | jq") {
+		t.Fatalf("expected shell pipeline example, got %q", msg)
+	}
+}
+
+func TestParseUnexpectedTokenUsesReadableTokenName(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`object:project =active`)
+	if err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "unexpected token '='") {
+		t.Fatalf("expected readable token name, got %q", msg)
+	}
+	if strings.Contains(msg, "unexpected token 22") {
+		t.Fatalf("expected symbolic token name instead of enum number, got %q", msg)
 	}
 }
 

@@ -705,7 +705,7 @@ For trait queries (trait:...):
 			{Name: "count-only", Description: "Return only the total count of matches (no items or IDs)", Type: FlagTypeBool},
 			{Name: "apply", Description: "Apply bulk operation to results (e.g., 'set status=done', 'delete', 'add @reviewed', 'update done')", Type: FlagTypeStringSlice},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
-			{Name: "pipe", Description: "Force pipe-friendly output format", Type: FlagTypeBool},
+			{Name: "pipe", Description: "Force pipe-friendly output for shell pipelines (jq, head, sort)", Type: FlagTypeBool},
 			{Name: "no-pipe", Description: "Force human-readable output format", Type: FlagTypeBool},
 			{Name: "inputs", Description: "Saved query inputs as key=value pairs", Type: FlagTypePosKeyValue, Examples: []string{`{"project": "projects/raven"}`}},
 		},

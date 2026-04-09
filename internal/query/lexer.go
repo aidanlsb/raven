@@ -1,6 +1,7 @@
 package query
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
@@ -39,6 +40,67 @@ const (
 	TokenComma                // ,
 	TokenError                // error token
 )
+
+func (t TokenType) String() string {
+	switch t {
+	case TokenEOF:
+		return "EOF"
+	case TokenIdent:
+		return "identifier"
+	case TokenColon:
+		return "':'"
+	case TokenDot:
+		return "'.'"
+	case TokenBang:
+		return "'!'"
+	case TokenPipe:
+		return "'|'"
+	case TokenPipeline:
+		return "'|>'"
+	case TokenLParen:
+		return "'('"
+	case TokenRParen:
+		return "')'"
+	case TokenLBrace:
+		return "'{'"
+	case TokenRBrace:
+		return "'}'"
+	case TokenLBracket:
+		return "'['"
+	case TokenRBracket:
+		return "']'"
+	case TokenStar:
+		return "'*'"
+	case TokenRef:
+		return "reference"
+	case TokenString:
+		return "quoted string"
+	case TokenRegex:
+		return "regex"
+	case TokenUnderscore:
+		return "'_'"
+	case TokenLt:
+		return "'<'"
+	case TokenGt:
+		return "'>'"
+	case TokenLte:
+		return "'<='"
+	case TokenGte:
+		return "'>='"
+	case TokenEq:
+		return "'='"
+	case TokenEqEq:
+		return "'=='"
+	case TokenBangEq:
+		return "'!='"
+	case TokenComma:
+		return "','"
+	case TokenError:
+		return "error"
+	default:
+		return fmt.Sprintf("token(%d)", int(t))
+	}
+}
 
 // Token represents a lexer token.
 type Token struct {

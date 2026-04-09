@@ -12,6 +12,13 @@ type Parser struct {
 	peek  Token
 }
 
+func shellPipeQueryError(pos int) error {
+	return fmt.Errorf(
+		"at col %d: '|' (pipe) is not a shell pipe inside Raven queries. Use '|' only as OR between predicates, or run the query as one shell argument and pipe the command output instead, e.g. rvn query 'object:experiment_review' --pipe | jq 'sort_by(.created_at) | .[0]'",
+		pos+1,
+	)
+}
+
 // Parse parses a query string and returns a Query AST.
 func Parse(input string) (*Query, error) {
 	p := &Parser{lexer: NewLexer(input)}
@@ -31,6 +38,9 @@ func Parse(input string) (*Query, error) {
 		return nil, fmt.Errorf("%s at pos %d", p.curr.Value, p.curr.Pos)
 	}
 	if p.curr.Type != TokenEOF {
+		if p.curr.Type == TokenPipe {
+			return nil, shellPipeQueryError(p.curr.Pos)
+		}
 		return nil, fmt.Errorf("unexpected token %v at pos %d", p.curr.Type, p.curr.Pos)
 	}
 	return q, nil
@@ -116,13 +126,14 @@ func (p *Parser) parseOrPredicate(qt QueryType) (Predicate, error) {
 
 	preds := []Predicate{first}
 	for p.curr.Type == TokenPipe {
+		pipePos := p.curr.Pos
 		p.advance()
 		next, err := p.parseAndPredicate(qt)
 		if err != nil {
 			return nil, err
 		}
 		if next == nil {
-			return nil, fmt.Errorf("expected predicate after '|'")
+			return nil, shellPipeQueryError(pipePos)
 		}
 		preds = append(preds, next)
 	}
