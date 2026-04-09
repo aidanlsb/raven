@@ -1,14 +1,21 @@
 package mcp
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/aidanlsb/raven/internal/commandexec"
 )
 
 func writeExecutableScript(t *testing.T, dir, name, content string) string {
@@ -594,4 +601,173 @@ func TestResolveVaultForInvocationBaseArgsVaultPathSource(t *testing.T) {
 	if res.source != "base_args" {
 		t.Fatalf("source = %q, want %q", res.source, "base_args")
 	}
+}
+
+func TestRunCancelsInFlightToolCallAndHandlesPing(t *testing.T) {
+	t.Parallel()
+
+	started := make(chan struct{})
+	cancelSeen := make(chan error, 1)
+	var startedOnce sync.Once
+
+	registry := commandexec.NewHandlerRegistry()
+	registry.Register("reindex", func(ctx context.Context, _ commandexec.Request) commandexec.Result {
+		startedOnce.Do(func() { close(started) })
+		<-ctx.Done()
+		cancelSeen <- ctx.Err()
+		return commandexec.Failure("CANCELLED", ctx.Err().Error(), nil, "")
+	})
+
+	inReader, inWriter := io.Pipe()
+	outReader, outWriter := io.Pipe()
+	server := &Server{
+		vaultPath: t.TempDir(),
+		in:        inReader,
+		out:       outWriter,
+		invoker:   commandexec.NewInvoker(registry, nil),
+	}
+
+	responses := make(chan rpcTestResponse, 8)
+	readDone := make(chan error, 1)
+	go func() {
+		scanner := bufio.NewScanner(outReader)
+		scanner.Buffer(make([]byte, 1024), 1024*1024)
+		for scanner.Scan() {
+			var resp rpcTestResponse
+			if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
+				readDone <- err
+				close(responses)
+				return
+			}
+			responses <- resp
+		}
+		readDone <- scanner.Err()
+		close(responses)
+	}()
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- server.Run()
+		_ = outWriter.Close()
+	}()
+
+	writeRPCLine(t, inWriter, map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]interface{}{
+			"name": "raven_invoke",
+			"arguments": map[string]interface{}{
+				"command": "reindex",
+				"args": map[string]interface{}{
+					"dry-run": true,
+				},
+			},
+		},
+	})
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for tool call to start")
+	}
+
+	writeRPCLine(t, inWriter, map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "ping",
+	})
+
+	pingResp := waitForRPCResponse(t, responses)
+	if got := rpcResponseIDAsInt(t, pingResp.ID); got != 2 {
+		t.Fatalf("first response id = %d, want ping response id 2", got)
+	}
+
+	writeRPCLine(t, inWriter, map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "notifications/cancelled",
+		"params": map[string]interface{}{
+			"requestId": 1,
+			"reason":    "test cancellation",
+		},
+	})
+
+	select {
+	case err := <-cancelSeen:
+		if err == nil || err.Error() != "context canceled" {
+			t.Fatalf("handler cancel err = %v, want context canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for handler cancellation")
+	}
+
+	toolResp := waitForRPCResponse(t, responses)
+	if got := rpcResponseIDAsInt(t, toolResp.ID); got != 1 {
+		t.Fatalf("tool response id = %d, want 1", got)
+	}
+
+	var toolResult ToolResult
+	if err := json.Unmarshal(toolResp.Result, &toolResult); err != nil {
+		t.Fatalf("unmarshal tool result: %v", err)
+	}
+	if !toolResult.IsError {
+		t.Fatalf("expected canceled tool result to be marked as error: %+v", toolResult)
+	}
+	if len(toolResult.Content) != 1 || !strings.Contains(toolResult.Content[0].Text, "context canceled") {
+		t.Fatalf("expected canceled tool response text, got: %+v", toolResult.Content)
+	}
+
+	if err := inWriter.Close(); err != nil {
+		t.Fatalf("close input: %v", err)
+	}
+	if err := <-runDone; err != nil {
+		t.Fatalf("server run returned error: %v", err)
+	}
+	if err := <-readDone; err != nil {
+		t.Fatalf("response reader returned error: %v", err)
+	}
+}
+
+type rpcTestResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      interface{}     `json:"id,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *RPCError       `json:"error,omitempty"`
+}
+
+func writeRPCLine(t *testing.T, w *io.PipeWriter, payload map[string]interface{}) {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal rpc payload: %v", err)
+	}
+	if _, err := fmt.Fprintf(w, "%s\n", data); err != nil {
+		t.Fatalf("write rpc payload: %v", err)
+	}
+}
+
+func waitForRPCResponse(t *testing.T, responses <-chan rpcTestResponse) rpcTestResponse {
+	t.Helper()
+	select {
+	case resp, ok := <-responses:
+		if !ok {
+			t.Fatal("response channel closed before receiving RPC response")
+		}
+		if resp.Error != nil {
+			t.Fatalf("unexpected rpc error: %+v", resp.Error)
+		}
+		return resp
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for RPC response")
+		return rpcTestResponse{}
+	}
+}
+
+func rpcResponseIDAsInt(t *testing.T, id interface{}) int {
+	t.Helper()
+	value, ok := id.(float64)
+	if !ok {
+		t.Fatalf("expected numeric rpc id, got %#v", id)
+	}
+	return int(value)
 }

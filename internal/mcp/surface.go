@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -26,7 +27,7 @@ type commandContract = commands.CommandContract
 
 type validationIssue = commands.ValidationIssue
 
-func (s *Server) callCompactTool(name string, args map[string]interface{}) (string, bool, bool) {
+func (s *Server) callCompactToolWithContext(ctx context.Context, name string, args map[string]interface{}) (string, bool, bool) {
 	switch name {
 	case compactToolDiscover:
 		out, isErr := s.callCompactDiscover(args)
@@ -35,7 +36,7 @@ func (s *Server) callCompactTool(name string, args map[string]interface{}) (stri
 		out, isErr := s.callCompactDescribe(args)
 		return out, isErr, true
 	case compactToolInvoke:
-		out, isErr := s.callCompactInvoke(args)
+		out, isErr := s.callCompactInvokeWithContext(ctx, args)
 		return out, isErr, true
 	default:
 		return "", false, false
@@ -136,6 +137,10 @@ func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool)
 }
 
 func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
+	return s.callCompactInvokeWithContext(context.Background(), args)
+}
+
+func (s *Server) callCompactInvokeWithContext(ctx context.Context, args map[string]interface{}) (string, bool) {
 	spec := map[string]parameterSpec{
 		"command": {
 			Name:     "command",
@@ -265,7 +270,7 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 		), true
 	}
 
-	if out, isErr, handled := s.callCanonicalCommand(commandID, invokeArgs, vaultName, vaultPath); handled {
+	if out, isErr, handled := s.callCanonicalCommandWithContext(ctx, commandID, invokeArgs, vaultName, vaultPath); handled {
 		return out, isErr
 	}
 

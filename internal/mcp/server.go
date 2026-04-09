@@ -4,13 +4,16 @@ package mcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/configsvc"
 	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -24,6 +27,12 @@ type Server struct {
 	in         io.Reader
 	out        io.Writer
 	executable string // Path to the rvn executable
+	invoker    *commandexec.Invoker
+
+	sendMu     sync.Mutex
+	inFlightMu sync.Mutex
+	inFlight   map[string]context.CancelFunc
+	runWG      sync.WaitGroup
 }
 
 // Request represents a JSON-RPC 2.0 request.
@@ -194,8 +203,14 @@ func (s *Server) Run() error {
 			continue
 		}
 
+		if req.Method == "tools/call" {
+			s.dispatchToolCall(&req)
+			continue
+		}
 		s.handleRequest(&req)
 	}
+
+	s.runWG.Wait()
 
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, "[raven-mcp] Scanner error:", err)
@@ -260,7 +275,7 @@ func (s *Server) handleRequest(req *Request) {
 	case "tools/list":
 		s.handleToolsList(req)
 	case "tools/call":
-		s.handleToolsCall(req)
+		s.handleToolsCall(context.Background(), req)
 	case "resources/list":
 		s.handleResourcesList(req)
 	case "resources/read":
@@ -268,7 +283,7 @@ func (s *Server) handleRequest(req *Request) {
 	case "ping":
 		s.sendResult(req.ID, map[string]interface{}{})
 	case "notifications/cancelled":
-		// Ignore cancellation notifications
+		s.handleCancelledNotification(req)
 		return
 	default:
 		// Only send error for requests, not notifications
@@ -300,7 +315,7 @@ func (s *Server) handleToolsList(req *Request) {
 	s.sendResult(req.ID, map[string]interface{}{"tools": tools})
 }
 
-func (s *Server) handleToolsCall(req *Request) {
+func (s *Server) handleToolsCall(ctx context.Context, req *Request) {
 	var params struct {
 		Name      string                 `json:"name"`
 		Arguments map[string]interface{} `json:"arguments"`
@@ -313,11 +328,90 @@ func (s *Server) handleToolsCall(req *Request) {
 		}
 	}
 
-	result, isError := s.callTool(params.Name, params.Arguments)
+	result, isError := s.callToolWithContext(ctx, params.Name, params.Arguments)
 	s.sendResult(req.ID, ToolResult{
 		Content: []ToolContent{{Type: "text", Text: result}},
 		IsError: isError,
 	})
+}
+
+func (s *Server) dispatchToolCall(req *Request) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	requestKey, tracked := requestIDKey(req.ID)
+	if tracked {
+		s.trackInFlight(requestKey, cancel)
+	}
+
+	s.runWG.Add(1)
+	go func() {
+		defer s.runWG.Done()
+		defer cancel()
+		if tracked {
+			defer s.untrackInFlight(requestKey)
+		}
+		s.handleToolsCall(ctx, req)
+	}()
+}
+
+func (s *Server) handleCancelledNotification(req *Request) {
+	var params struct {
+		RequestID interface{} `json:"requestId"`
+		ID        interface{} `json:"id"`
+	}
+	if req.Params != nil {
+		if err := json.Unmarshal(*req.Params, &params); err != nil {
+			return
+		}
+	}
+
+	targetID := params.RequestID
+	if targetID == nil {
+		targetID = params.ID
+	}
+	requestKey, ok := requestIDKey(targetID)
+	if !ok {
+		return
+	}
+	s.cancelInFlight(requestKey)
+}
+
+func (s *Server) trackInFlight(requestKey string, cancel context.CancelFunc) {
+	s.inFlightMu.Lock()
+	defer s.inFlightMu.Unlock()
+	if s.inFlight == nil {
+		s.inFlight = make(map[string]context.CancelFunc)
+	}
+	s.inFlight[requestKey] = cancel
+}
+
+func (s *Server) untrackInFlight(requestKey string) {
+	s.inFlightMu.Lock()
+	defer s.inFlightMu.Unlock()
+	if s.inFlight == nil {
+		return
+	}
+	delete(s.inFlight, requestKey)
+}
+
+func (s *Server) cancelInFlight(requestKey string) {
+	s.inFlightMu.Lock()
+	cancel := s.inFlight[requestKey]
+	s.inFlightMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func requestIDKey(id interface{}) (string, bool) {
+	if id == nil {
+		return "", false
+	}
+	encoded, err := json.Marshal(id)
+	if err != nil {
+		return "", false
+	}
+	return string(encoded), true
 }
 
 // Resource represents an MCP resource
@@ -495,8 +589,8 @@ func (s *Server) readSchemaFile() (string, error) {
 	return string(data), nil
 }
 
-func (s *Server) callTool(name string, args map[string]interface{}) (string, bool) {
-	if out, isErr, handled := s.callCompactTool(name, args); handled {
+func (s *Server) callToolWithContext(ctx context.Context, name string, args map[string]interface{}) (string, bool) {
+	if out, isErr, handled := s.callCompactToolWithContext(ctx, name, args); handled {
 		return out, isErr
 	}
 
@@ -715,6 +809,9 @@ func (s *Server) sendError(id interface{}, code int, message, data string) {
 }
 
 func (s *Server) send(v interface{}) {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+
 	data, err := json.Marshal(v)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mcp: failed to marshal JSON-RPC response: %v\n", err)

@@ -10,7 +10,11 @@ import (
 )
 
 func (s *Server) callCanonicalCommand(commandID string, args map[string]interface{}, vaultName, vaultPathOverride string) (string, bool, bool) {
-	invoker := app.CommandInvoker()
+	return s.callCanonicalCommandWithContext(context.Background(), commandID, args, vaultName, vaultPathOverride)
+}
+
+func (s *Server) callCanonicalCommandWithContext(ctx context.Context, commandID string, args map[string]interface{}, vaultName, vaultPathOverride string) (string, bool, bool) {
+	invoker := s.commandInvoker()
 	if invoker == nil {
 		return "", false, false
 	}
@@ -36,7 +40,7 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 	args = normalizeCanonicalArgs(commandID, args)
 	configOpts := s.directConfigContextOptions()
 
-	result := invoker.Execute(context.Background(), commandexec.Request{
+	result := invoker.Execute(ctx, commandexec.Request{
 		CommandID:      commandID,
 		VaultPath:      vaultPath,
 		ConfigPath:     configOpts.ConfigPathOverride,
@@ -55,6 +59,13 @@ func (s *Server) callCanonicalCommand(commandID string, args map[string]interfac
 	}
 
 	return marshalCanonicalResult(result)
+}
+
+func (s *Server) commandInvoker() *commandexec.Invoker {
+	if s.invoker != nil {
+		return s.invoker
+	}
+	return app.CommandInvoker()
 }
 
 func marshalCanonicalResult(result commandexec.Result) (string, bool, bool) {

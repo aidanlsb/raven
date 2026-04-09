@@ -1,6 +1,10 @@
 package mcp
 
 import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
@@ -140,5 +144,58 @@ func TestVaultContextNilMetaCreated(t *testing.T) {
 	}
 	if result.Meta.VaultContext.Source != "active_vault" {
 		t.Fatalf("vault_context.source = %q, want %q", result.Meta.VaultContext.Source, "active_vault")
+	}
+}
+
+func TestCallCanonicalCommandWithContextPropagatesCancellation(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("types: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	registry := commandexec.NewHandlerRegistry()
+	registry.Register("reindex", func(ctx context.Context, _ commandexec.Request) commandexec.Result {
+		if err := ctx.Err(); err == nil {
+			t.Fatal("expected canceled context in canonical handler")
+		}
+		return commandexec.Failure("CANCELLED", ctx.Err().Error(), nil, "")
+	})
+
+	server := &Server{
+		vaultPath: vaultPath,
+		invoker:   commandexec.NewInvoker(registry, nil),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	out, isErr, handled := server.callCanonicalCommandWithContext(ctx, "reindex", map[string]interface{}{"dry-run": true}, "", "")
+	if !handled {
+		t.Fatal("expected canonical command to be handled")
+	}
+	if !isErr {
+		t.Fatalf("expected canceled command to be marked as error, got output: %s", out)
+	}
+
+	var envelope struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if envelope.OK {
+		t.Fatalf("expected ok=false, got true: %s", out)
+	}
+	if envelope.Error.Code != "CANCELLED" {
+		t.Fatalf("error code = %q, want %q", envelope.Error.Code, "CANCELLED")
+	}
+	if envelope.Error.Message != "context canceled" {
+		t.Fatalf("error message = %q, want %q", envelope.Error.Message, "context canceled")
 	}
 }
