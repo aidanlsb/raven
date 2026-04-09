@@ -26,9 +26,9 @@ func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result
 		limit = 20
 	}
 
-	rt, err := readsvc.NewRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
-	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if failure.Error != nil {
+		return failure
 	}
 	defer rt.Close()
 
@@ -72,9 +72,9 @@ func HandleBacklinks(_ context.Context, req commandexec.Request) commandexec.Res
 	start := time.Now()
 	reference := stringArg(req.Args, "target")
 
-	rt, err := readsvc.NewRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
-	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if failure.Error != nil {
+		return failure
 	}
 	defer rt.Close()
 
@@ -99,9 +99,9 @@ func HandleOutlinks(_ context.Context, req commandexec.Request) commandexec.Resu
 	start := time.Now()
 	reference := stringArg(req.Args, "source")
 
-	rt, err := readsvc.NewRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
-	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if failure.Error != nil {
+		return failure
 	}
 	defer rt.Close()
 
@@ -126,9 +126,9 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 	start := time.Now()
 	reference := stringArg(req.Args, "reference")
 
-	rt, err := readsvc.NewRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
-	if err != nil {
-		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
+	if failure.Error != nil {
+		return failure
 	}
 	defer rt.Close()
 
@@ -202,9 +202,9 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	startLine, _ := intArg(req.Args, "start-line")
 	endLine, _ := intArg(req.Args, "end-line")
 
-	rt, err := readsvc.NewRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: false})
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: false})
+	if failure.Error != nil {
+		return failure
 	}
 	defer rt.Close()
 
@@ -247,13 +247,9 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 // HandleOpen executes the canonical `open` command.
 func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)
-	if vaultPath == "" {
-		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
-	}
-
-	rt, err := readsvc.NewRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: false})
-	if err != nil {
-		return commandexec.Failure("CONFIG_INVALID", "failed to load vault config", nil, "Fix raven.yaml and try again")
+	rt, failure := newReadRuntime(vaultPath, readsvc.RuntimeOptions{OpenDB: false})
+	if failure.Error != nil {
+		return failure
 	}
 	defer rt.Close()
 
@@ -369,6 +365,34 @@ func mapOpenFailure(err error) commandexec.Result {
 		return commandexec.Failure("REF_NOT_FOUND", notFound.Error(), nil, "Check the reference and try again")
 	}
 	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+}
+
+func newReadRuntime(vaultPath string, opts readsvc.RuntimeOptions) (*readsvc.Runtime, commandexec.Result) {
+	rt, err := readsvc.NewRuntime(strings.TrimSpace(vaultPath), opts)
+	if err != nil {
+		return nil, mapReadRuntimeSetupFailure(err)
+	}
+	return rt, commandexec.Result{}
+}
+
+func mapReadRuntimeSetupFailure(err error) commandexec.Result {
+	if err == nil {
+		return commandexec.Failure("INTERNAL_ERROR", "failed to initialize read runtime", nil, "")
+	}
+
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(message, "vault path is required"):
+		return commandexec.Failure("VAULT_NOT_SPECIFIED", "no vault path resolved", nil, "Use --vault-path, --vault, active_vault, or default_vault")
+	case isReadRuntimeConfigError(message):
+		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	default:
+		return commandexec.Failure("DATABASE_ERROR", "failed to open database", nil, "Run 'rvn reindex' to rebuild the database")
+	}
+}
+
+func isReadRuntimeConfigError(message string) bool {
+	return strings.Contains(message, "vault config") || strings.Contains(message, "raven.yaml")
 }
 
 func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {
