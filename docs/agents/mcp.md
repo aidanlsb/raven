@@ -60,6 +60,17 @@ Raven exposes MCP resources that agents can fetch:
 
 Additional topic resources are available under `raven://guide/<topic>`.
 
+Vault-scoped resources use stable URIs. On `resources/read`, `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional `vault` or `vault_path` params to target a different vault for that read. Do not pass both. `resources/list` still reflects the server's pinned/current vault.
+
+Example:
+
+```json
+{
+  "uri": "raven://schema/current",
+  "vault": "work"
+}
+```
+
 ## Compact Tool Surface
 
 The MCP surface is intentionally compact:

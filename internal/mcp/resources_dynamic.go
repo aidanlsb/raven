@@ -13,8 +13,8 @@ type savedQueryResource struct {
 	Description string `json:"description,omitempty"`
 }
 
-func (s *Server) readSavedQueriesResource() (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+func (s *Server) readSavedQueriesResource(vaultName, vaultPath string) (string, error) {
+	vaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPath)
 	if err != nil {
 		return "", err
 	}

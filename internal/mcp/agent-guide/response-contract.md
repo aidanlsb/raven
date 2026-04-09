@@ -28,6 +28,10 @@ Important:
 - Use `vault` for a configured vault name or `vault_path` for an explicit vault directory on a single invocation.
 - Do not pass both `vault` and `vault_path`.
 
+For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `raven://queries/saved`, and `raven://vault/agent-instructions` also accept optional top-level `vault` or `vault_path` params.
+- Use one or the other for that read.
+- `resources/list` still reflects the server's pinned/current vault.
+
 ## Error handling rules
 
 1. If `ok=false`, treat the operation as failed.

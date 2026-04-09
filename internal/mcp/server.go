@@ -431,6 +431,19 @@ type ResourceContent struct {
 
 const vaultAgentInstructionsResourceURI = "raven://vault/agent-instructions"
 
+type resourceReadParams struct {
+	URI       string `json:"uri"`
+	Vault     string `json:"vault,omitempty"`
+	VaultPath string `json:"vault_path,omitempty"`
+}
+
+func (p resourceReadParams) validate() error {
+	if strings.TrimSpace(p.Vault) != "" && strings.TrimSpace(p.VaultPath) != "" {
+		return fmt.Errorf("vault and vault_path are mutually exclusive")
+	}
+	return nil
+}
+
 func (s *Server) handleResourcesList(req *Request) {
 	resources := append([]Resource{}, listAgentGuideResources()...)
 	resources = append(resources, Resource{
@@ -452,15 +465,17 @@ func (s *Server) handleResourcesList(req *Request) {
 }
 
 func (s *Server) handleResourcesRead(req *Request) {
-	var params struct {
-		URI string `json:"uri"`
-	}
+	var params resourceReadParams
 
 	if req.Params != nil {
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
 			s.sendError(req.ID, -32602, "Invalid params", err.Error())
 			return
 		}
+	}
+	if err := params.validate(); err != nil {
+		s.sendError(req.ID, -32602, "Invalid params", err.Error())
+		return
 	}
 
 	var content ResourceContent
@@ -477,7 +492,7 @@ func (s *Server) handleResourcesRead(req *Request) {
 			Text:     indexContent,
 		}
 	case "raven://schema/current":
-		schemaContent, err := s.readSchemaFile()
+		schemaContent, err := s.readSchemaFile(params.Vault, params.VaultPath)
 		if err != nil {
 			s.sendError(req.ID, -32603, "Failed to read schema", err.Error())
 			return
@@ -488,7 +503,7 @@ func (s *Server) handleResourcesRead(req *Request) {
 			Text:     schemaContent,
 		}
 	case "raven://queries/saved":
-		queriesContent, err := s.readSavedQueriesResource()
+		queriesContent, err := s.readSavedQueriesResource(params.Vault, params.VaultPath)
 		if err != nil {
 			s.sendError(req.ID, -32603, "Failed to read saved queries", err.Error())
 			return
@@ -499,7 +514,7 @@ func (s *Server) handleResourcesRead(req *Request) {
 			Text:     queriesContent,
 		}
 	case vaultAgentInstructionsResourceURI:
-		agentInstructions, err := s.readAgentInstructionsResource()
+		agentInstructions, err := s.readAgentInstructionsResource(params.Vault, params.VaultPath)
 		if err != nil {
 			if os.IsNotExist(err) {
 				s.sendError(req.ID, -32602, "Resource not found", params.URI)
@@ -561,8 +576,8 @@ func (s *Server) agentInstructionsResource() (Resource, bool) {
 	}, true
 }
 
-func (s *Server) readAgentInstructionsResource() (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+func (s *Server) readAgentInstructionsResource(vaultName, vaultPath string) (string, error) {
+	vaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPath)
 	if err != nil {
 		return "", err
 	}
@@ -575,8 +590,8 @@ func (s *Server) readAgentInstructionsResource() (string, error) {
 	return string(data), nil
 }
 
-func (s *Server) readSchemaFile() (string, error) {
-	vaultPath, err := s.resolveVaultPath()
+func (s *Server) readSchemaFile(vaultName, vaultPath string) (string, error) {
+	vaultPath, err := s.resolveVaultPathForInvocation(vaultName, vaultPath)
 	if err != nil {
 		return "", err
 	}

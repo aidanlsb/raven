@@ -35,6 +35,8 @@ Then fetch:
 - `raven://queries/saved`
 - `raven://vault/agent-instructions`
 
+If you are working against a non-default vault, pass the same `vault` or `vault_path` on `resources/read` for those vault-scoped URIs.
+
 ## Recommended first create flow
 
 ```text

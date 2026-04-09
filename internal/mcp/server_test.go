@@ -84,10 +84,20 @@ func callResourcesReadResponse(t *testing.T, s *Server, uri string) struct {
 	Error *RPCError `json:"error,omitempty"`
 } {
 	t.Helper()
+	return callResourcesReadResponseWithParams(t, s, map[string]interface{}{"uri": uri})
+}
+
+func callResourcesReadResponseWithParams(t *testing.T, s *Server, params map[string]interface{}) struct {
+	Result struct {
+		Contents []ResourceContent `json:"contents"`
+	} `json:"result"`
+	Error *RPCError `json:"error,omitempty"`
+} {
+	t.Helper()
 
 	buf := &bytes.Buffer{}
 	s.out = buf
-	paramsBytes, err := json.Marshal(map[string]string{"uri": uri})
+	paramsBytes, err := json.Marshal(params)
 	if err != nil {
 		t.Fatalf("marshal resources/read params: %v", err)
 	}
@@ -235,6 +245,139 @@ func TestResourcesReadSchema(t *testing.T) {
 	}
 	if !strings.Contains(content.Text, "types:") {
 		t.Fatalf("expected schema content to include types, got: %q", content.Text)
+	}
+}
+
+func TestResourcesReadSchemaUsesVaultPathOverrideAgainstPinnedVault(t *testing.T) {
+	t.Parallel()
+
+	pinnedVault := t.TempDir()
+	overrideVault := t.TempDir()
+	if err := os.WriteFile(filepath.Join(pinnedVault, "schema.yaml"), []byte("types:\n  pinned:\n    default_path: pinned/\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write pinned schema: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(overrideVault, "schema.yaml"), []byte("types:\n  override:\n    default_path: override/\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write override schema: %v", err)
+	}
+
+	s := &Server{vaultPath: pinnedVault}
+	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
+		"uri":        "raven://schema/current",
+		"vault_path": overrideVault,
+	})
+	if resp.Error != nil {
+		t.Fatalf("resources/read error: %s", resp.Error.Message)
+	}
+	if len(resp.Result.Contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(resp.Result.Contents))
+	}
+	text := resp.Result.Contents[0].Text
+	if !strings.Contains(text, "override:") {
+		t.Fatalf("expected override schema content, got %q", text)
+	}
+	if strings.Contains(text, "pinned:") {
+		t.Fatalf("expected override schema to replace pinned schema, got %q", text)
+	}
+}
+
+func TestResourcesReadSavedQueriesUsesNamedVaultOverrideAgainstPinnedVault(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	pinnedVault := filepath.Join(tmp, "pinned")
+	namedVault := filepath.Join(tmp, "named")
+	for _, vaultPath := range []string{pinnedVault, namedVault} {
+		if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+			t.Fatalf("mkdir vault %s: %v", vaultPath, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(pinnedVault, "raven.yaml"), []byte("queries:\n  pinned_query:\n    query: object:project\n"), 0o644); err != nil {
+		t.Fatalf("write pinned raven.yaml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(namedVault, "raven.yaml"), []byte("queries:\n  named_query:\n    query: object:person\n"), 0o644); err != nil {
+		t.Fatalf("write named raven.yaml: %v", err)
+	}
+
+	configPath := filepath.Join(tmp, "config.toml")
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("[vaults]\nwork = %q\n", namedVault)), 0o644); err != nil {
+		t.Fatalf("write config.toml: %v", err)
+	}
+
+	s := &Server{
+		vaultPath: pinnedVault,
+		baseArgs:  []string{"--config", configPath, "--state", filepath.Join(tmp, "state.toml")},
+	}
+	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
+		"uri":   "raven://queries/saved",
+		"vault": "work",
+	})
+	if resp.Error != nil {
+		t.Fatalf("resources/read error: %s", resp.Error.Message)
+	}
+	if len(resp.Result.Contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(resp.Result.Contents))
+	}
+	text := resp.Result.Contents[0].Text
+	if !strings.Contains(text, `"named_query"`) {
+		t.Fatalf("expected named vault queries, got %q", text)
+	}
+	if strings.Contains(text, `"pinned_query"`) {
+		t.Fatalf("expected named vault override to replace pinned vault queries, got %q", text)
+	}
+}
+
+func TestResourcesReadAgentInstructionsUsesVaultPathOverride(t *testing.T) {
+	t.Parallel()
+
+	pinnedVault := t.TempDir()
+	overrideVault := t.TempDir()
+	expected := "# Override Rules\nAlways verify the target vault.\n"
+	if err := os.WriteFile(filepath.Join(pinnedVault, "schema.yaml"), []byte("types: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write pinned schema: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(overrideVault, "schema.yaml"), []byte("types: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write override schema: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(overrideVault, "AGENTS.md"), []byte(expected), 0o644); err != nil {
+		t.Fatalf("write override AGENTS.md: %v", err)
+	}
+
+	s := &Server{vaultPath: pinnedVault}
+	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
+		"uri":        vaultAgentInstructionsResourceURI,
+		"vault_path": overrideVault,
+	})
+	if resp.Error != nil {
+		t.Fatalf("resources/read error: %s", resp.Error.Message)
+	}
+	if len(resp.Result.Contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(resp.Result.Contents))
+	}
+	if resp.Result.Contents[0].Text != expected {
+		t.Fatalf("unexpected AGENTS.md content: got %q want %q", resp.Result.Contents[0].Text, expected)
+	}
+}
+
+func TestResourcesReadRejectsVaultAndVaultPathTogether(t *testing.T) {
+	t.Parallel()
+
+	s := newTestServerWithVault(t)
+	resp := callResourcesReadResponseWithParams(t, s, map[string]interface{}{
+		"uri":        "raven://schema/current",
+		"vault":      "work",
+		"vault_path": s.vaultPath,
+	})
+	if resp.Error == nil {
+		t.Fatal("expected invalid params error")
+	}
+	if resp.Error.Code != -32602 {
+		t.Fatalf("expected error code -32602, got %d", resp.Error.Code)
+	}
+	if resp.Error.Message != "Invalid params" {
+		t.Fatalf("error message = %q, want %q", resp.Error.Message, "Invalid params")
+	}
+	if data, ok := resp.Error.Data.(string); !ok || data != "vault and vault_path are mutually exclusive" {
+		t.Fatalf("error data = %#v, want mutual exclusion message", resp.Error.Data)
 	}
 }
 
