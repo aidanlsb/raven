@@ -106,9 +106,6 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 				outputCanonicalResultJSON(result)
 				return nil
 			}
-			if err := handleFailure(result); err != nil {
-				return err
-			}
 			if opts.RenderHuman != nil {
 				return opts.RenderHuman(cmd, result)
 			}
