@@ -12,11 +12,36 @@ type Parser struct {
 	peek  Token
 }
 
+var commonShellPipeCommands = map[string]struct{}{
+	"awk":   {},
+	"cat":   {},
+	"cut":   {},
+	"grep":  {},
+	"head":  {},
+	"jq":    {},
+	"less":  {},
+	"sed":   {},
+	"sort":  {},
+	"tail":  {},
+	"tee":   {},
+	"uniq":  {},
+	"wc":    {},
+	"xargs": {},
+}
+
 func shellPipeQueryError(pos int) error {
 	return fmt.Errorf(
 		"at col %d: '|' (pipe) is not a shell pipe inside Raven queries. Use '|' only as OR between predicates, or run the query as one shell argument and pipe the command output instead, e.g. rvn query 'object:experiment_review' --pipe | jq 'sort_by(.created_at) | .[0]'",
 		pos+1,
 	)
+}
+
+func looksLikeShellPipeCommand(tok Token) bool {
+	if tok.Type != TokenIdent {
+		return false
+	}
+	_, ok := commonShellPipeCommands[strings.ToLower(tok.Value)]
+	return ok
 }
 
 // Parse parses a query string and returns a Query AST.
@@ -128,6 +153,9 @@ func (p *Parser) parseOrPredicate(qt QueryType) (Predicate, error) {
 	for p.curr.Type == TokenPipe {
 		pipePos := p.curr.Pos
 		p.advance()
+		if looksLikeShellPipeCommand(p.curr) {
+			return nil, shellPipeQueryError(pipePos)
+		}
 		next, err := p.parseAndPredicate(qt)
 		if err != nil {
 			return nil, err

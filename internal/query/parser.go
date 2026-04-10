@@ -329,7 +329,11 @@ func (p *Parser) parseElementOrPredicate() (Predicate, error) {
 
 	preds := []Predicate{first}
 	for p.curr.Type == TokenPipe {
+		pipePos := p.curr.Pos
 		p.advance()
+		if looksLikeShellPipeCommand(p.curr) {
+			return nil, shellPipeQueryError(pipePos)
+		}
 		next, err := p.parseElementAndPredicate()
 		if err != nil {
 			return nil, err

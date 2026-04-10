@@ -132,6 +132,32 @@ func TestParseReportsShellPipeGuidance(t *testing.T) {
 	}
 }
 
+func TestParseReportsShellPipeGuidanceAfterPredicate(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`object:experiment_review .status==open | jq`)
+	if err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "'|' (pipe) is not a shell pipe") {
+		t.Fatalf("expected pipe guidance, got %q", msg)
+	}
+}
+
+func TestParseReportsShellPipeGuidanceInArrayQuantifier(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`object:book any(.tags, _ == "raven" | jq)`)
+	if err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "'|' (pipe) is not a shell pipe") {
+		t.Fatalf("expected pipe guidance, got %q", msg)
+	}
+}
+
 func TestParseUnexpectedTokenUsesReadableTokenName(t *testing.T) {
 	t.Parallel()
 
@@ -640,6 +666,10 @@ func TestParseBooleanComposition(t *testing.T) {
 		{
 			name:  "grouped predicates",
 			input: "object:project (.status==active | .status==done)",
+		},
+		{
+			name:  "OR with function predicate",
+			input: "object:project .status==active | has(trait:due)",
 		},
 	}
 
