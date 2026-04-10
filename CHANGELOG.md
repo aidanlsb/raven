@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.15] - 2026-04-10
+
+### Added
+- Support vault overrides when reading MCP resources, so resource fetches can target the same vault as command calls.
+- Structured vault configuration commands for inspecting and updating config without hand-editing `config.toml`.
+
+### Changed
+- CLI and MCP execution paths now share more canonical planning and validation around query apply, object creation, schema field checks, and vault resolution.
+- Query/date/reference internals now centralize more shared logic, reducing duplicated parsing and repeated resolver/index work.
+
+### Fixed
+- `rvn docs fetch` and `rvn docs list` no longer fail after successful execution in human-readable mode.
+- Query pipe parse errors now point users toward shell pipelines and `jq` instead of surfacing a cryptic unexpected-token message.
+- Schema updates reject null and unsupported field/trait definitions more consistently during validation.
+- Reindex, read, and cleanup paths now preserve cancellation, transactional cleanup, and accurate rebuild bookkeeping more reliably.
+- Several command/runtime error paths now preserve clearer, more stable failure codes and messages across add/read/reclassify flows.
+
 ## [v0.0.14] - 2026-04-04
 
 ### Added
