@@ -254,8 +254,12 @@ func (s *Server) callCompactInvokeWithContext(ctx context.Context, args map[stri
 			}
 		}
 	}
+	normalizedInvokeArgs, commandIssues := validateArgumentsStrict(buildInvokeParamSpec(contract), rawInvokeArgs)
+	if len(commandIssues) > 0 {
+		return commandValidationErrorEnvelope(commandID, rawInvokeArgs, commandIssues), true
+	}
 
-	if out, isErr, handled := s.callCanonicalCommandWithContext(ctx, commandID, rawInvokeArgs, vaultName, vaultPath); handled {
+	if out, isErr, handled := s.callCanonicalCommandWithContext(ctx, commandID, normalizedInvokeArgs, vaultName, vaultPath); handled {
 		return out, isErr
 	}
 
@@ -330,6 +334,18 @@ func validationErrorEnvelope(command string, issues []validationIssue) string {
 		map[string]interface{}{
 			"command": command,
 			"issues":  issues,
+		},
+	)
+}
+
+func commandValidationErrorEnvelope(commandID string, rawArgs map[string]interface{}, issues []validationIssue) string {
+	return errorEnvelope(
+		"INVALID_ARGS",
+		"argument validation failed",
+		describeRetrySuggestion(commandID),
+		map[string]interface{}{
+			"command": commandID,
+			"issues":  withCommandArgumentHints(commandID, rawArgs, issues),
 		},
 	)
 }

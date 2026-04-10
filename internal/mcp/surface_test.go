@@ -166,7 +166,7 @@ func TestCompactInvokeListsSavedQueriesWithDedicatedCommand(t *testing.T) {
 
 func TestCompactInvokeRejectsInvalidArgumentTypes(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := newServerWithoutDefaultVault(t)
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "query",
 		"args": map[string]interface{}{
@@ -428,7 +428,7 @@ func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
 
 func TestCompactInvokeHintsForQuerySavedArgument(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := newServerWithoutDefaultVault(t)
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "query",
 		"args": map[string]interface{}{
@@ -478,7 +478,7 @@ func TestCompactInvokeHintsForQuerySavedArgument(t *testing.T) {
 
 func TestCompactInvokeCommandValidationMatchesCanonicalInvoker(t *testing.T) {
 	t.Parallel()
-	server := NewServer("")
+	server := newServerWithoutDefaultVault(t)
 	rawArgs := map[string]interface{}{
 		"saved": "issues",
 	}
@@ -573,4 +573,20 @@ func canonicalIssueSignatures(issues []commands.ValidationIssue) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func newServerWithoutDefaultVault(t *testing.T) *Server {
+	t.Helper()
+
+	tmp := t.TempDir()
+	configPath := filepath.Join(tmp, "config.toml")
+	statePath := filepath.Join(tmp, "state.toml")
+	if err := os.WriteFile(configPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	return NewServerWithBaseArgs([]string{"--config", configPath, "--state", statePath})
 }
