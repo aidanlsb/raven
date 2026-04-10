@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/filelock"
@@ -1536,6 +1537,158 @@ func TestOpenWithRebuildLock(t *testing.T) {
 
 	if _, _, err := OpenWithRebuild(vaultDir); !errors.Is(err, ErrIndexLocked) {
 		t.Fatalf("expected ErrIndexLocked, got %v", err)
+	}
+}
+
+func TestIsSchemaCompatibleUsesMetaVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		version *string
+		want    bool
+	}{
+		{
+			name: "current version is compatible",
+			version: func() *string {
+				v := strconv.Itoa(CurrentDBVersion)
+				return &v
+			}(),
+			want: true,
+		},
+		{
+			name: "stale version is incompatible",
+			version: func() *string {
+				v := strconv.Itoa(CurrentDBVersion - 1)
+				return &v
+			}(),
+			want: false,
+		},
+		{
+			name: "missing version is incompatible",
+			want: false,
+		},
+		{
+			name: "invalid version is incompatible",
+			version: func() *string {
+				v := "banana"
+				return &v
+			}(),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rawDB, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatalf("open db: %v", err)
+			}
+			defer rawDB.Close()
+
+			if _, err := rawDB.Exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`); err != nil {
+				t.Fatalf("create meta table: %v", err)
+			}
+			if tt.version != nil {
+				if _, err := rawDB.Exec(`INSERT INTO meta (key, value) VALUES ('version', ?)`, *tt.version); err != nil {
+					t.Fatalf("insert version: %v", err)
+				}
+			}
+
+			if got := isSchemaCompatible(rawDB); got != tt.want {
+				t.Fatalf("isSchemaCompatible() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOpenWithRebuildRebuildsStaleVersionAfterPlainOpen(t *testing.T) {
+	t.Parallel()
+
+	vaultDir := t.TempDir()
+	legacyVersion := strconv.Itoa(CurrentDBVersion - 1)
+	seedLegacyIndexVersion(t, vaultDir, legacyVersion)
+
+	db, err := Open(vaultDir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	version, ok, err := storedDatabaseVersion(db.db)
+	if err != nil {
+		t.Fatalf("storedDatabaseVersion after Open: %v", err)
+	}
+	if !ok || version != CurrentDBVersion-1 {
+		t.Fatalf("expected Open to preserve legacy version %d, got ok=%v version=%d", CurrentDBVersion-1, ok, version)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+
+	rebuiltDB, rebuilt, err := OpenWithRebuild(vaultDir)
+	if err != nil {
+		t.Fatalf("OpenWithRebuild: %v", err)
+	}
+	defer rebuiltDB.Close()
+	if !rebuilt {
+		t.Fatal("expected stale version to trigger rebuild")
+	}
+
+	currentVersion, ok, err := storedDatabaseVersion(rebuiltDB.db)
+	if err != nil {
+		t.Fatalf("storedDatabaseVersion after rebuild: %v", err)
+	}
+	if !ok || currentVersion != CurrentDBVersion {
+		t.Fatalf("expected rebuilt DB version %d, got ok=%v version=%d", CurrentDBVersion, ok, currentVersion)
+	}
+}
+
+func TestOpenWithRebuildRebuildsWhenVersionMissing(t *testing.T) {
+	t.Parallel()
+
+	vaultDir := t.TempDir()
+	seedLegacyIndexVersion(t, vaultDir, "")
+
+	db, rebuilt, err := OpenWithRebuild(vaultDir)
+	if err != nil {
+		t.Fatalf("OpenWithRebuild: %v", err)
+	}
+	defer db.Close()
+	if !rebuilt {
+		t.Fatal("expected missing version to trigger rebuild")
+	}
+
+	currentVersion, ok, err := storedDatabaseVersion(db.db)
+	if err != nil {
+		t.Fatalf("storedDatabaseVersion after rebuild: %v", err)
+	}
+	if !ok || currentVersion != CurrentDBVersion {
+		t.Fatalf("expected rebuilt DB version %d, got ok=%v version=%d", CurrentDBVersion, ok, currentVersion)
+	}
+}
+
+func seedLegacyIndexVersion(t *testing.T, vaultDir string, version string) {
+	t.Helper()
+
+	dbDir := filepath.Join(vaultDir, ".raven")
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		t.Fatalf("create db dir: %v", err)
+	}
+
+	rawDB, err := sql.Open("sqlite", filepath.Join(dbDir, "index.db"))
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+	defer rawDB.Close()
+
+	if _, err := rawDB.Exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create meta table: %v", err)
+	}
+	if version != "" {
+		if _, err := rawDB.Exec(`INSERT INTO meta (key, value) VALUES ('version', ?)`, version); err != nil {
+			t.Fatalf("insert version: %v", err)
+		}
 	}
 }
 

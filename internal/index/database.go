@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,13 +48,17 @@ func Open(vaultPath string) (*Database, error) {
 	}
 
 	dbPath := filepath.Join(dbDir, "index.db")
+	isNewDB, err := isNewDatabaseFile(dbPath)
+	if err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	d := &Database{db: db, dailyDirectory: "daily", autoResolveRefs: true}
-	if err := d.initialize(); err != nil {
+	if err := d.initialize(isNewDB); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -146,73 +151,11 @@ func removeDatabaseFiles(dbPath string) error {
 
 // isSchemaCompatible checks if the database schema matches expected structure.
 func isSchemaCompatible(db *sql.DB) bool {
-	// Check if traits table has 'value' column (new schema)
-	// Old schema had 'fields' column instead
-	rows, err := db.Query("PRAGMA table_info(traits)")
-	if err != nil {
+	version, ok, err := storedDatabaseVersion(db)
+	if err != nil || !ok {
 		return false
 	}
-	defer rows.Close()
-
-	hasValueColumn := false
-	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull, pk int
-		var dfltValue interface{}
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
-			return false
-		}
-		if name == "value" {
-			hasValueColumn = true
-			break
-		}
-	}
-
-	if !hasValueColumn {
-		return false
-	}
-
-	// Check if fts_content table exists (v4+)
-	var ftsTableName string
-	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='fts_content'").Scan(&ftsTableName)
-	if err != nil {
-		return false
-	}
-
-	// Check if field_refs table exists (v9+)
-	var fieldRefsTableName string
-	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='field_refs'").Scan(&fieldRefsTableName)
-	if err != nil {
-		return false
-	}
-
-	// Check if objects table has required columns (v6+: indexed_at, v8+: alias)
-	rows2, err := db.Query("PRAGMA table_info(objects)")
-	if err != nil {
-		return false
-	}
-	defer rows2.Close()
-
-	hasIndexedAtColumn := false
-	hasAliasColumn := false
-	for rows2.Next() {
-		var cid int
-		var name, colType string
-		var notNull, pk int
-		var dfltValue interface{}
-		if err := rows2.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
-			return false
-		}
-		if name == "indexed_at" {
-			hasIndexedAtColumn = true
-		}
-		if name == "alias" {
-			hasAliasColumn = true
-		}
-	}
-
-	return hasIndexedAtColumn && hasAliasColumn
+	return version == CurrentDBVersion
 }
 
 // OpenInMemory opens an in-memory database (for testing).
@@ -223,7 +166,7 @@ func OpenInMemory() (*Database, error) {
 	}
 
 	d := &Database{db: db, dailyDirectory: "daily", autoResolveRefs: true}
-	if err := d.initialize(); err != nil {
+	if err := d.initialize(true); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -264,7 +207,7 @@ func (d *Database) Analyze() error {
 const CurrentDBVersion = 9
 
 // initialize creates the database schema.
-func (d *Database) initialize() error {
+func (d *Database) initialize(isNewDB bool) error {
 	schema := `
 		-- Enable WAL mode for better concurrency
 		PRAGMA journal_mode = WAL;
@@ -390,14 +333,54 @@ func (d *Database) initialize() error {
 		return fmt.Errorf("failed to initialize database schema: %w", err)
 	}
 
-	// Set database version
-	_, err = d.db.Exec(`INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)`,
-		fmt.Sprintf("%d", CurrentDBVersion))
-	if err != nil {
-		return fmt.Errorf("failed to set database version: %w", err)
+	if isNewDB {
+		if err := setDatabaseVersion(d.db, CurrentDBVersion); err != nil {
+			return fmt.Errorf("failed to set database version: %w", err)
+		}
 	}
 
 	return nil
+}
+
+func isNewDatabaseFile(dbPath string) (bool, error) {
+	info, err := os.Stat(dbPath)
+	if err == nil {
+		return info.Size() == 0, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return true, nil
+	}
+	return false, fmt.Errorf("failed to inspect database file: %w", err)
+}
+
+func storedDatabaseVersion(db *sql.DB) (int, bool, error) {
+	var raw string
+	err := db.QueryRow(`SELECT value FROM meta WHERE key = 'version'`).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+
+	version, ok := parseDatabaseVersion(raw)
+	if !ok {
+		return 0, false, nil
+	}
+	return version, true, nil
+}
+
+func parseDatabaseVersion(raw string) (int, bool) {
+	version, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, false
+	}
+	return version, true
+}
+
+func setDatabaseVersion(db *sql.DB, version int) error {
+	_, err := db.Exec(`INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)`, strconv.Itoa(version))
+	return err
 }
 
 // IndexDocument indexes a parsed document (replaces existing data for the file).
