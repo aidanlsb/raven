@@ -218,6 +218,57 @@ traits: {}
 	}
 }
 
+func TestUpsertCreateAppliesDefaultTemplate(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+version: 2
+templates:
+  interview_default:
+    file: templates/interview/default.md
+types:
+  interview:
+    default_path: interviews/
+    name_field: title
+    templates: [interview_default]
+    default_template: interview_default
+    fields:
+      title:
+        type: string
+        required: true
+traits: {}
+`)
+	if err := os.MkdirAll(filepath.Join(vaultPath, "templates", "interview"), 0o755); err != nil {
+		t.Fatalf("mkdir templates/interview: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "templates", "interview", "default.md"), []byte("## Interview Template\n"), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+	sch := loadTestSchema(t, vaultPath)
+
+	result, err := Upsert(UpsertRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "interview",
+		Title:      "Jane Doe",
+		TargetPath: "Jane Doe",
+		Schema:     sch,
+	})
+	if err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	if result.Status != "created" {
+		t.Fatalf("expected created status, got %q", result.Status)
+	}
+
+	created, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	if !strings.Contains(string(created), "## Interview Template") {
+		t.Fatalf("expected default template content, got:\n%s", string(created))
+	}
+}
+
 func writeTestSchema(t *testing.T, vaultPath, content string) {
 	t.Helper()
 	path := filepath.Join(vaultPath, "schema.yaml")

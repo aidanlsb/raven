@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
@@ -91,25 +90,12 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 		return nil, newError(ErrorValidationFailed, "schema is required", "Fix schema.yaml and try again", nil, nil)
 	}
 
-	fieldValues := cloneFieldValues(req.FieldValues)
-
-	typeDef, typeExists := req.Schema.Types[req.TypeName]
-	if !typeExists && !schema.IsBuiltinType(req.TypeName) {
-		var typeNames []string
-		for name := range req.Schema.Types {
-			typeNames = append(typeNames, name)
-		}
-		sort.Strings(typeNames)
-		return nil, newError(
-			ErrorTypeNotFound,
-			fmt.Sprintf("type '%s' not found", req.TypeName),
-			fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", ")),
-			map[string]interface{}{"available_types": typeNames},
-			nil,
-		)
+	typeDef, err := lookupTypeDefinitionForCreate(req.Schema, req.TypeName)
+	if err != nil {
+		return nil, err
 	}
 
-	ensureNameFieldValue(fieldValues, typeDef, req.Title)
+	fieldValues := normalizedCreateFieldValues(req.FieldValues, typeDef, req.Title)
 
 	slugified := pages.SlugifyPath(
 		pages.ResolveTargetPathWithRoots(req.TargetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot),
@@ -127,7 +113,7 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 	var warningMessages []string
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		missingRequired := requiredFieldGapsValues(typeDef, fieldValues)
+		missingRequired := requiredFieldGapNames(requiredFieldGaps(typeDef, fieldValues))
 		if len(missingRequired) > 0 {
 			msg := fmt.Sprintf("Missing required fields: %s", strings.Join(missingRequired, ", "))
 			return nil, newError(
@@ -148,23 +134,19 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			)
 		}
 
-		validatedCreateFields, createWarnings, err := fieldmutation.PrepareValidatedFieldMutationValues(
+		validatedCreateFields, createWarnings, err := validateCreateFieldValues(
 			req.TypeName,
-			nil,
 			fieldValues,
 			req.Schema,
 			map[string]bool{"type": true},
-			&fieldmutation.RefValidationContext{
-				VaultPath:   req.VaultPath,
-				VaultConfig: req.VaultConfig,
-			},
+			createRefValidationContext(req.VaultPath, req.VaultConfig),
 		)
 		if err != nil {
 			return nil, err
 		}
 		warningMessages = append(warningMessages, createWarnings...)
 
-		createResult, err := pages.Create(pages.CreateOptions{
+		createResult, err := createObjectPage(createPageRequest{
 			VaultPath:   req.VaultPath,
 			TypeName:    req.TypeName,
 			Title:       req.Title,
@@ -172,17 +154,12 @@ func Upsert(req UpsertRequest) (*UpsertResult, error) {
 			Fields:      validatedCreateFields,
 			Schema:      req.Schema,
 			TemplateDir: req.TemplateDir,
-			ProtectedPrefixes: func() []string {
-				if req.VaultConfig == nil {
-					return nil
-				}
-				return req.VaultConfig.ProtectedPrefixes
-			}(),
+			VaultConfig: req.VaultConfig,
 			ObjectsRoot: req.ObjectsRoot,
 			PagesRoot:   req.PagesRoot,
 		})
 		if err != nil {
-			return nil, newError(ErrorFileWrite, "failed to create object", "", nil, err)
+			return nil, err
 		}
 		filePath = createResult.FilePath
 		relPath = createResult.RelativePath

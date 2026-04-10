@@ -85,6 +85,48 @@ traits: {}
 	}
 }
 
+func TestCreateUnknownFieldReturnsValidationFailed(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	_, err := Create(CreateRequest{
+		VaultPath:  vaultPath,
+		TypeName:   "person",
+		Title:      "Freya",
+		TargetPath: "Freya",
+		FieldValues: map[string]schema.FieldValue{
+			"favorite_color": schema.String("blue"),
+		},
+		Schema: sch,
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	var svcErr *Error
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if svcErr.Code != ErrorValidationFailed {
+		t.Fatalf("expected ErrorValidationFailed, got %s", svcErr.Code)
+	}
+	if !strings.Contains(svcErr.Message, "unknown field 'favorite_color'") {
+		t.Fatalf("unexpected error message: %q", svcErr.Message)
+	}
+}
+
 func TestCreateRejectsExistingFile(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

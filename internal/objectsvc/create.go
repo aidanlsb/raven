@@ -2,13 +2,10 @@ package objectsvc
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/pages"
-	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -45,20 +42,9 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, newError(ErrorInvalidInput, "title cannot contain path separators", "Provide a plain title without path separators", nil, nil)
 	}
 
-	typeDef, typeExists := req.Schema.Types[req.TypeName]
-	if !typeExists && !schema.IsBuiltinType(req.TypeName) {
-		var typeNames []string
-		for name := range req.Schema.Types {
-			typeNames = append(typeNames, name)
-		}
-		sort.Strings(typeNames)
-		return nil, newError(
-			ErrorTypeNotFound,
-			fmt.Sprintf("type '%s' not found", req.TypeName),
-			fmt.Sprintf("Available types: %s", strings.Join(typeNames, ", ")),
-			map[string]interface{}{"available_types": typeNames},
-			nil,
-		)
+	typeDef, err := lookupTypeDefinitionForCreate(req.Schema, req.TypeName)
+	if err != nil {
+		return nil, err
 	}
 
 	targetPath := req.TargetPath
@@ -66,52 +52,19 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		targetPath = req.Title
 	}
 
-	fieldValues := cloneFieldValues(req.FieldValues)
-	ensureNameFieldValue(fieldValues, typeDef, req.Title)
-
-	var missingFields []string
-	var fieldDetails []map[string]interface{}
-	if typeDef != nil {
-		var fieldNames []string
-		for name := range typeDef.Fields {
-			fieldNames = append(fieldNames, name)
-		}
-		sort.Strings(fieldNames)
-
-		for _, fieldName := range fieldNames {
-			fieldDef := typeDef.Fields[fieldName]
-			if fieldDef == nil || !fieldDef.Required {
-				continue
-			}
-			if _, ok := fieldValues[fieldName]; ok {
-				continue
-			}
-			if fieldDef.Default != nil {
-				fieldValues[fieldName] = parser.FieldValueFromYAML(fieldDef.Default)
-				continue
-			}
-			missingFields = append(missingFields, fieldName)
-			detail := map[string]interface{}{
-				"name":     fieldName,
-				"type":     string(fieldDef.Type),
-				"required": true,
-			}
-			if len(fieldDef.Values) > 0 {
-				detail["values"] = fieldDef.Values
-			}
-			fieldDetails = append(fieldDetails, detail)
-		}
-	}
+	fieldValues := normalizedCreateFieldValues(req.FieldValues, typeDef, req.Title)
+	missingFields := requiredFieldGaps(typeDef, fieldValues)
 
 	if len(missingFields) > 0 {
+		missingNames := requiredFieldGapNames(missingFields)
 		details := map[string]interface{}{
-			"missing_fields": fieldDetails,
+			"missing_fields": requiredFieldGapDetails(missingFields),
 			"type":           req.TypeName,
 			"title":          req.Title,
 			"retry_with": map[string]interface{}{
 				"type":  req.TypeName,
 				"title": req.Title,
-				"field": buildFieldTemplate(missingFields),
+				"field": buildFieldTemplate(missingNames),
 			},
 		}
 		if typeDef != nil && typeDef.NameField != "" {
@@ -120,16 +73,15 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		}
 		return nil, newError(
 			ErrorRequiredField,
-			fmt.Sprintf("Missing required fields: %s", strings.Join(missingFields, ", ")),
-			fmt.Sprintf("Retry the same call with: field: {%s}", buildFieldTemplateExample(missingFields)),
+			fmt.Sprintf("Missing required fields: %s", strings.Join(missingNames, ", ")),
+			fmt.Sprintf("Retry the same call with: field: {%s}", buildFieldTemplateExample(missingNames)),
 			details,
 			nil,
 		)
 	}
 
-	resolvedSlugPath := pages.SlugifyPath(
-		pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot),
-	)
+	resolvedTargetPath := pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot)
+	resolvedSlugPath := pages.SlugifyPath(resolvedTargetPath)
 	plannedRelPath := resolvedSlugPath
 	if !strings.HasSuffix(plannedRelPath, ".md") {
 		plannedRelPath += ".md"
@@ -137,7 +89,7 @@ func Create(req CreateRequest) (*CreateResult, error) {
 	if err := ValidateContentMutationRelPath(req.VaultConfig, plannedRelPath); err != nil {
 		return nil, err
 	}
-	if pages.Exists(req.VaultPath, pages.ResolveTargetPathWithRoots(targetPath, req.TypeName, req.Schema, req.ObjectsRoot, req.PagesRoot)) {
+	if pages.Exists(req.VaultPath, resolvedTargetPath) {
 		return nil, newError(
 			ErrorFileExists,
 			fmt.Sprintf("file already exists: %s.md", resolvedSlugPath),
@@ -152,22 +104,12 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		return nil, newError(ErrorInvalidInput, err.Error(), "Use `rvn schema template list --type <type_name>` to see available template IDs", nil, err)
 	}
 
-	validatedFields, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
-		req.TypeName,
-		nil,
-		fieldValues,
-		req.Schema,
-		nil,
-		&fieldmutation.RefValidationContext{
-			VaultPath:   req.VaultPath,
-			VaultConfig: req.VaultConfig,
-		},
-	)
+	validatedFields, _, err := validateCreateFieldValues(req.TypeName, fieldValues, req.Schema, nil, createRefValidationContext(req.VaultPath, req.VaultConfig))
 	if err != nil {
 		return nil, newError(ErrorValidationFailed, err.Error(), "Ensure values match the schema field types for this object", nil, err)
 	}
 
-	result, err := pages.Create(pages.CreateOptions{
+	result, err := createObjectPage(createPageRequest{
 		VaultPath:        req.VaultPath,
 		TypeName:         req.TypeName,
 		Title:            req.Title,
@@ -176,17 +118,12 @@ func Create(req CreateRequest) (*CreateResult, error) {
 		Schema:           req.Schema,
 		TemplateOverride: templateOverride,
 		TemplateDir:      req.TemplateDir,
-		ProtectedPrefixes: func() []string {
-			if req.VaultConfig == nil {
-				return nil
-			}
-			return req.VaultConfig.ProtectedPrefixes
-		}(),
-		ObjectsRoot: req.ObjectsRoot,
-		PagesRoot:   req.PagesRoot,
+		VaultConfig:      req.VaultConfig,
+		ObjectsRoot:      req.ObjectsRoot,
+		PagesRoot:        req.PagesRoot,
 	})
 	if err != nil {
-		return nil, newError(ErrorFileWrite, "failed to create object", "", nil, err)
+		return nil, err
 	}
 
 	return &CreateResult{
