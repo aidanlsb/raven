@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
 func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {
-	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Object, error) {
+	return scanRows(rows, func(rows *sql.Rows) (model.Object, error) {
 		var r model.Object
 		var fieldsJSON string
 		if err := rows.Scan(&r.ID, &r.Type, &fieldsJSON, &r.FilePath, &r.LineStart, &r.ParentID); err != nil {
@@ -24,7 +24,7 @@ func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {
 }
 
 func scanTraitRows(rows *sql.Rows) ([]model.Trait, error) {
-	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Trait, error) {
+	return scanRows(rows, func(rows *sql.Rows) (model.Trait, error) {
 		var r model.Trait
 		if err := rows.Scan(&r.ID, &r.TraitType, &r.Value, &r.Content, &r.FilePath, &r.Line, &r.ParentObjectID); err != nil {
 			return model.Trait{}, err
@@ -34,7 +34,7 @@ func scanTraitRows(rows *sql.Rows) ([]model.Trait, error) {
 }
 
 func scanIDRows(rows *sql.Rows) ([]string, error) {
-	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (string, error) {
+	return scanRows(rows, func(rows *sql.Rows) (string, error) {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return "", err
@@ -205,4 +205,34 @@ func (e *Executor) ExecuteTraitIDQuery(q *Query, limit, offset int) ([]string, e
 // ExecuteTraitCountQuery executes a trait query as COUNT(*).
 func (e *Executor) ExecuteTraitCountQuery(q *Query) (int, error) {
 	return e.executeTraitCountQuery(q)
+}
+
+// inClauseArgs returns a comma-separated list of "?" placeholders and the
+// corresponding args slice. If items is empty, returns "NULL" and no args.
+func inClauseArgs(items []string) (placeholders string, args []any) {
+	if len(items) == 0 {
+		return "NULL", nil
+	}
+	ph := make([]string, len(items))
+	args = make([]any, len(items))
+	for i, item := range items {
+		ph[i] = "?"
+		args[i] = item
+	}
+	return strings.Join(ph, ", "), args
+}
+
+// scanRows scans all rows into a slice using the provided scanner.
+func scanRows[T any](rows *sql.Rows, scan func(*sql.Rows) (T, error)) ([]T, error) {
+	defer rows.Close()
+
+	var out []T
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }

@@ -6,8 +6,14 @@ import (
 
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
-	"github.com/aidanlsb/raven/internal/shellquote"
 )
+
+func shellQuoteIfNeeded(s string) string {
+	if strings.ContainsAny(s, "#[]()|!\"'") {
+		return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	}
+	return s
+}
 
 func isSingleToken(s string) bool {
 	return s != "" && !strings.ContainsAny(s, " \t\r\n")
@@ -32,7 +38,7 @@ func buildUnknownQuerySuggestion(db *index.Database, queryStr string, dailyDir s
 	}
 	rr := res.Resolve(q)
 	if rr.Ambiguous {
-		return base + fmt.Sprintf(" Did you mean to resolve a reference? Try: %s", "rvn resolve "+shellquote.QuoteIfNeeded(q))
+		return base + fmt.Sprintf(" Did you mean to resolve a reference? Try: %s", "rvn resolve "+shellQuoteIfNeeded(q))
 	}
 	if rr.TargetID == "" {
 		return base
@@ -40,7 +46,7 @@ func buildUnknownQuerySuggestion(db *index.Database, queryStr string, dailyDir s
 
 	// Looks like a valid reference.
 	return base + fmt.Sprintf(" Did you mean to open/read an object reference? Try: %s or %s",
-		"rvn read "+shellquote.QuoteIfNeeded(q),
-		"rvn open "+shellquote.QuoteIfNeeded(q),
+		"rvn read "+shellQuoteIfNeeded(q),
+		"rvn open "+shellQuoteIfNeeded(q),
 	)
 }

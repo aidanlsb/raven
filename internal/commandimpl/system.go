@@ -15,6 +15,7 @@ import (
 	"github.com/aidanlsb/raven/internal/maintsvc"
 	"github.com/aidanlsb/raven/internal/reindexsvc"
 	"github.com/aidanlsb/raven/internal/slugs"
+	"github.com/aidanlsb/raven/internal/svcerror"
 	"github.com/aidanlsb/raven/internal/versioninfo"
 )
 
@@ -31,11 +32,11 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		CLIVersion: version,
 	})
 	if err != nil {
-		svcErr, ok := initsvc.AsError(err)
+		svcErr, ok := svcerror.As(err)
 		if !ok {
 			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 		}
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.Warnings))
@@ -72,11 +73,11 @@ func HandleReindex(_ context.Context, req commandexec.Request) commandexec.Resul
 		Context:   context.Background(),
 	})
 	if err != nil {
-		svcErr, ok := reindexsvc.AsError(err)
+		svcErr, ok := svcerror.As(err)
 		if !ok {
 			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 		}
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
@@ -164,12 +165,12 @@ func HandleVersion(_ context.Context, req commandexec.Request) commandexec.Resul
 }
 
 func mapDateServiceError(err error) commandexec.Result {
-	svcErr, ok := datesvc.AsError(err)
+	svcErr, ok := svcerror.As(err)
 	if !ok {
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 	}
 
-	return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+	return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 }
 
 func buildInitPostInitData(path, configPathOverride, statePathOverride string) map[string]interface{} {

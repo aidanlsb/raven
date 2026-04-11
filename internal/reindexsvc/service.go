@@ -2,7 +2,6 @@ package reindexsvc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,58 +11,18 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerror"
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-type Code string
-
 const (
-	CodeInvalidInput  Code = "INVALID_INPUT"
-	CodeSchemaInvalid Code = "SCHEMA_INVALID"
-	CodeConfigInvalid Code = "CONFIG_INVALID"
-	CodeDatabaseError Code = "DATABASE_ERROR"
-	CodeFileReadError Code = "FILE_READ_ERROR"
-	CodeInternal      Code = "INTERNAL_ERROR"
+	CodeInvalidInput  = "INVALID_INPUT"
+	CodeSchemaInvalid = "SCHEMA_INVALID"
+	CodeConfigInvalid = "CONFIG_INVALID"
+	CodeDatabaseError = "DATABASE_ERROR"
+	CodeFileReadError = "FILE_READ_ERROR"
+	CodeInternal      = "INTERNAL_ERROR"
 )
-
-type Error struct {
-	Code       Code
-	Message    string
-	Suggestion string
-	Err        error
-}
-
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return string(e.Code)
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func newError(code Code, message, suggestion string, err error) *Error {
-	return &Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
-func AsError(err error) (*Error, bool) {
-	var svcErr *Error
-	if errors.As(err, &svcErr) {
-		return svcErr, true
-	}
-	return nil, false
-}
 
 type RunRequest struct {
 	VaultPath string
@@ -121,7 +80,7 @@ func (r *RunResult) Data() map[string]interface{} {
 func Run(req RunRequest) (*RunResult, error) {
 	vaultPath := strings.TrimSpace(req.VaultPath)
 	if vaultPath == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+		return nil, svcerror.New(CodeInvalidInput, "vault path is required", "", nil)
 	}
 
 	ctx := req.Context
@@ -131,12 +90,12 @@ func Run(req RunRequest) (*RunResult, error) {
 
 	sch, err := schema.Load(vaultPath)
 	if err != nil {
-		return nil, newError(CodeSchemaInvalid, fmt.Sprintf("failed to load schema: %v", err), "Run 'rvn init' to create a schema", err)
+		return nil, svcerror.New(CodeSchemaInvalid, fmt.Sprintf("failed to load schema: %v", err), "Run 'rvn init' to create a schema", err)
 	}
 
 	vaultCfg, err := config.LoadVaultConfig(vaultPath)
 	if err != nil {
-		return nil, newError(CodeConfigInvalid, fmt.Sprintf("failed to load raven.yaml: %v", err), "Fix raven.yaml and try again", err)
+		return nil, svcerror.New(CodeConfigInvalid, fmt.Sprintf("failed to load raven.yaml: %v", err), "Fix raven.yaml and try again", err)
 	}
 	if vaultCfg == nil {
 		vaultCfg = &config.VaultConfig{}
@@ -144,7 +103,7 @@ func Run(req RunRequest) (*RunResult, error) {
 
 	db, wasRebuilt, err := index.OpenWithRebuild(vaultPath)
 	if err != nil {
-		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to open database: %v", err), "Run 'rvn reindex' to rebuild the database", err)
+		return nil, svcerror.New(CodeDatabaseError, fmt.Sprintf("failed to open database: %v", err), "Run 'rvn reindex' to rebuild the database", err)
 	}
 	defer db.Close()
 
@@ -155,7 +114,7 @@ func Run(req RunRequest) (*RunResult, error) {
 
 	if !incremental && !req.DryRun {
 		if err := db.ClearAllData(); err != nil {
-			return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to clear database for full reindex: %v", err), "", err)
+			return nil, svcerror.New(CodeDatabaseError, fmt.Sprintf("failed to clear database for full reindex: %v", err), "", err)
 		}
 	}
 
@@ -259,7 +218,7 @@ func Run(req RunRequest) (*RunResult, error) {
 		return nil
 	})
 	if walkErr != nil {
-		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking vault: %v", walkErr), "", walkErr)
+		return nil, svcerror.New(CodeFileReadError, fmt.Sprintf("error walking vault: %v", walkErr), "", walkErr)
 	}
 
 	if !req.DryRun && result.FilesIndexed > 0 {
@@ -279,7 +238,7 @@ func Run(req RunRequest) (*RunResult, error) {
 
 	stats, err := db.Stats()
 	if err != nil {
-		return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to get stats: %v", err), "", err)
+		return nil, svcerror.New(CodeDatabaseError, fmt.Sprintf("failed to get stats: %v", err), "", err)
 	}
 	result.Objects = stats.ObjectCount
 	result.Traits = stats.TraitCount

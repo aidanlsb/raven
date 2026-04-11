@@ -7,14 +7,15 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/svcerror"
 )
 
-func assertReindexCode(t *testing.T, err error, want Code) *Error {
+func assertReindexCode(t *testing.T, err error, want string) *svcerror.Error {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
 	}
-	svcErr, ok := AsError(err)
+	svcErr, ok := svcerror.As(err)
 	if !ok {
 		t.Fatalf("expected reindexsvc error, got %T: %v", err, err)
 	}

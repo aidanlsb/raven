@@ -2,60 +2,19 @@ package maintsvc
 
 import (
 	stdbuildinfo "debug/buildinfo"
-	"errors"
 	"runtime"
 	"runtime/debug"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/buildinfo"
 	"github.com/aidanlsb/raven/internal/index"
+	"github.com/aidanlsb/raven/internal/svcerror"
 )
-
-type Code string
 
 const (
-	CodeInvalidInput  Code = "INVALID_INPUT"
-	CodeDatabaseError Code = "DATABASE_ERROR"
+	CodeInvalidInput  = "INVALID_INPUT"
+	CodeDatabaseError = "DATABASE_ERROR"
 )
-
-type Error struct {
-	Code       Code
-	Message    string
-	Suggestion string
-	Err        error
-}
-
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return string(e.Code)
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func newError(code Code, message, suggestion string, err error) *Error {
-	return &Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
-func AsError(err error) (*Error, bool) {
-	var svcErr *Error
-	if errors.As(err, &svcErr) {
-		return svcErr, true
-	}
-	return nil, false
-}
 
 type StatsResult struct {
 	FileCount   int `json:"file_count"`
@@ -66,18 +25,18 @@ type StatsResult struct {
 
 func Stats(vaultPath string) (*StatsResult, error) {
 	if strings.TrimSpace(vaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+		return nil, svcerror.New(CodeInvalidInput, "vault path is required", "", nil)
 	}
 
 	db, err := index.Open(vaultPath)
 	if err != nil {
-		return nil, newError(CodeDatabaseError, "failed to open database", "Run 'rvn reindex' to rebuild the database", err)
+		return nil, svcerror.New(CodeDatabaseError, "failed to open database", "Run 'rvn reindex' to rebuild the database", err)
 	}
 	defer db.Close()
 
 	stats, err := db.Stats()
 	if err != nil {
-		return nil, newError(CodeDatabaseError, "failed to query stats", "", err)
+		return nil, svcerror.New(CodeDatabaseError, "failed to query stats", "", err)
 	}
 
 	return &StatsResult{

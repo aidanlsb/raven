@@ -1,7 +1,6 @@
 package initsvc
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,55 +11,15 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/docsync"
 	"github.com/aidanlsb/raven/internal/schema"
+	"github.com/aidanlsb/raven/internal/svcerror"
 )
 
-type Code string
-
 const (
-	CodeInvalidInput   Code = "INVALID_INPUT"
-	CodeFileWriteError Code = "FILE_WRITE_ERROR"
+	CodeInvalidInput   = "INVALID_INPUT"
+	CodeFileWriteError = "FILE_WRITE_ERROR"
 )
 
 const WarnDocsFetchFailed = "DOCS_FETCH_FAILED"
-
-type Error struct {
-	Code       Code
-	Message    string
-	Suggestion string
-	Err        error
-}
-
-func (e *Error) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return string(e.Code)
-}
-
-func (e *Error) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func newError(code Code, message, suggestion string, err error) *Error {
-	return &Error{Code: code, Message: message, Suggestion: suggestion, Err: err}
-}
-
-func AsError(err error) (*Error, bool) {
-	var svcErr *Error
-	if errors.As(err, &svcErr) {
-		return svcErr, true
-	}
-	return nil, false
-}
 
 type DocsResult struct {
 	Fetched   bool   `json:"fetched"`
@@ -91,16 +50,16 @@ type InitializeRequest struct {
 func Initialize(req InitializeRequest) (*Result, error) {
 	path := strings.TrimSpace(req.Path)
 	if path == "" {
-		return nil, newError(CodeInvalidInput, "path is required", "Usage: rvn init <path>", nil)
+		return nil, svcerror.New(CodeInvalidInput, "path is required", "Usage: rvn init <path>", nil)
 	}
 
 	if err := os.MkdirAll(path, 0o755); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create vault directory", "Check that the destination path is writable", err)
+		return nil, svcerror.New(CodeFileWriteError, "failed to create vault directory", "Check that the destination path is writable", err)
 	}
 
 	ravenDir := filepath.Join(path, ".raven")
 	if err := os.MkdirAll(ravenDir, 0o755); err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create .raven directory", "Check that the destination path is writable", err)
+		return nil, svcerror.New(CodeFileWriteError, "failed to create .raven directory", "Check that the destination path is writable", err)
 	}
 
 	gitignorePath := filepath.Join(path, ".gitignore")
@@ -140,7 +99,7 @@ func Initialize(req InitializeRequest) (*Result, error) {
 			newContent = strings.TrimRight(existingContent, "\n") + "\n" + addition
 		}
 		if err := os.WriteFile(gitignorePath, []byte(newContent), 0o644); err != nil {
-			return nil, newError(CodeFileWriteError, "failed to write .gitignore", "Check write permissions for .gitignore", err)
+			return nil, svcerror.New(CodeFileWriteError, "failed to write .gitignore", "Check write permissions for .gitignore", err)
 		}
 	} else if existingContent != "" {
 		gitignoreState = "unchanged"
@@ -148,11 +107,11 @@ func Initialize(req InitializeRequest) (*Result, error) {
 
 	createdConfig, err := config.CreateDefaultVaultConfig(path)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create raven.yaml", "", err)
+		return nil, svcerror.New(CodeFileWriteError, "failed to create raven.yaml", "", err)
 	}
 	createdSchema, err := schema.CreateDefault(path)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "failed to create schema.yaml", "", err)
+		return nil, svcerror.New(CodeFileWriteError, "failed to create schema.yaml", "", err)
 	}
 
 	result := &Result{

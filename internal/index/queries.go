@@ -9,7 +9,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
 // QueryTraits queries traits by type with optional value filter.
@@ -179,7 +178,7 @@ func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]model.
 		return nil, nil
 	}
 
-	inClause, args := sqlutil.InClauseArgs(traitTypes)
+	inClause, args := inClauseArgs(traitTypes)
 
 	query := fmt.Sprintf(`
 		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id

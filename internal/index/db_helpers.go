@@ -3,7 +3,23 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
+
+// inClauseArgs returns a comma-separated list of "?" placeholders and the
+// corresponding args slice. If items is empty, returns "NULL" and no args.
+func inClauseArgs(items []string) (placeholders string, args []any) {
+	if len(items) == 0 {
+		return "NULL", nil
+	}
+	ph := make([]string, len(items))
+	args = make([]any, len(items))
+	for i, item := range items {
+		ph[i] = "?"
+		args[i] = item
+	}
+	return strings.Join(ph, ", "), args
+}
 
 type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)

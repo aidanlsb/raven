@@ -13,9 +13,12 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
+
+// --- file-level move ---
 
 type MoveFileRequest struct {
 	VaultPath          string
@@ -452,4 +455,365 @@ func remapMovedSourceID(sourceID, oldID, newID string) string {
 		return newID + sourceID[len(oldID):]
 	}
 	return sourceID
+}
+
+// --- single-object move by reference ---
+
+type MoveByReferenceRequest struct {
+	VaultPath      string
+	VaultConfig    *config.VaultConfig
+	Schema         *schema.Schema
+	Reference      string
+	Destination    string
+	UpdateRefs     bool
+	SkipTypeCheck  bool
+	ParseOptions   *parser.ParseOptions
+	FailOnIndexErr bool
+}
+
+type MoveTypeMismatch struct {
+	DestinationDir string
+	ExpectedType   string
+	ActualType     string
+}
+
+type MoveByReferenceResult struct {
+	SourceID          string
+	SourceRelative    string
+	DestinationID     string
+	DestinationRel    string
+	UpdatedRefs       []string
+	WarningMessages   []string
+	NeedsConfirm      bool
+	Reason            string
+	TypeMismatch      *MoveTypeMismatch
+	ResolvedDestInput string
+}
+
+func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error) {
+	if strings.TrimSpace(req.VaultPath) == "" {
+		return nil, newError(ErrorInvalidInput, "vault path is required", "", nil, nil)
+	}
+	if req.VaultConfig == nil {
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+	}
+	if strings.TrimSpace(req.Reference) == "" || strings.TrimSpace(req.Destination) == "" {
+		return nil, newError(ErrorInvalidInput, "source and destination are required", "Usage: rvn move <source> <destination>", nil, nil)
+	}
+
+	resolved, err := resolveReferenceForMutation(req.VaultPath, req.VaultConfig, req.Schema, req.Reference)
+	if err != nil {
+		return nil, err
+	}
+	sourceFile := resolved.FilePath
+
+	if err := paths.ValidateWithinVault(req.VaultPath, sourceFile); err != nil {
+		return nil, newError(ErrorValidationFailed, "source path is outside vault", "Files can only be moved within the vault", nil, err)
+	}
+
+	sourceRelPath, err := filepath.Rel(req.VaultPath, sourceFile)
+	if err != nil {
+		return nil, newError(ErrorUnexpected, "failed to resolve source path", "", nil, err)
+	}
+	if err := ValidateContentMutationRelPath(req.VaultConfig, sourceRelPath); err != nil {
+		return nil, err
+	}
+	sourceID := req.VaultConfig.FilePathToObjectID(sourceRelPath)
+
+	destination := req.Destination
+	destinationIsDirectory := strings.HasSuffix(destination, "/") || strings.HasSuffix(destination, "\\")
+	if destinationIsDirectory {
+		sourceBase := strings.TrimSuffix(filepath.Base(sourceRelPath), ".md")
+		if strings.TrimSpace(sourceBase) == "" {
+			return nil, newError(ErrorInvalidInput, "source has an invalid filename", "Use an explicit destination file path", nil, nil)
+		}
+		destination = filepath.ToSlash(filepath.Join(destination, sourceBase))
+	}
+
+	destination = paths.EnsureMDExtension(destination)
+	destinationBase := strings.TrimSuffix(filepath.Base(destination), ".md")
+	if strings.TrimSpace(destinationBase) == "" {
+		return nil, newError(ErrorInvalidInput, "destination has an empty filename", "Use a non-empty destination filename or a directory ending with /", nil, nil)
+	}
+
+	destPath := destination
+	if req.VaultConfig.HasDirectoriesConfig() {
+		destPath = req.VaultConfig.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
+	}
+	destFile := filepath.Join(req.VaultPath, destPath)
+
+	if err := paths.ValidateWithinVault(req.VaultPath, destFile); err != nil {
+		return nil, newError(ErrorValidationFailed, "destination path is outside vault", "Files can only be moved within the vault", nil, err)
+	}
+	relDest, _ := filepath.Rel(req.VaultPath, destFile)
+	if err := ValidateContentMutationRelPath(req.VaultConfig, relDest); err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(destFile); err == nil {
+		return nil, newError(ErrorValidationFailed, fmt.Sprintf("Destination '%s' already exists", destination), "Choose a different destination or delete the existing file first", nil, nil)
+	}
+
+	sch := req.Schema
+	if sch == nil {
+		sch = schema.New()
+	}
+
+	content, err := os.ReadFile(sourceFile)
+	if err != nil {
+		return nil, newError(ErrorFileRead, "failed to read source file", "", nil, err)
+	}
+	doc, err := parser.ParseDocumentWithOptions(string(content), sourceFile, req.VaultPath, req.ParseOptions)
+	if err != nil {
+		return nil, newError(ErrorValidationFailed, "failed to parse source file", "Failed to parse source file", nil, err)
+	}
+
+	fileType := ""
+	if len(doc.Objects) > 0 {
+		fileType = doc.Objects[0].ObjectType
+	}
+
+	destDir := filepath.Dir(relDest)
+	for typeName, typeDef := range sch.Types {
+		if typeDef.DefaultPath == "" {
+			continue
+		}
+		defaultPath := strings.TrimSuffix(typeDef.DefaultPath, "/")
+		if destDir == defaultPath && typeName != fileType && !req.SkipTypeCheck {
+			return &MoveByReferenceResult{
+				SourceID:       sourceID,
+				SourceRelative: sourceRelPath,
+				DestinationID:  req.VaultConfig.FilePathToObjectID(destPath),
+				DestinationRel: destPath,
+				NeedsConfirm:   true,
+				Reason:         fmt.Sprintf("Type mismatch: file is '%s' but destination is default path for '%s'", fileType, typeName),
+				TypeMismatch: &MoveTypeMismatch{
+					DestinationDir: destDir,
+					ExpectedType:   typeName,
+					ActualType:     fileType,
+				},
+			}, nil
+		}
+	}
+
+	serviceResult, err := MoveFile(MoveFileRequest{
+		VaultPath:         req.VaultPath,
+		SourceFile:        sourceFile,
+		DestinationFile:   destFile,
+		SourceObjectID:    sourceID,
+		DestinationObject: req.VaultConfig.FilePathToObjectID(destPath),
+		UpdateRefs:        req.UpdateRefs,
+		FailOnIndexError:  req.FailOnIndexErr,
+		VaultConfig:       req.VaultConfig,
+		Schema:            sch,
+		ParseOptions:      req.ParseOptions,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &MoveByReferenceResult{
+		SourceID:        sourceID,
+		SourceRelative:  sourceRelPath,
+		DestinationID:   req.VaultConfig.FilePathToObjectID(destPath),
+		DestinationRel:  destPath,
+		UpdatedRefs:     serviceResult.UpdatedRefs,
+		WarningMessages: serviceResult.WarningMessages,
+	}, nil
+}
+
+// --- bulk move ---
+
+type MoveBulkRequest struct {
+	VaultPath      string
+	VaultConfig    *config.VaultConfig
+	Schema         *schema.Schema
+	ObjectIDs      []string
+	DestinationDir string
+	UpdateRefs     bool
+	ParseOptions   *parser.ParseOptions
+}
+
+type MoveBulkPreviewItem struct {
+	ID      string
+	Action  string
+	Details string
+}
+
+type MoveBulkResult struct {
+	ID      string
+	Status  string
+	Reason  string
+	Details string
+}
+
+type MoveBulkPreview struct {
+	Action      string
+	Items       []MoveBulkPreviewItem
+	Skipped     []MoveBulkResult
+	Total       int
+	Destination string
+}
+
+type MoveBulkSummary struct {
+	Action          string
+	Results         []MoveBulkResult
+	Total           int
+	Skipped         int
+	Errors          int
+	Moved           int
+	Destination     string
+	WarningMessages []string
+}
+
+func PreviewMoveBulk(req MoveBulkRequest) (*MoveBulkPreview, error) {
+	if req.VaultConfig == nil {
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+	}
+	if !strings.HasSuffix(req.DestinationDir, "/") {
+		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
+	}
+
+	items := make([]MoveBulkPreviewItem, 0, len(req.ObjectIDs))
+	skipped := make([]MoveBulkResult, 0)
+	for _, id := range req.ObjectIDs {
+		sourceFile, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		if err != nil {
+			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: "object not found"})
+			continue
+		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			continue
+		}
+
+		filename := filepath.Base(sourceFile)
+		destPath := filepath.Join(req.DestinationDir, filename)
+		if err := ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+			skipped = append(skipped, MoveBulkResult{ID: id, Status: "skipped", Reason: err.Error()})
+			continue
+		}
+		fullDestPath := filepath.Join(req.VaultPath, destPath)
+		if _, err := os.Stat(fullDestPath); err == nil {
+			skipped = append(skipped, MoveBulkResult{
+				ID:     id,
+				Status: "skipped",
+				Reason: fmt.Sprintf("destination already exists: %s", destPath),
+			})
+			continue
+		}
+
+		items = append(items, MoveBulkPreviewItem{
+			ID:      id,
+			Action:  "move",
+			Details: fmt.Sprintf("→ %s", destPath),
+		})
+	}
+
+	return &MoveBulkPreview{
+		Action:      "move",
+		Items:       items,
+		Skipped:     skipped,
+		Total:       len(req.ObjectIDs),
+		Destination: req.DestinationDir,
+	}, nil
+}
+
+func ApplyMoveBulk(req MoveBulkRequest) (*MoveBulkSummary, error) {
+	if req.VaultConfig == nil {
+		return nil, newError(ErrorValidationFailed, "vault config is required", "Fix raven.yaml and try again", nil, nil)
+	}
+	if !strings.HasSuffix(req.DestinationDir, "/") {
+		return nil, newError(ErrorInvalidInput, "destination must be a directory (end with /)", "Example: rvn move --stdin archive/projects/", nil, nil)
+	}
+
+	results := make([]MoveBulkResult, 0, len(req.ObjectIDs))
+	movedCount := 0
+	skippedCount := 0
+	errorCount := 0
+	warnings := make([]string, 0)
+
+	for _, id := range req.ObjectIDs {
+		result := MoveBulkResult{ID: id}
+
+		sourceFile, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, id, req.VaultConfig)
+		if err != nil {
+			result.Status = "skipped"
+			result.Reason = "object not found"
+			skippedCount++
+			results = append(results, result)
+			continue
+		}
+		if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, sourceFile); err != nil {
+			result.Status = "error"
+			result.Reason = err.Error()
+			errorCount++
+			results = append(results, result)
+			continue
+		}
+
+		filename := filepath.Base(sourceFile)
+		destPath := filepath.Join(req.DestinationDir, filename)
+		if err := ValidateContentMutationRelPath(req.VaultConfig, destPath); err != nil {
+			result.Status = "error"
+			result.Reason = err.Error()
+			errorCount++
+			results = append(results, result)
+			continue
+		}
+		fullDestPath := filepath.Join(req.VaultPath, destPath)
+		if _, err := os.Stat(fullDestPath); err == nil {
+			result.Status = "skipped"
+			result.Reason = fmt.Sprintf("destination already exists: %s", destPath)
+			skippedCount++
+			results = append(results, result)
+			continue
+		}
+
+		relSource, _ := filepath.Rel(req.VaultPath, sourceFile)
+		sourceID := req.VaultConfig.FilePathToObjectID(relSource)
+		destID := req.VaultConfig.FilePathToObjectID(destPath)
+
+		serviceResult, err := MoveFile(MoveFileRequest{
+			VaultPath:         req.VaultPath,
+			SourceFile:        sourceFile,
+			DestinationFile:   fullDestPath,
+			SourceObjectID:    sourceID,
+			DestinationObject: destID,
+			UpdateRefs:        req.UpdateRefs,
+			FailOnIndexError:  true,
+			VaultConfig:       req.VaultConfig,
+			Schema:            req.Schema,
+			ParseOptions:      req.ParseOptions,
+		})
+		if err != nil {
+			result.Status = "error"
+			var svcErr *Error
+			if errors.As(err, &svcErr) {
+				result.Reason = svcErr.Message
+			} else {
+				result.Reason = fmt.Sprintf("move failed: %v", err)
+			}
+			errorCount++
+			results = append(results, result)
+			continue
+		}
+
+		warnings = append(warnings, serviceResult.WarningMessages...)
+
+		result.Status = "moved"
+		result.Details = destPath
+		movedCount++
+		results = append(results, result)
+	}
+
+	return &MoveBulkSummary{
+		Action:          "move",
+		Results:         results,
+		Total:           len(results),
+		Skipped:         skippedCount,
+		Errors:          errorCount,
+		Moved:           movedCount,
+		Destination:     req.DestinationDir,
+		WarningMessages: warnings,
+	}, nil
 }

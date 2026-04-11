@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/shellquote"
 )
 
 // OpenInEditor opens a file in the user's configured editor.
@@ -34,7 +33,7 @@ func OpenInEditor(cfg *config.Config, filePath string) bool {
 	// If editor contains spaces, it's a compound command like "open -a Cursor"
 	// Execute via shell to handle this correctly
 	if strings.Contains(editor, " ") {
-		cmd = exec.Command("sh", "-c", editor+" "+shellquote.Quote(filePath))
+		cmd = exec.Command("sh", "-c", editor+" "+shellQuote(filePath))
 	} else {
 		cmd = exec.Command(editor, filePath)
 	}
@@ -78,7 +77,7 @@ func OpenFilesInEditor(cfg *config.Config, filePaths []string) bool {
 	if strings.Contains(editor, " ") {
 		quotedPaths := make([]string, len(filePaths))
 		for i, p := range filePaths {
-			quotedPaths[i] = shellquote.Quote(p)
+			quotedPaths[i] = shellQuote(p)
 		}
 		cmd = exec.Command("sh", "-c", editor+" "+strings.Join(quotedPaths, " "))
 	} else {
@@ -195,4 +194,9 @@ func editorCommandName(editor string) string {
 	base := filepath.Base(cmd)
 	base = strings.TrimSuffix(base, ".exe")
 	return strings.ToLower(base)
+}
+
+// shellQuote wraps s in single quotes, escaping any internal single quotes.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
