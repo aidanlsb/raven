@@ -45,9 +45,8 @@ func (v *Validator) validateQuery(q *Query) error {
 
 	if q.Type == QueryTypeObject {
 		return v.validateObjectQuery(q)
-	} else {
-		return v.validateTraitQuery(q)
 	}
+	return v.validateTraitQuery(q)
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {

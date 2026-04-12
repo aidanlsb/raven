@@ -1,8 +1,6 @@
 package query
 
 import (
-	"database/sql"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -203,6 +201,221 @@ type fieldRefAmbiguityResult struct {
 	err error
 }
 
+func (e *Executor) prepareRefFieldAmbiguityChecks(q *Query) error {
+	if e.schema == nil || e.db == nil || q == nil || q.Type != QueryTypeObject || q.Predicate == nil {
+		return nil
+	}
+	if e.fieldRefAmbiguityCache == nil {
+		e.fieldRefAmbiguityCache = make(map[fieldRefAmbiguityKey]fieldRefAmbiguityResult)
+	}
+
+	keys := make(map[fieldRefAmbiguityKey]struct{})
+	if err := e.collectRefFieldAmbiguityKeys(q, keys); err != nil {
+		return err
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+
+	missing := make([]fieldRefAmbiguityKey, 0, len(keys))
+	for key := range keys {
+		if _, ok := e.fieldRefAmbiguityCache[key]; !ok {
+			missing = append(missing, key)
+		}
+	}
+	return e.loadFieldRefAmbiguityResults(missing)
+}
+
+func (e *Executor) collectRefFieldAmbiguityKeys(q *Query, keys map[fieldRefAmbiguityKey]struct{}) error {
+	if q == nil || q.Predicate == nil {
+		return nil
+	}
+	return e.collectRefFieldAmbiguityPredicate(q.Type, q.TypeName, q.Predicate, keys)
+}
+
+func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeName string, pred Predicate, keys map[fieldRefAmbiguityKey]struct{}) error {
+	switch p := pred.(type) {
+	case *FieldPredicate:
+		if queryType != QueryTypeObject || !e.isRefField(typeName, p.Field) {
+			return nil
+		}
+		if p.CompareOp != CompareEq && p.CompareOp != CompareNeq {
+			return nil
+		}
+		resolved, _, err := e.resolveRefValue(p.Value)
+		if err != nil {
+			return err
+		}
+		keys[fieldRefAmbiguityKey{
+			typeName:       typeName,
+			fieldName:      p.Field,
+			rawValue:       p.Value,
+			resolvedTarget: resolved,
+		}] = struct{}{}
+		return nil
+	case *ArrayQuantifierPredicate:
+		if queryType != QueryTypeObject || !e.isRefArrayField(typeName, p.Field) {
+			return nil
+		}
+		elem, ok := p.ElementPred.(*ElementEqualityPredicate)
+		if !ok {
+			return nil
+		}
+		if elem.CompareOp != CompareEq && elem.CompareOp != CompareNeq {
+			return nil
+		}
+		resolved, _, err := e.resolveRefValue(elem.Value)
+		if err != nil {
+			return err
+		}
+		keys[fieldRefAmbiguityKey{
+			typeName:       typeName,
+			fieldName:      p.Field,
+			rawValue:       elem.Value,
+			resolvedTarget: resolved,
+		}] = struct{}{}
+		return nil
+	case *HasPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *ParentPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *AncestorPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *ChildPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *DescendantPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *ContainsPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *RefsPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *OnPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *WithinPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *AtPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *RefdPredicate:
+		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
+	case *OrPredicate:
+		for _, sub := range p.Predicates {
+			if err := e.collectRefFieldAmbiguityPredicate(queryType, typeName, sub, keys); err != nil {
+				return err
+			}
+		}
+	case *GroupPredicate:
+		for _, sub := range p.Predicates {
+			if err := e.collectRefFieldAmbiguityPredicate(queryType, typeName, sub, keys); err != nil {
+				return err
+			}
+		}
+	case *NotPredicate:
+		return e.collectRefFieldAmbiguityPredicate(queryType, typeName, p.Inner, keys)
+	}
+	return nil
+}
+
+func (e *Executor) loadFieldRefAmbiguityResults(keys []fieldRefAmbiguityKey) error {
+	if e.schema == nil || e.db == nil || len(keys) == 0 {
+		return nil
+	}
+	if e.fieldRefAmbiguityCache == nil {
+		e.fieldRefAmbiguityCache = make(map[fieldRefAmbiguityKey]fieldRefAmbiguityResult)
+	}
+
+	type querySet struct {
+		key        fieldRefAmbiguityKey
+		candidates []string
+	}
+
+	sets := make([]querySet, 0, len(keys))
+	matchIndex := make(map[string][]fieldRefAmbiguityKey)
+	args := make([]interface{}, 0, len(keys)*4)
+	clauses := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		if _, ok := e.fieldRefAmbiguityCache[key]; ok {
+			continue
+		}
+
+		candidates := []string{key.rawValue}
+		if key.resolvedTarget != "" {
+			shortName := paths.ShortNameFromID(key.resolvedTarget)
+			if shortName != "" && shortName != key.rawValue {
+				candidates = append(candidates, shortName)
+			}
+		}
+		candidates = dedupeStrings(candidates)
+		if len(candidates) == 0 {
+			e.fieldRefAmbiguityCache[key] = fieldRefAmbiguityResult{}
+			continue
+		}
+
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(candidates)), ",")
+		clauses = append(clauses, fmt.Sprintf("(o.type = ? AND fr.field_name = ? AND fr.target_raw IN (%s))", placeholders))
+		args = append(args, key.typeName, key.fieldName)
+		for _, candidate := range candidates {
+			args = append(args, candidate)
+			indexKey := key.typeName + "\x00" + key.fieldName + "\x00" + candidate
+			matchIndex[indexKey] = append(matchIndex[indexKey], key)
+		}
+		sets = append(sets, querySet{key: key, candidates: candidates})
+	}
+
+	if len(clauses) == 0 {
+		return nil
+	}
+
+	query := fmt.Sprintf(`
+		SELECT o.type, fr.field_name, fr.target_raw
+		FROM field_refs fr
+		JOIN objects o ON fr.source_id = o.id
+		WHERE fr.resolution_status = 'ambiguous'
+		  AND (%s)
+	`, strings.Join(clauses, " OR "))
+
+	if e.ambiguousFieldRefQueryHook != nil {
+		e.ambiguousFieldRefQueryHook()
+	}
+
+	rows, err := e.db.Query(query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	ambiguous := make(map[fieldRefAmbiguityKey]struct{})
+	for rows.Next() {
+		var typeName, fieldName, targetRaw string
+		if err := rows.Scan(&typeName, &fieldName, &targetRaw); err != nil {
+			return err
+		}
+		indexKey := typeName + "\x00" + fieldName + "\x00" + targetRaw
+		for _, key := range matchIndex[indexKey] {
+			ambiguous[key] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, set := range sets {
+		if _, ok := ambiguous[set.key]; ok {
+			e.fieldRefAmbiguityCache[set.key] = fieldRefAmbiguityResult{
+				err: newExecutionError(
+					fmt.Sprintf("ambiguous reference in field '%s' for value '%s' (disambiguate the field value before querying)", set.key.fieldName, set.key.rawValue),
+					"Use a full object ID/path in the query value to disambiguate",
+					nil,
+				),
+			}
+			continue
+		}
+		e.fieldRefAmbiguityCache[set.key] = fieldRefAmbiguityResult{}
+	}
+
+	return nil
+}
+
 func (e *Executor) checkAmbiguousFieldRefs(typeName, fieldName, rawValue, resolvedTarget string) error {
 	if e.schema == nil || typeName == "" || e.db == nil {
 		return nil
@@ -219,57 +432,11 @@ func (e *Executor) checkAmbiguousFieldRefs(typeName, fieldName, rawValue, resolv
 	if cached, ok := e.fieldRefAmbiguityCache[key]; ok {
 		return cached.err
 	}
-	candidates := []string{rawValue}
-	if resolvedTarget != "" {
-		shortName := paths.ShortNameFromID(resolvedTarget)
-		if shortName != "" && shortName != rawValue {
-			candidates = append(candidates, shortName)
-		}
-	}
-
-	candidates = dedupeStrings(candidates)
-	if len(candidates) == 0 {
-		return nil
-	}
-
-	placeholders := strings.Repeat("?,", len(candidates))
-	placeholders = strings.TrimSuffix(placeholders, ",")
-	query := fmt.Sprintf(`
-		SELECT 1
-		FROM field_refs fr
-		JOIN objects o ON fr.source_id = o.id
-		WHERE o.type = ?
-		  AND fr.field_name = ?
-		  AND fr.resolution_status = 'ambiguous'
-		  AND fr.target_raw IN (%s)
-		LIMIT 1
-	`, placeholders)
-
-	args := []interface{}{typeName, fieldName}
-	for _, candidate := range candidates {
-		args = append(args, candidate)
-	}
-
-	if e.ambiguousFieldRefQueryHook != nil {
-		e.ambiguousFieldRefQueryHook()
-	}
-	var exists int
-	err := e.db.QueryRow(query, args...).Scan(&exists)
-	if errors.Is(err, sql.ErrNoRows) {
-		e.fieldRefAmbiguityCache[key] = fieldRefAmbiguityResult{}
-		return nil
-	}
-	if err != nil {
+	if err := e.loadFieldRefAmbiguityResults([]fieldRefAmbiguityKey{key}); err != nil {
 		e.fieldRefAmbiguityCache[key] = fieldRefAmbiguityResult{err: err}
 		return err
 	}
-	err = newExecutionError(
-		fmt.Sprintf("ambiguous reference in field '%s' for value '%s' (disambiguate the field value before querying)", fieldName, rawValue),
-		"Use a full object ID/path in the query value to disambiguate",
-		nil,
-	)
-	e.fieldRefAmbiguityCache[key] = fieldRefAmbiguityResult{err: err}
-	return err
+	return e.fieldRefAmbiguityCache[key].err
 }
 
 func (e *Executor) buildRefFieldPredicateSQL(p *FieldPredicate, alias, typeName string) (string, []interface{}, error) {

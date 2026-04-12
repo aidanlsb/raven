@@ -1458,12 +1458,12 @@ func TestParseNavigationPredicateErrors(t *testing.T) {
 		{
 			name:    "object nav rejects self reference",
 			input:   "object:meeting parent(_)",
-			wantErr: "self-reference '_' is no longer supported (pipeline removed)",
+			wantErr: "self-reference '_' is no longer supported; write an explicit target or subquery instead",
 		},
 		{
 			name:    "trait nav rejects self reference",
 			input:   "trait:due on(_)",
-			wantErr: "self-reference '_' is no longer supported (pipeline removed)",
+			wantErr: "self-reference '_' is no longer supported; write an explicit target or subquery instead",
 		},
 		{
 			name:    "object nav requires target or subquery",

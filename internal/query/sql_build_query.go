@@ -27,6 +27,10 @@ func (e *Executor) buildObjectWhereClause(q *Query) (string, []interface{}, erro
 	conditions = append(conditions, "o.type = ?")
 	args = append(args, q.TypeName)
 
+	if err := e.prepareRefFieldAmbiguityChecks(q); err != nil {
+		return "", nil, err
+	}
+
 	if q.Predicate != nil {
 		cond, predArgs, err := e.buildObjectPredicateSQL(q.Predicate, "o", q.TypeName)
 		if err != nil {

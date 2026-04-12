@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/model"
@@ -27,7 +28,9 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.T
 	args := []interface{}{traitType}
 
 	if valueFilter != nil && *valueFilter != "" {
-		condition, filterArgs, err := parseFilterExpression(*valueFilter, "value")
+		condition, filterArgs, err := parseFilterExpressionWithOptions(*valueFilter, "value", DateFilterOptions{
+			Now: time.Now(),
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -53,16 +56,6 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.T
 	}
 
 	return results, rows.Err()
-}
-
-// parseFilterExpression parses a filter expression with support for:
-//   - OR using pipe: "a|b" → (expr_a OR expr_b)
-//   - NOT using bang: "!a" → NOT expr_a
-//   - Date filters are automatically detected and expanded
-//
-// Returns SQL condition and args.
-func parseFilterExpression(filter string, fieldExpr string) (condition string, args []interface{}, err error) {
-	return parseFilterExpressionWithOptions(filter, fieldExpr, DateFilterOptions{})
 }
 
 func parseFilterExpressionWithOptions(filter string, fieldExpr string, opts DateFilterOptions) (condition string, args []interface{}, err error) {

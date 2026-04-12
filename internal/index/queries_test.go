@@ -7,6 +7,7 @@ import (
 
 func TestParseFilterExpression(t *testing.T) {
 	t.Parallel()
+	now := time.Date(2026, time.March, 4, 10, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name           string
 		filter         string
@@ -106,7 +107,9 @@ func TestParseFilterExpression(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			condition, args, err := parseFilterExpression(tt.filter, tt.fieldExpr)
+			condition, args, err := parseFilterExpressionWithOptions(tt.filter, tt.fieldExpr, DateFilterOptions{
+				Now: now,
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")

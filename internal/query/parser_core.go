@@ -36,6 +36,10 @@ func shellPipeQueryError(pos int) error {
 	)
 }
 
+func unsupportedSelfReferenceError() error {
+	return fmt.Errorf("self-reference '_' is no longer supported; write an explicit target or subquery instead")
+}
+
 func looksLikeShellPipeCommand(tok Token) bool {
 	if tok.Type != TokenIdent {
 		return false
@@ -465,7 +469,7 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	}
 
 	if p.curr.Type == TokenUnderscore {
-		return navFuncArgument{}, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
+		return navFuncArgument{}, unsupportedSelfReferenceError()
 	}
 
 	if p.curr.Type != TokenIdent {
@@ -512,22 +516,22 @@ func buildTraitNavPredicate(negated bool, kind, target string, subQuery *Query) 
 	}
 }
 
-func (p *Parser) parseObjectNavFuncPredicate(negated bool, kind string) (Predicate, error) {
-	// parent(object:...), ancestor(object:...), child(object:...), descendant(object:...), or ...([[target]])
+func (p *Parser) parseNavFuncPredicate(negated bool, kind string, buildFn func(bool, string, string, *Query) (Predicate, error)) (Predicate, error) {
 	arg, err := p.parseNavFuncArgument(kind)
 	if err != nil {
 		return nil, err
 	}
-	return buildObjectNavPredicate(negated, kind, arg.target, arg.subQuery)
+	return buildFn(negated, kind, arg.target, arg.subQuery)
+}
+
+func (p *Parser) parseObjectNavFuncPredicate(negated bool, kind string) (Predicate, error) {
+	// parent(object:...), ancestor(object:...), child(object:...), descendant(object:...), or ...([[target]])
+	return p.parseNavFuncPredicate(negated, kind, buildObjectNavPredicate)
 }
 
 func (p *Parser) parseTraitNavFuncPredicate(negated bool, kind string) (Predicate, error) {
 	// on(object:...), within(object:...), or ...([[target]])
-	arg, err := p.parseNavFuncArgument(kind)
-	if err != nil {
-		return nil, err
-	}
-	return buildTraitNavPredicate(negated, kind, arg.target, arg.subQuery)
+	return p.parseNavFuncPredicate(negated, kind, buildTraitNavPredicate)
 }
 
 func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
@@ -547,7 +551,7 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 		return &RefsPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
 	}
 	if p.curr.Type == TokenUnderscore {
-		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
+		return nil, unsupportedSelfReferenceError()
 	}
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected target or object subquery in refs()")
@@ -591,7 +595,7 @@ func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
 		return &RefdPredicate{basePredicate: basePredicate{negated: negated}, Target: target}, nil
 	}
 	if p.curr.Type == TokenUnderscore {
-		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
+		return nil, unsupportedSelfReferenceError()
 	}
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected source or subquery in refd()")
@@ -633,7 +637,7 @@ func (p *Parser) parseQueryArg(expected QueryType, expectedKind string) (*Query,
 		return nil, fmt.Errorf("brace subqueries are no longer supported; drop braces and write %s:... directly", expectedKind)
 	}
 	if p.curr.Type == TokenUnderscore {
-		return nil, fmt.Errorf("self-reference '_' is no longer supported (pipeline removed)")
+		return nil, unsupportedSelfReferenceError()
 	}
 	if p.curr.Type != TokenIdent {
 		return nil, fmt.Errorf("expected %s query in argument", expectedKind)
