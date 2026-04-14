@@ -8,7 +8,7 @@ These rules are non-negotiable.
 |--------|------------|------------|
 | Move or rename files | `move` | `mv`, `git mv` |
 | Delete files | `delete` | `rm`, `trash` |
-| Create typed objects | `new` | `touch`, `echo >` |
+| Create typed items | `new` | `touch`, `echo >` |
 | Read vault files | `read` | `cat`, `head`, `tail` |
 | Edit content files | `edit` | ad hoc shell text replacement |
 | Update frontmatter | `set` | manual YAML edits |

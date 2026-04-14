@@ -79,7 +79,7 @@ Built-in types cannot be redefined. Your custom types (`project`, `meeting`, `pe
 
 ### Embedded types
 
-You can turn a heading into a typed object without splitting it into a separate file by adding a `::type(...)` declaration on the line immediately after the heading:
+You can turn a heading into a typed item without splitting it into a separate file by adding a `::type(...)` declaration on the line immediately after the heading:
 
 ```markdown
 ## Weekly Standup
@@ -101,7 +101,7 @@ See the tasks: [[project/website#tasks]]
 
 References also appear in frontmatter `ref` fields (`owner: person/freya`) and in embedded type declarations.
 
-Raven resolves references to canonical object IDs. Short references like `[[freya]]` work when unambiguous. Use `rvn backlinks` to see what links to an object:
+Raven resolves references to canonical IDs. Short references like `[[freya]]` work when unambiguous. Use `rvn backlinks` to see what links to an item:
 
 ```bash
 rvn backlinks person/freya
@@ -124,7 +124,7 @@ Traits must be defined in `schema.yaml` to be indexed and queryable. They can ha
 
 ```bash
 rvn query 'trait:due .value<today'
-rvn query 'trait:todo within(object:project .status==active)'
+rvn query 'trait:todo within(type:project .status==active)'
 ```
 
 See `types-and-traits/file-format.md` for trait syntax and `types-and-traits/schema.md` for defining traits.
@@ -151,7 +151,7 @@ rvn daily yesterday                    # Yesterday's
 rvn add "@todo Review PR"              # Capture to today's note
 ```
 
-Daily notes are `date`-typed objects. They support templates, structured headings, and all the same query/trait features as any other object. See `using-your-vault/daily-notes.md` for the full guide.
+Daily notes are `date`-typed items. They support templates, structured headings, and all the same query/trait features as any other item. See `using-your-vault/daily-notes.md` for the full guide.
 
 ## Queries
 
@@ -159,10 +159,10 @@ Raven Query Language (RQL) lets you retrieve objects and traits by structure, no
 
 ```bash
 # All active projects
-rvn query 'object:project .status==active'
+rvn query 'type:project .status==active'
 
 # Todos linked to a specific project
-rvn query 'trait:todo within(object:meeting refs(midgard-security-review))'
+rvn query 'trait:todo within(type:meeting refs(midgard-security-review))'
 
 # Overdue items
 rvn query 'trait:due .value<today'

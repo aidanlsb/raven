@@ -6,7 +6,7 @@ Use this guide to choose the right mutation primitive.
 
 | Goal | Command ID | Why |
 |------|------------|-----|
-| Create a typed object | `new` | Applies schema, templates, and required-field checks |
+| Create a typed item | `new` | Applies schema, templates, and required-field checks |
 | Append a note/log entry | `add` | Intentional append-only capture |
 | Deterministic create-or-update | `upsert` | Idempotent convergence for generated artifacts |
 | Update frontmatter fields | `set` | Schema-validated metadata updates |

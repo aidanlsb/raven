@@ -4,7 +4,7 @@ Quick reference for common Raven Query Language (RQL) patterns.
 
 ## Query shapes
 
-- `object:<type> [predicates...]`
+- `type:<type> [predicates...]`
 - `trait:<name> [predicates...]`
 
 ## Predicates
@@ -18,18 +18,18 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - Text search: `content("phrase")`
 - References:
   - `refs([[target]])` (objects/traits that reference target)
-  - `refs(object:project .status==active)`
-  - Trait location: `within([[target]])`, `within(object:...)`, `on([[target]])`, `on(object:...)`
+  - `refs(type:project .status==active)`
+  - Trait location: `within([[target]])`, `within(type:...)`, `on([[target]])`, `on(type:...)`
   - Object hierarchy: `parent(...)`, `ancestor(...)`, `child(...)`, `descendant(...)`
 
 ## Sub-queries
 
 Nest queries inside predicates to filter by related objects or traits:
 
-- `refs(object:project .status == active)`
-- `within(object:meeting refs([[project/raven]]))`
+- `refs(type:project .status == active)`
+- `within(type:meeting refs([[project/raven]]))`
 - `has(trait:due .value < today)`
-- `on(object:project .status == active)`
+- `on(type:project .status == active)`
 
 ## Boolean logic
 
@@ -52,18 +52,18 @@ This can be very useful to provide lots of information to the user. If a questio
 - Todos referencing a project:
   - `trait:todo refs([[project/raven]]) .value != done`
 - Open todos in briefs:
-  - `trait:todo .value == todo within(object:brief)`
+  - `trait:todo .value == todo within(type:brief)`
 - Real traits, not prose mentions:
   - `trait:todo .value == todo`
 - Text mentions of a token when structure is unknown:
   - `search "@todo pricing"`
 - Todos under a topic section:
-  - `trait:todo .value == todo within(object:section content("pricing"))`
+  - `trait:todo .value == todo within(type:section content("pricing"))`
 - Path-scoped pages with open todos:
-  - `object:page matches(.path, "^pages/work/") has(trait:todo .value == todo)`
+  - `type:page matches(.path, "^pages/work/") has(trait:todo .value == todo)`
 - Due tomorrow:
   - `trait:due .value == tomorrow`
 - Meetings with an attendee:
-  - `object:meeting .attendees == [[person/freya]]`
+  - `type:meeting .attendees == [[person/freya]]`
 - Active projects:
-  - `object:project .status == active`
+  - `type:project .status == active`

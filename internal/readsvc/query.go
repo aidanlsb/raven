@@ -16,7 +16,7 @@ type ExecuteQueryRequest struct {
 }
 
 type ExecuteQueryResult struct {
-	QueryType string
+	QueryKind string
 	TypeName  string
 	Total     int
 	Returned  int
@@ -54,12 +54,12 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 	executor.SetDailyDirectory(rt.VaultCfg.GetDailyDirectory())
 	executor.SetSchema(rt.Schema)
 
-	queryType := "trait"
+	queryKind := "trait"
 	if q.Type == query.QueryTypeObject {
-		queryType = "object"
+		queryKind = "type"
 	}
 	result := &ExecuteQueryResult{
-		QueryType: queryType,
+		QueryKind: queryKind,
 		TypeName:  q.TypeName,
 		Offset:    req.Offset,
 		Limit:     req.Limit,

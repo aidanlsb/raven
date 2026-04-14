@@ -412,7 +412,7 @@ Rename field updates:
 3. Type templates referencing {{field.old_field}} (template files)
 4. Object frontmatter keys for files with type:<type>
 5. Field keys inside ::type(...) declarations (only for that type)
-6. Saved queries in raven.yaml (best-effort for object:<type> queries)
+6. Saved queries in raven.yaml (best-effort for type:<type> queries)
 
 By default, previews changes. Use --confirm to apply.
 When type default_path clearly matches the type name, you can also rename

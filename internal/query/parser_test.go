@@ -15,8 +15,8 @@ func TestParseObjectQuery(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "simple object query",
-			input:    "object:project",
+			name:     "simple type query",
+			input:    "type:project",
 			wantType: QueryTypeObject,
 			wantName: "project",
 		},
@@ -33,7 +33,7 @@ func TestParseObjectQuery(t *testing.T) {
 		},
 		{
 			name:    "missing type name",
-			input:   "object:",
+			input:   "type:",
 			wantErr: true,
 		},
 	}
@@ -60,6 +60,18 @@ func TestParseObjectQuery(t *testing.T) {
 	}
 }
 
+func TestParseRejectsLegacyObjectRoot(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse("object:project")
+	if err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+	if !strings.Contains(err.Error(), "legacy 'object:' queries are no longer supported; use 'type:'") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParseRejectsUnterminatedLiterals(t *testing.T) {
 	t.Parallel()
 
@@ -69,15 +81,15 @@ func TestParseRejectsUnterminatedLiterals(t *testing.T) {
 	}{
 		{
 			name:  "unterminated string literal",
-			input: `object:project .title=="Unclosed`,
+			input: `type:project .title=="Unclosed`,
 		},
 		{
 			name:  "unterminated raw string literal",
-			input: `object:project content(r"Unclosed)`,
+			input: `type:project content(r"Unclosed)`,
 		},
 		{
 			name:  "unterminated regex literal",
-			input: `object:project matches(.title, /unclosed)`,
+			input: `type:project matches(.title, /unclosed)`,
 		},
 	}
 
@@ -99,11 +111,11 @@ func TestParseRejectsUnexpectedTrailingTokens(t *testing.T) {
 	}{
 		{
 			name:  "unmatched closing parenthesis after type",
-			input: `object:project)`,
+			input: `type:project)`,
 		},
 		{
 			name:  "unmatched closing parenthesis after predicate",
-			input: `object:project .status==active)`,
+			input: `type:project .status==active)`,
 		},
 	}
 
@@ -119,7 +131,7 @@ func TestParseRejectsUnexpectedTrailingTokens(t *testing.T) {
 func TestParseReportsShellPipeGuidance(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`object:experiment_review | sort -field:created_at | head 1`)
+	_, err := Parse(`type:experiment_review | sort -field:created_at | head 1`)
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
 	}
@@ -135,7 +147,7 @@ func TestParseReportsShellPipeGuidance(t *testing.T) {
 func TestParseReportsShellPipeGuidanceAfterPredicate(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`object:experiment_review .status==open | jq`)
+	_, err := Parse(`type:experiment_review .status==open | jq`)
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
 	}
@@ -148,7 +160,7 @@ func TestParseReportsShellPipeGuidanceAfterPredicate(t *testing.T) {
 func TestParseReportsShellPipeGuidanceInArrayQuantifier(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`object:book any(.tags, _ == "raven" | jq)`)
+	_, err := Parse(`type:book any(.tags, _ == "raven" | jq)`)
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
 	}
@@ -161,7 +173,7 @@ func TestParseReportsShellPipeGuidanceInArrayQuantifier(t *testing.T) {
 func TestParseUnexpectedTokenUsesReadableTokenName(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`object:project =active`)
+	_, err := Parse(`type:project =active`)
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
 	}
@@ -186,39 +198,39 @@ func TestParseFieldPredicates(t *testing.T) {
 	}{
 		{
 			name:      "simple field",
-			input:     "object:project .status==active",
+			input:     "type:project .status==active",
 			wantField: "status",
 			wantValue: "active",
 		},
 		{
 			name:      "negated field",
-			input:     "object:project !.status==done",
+			input:     "type:project !.status==done",
 			wantField: "status",
 			wantValue: "done",
 			wantNeg:   true,
 		},
 		{
 			name:      "quoted string value",
-			input:     `object:project .title=="My Project"`,
+			input:     `type:project .title=="My Project"`,
 			wantField: "title",
 			wantValue: "My Project",
 		},
 		{
 			name:      "quoted string with spaces",
-			input:     `object:book .author=="J.R.R. Tolkien"`,
+			input:     `type:book .author=="J.R.R. Tolkien"`,
 			wantField: "author",
 			wantValue: "J.R.R. Tolkien",
 		},
 		{
 			name:      "negated quoted string",
-			input:     `object:project !.status=="in progress"`,
+			input:     `type:project !.status=="in progress"`,
 			wantField: "status",
 			wantValue: "in progress",
 			wantNeg:   true,
 		},
 		{
 			name:      "field ref value uses wikilink target",
-			input:     `object:meeting .attendees==[[people/freya|Freya]]`,
+			input:     `type:meeting .attendees==[[people/freya|Freya]]`,
 			wantField: "attendees",
 			wantValue: "people/freya",
 		},
@@ -263,17 +275,17 @@ func TestParseHasPredicate(t *testing.T) {
 	}{
 		{
 			name:          "shorthand has",
-			input:         "object:meeting has(trait:due)",
+			input:         "type:meeting has(trait:due)",
 			wantTraitName: "due",
 		},
 		{
 			name:          "full has subquery",
-			input:         "object:meeting has(trait:due)",
+			input:         "type:meeting has(trait:due)",
 			wantTraitName: "due",
 		},
 		{
 			name:          "negated has",
-			input:         "object:meeting !has(trait:due)",
+			input:         "type:meeting !has(trait:due)",
 			wantTraitName: "due",
 			wantNeg:       true,
 		},
@@ -312,25 +324,25 @@ func TestParseParentAncestorChild(t *testing.T) {
 	}{
 		{
 			name:         "parent shorthand",
-			input:        "object:meeting parent(object:date)",
+			input:        "type:meeting parent(type:date)",
 			predType:     "parent",
 			wantTypeName: "date",
 		},
 		{
 			name:         "parent full",
-			input:        "object:meeting parent(object:date)",
+			input:        "type:meeting parent(type:date)",
 			predType:     "parent",
 			wantTypeName: "date",
 		},
 		{
 			name:         "ancestor shorthand",
-			input:        "object:meeting ancestor(object:date)",
+			input:        "type:meeting ancestor(type:date)",
 			predType:     "ancestor",
 			wantTypeName: "date",
 		},
 		{
 			name:         "child shorthand",
-			input:        "object:date child(object:meeting)",
+			input:        "type:date child(type:meeting)",
 			predType:     "child",
 			wantTypeName: "meeting",
 		},
@@ -384,25 +396,25 @@ func TestParseParentAncestorChildTarget(t *testing.T) {
 	}{
 		{
 			name:       "parent target",
-			input:      "object:meeting parent(website)",
+			input:      "type:meeting parent(website)",
 			predType:   "parent",
 			wantTarget: "website",
 		},
 		{
 			name:       "ancestor target",
-			input:      "object:meeting ancestor(projects/website)",
+			input:      "type:meeting ancestor(projects/website)",
 			predType:   "ancestor",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "child target",
-			input:      "object:date child(meeting)",
+			input:      "type:date child(meeting)",
 			predType:   "child",
 			wantTarget: "meeting",
 		},
 		{
 			name:       "descendant target",
-			input:      "object:project descendant(tasks)",
+			input:      "type:project descendant(tasks)",
 			predType:   "descendant",
 			wantTarget: "tasks",
 		},
@@ -538,19 +550,19 @@ func TestParseOnWithin(t *testing.T) {
 	}{
 		{
 			name:         "on shorthand",
-			input:        "trait:due on(object:meeting)",
+			input:        "trait:due on(type:meeting)",
 			predType:     "on",
 			wantTypeName: "meeting",
 		},
 		{
 			name:         "on full",
-			input:        "trait:due on(object:meeting)",
+			input:        "trait:due on(type:meeting)",
 			predType:     "on",
 			wantTypeName: "meeting",
 		},
 		{
 			name:         "within shorthand",
-			input:        "trait:highlight within(object:date)",
+			input:        "trait:highlight within(type:date)",
 			predType:     "within",
 			wantTypeName: "date",
 		},
@@ -657,19 +669,19 @@ func TestParseBooleanComposition(t *testing.T) {
 	}{
 		{
 			name:  "multiple predicates AND",
-			input: "object:project .status==active has(trait:due)",
+			input: "type:project .status==active has(trait:due)",
 		},
 		{
 			name:  "OR predicate",
-			input: "object:project .status==active | .status==done",
+			input: "type:project .status==active | .status==done",
 		},
 		{
 			name:  "grouped predicates",
-			input: "object:project (.status==active | .status==done)",
+			input: "type:project (.status==active | .status==done)",
 		},
 		{
 			name:  "OR with function predicate",
-			input: "object:project .status==active | has(trait:due)",
+			input: "type:project .status==active | has(trait:due)",
 		},
 	}
 
@@ -703,28 +715,28 @@ func TestParseRefsPredicate(t *testing.T) {
 	}{
 		{
 			name:       "refs with target",
-			input:      "object:meeting refs([[projects/website]])",
+			input:      "type:meeting refs([[projects/website]])",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "refs with shorthand target",
-			input:      "object:meeting refs(cursor)",
+			input:      "type:meeting refs(cursor)",
 			wantTarget: "cursor",
 		},
 		{
 			name:     "refs with subquery",
-			input:    "object:meeting refs(object:project)",
+			input:    "type:meeting refs(type:project)",
 			wantSubQ: true,
 		},
 		{
 			name:       "negated refs",
-			input:      "object:meeting !refs([[projects/website]])",
+			input:      "type:meeting !refs([[projects/website]])",
 			wantTarget: "projects/website",
 			wantNeg:    true,
 		},
 		{
 			name:     "refs with complex subquery",
-			input:    "object:meeting refs(object:project .status==active)",
+			input:    "type:meeting refs(type:project .status==active)",
 			wantSubQ: true,
 		},
 	}
@@ -769,23 +781,23 @@ func TestParseContentPredicate(t *testing.T) {
 	}{
 		{
 			name:     "simple content search",
-			input:    `object:person content("colleague")`,
+			input:    `type:person content("colleague")`,
 			wantTerm: "colleague",
 		},
 		{
 			name:     "content with multiple words",
-			input:    `object:project content("api design")`,
+			input:    `type:project content("api design")`,
 			wantTerm: "api design",
 		},
 		{
 			name:     "negated content search",
-			input:    `object:person !content("contractor")`,
+			input:    `type:person !content("contractor")`,
 			wantTerm: "contractor",
 			wantNeg:  true,
 		},
 		{
 			name:    "content without quotes",
-			input:   `object:person content(colleague)`,
+			input:   `type:person content(colleague)`,
 			wantErr: true, // requires quoted string
 		},
 	}
@@ -830,44 +842,44 @@ func TestParseDescendantContains(t *testing.T) {
 	}{
 		{
 			name:         "descendant shorthand",
-			input:        "object:project descendant(object:section)",
+			input:        "type:project descendant(type:section)",
 			predType:     "descendant",
 			wantTypeName: "section",
 		},
 		{
 			name:         "descendant full",
-			input:        "object:project descendant(object:section)",
+			input:        "type:project descendant(type:section)",
 			predType:     "descendant",
 			wantTypeName: "section",
 		},
 		{
 			name:         "negated descendant",
-			input:        "object:project !descendant(object:section)",
+			input:        "type:project !descendant(type:section)",
 			predType:     "descendant",
 			wantTypeName: "section",
 			wantNeg:      true,
 		},
 		{
 			name:         "encloses shorthand",
-			input:        "object:project encloses(trait:todo)",
+			input:        "type:project encloses(trait:todo)",
 			predType:     "encloses",
 			wantTypeName: "todo",
 		},
 		{
 			name:         "encloses full",
-			input:        "object:project encloses(trait:todo)",
+			input:        "type:project encloses(trait:todo)",
 			predType:     "encloses",
 			wantTypeName: "todo",
 		},
 		{
 			name:         "encloses with value",
-			input:        "object:project encloses(trait:todo .value==done)",
+			input:        "type:project encloses(trait:todo .value==done)",
 			predType:     "encloses",
 			wantTypeName: "todo",
 		},
 		{
 			name:         "negated encloses",
-			input:        "object:project !encloses(trait:todo)",
+			input:        "type:project !encloses(trait:todo)",
 			predType:     "encloses",
 			wantTypeName: "todo",
 			wantNeg:      true,
@@ -922,35 +934,35 @@ func TestParseComplexQueries(t *testing.T) {
 	}{
 		{
 			name:  "nested has with value",
-			input: "object:meeting has(trait:due .value==past)",
+			input: "type:meeting has(trait:due .value==past)",
 		},
 		{
 			name:  "on with field",
-			input: "trait:highlight on(object:book .status==reading)",
+			input: "trait:highlight on(type:book .status==reading)",
 		},
 		{
 			name:  "ancestor chain",
-			input: "object:topic ancestor(object:meeting ancestor(object:date))",
+			input: "type:topic ancestor(type:meeting ancestor(type:date))",
 		},
 		{
 			name:  "complex with OR",
-			input: "trait:highlight (on(object:book .status==reading) | on(object:article .status==reading))",
+			input: "trait:highlight (on(type:book .status==reading) | on(type:article .status==reading))",
 		},
 		{
 			name:  "multiple field predicates",
-			input: "object:project .status==active .priority==high",
+			input: "type:project .status==active .priority==high",
 		},
 		{
 			name:  "encloses with value predicate",
-			input: "object:project encloses(trait:todo .value==todo)",
+			input: "type:project encloses(trait:todo .value==todo)",
 		},
 		{
 			name:  "descendant with field predicate",
-			input: "object:project descendant(object:section .title==Tasks)",
+			input: "type:project descendant(type:section .title==Tasks)",
 		},
 		{
 			name:  "combined contains and field",
-			input: "object:project .status==active encloses(trait:todo)",
+			input: "type:project .status==active encloses(trait:todo)",
 		},
 	}
 
@@ -1038,28 +1050,28 @@ func TestParseRefdPredicate(t *testing.T) {
 	}{
 		{
 			name:       "refd with target",
-			input:      "object:project refd([[meetings/standup]])",
+			input:      "type:project refd([[meetings/standup]])",
 			wantTarget: "meetings/standup",
 		},
 		{
 			name:       "refd with shorthand target",
-			input:      "object:project refd(cursor)",
+			input:      "type:project refd(cursor)",
 			wantTarget: "cursor",
 		},
 		{
-			name:     "refd with object subquery",
-			input:    "object:project refd(object:meeting)",
+			name:     "refd with type subquery",
+			input:    "type:project refd(type:meeting)",
 			wantSubQ: true,
 		},
 		{
 			name:       "negated refd",
-			input:      "object:project !refd([[meetings/standup]])",
+			input:      "type:project !refd([[meetings/standup]])",
 			wantTarget: "meetings/standup",
 			wantNeg:    true,
 		},
 		{
 			name:     "refd with complex subquery",
-			input:    "object:person refd(object:project .status==active)",
+			input:    "type:person refd(type:project .status==active)",
 			wantSubQ: true,
 		},
 	}
@@ -1192,7 +1204,7 @@ func TestParseInPredicates(t *testing.T) {
 	})
 
 	t.Run("object field in list", func(t *testing.T) {
-		q, err := Parse(`object:project in(.status, [active,backlog])`)
+		q, err := Parse(`type:project in(.status, [active,backlog])`)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1230,21 +1242,21 @@ func TestParseFieldComparisonOperators(t *testing.T) {
 	}{
 		{
 			name:          "field less than",
-			input:         "object:project .priority<5",
+			input:         "type:project .priority<5",
 			wantField:     "priority",
 			wantCompareOp: CompareLt,
 			wantValue:     "5",
 		},
 		{
 			name:          "field greater than or equal",
-			input:         "object:task .count>=10",
+			input:         "type:task .count>=10",
 			wantField:     "count",
 			wantCompareOp: CompareGte,
 			wantValue:     "10",
 		},
 		{
 			name:          "field equals (default)",
-			input:         "object:project .status==active",
+			input:         "type:project .status==active",
 			wantField:     "status",
 			wantCompareOp: CompareEq,
 			wantValue:     "active",
@@ -1286,7 +1298,7 @@ func TestParseRefdShorthand(t *testing.T) {
 	}{
 		{
 			name:         "refd shorthand",
-			input:        "object:project refd(object:meeting)",
+			input:        "type:project refd(type:meeting)",
 			wantTypeName: "meeting",
 		},
 	}
@@ -1325,25 +1337,25 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 	}{
 		{
 			name:       "parent with direct target",
-			input:      "object:section parent([[projects/website]])",
+			input:      "type:section parent([[projects/website]])",
 			predType:   "parent",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "ancestor with direct target",
-			input:      "object:section ancestor([[projects/website]])",
+			input:      "type:section ancestor([[projects/website]])",
 			predType:   "ancestor",
 			wantTarget: "projects/website",
 		},
 		{
 			name:       "child with direct target",
-			input:      "object:project child([[projects/website#overview]])",
+			input:      "type:project child([[projects/website#overview]])",
 			predType:   "child",
 			wantTarget: "projects/website#overview",
 		},
 		{
 			name:       "descendant with direct target",
-			input:      "object:project descendant([[projects/website#tasks]])",
+			input:      "type:project descendant([[projects/website#tasks]])",
 			predType:   "descendant",
 			wantTarget: "projects/website#tasks",
 		},
@@ -1361,7 +1373,7 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 		},
 		{
 			name:       "negated parent with direct target",
-			input:      "object:section !parent([[projects/website]])",
+			input:      "type:section !parent([[projects/website]])",
 			predType:   "parent",
 			wantTarget: "projects/website",
 			wantNeg:    true,
@@ -1447,17 +1459,17 @@ func TestParseNavigationPredicateErrors(t *testing.T) {
 	}{
 		{
 			name:    "object nav rejects brace subqueries",
-			input:   "object:meeting parent({object:date})",
-			wantErr: "brace subqueries are no longer supported; use parent(object:...) or parent([[target]])",
+			input:   "type:meeting parent({type:date})",
+			wantErr: "brace subqueries are no longer supported; use parent(type:...) or parent([[target]])",
 		},
 		{
 			name:    "trait nav rejects brace subqueries",
-			input:   "trait:due on({object:meeting})",
-			wantErr: "brace subqueries are no longer supported; use on(object:...) or on([[target]])",
+			input:   "trait:due on({type:meeting})",
+			wantErr: "brace subqueries are no longer supported; use on(type:...) or on([[target]])",
 		},
 		{
 			name:    "object nav rejects self reference",
-			input:   "object:meeting parent(_)",
+			input:   "type:meeting parent(_)",
 			wantErr: "self-reference '_' is no longer supported; write an explicit target or subquery instead",
 		},
 		{
@@ -1467,13 +1479,13 @@ func TestParseNavigationPredicateErrors(t *testing.T) {
 		},
 		{
 			name:    "object nav requires target or subquery",
-			input:   "object:meeting parent()",
-			wantErr: "expected object query or target in parent()",
+			input:   "type:meeting parent()",
+			wantErr: "expected type query or target in parent()",
 		},
 		{
 			name:    "trait nav requires target or subquery",
 			input:   "trait:due on()",
-			wantErr: "expected object query or target in on()",
+			wantErr: "expected type query or target in on()",
 		},
 	}
 
@@ -1493,7 +1505,7 @@ func TestParseNavigationPredicateErrors(t *testing.T) {
 func TestParseBooleanEdgeCases(t *testing.T) {
 	t.Parallel()
 	t.Run("chained OR produces flat OrPredicate", func(t *testing.T) {
-		q, err := Parse("object:project .status==active | .status==paused | .status==done | .status==archived")
+		q, err := Parse("type:project .status==active | .status==paused | .status==done | .status==archived")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1507,7 +1519,7 @@ func TestParseBooleanEdgeCases(t *testing.T) {
 	})
 
 	t.Run("AND of two OR groups", func(t *testing.T) {
-		q, err := Parse("object:project (.status==active | .status==paused) (.priority==high | .priority==medium)")
+		q, err := Parse("type:project (.status==active | .status==paused) (.priority==high | .priority==medium)")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1529,7 +1541,7 @@ func TestParseBooleanEdgeCases(t *testing.T) {
 	})
 
 	t.Run("negated AND inside OR", func(t *testing.T) {
-		q, err := Parse("object:project .status==active | !(.status==paused .priority==low)")
+		q, err := Parse("type:project .status==active | !(.status==paused .priority==low)")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1554,7 +1566,7 @@ func TestParseBooleanEdgeCases(t *testing.T) {
 	})
 
 	t.Run("negated single predicate", func(t *testing.T) {
-		q, err := Parse("object:project !.status==done")
+		q, err := Parse("type:project !.status==done")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1568,7 +1580,7 @@ func TestParseBooleanEdgeCases(t *testing.T) {
 	})
 
 	t.Run("NotPredicate from negated group", func(t *testing.T) {
-		q, err := Parse("object:project !(.status==active | .status==paused)")
+		q, err := Parse("type:project !(.status==active | .status==paused)")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1586,7 +1598,7 @@ func TestParseBooleanEdgeCases(t *testing.T) {
 	})
 
 	t.Run("in() produces flat OrPredicate", func(t *testing.T) {
-		q, err := Parse("object:project in(.status, [active,paused,done])")
+		q, err := Parse("type:project in(.status, [active,paused,done])")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

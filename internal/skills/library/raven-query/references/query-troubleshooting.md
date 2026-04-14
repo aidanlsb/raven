@@ -3,7 +3,7 @@
 ## No matches returned
 
 - Check type and field names with `rvn schema`.
-- Validate query mode: `object:<type>` vs `trait:<name>`.
+- Validate query mode: `type:<type>` vs `trait:<name>`.
 - Remove predicates one-by-one to isolate the failing constraint.
 
 ## Ambiguous references
@@ -13,7 +13,7 @@
 
 ## Unexpectedly broad results
 
-- Add explicit predicates first (`.status==active`, `on(object:...)`, `within(object:...)`).
+- Add explicit predicates first (`.status==active`, `on(type:...)`, `within(type:...)`).
 - Use `--limit` and inspect IDs before any apply command.
 
 ## Shell parsing issues
@@ -24,7 +24,7 @@
 ## Apply rejected or unsafe
 
 - Confirm query type:
-  - object query: `set`, `add`, `delete`, `move`
+  - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
 - Re-run without `--confirm` first to inspect preview.
 

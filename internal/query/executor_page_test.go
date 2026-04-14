@@ -10,7 +10,7 @@ func TestExecuteObjectPageQuery(t *testing.T) {
 	defer db.Close()
 
 	exec := NewExecutor(db)
-	q, err := Parse("object:project")
+	q, err := Parse("type:project")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestExecuteObjectCountQuery(t *testing.T) {
 	exec := NewExecutor(db)
 
 	t.Run("counts all of type", func(t *testing.T) {
-		q, _ := Parse("object:project")
+		q, _ := Parse("type:project")
 		count, err := exec.ExecuteObjectCountQuery(q)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -83,7 +83,7 @@ func TestExecuteObjectCountQuery(t *testing.T) {
 	})
 
 	t.Run("counts with predicate", func(t *testing.T) {
-		q, _ := Parse(`object:project .status==active`)
+		q, _ := Parse(`type:project .status==active`)
 		count, err := exec.ExecuteObjectCountQuery(q)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -94,7 +94,7 @@ func TestExecuteObjectCountQuery(t *testing.T) {
 	})
 
 	t.Run("zero count for no matches", func(t *testing.T) {
-		q, _ := Parse(`object:project .status==archived`)
+		q, _ := Parse(`type:project .status==archived`)
 		count, err := exec.ExecuteObjectCountQuery(q)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -121,7 +121,7 @@ func TestExecuteObjectIDQuery(t *testing.T) {
 	exec := NewExecutor(db)
 
 	t.Run("returns IDs only", func(t *testing.T) {
-		q, _ := Parse("object:project")
+		q, _ := Parse("type:project")
 		ids, err := exec.ExecuteObjectIDQuery(q, 0, 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -137,7 +137,7 @@ func TestExecuteObjectIDQuery(t *testing.T) {
 	})
 
 	t.Run("limit restricts IDs", func(t *testing.T) {
-		q, _ := Parse("object:project")
+		q, _ := Parse("type:project")
 		ids, err := exec.ExecuteObjectIDQuery(q, 1, 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -148,7 +148,7 @@ func TestExecuteObjectIDQuery(t *testing.T) {
 	})
 
 	t.Run("offset beyond results returns empty", func(t *testing.T) {
-		q, _ := Parse("object:project")
+		q, _ := Parse("type:project")
 		ids, err := exec.ExecuteObjectIDQuery(q, 10, 100)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -200,11 +200,11 @@ func TestExecuteTraitPageQuery(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects object query", func(t *testing.T) {
-		oq, _ := Parse("object:project")
+	t.Run("rejects type query", func(t *testing.T) {
+		oq, _ := Parse("type:project")
 		_, err := exec.ExecuteTraitPageQuery(oq, 0, 0)
 		if err == nil {
-			t.Error("expected error for object query on trait page executor")
+			t.Error("expected error for type query on trait page executor")
 		}
 	})
 }
@@ -238,11 +238,11 @@ func TestExecuteTraitCountQuery(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects object query", func(t *testing.T) {
-		oq, _ := Parse("object:project")
+	t.Run("rejects type query", func(t *testing.T) {
+		oq, _ := Parse("type:project")
 		_, err := exec.ExecuteTraitCountQuery(oq)
 		if err == nil {
-			t.Error("expected error for object query on trait count executor")
+			t.Error("expected error for type query on trait count executor")
 		}
 	})
 }

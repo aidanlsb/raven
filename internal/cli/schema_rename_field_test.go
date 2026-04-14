@@ -23,7 +23,7 @@ traits: {}
   daily: daily/
 queries:
   person-by-email:
-    query: 'object:person .email=="alice@example.com"'
+    query: 'type:person .email=="alice@example.com"'
   overdue:
     query: 'trait:due .value==past'
 `).
@@ -94,7 +94,7 @@ traits: {}
   daily: daily/
 queries:
   person-by-email:
-    query: 'object:person .email=="alice@example.com"'
+    query: 'type:person .email=="alice@example.com"'
   overdue:
     query: 'trait:due .value==past'
 `).
@@ -125,7 +125,7 @@ type: page
 	v.AssertFileContains("templates/person.md", "{{field.email_address}}")
 	v.AssertFileNotContains("templates/person.md", "{{field.email}}")
 
-	// raven.yaml saved query updated (only object:person query)
+	// raven.yaml saved query updated (only type:person query)
 	v.AssertFileContains("raven.yaml", `.email_address==`)
 	v.AssertFileNotContains("raven.yaml", `.email==`)
 	v.AssertFileContains("raven.yaml", "trait:due")

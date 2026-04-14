@@ -29,7 +29,7 @@ func TestIntegration_ObjectLifecycle(t *testing.T) {
 	v.AssertFileContains("people/alice.md", "email: alice@example.com")
 
 	// Query the person - results are in "items" field
-	result = v.RunCLI("query", "object:person")
+	result = v.RunCLI("query", "type:person")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 1)
 
@@ -334,7 +334,7 @@ func TestIntegration_JSONPreRunMissingVaultReturnsEnvelope(t *testing.T) {
 	binary := testutil.BuildCLI(t)
 	missingVault := filepath.Join(t.TempDir(), "missing-vault")
 
-	cmd := exec.Command(binary, "--vault-path", missingVault, "--json", "query", "object:project")
+	cmd := exec.Command(binary, "--vault-path", missingVault, "--json", "query", "type:project")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("expected JSON envelope without process failure: %v\n%s", err, output)
@@ -415,12 +415,12 @@ func TestIntegration_QueryByField(t *testing.T) {
 	v.RunCLI("new", "project", "Project Gamma", "--field", "status=active").MustSucceed(t)
 
 	// Query for active projects - uses == for equality
-	result := v.RunCLI("query", "object:project .status==active")
+	result := v.RunCLI("query", "type:project .status==active")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 2)
 
 	// Query for paused projects
-	result = v.RunCLI("query", "object:project .status==paused")
+	result = v.RunCLI("query", "type:project .status==paused")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 1)
 }
@@ -469,7 +469,7 @@ status: done
 		t.Fatalf("failed to bump project mtime: %v", err)
 	}
 
-	result := v.RunCLI("query", "object:project", "--refresh")
+	result := v.RunCLI("query", "type:project", "--refresh")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 1)
 
@@ -501,13 +501,13 @@ name: Alice
 		Build()
 
 	v.RunCLI("reindex").MustSucceed(t)
-	v.AssertQueryCount("object:person", 1)
+	v.AssertQueryCount("type:person", 1)
 
 	if err := os.Remove(filepath.Join(v.Path, "people/alice.md")); err != nil {
 		t.Fatalf("failed to remove person file: %v", err)
 	}
 
-	result := v.RunCLI("query", "object:person", "--refresh")
+	result := v.RunCLI("query", "type:person", "--refresh")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 0)
 }
@@ -525,7 +525,7 @@ func TestIntegration_QueryFailsOnSchemaLoadError(t *testing.T) {
 		t.Fatalf("failed to corrupt schema for test: %v", err)
 	}
 
-	result := v.RunCLI("query", "object:project")
+	result := v.RunCLI("query", "type:project")
 	result.MustFail(t, "SCHEMA_INVALID")
 	result.MustFailWithMessage(t, "Fix schema.yaml and try again")
 }
@@ -539,7 +539,7 @@ func TestIntegration_QueryAmbiguousReferenceReturnsQueryInvalid(t *testing.T) {
 	v.RunCLI("new", "project", "Alex").MustSucceed(t)
 	v.RunCLI("new", "person", "Alex").MustSucceed(t)
 
-	result := v.RunCLI("query", "object:project refs([[alex]])")
+	result := v.RunCLI("query", "type:project refs([[alex]])")
 	result.MustFail(t, "QUERY_INVALID")
 	result.MustFailWithMessage(t, "Use a full object ID/path to disambiguate")
 }
@@ -561,7 +561,7 @@ func TestIntegration_ReferencesAndBacklinks(t *testing.T) {
 	v.AssertBacklinks("people/alice", 1)
 
 	// Query for projects that reference Alice - results are in "items" field
-	result := v.RunCLI("query", "object:project refs([[people/alice]])")
+	result := v.RunCLI("query", "type:project refs([[people/alice]])")
 	result.MustSucceed(t)
 	result.AssertResultCount(t, "items", 1)
 }
@@ -971,14 +971,14 @@ func TestIntegration_BulkOperationsPreview(t *testing.T) {
 	v.RunCLI("new", "project", "Project C", "--field", "status=active").MustSucceed(t)
 
 	// Preview bulk set without --confirm (should not apply changes) - uses == for comparison
-	result := v.RunCLI("query", "object:project .status==active", "--apply", "set status=done")
+	result := v.RunCLI("query", "type:project .status==active", "--apply", "set status=done")
 	result.MustSucceed(t)
 
 	// Files should still have active status since we didn't confirm
 	v.AssertFileContains("projects/project-a.md", "status: active")
 
 	// Now confirm the bulk operation
-	result = v.RunCLI("query", "object:project .status==active", "--apply", "set status=done", "--confirm")
+	result = v.RunCLI("query", "type:project .status==active", "--apply", "set status=done", "--confirm")
 	result.MustSucceed(t)
 
 	// Files should now have done status
@@ -999,7 +999,7 @@ func TestIntegration_BulkDelete(t *testing.T) {
 	v.RunCLI("new", "project", "Project Y", "--field", "status=done").MustSucceed(t)
 
 	// Bulk delete with confirmation - uses == for comparison
-	result := v.RunCLI("query", "object:project .status==done", "--apply", "delete", "--confirm")
+	result := v.RunCLI("query", "type:project .status==done", "--apply", "delete", "--confirm")
 	result.MustSucceed(t)
 
 	// Files should be deleted (moved to trash)
@@ -2128,7 +2128,7 @@ type: page
 	read := v.RunCLI("read", "2025-02-01")
 	read.MustFail(t, "REF_AMBIGUOUS")
 
-	query := v.RunCLI("query", "object:page refs([[2025-02-01]])")
+	query := v.RunCLI("query", "type:page refs([[2025-02-01]])")
 	query.MustFail(t, "QUERY_INVALID")
 	query.MustFailWithMessage(t, "ambiguous reference '2025-02-01'")
 }

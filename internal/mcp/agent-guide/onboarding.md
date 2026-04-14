@@ -68,7 +68,7 @@ If the vault already has content, focus on showing the user what Raven can do wi
 Summarize the types and their counts from `vault_stats`. Then run a query against their most populated type:
 
 ```text
-raven_invoke(command="query", args={"query_string":"object:<most-populated-type>", "limit":5})
+raven_invoke(command="query", args={"query_string":"type:<most-populated-type>", "limit":5})
 ```
 
 **Tell the user:** Walk through the results — what fields each object has, how the schema shapes the data. Point out any patterns.

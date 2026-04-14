@@ -27,7 +27,7 @@ func (e *Executor) buildTraitContentPredicateSQL(p *ContentPredicate, alias stri
 	return cond, []interface{}{searchPattern}, nil
 }
 
-// buildTraitRefsPredicateSQL builds SQL for refs:[[target]] or refs:{object:...} predicates on traits.
+// buildTraitRefsPredicateSQL builds SQL for refs:[[target]] or refs:{type:...} predicates on traits.
 //
 // CONTENT SCOPE RULE: This matches refs that appear on the same line as the trait.
 // This is the same rule used by parser.IsRefOnTraitLine and parser.StripTraitAnnotations -
@@ -192,7 +192,7 @@ func buildDateFilterConditionForCompare(value string, compareOp CompareOp, colum
 	return cond, args, true
 }
 
-// buildOnPredicateSQL builds SQL for on:{object:...} or on:[[target]] predicates.
+// buildOnPredicateSQL builds SQL for on:{type:...} or on:[[target]] predicates.
 func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []interface{}, error) {
 	// Handle direct target reference: on:[[target]]
 	if p.Target != "" {
@@ -235,7 +235,7 @@ func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []
 	return cond, args, nil
 }
 
-// buildWithinPredicateSQL builds SQL for within(object:...) or within([[target]]) predicates.
+// buildWithinPredicateSQL builds SQL for within(type:...) or within([[target]]) predicates.
 func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (string, []interface{}, error) {
 	// Handle direct target reference: within([[target]])
 	if p.Target != "" {

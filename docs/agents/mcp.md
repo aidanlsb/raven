@@ -93,7 +93,7 @@ Example:
 {
   "command": "query",
   "args": {
-    "query_string": "object:project .status==active",
+    "query_string": "type:project .status==active",
     "limit": 20
   }
 }
@@ -385,7 +385,7 @@ Apply:
 
 ## Best Practices
 
-1. Check the schema before creating or mutating typed objects.
+1. Check the schema before creating or mutating typed items.
 2. Prefer `query` over `search` when the structure is known.
 3. Use raw `read` ranges before building string replacements for `edit`.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.

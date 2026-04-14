@@ -50,5 +50,5 @@ queries:
 
   # Active projects
   active-projects:
-    query: "object:project has(trait:todo)"
+    query: "type:project has(trait:todo)"
     description: "Projects marked with @todo"

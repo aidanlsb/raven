@@ -20,17 +20,17 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 
 ## Query vs search
 
-- Use `query` when you want real Raven objects or real trait instances.
+- Use `query` when you want real Raven items or real trait instances.
 - Use `search` when you only know a text fragment and do not yet know the type, trait, or structure.
 - `search` returns file/snippet matches. It does not distinguish a real `@todo` trait from plain prose that happens to mention `@todo`.
-- If the user asks for actual open tasks, due items, briefs, or typed objects, start with `query`.
+- If the user asks for actual open tasks, due items, briefs, or typed items, start with `query`.
 
 ## Examples
 
 ```text
-raven_invoke(command="query", args={"query_string":"object:project .status==active"})
+raven_invoke(command="query", args={"query_string":"type:project .status==active"})
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
-raven_invoke(command="query", args={"query_string":"object:meeting refs([[project/website]])"})
+raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])"})
 ```
 
 For text search inside typed queries, use `content("term")`.
@@ -48,19 +48,19 @@ raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 Open todos in briefs:
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(object:brief)"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(type:brief)"})
 ```
 
 Open todos under a topic heading or section:
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(object:section content(\"pricing\"))"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(type:section content(\"pricing\"))"})
 ```
 
 Open todos in a path plus structured filter:
 
 ```text
-raven_invoke(command="query", args={"query_string":"object:page matches(.path, \"^pages/work/\") has(trait:todo .value==todo)"})
+raven_invoke(command="query", args={"query_string":"type:page matches(.path, \"^pages/work/\") has(trait:todo .value==todo)"})
 ```
 
 Text mentions instead of real traits:

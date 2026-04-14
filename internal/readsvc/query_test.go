@@ -9,7 +9,7 @@ import (
 
 func TestExecuteQuery_InvalidInput(t *testing.T) {
 	t.Parallel()
-	_, err := ExecuteQuery(nil, ExecuteQueryRequest{QueryString: "object:project"})
+	_, err := ExecuteQuery(nil, ExecuteQueryRequest{QueryString: "type:project"})
 	if err == nil {
 		t.Fatalf("expected error for nil runtime")
 	}
@@ -21,12 +21,12 @@ func TestExecuteQuery_InvalidInput(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	rt := &Runtime{DB: db}
 
-	_, err = ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project", Limit: -1})
+	_, err = ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "type:project", Limit: -1})
 	if err == nil || err.Error() != "limit must be >= 0" {
 		t.Fatalf("expected limit validation error, got: %v", err)
 	}
 
-	_, err = ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project", Offset: -1})
+	_, err = ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "type:project", Offset: -1})
 	if err == nil || err.Error() != "offset must be >= 0" {
 		t.Fatalf("expected offset validation error, got: %v", err)
 	}
@@ -36,18 +36,18 @@ func TestExecuteQuery_ObjectModes(t *testing.T) {
 	t.Parallel()
 	rt := seededRuntime(t)
 
-	result, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project"})
+	result, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "type:project"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.QueryType != "object" || result.TypeName != "project" {
+	if result.QueryKind != "type" || result.TypeName != "project" {
 		t.Fatalf("unexpected query metadata: %#v", result)
 	}
 	if result.Total != 2 || len(result.Objects) != 2 || result.Returned != 2 {
 		t.Fatalf("unexpected object results: %#v", result)
 	}
 
-	idsOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project", IDsOnly: true, Limit: 1})
+	idsOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "type:project", IDsOnly: true, Limit: 1})
 	if err != nil {
 		t.Fatalf("unexpected IDsOnly error: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestExecuteQuery_ObjectModes(t *testing.T) {
 		t.Fatalf("expected total 2, got %d", idsOnly.Total)
 	}
 
-	countOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project", CountOnly: true})
+	countOnly, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "type:project", CountOnly: true})
 	if err != nil {
 		t.Fatalf("unexpected CountOnly error: %v", err)
 	}
@@ -69,9 +69,9 @@ func TestExecuteQuery_ObjectModes(t *testing.T) {
 		t.Fatalf("count-only should not include rows or ids: %#v", countOnly)
 	}
 
-	paged, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "object:project", Limit: 1, Offset: 1})
+	paged, err := ExecuteQuery(rt, ExecuteQueryRequest{QueryString: "type:project", Limit: 1, Offset: 1})
 	if err != nil {
-		t.Fatalf("unexpected paged object query error: %v", err)
+		t.Fatalf("unexpected paged type query error: %v", err)
 	}
 	if paged.Total != 2 || paged.Returned != 1 || len(paged.Objects) != 1 {
 		t.Fatalf("unexpected paged object result: %#v", paged)
@@ -89,7 +89,7 @@ func TestExecuteQuery_TraitModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.QueryType != "trait" || result.TypeName != "todo" {
+	if result.QueryKind != "trait" || result.TypeName != "todo" {
 		t.Fatalf("unexpected query metadata: %#v", result)
 	}
 	if result.Total != 2 || len(result.Traits) != 2 || result.Returned != 2 {
@@ -148,7 +148,7 @@ func TestExecuteQuery_RefPredicateUsesLazyResolver(t *testing.T) {
 	}
 
 	result, err := ExecuteQuery(rt, ExecuteQueryRequest{
-		QueryString: "object:note refs([[raven]])",
+		QueryString: "type:note refs([[raven]])",
 	})
 	if err != nil {
 		t.Fatalf("unexpected ref query error: %v", err)
@@ -175,7 +175,7 @@ func TestExecuteQuery_AmbiguousISODateRefReturnsError(t *testing.T) {
 	}
 
 	_, err = ExecuteQuery(rt, ExecuteQueryRequest{
-		QueryString: "object:project refs([[2025-02-01]])",
+		QueryString: "type:project refs([[2025-02-01]])",
 	})
 	if err == nil {
 		t.Fatal("expected ambiguous ISO date reference error")

@@ -14,7 +14,7 @@ func TestExecuteString_ObjectQuery(t *testing.T) {
 
 	exec := NewExecutor(db)
 
-	result, err := exec.Execute("object:project")
+	result, err := exec.Execute("type:project")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestExecuteString_ParseError(t *testing.T) {
 
 	exec := NewExecutor(db)
 
-	_, err := exec.Execute("object:project .status==")
+	_, err := exec.Execute("type:project .status==")
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
 	}
@@ -71,7 +71,7 @@ func TestExecuteString_MatchesManualParseThenExecute(t *testing.T) {
 	defer db.Close()
 
 	exec := NewExecutor(db)
-	queryStr := `object:project .status==active`
+	queryStr := `type:project .status==active`
 
 	directResult, err := exec.Execute(queryStr)
 	if err != nil {

@@ -21,7 +21,7 @@ func TestValidator_UnknownType(t *testing.T) {
 
 	v := NewValidator(sch)
 
-	q, err := Parse("object:nonexistent")
+	q, err := Parse("type:nonexistent")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestValidator_UnknownField(t *testing.T) {
 
 	v := NewValidator(sch)
 
-	q, err := Parse("object:person .nonexistent==value")
+	q, err := Parse("type:person .nonexistent==value")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -157,13 +157,13 @@ func TestValidator_ValidQuery(t *testing.T) {
 	v := NewValidator(sch)
 
 	tests := []string{
-		"object:person",
-		"object:person .name==Freya",
-		"object:project .status==active",
+		"type:person",
+		"type:person .name==Freya",
+		"type:project .status==active",
 		"trait:due",
 		"trait:due .value==past",
-		"object:person has(trait:due)",
-		"trait:due on(object:project)",
+		"type:person has(trait:due)",
+		"trait:due on(type:project)",
 	}
 
 	for _, queryStr := range tests {
@@ -227,7 +227,7 @@ func TestValidator_FieldNotTrait(t *testing.T) {
 	v := NewValidator(sch)
 
 	// Should be invalid - due is a trait, not a field on project
-	q, err := Parse("object:project .due==2025-01-01")
+	q, err := Parse("type:project .due==2025-01-01")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestValidator_NestedSubqueryValidation(t *testing.T) {
 	v := NewValidator(sch)
 
 	// Invalid nested subquery - trait doesn't exist
-	q, err := Parse("object:project has(trait:nonexistent)")
+	q, err := Parse("type:project has(trait:nonexistent)")
 	if err != nil {
 		t.Fatalf("failed to parse query: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestValidator_InvalidRegexPattern(t *testing.T) {
 	v := NewValidator(sch)
 
 	tests := []string{
-		`object:project matches(.name, "[")`,
+		`type:project matches(.name, "[")`,
 		`trait:todo matches(.value, "[")`,
 	}
 
@@ -343,15 +343,15 @@ func TestValidator_DirectTargetPredicates(t *testing.T) {
 	// They should validate without panicking
 	tests := []string{
 		// Object predicates with [[target]]
-		"object:section parent([[projects/website]])",
-		"object:section ancestor([[projects/website]])",
-		"object:project child([[projects/website#tasks]])",
-		"object:project descendant([[projects/website#tasks]])",
+		"type:section parent([[projects/website]])",
+		"type:section ancestor([[projects/website]])",
+		"type:project child([[projects/website#tasks]])",
+		"type:project descendant([[projects/website#tasks]])",
 		// Trait predicates with [[target]]
 		"trait:todo on([[projects/website]])",
 		"trait:todo within([[projects/website]])",
 		// Negated versions
-		"object:section !parent([[projects/website]])",
+		"type:section !parent([[projects/website]])",
 		"trait:todo !within([[projects/website]])",
 		// Short references
 		"trait:todo within([[website]])",
@@ -459,64 +459,64 @@ func TestValidator_ObjectStringFunctionsAndArrayQuantifiersValidateFieldTypes(t 
 	}{
 		{
 			name:    "string function on scalar string field",
-			query:   `object:project contains(.name, "api")`,
+			query:   `type:project contains(.name, "api")`,
 			wantErr: false,
 		},
 		{
 			name:    "array quantifier on string array with element string function",
-			query:   `object:project any(.tags, startswith(_, "feature-"))`,
+			query:   `type:project any(.tags, startswith(_, "feature-"))`,
 			wantErr: false,
 		},
 		{
 			name:    "array quantifier on ref array with ref element comparison",
-			query:   `object:project any(.owners, _ == [[people/freya]])`,
+			query:   `type:project any(.owners, _ == [[people/freya]])`,
 			wantErr: false,
 		},
 		{
 			name:        "string function unknown field",
-			query:       `object:project contains(.missing, "api")`,
+			query:       `type:project contains(.missing, "api")`,
 			wantErr:     true,
 			errContains: "has no field 'missing'",
 		},
 		{
 			name:        "string function on number field",
-			query:       `object:project contains(.score, "9")`,
+			query:       `type:project contains(.score, "9")`,
 			wantErr:     true,
 			errContains: "not valid for field '.score'",
 		},
 		{
 			name:        "string function on array field",
-			query:       `object:project contains(.tags, "urgent")`,
+			query:       `type:project contains(.tags, "urgent")`,
 			wantErr:     true,
 			errContains: "require a scalar field",
 		},
 		{
 			name:        "top-level string function underscore placeholder",
-			query:       `object:project contains(_, "api")`,
+			query:       `type:project contains(_, "api")`,
 			wantErr:     true,
 			errContains: "placeholder '_' is only valid inside any()/all()/none()",
 		},
 		{
 			name:        "array quantifier on non-array field",
-			query:       `object:project any(.name, _ == "api")`,
+			query:       `type:project any(.name, _ == "api")`,
 			wantErr:     true,
 			errContains: "require an array field",
 		},
 		{
 			name:        "array element string function on numeric array",
-			query:       `object:project any(.scores, startswith(_, "1"))`,
+			query:       `type:project any(.scores, startswith(_, "1"))`,
 			wantErr:     true,
 			errContains: "not valid for array elements of type number",
 		},
 		{
 			name:        "array element string function must use underscore",
-			query:       `object:project any(.tags, startswith(.name, "api"))`,
+			query:       `type:project any(.tags, startswith(.name, "api"))`,
 			wantErr:     true,
 			errContains: "must use '_' as the first argument",
 		},
 		{
 			name:        "reference element comparison only for ref arrays",
-			query:       `object:project any(.tags, _ == [[people/freya]])`,
+			query:       `type:project any(.tags, _ == [[people/freya]])`,
 			wantErr:     true,
 			errContains: "only valid for ref[] fields",
 		},

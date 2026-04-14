@@ -24,7 +24,7 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 
 	e := NewExecutor(db)
 
-	q, err := Parse("object:metric .score>5")
+	q, err := Parse("type:metric .score>5")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestObjectFieldComparison_RelativeDateKeywordOrdering(t *testing.T) {
 
 	e := NewExecutor(db)
 
-	q, err := Parse("object:task .due<today")
+	q, err := Parse("type:task .due<today")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestObjectFieldComparison_InvalidDateReturnsError(t *testing.T) {
 
 	e := NewExecutor(db)
 
-	q, err := Parse(`object:project .due>"2026-13-45"`)
+	q, err := Parse(`type:project .due>"2026-13-45"`)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestObjectFieldComparison_RelativeDateUsesSingleExecutionTimestamp(t *testi
 		return time.Date(2026, 4, 6, 0, 0, 1, 0, time.UTC)
 	}
 
-	q, err := Parse("object:task .due>=today .due<=today")
+	q, err := Parse("type:task .due>=today .due<=today")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

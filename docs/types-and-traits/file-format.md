@@ -223,7 +223,7 @@ Use `parent:`, `ancestor:`, `child:`, `descendant:` predicates to query this hie
 
 ## Embedded Type Declarations
 
-The `::type` syntax declares a typed object embedded within a file.
+The `::type` syntax declares a typed item embedded within a file.
 
 ### Syntax
 
@@ -245,8 +245,8 @@ Meeting notes go here...
 ### Rules
 
 1. The `::type()` line must be directly after the heading (no blank lines)
-2. The heading becomes an object of the specified type (not a `section`)
-3. The object ID is `<file-id>#<slug>` where slug comes from the heading text
+2. The heading becomes an item of the specified type (not a `section`)
+3. The item ID is `<file-id>#<slug>` where slug comes from the heading text
 4. Use `id=custom-id` to override the slug
 
 ### Field Value Syntax
@@ -314,7 +314,7 @@ Wiki-style links connect objects across your vault:
 
 References can appear in markdown body content, frontmatter `ref`/`ref[]` fields, and embedded type declarations.
 
-Raven resolves references to canonical object IDs through alias, name field, date, path, and short name matching. Short references like `[[freya]]` work when unambiguous.
+Raven resolves references to canonical IDs through alias, name field, date, path, and short name matching. Short references like `[[freya]]` work when unambiguous.
 
 For the full resolution model, ambiguity handling, frontmatter ref syntax, and maintenance commands, see `types-and-traits/references.md`.
 
@@ -377,8 +377,8 @@ Traits are associated with the nearest containing object (the section or file th
 Query with `on(...)` (direct parent) or `within(...)` (any ancestor):
 
 ```
-trait:todo on(object:section .title=="Tasks")
-trait:highlight within(object:project .status==active)
+trait:todo on(type:section .title=="Tasks")
+trait:highlight within(type:project .status==active)
 ```
 
 ---

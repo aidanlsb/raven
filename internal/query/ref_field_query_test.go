@@ -45,7 +45,7 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 	executor := NewExecutor(db)
 	executor.SetSchema(sch)
 
-	q, err := Parse("object:person .company==[[companies/cursor]]")
+	q, err := Parse("type:person .company==[[companies/cursor]]")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestRefFieldQueryResolvesCanonicalTargets(t *testing.T) {
 		t.Fatalf("expected people/ada, got %+v", results)
 	}
 
-	q, err = Parse("object:person .company==cursor")
+	q, err = Parse("type:person .company==cursor")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRefFieldQueryErrorsOnAmbiguousStoredValue(t *testing.T) {
 	executor := NewExecutor(db)
 	executor.SetSchema(sch)
 
-	q, err := Parse("object:person .company==[[companies/cursor]]")
+	q, err := Parse("type:person .company==[[companies/cursor]]")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestRefFieldQueryMemoizesAmbiguityChecksWithinExecution(t *testing.T) {
 		checkCount++
 	}
 
-	q, err := Parse("object:person .company==cursor .company==cursor")
+	q, err := Parse("type:person .company==cursor .company==cursor")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestRefFieldQueryBatchesDistinctAmbiguityChecksWithinExecution(t *testing.T
 		checkCount++
 	}
 
-	q, err := Parse("object:person .company==cursor .manager==freya")
+	q, err := Parse("type:person .company==cursor .manager==freya")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}

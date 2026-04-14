@@ -182,36 +182,36 @@ func shortenRefIfNeeded(s string) string {
 var queryCmd = &cobra.Command{
 	Use:   "query <query-string>",
 	Short: "Run a query using the Raven query language",
-	Long: `Query objects or traits using the Raven query language.
+	Long: `Query items by type or traits by name using the Raven query language.
 
-Query types:
-  object:<type> [predicates]   Query objects of a type
-  trait:<name> [predicates]    Query traits by name
+Query roots:
+  type:<type> [predicates]    Query items of a type
+  trait:<name> [predicates]   Query traits by name
 
-Predicates for object queries:
+Predicates for type queries:
   .field==value      Field equals value
   exists(.field)     Field exists (has a value)
   !.field==value     Field does not equal value
   has(trait:...)        Has a trait matching nested trait query
   encloses(trait:...)   Has a trait in subtree (self or descendants)
-  parent(object:...)    Direct parent matches nested object query
-  ancestor(object:...)  Any ancestor matches nested object query
-  child(object:...)     Has child matching nested object query
-  descendant(object:...) Has descendant matching nested object query
+  parent(type:...)    Direct parent matches nested type query
+  ancestor(type:...)  Any ancestor matches nested type query
+  child(type:...)     Has child matching nested type query
+  descendant(type:...) Has descendant matching nested type query
   refs([[target]])      References a specific target
-  refs(object:...)      References an object matching nested object query
+  refs(type:...)      References an item matching nested type query
   refd([[source]])      Referenced by a specific source
-  refd(object:...)      Referenced by an object matching nested object query
+  refd(type:...)      Referenced by an item matching nested type query
   refd(trait:...)       Referenced by a trait matching nested trait query
-  content("term")       Full-text search on object content
+  content("term")       Full-text search on item content
 
 Predicates for trait queries:
   .value==val      Trait value equals val
-  on(object:...)       Direct parent matches nested object query
-  within(object:...)   Any ancestor matches nested object query
+  on(type:...)       Direct parent matches nested type query
+  within(type:...)   Any ancestor matches nested type query
   at(trait:...)        Co-located with trait matching nested trait query
   refs([[target]])     Line contains reference to target
-  refs(object:...)     Line references an object matching nested object query
+  refs(type:...)     Line references an item matching nested type query
   content("term")      Line content contains term
 
 Boolean operators:
@@ -223,11 +223,11 @@ Saved query inputs must be declared with args: in raven.yaml when using {{args.<
 You can then pass inputs either by position (following args order) or as key=value pairs.
 
 Examples:
-  rvn query "object:project .status==active"
-  rvn query "object:meeting has(trait:due)"
+  rvn query "type:project .status==active"
+  rvn query "type:meeting has(trait:due)"
   rvn query "trait:due .value<today"
   rvn query "trait:todo content(\"my task\")"
-  rvn query "trait:highlight on(object:book .status==reading)"
+  rvn query "trait:highlight on(type:book .status==reading)"
   rvn query tasks                    # Run saved query
   rvn query project-todos raven      # Positional input (args: [project])
   rvn query project-todos project=projects/raven
@@ -302,9 +302,9 @@ Examples:
 			})
 		}
 
-		if !strings.HasPrefix(queryStr, "object:") && !strings.HasPrefix(queryStr, "trait:") {
+		if !strings.HasPrefix(queryStr, "type:") && !strings.HasPrefix(queryStr, "trait:") {
 			if isSavedQuery {
-				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'object:' or 'trait:'", queryName), "")
+				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'type:' or 'trait:'", queryName), "")
 			}
 
 			db, err := index.Open(vaultPath)
@@ -378,9 +378,9 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 		return nil
 	}
 
-	queryType, _ := data["query_type"].(string)
-	switch queryType {
-	case "object":
+	queryKind, _ := data["query_kind"].(string)
+	switch queryKind {
+	case "type", "object":
 		objects := objectResultsFromAny(data["items"])
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
@@ -765,7 +765,7 @@ func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.Sa
 	}
 
 	// Full query strings should continue through the normal path untouched.
-	if strings.HasPrefix(inline, "object:") || strings.HasPrefix(inline, "trait:") {
+	if strings.HasPrefix(inline, "type:") || strings.HasPrefix(inline, "trait:") {
 		return args
 	}
 

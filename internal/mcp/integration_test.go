@@ -300,7 +300,7 @@ func TestMCPIntegration_QueryObjects(t *testing.T) {
 
 	// Query for active projects - uses == for equality
 	result := server.callTool("query", map[string]interface{}{
-		"query_string": "object:project .status==active",
+		"query_string": "type:project .status==active",
 	})
 
 	if result.IsError {
@@ -331,7 +331,7 @@ func TestMCPIntegration_QuerySavedQueryInlineArgs(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
   project-by-status:
-    query: "object:project .status=={{args.status}}"
+    query: "type:project .status=={{args.status}}"
     args: [status]
 `).
 		Build()
@@ -381,7 +381,7 @@ func TestMCPIntegration_QuerySavedQueryInlineQuotedArgs(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
   project-by-name:
-    query: 'object:project .title=="{{args.name}}"'
+    query: 'type:project .title=="{{args.name}}"'
     args: [name]
 `).
 		Build()
@@ -435,7 +435,7 @@ func TestMCPIntegration_QuerySavedQueryTypedInputs(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
   project-by-status:
-    query: "object:project .status=={{args.status}}"
+    query: "type:project .status=={{args.status}}"
     args: [status]
 `).
 		Build()
@@ -486,7 +486,7 @@ func TestMCPIntegration_QuerySavedQueryAllowsUnusedDeclaredArgs(t *testing.T) {
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`queries:
   project-by-status:
-    query: "object:project .status=={{args.status}}"
+    query: "type:project .status=={{args.status}}"
     args: [status, project]
 `).
 		Build()
@@ -1386,7 +1386,7 @@ name: Alice
 	}
 
 	result := server.callTool("query", map[string]interface{}{
-		"query_string": "object:person",
+		"query_string": "type:person",
 		"refresh":      true,
 	})
 	if result.IsError {
@@ -2150,13 +2150,13 @@ status: paused
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
 		mcpResult := server.callTool("query", map[string]interface{}{
-			"query_string": "object:project .status==active",
+			"query_string": "type:project .status==active",
 			"limit":        10,
 			"offset":       0,
 		})
-		cliResult := vCLI.RunCLI("query", "object:project .status==active", "--limit", "10", "--offset", "0")
+		cliResult := vCLI.RunCLI("query", "type:project .status==active", "--limit", "10", "--offset", "0")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_type", "type", "items", "total", "returned", "offset", "limit"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_kind", "type", "items", "total", "returned", "offset", "limit"})
 	})
 
 	t.Run("query_apply_object_preview", func(t *testing.T) {
@@ -2196,10 +2196,10 @@ status: paused
 		vCLI.RunCLI("reindex").MustSucceed(t)
 
 		mcpResult := server.callTool("query", map[string]interface{}{
-			"query_string": "object:project .status==active",
+			"query_string": "type:project .status==active",
 			"apply":        []interface{}{"set status=done"},
 		})
-		cliResult := vCLI.RunCLI("query", "object:project .status==active", "--apply", "set status=done")
+		cliResult := vCLI.RunCLI("query", "type:project .status==active", "--apply", "set status=done")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "fields"})
 	})
@@ -3507,9 +3507,9 @@ func TestMCPIntegration_DirectDispatchReferenceErrorsParity(t *testing.T) {
 		server := newTestServer(t, vMCP.Path, binary)
 
 		mcpResult := server.callTool("query", map[string]interface{}{
-			"query_string": "object:project .status===",
+			"query_string": "type:project .status===",
 		})
-		cliResult := vCLI.RunCLI("query", "object:project .status===")
+		cliResult := vCLI.RunCLI("query", "type:project .status===")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, nil)
 	})

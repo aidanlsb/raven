@@ -75,7 +75,7 @@ Your agent should be able to:
 
 - inspect the schema
 - list or read saved queries
-- create a typed object through Raven instead of direct file writes
+- create a typed item through Raven instead of direct file writes
 - query the vault and explain what it found
 
 If the agent can do those four things, the integration is in good shape.

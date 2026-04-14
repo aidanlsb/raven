@@ -27,17 +27,17 @@ rvn query "<query>" --apply "<command> [args...]" [--confirm]
 
 | Query type | `--apply` commands |
 |------------|--------------------|
-| `object:...` | `set field=value...`, `add <text...>`, `delete`, `move <destination/>` |
+| `type:...` | `set field=value...`, `add <text...>`, `delete`, `move <destination/>` |
 | `trait:...` | `update <new_value>` |
 
 ### Preview vs Apply
 
 ```bash
 # Preview (default) - shows what would change
-rvn query "object:project .status==active" --apply "set reviewed=true"
+rvn query "type:project .status==active" --apply "set reviewed=true"
 
 # Apply - actually makes the changes
-rvn query "object:project .status==active" --apply "set reviewed=true" --confirm
+rvn query "type:project .status==active" --apply "set reviewed=true" --confirm
 ```
 
 ---
@@ -50,13 +50,13 @@ Update frontmatter fields on matching objects.
 
 ```bash
 # Set single field
-rvn query "object:project .status==active" --apply "set reviewed=true" --confirm
+rvn query "type:project .status==active" --apply "set reviewed=true" --confirm
 
 # Set multiple fields
-rvn query "object:person !exists(.status)" --apply "set status=active role=member" --confirm
+rvn query "type:person !exists(.status)" --apply "set status=active role=member" --confirm
 
 # Clear a field (set to empty)
-rvn query "object:project .status==archived" --apply "set priority=" --confirm
+rvn query "type:project .status==archived" --apply "set priority=" --confirm
 ```
 
 ### Behavior
@@ -97,13 +97,13 @@ Append text to the end of matching files.
 
 ```bash
 # Add a note
-rvn query "object:project .status==active" --apply "add ## Reviewed on $(date +%Y-%m-%d)" --confirm
+rvn query "type:project .status==active" --apply "add ## Reviewed on $(date +%Y-%m-%d)" --confirm
 
 # Add a trait
-rvn query "object:project .status==active" --apply "add @reviewed(2026-01-10)" --confirm
+rvn query "type:project .status==active" --apply "add @reviewed(2026-01-10)" --confirm
 
 # Add with reference
-rvn query "object:meeting" --apply "add See also: [[project/website]]" --confirm
+rvn query "type:meeting" --apply "add See also: [[project/website]]" --confirm
 ```
 
 ### Behavior
@@ -122,10 +122,10 @@ Delete matching objects (moves to trash by default).
 
 ```bash
 # Delete archived projects
-rvn query "object:project .status==archived" --apply "delete" --confirm
+rvn query "type:project .status==archived" --apply "delete" --confirm
 
 # Delete old daily notes (be careful!)
-rvn query "object:date" --ids | head -100 | rvn delete --stdin --confirm
+rvn query "type:date" --ids | head -100 | rvn delete --stdin --confirm
 ```
 
 ### Behavior
@@ -138,7 +138,7 @@ rvn query "object:date" --ids | head -100 | rvn delete --stdin --confirm
 
 ```bash
 # Check what references these objects first
-for id in $(rvn query "object:project .status==archived" --ids); do
+for id in $(rvn query "type:project .status==archived" --ids); do
   echo "=== $id ==="
   rvn backlinks "$id"
 done
@@ -154,10 +154,10 @@ Move matching objects to a directory.
 
 ```bash
 # Archive old projects
-rvn query "object:project .status==archived" --apply "move archive/project/" --confirm
+rvn query "type:project .status==archived" --apply "move archive/project/" --confirm
 
 # Reorganize people
-rvn query "object:person .role==contractor" --apply "move contractor/" --confirm
+rvn query "type:person .role==contractor" --apply "move contractor/" --confirm
 ```
 
 ### Behavior
@@ -178,8 +178,8 @@ For complex operations, get IDs and pipe to other commands.
 Outputs one ID per line for piping:
 
 ```bash
-# Object query - outputs object IDs
-rvn query "object:project .status==active" --ids
+# Type query - outputs item IDs
+rvn query "type:project .status==active" --ids
 
 # Trait query - outputs trait IDs
 rvn query "trait:due .value<today" --ids
@@ -189,26 +189,26 @@ rvn query "trait:due .value<today" --ids
 
 ```bash
 # Set fields via pipe
-rvn query "object:project .status==active" --ids | rvn set --stdin priority=high --confirm
+rvn query "type:project .status==active" --ids | rvn set --stdin priority=high --confirm
 
 # Update trait values via pipe
 rvn query "trait:todo .value==todo" --ids | rvn update --stdin done --confirm
 
 # Delete via pipe
-rvn query "object:project .status==archived" --ids | rvn delete --stdin --confirm
+rvn query "type:project .status==archived" --ids | rvn delete --stdin --confirm
 
 # Move via pipe
-rvn query "object:project .status==archived" --ids | rvn move --stdin archive/project/ --confirm
+rvn query "type:project .status==archived" --ids | rvn move --stdin archive/project/ --confirm
 ```
 
 ### Combining with Shell Tools
 
 ```bash
 # Process first 10 results
-rvn query "object:project" --ids | head -10 | rvn set --stdin reviewed=true --confirm
+rvn query "type:project" --ids | head -10 | rvn set --stdin reviewed=true --confirm
 
 # Filter with grep
-rvn query "object:person" --ids | grep "team-" | rvn set --stdin department=engineering --confirm
+rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engineering --confirm
 ```
 
 ---
@@ -256,7 +256,7 @@ Skipping embedded object: project/website#tasks (use set for embedded objects)
 Bulk operations collect errors and continue processing:
 
 ```bash
-$ rvn query "object:project" --apply "set status=invalid-value" --confirm
+$ rvn query "type:project" --apply "set status=invalid-value" --confirm
 Updated: project/alpha (status=invalid-value) [ERROR: invalid enum value]
 Updated: project/beta (status=invalid-value) [ERROR: invalid enum value]
 Updated: project/gamma (status=invalid-value) [ERROR: invalid enum value]
@@ -288,42 +288,42 @@ git restore .
 
 ```bash
 # Add a reviewed trait to all active projects
-rvn query "object:project .status==active" --apply "add @reviewed($(date +%Y-%m-%d))" --confirm
+rvn query "type:project .status==active" --apply "add @reviewed($(date +%Y-%m-%d))" --confirm
 ```
 
 ### Archive Old Content
 
 ```bash
 # Move archived projects to archive folder
-rvn query "object:project .status==archived" --apply "move archive/project/" --confirm
+rvn query "type:project .status==archived" --apply "move archive/project/" --confirm
 ```
 
 ### Fix Missing Fields
 
 ```bash
 # Find objects missing a field and set a default
-rvn query "object:person !exists(.status)" --apply "set status=active" --confirm
+rvn query "type:person !exists(.status)" --apply "set status=active" --confirm
 ```
 
 ### Update Enum Values After Schema Change
 
 ```bash
 # After adding "critical" to priority enum, update old "urgent" values
-rvn query "object:project .priority==urgent" --ids | rvn set --stdin priority=critical --confirm
+rvn query "type:project .priority==urgent" --ids | rvn set --stdin priority=critical --confirm
 ```
 
 ### Clean Up Overdue Items
 
 ```bash
 # Mark projects with overdue items
-rvn query "object:project has(trait:due .value<today)" --apply "set status=overdue" --confirm
+rvn query "type:project has(trait:due .value<today)" --apply "set status=overdue" --confirm
 ```
 
 ### Batch Create Tags
 
 ```bash
 # Add a reviewed marker to all frontend projects
-rvn query "object:project .category==frontend" --apply "add @reviewed(2026-01-10)" --confirm
+rvn query "type:project .category==frontend" --apply "add @reviewed(2026-01-10)" --confirm
 ```
 
 ---
@@ -341,9 +341,9 @@ Before running bulk operations:
 ```bash
 # Safe flow
 git add -A && git commit -m "Before bulk update"
-rvn query "object:project .status==archived" --apply "move archive/"
+rvn query "type:project .status==archived" --apply "move archive/"
 # Review preview...
-rvn query "object:project .status==archived" --apply "move archive/" --confirm
+rvn query "type:project .status==archived" --apply "move archive/" --confirm
 ```
 
 ---

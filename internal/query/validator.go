@@ -143,17 +143,17 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 		// ValuePredicate is deprecated; the parser now uses FieldPredicate with Field="value"
 		return &ValidationError{
 			Message:    "value predicate is only valid for trait queries",
-			Suggestion: "Use .value==X in trait queries, or use .field==X for object fields",
+			Suggestion: "Use .value==X in trait queries, or use .field==X for type fields",
 		}
 	case *OnPredicate:
 		return &ValidationError{
 			Message:    "on: predicate is only valid for trait queries",
-			Suggestion: "Use on(object:...) in trait queries",
+			Suggestion: "Use on(type:...) in trait queries",
 		}
 	case *WithinPredicate:
 		return &ValidationError{
 			Message:    "within: predicate is only valid for trait queries",
-			Suggestion: "Use within(object:...) in trait queries",
+			Suggestion: "Use within(type:...) in trait queries",
 		}
 	case *AtPredicate:
 		// at: is only valid for trait queries
@@ -232,8 +232,8 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 		}
 	case *RefdPredicate:
 		return &ValidationError{
-			Message:    "refd: predicate is only valid for object queries",
-			Suggestion: "Use refd: with object queries, or use refs: in trait queries",
+			Message:    "refd: predicate is only valid for type queries",
+			Suggestion: "Use refd: with type queries, or use refs: in trait queries",
 		}
 	case *FieldPredicate:
 		// Allow .value for traits (the trait's value field)
@@ -241,43 +241,43 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 			return nil
 		}
 		return &ValidationError{
-			Message:    "field predicates other than .value are only valid for object queries",
-			Suggestion: "Use .value==X for trait values, or .field==X in object queries",
+			Message:    "field predicates other than .value are only valid for type queries",
+			Suggestion: "Use .value==X for trait values, or .field==X in type queries",
 		}
 	case *ArrayQuantifierPredicate:
 		return &ValidationError{
-			Message:    "array predicates are only valid for object queries",
-			Suggestion: "Use any()/all()/none() on object array fields",
+			Message:    "array predicates are only valid for type queries",
+			Suggestion: "Use any()/all()/none() on array fields in type queries",
 		}
 	case *HasPredicate:
 		return &ValidationError{
-			Message:    "has: predicate is only valid for object queries",
-			Suggestion: "Use has(trait:...) in object queries",
+			Message:    "has: predicate is only valid for type queries",
+			Suggestion: "Use has(trait:...) in type queries",
 		}
 	case *ContainsPredicate:
 		return &ValidationError{
-			Message:    "contains: predicate is only valid for object queries",
-			Suggestion: "Use encloses(trait:...) in object queries",
+			Message:    "contains: predicate is only valid for type queries",
+			Suggestion: "Use encloses(trait:...) in type queries",
 		}
 	case *ParentPredicate:
 		return &ValidationError{
-			Message:    "parent: predicate is only valid for object queries",
-			Suggestion: "Use parent(object:...) in object queries",
+			Message:    "parent: predicate is only valid for type queries",
+			Suggestion: "Use parent(type:...) in type queries",
 		}
 	case *AncestorPredicate:
 		return &ValidationError{
-			Message:    "ancestor: predicate is only valid for object queries",
-			Suggestion: "Use ancestor(object:...) in object queries",
+			Message:    "ancestor: predicate is only valid for type queries",
+			Suggestion: "Use ancestor(type:...) in type queries",
 		}
 	case *ChildPredicate:
 		return &ValidationError{
-			Message:    "child: predicate is only valid for object queries",
-			Suggestion: "Use child(object:...) in object queries",
+			Message:    "child: predicate is only valid for type queries",
+			Suggestion: "Use child(type:...) in type queries",
 		}
 	case *DescendantPredicate:
 		return &ValidationError{
-			Message:    "descendant: predicate is only valid for object queries",
-			Suggestion: "Use descendant(object:...) in object queries",
+			Message:    "descendant: predicate is only valid for type queries",
+			Suggestion: "Use descendant(type:...) in type queries",
 		}
 	case *OrPredicate:
 		for _, subPred := range p.Predicates {
@@ -306,7 +306,7 @@ func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, ty
 	if p.IsElementRef {
 		return &ValidationError{
 			Message:    "string function placeholder '_' is only valid inside any()/all()/none()",
-			Suggestion: `Use contains(.field, "..."), startswith(.field, "..."), endswith(.field, "..."), or matches(.field, "...") for object fields.`,
+			Suggestion: `Use contains(.field, "..."), startswith(.field, "..."), endswith(.field, "..."), or matches(.field, "...") for type fields.`,
 		}
 	}
 

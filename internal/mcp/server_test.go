@@ -291,10 +291,10 @@ func TestResourcesReadSavedQueriesUsesNamedVaultOverrideAgainstPinnedVault(t *te
 			t.Fatalf("mkdir vault %s: %v", vaultPath, err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(pinnedVault, "raven.yaml"), []byte("queries:\n  pinned_query:\n    query: object:project\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(pinnedVault, "raven.yaml"), []byte("queries:\n  pinned_query:\n    query: type:project\n"), 0o644); err != nil {
 		t.Fatalf("write pinned raven.yaml: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(namedVault, "raven.yaml"), []byte("queries:\n  named_query:\n    query: object:person\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(namedVault, "raven.yaml"), []byte("queries:\n  named_query:\n    query: type:person\n"), 0o644); err != nil {
 		t.Fatalf("write named raven.yaml: %v", err)
 	}
 

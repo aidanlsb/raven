@@ -253,7 +253,7 @@ Directory roots used by Raven.
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `daily` | string | `daily/` | Daily note files are `<daily>/YYYY-MM-DD.md` |
-| `object` | string | unset | Root for typed objects |
+| `object` | string | unset | Root for typed items |
 | `page` | string | unset, but defaults to `object` when `object` is set and `page` is omitted | Root for untyped pages |
 | `template` | string | `templates/` | Root for template files referenced by schema |
 

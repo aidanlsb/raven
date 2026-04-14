@@ -131,7 +131,7 @@ func TestCompactInvokeListsSavedQueriesWithDedicatedCommand(t *testing.T) {
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`queries:
   open-projects:
-    query: "object:project .status==active"
+    query: "type:project .status==active"
     description: "Active projects"
 `).
 		Build()
@@ -170,7 +170,7 @@ func TestCompactInvokeRejectsInvalidArgumentTypes(t *testing.T) {
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "query",
 		"args": map[string]interface{}{
-			"query_string": "object:project",
+			"query_string": "type:project",
 			"apply":        "set status=done",
 		},
 	})
@@ -242,7 +242,7 @@ func TestCompactInvokeRejectsLegacyCommandAlias(t *testing.T) {
 	out, isErr := server.callCompactInvoke(map[string]interface{}{
 		"command": "raven_query",
 		"args": map[string]interface{}{
-			"query_string": "object:project",
+			"query_string": "type:project",
 		},
 	})
 	if !isErr {
@@ -352,7 +352,7 @@ func TestCompactInvokeRejectsConflictingVaultOverrides(t *testing.T) {
 		"vault":      "work",
 		"vault_path": "/tmp/work",
 		"args": map[string]interface{}{
-			"query_string": "object:project",
+			"query_string": "type:project",
 		},
 	})
 	if !isErr {

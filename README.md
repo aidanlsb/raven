@@ -163,8 +163,8 @@ with:
 Use the Raven query language to retrieve information from your vault:
 
 ```bash
-rvn query 'trait:todo within(object:meeting refs(midgard-security-review))'
-rvn query 'trait:decision within(object:meeting refs(midgard-security-review))'
+rvn query 'trait:todo within(type:meeting refs(midgard-security-review))'
+rvn query 'trait:decision within(type:meeting refs(midgard-security-review))'
 ```
 Results:
 

@@ -31,7 +31,7 @@ var commonShellPipeCommands = map[string]struct{}{
 
 func shellPipeQueryError(pos int) error {
 	return fmt.Errorf(
-		"at col %d: '|' (pipe) is not a shell pipe inside Raven queries. Use '|' only as OR between predicates, or run the query as one shell argument and pipe the command output instead, e.g. rvn query 'object:experiment_review' --pipe | jq 'sort_by(.created_at) | .[0]'",
+		"at col %d: '|' (pipe) is not a shell pipe inside Raven queries. Use '|' only as OR between predicates, or run the query as one shell argument and pipe the command output instead, e.g. rvn query 'type:experiment_review' --pipe | jq 'sort_by(.created_at) | .[0]'",
 		pos+1,
 	)
 }
@@ -88,13 +88,16 @@ func (p *Parser) expect(t TokenType) error {
 	return nil
 }
 
-// parseQuery parses a top-level query (object:type or trait:name).
+// parseQuery parses a top-level query (type:<name> or trait:<name>).
 func (p *Parser) parseQuery() (*Query, error) {
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected 'object' or 'trait', got %v", p.curr.Value)
+		return nil, fmt.Errorf("expected 'type' or 'trait', got %v", p.curr.Value)
 	}
 
 	queryKind := strings.ToLower(p.curr.Value)
+	if queryKind == "object" {
+		return nil, fmt.Errorf("legacy 'object:' queries are no longer supported; use 'type:'")
+	}
 	p.advance()
 
 	if err := p.expect(TokenColon); err != nil {
@@ -110,12 +113,12 @@ func (p *Parser) parseQuery() (*Query, error) {
 
 	var query Query
 	switch queryKind {
-	case "object":
+	case "type":
 		query.Type = QueryTypeObject
 	case "trait":
 		query.Type = QueryTypeTrait
 	default:
-		return nil, fmt.Errorf("invalid query type: %s (expected 'object' or 'trait')", queryKind)
+		return nil, fmt.Errorf("invalid query type: %s (expected 'type' or 'trait')", queryKind)
 	}
 	query.TypeName = typeName
 
@@ -345,13 +348,13 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 			case "contains":
 				return nil, fmt.Errorf("contains:{...} is no longer supported; use encloses(trait:...)")
 			case "refs":
-				return nil, fmt.Errorf("refs:... is no longer supported; use refs([[target]]) or refs(object:...)")
+				return nil, fmt.Errorf("refs:... is no longer supported; use refs([[target]]) or refs(type:...)")
 			case "refd":
-				return nil, fmt.Errorf("refd:... is no longer supported; use refd([[source]]) or refd(object:...)")
+				return nil, fmt.Errorf("refd:... is no longer supported; use refd([[source]]) or refd(type:...)")
 			case "on":
-				return nil, fmt.Errorf("on:{...} is no longer supported; use on(object:...)")
+				return nil, fmt.Errorf("on:{...} is no longer supported; use on(type:...)")
 			case "within":
-				return nil, fmt.Errorf("within:{...} is no longer supported; use within(object:...)")
+				return nil, fmt.Errorf("within:{...} is no longer supported; use within(type:...)")
 			case "at":
 				return nil, fmt.Errorf("at:{...} is no longer supported; use at(trait:...)")
 			default:
@@ -444,7 +447,7 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 		return navFuncArgument{}, err
 	}
 	if p.curr.Type == TokenLBrace {
-		return navFuncArgument{}, fmt.Errorf("brace subqueries are no longer supported; use %s(object:...) or %s([[target]])", kind, kind)
+		return navFuncArgument{}, fmt.Errorf("brace subqueries are no longer supported; use %s(type:...) or %s([[target]])", kind, kind)
 	}
 
 	if p.curr.Type == TokenRef {
@@ -458,7 +461,7 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 
 	if p.curr.Type == TokenIdent {
 		ident := strings.ToLower(p.curr.Value)
-		if ident != "object" || p.peek.Type != TokenColon {
+		if ident != "type" || p.peek.Type != TokenColon {
 			target := p.curr.Value
 			p.advance()
 			if err := p.expect(TokenRParen); err != nil {
@@ -473,14 +476,14 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	}
 
 	if p.curr.Type != TokenIdent {
-		return navFuncArgument{}, fmt.Errorf("expected object query or target in %s()", kind)
+		return navFuncArgument{}, fmt.Errorf("expected type query or target in %s()", kind)
 	}
 	subq, err := p.parseQuery()
 	if err != nil {
 		return navFuncArgument{}, err
 	}
 	if subq.Type != QueryTypeObject {
-		return navFuncArgument{}, fmt.Errorf("expected object subquery in %s(), got trait subquery", kind)
+		return navFuncArgument{}, fmt.Errorf("expected type subquery in %s(), got trait subquery", kind)
 	}
 	if err := p.expect(TokenRParen); err != nil {
 		return navFuncArgument{}, err
@@ -525,22 +528,22 @@ func (p *Parser) parseNavFuncPredicate(negated bool, kind string, buildFn func(b
 }
 
 func (p *Parser) parseObjectNavFuncPredicate(negated bool, kind string) (Predicate, error) {
-	// parent(object:...), ancestor(object:...), child(object:...), descendant(object:...), or ...([[target]])
+	// parent(type:...), ancestor(type:...), child(type:...), descendant(type:...), or ...([[target]])
 	return p.parseNavFuncPredicate(negated, kind, buildObjectNavPredicate)
 }
 
 func (p *Parser) parseTraitNavFuncPredicate(negated bool, kind string) (Predicate, error) {
-	// on(object:...), within(object:...), or ...([[target]])
+	// on(type:...), within(type:...), or ...([[target]])
 	return p.parseNavFuncPredicate(negated, kind, buildTraitNavPredicate)
 }
 
 func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
-	// refs([[target]]) or refs(object:...)
+	// refs([[target]]) or refs(type:...)
 	if err := p.expect(TokenLParen); err != nil {
 		return nil, err
 	}
 	if p.curr.Type == TokenLBrace {
-		return nil, fmt.Errorf("brace subqueries are no longer supported; use refs(object:...)")
+		return nil, fmt.Errorf("brace subqueries are no longer supported; use refs(type:...)")
 	}
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -554,10 +557,10 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 		return nil, unsupportedSelfReferenceError()
 	}
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected target or object subquery in refs()")
+		return nil, fmt.Errorf("expected target or type subquery in refs()")
 	}
 	ident := strings.ToLower(p.curr.Value)
-	if ident != "object" || p.peek.Type != TokenColon {
+	if ident != "type" || p.peek.Type != TokenColon {
 		target := p.curr.Value
 		p.advance()
 		if err := p.expect(TokenRParen); err != nil {
@@ -570,7 +573,7 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 		return nil, err
 	}
 	if subq.Type != QueryTypeObject {
-		return nil, fmt.Errorf("refs() subquery must be an object query")
+		return nil, fmt.Errorf("refs() subquery must be a type query")
 	}
 	if err := p.expect(TokenRParen); err != nil {
 		return nil, err
@@ -579,12 +582,12 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 }
 
 func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
-	// refd([[source]]) or refd(object:...) or refd(trait:...)
+	// refd([[source]]) or refd(type:...) or refd(trait:...)
 	if err := p.expect(TokenLParen); err != nil {
 		return nil, err
 	}
 	if p.curr.Type == TokenLBrace {
-		return nil, fmt.Errorf("brace subqueries are no longer supported; use refd(object:...) or refd(trait:...)")
+		return nil, fmt.Errorf("brace subqueries are no longer supported; use refd(type:...) or refd(trait:...)")
 	}
 	if p.curr.Type == TokenRef {
 		target := p.curr.Value
@@ -601,7 +604,7 @@ func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
 		return nil, fmt.Errorf("expected source or subquery in refd()")
 	}
 	ident := strings.ToLower(p.curr.Value)
-	if (ident != "object" && ident != "trait") || p.peek.Type != TokenColon {
+	if (ident != "type" && ident != "trait") || p.peek.Type != TokenColon {
 		target := p.curr.Value
 		p.advance()
 		if err := p.expect(TokenRParen); err != nil {
@@ -613,7 +616,7 @@ func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Unlike most predicates, refd accepts both object and trait subqueries.
+	// Unlike most predicates, refd accepts both type and trait subqueries.
 	if err := p.expect(TokenRParen); err != nil {
 		return nil, err
 	}

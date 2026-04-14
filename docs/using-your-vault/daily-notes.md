@@ -1,6 +1,6 @@
 # Daily Notes
 
-Daily notes give you a date-stamped file for each day. Use them for journaling, quick capture, meeting notes, or anything you want anchored to a date. Each daily note is a `date`-typed object managed by Raven.
+Daily notes give you a date-stamped file for each day. Use them for journaling, quick capture, meeting notes, or anything you want anchored to a date. Each daily note is a `date`-typed item managed by Raven.
 
 ## Creating daily notes
 
@@ -76,20 +76,20 @@ Now `rvn daily` uses this template when creating a new note. See `types-and-trai
 
 ## Querying daily notes
 
-Daily notes are `date`-typed objects. Query them like any other type:
+Daily notes are `date`-typed items. Query them like any other type:
 
 ```bash
 # All daily notes
-rvn query 'object:date'
+rvn query 'type:date'
 
 # Todos captured in daily notes
-rvn query 'trait:todo within(object:date)'
+rvn query 'trait:todo within(type:date)'
 
 # Todos from a specific day
 rvn query 'trait:todo within([[2026-03-15]])'
 
 # Overdue items across all daily notes
-rvn query 'trait:due .value<today within(object:date)'
+rvn query 'trait:due .value<today within(type:date)'
 ```
 
 ### Date references
@@ -112,7 +112,7 @@ directories:
   daily: daily/
 ```
 
-This means daily notes are stored as `daily/2026-03-15.md`. With the default directory configuration, the `daily/` prefix is stripped from object IDs, so the ID is just `2026-03-15`. Date references like `[[2026-03-15]]` resolve accordingly. If you remove the `directories.daily` setting (flat layout), the file path becomes the full ID (`daily/2026-03-15`).
+This means daily notes are stored as `daily/2026-03-15.md`. With the default directory configuration, the `daily/` prefix is stripped from IDs, so the ID is just `2026-03-15`. Date references like `[[2026-03-15]]` resolve accordingly. If you remove the `directories.daily` setting (flat layout), the file path becomes the full ID (`daily/2026-03-15`).
 
 ## Related docs
 

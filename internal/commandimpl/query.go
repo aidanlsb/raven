@@ -44,7 +44,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 	}
 
 	if isSavedQuery && !isFullQueryString(resolvedQuery) {
-		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'object:' or 'trait:'", queryName), nil, "")
+		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:' or 'trait:'", queryName), nil, "")
 	}
 
 	sch, err := schema.Load(vaultPath)
@@ -112,11 +112,11 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 	if countOnly {
 		meta.Count = result.Total
 		key := "type"
-		if result.QueryType == "trait" {
+		if result.QueryKind == "trait" {
 			key = "trait"
 		}
 		return commandexec.Success(map[string]interface{}{
-			"query_type": result.QueryType,
+			"query_kind": result.QueryKind,
 			key:          result.TypeName,
 			"total":      result.Total,
 		}, meta)
@@ -133,10 +133,10 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		}, meta)
 	}
 
-	if result.QueryType == "object" {
+	if result.QueryKind == "type" {
 		meta.Count = result.Returned
 		data := map[string]interface{}{
-			"query_type": "object",
+			"query_kind": "type",
 			"items":      objectQueryItems(result),
 			"total":      result.Total,
 			"returned":   result.Returned,
@@ -153,7 +153,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 
 	meta.Count = result.Returned
 	data := map[string]interface{}{
-		"query_type": "trait",
+		"query_kind": "trait",
 		"items":      traitQueryItems(result),
 		"total":      result.Total,
 		"returned":   result.Returned,
@@ -174,7 +174,7 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 		return mapBulkopsFailure(err)
 	}
 
-	if result.QueryType == "trait" {
+	if result.QueryKind == "trait" {
 		plan, err := bulkops.PlanTraitApply(rawApply, result.Traits)
 		if err != nil {
 			return mapBulkopsFailure(err)
@@ -410,7 +410,7 @@ func mapQuerySvcFailure(err error) commandexec.Result {
 }
 
 func isFullQueryString(queryString string) bool {
-	return strings.HasPrefix(queryString, "object:") || strings.HasPrefix(queryString, "trait:")
+	return strings.HasPrefix(queryString, "type:") || strings.HasPrefix(queryString, "trait:")
 }
 
 // HandleQuerySavedList executes the canonical `query_saved_list` command.

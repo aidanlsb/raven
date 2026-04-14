@@ -19,12 +19,12 @@
 
 | Query type | Returns | Best for |
 |------------|---------|----------|
-| `object:<type> ...` | Objects | Find files/sections by frontmatter fields and structural relationships |
+| `type:<type> ...` | Objects | Find files/sections by frontmatter fields and structural relationships |
 | `trait:<name> ...` | Trait instances | Find inline annotations (`@todo`, `@due`, etc.) and surrounding content|
 
 Core rules:
 1. Every query returns exactly one kind of result (objects or traits).
-2. Queries can nest arbitrarily, e.g. `object:project has(trait:...)`.
+2. Queries can nest arbitrarily, e.g. `type:project has(trait:...)`.
 3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
 
 ## Query Shapes
@@ -32,16 +32,16 @@ Core rules:
 ### Object Query
 
 ```text
-object:<type> [predicates...]
+type:<type> [predicates...]
 ```
 
 Examples:
 
 ```text
-object:project
-object:project .status==active
-object:meeting has(trait:due .value<today)
-object:project encloses(trait:todo .value==todo)
+type:project
+type:project .status==active
+type:meeting has(trait:due .value<today)
+type:project encloses(trait:todo .value==todo)
 ```
 
 ### Trait Query
@@ -55,7 +55,7 @@ Examples:
 ```text
 trait:due
 trait:due .value<today
-trait:highlight on(object:book .status==reading)
+trait:highlight on(type:book .status==reading)
 ```
 
 ## Syntax Building Blocks
@@ -93,11 +93,11 @@ Notes:
 Examples:
 
 ```text
-object:project .status==active
-object:project .title=="Website Redesign"
-object:person exists(.email)
-object:person !exists(.email)
-object:project in(.status, [active,paused])
+type:project .status==active
+type:project .title=="Website Redesign"
+type:person exists(.email)
+type:person !exists(.email)
+type:project in(.status, [active,paused])
 ```
 
 For `ref` and `ref[]` fields (from `schema.yaml`), comparison values are resolved as reference targets, including unbracketed shorthand such as `.company==cursor`.
@@ -122,9 +122,9 @@ contains(.name, "API", true)
 Use quantifiers for array fields. `_` represents the current array element.
 
 ```text
-object:project any(.tags, _ == "urgent")
-object:project all(.tags, startswith(_, "feature-"))
-object:project none(.tags, _ == "deprecated")
+type:project any(.tags, _ == "urgent")
+type:project all(.tags, startswith(_, "feature-"))
+type:project none(.tags, _ == "deprecated")
 ```
 
 ### Structural Predicates
@@ -142,19 +142,19 @@ object:project none(.tags, _ == "deprecated")
 | `content("term")` | Full-text term in object content |
 
 `parent`, `ancestor`, `child`, `descendant`, and `refs` accept:
-- Nested query: `parent(object:date)`
+- Nested query: `parent(type:date)`
 - Wikilink: `parent([[daily/2026-01-10]])`
 - Target shorthand: `parent(daily/2026-01-10)`
 
 Examples:
 
 ```text
-object:project has(trait:due)
-object:project encloses(trait:todo .value==todo)
-object:meeting parent(object:date)
-object:meeting refs([[project/website]])
-object:meeting refs(object:project .status==active)
-object:project refd(object:meeting)
+type:project has(trait:due)
+type:project encloses(trait:todo .value==todo)
+type:meeting parent(type:date)
+type:meeting refs([[project/website]])
+type:meeting refs(type:project .status==active)
+type:project refd(type:meeting)
 ```
 
 ## Trait Query Predicates
@@ -194,14 +194,14 @@ trait:due .value<=2026-03-01
 Examples:
 
 ```text
-trait:due on(object:meeting)
-trait:todo within(object:project .status==active)
+trait:due on(type:meeting)
+trait:todo within(type:project .status==active)
 trait:due at(trait:todo)
 trait:due refs([[person/freya]])
 trait:todo content("refactor")
 ```
 
-`refd(...)` is available on object queries, not trait queries.
+`refd(...)` is available on type queries, not trait queries.
 
 ## Boolean Composition
 
@@ -215,9 +215,9 @@ trait:todo content("refactor")
 Examples:
 
 ```text
-object:project .status==active has(trait:due)
-object:project (.status==active | .status==backlog) !.archived==true
-object:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
+type:project .status==active has(trait:due)
+type:project (.status==active | .status==backlog) !.archived==true
+type:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 ```
 
 ## Running and Applying Queries
@@ -225,9 +225,9 @@ object:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 ### Inspect Results
 
 ```bash
-rvn query 'object:project .status==active' --json
+rvn query 'type:project .status==active' --json
 rvn query 'trait:due .value<today' --ids
-rvn query 'object:project refs([[company/acme]])' --refresh --json
+rvn query 'type:project refs([[company/acme]])' --refresh --json
 ```
 
 Key flags:
@@ -240,8 +240,8 @@ Key flags:
 Use `--limit` and `--offset` to paginate large result sets:
 
 ```bash
-rvn query 'object:project' --limit 20                   # First 20 results
-rvn query 'object:project' --limit 20 --offset 20       # Next 20
+rvn query 'type:project' --limit 20                   # First 20 results
+rvn query 'type:project' --limit 20 --offset 20       # Next 20
 rvn query 'trait:todo' --limit 50 --json                 # Cap results at 50
 ```
 
@@ -267,7 +267,7 @@ Examples:
 
 ```bash
 # Object query bulk update
-rvn query 'object:project has(trait:due .value<today)' --apply 'set status=overdue' --confirm
+rvn query 'type:project has(trait:due .value<today)' --apply 'set status=overdue' --confirm
 
 # Trait query bulk update
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm

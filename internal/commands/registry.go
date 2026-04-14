@@ -646,34 +646,34 @@ References are updated when the file moves (controlled by --update-refs).`,
 		Name:        "query",
 		Use:         "query <query_string|saved-query> [inputs...]",
 		Description: "Run a query using the Raven query language",
-		LongDesc: `Query objects or traits using the Raven query language.
+		LongDesc: `Query items by type or traits by name using the Raven query language.
 
-Prefer query when the structure is known and you need real Raven objects or
+Prefer query when the structure is known and you need real Raven items or
 trait instances. Use search for broad text discovery when you do not yet know
 the right type, trait, or structural context. Search returns file/snippet
-matches; query returns schema-aware object rows or real trait rows.
+matches; query returns schema-aware item rows or real trait rows.
 
 Query syntax:
-- Object queries: object:<type> [predicates...]
-  Examples: object:project .status==active, object:meeting refs([[people/freya]])
+- Type queries: type:<type> [predicates...]
+  Examples: type:project .status==active, type:meeting refs([[people/freya]])
 - Trait queries: trait:<name> [predicates...]
-  Examples: trait:due .value<today, trait:highlight on(object:book)
+  Examples: trait:due .value<today, trait:highlight on(type:book)
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
 - has(trait:...) — Has trait matching subquery
 - refs([[target]]) — References target (refs([[people/freya]]))
-- refs(object:type) — References objects matching subquery (refs(object:project .status==active))
-- within(object:type) — Trait is inside object type (within(object:meeting))
+- refs(type:...) — References items matching subquery (refs(type:project .status==active))
+- within(type:...) — Trait is inside items matching a type query (within(type:meeting))
 - .value==X — Trait value equals X (.value==today, .value==high)
 - content("text") — Full-text search within content (content("meeting notes"))
 
 Common agent patterns:
 - Real open todos: trait:todo .value==todo
-- Open todos in briefs: trait:todo .value==todo within(object:brief)
+- Open todos in briefs: trait:todo .value==todo within(type:brief)
 - Distinguish real traits from plain-text mentions: use trait:todo ... instead of search "@todo"
-- Open todos under a section/topic heading: trait:todo .value==todo within(object:section content("pricing"))
-- Path + structure together: object:page matches(.path, "^pages/work/") has(trait:todo .value==todo)
+- Open todos under a section/topic heading: trait:todo .value==todo within(type:section content("pricing"))
+- Path + structure together: type:page matches(.path, "^pages/work/") has(trait:todo .value==todo)
 
 Special date values for trait comparisons:
 - today, tomorrow, yesterday
@@ -686,7 +686,7 @@ Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
 Use --apply to run a bulk operation directly on query results.
 
-For object queries (object:...):
+For type queries (type:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
 - Supported commands: set, delete, add, move
 
@@ -695,7 +695,7 @@ For trait queries (trait:...):
 - Supported command: update <new_value> (updates trait values in-place)
 - Example: trait:todo .value==todo --apply "update done" marks todos as done`,
 		Args: []ArgMeta{
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or saved query name) optionally followed by saved-query inputs.", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active' or saved query name) optionally followed by saved-query inputs.", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
@@ -710,20 +710,20 @@ For trait queries (trait:...):
 			{Name: "inputs", Description: "Saved query inputs as key=value pairs", Type: FlagTypePosKeyValue, Examples: []string{`{"project": "projects/raven"}`}},
 		},
 		Examples: []string{
-			"rvn query 'object:project .status==active' --json",
-			"rvn query 'object:meeting has(trait:due)' --json",
+			"rvn query 'type:project .status==active' --json",
+			"rvn query 'type:meeting has(trait:due)' --json",
 			"rvn query 'trait:due .value<today' --json",
 			"rvn query 'trait:due .value<today' --ids",
 			"rvn query 'trait:todo .value==todo' --limit 50 --offset 100 --json",
 			"rvn query 'trait:todo .value==todo' --count-only --json",
-			"rvn query 'object:project .status==active' --apply 'set status=done' --confirm --json",
+			"rvn query 'type:project .status==active' --apply 'set status=done' --confirm --json",
 			"rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json",
 			"rvn query tasks --json",
 			"rvn query project-todos raven --json",
 			"rvn query project-todos project=projects/raven --json",
 		},
 		UseCases: []string{
-			"Find objects matching specific criteria",
+			"Find items matching specific criteria",
 			"Find traits with specific values",
 			"Bulk update query results with --apply",
 			"Pipe query results to other commands with --ids",
@@ -751,7 +751,7 @@ For trait queries (trait:...):
 		Description: "Create or replace a saved query in raven.yaml",
 		Args: []ArgMeta{
 			{Name: "name", Description: "Name for the saved query", Required: true},
-			{Name: "query_string", Description: "Query string (e.g., 'object:project .status==active' or 'trait:due .value<today')", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active' or 'trait:due .value<today')", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
@@ -760,7 +760,7 @@ For trait queries (trait:...):
 		Examples: []string{
 			"rvn query saved set tasks 'trait:due' --json",
 			"rvn query saved set overdue 'trait:due .value<today' --json",
-			"rvn query saved set active-projects 'object:project .status==active' --json",
+			"rvn query saved set active-projects 'type:project .status==active' --json",
 			"rvn query saved set project-todos 'trait:todo refs([[{{args.project}}]])' --arg project --json",
 		},
 	},
@@ -1295,7 +1295,7 @@ This command:
 3. Updates type templates that reference {{field.<old_field>}} (template files)
 4. Renames frontmatter keys in files whose type matches the target type
 5. Renames keys inside ::type(...) declarations (only for the target type)
-6. Updates saved queries in raven.yaml that parse as object:<type> (best-effort)
+6. Updates saved queries in raven.yaml that parse as type:<type> (best-effort)
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
@@ -2019,7 +2019,7 @@ This is useful for piping query results to open multiple files at once.`,
 		Examples: []string{
 			"rvn open cursor --json",
 			"rvn open companies/cursor --json",
-			"rvn query 'object:project .status==active' --ids | rvn open --stdin --json",
+			"rvn query 'type:project .status==active' --ids | rvn open --stdin --json",
 		},
 		UseCases: []string{
 			"Quickly open a file by its short name",

@@ -442,7 +442,7 @@ func TestResolveQueryString(t *testing.T) {
 func TestResolveSavedQuery(t *testing.T) {
 	t.Parallel()
 	query := &config.SavedQuery{
-		Query: "object:project .status=={{args.status}}",
+		Query: "type:project .status=={{args.status}}",
 		Args:  []string{"status", "project"},
 	}
 
@@ -450,8 +450,8 @@ func TestResolveSavedQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "object:project .status==active" {
-		t.Fatalf("resolved query = %q, want %q", got, "object:project .status==active")
+	if got != "type:project .status==active" {
+		t.Fatalf("resolved query = %q, want %q", got, "type:project .status==active")
 	}
 }
 

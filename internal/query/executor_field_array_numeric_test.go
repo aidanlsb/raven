@@ -18,7 +18,7 @@ func TestObjectFieldEquality_NumericArrayMembership(t *testing.T) {
 	}
 
 	e := NewExecutor(db)
-	q, err := Parse("object:nums .scores==10")
+	q, err := Parse("type:nums .scores==10")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

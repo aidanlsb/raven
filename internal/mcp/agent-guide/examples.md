@@ -19,13 +19,13 @@ Use `search` only when you want broad text discovery and do not yet know whether
 ## Find open todos in briefs
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(object:brief)"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(type:brief)"})
 ```
 
 ## Find open todos under a topic heading
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(object:section content(\"pricing\"))"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(type:section content(\"pricing\"))"})
 ```
 
 ## Validate project objects

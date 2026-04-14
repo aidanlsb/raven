@@ -14,7 +14,7 @@ func TestParseV3FieldPredicates(t *testing.T) {
 	}{
 		{
 			name:  "equals",
-			input: "object:project .status==active",
+			input: "type:project .status==active",
 			checkFunc: func(t *testing.T, q *Query) {
 				if q.Predicate == nil {
 					t.Fatal("expected predicate, got nil")
@@ -36,7 +36,7 @@ func TestParseV3FieldPredicates(t *testing.T) {
 		},
 		{
 			name:  "not equals",
-			input: "object:project .status!=done",
+			input: "type:project .status!=done",
 			checkFunc: func(t *testing.T, q *Query) {
 				fp := q.Predicate.(*FieldPredicate)
 				if fp.CompareOp != CompareNeq {
@@ -46,7 +46,7 @@ func TestParseV3FieldPredicates(t *testing.T) {
 		},
 		{
 			name:  "greater than",
-			input: "object:task .priority>5",
+			input: "type:task .priority>5",
 			checkFunc: func(t *testing.T, q *Query) {
 				fp := q.Predicate.(*FieldPredicate)
 				if fp.CompareOp != CompareGt {
@@ -59,17 +59,17 @@ func TestParseV3FieldPredicates(t *testing.T) {
 		},
 		{
 			name:    "star syntax deprecated",
-			input:   "object:person .email==*",
+			input:   "type:person .email==*",
 			wantErr: true,
 		},
 		{
 			name:    "star not-equals syntax deprecated",
-			input:   "object:person .email!=*",
+			input:   "type:person .email!=*",
 			wantErr: true,
 		},
 		{
 			name:  "exists function",
-			input: "object:person exists(.email)",
+			input: "type:person exists(.email)",
 			checkFunc: func(t *testing.T, q *Query) {
 				fp := q.Predicate.(*FieldPredicate)
 				if !fp.IsExists {
@@ -85,7 +85,7 @@ func TestParseV3FieldPredicates(t *testing.T) {
 		},
 		{
 			name:  "negated exists function",
-			input: "object:person !exists(.email)",
+			input: "type:person !exists(.email)",
 			checkFunc: func(t *testing.T, q *Query) {
 				fp := q.Predicate.(*FieldPredicate)
 				if !fp.IsExists || fp.Field != "email" {
@@ -167,7 +167,7 @@ func TestParseV3ValuePredicates(t *testing.T) {
 
 func TestParseV3ComplexQuery(t *testing.T) {
 	t.Parallel()
-	input := `object:project .status==active has(trait:due .value==past)`
+	input := `type:project .status==active has(trait:due .value==past)`
 
 	q, err := Parse(input)
 	if err != nil {
@@ -176,7 +176,7 @@ func TestParseV3ComplexQuery(t *testing.T) {
 
 	// Check basic structure
 	if q.Type != QueryTypeObject {
-		t.Error("expected object query")
+		t.Error("expected type query")
 	}
 	if q.TypeName != "project" {
 		t.Errorf("expected type 'project', got '%s'", q.TypeName)
@@ -201,7 +201,7 @@ func TestParseStringFunctions(t *testing.T) {
 	}{
 		{
 			name:  "contains on field",
-			input: `object:project contains(.name, "api")`,
+			input: `type:project contains(.name, "api")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				if q.Predicate == nil {
 					t.Fatal("expected predicate, got nil")
@@ -226,7 +226,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "contains case sensitive",
-			input: `object:project contains(.name, "API", true)`,
+			input: `type:project contains(.name, "API", true)`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if !sfp.CaseSensitive {
@@ -236,7 +236,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "startswith",
-			input: `object:project startswith(.name, "feature-")`,
+			input: `type:project startswith(.name, "feature-")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if sfp.FuncType != StringFuncStartsWith {
@@ -249,7 +249,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "endswith",
-			input: `object:project endswith(.name, "-service")`,
+			input: `type:project endswith(.name, "-service")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if sfp.FuncType != StringFuncEndsWith {
@@ -259,7 +259,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "matches regex",
-			input: `object:person matches(.email, ".*@company\.com$")`,
+			input: `type:person matches(.email, ".*@company\.com$")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if sfp.FuncType != StringFuncMatches {
@@ -272,7 +272,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "matches with raw string",
-			input: `object:person matches(.email, r".*@company\.com$")`,
+			input: `type:person matches(.email, r".*@company\.com$")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				// Raw string should not need double escaping
@@ -283,7 +283,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "matches with regex literal",
-			input: `object:person matches(.email, /.*@company\.com$/)`,
+			input: `type:person matches(.email, /.*@company\.com$/)`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if sfp.Value != ".*@company\\.com$" {
@@ -293,7 +293,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "negated contains",
-			input: `object:project !contains(.name, "test")`,
+			input: `type:project !contains(.name, "test")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if !sfp.Negated() {
@@ -303,7 +303,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "multiple string functions",
-			input: `object:project contains(.name, "api") endswith(.name, "-service")`,
+			input: `type:project contains(.name, "api") endswith(.name, "-service")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				if q.Predicate == nil {
 					t.Fatal("expected predicate, got nil")
@@ -348,7 +348,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 	}{
 		{
 			name:  "any with equality",
-			input: `object:project any(.tags, _ == "urgent")`,
+			input: `type:project any(.tags, _ == "urgent")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				if q.Predicate == nil {
 					t.Fatal("expected predicate, got nil")
@@ -374,7 +374,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "all with startswith",
-			input: `object:project all(.tags, startswith(_, "feature-"))`,
+			input: `type:project all(.tags, startswith(_, "feature-"))`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				if aqp.Quantifier != ArrayQuantifierAll {
@@ -394,7 +394,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "none with equality",
-			input: `object:project none(.tags, _ == "deprecated")`,
+			input: `type:project none(.tags, _ == "deprecated")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				if aqp.Quantifier != ArrayQuantifierNone {
@@ -404,7 +404,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "any with contains",
-			input: `object:project any(.tags, contains(_, "api"))`,
+			input: `type:project any(.tags, contains(_, "api"))`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				sfp := aqp.ElementPred.(*StringFuncPredicate)
@@ -418,7 +418,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "any with OR",
-			input: `object:project any(.tags, _ == "urgent" | _ == "critical")`,
+			input: `type:project any(.tags, _ == "urgent" | _ == "critical")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				orPred, ok := aqp.ElementPred.(*OrPredicate)
@@ -437,7 +437,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "any with AND",
-			input: `object:project any(.tags, _ == "urgent" startswith(_, "feat-"))`,
+			input: `type:project any(.tags, _ == "urgent" startswith(_, "feat-"))`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				group, ok := aqp.ElementPred.(*GroupPredicate)
@@ -454,7 +454,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "negated any",
-			input: `object:project !any(.tags, _ == "wontfix")`,
+			input: `type:project !any(.tags, _ == "wontfix")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				if !aqp.Negated() {
@@ -464,7 +464,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "combined with other predicates",
-			input: `object:project .status==active any(.tags, _ == "urgent")`,
+			input: `type:project .status==active any(.tags, _ == "urgent")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				if q.Predicate == nil {
 					t.Fatal("expected predicate, got nil")
@@ -485,7 +485,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "element inequality",
-			input: `object:project any(.tags, _ != "test")`,
+			input: `type:project any(.tags, _ != "test")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				eep := aqp.ElementPred.(*ElementEqualityPredicate)
@@ -519,12 +519,12 @@ func TestParseRawStrings(t *testing.T) {
 	}{
 		{
 			name:      "raw string without escapes",
-			input:     `object:project matches(.path, r"/api/v[0-9]+/.*")`,
+			input:     `type:project matches(.path, r"/api/v[0-9]+/.*")`,
 			wantValue: "/api/v[0-9]+/.*",
 		},
 		{
 			name:      "raw string with backslash",
-			input:     `object:project matches(.path, r"C:\Users\.*")`,
+			input:     `type:project matches(.path, r"C:\Users\.*")`,
 			wantValue: "C:\\Users\\.*",
 		},
 	}

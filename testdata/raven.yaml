@@ -2,16 +2,16 @@ directories:
     daily: daily/
 queries:
     active-projects:
-        query: object:project .status==active
+        query: type:project .status==active
         description: Active projects
     overdue:
         query: trait:due .value==past
         description: Overdue items
     people:
-        query: object:person
+        query: type:person
         description: All people
     projects:
-        query: object:project
+        query: type:project
         description: All projects
     tasks:
         query: trait:due

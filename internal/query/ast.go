@@ -1,7 +1,7 @@
 // Package query implements the Raven query language parser and executor.
 package query
 
-// QueryType represents the type of query (object or trait).
+// QueryType represents the parsed query root (type or trait).
 type QueryType int
 
 const (
@@ -12,7 +12,7 @@ const (
 // Query represents a parsed query.
 type Query struct {
 	Type      QueryType
-	TypeName  string    // Object type or trait name
+	TypeName  string    // Type name or trait name
 	Predicate Predicate // Filter to apply (may be nil)
 }
 
@@ -58,7 +58,7 @@ func (op CompareOp) String() string {
 	}
 }
 
-// FieldPredicate filters by object field value.
+// FieldPredicate filters by type field value.
 // Syntax: .field==value, .field>value, exists(.field)
 // For string matching, use StringFuncPredicate (contains, startswith, endswith, matches).
 type FieldPredicate struct {
@@ -72,7 +72,7 @@ type FieldPredicate struct {
 
 func (FieldPredicate) predicateNode() {}
 
-// HasPredicate filters objects by whether they contain matching traits.
+// HasPredicate filters type-query results by whether they contain matching traits.
 // Syntax: has(trait:name .value==...)
 type HasPredicate struct {
 	basePredicate
@@ -82,47 +82,47 @@ type HasPredicate struct {
 func (HasPredicate) predicateNode() {}
 
 // ParentPredicate filters by direct parent matching.
-// Syntax: parent:{object:type ...}, parent:[[target]], parent:_
+// Syntax: parent(type:<name> ...), parent([[target]]), parent(_)
 type ParentPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	SubQuery *Query // A type query (mutually exclusive with Target)
 }
 
 func (ParentPredicate) predicateNode() {}
 
 // AncestorPredicate filters by any ancestor matching.
-// Syntax: ancestor:{object:type ...}, ancestor:[[target]], ancestor:_
+// Syntax: ancestor(type:<name> ...), ancestor([[target]]), ancestor(_)
 type AncestorPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	SubQuery *Query // A type query (mutually exclusive with Target)
 }
 
 func (AncestorPredicate) predicateNode() {}
 
 // ChildPredicate filters by having a direct child matching.
-// Syntax: child:{object:type ...}, child:[[target]], child:_
+// Syntax: child(type:<name> ...), child([[target]]), child(_)
 type ChildPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	SubQuery *Query // A type query (mutually exclusive with Target)
 }
 
 func (ChildPredicate) predicateNode() {}
 
 // DescendantPredicate filters by having any descendant matching (at any depth).
-// Syntax: descendant:{object:type ...}, descendant:[[target]], descendant:_
+// Syntax: descendant(type:<name> ...), descendant([[target]]), descendant(_)
 type DescendantPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	SubQuery *Query // A type query (mutually exclusive with Target)
 }
 
 func (DescendantPredicate) predicateNode() {}
 
-// ContainsPredicate filters objects by whether they contain matching traits anywhere
-// in their subtree (self or any descendant object).
+// ContainsPredicate filters type-query results by whether they contain matching traits anywhere
+// in their subtree (self or any descendant item).
 // Syntax: encloses(trait:name ...)
 type ContainsPredicate struct {
 	basePredicate
@@ -131,8 +131,8 @@ type ContainsPredicate struct {
 
 func (ContainsPredicate) predicateNode() {}
 
-// RefsPredicate filters objects by what they reference.
-// Syntax: refs([[target]]), refs(target), refs(object:type ...)
+// RefsPredicate filters type-query results by what they reference.
+// Syntax: refs([[target]]), refs(target), refs(type:<name> ...)
 type RefsPredicate struct {
 	basePredicate
 	Target   string // Specific target like "projects/website" (mutually exclusive with SubQuery)
@@ -141,7 +141,7 @@ type RefsPredicate struct {
 
 func (RefsPredicate) predicateNode() {}
 
-// ContentPredicate filters objects by full-text search on their content.
+// ContentPredicate filters type-query results by full-text search on their content.
 // Syntax: content("search terms"), content("exact phrase")
 type ContentPredicate struct {
 	basePredicate
@@ -163,22 +163,22 @@ type ValuePredicate struct {
 
 func (ValuePredicate) predicateNode() {}
 
-// OnPredicate filters traits by direct parent object.
-// Syntax: on(object:type ...), on([[target]]), on(_)
+// OnPredicate filters traits by direct parent item.
+// Syntax: on(type:<name> ...), on([[target]]), on(_)
 type OnPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	SubQuery *Query // A type query (mutually exclusive with Target)
 }
 
 func (OnPredicate) predicateNode() {}
 
-// WithinPredicate filters traits by any ancestor object.
-// Syntax: within(object:type ...), within([[target]]), within(_)
+// WithinPredicate filters traits by any ancestor item.
+// Syntax: within(type:<name> ...), within([[target]]), within(_)
 type WithinPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // An object query (mutually exclusive with Target)
+	SubQuery *Query // A type query (mutually exclusive with Target)
 }
 
 func (WithinPredicate) predicateNode() {}
@@ -305,7 +305,7 @@ type AtPredicate struct {
 func (AtPredicate) predicateNode() {}
 
 // RefdPredicate filters objects/traits by what references them (inverse of refs:).
-// Syntax: refd(object:type ...), refd(trait:name ...), refd([[target]]), refd(target)
+// Syntax: refd(type:type ...), refd(trait:name ...), refd([[target]]), refd(target)
 type RefdPredicate struct {
 	basePredicate
 	Target   string // Specific source ID

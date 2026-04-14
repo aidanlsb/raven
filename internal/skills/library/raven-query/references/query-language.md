@@ -2,13 +2,13 @@
 
 ## Query shapes
 
-- Object query: `object:<type> [predicates...]`
+- Object query: `type:<type> [predicates...]`
 - Trait query: `trait:<name> [predicates...]`
 
 Examples:
 
 ```text
-object:project .status==active
+type:project .status==active
 trait:due .value<today
 ```
 
@@ -28,7 +28,7 @@ trait:due .value<today
   - `any(.tags, _ == "urgent")`
   - `all(.tags, startswith(_, "feature-"))`
   - `none(.tags, _ == "deprecated")`
-- Structural predicates (object query):
+- Structural predicates (type query):
   - `has(trait:...)`, `encloses(trait:...)`
   - `parent(...)`, `ancestor(...)`, `child(...)`, `descendant(...)`
   - `refs(...)`, `refd(...)`
@@ -48,7 +48,7 @@ trait:due .value<today
 Example:
 
 ```text
-object:project (.status==active | .status==backlog) !.archived==true
+type:project (.status==active | .status==backlog) !.archived==true
 ```
 
 ## Relative date values

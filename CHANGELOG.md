@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Raven Query Language now uses `type:<name>` as the only type-root syntax. Legacy `object:<name>` roots, including nested subqueries and saved-query examples, are rejected with a targeted hint to switch to `type:`.
+- Query results now report `query_kind: type|trait` instead of `query_type: object|trait`, and first-party CLI/MCP/docs guidance now consistently teaches `type:` plus item/type/trait terminology.
+
 ## [v0.0.15] - 2026-04-10
 
 ### Added

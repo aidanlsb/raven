@@ -511,7 +511,7 @@ rvn schema update field person email --required=true
 
 ```bash
 # First, add the field to all objects
-rvn query "object:person !exists(.email)" --ids | rvn set --stdin email="" --confirm
+rvn query "type:person !exists(.email)" --ids | rvn set --stdin email="" --confirm
 
 # Then make it required
 rvn schema update field person email --required=true

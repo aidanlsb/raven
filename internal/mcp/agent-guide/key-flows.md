@@ -96,7 +96,7 @@ raven_invoke(command="reindex", args={"full":true})
 
 ```text
 raven_invoke(command="query", args={
-  "query_string":"object:meeting refs([[project/website]])",
+  "query_string":"type:meeting refs([[project/website]])",
   "limit":25,
   "offset":0
 })

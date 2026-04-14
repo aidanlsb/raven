@@ -39,7 +39,7 @@ func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, 
 	return cond, args, nil
 }
 
-// buildParentPredicateSQL builds SQL for parent:{object:...} predicates.
+// buildParentPredicateSQL builds SQL for parent:{type:...} predicates.
 func (e *Executor) buildParentPredicateSQL(p *ParentPredicate, alias string) (string, []interface{}, error) {
 	// Handle direct target reference: parent:[[target]]
 	if p.Target != "" {
@@ -82,7 +82,7 @@ func (e *Executor) buildParentPredicateSQL(p *ParentPredicate, alias string) (st
 	return cond, args, nil
 }
 
-// buildAncestorPredicateSQL builds SQL for ancestor:{object:...} or ancestor:[[target]] predicates.
+// buildAncestorPredicateSQL builds SQL for ancestor:{type:...} or ancestor:[[target]] predicates.
 func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string) (string, []interface{}, error) {
 	// Handle direct target reference: ancestor:[[target]]
 	if p.Target != "" {
@@ -143,7 +143,7 @@ func (e *Executor) buildAncestorPredicateSQL(p *AncestorPredicate, alias string)
 	return cond, args, nil
 }
 
-// buildChildPredicateSQL builds SQL for child:{object:...} or child:[[target]] predicates.
+// buildChildPredicateSQL builds SQL for child:{type:...} or child:[[target]] predicates.
 func (e *Executor) buildChildPredicateSQL(p *ChildPredicate, alias string) (string, []interface{}, error) {
 	// Handle direct target reference: child:[[target]]
 	if p.Target != "" {
@@ -188,7 +188,7 @@ func (e *Executor) buildChildPredicateSQL(p *ChildPredicate, alias string) (stri
 	return cond, args, nil
 }
 
-// buildDescendantPredicateSQL builds SQL for descendant:{object:...} or descendant:[[target]] predicates.
+// buildDescendantPredicateSQL builds SQL for descendant:{type:...} or descendant:[[target]] predicates.
 // Uses a recursive CTE to find all descendants at any depth.
 func (e *Executor) buildDescendantPredicateSQL(p *DescendantPredicate, alias string) (string, []interface{}, error) {
 	// Handle direct target reference: descendant:[[target]]
@@ -289,7 +289,7 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 	return cond, args, nil
 }
 
-// buildRefsPredicateSQL builds SQL for refs:[[target]] or refs:{object:...} predicates.
+// buildRefsPredicateSQL builds SQL for refs:[[target]] or refs:{type:...} predicates.
 func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string, []interface{}, error) {
 	var cond string
 	var args []interface{}

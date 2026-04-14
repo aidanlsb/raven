@@ -106,11 +106,11 @@ RQL has predicates for querying the reference graph:
 
 ```bash
 # Objects that reference a target
-rvn query 'object:meeting refs([[person/freya]])'
-rvn query 'object:meeting refs(object:project .status==active)'
+rvn query 'type:meeting refs([[person/freya]])'
+rvn query 'type:meeting refs(type:project .status==active)'
 
 # Objects referenced by a source
-rvn query 'object:project refd(object:meeting)'
+rvn query 'type:project refd(type:meeting)'
 
 # Traits on lines that reference a target
 rvn query 'trait:todo refs([[person/freya]])'
@@ -118,8 +118,8 @@ rvn query 'trait:todo refs([[person/freya]])'
 
 | Predicate | Meaning |
 |-----------|---------|
-| `refs(...)` | Object/trait references a target or query match |
-| `refd(...)` | Object is referenced by a source or query match (object queries only) |
+| `refs(...)` | Item/trait references a target or query match |
+| `refd(...)` | Item is referenced by a source or query match (type queries only) |
 
 `refs()` accepts nested queries, wiki-links, or bare target shorthand. See `querying/query-language.md` for the full syntax.
 

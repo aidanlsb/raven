@@ -2,7 +2,7 @@
 
 ## Creating content
 
-- Create a brand-new typed object: `rvn new <type> <title> --json`
+- Create a brand-new typed item: `rvn new <type> <title> --json`
 - Append notes or capture text: `rvn add <text> --json` or `rvn add <text> --to <path> --json`
 - Write idempotent canonical output: `rvn upsert <type> <title> --json`
 

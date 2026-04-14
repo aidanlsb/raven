@@ -51,7 +51,7 @@ func (e *Executor) executeCountQuery(sqlStr string, args []interface{}) (int, er
 	return count, nil
 }
 
-// executeObjectQuery executes an object query and returns matching objects.
+// executeObjectQuery executes a type query and returns matching objects.
 // External callers should use ExecuteObjectQuery.
 func (e *Executor) executeObjectQuery(q *Query) ([]model.Object, error) {
 	return e.executeObjectPageQuery(q, 0, 0)
@@ -59,7 +59,7 @@ func (e *Executor) executeObjectQuery(q *Query) ([]model.Object, error) {
 
 func (e *Executor) executeObjectPageQuery(q *Query, limit, offset int) ([]model.Object, error) {
 	if q.Type != QueryTypeObject {
-		return nil, fmt.Errorf("expected object query, got trait query")
+		return nil, fmt.Errorf("expected type query, got trait query")
 	}
 
 	sqlStr, args, err := e.buildObjectPageSQL(q, limit, offset)
@@ -76,7 +76,7 @@ func (e *Executor) executeObjectPageQuery(q *Query, limit, offset int) ([]model.
 
 func (e *Executor) executeObjectIDQuery(q *Query, limit, offset int) ([]string, error) {
 	if q.Type != QueryTypeObject {
-		return nil, fmt.Errorf("expected object query, got trait query")
+		return nil, fmt.Errorf("expected type query, got trait query")
 	}
 
 	sqlStr, args, err := e.buildObjectIDSQL(q, limit, offset)
@@ -93,7 +93,7 @@ func (e *Executor) executeObjectIDQuery(q *Query, limit, offset int) ([]string, 
 
 func (e *Executor) executeObjectCountQuery(q *Query) (int, error) {
 	if q.Type != QueryTypeObject {
-		return 0, fmt.Errorf("expected object query, got trait query")
+		return 0, fmt.Errorf("expected type query, got trait query")
 	}
 
 	sqlStr, args, err := e.buildObjectCountSQL(q)
@@ -116,7 +116,7 @@ func (e *Executor) executeTraitQuery(q *Query) ([]model.Trait, error) {
 
 func (e *Executor) executeTraitPageQuery(q *Query, limit, offset int) ([]model.Trait, error) {
 	if q.Type != QueryTypeTrait {
-		return nil, fmt.Errorf("expected trait query, got object query")
+		return nil, fmt.Errorf("expected trait query, got type query")
 	}
 
 	sqlStr, args, err := e.buildTraitPageSQL(q, limit, offset)
@@ -134,7 +134,7 @@ func (e *Executor) executeTraitPageQuery(q *Query, limit, offset int) ([]model.T
 
 func (e *Executor) executeTraitIDQuery(q *Query, limit, offset int) ([]string, error) {
 	if q.Type != QueryTypeTrait {
-		return nil, fmt.Errorf("expected trait query, got object query")
+		return nil, fmt.Errorf("expected trait query, got type query")
 	}
 
 	sqlStr, args, err := e.buildTraitIDSQL(q, limit, offset)
@@ -152,7 +152,7 @@ func (e *Executor) executeTraitIDQuery(q *Query, limit, offset int) ([]string, e
 
 func (e *Executor) executeTraitCountQuery(q *Query) (int, error) {
 	if q.Type != QueryTypeTrait {
-		return 0, fmt.Errorf("expected trait query, got object query")
+		return 0, fmt.Errorf("expected trait query, got type query")
 	}
 
 	sqlStr, args, err := e.buildTraitCountSQL(q)
@@ -167,22 +167,22 @@ func (e *Executor) executeTraitCountQuery(q *Query) (int, error) {
 	return count, nil
 }
 
-// ExecuteObjectQuery executes an object query and returns matching objects.
+// ExecuteObjectQuery executes a type query and returns matching objects.
 func (e *Executor) ExecuteObjectQuery(q *Query) ([]model.Object, error) {
 	return e.withExecutionNow().executeObjectQuery(q)
 }
 
-// ExecuteObjectPageQuery executes an object query with SQL-level pagination.
+// ExecuteObjectPageQuery executes a type query with SQL-level pagination.
 func (e *Executor) ExecuteObjectPageQuery(q *Query, limit, offset int) ([]model.Object, error) {
 	return e.withExecutionNow().executeObjectPageQuery(q, limit, offset)
 }
 
-// ExecuteObjectIDQuery executes an object query returning only object IDs.
+// ExecuteObjectIDQuery executes a type query returning only item IDs.
 func (e *Executor) ExecuteObjectIDQuery(q *Query, limit, offset int) ([]string, error) {
 	return e.withExecutionNow().executeObjectIDQuery(q, limit, offset)
 }
 
-// ExecuteObjectCountQuery executes an object query as COUNT(*).
+// ExecuteObjectCountQuery executes a type query as COUNT(*).
 func (e *Executor) ExecuteObjectCountQuery(q *Query) (int, error) {
 	return e.withExecutionNow().executeObjectCountQuery(q)
 }

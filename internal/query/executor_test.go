@@ -237,194 +237,194 @@ func TestExecuteObjectQuery(t *testing.T) {
 	}{
 		{
 			name:      "simple type query",
-			query:     "object:project",
+			query:     "type:project",
 			wantCount: 2,
 		},
 		{
 			name:      "type with field filter",
-			query:     "object:project .status==active",
+			query:     "type:project .status==active",
 			wantCount: 1,
 		},
 		{
 			name:      "array field membership (ref token)",
-			query:     "object:meeting .attendees==[[people/freya]]",
+			query:     "type:meeting .attendees==[[people/freya]]",
 			wantCount: 1, // standup has attendees including freya
 		},
 		{
 			name:      "array field membership (short ref token resolves)",
-			query:     "object:meeting .attendees==[[freya]]",
+			query:     "type:meeting .attendees==[[freya]]",
 			wantCount: 1, // standup has attendees including freya
 		},
 		{
 			name:      "array quantifier membership (short ref token resolves)",
-			query:     "object:meeting any(.attendees, _ == [[freya]])",
+			query:     "type:meeting any(.attendees, _ == [[freya]])",
 			wantCount: 1, // standup has attendees including freya
 		},
 		{
 			name:      "negated field filter",
-			query:     "object:project !.status==active",
+			query:     "type:project !.status==active",
 			wantCount: 1,
 		},
 		{
 			name:      "field filter case insensitive",
-			query:     "object:project .status==ACTIVE",
+			query:     "type:project .status==ACTIVE",
 			wantCount: 1, // matches "active" case-insensitively
 		},
 		{
 			name:      "field filter mixed case",
-			query:     "object:project .status==Active",
+			query:     "type:project .status==Active",
 			wantCount: 1, // matches "active" case-insensitively
 		},
 		{
 			name:      "field exists with notnull",
-			query:     "object:person exists(.email)",
+			query:     "type:person exists(.email)",
 			wantCount: 1,
 		},
 		{
 			name:      "has trait",
-			query:     "object:project has(trait:due)",
+			query:     "type:project has(trait:due)",
 			wantCount: 1,
 		},
 		{
 			name:      "meeting type",
-			query:     "object:meeting",
+			query:     "type:meeting",
 			wantCount: 2, // standup and planning
 		},
 		{
 			name:      "meeting has due",
-			query:     "object:meeting has(trait:due)",
+			query:     "type:meeting has(trait:due)",
 			wantCount: 1,
 		},
 		{
 			name:      "parent type",
-			query:     "object:meeting parent(object:date)",
+			query:     "type:meeting parent(type:date)",
 			wantCount: 2, // Both standup and planning
 		},
 		{
 			name:      "refs to specific target",
-			query:     "object:meeting refs([[projects/website]])",
+			query:     "type:meeting refs([[projects/website]])",
 			wantCount: 1, // Only standup refs website
 		},
 		{
 			name:      "refs to person",
-			query:     "object:meeting refs([[people/freya]])",
+			query:     "type:meeting refs([[people/freya]])",
 			wantCount: 2, // Both meetings ref Freya
 		},
 		{
 			name:      "refs with subquery",
-			query:     "object:meeting refs(object:project .status==active)",
+			query:     "type:meeting refs(type:project .status==active)",
 			wantCount: 1, // Only standup refs active project (website)
 		},
 		{
 			name:      "negated refs",
-			query:     "object:meeting !refs([[projects/website]])",
+			query:     "type:meeting !refs([[projects/website]])",
 			wantCount: 1, // Planning doesn't ref website
 		},
 		{
 			name:      "project refs person",
-			query:     "object:project refs([[people/freya]])",
+			query:     "type:project refs([[people/freya]])",
 			wantCount: 1, // Website refs Freya
 		},
 		{
 			name:      "project refs target through embedded object",
-			query:     "object:project refs([[projects/website]])",
+			query:     "type:project refs([[projects/website]])",
 			wantCount: 1, // Mobile refs website from its tasks section
 		},
 		{
 			name:      "content search simple",
-			query:     `object:person content("colleague")`,
+			query:     `type:person content("colleague")`,
 			wantCount: 1, // Freya's page mentions "colleague"
 		},
 		{
 			name:      "content search multiple words",
-			query:     `object:project content("website redesign")`,
+			query:     `type:project content("website redesign")`,
 			wantCount: 1, // Website project has both words
 		},
 		{
 			name:      "content search negated",
-			query:     `object:person !content("contractor")`,
+			query:     `type:person !content("contractor")`,
 			wantCount: 1, // Freya doesn't mention contractor, Loki does
 		},
 		{
 			name:      "content search no match",
-			query:     `object:project content("nonexistent")`,
+			query:     `type:project content("nonexistent")`,
 			wantCount: 0,
 		},
 		{
 			name:      "content combined with field",
-			query:     `object:project .status==active content("colleague")`,
+			query:     `type:project .status==active content("colleague")`,
 			wantCount: 1, // Website is active and mentions colleague
 		},
 		// Descendant predicate tests
 		{
 			name:      "descendant section",
-			query:     "object:project descendant(object:section)",
+			query:     "type:project descendant(type:section)",
 			wantCount: 2, // Both website and mobile have section children
 		},
 		{
 			name:      "descendant section with title",
-			query:     `object:project descendant(object:section)`,
+			query:     `type:project descendant(type:section)`,
 			wantCount: 2,
 		},
 		{
 			name:      "negated descendant",
-			query:     "object:project !descendant(object:section)",
+			query:     "type:project !descendant(type:section)",
 			wantCount: 0, // Both projects have sections
 		},
 		{
 			name:      "date has descendant meeting",
-			query:     "object:date descendant(object:meeting)",
+			query:     "type:date descendant(type:meeting)",
 			wantCount: 1, // daily/2025-02-01 has meetings
 		},
 		// Contains predicate tests
 		{
 			name:      "contains todo trait",
-			query:     "object:project encloses(trait:todo)",
+			query:     "type:project encloses(trait:todo)",
 			wantCount: 2, // Both projects have todo traits in nested sections
 		},
 		{
 			name:      "contains todo with value filter",
-			query:     "object:project encloses(trait:todo .value==todo)",
+			query:     "type:project encloses(trait:todo .value==todo)",
 			wantCount: 2, // Both projects have incomplete todos (trait5 on website, trait8 on mobile)
 		},
 		{
 			name:      "contains todo with content filter",
-			query:     `object:project encloses(trait:todo content("Build"))`,
+			query:     `type:project encloses(trait:todo content("Build"))`,
 			wantCount: 1, // Only website has a matching todo trait line
 		},
 		{
 			name:      "contains todo with refs filter",
-			query:     "object:project encloses(trait:todo refs([[projects/website]]))",
+			query:     "type:project encloses(trait:todo refs([[projects/website]]))",
 			wantCount: 1, // Only mobile has a todo trait line that references website
 		},
 		{
 			name:      "contains todo value done",
-			query:     "object:project encloses(trait:todo .value==done)",
+			query:     "type:project encloses(trait:todo .value==done)",
 			wantCount: 1, // Only mobile has completed todo
 		},
 		{
 			name:      "contains priority high",
-			query:     "object:project encloses(trait:priority .value==high)",
+			query:     "type:project encloses(trait:priority .value==high)",
 			wantCount: 1, // Only website has high priority in subtree
 		},
 		{
 			name:      "negated contains",
-			query:     "object:project !encloses(trait:todo)",
+			query:     "type:project !encloses(trait:todo)",
 			wantCount: 0, // Both projects have todos
 		},
 		{
 			name:      "contains on date (direct trait on child)",
-			query:     "object:date encloses(trait:due)",
+			query:     "type:date encloses(trait:due)",
 			wantCount: 1, // daily note has due trait on its child meeting
 		},
 		{
 			name:      "contains highlight",
-			query:     "object:date encloses(trait:highlight)",
+			query:     "type:date encloses(trait:highlight)",
 			wantCount: 1, // daily note has highlight on its meeting child
 		},
 		{
 			name:      "project with direct has vs contains",
-			query:     "object:project has(trait:due)",
+			query:     "type:project has(trait:due)",
 			wantCount: 1, // Only website has due directly on project (not section)
 		},
 	}
@@ -487,7 +487,7 @@ func TestExecuteObjectQuery_HasAppliesNestedTraitPredicates(t *testing.T) {
 
 	executor := NewExecutor(db)
 
-	q, err := Parse("object:date has(trait:todo refs([[projects/website]]))")
+	q, err := Parse("type:date has(trait:todo refs([[projects/website]]))")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -554,12 +554,12 @@ func TestExecuteTraitQuery(t *testing.T) {
 		},
 		{
 			name:      "on object type",
-			query:     "trait:due on(object:meeting)",
+			query:     "trait:due on(type:meeting)",
 			wantCount: 1,
 		},
 		{
 			name:      "on project",
-			query:     "trait:due on(object:project)",
+			query:     "trait:due on(type:project)",
 			wantCount: 1,
 		},
 		{
@@ -573,8 +573,8 @@ func TestExecuteTraitQuery(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "refs with object subquery",
-			query:     "trait:due refs(object:person)",
+			name:      "refs with type subquery",
+			query:     "trait:due refs(type:person)",
 			wantCount: 1, // trait2 refs a person on the same line
 		},
 		{
@@ -594,8 +594,8 @@ func TestExecuteTraitQuery(t *testing.T) {
 			wantCount: 1, // trait8 has unresolved ref to projects/website on line 30
 		},
 		{
-			name:      "refs with NULL target_id (unresolved) using object subquery",
-			query:     "trait:todo refs(object:project)",
+			name:      "refs with NULL target_id (unresolved) using type subquery",
+			query:     "trait:todo refs(type:project)",
 			wantCount: 1, // trait8 has unresolved ref to a project on line 30
 		},
 		// Content predicate tests
@@ -626,7 +626,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 		},
 		{
 			name:      "content combined with on",
-			query:     `trait:highlight content("Important") on(object:meeting)`,
+			query:     `trait:highlight content("Important") on(type:meeting)`,
 			wantCount: 1, // trait3 has "Important insight" on a meeting
 		},
 		{
@@ -670,7 +670,7 @@ func TestDirectTargetPredicates(t *testing.T) {
 
 	executor := NewExecutor(db)
 
-	// Object query tests with [[target]] predicates
+	// Type query tests with [[target]] predicates
 	objectTests := []struct {
 		name      string
 		query     string
@@ -679,42 +679,42 @@ func TestDirectTargetPredicates(t *testing.T) {
 	}{
 		{
 			name:      "parent with direct target",
-			query:     "object:section parent([[projects/website]])",
+			query:     "type:section parent([[projects/website]])",
 			wantCount: 2, // website#tasks and website#design
 		},
 		{
 			name:      "parent with short reference",
-			query:     "object:section parent([[website]])",
+			query:     "type:section parent([[website]])",
 			wantCount: 2, // website#tasks and website#design
 		},
 		{
 			name:      "ancestor with direct target",
-			query:     "object:meeting ancestor([[daily/2025-02-01]])",
+			query:     "type:meeting ancestor([[daily/2025-02-01]])",
 			wantCount: 2, // standup and planning
 		},
 		{
 			name:      "child with direct target",
-			query:     "object:date child([[daily/2025-02-01#standup]])",
+			query:     "type:date child([[daily/2025-02-01#standup]])",
 			wantCount: 1, // daily/2025-02-01
 		},
 		{
 			name:      "descendant with direct target",
-			query:     "object:project descendant([[projects/website#tasks]])",
+			query:     "type:project descendant([[projects/website#tasks]])",
 			wantCount: 1, // projects/website
 		},
 		{
 			name:      "descendant with embedded short reference",
-			query:     "object:project descendant([[website#tasks]])",
+			query:     "type:project descendant([[website#tasks]])",
 			wantCount: 1, // projects/website (via resolver: website#tasks -> projects/website#tasks)
 		},
 		{
 			name:      "negated parent target",
-			query:     "object:section !parent([[projects/website]])",
+			query:     "type:section !parent([[projects/website]])",
 			wantCount: 1, // mobile#tasks
 		},
 		{
 			name:      "non-existent target returns nothing",
-			query:     "object:section parent([[nonexistent]])",
+			query:     "type:section parent([[nonexistent]])",
 			wantCount: 0,
 		},
 	}
@@ -813,7 +813,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 
 	executor := NewExecutor(db)
 
-	// Object query tests with OR and groups
+	// Type query tests with OR and groups
 	objectTests := []struct {
 		name      string
 		query     string
@@ -821,37 +821,37 @@ func TestOrAndGroupPredicates(t *testing.T) {
 	}{
 		{
 			name:      "AND binds tighter than OR",
-			query:     "object:project .status==active .priority==high | .status==paused",
+			query:     "type:project .status==active .priority==high | .status==paused",
 			wantCount: 2, // (active AND high) OR paused
 		},
 		{
 			name:      "OR field values",
-			query:     "object:project (.status==active | .status==paused)",
+			query:     "type:project (.status==active | .status==paused)",
 			wantCount: 2, // website (active) and mobile (paused)
 		},
 		{
 			name:      "OR with one match",
-			query:     "object:project (.status==active | .status==nonexistent)",
+			query:     "type:project (.status==active | .status==nonexistent)",
 			wantCount: 1, // website only
 		},
 		{
 			name:      "grouped AND with field",
-			query:     "object:project (.status==active) .priority==high",
+			query:     "type:project (.status==active) .priority==high",
 			wantCount: 1, // website has both
 		},
 		{
 			name:      "negated OR",
-			query:     "object:project !(.status==active | .status==paused)",
+			query:     "type:project !(.status==active | .status==paused)",
 			wantCount: 0, // both projects match the OR, so negation returns none
 		},
 		{
 			name:      "OR priority values",
-			query:     "object:project (.priority==high | .priority==medium)",
+			query:     "type:project (.priority==high | .priority==medium)",
 			wantCount: 2,
 		},
 		{
 			name:      "complex: OR with has",
-			query:     "object:project (has(trait:due) | has(trait:todo))",
+			query:     "type:project (has(trait:due) | has(trait:todo))",
 			wantCount: 1, // website has due directly
 		},
 	}
@@ -884,7 +884,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 	}{
 		{
 			name:      "OR on object types",
-			query:     "trait:due (on(object:project) | on(object:person))",
+			query:     "trait:due (on(type:project) | on(type:person))",
 			wantCount: 2, // trait1 on project, trait4 on person
 		},
 		{
@@ -894,7 +894,7 @@ func TestOrAndGroupPredicates(t *testing.T) {
 		},
 		{
 			name:      "grouped with value",
-			query:     "trait:todo (.value==todo) on(object:section)",
+			query:     "trait:todo (.value==todo) on(type:section)",
 			wantCount: 2, // trait5 and trait8 (both have .value==todo and are on sections)
 		},
 	}
@@ -934,27 +934,27 @@ func TestBooleanEdgeCasesExecution(t *testing.T) {
 	}{
 		{
 			name:      "chained OR: A | B | C",
-			query:     "object:project (.status==active | .status==paused | .status==nonexistent)",
+			query:     "type:project (.status==active | .status==paused | .status==nonexistent)",
 			wantCount: 2, // website (active) + mobile (paused)
 		},
 		{
 			name:      "AND of two OR groups",
-			query:     "object:project (.status==active | .status==paused) (.priority==high | .priority==medium)",
+			query:     "type:project (.status==active | .status==paused) (.priority==high | .priority==medium)",
 			wantCount: 2, // website (active+high), mobile (paused+medium)
 		},
 		{
 			name:      "negated OR via NotPredicate",
-			query:     "object:project !(.status==active | .status==paused)",
+			query:     "type:project !(.status==active | .status==paused)",
 			wantCount: 0, // all match the OR
 		},
 		{
 			name:      "in() as flat OR",
-			query:     "object:project in(.status, [active,paused])",
+			query:     "type:project in(.status, [active,paused])",
 			wantCount: 2,
 		},
 		{
 			name:      "negated in()",
-			query:     "object:project !in(.status, [active,paused])",
+			query:     "type:project !in(.status, [active,paused])",
 			wantCount: 0, // all match
 		},
 	}
@@ -1059,32 +1059,32 @@ func TestRefdPredicate(t *testing.T) {
 	}{
 		{
 			name:      "refd by specific source",
-			query:     "object:project refd([[daily/2025-02-01#standup]])",
+			query:     "type:project refd([[daily/2025-02-01#standup]])",
 			wantCount: 1, // website is referenced by standup
 		},
 		{
 			name:      "refd by short reference source",
-			query:     "object:project refd([[standup]])",
+			query:     "type:project refd([[standup]])",
 			wantCount: 1, // website is referenced by standup (via resolver)
 		},
 		{
 			name:      "refd by meeting type",
-			query:     "object:project refd(object:meeting)",
+			query:     "type:project refd(type:meeting)",
 			wantCount: 2, // website referenced by standup, mobile by planning
 		},
 		{
 			name:      "person refd by meeting",
-			query:     "object:person refd(object:meeting)",
+			query:     "type:person refd(type:meeting)",
 			wantCount: 1, // freya is referenced by both meetings
 		},
 		{
 			name:      "person refd by project",
-			query:     "object:person refd(object:project)",
+			query:     "type:person refd(type:project)",
 			wantCount: 1, // freya is referenced by website
 		},
 		{
 			name:      "negated refd",
-			query:     "object:person !refd(object:meeting)",
+			query:     "type:person !refd(type:meeting)",
 			wantCount: 1, // loki is not referenced by any meeting
 		},
 	}
@@ -1173,7 +1173,7 @@ func TestRefdShorthand(t *testing.T) {
 
 	executor := NewExecutor(db)
 
-	// Test refd shorthand (should expand to object subquery)
+	// Test refd shorthand (should expand to type subquery)
 	tests := []struct {
 		name      string
 		query     string
@@ -1181,7 +1181,7 @@ func TestRefdShorthand(t *testing.T) {
 	}{
 		{
 			name:      "refd shorthand",
-			query:     "object:project refd(object:meeting)",
+			query:     "type:project refd(type:meeting)",
 			wantCount: 2, // website referenced by standup, mobile by planning
 		},
 	}
@@ -1214,7 +1214,7 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 
 	executor := NewExecutor(db)
 
-	// Object query hierarchy tests
+	// Type query hierarchy tests
 	objectTests := []struct {
 		name      string
 		query     string
@@ -1223,50 +1223,50 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 		// Ancestor with subquery predicates
 		{
 			name:      "ancestor with field filter",
-			query:     "object:meeting ancestor(object:date)",
+			query:     "type:meeting ancestor(type:date)",
 			wantCount: 2, // standup and planning are under date
 		},
 		{
 			name:      "negated ancestor",
-			query:     "object:section !ancestor(object:project)",
+			query:     "type:section !ancestor(type:project)",
 			wantCount: 0, // all sections have project ancestors
 		},
 		// Child with subquery predicates
 		{
 			name:      "child with type",
-			query:     "object:date child(object:meeting)",
+			query:     "type:date child(type:meeting)",
 			wantCount: 1, // daily/2025-02-01 has meeting children
 		},
 		{
 			name:      "child with has predicate",
-			query:     "object:date child(object:meeting has(trait:due))",
+			query:     "type:date child(type:meeting has(trait:due))",
 			wantCount: 1, // standup has due
 		},
 		{
 			name:      "child no match",
-			query:     "object:project child(object:meeting)",
+			query:     "type:project child(type:meeting)",
 			wantCount: 0, // projects don't have meetings as children
 		},
 		// Descendant with subquery predicates
 		{
 			name:      "descendant with field filter",
-			query:     "object:project descendant(object:section .title==Tasks)",
+			query:     "type:project descendant(type:section .title==Tasks)",
 			wantCount: 2, // both projects have Tasks sections
 		},
 		{
 			name:      "descendant meeting in date",
-			query:     "object:date descendant(object:meeting has(trait:highlight))",
+			query:     "type:date descendant(type:meeting has(trait:highlight))",
 			wantCount: 1, // standup has highlight
 		},
 		// Parent with subquery predicates
 		{
 			name:      "parent with field filter",
-			query:     "object:section parent(object:project .status==active)",
+			query:     "type:section parent(type:project .status==active)",
 			wantCount: 2, // website#tasks and website#design
 		},
 		{
 			name:      "parent with has predicate",
-			query:     "object:section parent(object:project has(trait:due))",
+			query:     "type:section parent(type:project has(trait:due))",
 			wantCount: 2, // website has due, so its sections match
 		},
 	}
@@ -1300,27 +1300,27 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 		// Within with subquery predicates
 		{
 			name:      "within with field filter",
-			query:     "trait:todo within(object:project .status==active)",
+			query:     "trait:todo within(type:project .status==active)",
 			wantCount: 1, // trait5 is within website (active)
 		},
 		{
 			name:      "within with has predicate",
-			query:     "trait:todo within(object:project has(trait:due))",
+			query:     "trait:todo within(type:project has(trait:due))",
 			wantCount: 1, // website has due, trait5 is within it
 		},
 		{
 			name:      "on with field filter",
-			query:     "trait:todo on(object:section .title==Tasks)",
+			query:     "trait:todo on(type:section .title==Tasks)",
 			wantCount: 3, // trait5 on website#tasks, trait7 and trait8 on mobile#tasks
 		},
 		{
 			name:      "within paused project",
-			query:     "trait:todo within(object:project .status==paused)",
+			query:     "trait:todo within(type:project .status==paused)",
 			wantCount: 2, // trait7 and trait8 are within mobile (paused)
 		},
 		{
 			name:      "highlight within date",
-			query:     "trait:highlight within(object:date)",
+			query:     "trait:highlight within(type:date)",
 			wantCount: 1, // trait3 is within daily note
 		},
 	}

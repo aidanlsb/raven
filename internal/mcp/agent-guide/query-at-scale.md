@@ -11,20 +11,20 @@ raven_invoke(command="query", args={"query_string":"trait:todo .value==todo", "c
 ## 2. Page through results
 
 ```text
-raven_invoke(command="query", args={"query_string":"object:project .status==active", "limit":50, "offset":0})
-raven_invoke(command="query", args={"query_string":"object:project .status==active", "limit":50, "offset":50})
+raven_invoke(command="query", args={"query_string":"type:project .status==active", "limit":50, "offset":0})
+raven_invoke(command="query", args={"query_string":"type:project .status==active", "limit":50, "offset":50})
 ```
 
 ## 3. Use IDs for follow-up flows
 
 ```text
-raven_invoke(command="query", args={"query_string":"object:project .status==archived", "ids":true})
+raven_invoke(command="query", args={"query_string":"type:project .status==archived", "ids":true})
 ```
 
 ## 4. Narrow before reading files
 
 ```text
-raven_invoke(command="query", args={"query_string":"object:meeting refs([[project/website]])", "limit":20})
+raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])", "limit":20})
 raven_invoke(command="read", args={"path":"meeting/team-sync", "raw":true})
 ```
 

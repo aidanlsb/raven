@@ -121,8 +121,8 @@ Use positional `field=value` arguments for shell-friendly literal updates. Use `
 For bulk field updates, pipe IDs from a query:
 
 ```bash
-rvn query 'object:project .status==active' --ids | rvn set --stdin reviewed=true --confirm
-rvn query 'object:person' --ids | rvn set --stdin --confirm --fields-json '{"email":"true"}'
+rvn query 'type:project .status==active' --ids | rvn set --stdin reviewed=true --confirm
+rvn query 'type:person' --ids | rvn set --stdin --confirm --fields-json '{"email":"true"}'
 ```
 
 ### `rvn update`

@@ -25,7 +25,7 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 		return e.buildGroupPredicateSQL(p, alias, recurse)
 	case *RefdPredicate:
 		if kind == predicateKindTrait {
-			return "", nil, fmt.Errorf("refd: predicate is only supported for object queries")
+			return "", nil, fmt.Errorf("refd: predicate is only supported for type queries")
 		}
 		return e.buildRefdPredicateSQL(p, alias, false)
 	case *ContentPredicate:
