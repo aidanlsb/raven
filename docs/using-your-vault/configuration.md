@@ -177,7 +177,7 @@ rvn vault config auto-reindex unset --json
 rvn vault config protected-prefixes list --json
 rvn vault config protected-prefixes add private --json
 rvn vault config protected-prefixes remove private/ --json
-rvn vault config directories set --daily journal --object objects --template templates/custom --json
+rvn vault config directories set --daily journal --type types --template templates/custom --json
 rvn vault config directories unset --template --json
 rvn vault config capture set --destination inbox.md --heading "## Captured" --json
 rvn vault config capture unset --heading --json
@@ -192,7 +192,7 @@ auto_reindex: true
 
 directories:
   daily: daily/
-  object: object/
+  type: type/
   page: page/
   template: templates/
 
@@ -206,7 +206,7 @@ capture:
 ```yaml
 directories:
   daily: daily/
-  object: object/
+  type: type/
   page: page/
   template: templates/
 
@@ -253,20 +253,21 @@ Directory roots used by Raven.
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `daily` | string | `daily/` | Daily note files are `<daily>/YYYY-MM-DD.md` |
-| `object` | string | unset | Root for typed items |
-| `page` | string | unset, but defaults to `object` when `object` is set and `page` is omitted | Root for untyped pages |
+| `type` | string | unset | Root for typed items |
+| `page` | string | unset, but defaults to `type` when `type` is set and `page` is omitted | Root for untyped pages |
 | `template` | string | `templates/` | Root for template files referenced by schema |
 
 Behavior notes:
 - Paths are normalized as vault-relative paths.
 - `template` is normalized with trailing `/`.
 - `daily` is normalized and used as a directory name (no trailing `/` in resolved internal value).
-- If the entire `directories` block is missing, Raven uses a flat layout (no `object`/`page` roots).
+- If the entire `directories` block is missing, Raven uses a flat layout (no `type`/`page` roots).
 
 Compatibility notes:
-- Singular keys are canonical: `object`, `page`, `template`.
-- Legacy plural keys are still accepted: `objects`, `pages`, `templates`.
-- If both singular and plural are present, singular wins.
+- Canonical keys are `type`, `page`, and `template`.
+- Legacy `directories.object` and `directories.objects` are rejected. Use `directories.type` instead.
+- Legacy plural `pages` and `templates` are still accepted.
+- If both singular and plural are present for `page` or `template`, singular wins.
 - `daily_directory` is no longer supported and causes a config error.
 
 ### `capture`
@@ -325,7 +326,7 @@ This is additive. Raven always protects:
 ## Defaults from `rvn init`
 
 `rvn init` creates a default `raven.yaml` with:
-- `directories.daily`, `directories.object`, `directories.page`, `directories.template`
+- `directories.daily`, `directories.type`, `directories.page`, `directories.template`
 - `auto_reindex: true`
 - starter `queries`
 

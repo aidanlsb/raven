@@ -65,14 +65,14 @@ func TestIntegration_VaultConfigDirectoriesLifecycle(t *testing.T) {
 
 	v := testutil.NewTestVault(t).Build()
 
-	result := v.RunCLI("vault", "config", "directories", "set", "--daily=journal", "--object=objects", "--template=templates/custom")
+	result := v.RunCLI("vault", "config", "directories", "set", "--daily=journal", "--type=types", "--template=templates/custom")
 	result.MustSucceed(t)
 	v.AssertFileContains("raven.yaml", "directories:")
 	v.AssertFileContains("raven.yaml", "daily: journal/")
-	v.AssertFileContains("raven.yaml", "object: objects/")
+	v.AssertFileContains("raven.yaml", "type: types/")
 	v.AssertFileContains("raven.yaml", "template: templates/custom/")
 
-	result = v.RunCLI("vault", "config", "directories", "unset", "--daily", "--object", "--template")
+	result = v.RunCLI("vault", "config", "directories", "unset", "--daily", "--type", "--template")
 	result.MustSucceed(t)
 	v.AssertFileNotContains("raven.yaml", "directories:")
 }

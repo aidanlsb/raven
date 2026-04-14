@@ -95,7 +95,7 @@ func TestLoadVaultConfig(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
 
-		content := "directories:\n  object: ../outside\n  template: ../templates\n  daily: ../journal\n"
+		content := "directories:\n  type: ../outside\n  template: ../templates\n  daily: ../journal\n"
 		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
@@ -123,6 +123,34 @@ func TestLoadVaultConfig(t *testing.T) {
 
 		if _, err := LoadVaultConfig(tmpDir); err == nil {
 			t.Fatal("expected error for legacy daily_directory, got nil")
+		}
+	})
+
+	t.Run("rejects legacy directories.object", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := "directories:\n  object: object/\n"
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		if _, err := LoadVaultConfig(tmpDir); err == nil {
+			t.Fatal("expected error for legacy directories.object, got nil")
+		}
+	})
+
+	t.Run("rejects legacy directories.objects", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := "directories:\n  objects: objects/\n"
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		if _, err := LoadVaultConfig(tmpDir); err == nil {
+			t.Fatal("expected error for legacy directories.objects, got nil")
 		}
 	})
 }
@@ -158,13 +186,13 @@ func TestVaultConfigPaths(t *testing.T) {
 }
 
 func TestDirectoriesConfig(t *testing.T) {
-	t.Run("loads directories config with singular keys", func(t *testing.T) {
+	t.Run("loads directories config with type key", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
 
 		content := `
 directories:
-  object: object/
+  type: type/
   page: page/
 `
 		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
@@ -181,21 +209,21 @@ directories:
 		}
 
 		dirs := cfg.GetDirectoriesConfig()
-		if dirs.Object != "object/" {
-			t.Errorf("expected object 'object/', got %q", dirs.Object)
+		if dirs.Object != "type/" {
+			t.Errorf("expected type root 'type/', got %q", dirs.Object)
 		}
 		if dirs.Page != "page/" {
 			t.Errorf("expected page 'page/', got %q", dirs.Page)
 		}
 	})
 
-	t.Run("defaults page root to object root when omitted", func(t *testing.T) {
+	t.Run("defaults page root to type root when omitted", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
 
 		content := `
 directories:
-  object: objects/
+  type: types/
 `
 		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
@@ -207,56 +235,49 @@ directories:
 		}
 
 		dirs := cfg.GetDirectoriesConfig()
-		if dirs.Object != "objects/" {
-			t.Errorf("expected object root 'objects/', got %q", dirs.Object)
+		if dirs.Object != "types/" {
+			t.Errorf("expected type root 'types/', got %q", dirs.Object)
 		}
-		if dirs.Page != "objects/" {
-			t.Errorf("expected page root to default to object root 'objects/', got %q", dirs.Page)
+		if dirs.Page != "types/" {
+			t.Errorf("expected page root to default to type root 'types/', got %q", dirs.Page)
 		}
 	})
 
-	t.Run("backwards compatibility with plural keys", func(t *testing.T) {
+	t.Run("rejects legacy object keys", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
 
-		// Old plural key format should still work
 		content := `
+directories:
+  object: object/
+`
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		if _, err := LoadVaultConfig(tmpDir); err == nil {
+			t.Fatal("expected error for directories.object, got nil")
+		}
+
+		content = `
 directories:
   objects: objects/
-  pages: pages/
 `
 		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
-
-		cfg, err := LoadVaultConfig(tmpDir)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if !cfg.HasDirectoriesConfig() {
-			t.Error("expected HasDirectoriesConfig to return true")
-		}
-
-		dirs := cfg.GetDirectoriesConfig()
-		// Should be normalized to the new singular field names
-		if dirs.Object != "objects/" {
-			t.Errorf("expected object 'objects/' (from plural key), got %q", dirs.Object)
-		}
-		if dirs.Page != "pages/" {
-			t.Errorf("expected page 'pages/' (from plural key), got %q", dirs.Page)
+		if _, err := LoadVaultConfig(tmpDir); err == nil {
+			t.Fatal("expected error for directories.objects, got nil")
 		}
 	})
 
-	t.Run("singular keys take precedence over plural", func(t *testing.T) {
+	t.Run("page singular key takes precedence over plural", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		configPath := filepath.Join(tmpDir, "raven.yaml")
 
-		// Both singular and plural keys - singular should win
 		content := `
 directories:
-  object: new-object/
-  objects: old-objects/
+  type: types/
   page: new-page/
   pages: old-pages/
 `
@@ -270,8 +291,8 @@ directories:
 		}
 
 		dirs := cfg.GetDirectoriesConfig()
-		if dirs.Object != "new-object/" {
-			t.Errorf("expected singular 'new-object/' to take precedence, got %q", dirs.Object)
+		if dirs.Object != "types/" {
+			t.Errorf("expected type root 'types/', got %q", dirs.Object)
 		}
 		if dirs.Page != "new-page/" {
 			t.Errorf("expected singular 'new-page/' to take precedence, got %q", dirs.Page)
@@ -330,7 +351,7 @@ directories:
 		cfg := &VaultConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
-				Object: "object/",
+				Object: "type/",
 				Page:   "page/",
 			},
 		}
@@ -339,10 +360,10 @@ directories:
 			filePath string
 			expected string
 		}{
-			{"object/person/freya.md", "person/freya"},
-			{"object/project/website.md", "project/website"},
+			{"type/person/freya.md", "person/freya"},
+			{"type/project/website.md", "project/website"},
 			{"page/my-note.md", "my-note"},
-			{"daily/2025-01-01.md", "daily/2025-01-01"}, // Not in object or page
+			{"daily/2025-01-01.md", "daily/2025-01-01"}, // Not in type or page
 		}
 
 		for _, tc := range tests {
@@ -357,7 +378,7 @@ directories:
 		cfg := &VaultConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
-				Object: "object/",
+				Object: "type/",
 				Page:   "page/",
 			},
 		}
@@ -367,8 +388,8 @@ directories:
 			typeName string
 			expected string
 		}{
-			{"person/freya", "person", "object/person/freya.md"},
-			{"project/website", "project", "object/project/website.md"},
+			{"person/freya", "person", "type/person/freya.md"},
+			{"project/website", "project", "type/project/website.md"},
 			{"my-note", "page", "page/my-note.md"},
 			{"random-note", "", "page/random-note.md"},
 		}
@@ -385,7 +406,7 @@ directories:
 		cfg := &VaultConfig{
 			DailyDirectory: "daily",
 			Directories: &DirectoriesConfig{
-				Object: "object/",
+				Object: "type/",
 				Page:   "page/",
 			},
 		}
@@ -394,12 +415,12 @@ directories:
 			ref      string
 			expected string
 		}{
-			{"person/freya", "object/person/freya.md"},
-			{"project/website", "object/project/website.md"},
+			{"person/freya", "type/person/freya.md"},
+			{"project/website", "type/project/website.md"},
 			{"my-note", "page/my-note.md"},
-			{"object/person/freya", "object/person/freya.md"},
+			{"type/person/freya", "type/person/freya.md"},
 			{"page/my-note", "page/my-note.md"},
-			{"object/person/freya.md", "object/person/freya.md"},
+			{"type/person/freya.md", "type/person/freya.md"},
 		}
 
 		for _, tc := range tests {
@@ -437,8 +458,8 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 	if cfg.GetDailyDirectory() != "daily" {
 		t.Errorf("expected directories.daily 'daily', got %q", cfg.GetDailyDirectory())
 	}
-	if cfg.GetObjectsRoot() != "object/" {
-		t.Errorf("expected default directories.object 'object/', got %q", cfg.GetObjectsRoot())
+	if cfg.GetObjectsRoot() != "type/" {
+		t.Errorf("expected default directories.type 'type/', got %q", cfg.GetObjectsRoot())
 	}
 	if cfg.GetPagesRoot() != "page/" {
 		t.Errorf("expected default directories.page 'page/', got %q", cfg.GetPagesRoot())
@@ -450,8 +471,8 @@ func TestCreateDefaultVaultConfig(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(tmpDir, "daily")); os.IsNotExist(err) {
 		t.Error("expected default daily directory to be created")
 	}
-	if _, err := os.Stat(filepath.Join(tmpDir, "object")); os.IsNotExist(err) {
-		t.Error("expected default object directory to be created")
+	if _, err := os.Stat(filepath.Join(tmpDir, "type")); os.IsNotExist(err) {
+		t.Error("expected default type directory to be created")
 	}
 	if _, err := os.Stat(filepath.Join(tmpDir, "page")); os.IsNotExist(err) {
 		t.Error("expected default page directory to be created")

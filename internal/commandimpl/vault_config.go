@@ -22,7 +22,7 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 		"directories": map[string]interface{}{
 			"configured": result.Directories.Configured,
 			"daily":      result.Directories.Daily,
-			"object":     result.Directories.Object,
+			"type":       result.Directories.Object,
 			"page":       result.Directories.Page,
 			"template":   result.Directories.Template,
 		},
@@ -133,7 +133,7 @@ func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request)
 	result, err := vaultconfigsvc.SetDirectories(vaultconfigsvc.SetDirectoriesRequest{
 		VaultPath: req.VaultPath,
 		Daily:     optionalStringArg(req.Args, "daily"),
-		Object:    optionalStringArg(req.Args, "object"),
+		Object:    optionalStringArg(req.Args, "type"),
 		Page:      optionalStringArg(req.Args, "page"),
 		Template:  optionalStringArg(req.Args, "template"),
 	})
@@ -150,7 +150,7 @@ func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Reques
 	result, err := vaultconfigsvc.UnsetDirectories(vaultconfigsvc.UnsetDirectoriesRequest{
 		VaultPath: req.VaultPath,
 		Daily:     boolArg(req.Args, "daily"),
-		Object:    boolArg(req.Args, "object"),
+		Object:    boolArg(req.Args, "type"),
 		Page:      boolArg(req.Args, "page"),
 		Template:  boolArg(req.Args, "template"),
 	})
@@ -260,7 +260,7 @@ func vaultDirectoriesData(configPath string, exists bool, info vaultconfigsvc.Di
 		"exists":      exists,
 		"configured":  info.Configured,
 		"daily":       info.Daily,
-		"object":      info.Object,
+		"type":        info.Object,
 		"page":        info.Page,
 		"template":    info.Template,
 	}

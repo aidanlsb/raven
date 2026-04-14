@@ -25,7 +25,7 @@ type VaultConfig struct {
 	DailyTemplate string `yaml:"daily_template,omitempty"`
 
 	// Directories configures directory organization for the vault.
-	// When set, typed objects are nested under objects/, untyped pages under pages/.
+	// When set, typed items are nested under the configured type root, untyped pages under the page root.
 	// Object IDs strip the directory prefix, keeping references short.
 	Directories *DirectoriesConfig `yaml:"directories,omitempty"`
 
@@ -76,17 +76,17 @@ func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
 // DirectoriesConfig configures directory organization for the vault.
 // This allows nesting type folders under a common root while keeping reference paths short.
 //
-// Uses singular keys (object, page) to encourage singular directory names,
+// Uses user-facing keys (type, page) to encourage singular directory names,
 // which leads to more natural reference syntax like [[person/freya]] instead of [[people/freya]].
 type DirectoriesConfig struct {
 	// Daily is the root directory for daily notes (default: "daily/").
 	// Daily note files are created as <daily>/YYYY-MM-DD.md.
 	Daily string `yaml:"daily,omitempty"`
 
-	// Object is the root directory for typed objects (e.g., "object/").
+	// Object is the root directory for typed items (e.g., "type/").
 	// Type default_path values are relative to this.
-	// Object IDs strip this prefix, so "object/person/freya" becomes "person/freya".
-	Object string `yaml:"object,omitempty"`
+	// Object IDs strip this prefix, so "type/person/freya" becomes "person/freya".
+	Object string `yaml:"type,omitempty"`
 
 	// Page is the root directory for untyped pages (e.g., "page/").
 	// Pages get bare IDs without the directory prefix.
@@ -99,9 +99,6 @@ type DirectoriesConfig struct {
 	// If empty, defaults to "templates/".
 	Template string `yaml:"template,omitempty"`
 
-	// Deprecated: use Object instead. Kept for backwards compatibility.
-	Objects string `yaml:"objects,omitempty"`
-
 	// Deprecated: use Page instead. Kept for backwards compatibility.
 	Pages string `yaml:"pages,omitempty"`
 
@@ -109,20 +106,38 @@ type DirectoriesConfig struct {
 	Templates string `yaml:"templates,omitempty"`
 }
 
+func (dc *DirectoriesConfig) UnmarshalYAML(value *yaml.Node) error {
+	type plain DirectoriesConfig
+	var p plain
+	if err := value.Decode(&p); err != nil {
+		return err
+	}
+	*dc = DirectoriesConfig(p)
+
+	if value.Kind != yaml.MappingNode {
+		return nil
+	}
+
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		key := value.Content[i]
+		switch key.Value {
+		case "object", "objects":
+			return fmt.Errorf("directories.%s is no longer supported; use directories.type instead", key.Value)
+		}
+	}
+	return nil
+}
+
 // GetDirectoriesConfig returns the directories config with defaults applied.
 // Returns nil if directories are not configured (flat vault structure).
-// Handles backwards compatibility: if old plural keys (objects, pages) are set
-// but new singular keys (object, page) are not, uses the old values.
+// Handles backwards compatibility for the remaining plural page/template aliases.
 func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	if vc.Directories == nil {
 		return nil
 	}
 	cfg := *vc.Directories
 
-	// Backwards compatibility: prefer new singular keys, fall back to old plural keys
-	if cfg.Object == "" && cfg.Objects != "" {
-		cfg.Object = cfg.Objects
-	}
+	// Backwards compatibility: prefer new singular keys, fall back to old plural keys.
 	if cfg.Page == "" && cfg.Pages != "" {
 		cfg.Page = cfg.Pages
 	}
@@ -136,16 +151,15 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
 	cfg.Template = paths.NormalizeDirRoot(cfg.Template)
 
-	// If page root is omitted, default it to object root.
+	// If page root is omitted, default it to the type root.
 	// This keeps "all notes under one root" configs simple:
 	// directories:
-	//   object: objects/
+	//   type: type/
 	if cfg.Page == "" && cfg.Object != "" {
 		cfg.Page = cfg.Object
 	}
 
 	// Clear deprecated fields after normalization to avoid confusion
-	cfg.Objects = ""
 	cfg.Pages = ""
 	cfg.Templates = ""
 
@@ -157,9 +171,8 @@ func (vc *VaultConfig) HasDirectoriesConfig() bool {
 	if vc.Directories == nil {
 		return false
 	}
-	// Check both new singular keys and old plural keys for backwards compatibility
 	return vc.Directories.Object != "" || vc.Directories.Page != "" ||
-		vc.Directories.Objects != "" || vc.Directories.Pages != ""
+		vc.Directories.Pages != ""
 }
 
 // DeletionConfig configures how file deletion is handled.
@@ -345,7 +358,7 @@ func CreateDefaultVaultConfig(vaultPath string) (bool, error) {
 		return false, fmt.Errorf("failed to write vault config: %w", err)
 	}
 
-	defaultDirectories := []string{"daily", "object", "page", "templates"}
+	defaultDirectories := []string{"daily", "type", "page", "templates"}
 	for _, dir := range defaultDirectories {
 		if err := os.MkdirAll(filepath.Join(vaultPath, dir), 0o755); err != nil {
 			return false, fmt.Errorf("failed to create default directory %q: %w", dir, err)
@@ -383,7 +396,7 @@ func (vc *VaultConfig) DailyNoteID(date string) string {
 
 // FilePathToObjectID converts a file path (relative to vault) to an object ID.
 // If directories are configured, the appropriate root prefix is stripped.
-// For example, with object: "object/", the path "object/person/freya.md" becomes "person/freya".
+// For example, with type: "type/", the path "type/person/freya.md" becomes "person/freya".
 func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
@@ -394,8 +407,8 @@ func (vc *VaultConfig) FilePathToObjectID(filePath string) string {
 
 // ObjectIDToFilePath converts an object ID to a file path (relative to vault).
 // If directories are configured, the appropriate root prefix is added.
-// The typeName helps determine which root to use (object vs page).
-// If typeName is empty or "page", uses the page root; otherwise uses object root.
+// The typeName helps determine which root to use (type vs page).
+// If typeName is empty or "page", uses the page root; otherwise uses the type root.
 func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {
@@ -405,7 +418,7 @@ func (vc *VaultConfig) ObjectIDToFilePath(objectID, typeName string) string {
 }
 
 // ResolveReferenceToFilePath resolves a reference (object ID) to a file path.
-// This handles the logic of checking whether the reference looks like a typed object
+// This handles the logic of checking whether the reference looks like a typed item
 // (has a directory prefix like "person/freya") or an untyped page ("my-note").
 // Returns the relative file path within the vault.
 func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
@@ -427,8 +440,8 @@ func (vc *VaultConfig) ResolveReferenceToFilePath(ref string) string {
 		return ref + ".md"
 	}
 
-	// If the reference contains a slash, it's likely a typed object path
-	// e.g., "person/freya" -> "object/person/freya.md"
+	// If the reference contains a slash, it's likely a typed item path
+	// e.g., "person/freya" -> "type/person/freya.md"
 	if strings.Contains(ref, "/") {
 		if dirs.Object != "" {
 			return dirs.Object + ref + ".md"
@@ -465,7 +478,7 @@ func (vc *VaultConfig) IsInPagesRoot(filePath string) bool {
 	return strings.HasPrefix(filepath.ToSlash(filePath), dirs.Page)
 }
 
-// GetObjectsRoot returns the object root directory, or empty string if not configured.
+// GetObjectsRoot returns the configured type root directory, or empty string if not configured.
 func (vc *VaultConfig) GetObjectsRoot() string {
 	dirs := vc.GetDirectoriesConfig()
 	if dirs == nil {

@@ -478,7 +478,7 @@ types:
 
 	ravenYAML := strings.TrimSpace(`
 directories:
-  object: objects/
+  type: objects/
 `) + "\n"
 	if err := os.WriteFile(filepath.Join(vaultPath, "raven.yaml"), []byte(ravenYAML), 0o644); err != nil {
 		t.Fatalf("write raven.yaml: %v", err)

@@ -21,7 +21,7 @@ protected_prefixes:
   - private/
 directories:
   daily: journal
-  object: objects
+  type: types
   template: templates/custom
 capture:
   destination: inbox.md

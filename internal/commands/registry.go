@@ -1909,13 +1909,13 @@ Prefixes are normalized with a trailing slash.`,
 		Description: "Set one or more directories fields in raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "daily", Description: "Set directories.daily", Type: FlagTypeString},
-			{Name: "object", Description: "Set directories.object", Type: FlagTypeString},
+			{Name: "type", Description: "Set directories.type", Type: FlagTypeString},
 			{Name: "page", Description: "Set directories.page", Type: FlagTypeString},
 			{Name: "template", Description: "Set directories.template", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn vault config directories set --daily journal --json",
-			"rvn vault config directories set --object object --page page --template templates --json",
+			"rvn vault config directories set --type type --page page --template templates --json",
 		},
 	},
 	"vault_config_directories_unset": {
@@ -1923,13 +1923,13 @@ Prefixes are normalized with a trailing slash.`,
 		Description: "Clear one or more directories fields from raven.yaml",
 		Flags: []FlagMeta{
 			{Name: "daily", Description: "Clear directories.daily", Type: FlagTypeBool},
-			{Name: "object", Description: "Clear directories.object", Type: FlagTypeBool},
+			{Name: "type", Description: "Clear directories.type", Type: FlagTypeBool},
 			{Name: "page", Description: "Clear directories.page", Type: FlagTypeBool},
 			{Name: "template", Description: "Clear directories.template", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn vault config directories unset --page --json",
-			"rvn vault config directories unset --daily --object --page --template --json",
+			"rvn vault config directories unset --daily --type --page --template --json",
 		},
 	},
 	"vault_config_capture_get": {

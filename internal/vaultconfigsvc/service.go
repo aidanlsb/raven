@@ -310,7 +310,7 @@ func GetDirectories(req GetDirectoriesRequest) (*GetDirectoriesResult, error) {
 
 func SetDirectories(req SetDirectoriesRequest) (*SetDirectoriesResult, error) {
 	if req.Daily == nil && req.Object == nil && req.Page == nil && req.Template == nil {
-		return nil, newError(CodeInvalidInput, "specify at least one directories field", "Use --daily, --object, --page, or --template", nil)
+		return nil, newError(CodeInvalidInput, "specify at least one directories field", "Use --daily, --type, --page, or --template", nil)
 	}
 
 	cfg, exists, configPath, err := load(req.VaultPath)
@@ -332,7 +332,7 @@ func SetDirectories(req SetDirectoriesRequest) (*SetDirectoriesResult, error) {
 		next.Daily = value
 	}
 	if req.Object != nil {
-		value, err := normalizeDirValue(*req.Object, "object")
+		value, err := normalizeDirValue(*req.Object, "type")
 		if err != nil {
 			return nil, err
 		}
@@ -372,7 +372,7 @@ func SetDirectories(req SetDirectoriesRequest) (*SetDirectoriesResult, error) {
 
 func UnsetDirectories(req UnsetDirectoriesRequest) (*UnsetDirectoriesResult, error) {
 	if !req.Daily && !req.Object && !req.Page && !req.Template {
-		return nil, newError(CodeInvalidInput, "specify at least one directories field to clear", "Use --daily, --object, --page, or --template", nil)
+		return nil, newError(CodeInvalidInput, "specify at least one directories field to clear", "Use --daily, --type, --page, or --template", nil)
 	}
 
 	cfg, _, configPath, err := load(req.VaultPath)
@@ -834,10 +834,6 @@ func canonicalDirectoriesConfig(cfg *config.VaultConfig) *config.DirectoriesConf
 
 	daily := paths.NormalizeDirRoot(cfg.Directories.Daily)
 	object := cfg.Directories.Object
-	if object == "" {
-		//nolint:staticcheck // Backward-compatible read of deprecated config key.
-		object = cfg.Directories.Objects
-	}
 	object = paths.NormalizeDirRoot(object)
 
 	page := cfg.Directories.Page
@@ -874,8 +870,6 @@ func compactDirectoriesConfig(cfg *config.DirectoriesConfig) *config.Directories
 	if cfg == nil {
 		return nil
 	}
-	//nolint:staticcheck // Clearing deprecated aliases keeps saved config canonical.
-	cfg.Objects = ""
 	//nolint:staticcheck // Clearing deprecated aliases keeps saved config canonical.
 	cfg.Pages = ""
 	//nolint:staticcheck // Clearing deprecated aliases keeps saved config canonical.

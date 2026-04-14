@@ -105,8 +105,8 @@ func TestResolveObjectToFileWithConfig_NormalizesRoots(t *testing.T) {
 
 	vc := &config.VaultConfig{
 		Directories: &config.DirectoriesConfig{
-			Objects: "objects", // intentionally missing trailing slash
-			Pages:   "pages",   // intentionally missing trailing slash
+			Object: "objects", // intentionally missing trailing slash
+			Pages:  "pages",   // intentionally missing trailing slash
 		},
 	}
 

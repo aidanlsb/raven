@@ -250,13 +250,13 @@ func TestMCPIntegration_SchemaAddTypeDefaultsPathToTypeName(t *testing.T) {
 }
 
 // TestMCPIntegration_CreatePageWithObjectRootFallback verifies that when
-// directories.page is omitted, it defaults to directories.object for creation.
+// directories.page is omitted, it defaults to directories.type for creation.
 func TestMCPIntegration_CreatePageWithObjectRootFallback(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		Build()
 
@@ -1323,7 +1323,7 @@ types:
         target: meeting
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		WithFile("projects/weekly.md", `---
 type: project

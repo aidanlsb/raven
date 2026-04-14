@@ -179,8 +179,8 @@ func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	directories, _ := data["directories"].(map[string]interface{})
 	fmt.Println(ui.SectionHeader("directories"))
 	fmt.Printf("%s %s\n", ui.Hint("daily:"), stringValue(directories["daily"]))
-	if v := stringValue(directories["object"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("object:"), v)
+	if v := stringValue(directories["type"]); v != "" {
+		fmt.Printf("%s %s\n", ui.Hint("type:"), v)
 	}
 	if v := stringValue(directories["page"]); v != "" {
 		fmt.Printf("%s %s\n", ui.Hint("page:"), v)
@@ -274,8 +274,8 @@ func renderVaultConfigDirectoriesGet(_ *cobra.Command, result commandexec.Result
 		fmt.Println(ui.Hint("directories block not explicitly configured; showing effective values."))
 	}
 	fmt.Printf("%s %s\n", ui.Hint("daily:"), stringValue(data["daily"]))
-	if v := stringValue(data["object"]); v != "" {
-		fmt.Printf("%s %s\n", ui.Hint("object:"), v)
+	if v := stringValue(data["type"]); v != "" {
+		fmt.Printf("%s %s\n", ui.Hint("type:"), v)
 	}
 	if v := stringValue(data["page"]); v != "" {
 		fmt.Printf("%s %s\n", ui.Hint("page:"), v)

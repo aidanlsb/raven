@@ -4,7 +4,7 @@
 # Directory settings
 directories:
   daily: daily/
-  object: object/
+  type: type/
   page: page/
   template: templates/
 

@@ -442,7 +442,7 @@ types:
         values: [active, done]
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		WithFile("objects/projects/weekly.md", `---
 type: project
@@ -684,7 +684,7 @@ types:
     default_path: note/
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		WithFile("objects/spec/raven-move-friction.md", `---
 type: note
@@ -716,7 +716,7 @@ types:
     default_path: doc/
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
   page: pages/
 `).
 		WithFile("objects/doc/test-note.md", `---
@@ -748,7 +748,7 @@ types:
     default_path: note/
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		Build()
 
@@ -809,7 +809,7 @@ func TestIntegration_SetResolvesObjectIDsAndWikiLinks(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		Build()
 
@@ -944,7 +944,7 @@ types:
     default_path: note/
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		Build()
 
@@ -1257,7 +1257,7 @@ types:
         target: meeting
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		WithFile("projects/weekly.md", `---
 type: project
@@ -1294,7 +1294,7 @@ types:
         target: meeting
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		WithFile("projects/kickoff.md", `---
 type: project
@@ -1339,7 +1339,7 @@ types:
     default_path: projects/
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		WithFile("projects/launch.md", `---
 type: project
@@ -1397,7 +1397,7 @@ types:
         target: meeting
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		WithFile("projects/weekly.md", `---
 type: project
@@ -1434,7 +1434,7 @@ types:
         type: string
 `).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
 `).
 		Build()
 
@@ -1646,7 +1646,7 @@ func TestIntegration_NewPageRespectsPagesRoot(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`directories:
-  object: objects/
+  type: objects/
   page: pages/
 `).
 		Build()
@@ -1665,7 +1665,7 @@ func TestIntegration_InvalidRavenYAMLFailsCommands(t *testing.T) {
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.MinimalSchema()).
 		WithRavenYAML(`directories:
-  object: [
+  type: [
 `).
 		Build()
 
@@ -1696,7 +1696,7 @@ func TestIntegration_ReadCommandsClassifyInvalidRavenYAMLAsConfigError(t *testin
 			v := testutil.NewTestVault(t).
 				WithSchema(testutil.MinimalSchema()).
 				WithRavenYAML(`directories:
-  object: [
+  type: [
 `).
 				Build()
 
