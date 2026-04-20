@@ -14,6 +14,7 @@ Rule: in JSON mode, prefer each issue's `fix_command` and `fix_hint` over hard-c
 | `missing_required_field` | Required type field missing | Set required field value(s) |
 | `invalid_field_value` | Field value violates schema | Correct value to match constraints |
 | `wrong_target_type` | Ref points to object of wrong type | Replace with a ref targeting the correct type |
+| `non_canonical_path` | File lives outside the configured directory root for its type | Run `check fix --confirm` to move file to canonical location |
 
 ## Warning-level issues
 
@@ -24,6 +25,7 @@ Rule: in JSON mode, prefer each issue's `fix_command` and `fix_hint` over hard-c
 | `unused_trait` | Trait defined but unused | Remove trait or start using it |
 | `stale_index` | Index may be stale | Run `reindex` |
 | `short_ref_could_be_full_path` | Short ref could be clearer | Consider explicit full-path refs |
+| `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Run `check fix --confirm` to rewrite to canonical form (`[[person/jane]]`) |
 
 ## Filtering patterns
 

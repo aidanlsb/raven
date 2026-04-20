@@ -226,6 +226,22 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 		}
 	}
 
+	for _, issue := range detectNonCanonicalIssues(allDocs, sch, vaultCfg) {
+		doc := docByPath(allDocs, issue.FilePath)
+		if doc != nil && !isIssueInScope(issue, doc, scope) {
+			continue
+		}
+		if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
+			continue
+		}
+		allIssues = append(allIssues, issue)
+		if issue.Level == check.LevelWarning {
+			result.WarningCount++
+		} else {
+			result.ErrorCount++
+		}
+	}
+
 	for _, pe := range parseErrors {
 		if shouldIncludeIssue(pe, includeIssues, excludeIssues, opts.ErrorsOnly) {
 			allIssues = append([]check.Issue{pe}, allIssues...)
@@ -572,6 +588,18 @@ func isFileInScope(filePath string, scope *Scope, walkPath string, targetFileSet
 	default:
 		return true
 	}
+}
+
+func docByPath(docs []*parser.ParsedDocument, filePath string) *parser.ParsedDocument {
+	if filePath == "" {
+		return nil
+	}
+	for _, doc := range docs {
+		if doc != nil && doc.FilePath == filePath {
+			return doc
+		}
+	}
+	return nil
 }
 
 func isIssueInScope(issue check.Issue, doc *parser.ParsedDocument, scope *Scope) bool {

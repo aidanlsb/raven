@@ -21,7 +21,7 @@ owner: "[[people/freya]]"
 ---`).
 		Build()
 
-	result := handleCheckFix(vault.Path, nil, &checksvc.RunResult{
+	result := handleCheckFix(vault.Path, nil, nil, &checksvc.RunResult{
 		Issues: []check.Issue{
 			{
 				Type:     check.IssueShortRefCouldBeFullPath,

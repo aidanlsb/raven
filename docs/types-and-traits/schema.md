@@ -587,6 +587,8 @@ Validates vault files against the schema. Reports issues like:
 | `id_collision` | Same short name maps to multiple object IDs | Use full paths or rename objects |
 | `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
 | `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use full path |
+| `non_canonical_path` | File lives outside the configured directory root for its type | Run `rvn check fix --confirm` to move the file |
+| `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |
 
 For reference resolution details and ambiguity behavior, see `types-and-traits/file-format.md` (References section).
 

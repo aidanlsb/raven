@@ -41,6 +41,8 @@ const (
 	IssueDuplicateAlias          IssueType = "duplicate_alias"
 	IssueAliasCollision          IssueType = "alias_collision"
 	IssueStaleFragment           IssueType = "stale_fragment"
+	IssueNonCanonicalPath        IssueType = "non_canonical_path"
+	IssueNonCanonicalRef         IssueType = "non_canonical_ref"
 )
 
 // Issue represents a validation issue.

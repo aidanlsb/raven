@@ -1242,6 +1242,101 @@ owner: "[[freya]]"
 	v.AssertFileContains("projects/roadmap.md", "owner: \"[[people/freya]]\"")
 }
 
+// TestIntegration_CheckFixCanonicalPathMovesFiles verifies that check fix
+// detects files outside the configured directory roots and migrates them via
+// real file moves, with reference updates following the move.
+func TestIntegration_CheckFixCanonicalPathMovesFiles(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  person:
+    default_path: person/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+`).
+		WithRavenYAML(`directories:
+  type: type/
+  page: page/
+`).
+		WithFile("objects/person/john.md", `---
+type: person
+name: John
+---
+`).
+		WithFile("page/notes/today.md", `---
+type: page
+---
+Mentioned [[type/person/john]] today.
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	preview := v.RunCLI("check", "fix")
+	preview.MustSucceed(t)
+	if got, ok := preview.Data["fixable_issues"].(float64); !ok || int(got) < 2 {
+		t.Fatalf("expected at least 2 fixable issues (move + ref), got %#v", preview.Data["fixable_issues"])
+	}
+
+	apply := v.RunCLI("check", "fix", "--confirm")
+	apply.MustSucceed(t)
+
+	v.AssertFileExists("type/person/john.md")
+	v.AssertFileNotExists("objects/person/john.md")
+
+	v.AssertFileContains("page/notes/today.md", "[[person/john]]")
+	v.AssertFileNotContains("page/notes/today.md", "[[type/person/john]]")
+}
+
+// TestIntegration_CheckFixCanonicalPathSkipsCollisions verifies that when a
+// non_canonical_path move would collide with an existing file at the
+// canonical destination, check fix skips that move and continues past it.
+func TestIntegration_CheckFixCanonicalPathSkipsCollisions(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  person:
+    default_path: person/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+`).
+		WithRavenYAML(`directories:
+  type: type/
+  page: page/
+`).
+		WithFile("objects/person/john.md", `---
+type: person
+name: John (old)
+---
+`).
+		WithFile("type/person/john.md", `---
+type: person
+name: John (new)
+---
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	apply := v.RunCLI("check", "fix", "--confirm")
+	apply.MustSucceed(t)
+
+	if got, ok := apply.Data["skipped_issues"].(float64); !ok || int(got) < 1 {
+		t.Fatalf("expected at least 1 skipped fix for collision, got %#v", apply.Data["skipped_issues"])
+	}
+
+	v.AssertFileExists("objects/person/john.md")
+	v.AssertFileExists("type/person/john.md")
+}
+
 func TestIntegration_CheckCreateMissingSubcommandJSONConfirmRespectsDirectoryRoots(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

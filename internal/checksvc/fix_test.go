@@ -29,7 +29,7 @@ owner: "[[people/freya]]"
 			NewValue:    "people/freya",
 			Description: "[[freya]] -> [[people/freya]]",
 		},
-	})
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("ApplyFixes returned error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestCollectFixableIssues_IgnoresNilTraitDefinition(t *testing.T) {
 	sch := schema.New()
 	sch.Traits["priority"] = nil
 
-	fixes := CollectFixableIssues(issues, nil, sch)
+	fixes := CollectFixableIssues(issues, nil, sch, nil)
 	if len(fixes) != 0 {
 		t.Fatalf("expected no fixes for nil trait definition, got %#v", fixes)
 	}

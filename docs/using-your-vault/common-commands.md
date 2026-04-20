@@ -229,11 +229,17 @@ rvn check --by-file                              # Group output by file
 Auto-fix capabilities:
 
 ```bash
-rvn check --fix                                  # Preview auto-fixes (short refs → full paths)
-rvn check --fix --confirm                        # Apply fixes
+rvn check fix                                    # Preview auto-fixes
+rvn check fix --confirm                          # Apply fixes
 rvn check --create-missing                       # Preview creating missing referenced pages
 rvn check --create-missing --confirm             # Create them
 ```
+
+`rvn check fix` handles three classes of safe rewrites:
+
+- **`short_ref_could_be_full_path`** — replace short refs with their canonical full path
+- **`non_canonical_ref`** — strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
+- **`non_canonical_path`** — move files into the configured directory root for their type and rewrite all references that point at them
 
 Key flags:
 - `--type` / `-t` — check only objects of a specific type

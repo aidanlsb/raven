@@ -950,7 +950,13 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 		Description: "Preview or apply safe auto-fixes for check findings",
 		LongDesc: `Runs check, then previews or applies only unambiguous safe fixes.
 
-Preview is default; use --confirm to apply.`,
+Preview is default; use --confirm to apply.
+
+Auto-fixable issue types include:
+- short_ref_could_be_full_path: rewrite short refs to canonical full paths
+- non_canonical_ref: strip configured root prefix from wikilink targets
+- non_canonical_path: move file under the configured directory root for its type
+  and rewrite all references that point at it`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "File, directory, or reference to check before fixing (optional, defaults to entire vault)", Required: false},
 		},

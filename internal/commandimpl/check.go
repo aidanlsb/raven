@@ -48,7 +48,7 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 
 	switch {
 	case boolArg(req.Args, "fix"):
-		return handleCheckFix(vaultPath, sch, result, req.Confirm || boolArg(req.Args, "confirm"))
+		return handleCheckFix(vaultPath, vaultCfg, sch, result, req.Confirm || boolArg(req.Args, "confirm"))
 	case boolArg(req.Args, "create-missing"):
 		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm || boolArg(req.Args, "confirm"))
 	default:
@@ -72,8 +72,8 @@ func HandleCheckCreateMissing(ctx context.Context, req commandexec.Request) comm
 	return HandleCheck(ctx, req)
 }
 
-func handleCheckFix(vaultPath string, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
-	fixes := checksvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch)
+func handleCheckFix(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, result *checksvc.RunResult, confirm bool) commandexec.Result {
+	fixes := checksvc.CollectFixableIssues(result.Issues, result.ShortRefs, sch, vaultCfg)
 	grouped := checksvc.GroupFixesByFile(fixes)
 
 	if !confirm {
@@ -88,7 +88,7 @@ func handleCheckFix(vaultPath string, sch *schema.Schema, result *checksvc.RunRe
 		}, nil)
 	}
 
-	applied, err := checksvc.ApplyFixes(vaultPath, fixes)
+	applied, err := checksvc.ApplyFixes(vaultPath, fixes, vaultCfg, sch)
 	if err != nil {
 		return commandexec.Failure("VALIDATION_FAILED", err.Error(), nil, "")
 	}
