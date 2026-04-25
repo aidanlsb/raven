@@ -35,8 +35,8 @@ func BuildFTSContentQuery(userQuery string) string {
 	return "content: (" + sanitizeFTSQuery(q) + ")"
 }
 
-// sanitizeFTSQuery quotes unquoted tokens containing '-' to prevent SQLite FTS
-// from interpreting them as operators (which can surface as "no such column" errors).
+// sanitizeFTSQuery quotes unquoted tokens containing FTS-special punctuation
+// to prevent SQLite FTS from interpreting them as query syntax.
 //
 // This keeps quoted phrases intact and preserves boolean operators/parentheses.
 func sanitizeFTSQuery(q string) string {
@@ -100,8 +100,9 @@ func sanitizeFTSQuery(q string) string {
 			continue
 		}
 
-		// Quote hyphenated tokens (but avoid treating unary NOT `-foo` as a phrase).
-		if strings.Contains(tok, "-") && !strings.HasPrefix(tok, "-") {
+		// Quote punctuation-bearing literal tokens (but avoid treating unary NOT
+		// `-foo` as a phrase).
+		if shouldQuoteFTSLiteralToken(tok) {
 			b.WriteByte('"')
 			b.WriteString(strings.ReplaceAll(tok, `"`, `""`))
 			b.WriteByte('"')
@@ -112,4 +113,11 @@ func sanitizeFTSQuery(q string) string {
 	}
 
 	return b.String()
+}
+
+func shouldQuoteFTSLiteralToken(tok string) bool {
+	if strings.Contains(tok, ".") {
+		return true
+	}
+	return strings.Contains(tok, "-") && !strings.HasPrefix(tok, "-")
 }

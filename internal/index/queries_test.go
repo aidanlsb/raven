@@ -169,6 +169,14 @@ func TestBuildFTSContentQuery_SanitizesHyphenatedTokens(t *testing.T) {
 	}
 }
 
+func TestBuildFTSContentQuery_SanitizesDottedTokens(t *testing.T) {
+	t.Parallel()
+	q := BuildFTSContentQuery(`inputs.project OR "optional input"`)
+	if q != `content: ("inputs.project" OR "optional input")` {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, `content: ("inputs.project" OR "optional input")`)
+	}
+}
+
 func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
 	t.Parallel()
 	q := BuildFTSSearchQuery("hello world")
@@ -179,6 +187,12 @@ func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
 
 	q = BuildFTSSearchQuery(`michael-truell OR "Michael Truell"`)
 	want = `{title content}: ("michael-truell" OR "Michael Truell")`
+	if q != want {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
+	}
+
+	q = BuildFTSSearchQuery(`inputs.project OR "optional input"`)
+	want = `{title content}: ("inputs.project" OR "optional input")`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
 	}
@@ -217,6 +231,38 @@ func TestSearch_AllowsHyphenatedTokenWithOR(t *testing.T) {
 
 	// This used to fail with "no such column: truell" due to FTS parsing.
 	results, err := db.Search(`michael-truell OR "Michael Truell"`, 10)
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatalf("expected at least one result")
+	}
+}
+
+func TestSearch_AllowsDottedToken(t *testing.T) {
+	t.Parallel()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.db.Exec(`INSERT INTO objects (id, file_path, type, line_start, fields) VALUES ('notes/workflow', 'notes/workflow.md', 'note', 1, '{}')`)
+	if err != nil {
+		t.Fatalf("failed to insert object: %v", err)
+	}
+
+	_, err = db.db.Exec(`INSERT INTO fts_content (object_id, title, content, file_path) VALUES (?, ?, ?, ?)`,
+		"notes/workflow",
+		"Workflow Notes",
+		"Optional interpolation failed for inputs.project in the workflow.",
+		"notes/workflow.md",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert fts row: %v", err)
+	}
+
+	results, err := db.Search("inputs.project", 10)
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}

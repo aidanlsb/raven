@@ -118,7 +118,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('projects/mobile#tasks', NULL, 'projects/website', 'projects/mobile.md', 30);
 
 		INSERT INTO fts_content (object_id, title, content, file_path) VALUES
-			('projects/website', 'Website Project', 'This is the website redesign project. Freya is a colleague working on this.', 'projects/website.md'),
+			('projects/website', 'Website Project', 'This is the website redesign project. Freya is a colleague working on this. Optional workflow input inputs.project is documented here.', 'projects/website.md'),
 			('projects/mobile', 'Mobile App', 'Mobile application for customers. Currently paused.', 'projects/mobile.md'),
 			('people/freya', 'Freya', 'Senior engineer and colleague. Works on platform team.', 'people/freya.md'),
 			('people/loki', 'Loki', 'Contractor helping with security review.', 'people/loki.md'),
@@ -339,6 +339,11 @@ func TestExecuteObjectQuery(t *testing.T) {
 			name:      "content search multiple words",
 			query:     `type:project content("website redesign")`,
 			wantCount: 1, // Website project has both words
+		},
+		{
+			name:      "content search dotted token",
+			query:     `type:project content("inputs.project")`,
+			wantCount: 1,
 		},
 		{
 			name:      "content search negated",
