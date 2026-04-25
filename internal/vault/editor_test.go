@@ -1,6 +1,9 @@
 package vault
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/config"
@@ -75,5 +78,31 @@ func TestParseEditorMode(t *testing.T) {
 				t.Fatalf("parseEditorMode(%q) = %v, want %v", tt.mode, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestOpenInEditorFallsBackToEditorEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	capturePath := filepath.Join(tmpDir, "opened.txt")
+	editorPath := filepath.Join(tmpDir, "editor.sh")
+	if err := os.WriteFile(editorPath, []byte("#!/bin/sh\nprintf '%s' \"$1\" > \"$RAVEN_EDITOR_CAPTURE\"\n"), 0o755); err != nil {
+		t.Fatalf("write editor fixture: %v", err)
+	}
+
+	targetPath := filepath.Join(tmpDir, "target.md")
+	t.Setenv("EDITOR", editorPath)
+	t.Setenv("RAVEN_EDITOR_CAPTURE", capturePath)
+
+	cfg := &config.Config{EditorMode: "terminal"}
+	if !OpenInEditor(cfg, targetPath) {
+		t.Fatal("expected editor to launch")
+	}
+
+	gotBytes, err := os.ReadFile(capturePath)
+	if err != nil {
+		t.Fatalf("read capture: %v", err)
+	}
+	if got := strings.TrimSpace(string(gotBytes)); got != targetPath {
+		t.Fatalf("opened path = %q, want %q", got, targetPath)
 	}
 }

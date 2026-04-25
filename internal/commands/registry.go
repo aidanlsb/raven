@@ -1270,7 +1270,7 @@ This command:
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
-For agents: After renaming, run raven_reindex(full=true) to update the index.`,
+For agents: After renaming, run raven_invoke(command="reindex", args={"full": true}) to update the index.`,
 		Args: []ArgMeta{
 			{Name: "old_name", Description: "Current type name", Required: true},
 			{Name: "new_name", Description: "New type name", Required: true},
@@ -1305,7 +1305,7 @@ This command:
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
-For agents: After renaming, run raven_reindex(full=true) to update the index.`,
+For agents: After renaming, run raven_invoke(command="reindex", args={"full": true}) to update the index.`,
 		Args: []ArgMeta{
 			{Name: "type_name", Description: "Type containing the field", Required: true, DynamicComp: "types"},
 			{Name: "old_field", Description: "Current field name", Required: true},

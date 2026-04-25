@@ -23,7 +23,7 @@ Rule: in JSON mode, prefer each issue's `fix_command` and `fix_hint` over hard-c
 | `undefined_trait` | Trait used but not in schema | Add trait definition or remove usage |
 | `unused_type` | Type defined but unused | Remove type or create instances |
 | `unused_trait` | Trait defined but unused | Remove trait or start using it |
-| `stale_index` | Index may be stale | Run `reindex` |
+| `stale_index` | Index may be stale | Run `raven_invoke(command="reindex")` (or `rvn reindex` in the CLI) |
 | `short_ref_could_be_full_path` | Short ref could be clearer | Consider explicit full-path refs |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Run `check fix --confirm` to rewrite to canonical form (`[[person/jane]]`) |
 

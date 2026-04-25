@@ -505,7 +505,7 @@ func UpdateField(req UpdateFieldRequest) (*UpdateResult, error) {
 		return nil, newError(
 			ErrorInvalidInput,
 			"no changes specified",
-			"Use flags like --type, --required, --default, --description",
+			"Use flags like --type, --required, --default, --values, --target, --description",
 			nil,
 			nil,
 		)

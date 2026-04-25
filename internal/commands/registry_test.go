@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -107,6 +108,16 @@ func TestRequiresVaultMetadata(t *testing.T) {
 	for _, commandID := range vaultCommands {
 		if !RequiresVault(commandID) {
 			t.Fatalf("expected %q to require a resolved vault", commandID)
+		}
+	}
+}
+
+func TestRegistryLongDescriptionsUseCompactReindexGuidance(t *testing.T) {
+	t.Parallel()
+
+	for name, meta := range Registry {
+		if strings.Contains(meta.LongDesc, "raven_reindex") {
+			t.Fatalf("%s LongDesc references obsolete raven_reindex tool", name)
 		}
 	}
 }

@@ -234,6 +234,27 @@ func stringArg(args map[string]any, key string) string {
 	}
 }
 
+func commaStringArg(args map[string]any, key string) string {
+	if args == nil {
+		return ""
+	}
+	switch v := args[key].(type) {
+	case []string:
+		return strings.Join(v, ",")
+	case []any:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			if item == nil {
+				continue
+			}
+			parts = append(parts, fmt.Sprint(item))
+		}
+		return strings.Join(parts, ",")
+	default:
+		return stringArg(args, key)
+	}
+}
+
 func boolArg(args map[string]any, key string) bool {
 	if args == nil {
 		return false

@@ -130,7 +130,7 @@ func HandleSchemaAddTrait(_ context.Context, req commandexec.Request) commandexe
 		VaultPath: req.VaultPath,
 		TraitName: stringArg(req.Args, "name"),
 		TraitType: stringArg(req.Args, "type"),
-		Values:    stringArg(req.Args, "values"),
+		Values:    commaStringArg(req.Args, "values"),
 		Default:   stringArg(req.Args, "default"),
 	})
 	if err != nil {
@@ -149,7 +149,7 @@ func HandleSchemaAddField(_ context.Context, req commandexec.Request) commandexe
 		FieldType:   stringArg(req.Args, "type"),
 		Required:    boolArg(req.Args, "required"),
 		Default:     stringArg(req.Args, "default"),
-		Values:      stringArg(req.Args, "values"),
+		Values:      commaStringArg(req.Args, "values"),
 		Target:      stringArg(req.Args, "target"),
 		Description: stringArg(req.Args, "description"),
 	})
@@ -186,7 +186,7 @@ func HandleSchemaUpdateTrait(_ context.Context, req commandexec.Request) command
 		VaultPath: req.VaultPath,
 		TraitName: name,
 		TraitType: stringArg(req.Args, "type"),
-		Values:    stringArg(req.Args, "values"),
+		Values:    commaStringArg(req.Args, "values"),
 		Default:   stringArg(req.Args, "default"),
 	})
 	if err != nil {
@@ -207,7 +207,7 @@ func HandleSchemaUpdateField(_ context.Context, req commandexec.Request) command
 		FieldType:   stringArg(req.Args, "type"),
 		Required:    stringArg(req.Args, "required"),
 		Default:     stringArg(req.Args, "default"),
-		Values:      stringArg(req.Args, "values"),
+		Values:      commaStringArg(req.Args, "values"),
 		Target:      stringArg(req.Args, "target"),
 		Description: stringArg(req.Args, "description"),
 	})
