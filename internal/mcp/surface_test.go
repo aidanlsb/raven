@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/app"
@@ -27,13 +28,14 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	var envelope struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			Command    string `json:"command"`
-			Summary    string `json:"summary"`
-			CLIUsage   string `json:"cli_usage"`
-			ReadOnly   bool   `json:"read_only"`
-			Invokable  bool   `json:"invokable"`
-			SchemaHash string `json:"schema_hash"`
-			ArgsSchema struct {
+			Command     string `json:"command"`
+			Summary     string `json:"summary"`
+			Description string `json:"description"`
+			CLIUsage    string `json:"cli_usage"`
+			ReadOnly    bool   `json:"read_only"`
+			Invokable   bool   `json:"invokable"`
+			SchemaHash  string `json:"schema_hash"`
+			ArgsSchema  struct {
 				Required   []string               `json:"required"`
 				Properties map[string]interface{} `json:"properties"`
 			} `json:"args_schema"`
@@ -58,6 +60,15 @@ func TestCompactDescribeReturnsContract(t *testing.T) {
 	}
 	if envelope.Data.Summary == "" {
 		t.Fatalf("expected summary in describe response: %s", out)
+	}
+	if !strings.Contains(envelope.Data.Description, "Query syntax:") {
+		t.Fatalf("expected query DSL syntax in describe response: %s", out)
+	}
+	if !strings.Contains(envelope.Data.Description, "type:<type>") {
+		t.Fatalf("expected type query hint in describe response: %s", out)
+	}
+	if !strings.Contains(envelope.Data.Description, "content(\"text\")") {
+		t.Fatalf("expected content predicate hint in describe response: %s", out)
 	}
 	if envelope.Data.CLIUsage != "rvn query <query_string|saved-query> [inputs...]" {
 		t.Fatalf("cli_usage=%q, want query usage; response=%s", envelope.Data.CLIUsage, out)

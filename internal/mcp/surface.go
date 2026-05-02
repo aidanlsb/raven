@@ -121,6 +121,7 @@ func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool)
 	return successEnvelope(map[string]interface{}{
 		"command":      contract.CommandID,
 		"summary":      contract.Summary,
+		"description":  contract.Description,
 		"cli_usage":    contract.CLIUsage,
 		"args_schema":  compactArgsSchema(contract),
 		"read_only":    contract.ReadOnly,

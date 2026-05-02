@@ -84,7 +84,7 @@ The MCP surface is intentionally compact:
 Use this sequence:
 
 1. `raven_discover` to fetch the full command catalog.
-2. `raven_describe(command="...")` to fetch the strict argument contract.
+2. `raven_describe(command="...")` to fetch the strict argument contract and command guidance.
 3. `raven_invoke(command="...", args={...})` to execute.
 
 Example:
@@ -150,6 +150,8 @@ This tool list is generated from the command registry and should stay in sync wi
 - `schema_add_type`
 
 Use canonical registry command IDs with `raven_describe` and `raven_invoke`.
+
+`raven_describe` returns both a short `summary` and a fuller `description` from the command registry. Use `description` for command-specific syntax guidance, such as Raven query language examples for `query`.
 
 ## Parameter Conventions
 
