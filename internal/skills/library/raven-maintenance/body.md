@@ -1,11 +1,12 @@
 # Raven Maintenance
 
-Use this skill for vault health checks, index management, data import, and documentation access.
+Use this skill for vault health checks, index management, and data import.
+
+This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
 
 ## Operating rules
 
-- Prefer `rvn` CLI with `--json` for deterministic machine-readable output.
-- When operating through Raven MCP, use the equivalent MCP tools instead of shelling out.
+- Use `rvn` with `--json` for deterministic machine-readable output.
 - Preview first when the command supports it. For `rvn import`, use `--dry-run` for preview and rerun without it to apply.
 - Run `rvn check` after schema migrations, bulk edits, or external file changes.
 
@@ -50,15 +51,6 @@ Use `--full` after schema renames, bulk moves, or broad file changes outside Rav
 - Apply: `rvn import person --file data.json --json`
 
 For complex imports, use a YAML mapping file. See `references/import-guide.md`.
-
-## Documentation access
-
-Browse Raven's long-form documentation stored in `.raven/docs`.
-
-- Fetch or refresh docs: `rvn docs fetch --json`
-- List sections: `rvn docs list --json`
-- Read a topic: `rvn docs <section> <topic> --json`
-- Search docs: `rvn docs search "<query>" --json`
 
 ## Cross-references
 

@@ -2,14 +2,15 @@
 
 Use this skill for day-to-day Raven operations: creating, reading, editing, moving, and deleting vault content.
 
+This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
+
 ## Operating rules
 
-- Prefer `rvn` CLI with `--json` for deterministic machine-readable output.
-- When operating through Raven MCP, use the equivalent Raven MCP tools instead of shelling out redundantly.
-- Prefer Raven commands over direct file writes or shell text manipulation.
+- Use `rvn` with `--json` for deterministic machine-readable output.
+- Prefer `rvn` commands over direct file writes or shell text manipulation (`echo`, `cat >`, `sed`, `awk`).
 - Choose the smallest mutation primitive that matches the user's intent.
 - Read with `rvn read --raw` before constructing `rvn edit` replacements.
-- For bulk or destructive operations, preview first, then apply with confirmation.
+- For bulk or destructive operations, preview first, then re-run with `--confirm`.
 
 ## Choose the right write command
 
@@ -40,6 +41,15 @@ Key distinctions:
 3. For edits, always read the file raw first, then construct the exact `old_str` match.
 4. For lifecycle changes: `rvn reclassify` to change type, `rvn move` to rename/relocate, `rvn delete` to remove.
 5. After mutations, verify with `rvn read` or `rvn check`.
+
+## Look things up
+
+Raven ships its own long-form documentation. Use these when you need usage details or examples beyond what `rvn <command> --help` shows.
+
+- List doc sections: `rvn docs list --json`
+- Read a topic: `rvn docs <section> <topic> --json`
+- Search docs: `rvn docs search "<query>" --json`
+- Refresh local doc cache if missing or stale: `rvn docs fetch --json`
 
 ## Cross-references
 

@@ -2,11 +2,13 @@
 
 Use this skill for structured retrieval, text search, link traversal, and saved query management.
 
+This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
+
 ## Operating rules
 
 - Use `rvn query` for structured filters when type, field, or trait shape is known.
 - Use `rvn search` for open-ended text discovery when structure is unknown.
-- When already connected through Raven MCP, prefer the matching MCP tool over a CLI subprocess.
+- Always pass `--json` so output is deterministic and parseable.
 - Use single-quoted query strings in shell invocations to avoid shell expansion.
 - Decide early whether the result should be objects (`type:<type>`) or traits (`trait:<name>`).
 - Count or sample before pulling large result sets into context.

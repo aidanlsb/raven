@@ -1,3 +1,3 @@
 name: raven-templates
 description: Raven template file and schema binding workflows for types and core objects.
-default_prompt: Manage template files and schema template bindings in safe lifecycle order using Raven CLI --json commands or equivalent Raven MCP tools.
+default_prompt: Manage template files and schema template bindings in safe lifecycle order using Raven CLI (`rvn`) commands with --json.

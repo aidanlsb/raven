@@ -2,10 +2,12 @@
 
 Use this skill for schema modeling, migrations, and schema-driven data cleanup.
 
+This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
+
 ## Operating rules
 
-- Inspect current schema before changes: `rvn schema`.
-- Prefer Raven MCP tool equivalents when already running inside an MCP session; otherwise use `rvn ... --json`.
+- Inspect current schema before changes: `rvn schema --json`.
+- Use `rvn ... --json` for all schema operations so output stays deterministic.
 - Prefer additive changes first, then backfill objects, then tighten constraints.
 - Treat schema edits and object backfill as separate steps in the same migration.
 - Use the right validation pass for the job:

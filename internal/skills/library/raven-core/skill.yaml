@@ -21,6 +21,10 @@ coverage:
     - daily
     - date
     - open
+    - docs
+    - docs fetch
+    - docs list
+    - docs search
 execution:
   preferred_transport: cli
   cli_binary: rvn

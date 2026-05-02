@@ -2,10 +2,12 @@
 
 Use this skill for template file authoring plus schema/type/core bindings.
 
+This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
+
 ## Operating rules
 
 - Treat file lifecycle and schema binding lifecycle as separate concerns.
-- Prefer Raven MCP tool equivalents when available in-session; otherwise use `rvn ... --json`.
+- Use `rvn ... --json` for all template and schema-template operations.
 - Keep template files under `directories.template` (default `templates/`).
 - Prefer explicit type/core bindings over implicit assumptions.
 - Inspect current bindings before changing defaults or removing templates.
