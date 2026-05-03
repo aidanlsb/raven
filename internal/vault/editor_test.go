@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -84,9 +85,21 @@ func TestParseEditorMode(t *testing.T) {
 func TestOpenInEditorFallsBackToEditorEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	capturePath := filepath.Join(tmpDir, "opened.txt")
-	editorPath := filepath.Join(tmpDir, "editor.sh")
-	if err := os.WriteFile(editorPath, []byte("#!/bin/sh\nprintf '%s' \"$1\" > \"$RAVEN_EDITOR_CAPTURE\"\n"), 0o755); err != nil {
-		t.Fatalf("write editor fixture: %v", err)
+
+	var editorPath string
+	if runtime.GOOS == "windows" {
+		editorPath = filepath.Join(tmpDir, "editor.cmd")
+		// Batch echoes %~1 (strips surrounding quotes) into the capture file.
+		// strings.TrimSpace below tolerates the trailing CRLF that `echo` adds.
+		script := "@echo off\r\n> \"%RAVEN_EDITOR_CAPTURE%\" echo %~1\r\n"
+		if err := os.WriteFile(editorPath, []byte(script), 0o644); err != nil {
+			t.Fatalf("write editor fixture: %v", err)
+		}
+	} else {
+		editorPath = filepath.Join(tmpDir, "editor.sh")
+		if err := os.WriteFile(editorPath, []byte("#!/bin/sh\nprintf '%s' \"$1\" > \"$RAVEN_EDITOR_CAPTURE\"\n"), 0o755); err != nil {
+			t.Fatalf("write editor fixture: %v", err)
+		}
 	}
 
 	targetPath := filepath.Join(tmpDir, "target.md")
