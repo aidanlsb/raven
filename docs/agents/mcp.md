@@ -2,12 +2,12 @@
 
 Raven exposes a compact MCP surface via `rvn serve`.
 
-The only documented public MCP tools are:
+The MCP surface is exactly three tools:
 - `raven_discover`
 - `raven_describe`
 - `raven_invoke`
 
-Legacy direct-call compatibility tools are not part of the MCP surface.
+Earlier per-command `raven_*` tools have been removed. Use `raven_invoke` with a registry command ID instead.
 
 ## Recommended Setup
 
@@ -268,7 +268,7 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
   "command": "vault_config_directories_set",
   "args": {
     "daily": "journal",
-    "object": "objects",
+    "type": "type",
     "template": "templates/custom"
   }
 }

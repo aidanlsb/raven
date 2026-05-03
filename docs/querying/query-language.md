@@ -249,13 +249,35 @@ The response metadata includes total count information so you know whether more 
 
 ### Save and Reuse Queries
 
+Saved queries live in `raven.yaml` under `queries:` and are managed via dedicated commands:
+
 ```bash
-rvn query saved set overdue 'trait:due .value<today' --json
-rvn query overdue --json
-rvn query saved list --json
+rvn query saved list --json                                         # List all saved queries
+rvn query saved get overdue --json                                  # Show one saved query
+rvn query saved set overdue 'trait:due .value<today' --json         # Create or replace
+rvn query saved remove overdue --json                               # Delete
+
+rvn query overdue --json                                            # Run a saved query by name
 ```
 
-Saved query placeholders (`{{args.name}}`) must be declared in `raven.yaml` under `queries.<name>.args`.
+Add `--description` to document the query, and `--arg <name>` (repeatable) to declare positional inputs that placeholders reference:
+
+```bash
+rvn query saved set project-todos \
+  'trait:todo refs([[{{args.project}}]])' \
+  --arg project \
+  --description "Todos linked to a project" \
+  --json
+```
+
+Pass inputs to a saved query positionally (in the order they were declared with `--arg`) or as `key=value` pairs:
+
+```bash
+rvn query project-todos project/raven --json                 # positional
+rvn query project-todos project=project/raven --json         # key=value
+```
+
+Saved query placeholders use `{{args.<name>}}` syntax. Every placeholder must be declared with `--arg`, which also fixes the positional input order.
 
 ### Bulk Operations by Query Type
 

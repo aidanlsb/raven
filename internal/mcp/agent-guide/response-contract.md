@@ -19,7 +19,7 @@ All commands return:
 ## Compact invoke flow
 
 1. `raven_discover` to fetch the authoritative command catalog.
-2. `raven_describe(command="...")` to fetch the strict arg schema.
+2. `raven_describe(command="...")` to fetch the strict arg schema and command guidance. The response includes a short `summary` plus a fuller `description` with command-specific syntax (e.g. RQL examples for `query`).
 3. `raven_invoke(command="...", args={...})` to execute.
 
 Important:

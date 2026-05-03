@@ -43,14 +43,14 @@ Preview first:
 raven_invoke(command="import", args={"type":"project", "file":"projects.json", "dry_run":true})
 ```
 
-Apply only after approval:
+Apply by re-running without `dry_run` (import has no `confirm` flag):
 
 ```text
-raven_invoke(command="import", args={"type":"project", "file":"projects.json", "confirm":true})
+raven_invoke(command="import", args={"type":"project", "file":"projects.json"})
 ```
 
 ## Notes
 
-- Use `raven_describe(command="...")` before invoking unfamiliar commands.
+- Use `raven_describe(command="...")` before invoking unfamiliar commands. The response includes a `description` field with command-specific syntax guidance.
 - Prefer registry command IDs in docs and prompts.
-- Treat direct `raven_*` compatibility tools as legacy, not public surface.
+- The MCP surface is exactly `raven_discover`, `raven_describe`, and `raven_invoke`. There are no per-command MCP tools.

@@ -105,8 +105,9 @@ raven_invoke(command="query", args={
 ## 8. Import and template setup
 
 ```text
+# Preview first with dry_run, then re-run without dry_run to apply.
 raven_invoke(command="import", args={"type":"person", "file":"contacts.json", "dry_run":true})
-raven_invoke(command="import", args={"type":"person", "file":"contacts.json", "confirm":true})
+raven_invoke(command="import", args={"type":"person", "file":"contacts.json"})
 raven_invoke(command="template_write", args={"path":"meeting.md", "content":"# {{title}}\n\n## Notes"})
 raven_invoke(command="schema_template_set", args={"template_id":"meeting_standard", "file":"templates/meeting.md"})
 raven_invoke(command="schema_template_bind", args={"template_id":"meeting_standard", "type":"meeting", "default":true})

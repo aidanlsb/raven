@@ -42,15 +42,15 @@ For file-level objects, the ID is derived from the file path (relative to vault 
 | `random-note.md` | `random-note` |
 | `daily/2026-01-10.md` | `daily/2026-01-10` |
 
-**With directory organization** (configured in `raven.yaml`):
+**With directory organization** (configured in `raven.yaml` via `directories.type` and `directories.page`):
 
 | File Path | Object ID |
 |-----------|-----------|
-| `objects/person/freya.md` | `person/freya` |
-| `objects/project/website.md` | `project/website` |
-| `pages/random-note.md` | `random-note` |
+| `type/person/freya.md` | `person/freya` |
+| `type/project/website.md` | `project/website` |
+| `page/random-note.md` | `random-note` |
 
-The directory prefix (`objects/`, `pages/`) is stripped from IDs.
+The directory prefix (`type/`, `page/`) is stripped from IDs.
 
 ### Embedded Objects
 

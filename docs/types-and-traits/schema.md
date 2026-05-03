@@ -92,7 +92,7 @@ This file has no type, so it's a "page".
 **Behavior:**
 - Any markdown file without `type:` becomes a `page`
 - Has no defined fields (all frontmatter keys are allowed but not validated)
-- When directory organization is enabled, pages go to `pages/` root
+- When directory organization is enabled, pages go to the directory configured under `directories.page` (defaults to `directories.type` when only `type` is set)
 
 ### `section`
 
@@ -196,7 +196,7 @@ types:
     default_path: person/
 ```
 
-With `directories` configured in `raven.yaml`, `default_path` is relative to `objects/`.
+With `directories` configured in `raven.yaml`, `default_path` is resolved relative to `directories.type` for typed objects (or `directories.page` for the built-in `page` type).
 
 ### `templates` and `default_template`
 

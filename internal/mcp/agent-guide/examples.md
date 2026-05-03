@@ -45,8 +45,10 @@ raven_invoke(command="new", args={"type":"project", "title":"Website Redesign"})
 
 ```text
 raven_invoke(command="import", args={"type":"person", "file":"contacts.json", "dry_run":true})
-raven_invoke(command="import", args={"type":"person", "file":"contacts.json", "confirm":true})
+raven_invoke(command="import", args={"type":"person", "file":"contacts.json"})
 ```
+
+`import` applies on the second call because `dry_run` is omitted; it does not take a `confirm` flag.
 
 ## Build a reusable meeting template
 
