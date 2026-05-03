@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.17] - 2026-05-03
+
+### Added
+- `check` and `check fix` now detect and repair non-canonical layouts. New `non_canonical_path` (error) issues flag files that live outside the configured directory root for their type, and auto-fix moves them via the move service so all references stay in sync. New `non_canonical_ref` (warning) issues flag wikilinks that unnecessarily include the configured root prefix (e.g. `[[type/person/jane]]`); auto-fix rewrites them to canonical form only when the stripped target still resolves to the same object.
+- `raven_describe` now exposes a `description` field alongside `summary`, surfacing the registry's long-form command guidance (such as RQL syntax examples for `query`) so agents can avoid an extra round trip for command-specific syntax.
+
+### Changed
+- The packaged Raven skills (`raven-core`, `raven-query`, `raven-maintenance`, `raven-schema`, `raven-templates`, `raven-vault-admin`) are now explicitly CLI-focused. "Prefer MCP when in-session" framing has been replaced with a short scoping note so skills consistently teach `rvn ... --json`. The `rvn docs *` pointer has been moved out of `raven-maintenance` and into `raven-core` as a small "look things up" section.
+- `check fix` now splits text fixes and move fixes, and bulk moves continue past per-item failures so a single collision no longer aborts the batch.
+
+### Fixed
+- `rvn search` and RQL `content(...)` now handle identifiers with dots like `inputs.project` by quoting dotted literal tokens before passing search text to SQLite FTS, instead of failing with FTS syntax errors.
+- Schema commands now accept array-form enum values from JSON callers (such as MCP `raven_invoke` payloads), matching the documented schema-edit shape.
+- `TestOpenInEditorFallsBackToEditorEnv` now writes a `.cmd` batch script on Windows instead of a POSIX `.sh`, restoring the Windows CI test job.
+
 ## [v0.0.16] - 2026-04-14
 
 ### Changed
