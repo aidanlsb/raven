@@ -31,19 +31,13 @@ func HandleSkillList(_ context.Context, req commandexec.Request) commandexec.Res
 	return commandexec.Success(data, &commandexec.Meta{Count: len(result.Skills)})
 }
 
-// HandleSkillInstall executes the canonical `skill install` command.
-func HandleSkillInstall(_ context.Context, req commandexec.Request) commandexec.Result {
-	name := strings.TrimSpace(stringArg(req.Args, "name"))
-	if name == "" {
-		return commandexec.Failure("MISSING_ARGUMENT", "specify skill name", nil, "Usage: rvn skill install <name>")
-	}
-
-	result, err := skillsvc.Install(skillsvc.InstallRequest{
-		Name:    name,
+// HandleSkillSync executes the canonical `skill sync` command.
+func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Result {
+	result, err := skillsvc.Sync(skillsvc.SyncRequest{
+		Name:    strings.TrimSpace(stringArg(req.Args, "name")),
 		Target:  strings.TrimSpace(stringArg(req.Args, "target")),
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
-		Force:   boolArg(req.Args, "force"),
 		Confirm: boolArg(req.Args, "confirm"),
 	})
 	if err != nil {
@@ -58,9 +52,6 @@ func HandleSkillInstall(_ context.Context, req commandexec.Request) commandexec.
 	}
 	if result.ActionsApplied > 0 {
 		data["actions_applied"] = result.ActionsApplied
-	}
-	if result.Receipt != nil {
-		data["receipt"] = result.Receipt
 	}
 	return commandexec.Success(data, nil)
 }

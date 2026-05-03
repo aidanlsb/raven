@@ -2495,19 +2495,19 @@ type: page
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"skills"})
 	})
 
-	t.Run("skill_install_preview", func(t *testing.T) {
+	t.Run("skill_sync_preview", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		server := newTestServer(t, vMCP.Path, binary)
 		dest := filepath.Join(t.TempDir(), "skills")
 
-		mcpResult := server.callTool("skill_install", map[string]interface{}{
+		mcpResult := server.callTool("skill_sync", map[string]interface{}{
 			"name":   "raven-core",
 			"target": "codex",
 			"scope":  "user",
 			"dest":   dest,
 		})
-		cliResult := vCLI.RunCLI("skill", "install", "raven-core", "--target", "codex", "--scope", "user", "--dest", dest)
+		cliResult := vCLI.RunCLI("skill", "sync", "raven-core", "--target", "codex", "--scope", "user", "--dest", dest)
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"mode", "plan"})
 	})

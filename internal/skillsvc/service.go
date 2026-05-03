@@ -16,7 +16,6 @@ const (
 	CodeSkillNotFound          Code = "SKILL_NOT_FOUND"
 	CodeSkillNotInstalled      Code = "SKILL_NOT_INSTALLED"
 	CodeSkillTargetUnsupported Code = "SKILL_TARGET_UNSUPPORTED"
-	CodeSkillInstallConflict   Code = "SKILL_INSTALL_CONFLICT"
 	CodeSkillPathUnresolved    Code = "SKILL_PATH_UNRESOLVED"
 	CodeFileWriteError         Code = "FILE_WRITE_ERROR"
 	CodeInternal               Code = "INTERNAL_ERROR"
@@ -76,22 +75,20 @@ type ListResult struct {
 	Skills []skills.Summary `json:"skills"`
 }
 
-type InstallRequest struct {
+type SyncRequest struct {
 	Name    string
 	Target  string
 	Scope   string
 	Dest    string
-	Force   bool
 	Confirm bool
 }
 
-type InstallResult struct {
-	Mode           string              `json:"mode"`
-	SkillName      string              `json:"skill_name"`
-	Target         string              `json:"target,omitempty"`
-	Plan           *skills.InstallPlan `json:"plan,omitempty"`
-	ActionsApplied int                 `json:"actions_applied,omitempty"`
-	Receipt        *skills.Receipt     `json:"receipt,omitempty"`
+type SyncResult struct {
+	Mode           string           `json:"mode"`
+	SkillName      string           `json:"skill_name,omitempty"`
+	Target         string           `json:"target,omitempty"`
+	Plan           *skills.SyncPlan `json:"plan,omitempty"`
+	ActionsApplied int              `json:"actions_applied,omitempty"`
 }
 
 type RemoveRequest struct {
@@ -165,27 +162,28 @@ func List(req ListRequest) (*ListResult, error) {
 	}, nil
 }
 
-func Install(req InstallRequest) (*InstallResult, error) {
+func Sync(req SyncRequest) (*SyncResult, error) {
 	skillName := strings.TrimSpace(req.Name)
 	catalog, err := skills.LoadCatalog()
 	if err != nil {
 		return nil, newError(CodeInternal, "failed to load skill catalog", "", nil, err)
 	}
 
-	skillDef, ok := catalog[skillName]
-	if !ok {
-		available := skills.SortedSummaries(catalog)
-		names := make([]string, 0, len(available))
-		for _, item := range available {
-			names = append(names, item.Name)
+	if skillName != "" {
+		if _, ok := catalog[skillName]; !ok {
+			available := skills.SortedSummaries(catalog)
+			names := make([]string, 0, len(available))
+			for _, item := range available {
+				names = append(names, item.Name)
+			}
+			return nil, newError(
+				CodeSkillNotFound,
+				fmt.Sprintf("skill '%s' not found", skillName),
+				"Run 'rvn skill list' to see available skills",
+				map[string]interface{}{"available": names},
+				nil,
+			)
 		}
-		return nil, newError(
-			CodeSkillNotFound,
-			fmt.Sprintf("skill '%s' not found", skillName),
-			"Run 'rvn skill list' to see available skills",
-			map[string]interface{}{"available": names},
-			nil,
-		)
 	}
 
 	target, err := skills.ParseTarget(strings.TrimSpace(req.Target))
@@ -201,25 +199,13 @@ func Install(req InstallRequest) (*InstallResult, error) {
 		return nil, newError(CodeSkillPathUnresolved, err.Error(), "Use --dest to set an explicit install root", nil, err)
 	}
 
-	plan, err := skills.PlanInstall(skillDef, target, scope, root, req.Force)
+	plan, err := skills.PlanSync(catalog, skillName, target, scope, root)
 	if err != nil {
-		return nil, newError(CodeInternal, "failed to build install plan", "", nil, err)
-	}
-	if len(plan.Conflicts) > 0 {
-		return nil, newError(
-			CodeSkillInstallConflict,
-			"install has conflicts",
-			"Use --force to overwrite conflicting files",
-			map[string]interface{}{
-				"conflicts": plan.Conflicts,
-				"plan":      plan,
-			},
-			nil,
-		)
+		return nil, newError(CodeInternal, "failed to build sync plan", "", nil, err)
 	}
 
 	if !req.Confirm {
-		return &InstallResult{
+		return &SyncResult{
 			Mode:      "preview",
 			SkillName: skillName,
 			Target:    string(target),
@@ -227,17 +213,16 @@ func Install(req InstallRequest) (*InstallResult, error) {
 		}, nil
 	}
 
-	receipt, applied, err := skills.ApplyInstall(plan)
+	applied, err := skills.ApplySync(plan)
 	if err != nil {
-		return nil, newError(CodeFileWriteError, "failed to apply install", "", nil, err)
+		return nil, newError(CodeFileWriteError, "failed to apply sync", "", nil, err)
 	}
-	return &InstallResult{
+	return &SyncResult{
 		Mode:           "applied",
 		SkillName:      skillName,
 		Target:         string(target),
 		Plan:           plan,
 		ActionsApplied: applied,
-		Receipt:        receipt,
 	}, nil
 }
 

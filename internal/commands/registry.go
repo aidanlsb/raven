@@ -2057,30 +2057,36 @@ Use --target to include target-specific installed status and paths.`,
 			"Check installed skills for a specific runtime target",
 		},
 	},
-	"skill_install": {
-		Name:        "skill install",
-		Description: "Install a Raven skill for a target runtime",
+	"skill_sync": {
+		Name:        "skill sync",
+		Description: "Sync Raven-provided skills for a target runtime",
 		VaultScope:  VaultScopeNone,
-		LongDesc: `Install one bundled Raven skill for a target runtime.
+		LongDesc: `Sync bundled Raven skills for a target runtime.
+
+With a skill name, installs that shipped skill if missing or aligns it with the
+current shipped version if already Raven-managed.
+
+Without a skill name, updates/removes existing Raven-managed skills identified
+by their receipts. Missing shipped skills are reported but not installed.
 
 Preview is returned by default. Use --confirm to apply writes.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to install", Required: true, Completions: []string{"raven-core", "raven-maintenance", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
+			{Name: "name", Description: "Optional shipped skill name to sync", Required: false, Completions: []string{"raven-core", "raven-maintenance", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
 			{Name: "scope", Description: "Install scope: user or project", Type: FlagTypeString, Default: "user", Examples: []string{"user", "project"}},
 			{Name: "dest", Description: "Override install root path", Type: FlagTypeString},
-			{Name: "force", Description: "Overwrite conflicting files", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
-			"rvn skill install raven-core --target codex --confirm --json",
-			"rvn skill install raven-schema --target claude --scope project --json",
+			"rvn skill sync raven-core --target codex --confirm --json",
+			"rvn skill sync --target cursor --scope project --json",
 		},
 		UseCases: []string{
-			"Install Raven core skill guidance into an agent runtime",
-			"Preview skill installation plan before writing files",
+			"Install or refresh one Raven skill for an agent runtime",
+			"Update installed Raven-managed skills to shipped versions",
+			"Preview packaged skill sync before writing files",
 		},
 	},
 	"skill_remove": {

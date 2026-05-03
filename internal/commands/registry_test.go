@@ -93,7 +93,7 @@ func TestRequiresVaultMetadata(t *testing.T) {
 		"mcp_status",
 		"mcp_show",
 		"skill_list",
-		"skill_install",
+		"skill_sync",
 		"skill_remove",
 		"skill_doctor",
 	}

@@ -53,13 +53,19 @@ rvn skill list --target claude --json
 rvn skill list --target cursor --json
 ```
 
-Install the core Raven skill:
+Sync the core Raven skill:
 
 ```bash
-rvn skill install raven-core --target codex --confirm --json
+rvn skill sync raven-core --target codex --confirm --json
 ```
 
-Available targets are `codex`, `claude`, and `cursor`.
+To refresh already installed Raven-managed skills for a target, run:
+
+```bash
+rvn skill sync --target codex --confirm --json
+```
+
+The no-name sync updates/removes installed Raven-managed skills and reports shipped skills that are not installed. It does not install newly shipped skills unless you name one explicitly. Available targets are `codex`, `claude`, and `cursor`.
 
 ## Recommended first prompt
 

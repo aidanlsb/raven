@@ -61,13 +61,13 @@ rvn mcp show
 rvn mcp show --client cursor
 ```
 
-### Skill Installation
+### Skill Sync
 
 Raven also ships with a few skills for supported agent runtimes:
 
 ```bash
 rvn skill list --target cursor
-rvn skill install raven-core --target cursor --confirm
+rvn skill sync raven-core --target cursor --confirm
 ```
 
 Available skill targets are `codex`, `claude`, and `cursor`.

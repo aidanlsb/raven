@@ -14,15 +14,15 @@ import (
 var skillCmd = &cobra.Command{
 	Use:   "skill",
 	Short: "Manage Raven agent skills",
-	Long:  "Install and manage Raven-provided skills for supported agent runtimes.",
+	Long:  "Sync and manage Raven-provided skills for supported agent runtimes.",
 }
 
 var skillListCmd = newCanonicalLeafCommand("skill_list", canonicalLeafOptions{
 	RenderHuman: renderSkillList,
 })
 
-var skillInstallCmd = newCanonicalLeafCommand("skill_install", canonicalLeafOptions{
-	RenderHuman: renderSkillInstall,
+var skillSyncCmd = newCanonicalLeafCommand("skill_sync", canonicalLeafOptions{
+	RenderHuman: renderSkillSync,
 })
 
 var skillRemoveCmd = newCanonicalLeafCommand("skill_remove", canonicalLeafOptions{
@@ -35,7 +35,7 @@ var skillDoctorCmd = newCanonicalLeafCommand("skill_doctor", canonicalLeafOption
 
 func init() {
 	skillCmd.AddCommand(skillListCmd)
-	skillCmd.AddCommand(skillInstallCmd)
+	skillCmd.AddCommand(skillSyncCmd)
 	skillCmd.AddCommand(skillRemoveCmd)
 	skillCmd.AddCommand(skillDoctorCmd)
 	rootCmd.AddCommand(skillCmd)
@@ -73,24 +73,46 @@ func renderSkillList(_ *cobra.Command, result commandexec.Result) error {
 	return nil
 }
 
-func renderSkillInstall(_ *cobra.Command, result commandexec.Result) error {
+func renderSkillSync(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
-	plan := skillInstallPlanFromAny(data["plan"])
+	plan := skillSyncPlanFromAny(data["plan"])
+	if plan == nil {
+		return nil
+	}
 	if stringValue(data["mode"]) == "preview" {
-		fmt.Println(ui.SectionHeader(fmt.Sprintf("Preview install: %s", stringValue(data["skill_name"]))))
-		fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(plan.SkillPath))
+		title := "Preview sync"
+		if skillName := strings.TrimSpace(stringValue(data["skill_name"])); skillName != "" {
+			title = fmt.Sprintf("Preview sync: %s", skillName)
+		}
+		fmt.Println(ui.SectionHeader(title))
+		fmt.Printf("%s %s\n", ui.Hint("target:"), ui.FilePath(plan.Root))
 		for _, action := range plan.Actions {
-			fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(action.Op), ui.FilePath(action.Path))))
+			line := fmt.Sprintf("%s %s", ui.Bold.Render(action.Op), ui.FilePath(action.Path))
+			if strings.TrimSpace(action.Reason) != "" {
+				line += " " + ui.Hint("("+action.Reason+")")
+			}
+			fmt.Println(ui.Bullet(line))
 		}
 		if len(plan.Actions) == 0 {
 			fmt.Println(ui.Bullet(ui.Hint("no changes")))
 		}
-		fmt.Println(ui.Hint("Re-run with --confirm to apply."))
+		if len(plan.MissingAvailable) > 0 {
+			fmt.Println(ui.Bullet("available but not installed:"))
+			for _, item := range plan.MissingAvailable {
+				fmt.Println(ui.Indent(2, ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(item.Name), ui.Hint(fmt.Sprintf("v%d", item.Version))))))
+			}
+		}
+		if plan.NeedsConfirm {
+			fmt.Println(ui.Hint("Re-run with --confirm to apply."))
+		}
 		return nil
 	}
 
-	fmt.Println(ui.Checkf("Installed %s for %s at %s", stringValue(data["skill_name"]), stringValue(data["target"]), ui.FilePath(plan.SkillPath)))
+	fmt.Println(ui.Checkf("Synced skills for %s at %s", stringValue(data["target"]), ui.FilePath(plan.Root)))
 	fmt.Println(ui.Hint(fmt.Sprintf("Applied %d file changes", intValue(data["actions_applied"]))))
+	if len(plan.MissingAvailable) > 0 {
+		fmt.Println(ui.Hint(fmt.Sprintf("%d shipped skills are available but not installed", len(plan.MissingAvailable))))
+	}
 	return nil
 }
 
@@ -139,8 +161,8 @@ func skillSummariesFromAny(raw interface{}) []skills.Summary {
 	return items
 }
 
-func skillInstallPlanFromAny(raw interface{}) *skills.InstallPlan {
-	plan, _ := raw.(*skills.InstallPlan)
+func skillSyncPlanFromAny(raw interface{}) *skills.SyncPlan {
+	plan, _ := raw.(*skills.SyncPlan)
 	return plan
 }
 
