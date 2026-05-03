@@ -192,7 +192,17 @@ func TestCompactInvokeRejectsInvalidArgumentTypes(t *testing.T) {
 	var envelope struct {
 		OK    bool `json:"ok"`
 		Error struct {
-			Code string `json:"code"`
+			Code   string `json:"code"`
+			Detail struct {
+				SchemaHash string `json:"schema_hash"`
+				ArgsSchema struct {
+					Required   []string               `json:"required"`
+					Properties map[string]interface{} `json:"properties"`
+				} `json:"args_schema"`
+				InvokeShape struct {
+					Wrapper string `json:"wrapper"`
+				} `json:"invoke_shape"`
+			} `json:"details"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -200,6 +210,15 @@ func TestCompactInvokeRejectsInvalidArgumentTypes(t *testing.T) {
 	}
 	if envelope.Error.Code != "INVALID_ARGS" {
 		t.Fatalf("error.code=%q, want INVALID_ARGS; response=%s", envelope.Error.Code, out)
+	}
+	if envelope.Error.Detail.SchemaHash == "" {
+		t.Fatalf("expected schema_hash in INVALID_ARGS details: %s", out)
+	}
+	if envelope.Error.Detail.InvokeShape.Wrapper != "args" {
+		t.Fatalf("invoke_shape.wrapper=%q, want args; response=%s", envelope.Error.Detail.InvokeShape.Wrapper, out)
+	}
+	if _, ok := envelope.Error.Detail.ArgsSchema.Properties["query_string"]; !ok {
+		t.Fatalf("expected query_string property in INVALID_ARGS args_schema: %s", out)
 	}
 }
 
@@ -410,12 +429,19 @@ func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
 		Error struct {
 			Code   string `json:"code"`
 			Detail struct {
-				Issues []struct {
+				TargetCommand string `json:"target_command"`
+				Issues        []struct {
 					Field   string `json:"field"`
 					Code    string `json:"code"`
 					Message string `json:"message"`
 					Hint    string `json:"hint"`
 				} `json:"issues"`
+				ArgsSchema struct {
+					Properties map[string]interface{} `json:"properties"`
+				} `json:"args_schema"`
+				InvokeShape struct {
+					Wrapper string `json:"wrapper"`
+				} `json:"invoke_shape"`
 			} `json:"details"`
 		} `json:"error"`
 	}
@@ -427,6 +453,15 @@ func TestCompactInvokeHintsForTopLevelCommandArgs(t *testing.T) {
 	}
 	if len(envelope.Error.Detail.Issues) != 1 {
 		t.Fatalf("expected one validation issue, got %d; response=%s", len(envelope.Error.Detail.Issues), out)
+	}
+	if envelope.Error.Detail.TargetCommand != "read" {
+		t.Fatalf("target_command=%q, want read; response=%s", envelope.Error.Detail.TargetCommand, out)
+	}
+	if envelope.Error.Detail.InvokeShape.Wrapper != "args" {
+		t.Fatalf("invoke_shape.wrapper=%q, want args; response=%s", envelope.Error.Detail.InvokeShape.Wrapper, out)
+	}
+	if _, ok := envelope.Error.Detail.ArgsSchema.Properties["path"]; !ok {
+		t.Fatalf("expected path property in INVALID_ARGS args_schema: %s", out)
 	}
 	issue := envelope.Error.Detail.Issues[0]
 	if issue.Field != "path" {
@@ -539,6 +574,12 @@ func TestCompactInvokeCommandValidationMatchesCanonicalInvoker(t *testing.T) {
 	details, ok := invokerResult.Error.Details.(map[string]interface{})
 	if !ok {
 		t.Fatalf("invoker details type = %T, want map[string]interface{}", invokerResult.Error.Details)
+	}
+	if _, ok := details["args_schema"]; !ok {
+		t.Fatalf("expected canonical invoker details to include args_schema: %#v", details)
+	}
+	if _, ok := details["schema_hash"]; !ok {
+		t.Fatalf("expected canonical invoker details to include schema_hash: %#v", details)
 	}
 	canonicalIssues, ok := details["issues"].([]commands.ValidationIssue)
 	if !ok {

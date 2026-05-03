@@ -43,8 +43,10 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 			"INVALID_ARGS",
 			"argument validation failed",
 			map[string]interface{}{
-				"command": req.CommandID,
-				"issues":  issues,
+				"command":     req.CommandID,
+				"issues":      issues,
+				"args_schema": commands.CompactArgsSchema(contract),
+				"schema_hash": contract.SchemaHash,
 			},
 			"Check command arguments and retry",
 		), false

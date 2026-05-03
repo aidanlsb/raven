@@ -96,6 +96,15 @@ func TestAdaptCanonicalResultForMCPAddsQueryArgumentHints(t *testing.T) {
 	if !ok {
 		t.Fatalf("issues type = %T, want []validationIssue", details["issues"])
 	}
+	if _, ok := details["args_schema"].(map[string]interface{}); !ok {
+		t.Fatalf("args_schema type = %T, want map[string]interface{}", details["args_schema"])
+	}
+	if _, ok := details["invoke_shape"].(map[string]interface{}); !ok {
+		t.Fatalf("invoke_shape type = %T, want map[string]interface{}", details["invoke_shape"])
+	}
+	if details["schema_hash"] == "" {
+		t.Fatalf("expected schema_hash in details: %#v", details)
+	}
 
 	if len(issues) != 2 {
 		t.Fatalf("issues len = %d, want 2", len(issues))

@@ -29,7 +29,7 @@ func adaptValidationDetailsForMCP(commandID string, rawArgs map[string]interface
 		return errInfo.Details
 	}
 
-	return detailsWithValidationIssues(errInfo.Details, withCommandArgumentHints(commandID, rawArgs, issues))
+	return detailsWithValidationMetadata(commandID, errInfo.Details, withCommandArgumentHints(commandID, rawArgs, issues))
 }
 
 func adaptErrorSuggestionForMCP(commandID string, err commandexec.ErrorInfo) string {
@@ -94,7 +94,7 @@ func validationIssuesFromDetails(details interface{}) ([]validationIssue, bool) 
 	}
 }
 
-func detailsWithValidationIssues(details interface{}, issues []validationIssue) interface{} {
+func detailsWithValidationMetadata(commandID string, details interface{}, issues []validationIssue) interface{} {
 	detailMap, ok := details.(map[string]interface{})
 	if !ok {
 		return details
@@ -105,5 +105,10 @@ func detailsWithValidationIssues(details interface{}, issues []validationIssue) 
 		out[key] = value
 	}
 	out["issues"] = issues
+	if contract, ok := buildCommandContract(commandID); ok {
+		out["args_schema"] = compactArgsSchema(contract)
+		out["schema_hash"] = contract.SchemaHash
+		out["invoke_shape"] = compactInvokeShape()
+	}
 	return out
 }

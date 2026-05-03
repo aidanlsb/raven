@@ -119,20 +119,17 @@ func (s *Server) callCompactDescribe(args map[string]interface{}) (string, bool)
 	}
 
 	return successEnvelope(map[string]interface{}{
-		"command":      contract.CommandID,
-		"summary":      contract.Summary,
-		"description":  contract.Description,
-		"cli_usage":    contract.CLIUsage,
-		"args_schema":  compactArgsSchema(contract),
-		"read_only":    contract.ReadOnly,
-		"destructive":  contract.Destructive,
-		"preview_mode": contract.PreviewMode,
-		"invokable":    contract.Policy.Invokable,
-		"schema_hash":  contract.SchemaHash,
-		"invoke_shape": map[string]interface{}{
-			"wrapper": "args",
-			"note":    "Pass command-specific parameters under args when calling raven_invoke. Optional top-level wrapper fields: vault, vault_path, schema_hash, strict_schema.",
-		},
+		"command":        contract.CommandID,
+		"summary":        contract.Summary,
+		"description":    contract.Description,
+		"cli_usage":      contract.CLIUsage,
+		"args_schema":    compactArgsSchema(contract),
+		"read_only":      contract.ReadOnly,
+		"destructive":    contract.Destructive,
+		"preview_mode":   contract.PreviewMode,
+		"invokable":      contract.Policy.Invokable,
+		"schema_hash":    contract.SchemaHash,
+		"invoke_shape":   compactInvokeShape(),
 		"invoke_example": compactInvokeExample(contract),
 	}, nil), false
 }
@@ -142,33 +139,7 @@ func (s *Server) callCompactInvoke(args map[string]interface{}) (string, bool) {
 }
 
 func (s *Server) callCompactInvokeWithContext(ctx context.Context, args map[string]interface{}) (string, bool) {
-	spec := map[string]parameterSpec{
-		"command": {
-			Name:     "command",
-			Type:     paramTypeString,
-			Required: true,
-		},
-		"args": {
-			Name: "args",
-			Type: paramTypeObject,
-		},
-		"vault": {
-			Name: "vault",
-			Type: paramTypeString,
-		},
-		"vault_path": {
-			Name: "vault_path",
-			Type: paramTypeString,
-		},
-		"schema_hash": {
-			Name: "schema_hash",
-			Type: paramTypeString,
-		},
-		"strict_schema": {
-			Name: "strict_schema",
-			Type: paramTypeBool,
-		},
-	}
+	spec := invokeWrapperParamSpec()
 	validated, issues := validateArgumentsStrict(spec, args)
 	commandRef := strings.TrimSpace(toString(validated["command"]))
 	if len(issues) > 0 && commandRef == "" {
@@ -210,7 +181,7 @@ func (s *Server) callCompactInvokeWithContext(ctx context.Context, args map[stri
 		), true
 	}
 	if len(issues) > 0 {
-		return validationErrorEnvelope("raven_invoke", withInvokeWrapperHints(issues, buildInvokeParamSpec(contract))), true
+		return invokeWrapperValidationErrorEnvelope(contract, withInvokeWrapperHints(issues, buildInvokeParamSpec(contract))), true
 	}
 
 	if !contract.Policy.Invokable {
@@ -257,7 +228,7 @@ func (s *Server) callCompactInvokeWithContext(ctx context.Context, args map[stri
 	}
 	normalizedInvokeArgs, commandIssues := validateArgumentsStrict(buildInvokeParamSpec(contract), rawInvokeArgs)
 	if len(commandIssues) > 0 {
-		return commandValidationErrorEnvelope(commandID, rawInvokeArgs, commandIssues), true
+		return commandValidationErrorEnvelope(contract, rawInvokeArgs, commandIssues), true
 	}
 
 	if out, isErr, handled := s.callCanonicalCommandWithContext(ctx, commandID, normalizedInvokeArgs, vaultName, vaultPath); handled {
@@ -284,12 +255,69 @@ func compactArgsSchema(contract commandContract) map[string]interface{} {
 	return commands.CompactArgsSchema(contract)
 }
 
+func compactInvokeShape() map[string]interface{} {
+	return map[string]interface{}{
+		"wrapper": "args",
+		"note":    "Pass command-specific parameters under args when calling raven_invoke. Optional top-level wrapper fields: vault, vault_path, schema_hash, strict_schema.",
+	}
+}
+
 func compactInvokeExample(contract commandContract) map[string]interface{} {
 	return commands.CompactInvokeExample(contract)
 }
 
 func buildInvokeParamSpec(contract commandContract) map[string]parameterSpec {
 	return commands.BuildInvokeParamSpec(contract)
+}
+
+func invokeWrapperParamSpec() map[string]parameterSpec {
+	return map[string]parameterSpec{
+		"command": {
+			Name:        "command",
+			Type:        paramTypeString,
+			Required:    true,
+			Description: "Command identifier to invoke",
+		},
+		"args": {
+			Name:        "args",
+			Type:        paramTypeObject,
+			Description: "Command-specific parameters nested under args",
+		},
+		"vault": {
+			Name:        "vault",
+			Type:        paramTypeString,
+			Description: "Configured vault name to use for this invocation",
+		},
+		"vault_path": {
+			Name:        "vault_path",
+			Type:        paramTypeString,
+			Description: "Absolute vault path to use for this invocation",
+		},
+		"schema_hash": {
+			Name:        "schema_hash",
+			Type:        paramTypeString,
+			Description: "Schema hash returned by raven_describe",
+		},
+		"strict_schema": {
+			Name:        "strict_schema",
+			Type:        paramTypeBool,
+			Description: "Reject invocation when the provided schema_hash is stale",
+		},
+	}
+}
+
+func compactInvokeWrapperSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"required": []string{"command"},
+		"properties": map[string]interface{}{
+			"command":       map[string]interface{}{"type": "string", "description": "Command identifier to invoke"},
+			"args":          map[string]interface{}{"type": "object", "description": "Command-specific parameters nested under args"},
+			"vault":         map[string]interface{}{"type": "string", "description": "Configured vault name to use for this invocation"},
+			"vault_path":    map[string]interface{}{"type": "string", "description": "Absolute vault path to use for this invocation"},
+			"schema_hash":   map[string]interface{}{"type": "string", "description": "Schema hash returned by raven_describe"},
+			"strict_schema": map[string]interface{}{"type": "boolean", "description": "Reject invocation when the provided schema_hash is stale"},
+		},
+	}
 }
 
 func validateArgumentsStrict(spec map[string]parameterSpec, raw map[string]interface{}) (map[string]interface{}, []validationIssue) {
@@ -328,25 +356,51 @@ func withCommandArgumentHints(commandID string, rawArgs map[string]interface{}, 
 }
 
 func validationErrorEnvelope(command string, issues []validationIssue) string {
+	details := map[string]interface{}{
+		"command": command,
+		"issues":  issues,
+	}
+	suggestion := fmt.Sprintf("Call %s to get the strict parameter schema", compactToolDescribe)
+	if command == "raven_invoke" {
+		suggestion = fmt.Sprintf("Pass command-specific parameters under args; call %s with a command id for its args_schema", compactToolDescribe)
+		details["invoke_shape"] = compactInvokeShape()
+		details["wrapper_schema"] = compactInvokeWrapperSchema()
+	}
 	return errorEnvelope(
 		"INVALID_ARGS",
 		"argument validation failed",
-		fmt.Sprintf("Call %s to get the strict parameter schema", compactToolDescribe),
+		suggestion,
+		details,
+	)
+}
+
+func invokeWrapperValidationErrorEnvelope(contract commandContract, issues []validationIssue) string {
+	return errorEnvelope(
+		"INVALID_ARGS",
+		"argument validation failed",
+		describeRetrySuggestion(contract.CommandID),
 		map[string]interface{}{
-			"command": command,
-			"issues":  issues,
+			"command":        "raven_invoke",
+			"target_command": contract.CommandID,
+			"issues":         issues,
+			"invoke_shape":   compactInvokeShape(),
+			"args_schema":    compactArgsSchema(contract),
+			"schema_hash":    contract.SchemaHash,
 		},
 	)
 }
 
-func commandValidationErrorEnvelope(commandID string, rawArgs map[string]interface{}, issues []validationIssue) string {
+func commandValidationErrorEnvelope(contract commandContract, rawArgs map[string]interface{}, issues []validationIssue) string {
 	return errorEnvelope(
 		"INVALID_ARGS",
 		"argument validation failed",
-		describeRetrySuggestion(commandID),
+		describeRetrySuggestion(contract.CommandID),
 		map[string]interface{}{
-			"command": commandID,
-			"issues":  withCommandArgumentHints(commandID, rawArgs, issues),
+			"command":      contract.CommandID,
+			"issues":       withCommandArgumentHints(contract.CommandID, rawArgs, issues),
+			"invoke_shape": compactInvokeShape(),
+			"args_schema":  compactArgsSchema(contract),
+			"schema_hash":  contract.SchemaHash,
 		},
 	)
 }
