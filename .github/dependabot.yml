@@ -11,9 +11,16 @@ updates:
     labels:
       - "dependencies"
     groups:
+      charmbracelet-dependencies:
+        patterns:
+          - "github.com/charmbracelet/*"
+          - "github.com/charmbracelet/x/*"
       go-dependencies:
         patterns:
           - "*"
+        exclude-patterns:
+          - "github.com/charmbracelet/*"
+          - "github.com/charmbracelet/x/*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
