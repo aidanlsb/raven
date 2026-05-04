@@ -12,6 +12,7 @@ Use this guide to choose the right mutation primitive.
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown with preview/confirm |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
+| Delete one object | `delete` | Safe deletion behavior with backlink warnings and trash support |
 
 Rules:
 - Use `upsert` when reruns should produce one current canonical output.
@@ -64,6 +65,17 @@ raven_invoke(command="edit", args={
   "confirm":true
 })
 ```
+
+Immediate single-object delete:
+
+```text
+raven_invoke(command="backlinks", args={"target":"project/old-project"})
+raven_invoke(command="delete", args={"object_id":"project/old-project"})
+```
+
+MCP single-object `delete` applies immediately. Only call it after clear user
+approval or an unambiguous user request. Bulk delete remains preview-first unless
+`confirm=true`.
 
 ## Practical rules
 

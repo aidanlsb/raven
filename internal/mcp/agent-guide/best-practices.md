@@ -12,8 +12,9 @@
 - Avoid shell-level mutations for vault operations.
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
-4. Use preview-first mutation flow.
+4. Use the command's documented mutation flow.
 - For preview-capable commands, show preview, ask for approval, then apply with `confirm=true`.
+- Single-object `delete` applies immediately in MCP, so only call it when deletion intent is clear.
 
 5. Surface ambiguity instead of guessing.
 - For ambiguous refs or unclear destructive intent, ask a focused clarifying question.

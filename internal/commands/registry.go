@@ -513,26 +513,34 @@ The file is moved to .trash/ for recovery.`,
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'rm'.
 Using 'rm' directly will NOT warn about backlinks (other files that reference this one),
 potentially creating broken links throughout the vault. The raven_delete command:
-- Warns about incoming backlinks before deletion
+- Reports incoming backlink warnings
 - Moves files to .trash/ for recovery (not permanent deletion)
 - Updates the index properly
 
 By default, files are moved to a trash directory (.trash/).
 Warns about backlinks (objects that reference the deleted item).
 
+MCP behavior:
+Single-object MCP deletes apply immediately when invoked. Agents should only call
+delete after the user intent is clear; when unsure, inspect the object and run
+backlinks first.
+
+CLI behavior:
+In CLI JSON mode, single-object deletes return preview by default; use --confirm
+to apply. Interactive single-object deletes show a confirmation prompt unless
+--force is set.
+
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
 IMPORTANT:
-- Single-object deletes in JSON/agent mode return preview by default; use --confirm to apply.
-- Interactive single-object deletes show a confirmation prompt unless --force is set.
 - Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "object_id", Description: "Object ID to delete (e.g., people/freya)", Required: false},
 		},
 		Flags: []FlagMeta{
-			{Name: "force", Description: "Skip confirmation prompt", Type: FlagTypeBool},
+			{Name: "force", Description: "Skip interactive CLI confirmation prompt", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply delete (without this flag, JSON/agent mode shows preview only)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply previewed CLI JSON or bulk delete; optional for single-object MCP delete", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn delete people/freya --json",

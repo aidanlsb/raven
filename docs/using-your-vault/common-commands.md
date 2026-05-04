@@ -200,7 +200,7 @@ Remove an object. Files are moved to `.trash/` by default.
 ```bash
 rvn delete project/old-project
 rvn delete project/old-project --force         # Skip confirmation
-rvn delete project/old-project --json          # Preview in JSON/agent mode
+rvn delete project/old-project --json          # Preview in CLI JSON mode
 rvn delete project/old-project --confirm --json
 ```
 

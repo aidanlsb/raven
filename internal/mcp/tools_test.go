@@ -85,6 +85,14 @@ func TestBuildCommandContractStrictTypes(t *testing.T) {
 		t.Fatalf("import preview mode=%q, want none", got)
 	}
 
+	deleteContract, ok := buildCommandContract("delete")
+	if !ok {
+		t.Fatal("expected delete contract")
+	}
+	if got := deleteContract.PreviewMode; got != "bulk_preview_default" {
+		t.Fatalf("delete preview mode=%q, want bulk_preview_default", got)
+	}
+
 	dailyContract, ok := buildCommandContract("daily")
 	if !ok {
 		t.Fatal("expected daily contract")

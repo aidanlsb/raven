@@ -61,6 +61,9 @@ raven_invoke(command="backlinks", args={"target":"project/old-project"})
 raven_invoke(command="delete", args={"object_id":"project/old-project"})
 ```
 
+Single-object `delete` applies immediately in MCP. Run the backlinks check first
+when impact is not already clear. Bulk delete remains preview-first.
+
 ## 5. Bulk mutation flow
 
 ```text

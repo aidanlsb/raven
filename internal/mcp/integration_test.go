@@ -721,12 +721,10 @@ func TestMCPIntegration_DeleteObject(t *testing.T) {
 	})
 	v.AssertFileExists("people/dave.md")
 
-	// Delete it
+	// Single-object MCP delete applies immediately when invoked.
 	result := server.callTool("delete", map[string]interface{}{
 		"object_id": "people/dave",
-		"force":     true,
 	})
-
 	if result.IsError {
 		t.Fatalf("delete failed: %s", result.Text)
 	}
@@ -1720,6 +1718,33 @@ type: page
 		cliResult := vCLI.RunCLI("delete", "people/parity-delete", "--confirm")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"deleted", "behavior", "trash_path"})
+	})
+
+	t.Run("delete_single_immediate_differs_from_cli_json_preview", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("new", map[string]interface{}{
+			"type":  "person",
+			"title": "Delete Divergence",
+		})
+		vCLI.RunCLI("new", "person", "Delete Divergence").MustSucceed(t)
+
+		mcpResult := server.callTool("delete", map[string]interface{}{
+			"object_id": "people/delete-divergence",
+		})
+		cliResult := vCLI.RunCLI("delete", "people/delete-divergence")
+
+		mcpEnv := parseMCPEnvelope(t, mcpResult.Text)
+		if !mcpEnv.OK || mcpEnv.Data["deleted"] != "people/delete-divergence" {
+			t.Fatalf("expected MCP delete to apply immediately, got: %s", mcpResult.Text)
+		}
+		if !cliResult.OK || cliResult.Data["preview"] != true {
+			t.Fatalf("expected CLI JSON delete to preview, got: %s", cliResult.RawJSON)
+		}
+		vMCP.AssertFileNotExists("people/delete-divergence.md")
+		vCLI.AssertFileExists("people/delete-divergence.md")
 	})
 
 	t.Run("delete_bulk_preview", func(t *testing.T) {

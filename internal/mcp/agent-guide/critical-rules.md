@@ -19,4 +19,8 @@ Why:
 - `new` applies schema and templates.
 - `edit` is for content markdown only; use `vault config`, `schema`, and `template` for control-plane files.
 
+MCP single-object `delete` applies immediately when invoked. Only use it after
+clear user intent; if deletion impact is uncertain, inspect the object and run
+`backlinks` first. Bulk delete still previews unless `confirm=true`.
+
 If you bypass Raven and mutate files directly, reindex and repair before continuing.

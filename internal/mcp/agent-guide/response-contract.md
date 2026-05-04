@@ -41,7 +41,7 @@ For `resources/read`, the vault-scoped Raven URIs `raven://schema/current`, `rav
 
 ## Preview and apply semantics
 
-Many mutation commands are preview-first.
+Some mutation commands are preview-first, especially bulk and query-driven flows.
 
 Examples:
 
@@ -53,6 +53,10 @@ raven_invoke(command="move", args={"stdin":true})
 ```
 
 Apply only after explicit approval with `confirm=true`.
+
+Important exception: single-object MCP `delete` applies immediately when called.
+Only invoke it when the user intent is clear; if unsure, inspect the object and
+check backlinks first.
 
 ## Vault context
 

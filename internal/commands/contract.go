@@ -511,6 +511,9 @@ func flagTypeToParameterType(flagType FlagType) ParameterType {
 }
 
 func previewModeForCommand(meta Meta) string {
+	if meta.Name == "delete" {
+		return "bulk_preview_default"
+	}
 	for _, flag := range meta.Flags {
 		if flag.Name == "confirm" && flag.Type == FlagTypeBool {
 			return "preview_default"

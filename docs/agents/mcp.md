@@ -385,13 +385,17 @@ Apply:
 }
 ```
 
+Single-object `delete` is different: when invoked through MCP it applies
+immediately. Check backlinks or read the object first if the user's intent or
+impact is not clear. Bulk and query-driven delete flows remain preview-first.
+
 ## Best Practices
 
 1. Check the schema before creating or mutating typed items.
 2. Prefer `query` over `search` when the structure is known.
 3. Use raw `read` ranges before building string replacements for `edit`.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
-5. Preview destructive or bulk mutations before applying with `confirm=true`.
+5. Use preview/apply for preview-capable or bulk mutations; single-object MCP `delete` applies immediately.
 6. Reindex after schema-level structural changes when required.
 7. Treat `raven_describe` as the authority for argument shape.
 
