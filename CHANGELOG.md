@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.18] - 2026-05-04
+
+### Changed
+- `rvn skill install` has been replaced by `rvn skill sync`, including registry metadata and examples for syncing packaged Raven skills.
+- Dependency update CI now groups Charmbracelet-related updates together.
+
+### Fixed
+- MCP validation errors now include argument schemas, making malformed `raven_invoke` calls easier to correct.
+- MCP agent guidance now more clearly describes immediate delete semantics.
+
 ## [v0.0.17] - 2026-05-03
 
 ### Added
