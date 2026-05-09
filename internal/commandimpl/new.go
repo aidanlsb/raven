@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
@@ -93,38 +94,14 @@ func mapContentMutationError(err error) commandexec.Result {
 		return commandexec.Failure("VALIDATION_FAILED", validationErr.Error(), nil, validationErr.Suggestion())
 	}
 
-	return commandexec.Failure("UNEXPECTED", err.Error(), nil, "")
+	return commandexec.Failure(codes.ErrInternal, err.Error(), nil, "")
 }
 
-func mapServiceCode(code objectsvc.ErrorCode) string {
-	switch code {
-	case objectsvc.ErrorTypeNotFound:
-		return "TYPE_NOT_FOUND"
-	case objectsvc.ErrorRequiredField:
-		return "REQUIRED_FIELD_MISSING"
-	case objectsvc.ErrorInvalidInput:
-		return "INVALID_INPUT"
-	case objectsvc.ErrorFileNotFound:
-		return "FILE_NOT_FOUND"
-	case objectsvc.ErrorRefNotFound:
-		return "REF_NOT_FOUND"
-	case objectsvc.ErrorRefAmbiguous:
-		return "REF_AMBIGUOUS"
-	case objectsvc.ErrorDatabase:
-		return "DATABASE_ERROR"
-	case objectsvc.ErrorFileExists:
-		return "FILE_EXISTS"
-	case objectsvc.ErrorValidationFailed:
-		return "VALIDATION_FAILED"
-	case objectsvc.ErrorFileRead:
-		return "FILE_READ_ERROR"
-	case objectsvc.ErrorFileWrite:
-		return "FILE_WRITE_ERROR"
-	case objectsvc.ErrorUnexpected:
-		return "INTERNAL_ERROR"
-	default:
-		return "INTERNAL_ERROR"
+func mapServiceCode(code objectsvc.ErrorCode) codes.ErrorCode {
+	if codes.IsErrorCode(string(code)) {
+		return code
 	}
+	return codes.ErrInternal
 }
 
 // HandleUpsert executes the canonical `upsert` command.
@@ -183,7 +160,7 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 		return mapContentMutationError(err)
 	}
 
-	warnings := warningMessagesToCommandWarnings(result.WarningMessages, "UNKNOWN_FIELD")
+	warnings := warningMessagesToCommandWarnings(result.WarningMessages, codes.WarnUnknownField)
 	if result.Status == "created" || result.Status == "updated" {
 		warnings = appendCommandWarnings(warnings, autoReindexWarnings(vaultPath, vaultCfg, result.FilePath))
 	}
@@ -201,7 +178,7 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 	)
 }
 
-func warningMessagesToCommandWarnings(messages []string, code string) []commandexec.Warning {
+func warningMessagesToCommandWarnings(messages []string, code codes.WarningCode) []commandexec.Warning {
 	if len(messages) == 0 {
 		return nil
 	}

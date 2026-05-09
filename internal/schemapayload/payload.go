@@ -1,6 +1,9 @@
 package schemapayload
 
-import "github.com/aidanlsb/raven/internal/schemasvc"
+import (
+	"github.com/aidanlsb/raven/internal/codes"
+	"github.com/aidanlsb/raven/internal/schemasvc"
+)
 
 func Validate(result *schemasvc.ValidateResult) map[string]interface{} {
 	return map[string]interface{}{
@@ -143,7 +146,7 @@ func RenameType(result *schemasvc.RenameTypeResult) map[string]interface{} {
 	return data
 }
 
-func MapWarnings[T any](warnings []schemasvc.Warning, build func(code, message string) T) []T {
+func MapWarnings[T any](warnings []schemasvc.Warning, build func(code codes.WarningCode, message string) T) []T {
 	if len(warnings) == 0 {
 		return nil
 	}

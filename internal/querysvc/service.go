@@ -7,18 +7,19 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/query"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput   Code = "INVALID_INPUT"
-	CodeQueryInvalid   Code = "QUERY_INVALID"
-	CodeQueryNotFound  Code = "QUERY_NOT_FOUND"
-	CodeConfigInvalid  Code = "CONFIG_INVALID"
-	CodeFileWriteError Code = "FILE_WRITE_ERROR"
+	CodeInvalidInput   Code = codes.ErrInvalidInput
+	CodeQueryInvalid   Code = codes.ErrQueryInvalid
+	CodeQueryNotFound  Code = codes.ErrQueryNotFound
+	CodeConfigInvalid  Code = codes.ErrConfigInvalid
+	CodeFileWriteError Code = codes.ErrFileWrite
 )
 
 type Error struct {

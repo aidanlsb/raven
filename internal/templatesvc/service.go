@@ -11,26 +11,27 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/template"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput     Code = "INVALID_INPUT"
-	CodeFileNotFound     Code = "FILE_NOT_FOUND"
-	CodeFileReadError    Code = "FILE_READ_ERROR"
-	CodeFileWriteError   Code = "FILE_WRITE_ERROR"
-	CodeFileOutsideVault Code = "FILE_OUTSIDE_VAULT"
-	CodeSchemaInvalid    Code = "SCHEMA_INVALID"
-	CodeValidationFailed Code = "VALIDATION_FAILED"
-	CodeInternal         Code = "INTERNAL_ERROR"
+	CodeInvalidInput     Code = codes.ErrInvalidInput
+	CodeFileNotFound     Code = codes.ErrFileNotFound
+	CodeFileReadError    Code = codes.ErrFileRead
+	CodeFileWriteError   Code = codes.ErrFileWrite
+	CodeFileOutsideVault Code = codes.ErrFileOutsideVault
+	CodeSchemaInvalid    Code = codes.ErrSchemaInvalid
+	CodeValidationFailed Code = codes.ErrValidationFailed
+	CodeInternal         Code = codes.ErrInternal
 )
 
-const WarningIndexUpdateFailed = "INDEX_UPDATE_FAILED"
+const WarningIndexUpdateFailed = codes.WarnIndexUpdateFailed
 
 type Error struct {
 	Code       Code
@@ -72,7 +73,7 @@ func AsError(err error) (*Error, bool) {
 }
 
 type Warning struct {
-	Code    string
+	Code    codes.WarningCode
 	Message string
 	Ref     string
 }

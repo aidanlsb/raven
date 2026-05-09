@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/aidanlsb/raven/internal/codes"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput    Code = "INVALID_INPUT"
-	CodeStringNotFound  Code = "STRING_NOT_FOUND"
-	CodeMultipleMatches Code = "MULTIPLE_MATCHES"
+	CodeInvalidInput    Code = codes.ErrInvalidInput
+	CodeStringNotFound  Code = codes.ErrStringNotFound
+	CodeMultipleMatches Code = codes.ErrMultipleMatches
 )
 
 type Error struct {

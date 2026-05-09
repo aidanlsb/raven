@@ -6,19 +6,20 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/skills"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput           Code = "INVALID_INPUT"
-	CodeSkillNotFound          Code = "SKILL_NOT_FOUND"
-	CodeSkillNotInstalled      Code = "SKILL_NOT_INSTALLED"
-	CodeSkillTargetUnsupported Code = "SKILL_TARGET_UNSUPPORTED"
-	CodeSkillPathUnresolved    Code = "SKILL_PATH_UNRESOLVED"
-	CodeFileWriteError         Code = "FILE_WRITE_ERROR"
-	CodeInternal               Code = "INTERNAL_ERROR"
+	CodeInvalidInput           Code = codes.ErrInvalidInput
+	CodeSkillNotFound          Code = codes.ErrSkillNotFound
+	CodeSkillNotInstalled      Code = codes.ErrSkillNotInstalled
+	CodeSkillTargetUnsupported Code = codes.ErrSkillTargetUnsupported
+	CodeSkillPathUnresolved    Code = codes.ErrSkillPathUnresolved
+	CodeFileWriteError         Code = codes.ErrFileWrite
+	CodeInternal               Code = codes.ErrInternal
 )
 
 type Error struct {

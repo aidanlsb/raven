@@ -107,9 +107,5 @@ func mapSkillSvcFailure(err error) commandexec.Result {
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 	}
 
-	code := string(svcErr.Code)
-	if svcErr.Code == skillsvc.CodeInternal {
-		code = "INTERNAL_ERROR"
-	}
-	return commandexec.Failure(code, svcErr.Message, svcErr.Details, svcErr.Suggestion)
+	return commandexec.Failure(svcErr.Code, svcErr.Message, svcErr.Details, svcErr.Suggestion)
 }

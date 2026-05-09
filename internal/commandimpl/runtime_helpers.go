@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
@@ -13,7 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-const indexUpdateFailedWarningCode = "INDEX_UPDATE_FAILED"
+const indexUpdateFailedWarningCode = codes.WarnIndexUpdateFailed
 
 const indexUpdateFailedWarningRef = "The write succeeded, but the derived index may be stale. Run 'rvn reindex' to refresh it."
 

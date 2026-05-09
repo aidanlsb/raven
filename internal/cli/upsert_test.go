@@ -233,7 +233,7 @@ func TestUpsertRejectsTitleWithPathSeparator(t *testing.T) {
 	if resp.OK {
 		t.Fatalf("expected ok=false, got true; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
 	}
 	if !strings.Contains(resp.Error.Message, "title cannot contain path separators") {
@@ -344,7 +344,7 @@ func TestUpsertRejectsDirectoryOnlyPath(t *testing.T) {
 	if resp.OK {
 		t.Fatalf("expected ok=false, got true; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
 	}
 }

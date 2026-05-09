@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/pages"
@@ -14,21 +15,21 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-type ErrorCode string
+type ErrorCode = codes.ErrorCode
 
 const (
-	ErrorTypeNotFound     ErrorCode = "TYPE_NOT_FOUND"
-	ErrorRequiredField    ErrorCode = "REQUIRED_FIELD"
-	ErrorInvalidInput     ErrorCode = "INVALID_INPUT"
-	ErrorFileNotFound     ErrorCode = "FILE_NOT_FOUND"
-	ErrorFileExists       ErrorCode = "FILE_EXISTS"
-	ErrorRefNotFound      ErrorCode = "REF_NOT_FOUND"
-	ErrorRefAmbiguous     ErrorCode = "REF_AMBIGUOUS"
-	ErrorDatabase         ErrorCode = "DATABASE"
-	ErrorValidationFailed ErrorCode = "VALIDATION_FAILED"
-	ErrorFileRead         ErrorCode = "FILE_READ"
-	ErrorFileWrite        ErrorCode = "FILE_WRITE"
-	ErrorUnexpected       ErrorCode = "UNEXPECTED"
+	ErrorTypeNotFound     ErrorCode = codes.ErrTypeNotFound
+	ErrorRequiredField    ErrorCode = codes.ErrRequiredFieldMissing
+	ErrorInvalidInput     ErrorCode = codes.ErrInvalidInput
+	ErrorFileNotFound     ErrorCode = codes.ErrFileNotFound
+	ErrorFileExists       ErrorCode = codes.ErrFileExists
+	ErrorRefNotFound      ErrorCode = codes.ErrRefNotFound
+	ErrorRefAmbiguous     ErrorCode = codes.ErrRefAmbiguous
+	ErrorDatabase         ErrorCode = codes.ErrDatabase
+	ErrorValidationFailed ErrorCode = codes.ErrValidationFailed
+	ErrorFileRead         ErrorCode = codes.ErrFileRead
+	ErrorFileWrite        ErrorCode = codes.ErrFileWrite
+	ErrorUnexpected       ErrorCode = codes.ErrInternal
 )
 
 type Error struct {

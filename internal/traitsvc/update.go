@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
@@ -17,15 +18,15 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput   Code = "INVALID_INPUT"
-	CodeValidation     Code = "VALIDATION_FAILED"
-	CodeDatabaseError  Code = "DATABASE_ERROR"
-	CodeFileReadError  Code = "FILE_READ_ERROR"
-	CodeFileWriteError Code = "FILE_WRITE_ERROR"
-	CodeInternalError  Code = "INTERNAL_ERROR"
+	CodeInvalidInput   Code = codes.ErrInvalidInput
+	CodeValidation     Code = codes.ErrValidationFailed
+	CodeDatabaseError  Code = codes.ErrDatabase
+	CodeFileReadError  Code = codes.ErrFileRead
+	CodeFileWriteError Code = codes.ErrFileWrite
+	CodeInternalError  Code = codes.ErrInternal
 )
 
 type Error struct {

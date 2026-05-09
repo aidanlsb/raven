@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commands"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/ui"
@@ -229,7 +230,7 @@ func loadGlobalConfigWithPath() (*config.Config, string, error) {
 	return loadedCfg, resolvedPath, nil
 }
 
-func handleStartupError(code, message, suggestion string) error {
+func handleStartupError(code codes.ErrorCode, message, suggestion string) error {
 	if jsonOutput {
 		outputError(code, message, nil, suggestion)
 		return errJSONStartupHandled

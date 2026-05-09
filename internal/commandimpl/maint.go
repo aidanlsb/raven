@@ -18,7 +18,7 @@ func HandleVaultStats(_ context.Context, req commandexec.Request) commandexec.Re
 		if !ok {
 			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 		}
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 	}
 
 	return commandexec.Success(map[string]interface{}{

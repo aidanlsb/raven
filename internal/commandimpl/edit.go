@@ -189,7 +189,7 @@ func mapEditFailure(err error) commandexec.Result {
 				details[key] = value
 			}
 		}
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, details, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, details, svcErr.Suggestion)
 	}
 	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 }

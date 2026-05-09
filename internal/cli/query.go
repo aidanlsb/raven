@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/app"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
@@ -796,19 +797,19 @@ func normalizeSavedQueryArgsForCommand(cmd *cobra.Command) ([]string, error) {
 	return normalized, nil
 }
 
-func mapQueryCode(code string) string {
+func mapQueryCode(code codes.ErrorCode) codes.ErrorCode {
 	switch code {
-	case "MISSING_ARGUMENT":
+	case codes.ErrMissingArgument:
 		return ErrMissingArgument
-	case "INVALID_ARGS", "INVALID_INPUT":
+	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
 		return ErrInvalidInput
-	case "QUERY_INVALID":
+	case codes.ErrQueryInvalid:
 		return ErrQueryInvalid
-	case "QUERY_NOT_FOUND":
+	case codes.ErrQueryNotFound:
 		return ErrQueryNotFound
-	case "CONFIG_INVALID":
+	case codes.ErrConfigInvalid:
 		return ErrConfigInvalid
-	case "DATABASE_ERROR":
+	case codes.ErrDatabase:
 		return ErrDatabaseError
 	default:
 		return ErrInternal

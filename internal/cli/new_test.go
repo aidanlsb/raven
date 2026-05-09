@@ -288,7 +288,7 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrFileExists {
+	if resp.Error == nil || resp.Error.Code != string(ErrFileExists) {
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrFileExists, resp.Error, out)
 	}
 }
@@ -345,7 +345,7 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
 	}
 	if !strings.Contains(resp.Error.Message, "title cannot contain path separators") {
@@ -458,7 +458,7 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
 		t.Fatalf("expected error.code=%s, got %#v; out=%s", ErrInvalidInput, resp.Error, out)
 	}
 }

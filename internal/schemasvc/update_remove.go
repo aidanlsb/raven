@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 )
@@ -66,8 +67,8 @@ type RemoveFieldRequest struct {
 }
 
 type Warning struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    codes.WarningCode `json:"code"`
+	Message string            `json:"message"`
 }
 
 type RemoveResult struct {
@@ -567,7 +568,7 @@ func RemoveType(req RemoveTypeRequest) (*RemoveResult, error) {
 		defer db.Close()
 		if objects, err := db.QueryObjects(typeName); err == nil && len(objects) > 0 {
 			warnings = append(warnings, Warning{
-				Code:    "ORPHANED_FILES",
+				Code:    codes.WarnOrphanedFiles,
 				Message: fmt.Sprintf("%d files of type '%s' will become 'page' type", len(objects), typeName),
 			})
 			if req.Interactive && !req.Force {
@@ -633,7 +634,7 @@ func RemoveTrait(req RemoveTraitRequest) (*RemoveResult, error) {
 		defer db.Close()
 		if instances, err := db.QueryTraits(traitName, nil); err == nil && len(instances) > 0 {
 			warnings = append(warnings, Warning{
-				Code:    "ORPHANED_TRAITS",
+				Code:    codes.WarnOrphanedTraits,
 				Message: fmt.Sprintf("%d instances of @%s will remain in files (no longer indexed)", len(instances), traitName),
 			})
 			if req.Interactive && !req.Force {

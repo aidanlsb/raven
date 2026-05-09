@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schemapayload"
@@ -577,21 +578,21 @@ func HandleTemplateDelete(_ context.Context, req commandexec.Request) commandexe
 func mapSchemaFailure(err error) commandexec.Result {
 	var svcErr *schemasvc.Error
 	if errors.As(err, &svcErr) {
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, svcErr.Details, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, svcErr.Details, svcErr.Suggestion)
 	}
-	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+	return commandexec.Failure(codes.ErrInternal, err.Error(), nil, "")
 }
 
 func mapTemplateFailure(err error) commandexec.Result {
 	svcErr, ok := templatesvc.AsError(err)
 	if !ok {
-		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
+		return commandexec.Failure(codes.ErrInternal, err.Error(), nil, "")
 	}
-	return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+	return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 }
 
 func canonicalSchemaWarnings(serviceWarnings []schemasvc.Warning) []commandexec.Warning {
-	return schemapayload.MapWarnings(serviceWarnings, func(code, message string) commandexec.Warning {
+	return schemapayload.MapWarnings(serviceWarnings, func(code codes.WarningCode, message string) commandexec.Warning {
 		return commandexec.Warning{Code: code, Message: message}
 	})
 }

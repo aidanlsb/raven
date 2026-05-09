@@ -285,7 +285,7 @@ func mapBulkopsFailure(err error) commandexec.Result {
 	if !ok {
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 	}
-	return commandexec.Failure(string(bulkErr.Code), bulkErr.Message, nil, bulkErr.Suggestion)
+	return commandexec.Failure(bulkErr.Code, bulkErr.Message, nil, bulkErr.Suggestion)
 }
 
 func dedupeQueryApplyIDs(ids []string) []string {

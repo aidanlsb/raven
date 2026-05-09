@@ -7,12 +7,13 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/checksvc"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-const checkApplyIncompleteWarningCode = "CHECK_APPLY_INCOMPLETE"
+const checkApplyIncompleteWarningCode = codes.WarnCheckIncomplete
 
 // HandleCheck executes the canonical `check` command.
 func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result {

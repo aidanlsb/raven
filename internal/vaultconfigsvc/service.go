@@ -8,17 +8,18 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput   Code = "INVALID_INPUT"
-	CodeConfigInvalid  Code = "CONFIG_INVALID"
-	CodeFileWriteError Code = "FILE_WRITE_ERROR"
-	CodePrefixNotFound Code = "PREFIX_NOT_FOUND"
+	CodeInvalidInput   Code = codes.ErrInvalidInput
+	CodeConfigInvalid  Code = codes.ErrConfigInvalid
+	CodeFileWriteError Code = codes.ErrFileWrite
+	CodePrefixNotFound Code = codes.ErrPrefixNotFound
 )
 
 type Error struct {

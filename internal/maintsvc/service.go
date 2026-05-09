@@ -8,14 +8,15 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/buildinfo"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/index"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput  Code = "INVALID_INPUT"
-	CodeDatabaseError Code = "DATABASE_ERROR"
+	CodeInvalidInput  Code = codes.ErrInvalidInput
+	CodeDatabaseError Code = codes.ErrDatabase
 )
 
 type Error struct {

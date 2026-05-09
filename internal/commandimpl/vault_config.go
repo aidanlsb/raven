@@ -245,7 +245,7 @@ func mapVaultConfigFailure(err error) commandexec.Result {
 	if !ok {
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 	}
-	return commandexec.Failure(string(svcErr.Code), svcErr.Error(), nil, svcErr.Suggestion)
+	return commandexec.Failure(svcErr.Code, svcErr.Error(), nil, svcErr.Suggestion)
 }
 
 func vaultConfigShowRequest(req commandexec.Request) vaultconfigsvc.ShowRequest {

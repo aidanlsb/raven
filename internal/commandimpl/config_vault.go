@@ -255,5 +255,5 @@ func mapConfigSvcFailure(err error, fallbackSuggestion string) commandexec.Resul
 	if !ok {
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, fallbackSuggestion)
 	}
-	return commandexec.Failure(string(svcErr.Code), svcErr.Error(), nil, fallbackSuggestion)
+	return commandexec.Failure(svcErr.Code, svcErr.Error(), nil, fallbackSuggestion)
 }

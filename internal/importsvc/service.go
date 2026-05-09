@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/pages"
@@ -19,13 +20,13 @@ import (
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput  Code = "INVALID_INPUT"
-	CodeTypeNotFound  Code = "TYPE_NOT_FOUND"
-	CodeSchemaInvalid Code = "SCHEMA_INVALID"
-	CodeConfigInvalid Code = "CONFIG_INVALID"
+	CodeInvalidInput  Code = codes.ErrInvalidInput
+	CodeTypeNotFound  Code = codes.ErrTypeNotFound
+	CodeSchemaInvalid Code = codes.ErrSchemaInvalid
+	CodeConfigInvalid Code = codes.ErrConfigInvalid
 )
 
 type Error struct {

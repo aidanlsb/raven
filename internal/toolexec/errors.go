@@ -3,16 +3,18 @@ package toolexec
 import (
 	"errors"
 	"fmt"
+
+	"github.com/aidanlsb/raven/internal/codes"
 )
 
-type ErrorCode string
+type ErrorCode = codes.ErrorCode
 
 const (
-	CodeExecutableRequired ErrorCode = "EXECUTABLE_REQUIRED"
-	CodeUnknownTool        ErrorCode = "UNKNOWN_TOOL"
-	CodeExecutionFailed    ErrorCode = "EXECUTION_FAILED"
-	CodeInvalidJSON        ErrorCode = "INVALID_JSON"
-	CodeToolReturnedError  ErrorCode = "TOOL_RETURNED_ERROR"
+	CodeExecutableRequired ErrorCode = codes.ErrExecutableRequired
+	CodeUnknownTool        ErrorCode = codes.ErrUnknownTool
+	CodeExecutionFailed    ErrorCode = codes.ErrExecutionFailed
+	CodeInvalidJSON        ErrorCode = codes.ErrInvalidJSON
+	CodeToolReturnedError  ErrorCode = codes.ErrToolReturnedError
 )
 
 // Error is the typed error contract for tool execution failures.

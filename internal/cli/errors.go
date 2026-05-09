@@ -1,92 +1,94 @@
 // Package cli implements the command-line interface.
 package cli
 
+import "github.com/aidanlsb/raven/internal/codes"
+
 // Error codes for structured error responses.
 // These codes are stable and can be relied upon by agents.
 const (
 	// Vault errors
-	ErrVaultNotFound     = "VAULT_NOT_FOUND"
-	ErrVaultNotSpecified = "VAULT_NOT_SPECIFIED"
-	ErrConfigInvalid     = "CONFIG_INVALID"
+	ErrVaultNotFound     = codes.ErrVaultNotFound
+	ErrVaultNotSpecified = codes.ErrVaultNotSpecified
+	ErrConfigInvalid     = codes.ErrConfigInvalid
 
 	// Schema errors
-	ErrSchemaNotFound = "SCHEMA_NOT_FOUND"
-	ErrSchemaInvalid  = "SCHEMA_INVALID"
-	ErrTypeNotFound   = "TYPE_NOT_FOUND"
-	ErrTraitNotFound  = "TRAIT_NOT_FOUND"
-	ErrFieldNotFound  = "FIELD_NOT_FOUND"
+	ErrSchemaNotFound = codes.ErrSchemaNotFound
+	ErrSchemaInvalid  = codes.ErrSchemaInvalid
+	ErrTypeNotFound   = codes.ErrTypeNotFound
+	ErrTraitNotFound  = codes.ErrTraitNotFound
+	ErrFieldNotFound  = codes.ErrFieldNotFound
 
 	// Object errors
-	ErrObjectNotFound = "OBJECT_NOT_FOUND"
-	ErrObjectExists   = "OBJECT_EXISTS"
-	ErrObjectInvalid  = "OBJECT_INVALID"
+	ErrObjectNotFound = codes.ErrObjectNotFound
+	ErrObjectExists   = codes.ErrObjectExists
+	ErrObjectInvalid  = codes.ErrObjectInvalid
 
 	// Reference errors
-	ErrRefNotFound  = "REF_NOT_FOUND"
-	ErrRefInvalid   = "REF_INVALID"
-	ErrRefAmbiguous = "REF_AMBIGUOUS"
+	ErrRefNotFound  = codes.ErrRefNotFound
+	ErrRefInvalid   = codes.ErrRefInvalid
+	ErrRefAmbiguous = codes.ErrRefAmbiguous
 
 	// File errors
-	ErrFileNotFound     = "FILE_NOT_FOUND"
-	ErrFileExists       = "FILE_EXISTS"
-	ErrFileReadError    = "FILE_READ_ERROR"
-	ErrFileWriteError   = "FILE_WRITE_ERROR"
-	ErrFileOutsideVault = "FILE_OUTSIDE_VAULT"
+	ErrFileNotFound     = codes.ErrFileNotFound
+	ErrFileExists       = codes.ErrFileExists
+	ErrFileReadError    = codes.ErrFileRead
+	ErrFileWriteError   = codes.ErrFileWrite
+	ErrFileOutsideVault = codes.ErrFileOutsideVault
 
 	// Database errors
-	ErrDatabaseError   = "DATABASE_ERROR"
-	ErrDatabaseVersion = "DATABASE_VERSION_MISMATCH"
+	ErrDatabaseError   = codes.ErrDatabase
+	ErrDatabaseVersion = codes.ErrDatabaseVersion
 
 	// Validation errors
-	ErrValidationFailed     = "VALIDATION_FAILED"
-	ErrRequiredFieldMissing = "REQUIRED_FIELD_MISSING"
-	ErrInvalidValue         = "INVALID_VALUE"
-	ErrUnknownField         = "UNKNOWN_FIELD"
+	ErrValidationFailed     = codes.ErrValidationFailed
+	ErrRequiredFieldMissing = codes.ErrRequiredFieldMissing
+	ErrInvalidValue         = codes.ErrInvalidValue
+	ErrUnknownField         = codes.ErrUnknownField
 
 	// Query errors
-	ErrQueryNotFound = "QUERY_NOT_FOUND"
-	ErrQueryInvalid  = "QUERY_INVALID"
-	ErrDuplicateName = "DUPLICATE_NAME"
+	ErrQueryNotFound = codes.ErrQueryNotFound
+	ErrQueryInvalid  = codes.ErrQueryInvalid
+	ErrDuplicateName = codes.ErrDuplicateName
 
 	// Input errors
-	ErrInvalidInput    = "INVALID_INPUT"
-	ErrInvalidArgs     = "INVALID_ARGS"
-	ErrMissingArgument = "MISSING_ARGUMENT"
-	ErrCommandNotFound = "COMMAND_NOT_FOUND"
+	ErrInvalidInput    = codes.ErrInvalidInput
+	ErrInvalidArgs     = codes.ErrInvalidArgs
+	ErrMissingArgument = codes.ErrMissingArgument
+	ErrCommandNotFound = codes.ErrCommandNotFound
 
 	// Skill errors
-	ErrSkillNotFound          = "SKILL_NOT_FOUND"
-	ErrSkillNotInstalled      = "SKILL_NOT_INSTALLED"
-	ErrSkillTargetUnsupported = "SKILL_TARGET_UNSUPPORTED"
-	ErrSkillRenderFailed      = "SKILL_RENDER_FAILED"
-	ErrSkillPathUnresolved    = "SKILL_PATH_UNRESOLVED"
-	ErrSkillReceiptInvalid    = "SKILL_RECEIPT_INVALID"
+	ErrSkillNotFound          = codes.ErrSkillNotFound
+	ErrSkillNotInstalled      = codes.ErrSkillNotInstalled
+	ErrSkillTargetUnsupported = codes.ErrSkillTargetUnsupported
+	ErrSkillRenderFailed      = codes.ErrSkillRenderFailed
+	ErrSkillPathUnresolved    = codes.ErrSkillPathUnresolved
+	ErrSkillReceiptInvalid    = codes.ErrSkillReceiptInvalid
 
 	// MCP client errors
-	ErrMCPClientInvalid    = "MCP_CLIENT_INVALID"
-	ErrMCPConfigWriteError = "MCP_CONFIG_WRITE_ERROR"
+	ErrMCPClientInvalid    = codes.ErrMCPClientInvalid
+	ErrMCPConfigWriteError = codes.ErrMCPConfigWrite
 
 	// General errors
-	ErrInternal       = "INTERNAL_ERROR"
-	ErrNotImplemented = "NOT_IMPLEMENTED"
+	ErrInternal       = codes.ErrInternal
+	ErrNotImplemented = codes.ErrNotImplemented
 
 	// Schema modification errors
-	ErrDataIntegrityBlock   = "DATA_INTEGRITY_BLOCK"
-	ErrConfirmationRequired = "CONFIRMATION_REQUIRED"
+	ErrDataIntegrityBlock   = codes.ErrDataIntegrityBlock
+	ErrConfirmationRequired = codes.ErrConfirmationRequired
 )
 
 // Warning codes for non-fatal issues.
 const (
-	WarnRefNotFound       = "REF_NOT_FOUND"
-	WarnDeprecated        = "DEPRECATED"
-	WarnSchemaOutdated    = "SCHEMA_OUTDATED"
-	WarnDatabaseOutdated  = "DATABASE_OUTDATED"
-	WarnIndexUpdateFailed = "INDEX_UPDATE_FAILED"
-	WarnDocsFetchFailed   = "DOCS_FETCH_FAILED"
-	WarnWrongCommand      = "WRONG_COMMAND"
-	WarnMissingField      = "MISSING_REQUIRED_FIELD"
-	WarnBacklinks         = "HAS_BACKLINKS"
-	WarnEmbeddedSkipped   = "EMBEDDED_SKIPPED"
-	WarnUnknownField      = "UNKNOWN_FIELD"
-	WarnTypeMismatch      = "TYPE_DIRECTORY_MISMATCH"
+	WarnRefNotFound       = codes.WarnRefNotFound
+	WarnDeprecated        = codes.WarnDeprecated
+	WarnSchemaOutdated    = codes.WarnSchemaOutdated
+	WarnDatabaseOutdated  = codes.WarnDatabaseOutdated
+	WarnIndexUpdateFailed = codes.WarnIndexUpdateFailed
+	WarnDocsFetchFailed   = codes.WarnDocsFetchFailed
+	WarnWrongCommand      = codes.WarnWrongCommand
+	WarnMissingField      = codes.WarnMissingField
+	WarnBacklinks         = codes.WarnBacklinks
+	WarnEmbeddedSkipped   = codes.WarnEmbeddedSkipped
+	WarnUnknownField      = codes.WarnUnknownField
+	WarnTypeMismatch      = codes.WarnTypeMismatch
 )

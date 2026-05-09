@@ -35,7 +35,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 		if !ok {
 			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 		}
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.Warnings))
@@ -76,7 +76,7 @@ func HandleReindex(ctx context.Context, req commandexec.Request) commandexec.Res
 		if !ok {
 			return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 		}
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 	}
 
 	warnings := make([]commandexec.Warning, 0, len(result.WarningMessages))
@@ -169,7 +169,7 @@ func mapDateServiceError(err error) commandexec.Result {
 		return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 	}
 
-	return commandexec.Failure(string(svcErr.Code), svcErr.Message, nil, svcErr.Suggestion)
+	return commandexec.Failure(svcErr.Code, svcErr.Message, nil, svcErr.Suggestion)
 }
 
 func buildInitPostInitData(path, configPathOverride, statePathOverride string) map[string]interface{} {

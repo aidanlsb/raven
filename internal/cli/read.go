@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
@@ -109,21 +110,21 @@ func init() {
 	rootCmd.AddCommand(readCmd)
 }
 
-func mapReadCode(code string) string {
+func mapReadCode(code codes.ErrorCode) codes.ErrorCode {
 	switch code {
-	case "CONFIG_INVALID":
+	case codes.ErrConfigInvalid:
 		return ErrConfigInvalid
-	case "REF_AMBIGUOUS":
+	case codes.ErrRefAmbiguous:
 		return ErrRefAmbiguous
-	case "REF_NOT_FOUND":
+	case codes.ErrRefNotFound:
 		return ErrRefNotFound
-	case "INVALID_ARGS", "INVALID_INPUT":
+	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
 		return ErrInvalidInput
-	case "DATABASE_ERROR":
+	case codes.ErrDatabase:
 		return ErrDatabaseError
-	case "FILE_NOT_FOUND":
+	case codes.ErrFileNotFound:
 		return ErrFileNotFound
-	case "FILE_READ_ERROR":
+	case codes.ErrFileRead:
 		return ErrFileReadError
 	default:
 		return ErrInternal

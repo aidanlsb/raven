@@ -1,12 +1,16 @@
 package bulkops
 
-import "errors"
+import (
+	"errors"
 
-type ErrorCode string
+	"github.com/aidanlsb/raven/internal/codes"
+)
+
+type ErrorCode = codes.ErrorCode
 
 const (
-	CodeInvalidInput    ErrorCode = "INVALID_INPUT"
-	CodeMissingArgument ErrorCode = "MISSING_ARGUMENT"
+	CodeInvalidInput    ErrorCode = codes.ErrInvalidInput
+	CodeMissingArgument ErrorCode = codes.ErrMissingArgument
 )
 
 type Error struct {

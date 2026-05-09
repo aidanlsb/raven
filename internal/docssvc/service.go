@@ -15,19 +15,20 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/docsync"
 )
 
 const docsIndexPath = "index.yaml"
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput Code = "INVALID_INPUT"
-	CodeNotFound     Code = "NOT_FOUND"
-	CodeFileRead     Code = "FILE_READ_ERROR"
-	CodeFetchFailed  Code = "FETCH_FAILED"
-	CodeInternal     Code = "INTERNAL_ERROR"
+	CodeInvalidInput Code = codes.ErrInvalidInput
+	CodeNotFound     Code = codes.ErrNotFound
+	CodeFileRead     Code = codes.ErrFileRead
+	CodeFetchFailed  Code = codes.ErrFetchFailed
+	CodeInternal     Code = codes.ErrInternal
 )
 
 type Error struct {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
@@ -16,15 +17,15 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput  Code = "INVALID_INPUT"
-	CodeConfigInvalid Code = "CONFIG_INVALID"
-	CodeSchemaInvalid Code = "SCHEMA_INVALID"
-	CodeDatabaseError Code = "DATABASE_ERROR"
-	CodeQueryFailed   Code = "QUERY_FAILED"
-	CodeFileWriteErr  Code = "FILE_WRITE_ERROR"
+	CodeInvalidInput  Code = codes.ErrInvalidInput
+	CodeConfigInvalid Code = codes.ErrConfigInvalid
+	CodeSchemaInvalid Code = codes.ErrSchemaInvalid
+	CodeDatabaseError Code = codes.ErrDatabase
+	CodeQueryFailed   Code = codes.ErrQueryFailed
+	CodeFileWriteErr  Code = codes.ErrFileWrite
 )
 
 type Error struct {

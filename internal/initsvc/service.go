@@ -9,19 +9,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/docsync"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeInvalidInput   Code = "INVALID_INPUT"
-	CodeFileWriteError Code = "FILE_WRITE_ERROR"
+	CodeInvalidInput   Code = codes.ErrInvalidInput
+	CodeFileWriteError Code = codes.ErrFileWrite
 )
 
-const WarnDocsFetchFailed = "DOCS_FETCH_FAILED"
+const WarnDocsFetchFailed = codes.WarnDocsFetchFailed
 
 type Error struct {
 	Code       Code
@@ -69,8 +70,8 @@ type DocsResult struct {
 }
 
 type Warning struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    codes.WarningCode `json:"code"`
+	Message string            `json:"message"`
 }
 
 type Result struct {

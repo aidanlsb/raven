@@ -240,7 +240,7 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrRequiredFieldMissing {
+	if resp.Error == nil || resp.Error.Code != string(ErrRequiredFieldMissing) {
 		t.Fatalf("expected error code %s, got %v; out=%s", ErrRequiredFieldMissing, resp.Error, out)
 	}
 	if resp.Error.Details["retry_with"] == nil {
@@ -519,7 +519,7 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
 		t.Fatalf("expected error code %s, got %v; out=%s", ErrInvalidInput, resp.Error, out)
 	}
 }
@@ -550,7 +550,7 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrInvalidInput {
+	if resp.Error == nil || resp.Error.Code != string(ErrInvalidInput) {
 		t.Fatalf("expected error code %s, got %v; out=%s", ErrInvalidInput, resp.Error, out)
 	}
 }
@@ -581,7 +581,7 @@ types:
 	if resp.OK {
 		t.Fatalf("expected ok=false; out=%s", out)
 	}
-	if resp.Error == nil || resp.Error.Code != ErrTypeNotFound {
+	if resp.Error == nil || resp.Error.Code != string(ErrTypeNotFound) {
 		t.Fatalf("expected error code %s, got %v; out=%s", ErrTypeNotFound, resp.Error, out)
 	}
 }

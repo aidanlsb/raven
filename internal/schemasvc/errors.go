@@ -1,24 +1,26 @@
 package schemasvc
 
-type ErrorCode string
+import "github.com/aidanlsb/raven/internal/codes"
+
+type ErrorCode = codes.ErrorCode
 
 const (
-	ErrorSchemaNotFound ErrorCode = "SCHEMA_NOT_FOUND"
-	ErrorSchemaInvalid  ErrorCode = "SCHEMA_INVALID"
-	ErrorTypeNotFound   ErrorCode = "TYPE_NOT_FOUND"
-	ErrorTraitNotFound  ErrorCode = "TRAIT_NOT_FOUND"
-	ErrorFieldNotFound  ErrorCode = "FIELD_NOT_FOUND"
-	ErrorObjectExists   ErrorCode = "OBJECT_EXISTS"
-	ErrorConfigInvalid  ErrorCode = "CONFIG_INVALID"
-	ErrorInvalidInput   ErrorCode = "INVALID_INPUT"
-	ErrorValidation     ErrorCode = "VALIDATION_FAILED"
-	ErrorDataIntegrity  ErrorCode = "DATA_INTEGRITY_BLOCK"
-	ErrorConfirmation   ErrorCode = "CONFIRMATION_REQUIRED"
-	ErrorFileNotFound   ErrorCode = "FILE_NOT_FOUND"
-	ErrorFileRead       ErrorCode = "FILE_READ_ERROR"
-	ErrorFileWrite      ErrorCode = "FILE_WRITE_ERROR"
-	ErrorFileOutside    ErrorCode = "FILE_OUTSIDE_VAULT"
-	ErrorInternal       ErrorCode = "INTERNAL_ERROR"
+	ErrorSchemaNotFound ErrorCode = codes.ErrSchemaNotFound
+	ErrorSchemaInvalid  ErrorCode = codes.ErrSchemaInvalid
+	ErrorTypeNotFound   ErrorCode = codes.ErrTypeNotFound
+	ErrorTraitNotFound  ErrorCode = codes.ErrTraitNotFound
+	ErrorFieldNotFound  ErrorCode = codes.ErrFieldNotFound
+	ErrorObjectExists   ErrorCode = codes.ErrObjectExists
+	ErrorConfigInvalid  ErrorCode = codes.ErrConfigInvalid
+	ErrorInvalidInput   ErrorCode = codes.ErrInvalidInput
+	ErrorValidation     ErrorCode = codes.ErrValidationFailed
+	ErrorDataIntegrity  ErrorCode = codes.ErrDataIntegrityBlock
+	ErrorConfirmation   ErrorCode = codes.ErrConfirmationRequired
+	ErrorFileNotFound   ErrorCode = codes.ErrFileNotFound
+	ErrorFileRead       ErrorCode = codes.ErrFileRead
+	ErrorFileWrite      ErrorCode = codes.ErrFileWrite
+	ErrorFileOutside    ErrorCode = codes.ErrFileOutsideVault
+	ErrorInternal       ErrorCode = codes.ErrInternal
 )
 
 type Error struct {

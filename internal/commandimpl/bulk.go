@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/dates"
@@ -22,7 +23,7 @@ import (
 	"github.com/aidanlsb/raven/internal/traitsvc"
 )
 
-const warnEmbeddedSkipped = "EMBEDDED_SKIPPED"
+const warnEmbeddedSkipped = codes.WarnEmbeddedSkipped
 
 type canonicalBulkResult struct {
 	ID      string `json:"id"`
@@ -142,7 +143,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	warnings := appendCommandWarnings(
-		warningMessagesToCommandWarnings(serviceResult.WarningMessages, "UNKNOWN_FIELD"),
+		warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField),
 		autoReindexWarnings(vaultPath, vaultCfg, serviceResult.FilePath),
 	)
 
@@ -344,7 +345,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 			"needs_confirm": true,
 			"reason":        serviceResult.Reason,
 		}, []commandexec.Warning{{
-			Code: "TYPE_DIRECTORY_MISMATCH",
+			Code: codes.WarnTypeMismatch,
 			Message: fmt.Sprintf("Moving to '%s/' which is the default directory for type '%s', but file has type '%s'",
 				mismatch.DestinationDir, mismatch.ExpectedType, mismatch.ActualType),
 			Ref: fmt.Sprintf("Use --skip-type-check to proceed, or change the file's type to '%s'", mismatch.ExpectedType),
@@ -957,7 +958,7 @@ func deleteBacklinkCommandWarnings(backlinks []model.Reference) []commandexec.Wa
 	}
 
 	return []commandexec.Warning{{
-		Code:    "HAS_BACKLINKS",
+		Code:    codes.WarnBacklinks,
 		Message: fmt.Sprintf("Object is referenced by %d other objects", len(backlinks)),
 		Ref:     strings.Join(backlinkIDs, ", "),
 	}}
@@ -1001,7 +1002,7 @@ func mapTraitMutationError(err error) commandexec.Result {
 		return commandexec.Failure("VALIDATION_FAILED", validationErr.Error(), nil, validationErr.Suggestion())
 	}
 	if svcErr, ok := traitsvc.AsError(err); ok {
-		return commandexec.Failure(string(svcErr.Code), svcErr.Message, svcErr.Details, svcErr.Suggestion)
+		return commandexec.Failure(svcErr.Code, svcErr.Message, svcErr.Details, svcErr.Suggestion)
 	}
 	return commandexec.Failure("INTERNAL_ERROR", err.Error(), nil, "")
 }

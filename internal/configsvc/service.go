@@ -8,22 +8,23 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
 )
 
-type Code string
+type Code = codes.ErrorCode
 
 const (
-	CodeConfigInvalid      Code = "CONFIG_INVALID"
-	CodeVaultNotFound      Code = "VAULT_NOT_FOUND"
-	CodeVaultNotSpecified  Code = "VAULT_NOT_SPECIFIED"
-	CodeFileNotFound       Code = "FILE_NOT_FOUND"
-	CodeFileReadError      Code = "FILE_READ_ERROR"
-	CodeFileWriteError     Code = "FILE_WRITE_ERROR"
-	CodeInvalidInput       Code = "INVALID_INPUT"
-	CodeMissingArgument    Code = "MISSING_ARGUMENT"
-	CodeDuplicateName      Code = "DUPLICATE_NAME"
-	CodeConfirmationNeeded Code = "CONFIRMATION_REQUIRED"
+	CodeConfigInvalid      Code = codes.ErrConfigInvalid
+	CodeVaultNotFound      Code = codes.ErrVaultNotFound
+	CodeVaultNotSpecified  Code = codes.ErrVaultNotSpecified
+	CodeFileNotFound       Code = codes.ErrFileNotFound
+	CodeFileReadError      Code = codes.ErrFileRead
+	CodeFileWriteError     Code = codes.ErrFileWrite
+	CodeInvalidInput       Code = codes.ErrInvalidInput
+	CodeMissingArgument    Code = codes.ErrMissingArgument
+	CodeDuplicateName      Code = codes.ErrDuplicateName
+	CodeConfirmationNeeded Code = codes.ErrConfirmationRequired
 )
 
 type Error struct {

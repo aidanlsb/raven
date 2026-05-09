@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/importsvc"
 )
@@ -77,7 +78,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 				autoReindexWarnings(vaultPath, serviceResult.VaultConfig, changedFile),
 			)
 		}
-		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, "UNKNOWN_FIELD")
+		serviceWarnings := warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField)
 		return commandexec.SuccessWithWarnings(map[string]interface{}{
 			"total":   len(serviceResult.Results),
 			"created": created,
@@ -95,7 +96,7 @@ func HandleImport(_ context.Context, req commandexec.Request) commandexec.Result
 		"skipped": skipped,
 		"errors":  errored,
 		"results": serviceResult.Results,
-	}, warningMessagesToCommandWarnings(serviceResult.WarningMessages, "UNKNOWN_FIELD"), nil)
+	}, warningMessagesToCommandWarnings(serviceResult.WarningMessages, codes.WarnUnknownField), nil)
 }
 
 func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {
@@ -118,7 +119,7 @@ func mapImportFailure(err error, fallbackSuggestion string) commandexec.Result {
 		suggestion = "Fix raven.yaml and try again"
 	}
 
-	return commandexec.Failure(string(svcErr.Code), svcErr.Error(), nil, suggestion)
+	return commandexec.Failure(svcErr.Code, svcErr.Error(), nil, suggestion)
 }
 
 func stdinReader(stdin []byte) io.Reader {

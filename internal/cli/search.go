@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/model"
 )
@@ -85,11 +86,11 @@ func searchMatchFromMap(row map[string]interface{}) model.SearchMatch {
 	return match
 }
 
-func mapSearchCode(code string) string {
+func mapSearchCode(code codes.ErrorCode) codes.ErrorCode {
 	switch code {
-	case "DATABASE_ERROR":
+	case codes.ErrDatabase:
 		return ErrDatabaseError
-	case "INVALID_ARGS", "INVALID_INPUT":
+	case codes.ErrInvalidArgs, codes.ErrInvalidInput:
 		return ErrInvalidInput
 	default:
 		return ErrInternal
