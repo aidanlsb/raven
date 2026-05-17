@@ -14,7 +14,7 @@ Out of scope:
 - **fields**: validated frontmatter keys per type
 - **traits**: inline annotations like `@due(2026-02-01)` or `@highlight`
 
-When Raven indexes your notes, schema definitions determine what becomes structured, queryable data. Only types, fields, and traits defined in `schema.yaml` are indexed — undefined frontmatter keys trigger validation warnings, and undefined traits are treated as plain text.
+When Raven indexes your notes, schema definitions determine what becomes structured, queryable data. Only types, fields, and traits defined in `schema.yaml` are indexed — unknown frontmatter keys are validation errors, and undefined traits are treated as plain text.
 
 This means the schema is the bridge between your markdown files and Raven's query engine. If something isn't in the schema, you can't query it structurally.
 

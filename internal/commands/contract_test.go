@@ -76,6 +76,36 @@ func TestValidateArgumentsStrictNormalizesUpdateBulkAliases(t *testing.T) {
 	}
 }
 
+func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
+	t.Parallel()
+
+	for _, commandID := range []string{"add", "delete", "move", "set", "update"} {
+		t.Run(commandID, func(t *testing.T) {
+			t.Parallel()
+
+			contract, ok := BuildCommandContract(commandID)
+			if !ok {
+				t.Fatalf("expected %s contract", commandID)
+			}
+			if got := contract.PreviewMode; got != "bulk_preview_default" {
+				t.Fatalf("%s preview mode=%q, want bulk_preview_default", commandID, got)
+			}
+		})
+	}
+}
+
+func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
+	t.Parallel()
+
+	contract, ok := BuildCommandContract("query")
+	if !ok {
+		t.Fatal("expected query contract")
+	}
+	if got := contract.PreviewMode; got != "preview_default" {
+		t.Fatalf("query preview mode=%q, want preview_default", got)
+	}
+}
+
 func containsString(items []string, want string) bool {
 	for _, item := range items {
 		if item == want {

@@ -511,7 +511,8 @@ func flagTypeToParameterType(flagType FlagType) ParameterType {
 }
 
 func previewModeForCommand(meta Meta) string {
-	if meta.Name == "delete" {
+	switch meta.Name {
+	case "add", "delete", "move", "set", "update":
 		return "bulk_preview_default"
 	}
 	for _, flag := range meta.Flags {
