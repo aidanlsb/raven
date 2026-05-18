@@ -10,7 +10,7 @@ For daily notes and quick capture (`rvn daily`, `rvn add`), see `using-your-vaul
 
 ### `rvn read`
 
-Display an object's content. By default, Raven renders wiki-links and appends backlinks. Use `--raw` for plain file content (recommended when preparing edits).
+Display an object's content. By default, Raven renders wiki-links and appends backlinks. Use `--raw` for plain file content (recommended when preparing edits). Use your editor or operating system tools to view binary assets.
 
 ```bash
 rvn read person/freya                     # Enriched output with backlinks
@@ -65,16 +65,17 @@ Key flags:
 
 ### `rvn backlinks`
 
-Find all incoming references to an object — everything that links *to* it.
+Find all incoming references to an object or asset — everything that links *to* it.
 
 ```bash
 rvn backlinks person/freya
 rvn backlinks project/website
+rvn backlinks assets/pdfs/paper.pdf
 ```
 
 ### `rvn outlinks`
 
-Find all outgoing references from an object — everything it links *to*.
+Find all outgoing references from an object — everything it links *to*, including assets referenced with Markdown links or images.
 
 ```bash
 rvn outlinks project/website
@@ -164,12 +165,15 @@ Key flags:
 
 ### `rvn move`
 
-Move or rename an object. References are updated automatically by default.
+Move or rename an object or asset. References are updated automatically by default, including Raven wikilinks and Markdown links/images that point at moved assets.
 
 ```bash
 rvn move inbox/idea project/idea              # Rename/relocate
 rvn move project/old-name project/new-name    # Rename
+rvn move assets/pdfs/draft.pdf assets/pdfs/final.pdf
 ```
+
+Asset destinations must include a file extension. Raven treats non-Markdown moves as asset moves and keeps the asset index in sync.
 
 Key flags:
 - `--update-refs` — update all references to the moved file (default: true)
@@ -216,7 +220,7 @@ rvn backlinks project/old-project
 
 ### `rvn check`
 
-Validate vault files against the schema. Reports issues like unknown types, missing required fields, broken references, and undefined traits.
+Validate vault files against the schema and asset graph. Reports issues like unknown types, missing required fields, broken references, missing assets, orphaned assets, non-canonical asset locations, and undefined traits.
 
 ```bash
 rvn check                                       # Entire vault
@@ -241,6 +245,8 @@ rvn check --create-missing --confirm             # Create them
 - **`non_canonical_ref`** — strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
 - **`non_canonical_path`** — move files into the configured directory root for their type and rewrite all references that point at them
 
+Asset-related issues are reported by `rvn check`, but are not auto-fixed by `rvn check fix` in this release. Use `rvn move` to relocate assets into their configured kind paths so references are rewritten safely.
+
 Key flags:
 - `--type` / `-t` — check only objects of a specific type
 - `--issues` — only report specific issue types (comma-separated)
@@ -252,16 +258,17 @@ Key flags:
 
 ### `rvn resolve`
 
-Debug reference resolution. Shows how Raven resolves a reference string to an object ID.
+Debug reference resolution. Shows how Raven resolves a reference string to an object or asset ID.
 
 ```bash
 rvn resolve freya                                # Short name
 rvn resolve "The Queen"                          # Alias
 rvn resolve 2026-03-15                           # Date reference
 rvn resolve project/website#tasks               # Section reference
+rvn resolve paper                                # Short asset name if unambiguous
 ```
 
-Returns whether the reference resolved, the target object ID, and the match source (alias, name_field, object_id, short_name, etc.).
+Returns whether the reference resolved, the target ID, and the match source (alias, name_field, object_id, short_name, asset path, etc.).
 
 ---
 
@@ -269,9 +276,10 @@ Returns whether the reference resolved, the target object ID, and the match sour
 
 ### `rvn reindex`
 
-Rebuild the SQLite index from vault files. Normally Raven reindexes automatically after commands (`auto_reindex: true` in `raven.yaml`). Manual reindexing is needed after:
+Rebuild the SQLite index from vault files, including Markdown objects and assets under the configured asset root. Normally Raven reindexes automatically after commands (`auto_reindex: true` in `raven.yaml`). Manual reindexing is needed after:
 
 - Editing files outside of Raven (e.g., in your editor or with git)
+- Adding, moving, or deleting assets outside of Raven
 - Schema changes that affect indexing
 - Recovering from index corruption
 
@@ -286,6 +294,7 @@ rvn reindex --dry-run                            # Show what would be reindexed
 ## Related docs
 
 - `querying/query-language.md` — full RQL syntax for complex queries
+- `using-your-vault/assets.md` — organizing and referencing non-Markdown files
 - `vault-management/bulk-operations.md` — `--apply` and `--ids` piping for bulk changes
 - `vault-management/import.md` — bulk importing from JSON
 - `types-and-traits/references.md` — reference syntax, resolution, and maintenance

@@ -134,6 +134,8 @@ type: date
 - Date references (`[[2026-01-10]]`) resolve to daily notes
 - Files are stored under `directories.daily` (from `raven.yaml`)
 
+There is intentionally no built-in `asset` type. Assets such as PDFs and images are non-Markdown graph resources configured under `assets:` in `raven.yaml`; they are not schema-backed objects and do not define frontmatter fields.
+
 ---
 
 ## Type Definitions
@@ -582,13 +584,16 @@ Validates vault files against the schema. Reports issues like:
 | `missing_required_field` | Required field not set | Set the field value |
 | `invalid_enum_value` | Value not in allowed list | Use valid value |
 | `undefined_trait` | Trait not in schema | Add trait to schema |
-| `missing_reference` | Link to non-existent page | Create the page |
-| `ambiguous_reference` | Reference matches multiple objects | Use full path (e.g., `[[person/freya]]`) |
+| `missing_reference` | Link to non-existent object or section | Create the target or update the link |
+| `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset or update the reference |
+| `ambiguous_reference` | Reference matches multiple objects or assets | Use full path (e.g., `[[person/freya]]`) |
 | `id_collision` | Same short name maps to multiple object IDs | Use full paths or rename objects |
 | `duplicate_alias` | Multiple objects use the same alias | Make aliases unique |
 | `alias_collision` | Alias conflicts with object ID or short name | Rename alias or use full path |
 | `non_canonical_path` | File lives outside the configured directory root for its type | Run `rvn check fix --confirm` to move the file |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |
+| `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
+| `non_canonical_asset` | Asset is outside its kind's preferred path | Move it with `rvn move` |
 
 For reference resolution details and ambiguity behavior, see `types-and-traits/file-format.md` (References section).
 

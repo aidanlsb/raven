@@ -42,11 +42,12 @@ collaborators:
 ::meeting(attendees=[[[person/freya]], [[person/thor]]])
 ```
 
-Asset references work in Markdown body content via vault-relative Markdown links and images:
+Asset references work in Markdown body content via vault-relative Markdown links/images or Raven wikilinks:
 
 ```markdown
 See [paper](assets/pdfs/paper.pdf).
 ![Diagram](assets/photos/system.png)
+See also [[assets/pdfs/paper.pdf]].
 ```
 
 ## Resolution
@@ -64,15 +65,16 @@ If multiple candidates match, the reference is ambiguous and is not resolved aut
 
 ### Short references
 
-When a short name uniquely identifies one object, you can use it without the full path:
+When a short name uniquely identifies one object or asset, you can use it without the full path:
 
 ```markdown
 [[freya]]       → person/freya (if only one "freya" exists)
 [[website]]     → project/website
 [[2026-03-15]]  → daily/2026-03-15
+[[paper]]       → assets/pdfs/paper.pdf
 ```
 
-When short names collide (e.g., `project/notes` and `meeting/notes`), use the full path to disambiguate:
+When short names collide (e.g., `project/notes` and `meeting/notes`, or `paper.pdf` and `paper.png`), use the full path to disambiguate:
 
 ```markdown
 [[project/notes]]    → unambiguous
@@ -84,10 +86,11 @@ Use `rvn resolve` to debug resolution and `rvn check` to find ambiguous referenc
 
 ## Backlinks and outlinks
 
-Backlinks are incoming references — everything that links *to* an object. Outlinks are outgoing references — everything an object links *to*.
+Backlinks are incoming references — everything that links *to* an object or asset. Outlinks are outgoing references — everything an object links *to*.
 
 ```bash
 rvn backlinks person/freya
+rvn backlinks assets/pdfs/paper.pdf
 ```
 
 ```text
@@ -118,6 +121,7 @@ RQL has predicates for querying the reference graph:
 # Objects that reference a target
 rvn query 'type:meeting refs([[person/freya]])'
 rvn query 'type:meeting refs(type:project .status==active)'
+rvn query 'type:page refs([[assets/pdfs/paper.pdf]])'
 
 # Objects referenced by a source
 rvn query 'type:project refd(type:meeting)'
@@ -142,6 +146,9 @@ rvn query 'trait:todo refs([[person/freya]])'
 ```bash
 rvn move person/freya person/freya-odinsdottir
 # All [[person/freya]] references are updated to [[person/freya-odinsdottir]]
+
+rvn move assets/downloads/paper.pdf assets/pdfs/paper.pdf
+# Markdown links/images and wikilinks pointing at the asset are updated
 ```
 
 Disable with `--update-refs=false` if needed.
@@ -150,6 +157,7 @@ Disable with `--update-refs=false` if needed.
 
 ```bash
 rvn check --issues missing_reference
+rvn check --issues missing_asset
 rvn check --issues ambiguous_reference,id_collision,alias_collision
 ```
 
@@ -159,6 +167,7 @@ rvn check --issues ambiguous_reference,id_collision,alias_collision
 rvn resolve "freya" --json           # See match source and target
 rvn resolve "The Queen" --json       # Alias resolution
 rvn resolve "2026-03-15" --json      # Date resolution
+rvn resolve "paper" --json           # Short asset name when unambiguous
 ```
 
 ## Common patterns
@@ -191,6 +200,7 @@ See the tasks list: [[project/website#tasks]]
 ## Related docs
 
 - `types-and-traits/file-format.md` — full resolution model, slug generation, and ambiguity handling
+- `using-your-vault/assets.md` — organizing and referencing non-Markdown files
 - `querying/query-language.md` — `refs()`, `refd()`, and other structural predicates
 - `using-your-vault/common-commands.md` — `rvn backlinks`, `rvn outlinks`, `rvn resolve`, `rvn check`
 - `types-and-traits/schema.md` — `ref` and `ref[]` field types, `alias` reserved key

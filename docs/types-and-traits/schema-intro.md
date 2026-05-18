@@ -18,6 +18,8 @@ When Raven indexes your notes, schema definitions determine what becomes structu
 
 This means the schema is the bridge between your markdown files and Raven's query engine. If something isn't in the schema, you can't query it structurally.
 
+Assets are separate from `schema.yaml`. Non-Markdown files such as PDFs and images are configured under `assets:` in `raven.yaml`; asset kinds are organization and validation rules, not object types.
+
 ## Validation levels
 
 Raven validates your schema and data at two levels:
@@ -51,6 +53,8 @@ After `rvn init`, your schema already includes:
 - built-in types (`page`, `section`, `date`)
 - starter types (`person`, `project`)
 - starter traits (`due`, `todo`, `priority`)
+
+It does not include an `asset` type. Assets are graph resources configured in `raven.yaml`.
 
 Read your current schema first:
 

@@ -11,7 +11,7 @@
 |----------|---------------|
 | `rvn query` | Structured filtering by type/trait, field values, hierarchy, and references |
 | `rvn search` | Free-text discovery when you do not know the structure yet |
-| `rvn backlinks` | All incoming references to one specific target |
+| `rvn backlinks` | All incoming references to one specific object or asset |
 | `rvn outlinks` | All outgoing references from one specific target |
 | `rvn read` | Full file content after you already identified relevant objects |
 
@@ -26,6 +26,8 @@ Core rules:
 1. Every query returns exactly one kind of result (objects or traits).
 2. Queries can nest arbitrarily, e.g. `type:project has(trait:...)`.
 3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
+
+Assets can participate as reference targets in object and trait queries, but RQL does not currently return assets as the top-level result kind.
 
 ## Query Shapes
 
@@ -153,9 +155,12 @@ type:project has(trait:due)
 type:project encloses(trait:todo .value==todo)
 type:meeting parent(type:date)
 type:meeting refs([[project/website]])
+type:paper-notes refs([[assets/pdfs/paper.pdf]])
 type:meeting refs(type:project .status==active)
 type:project refd(type:meeting)
 ```
+
+For assets, `refs(...)` can target a full asset path or an unambiguous short asset name. Standard Markdown links and images to vault-local non-Markdown files are indexed as references, so `rvn backlinks assets/pdfs/paper.pdf` and `refd(...)` queries can find Markdown files that link to the asset.
 
 ## Trait Query Predicates
 
@@ -298,6 +303,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 ## Related Docs
 
 - Query-driven bulk changes: `vault-management/bulk-operations.md`
+- Organizing and referencing assets: `using-your-vault/assets.md`
 - Queryable field/trait definitions: `types-and-traits/schema.md`
 - Hierarchy and object IDs (`#fragment`, sections, embedded objects): `types-and-traits/file-format.md`
 - Saved query configuration in `raven.yaml`: `using-your-vault/configuration.md`

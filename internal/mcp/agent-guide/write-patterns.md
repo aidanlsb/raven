@@ -11,6 +11,7 @@ Use this guide to choose the right mutation primitive.
 | Deterministic create-or-update | `upsert` | Idempotent convergence for generated artifacts |
 | Update frontmatter fields | `set` | Schema-validated metadata updates |
 | Replace body text safely | `edit` | Unique-string replacement in content markdown with preview/confirm |
+| Move or rename an asset | `move` | Updates Markdown links/images and refreshes the asset index |
 | Update trait value | `update` | Targeted trait mutation by trait ID |
 | Delete one object | `delete` | Safe deletion behavior with backlink warnings and trash support |
 
@@ -82,4 +83,5 @@ approval or an unambiguous user request. Bulk delete remains preview-first unles
 - If data should be queryable/filterable, prefer frontmatter (`set`, `new`, `upsert`).
 - If data is narrative, prefer body content (`add`, `edit`, `upsert content=...`).
 - Use `edit` only for vault content files, not `raven.yaml`, `schema.yaml`, or template files.
+- Use `move` for assets instead of shell `mv`; asset destinations must include a file extension.
 - Prefer raw reads before constructing `old_str` for `edit`.

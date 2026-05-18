@@ -320,6 +320,29 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 }
 ```
 
+### Asset references
+
+Use `backlinks` to find notes that reference a vault-local asset. Use `move` instead of shell `mv` so Markdown links/images and wikilinks are rewritten.
+
+```json
+{
+  "command": "backlinks",
+  "args": {
+    "target": "assets/pdfs/paper.pdf"
+  }
+}
+```
+
+```json
+{
+  "command": "move",
+  "args": {
+    "source": "assets/downloads/paper.pdf",
+    "destination": "assets/pdfs/paper.pdf"
+  }
+}
+```
+
 ### Create and enrich an object
 
 ```json
@@ -396,8 +419,9 @@ impact is not clear. Bulk and query-driven delete flows remain preview-first.
 3. Use raw `read` ranges before building string replacements for `edit`.
 4. Use `edit` only for content markdown files; use dedicated commands for `raven.yaml`, `schema.yaml`, and templates.
 5. Use preview/apply for preview-capable or bulk mutations; single-object MCP `delete` applies immediately.
-6. Reindex after schema-level structural changes when required.
-7. Treat `raven_describe` as the authority for argument shape.
+6. Use `move` for asset relocation so references and the asset index stay correct.
+7. Reindex after schema-level structural changes or out-of-band asset file changes when required.
+8. Treat `raven_describe` as the authority for argument shape.
 
 ## Related Resources
 
@@ -411,4 +435,5 @@ impact is not clear. Bulk and query-driven delete flows remain preview-first.
 
 - `querying/query-language.md` — RQL syntax for `query` commands
 - `vault-management/bulk-operations.md` — `--apply` and `--ids` patterns for bulk changes
+- `using-your-vault/assets.md` — asset organization, linking, and checks
 - `using-your-vault/common-commands.md` — full command surface (read, search, edit, check, etc.)

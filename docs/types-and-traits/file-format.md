@@ -1,6 +1,6 @@
 # File Format Reference
 
-Raven files are plain markdown with optional YAML frontmatter and optional embedded type declarations.
+Raven object files are plain markdown with optional YAML frontmatter and optional embedded type declarations. Non-Markdown files under the configured asset root are assets, not object files.
 
 ## File Structure Overview
 
@@ -51,6 +51,17 @@ For file-level objects, the ID is derived from the file path (relative to vault 
 | `page/random-note.md` | `random-note` |
 
 The directory prefix (`type/`, `page/`) is stripped from IDs.
+
+### Asset IDs
+
+Assets are non-Markdown files under `assets.root` in `raven.yaml`. Asset IDs preserve the vault-relative file path including the extension:
+
+| File Path | Asset ID |
+|-----------|----------|
+| `assets/pdfs/paper.pdf` | `assets/pdfs/paper.pdf` |
+| `assets/photos/diagram.png` | `assets/photos/diagram.png` |
+
+Assets are graph resources, not schema object types. They do not have YAML frontmatter, embedded sections, traits, or templates. Asset kinds in `raven.yaml` classify and organize assets but do not define schema fields.
 
 ### Embedded Objects
 
@@ -303,18 +314,26 @@ Both `::section` and `::section()` are equivalent - parentheses are optional whe
 
 ## References
 
-Wiki-style links connect objects across your vault:
+Wiki-style links connect objects, sections, and assets across your vault:
 
 ```markdown
 [[person/freya]]                   # Basic reference
 [[person/freya|Freya]]             # With display text
 [[project/website#tasks]]         # To a section or embedded object
 [[2026-01-10]]                     # Date reference (daily note)
+[[assets/pdfs/paper.pdf]]          # Asset reference
 ```
 
-References can appear in markdown body content, frontmatter `ref`/`ref[]` fields, and embedded type declarations.
+Object references can appear in markdown body content, frontmatter `ref`/`ref[]` fields, and embedded type declarations.
 
-Raven resolves references to canonical IDs through alias, name field, date, path, and short name matching. Short references like `[[freya]]` work when unambiguous.
+Vault-relative Markdown links and images to non-Markdown files are indexed as asset references:
+
+```markdown
+[Paper](assets/pdfs/paper.pdf)
+![Diagram](assets/photos/diagram.png)
+```
+
+Raven resolves references to canonical IDs through alias, name field, date, path, asset path, and short name matching. Short references like `[[freya]]` or `[[paper]]` work when unambiguous.
 
 For the full resolution model, ambiguity handling, frontmatter ref syntax, and maintenance commands, see `types-and-traits/references.md`.
 

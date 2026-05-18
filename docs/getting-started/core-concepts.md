@@ -1,10 +1,10 @@
 # Core Concepts
 
-This page gives you the mental model for Raven. After reading it, you should understand the key building blocks — types, references, traits, sections, daily notes, and queries — even if you don't yet know every syntax detail.
+This page gives you the mental model for Raven. After reading it, you should understand the key building blocks — types, references, traits, sections, assets, daily notes, and queries — even if you don't yet know every syntax detail.
 
 ## Types & Objects
 
-Every file in a Raven vault is an instance of a type; these instances are called "objects." You define types in `schema.yaml`. Raven ships with starter types you can modify or replace. Here is an example:
+Every Markdown file in a Raven vault is an instance of a type; these instances are called "objects." You define types in `schema.yaml`. Raven ships with starter types you can modify or replace. Here is an example:
 
 ```yaml
 types:
@@ -63,7 +63,7 @@ rvn check                                # Entire vault
 rvn check project/midgard-security-review  # One object
 ```
 
-`rvn check` reports issues like unknown fields, missing required data, broken references, and schema mismatches.
+`rvn check` reports issues like unknown fields, missing required data, broken references, missing assets, and schema mismatches.
 
 ### Built-in types
 
@@ -92,7 +92,7 @@ This creates an embedded `meeting` object within the file. See `types-and-traits
 
 ## References
 
-References are wiki-style links that connect objects into a graph:
+References connect objects, sections, and assets into a graph. Wiki-style links are the Raven-native syntax for objects and sections:
 
 ```markdown
 Met with [[person/freya]] about [[project/website]].
@@ -101,13 +101,38 @@ See the tasks: [[project/website#tasks]]
 
 References also appear in frontmatter `ref` fields (`owner: person/freya`) and in embedded type declarations.
 
-Raven resolves references to canonical IDs. Short references like `[[freya]]` work when unambiguous. Use `rvn backlinks` to see what links to an item:
+Normal Markdown links/images to vault-local non-Markdown files are asset references:
+
+```markdown
+Read [the paper](assets/pdfs/paper.pdf).
+![Diagram](assets/photos/system.png)
+```
+
+Raven resolves references to canonical IDs. Short references like `[[freya]]` and `[[paper]]` work when unambiguous. Use `rvn backlinks` to see what links to an item:
 
 ```bash
 rvn backlinks person/freya
+rvn backlinks assets/pdfs/paper.pdf
 ```
 
 See `types-and-traits/references.md` for the full reference guide.
+
+## Assets
+
+Assets are vault-local non-Markdown files such as PDFs, images, audio, videos, and datasets. They are first-class graph resources, but they are not schema object types.
+
+Asset behavior is configured in `raven.yaml`, not `schema.yaml`:
+
+```yaml
+assets:
+  root: assets/
+  kinds:
+    pdf:
+      extensions: [pdf]
+      default_path: pdfs/
+```
+
+Asset kinds are organization and validation rules. If you need authored metadata about an asset, create a Markdown object that references it.
 
 ## Traits
 
@@ -192,6 +217,7 @@ Good descriptions focus on intent and constraints, not just repeating the field 
 |------|------|
 | Set up an AI agent | `getting-started/agent-setup.md` |
 | Work with daily notes | `using-your-vault/daily-notes.md` |
+| Organize files like PDFs and images | `using-your-vault/assets.md` |
 | Learn everyday commands | `using-your-vault/common-commands.md` |
 | Design your schema | `types-and-traits/schema-intro.md` |
 | Understand file format details | `types-and-traits/file-format.md` |

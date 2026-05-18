@@ -166,7 +166,7 @@ rvn config unset --ui-accent --ui-code-theme --json
 
 ## Vault config: `raven.yaml`
 
-`raven.yaml` controls per-vault behavior: directories, auto-reindexing, capture, deletion, saved queries, and protected paths.
+`raven.yaml` controls per-vault behavior: directories, assets, auto-reindexing, capture, deletion, saved queries, and protected paths.
 
 Use structured CLI commands when available instead of editing `raven.yaml` manually:
 
@@ -294,7 +294,7 @@ Vault-local non-Markdown files that Raven can index as graph resources.
 | `root` | string | `assets/` | Root scanned for asset files |
 | `kinds` | map | built-in starter kinds | Organization and validation rules |
 
-Asset kinds are not schema object types. They classify files by extension or media type and can specify a preferred `default_path` under the asset root. Authored metadata should live in Markdown objects that link to the asset.
+Asset kinds are not schema object types. They classify files by extension or media type and can specify a preferred `default_path` under the asset root. `media_types` entries can be exact types such as `application/pdf` or prefixes such as `image/`. Authored metadata should live in Markdown objects that link to the asset. See `using-your-vault/assets.md` for linking, checks, and move behavior.
 
 ### `capture`
 

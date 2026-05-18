@@ -6,7 +6,7 @@ These rules are non-negotiable.
 
 | Intent | Command ID | Do not use |
 |--------|------------|------------|
-| Move or rename files | `move` | `mv`, `git mv` |
+| Move or rename files, including assets | `move` | `mv`, `git mv` |
 | Delete files | `delete` | `rm`, `trash` |
 | Create typed items | `new` | `touch`, `echo >` |
 | Read vault files | `read` | `cat`, `head`, `tail` |
@@ -14,7 +14,7 @@ These rules are non-negotiable.
 | Update frontmatter | `set` | manual YAML edits |
 
 Why:
-- `move` updates references.
+- `move` updates references, including Markdown links/images that point at assets.
 - `delete` checks impact and uses safe deletion behavior.
 - `new` applies schema and templates.
 - `edit` is for content markdown only; use `vault config`, `schema`, and `template` for control-plane files.
@@ -23,4 +23,4 @@ MCP single-object `delete` applies immediately when invoked. Only use it after
 clear user intent; if deletion impact is uncertain, inspect the object and run
 `backlinks` first. Bulk delete still previews unless `confirm=true`.
 
-If you bypass Raven and mutate files directly, reindex and repair before continuing.
+If you bypass Raven and mutate files directly, reindex and repair before continuing. This also applies to adding, moving, or deleting files under the configured asset root.

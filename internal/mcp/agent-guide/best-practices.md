@@ -4,12 +4,12 @@
 - Use `raven_invoke(command="schema", ...)`, `raven_invoke(command="vault_stats")`, and targeted `raven_invoke(command="query", ...)` first.
 - Read files only after narrowing candidates.
 
-2. Treat the markdown vault as source of truth.
+2. Treat markdown and asset files as source of truth.
 - Index is rebuildable; use `raven_invoke(command="reindex")` when state looks stale.
 
 3. Prefer explicit, schema-safe writes.
 - Use `raven_invoke` with commands like `new`, `set`, `edit`, `move`, `delete`, and `upsert`.
-- Avoid shell-level mutations for vault operations.
+- Avoid shell-level mutations for vault operations, including asset moves.
 - See `raven://guide/critical-rules` and `raven://guide/write-patterns`.
 
 4. Use the command's documented mutation flow.
@@ -17,7 +17,7 @@
 - Single-object `delete` applies immediately in MCP, so only call it when deletion intent is clear.
 
 5. Surface ambiguity instead of guessing.
-- For ambiguous refs or unclear destructive intent, ask a focused clarifying question.
+- For ambiguous refs, short asset names, or unclear destructive intent, ask a focused clarifying question.
 
 6. Prefer one strong query over many weak queries.
 - Compose with predicates and relationships (`within`, `has`, `refs`, `ancestor`).

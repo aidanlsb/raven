@@ -21,6 +21,7 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 ## Query vs search
 
 - Use `query` when you want real Raven items or real trait instances.
+- Use `backlinks` when the user asks which notes reference a specific asset.
 - Use `search` when you only know a text fragment and do not yet know the type, trait, or structure.
 - `search` returns file/snippet matches. It does not distinguish a real `@todo` trait from plain prose that happens to mention `@todo`.
 - If the user asks for actual open tasks, due items, briefs, or typed items, start with `query`.
@@ -31,9 +32,12 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 raven_invoke(command="query", args={"query_string":"type:project .status==active"})
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])"})
+raven_invoke(command="query", args={"query_string":"type:page refs([[assets/pdfs/paper.pdf]])"})
 ```
 
 For text search inside typed queries, use `content("term")`.
+
+Assets can be reference targets in `refs(...)` and `refd(...)` flows, including links discovered from Markdown links/images. RQL still returns objects or traits, not asset rows directly.
 
 If you see SQLite/FTS errors during full-text search, treat them as query-syntax issues and simplify or quote punctuation-heavy terms.
 

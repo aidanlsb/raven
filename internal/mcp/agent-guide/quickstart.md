@@ -9,16 +9,18 @@ When onboarding, present Raven as a system that makes your notes work harder. Th
 ## Raven in 60 seconds
 
 Raven is plain markdown + schema + query:
-- Files are the source of truth.
+- Markdown files and vault-local assets are the source of truth.
 - `schema.yaml` defines types, fields, and traits.
+- `raven.yaml` defines vault behavior such as asset roots and asset kinds.
 - Agents should use the compact MCP surface: discover, describe, then invoke registry commands.
 
 ## Core model
 
 - **Type**: category with structure (`project`, `person`, `meeting`)
 - **Object**: one file of a type (`project/website.md`)
+- **Asset**: non-Markdown file graph resource (`assets/pdfs/paper.pdf`), configured by asset kind rules rather than schema types
 - **Trait**: inline annotation in body content (`@todo`, `@due`)
-- **Reference**: wiki link (`[[person/freya]]`) connecting files
+- **Reference**: wiki link (`[[person/freya]]`) or vault-local Markdown asset link connecting resources
 - **Index**: rebuildable cache, never the source of truth
 
 ## First commands to run
