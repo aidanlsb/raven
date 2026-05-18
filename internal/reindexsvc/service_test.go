@@ -185,6 +185,54 @@ func TestRunResolvesReferencesAfterBulkReindex(t *testing.T) {
 	}
 }
 
+func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vaultPath, "assets", "pdfs"), 0o755); err != nil {
+		t.Fatalf("failed to create asset dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "assets", "pdfs", "paper.pdf"), []byte("%PDF test\n"), 0o644); err != nil {
+		t.Fatalf("failed to write asset fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "note.md"), []byte("# Note\n\nRead [paper](assets/pdfs/paper.pdf).\n"), 0o644); err != nil {
+		t.Fatalf("failed to write markdown fixture: %v", err)
+	}
+
+	result, err := Run(RunRequest{
+		VaultPath: vaultPath,
+		Full:      true,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Assets != 1 {
+		t.Fatalf("assets = %d, want 1", result.Assets)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to reopen index: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	assets, err := db.QueryAssets("pdf")
+	if err != nil {
+		t.Fatalf("QueryAssets returned error: %v", err)
+	}
+	if len(assets) != 1 || assets[0].ID != "assets/pdfs/paper.pdf" {
+		t.Fatalf("assets = %#v, want paper asset", assets)
+	}
+
+	var targetID string
+	err = db.DB().QueryRow(`SELECT target_id FROM refs WHERE file_path = ?`, "note.md").Scan(&targetID)
+	if err != nil {
+		t.Fatalf("failed to query refs table: %v", err)
+	}
+	if targetID != "assets/pdfs/paper.pdf" {
+		t.Fatalf("target_id = %q, want assets/pdfs/paper.pdf", targetID)
+	}
+}
+
 func TestBuildParseOptions(t *testing.T) {
 	t.Parallel()
 	if got := buildParseOptions(nil); got != nil {

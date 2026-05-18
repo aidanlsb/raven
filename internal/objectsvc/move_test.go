@@ -14,6 +14,7 @@ import (
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vault"
 )
 
 func TestMoveFileUpdatesBacklinksAfterRename(t *testing.T) {
@@ -54,6 +55,51 @@ func TestMoveFileUpdatesBacklinksAfterRename(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(v.Path, "archive/freya.md")); err != nil {
 		t.Fatalf("expected moved file to exist: %v", err)
+	}
+}
+
+func TestMoveFileUpdatesMarkdownAssetLinks(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("assets/pdfs/paper.pdf", "%PDF test\n").
+		WithFile("notes/ref.md", "Read [paper](assets/pdfs/paper.pdf).\n").
+		Build()
+
+	sch := loadTestSchema(t, v.Path)
+	indexVaultFiles(t, v.Path, sch, "notes/ref.md")
+	indexVaultAssets(t, v.Path, "assets/pdfs/paper.pdf")
+	resolveVaultRefs(t, v.Path, sch)
+
+	result, err := MoveFile(MoveFileRequest{
+		VaultPath:         v.Path,
+		VaultConfig:       config.DefaultVaultConfig(),
+		Schema:            sch,
+		SourceFile:        filepath.Join(v.Path, "assets/pdfs/paper.pdf"),
+		DestinationFile:   filepath.Join(v.Path, "assets/pdfs/archive/paper.pdf"),
+		SourceObjectID:    "assets/pdfs/paper.pdf",
+		DestinationObject: "assets/pdfs/archive/paper.pdf",
+		UpdateRefs:        true,
+		FailOnIndexError:  true,
+		IsAsset:           true,
+	})
+	if err != nil {
+		t.Fatalf("MoveFile() error = %v", err)
+	}
+	if len(result.WarningMessages) != 0 {
+		t.Fatalf("unexpected warnings: %#v", result.WarningMessages)
+	}
+	if len(result.UpdatedRefs) != 1 || result.UpdatedRefs[0] != "notes/ref" {
+		t.Fatalf("UpdatedRefs = %#v, want [notes/ref]", result.UpdatedRefs)
+	}
+
+	content := v.ReadFile("notes/ref.md")
+	if !strings.Contains(content, "[paper](assets/pdfs/archive/paper.pdf)") {
+		t.Fatalf("asset link not updated, content:\n%s", content)
+	}
+	if _, err := os.Stat(filepath.Join(v.Path, "assets/pdfs/archive/paper.pdf")); err != nil {
+		t.Fatalf("expected moved asset to exist: %v", err)
 	}
 }
 
@@ -318,5 +364,37 @@ func indexVaultFiles(t *testing.T, vaultPath string, sch *schema.Schema, relPath
 		if err := db.IndexDocument(doc, sch); err != nil {
 			t.Fatalf("index %s: %v", relPath, err)
 		}
+	}
+}
+
+func indexVaultAssets(t *testing.T, vaultPath string, relPaths ...string) {
+	t.Helper()
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	defer db.Close()
+	cfg := config.DefaultVaultConfig()
+	for _, relPath := range relPaths {
+		fullPath := filepath.Join(vaultPath, relPath)
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			t.Fatalf("stat %s: %v", relPath, err)
+		}
+		if err := db.IndexAsset(vault.BuildAsset(relPath, info, cfg)); err != nil {
+			t.Fatalf("index asset %s: %v", relPath, err)
+		}
+	}
+}
+
+func resolveVaultRefs(t *testing.T, vaultPath string, sch *schema.Schema) {
+	t.Helper()
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.ResolveReferencesWithSchema("daily", sch); err != nil {
+		t.Fatalf("resolve refs: %v", err)
 	}
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/filelock"
+	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -204,7 +205,8 @@ func (d *Database) Analyze() error {
 // v7: Added composite indexes for trait refs matching and performance PRAGMAs
 // v8: Added alias column to objects table for reference aliasing
 // v9: Added field_refs table for ref-typed fields
-const CurrentDBVersion = 9
+// v10: Added assets table for first-class non-Markdown resources
+const CurrentDBVersion = 10
 
 // initialize creates the database schema.
 func (d *Database) initialize(isNewDB bool) error {
@@ -276,6 +278,21 @@ func (d *Database) initialize(isNewDB bool) error {
 			file_path TEXT NOT NULL,
 			line_number INTEGER
 		);
+
+		-- Non-Markdown asset resources. Assets are graph resources, not objects.
+		CREATE TABLE IF NOT EXISTS assets (
+			id TEXT PRIMARY KEY,
+			file_path TEXT NOT NULL UNIQUE,
+			kind TEXT,
+			media_type TEXT,
+			extension TEXT,
+			filename TEXT NOT NULL,
+			size_bytes INTEGER NOT NULL,
+			default_path TEXT,
+			non_canonical INTEGER NOT NULL DEFAULT 0,
+			file_mtime INTEGER,
+			indexed_at INTEGER
+		);
 		
 		-- Indexes for fast queries
 		CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);
@@ -296,6 +313,9 @@ func (d *Database) initialize(isNewDB bool) error {
 		CREATE INDEX IF NOT EXISTS idx_field_refs_field_raw ON field_refs(field_name, target_raw);
 		CREATE INDEX IF NOT EXISTS idx_field_refs_status ON field_refs(resolution_status);
 		CREATE INDEX IF NOT EXISTS idx_field_refs_file ON field_refs(file_path);
+
+		CREATE INDEX IF NOT EXISTS idx_assets_file ON assets(file_path);
+		CREATE INDEX IF NOT EXISTS idx_assets_kind ON assets(kind);
 		
 		-- Composite indexes for trait refs matching (content scope rule)
 		CREATE INDEX IF NOT EXISTS idx_traits_file_line ON traits(file_path, line_number);
@@ -449,6 +469,59 @@ func indexedMtime(now, fileMtime int64) int64 {
 		mtime = now
 	}
 	return mtime
+}
+
+// IndexAsset indexes a non-Markdown asset resource.
+func (d *Database) IndexAsset(asset *model.Asset) error {
+	if asset == nil {
+		return nil
+	}
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := deleteByFilePath(tx, asset.FilePath); err != nil {
+		return err
+	}
+
+	now := time.Now().Unix()
+	mtime := indexedMtime(now, asset.FileMtime)
+	_, err = tx.Exec(`
+		INSERT INTO assets (id, file_path, kind, media_type, extension, filename, size_bytes, default_path, non_canonical, file_mtime, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		asset.ID,
+		asset.FilePath,
+		nullableString(asset.Kind),
+		nullableString(asset.MediaType),
+		nullableString(asset.Extension),
+		asset.Filename,
+		asset.SizeBytes,
+		nullableString(asset.DefaultPath),
+		boolInt(asset.NonCanonical),
+		mtime,
+		now,
+	)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func nullableString(value string) interface{} {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64) error {
@@ -823,6 +896,7 @@ func (d *Database) ClearAllData() error {
 		"DELETE FROM field_refs",
 		"DELETE FROM date_index",
 		"DELETE FROM fts_content",
+		"DELETE FROM assets",
 	} {
 		if _, err := tx.Exec(stmt); err != nil {
 			return err
@@ -855,7 +929,15 @@ func (d *Database) RemoveFilesWithPrefix(pathPrefix string) (int, error) {
 
 func countDistinctFilesWithPrefix(db *sql.DB, pathPrefix string) (int, error) {
 	var count int
-	err := db.QueryRow("SELECT COUNT(DISTINCT file_path) FROM objects WHERE file_path LIKE ?", pathPrefix+"%").Scan(&count)
+	err := db.QueryRow(`
+		SELECT COUNT(DISTINCT file_path)
+		FROM (
+			SELECT file_path FROM objects WHERE parent_id IS NULL
+			UNION
+			SELECT file_path FROM assets
+		)
+		WHERE file_path LIKE ?
+	`, pathPrefix+"%").Scan(&count)
 	if err != nil {
 		return 0, err
 	}
@@ -867,6 +949,8 @@ func countDistinctFilesWithPrefix(db *sql.DB, pathPrefix string) (int, error) {
 func (d *Database) AllIndexedFilePaths() ([]string, error) {
 	rows, err := d.db.Query(`
 		SELECT DISTINCT file_path FROM objects WHERE parent_id IS NULL
+		UNION
+		SELECT DISTINCT file_path FROM assets
 	`)
 	if err != nil {
 		return nil, err
@@ -969,7 +1053,17 @@ func (d *Database) Stats() (*IndexStats, error) {
 	if err := d.db.QueryRow("SELECT COUNT(*) FROM refs").Scan(&stats.RefCount); err != nil {
 		return nil, err
 	}
-	if err := d.db.QueryRow("SELECT COUNT(DISTINCT file_path) FROM objects").Scan(&stats.FileCount); err != nil {
+	if err := d.db.QueryRow("SELECT COUNT(*) FROM assets").Scan(&stats.AssetCount); err != nil {
+		return nil, err
+	}
+	if err := d.db.QueryRow(`
+		SELECT COUNT(DISTINCT file_path)
+		FROM (
+			SELECT file_path FROM objects WHERE parent_id IS NULL
+			UNION
+			SELECT file_path FROM assets
+		)
+	`).Scan(&stats.FileCount); err != nil {
 		return nil, err
 	}
 
@@ -982,6 +1076,7 @@ type IndexStats struct {
 	TraitCount  int
 	RefCount    int
 	FileCount   int
+	AssetCount  int
 }
 
 // AllObjectIDs returns all object IDs (for reference resolution).
@@ -1011,6 +1106,10 @@ type ResolverOptions struct {
 	// Useful for hypothetical resolution (e.g., testing if refs will
 	// resolve after a move operation).
 	ExtraIDs []string
+
+	// ExtraAssetIDs are additional asset IDs to include in the resolver.
+	// Useful for hypothetical asset moves.
+	ExtraAssetIDs []string
 }
 
 // Resolver builds the canonical resolver for this vault index.
@@ -1038,6 +1137,10 @@ func BuildResolver(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object IDs: %w", err)
 	}
+	assetIDs, err := allAssetIDsFromDB(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get asset IDs: %w", err)
+	}
 
 	aliases, err := allAliasesFromDB(db)
 	if err != nil {
@@ -1050,12 +1153,14 @@ func BuildResolver(db *sql.DB, opts ResolverOptions) (*resolver.Resolver, error)
 
 	// Add extra IDs if provided (for hypothetical resolution)
 	objectIDs = appendExtraIDs(objectIDs, opts.ExtraIDs)
+	assetIDs = appendExtraIDs(assetIDs, opts.ExtraAssetIDs)
 
 	// Include name_field values if schema is provided
 	resolverOpts := resolver.Options{
 		DailyDirectory: dailyDir,
 		Aliases:        aliases,
 		AliasMatches:   aliasMatches,
+		AssetIDs:       assetIDs,
 	}
 	if opts.Schema != nil {
 		nameFieldMap, err := allNameFieldValuesFromDB(db, opts.Schema)
@@ -1106,6 +1211,32 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string][]string, 
 
 func allObjectIDsFromDB(db *sql.DB) ([]string, error) {
 	rows, err := db.Query("SELECT id FROM objects")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
+func allAssetIDsFromDB(db *sql.DB) ([]string, error) {
+	exists, err := objectsTableHasColumn(db, "assets", "id")
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+	rows, err := db.Query("SELECT id FROM assets")
 	if err != nil {
 		return nil, err
 	}
@@ -1420,6 +1551,9 @@ func stalenessRows(db *sql.DB) (*sql.Rows, error) {
 		SELECT DISTINCT file_path, file_mtime 
 		FROM objects 
 		WHERE parent_id IS NULL
+		UNION
+		SELECT DISTINCT file_path, file_mtime
+		FROM assets
 	`)
 }
 
@@ -1456,10 +1590,14 @@ func isFileStaleAgainstIndexedMtime(fullPath string, indexedMtime sql.NullInt64)
 func (d *Database) GetFileMtime(filePath string) (int64, error) {
 	var mtime sql.NullInt64
 	err := d.db.QueryRow(`
-		SELECT file_mtime FROM objects 
-		WHERE file_path = ? AND parent_id IS NULL 
+		SELECT file_mtime
+		FROM (
+			SELECT file_mtime FROM objects WHERE file_path = ? AND parent_id IS NULL
+			UNION ALL
+			SELECT file_mtime FROM assets WHERE file_path = ?
+		)
 		LIMIT 1
-	`, filePath).Scan(&mtime)
+	`, filePath, filePath).Scan(&mtime)
 
 	if err == sql.ErrNoRows {
 		return 0, nil

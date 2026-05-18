@@ -170,12 +170,25 @@ func ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot
 		result = strings.ReplaceAll(result, "[["+oldPattern+"]]", "[["+newRef+"]]")
 		result = strings.ReplaceAll(result, "[["+oldPattern+"|", "[["+newRef+"|")
 		result = strings.ReplaceAll(result, "[["+oldPattern+"#", "[["+newRef+"#")
+		result = replaceMarkdownLinkDestination(result, oldPattern, newRef)
 	}
 
 	result = replaceFrontmatterBareRefVariants(result, oldPatterns, newRef)
 	result = replaceTypeDeclBareRefVariants(result, oldPatterns, newRef)
 
 	return result
+}
+
+func replaceMarkdownLinkDestination(content, oldRef, newRef string) string {
+	replacer := strings.NewReplacer(
+		"]("+oldRef+")", "]("+newRef+")",
+		"]("+oldRef+"#", "]("+newRef+"#",
+		"]("+oldRef+"?", "]("+newRef+"?",
+		"](<"+oldRef+">)", "](<"+newRef+">)",
+		"](<"+oldRef+"#", "](<"+newRef+"#",
+		"](<"+oldRef+"?", "](<"+newRef+"?",
+	)
+	return replacer.Replace(content)
 }
 
 func ApplyAllRefVariantsAtLine(content string, line int, oldID, oldBase, newRef, objectRoot, pageRoot string) string {

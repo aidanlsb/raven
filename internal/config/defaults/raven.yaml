@@ -8,6 +8,32 @@ directories:
   page: page/
   template: templates/
 
+# Asset settings
+# Assets are non-Markdown files that Raven can reference, validate, and organize.
+# Asset kinds are rules, not schema object types.
+assets:
+  root: assets/
+  kinds:
+    photo:
+      extensions: [jpg, jpeg, png, gif, webp, heic]
+      media_types: [image/]
+      default_path: photos/
+    pdf:
+      extensions: [pdf]
+      media_types: [application/pdf]
+      default_path: pdfs/
+    audio:
+      extensions: [mp3, m4a, wav, flac, aac, ogg]
+      media_types: [audio/]
+      default_path: audio/
+    video:
+      extensions: [mp4, mov, m4v, webm, avi]
+      media_types: [video/]
+      default_path: videos/
+    data:
+      extensions: [csv, tsv, json, jsonl, parquet]
+      default_path: data/
+
 # Additional protected/system prefixes (additive).
 # Raven mutation commands and automation features refuse to operate on protected paths.
 # Critical protected paths are enforced automatically (.raven/, .trash/, .git/, raven.yaml, schema.yaml).

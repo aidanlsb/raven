@@ -3,6 +3,7 @@ package check
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/index"
@@ -43,6 +44,9 @@ const (
 	IssueStaleFragment           IssueType = "stale_fragment"
 	IssueNonCanonicalPath        IssueType = "non_canonical_path"
 	IssueNonCanonicalRef         IssueType = "non_canonical_ref"
+	IssueMissingAsset            IssueType = "missing_asset"
+	IssueOrphanedAsset           IssueType = "orphaned_asset"
+	IssueNonCanonicalAsset       IssueType = "non_canonical_asset"
 )
 
 // Issue represents a validation issue.
@@ -621,6 +625,19 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 			}
 		}
 
+		if looksLikeAssetReference(ref.TargetRaw) && targetType == "" {
+			issues = append(issues, Issue{
+				Level:    LevelError,
+				Type:     IssueMissingAsset,
+				FilePath: filePath,
+				Line:     ref.Line,
+				Message:  fmt.Sprintf("Asset reference %q not found", ref.TargetRaw),
+				Value:    ref.TargetRaw,
+				FixHint:  "Add the asset file under the configured assets root or update the Markdown link",
+			})
+			return issues
+		}
+
 		issues = append(issues, Issue{
 			Level:      LevelError,
 			Type:       IssueMissingReference,
@@ -672,6 +689,19 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 	}
 
 	return issues
+}
+
+func looksLikeAssetReference(target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	base, _, _ := paths.ParseEmbeddedID(target)
+	if idx := strings.IndexAny(base, "?#"); idx >= 0 {
+		base = base[:idx]
+	}
+	ext := strings.ToLower(filepath.Ext(base))
+	return ext != "" && ext != ".md"
 }
 
 func formatAmbiguousRefMessage(raw string, result resolver.ResolveResult, displayID func(string) string) string {

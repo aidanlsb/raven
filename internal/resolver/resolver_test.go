@@ -106,6 +106,43 @@ func TestResolverAmbiguous(t *testing.T) {
 	}
 }
 
+func TestResolverAssetShortNames(t *testing.T) {
+	t.Parallel()
+
+	t.Run("extensionless short asset resolves when unique", func(t *testing.T) {
+		r := New(nil, Options{AssetIDs: []string{"assets/pdfs/paper.pdf"}})
+		result := r.Resolve("paper")
+		if result.Ambiguous {
+			t.Fatalf("expected non-ambiguous, got matches: %v", result.Matches)
+		}
+		if result.TargetID != "assets/pdfs/paper.pdf" {
+			t.Fatalf("target = %q, want assets/pdfs/paper.pdf", result.TargetID)
+		}
+	})
+
+	t.Run("extensionless short asset is ambiguous across extensions", func(t *testing.T) {
+		r := New(nil, Options{AssetIDs: []string{
+			"assets/pdfs/paper.pdf",
+			"assets/photos/paper.png",
+		}})
+		result := r.Resolve("paper")
+		if !result.Ambiguous {
+			t.Fatalf("expected ambiguous, got %+v", result)
+		}
+		if len(result.Matches) != 2 {
+			t.Fatalf("matches = %#v, want two matches", result.Matches)
+		}
+	})
+
+	t.Run("extensionless short asset collides with object short name", func(t *testing.T) {
+		r := New([]string{"notes/paper"}, Options{AssetIDs: []string{"assets/pdfs/paper.pdf"}})
+		result := r.Resolve("paper")
+		if !result.Ambiguous {
+			t.Fatalf("expected ambiguous, got %+v", result)
+		}
+	})
+}
+
 func TestResolverSuffixMatching(t *testing.T) {
 	t.Parallel()
 	// When objects have a directory prefix (e.g., "objects/") but the user

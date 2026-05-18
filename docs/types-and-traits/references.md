@@ -1,6 +1,6 @@
 # References
 
-References are wiki-style links that connect objects across your vault into a graph. They power navigation, backlinks, query predicates like `refs(...)` and `refd(...)`, and automatic link updates when you move files.
+References connect objects and assets across your vault into a graph. Wiki-style links connect Raven objects and sections; normal Markdown links/images can connect notes to non-Markdown assets. References power navigation, backlinks, query predicates like `refs(...)` and `refd(...)`, and automatic link updates when you move files.
 
 ## Syntax
 
@@ -10,10 +10,12 @@ References are wiki-style links that connect objects across your vault into a gr
 | `[[target\|display]]` | Reference with display text | `[[person/freya\|Freya]]` |
 | `[[target#fragment]]` | Reference to a section or embedded object | `[[project/website#tasks]]` |
 | `[[YYYY-MM-DD]]` | Date reference (resolves to daily note) | `[[2026-03-15]]` |
+| `[text](assets/file.pdf)` | Markdown link to an asset | `[Paper](assets/pdfs/paper.pdf)` |
+| `![alt](assets/image.png)` | Markdown image asset | `![Diagram](assets/photos/diagram.png)` |
 
 ## Where references can appear
 
-References work in three places:
+Object references work in three places:
 
 **Markdown body content** (most common):
 
@@ -40,15 +42,23 @@ collaborators:
 ::meeting(attendees=[[[person/freya]], [[person/thor]]])
 ```
 
+Asset references work in Markdown body content via vault-relative Markdown links and images:
+
+```markdown
+See [paper](assets/pdfs/paper.pdf).
+![Diagram](assets/photos/system.png)
+```
+
 ## Resolution
 
-When Raven encounters a reference, it resolves it to a canonical object ID by checking these match sources in order:
+When Raven encounters a reference, it resolves it to a canonical object or asset ID by checking these match sources in order:
 
 1. **Alias** — the `alias` frontmatter field
 2. **Name field** — the type's `name_field` value (e.g., `title`, `name`)
 3. **Date** — absolute `YYYY-MM-DD` patterns resolve to daily notes
 4. **Object ID / path** — full or suffix path match
-5. **Short name** — the last segment of an object ID (e.g., `freya` for `person/freya`)
+5. **Asset path** — indexed non-Markdown asset paths such as `assets/pdfs/paper.pdf`
+6. **Short name** — the last segment of an object or asset ID (e.g., `freya` for `person/freya`)
 
 If multiple candidates match, the reference is ambiguous and is not resolved automatically.
 

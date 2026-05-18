@@ -248,6 +248,51 @@ func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 	return results, rows.Err()
 }
 
+// QueryAssets returns indexed asset resources, optionally filtered by kind.
+func (d *Database) QueryAssets(kind string) ([]model.Asset, error) {
+	query := `
+		SELECT id, file_path, COALESCE(kind, ''), COALESCE(media_type, ''), COALESCE(extension, ''),
+		       filename, size_bytes, COALESCE(default_path, ''), non_canonical, COALESCE(file_mtime, 0), COALESCE(indexed_at, 0)
+		FROM assets
+	`
+	var args []interface{}
+	if strings.TrimSpace(kind) != "" {
+		query += " WHERE kind = ?"
+		args = append(args, strings.TrimSpace(kind))
+	}
+	query += " ORDER BY file_path"
+
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.Asset
+	for rows.Next() {
+		var result model.Asset
+		var nonCanonical int
+		if err := rows.Scan(
+			&result.ID,
+			&result.FilePath,
+			&result.Kind,
+			&result.MediaType,
+			&result.Extension,
+			&result.Filename,
+			&result.SizeBytes,
+			&result.DefaultPath,
+			&nonCanonical,
+			&result.FileMtime,
+			&result.IndexedAt,
+		); err != nil {
+			return nil, err
+		}
+		result.NonCanonical = nonCanonical != 0
+		results = append(results, result)
+	}
+	return results, rows.Err()
+}
+
 // Backlinks returns all objects that reference the given target.
 func (d *Database) Backlinks(targetID string) ([]model.Reference, error) {
 	return d.BacklinksWithRoots(targetID, "", "")

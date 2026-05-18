@@ -68,31 +68,48 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	if err != nil {
 		return nil, newError(ErrorUnexpected, "failed to resolve source path", "", nil, err)
 	}
+	sourceRelPath = paths.NormalizeVaultRelPath(sourceRelPath)
 	if err := ValidateContentMutationRelPath(req.VaultConfig, sourceRelPath); err != nil {
 		return nil, err
 	}
+	sourceIsAsset := !paths.HasMDExtension(sourceRelPath)
 	sourceID := req.VaultConfig.FilePathToObjectID(sourceRelPath)
+	if sourceIsAsset {
+		sourceID = sourceRelPath
+	}
 
 	destination := req.Destination
 	destinationIsDirectory := strings.HasSuffix(destination, "/") || strings.HasSuffix(destination, "\\")
 	if destinationIsDirectory {
-		sourceBase := strings.TrimSuffix(filepath.Base(sourceRelPath), ".md")
+		sourceBase := filepath.Base(sourceRelPath)
+		if !sourceIsAsset {
+			sourceBase = strings.TrimSuffix(sourceBase, ".md")
+		}
 		if strings.TrimSpace(sourceBase) == "" {
 			return nil, newError(ErrorInvalidInput, "source has an invalid filename", "Use an explicit destination file path", nil, nil)
 		}
 		destination = filepath.ToSlash(filepath.Join(destination, sourceBase))
 	}
 
-	destination = paths.EnsureMDExtension(destination)
-	destinationBase := strings.TrimSuffix(filepath.Base(destination), ".md")
+	if !sourceIsAsset {
+		destination = paths.EnsureMDExtension(destination)
+	}
+	destinationBase := filepath.Base(destination)
+	if !sourceIsAsset {
+		destinationBase = strings.TrimSuffix(destinationBase, ".md")
+	}
 	if strings.TrimSpace(destinationBase) == "" {
 		return nil, newError(ErrorInvalidInput, "destination has an empty filename", "Use a non-empty destination filename or a directory ending with /", nil, nil)
 	}
+	if sourceIsAsset && filepath.Ext(destinationBase) == "" {
+		return nil, newError(ErrorInvalidInput, "asset destination must include a file extension", "Use a destination like assets/pdfs/file.pdf or a directory ending with /", nil, nil)
+	}
 
 	destPath := destination
-	if req.VaultConfig.HasDirectoriesConfig() {
+	if !sourceIsAsset && req.VaultConfig.HasDirectoriesConfig() {
 		destPath = req.VaultConfig.ResolveReferenceToFilePath(strings.TrimSuffix(destination, ".md"))
 	}
+	destPath = paths.NormalizeVaultRelPath(destPath)
 	destFile := filepath.Join(req.VaultPath, destPath)
 
 	if err := paths.ValidateWithinVault(req.VaultPath, destFile); err != nil {
@@ -104,6 +121,33 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	}
 	if _, err := os.Stat(destFile); err == nil {
 		return nil, newError(ErrorValidationFailed, fmt.Sprintf("Destination '%s' already exists", destination), "Choose a different destination or delete the existing file first", nil, nil)
+	}
+
+	if sourceIsAsset {
+		serviceResult, err := MoveFile(MoveFileRequest{
+			VaultPath:         req.VaultPath,
+			SourceFile:        sourceFile,
+			DestinationFile:   destFile,
+			SourceObjectID:    sourceID,
+			DestinationObject: destPath,
+			UpdateRefs:        req.UpdateRefs,
+			FailOnIndexError:  req.FailOnIndexErr,
+			VaultConfig:       req.VaultConfig,
+			Schema:            req.Schema,
+			ParseOptions:      req.ParseOptions,
+			IsAsset:           true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &MoveByReferenceResult{
+			SourceID:        sourceID,
+			SourceRelative:  sourceRelPath,
+			DestinationID:   destPath,
+			DestinationRel:  destPath,
+			UpdatedRefs:     serviceResult.UpdatedRefs,
+			WarningMessages: serviceResult.WarningMessages,
+		}, nil
 	}
 
 	sch := req.Schema
@@ -159,6 +203,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		VaultConfig:       req.VaultConfig,
 		Schema:            sch,
 		ParseOptions:      req.ParseOptions,
+		IsAsset:           false,
 	})
 	if err != nil {
 		return nil, err

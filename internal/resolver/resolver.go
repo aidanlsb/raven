@@ -39,6 +39,11 @@ type Options struct {
 	// the same display name.
 	// For example: {"The Prose Edda": {"books/the-prose-edda"}}
 	NameFieldMap map[string][]string
+
+	// AssetIDs are vault-local non-Markdown asset resource IDs.
+	// They participate in normal path/short-name resolution, plus extensionless
+	// short-name matching when unambiguous (e.g., "paper" -> "assets/paper.pdf").
+	AssetIDs []string
 }
 
 // New creates a new Resolver with the given object IDs and options.
@@ -47,21 +52,25 @@ func New(objectIDs []string, opts Options) *Resolver {
 	if dailyDir == "" {
 		dailyDir = "daily"
 	}
+	allIDs, assetSet := resolverIDs(objectIDs, opts.AssetIDs)
 
 	r := &Resolver{
-		objectIDs:      make(map[string]struct{}, len(objectIDs)),
-		shortMap:       make(map[string][]string, len(objectIDs)),
-		slugMap:        make(map[string]string, len(objectIDs)),
-		suffixMap:      make(map[string][]string, len(objectIDs)*2),
+		objectIDs:      make(map[string]struct{}, len(allIDs)),
+		shortMap:       make(map[string][]string, len(allIDs)*2),
+		slugMap:        make(map[string]string, len(allIDs)),
+		suffixMap:      make(map[string][]string, len(allIDs)*2),
 		dailyDirectory: dailyDir,
 	}
 
-	for _, id := range objectIDs {
+	for _, id := range allIDs {
 		r.objectIDs[id] = struct{}{}
 
 		// Build short name map
 		shortName := paths.ShortNameFromID(id)
 		r.shortMap[shortName] = append(r.shortMap[shortName], id)
+		if _, isAsset := assetSet[id]; isAsset {
+			addAssetShortNames(r.shortMap, id, shortName)
+		}
 
 		// Build slugified map for fuzzy matching
 		sluggedID := pages.SlugifyPath(id)
@@ -110,6 +119,58 @@ func New(objectIDs []string, opts Options) *Resolver {
 	}
 
 	return r
+}
+
+func resolverIDs(objectIDs, assetIDs []string) ([]string, map[string]struct{}) {
+	assetSet := make(map[string]struct{}, len(assetIDs))
+	seen := make(map[string]struct{}, len(objectIDs)+len(assetIDs))
+	allIDs := make([]string, 0, len(objectIDs)+len(assetIDs))
+	add := func(id string) {
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		allIDs = append(allIDs, id)
+	}
+	for _, id := range objectIDs {
+		add(id)
+	}
+	for _, id := range assetIDs {
+		if id == "" {
+			continue
+		}
+		assetSet[id] = struct{}{}
+		add(id)
+	}
+	return allIDs, assetSet
+}
+
+func addAssetShortNames(shortMap map[string][]string, id, shortName string) {
+	ext := path.Ext(shortName)
+	if ext == "" || ext == ".md" {
+		return
+	}
+	base := strings.TrimSuffix(shortName, ext)
+	if base == "" || base == shortName {
+		return
+	}
+	addShortMapEntry(shortMap, base, id)
+	slugged := pages.Slugify(base)
+	if slugged != "" && slugged != base {
+		addShortMapEntry(shortMap, slugged, id)
+	}
+}
+
+func addShortMapEntry(shortMap map[string][]string, key, id string) {
+	for _, existing := range shortMap[key] {
+		if existing == id {
+			return
+		}
+	}
+	shortMap[key] = append(shortMap[key], id)
 }
 
 // ResolveResult represents the result of a reference resolution.

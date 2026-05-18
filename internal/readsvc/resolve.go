@@ -190,6 +190,13 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 		result.FileObjectID = resolved.TargetID
 	}
 
+	if assetPath, ok, err := tryResolvedAssetPath(op.rt.VaultPath, result.FileObjectID); err != nil {
+		return nil, err
+	} else if ok {
+		result.FilePath = assetPath
+		return result, nil
+	}
+
 	filePath, err := vault.ResolveObjectToFileWithConfig(op.rt.VaultPath, result.FileObjectID, op.rt.VaultCfg)
 	if err != nil {
 		dailyDir := op.dailyDirectory()
@@ -205,6 +212,30 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 
 	result.FilePath = filePath
 	return result, nil
+}
+
+func tryResolvedAssetPath(vaultPath, targetID string) (string, bool, error) {
+	if strings.TrimSpace(vaultPath) == "" || strings.TrimSpace(targetID) == "" {
+		return "", false, nil
+	}
+	if filepath.Ext(targetID) == "" || strings.HasSuffix(strings.ToLower(targetID), ".md") {
+		return "", false, nil
+	}
+	fullPath := filepath.Join(vaultPath, targetID)
+	if err := paths.ValidateWithinVault(vaultPath, fullPath); err != nil {
+		return "", false, err
+	}
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	if info.IsDir() {
+		return "", false, nil
+	}
+	return fullPath, true, nil
 }
 
 func isoDateLiteralPathAmbiguity(reference string, literalPathResult *ResolveResult, resolved resolver.ResolveResult) error {

@@ -80,6 +80,7 @@ type RunResult struct {
 	Objects       int
 	Traits        int
 	References    int
+	Assets        int
 	SchemaRebuilt bool
 	Incremental   bool
 	DryRun        bool
@@ -103,6 +104,7 @@ func (r *RunResult) Data() map[string]interface{} {
 		"objects":        r.Objects,
 		"traits":         r.Traits,
 		"references":     r.References,
+		"assets":         r.Assets,
 		"schema_rebuilt": r.SchemaRebuilt,
 		"incremental":    r.Incremental,
 		"dry_run":        r.DryRun,
@@ -190,8 +192,10 @@ func Run(req RunRequest) (*RunResult, error) {
 		Objects:         0,
 		Traits:          0,
 		References:      0,
+		Assets:          0,
 	}
 	dryRunFileStats := make(map[string]index.IndexStats)
+	dryRunAssetFiles := make(map[string]struct{})
 	dryRunStats := index.IndexStats{}
 
 	trashRemoved, err := db.RemoveFilesWithPrefix(".trash/")
@@ -270,6 +274,47 @@ func Run(req RunRequest) (*RunResult, error) {
 		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking vault: %v", walkErr), "", walkErr)
 	}
 
+	assetWalkErr := vault.WalkAssetFiles(vaultPath, vaultCfg, func(walkResult vault.AssetWalkResult) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		if walkResult.Error != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", walkResult.RelativePath, walkResult.Error))
+			return nil //nolint:nilerr // keep walking to collect all per-file errors
+		}
+		if walkResult.Asset == nil {
+			return nil
+		}
+
+		if incremental {
+			indexedMtime, mtimeErr := db.GetFileMtime(walkResult.RelativePath)
+			if mtimeErr == nil && indexedMtime > 0 && walkResult.FileMtime <= indexedMtime {
+				result.FilesSkipped++
+				return nil
+			}
+			result.StaleFiles = append(result.StaleFiles, walkResult.RelativePath)
+		}
+
+		if req.DryRun {
+			result.FilesIndexed++
+			result.Assets++
+			dryRunAssetFiles[walkResult.RelativePath] = struct{}{}
+			return nil
+		}
+		if idxErr := db.IndexAsset(walkResult.Asset); idxErr != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", walkResult.RelativePath, idxErr))
+			return nil
+		}
+		result.FilesIndexed++
+		return nil
+	})
+	if assetWalkErr != nil {
+		return nil, newError(CodeFileReadError, fmt.Sprintf("error walking asset files: %v", assetWalkErr), "", assetWalkErr)
+	}
+
 	if req.DryRun {
 		if incremental {
 			projected, err := projectedDryRunStats(db, result.DeletedFiles, dryRunFileStats)
@@ -279,6 +324,11 @@ func Run(req RunRequest) (*RunResult, error) {
 			result.Objects = projected.ObjectCount
 			result.Traits = projected.TraitCount
 			result.References = projected.RefCount
+			assetCount, err := projectedDryRunAssetCount(db, result.DeletedFiles, dryRunAssetFiles)
+			if err != nil {
+				return nil, newError(CodeDatabaseError, fmt.Sprintf("failed to project dry-run asset stats: %v", err), "", err)
+			}
+			result.Assets = assetCount
 		} else {
 			result.Objects = dryRunStats.ObjectCount
 			result.Traits = dryRunStats.TraitCount
@@ -309,6 +359,7 @@ func Run(req RunRequest) (*RunResult, error) {
 	result.Objects = stats.ObjectCount
 	result.Traits = stats.TraitCount
 	result.References = stats.RefCount
+	result.Assets = stats.AssetCount
 
 	return result, nil
 }
@@ -352,6 +403,24 @@ func projectedDryRunStats(db *index.Database, deletedFiles []string, reindexedFi
 	}
 
 	return &projected, nil
+}
+
+func projectedDryRunAssetCount(db *index.Database, deletedFiles []string, reindexedAssets map[string]struct{}) (int, error) {
+	assets, err := db.QueryAssets("")
+	if err != nil {
+		return 0, err
+	}
+	current := make(map[string]struct{}, len(assets))
+	for _, asset := range assets {
+		current[asset.FilePath] = struct{}{}
+	}
+	for _, filePath := range deletedFiles {
+		delete(current, filePath)
+	}
+	for filePath := range reindexedAssets {
+		current[filePath] = struct{}{}
+	}
+	return len(current), nil
 }
 
 func fileIndexStats(db *index.Database, filePath string) (index.IndexStats, error) {

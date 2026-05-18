@@ -1,13 +1,17 @@
 package checksvc
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
+	"github.com/aidanlsb/raven/internal/vault"
 )
 
 func TestRun_FiltersParseErrorsBeforeCounting(t *testing.T) {
@@ -89,4 +93,78 @@ func TestCreateMissingRefsNonInteractive_ReportsFailures(t *testing.T) {
 	if !strings.Contains(result.Failures[0].Error, "protected") {
 		t.Fatalf("unexpected failure error: %v", result.Failures[0])
 	}
+}
+
+func TestRun_ReportsMissingAssetReference(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("note.md", "See [paper](assets/pdfs/missing.pdf).\n").
+		Build()
+	sch, err := schema.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+
+	result, err := Run(vault.Path, config.DefaultVaultConfig(), sch, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !hasIssue(result.Issues, check.IssueMissingAsset) {
+		t.Fatalf("issues = %#v, want missing_asset", result.Issues)
+	}
+}
+
+func TestRun_ReportsOrphanedAndNonCanonicalAsset(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	assetRel := "assets/random/paper.pdf"
+	if err := os.MkdirAll(filepath.Join(vaultPath, "assets", "random"), 0o755); err != nil {
+		t.Fatalf("mkdir asset dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, assetRel), []byte("%PDF test\n"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte("version: 1\ntypes: {}\ntraits: {}\n"), 0o644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+	cfg := config.DefaultVaultConfig()
+	info, err := os.Stat(filepath.Join(vaultPath, assetRel))
+	if err != nil {
+		t.Fatalf("stat asset: %v", err)
+	}
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if err := db.IndexAsset(vault.BuildAsset(assetRel, info, cfg)); err != nil {
+		t.Fatalf("index asset: %v", err)
+	}
+	db.Close()
+
+	result, err := Run(vaultPath, cfg, sch, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !hasIssue(result.Issues, check.IssueOrphanedAsset) {
+		t.Fatalf("issues = %#v, want orphaned_asset", result.Issues)
+	}
+	if !hasIssue(result.Issues, check.IssueNonCanonicalAsset) {
+		t.Fatalf("issues = %#v, want non_canonical_asset", result.Issues)
+	}
+}
+
+func hasIssue(issues []check.Issue, issueType check.IssueType) bool {
+	for _, issue := range issues {
+		if issue.Type == issueType {
+			return true
+		}
+	}
+	return false
 }

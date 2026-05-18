@@ -25,6 +25,9 @@ sections:
       common-commands:
         title: Common Commands
         path: common-commands.md
+      assets:
+        title: Assets
+        path: assets.md
       configuration:
         title: Configuration
         path: configuration.md

@@ -77,6 +77,25 @@ More content.
 		}
 	})
 
+	t.Run("extracts local markdown asset links and images", func(t *testing.T) {
+		content := "# Notes\n\nSee [paper](assets/papers/paper.pdf) and ![diagram](assets/images/diagram.png).\nExternal [site](https://example.com) and note [note](notes/next.md) are ignored.\n"
+
+		result, err := ExtractFromAST([]byte(content), 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(result.Refs) != 2 {
+			t.Fatalf("got %d refs, want 2: %#v", len(result.Refs), result.Refs)
+		}
+		if result.Refs[0].TargetRaw != "assets/papers/paper.pdf" {
+			t.Fatalf("first target = %q, want assets/papers/paper.pdf", result.Refs[0].TargetRaw)
+		}
+		if result.Refs[1].TargetRaw != "assets/images/diagram.png" {
+			t.Fatalf("second target = %q, want assets/images/diagram.png", result.Refs[1].TargetRaw)
+		}
+	})
+
 	t.Run("skips refs in code blocks", func(t *testing.T) {
 		content := "# Notes\n\n[[real-ref]]\n\n```\n[[fake-ref]]\n```\n\n[[another-real]]\n"
 

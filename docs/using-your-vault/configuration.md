@@ -196,6 +196,9 @@ directories:
   page: page/
   template: templates/
 
+assets:
+  root: assets/
+
 capture:
   destination: daily
   heading: "## Captured"
@@ -209,6 +212,18 @@ directories:
   type: type/
   page: page/
   template: templates/
+
+assets:
+  root: assets/
+  kinds:
+    photo:
+      extensions: [jpg, jpeg, png, gif, webp, heic]
+      media_types: [image/]
+      default_path: photos/
+    pdf:
+      extensions: [pdf]
+      media_types: [application/pdf]
+      default_path: pdfs/
 
 auto_reindex: true
 
@@ -270,6 +285,17 @@ Compatibility notes:
 - If both singular and plural are present for `page` or `template`, singular wins.
 - `daily_directory` is no longer supported and causes a config error.
 
+### `assets`
+
+Vault-local non-Markdown files that Raven can index as graph resources.
+
+| Key | Type | Default | Notes |
+|-----|------|---------|-------|
+| `root` | string | `assets/` | Root scanned for asset files |
+| `kinds` | map | built-in starter kinds | Organization and validation rules |
+
+Asset kinds are not schema object types. They classify files by extension or media type and can specify a preferred `default_path` under the asset root. Authored metadata should live in Markdown objects that link to the asset.
+
 ### `capture`
 
 Quick capture defaults for `rvn add`.
@@ -327,6 +353,7 @@ This is additive. Raven always protects:
 
 `rvn init` creates a default `raven.yaml` with:
 - `directories.daily`, `directories.type`, `directories.page`, `directories.template`
+- `assets.root` and starter asset kinds
 - `auto_reindex: true`
 - starter `queries`
 

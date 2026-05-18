@@ -154,6 +154,40 @@ func TestLoadVaultConfig(t *testing.T) {
 		}
 	})
 }
+
+func TestAssetsConfigDefaultsAndKinds(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultVaultConfig()
+	if got := cfg.GetAssetRoot(); got != "assets/" {
+		t.Fatalf("asset root = %q, want assets/", got)
+	}
+	if got := cfg.AssetKindForPath("assets/pdfs/paper.pdf", "application/pdf"); got != "pdf" {
+		t.Fatalf("pdf kind = %q, want pdf", got)
+	}
+	if got := cfg.AssetKindForPath("assets/photos/image.JPG", ""); got != "photo" {
+		t.Fatalf("photo kind = %q, want photo", got)
+	}
+
+	cfg.Assets = &AssetsConfig{
+		Root: "../bad",
+		Kinds: map[string]*AssetKindConfig{
+			"receipt": {
+				Extensions:  []string{".RECEIPT", "receipt"},
+				DefaultPath: "receipts",
+			},
+		},
+	}
+	if got := cfg.GetAssetRoot(); got != "assets/" {
+		t.Fatalf("invalid root defaulted to %q, want assets/", got)
+	}
+	if got := cfg.AssetKindForPath("assets/expense.receipt", ""); got != "receipt" {
+		t.Fatalf("custom kind = %q, want receipt", got)
+	}
+	if got := cfg.GetAssetsConfig().Kinds["receipt"].DefaultPath; got != "receipts/" {
+		t.Fatalf("receipt default path = %q, want receipts/", got)
+	}
+}
 func TestVaultConfigPaths(t *testing.T) {
 	cfg := &VaultConfig{
 		DailyDirectory: "daily",

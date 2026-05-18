@@ -10,6 +10,7 @@ Rule: in JSON mode, prefer each issue's `fix_command` and `fix_hint` over hard-c
 |------------|---------|----------------|
 | `unknown_type` | File uses a type not in schema | Add/rename type in schema, or change file type |
 | `missing_reference` | Link points to missing object/section | Create missing target or update/remove reference |
+| `missing_asset` | Markdown asset link/image points to a missing non-Markdown file | Add the asset under the configured asset root or update/remove the link |
 | `unknown_frontmatter_key` | Field is not defined for object type | Add schema field or remove invalid key |
 | `missing_required_field` | Required type field missing | Set required field value(s) |
 | `invalid_field_value` | Field value violates schema | Correct value to match constraints |
@@ -26,6 +27,8 @@ Rule: in JSON mode, prefer each issue's `fix_command` and `fix_hint` over hard-c
 | `stale_index` | Index may be stale | Run `raven_invoke(command="reindex")` (or `rvn reindex` in the CLI) |
 | `short_ref_could_be_full_path` | Short ref could be clearer | Consider explicit full-path refs |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Run `check fix --confirm` to rewrite to canonical form (`[[person/jane]]`) |
+| `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
+| `non_canonical_asset` | Asset is outside its kind's preferred path | Move it with `rvn move` so Markdown links stay updated |
 
 ## Filtering patterns
 

@@ -555,13 +555,13 @@ IMPORTANT:
 	},
 	"move": {
 		Name:        "move",
-		Description: "Move or rename an object within the vault",
-		LongDesc: `Move or rename a file/object within the vault.
+		Description: "Move or rename an object or asset within the vault",
+		LongDesc: `Move or rename a file/object or asset within the vault.
 
 ⚠️ IMPORTANT FOR AGENTS: ALWAYS use this command instead of shell commands like 'mv'.
 Using 'mv' directly will NOT update references to the file, causing broken links
-throughout the vault. The raven_move command automatically updates all [[references]]
-that point to the moved file.
+throughout the vault. The raven_move command automatically updates [[references]]
+and Markdown asset links/images that point to the moved file.
 
 SECURITY: Both source and destination must be within the vault.
 Files cannot be moved outside the vault, and external files cannot be moved in.
@@ -569,6 +569,7 @@ Files cannot be moved outside the vault, and external files cannot be moved in.
 This command:
 - Validates paths are within the vault
 - Updates all references to the moved file (--update-refs, default: true)
+- Preserves non-Markdown asset filenames/extensions when moving assets
 - Warns if moving to a type's default directory with mismatched type
 - Creates destination directories if needed
 
@@ -581,8 +582,8 @@ Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
-			{Name: "source", Description: "Source file path (e.g., inbox/note.md or people/loki)", Required: false},
-			{Name: "destination", Description: "Destination path (e.g., people/loki-archived or archive/projects/)", Required: false},
+			{Name: "source", Description: "Source object reference or asset path (e.g., inbox/note.md, people/loki, assets/pdfs/file.pdf)", Required: false},
+			{Name: "destination", Description: "Destination path (e.g., people/loki-archived, archive/projects/, assets/pdfs/archive/file.pdf)", Required: false},
 		},
 		Flags: []FlagMeta{
 			{Name: "force", Description: "Skip confirmation prompts", Type: FlagTypeBool},
@@ -595,6 +596,7 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"rvn move people/loki people/loki-archived --json",
 			"rvn move inbox/task.md projects/website/task.md --json",
 			"rvn move drafts/person.md people/freya.md --update-refs --json",
+			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --json",
 		},
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",
@@ -784,17 +786,18 @@ For trait queries (trait:...):
 	},
 	"backlinks": {
 		Name:        "backlinks",
-		Description: "Find objects that reference a target",
+		Description: "Find objects that reference a target object or asset",
 		Args: []ArgMeta{
-			{Name: "target", Description: "Target object ID (e.g., people/freya)", Required: true},
+			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: true},
 		},
 		Examples: []string{
 			"rvn backlinks people/freya --json",
+			"rvn backlinks assets/pdfs/paper.pdf --json",
 		},
 	},
 	"outlinks": {
 		Name:        "outlinks",
-		Description: "Find links referenced by an object",
+		Description: "Find object and asset links referenced by an object",
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true},
 		},
@@ -887,6 +890,9 @@ By default, performs an incremental reindex that only processes files that have
 changed since the last index. Deleted files are automatically detected and
 removed from the index.
 
+Reindex also discovers non-Markdown assets under the configured asset root and
+resolves Markdown links/images to those assets.
+
 Use --full to force a complete rebuild of the entire index.`,
 		Examples: []string{
 			"rvn reindex",
@@ -904,7 +910,7 @@ Use --full to force a complete rebuild of the entire index.`,
 		LongDesc: `Validates all files in the vault against the schema.
 
 Returns structured issues with:
-- issue_type: unknown_type, missing_reference, undefined_trait, unknown_frontmatter_key, etc.
+- issue_type: unknown_type, missing_reference, missing_asset, orphaned_asset, undefined_trait, unknown_frontmatter_key, etc.
 - fix_command: Suggested CLI command to fix the issue
 - fix_hint: Human-readable explanation of how to fix
 

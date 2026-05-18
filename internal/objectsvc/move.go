@@ -13,6 +13,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
+	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -29,6 +30,7 @@ type MoveFileRequest struct {
 	VaultConfig        *config.VaultConfig
 	Schema             *schema.Schema
 	ParseOptions       *parser.ParseOptions
+	IsAsset            bool
 }
 
 type MoveFileResult struct {
@@ -145,6 +147,31 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	result.UpdatedRefs = append(result.UpdatedRefs, writePlan.updatedRefs...)
 
 	if db == nil {
+		return result, nil
+	}
+
+	if req.IsAsset {
+		oldRel, _ := filepath.Rel(req.VaultPath, req.SourceFile)
+		newRel, _ := filepath.Rel(req.VaultPath, req.DestinationFile)
+		oldRel = paths.NormalizeVaultRelPath(oldRel)
+		newRel = paths.NormalizeVaultRelPath(newRel)
+		if err := db.RemoveFiles([]string{oldRel}); err != nil {
+			if req.FailOnIndexError {
+				rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
+				return nil, moveRollbackError("failed to remove old asset index entry", err, rollbackErr)
+			}
+			result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to remove old asset index entry: %v", err))
+		}
+		if info, statErr := os.Stat(req.DestinationFile); statErr == nil {
+			asset := vault.BuildAsset(newRel, info, req.VaultConfig)
+			if err := db.IndexAsset(asset); err != nil {
+				if req.FailOnIndexError {
+					rollbackErr := rollbackMovedFiles(req, sourceSnapshot, appliedRewrites)
+					return nil, moveRollbackError("failed to index moved asset", err, rollbackErr)
+				}
+				result.WarningMessages = append(result.WarningMessages, fmt.Sprintf("Failed to index moved asset: %v", err))
+			}
+		}
 		return result, nil
 	}
 
@@ -403,7 +430,13 @@ func prepareRefUpdatePlans(db *index.Database, req MoveFileRequest, objectRoot, 
 		return nil, append(warnings, fmt.Sprintf("Failed to read aliases for move update: %v", err))
 	}
 
-	res, err := db.Resolver(index.ResolverOptions{DailyDirectory: dailyDir, ExtraIDs: []string{req.DestinationObject}})
+	resolverOpts := index.ResolverOptions{DailyDirectory: dailyDir}
+	if req.IsAsset {
+		resolverOpts.ExtraAssetIDs = []string{req.DestinationObject}
+	} else {
+		resolverOpts.ExtraIDs = []string{req.DestinationObject}
+	}
+	res, err := db.Resolver(resolverOpts)
 	if err != nil {
 		return nil, append(warnings, fmt.Sprintf("Failed to build resolver for move update: %v", err))
 	}
