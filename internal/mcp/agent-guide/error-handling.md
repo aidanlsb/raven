@@ -23,7 +23,20 @@ If there is no Raven JSON payload at all:
 2. Re-check required args and command ID.
 3. Do not assume data/schema corruption without a Raven envelope.
 
-## 4. Recovery loop for check/repair tasks
+## 4. Schema validation failures
+
+When `new`, `upsert`, `set`, `import`, or schema commands fail because a value does not match the schema:
+1. Inspect `error.details`, especially `retry_with`, `field`, `expected`, and `actual` when present.
+2. Read the live schema before retrying:
+   ```text
+   raven_invoke(command="schema", args={"subcommand":"type", "name":"<type>"})
+   ```
+3. Retry with schema-valid fields and values. Prefer command arguments such as `fields-json` over raw content edits.
+4. If the user intent requires changing the schema, ask before adding fields, changing enum values, or relaxing required fields.
+
+Do not bypass validation by editing frontmatter manually. Unknown frontmatter keys and invalid values will be reported by `check` and may not be indexed.
+
+## 5. Recovery loop for check/repair tasks
 
 ```text
 raven_invoke(command="check")

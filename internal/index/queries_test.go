@@ -177,6 +177,16 @@ func TestBuildFTSContentQuery_SanitizesDottedTokens(t *testing.T) {
 	}
 }
 
+func TestBuildFTSContentQuery_SanitizesSlashAndFunctionLikeTokens(t *testing.T) {
+	t.Parallel()
+
+	q := BuildFTSContentQuery(`reference/ OR content()`)
+	want := `content: ("reference/" OR "content()")`
+	if q != want {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
+	}
+}
+
 func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
 	t.Parallel()
 	q := BuildFTSSearchQuery("hello world")
@@ -193,6 +203,12 @@ func TestBuildFTSSearchQuery_ScopesTitleAndContent(t *testing.T) {
 
 	q = BuildFTSSearchQuery(`inputs.project OR "optional input"`)
 	want = `{title content}: ("inputs.project" OR "optional input")`
+	if q != want {
+		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
+	}
+
+	q = BuildFTSSearchQuery(`reference/ OR content()`)
+	want = `{title content}: ("reference/" OR "content()")`
 	if q != want {
 		t.Fatalf("unexpected fts query:\n got: %q\nwant: %q", q, want)
 	}
@@ -268,6 +284,40 @@ func TestSearch_AllowsDottedToken(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatalf("expected at least one result")
+	}
+}
+
+func TestSearch_AllowsSlashAndFunctionLikeTokens(t *testing.T) {
+	t.Parallel()
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.db.Exec(`INSERT INTO objects (id, file_path, type, line_start, fields) VALUES ('notes/search', 'notes/search.md', 'note', 1, '{}')`)
+	if err != nil {
+		t.Fatalf("failed to insert object: %v", err)
+	}
+
+	_, err = db.db.Exec(`INSERT INTO fts_content (object_id, title, content, file_path) VALUES (?, ?, ?, ?)`,
+		"notes/search",
+		"Search Notes",
+		"Paths like reference/ and code examples like content() should be searchable.",
+		"notes/search.md",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert fts row: %v", err)
+	}
+
+	for _, query := range []string{"reference/", "content()"} {
+		results, err := db.Search(query, 10)
+		if err != nil {
+			t.Fatalf("search %q failed: %v", query, err)
+		}
+		if len(results) == 0 {
+			t.Fatalf("expected at least one result for %q", query)
+		}
 	}
 }
 

@@ -67,6 +67,7 @@ type RenameTypeRequest struct {
 	VaultPath         string
 	OldName           string
 	NewName           string
+	Description       string
 	Confirm           bool
 	RenameDefaultPath bool
 }
@@ -258,7 +259,8 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 		return nil, newError(ErrorConfigInvalid, "failed to load raven.yaml", "Fix raven.yaml and try again", nil, err)
 	}
 
-	if _, exists := sch.Types[oldName]; !exists {
+	oldTypeDef, exists := sch.Types[oldName]
+	if !exists {
 		return nil, newError(ErrorTypeNotFound, fmt.Sprintf("type '%s' not found", oldName), "", nil, nil)
 	}
 	if _, exists := sch.Types[newName]; exists {
@@ -267,12 +269,34 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 
 	changes := make([]TypeRenameChange, 0)
 	optionalChanges := make([]TypeRenameChange, 0)
+	description := strings.TrimSpace(req.Description)
 
 	changes = append(changes, TypeRenameChange{
 		FilePath:    "schema.yaml",
 		ChangeType:  "schema_type",
 		Description: fmt.Sprintf("rename type '%s' to '%s'", oldName, newName),
 	})
+	if description != "" {
+		oldDescription := ""
+		if oldTypeDef != nil {
+			oldDescription = oldTypeDef.Description
+		}
+		if isClearSentinel(req.Description) {
+			if oldDescription != "" {
+				changes = append(changes, TypeRenameChange{
+					FilePath:    "schema.yaml",
+					ChangeType:  "schema_description",
+					Description: fmt.Sprintf("remove description from type '%s'", newName),
+				})
+			}
+		} else if req.Description != oldDescription {
+			changes = append(changes, TypeRenameChange{
+				FilePath:    "schema.yaml",
+				ChangeType:  "schema_description",
+				Description: fmt.Sprintf("update description for type '%s'", newName),
+			})
+		}
+	}
 
 	for typeName, typeDef := range sch.Types {
 		if typeDef == nil || typeDef.Fields == nil {
@@ -417,6 +441,21 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 		typesNode[newName] = typeDef
 		delete(typesNode, oldName)
 		appliedChanges++
+	}
+	if description != "" {
+		if typeDefAny, exists := typesNode[newName]; exists {
+			if typeDefMap, ok := typeDefAny.(map[string]interface{}); ok {
+				if isClearSentinel(req.Description) {
+					if _, hadDescription := typeDefMap["description"]; hadDescription {
+						delete(typeDefMap, "description")
+						appliedChanges++
+					}
+				} else if current, _ := typeDefMap["description"].(string); current != req.Description {
+					typeDefMap["description"] = req.Description
+					appliedChanges++
+				}
+			}
+		}
 	}
 
 	if applyDefaultPathRename {

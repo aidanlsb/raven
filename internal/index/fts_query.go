@@ -76,11 +76,29 @@ func sanitizeFTSQuery(q string) string {
 			continue
 		}
 
-		// Consume a token until whitespace or paren.
+		// Consume a token until whitespace or grouping punctuation. Parentheses
+		// attached to a token (for example `content()`) are treated as literal
+		// punctuation so users can search for code-like strings.
 		start := i
+		hasLiteralParen := false
 		for i < len(q) {
 			cc := q[i]
-			if cc == '"' || cc == '(' || cc == ')' || cc == ' ' || cc == '\t' || cc == '\n' || cc == '\r' {
+			if cc == '"' || cc == ' ' || cc == '\t' || cc == '\n' || cc == '\r' {
+				break
+			}
+			if cc == '(' {
+				if i == start {
+					break
+				}
+				hasLiteralParen = true
+				i++
+				continue
+			}
+			if cc == ')' {
+				if hasLiteralParen {
+					i++
+					continue
+				}
 				break
 			}
 			i++
@@ -117,6 +135,9 @@ func sanitizeFTSQuery(q string) string {
 
 func shouldQuoteFTSLiteralToken(tok string) bool {
 	if strings.Contains(tok, ".") {
+		return true
+	}
+	if strings.Contains(tok, "/") || strings.Contains(tok, "(") || strings.Contains(tok, ")") {
 		return true
 	}
 	return strings.Contains(tok, "-") && !strings.HasPrefix(tok, "-")

@@ -18,9 +18,12 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+      - -buildvcs=false
     ldflags:
       - -s -w
-      - -X github.com/aidanlsb/raven/internal/buildinfo.Version={{.Version}}
+      - -X github.com/aidanlsb/raven/internal/buildinfo.Version={{.Tag}}
       - -X github.com/aidanlsb/raven/internal/buildinfo.Commit={{.Commit}}
       - -X github.com/aidanlsb/raven/internal/buildinfo.Date={{.Date}}
 

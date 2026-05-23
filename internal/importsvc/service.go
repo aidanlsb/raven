@@ -416,7 +416,8 @@ func Run(req RunRequest) (*RunResult, error) {
 			continue
 		}
 
-		targetPath := pages.ResolveTargetPathWithRoots(matchValue, itemCfg.TypeName, sch, objectsRoot, pagesRoot)
+		targetName := importTargetName(matchValue)
+		targetPath := pages.ResolveTargetPathWithRoots(targetName, itemCfg.TypeName, sch, objectsRoot, pagesRoot)
 		exists := pages.Exists(vaultPath, targetPath)
 
 		if exists && req.CreateOnly {
@@ -459,7 +460,7 @@ func Run(req RunRequest) (*RunResult, error) {
 			continue
 		}
 
-		itemResult, warnMsgs, filePath := createObject(vaultPath, matchValue, targetPath, itemCfg.TypeName, mapped, contentValue, sch, vaultCfg, templateDir, objectsRoot, pagesRoot)
+		itemResult, warnMsgs, filePath := createObject(vaultPath, matchValue, targetName, targetPath, itemCfg.TypeName, mapped, contentValue, sch, vaultCfg, templateDir, objectsRoot, pagesRoot)
 		result.Results = append(result.Results, itemResult)
 		result.WarningMessages = append(result.WarningMessages, warnMsgs...)
 		if filePath != "" {
@@ -470,8 +471,12 @@ func Run(req RunRequest) (*RunResult, error) {
 	return result, nil
 }
 
+func importTargetName(matchValue string) string {
+	return pages.Slugify(matchValue)
+}
+
 func createObject(
-	vaultPath, title, resolvedTargetPath, typeName string,
+	vaultPath, title, targetName, resolvedTargetPath, typeName string,
 	fields map[string]interface{},
 	content string,
 	sch *schema.Schema,
@@ -502,7 +507,7 @@ func createObject(
 		VaultPath:         vaultPath,
 		TypeName:          typeName,
 		Title:             title,
-		TargetPath:        title,
+		TargetPath:        targetName,
 		Fields:            validatedTypedFields,
 		Schema:            sch,
 		TemplateDir:       templateDir,

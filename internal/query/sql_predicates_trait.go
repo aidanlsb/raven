@@ -9,7 +9,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 )
 
-// buildTraitContentPredicateSQL builds SQL for content:"search terms" predicates on traits.
+// buildTraitContentPredicateSQL builds SQL for content("search terms") predicates on traits.
 // Uses LIKE matching on the trait's content column (the line text where the trait appears).
 // This is simpler than FTS5 since trait content is a single line.
 func (e *Executor) buildTraitContentPredicateSQL(p *ContentPredicate, alias string) (string, []interface{}, error) {
@@ -27,7 +27,7 @@ func (e *Executor) buildTraitContentPredicateSQL(p *ContentPredicate, alias stri
 	return cond, []interface{}{searchPattern}, nil
 }
 
-// buildTraitRefsPredicateSQL builds SQL for refs:[[target]] or refs:{type:...} predicates on traits.
+// buildTraitRefsPredicateSQL builds SQL for refs([[target]]) or refs(type:...) predicates on traits.
 //
 // CONTENT SCOPE RULE: This matches refs that appear on the same line as the trait.
 // This is the same rule used by parser.IsRefOnTraitLine and parser.StripTraitAnnotations -
@@ -192,7 +192,7 @@ func buildDateFilterConditionForCompare(value string, compareOp CompareOp, colum
 	return cond, args, true
 }
 
-// buildOnPredicateSQL builds SQL for on:{type:...} or on:[[target]] predicates.
+// buildOnPredicateSQL builds SQL for on(type:...) or on([[target]]) predicates.
 func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []interface{}, error) {
 	// Handle direct target reference: on:[[target]]
 	if p.Target != "" {
@@ -296,7 +296,7 @@ func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (st
 	return cond, args, nil
 }
 
-// buildAtPredicateSQL builds SQL for at:{trait:...} predicates.
+// buildAtPredicateSQL builds SQL for at(trait:...) predicates.
 // Matches traits at the same file:line location as matching traits.
 func (e *Executor) buildAtPredicateSQL(p *AtPredicate, alias string) (string, []interface{}, error) {
 	if p.Target != "" {

@@ -280,6 +280,7 @@ func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commande
 		VaultPath:         req.VaultPath,
 		OldName:           stringArg(req.Args, "old_name"),
 		NewName:           stringArg(req.Args, "new_name"),
+		Description:       stringArg(req.Args, "description"),
 		Confirm:           boolArg(req.Args, "confirm") || req.Confirm,
 		RenameDefaultPath: boolArg(req.Args, "rename-default-path"),
 	})

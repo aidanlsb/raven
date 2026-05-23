@@ -272,8 +272,8 @@ Examples:
 			}
 		} else {
 			// Join multiple args with spaces - allows running without quoting the whole query
-			// e.g., `rvn query trait:todo content:"my task"` works the same as
-			//       `rvn query 'trait:todo content:"my task"'`
+			// e.g., `rvn query trait:todo 'content("my task")'` works the same as
+			//       `rvn query 'trait:todo content("my task")'`
 			queryStr = joinQueryArgs(args)
 		}
 

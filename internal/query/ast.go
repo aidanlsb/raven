@@ -294,7 +294,7 @@ type GroupPredicate struct {
 func (GroupPredicate) predicateNode() {}
 
 // AtPredicate filters traits by co-location (same file:line).
-// Syntax: at:{trait:name ...}, at:[[target]], at:_
+// Syntax: at(trait:name ...), at([[target]]), at(_)
 // For traits only - matches traits at the same file and line.
 type AtPredicate struct {
 	basePredicate
@@ -304,7 +304,7 @@ type AtPredicate struct {
 
 func (AtPredicate) predicateNode() {}
 
-// RefdPredicate filters objects/traits by what references them (inverse of refs:).
+// RefdPredicate filters objects/traits by what references them (inverse of refs()).
 // Syntax: refd(type:type ...), refd(trait:name ...), refd([[target]]), refd(target)
 type RefdPredicate struct {
 	basePredicate

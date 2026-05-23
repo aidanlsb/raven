@@ -112,18 +112,18 @@ func CurrentVersionInfoWithReader(reader BuildInfoReader) VersionInfo {
 	info := defaultVersionInfo()
 
 	if reader == nil {
-		applyLdflagsFallback(&info)
+		applyLdflagsMetadata(&info)
 		return info
 	}
 
 	buildInfo, ok := reader()
 	if !ok || buildInfo == nil {
-		applyLdflagsFallback(&info)
+		applyLdflagsMetadata(&info)
 		return info
 	}
 
 	info = versionInfoFromBuildInfo(buildInfo, info)
-	applyLdflagsFallback(&info)
+	applyLdflagsMetadata(&info)
 
 	return info
 }
@@ -197,19 +197,25 @@ func buildSetting(info *debug.BuildInfo, key string) string {
 	return ""
 }
 
-func applyLdflagsFallback(info *VersionInfo) {
+func applyLdflagsMetadata(info *VersionInfo) {
 	if info == nil {
 		return
 	}
 
-	if info.Version == "devel" && buildinfo.Version != "" {
+	explicitReleaseMetadata := buildinfo.Version != "" || buildinfo.Commit != ""
+	if buildinfo.Version != "" {
 		info.Version = normalizeVersion(buildinfo.Version)
 	}
-	if info.Commit == "" && buildinfo.Commit != "" {
+	if buildinfo.Commit != "" {
 		info.Commit = buildinfo.Commit
 	}
-	if info.CommitTime == "" && buildinfo.Date != "" {
+	if buildinfo.Date != "" {
 		info.CommitTime = buildinfo.Date
+	}
+	if explicitReleaseMetadata {
+		// Release ldflags are the authority. Go's VCS stamping can report a
+		// dirty checkout if release hooks touch files before compilation.
+		info.Modified = false
 	}
 }
 

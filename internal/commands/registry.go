@@ -1281,7 +1281,8 @@ This command:
 2. Updates all 'type:' frontmatter fields in files
 3. Updates all ::type() embedded declarations
 4. Updates all ref field targets pointing to the old type
-5. Optionally renames default_path directory and moves matching files with reference updates (--rename-default-path)
+5. Optionally updates the type description (--description)
+6. Optionally renames default_path directory and moves matching files with reference updates (--rename-default-path)
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
@@ -1292,10 +1293,12 @@ For agents: After renaming, run raven_invoke(command="reindex", args={"full": tr
 		},
 		Flags: []FlagMeta{
 			{Name: "confirm", Description: "Apply the rename (default: preview only)", Type: FlagTypeBool},
+			{Name: "description", Description: "Set the renamed type description (use '-', 'none', or '\"\"' to clear)", Type: FlagTypeString},
 			{Name: "rename-default-path", Description: "Also rename type default_path directory and move matching files (with reference updates)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn schema rename type event meeting --json",
+			"rvn schema rename type event meeting --description 'Meetings and calls' --json",
 			"rvn schema rename type event meeting --confirm --json",
 			"rvn schema rename type event meeting --confirm --rename-default-path --json",
 		},

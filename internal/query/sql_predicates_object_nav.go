@@ -9,7 +9,7 @@ import (
 
 const recursivePredicateMaxDepth = 100
 
-// buildHasPredicateSQL builds SQL for has:{trait:...} predicates.
+// buildHasPredicateSQL builds SQL for has(trait:...) predicates.
 func (e *Executor) buildHasPredicateSQL(p *HasPredicate, alias string) (string, []interface{}, error) {
 	// Build subquery conditions for the trait
 	var traitConditions []string
@@ -289,7 +289,7 @@ func (e *Executor) buildContainsPredicateSQL(p *ContainsPredicate, alias string)
 	return cond, args, nil
 }
 
-// buildRefsPredicateSQL builds SQL for refs:[[target]] or refs:{type:...} predicates.
+// buildRefsPredicateSQL builds SQL for refs([[target]]) or refs(type:...) predicates.
 func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string, []interface{}, error) {
 	var cond string
 	var args []interface{}
@@ -343,7 +343,7 @@ func (e *Executor) buildRefsPredicateSQL(p *RefsPredicate, alias string) (string
 	return cond, args, nil
 }
 
-// buildContentPredicateSQL builds SQL for content:"search terms" predicates.
+// buildContentPredicateSQL builds SQL for content("search terms") predicates.
 // Uses FTS5 full-text search to filter objects by their content.
 func (e *Executor) buildContentPredicateSQL(p *ContentPredicate, alias string) (string, []interface{}, error) {
 	// Use FTS5 to search content

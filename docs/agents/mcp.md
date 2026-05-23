@@ -71,6 +71,12 @@ Example:
 }
 ```
 
+## Vault Agent Instructions
+
+Put a file named `AGENTS.md` at the vault root to give agents vault-specific operating guidance. Raven exposes this file through `raven://vault/agent-instructions` when it exists, so MCP clients can fetch the same instructions alongside the schema and saved queries.
+
+Use `AGENTS.md` for durable rules that are specific to the vault, such as preferred traits, task formatting conventions, naming patterns, or safety constraints. Keep it concise and operational; agents should treat it as guidance for working in the vault, not as a replacement for `schema.yaml` or `raven.yaml`.
+
 ## Compact Tool Surface
 
 The MCP surface is intentionally compact:

@@ -4,6 +4,18 @@ This guide covers the everyday Raven commands that are not covered by dedicated 
 
 For daily notes and quick capture (`rvn daily`, `rvn add`), see `using-your-vault/daily-notes.md`. For query syntax, see `querying/query-language.md`. For bulk operations on query results, see `vault-management/bulk-operations.md`.
 
+## Interactive Pickers
+
+If `fzf` is installed and Raven is running in an interactive terminal, a few commands open a picker when you omit the target argument:
+
+```bash
+rvn read   # Pick an indexed vault file to read
+rvn open   # Pick an indexed vault file to open
+rvn docs   # Pick a docs topic to view
+```
+
+Interactive pickers are disabled for `--json` output and other non-interactive/scripted contexts. If `fzf` is not installed, pass the target path or docs topic explicitly.
+
 ---
 
 ## Reading content

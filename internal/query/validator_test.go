@@ -206,7 +206,7 @@ func TestValidator_TraitRefdRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error for refd in trait query")
 	}
-	if !strings.Contains(err.Error(), "refd:") {
+	if !strings.Contains(err.Error(), "refd()") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

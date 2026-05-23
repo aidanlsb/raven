@@ -444,6 +444,9 @@ func invokeSchemaRenameType(_ *cobra.Command, commandID, vaultPath string, args 
 		"old_name": args["old_name"],
 		"new_name": args["new_name"],
 	}
+	if description, ok := args["description"]; ok {
+		previewArgs["description"] = description
+	}
 	preview := executeCanonicalCommand(commandID, vaultPath, previewArgs)
 	if !preview.OK {
 		return preview

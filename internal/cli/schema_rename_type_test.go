@@ -169,3 +169,30 @@ title: Kickoff
 	v.AssertFileNotExists("meetings/kickoff.md")
 	v.AssertFileContains("events/kickoff.md", "type: meeting")
 }
+
+func TestSchemaRenameType_ConfirmUpdatesDescription(t *testing.T) {
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  event:
+    description: Calendar events
+    default_path: events/
+    fields:
+      title: { type: string }
+traits: {}
+`).
+		WithFile("events/kickoff.md", `---
+type: event
+title: Kickoff
+---
+# Kickoff
+`).
+		Build()
+
+	res := v.RunCLI("schema", "rename", "type", "event", "meeting", "--description", "Meetings and calls", "--confirm")
+	res.MustSucceed(t)
+
+	v.AssertFileContains("schema.yaml", "meeting:")
+	v.AssertFileContains("schema.yaml", "description: Meetings and calls")
+	v.AssertFileNotContains("schema.yaml", "description: Calendar events")
+}

@@ -147,18 +147,18 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 		}
 	case *OnPredicate:
 		return &ValidationError{
-			Message:    "on: predicate is only valid for trait queries",
+			Message:    "on() predicate is only valid for trait queries",
 			Suggestion: "Use on(type:...) in trait queries",
 		}
 	case *WithinPredicate:
 		return &ValidationError{
-			Message:    "within: predicate is only valid for trait queries",
+			Message:    "within() predicate is only valid for trait queries",
 			Suggestion: "Use within(type:...) in trait queries",
 		}
 	case *AtPredicate:
 		// at: is only valid for trait queries
 		return &ValidationError{
-			Message:    "at: predicate is only valid for trait queries",
+			Message:    "at() predicate is only valid for trait queries",
 			Suggestion: "Use at(trait:...) to find traits co-located with other traits",
 		}
 	case *OrPredicate:
@@ -232,8 +232,8 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 		}
 	case *RefdPredicate:
 		return &ValidationError{
-			Message:    "refd: predicate is only valid for type queries",
-			Suggestion: "Use refd: with type queries, or use refs: in trait queries",
+			Message:    "refd() predicate is only valid for type queries",
+			Suggestion: "Use refd(...) with type queries, or use refs(...) in trait queries",
 		}
 	case *FieldPredicate:
 		// Allow .value for traits (the trait's value field)
@@ -251,12 +251,12 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 		}
 	case *HasPredicate:
 		return &ValidationError{
-			Message:    "has: predicate is only valid for type queries",
+			Message:    "has() predicate is only valid for type queries",
 			Suggestion: "Use has(trait:...) in type queries",
 		}
 	case *ContainsPredicate:
 		return &ValidationError{
-			Message:    "contains: predicate is only valid for type queries",
+			Message:    "contains() predicate is only valid for type queries",
 			Suggestion: "Use encloses(trait:...) in type queries",
 		}
 	case *ParentPredicate:
