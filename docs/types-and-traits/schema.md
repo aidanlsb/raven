@@ -131,6 +131,7 @@ type: date
 **Behavior:**
 - Created automatically by `rvn daily`
 - Has no defined fields (use traits for metadata)
+- Exposes a generated query-only `.date` value derived from the daily note ID
 - Date references (`[[2026-01-10]]`) resolve to daily notes
 - Files are stored under `directories.daily` (from `raven.yaml`)
 

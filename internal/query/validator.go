@@ -298,6 +298,9 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 }
 
 func (v *Validator) validateFieldPredicate(p *FieldPredicate, typeName string, typeDef *schema.TypeDefinition) error {
+	if isDateVirtualField(typeName, p.Field) {
+		return nil
+	}
 	_, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
 	return err
 }

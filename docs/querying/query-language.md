@@ -100,9 +100,12 @@ type:project .title=="Website Redesign"
 type:person exists(.email)
 type:person !exists(.email)
 type:project in(.status, [active,paused])
+type:date .date>=2026-05-01 .date<=2026-05-31
 ```
 
 For `ref` and `ref[]` fields (from `schema.yaml`), comparison values are resolved as reference targets, including unbracketed shorthand such as `.company==cursor`.
+
+The built-in `date` type has a generated `.date` field derived from the daily note's canonical `YYYY-MM-DD` object ID. It is queryable but not authored in frontmatter.
 
 ### String Matching
 
@@ -177,6 +180,8 @@ Date/date-time comparisons also support relative keywords:
 - `today`
 - `tomorrow`
 - `yesterday`
+
+The same date comparison values work for `type:date .date...` predicates.
 
 Examples:
 

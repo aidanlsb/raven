@@ -147,6 +147,9 @@ func TestValidator_ValidQuery(t *testing.T) {
 					"status": {Type: schema.FieldTypeString},
 				},
 			},
+			"date": {
+				Fields: map[string]*schema.FieldDefinition{},
+			},
 		},
 		Traits: map[string]*schema.TraitDefinition{
 			"due":      {},
@@ -160,6 +163,7 @@ func TestValidator_ValidQuery(t *testing.T) {
 		"type:person",
 		"type:person .name==Freya",
 		"type:project .status==active",
+		"type:date .date>=2026-05-01",
 		"trait:due",
 		"trait:due .value==past",
 		"type:person has(trait:due)",

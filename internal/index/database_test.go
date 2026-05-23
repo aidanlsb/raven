@@ -111,6 +111,43 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("indexes generated date field for date objects", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		doc := &parser.ParsedDocument{
+			FilePath: "daily/2026-05-23.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "daily/2026-05-23",
+					ObjectType: "date",
+					Fields:     make(map[string]schema.FieldValue),
+					LineStart:  1,
+				},
+			},
+		}
+
+		if err := db.IndexDocument(doc, sch); err != nil {
+			t.Fatalf("failed to index document: %v", err)
+		}
+
+		var gotDate, gotSourceID, gotField string
+		err = db.db.QueryRow(`
+			SELECT date, source_id, field_name
+			FROM date_index
+			WHERE source_type = 'object'
+		`).Scan(&gotDate, &gotSourceID, &gotField)
+		if err != nil {
+			t.Fatalf("failed to query generated date index row: %v", err)
+		}
+		if gotDate != "2026-05-23" || gotSourceID != "daily/2026-05-23" || gotField != "date" {
+			t.Fatalf("generated date index row = date %q source %q field %q", gotDate, gotSourceID, gotField)
+		}
+	})
+
 	t.Run("reindex replaces data", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {

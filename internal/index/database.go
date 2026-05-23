@@ -730,7 +730,18 @@ func indexDates(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) erro
 	defer dateStmt.Close()
 
 	for _, obj := range doc.Objects {
+		generatedDate := generatedDateObjectDate(obj)
+		if generatedDate != "" {
+			_, err = dateStmt.Exec(generatedDate, "object", obj.ID, "date", doc.FilePath)
+			if err != nil {
+				return err
+			}
+		}
+
 		for fieldName, fieldValue := range obj.Fields {
+			if obj.ObjectType == "date" && fieldName == "date" {
+				continue
+			}
 			if dateStr := extractDateString(fieldValue); dateStr != "" {
 				_, err = dateStmt.Exec(dateStr, "object", obj.ID, fieldName, doc.FilePath)
 				if err != nil {
@@ -834,6 +845,21 @@ func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 	}
 
 	return strings.Join(lines[start:end], "\n")
+}
+
+func generatedDateObjectDate(obj *parser.ParsedObject) string {
+	if obj == nil || obj.ObjectType != "date" || obj.ParentID != nil {
+		return ""
+	}
+
+	candidate := obj.ID
+	if idx := strings.LastIndex(candidate, "/"); idx >= 0 {
+		candidate = candidate[idx+1:]
+	}
+	if dates.IsValidDate(candidate) {
+		return candidate
+	}
+	return ""
 }
 
 // extractDateString extracts a date string from a field value if it's a date type.

@@ -63,6 +63,15 @@ func setupTestDB(t *testing.T) *sql.DB {
 			line_number INTEGER
 		);
 
+		CREATE TABLE date_index (
+			date TEXT NOT NULL,
+			source_type TEXT NOT NULL,
+			source_id TEXT NOT NULL,
+			field_name TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			PRIMARY KEY (date, source_type, source_id, field_name)
+		);
+
 		CREATE VIRTUAL TABLE fts_content USING fts5(
 			object_id,
 			title,
@@ -188,6 +197,15 @@ func setupRefRegressionDB(t *testing.T) *sql.DB {
 			line_number INTEGER
 		);
 
+		CREATE TABLE date_index (
+			date TEXT NOT NULL,
+			source_type TEXT NOT NULL,
+			source_id TEXT NOT NULL,
+			field_name TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			PRIMARY KEY (date, source_type, source_id, field_name)
+		);
+
 		CREATE VIRTUAL TABLE fts_content USING fts5(
 			object_id,
 			title,
@@ -299,6 +317,16 @@ func TestExecuteObjectQuery(t *testing.T) {
 			name:      "parent type",
 			query:     "type:meeting parent(type:date)",
 			wantCount: 2, // Both standup and planning
+		},
+		{
+			name:      "date virtual field exact",
+			query:     "type:date .date==2025-02-01",
+			wantCount: 1,
+		},
+		{
+			name:      "date virtual field range",
+			query:     "type:date .date>=2025-01-01 .date<=2025-12-31",
+			wantCount: 1,
 		},
 		{
 			name:      "refs to specific target",
@@ -565,6 +593,11 @@ func TestExecuteTraitQuery(t *testing.T) {
 		{
 			name:      "on project",
 			query:     "trait:due on(type:project)",
+			wantCount: 1,
+		},
+		{
+			name:      "within date virtual field",
+			query:     "trait:due within(type:date .date==2025-02-01)",
 			wantCount: 1,
 		},
 		{

@@ -16,6 +16,10 @@ import (
 func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName string) (string, []interface{}, error) {
 	jsonPath := jsonFieldPath(p.Field)
 
+	if isDateVirtualField(typeName, p.Field) {
+		return e.buildDateVirtualFieldPredicateSQL(p, alias)
+	}
+
 	if p.IsExists {
 		cond, args := fieldExistsCond(alias, jsonPath, p.CompareOp == CompareNeq)
 		if p.Negated() {
@@ -97,6 +101,58 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 	return cond, args, nil
 }
 
+func isDateVirtualField(typeName, fieldName string) bool {
+	return typeName == "date" && fieldName == "date"
+}
+
+func dateVirtualFieldExpr(alias string) string {
+	idDateExpr := fmt.Sprintf("substr(%[1]s.id, length(%[1]s.id) - 9, 10)", alias)
+	return fmt.Sprintf(`CASE
+		WHEN %[1]s GLOB '????-??-??' THEN %[1]s
+		ELSE (
+			SELECT di.date FROM date_index di
+			WHERE di.source_type = 'object'
+			  AND di.source_id = %[2]s.id
+			  AND di.field_name = 'date'
+			LIMIT 1
+		)
+	END`, idDateExpr, alias)
+}
+
+func (e *Executor) buildDateVirtualFieldPredicateSQL(p *FieldPredicate, alias string) (string, []interface{}, error) {
+	fieldExpr := dateVirtualFieldExpr(alias)
+	existsCond := fmt.Sprintf("%s GLOB '????-??-??'", fieldExpr)
+
+	if p.IsExists {
+		cond := existsCond
+		if p.CompareOp == CompareNeq {
+			cond = "NOT (" + cond + ")"
+		}
+		if p.Negated() {
+			cond = "NOT (" + cond + ")"
+		}
+		return cond, nil, nil
+	}
+
+	if p.IsRefValue {
+		return "", nil, fmt.Errorf("date field '.date' does not support reference values")
+	}
+
+	dateCond, dateArgs, ok, err := buildDateFieldCompareCondition(p.Value, p.CompareOp, fieldExpr, "", e.queryNow())
+	if err != nil {
+		return "", nil, err
+	}
+	if !ok {
+		return "", nil, fmt.Errorf("invalid date value for .date: %q (use YYYY-MM-DD, today, tomorrow, or yesterday)", p.Value)
+	}
+
+	cond := fmt.Sprintf("(%s AND %s)", existsCond, dateCond)
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+	return cond, dateArgs, nil
+}
+
 func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr string, jsonPath string, now time.Time) (string, []interface{}, bool, error) {
 	cond, dateArgs, ok, err := index.TryParseDateComparisonWithOptions(
 		value,
@@ -118,7 +174,9 @@ func buildDateFieldCompareCondition(value string, compareOp CompareOp, fieldExpr
 	pathArgCount := strings.Count(cond, fieldExpr)
 	args := make([]interface{}, 0, pathArgCount+len(dateArgs))
 	for i := 0; i < pathArgCount; i++ {
-		args = append(args, jsonPath)
+		if jsonPath != "" {
+			args = append(args, jsonPath)
+		}
 	}
 	args = append(args, dateArgs...)
 

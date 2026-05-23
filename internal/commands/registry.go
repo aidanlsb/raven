@@ -683,9 +683,10 @@ Common agent patterns:
 - Open todos in briefs: trait:todo .value==todo within(type:brief)
 - Distinguish real traits from plain-text mentions: use trait:todo ... instead of search "@todo"
 - Open todos under a section/topic heading: trait:todo .value==todo within(type:section content("pricing"))
+- Open todos in a daily-note range: trait:todo .value==todo within(type:date .date>=2026-05-01 .date<=2026-05-31)
 - Path + structure together: type:page matches(.path, "^pages/work/") has(trait:todo .value==todo)
 
-Special date values for trait comparisons:
+Special date values for trait and type:date .date comparisons:
 - today, tomorrow, yesterday
 
 Saved query inputs must be declared in the saved query definition when using {{args.<name>}}.

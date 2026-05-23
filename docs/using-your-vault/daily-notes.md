@@ -88,6 +88,9 @@ rvn query 'trait:todo within(type:date)'
 # Todos from a specific day
 rvn query 'trait:todo within([[2026-03-15]])'
 
+# Todos from a date range
+rvn query 'trait:todo within(type:date .date>=2026-03-01 .date<=2026-03-31)'
+
 # Overdue items across all daily notes
 rvn query 'trait:due .value<today within(type:date)'
 ```
