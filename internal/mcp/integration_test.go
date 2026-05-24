@@ -1559,6 +1559,38 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"file", "line", "content"})
 	})
 
+	t.Run("edit_preview", func(t *testing.T) {
+		note := `---
+type: page
+---
+# Daily
+
+old task
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("daily/2026-02-15.md", note).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.MinimalSchema()).
+			WithFile("daily/2026-02-15.md", note).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		mcpResult := server.callTool("edit", map[string]interface{}{
+			"path":    "daily/2026-02-15.md",
+			"old_str": "old task",
+			"new_str": "done task",
+		})
+		cliResult := vCLI.RunCLI("edit", "daily/2026-02-15.md", "old task", "done task")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "path", "line", "preview"})
+		vMCP.AssertFileContains("daily/2026-02-15.md", "old task")
+		vMCP.AssertFileNotContains("daily/2026-02-15.md", "done task")
+		vCLI.AssertFileContains("daily/2026-02-15.md", "old task")
+		vCLI.AssertFileNotContains("daily/2026-02-15.md", "done task")
+	})
+
 	t.Run("add_bulk_preview", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
@@ -1577,6 +1609,10 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		cliResult := vCLI.RunCLIWithStdin("people/add-bulk-one\npeople/add-bulk-two\n", "add", "--stdin", "bulk add preview")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "content"})
+		vMCP.AssertFileNotContains("people/add-bulk-one.md", "bulk add preview")
+		vMCP.AssertFileNotContains("people/add-bulk-two.md", "bulk add preview")
+		vCLI.AssertFileNotContains("people/add-bulk-one.md", "bulk add preview")
+		vCLI.AssertFileNotContains("people/add-bulk-two.md", "bulk add preview")
 	})
 
 	t.Run("add_bulk_apply", func(t *testing.T) {
@@ -1642,6 +1678,10 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		cliResult := vCLI.RunCLIWithStdin("people/set-bulk-one\npeople/set-bulk-two\n", "set", "--stdin", "email=bulk@example.com")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "fields"})
+		vMCP.AssertFileNotContains("people/set-bulk-one.md", "bulk@example.com")
+		vMCP.AssertFileNotContains("people/set-bulk-two.md", "bulk@example.com")
+		vCLI.AssertFileNotContains("people/set-bulk-one.md", "bulk@example.com")
+		vCLI.AssertFileNotContains("people/set-bulk-two.md", "bulk@example.com")
 	})
 
 	t.Run("set_bulk_apply", func(t *testing.T) {
@@ -1665,6 +1705,42 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		cliResult := vCLI.RunCLIWithStdin("people/set-apply-one\npeople/set-apply-two\n", "set", "--stdin", "--confirm", "email=apply@example.com")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"ok", "action", "results", "total", "skipped", "errors", "modified", "fields"})
+	})
+
+	t.Run("update_bulk_preview", func(t *testing.T) {
+		taskFile := `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+- @priority(low) Second task
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("update", map[string]interface{}{
+			"stdin":     true,
+			"trait_ids": []interface{}{"tasks/task1.md:trait:1"},
+			"value":     "high",
+		})
+		cliResult := vCLI.RunCLIWithStdin("tasks/task1.md:trait:1\n", "update", "--stdin", "high")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total"})
+		vMCP.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+		vMCP.AssertFileNotContains("tasks/task1.md", "@priority(high)")
+		vCLI.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+		vCLI.AssertFileNotContains("tasks/task1.md", "@priority(high)")
 	})
 
 	t.Run("update_bulk_apply", func(t *testing.T) {
@@ -1764,6 +1840,10 @@ type: page
 		cliResult := vCLI.RunCLIWithStdin("people/delete-bulk-one\npeople/delete-bulk-two\n", "delete", "--stdin")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "behavior"})
+		vMCP.AssertFileExists("people/delete-bulk-one.md")
+		vMCP.AssertFileExists("people/delete-bulk-two.md")
+		vCLI.AssertFileExists("people/delete-bulk-one.md")
+		vCLI.AssertFileExists("people/delete-bulk-two.md")
 	})
 
 	t.Run("delete_bulk_apply", func(t *testing.T) {
@@ -1830,6 +1910,14 @@ type: page
 		cliResult := vCLI.RunCLIWithStdin("people/bulk-one\npeople/bulk-two\n", "move", "--stdin", "archive/")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "warnings", "destination"})
+		vMCP.AssertFileExists("people/bulk-one.md")
+		vMCP.AssertFileExists("people/bulk-two.md")
+		vMCP.AssertFileNotExists("archive/bulk-one.md")
+		vMCP.AssertFileNotExists("archive/bulk-two.md")
+		vCLI.AssertFileExists("people/bulk-one.md")
+		vCLI.AssertFileExists("people/bulk-two.md")
+		vCLI.AssertFileNotExists("archive/bulk-one.md")
+		vCLI.AssertFileNotExists("archive/bulk-two.md")
 	})
 
 	t.Run("move_bulk_apply", func(t *testing.T) {
@@ -2227,6 +2315,10 @@ status: paused
 		cliResult := vCLI.RunCLI("query", "type:project .status==active", "--apply", "set status=done")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total", "fields"})
+		vMCP.AssertFileContains("projects/alpha.md", "status: active")
+		vMCP.AssertFileNotContains("projects/alpha.md", "status: done")
+		vCLI.AssertFileContains("projects/alpha.md", "status: active")
+		vCLI.AssertFileNotContains("projects/alpha.md", "status: done")
 	})
 
 	t.Run("query_apply_trait_confirm", func(t *testing.T) {
