@@ -330,6 +330,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		Destination:    destination,
 		UpdateRefs:     boolArgDefault(req.Args, "update-refs", true),
 		SkipTypeCheck:  boolArg(req.Args, "skip-type-check"),
+		Preview:        req.Preview,
 		ParseOptions:   buildParseOptions(vaultCfg),
 		FailOnIndexErr: true,
 	})
@@ -342,6 +343,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.SuccessWithWarnings(map[string]interface{}{
 			"source":        serviceResult.SourceID,
 			"destination":   serviceResult.DestinationID,
+			"preview":       req.Preview,
 			"needs_confirm": true,
 			"reason":        serviceResult.Reason,
 		}, []commandexec.Warning{{
@@ -356,6 +358,10 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 	data := map[string]interface{}{
 		"source":      serviceResult.SourceID,
 		"destination": serviceResult.DestinationID,
+	}
+	if req.Preview {
+		data["preview"] = true
+		data["status"] = "preview"
 	}
 	if len(serviceResult.UpdatedRefs) > 0 {
 		data["updated_refs"] = serviceResult.UpdatedRefs

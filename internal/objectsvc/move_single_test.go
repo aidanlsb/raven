@@ -59,6 +59,58 @@ traits: {}
 	}
 }
 
+func TestMoveByReferencePreviewDoesNotMoveFile(t *testing.T) {
+	t.Parallel()
+	vaultPath := t.TempDir()
+	writeTestSchema(t, vaultPath, `
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+traits: {}
+`)
+	sch := loadTestSchema(t, vaultPath)
+
+	filePath := filepath.Join(vaultPath, "people/freya.md")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("---\ntype: person\nname: Freya\n---\n"), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	result, err := MoveByReference(MoveByReferenceRequest{
+		VaultPath:      vaultPath,
+		VaultConfig:    &config.VaultConfig{},
+		Schema:         sch,
+		Reference:      "people/freya",
+		Destination:    "archive/freya-archived",
+		UpdateRefs:     true,
+		SkipTypeCheck:  true,
+		Preview:        true,
+		FailOnIndexErr: false,
+	})
+	if err != nil {
+		t.Fatalf("MoveByReference: %v", err)
+	}
+	if result.SourceID != "people/freya" {
+		t.Fatalf("expected source id people/freya, got %q", result.SourceID)
+	}
+	if result.DestinationID != "archive/freya-archived" {
+		t.Fatalf("expected destination id archive/freya-archived, got %q", result.DestinationID)
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("expected source file to remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(vaultPath, "archive/freya-archived.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected destination file not to exist, stat err: %v", err)
+	}
+}
+
 func TestMoveByReferenceTypeMismatchNeedsConfirm(t *testing.T) {
 	t.Parallel()
 	vaultPath := t.TempDir()

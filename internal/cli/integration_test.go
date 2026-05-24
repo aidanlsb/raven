@@ -615,7 +615,7 @@ func TestIntegration_MoveWithReferenceUpdate(t *testing.T) {
 	v.RunCLI("new", "project", "Website", "--field", "owner=[[people/alice]]").MustSucceed(t)
 
 	// Move Alice within the people directory (rename)
-	result := v.RunCLI("move", "people/alice", "people/alice-archived")
+	result := v.RunCLI("move", "people/alice", "people/alice-archived", "--confirm")
 	result.MustSucceed(t)
 
 	// Verify the move
@@ -624,6 +624,29 @@ func TestIntegration_MoveWithReferenceUpdate(t *testing.T) {
 
 	// Verify the reference was updated in the project
 	v.AssertFileContains("projects/website.md", "[[people/alice-archived]]")
+}
+
+func TestIntegration_MovePreviewDoesNotMutateWithoutConfirm(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	v.RunCLI("new", "person", "Preview Me").MustSucceed(t)
+	v.RunCLI("new", "project", "Preview Ref", "--field", "owner=[[people/preview-me]]").MustSucceed(t)
+
+	result := v.RunCLI("move", "people/preview-me", "people/preview-me-archived")
+	result.MustSucceed(t)
+	if got := result.DataString("status"); got != "preview" {
+		t.Fatalf("expected preview status, got %q; raw: %s", got, result.RawJSON)
+	}
+	if preview, ok := result.Data["preview"].(bool); !ok || !preview {
+		t.Fatalf("expected preview=true, got %#v; raw: %s", result.Data["preview"], result.RawJSON)
+	}
+
+	v.AssertFileExists("people/preview-me.md")
+	v.AssertFileNotExists("people/preview-me-archived.md")
+	v.AssertFileContains("projects/preview-ref.md", "[[people/preview-me]]")
 }
 
 // TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef verifies that
@@ -641,7 +664,7 @@ func TestIntegration_MoveWithReferenceUpdate_BareFrontmatterRef(t *testing.T) {
 	v.RunCLI("new", "project", "Website", "--field", "owner=people/alice").MustSucceed(t)
 
 	// Move Alice within the people directory (rename).
-	result := v.RunCLI("move", "people/alice", "people/alice-archived")
+	result := v.RunCLI("move", "people/alice", "people/alice-archived", "--confirm")
 	result.MustSucceed(t)
 
 	// Verify the move happened.
@@ -664,7 +687,7 @@ func TestIntegration_MoveWithShortSourceReference(t *testing.T) {
 	v.RunCLI("new", "project", "Website", "--field", "owner=[[people/alice]]").MustSucceed(t)
 
 	// Move using short reference as source.
-	result := v.RunCLI("move", "alice", "people/alice-archived")
+	result := v.RunCLI("move", "alice", "people/alice-archived", "--confirm")
 	result.MustSucceed(t)
 
 	v.AssertFileNotExists("people/alice.md")
@@ -695,7 +718,7 @@ type: note
 	// Source is not in the default path and should resolve via short object ID.
 	v.RunCLI("reindex").MustSucceed(t)
 
-	result := v.RunCLI("move", "spec/raven-move-friction", "note/")
+	result := v.RunCLI("move", "spec/raven-move-friction", "note/", "--confirm")
 	result.MustSucceed(t)
 
 	v.AssertFileNotExists("objects/spec/raven-move-friction.md")
@@ -727,7 +750,7 @@ type: doc
 
 	v.RunCLI("reindex").MustSucceed(t)
 
-	result := v.RunCLI("move", "doc/test-note", "objects/doc/test-note-moved")
+	result := v.RunCLI("move", "doc/test-note", "objects/doc/test-note-moved", "--confirm")
 	result.MustSucceed(t)
 
 	v.AssertFileNotExists("objects/doc/test-note.md")

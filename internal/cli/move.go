@@ -77,12 +77,22 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 		})
 	}
 
+	if isJSONOutput() {
+		return executeCanonicalRequest(commandexec.Request{
+			CommandID: commandID,
+			VaultPath: vaultPath,
+			Args:      args,
+			Preview:   !moveConfirm,
+			Confirm:   moveConfirm,
+		})
+	}
+
 	result := executeCanonicalRequest(commandexec.Request{
 		CommandID: commandID,
 		VaultPath: vaultPath,
 		Args:      args,
 	})
-	if isJSONOutput() || !result.OK {
+	if !result.OK {
 		return result
 	}
 	data := canonicalDataMap(result)

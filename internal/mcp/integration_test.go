@@ -1807,7 +1807,7 @@ type: page
 			"source":      "people/move-me",
 			"destination": "archive/move-me-archived",
 		})
-		cliResult := vCLI.RunCLI("move", "people/move-me", "archive/move-me-archived")
+		cliResult := vCLI.RunCLI("move", "people/move-me", "archive/move-me-archived", "--confirm")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"source", "destination", "updated_refs"})
 	})

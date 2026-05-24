@@ -577,6 +577,9 @@ If moving a file to a type's default directory (e.g., people/) but the file
 has a different type, returns a warning with needs_confirm=true. The agent
 should ask the user how to proceed.
 
+CLI JSON behavior:
+Single-object moves return preview by default; use --confirm to apply.
+
 Bulk operations:
 Use --stdin to read object IDs from stdin (one per line).
 Destination must be a directory (ending with /).
@@ -590,13 +593,14 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			{Name: "update-refs", Description: "Update references to moved file (default: true)", Type: FlagTypeBool, Default: "true"},
 			{Name: "skip-type-check", Description: "Skip type-directory mismatch warning", Type: FlagTypeBool},
 			{Name: "stdin", Description: "Read object IDs from stdin for bulk operations", Type: FlagTypeBool},
-			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
+			{Name: "confirm", Description: "Apply CLI JSON or bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn move people/loki people/loki-archived --json",
-			"rvn move inbox/task.md projects/website/task.md --json",
-			"rvn move drafts/person.md people/freya.md --update-refs --json",
-			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --json",
+			"rvn move people/loki people/loki-archived --confirm --json",
+			"rvn move inbox/task.md projects/website/task.md --confirm --json",
+			"rvn move drafts/person.md people/freya.md --update-refs --confirm --json",
+			"rvn move assets/pdfs/paper.pdf assets/pdfs/archive/paper.pdf --confirm --json",
 		},
 		UseCases: []string{
 			"Rename a file in place (NEVER use 'mv' shell command)",

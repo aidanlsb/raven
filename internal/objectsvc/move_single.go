@@ -20,6 +20,7 @@ type MoveByReferenceRequest struct {
 	Destination    string
 	UpdateRefs     bool
 	SkipTypeCheck  bool
+	Preview        bool
 	ParseOptions   *parser.ParseOptions
 	FailOnIndexErr bool
 }
@@ -131,6 +132,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 			SourceObjectID:    sourceID,
 			DestinationObject: destPath,
 			UpdateRefs:        req.UpdateRefs,
+			Preview:           req.Preview,
 			FailOnIndexError:  req.FailOnIndexErr,
 			VaultConfig:       req.VaultConfig,
 			Schema:            req.Schema,
@@ -199,6 +201,7 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 		SourceObjectID:    sourceID,
 		DestinationObject: req.VaultConfig.FilePathToObjectID(destPath),
 		UpdateRefs:        req.UpdateRefs,
+		Preview:           req.Preview,
 		FailOnIndexError:  req.FailOnIndexErr,
 		VaultConfig:       req.VaultConfig,
 		Schema:            sch,

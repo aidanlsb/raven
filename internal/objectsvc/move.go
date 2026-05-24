@@ -26,6 +26,7 @@ type MoveFileRequest struct {
 	DestinationObject  string
 	ReplacementContent []byte
 	UpdateRefs         bool
+	Preview            bool
 	FailOnIndexError   bool
 	VaultConfig        *config.VaultConfig
 	Schema             *schema.Schema
@@ -117,6 +118,11 @@ func MoveFile(req MoveFileRequest) (*MoveFileResult, error) {
 	result.WarningMessages = append(result.WarningMessages, warnings...)
 	if err != nil {
 		return nil, err
+	}
+
+	if req.Preview {
+		result.UpdatedRefs = append(result.UpdatedRefs, writePlan.updatedRefs...)
+		return result, nil
 	}
 
 	if err := os.MkdirAll(filepath.Dir(req.DestinationFile), 0o755); err != nil {
