@@ -204,6 +204,7 @@ Semantics:
 - Use --path to override the storage path explicitly while keeping title as display metadata
 - Frontmatter fields provided via --field are merged/updated
 - If --content is provided, the body is fully replaced (idempotent reruns)
+- Use --content-file to read the replacement body from a file, or '-' for stdin
 - Returns status: created, updated, or unchanged
 
 Boundary with add:
@@ -224,10 +225,13 @@ providing arrays/nulls explicitly.`,
 			{Name: "field", Description: "Set/update frontmatter fields using Raven field literals (repeatable)", Type: FlagTypeKeyValue, Examples: []string{`{"source": "daily-brief", "status": "ready"}`}},
 			{Name: "field-json", Description: "Set/update frontmatter fields as a JSON object with exact typed values", Type: FlagTypeJSON},
 			{Name: "content", Description: "Replace body content (full-body idempotent mode)", Type: FlagTypeString},
+			{Name: "content-file", Description: "Read replacement body content from a file, or '-' for stdin (mutually exclusive with --content)", Type: FlagTypeString, Examples: []string{"/tmp/brief.md", "-"}},
 			{Name: "path", Description: "Explicit target path (overrides title-derived path)", Type: FlagTypeString, Examples: []string{"brief/daily-2026-02-14", "note/raven-friction"}},
 		},
 		Examples: []string{
 			"rvn upsert brief \"Daily Brief 2026-02-14\" --content \"# Daily Brief\" --json",
+			"rvn upsert brief \"Daily Brief 2026-02-14\" --content-file /tmp/brief.md --json",
+			"rvn upsert brief \"Daily Brief 2026-02-14\" --content-file - --json < /tmp/brief.md",
 			"rvn upsert note \"Raven Friction\" --path note/raven-friction --content \"# Notes\" --json",
 			"rvn upsert report \"Q1 Status\" --field owner=people/freya --field status=draft --json",
 		},

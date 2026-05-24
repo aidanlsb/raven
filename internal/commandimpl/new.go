@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -139,8 +140,10 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 	}
 	allFieldValues := mergeFieldInputs(fieldValues, typedFieldValues)
 
-	_, hasContent := req.Args["content"]
-	content := stringArg(req.Args, "content")
+	content, hasContent, contentErr := upsertBodyContent(req)
+	if contentErr != nil {
+		return *contentErr
+	}
 
 	result, err := objectsvc.Upsert(objectsvc.UpsertRequest{
 		VaultPath:   vaultPath,
@@ -176,6 +179,50 @@ func HandleUpsert(_ context.Context, req commandexec.Request) commandexec.Result
 		warnings,
 		nil,
 	)
+}
+
+func upsertBodyContent(req commandexec.Request) (string, bool, *commandexec.Result) {
+	_, hasContent := req.Args["content"]
+	content := stringArg(req.Args, "content")
+
+	_, hasContentFile := req.Args["content-file"]
+	contentFile := strings.TrimSpace(stringArg(req.Args, "content-file"))
+	if hasContent && hasContentFile {
+		result := commandexec.Failure(
+			codes.ErrInvalidInput,
+			"--content and --content-file are mutually exclusive",
+			nil,
+			"Use only one body input mode",
+		)
+		return "", false, &result
+	}
+	if !hasContentFile {
+		return content, hasContent, nil
+	}
+	if contentFile == "" {
+		result := commandexec.Failure(
+			codes.ErrInvalidInput,
+			"--content-file requires a path or '-'",
+			nil,
+			"Provide a file path or use --content-file - to read from stdin",
+		)
+		return "", false, &result
+	}
+	if contentFile == "-" {
+		return string(req.Stdin), true, nil
+	}
+
+	data, err := os.ReadFile(contentFile)
+	if err != nil {
+		result := commandexec.Failure(
+			codes.ErrFileRead,
+			"failed to read --content-file",
+			map[string]interface{}{"path": contentFile},
+			err.Error(),
+		)
+		return "", false, &result
+	}
+	return string(data), true, nil
 }
 
 func warningMessagesToCommandWarnings(messages []string, code codes.WarningCode) []commandexec.Warning {

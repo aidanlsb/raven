@@ -981,6 +981,68 @@ types:
 	v.AssertFileContains("objects/note/raven-logo-brief.md", "# V2")
 }
 
+func TestIntegration_UpsertWithContentFile(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		WithRavenYAML(`directories:
+  type: objects/
+`).
+		Build()
+
+	contentFile := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(contentFile, []byte("# From File\n\n[[note/ref]]\n"), 0o644); err != nil {
+		t.Fatalf("write content file: %v", err)
+	}
+
+	result := v.RunCLI("upsert", "note", "File Body", "--content-file", contentFile)
+	result.MustSucceed(t)
+	v.AssertFileExists("objects/note/file-body.md")
+	v.AssertFileContains("objects/note/file-body.md", "# From File")
+	v.AssertFileContains("objects/note/file-body.md", "[[note/ref]]")
+}
+
+func TestIntegration_UpsertWithContentFileStdin(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 2
+types:
+  note:
+    default_path: note/
+`).
+		WithRavenYAML(`directories:
+  type: objects/
+`).
+		Build()
+
+	result := v.RunCLIWithStdin("# From Stdin\n\nBody\n", "upsert", "note", "Stdin Body", "--content-file", "-")
+	result.MustSucceed(t)
+	v.AssertFileExists("objects/note/stdin-body.md")
+	v.AssertFileContains("objects/note/stdin-body.md", "# From Stdin")
+	v.AssertFileContains("objects/note/stdin-body.md", "Body")
+}
+
+func TestIntegration_UpsertRejectsContentAndContentFileTogether(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	contentFile := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(contentFile, []byte("# From File\n"), 0o644); err != nil {
+		t.Fatalf("write content file: %v", err)
+	}
+
+	result := v.RunCLI("upsert", "project", "Conflict Body", "--content", "# Inline", "--content-file", contentFile)
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "mutually exclusive")
+	v.AssertFileNotExists("projects/conflict-body.md")
+}
+
 // TestIntegration_BulkOperationsPreview tests bulk operations with preview mode.
 func TestIntegration_BulkOperationsPreview(t *testing.T) {
 	t.Parallel()

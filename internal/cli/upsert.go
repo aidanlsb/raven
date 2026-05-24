@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,10 +13,11 @@ import (
 )
 
 var (
-	upsertFieldFlags []string
-	upsertFieldJSON  string
-	upsertContent    string
-	upsertPathFlag   string
+	upsertFieldFlags  []string
+	upsertFieldJSON   string
+	upsertContent     string
+	upsertContentFile string
+	upsertPathFlag    string
 )
 
 var upsertCmd = newCanonicalLeafCommand("upsert", canonicalLeafOptions{
@@ -50,14 +53,32 @@ func buildUpsertArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
 	}
 
+	content := upsertContent
+	replaceBody := cmd.Flags().Changed("content")
+	contentFileChanged := cmd.Flags().Changed("content-file")
+	if replaceBody && contentFileChanged {
+		return nil, handleErrorMsg(ErrInvalidInput, "--content and --content-file are mutually exclusive", "Use only one body input mode")
+	}
+	if contentFileChanged && strings.TrimSpace(upsertContentFile) == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, handleErrorMsg(ErrFileReadError, "failed to read content from stdin", err.Error())
+		}
+		content = string(data)
+		replaceBody = true
+		contentFileChanged = false
+	}
+
 	return buildUpsertCommandArgs(
 		typeName,
 		title,
 		targetPath,
 		fieldValues,
 		fieldJSONRaw,
-		upsertContent,
-		cmd.Flags().Changed("content"),
+		content,
+		replaceBody,
+		upsertContentFile,
+		contentFileChanged,
 	), nil
 }
 
@@ -79,7 +100,7 @@ func renderUpsertResult(_ *cobra.Command, result commandexec.Result) error {
 	return nil
 }
 
-func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}, content string, replaceBody bool) map[string]interface{} {
+func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}, content string, replaceBody bool, contentFile string, contentFileChanged bool) map[string]interface{} {
 	args := map[string]interface{}{
 		"type":  typeName,
 		"title": title,
@@ -95,6 +116,9 @@ func buildUpsertCommandArgs(typeName, title, targetPath string, fieldValues map[
 	}
 	if replaceBody {
 		args["content"] = content
+	}
+	if contentFileChanged {
+		args["content-file"] = strings.TrimSpace(contentFile)
 	}
 	return args
 }
@@ -115,6 +139,7 @@ func init() {
 	upsertCmd.Flags().StringArrayVar(&upsertFieldFlags, "field", nil, "Set field value (can be repeated): --field name=value")
 	upsertCmd.Flags().StringVar(&upsertFieldJSON, "field-json", "", "Set/update frontmatter fields as a JSON object")
 	upsertCmd.Flags().StringVar(&upsertContent, "content", "", "Replace body content (idempotent full-body mode)")
+	upsertCmd.Flags().StringVar(&upsertContentFile, "content-file", "", "Read replacement body content from a file, or '-' for stdin")
 	upsertCmd.Flags().StringVar(&upsertPathFlag, "path", "", "Explicit target path (overrides title-derived path)")
 	rootCmd.AddCommand(upsertCmd)
 }

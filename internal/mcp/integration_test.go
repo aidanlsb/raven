@@ -1539,6 +1539,29 @@ func TestMCPIntegration_DirectDispatchParityWithCLI(t *testing.T) {
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "id", "file", "type", "title"})
 	})
 
+	t.Run("upsert_content_file", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		contentFile := filepath.Join(t.TempDir(), "body.md")
+		if err := os.WriteFile(contentFile, []byte("# File Body\n\nLong generated content.\n"), 0o644); err != nil {
+			t.Fatalf("write content file: %v", err)
+		}
+
+		mcpResult := server.callTool("upsert", map[string]interface{}{
+			"type":         "project",
+			"title":        "File Body Project",
+			"field":        map[string]interface{}{"status": "active"},
+			"content-file": contentFile,
+		})
+		cliResult := vCLI.RunCLI("upsert", "project", "File Body Project", "--field", "status=active", "--content-file", contentFile)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"status", "id", "file", "type", "title"})
+		vMCP.AssertFileContains("projects/file-body-project.md", "# File Body")
+		vCLI.AssertFileContains("projects/file-body-project.md", "# File Body")
+	})
+
 	t.Run("add", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
