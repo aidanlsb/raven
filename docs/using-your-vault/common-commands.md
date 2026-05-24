@@ -151,6 +151,9 @@ rvn update daily/2026-03-15.md:trait:0 done
 
 # Bulk update
 rvn query 'trait:todo .value==todo' --ids | rvn update --stdin done --confirm
+
+# Bulk update from an explicit trait ID list
+rvn update --trait-id daily/2026-03-15.md:trait:0 --trait-id daily/2026-03-16.md:trait:0 done --confirm
 ```
 
 ### `rvn upsert`

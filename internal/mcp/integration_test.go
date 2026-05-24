@@ -1799,6 +1799,45 @@ type: page
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"action", "results", "total", "skipped", "errors", "modified"})
 	})
 
+	t.Run("update_bulk_explicit_trait_ids", func(t *testing.T) {
+		taskFile := `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+- @priority(low) Second task
+`
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("tasks/task1.md", taskFile).
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		server.callTool("reindex", nil)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("update", map[string]interface{}{
+			"trait_ids": []interface{}{"tasks/task1.md:trait:0", "tasks/task1.md:trait:1"},
+			"value":     "high",
+		})
+		cliResult := vCLI.RunCLI("update",
+			"--trait-id", "tasks/task1.md:trait:0",
+			"--trait-id", "tasks/task1.md:trait:1",
+			"high",
+		)
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"preview", "action", "items", "skipped", "total"})
+		vMCP.AssertFileContains("tasks/task1.md", "@priority(low) First task")
+		vMCP.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+		vCLI.AssertFileContains("tasks/task1.md", "@priority(low) First task")
+		vCLI.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+	})
+
 	t.Run("delete", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()
 		vCLI := testutil.NewTestVault(t).WithSchema(testutil.PersonProjectSchema()).Build()

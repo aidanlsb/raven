@@ -19,6 +19,27 @@ var updateCmd = newCanonicalLeafCommand("update", canonicalLeafOptions{
 
 func buildUpdateArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	stdin, _ := cmd.Flags().GetBool("stdin")
+	explicitIDs, _ := cmd.Flags().GetStringArray("trait-id")
+	if stdin && len(explicitIDs) > 0 {
+		return nil, handleErrorMsg(ErrInvalidInput, "--stdin and --trait-id are mutually exclusive", "Use either piped trait IDs or repeated --trait-id flags")
+	}
+	if len(explicitIDs) > 0 {
+		newValue, err := parseTraitUpdateValueArgs(args, "Usage: rvn update --trait-id <trait_id> [--trait-id <trait_id>...] <new_value>")
+		if err != nil {
+			return nil, err
+		}
+
+		ids, err := normalizeExplicitTraitIDs(explicitIDs)
+		if err != nil {
+			return nil, err
+		}
+
+		return map[string]interface{}{
+			"value":     newValue,
+			"trait_ids": stringsToAny(ids),
+		}, nil
+	}
+
 	if stdin {
 		newValue, err := parseTraitUpdateValueArgs(args, "Usage: rvn update --stdin <new_value>")
 		if err != nil {
@@ -58,6 +79,29 @@ func buildUpdateArgs(cmd *cobra.Command, args []string) (map[string]interface{},
 		"trait_id": traitID,
 		"value":    newValue,
 	}, nil
+}
+
+func normalizeExplicitTraitIDs(rawIDs []string) ([]string, error) {
+	ids := make([]string, 0, len(rawIDs))
+	seen := make(map[string]struct{}, len(rawIDs))
+	for _, rawID := range rawIDs {
+		id := strings.TrimSpace(rawID)
+		if id == "" {
+			continue
+		}
+		if !strings.Contains(id, ":trait:") {
+			return nil, handleErrorMsg(ErrInvalidInput, "invalid trait ID format", "Trait IDs look like: path/file.md:trait:N")
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, handleErrorMsg(ErrMissingArgument, "no trait IDs provided via --trait-id", "Pass one or more --trait-id flags")
+	}
+	return ids, nil
 }
 
 func invokeUpdate(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result {

@@ -194,6 +194,9 @@ rvn query "type:project .status==active" --ids | rvn set --stdin priority=high -
 # Update trait values via pipe
 rvn query "trait:todo .value==todo" --ids | rvn update --stdin done --confirm
 
+# Update explicit trait IDs without stdin
+rvn update --trait-id daily/today.md:trait:0 --trait-id daily/tomorrow.md:trait:0 done --confirm
+
 # Delete via pipe
 rvn query "type:project .status==archived" --ids | rvn delete --stdin --confirm
 
@@ -218,7 +221,7 @@ rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engine
 | Command | Behavior |
 |---------|----------|
 | `rvn set` | Set fields on each object (file-level and embedded) |
-| `rvn update` | Update each trait value (trait IDs only) |
+| `rvn update` | Update each trait value (trait IDs only; also supports repeated `--trait-id`) |
 | `rvn add` | Append text to each file (file-level only) |
 | `rvn delete` | Delete each object (file-level only) |
 | `rvn move` | Move each object (file-level only) |

@@ -1506,6 +1506,7 @@ Trait IDs look like "path/file.md:trait:N" and can be obtained via:
 
 Bulk operations:
 Use --stdin to read trait IDs from stdin (one per line).
+Use repeated --trait-id flags to provide an explicit trait ID list without stdin.
 IMPORTANT: Bulk operations return preview by default. Changes are NOT applied unless confirm=true.`,
 		Args: []ArgMeta{
 			{Name: "trait_id", Description: "Trait ID to update (e.g., daily/2026-01-25.md:trait:0)", Required: false},
@@ -1513,17 +1514,20 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 		},
 		Flags: []FlagMeta{
 			{Name: "stdin", Description: "Read trait IDs from stdin for bulk operations", Type: FlagTypeBool},
+			{Name: "trait-id", Description: "Trait ID for explicit-list bulk update (repeatable)", Type: FlagTypeStringSlice, Examples: []string{"daily/2026-01-25.md:trait:0"}},
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 		},
 		BulkStdinArgName:    "trait_ids",
 		BulkStdinArgAliases: []string{"object_ids", "ids"},
 		Examples: []string{
 			"rvn update daily/2026-01-25.md:trait:0 done --json",
+			"rvn update --trait-id daily/2026-01-25.md:trait:0 --trait-id daily/2026-01-25.md:trait:1 done --confirm --json",
 			"rvn query 'trait:todo' --ids | rvn update --stdin done --confirm --json",
 		},
 		UseCases: []string{
 			"Update a specific trait by ID",
 			"Bulk update trait values via --stdin",
+			"Bulk update an explicit list of trait IDs without stdin piping",
 		},
 	},
 	"edit": {

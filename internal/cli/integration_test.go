@@ -1167,6 +1167,59 @@ type: page
 	v.AssertFileContains("tasks/task1.md", "@priority(medium) Second task")
 }
 
+func TestIntegration_TraitUpdateExplicitTraitIDsPreviewAndApply(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("tasks/task1.md", `---
+type: page
+---
+# Task 1
+
+- @priority(low) First task
+- @priority(low) Second task
+`).
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("update",
+		"--trait-id", "tasks/task1.md:trait:0",
+		"--trait-id", "tasks/task1.md:trait:1",
+		"high",
+	)
+	result.MustSucceed(t)
+	if preview, ok := result.Data["preview"].(bool); !ok || !preview {
+		t.Fatalf("expected preview=true, got %#v; raw: %s", result.Data["preview"], result.RawJSON)
+	}
+	if total, ok := result.Data["total"].(float64); !ok || total != 2 {
+		t.Fatalf("expected total=2, got %#v; raw: %s", result.Data["total"], result.RawJSON)
+	}
+	v.AssertFileContains("tasks/task1.md", "@priority(low) First task")
+	v.AssertFileContains("tasks/task1.md", "@priority(low) Second task")
+
+	result = v.RunCLI("update",
+		"--trait-id", "tasks/task1.md:trait:0",
+		"--trait-id", "tasks/task1.md:trait:1",
+		"--confirm",
+		"high",
+	)
+	result.MustSucceed(t)
+	v.AssertFileContains("tasks/task1.md", "@priority(high) First task")
+	v.AssertFileContains("tasks/task1.md", "@priority(high) Second task")
+}
+
+func TestIntegration_TraitUpdateRejectsStdinAndExplicitTraitIDs(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		Build()
+
+	result := v.RunCLI("update", "--stdin", "--trait-id", "tasks/task1.md:trait:0", "high")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "mutually exclusive")
+}
+
 func TestIntegration_TraitUpdateCommand_ResolvesRelativeDateKeyword(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
