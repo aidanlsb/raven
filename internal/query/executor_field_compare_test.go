@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
@@ -46,6 +48,88 @@ func TestObjectFieldComparison_NumericUsesNumericOrdering(t *testing.T) {
 	}
 	if !(slices.Contains(ids, "metric/a") && slices.Contains(ids, "metric/c")) {
 		t.Fatalf("unexpected ids: %#v", ids)
+	}
+}
+
+func TestObjectFieldComparison_BooleanLiteralsUseBoolStorage(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`
+		INSERT INTO objects (id, file_path, type, fields, line_start) VALUES
+			('movie/heat', 'movie/heat.md', 'movie', '{"watched": false}', 1),
+			('movie/alien', 'movie/alien.md', 'movie', '{"watched": true}', 1),
+			('movie/unset', 'movie/unset.md', 'movie', '{}', 1);
+	`)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	e := NewExecutor(db)
+	e.SetSchema(&schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"movie": {
+				Fields: map[string]*schema.FieldDefinition{
+					"watched": {Type: schema.FieldTypeBool},
+				},
+			},
+		},
+	})
+
+	tests := []struct {
+		name    string
+		query   string
+		wantIDs []string
+	}{
+		{
+			name:    "false equality",
+			query:   "type:movie .watched==false",
+			wantIDs: []string{"movie/heat"},
+		},
+		{
+			name:    "true equality",
+			query:   "type:movie .watched==true",
+			wantIDs: []string{"movie/alien"},
+		},
+		{
+			name:    "false inequality",
+			query:   "type:movie .watched!=false",
+			wantIDs: []string{"movie/alien"},
+		},
+		{
+			name:    "true inequality",
+			query:   "type:movie .watched!=true",
+			wantIDs: []string{"movie/heat"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+
+			results, err := e.ExecuteObjectQuery(q)
+			if err != nil {
+				t.Fatalf("exec: %v", err)
+			}
+
+			ids := make([]string, 0, len(results))
+			for _, r := range results {
+				ids = append(ids, r.ID)
+			}
+
+			if len(ids) != len(tt.wantIDs) {
+				t.Fatalf("got ids %#v, want %#v", ids, tt.wantIDs)
+			}
+			for _, wantID := range tt.wantIDs {
+				if !slices.Contains(ids, wantID) {
+					t.Fatalf("got ids %#v, want %#v", ids, tt.wantIDs)
+				}
+			}
+		})
 	}
 }
 

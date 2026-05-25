@@ -62,6 +62,8 @@ func (e *Executor) buildFieldPredicateSQL(p *FieldPredicate, alias, typeName str
 		}
 	}
 
+	value = e.normalizeBoolFieldComparisonValue(typeName, p.Field, value, p.CompareOp)
+
 	if p.CompareOp == CompareNeq {
 		if altValue != "" {
 			cond1, args1 := fieldScalarOrArrayCIEqualsCond(alias, jsonPath, value, true, mode)
@@ -224,6 +226,35 @@ func (e *Executor) isRefArrayField(typeName, fieldName string) bool {
 		return false
 	}
 	return fieldDef.Type == schema.FieldTypeRefArray
+}
+
+func (e *Executor) normalizeBoolFieldComparisonValue(typeName, fieldName, value string, op CompareOp) string {
+	if op != CompareEq && op != CompareNeq {
+		return value
+	}
+	if e.schema == nil || typeName == "" {
+		return value
+	}
+	typeDef := e.schema.Types[typeName]
+	if typeDef == nil {
+		return value
+	}
+	fieldDef := typeDef.Fields[fieldName]
+	if fieldDef == nil {
+		return value
+	}
+	if fieldDef.Type != schema.FieldTypeBool && fieldDef.Type != schema.FieldTypeBoolArray {
+		return value
+	}
+
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true":
+		return "1"
+	case "false":
+		return "0"
+	default:
+		return value
+	}
 }
 
 func (e *Executor) fieldEqualityMode(typeName, fieldName string) fieldEqualityMode {
