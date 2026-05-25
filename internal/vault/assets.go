@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/model"
 	"github.com/aidanlsb/raven/internal/paths"
 )
@@ -22,8 +23,18 @@ type AssetWalkResult struct {
 	Error        error
 }
 
+// AssetWalkOptions contains options for walking asset files.
+type AssetWalkOptions struct {
+	ExcludeMatcher *ravenignore.Matcher
+}
+
 // WalkAssetFiles walks configured asset roots and calls handler for each asset.
 func WalkAssetFiles(vaultPath string, vaultCfg *config.VaultConfig, handler func(result AssetWalkResult) error) error {
+	return WalkAssetFilesWithOptions(vaultPath, vaultCfg, nil, handler)
+}
+
+// WalkAssetFilesWithOptions walks configured asset roots with custom options.
+func WalkAssetFilesWithOptions(vaultPath string, vaultCfg *config.VaultConfig, opts *AssetWalkOptions, handler func(result AssetWalkResult) error) error {
 	if vaultCfg == nil {
 		vaultCfg = config.DefaultVaultConfig()
 	}
@@ -53,11 +64,21 @@ func WalkAssetFiles(vaultPath string, vaultCfg *config.VaultConfig, handler func
 			})
 		}
 
+		relativePath, _ := filepath.Rel(vaultPath, path)
+		rel := paths.NormalizeVaultRelPath(relativePath)
+
 		if d.IsDir() {
 			name := d.Name()
 			if name == ".raven" || name == ".trash" || name == ".git" {
 				return filepath.SkipDir
 			}
+			if rel != "." && opts != nil && opts.ExcludeMatcher.Match(rel, true) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if opts != nil && opts.ExcludeMatcher.Match(rel, false) {
 			return nil
 		}
 
@@ -85,8 +106,6 @@ func WalkAssetFiles(vaultPath string, vaultCfg *config.VaultConfig, handler func
 				Error:        err,
 			})
 		}
-		relativePath, _ := filepath.Rel(vaultPath, path)
-		rel := paths.NormalizeVaultRelPath(relativePath)
 		asset := BuildAsset(rel, info, vaultCfg)
 		return handler(AssetWalkResult{
 			Path:         path,

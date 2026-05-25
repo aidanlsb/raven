@@ -11,7 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/testutil"
-	"github.com/aidanlsb/raven/internal/vault"
+	vaultpkg "github.com/aidanlsb/raven/internal/vault"
 )
 
 func TestRun_FiltersParseErrorsBeforeCounting(t *testing.T) {
@@ -143,7 +143,7 @@ func TestRun_ReportsOrphanedAndNonCanonicalAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open index: %v", err)
 	}
-	if err := db.IndexAsset(vault.BuildAsset(assetRel, info, cfg)); err != nil {
+	if err := db.IndexAsset(vaultpkg.BuildAsset(assetRel, info, cfg)); err != nil {
 		t.Fatalf("index asset: %v", err)
 	}
 	db.Close()
@@ -157,6 +157,58 @@ func TestRun_ReportsOrphanedAndNonCanonicalAsset(t *testing.T) {
 	}
 	if !hasIssue(result.Issues, check.IssueNonCanonicalAsset) {
 		t.Fatalf("issues = %#v, want non_canonical_asset", result.Issues)
+	}
+}
+
+func TestRun_IgnoresExcludedMarkdownAndAssetIssues(t *testing.T) {
+	t.Parallel()
+
+	vault := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML("directories:\n  type: type/\n  page: page/\nexclude:\n  - AGENTS.md\n  - .cursor/\n  - assets/generated/**\n").
+		WithFile("page/keep.md", "# Keep\n").
+		WithFile("AGENTS.md", "---\ntype: person\nname: [\n---\n").
+		WithFile(".cursor/plans/work.plan.md", "---\ntype: person\nname: [\n---\n").
+		Build()
+
+	assetRel := "assets/generated/drop.pdf"
+	assetFull := filepath.Join(vault.Path, assetRel)
+	if err := os.MkdirAll(filepath.Dir(assetFull), 0o755); err != nil {
+		t.Fatalf("mkdir asset: %v", err)
+	}
+	if err := os.WriteFile(assetFull, []byte("%PDF test\n"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+	cfg, err := config.LoadVaultConfig(vault.Path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	sch, err := schema.Load(vault.Path)
+	if err != nil {
+		t.Fatalf("load schema: %v", err)
+	}
+	info, err := os.Stat(assetFull)
+	if err != nil {
+		t.Fatalf("stat asset: %v", err)
+	}
+	db, err := index.Open(vault.Path)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if err := db.IndexAsset(vaultpkg.BuildAsset(assetRel, info, cfg)); err != nil {
+		t.Fatalf("index asset: %v", err)
+	}
+	db.Close()
+
+	result, err := Run(vault.Path, cfg, sch, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.FileCount != 1 {
+		t.Fatalf("file count = %d, want only managed keep.md", result.FileCount)
+	}
+	if len(result.Issues) != 0 {
+		t.Fatalf("issues = %#v, want none", result.Issues)
 	}
 }
 

@@ -255,6 +255,25 @@ status: active
 	v.AssertFileExists("private/task.md")
 }
 
+func TestIntegration_ExcludeRejectsMutationCommands(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithRavenYAML("exclude:\n  - private/\n").
+		WithFile("private/notes.md", "# Notes\nold task\n").
+		Build()
+
+	editResult := v.RunCLI("edit", "private/notes.md", "old task", "done task", "--confirm")
+	editResult.MustFail(t, "VALIDATION_FAILED")
+	editResult.MustFailWithMessage(t, "excluded")
+	v.AssertFileContains("private/notes.md", "old task")
+
+	addResult := v.RunCLI("add", "new note", "--to", "private/notes.md")
+	addResult.MustFail(t, "VALIDATION_FAILED")
+	addResult.MustFailWithMessage(t, "excluded")
+	v.AssertFileNotContains("private/notes.md", "new note")
+}
+
 func TestIntegration_MoveRejectsProtectedBacklinkUpdates(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

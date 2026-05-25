@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 )
 
 func TestWalkMarkdownFiles(t *testing.T) {
@@ -176,6 +178,44 @@ type: [invalid yaml
 
 	if errorCount != 1 {
 		t.Errorf("Error count = %d, want 1", errorCount)
+	}
+}
+
+func TestWalkMarkdownFilesWithOptionsExcludesPaths(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	files := map[string]string{
+		"keep.md":                    "# Keep\n",
+		"AGENTS.md":                  "# Agents\n",
+		".cursor/plans/work.plan.md": "# Plan\n",
+		"notes/work.plan.md":         "# Plan\n",
+	}
+	for relPath, content := range files {
+		fullPath := filepath.Join(tmpDir, relPath)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", relPath, err)
+		}
+		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", relPath, err)
+		}
+	}
+
+	matcher, err := ravenignore.NewMatcher([]string{"AGENTS.md", ".cursor/", "*.plan.md"})
+	if err != nil {
+		t.Fatalf("NewMatcher returned error: %v", err)
+	}
+
+	var found []string
+	err = WalkMarkdownFilesWithOptions(tmpDir, &WalkOptions{ExcludeMatcher: matcher}, func(result WalkResult) error {
+		found = append(found, result.RelativePath)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WalkMarkdownFilesWithOptions returned error: %v", err)
+	}
+	if len(found) != 1 || found[0] != "keep.md" {
+		t.Fatalf("found files = %#v, want only keep.md", found)
 	}
 }
 

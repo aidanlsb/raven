@@ -36,6 +36,10 @@ When `new`, `upsert`, `set`, `import`, or schema commands fail because a value d
 
 Do not bypass validation by editing frontmatter manually. Unknown frontmatter keys and invalid values will be reported by `check` and may not be indexed.
 
+If a write fails because the path is excluded, treat that as a vault-management
+boundary. Excluded files are not Raven-managed; ask whether to change
+`raven.yaml` `exclude` before retrying as a Raven content mutation.
+
 ## 5. Recovery loop for check/repair tasks
 
 ```text

@@ -235,7 +235,7 @@ rvn backlinks project/old-project
 
 ### `rvn check`
 
-Validate vault files against the schema and asset graph. Reports issues like unknown types, missing required fields, broken references, missing assets, orphaned assets, non-canonical asset locations, and undefined traits.
+Validate managed vault files against the schema and asset graph. Reports issues like unknown types, missing required fields, broken references, missing assets, orphaned assets, non-canonical asset locations, and undefined traits. Paths matched by `raven.yaml` `exclude` patterns are not checked.
 
 ```bash
 rvn check                                       # Entire vault
@@ -291,7 +291,7 @@ Returns whether the reference resolved, the target ID, and the match source (ali
 
 ### `rvn reindex`
 
-Rebuild the SQLite index from vault files, including Markdown objects and assets under the configured asset root. Normally Raven reindexes automatically after commands (`auto_reindex: true` in `raven.yaml`). Manual reindexing is needed after:
+Rebuild the SQLite index from managed vault files, including Markdown objects and assets under the configured asset root. Paths matched by `raven.yaml` `exclude` patterns are skipped and removed from the index during incremental reindexing. Normally Raven reindexes automatically after commands (`auto_reindex: true` in `raven.yaml`). Manual reindexing is needed after:
 
 - Editing files outside of Raven (e.g., in your editor or with git)
 - Adding, moving, or deleting assets outside of Raven

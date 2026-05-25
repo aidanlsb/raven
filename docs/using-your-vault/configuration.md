@@ -343,6 +343,26 @@ This is additive. Raven always protects:
 - `raven.yaml`
 - `schema.yaml`
 
+### `exclude`
+
+Vault-root-relative `.gitignore`-style patterns for files and directories that Raven should not manage.
+
+| Type | Default |
+|------|---------|
+| string[] | empty |
+
+Excluded paths are not indexed, checked, queried after reindex, or mutated by Raven content commands. Use this for repository support files that live beside your notes but are not Raven content, such as `AGENTS.md` or `.cursor/` plan files.
+
+```yaml
+exclude:
+  - AGENTS.md
+  - .cursor/
+  - "*.plan.md"
+  - assets/generated/**
+```
+
+`exclude` is separate from `protected_prefixes`: protected paths can still be managed/read/indexed by Raven but cannot be changed by mutation commands; excluded paths are outside Raven's managed content model.
+
 ### `daily_template` (legacy)
 
 `daily_template` remains in the config model for backward compatibility, but daily templating is schema-driven in current Raven. Use `schema.yaml` (`types.date.templates` and `types.date.default_template`) instead.

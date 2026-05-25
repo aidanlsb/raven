@@ -4,6 +4,10 @@ Use this guide for `check` triage.
 
 Rule: in JSON mode, prefer each issue's `fix_command` and `fix_hint` over hard-coded repairs.
 
+`check` does not report issues for paths matched by `raven.yaml` `exclude`
+patterns. Those files are outside Raven's managed content model, not hidden
+check failures.
+
 ## Error-level issues
 
 | Issue Type | Meaning | Typical Action |

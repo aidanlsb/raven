@@ -37,7 +37,9 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 		"queries_count":            result.QueriesCount,
 		"protected_prefixes":       result.ProtectedPrefixes,
 		"protected_prefixes_count": len(result.ProtectedPrefixes),
-	}, &commandexec.Meta{Count: len(result.ProtectedPrefixes)})
+		"exclude":                  result.Exclude,
+		"exclude_count":            len(result.Exclude),
+	}, &commandexec.Meta{Count: len(result.ProtectedPrefixes) + len(result.Exclude)})
 }
 
 func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request) commandexec.Result {
@@ -116,6 +118,53 @@ func HandleVaultConfigProtectedPrefixesRemove(_ context.Context, req commandexec
 		"changed":            result.Changed,
 		"removed":            result.Removed,
 		"protected_prefixes": result.ProtectedPrefixes,
+	}, nil)
+}
+
+func HandleVaultConfigExcludeList(_ context.Context, req commandexec.Request) commandexec.Result {
+	result, err := vaultconfigsvc.ListExclude(vaultconfigsvc.ListExcludeRequest{
+		VaultPath: req.VaultPath,
+	})
+	if err != nil {
+		return mapVaultConfigFailure(err)
+	}
+	return commandexec.Success(map[string]interface{}{
+		"config_path": result.ConfigPath,
+		"exists":      result.Exists,
+		"exclude":     result.Exclude,
+	}, &commandexec.Meta{Count: len(result.Exclude)})
+}
+
+func HandleVaultConfigExcludeAdd(_ context.Context, req commandexec.Request) commandexec.Result {
+	result, err := vaultconfigsvc.AddExclude(vaultconfigsvc.AddExcludeRequest{
+		VaultPath: req.VaultPath,
+		Pattern:   strings.TrimSpace(stringArg(req.Args, "pattern")),
+	})
+	if err != nil {
+		return mapVaultConfigFailure(err)
+	}
+	return commandexec.Success(map[string]interface{}{
+		"config_path": result.ConfigPath,
+		"created":     result.Created,
+		"changed":     result.Changed,
+		"pattern":     result.Pattern,
+		"exclude":     result.Exclude,
+	}, nil)
+}
+
+func HandleVaultConfigExcludeRemove(_ context.Context, req commandexec.Request) commandexec.Result {
+	result, err := vaultconfigsvc.RemoveExclude(vaultconfigsvc.RemoveExcludeRequest{
+		VaultPath: req.VaultPath,
+		Pattern:   strings.TrimSpace(stringArg(req.Args, "pattern")),
+	})
+	if err != nil {
+		return mapVaultConfigFailure(err)
+	}
+	return commandexec.Success(map[string]interface{}{
+		"config_path": result.ConfigPath,
+		"changed":     result.Changed,
+		"removed":     result.Removed,
+		"exclude":     result.Exclude,
 	}, nil)
 }
 

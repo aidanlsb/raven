@@ -233,6 +233,85 @@ func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
 	}
 }
 
+func TestRunSkipsExcludedMarkdownAndAssets(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "raven.yaml", "exclude:\n  - AGENTS.md\n  - .cursor/\n  - assets/generated/**\n")
+	writeTestFile(t, vaultPath, "keep.md", "# Keep\n")
+	writeTestFile(t, vaultPath, "AGENTS.md", "# Agents\n")
+	writeTestFile(t, vaultPath, ".cursor/plans/work.plan.md", "# Plan\n")
+	writeTestFile(t, vaultPath, "assets/pdfs/keep.pdf", "%PDF keep\n")
+	writeTestFile(t, vaultPath, "assets/generated/drop.pdf", "%PDF drop\n")
+
+	result, err := Run(RunRequest{VaultPath: vaultPath, Full: true})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.FilesIndexed != 2 {
+		t.Fatalf("files indexed = %d, want 2", result.FilesIndexed)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to reopen index: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	paths, err := db.AllIndexedFilePaths()
+	if err != nil {
+		t.Fatalf("AllIndexedFilePaths returned error: %v", err)
+	}
+	for _, excluded := range []string{"AGENTS.md", ".cursor/plans/work.plan.md", "assets/generated/drop.pdf"} {
+		if containsString(paths, excluded) {
+			t.Fatalf("indexed paths = %#v, did not expect excluded %s", paths, excluded)
+		}
+	}
+	for _, included := range []string{"keep.md", "assets/pdfs/keep.pdf"} {
+		if !containsString(paths, included) {
+			t.Fatalf("indexed paths = %#v, expected %s", paths, included)
+		}
+	}
+}
+
+func TestRunIncrementalPurgesNewlyExcludedFiles(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "keep.md", "# Keep\n")
+	writeTestFile(t, vaultPath, "AGENTS.md", "# Agents\n")
+
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial Run returned error: %v", err)
+	}
+	writeTestFile(t, vaultPath, "raven.yaml", "exclude:\n  - AGENTS.md\n")
+
+	result, err := Run(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("incremental Run returned error: %v", err)
+	}
+	if result.FilesExcluded != 1 || len(result.ExcludedFiles) != 1 || result.ExcludedFiles[0] != "AGENTS.md" {
+		t.Fatalf("excluded files = %d %#v, want AGENTS.md", result.FilesExcluded, result.ExcludedFiles)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to reopen index: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	paths, err := db.AllIndexedFilePaths()
+	if err != nil {
+		t.Fatalf("AllIndexedFilePaths returned error: %v", err)
+	}
+	if containsString(paths, "AGENTS.md") {
+		t.Fatalf("indexed paths = %#v, did not expect AGENTS.md", paths)
+	}
+	if !containsString(paths, "keep.md") {
+		t.Fatalf("indexed paths = %#v, expected keep.md", paths)
+	}
+}
+
 func TestBuildParseOptions(t *testing.T) {
 	t.Parallel()
 	if got := buildParseOptions(nil); got != nil {
@@ -256,4 +335,24 @@ func TestBuildParseOptions(t *testing.T) {
 	if got.ObjectsRoot != "objects/" || got.PagesRoot != "pages/" {
 		t.Fatalf("unexpected parse options roots: %#v", got)
 	}
+}
+
+func writeTestFile(t *testing.T, vaultPath, relPath, content string) {
+	t.Helper()
+	fullPath := filepath.Join(vaultPath, relPath)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", relPath, err)
+	}
+	if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", relPath, err)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

@@ -576,7 +576,7 @@ Checks schema.yaml for internal consistency:
 
 ### `rvn check`
 
-Validates vault files against the schema. Reports issues like:
+Validates managed vault files against the schema. Paths matched by `raven.yaml` `exclude` patterns are outside Raven management and are not checked. Reports issues like:
 
 | Issue Type | Description | Fix |
 |------------|-------------|-----|

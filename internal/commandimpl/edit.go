@@ -11,6 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/editsvc"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/readsvc"
 )
@@ -228,6 +229,18 @@ func validateEditableContentPath(vaultPath string, vaultCfg *config.VaultConfig,
 		}
 		result := commandexec.Failure("VALIDATION_FAILED", "cannot edit protected or system-managed paths", map[string]interface{}{"path": relPath}, suggestion)
 		return &result
+	}
+
+	if vaultCfg != nil {
+		excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
+		if err != nil {
+			result := commandexec.Failure("VALIDATION_FAILED", "invalid exclude config", map[string]interface{}{"path": relPath}, "Fix raven.yaml exclude patterns and try again")
+			return &result
+		}
+		if excludeMatcher.Match(relPath, false) {
+			result := commandexec.Failure("VALIDATION_FAILED", "cannot edit excluded paths", map[string]interface{}{"path": relPath}, "Choose a managed path, or update exclusions with 'rvn vault config exclude ...'")
+			return &result
+		}
 	}
 
 	if templateDir != "" && strings.HasPrefix(relPath, templateDir) {

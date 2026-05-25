@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -49,6 +50,28 @@ func ValidateContentMutationRelPath(vaultCfg *config.VaultConfig, relPath string
 			map[string]interface{}{"path": normalized},
 			nil,
 		)
+	}
+
+	if vaultCfg != nil {
+		excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
+		if err != nil {
+			return newError(
+				ErrorValidationFailed,
+				"invalid exclude config",
+				"Fix raven.yaml exclude patterns and try again",
+				map[string]interface{}{"path": normalized},
+				err,
+			)
+		}
+		if excludeMatcher.Match(normalized, false) {
+			return newError(
+				ErrorValidationFailed,
+				"cannot modify excluded paths",
+				"Choose a managed path, or update exclusions with 'rvn vault config exclude ...'",
+				map[string]interface{}{"path": normalized},
+				nil,
+			)
+		}
 	}
 
 	if templateDir != "" && strings.HasPrefix(normalized, templateDir) {

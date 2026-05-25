@@ -10,6 +10,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -77,6 +78,8 @@ type ShowResult struct {
 	QueriesCount          int
 	ProtectedPrefixes     []string
 	ProtectedPrefixesUsed bool
+	Exclude               []string
+	ExcludeUsed           bool
 }
 
 type DirectoriesInfo struct {
@@ -271,6 +274,41 @@ type RemoveProtectedPrefixResult struct {
 	ProtectedPrefixes []string
 }
 
+type ListExcludeRequest struct {
+	VaultPath string
+}
+
+type ListExcludeResult struct {
+	ConfigPath string
+	Exists     bool
+	Exclude    []string
+}
+
+type AddExcludeRequest struct {
+	VaultPath string
+	Pattern   string
+}
+
+type AddExcludeResult struct {
+	ConfigPath string
+	Created    bool
+	Changed    bool
+	Pattern    string
+	Exclude    []string
+}
+
+type RemoveExcludeRequest struct {
+	VaultPath string
+	Pattern   string
+}
+
+type RemoveExcludeResult struct {
+	ConfigPath string
+	Changed    bool
+	Removed    string
+	Exclude    []string
+}
+
 func Show(req ShowRequest) (*ShowResult, error) {
 	cfg, exists, configPath, err := load(req.VaultPath)
 	if err != nil {
@@ -278,6 +316,7 @@ func Show(req ShowRequest) (*ShowResult, error) {
 	}
 
 	protected := normalizedProtectedPrefixes(cfg.ProtectedPrefixes)
+	exclude := normalizedExcludePatterns(cfg.Exclude)
 	directories := showDirectories(cfg)
 	capture := cfg.GetCaptureConfig()
 	deletion := cfg.GetDeletionConfig()
@@ -293,6 +332,8 @@ func Show(req ShowRequest) (*ShowResult, error) {
 		QueriesCount:          len(cfg.Queries),
 		ProtectedPrefixes:     protected,
 		ProtectedPrefixesUsed: len(protected) > 0,
+		Exclude:               exclude,
+		ExcludeUsed:           len(exclude) > 0,
 	}, nil
 }
 
@@ -762,6 +803,93 @@ func RemoveProtectedPrefix(req RemoveProtectedPrefixRequest) (*RemoveProtectedPr
 	}, nil
 }
 
+func ListExclude(req ListExcludeRequest) (*ListExcludeResult, error) {
+	cfg, exists, configPath, err := load(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ListExcludeResult{
+		ConfigPath: configPath,
+		Exists:     exists,
+		Exclude:    normalizedExcludePatterns(cfg.Exclude),
+	}, nil
+}
+
+func AddExclude(req AddExcludeRequest) (*AddExcludeResult, error) {
+	cfg, exists, configPath, err := load(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
+
+	pattern, err := normalizeExcludePattern(req.Pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	patterns := normalizedExcludePatterns(cfg.Exclude)
+	changed := true
+	for _, existing := range patterns {
+		if existing == pattern {
+			changed = false
+			break
+		}
+	}
+	if changed {
+		patterns = append(patterns, pattern)
+		cfg.Exclude = patterns
+		if err := config.SaveVaultConfig(req.VaultPath, cfg); err != nil {
+			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+		}
+	}
+
+	return &AddExcludeResult{
+		ConfigPath: configPath,
+		Created:    !exists && changed,
+		Changed:    changed,
+		Pattern:    pattern,
+		Exclude:    patterns,
+	}, nil
+}
+
+func RemoveExclude(req RemoveExcludeRequest) (*RemoveExcludeResult, error) {
+	cfg, _, configPath, err := load(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
+
+	pattern, err := normalizeExcludePattern(req.Pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	patterns := normalizedExcludePatterns(cfg.Exclude)
+	next := make([]string, 0, len(patterns))
+	found := false
+	for _, existing := range patterns {
+		if existing == pattern {
+			found = true
+			continue
+		}
+		next = append(next, existing)
+	}
+	if !found {
+		return nil, newError(CodePrefixNotFound, fmt.Sprintf("exclude pattern %q not found", pattern), "Run 'rvn vault config exclude list' to see configured patterns", nil)
+	}
+
+	cfg.Exclude = next
+	if err := config.SaveVaultConfig(req.VaultPath, cfg); err != nil {
+		return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+	}
+
+	return &RemoveExcludeResult{
+		ConfigPath: configPath,
+		Changed:    true,
+		Removed:    pattern,
+		Exclude:    next,
+	}, nil
+}
+
 func load(vaultPath string) (*config.VaultConfig, bool, string, error) {
 	if strings.TrimSpace(vaultPath) == "" {
 		return nil, false, "", newError(CodeInvalidInput, "vault path is required", "Resolve a vault before invoking the command", nil)
@@ -809,6 +937,21 @@ func normalizeProtectedPrefix(raw string) (string, error) {
 		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid protected prefix: %q", raw), "Use a vault-relative directory prefix such as 'private/'", nil)
 	}
 	return normalized, nil
+}
+
+func normalizedExcludePatterns(patterns []string) []string {
+	return ravenignore.NormalizePatterns(patterns)
+}
+
+func normalizeExcludePattern(raw string) (string, error) {
+	normalized := ravenignore.NormalizePatterns([]string{raw})
+	if len(normalized) == 0 {
+		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid exclude pattern: %q", raw), "Use a gitignore-style pattern such as 'AGENTS.md', '.cursor/', or '*.plan.md'", nil)
+	}
+	if _, err := ravenignore.NewMatcher(normalized); err != nil {
+		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid exclude pattern: %q", raw), err.Error(), nil)
+	}
+	return normalized[0], nil
 }
 
 func showDirectories(cfg *config.VaultConfig) DirectoriesInfo {

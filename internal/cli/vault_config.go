@@ -66,6 +66,28 @@ var vaultConfigProtectedPrefixesRemoveCmd = newCanonicalLeafCommand("vault_confi
 	RenderHuman: renderVaultConfigProtectedPrefixesRemove,
 })
 
+var vaultConfigExcludeCmd = &cobra.Command{
+	Use:   "exclude",
+	Short: "Manage exclude patterns in raven.yaml",
+	Args:  cobra.NoArgs,
+	RunE:  canonicalGroupDefaultRunE("vault_config_exclude_list", getVaultPath, renderVaultConfigExcludeList),
+}
+
+var vaultConfigExcludeListCmd = newCanonicalLeafCommand("vault_config_exclude_list", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigExcludeList,
+})
+
+var vaultConfigExcludeAddCmd = newCanonicalLeafCommand("vault_config_exclude_add", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigExcludeAdd,
+})
+
+var vaultConfigExcludeRemoveCmd = newCanonicalLeafCommand("vault_config_exclude_remove", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigExcludeRemove,
+})
+
 var vaultConfigDirectoriesCmd = &cobra.Command{
 	Use:   "directories",
 	Short: "Manage directories config in raven.yaml",
@@ -140,6 +162,10 @@ func init() {
 	vaultConfigProtectedPrefixesCmd.AddCommand(vaultConfigProtectedPrefixesAddCmd)
 	vaultConfigProtectedPrefixesCmd.AddCommand(vaultConfigProtectedPrefixesRemoveCmd)
 
+	vaultConfigExcludeCmd.AddCommand(vaultConfigExcludeListCmd)
+	vaultConfigExcludeCmd.AddCommand(vaultConfigExcludeAddCmd)
+	vaultConfigExcludeCmd.AddCommand(vaultConfigExcludeRemoveCmd)
+
 	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesGetCmd)
 	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesSetCmd)
 	vaultConfigDirectoriesCmd.AddCommand(vaultConfigDirectoriesUnsetCmd)
@@ -155,6 +181,7 @@ func init() {
 	vaultConfigCmd.AddCommand(vaultConfigShowCmd)
 	vaultConfigCmd.AddCommand(vaultConfigAutoReindexCmd)
 	vaultConfigCmd.AddCommand(vaultConfigProtectedPrefixesCmd)
+	vaultConfigCmd.AddCommand(vaultConfigExcludeCmd)
 	vaultConfigCmd.AddCommand(vaultConfigDirectoriesCmd)
 	vaultConfigCmd.AddCommand(vaultConfigCaptureCmd)
 	vaultConfigCmd.AddCommand(vaultConfigDeletionCmd)
@@ -203,12 +230,21 @@ func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	prefixes := stringSliceFromAny(data["protected_prefixes"])
 	if len(prefixes) == 0 {
 		fmt.Printf("%s %s\n", ui.Hint("protected_prefixes:"), ui.Hint("(none)"))
-		return nil
+	} else {
+		fmt.Println(ui.SectionHeader("protected_prefixes"))
+		for _, prefix := range prefixes {
+			fmt.Println(ui.Bullet(prefix))
+		}
 	}
 
-	fmt.Println(ui.SectionHeader("protected_prefixes"))
-	for _, prefix := range prefixes {
-		fmt.Println(ui.Bullet(prefix))
+	exclude := stringSliceFromAny(data["exclude"])
+	if len(exclude) == 0 {
+		fmt.Printf("%s %s\n", ui.Hint("exclude:"), ui.Hint("(none)"))
+	} else {
+		fmt.Println(ui.SectionHeader("exclude"))
+		for _, pattern := range exclude {
+			fmt.Println(ui.Bullet(pattern))
+		}
 	}
 	return nil
 }
@@ -263,6 +299,38 @@ func renderVaultConfigProtectedPrefixesAdd(_ *cobra.Command, result commandexec.
 func renderVaultConfigProtectedPrefixesRemove(_ *cobra.Command, result commandexec.Result) error {
 	data := canonicalDataMap(result)
 	fmt.Println(ui.Checkf("Removed protected prefix '%s'", stringValue(data["removed"])))
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	return nil
+}
+
+func renderVaultConfigExcludeList(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	exclude := stringSliceFromAny(data["exclude"])
+	if len(exclude) == 0 {
+		fmt.Println(ui.Star("No configured exclude patterns."))
+		return nil
+	}
+	for _, pattern := range exclude {
+		fmt.Println(ui.Bullet(pattern))
+	}
+	return nil
+}
+
+func renderVaultConfigExcludeAdd(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Added exclude pattern '%s'", stringValue(data["pattern"])))
+	} else {
+		fmt.Println(ui.Starf("Exclude pattern '%s' already configured", stringValue(data["pattern"])))
+	}
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	return nil
+}
+
+func renderVaultConfigExcludeRemove(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Println(ui.Checkf("Removed exclude pattern '%s'", stringValue(data["removed"])))
 	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/config"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/paths"
@@ -27,6 +28,8 @@ type WalkResult struct {
 type WalkOptions struct {
 	// ParseOptions are passed to the parser for each file.
 	ParseOptions *parser.ParseOptions
+	// ExcludeMatcher skips paths that are not managed by Raven.
+	ExcludeMatcher *ravenignore.Matcher
 }
 
 // WalkMarkdownFiles walks all markdown files in a vault and calls the handler for each.
@@ -56,10 +59,16 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 			})
 		}
 
-		// Skip directories, but skip .raven and .trash entirely
+		relativePath, _ := filepath.Rel(vaultPath, path)
+		relativePath = filepath.ToSlash(relativePath)
+
+		// Skip directories, but skip .raven, .trash, and excluded directories entirely
 		if d.IsDir() {
 			name := d.Name()
-			if name == ".raven" || name == ".trash" {
+			if name == ".raven" || name == ".trash" || name == ".git" {
+				return filepath.SkipDir
+			}
+			if relativePath != "." && opts != nil && opts.ExcludeMatcher.Match(relativePath, true) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -83,7 +92,9 @@ func WalkMarkdownFilesWithOptions(vaultPath string, opts *WalkOptions, handler f
 			})
 		}
 
-		relativePath, _ := filepath.Rel(vaultPath, path)
+		if opts != nil && opts.ExcludeMatcher.Match(relativePath, false) {
+			return nil
+		}
 
 		// Get file mtime
 		info, err := d.Info()

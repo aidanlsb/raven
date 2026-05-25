@@ -887,8 +887,8 @@ multiple installs exist on the system.`,
 	},
 	"reindex": {
 		Name:        "reindex",
-		Description: "Rebuild the SQLite index from all vault files",
-		LongDesc: `Parses all markdown files in the vault and rebuilds the SQLite index.
+		Description: "Rebuild the SQLite index from managed vault files",
+		LongDesc: `Parses managed markdown files in the vault and rebuilds the SQLite index.
 
 Use this after:
 - Bulk file operations outside of Raven
@@ -901,6 +901,9 @@ removed from the index.
 
 Reindex also discovers non-Markdown assets under the configured asset root and
 resolves Markdown links/images to those assets.
+
+Paths matched by raven.yaml exclude patterns are skipped and removed from the
+index during incremental reindexing.
 
 Use --full to force a complete rebuild of the entire index.`,
 		Examples: []string{
@@ -915,8 +918,8 @@ Use --full to force a complete rebuild of the entire index.`,
 	},
 	"check": {
 		Name:        "check",
-		Description: "Validate vault against schema",
-		LongDesc: `Validates all files in the vault against the schema.
+		Description: "Validate managed vault files against schema",
+		LongDesc: `Validates managed files in the vault against the schema.
 
 Returns structured issues with:
 - issue_type: unknown_type, missing_reference, missing_asset, orphaned_asset, undefined_trait, unknown_frontmatter_key, etc.
@@ -931,6 +934,9 @@ Scoping:
 - Use --trait to check all usages of a specific trait
 - Use --issues to check only specific issue types
 - Use --exclude to skip specific issue types
+
+Paths matched by raven.yaml exclude patterns are outside Raven management and
+are not checked.
 
 For agents: Use this tool to discover issues, then use the fix_command suggestions to resolve them.
 Ask the user for clarification when needed (e.g., which type to use for missing references).`,
@@ -1931,6 +1937,39 @@ Prefixes are normalized with a trailing slash.`,
 		},
 		Examples: []string{
 			"rvn vault config protected-prefixes remove private/ --json",
+		},
+	},
+	"vault_config_exclude_list": {
+		Name:        "vault config exclude list",
+		Description: "List configured exclude patterns from raven.yaml",
+		Examples: []string{
+			"rvn vault config exclude list --json",
+		},
+	},
+	"vault_config_exclude_add": {
+		Name:        "vault config exclude add",
+		Description: "Add one exclude pattern to raven.yaml",
+		LongDesc: `Add a gitignore-style pattern to the top-level exclude list.
+
+Excluded paths are not managed by Raven: check, reindex, query, and content
+mutation commands ignore or reject matching paths.`,
+		Args: []ArgMeta{
+			{Name: "pattern", Description: "Gitignore-style exclude pattern", Required: true},
+		},
+		Examples: []string{
+			"rvn vault config exclude add AGENTS.md --json",
+			"rvn vault config exclude add .cursor/ --json",
+			"rvn vault config exclude add '*.plan.md' --json",
+		},
+	},
+	"vault_config_exclude_remove": {
+		Name:        "vault config exclude remove",
+		Description: "Remove one exclude pattern from raven.yaml",
+		Args: []ArgMeta{
+			{Name: "pattern", Description: "Configured exclude pattern to remove", Required: true},
+		},
+		Examples: []string{
+			"rvn vault config exclude remove .cursor/ --json",
 		},
 	},
 	"vault_config_directories_get": {

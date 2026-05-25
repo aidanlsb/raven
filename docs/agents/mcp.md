@@ -271,6 +271,15 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 
 ```json
 {
+  "command": "vault_config_exclude_add",
+  "args": {
+    "pattern": ".cursor/"
+  }
+}
+```
+
+```json
+{
   "command": "vault_config_directories_set",
   "args": {
     "daily": "journal",

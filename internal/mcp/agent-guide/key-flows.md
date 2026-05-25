@@ -17,6 +17,11 @@ raven_invoke(command="check", args={"issues":"missing_reference,missing_asset,un
 
 Use issue `fix_command` / `fix_hint` from JSON output when available.
 
+`check` and `reindex` operate on Raven-managed content only. Paths matched by
+`raven.yaml` `exclude` patterns are intentionally ignored; update `exclude`
+with `vault_config_exclude_*` commands if support files need to enter or leave
+Raven management.
+
 ## 2. Create and enrich content
 
 ```text

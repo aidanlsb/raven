@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aidanlsb/raven/internal/config"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/parser"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
@@ -17,7 +18,12 @@ func CheckStaleness(rt *Runtime) (bool, []string, error) {
 	if err != nil {
 		return false, nil, err
 	}
-	return staleness.IsStale, staleness.StaleFiles, nil
+	matcher, err := excludeMatcher(rt)
+	if err != nil {
+		return false, nil, err
+	}
+	staleFiles := filterIncluded(staleness.StaleFiles, matcher)
+	return len(staleFiles) > 0, staleFiles, nil
 }
 
 func SmartReindex(rt *Runtime) (int, error) {
@@ -48,10 +54,17 @@ func SmartReindex(rt *Runtime) (int, error) {
 	if _, err := rt.DB.RemoveDeletedFiles(rt.VaultPath); err != nil {
 		return 0, err
 	}
+	matcher, err := excludeMatcher(rt)
+	if err != nil {
+		return 0, err
+	}
+	if err := removeExcludedIndexedFiles(rt, matcher); err != nil {
+		return 0, err
+	}
 
-	walkOpts := &vault.WalkOptions{ParseOptions: buildParseOptions(vaultCfg)}
+	walkOpts := &vault.WalkOptions{ParseOptions: buildParseOptions(vaultCfg), ExcludeMatcher: matcher}
 	reindexed := 0
-	err := vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
+	err = vault.WalkMarkdownFilesWithOptions(rt.VaultPath, walkOpts, func(result vault.WalkResult) error {
 		if result.Error != nil {
 			return nil //nolint:nilerr // skip files with errors
 		}
@@ -73,6 +86,50 @@ func SmartReindex(rt *Runtime) (int, error) {
 	}
 
 	return reindexed, nil
+}
+
+func excludeMatcher(rt *Runtime) (*ravenignore.Matcher, error) {
+	if rt == nil {
+		return ravenignore.NewMatcher(nil)
+	}
+	vaultCfg := rt.VaultCfg
+	if vaultCfg == nil {
+		loaded, err := config.LoadVaultConfig(rt.VaultPath)
+		if err != nil {
+			return nil, err
+		}
+		vaultCfg = loaded
+		rt.VaultCfg = loaded
+	}
+	return ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
+}
+
+func removeExcludedIndexedFiles(rt *Runtime, matcher *ravenignore.Matcher) error {
+	indexedPaths, err := rt.DB.AllIndexedFilePaths()
+	if err != nil {
+		return err
+	}
+	var excluded []string
+	for _, relPath := range indexedPaths {
+		if matcher.Match(relPath, false) {
+			excluded = append(excluded, relPath)
+		}
+	}
+	return rt.DB.RemoveFiles(excluded)
+}
+
+func filterIncluded(paths []string, matcher *ravenignore.Matcher) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if matcher.Match(path, false) {
+			continue
+		}
+		out = append(out, path)
+	}
+	return out
 }
 
 func buildParseOptions(vaultCfg *config.VaultConfig) *parser.ParseOptions {

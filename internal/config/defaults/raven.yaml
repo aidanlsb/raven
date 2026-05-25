@@ -41,6 +41,13 @@ assets:
 #   - templates/
 #   - private/
 
+# Unmanaged files/directories Raven should not index, check, query, or mutate.
+# Patterns use .gitignore-style syntax and are evaluated relative to the vault root.
+# exclude:
+#   - AGENTS.md
+#   - .cursor/
+#   - "*.plan.md"
+
 # Auto-reindex after CLI operations that modify files (default: true)
 # When enabled, commands like 'rvn add', 'rvn new', 'rvn set', 'rvn edit'
 # will automatically update the index. Disable if you prefer manual reindexing.

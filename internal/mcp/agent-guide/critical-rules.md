@@ -24,3 +24,11 @@ clear user intent; if deletion impact is uncertain, inspect the object and run
 `backlinks` first. Bulk delete still previews unless `confirm=true`.
 
 If you bypass Raven and mutate files directly, reindex and repair before continuing. This also applies to adding, moving, or deleting files under the configured asset root.
+
+## Respect managed-content boundaries
+
+`protected_prefixes` and `exclude` are different:
+- `protected_prefixes` marks managed paths that Raven must not mutate.
+- `exclude` marks unmanaged paths that Raven should not check, index, query, or mutate.
+
+If a path is excluded, do not try to work around Raven by editing it as vault content. Ask the user whether they want to remove or narrow the exclusion first.

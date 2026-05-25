@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/check"
 	"github.com/aidanlsb/raven/internal/config"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/pages"
 	"github.com/aidanlsb/raven/internal/parser"
@@ -100,6 +101,10 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	}
 
 	includeIssues, excludeIssues := parseIssueFilter(opts)
+	excludeMatcher, err := ravenignore.NewMatcher(vaultCfg.GetExcludePatterns())
+	if err != nil {
+		return nil, fmt.Errorf("invalid exclude config: %w", err)
+	}
 
 	result := &RunResult{
 		Scope: Scope{
@@ -123,8 +128,9 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 		defer db.Close()
 		stalenessInfo, stalenessErr := db.CheckStaleness(vaultPath)
 		if stalenessErr == nil && stalenessInfo.IsStale {
-			staleCount := len(stalenessInfo.StaleFiles)
-			if scope.Type == "full" {
+			staleFiles := filterIncludedPaths(stalenessInfo.StaleFiles, excludeMatcher)
+			staleCount := len(staleFiles)
+			if staleCount > 0 && scope.Type == "full" {
 				staleIssue := check.Issue{
 					Level:      check.LevelWarning,
 					Type:       check.IssueStaleIndex,
@@ -139,7 +145,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 					result.WarningCount++
 				}
 			}
-			result.StaleWarningShown = true
+			result.StaleWarningShown = staleCount > 0
 		}
 
 		aliases, _ = db.AllAliases()
@@ -166,6 +172,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 			ObjectsRoot: vaultCfg.GetObjectsRoot(),
 			PagesRoot:   vaultCfg.GetPagesRoot(),
 		},
+		ExcludeMatcher: excludeMatcher,
 	}
 	walkErr := vault.WalkMarkdownFilesWithOptions(vaultPath, walkOpts, func(walkResult vault.WalkResult) error {
 		if walkResult.Error != nil {
@@ -243,7 +250,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	}
 
 	if db != nil && (scope.Type == "full" || scope.Type == "directory") {
-		for _, issue := range detectAssetIssues(db, vaultPath, vaultCfg, scope, walkPath, targetFileSet) {
+		for _, issue := range detectAssetIssues(db, vaultPath, vaultCfg, excludeMatcher, scope, walkPath, targetFileSet) {
 			if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
 				continue
 			}
@@ -433,13 +440,16 @@ func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
 	return jsonResult
 }
 
-func detectAssetIssues(db *index.Database, vaultPath string, vaultCfg *config.VaultConfig, scope *Scope, walkPath string, targetFileSet map[string]bool) []check.Issue {
+func detectAssetIssues(db *index.Database, vaultPath string, vaultCfg *config.VaultConfig, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool) []check.Issue {
 	assets, err := db.QueryAssets("")
 	if err != nil {
 		return nil
 	}
 	var issues []check.Issue
 	for _, asset := range assets {
+		if excludeMatcher.Match(asset.FilePath, false) {
+			continue
+		}
 		fullPath := filepath.Join(vaultPath, asset.FilePath)
 		if !isFileInScope(fullPath, scope, walkPath, targetFileSet) {
 			continue
@@ -478,6 +488,20 @@ func detectAssetIssues(db *index.Database, vaultPath string, vaultCfg *config.Va
 		}
 	}
 	return issues
+}
+
+func filterIncludedPaths(paths []string, excludeMatcher *ravenignore.Matcher) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if excludeMatcher.Match(path, false) {
+			continue
+		}
+		out = append(out, path)
+	}
+	return out
 }
 
 func CreateMissingRefsNonInteractive(

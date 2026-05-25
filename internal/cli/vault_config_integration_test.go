@@ -12,7 +12,7 @@ func TestIntegration_VaultConfigShow(t *testing.T) {
 	t.Parallel()
 
 	v := testutil.NewTestVault(t).
-		WithRavenYAML("auto_reindex: false\nprotected_prefixes:\n  - private/\n").
+		WithRavenYAML("auto_reindex: false\nprotected_prefixes:\n  - private/\nexclude:\n  - AGENTS.md\n").
 		Build()
 
 	result := v.RunCLI("vault", "config", "show")
@@ -29,6 +29,10 @@ func TestIntegration_VaultConfigShow(t *testing.T) {
 	if len(prefixes) != 1 {
 		t.Fatalf("expected one protected prefix, got %#v", prefixes)
 	}
+	exclude := result.DataList("exclude")
+	if len(exclude) != 1 {
+		t.Fatalf("expected one exclude pattern, got %#v", exclude)
+	}
 }
 
 func TestIntegration_VaultConfigProtectedPrefixesLifecycle(t *testing.T) {
@@ -44,6 +48,21 @@ func TestIntegration_VaultConfigProtectedPrefixesLifecycle(t *testing.T) {
 	result = v.RunCLI("vault", "config", "protected-prefixes", "remove", "private/")
 	result.MustSucceed(t)
 	v.AssertFileNotContains("raven.yaml", "- private/")
+}
+
+func TestIntegration_VaultConfigExcludeLifecycle(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("vault", "config", "exclude", "add", ".cursor/")
+	result.MustSucceed(t)
+	v.AssertFileContains("raven.yaml", "exclude:")
+	v.AssertFileContains("raven.yaml", "- .cursor/")
+
+	result = v.RunCLI("vault", "config", "exclude", "remove", ".cursor/")
+	result.MustSucceed(t)
+	v.AssertFileNotContains("raven.yaml", "- .cursor/")
 }
 
 func TestIntegration_VaultConfigAutoReindexLifecycle(t *testing.T) {

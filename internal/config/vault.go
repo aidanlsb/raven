@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aidanlsb/raven/internal/atomicfile"
+	ravenignore "github.com/aidanlsb/raven/internal/ignore"
 	"github.com/aidanlsb/raven/internal/paths"
 )
 
@@ -46,6 +47,9 @@ type VaultConfig struct {
 	// Critical protected prefixes are hardcoded in code (e.g., .raven/, .trash/, .git/).
 	// This config is additive.
 	ProtectedPrefixes []string `yaml:"protected_prefixes,omitempty"`
+
+	// Exclude contains gitignore-style patterns for paths that are not managed by Raven.
+	Exclude []string `yaml:"exclude,omitempty"`
 
 	// Capture configures quick capture behavior
 	Capture *CaptureConfig `yaml:"capture,omitempty"`
@@ -239,6 +243,14 @@ func (vc *VaultConfig) IsAutoReindexEnabled() bool {
 		return true // Enabled by default
 	}
 	return *vc.AutoReindex
+}
+
+// GetExcludePatterns returns normalized Raven exclude patterns.
+func (vc *VaultConfig) GetExcludePatterns() []string {
+	if vc == nil {
+		return nil
+	}
+	return ravenignore.NormalizePatterns(vc.Exclude)
 }
 
 // CaptureConfig defines settings for quick capture via `rvn add`.
