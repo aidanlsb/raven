@@ -538,7 +538,7 @@ rvn schema update trait priority --values critical,high,medium,low
 ```
 
 **Effect:**
-- Existing values not in the new list cause `invalid_enum_value` errors
+- Existing trait enum values not in the new list cause `invalid_enum_value` errors
 - No automatic migration of existing values
 
 Fix with:
@@ -583,7 +583,7 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `unknown_type` | File uses undefined type | Add type to schema |
 | `unknown_frontmatter_key` | Field not defined for type | Add field to type |
 | `missing_required_field` | Required field not set | Set the field value |
-| `invalid_enum_value` | Value not in allowed list | Use valid value |
+| `invalid_enum_value` | Enum trait value not in allowed list | Use a valid value; `rvn check fix --confirm` can remove unnecessary quotes |
 | `undefined_trait` | Trait not in schema | Add trait to schema |
 | `missing_reference` | Link to non-existent object or section | Create the target or update the link |
 | `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset or update the reference |

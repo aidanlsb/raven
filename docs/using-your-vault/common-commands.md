@@ -254,9 +254,10 @@ rvn check --create-missing                       # Preview creating missing refe
 rvn check --create-missing --confirm             # Create them
 ```
 
-`rvn check fix` handles three classes of safe rewrites:
+`rvn check fix` handles these unambiguous fixes:
 
 - **`short_ref_could_be_full_path`** — replace short refs with their canonical full path
+- **`invalid_enum_value`** — remove unnecessary quotes around enum trait values when the unquoted value is valid
 - **`non_canonical_ref`** — strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
 - **`non_canonical_path`** — move files into the configured directory root for their type and rewrite all references that point at them
 
@@ -267,7 +268,7 @@ Key flags:
 - `--issues` — only report specific issue types (comma-separated)
 - `--exclude` — exclude specific issue types
 - `--strict` — treat warnings as errors
-- `--fix` — auto-fix simple issues
+- `--fix` — preview/apply safe auto-fixes for unambiguous check issues
 - `--create-missing` — create pages for unresolved references
 - `--verbose` / `-V` — full details for every issue
 

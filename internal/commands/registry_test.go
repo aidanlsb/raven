@@ -122,6 +122,22 @@ func TestRegistryLongDescriptionsUseCompactReindexGuidance(t *testing.T) {
 	}
 }
 
+func TestCheckFixMetadataListsSupportedFixes(t *testing.T) {
+	t.Parallel()
+
+	meta := Registry["check_fix"]
+	for _, issueType := range []string{
+		"short_ref_could_be_full_path",
+		"invalid_enum_value",
+		"non_canonical_ref",
+		"non_canonical_path",
+	} {
+		if !strings.Contains(meta.LongDesc, issueType) {
+			t.Fatalf("check_fix LongDesc missing supported fix issue type %q", issueType)
+		}
+	}
+}
+
 // TestCobraCommandGeneration verifies Cobra command generation works.
 func TestCobraCommandGeneration(t *testing.T) {
 	t.Parallel()

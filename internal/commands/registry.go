@@ -952,7 +952,7 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			{Name: "errors-only", Description: "Only report errors, skip warnings", Type: FlagTypeBool},
 			{Name: "by-file", Description: "Group issues by file path", Type: FlagTypeBool},
 			{Name: "verbose", Short: "V", Description: "Show all issues with full details", Type: FlagTypeBool},
-			{Name: "fix", Description: "Auto-fix simple issues (short refs -> full paths)", Type: FlagTypeBool},
+			{Name: "fix", Description: "Preview/apply safe auto-fixes for unambiguous check issues", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply fixes/create-missing in non-interactive mode (without this flag, shows preview only)", Type: FlagTypeBool},
 			{Name: "create-missing", Description: "Create missing referenced pages (interactive by default; with --json requires --confirm)", Type: FlagTypeBool},
 		},
@@ -983,6 +983,7 @@ Preview is default; use --confirm to apply.
 
 Auto-fixable issue types include:
 - short_ref_could_be_full_path: rewrite short refs to canonical full paths
+- invalid_enum_value: remove unnecessary quotes around enum trait values
 - non_canonical_ref: strip configured root prefix from wikilink targets
 - non_canonical_path: move file under the configured directory root for its type
   and rewrite all references that point at it`,
@@ -1005,7 +1006,7 @@ Auto-fixable issue types include:
 		},
 		UseCases: []string{
 			"Preview deterministic auto-fixes before applying",
-			"Apply short-reference and quoted-enum fixes safely",
+			"Apply short-reference, quoted-enum, and canonical-layout fixes safely",
 		},
 	},
 	"check create-missing": {

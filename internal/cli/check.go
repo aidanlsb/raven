@@ -892,7 +892,7 @@ func init() {
 	checkCmd.Flags().BoolVar(&checkCreateMissing, "create-missing", false, "Create missing referenced pages (interactive by default; with --json requires --confirm)")
 	checkCmd.Flags().BoolVar(&checkByFile, "by-file", false, "Group issues by file path")
 	checkCmd.Flags().BoolVarP(&checkVerbose, "verbose", "V", false, "Show all issues with full details")
-	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Auto-fix simple issues (short refs → full paths)")
+	checkCmd.Flags().BoolVar(&checkFix, "fix", false, "Preview/apply safe auto-fixes for unambiguous check issues")
 	checkCmd.Flags().BoolVar(&checkConfirm, "confirm", false, "Apply fixes/create-missing in non-interactive mode (without this flag, shows preview only)")
 
 	checkFixCmd.Flags().BoolVar(&checkStrict, "strict", false, "Treat warnings as errors")
