@@ -1589,6 +1589,7 @@ Supports two input modes:
 	},
 	"search": {
 		Name:        "search",
+		Use:         "search [query]",
 		Description: "Full-text search across all vault content",
 		LongDesc: `Search for content across all files in the vault.
 
@@ -1599,7 +1600,11 @@ Uses full-text search with relevance ranking. Supports:
   - Boolean: "meeting AND notes", "meeting OR notes", "meeting NOT private"
 
 Results are ranked by relevance with snippets showing matched content.
-Use --type to filter results to specific object types.`,
+Use --type to filter results to specific object types.
+
+In an interactive terminal with fzf installed, bare 'rvn search' launches
+an interactive picker over indexed files. Non-interactive use still requires
+a query string.`,
 		Args: []ArgMeta{
 			{Name: "query", Description: "Search query (words, phrases, or boolean expressions)", Required: true},
 		},
@@ -1615,6 +1620,7 @@ Use --type to filter results to specific object types.`,
 		},
 		UseCases: []string{
 			"Find pages mentioning specific topics",
+			"Interactively pick an indexed file via fzf (when available)",
 			"Search for content across the entire vault",
 			"Locate pages by partial matches",
 			"Find all mentions of a person or concept",
@@ -2084,6 +2090,10 @@ The editor is determined by the 'editor' setting in config.toml or $EDITOR.
 In an interactive terminal with fzf installed, bare 'rvn open' launches
 an interactive file picker.
 
+When an interactive open reference is ambiguous and fzf is installed, Raven
+prompts you to choose the target. Non-interactive and JSON output still return
+REF_AMBIGUOUS with the candidate matches.
+
 Use --stdin to read object IDs from stdin (one per line) and open them all.
 This is useful for piping query results to open multiple files at once.`,
 		Args: []ArgMeta{
@@ -2100,6 +2110,7 @@ This is useful for piping query results to open multiple files at once.`,
 		UseCases: []string{
 			"Quickly open a file by its short name",
 			"Interactively pick a file to open via fzf (when available)",
+			"Interactively disambiguate open references via fzf (when available)",
 			"Open files using references without knowing full paths",
 			"Open multiple files from query results",
 		},

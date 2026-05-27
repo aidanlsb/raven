@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -8,15 +9,51 @@ import (
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/ui"
 )
 
 var searchCmd = newCanonicalLeafCommand("search", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
-	Args:        cobra.MinimumNArgs(1),
+	Args:        cobra.ArbitraryArgs,
+	Prepare:     prepareSearchArgs,
 	BuildArgs:   buildSearchArgs,
 	HandleError: handleCanonicalSearchFailure,
 	RenderHuman: renderSearch,
 })
+
+func prepareSearchArgs(_ *cobra.Command, args []string) ([]string, bool, error) {
+	if len(args) > 0 {
+		return args, false, nil
+	}
+	if isJSONOutput() {
+		return args, false, nil
+	}
+
+	if canUseFZFInteractive() {
+		vaultPath := getVaultPath()
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
+		selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, "search> ", "Search indexed files (Esc to cancel)")
+		if err != nil {
+			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
+		}
+		if !selected {
+			return nil, true, nil
+		}
+		fmt.Println(ui.SectionHeader("Selected"))
+		fmt.Println(ui.Bullet(ui.FilePath(selectedPath)))
+		return nil, true, nil
+	}
+
+	err := handleErrorMsg(
+		ErrMissingArgument,
+		"specify a search query",
+		interactivePickerMissingArgSuggestion("search", "rvn search <query>"),
+	)
+	return nil, err == nil, err
+}
 
 func buildSearchArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	meta, _ := cmd.Flags().GetString("type")
@@ -88,6 +125,8 @@ func searchMatchFromMap(row map[string]interface{}) model.SearchMatch {
 
 func mapSearchCode(code codes.ErrorCode) codes.ErrorCode {
 	switch code {
+	case codes.ErrMissingArgument:
+		return ErrMissingArgument
 	case codes.ErrDatabase:
 		return ErrDatabaseError
 	case codes.ErrInvalidArgs, codes.ErrInvalidInput:

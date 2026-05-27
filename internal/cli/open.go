@@ -16,6 +16,7 @@ var openCmd = newCanonicalLeafCommand("open", canonicalLeafOptions{
 	Args:         validateOpenArgs,
 	Prepare:      prepareOpenArgs,
 	BuildArgs:    buildOpenArgs,
+	HandleError:  handleCanonicalOpenFailure,
 	HandleResult: handleOpenResult,
 })
 
@@ -92,6 +93,36 @@ func buildOpenArgs(cmd *cobra.Command, args []string) (map[string]interface{}, e
 	}, nil
 }
 
+func handleCanonicalOpenFailure(result commandexec.Result) error {
+	if result.Error == nil {
+		return nil
+	}
+	if result.Error.Code != ErrRefAmbiguous || !canUseFZFInteractive() {
+		return handleCanonicalFailure(result)
+	}
+
+	reference, matches, matchSources := ambiguousReferenceDetails(result.Error.Details)
+	if len(matches) == 0 {
+		return handleCanonicalFailure(result)
+	}
+
+	selected, ok, err := pickAmbiguousReferenceWithFZF(reference, matches, matchSources, "open/ref> ")
+	if err != nil {
+		return handleCanonicalFailure(result)
+	}
+	if !ok {
+		return nil
+	}
+
+	openResult := executeCanonicalCommand("open", getVaultPath(), map[string]interface{}{
+		"reference": selected,
+	})
+	if !openResult.OK {
+		return handleCanonicalFailure(openResult)
+	}
+	return renderSingleOpenResult(canonicalDataMap(openResult))
+}
+
 // openFileInEditor opens a file in the configured editor and prints appropriate output.
 // If skipOpenMessage is true, it won't print "Opening..." (useful when a "Created" message was already shown).
 func openFileInEditor(filePath, relPath string, skipOpenMessage bool) {
@@ -136,6 +167,27 @@ func handleOpenResult(cmd *cobra.Command, result commandexec.Result) error {
 		return nil
 	}
 
+	file := stringValue(data["file"])
+	if boolValue(data["opened"]) {
+		fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))
+		return nil
+	}
+	return renderSingleOpenResult(data)
+}
+
+func ambiguousReferenceDetails(raw interface{}) (string, []string, map[string]string) {
+	details, ok := raw.(map[string]interface{})
+	if !ok {
+		return "", nil, nil
+	}
+
+	reference, _ := details["reference"].(string)
+	matches := stringSliceFromAny(details["matches"])
+	matchSources := stringMapFromAny(details["match_sources"])
+	return reference, matches, matchSources
+}
+
+func renderSingleOpenResult(data map[string]interface{}) error {
 	file := stringValue(data["file"])
 	if boolValue(data["opened"]) {
 		fmt.Println(ui.Checkf("Opening %s", ui.FilePath(file)))

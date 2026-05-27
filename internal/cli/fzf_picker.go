@@ -19,6 +19,7 @@ var (
 	fzfLookPath         = exec.LookPath
 	fzfStdinIsTerminal  = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
 	fzfStdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
+	fzfRunPicker        = runFZFPicker
 )
 
 type fzfPickerOptions struct {
@@ -101,7 +102,7 @@ func pickVaultFileWithFZF(vaultPath string, vaultCfg *config.VaultConfig, prompt
 		return "", false, fmt.Errorf("no indexed files available (run 'rvn reindex')")
 	}
 
-	selectedLine, selected, err := runFZFPicker(paths, fzfPickerOptions{
+	selectedLine, selected, err := fzfRunPicker(paths, fzfPickerOptions{
 		Prompt: prompt,
 		Header: header,
 	})
@@ -109,6 +110,43 @@ func pickVaultFileWithFZF(vaultPath string, vaultCfg *config.VaultConfig, prompt
 		return "", selected, err
 	}
 	return strings.TrimSpace(selectedLine), true, nil
+}
+
+func pickAmbiguousReferenceWithFZF(reference string, matches []string, matchSources map[string]string, prompt string) (string, bool, error) {
+	lines := make([]string, 0, len(matches))
+	for _, match := range matches {
+		match = strings.TrimSpace(match)
+		if match == "" {
+			continue
+		}
+		source := strings.TrimSpace(matchSources[match])
+		if source == "" {
+			lines = append(lines, match)
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s\t%s", match, source))
+	}
+	if len(lines) == 0 {
+		return "", false, nil
+	}
+
+	header := fmt.Sprintf("Reference %q is ambiguous; select a target (Esc to cancel)", reference)
+	selectedLine, selected, err := fzfRunPicker(lines, fzfPickerOptions{
+		Prompt:    prompt,
+		Header:    header,
+		Delimiter: "\t",
+		WithNth:   "1,2",
+	})
+	if err != nil || !selected {
+		return "", selected, err
+	}
+
+	target, _, _ := strings.Cut(strings.TrimSpace(selectedLine), "\t")
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "", false, nil
+	}
+	return target, true, nil
 }
 
 func indexedVaultFilePaths(vaultPath string, vaultCfg *config.VaultConfig) ([]string, error) {

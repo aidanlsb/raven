@@ -2403,6 +2403,45 @@ func TestIntegration_OpenWithoutArgSuggestsUsage(t *testing.T) {
 	result.MustFailWithMessage(t, "rvn open <reference>")
 }
 
+func TestIntegration_SearchWithoutArgSuggestsUsage(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("search")
+	result.MustFail(t, "MISSING_ARGUMENT")
+	result.MustFailWithMessage(t, "rvn search <query>")
+}
+
+func TestIntegration_OpenAmbiguousReferenceReturnsMatches(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithFile("people/freya.md", `---
+type: person
+name: Freya
+---
+# Freya
+`).
+		WithFile("people/freya-2.md", `---
+type: person
+name: Freya
+---
+# Freya Two
+`).
+		Build()
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("open", "Freya")
+	result.MustFail(t, "REF_AMBIGUOUS")
+	matches, ok := result.Error.Details["matches"].([]interface{})
+	if !ok {
+		t.Fatalf("expected ambiguous match details, got %#v", result.Error.Details["matches"])
+	}
+	if len(matches) != 2 {
+		t.Fatalf("expected 2 ambiguous matches, got %#v", matches)
+	}
+}
+
 // TestIntegration_Resolve tests the resolve command.
 func TestIntegration_Resolve(t *testing.T) {
 	t.Parallel()

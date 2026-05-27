@@ -19,11 +19,14 @@ import (
 // HandleSearch executes the canonical `search` command.
 func HandleSearch(_ context.Context, req commandexec.Request) commandexec.Result {
 	start := time.Now()
-	query := stringArg(req.Args, "query")
+	query := strings.TrimSpace(stringArg(req.Args, "query"))
 	searchType := stringArg(req.Args, "type")
 	limit, ok := intArg(req.Args, "limit")
 	if !ok {
 		limit = 20
+	}
+	if query == "" {
+		return commandexec.Failure("MISSING_ARGUMENT", "requires search query", nil, "Usage: rvn search <query>")
 	}
 
 	rt, failure := newReadRuntime(req.VaultPath, readsvc.RuntimeOptions{OpenDB: true})
@@ -358,7 +361,14 @@ func mapReadFailure(err error) commandexec.Result {
 func mapOpenFailure(err error) commandexec.Result {
 	var ambiguous *readsvc.AmbiguousRefError
 	if errors.As(err, &ambiguous) {
-		return commandexec.Failure("REF_AMBIGUOUS", ambiguous.Error(), nil, "Use a full object ID/path to disambiguate")
+		details := map[string]interface{}{
+			"reference": ambiguous.Reference,
+			"matches":   ambiguous.Matches,
+		}
+		if len(ambiguous.MatchSources) > 0 {
+			details["match_sources"] = ambiguous.MatchSources
+		}
+		return commandexec.Failure("REF_AMBIGUOUS", ambiguous.Error(), details, "Use a full object ID/path to disambiguate")
 	}
 	var notFound *readsvc.RefNotFoundError
 	if errors.As(err, &notFound) {
