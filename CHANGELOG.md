@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.20] - 2026-05-27
+
+### Added
+- Optional fzf-driven interactive selection for bare `rvn search` and ambiguous `rvn open` references, with deterministic non-interactive fallbacks.
+
 ## [v0.0.19] - 2026-05-17
 
 ### Added
