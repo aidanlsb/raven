@@ -795,7 +795,12 @@ For trait queries (trait:...):
 	},
 	"backlinks": {
 		Name:        "backlinks",
+		Use:         "backlinks [target]",
 		Description: "Find objects that reference a target object or asset",
+		LongDesc: `Find objects that reference a target object or asset.
+
+In an interactive terminal with fzf installed, bare 'rvn backlinks' launches
+an interactive file picker. Non-interactive use still requires a target.`,
 		Args: []ArgMeta{
 			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: true},
 		},
@@ -803,15 +808,30 @@ For trait queries (trait:...):
 			"rvn backlinks people/freya --json",
 			"rvn backlinks assets/pdfs/paper.pdf --json",
 		},
+		UseCases: []string{
+			"Find all files that reference an object or asset",
+			"Interactively pick a target via fzf (when available)",
+			"Audit incoming links before moving or deleting content",
+		},
 	},
 	"outlinks": {
 		Name:        "outlinks",
+		Use:         "outlinks [source]",
 		Description: "Find object and asset links referenced by an object",
+		LongDesc: `Find object and asset links referenced by an object.
+
+In an interactive terminal with fzf installed, bare 'rvn outlinks' launches
+an interactive file picker. Non-interactive use still requires a source.`,
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true},
 		},
 		Examples: []string{
 			"rvn outlinks projects/bifrost --json",
+		},
+		UseCases: []string{
+			"Inspect the outgoing links from an object",
+			"Interactively pick a source via fzf (when available)",
+			"Follow references from a file to related objects and assets",
 		},
 	},
 	"date": {
@@ -2216,12 +2236,16 @@ Preview is returned by default. Use --confirm to apply removal.`,
 	},
 	"resolve": {
 		Name:        "resolve",
+		Use:         "resolve [reference]",
 		Description: "Resolve a reference to its target object",
 		LongDesc: `Resolve a reference (short name, alias, path, date, etc.) and return
 information about the target object.
 
 This is a pure query — it does not modify anything. The result always returns
 "resolved": true/false to indicate whether the reference was successfully resolved.
+
+In an interactive terminal with fzf installed, bare 'rvn resolve' launches
+an interactive file picker. Non-interactive use still requires a reference.
 
 Supports all reference formats:
 - Short names: "freya" → people/freya
@@ -2245,6 +2269,7 @@ with their match sources.`,
 		},
 		UseCases: []string{
 			"Check if a reference resolves before using it",
+			"Interactively pick a reference via fzf (when available)",
 			"Discover the full object ID and type for a short name",
 			"Disambiguate references that might match multiple objects",
 			"Validate references without side effects",

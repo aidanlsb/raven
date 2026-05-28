@@ -112,6 +112,36 @@ func pickVaultFileWithFZF(vaultPath string, vaultCfg *config.VaultConfig, prompt
 	return strings.TrimSpace(selectedLine), true, nil
 }
 
+func prepareInteractiveReferenceArgs(args []string, commandName, argName, prompt, header string) ([]string, bool, error) {
+	if len(args) > 0 {
+		return args, false, nil
+	}
+
+	vaultPath := getVaultPath()
+	if canUseFZFInteractive() {
+		vaultCfg, err := loadVaultConfigSafe(vaultPath)
+		if err != nil {
+			return nil, false, handleError(ErrConfigInvalid, err, "Fix raven.yaml and try again")
+		}
+		selectedPath, selected, err := pickVaultFileWithFZF(vaultPath, vaultCfg, prompt, header)
+		if err != nil {
+			return nil, false, handleError(ErrInternal, err, "Run 'rvn reindex' to refresh indexed files")
+		}
+		if !selected {
+			return nil, true, nil
+		}
+		return []string{selectedPath}, false, nil
+	}
+
+	usage := fmt.Sprintf("rvn %s <%s>", commandName, argName)
+	err := handleErrorMsg(
+		ErrMissingArgument,
+		fmt.Sprintf("specify a %s", argName),
+		interactivePickerMissingArgSuggestion(commandName, usage),
+	)
+	return nil, err == nil, err
+}
+
 func pickAmbiguousReferenceWithFZF(reference string, matches []string, matchSources map[string]string, prompt string) (string, bool, error) {
 	lines := make([]string, 0, len(matches))
 	for _, match := range matches {
