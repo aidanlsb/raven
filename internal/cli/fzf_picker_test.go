@@ -6,6 +6,49 @@ import (
 	"testing"
 )
 
+func fzfDefaultOptsFromEnv(t *testing.T, env []string) (string, int) {
+	t.Helper()
+	value := ""
+	count := 0
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "FZF_DEFAULT_OPTS="); ok {
+			value = v
+			count++
+		}
+	}
+	return value, count
+}
+
+func TestFZFEnv(t *testing.T) {
+	t.Run("uses defaults when FZF_DEFAULT_OPTS is unset", func(t *testing.T) {
+		t.Setenv("FZF_DEFAULT_OPTS", "")
+
+		value, count := fzfDefaultOptsFromEnv(t, fzfEnv())
+		if count != 1 {
+			t.Fatalf("expected exactly one FZF_DEFAULT_OPTS entry, got %d", count)
+		}
+		if value != fzfDefaultAppearance {
+			t.Fatalf("FZF_DEFAULT_OPTS = %q, want %q", value, fzfDefaultAppearance)
+		}
+	})
+
+	t.Run("prepends defaults so user options override them", func(t *testing.T) {
+		t.Setenv("FZF_DEFAULT_OPTS", "--layout=default --color=bw")
+
+		value, count := fzfDefaultOptsFromEnv(t, fzfEnv())
+		if count != 1 {
+			t.Fatalf("expected exactly one FZF_DEFAULT_OPTS entry, got %d", count)
+		}
+		want := fzfDefaultAppearance + " --layout=default --color=bw"
+		if value != want {
+			t.Fatalf("FZF_DEFAULT_OPTS = %q, want %q", value, want)
+		}
+		if !strings.HasPrefix(value, fzfDefaultAppearance+" ") {
+			t.Fatalf("expected Raven defaults to come first, got %q", value)
+		}
+	})
+}
+
 func TestInteractivePickerMissingArgSuggestion(t *testing.T) {
 	prevLookPath := fzfLookPath
 	t.Cleanup(func() {

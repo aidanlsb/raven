@@ -29,9 +29,35 @@ type fzfPickerOptions struct {
 	WithNth   string
 }
 
+// fzfDefaultAppearance holds Raven's cosmetic defaults for interactive pickers.
+// These are injected ahead of the user's FZF_DEFAULT_OPTS so the user can
+// override any of them via their own fzf configuration.
+const fzfDefaultAppearance = "--layout=reverse --height=80% --border"
+
 func hasFZFInstalled() bool {
 	_, err := fzfLookPath("fzf")
 	return err == nil
+}
+
+// fzfEnv returns the child environment for fzf with Raven's cosmetic defaults
+// prepended to FZF_DEFAULT_OPTS. fzf parses FZF_DEFAULT_OPTS left-to-right with
+// later options winning, so the user's existing FZF_DEFAULT_OPTS (placed after
+// the defaults) overrides any of Raven's defaults it conflicts with.
+func fzfEnv() []string {
+	merged := fzfDefaultAppearance
+	if existing := strings.TrimSpace(os.Getenv("FZF_DEFAULT_OPTS")); existing != "" {
+		merged += " " + existing
+	}
+
+	base := os.Environ()
+	env := make([]string, 0, len(base)+1)
+	for _, kv := range base {
+		if strings.HasPrefix(kv, "FZF_DEFAULT_OPTS=") {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, "FZF_DEFAULT_OPTS="+merged)
 }
 
 func canUseFZFInteractive() bool {
@@ -49,10 +75,11 @@ func runFZFPicker(lines []string, opts fzfPickerOptions) (string, bool, error) {
 		return "", false, nil
 	}
 
+	// Only behavioral flags that define the picker contract are passed as
+	// command-line args. fzf gives command-line args precedence over
+	// FZF_DEFAULT_OPTS, so these always take effect. Cosmetic defaults are
+	// handled via FZF_DEFAULT_OPTS (see fzfEnv) so users can override them.
 	args := []string{
-		"--layout=reverse",
-		"--height=80%",
-		"--border",
 		"--select-1",
 		"--exit-0",
 	}
@@ -71,6 +98,7 @@ func runFZFPicker(lines []string, opts fzfPickerOptions) (string, bool, error) {
 
 	cmd := exec.Command("fzf", args...)
 	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n") + "\n")
+	cmd.Env = fzfEnv()
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout

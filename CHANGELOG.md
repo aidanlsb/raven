@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Interactive fzf pickers (`rvn read`, `rvn open`, `rvn docs`, ambiguous-reference selection) no longer hardcode their appearance. Raven's cosmetic defaults (`--layout=reverse --height=80% --border`) are now applied through `FZF_DEFAULT_OPTS`, so any `FZF_DEFAULT_OPTS` you set overrides them. Behavioral flags (`--select-1`, `--exit-0`) are preserved.
+
 ## [v0.0.20] - 2026-05-27
 
 ### Added

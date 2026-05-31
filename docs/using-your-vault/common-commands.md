@@ -16,6 +16,13 @@ rvn docs   # Pick a docs topic to view
 
 Interactive pickers are disabled for `--json` output and other non-interactive/scripted contexts. If `fzf` is not installed, pass the target path or docs topic explicitly.
 
+The picker respects your `FZF_DEFAULT_OPTS` environment variable, so you can customize its appearance (layout, height, border, colors, keybindings) the same way you configure fzf everywhere else. Raven applies `--layout=reverse --height=80% --border` as defaults, but anything in your `FZF_DEFAULT_OPTS` overrides them:
+
+```bash
+# Override Raven's picker defaults
+export FZF_DEFAULT_OPTS='--height=100% --no-border --color=hl:cyan'
+```
+
 ---
 
 ## Reading content
