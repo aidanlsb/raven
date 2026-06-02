@@ -86,6 +86,7 @@ type Result struct {
 
 type InitializeRequest struct {
 	Path       string
+	ConfigPath string
 	CLIVersion string
 }
 
@@ -172,20 +173,20 @@ func Initialize(req InitializeRequest) (*Result, error) {
 	}
 
 	fetchResult, fetchErr := docsync.Fetch(docsync.FetchOptions{
-		VaultPath:  path,
+		ConfigPath: strings.TrimSpace(req.ConfigPath),
 		CLIVersion: strings.TrimSpace(req.CLIVersion),
 		HTTPClient: &http.Client{Timeout: 60 * time.Second},
 	})
 	if fetchErr != nil {
 		result.Warnings = append(result.Warnings, Warning{
 			Code:    WarnDocsFetchFailed,
-			Message: fmt.Sprintf("Docs fetch failed: %v. Run 'rvn --vault-path %s docs fetch' to retry.", fetchErr, path),
+			Message: fmt.Sprintf("Docs fetch failed: %v. Run 'rvn docs fetch' to retry.", fetchErr),
 		})
 	} else {
 		result.Docs = DocsResult{
 			Fetched:   true,
 			FileCount: fetchResult.FileCount,
-			StorePath: docsync.StoreRelPath,
+			StorePath: fetchResult.DocsPath,
 		}
 	}
 

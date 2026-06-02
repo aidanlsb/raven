@@ -109,7 +109,7 @@ raven_invoke(command="check")
 
 ## Step 3: Ensure docs are available
 
-Check whether the user has local docs fetched so `rvn docs` works:
+Check whether the user has global docs fetched so `rvn docs` works:
 
 ```text
 raven_invoke(command="docs_list")
@@ -121,7 +121,7 @@ If this fails with `NOT_FOUND`, fetch docs:
 raven_invoke(command="docs_fetch")
 ```
 
-**Tell the user:** Raven has built-in documentation you can browse with `rvn docs`. These are now available locally in your vault.
+**Tell the user:** Raven has built-in documentation you can browse with `rvn docs`. These are now available in Raven's global docs directory.
 
 ## Step 4: Wrap up
 

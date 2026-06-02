@@ -31,6 +31,15 @@ func ResolveConfigPath(explicitConfigPath string) string {
 	return DefaultPath()
 }
 
+// ResolveGlobalDir returns the directory that holds Raven's machine-local files.
+func ResolveGlobalDir(explicitConfigPath string) string {
+	dir := filepath.Dir(ResolveConfigPath(explicitConfigPath))
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return dir
+}
+
 // ResolveStatePath resolves the state.toml path with precedence:
 //  1. explicitStatePath flag
 //  2. cfg.StateFile from config.toml (relative to config file dir when not absolute)

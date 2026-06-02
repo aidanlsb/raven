@@ -23,9 +23,10 @@ func TestFetchInstallsDocsFromArchive(t *testing.T) {
 		"raven-main/internal/mcp/agent-guide/index.md":    "ignored",
 	})
 
-	vaultPath := t.TempDir()
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
 	result, err := Fetch(FetchOptions{
-		VaultPath:     vaultPath,
+		ConfigPath:    configPath,
 		SourceBaseURL: "https://example.invalid/docs",
 		Ref:           "main",
 		CLIVersion:    "v0.0.1",
@@ -50,11 +51,15 @@ func TestFetchInstallsDocsFromArchive(t *testing.T) {
 		t.Fatalf("manifest ref = %q, want main", result.Manifest.Ref)
 	}
 
-	if _, err := os.Stat(filepath.Join(vaultPath, StoreRelPath, DocsIndexFilename)); err != nil {
+	if result.DocsPath != filepath.Join(globalDir, StoreRelPath) {
+		t.Fatalf("DocsPath = %q, want %q", result.DocsPath, filepath.Join(globalDir, StoreRelPath))
+	}
+
+	if _, err := os.Stat(filepath.Join(globalDir, StoreRelPath, DocsIndexFilename)); err != nil {
 		t.Fatalf("expected docs index to exist: %v", err)
 	}
 
-	manifest, err := ReadManifest(vaultPath)
+	manifest, err := ReadManifest(configPath)
 	if err != nil {
 		t.Fatalf("ReadManifest() error = %v", err)
 	}
@@ -62,7 +67,7 @@ func TestFetchInstallsDocsFromArchive(t *testing.T) {
 		t.Fatalf("manifest cli_version = %v, want v0.0.1", manifest)
 	}
 
-	if _, err := OpenFS(vaultPath); err != nil {
+	if _, err := OpenFS(configPath); err != nil {
 		t.Fatalf("OpenFS() error = %v", err)
 	}
 }
@@ -75,8 +80,9 @@ func TestFetchReplacesExistingDocsCache(t *testing.T) {
 		"raven-main/docs/guide/start.md": "# Start\n",
 	})
 
-	vaultPath := t.TempDir()
-	oldPath := filepath.Join(vaultPath, StoreRelPath)
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
+	oldPath := filepath.Join(globalDir, StoreRelPath)
 	if err := os.MkdirAll(oldPath, 0o755); err != nil {
 		t.Fatalf("mkdir old docs: %v", err)
 	}
@@ -85,7 +91,7 @@ func TestFetchReplacesExistingDocsCache(t *testing.T) {
 	}
 
 	if _, err := Fetch(FetchOptions{
-		VaultPath:     vaultPath,
+		ConfigPath:    configPath,
 		SourceBaseURL: "https://example.invalid/archive",
 		Ref:           "main",
 		HTTPClient: &http.Client{Transport: fakeTransport{
@@ -98,7 +104,7 @@ func TestFetchReplacesExistingDocsCache(t *testing.T) {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(vaultPath, StoreRelPath, "stale.md")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(globalDir, StoreRelPath, "stale.md")); !os.IsNotExist(err) {
 		t.Fatalf("expected stale docs to be removed, err=%v", err)
 	}
 }
@@ -106,7 +112,8 @@ func TestFetchReplacesExistingDocsCache(t *testing.T) {
 func TestOpenFSMissingDocs(t *testing.T) {
 	t.Parallel()
 
-	_, err := OpenFS(t.TempDir())
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	_, err := OpenFS(configPath)
 	if !errors.Is(err, ErrDocsNotFetched) {
 		t.Fatalf("OpenFS() error = %v, want ErrDocsNotFetched", err)
 	}

@@ -126,6 +126,9 @@ func TestCommandVaultRequirementsFollowRegistryMetadata(t *testing.T) {
 	if commands.RequiresVault("config_show") {
 		t.Fatal("config_show should not require vault resolution")
 	}
+	if commands.RequiresVault("docs") || commands.RequiresVault("docs_fetch") {
+		t.Fatal("docs commands should not require vault resolution")
+	}
 	if !commands.RequiresVault("query") {
 		t.Fatal("query should require vault resolution")
 	}

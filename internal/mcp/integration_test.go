@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -2487,22 +2488,15 @@ type: page
       query-language:
         path: query-language.md
 `
-		vMCP := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
-			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
-			Build()
-		vCLI := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
-			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
-			Build()
-		server := newTestServer(t, vMCP.Path, binary)
+		configPath := seedGlobalDocsConfig(t, map[string]string{
+			"index.yaml":                      docsIndex,
+			"getting-started/installation.md": "# Installation\n\nWelcome.\n",
+			"querying/query-language.md":      "# Query Language\n\nquery predicate examples.\n",
+		})
+		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
 
 		mcpResult := server.callTool("docs", map[string]interface{}{})
-		cliResult := vCLI.RunCLI("docs")
+		cliResult := runCLIWithConfig(t, binary, configPath, "docs")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
 	})
@@ -2514,20 +2508,14 @@ type: page
       installation:
         path: installation.md
 `
-		vMCP := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
-			Build()
-		vCLI := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/getting-started/installation.md", "# Installation\n\nWelcome.\n").
-			Build()
-		server := newTestServer(t, vMCP.Path, binary)
+		configPath := seedGlobalDocsConfig(t, map[string]string{
+			"index.yaml":                      docsIndex,
+			"getting-started/installation.md": "# Installation\n\nWelcome.\n",
+		})
+		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
 
 		mcpResult := server.callTool("docs_list", map[string]interface{}{})
-		cliResult := vCLI.RunCLI("docs", "list")
+		cliResult := runCLIWithConfig(t, binary, configPath, "docs", "list")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"sections", "command_docs", "navigation_tip"})
 	})
@@ -2539,24 +2527,18 @@ type: page
       query-language:
         path: query-language.md
 `
-		vMCP := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
-			Build()
-		vCLI := testutil.NewTestVault(t).
-			WithSchema(testutil.MinimalSchema()).
-			WithFile(".raven/docs/index.yaml", docsIndex).
-			WithFile(".raven/docs/querying/query-language.md", "# Query Language\n\nquery predicate examples.\n").
-			Build()
-		server := newTestServer(t, vMCP.Path, binary)
+		configPath := seedGlobalDocsConfig(t, map[string]string{
+			"index.yaml":                 docsIndex,
+			"querying/query-language.md": "# Query Language\n\nquery predicate examples.\n",
+		})
+		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
 
 		mcpResult := server.callTool("docs_search", map[string]interface{}{
 			"query":   "query",
 			"section": "querying",
 			"limit":   5,
 		})
-		cliResult := vCLI.RunCLI("docs", "search", "query", "--section", "querying", "--limit", "5")
+		cliResult := runCLIWithConfig(t, binary, configPath, "docs", "search", "query", "--section", "querying", "--limit", "5")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "count", "matches"})
 	})
@@ -2577,16 +2559,15 @@ type: page
 		}))
 		defer httpServer.Close()
 
-		vMCP := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
-		vCLI := testutil.NewTestVault(t).WithSchema(testutil.MinimalSchema()).Build()
-		server := newTestServer(t, vMCP.Path, binary)
+		configPath := seedGlobalDocsConfig(t, nil)
+		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
 
 		source := httpServer.URL + "/archive"
 		mcpResult := server.callTool("docs_fetch", map[string]interface{}{
 			"source": source,
 			"ref":    "main",
 		})
-		cliResult := vCLI.RunCLI("docs", "fetch", "--source", source, "--ref", "main")
+		cliResult := runCLIWithConfig(t, binary, configPath, "docs", "fetch", "--source", source, "--ref", "main")
 
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"path", "file_count", "byte_count", "source", "ref", "archive_url", "fetched_at", "cli_version", "manifest_ver"})
 	})
@@ -3939,10 +3920,75 @@ func buildDocsArchiveBytes(t *testing.T, files map[string]string) []byte {
 	return buf.Bytes()
 }
 
+func seedGlobalDocsConfig(t *testing.T, files map[string]string) string {
+	t.Helper()
+	globalDir := t.TempDir()
+	configPath := filepath.Join(globalDir, "config.toml")
+	if err := os.WriteFile(configPath, []byte("# test config\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	for relPath, content := range files {
+		fullPath := filepath.Join(globalDir, "docs", filepath.FromSlash(relPath))
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			t.Fatalf("mkdir docs path: %v", err)
+		}
+		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+			t.Fatalf("write docs file: %v", err)
+		}
+	}
+	return configPath
+}
+
+func baseArgsForConfig(configPath string) []string {
+	return []string{"--config", configPath, "--state", filepath.Join(filepath.Dir(configPath), "state.toml")}
+}
+
+func runCLIWithConfig(t *testing.T, binary, configPath string, args ...string) *testutil.CLIResult {
+	t.Helper()
+	cmdArgs := append(baseArgsForConfig(configPath), "--json")
+	cmdArgs = append(cmdArgs, args...)
+
+	cmd := exec.Command(binary, cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	result := &testutil.CLIResult{RawJSON: string(output)}
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = -1
+		}
+	}
+
+	var resp struct {
+		OK       bool                   `json:"ok"`
+		Data     map[string]interface{} `json:"data,omitempty"`
+		Error    *testutil.CLIError     `json:"error,omitempty"`
+		Warnings []testutil.CLIWarning  `json:"warnings,omitempty"`
+		Meta     *testutil.CLIMeta      `json:"meta,omitempty"`
+	}
+	if err := json.Unmarshal(output, &resp); err != nil {
+		result.OK = false
+		result.Error = &testutil.CLIError{
+			Code:    "PARSE_ERROR",
+			Message: "Failed to parse JSON output: " + err.Error(),
+			Details: map[string]interface{}{"raw": string(output)},
+		}
+		return result
+	}
+	result.OK = resp.OK
+	result.Data = resp.Data
+	result.Error = resp.Error
+	result.Warnings = resp.Warnings
+	result.Meta = resp.Meta
+	return result
+}
+
 // testServer wraps the MCP Server for testing purposes.
 type testServer struct {
 	t          *testing.T
 	vaultPath  string
+	baseArgs   []string
 	executable string
 }
 
@@ -3961,6 +4007,14 @@ func newTestServer(t *testing.T, vaultPath, executable string) *testServer {
 	}
 }
 
+func newTestServerWithBaseArgs(t *testing.T, baseArgs []string, executable string) *testServer {
+	return &testServer{
+		t:          t,
+		baseArgs:   append([]string{}, baseArgs...),
+		executable: executable,
+	}
+}
+
 // callTool invokes a tool by simulating the MCP JSON-RPC protocol.
 func (s *testServer) callTool(name string, args map[string]interface{}) toolResult {
 	s.t.Helper()
@@ -3975,8 +4029,13 @@ func (s *testServer) callTool(name string, args map[string]interface{}) toolResu
 		}
 	}
 
-	// Create a real MCP server but with custom executable
-	server := mcp.NewServerWithExecutable(s.vaultPath, s.executable)
+	// Create a real MCP server but with custom executable.
+	var server *mcp.Server
+	if len(s.baseArgs) > 0 {
+		server = mcp.NewServerWithBaseArgsAndExecutable(s.baseArgs, s.executable)
+	} else {
+		server = mcp.NewServerWithExecutable(s.vaultPath, s.executable)
+	}
 
 	// Create a simulated JSON-RPC request
 	paramsBytes, _ := json.Marshal(map[string]interface{}{

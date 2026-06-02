@@ -45,7 +45,7 @@ type docsTopicRecord struct {
 var docsCmd = &cobra.Command{
 	Use:   "docs [section] [topic]",
 	Short: "Browse long-form Markdown documentation",
-	Long: `Browse long-form documentation stored in your vault's .raven/docs cache.
+	Long: `Browse long-form documentation stored in Raven's global docs directory.
 
 Use this command for guides, references, and design notes.
 Run 'rvn docs fetch' to sync or refresh docs content.
@@ -64,9 +64,9 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			if !isJSONOutput() && shouldUseDocsFZFNavigator() {
-				source, err := loadVaultDocsSource(getVaultPath())
+				source, err := loadGlobalDocsSource(getConfigPath())
 				if err != nil {
-					return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs for this vault")
+					return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs")
 				}
 
 				sections, err := listDocsSectionsFS(source, ".")
@@ -89,7 +89,7 @@ Examples:
 			argsMap["topic"] = args[1]
 		}
 
-		result := executeCanonicalCommand("docs", getVaultPath(), argsMap)
+		result := executeCanonicalCommand("docs", "", argsMap)
 		if !result.OK {
 			return handleCanonicalDocsFailure(result, args)
 		}
@@ -116,13 +116,11 @@ Examples:
 }
 
 var docsListCmd = newCanonicalLeafCommand("docs_list", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	HandleError: handleCanonicalDocsLeafFailure,
 	RenderHuman: renderDocsList,
 })
 
 var docsSearchCmd = newCanonicalLeafCommand("docs_search", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	Args:        cobra.MinimumNArgs(1),
 	BuildArgs:   buildDocsSearchArgs,
 	HandleError: handleCanonicalDocsLeafFailure,
@@ -130,7 +128,6 @@ var docsSearchCmd = newCanonicalLeafCommand("docs_search", canonicalLeafOptions{
 })
 
 var docsFetchCmd = newCanonicalLeafCommand("docs_fetch", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
 	HandleError: handleCanonicalDocsLeafFailure,
 	RenderHuman: renderDocsFetch,
 })
@@ -197,7 +194,7 @@ func outputDocsSections(sections []docsSectionView) error {
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs <section>"), ui.Hint("List topics in a section"))))
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs <section> <topic>"), ui.Hint("Open a docs topic"))))
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs search <query>"), ui.Hint("Search docs"))))
-	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync docs into .raven/docs"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync global docs"))))
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn help <command>"), ui.Hint("Command docs"))))
 	return nil
 }
@@ -227,7 +224,7 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 		fmt.Println(ui.SectionHeader("General docs commands"))
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(fmt.Sprintf("rvn docs search <query> --section %s", section.ID)), ui.Hint("Search only this section"))))
-		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync docs into .raven/docs"))))
+		fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync global docs"))))
 		return nil
 	}
 	for _, t := range topics {
@@ -239,7 +236,7 @@ func outputDocsTopics(section docsSectionView, topics []docsTopicRecord) error {
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(fmt.Sprintf("rvn docs %s", section.ID)), ui.Hint("List topics in this section"))))
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render(fmt.Sprintf("rvn docs search <query> --section %s", section.ID)), ui.Hint("Search only this section"))))
 	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs list"), ui.Hint("List sections and section commands"))))
-	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync docs into .raven/docs"))))
+	fmt.Println(ui.Bullet(fmt.Sprintf("%s %s", ui.Bold.Render("rvn docs fetch"), ui.Hint("Sync global docs"))))
 	return nil
 }
 
@@ -479,8 +476,8 @@ func listDocsSections(docsRoot string) ([]docsSectionView, error) {
 	return docsSectionsFromService(sections), nil
 }
 
-func loadVaultDocsSource(vaultPath string) (fs.FS, error) {
-	return docssvc.LoadVaultDocsSource(vaultPath)
+func loadGlobalDocsSource(configPath string) (fs.FS, error) {
+	return docssvc.LoadGlobalDocsSource(configPath)
 }
 
 func listDocsSectionsFS(docsFS fs.FS, docsRoot string) ([]docsSectionView, error) {

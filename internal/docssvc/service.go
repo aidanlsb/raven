@@ -96,7 +96,7 @@ type SearchMatchView struct {
 }
 
 type FetchRequest struct {
-	VaultPath  string
+	ConfigPath string
 	Ref        string
 	SourceBase string
 	CLIVersion string
@@ -130,23 +130,19 @@ type docsIndexTopicMeta struct {
 	Path  string `yaml:"path"`
 }
 
-func LoadVaultDocsSource(vaultPath string) (fs.FS, error) {
-	if strings.TrimSpace(vaultPath) == "" {
-		return nil, newError(CodeInvalidInput, "no vault resolved for docs command", "", nil)
-	}
-
-	docsFS, err := docsync.OpenFS(vaultPath)
+func LoadGlobalDocsSource(configPath string) (fs.FS, error) {
+	docsFS, err := docsync.OpenFS(configPath)
 	if err != nil {
 		if errors.Is(err, docsync.ErrDocsNotFetched) {
-			return nil, newError(CodeNotFound, "docs are not available for this vault", "Run 'rvn docs fetch' to download docs for this vault", err)
+			return nil, newError(CodeNotFound, "docs are not available in the global cache", "Run 'rvn docs fetch' to download docs", err)
 		}
 		return nil, newError(CodeFileRead, "failed to open docs cache", "", err)
 	}
 	return docsFS, nil
 }
 
-func ListSections(vaultPath string) ([]SectionView, error) {
-	source, err := LoadVaultDocsSource(vaultPath)
+func ListSections(configPath string) ([]SectionView, error) {
+	source, err := LoadGlobalDocsSource(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +160,8 @@ func ListSectionsFS(docsFS fs.FS, docsRoot string) ([]SectionView, error) {
 	return sections, nil
 }
 
-func ListTopics(vaultPath, section string) ([]TopicRecord, error) {
-	source, err := LoadVaultDocsSource(vaultPath)
+func ListTopics(configPath, section string) ([]TopicRecord, error) {
+	source, err := LoadGlobalDocsSource(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +190,8 @@ func ReadTopicContentFS(docsFS fs.FS, topic TopicRecord) (string, error) {
 	return string(content), nil
 }
 
-func Search(vaultPath, query, sectionFilter string, limit int) ([]SearchMatchView, error) {
-	source, err := LoadVaultDocsSource(vaultPath)
+func Search(configPath, query, sectionFilter string, limit int) ([]SearchMatchView, error) {
+	source, err := LoadGlobalDocsSource(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +221,7 @@ func SearchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([
 
 func Fetch(req FetchRequest) (*FetchResult, error) {
 	result, err := docsync.Fetch(docsync.FetchOptions{
-		VaultPath:     strings.TrimSpace(req.VaultPath),
+		ConfigPath:    strings.TrimSpace(req.ConfigPath),
 		Ref:           strings.TrimSpace(req.Ref),
 		SourceBaseURL: strings.TrimSpace(req.SourceBase),
 		CLIVersion:    strings.TrimSpace(req.CLIVersion),
@@ -235,14 +231,8 @@ func Fetch(req FetchRequest) (*FetchResult, error) {
 		return nil, newError(CodeFetchFailed, "failed to fetch docs", "Check your network connection and run 'rvn docs fetch' again", err)
 	}
 
-	relPath, relErr := filepath.Rel(req.VaultPath, result.DocsPath)
-	if relErr != nil {
-		relPath = docsync.StoreRelPath
-	}
-	relPath = filepath.ToSlash(relPath)
-
 	return &FetchResult{
-		Path:        relPath,
+		Path:        filepath.ToSlash(result.DocsPath),
 		FileCount:   result.FileCount,
 		ByteCount:   result.ByteCount,
 		Source:      result.Manifest.SourceBaseURL,

@@ -27,11 +27,12 @@ notes/
 
 ## What each file is for
 
-- `.raven/` is derived state such as the local index and docs cache
+- `.raven/` is derived vault state such as the local index
 - `raven.yaml` is vault-local operational configuration
 - `schema.yaml` is the vault data model
 
 Markdown files are still the durable source of truth. `.raven/` can be rebuilt with `rvn reindex`.
+Raven's long-form docs cache is global and lives next to global config, not inside each vault.
 
 In an interactive terminal, `rvn init` now follows up and can help you:
 - register the vault in global config

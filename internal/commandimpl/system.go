@@ -28,6 +28,7 @@ func HandleInit(_ context.Context, req commandexec.Request) commandexec.Result {
 	version := maintsvc.CurrentVersionInfo().Version
 	result, err := initsvc.Initialize(initsvc.InitializeRequest{
 		Path:       path,
+		ConfigPath: req.ConfigPath,
 		CLIVersion: version,
 	})
 	if err != nil {

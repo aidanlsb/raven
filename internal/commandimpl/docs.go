@@ -16,9 +16,9 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 	sectionInput := strings.TrimSpace(stringArg(req.Args, "section"))
 	topicInput := strings.TrimSpace(stringArg(req.Args, "topic"))
 
-	source, err := docssvc.LoadVaultDocsSource(req.VaultPath)
+	source, err := docssvc.LoadGlobalDocsSource(req.ConfigPath)
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to download docs for this vault")
+		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to download docs")
 	}
 
 	sections, err := docssvc.ListSectionsFS(source, ".")
@@ -98,9 +98,9 @@ func HandleDocs(_ context.Context, req commandexec.Request) commandexec.Result {
 
 // HandleDocsList executes the canonical `docs list` command.
 func HandleDocsList(_ context.Context, req commandexec.Request) commandexec.Result {
-	sections, err := docssvc.ListSections(req.VaultPath)
+	sections, err := docssvc.ListSections(req.ConfigPath)
 	if err != nil {
-		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to download docs for this vault")
+		return mapDocsSvcFailure(err, "Run 'rvn docs fetch' to download docs")
 	}
 	return commandexec.Success(docsSectionsData(sections), &commandexec.Meta{Count: len(sections)})
 }
@@ -120,7 +120,7 @@ func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Re
 		return commandexec.Failure("INVALID_INPUT", "--limit must be >= 1", nil, "")
 	}
 
-	matches, err := docssvc.Search(req.VaultPath, query, strings.TrimSpace(stringArg(req.Args, "section")), limit)
+	matches, err := docssvc.Search(req.ConfigPath, query, strings.TrimSpace(stringArg(req.Args, "section")), limit)
 	if err != nil {
 		return mapDocsSvcFailure(err, "Run 'rvn docs' to list sections")
 	}
@@ -140,7 +140,7 @@ func HandleDocsFetch(_ context.Context, req commandexec.Request) commandexec.Res
 	}
 
 	result, err := docssvc.Fetch(docssvc.FetchRequest{
-		VaultPath:  req.VaultPath,
+		ConfigPath: req.ConfigPath,
 		Ref:        strings.TrimSpace(stringArg(req.Args, "ref")),
 		SourceBase: strings.TrimSpace(stringArg(req.Args, "source")),
 		CLIVersion: version,

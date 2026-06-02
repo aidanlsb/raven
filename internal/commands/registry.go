@@ -253,7 +253,7 @@ Creates:
   - .raven/      (index directory)
   - .gitignore   (ignores derived files)
 
-Also attempts to fetch local docs into .raven/docs. If docs fetch fails, initialization
+Also attempts to fetch docs into Raven's global docs directory. If docs fetch fails, initialization
 still succeeds and returns a warning with a retry command.
 
 In interactive terminal mode, Raven follows up after initialization and can help
@@ -362,10 +362,11 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 	"docs": {
 		Name:        "docs",
 		Description: "Browse long-form Markdown documentation",
-		LongDesc: `Browse long-form documentation stored in .raven/docs for the active vault.
+		VaultScope:  VaultScopeNone,
+		LongDesc: `Browse long-form documentation stored in Raven's global docs directory.
 
 Use this command for guides and references.
-Run 'rvn docs fetch' to sync or refresh local docs content.
+Run 'rvn docs fetch' to sync or refresh global docs content.
 When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
 For command-level usage, use 'rvn help <command>'.`,
 		Args: []ArgMeta{
@@ -381,7 +382,7 @@ For command-level usage, use 'rvn help <command>'.`,
 			"rvn docs search \"saved query\" --json",
 		},
 		UseCases: []string{
-			"Fetch docs into the current vault with `docs fetch`",
+			"Fetch docs into the global docs directory with `docs fetch`",
 			"List docs sections and topic counts",
 			"Interactively select docs via fzf (when available)",
 			"Browse docs topics by section",
@@ -391,10 +392,11 @@ For command-level usage, use 'rvn help <command>'.`,
 	},
 	"docs_fetch": {
 		Name:        "docs fetch",
-		Description: "Fetch docs into .raven/docs for the current vault",
-		LongDesc: `Download docs from Raven's source repository into .raven/docs.
+		Description: "Fetch docs into Raven's global docs directory",
+		VaultScope:  VaultScopeNone,
+		LongDesc: `Download docs from Raven's source repository into Raven's global docs directory.
 
-This replaces the local docs cache for the current vault.
+This replaces the global docs cache.
 By default, docs are fetched from the "main" ref.`,
 		Flags: []FlagMeta{
 			{Name: "ref", Description: "Git ref to fetch (branch, tag, or commit)", Type: FlagTypeString, Default: "main"},
@@ -405,7 +407,7 @@ By default, docs are fetched from the "main" ref.`,
 			"rvn docs fetch --ref v0.5.0 --json",
 		},
 		UseCases: []string{
-			"Sync docs for a vault after init",
+			"Sync docs after init",
 			"Refresh docs without reinstalling rvn",
 			"Pin docs to a specific ref for reproducibility",
 		},
@@ -413,6 +415,7 @@ By default, docs are fetched from the "main" ref.`,
 	"docs_list": {
 		Name:        "docs list",
 		Description: "List docs sections and section commands",
+		VaultScope:  VaultScopeNone,
 		LongDesc: `List docs sections with explicit section command syntax.
 
 Use this to see exactly which 'rvn docs <section>' commands are available.`,
@@ -427,6 +430,7 @@ Use this to see exactly which 'rvn docs <section>' commands are available.`,
 	"docs_search": {
 		Name:        "docs search",
 		Description: "Search long-form Markdown documentation",
+		VaultScope:  VaultScopeNone,
 		Args: []ArgMeta{
 			{Name: "query", Description: "Search query text", Required: true},
 		},

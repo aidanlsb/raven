@@ -13,7 +13,7 @@ Use this guide after quickstart when you need an operational first pass through 
    `raven_invoke(command="vault_stats")`
 3. Check saved queries:
    `raven://queries/saved` or `raven_invoke(command="query_saved_list")`
-4. Ensure docs are available locally:
+4. Ensure docs are available in Raven's global docs directory:
    `raven_invoke(command="docs_list")`
    If this returns `NOT_FOUND`, fetch them: `raven_invoke(command="docs_fetch")`
 

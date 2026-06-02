@@ -164,6 +164,13 @@ func getVaultPath() string {
 	return resolvedVaultPath
 }
 
+func getConfigPath() string {
+	if strings.TrimSpace(resolvedConfigPath) != "" {
+		return resolvedConfigPath
+	}
+	return config.ResolveConfigPath(configPath)
+}
+
 // getConfig returns the loaded config.
 func getConfig() *config.Config {
 	return cfg

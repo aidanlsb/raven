@@ -165,6 +165,18 @@ func NewServerWithExecutable(vaultPath, executable string) *Server {
 	}
 }
 
+// NewServerWithBaseArgsAndExecutable creates a new MCP server using base CLI flags and a custom executable path.
+// This is primarily used for integration tests that need both config context and built-binary version metadata.
+func NewServerWithBaseArgsAndExecutable(baseArgs []string, executable string) *Server {
+	normalized := append([]string{}, baseArgs...)
+	return &Server{
+		baseArgs:   normalized,
+		in:         os.Stdin,
+		out:        os.Stdout,
+		executable: executable,
+	}
+}
+
 // SetIO sets the input and output streams for the server.
 // This is primarily used for testing.
 func (s *Server) SetIO(in io.Reader, out io.Writer) {
