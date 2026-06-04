@@ -53,3 +53,21 @@ func TestVisibleLenHandlesUnicodeAndANSI(t *testing.T) {
 		t.Fatalf("expected visible width 2 for colored CJK rune, got %d", got)
 	}
 }
+
+func TestBacklinksLayoutStylesPrimaryContentLikeQueryResults(t *testing.T) {
+	t.Parallel()
+
+	columns := BacklinksLayout()
+	if len(columns) != 3 {
+		t.Fatalf("expected 3 columns, got %d", len(columns))
+	}
+	if columns[1].Name != "content" {
+		t.Fatalf("expected primary backlinks column to be content, got %q", columns[1].Name)
+	}
+	if columns[1].HasStyle {
+		t.Fatalf("expected primary backlinks content to use default styling")
+	}
+	if columns[2].Name != "file" || !columns[2].HasStyle {
+		t.Fatalf("expected backlinks location column to stay styled as file metadata")
+	}
+}

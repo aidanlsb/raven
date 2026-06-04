@@ -88,15 +88,13 @@ func colFile() ColumnDef {
 	}
 }
 
-func colBacklinksMeta() ColumnDef {
+func colBacklinksContent() ColumnDef {
 	return ColumnDef{
-		Name:       "meta",
+		Name:       "content",
 		WidthRatio: 0.70,
 		MinWidth:   30,
 		MaxWidth:   120,
 		Align:      AlignLeft,
-		HasStyle:   true,
-		Style:      Muted,
 	}
 }
 
@@ -122,9 +120,9 @@ func TraitLayout() []ColumnDef {
 	return []ColumnDef{colNum(), colContent(), colMeta(), colFile()}
 }
 
-// BacklinksLayout returns the standard backlinks layout: [num, meta, file].
+// BacklinksLayout returns the standard backlinks layout: [num, content, file].
 func BacklinksLayout() []ColumnDef {
-	return []ColumnDef{colNum(), colBacklinksMeta(), colBacklinksFile()}
+	return []ColumnDef{colNum(), colBacklinksContent(), colBacklinksFile()}
 }
 
 // NewResultsTable creates a new ResultsTable with the given display context and column layout.
