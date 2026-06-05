@@ -12,7 +12,7 @@ func TestIntegration_VaultConfigShow(t *testing.T) {
 	t.Parallel()
 
 	v := testutil.NewTestVault(t).
-		WithRavenYAML("auto_reindex: false\nprotected_prefixes:\n  - private/\nexclude:\n  - AGENTS.md\n").
+		WithRavenYAML("auto_reindex: false\nassets:\n  root: resources/assets/\n  kinds:\n    image:\n      extensions: [svg]\n      default_path: images/\nprotected_prefixes:\n  - private/\nexclude:\n  - AGENTS.md\n").
 		Build()
 
 	result := v.RunCLI("vault", "config", "show")
@@ -24,6 +24,13 @@ func TestIntegration_VaultConfigShow(t *testing.T) {
 	if got := result.Data["auto_reindex_explicit"]; got != true {
 		t.Fatalf("expected auto_reindex_explicit=true, got %#v", got)
 	}
+	assets, ok := result.Data["assets"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected assets map, got %#v", result.Data["assets"])
+	}
+	if got := assets["root"]; got != "resources/assets/" {
+		t.Fatalf("expected assets.root resources/assets/, got %#v", got)
+	}
 
 	prefixes := result.DataList("protected_prefixes")
 	if len(prefixes) != 1 {
@@ -33,6 +40,37 @@ func TestIntegration_VaultConfigShow(t *testing.T) {
 	if len(exclude) != 1 {
 		t.Fatalf("expected one exclude pattern, got %#v", exclude)
 	}
+}
+
+func TestIntegration_VaultConfigAssetsLifecycle(t *testing.T) {
+	t.Parallel()
+
+	v := testutil.NewTestVault(t).Build()
+
+	result := v.RunCLI("vault", "config", "assets", "show")
+	result.MustSucceed(t)
+	assets, ok := result.Data["assets"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected assets map, got %#v", result.Data["assets"])
+	}
+	if got := assets["root"]; got != "assets/" {
+		t.Fatalf("expected default assets root, got %#v", got)
+	}
+
+	result = v.RunCLI("vault", "config", "assets", "set", "--root=resources/assets")
+	result.MustSucceed(t)
+	v.AssertFileContains("raven.yaml", "assets:")
+	v.AssertFileContains("raven.yaml", "root: resources/assets/")
+	if got := result.Data["reindex_required"]; got != true {
+		t.Fatalf("expected reindex_required=true, got %#v", got)
+	}
+
+	result = v.RunCLI("vault", "config", "assets", "kind", "set", "image", "--extensions=svg,png", "--media-types=image/svg+xml", "--default-path=images")
+	result.MustSucceed(t)
+	v.AssertFileContains("raven.yaml", "image:")
+	v.AssertFileContains("raven.yaml", "- png")
+	v.AssertFileContains("raven.yaml", "- svg")
+	v.AssertFileContains("raven.yaml", "default_path: images/")
 }
 
 func TestIntegration_VaultConfigProtectedPrefixesLifecycle(t *testing.T) {

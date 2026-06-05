@@ -314,11 +314,8 @@ func Run(req RunRequest) (*RunResult, error) {
 		}
 
 		if incremental {
-			indexedMtime, mtimeErr := db.GetFileMtime(walkResult.RelativePath)
-			if mtimeErr == nil && indexedMtime > 0 && walkResult.FileMtime <= indexedMtime {
-				result.FilesSkipped++
-				return nil
-			}
+			// Asset metadata depends on raven.yaml kind/default-path rules, so
+			// unchanged file mtimes do not prove the indexed row is fresh.
 			result.StaleFiles = append(result.StaleFiles, walkResult.RelativePath)
 		}
 

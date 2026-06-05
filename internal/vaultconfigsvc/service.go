@@ -73,6 +73,7 @@ type ShowResult struct {
 	AutoReindexExplicit   bool
 	DailyTemplate         string
 	Directories           DirectoriesInfo
+	Assets                AssetsInfo
 	Capture               CaptureInfo
 	Deletion              DeletionInfo
 	QueriesCount          int
@@ -98,6 +99,60 @@ type CaptureInfo struct {
 type DeletionInfo struct {
 	Behavior string
 	TrashDir string
+}
+
+type AssetsInfo struct {
+	Configured bool
+	Root       string
+	Kinds      map[string]AssetKindInfo
+}
+
+type AssetKindInfo struct {
+	Extensions  []string
+	MediaTypes  []string
+	DefaultPath string
+}
+
+type GetAssetsRequest struct {
+	VaultPath string
+}
+
+type GetAssetsResult struct {
+	ConfigPath string
+	Exists     bool
+	Assets     AssetsInfo
+}
+
+type SetAssetsRequest struct {
+	VaultPath string
+	Root      *string
+}
+
+type SetAssetsResult struct {
+	ConfigPath      string
+	Created         bool
+	Changed         bool
+	Assets          AssetsInfo
+	ReindexRequired bool
+	ReindexCommand  string
+}
+
+type SetAssetKindRequest struct {
+	VaultPath   string
+	Kind        string
+	Extensions  *[]string
+	MediaTypes  *[]string
+	DefaultPath *string
+}
+
+type SetAssetKindResult struct {
+	ConfigPath      string
+	Created         bool
+	Changed         bool
+	Kind            string
+	Assets          AssetsInfo
+	ReindexRequired bool
+	ReindexCommand  string
 }
 
 type GetDirectoriesRequest struct {
@@ -318,6 +373,7 @@ func Show(req ShowRequest) (*ShowResult, error) {
 	protected := normalizedProtectedPrefixes(cfg.ProtectedPrefixes)
 	exclude := normalizedExcludePatterns(cfg.Exclude)
 	directories := showDirectories(cfg)
+	assets := showAssets(cfg)
 	capture := cfg.GetCaptureConfig()
 	deletion := cfg.GetDeletionConfig()
 	return &ShowResult{
@@ -327,6 +383,7 @@ func Show(req ShowRequest) (*ShowResult, error) {
 		AutoReindexExplicit:   cfg.AutoReindex != nil,
 		DailyTemplate:         strings.TrimSpace(cfg.DailyTemplate),
 		Directories:           directories,
+		Assets:                assets,
 		Capture:               CaptureInfo{Destination: capture.Destination, Heading: capture.Heading},
 		Deletion:              DeletionInfo{Behavior: deletion.Behavior, TrashDir: deletion.TrashDir},
 		QueriesCount:          len(cfg.Queries),
@@ -334,6 +391,125 @@ func Show(req ShowRequest) (*ShowResult, error) {
 		ProtectedPrefixesUsed: len(protected) > 0,
 		Exclude:               exclude,
 		ExcludeUsed:           len(exclude) > 0,
+	}, nil
+}
+
+func GetAssets(req GetAssetsRequest) (*GetAssetsResult, error) {
+	cfg, exists, configPath, err := load(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetAssetsResult{
+		ConfigPath: configPath,
+		Exists:     exists,
+		Assets:     showAssets(cfg),
+	}, nil
+}
+
+func SetAssets(req SetAssetsRequest) (*SetAssetsResult, error) {
+	if req.Root == nil {
+		return nil, newError(CodeInvalidInput, "specify at least one assets field", "Use --root", nil)
+	}
+
+	cfg, exists, configPath, err := load(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
+
+	before := canonicalAssetsConfig(cfg)
+	next := copyAssetsConfig(before)
+	if next == nil {
+		next = &config.AssetsConfig{}
+	}
+
+	if req.Root != nil {
+		value, err := normalizeAssetRootValue(*req.Root)
+		if err != nil {
+			return nil, err
+		}
+		next.Root = value
+	}
+
+	next = compactAssetsConfig(next)
+	changed := !assetsConfigEqual(before, next)
+	if changed {
+		cfg.Assets = next
+		if err := config.SaveVaultConfig(req.VaultPath, cfg); err != nil {
+			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+		}
+	}
+
+	return &SetAssetsResult{
+		ConfigPath:      configPath,
+		Created:         !exists && changed,
+		Changed:         changed,
+		Assets:          showAssets(cfg),
+		ReindexRequired: changed,
+		ReindexCommand:  "rvn reindex --json",
+	}, nil
+}
+
+func SetAssetKind(req SetAssetKindRequest) (*SetAssetKindResult, error) {
+	if req.Extensions == nil && req.MediaTypes == nil && req.DefaultPath == nil {
+		return nil, newError(CodeInvalidInput, "specify at least one asset kind field", "Use --extensions, --media-types, or --default-path", nil)
+	}
+
+	kindName, err := normalizeAssetKindName(req.Kind)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, exists, configPath, err := load(req.VaultPath)
+	if err != nil {
+		return nil, err
+	}
+
+	before := canonicalAssetsConfig(cfg)
+	next := copyAssetsConfig(before)
+	if next == nil {
+		next = &config.AssetsConfig{}
+	}
+	if next.Kinds == nil {
+		next.Kinds = make(map[string]*config.AssetKindConfig)
+	}
+	kind := copyAssetKindConfig(next.Kinds[kindName])
+	if kind == nil {
+		kind = &config.AssetKindConfig{}
+	}
+
+	if req.Extensions != nil {
+		kind.Extensions = normalizeAssetExtensions(*req.Extensions)
+	}
+	if req.MediaTypes != nil {
+		kind.MediaTypes = normalizeAssetMediaTypes(*req.MediaTypes)
+	}
+	if req.DefaultPath != nil {
+		value, err := normalizeAssetDefaultPathValue(*req.DefaultPath)
+		if err != nil {
+			return nil, err
+		}
+		kind.DefaultPath = value
+	}
+	next.Kinds[kindName] = compactAssetKindConfig(kind)
+
+	next = compactAssetsConfig(next)
+	changed := !assetsConfigEqual(before, next)
+	if changed {
+		cfg.Assets = next
+		if err := config.SaveVaultConfig(req.VaultPath, cfg); err != nil {
+			return nil, newError(CodeFileWriteError, "failed to save vault config", "", err)
+		}
+	}
+
+	return &SetAssetKindResult{
+		ConfigPath:      configPath,
+		Created:         !exists && changed,
+		Changed:         changed,
+		Kind:            kindName,
+		Assets:          showAssets(cfg),
+		ReindexRequired: changed,
+		ReindexCommand:  "rvn reindex --json",
 	}, nil
 }
 
@@ -971,6 +1147,135 @@ func showDirectories(cfg *config.VaultConfig) DirectoriesInfo {
 	return info
 }
 
+func showAssets(cfg *config.VaultConfig) AssetsInfo {
+	assets := cfg.GetAssetsConfig()
+	info := AssetsInfo{
+		Configured: cfg.Assets != nil,
+		Root:       assets.Root,
+		Kinds:      make(map[string]AssetKindInfo, len(assets.Kinds)),
+	}
+	for name, kind := range assets.Kinds {
+		if kind == nil {
+			continue
+		}
+		info.Kinds[name] = AssetKindInfo{
+			Extensions:  append([]string(nil), kind.Extensions...),
+			MediaTypes:  append([]string(nil), kind.MediaTypes...),
+			DefaultPath: kind.DefaultPath,
+		}
+	}
+	return info
+}
+
+func canonicalAssetsConfig(cfg *config.VaultConfig) *config.AssetsConfig {
+	if cfg.Assets == nil {
+		return nil
+	}
+
+	assets := &config.AssetsConfig{
+		Root:  paths.NormalizeDirRoot(cfg.Assets.Root),
+		Kinds: make(map[string]*config.AssetKindConfig, len(cfg.Assets.Kinds)),
+	}
+	for name, kind := range cfg.Assets.Kinds {
+		name = strings.TrimSpace(name)
+		if name == "" || kind == nil {
+			continue
+		}
+		assets.Kinds[name] = &config.AssetKindConfig{
+			Extensions:  normalizeAssetExtensions(kind.Extensions),
+			MediaTypes:  normalizeAssetMediaTypes(kind.MediaTypes),
+			DefaultPath: normalizeAssetDefaultPath(kind.DefaultPath),
+		}
+	}
+	return compactAssetsConfig(assets)
+}
+
+func copyAssetsConfig(cfg *config.AssetsConfig) *config.AssetsConfig {
+	if cfg == nil {
+		return nil
+	}
+	cloned := &config.AssetsConfig{
+		Root: cfg.Root,
+	}
+	if len(cfg.Kinds) > 0 {
+		cloned.Kinds = make(map[string]*config.AssetKindConfig, len(cfg.Kinds))
+		for name, kind := range cfg.Kinds {
+			cloned.Kinds[name] = copyAssetKindConfig(kind)
+		}
+	}
+	return cloned
+}
+
+func copyAssetKindConfig(kind *config.AssetKindConfig) *config.AssetKindConfig {
+	if kind == nil {
+		return nil
+	}
+	return &config.AssetKindConfig{
+		Extensions:  append([]string(nil), kind.Extensions...),
+		MediaTypes:  append([]string(nil), kind.MediaTypes...),
+		DefaultPath: kind.DefaultPath,
+	}
+}
+
+func compactAssetsConfig(cfg *config.AssetsConfig) *config.AssetsConfig {
+	if cfg == nil {
+		return nil
+	}
+	if cfg.Root != "" {
+		cfg.Root = paths.NormalizeDirRoot(cfg.Root)
+	}
+	for name, kind := range cfg.Kinds {
+		if compactAssetKindConfig(kind) == nil {
+			delete(cfg.Kinds, name)
+		}
+	}
+	if len(cfg.Kinds) == 0 {
+		cfg.Kinds = nil
+	}
+	if cfg.Root == "" && len(cfg.Kinds) == 0 {
+		return nil
+	}
+	return cfg
+}
+
+func compactAssetKindConfig(kind *config.AssetKindConfig) *config.AssetKindConfig {
+	if kind == nil {
+		return nil
+	}
+	kind.Extensions = normalizeAssetExtensions(kind.Extensions)
+	kind.MediaTypes = normalizeAssetMediaTypes(kind.MediaTypes)
+	kind.DefaultPath = normalizeAssetDefaultPath(kind.DefaultPath)
+	if len(kind.Extensions) == 0 && len(kind.MediaTypes) == 0 && kind.DefaultPath == "" {
+		return nil
+	}
+	return kind
+}
+
+func assetsConfigEqual(a, b *config.AssetsConfig) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	if a.Root != b.Root || len(a.Kinds) != len(b.Kinds) {
+		return false
+	}
+	for name, aKind := range a.Kinds {
+		bKind, ok := b.Kinds[name]
+		if !ok || !assetKindConfigEqual(aKind, bKind) {
+			return false
+		}
+	}
+	return true
+}
+
+func assetKindConfigEqual(a, b *config.AssetKindConfig) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return stringSlicesEqual(a.Extensions, b.Extensions) &&
+		stringSlicesEqual(a.MediaTypes, b.MediaTypes) &&
+		a.DefaultPath == b.DefaultPath
+}
+
 func canonicalDirectoriesConfig(cfg *config.VaultConfig) *config.DirectoriesConfig {
 	if cfg.Directories == nil {
 		return nil
@@ -1102,6 +1407,100 @@ func deletionConfigEqual(a, b *config.DeletionConfig) bool {
 		return a == nil && b == nil
 	}
 	return a.Behavior == b.Behavior && a.TrashDir == b.TrashDir
+}
+
+func normalizeAssetRootValue(raw string) (string, error) {
+	value := paths.NormalizeDirRoot(paths.NormalizeVaultRelPath(raw))
+	if value == "" || !paths.IsValidVaultRelPath(value) {
+		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid assets.root: %q", raw), "Use a vault-relative directory such as 'assets/'", nil)
+	}
+	return value, nil
+}
+
+func normalizeAssetKindName(raw string) (string, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
+		return "", newError(CodeInvalidInput, "asset kind is required", "Use a kind name such as 'image' or 'pdf'", nil)
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid asset kind: %q", raw), "Use lowercase letters, numbers, dashes, or underscores", nil)
+	}
+	return value, nil
+}
+
+func normalizeAssetExtensions(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range splitConfigList(values) {
+		value = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), ".")
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func normalizeAssetMediaTypes(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range splitConfigList(values) {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func normalizeAssetDefaultPathValue(raw string) (string, error) {
+	value := normalizeAssetDefaultPath(raw)
+	if value == "" && strings.TrimSpace(raw) != "" {
+		return "", newError(CodeInvalidInput, fmt.Sprintf("invalid asset default_path: %q", raw), "Use a path relative to assets.root, such as 'images/'", nil)
+	}
+	return value, nil
+}
+
+func normalizeAssetDefaultPath(raw string) string {
+	value := paths.NormalizeDirRoot(paths.NormalizeVaultRelPath(raw))
+	if value == "" || !paths.IsValidVaultRelPath(value) {
+		return ""
+	}
+	return value
+}
+
+func splitConfigList(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, strings.Split(value, ",")...)
+	}
+	return out
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeDirValue(raw, field string) (string, error) {

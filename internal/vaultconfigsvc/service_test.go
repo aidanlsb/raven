@@ -301,6 +301,84 @@ func TestDeletionSetNormalizesTrashDirAndRejectsInvalidBehavior(t *testing.T) {
 	}
 }
 
+func TestAssetsShowAndSetLifecycle(t *testing.T) {
+	tmp := t.TempDir()
+
+	showResult, err := GetAssets(GetAssetsRequest{VaultPath: tmp})
+	if err != nil {
+		t.Fatalf("GetAssets() error = %v", err)
+	}
+	if showResult.Assets.Configured {
+		t.Fatalf("expected assets block to be unconfigured")
+	}
+	if showResult.Assets.Root != "assets/" {
+		t.Fatalf("expected default root assets/, got %q", showResult.Assets.Root)
+	}
+	if _, ok := showResult.Assets.Kinds["pdf"]; !ok {
+		t.Fatalf("expected default pdf kind, got %#v", showResult.Assets.Kinds)
+	}
+
+	setResult, err := SetAssets(SetAssetsRequest{
+		VaultPath: tmp,
+		Root:      strPtr("resources/assets"),
+	})
+	if err != nil {
+		t.Fatalf("SetAssets() error = %v", err)
+	}
+	if !setResult.Changed || !setResult.ReindexRequired {
+		t.Fatalf("expected changed reindex-required result, got %#v", setResult)
+	}
+	if setResult.Assets.Root != "resources/assets/" {
+		t.Fatalf("expected resources/assets/ root, got %q", setResult.Assets.Root)
+	}
+
+	cfg, err := config.LoadVaultConfig(tmp)
+	if err != nil {
+		t.Fatalf("LoadVaultConfig() error = %v", err)
+	}
+	if cfg.Assets == nil || cfg.Assets.Root != "resources/assets/" {
+		t.Fatalf("unexpected assets config: %#v", cfg.Assets)
+	}
+}
+
+func TestAssetKindSetNormalizesValues(t *testing.T) {
+	tmp := t.TempDir()
+
+	extensions := []string{".SVG,png", "svg"}
+	mediaTypes := []string{"IMAGE/SVG+XML", "image/"}
+	result, err := SetAssetKind(SetAssetKindRequest{
+		VaultPath:   tmp,
+		Kind:        "Image",
+		Extensions:  &extensions,
+		MediaTypes:  &mediaTypes,
+		DefaultPath: strPtr("./images"),
+	})
+	if err != nil {
+		t.Fatalf("SetAssetKind() error = %v", err)
+	}
+	if result.Kind != "image" {
+		t.Fatalf("expected normalized kind image, got %q", result.Kind)
+	}
+	kind := result.Assets.Kinds["image"]
+	if !stringSlicesEqual(kind.Extensions, []string{"png", "svg"}) {
+		t.Fatalf("extensions = %#v, want png/svg", kind.Extensions)
+	}
+	if !stringSlicesEqual(kind.MediaTypes, []string{"image/", "image/svg+xml"}) {
+		t.Fatalf("media_types = %#v, want image family and svg+xml", kind.MediaTypes)
+	}
+	if kind.DefaultPath != "images/" {
+		t.Fatalf("default_path = %q, want images/", kind.DefaultPath)
+	}
+
+	cfg, err := config.LoadVaultConfig(tmp)
+	if err != nil {
+		t.Fatalf("LoadVaultConfig() error = %v", err)
+	}
+	if cfg.Assets == nil || cfg.Assets.Kinds["image"] == nil {
+		t.Fatalf("expected image kind in raven.yaml, got %#v", cfg.Assets)
+	}
+}
+
 func strPtr(value string) *string {
 	return &value
 }

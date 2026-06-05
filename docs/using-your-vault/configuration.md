@@ -172,6 +172,9 @@ Use structured CLI commands when available instead of editing `raven.yaml` manua
 
 ```bash
 rvn vault config show --json
+rvn vault config assets show --json
+rvn vault config assets set --root assets --json
+rvn vault config assets kind set image --extensions svg --media-types image/svg+xml --default-path images --json
 rvn vault config auto-reindex set --value=false --json
 rvn vault config auto-reindex unset --json
 rvn vault config protected-prefixes list --json
@@ -294,7 +297,7 @@ Vault-local non-Markdown files that Raven can index as graph resources.
 | `root` | string | `assets/` | Root scanned for asset files |
 | `kinds` | map | built-in starter kinds | Organization and validation rules |
 
-Asset kinds are not schema object types. They classify files by extension or media type and can specify a preferred `default_path` under the asset root. `media_types` entries can be exact types such as `application/pdf` or prefixes such as `image/`. Authored metadata should live in Markdown objects that link to the asset. See `using-your-vault/assets.md` for linking, checks, and move behavior.
+Asset kinds are not schema object types. They classify files by extension or media type and can specify a preferred `default_path` under the asset root. `media_types` entries can be exact types such as `application/pdf` or prefixes such as `image/`. Authored metadata should live in Markdown objects that link to the asset. Use `rvn vault config assets show --json` to inspect resolved defaults and `rvn vault config assets kind set <kind> ... --json` to add or update kind rules without editing YAML directly. Run the returned reindex command after changing asset config so cached asset metadata is refreshed. See `using-your-vault/assets.md` for linking, checks, and move behavior.
 
 ### `capture`
 

@@ -46,6 +46,17 @@ assets:
 
 Kinds classify assets and define preferred placement. They do not define metadata fields, create schema types, or make assets queryable by frontmatter. If you need authored metadata, create a Markdown object such as `paper`, `source`, or `photo_set` and link it to the asset.
 
+Prefer the structured config commands when adding or changing asset rules:
+
+```bash
+rvn vault config assets show --json
+rvn vault config assets set --root assets --json
+rvn vault config assets kind set image --extensions svg --media-types image/svg+xml --default-path images --json
+rvn reindex --json
+```
+
+The config mutation commands return `reindex_required` and `reindex_command` when cached asset metadata should be refreshed.
+
 ## Checks And Moves
 
 `rvn check` reports:

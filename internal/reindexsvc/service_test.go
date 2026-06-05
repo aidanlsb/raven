@@ -233,6 +233,44 @@ func TestRunIndexesAssetsAndResolvesMarkdownAssetLinks(t *testing.T) {
 	}
 }
 
+func TestRunIncrementalReindexesAssetsAfterConfigChange(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	writeTestFile(t, vaultPath, "assets/raw/logo.svg", "<svg></svg>\n")
+
+	if _, err := Run(RunRequest{VaultPath: vaultPath, Full: true}); err != nil {
+		t.Fatalf("initial Run returned error: %v", err)
+	}
+
+	writeTestFile(t, vaultPath, "raven.yaml", "assets:\n  kinds:\n    image:\n      extensions:\n        - svg\n      default_path: images/\n")
+
+	result, err := Run(RunRequest{VaultPath: vaultPath})
+	if err != nil {
+		t.Fatalf("incremental Run returned error: %v", err)
+	}
+	if result.Assets != 1 {
+		t.Fatalf("assets = %d, want 1", result.Assets)
+	}
+
+	db, err := index.Open(vaultPath)
+	if err != nil {
+		t.Fatalf("failed to reopen index: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	assets, err := db.QueryAssets("image")
+	if err != nil {
+		t.Fatalf("QueryAssets returned error: %v", err)
+	}
+	if len(assets) != 1 {
+		t.Fatalf("image assets = %#v, want logo.svg", assets)
+	}
+	if assets[0].DefaultPath != "images/" || !assets[0].NonCanonical {
+		t.Fatalf("asset metadata = %#v, want default_path images/ and non_canonical", assets[0])
+	}
+}
+
 func TestRunSkipsExcludedMarkdownAndAssets(t *testing.T) {
 	t.Parallel()
 

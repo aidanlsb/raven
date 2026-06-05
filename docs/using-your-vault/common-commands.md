@@ -303,6 +303,7 @@ Rebuild the SQLite index from managed vault files, including Markdown objects an
 
 - Editing files outside of Raven (e.g., in your editor or with git)
 - Adding, moving, or deleting assets outside of Raven
+- Changing asset root or kind rules in `raven.yaml`
 - Schema changes that affect indexing
 - Recovering from index corruption
 

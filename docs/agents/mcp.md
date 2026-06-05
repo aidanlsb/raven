@@ -291,6 +291,25 @@ Use dedicated vault-config commands for supported `raven.yaml` settings instead 
 
 ```json
 {
+  "command": "vault_config_assets_show",
+  "args": {}
+}
+```
+
+```json
+{
+  "command": "vault_config_assets_kind_set",
+  "args": {
+    "kind": "image",
+    "extensions": ["svg"],
+    "media-types": ["image/svg+xml"],
+    "default-path": "images"
+  }
+}
+```
+
+```json
+{
   "command": "vault_config_capture_set",
   "args": {
     "destination": "inbox.md",

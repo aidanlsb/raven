@@ -1907,11 +1907,71 @@ Safety checks:
 	"vault_config_show": {
 		Name:        "vault config show",
 		Description: "Show current raven.yaml values",
+		LongDesc: `Show current effective raven.yaml values.
+
+The JSON output includes resolved defaults for directories, assets, capture,
+deletion, auto_reindex, protected_prefixes, and exclude patterns.`,
 		Examples: []string{
 			"rvn vault config show --json",
 		},
 		UseCases: []string{
 			"Inspect structured vault-level configuration without reading raven.yaml directly",
+		},
+	},
+	"vault_config_assets_show": {
+		Name:        "vault config assets show",
+		Description: "Show current assets config from raven.yaml",
+		LongDesc: `Show resolved asset configuration.
+
+The result includes the effective asset root and asset kinds after applying
+Raven's defaults and any raven.yaml overrides.`,
+		Examples: []string{
+			"rvn vault config assets show --json",
+		},
+		UseCases: []string{
+			"Verify which asset root and kind rules Raven will use",
+			"Inspect default and overridden asset kinds without reading raven.yaml directly",
+		},
+	},
+	"vault_config_assets_set": {
+		Name:        "vault config assets set",
+		Description: "Set assets root in raven.yaml",
+		Flags: []FlagMeta{
+			{Name: "root", Description: "Set assets.root", Type: FlagTypeString, Examples: []string{"assets", "resources/assets"}},
+		},
+		Examples: []string{
+			"rvn vault config assets set --root assets --json",
+			"rvn vault config assets set --root resources/assets --json",
+		},
+		UseCases: []string{
+			"Configure the vault-relative root scanned for non-Markdown assets",
+		},
+	},
+	"vault_config_assets_kind_set": {
+		Name:        "vault config assets kind set",
+		Description: "Set an asset kind rule in raven.yaml",
+		LongDesc: `Create or update an asset kind rule.
+
+Extensions may be passed with or without leading dots. --extensions and
+--media-types are repeatable and also accept comma-separated values.
+
+After changing asset kind rules, run the returned reindex command so cached
+asset kind/default_path metadata is recomputed.`,
+		Args: []ArgMeta{
+			{Name: "kind", Description: "Asset kind name", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "extensions", Description: "File extensions for this kind (repeatable or comma-separated)", Type: FlagTypeStringSlice, Examples: []string{"svg", "jpg,png"}},
+			{Name: "media-types", Description: "MIME media types or media families for this kind (repeatable or comma-separated)", Type: FlagTypeStringSlice, Examples: []string{"image/svg+xml", "image/"}},
+			{Name: "default-path", Description: "Preferred path for this kind, relative to assets.root", Type: FlagTypeString, Examples: []string{"images", "pdfs"}},
+		},
+		Examples: []string{
+			"rvn vault config assets kind set image --extensions svg --media-types image/svg+xml --default-path images --json",
+			"rvn vault config assets kind set data --extensions csv,jsonl --default-path data --json",
+		},
+		UseCases: []string{
+			"Add a custom asset kind without editing raven.yaml directly",
+			"Update extensions, media types, or default path for asset canonicality checks",
 		},
 	},
 	"vault_config_auto_reindex_set": {

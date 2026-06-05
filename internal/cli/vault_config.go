@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +24,37 @@ raven.yaml directly.`,
 var vaultConfigShowCmd = newCanonicalLeafCommand("vault_config_show", canonicalLeafOptions{
 	VaultPath:   getVaultPath,
 	RenderHuman: renderVaultConfigShow,
+})
+
+var vaultConfigAssetsCmd = &cobra.Command{
+	Use:   "assets",
+	Short: "Manage assets config in raven.yaml",
+	Args:  cobra.NoArgs,
+	RunE:  canonicalGroupDefaultRunE("vault_config_assets_show", getVaultPath, renderVaultConfigAssetsShow),
+}
+
+var vaultConfigAssetsShowCmd = newCanonicalLeafCommand("vault_config_assets_show", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigAssetsShow,
+})
+
+var vaultConfigAssetsSetCmd = newCanonicalLeafCommand("vault_config_assets_set", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigAssetsSet,
+})
+
+var vaultConfigAssetsKindCmd = &cobra.Command{
+	Use:   "kind",
+	Short: "Manage asset kind config in raven.yaml",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
+	},
+}
+
+var vaultConfigAssetsKindSetCmd = newCanonicalLeafCommand("vault_config_assets_kind_set", canonicalLeafOptions{
+	VaultPath:   getVaultPath,
+	RenderHuman: renderVaultConfigAssetsKindSet,
 })
 
 var vaultConfigAutoReindexCmd = &cobra.Command{
@@ -155,6 +187,11 @@ var vaultConfigDeletionUnsetCmd = newCanonicalLeafCommand("vault_config_deletion
 })
 
 func init() {
+	vaultConfigAssetsKindCmd.AddCommand(vaultConfigAssetsKindSetCmd)
+	vaultConfigAssetsCmd.AddCommand(vaultConfigAssetsShowCmd)
+	vaultConfigAssetsCmd.AddCommand(vaultConfigAssetsSetCmd)
+	vaultConfigAssetsCmd.AddCommand(vaultConfigAssetsKindCmd)
+
 	vaultConfigAutoReindexCmd.AddCommand(vaultConfigAutoReindexSetCmd)
 	vaultConfigAutoReindexCmd.AddCommand(vaultConfigAutoReindexUnsetCmd)
 
@@ -179,6 +216,7 @@ func init() {
 	vaultConfigDeletionCmd.AddCommand(vaultConfigDeletionUnsetCmd)
 
 	vaultConfigCmd.AddCommand(vaultConfigShowCmd)
+	vaultConfigCmd.AddCommand(vaultConfigAssetsCmd)
 	vaultConfigCmd.AddCommand(vaultConfigAutoReindexCmd)
 	vaultConfigCmd.AddCommand(vaultConfigProtectedPrefixesCmd)
 	vaultConfigCmd.AddCommand(vaultConfigExcludeCmd)
@@ -214,6 +252,11 @@ func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	}
 	fmt.Printf("%s %s\n", ui.Hint("template:"), stringValue(directories["template"]))
 
+	assets, _ := data["assets"].(map[string]interface{})
+	fmt.Println(ui.SectionHeader("assets"))
+	fmt.Printf("%s %s\n", ui.Hint("root:"), stringValue(assets["root"]))
+	printAssetKinds(assets)
+
 	capture, _ := data["capture"].(map[string]interface{})
 	fmt.Println(ui.SectionHeader("capture"))
 	fmt.Printf("%s %s\n", ui.Hint("destination:"), stringValue(capture["destination"]))
@@ -247,6 +290,72 @@ func renderVaultConfigShow(_ *cobra.Command, result commandexec.Result) error {
 		}
 	}
 	return nil
+}
+
+func renderVaultConfigAssetsShow(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	fmt.Printf("%s %s\n", ui.Hint("config:"), ui.FilePath(stringValue(data["config_path"])))
+	assets, _ := data["assets"].(map[string]interface{})
+	if !boolValue(assets["configured"]) {
+		fmt.Println(ui.Hint("assets block not explicitly configured; showing effective values."))
+	}
+	fmt.Printf("%s %s\n", ui.Hint("root:"), stringValue(assets["root"]))
+	printAssetKinds(assets)
+	return nil
+}
+
+func renderVaultConfigAssetsSet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Updated assets config in %s", ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Star("Assets config unchanged."))
+	}
+	if boolValue(data["reindex_required"]) {
+		fmt.Printf("%s %s\n", ui.Hint("reindex:"), stringValue(data["reindex_command"]))
+	}
+	return renderVaultConfigAssetsShow(nil, result)
+}
+
+func renderVaultConfigAssetsKindSet(_ *cobra.Command, result commandexec.Result) error {
+	data := canonicalDataMap(result)
+	if boolValue(data["changed"]) {
+		fmt.Println(ui.Checkf("Updated asset kind '%s' in %s", stringValue(data["kind"]), ui.FilePath(stringValue(data["config_path"]))))
+	} else {
+		fmt.Println(ui.Starf("Asset kind '%s' unchanged.", stringValue(data["kind"])))
+	}
+	if boolValue(data["reindex_required"]) {
+		fmt.Printf("%s %s\n", ui.Hint("reindex:"), stringValue(data["reindex_command"]))
+	}
+	return renderVaultConfigAssetsShow(nil, result)
+}
+
+func printAssetKinds(assets map[string]interface{}) {
+	rawKinds, _ := assets["kinds"].(map[string]interface{})
+	if len(rawKinds) == 0 {
+		fmt.Println(ui.Hint("kinds: (none)"))
+		return
+	}
+	names := make([]string, 0, len(rawKinds))
+	for name := range rawKinds {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	fmt.Println(ui.SectionHeader("asset kinds"))
+	for _, name := range names {
+		kind, _ := rawKinds[name].(map[string]interface{})
+		extensions := stringSliceFromAny(kind["extensions"])
+		mediaTypes := stringSliceFromAny(kind["media_types"])
+		defaultPath := stringValue(kind["default_path"])
+		fmt.Printf("%s %s", ui.Hint(name+":"), "extensions="+fmt.Sprint(extensions))
+		if len(mediaTypes) > 0 {
+			fmt.Printf(" media_types=%v", mediaTypes)
+		}
+		if defaultPath != "" {
+			fmt.Printf(" default_path=%s", defaultPath)
+		}
+		fmt.Println()
+	}
 }
 
 func renderVaultConfigAutoReindexSet(_ *cobra.Command, result commandexec.Result) error {
