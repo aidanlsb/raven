@@ -48,7 +48,7 @@ Raven ships its own long-form documentation. Use these when you need usage detai
 
 - List doc sections: `rvn docs list --json`
 - Read a topic: `rvn docs <section> <topic> --json`
-- Search docs: `rvn docs search "<query>" --json`
+- Search docs: `rvn docs search "<query>" --json` (continue with `--offset` when `has_more` is true)
 - Refresh global doc cache if missing or stale: `rvn docs fetch --json`
 
 ## Cross-references

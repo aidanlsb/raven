@@ -95,6 +95,14 @@ type SearchMatchView struct {
 	Snippet string `json:"snippet"`
 }
 
+type SearchResult struct {
+	Matches  []SearchMatchView
+	Returned int
+	Limit    int
+	Offset   int
+	HasMore  bool
+}
+
 type FetchRequest struct {
 	ConfigPath string
 	Ref        string
@@ -190,22 +198,22 @@ func ReadTopicContentFS(docsFS fs.FS, topic TopicRecord) (string, error) {
 	return string(content), nil
 }
 
-func Search(configPath, query, sectionFilter string, limit int) ([]SearchMatchView, error) {
+func Search(configPath, query, sectionFilter string, limit, offset int) (*SearchResult, error) {
 	source, err := LoadGlobalDocsSource(configPath)
 	if err != nil {
 		return nil, err
 	}
-	return SearchFS(source, ".", query, sectionFilter, limit)
+	return SearchFS(source, ".", query, sectionFilter, limit, offset)
 }
 
-func SearchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([]SearchMatchView, error) {
-	matches, err := searchFS(docsFS, docsRoot, query, sectionFilter, limit)
+func SearchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit, offset int) (*SearchResult, error) {
+	result, err := searchFS(docsFS, docsRoot, query, sectionFilter, limit, offset)
 	if err != nil {
 		message := err.Error()
 		suggestion := ""
 		code := CodeInternal
 		switch {
-		case strings.Contains(message, "empty query"), strings.Contains(message, "limit must be >= 1"), strings.Contains(message, "unknown section"):
+		case strings.Contains(message, "empty query"), strings.Contains(message, "limit must be >= 1"), strings.Contains(message, "offset must be >= 0"), strings.Contains(message, "unknown section"):
 			code = CodeInvalidInput
 			suggestion = "Run 'rvn docs' to list sections"
 		case strings.Contains(message, "docs index not found"):
@@ -216,7 +224,7 @@ func SearchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([
 		}
 		return nil, newError(code, message, suggestion, err)
 	}
-	return matches, nil
+	return result, nil
 }
 
 func Fetch(req FetchRequest) (*FetchResult, error) {
@@ -559,13 +567,16 @@ func docsSortLess(orderA, orderB *int, idA, idB string) bool {
 	return idA < idB
 }
 
-func searchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([]SearchMatchView, error) {
+func searchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit, offset int) (*SearchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, fmt.Errorf("empty query")
 	}
 	if limit < 1 {
 		return nil, fmt.Errorf("limit must be >= 1")
+	}
+	if offset < 0 {
+		return nil, fmt.Errorf("offset must be >= 0")
 	}
 
 	sections, err := listSectionsFS(docsFS, docsRoot)
@@ -585,7 +596,8 @@ func searchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([
 	}
 
 	queryLower := strings.ToLower(query)
-	matches := make([]SearchMatchView, 0, limit)
+	matches := make([]SearchMatchView, 0, limit+1)
+	skipped := 0
 
 	for _, section := range selected {
 		topics, err := listTopicsFS(docsFS, docsRoot, section.ID)
@@ -604,6 +616,10 @@ func searchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([
 				if !strings.Contains(strings.ToLower(line), queryLower) {
 					continue
 				}
+				if skipped < offset {
+					skipped++
+					continue
+				}
 
 				matches = append(matches, SearchMatchView{
 					Section: section.ID,
@@ -613,14 +629,26 @@ func searchFS(docsFS fs.FS, docsRoot, query, sectionFilter string, limit int) ([
 					Line:    i + 1,
 					Snippet: shortenDocsSnippet(line, queryLower),
 				})
-				if len(matches) >= limit {
-					return matches, nil
+				if len(matches) > limit {
+					return &SearchResult{
+						Matches:  matches[:limit],
+						Returned: limit,
+						Limit:    limit,
+						Offset:   offset,
+						HasMore:  true,
+					}, nil
 				}
 			}
 		}
 	}
 
-	return matches, nil
+	return &SearchResult{
+		Matches:  matches,
+		Returned: len(matches),
+		Limit:    limit,
+		Offset:   offset,
+		HasMore:  false,
+	}, nil
 }
 
 func shortenDocsSnippet(line, queryLower string) string {

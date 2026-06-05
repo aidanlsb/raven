@@ -150,11 +150,13 @@ func renderDocsFetch(_ *cobra.Command, result commandexec.Result) error {
 func buildDocsSearchArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	query := strings.TrimSpace(strings.Join(args, " "))
 	limit, _ := cmd.Flags().GetInt("limit")
+	offset, _ := cmd.Flags().GetInt("offset")
 	section, _ := cmd.Flags().GetString("section")
 	return map[string]interface{}{
 		"query":   query,
 		"section": section,
 		"limit":   limit,
+		"offset":  offset,
 	}, nil
 }
 
@@ -169,6 +171,11 @@ func renderDocsSearch(_ *cobra.Command, result commandexec.Result) error {
 	fmt.Printf("%s\n", ui.SectionHeader(fmt.Sprintf("Matches for %q (%d)", stringValue(data["query"]), len(matches))))
 	for _, m := range matches {
 		fmt.Println(ui.Bullet(fmt.Sprintf("%s/%s:%d %s", m.Section, m.Topic, m.Line, m.Snippet)))
+	}
+	if boolValue(data["has_more"]) {
+		nextOffset := intValue(data["offset"]) + intValue(data["returned"])
+		fmt.Println()
+		fmt.Println(ui.Hint(fmt.Sprintf("More matches available. Continue with --offset %d.", nextOffset)))
 	}
 	return nil
 }

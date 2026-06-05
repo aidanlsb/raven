@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/docssvc"
@@ -107,6 +108,7 @@ func HandleDocsList(_ context.Context, req commandexec.Request) commandexec.Resu
 
 // HandleDocsSearch executes the canonical `docs search` command.
 func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Result {
+	start := time.Now()
 	query := strings.TrimSpace(stringArg(req.Args, "query"))
 	if query == "" {
 		return commandexec.Failure("MISSING_ARGUMENT", "specify a search query", nil, "Usage: rvn docs search <query>")
@@ -119,17 +121,25 @@ func HandleDocsSearch(_ context.Context, req commandexec.Request) commandexec.Re
 	if limit < 1 {
 		return commandexec.Failure("INVALID_INPUT", "--limit must be >= 1", nil, "")
 	}
+	offset, _ := intArg(req.Args, "offset")
+	if offset < 0 {
+		return commandexec.Failure("INVALID_INPUT", "--offset must be >= 0", nil, "Use --offset 0 for no offset")
+	}
 
-	matches, err := docssvc.Search(req.ConfigPath, query, strings.TrimSpace(stringArg(req.Args, "section")), limit)
+	result, err := docssvc.Search(req.ConfigPath, query, strings.TrimSpace(stringArg(req.Args, "section")), limit, offset)
 	if err != nil {
 		return mapDocsSvcFailure(err, "Run 'rvn docs' to list sections")
 	}
 
 	return commandexec.Success(map[string]interface{}{
-		"query":   query,
-		"count":   len(matches),
-		"matches": matches,
-	}, &commandexec.Meta{Count: len(matches)})
+		"query":    query,
+		"count":    result.Returned,
+		"returned": result.Returned,
+		"limit":    result.Limit,
+		"offset":   result.Offset,
+		"has_more": result.HasMore,
+		"matches":  result.Matches,
+	}, &commandexec.Meta{Count: result.Returned, QueryTimeMs: time.Since(start).Milliseconds()})
 }
 
 // HandleDocsFetch executes the canonical `docs fetch` command.

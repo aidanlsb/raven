@@ -2529,18 +2529,27 @@ type: page
 `
 		configPath := seedGlobalDocsConfig(t, map[string]string{
 			"index.yaml":                 docsIndex,
-			"querying/query-language.md": "# Query Language\n\nquery predicate examples.\n",
+			"querying/query-language.md": "# Query Language\n\nquery predicate examples.\nquery trait examples.\nquery refs examples.\n",
 		})
 		server := newTestServerWithBaseArgs(t, baseArgsForConfig(configPath), binary)
 
 		mcpResult := server.callTool("docs_search", map[string]interface{}{
 			"query":   "query",
 			"section": "querying",
-			"limit":   5,
 		})
-		cliResult := runCLIWithConfig(t, binary, configPath, "docs", "search", "query", "--section", "querying", "--limit", "5")
+		cliResult := runCLIWithConfig(t, binary, configPath, "docs", "search", "query", "--section", "querying")
 
-		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "count", "matches"})
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query", "count", "returned", "limit", "offset", "has_more", "matches"})
+
+		mcpPage := server.callTool("docs_search", map[string]interface{}{
+			"query":   "query",
+			"section": "querying",
+			"limit":   2,
+			"offset":  2,
+		})
+		cliPage := runCLIWithConfig(t, binary, configPath, "docs", "search", "query", "--section", "querying", "--limit", "2", "--offset", "2")
+
+		assertEnvelopeParity(t, mcpPage, cliPage, []string{"query", "count", "returned", "limit", "offset", "has_more", "matches"})
 	})
 
 	t.Run("docs_fetch", func(t *testing.T) {

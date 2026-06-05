@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -181,7 +182,15 @@ func bindMetaFlags(cmd *cobra.Command, flags []commands.FlagMeta) {
 		case commands.FlagTypeBool:
 			cmd.Flags().Bool(flag.Name, flag.Default == "true", flag.Description)
 		case commands.FlagTypeInt:
-			cmd.Flags().Int(flag.Name, 0, flag.Description)
+			defaultValue := 0
+			if strings.TrimSpace(flag.Default) != "" {
+				parsed, err := strconv.Atoi(strings.TrimSpace(flag.Default))
+				if err != nil {
+					panic(fmt.Sprintf("invalid default for int flag %q: %q", flag.Name, flag.Default))
+				}
+				defaultValue = parsed
+			}
+			cmd.Flags().Int(flag.Name, defaultValue, flag.Description)
 		case commands.FlagTypeKeyValue, commands.FlagTypeStringSlice:
 			cmd.Flags().StringArray(flag.Name, nil, flag.Description)
 		case commands.FlagTypeJSON:

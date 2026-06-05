@@ -27,7 +27,7 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
         path: query-language.md
 `,
 		"getting-started/installation.md": "# Installation\n\nWelcome.\n",
-		"querying/query-language.md":      "# Query Language\n\nquery predicate examples.\n",
+		"querying/query-language.md":      "# Query Language\n\nquery predicate examples.\nquery trait examples.\nquery refs examples.\n",
 	})
 
 	list := runDocsCLI(t, configPath, "docs")
@@ -67,11 +67,39 @@ func TestIntegration_DocsListOpenSearch(t *testing.T) {
 		t.Fatalf("expected non-empty content in docs open response")
 	}
 
-	search := runDocsCLI(t, configPath, "docs", "search", "query", "--section", "querying", "--limit", "5")
+	search := runDocsCLI(t, configPath, "docs", "search", "query", "--section", "querying")
 	search.MustSucceed(t)
 	if count, ok := search.Data["count"].(float64); !ok || count < 1 {
 		t.Fatalf("expected search count >= 1, got %v", search.Data["count"])
 	}
+	if limit, ok := search.Data["limit"].(float64); !ok || limit != 20 {
+		t.Fatalf("expected default search limit 20, got %v", search.Data["limit"])
+	}
+	if offset, ok := search.Data["offset"].(float64); !ok || offset != 0 {
+		t.Fatalf("expected default search offset 0, got %v", search.Data["offset"])
+	}
+
+	firstPage := runDocsCLI(t, configPath, "docs", "search", "query", "--section", "querying", "--limit", "2")
+	firstPage.MustSucceed(t)
+	if hasMore, ok := firstPage.Data["has_more"].(bool); !ok || !hasMore {
+		t.Fatalf("expected first page has_more true, got %v", firstPage.Data["has_more"])
+	}
+	if returned, ok := firstPage.Data["returned"].(float64); !ok || returned != 2 {
+		t.Fatalf("expected first page returned 2, got %v", firstPage.Data["returned"])
+	}
+
+	secondPage := runDocsCLI(t, configPath, "docs", "search", "query", "--section", "querying", "--limit", "2", "--offset", "2")
+	secondPage.MustSucceed(t)
+	if hasMore, ok := secondPage.Data["has_more"].(bool); !ok || hasMore {
+		t.Fatalf("expected second page has_more false, got %v", secondPage.Data["has_more"])
+	}
+	if offset, ok := secondPage.Data["offset"].(float64); !ok || offset != 2 {
+		t.Fatalf("expected second page offset 2, got %v", secondPage.Data["offset"])
+	}
+
+	invalidOffset := runDocsCLI(t, configPath, "docs", "search", "query", "--offset", "-1")
+	invalidOffset.MustFail(t, "INVALID_INPUT")
+	invalidOffset.MustFailWithMessage(t, "--offset must be >= 0")
 }
 
 func TestIntegration_DocsCommandRedirectToHelp(t *testing.T) {
