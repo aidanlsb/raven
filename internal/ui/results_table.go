@@ -110,6 +110,52 @@ func colBacklinksFile() ColumnDef {
 	}
 }
 
+func colObjectName() ColumnDef {
+	return ColumnDef{
+		Name:       "name",
+		WidthRatio: 0.25,
+		MinWidth:   10,
+		MaxWidth:   25,
+		Align:      AlignLeft,
+	}
+}
+
+func colObjectField(name string, fieldCount int) ColumnDef {
+	widthRatio := 0.35
+	if fieldCount > 0 {
+		widthRatio = widthRatio / float64(fieldCount)
+	}
+	minWidth := len(name)
+	if minWidth < 8 {
+		minWidth = 8
+	}
+	if minWidth > 20 {
+		minWidth = 20
+	}
+	return ColumnDef{
+		Name:       "field:" + name,
+		WidthRatio: widthRatio,
+		MinWidth:   minWidth,
+		MaxWidth:   20,
+		Align:      AlignLeft,
+	}
+}
+
+func colObjectLocation(fieldCount int) ColumnDef {
+	widthRatio := 0.40
+	if fieldCount == 0 {
+		widthRatio = 0.65
+	}
+	return ColumnDef{
+		Name:       "location",
+		WidthRatio: widthRatio,
+		MinWidth:   18,
+		Align:      AlignLeft,
+		HasStyle:   true,
+		Style:      Muted,
+	}
+}
+
 // SearchLayout returns the standard search results layout: [num, content, meta, file].
 func SearchLayout() []ColumnDef {
 	return []ColumnDef{colNum(), colContent(), colMeta(), colFile()}
@@ -123,6 +169,18 @@ func TraitLayout() []ColumnDef {
 // BacklinksLayout returns the standard backlinks layout: [num, content, file].
 func BacklinksLayout() []ColumnDef {
 	return []ColumnDef{colNum(), colBacklinksContent(), colBacklinksFile()}
+}
+
+// ObjectLayout returns the standard object query layout:
+// [num, name, dynamic fields..., location].
+func ObjectLayout(fieldNames []string) []ColumnDef {
+	columns := make([]ColumnDef, 0, len(fieldNames)+3)
+	columns = append(columns, colNum(), colObjectName())
+	for _, fieldName := range fieldNames {
+		columns = append(columns, colObjectField(fieldName, len(fieldNames)))
+	}
+	columns = append(columns, colObjectLocation(len(fieldNames)))
+	return columns
 }
 
 // NewResultsTable creates a new ResultsTable with the given display context and column layout.

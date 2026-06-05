@@ -22,13 +22,45 @@ import (
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
-// printObjectTable prints object results in a tabular format with field columns
+// printObjectTable prints object results using the shared retrieval table.
 func printObjectTable(results []model.Object, sch *schema.Schema) {
 	if len(results) == 0 {
 		return
 	}
 
-	// Get the type definition to determine columns
+	fieldColumns := objectTableFieldColumns(results, sch)
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.ObjectLayout(fieldColumns))
+
+	for i, r := range results {
+		cells := make([]string, 0, len(fieldColumns)+3)
+		cells = append(cells,
+			ui.FormatRowNum(i+1, len(results)),
+			ui.TruncateWithEllipsis(filepath.Base(r.ID), table.GetColumnWidth(1)),
+		)
+
+		for fieldIndex, col := range fieldColumns {
+			valStr := formatFieldValueSimple(r.Fields[col])
+			if valStr == "" {
+				valStr = "-"
+			}
+			cells = append(cells, ui.TruncateWithEllipsis(valStr, table.GetColumnWidth(2+fieldIndex)))
+		}
+
+		location := formatLocationLinkSimpleStyled(r.FilePath, r.LineStart, ui.Muted.Render)
+		cells = append(cells, location)
+
+		table.AddRow(ui.ResultRow{
+			Num:      i + 1,
+			Cells:    cells,
+			Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
+		})
+	}
+
+	fmt.Println(table.Render())
+}
+
+func objectTableFieldColumns(results []model.Object, sch *schema.Schema) []string {
 	var typeDef *schema.TypeDefinition
 	var fieldColumns []string
 	nameField := ""
@@ -47,93 +79,7 @@ func printObjectTable(results []model.Object, sch *schema.Schema) {
 		}
 		sort.Strings(fieldColumns)
 	}
-
-	// Calculate number column width
-	numWidth := len(fmt.Sprintf("%d", len(results)))
-	if numWidth < 2 {
-		numWidth = 2
-	}
-
-	// Calculate column widths
-	nameWidth := 4 // "NAME"
-	fieldWidths := make(map[string]int)
-	locationWidth := 8 // "LOCATION"
-
-	for _, col := range fieldColumns {
-		fieldWidths[col] = len(col)
-	}
-
-	for _, r := range results {
-		name := filepath.Base(r.ID)
-		if len(name) > nameWidth {
-			nameWidth = len(name)
-		}
-
-		loc := formatLocationLinkSimpleStyled(r.FilePath, r.LineStart, ui.Muted.Render)
-		if visible := ui.VisibleLen(loc); visible > locationWidth {
-			locationWidth = visible
-		}
-
-		for _, col := range fieldColumns {
-			valStr := formatFieldValueSimple(r.Fields[col])
-			if len(valStr) > fieldWidths[col] {
-				fieldWidths[col] = len(valStr)
-			}
-		}
-	}
-
-	// Cap widths to prevent overly wide columns (except location)
-	if nameWidth > 25 {
-		nameWidth = 25
-	}
-	for col := range fieldWidths {
-		if fieldWidths[col] > 20 {
-			fieldWidths[col] = 20
-		}
-	}
-	// Don't cap location width - show full paths for navigation
-
-	// Print header with # column
-	header := fmt.Sprintf("%*s", numWidth, "#")
-	divider := strings.Repeat("─", numWidth)
-	header += "  " + fmt.Sprintf("%-*s", nameWidth, "NAME")
-	divider += "  " + strings.Repeat("─", nameWidth)
-	for _, col := range fieldColumns {
-		header += "  " + fmt.Sprintf("%-*s", fieldWidths[col], strings.ToUpper(col))
-		divider += "  " + strings.Repeat("─", fieldWidths[col])
-	}
-	header += "  " + fmt.Sprintf("%-*s", locationWidth, "LOCATION")
-	divider += "  " + strings.Repeat("─", locationWidth)
-
-	fmt.Println(ui.Muted.Render(header))
-	fmt.Println(ui.Muted.Render(divider))
-
-	// Print rows with numbers
-	for i, r := range results {
-		numStr := fmt.Sprintf("%*d", numWidth, i+1)
-		name := filepath.Base(r.ID)
-		if len(name) > nameWidth {
-			name = name[:nameWidth-1] + "…"
-		}
-		row := ui.Muted.Render(numStr) + "  " + fmt.Sprintf("%-*s", nameWidth, name)
-
-		for _, col := range fieldColumns {
-			valStr := formatFieldValueSimple(r.Fields[col])
-			if valStr == "" {
-				valStr = "-"
-			}
-			if len(valStr) > fieldWidths[col] {
-				valStr = valStr[:fieldWidths[col]-1] + "…"
-			}
-			row += "  " + fmt.Sprintf("%-*s", fieldWidths[col], valStr)
-		}
-
-		// Location is not truncated - show full path for easy navigation
-		loc := formatLocationLinkSimpleStyled(r.FilePath, r.LineStart, ui.Muted.Render)
-		row += "  " + loc
-
-		fmt.Println(row)
-	}
+	return fieldColumns
 }
 
 // formatFieldValueSimple formats a field value as a simple string for table display

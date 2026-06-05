@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/schema"
 )
 
 func TestPrintSearchResultsIncludesLocation(t *testing.T) {
@@ -87,5 +88,50 @@ func TestPrintBacklinksAndOutlinksUseQueryStyleLocations(t *testing.T) {
 	}
 	if !strings.Contains(outlinksOut, "note/planning.md:7") {
 		t.Fatalf("expected outlinks output to include query-style location, got: %q", outlinksOut)
+	}
+}
+
+func TestPrintObjectTableIncludesDynamicFieldsAndLocation(t *testing.T) {
+	prevJSON := jsonOutput
+	prevHyperlinksDisabled := hyperlinksDisabled
+	prevHyperlinkEnabled := hyperlinkEnabled
+	jsonOutput = false
+	setHyperlinksDisabled(true)
+	t.Cleanup(func() {
+		jsonOutput = prevJSON
+		hyperlinksDisabled = prevHyperlinksDisabled
+		hyperlinkEnabled = prevHyperlinkEnabled
+	})
+
+	sch := schema.New()
+	sch.Types["project"] = &schema.TypeDefinition{
+		NameField: "name",
+		Fields: map[string]*schema.FieldDefinition{
+			"name":   {Type: schema.FieldTypeString},
+			"owner":  {Type: schema.FieldTypeString},
+			"status": {Type: schema.FieldTypeString},
+		},
+	}
+
+	out := captureStdout(t, func() {
+		printObjectTable([]model.Object{
+			{
+				ID:        "projects/raven",
+				Type:      "project",
+				FilePath:  "projects/raven.md",
+				LineStart: 3,
+				Fields: map[string]interface{}{
+					"name":   "Raven",
+					"owner":  "people/aidan",
+					"status": "active",
+				},
+			},
+		}, sch)
+	})
+
+	for _, want := range []string{"raven", "aidan", "active", "projects/raven.md:3"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected object table output to include %q, got: %q", want, out)
+		}
 	}
 }

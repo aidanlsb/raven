@@ -383,32 +383,53 @@ func isEscapedBacktick(s string, idx int) bool {
 }
 
 func printBacklinksResults(target string, links []model.Reference) {
+	printReferenceResults(
+		"Backlinks to "+target,
+		fmt.Sprintf("No backlinks found for '%s'", target),
+		links,
+		func(link model.Reference) string {
+			displayText := link.SourceID
+			if link.DisplayText != nil {
+				displayText = *link.DisplayText
+			}
+			return displayText
+		},
+	)
+}
+
+func printOutlinksResults(source string, links []model.Reference) {
+	printReferenceResults(
+		"Outlinks from "+source,
+		fmt.Sprintf("No outlinks found for '%s'", source),
+		links,
+		func(link model.Reference) string {
+			target := link.TargetRaw
+			if link.DisplayText != nil && *link.DisplayText != "" && *link.DisplayText != link.TargetRaw {
+				target = fmt.Sprintf("%s (%s)", *link.DisplayText, link.TargetRaw)
+			}
+			return target
+		},
+	)
+}
+
+func printReferenceResults(title, emptyMessage string, links []model.Reference, displayText func(model.Reference) string) {
 	if len(links) == 0 {
-		fmt.Println(ui.Starf("No backlinks found for '%s'", target))
+		fmt.Println(ui.Star(emptyMessage))
 		return
 	}
 
-	fmt.Printf("%s %s\n\n", ui.SectionHeader("Backlinks to "+target), ui.Badge(fmt.Sprintf("%d", len(links))))
+	fmt.Printf("%s %s\n\n", ui.SectionHeader(title), ui.Badge(fmt.Sprintf("%d", len(links))))
 
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.BacklinksLayout())
 
 	for i, link := range links {
-		displayText := link.SourceID
-		if link.DisplayText != nil {
-			displayText = *link.DisplayText
-		}
-
-		line := 0
-		if link.Line != nil {
-			line = *link.Line
-		}
-
+		line := referenceLine(link)
 		location := formatLocationLinkSimpleStyled(link.FilePath, line, ui.Muted.Render)
 
 		table.AddRow(ui.ResultRow{
 			Num:      i + 1,
-			Cells:    []string{ui.FormatRowNum(i+1, len(links)), displayText, location},
+			Cells:    []string{ui.FormatRowNum(i+1, len(links)), displayText(link), location},
 			Location: fmt.Sprintf("%s:%d", link.FilePath, line),
 		})
 	}
@@ -416,36 +437,9 @@ func printBacklinksResults(target string, links []model.Reference) {
 	fmt.Println(table.Render())
 }
 
-func printOutlinksResults(source string, links []model.Reference) {
-	if len(links) == 0 {
-		fmt.Println(ui.Starf("No outlinks found for '%s'", source))
-		return
+func referenceLine(link model.Reference) int {
+	if link.Line == nil {
+		return 0
 	}
-
-	fmt.Printf("%s %s\n\n", ui.SectionHeader("Outlinks from "+source), ui.Badge(fmt.Sprintf("%d", len(links))))
-
-	display := ui.NewDisplayContext()
-	table := ui.NewResultsTable(display, ui.BacklinksLayout())
-
-	for i, link := range links {
-		target := link.TargetRaw
-		if link.DisplayText != nil && *link.DisplayText != "" && *link.DisplayText != link.TargetRaw {
-			target = fmt.Sprintf("%s (%s)", *link.DisplayText, link.TargetRaw)
-		}
-
-		line := 0
-		if link.Line != nil {
-			line = *link.Line
-		}
-
-		location := formatLocationLinkSimpleStyled(link.FilePath, line, ui.Muted.Render)
-
-		table.AddRow(ui.ResultRow{
-			Num:      i + 1,
-			Cells:    []string{ui.FormatRowNum(i+1, len(links)), target, location},
-			Location: fmt.Sprintf("%s:%d", link.FilePath, line),
-		})
-	}
-
-	fmt.Println(table.Render())
+	return *link.Line
 }
