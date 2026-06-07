@@ -10,7 +10,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/importsvc"
-	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -33,10 +32,7 @@ var importCmd = newCanonicalLeafCommand("import", canonicalLeafOptions{
 	SkipFlagBinding: true,
 })
 
-type importMappingConfig = importsvc.MappingConfig
-type importTypeMapping = importsvc.TypeMapping
 type importResult = importsvc.ResultItem
-type importItemConfig = importsvc.ItemConfig
 
 func buildImportArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
 	argsMap := map[string]interface{}{
@@ -75,40 +71,6 @@ func invokeImport(_ *cobra.Command, commandID, vaultPath string, args map[string
 
 func renderImportResult(_ *cobra.Command, result commandexec.Result) error {
 	return renderCanonicalImportResult(result)
-}
-
-func buildMappingConfig(args []string) (*importMappingConfig, error) {
-	cliType := ""
-	if len(args) > 0 {
-		cliType = args[0]
-	}
-	return importsvc.BuildMappingConfig(importsvc.BuildMappingConfigRequest{
-		MappingFilePath: importMapping,
-		CLIType:         cliType,
-		MapFlags:        importMapFlags,
-		Key:             importKey,
-		ContentField:    importContentField,
-	})
-}
-
-func validateMappingTypes(cfg *importMappingConfig, sch *schema.Schema) error {
-	return importsvc.ValidateMappingTypes(cfg, sch)
-}
-
-func resolveItemMapping(item map[string]interface{}, cfg *importMappingConfig, sch *schema.Schema) (*importItemConfig, error) {
-	return importsvc.ResolveItemMapping(item, cfg, sch)
-}
-
-func applyFieldMappings(item map[string]interface{}, fieldMap map[string]string) map[string]interface{} {
-	return importsvc.ApplyFieldMappings(item, fieldMap)
-}
-
-func matchKeyValue(mapped map[string]interface{}, matchKey string) (string, bool) {
-	return importsvc.MatchKeyValue(mapped, matchKey)
-}
-
-func fieldsToStringMap(fields map[string]interface{}, typeName string) map[string]string {
-	return importsvc.FieldsToStringMap(fields, typeName)
 }
 
 // outputImportResults outputs the import results in human-readable or JSON format.
@@ -222,14 +184,6 @@ func renderCanonicalImportResult(result commandexec.Result) error {
 		}
 	}
 	return outputImportResults(results, result.Warnings)
-}
-
-func extractContentField(mapped map[string]interface{}, contentField string) string {
-	return importsvc.ExtractContentField(mapped, contentField)
-}
-
-func replaceBodyContent(fileContent, newBody string) string {
-	return importsvc.ReplaceBodyContent(fileContent, newBody)
 }
 
 func init() {

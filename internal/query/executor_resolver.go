@@ -8,15 +8,6 @@ import (
 	"github.com/aidanlsb/raven/internal/resolver"
 )
 
-// SetResolver injects a resolver for target resolution.
-//
-// This allows callers (CLI/MCP) to provide a canonical resolver that includes
-// aliases and vault-specific settings like daily directory. If not set, the
-// executor will fall back to building a resolver from the objects table.
-func (e *Executor) SetResolver(r *resolver.Resolver) {
-	e.resolver = r
-}
-
 // SetDailyDirectory sets the daily directory used when building a fallback resolver.
 //
 // This matters for date shorthand references like [[2026-01-01]], which resolve to

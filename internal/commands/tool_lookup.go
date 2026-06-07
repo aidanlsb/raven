@@ -8,14 +8,6 @@ var compatibilityToolCommandAliases = map[string]string{
 	"raven_template": "template_list",
 }
 
-func CompatibilityToolCommandAliases() map[string]string {
-	out := make(map[string]string, len(compatibilityToolCommandAliases))
-	for toolName, commandID := range compatibilityToolCommandAliases {
-		out[toolName] = commandID
-	}
-	return out
-}
-
 // ResolveToolCommandID resolves an MCP tool name to a registry command ID.
 //
 // Accepted forms:

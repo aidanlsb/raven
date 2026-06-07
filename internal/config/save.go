@@ -35,11 +35,6 @@ func nonEmptyPtr(value string) *string {
 	return &trimmed
 }
 
-// Save writes the global config to the default config path.
-func Save(cfg *Config) error {
-	return SaveTo(DefaultPath(), cfg)
-}
-
 // SaveTo writes the global config to a specific path atomically.
 func SaveTo(path string, cfg *Config) error {
 	if strings.TrimSpace(path) == "" {

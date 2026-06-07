@@ -157,11 +157,6 @@ func XDGPath() (string, error) {
 	return filepath.Join(home, ".config", "raven", "config.toml"), nil
 }
 
-// CreateDefault creates a default config file if it doesn't exist.
-func CreateDefault() (string, error) {
-	return CreateDefaultAt(DefaultPath())
-}
-
 // CreateDefaultAt creates a default config file at a specific path if it doesn't exist.
 func CreateDefaultAt(path string) (string, error) {
 	configPath := strings.TrimSpace(path)

@@ -9,7 +9,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/dates"
 	"github.com/aidanlsb/raven/internal/model"
-	"github.com/aidanlsb/raven/internal/sqlutil"
 )
 
 // QueryTraits queries traits by type with optional value filter.
@@ -160,65 +159,6 @@ func isDateFilter(filter string) bool {
 		return true
 	}
 	return looksLikeDateLiteral(trimmed)
-}
-
-// QueryTraitsMultiple queries multiple trait types at once.
-// Useful for compound queries like "items with @due AND @status".
-func (d *Database) QueryTraitsMultiple(traitTypes []string) (map[string][]model.Trait, error) {
-	if len(traitTypes) == 0 {
-		return nil, nil
-	}
-
-	inClause, args := sqlutil.InClauseArgs(traitTypes)
-
-	query := fmt.Sprintf(`
-		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
-		FROM traits
-		WHERE trait_type IN (%s)
-	`, inClause)
-
-	rows, err := d.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	results := make(map[string][]model.Trait)
-	for rows.Next() {
-		var result model.Trait
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID); err != nil {
-			return nil, err
-		}
-		results[result.TraitType] = append(results[result.TraitType], result)
-	}
-
-	return results, rows.Err()
-}
-
-// QueryTraitsOnContent finds all traits on the same content (by file and line).
-func (d *Database) QueryTraitsOnContent(filePath string, line int) ([]model.Trait, error) {
-	query := `
-		SELECT id, trait_type, value, content, file_path, line_number, parent_object_id
-		FROM traits
-		WHERE file_path = ? AND line_number = ?
-	`
-
-	rows, err := d.db.Query(query, filePath, line)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []model.Trait
-	for rows.Next() {
-		var result model.Trait
-		if err := rows.Scan(&result.ID, &result.TraitType, &result.Value, &result.Content, &result.FilePath, &result.Line, &result.ParentObjectID); err != nil {
-			return nil, err
-		}
-		results = append(results, result)
-	}
-
-	return results, rows.Err()
 }
 
 // QueryObjects queries objects by type.

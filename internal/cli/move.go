@@ -7,9 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aidanlsb/raven/internal/commandexec"
-	"github.com/aidanlsb/raven/internal/config"
-	"github.com/aidanlsb/raven/internal/objectsvc"
-	"github.com/aidanlsb/raven/internal/resolver"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -118,22 +115,6 @@ func invokeMove(_ *cobra.Command, commandID, vaultPath string, args map[string]i
 		VaultPath: vaultPath,
 		Args:      retryArgs,
 	})
-}
-
-func updateReference(vaultPath string, vaultCfg *config.VaultConfig, sourceID, oldRef, newRef string) error {
-	return objectsvc.UpdateReference(vaultPath, vaultCfg, sourceID, oldRef, newRef)
-}
-
-func updateReferenceAtLine(vaultPath string, vaultCfg *config.VaultConfig, sourceID string, line int, oldRef, newRef string) error {
-	return objectsvc.UpdateReferenceAtLine(vaultPath, vaultCfg, sourceID, line, oldRef, newRef)
-}
-
-func replaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot string) string {
-	return objectsvc.ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot)
-}
-
-func chooseReplacementRefBase(oldBase, sourceID, destID string, aliasSlugToID map[string]string, res *resolver.Resolver) string {
-	return objectsvc.ChooseReplacementRefBase(oldBase, sourceID, destID, aliasSlugToID, res)
 }
 
 func init() {

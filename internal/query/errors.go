@@ -1,7 +1,5 @@
 package query
 
-import "errors"
-
 // ExecutionError represents a user-facing error discovered while executing a query.
 // These should map to query-facing error codes rather than storage/index failures.
 type ExecutionError struct {
@@ -32,12 +30,4 @@ func (e *ExecutionError) Unwrap() error {
 
 func newExecutionError(message, suggestion string, err error) *ExecutionError {
 	return &ExecutionError{Message: message, Suggestion: suggestion, Err: err}
-}
-
-func AsExecutionError(err error) (*ExecutionError, bool) {
-	var execErr *ExecutionError
-	if errors.As(err, &execErr) {
-		return execErr, true
-	}
-	return nil, false
 }

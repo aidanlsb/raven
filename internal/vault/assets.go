@@ -28,11 +28,6 @@ type AssetWalkOptions struct {
 	ExcludeMatcher *ravenignore.Matcher
 }
 
-// WalkAssetFiles walks configured asset roots and calls handler for each asset.
-func WalkAssetFiles(vaultPath string, vaultCfg *config.VaultConfig, handler func(result AssetWalkResult) error) error {
-	return WalkAssetFilesWithOptions(vaultPath, vaultCfg, nil, handler)
-}
-
 // WalkAssetFilesWithOptions walks configured asset roots with custom options.
 func WalkAssetFilesWithOptions(vaultPath string, vaultCfg *config.VaultConfig, opts *AssetWalkOptions, handler func(result AssetWalkResult) error) error {
 	if vaultCfg == nil {

@@ -168,14 +168,6 @@ func ListSectionsFS(docsFS fs.FS, docsRoot string) ([]SectionView, error) {
 	return sections, nil
 }
 
-func ListTopics(configPath, section string) ([]TopicRecord, error) {
-	source, err := LoadGlobalDocsSource(configPath)
-	if err != nil {
-		return nil, err
-	}
-	return ListTopicsFS(source, ".", section)
-}
-
 func ListTopicsFS(docsFS fs.FS, docsRoot, section string) ([]TopicRecord, error) {
 	topics, err := listTopicsFS(docsFS, docsRoot, section)
 	if err != nil {

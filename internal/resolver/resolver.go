@@ -545,21 +545,6 @@ func preferParentOverSections(matches []string) []string {
 	return filtered
 }
 
-// Exists checks if an object ID exists.
-func (r *Resolver) Exists(id string) bool {
-	_, ok := r.objectIDs[id]
-	return ok
-}
-
-// ResolveAll resolves all references and returns a map from raw ref to result.
-func (r *Resolver) ResolveAll(refs []string) map[string]ResolveResult {
-	results := make(map[string]ResolveResult, len(refs))
-	for _, ref := range refs {
-		results[ref] = r.Resolve(ref)
-	}
-	return results
-}
-
 // IDCollision represents a collision between object IDs with the same short name.
 type IDCollision struct {
 	ShortName string   // The short name that collides (e.g., "freya")
@@ -681,15 +666,6 @@ func (r *Resolver) FindAliasCollisions() []AliasCollision {
 	}
 
 	return collisions
-}
-
-// AllObjectIDs returns a slice of all known object IDs.
-func (r *Resolver) AllObjectIDs() []string {
-	ids := make([]string, 0, len(r.objectIDs))
-	for id := range r.objectIDs {
-		ids = append(ids, id)
-	}
-	return ids
 }
 
 func addAliasTarget(aliasMap map[string][]string, alias, targetID string) {

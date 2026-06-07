@@ -14,15 +14,6 @@ func VisibleLen(s string) int {
 	return ansi.StringWidth(s)
 }
 
-// PadRight pads a string to the specified visible width, accounting for ANSI codes
-func PadRight(s string, width int) string {
-	visible := VisibleLen(s)
-	if visible >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-visible)
-}
-
 // Symbols for status indicators
 const (
 	SymbolCheck     = "✓" // Explicit action success (created, added, etc.)
@@ -100,16 +91,6 @@ func FilePath(path string) string {
 	return Bold.Render(path)
 }
 
-// LineNum returns a muted line number
-func LineNum(n int) string {
-	return Muted.Render(fmt.Sprintf("%d", n))
-}
-
-// LineNumPadded returns a muted, right-padded line number
-func LineNumPadded(n int, width int) string {
-	return Muted.Render(fmt.Sprintf("%*d", width, n))
-}
-
 // Hint returns muted hint text
 func Hint(msg string) string {
 	return Muted.Render(msg)
@@ -146,11 +127,6 @@ func pluralize(singular string, count int) string {
 // Divider returns a section divider like "— tasks ————————————————"
 func Divider(label string, width int) string {
 	return dividerWithRender(label, width, Muted.Render)
-}
-
-// AccentDivider returns a section divider rendered with the accent style.
-func AccentDivider(label string, width int) string {
-	return dividerWithRender(label, width, Accent.Render)
 }
 
 // DividerWithAccentLabel renders a divider with muted dashes and an accent label.
@@ -196,16 +172,6 @@ func Badge(text string) string {
 	return Muted.Render("[" + text + "]")
 }
 
-// Metadata returns dot-separated metadata like "status: active · due: 2025-02-15"
-func Metadata(pairs ...string) string {
-	return Muted.Render(strings.Join(pairs, " "+SymbolDot+" "))
-}
-
-// MetadataItem returns a single "key: value" metadata item
-func MetadataItem(key, value string) string {
-	return key + ": " + value
-}
-
 // Bullet returns a bullet-prefixed item string.
 func Bullet(msg string) string {
 	return fmt.Sprintf("%s %s", Muted.Render(SymbolDot), msg)
@@ -214,11 +180,6 @@ func Bullet(msg string) string {
 // Indent returns a string indented by n spaces
 func Indent(n int, text string) string {
 	return strings.Repeat(" ", n) + text
-}
-
-// ResultCount returns a muted result count like "2 results"
-func ResultCount(n int) string {
-	return Muted.Render(fmt.Sprintf("%d %s", n, pluralize("result", n)))
 }
 
 // Trait formats a trait with styling.
@@ -265,9 +226,4 @@ func FieldSet(field, value string) string {
 // FieldAdd formats an added field as "+ field: value"
 func FieldAdd(field, value string) string {
 	return fmt.Sprintf("+ %s: %s", field, Bold.Render(value))
-}
-
-// FieldRemove formats a removed field as "- field: value"
-func FieldRemove(field, value string) string {
-	return fmt.Sprintf("- %s: %s", field, Muted.Render(value))
 }

@@ -1624,33 +1624,6 @@ func (d *Database) GetFileMtime(filePath string) (int64, error) {
 	return mtime.Int64, nil
 }
 
-// IsFileStale checks if a single file needs reindexing.
-// Returns true if the file's current mtime is newer than indexed mtime.
-func (d *Database) IsFileStale(vaultPath, filePath string) (bool, error) {
-	indexedMtime, err := d.GetFileMtime(filePath)
-	if err != nil {
-		return false, err
-	}
-
-	// File not in index - needs indexing
-	if indexedMtime == 0 {
-		return true, nil
-	}
-
-	// Check current file mtime
-	fullPath := filepath.Join(vaultPath, filePath)
-	stat, err := os.Stat(fullPath)
-	if err != nil {
-		// File doesn't exist - consider stale (will be cleaned up)
-		if errors.Is(err, os.ErrNotExist) {
-			return true, nil
-		}
-		return false, err
-	}
-
-	return stat.ModTime().Unix() > indexedMtime, nil
-}
-
 // ReferenceResolutionResult contains statistics about reference resolution.
 type ReferenceResolutionResult struct {
 	Resolved   int // Number of references successfully resolved
@@ -1692,14 +1665,6 @@ func (d *Database) ResolveReferencesWithSchema(dailyDirectory string, sch *schem
 	}
 
 	return result, nil
-}
-
-// ResolveReferencesForFile resolves unresolved references for a single file.
-//
-// This exists to support auto-reindex after CLI mutations without requiring a full
-// vault-wide reference resolution pass.
-func (d *Database) ResolveReferencesForFile(filePath, dailyDirectory string) (*ReferenceResolutionResult, error) {
-	return d.ResolveReferencesForFileWithSchema(filePath, dailyDirectory, nil)
 }
 
 // ResolveReferencesForFileWithSchema resolves unresolved references for a single file

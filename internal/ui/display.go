@@ -33,16 +33,3 @@ func NewDisplayContext() *DisplayContext {
 		IsTTY:     isTTY,
 	}
 }
-
-// NewDisplayContextWithWidth creates a DisplayContext with a fixed width (for testing).
-func NewDisplayContextWithWidth(width int) *DisplayContext {
-	return &DisplayContext{
-		TermWidth: width,
-		IsTTY:     true,
-	}
-}
-
-// AvailableWidth returns the usable width after accounting for left margin.
-func (d *DisplayContext) AvailableWidth(leftMargin int) int {
-	return d.TermWidth - leftMargin
-}

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -27,22 +26,6 @@ func TestWrapTextTwoLinesPreservesUTF8(t *testing.T) {
 	}
 	if line2 != "éééé" {
 		t.Fatalf("expected second line to preserve multibyte characters, got %q", line2)
-	}
-}
-
-func TestTableUsesVisibleWidthForANSIContent(t *testing.T) {
-	t.Parallel()
-
-	table := NewTable(2)
-	table.AddRow("\x1b[31mred\x1b[0m", "ok")
-
-	if table.colWidths[0] != 3 {
-		t.Fatalf("expected ANSI escapes to be ignored when tracking width, got %d", table.colWidths[0])
-	}
-
-	rendered := table.String()
-	if !strings.Contains(rendered, "red") {
-		t.Fatalf("expected rendered table to include cell content, got %q", rendered)
 	}
 }
 

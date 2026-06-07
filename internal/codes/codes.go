@@ -1,8 +1,6 @@
 // Package codes defines Raven's stable, transport-neutral response codes.
 package codes
 
-import "sort"
-
 // ErrorCode is the stable code carried in JSON error envelopes.
 type ErrorCode string
 
@@ -135,24 +133,4 @@ func IsErrorCode(code string) bool {
 func IsWarningCode(code string) bool {
 	_, ok := knownWarningCodes[WarningCode(code)]
 	return ok
-}
-
-// AllErrorCodes returns every documented stable error code.
-func AllErrorCodes() []ErrorCode {
-	out := make([]ErrorCode, 0, len(knownErrorCodes))
-	for code := range knownErrorCodes {
-		out = append(out, code)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
-}
-
-// AllWarningCodes returns every documented stable warning code.
-func AllWarningCodes() []WarningCode {
-	out := make([]WarningCode, 0, len(knownWarningCodes))
-	for code := range knownWarningCodes {
-		out = append(out, code)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
 }

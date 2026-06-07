@@ -6,7 +6,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/aidanlsb/raven/internal/codes"
 	"github.com/aidanlsb/raven/internal/config"
@@ -267,15 +266,4 @@ func DateHub(req DateHubRequest) (*DateHubResult, error) {
 	}
 	result.Backlinks = backlinks
 	return result, nil
-}
-
-func NormalizeDateArgForDisplay(arg string) string {
-	if strings.TrimSpace(arg) == "" {
-		return "today"
-	}
-	return strings.TrimSpace(arg)
-}
-
-func NowWeekday(now time.Time) string {
-	return now.Format("Monday")
 }

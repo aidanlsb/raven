@@ -23,12 +23,6 @@ type ResolveResult struct {
 	MatchSource  string
 }
 
-type ResolveOptions struct {
-	VaultPath    string
-	VaultConfig  *Runtime
-	AllowMissing bool
-}
-
 type AmbiguousRefError struct {
 	Reference    string
 	Matches      []string
@@ -327,22 +321,6 @@ func ResolveReferenceWithDynamicDates(reference string, rt *Runtime, allowDynami
 	}
 	defer op.Close()
 	return op.resolveReferenceWithDynamicDates(reference, allowDynamicMissing)
-}
-
-func ResolveReferenceToFile(reference string, rt *Runtime, allowMissing bool) (string, error) {
-	result, err := ResolveReference(reference, rt, allowMissing)
-	if err != nil {
-		return "", err
-	}
-	return result.FilePath, nil
-}
-
-func ResolveReferenceToObjectID(reference string, rt *Runtime, allowMissing bool) (string, error) {
-	result, err := ResolveReference(reference, rt, allowMissing)
-	if err != nil {
-		return "", err
-	}
-	return result.ObjectID, nil
 }
 
 func tryLiteralPath(reference, vaultPath string, vaultCfg interface {

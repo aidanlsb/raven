@@ -168,15 +168,6 @@ func AppendToFile(
 	return insertedLine, nil
 }
 
-// FileLineCount returns the number of lines in a file.
-func FileLineCount(path string) int {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return 0
-	}
-	return strings.Count(string(content), "\n")
-}
-
 func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *parser.ParseOptions) (int, error) {
 	contentBytes, err := os.ReadFile(destPath)
 	if err != nil {

@@ -475,14 +475,6 @@ func int64Value(raw interface{}) int64 {
 	}
 }
 
-func listDocsSections(docsRoot string) ([]docsSectionView, error) {
-	sections, err := docssvc.ListSectionsFromRoot(docsRoot)
-	if err != nil {
-		return nil, err
-	}
-	return docsSectionsFromService(sections), nil
-}
-
 func loadGlobalDocsSource(configPath string) (fs.FS, error) {
 	return docssvc.LoadGlobalDocsSource(configPath)
 }
@@ -493,14 +485,6 @@ func listDocsSectionsFS(docsFS fs.FS, docsRoot string) ([]docsSectionView, error
 		return nil, err
 	}
 	return docsSectionsFromService(sections), nil
-}
-
-func listDocsTopics(docsRoot, section string) ([]docsTopicRecord, error) {
-	topics, err := docssvc.ListTopicsFromRoot(docsRoot, section)
-	if err != nil {
-		return nil, err
-	}
-	return docsTopicsFromService(topics), nil
 }
 
 func listDocsTopicsFS(docsFS fs.FS, docsRoot, section string) ([]docsTopicRecord, error) {
@@ -535,10 +519,6 @@ func findDocsTopic(topics []docsTopicRecord, raw string) (docsTopicRecord, bool)
 		Path:    found.Path,
 		FSPath:  found.FSPath,
 	}, true
-}
-
-func normalizeDocsPathSlug(input string) string {
-	return docssvc.NormalizePathSlug(input)
 }
 
 func normalizeDocsSegment(input string) string {

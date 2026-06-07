@@ -42,10 +42,6 @@ func IsInvokableCommandID(commandID string) bool {
 	return PolicyForCommandID(commandID).Invokable
 }
 
-func IsDiscoverableCommandID(commandID string) bool {
-	return PolicyForCommandID(commandID).Discoverable
-}
-
 var nonInvokableCommandIDs = map[string]struct{}{
 	"path":        {},
 	"serve":       {},

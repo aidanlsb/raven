@@ -206,12 +206,6 @@ func validateCreateRelPath(relPath, templateDir string, protectedPrefixes []stri
 	return nil
 }
 
-// resolveDefaultPath applies the type's default_path if the target doesn't already have a directory.
-// This is the single source of truth for default_path resolution.
-func resolveDefaultPath(targetPath, typeName string, sch *schema.Schema) string {
-	return resolveDefaultPathWithRoots(targetPath, typeName, sch, "", "")
-}
-
 // resolveDefaultPathWithRoots applies directory roots and type default_path.
 func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot string) string {
 	// Normalize roots
@@ -276,13 +270,6 @@ func resolveDefaultPathWithRoots(targetPath, typeName string, sch *schema.Schema
 	return targetPath
 }
 
-// ResolveTargetPath applies the type's default_path if the target doesn't already have a directory.
-// This is exported for use by other packages that need to compute the resolved path
-// (e.g., for display purposes) without creating the file.
-func ResolveTargetPath(targetPath, typeName string, sch *schema.Schema) string {
-	return resolveDefaultPath(targetPath, typeName, sch)
-}
-
 // ResolveTargetPathWithRoots applies directory roots and type default_path.
 // This is the full resolution including configured directory organization.
 func ResolveTargetPathWithRoots(targetPath, typeName string, sch *schema.Schema, objectsRoot, pagesRoot string) string {
@@ -302,12 +289,6 @@ func Exists(vaultPath, targetPath string) bool {
 	return err == nil
 }
 
-// ExistsWithSchema checks if a page already exists, applying default_path resolution.
-func ExistsWithSchema(vaultPath, targetPath, typeName string, sch *schema.Schema) bool {
-	resolved := resolveDefaultPath(targetPath, typeName, sch)
-	return Exists(vaultPath, resolved)
-}
-
 // SlugifyPath slugifies each component of a path.
 // "people/Sif" -> "people/sif"
 // Also handles embedded object IDs: "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
@@ -318,11 +299,6 @@ func SlugifyPath(path string) string {
 // Slugify converts a string to a URL-safe slug.
 func Slugify(s string) string {
 	return slugs.ComponentSlug(s)
-}
-
-// CreateDailyNote creates a daily note for the given date.
-func CreateDailyNote(vaultPath, dailyDir, dateStr, friendlyTitle string) (*CreateResult, error) {
-	return CreateDailyNoteWithTemplate(vaultPath, dailyDir, dateStr, friendlyTitle, "", "", nil)
 }
 
 // CreateDailyNoteWithSchema creates a daily note using schema-driven template resolution.

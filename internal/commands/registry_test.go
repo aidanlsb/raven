@@ -138,17 +138,12 @@ func TestCheckFixMetadataListsSupportedFixes(t *testing.T) {
 	}
 }
 
-// TestCobraCommandGeneration verifies Cobra command generation works.
-func TestCobraCommandGeneration(t *testing.T) {
+func TestUsageForMetaUsesExplicitQueryUsage(t *testing.T) {
 	t.Parallel()
-	// Test a command with args and flags
-	cmd := GenerateCobraCommand("query", nil)
-	if cmd == nil {
-		t.Fatal("GenerateCobraCommand returned nil for 'query'")
-	}
 
-	if cmd.Use != "query <query_string|saved-query> [inputs...]" {
-		t.Errorf("Use = %q, want explicit query usage", cmd.Use)
+	meta := Registry["query"]
+	if got := UsageForMeta("query", meta); got != "query <query_string|saved-query> [inputs...]" {
+		t.Errorf("UsageForMeta(query) = %q, want explicit query usage", got)
 	}
 
 	// Check query_string remains required on the runnable query command.
@@ -164,53 +159,39 @@ func TestCobraCommandGeneration(t *testing.T) {
 	}
 }
 
-// TestCobraCommandWithNoArgs verifies commands with no args work.
-func TestCobraCommandWithNoArgs(t *testing.T) {
+func TestUsageForMetaDerivesNoArgCommandUsage(t *testing.T) {
 	t.Parallel()
-	cmd := GenerateCobraCommand("vault_stats", nil)
-	if cmd == nil {
-		t.Fatal("GenerateCobraCommand returned nil for 'vault_stats'")
-	}
 
-	if cmd.Use != "vault stats" {
-		t.Errorf("Use = %q, want 'vault stats'", cmd.Use)
+	meta := Registry["vault_stats"]
+	if got := UsageForMeta("vault_stats", meta); got != "vault stats" {
+		t.Errorf("UsageForMeta(vault_stats) = %q, want 'vault stats'", got)
 	}
 }
 
-// TestCobraCommandWithOptionalArgs verifies optional args are handled.
-func TestCobraCommandWithOptionalArgs(t *testing.T) {
+func TestUsageForMetaDerivesOptionalArgs(t *testing.T) {
 	t.Parallel()
-	cmd := GenerateCobraCommand("date", nil)
-	if cmd == nil {
-		t.Fatal("GenerateCobraCommand returned nil for 'date'")
-	}
 
-	// date has optional [date] arg
-	if cmd.Use != "date [date]" {
-		t.Errorf("Use = %q, want 'date [date]'", cmd.Use)
+	meta := Registry["date"]
+	if got := UsageForMeta("date", meta); got != "date [date]" {
+		t.Errorf("UsageForMeta(date) = %q, want 'date [date]'", got)
 	}
 }
 
-func TestCobraCommandUsesExplicitUsageWhenPresent(t *testing.T) {
+func TestUsageForMetaUsesExplicitUsageWhenPresent(t *testing.T) {
 	t.Parallel()
-	cmd := GenerateCobraCommand("set", nil)
-	if cmd == nil {
-		t.Fatal("GenerateCobraCommand returned nil for 'set'")
-	}
 
-	if cmd.Use != "set <object-id> <field=value>..." {
-		t.Errorf("Use = %q, want explicit set usage", cmd.Use)
+	meta := Registry["set"]
+	if got := UsageForMeta("set", meta); got != "set <object-id> <field=value>..." {
+		t.Errorf("UsageForMeta(set) = %q, want explicit set usage", got)
 	}
 }
 
-// TestAllCommandsGeneratable verifies all registry commands can generate Cobra commands.
-func TestAllCommandsGeneratable(t *testing.T) {
+func TestAllCommandsHaveUsage(t *testing.T) {
 	t.Parallel()
 	for name := range Registry {
 		t.Run(name, func(t *testing.T) {
-			cmd := GenerateCobraCommand(name, nil)
-			if cmd == nil {
-				t.Errorf("GenerateCobraCommand returned nil for %q", name)
+			if got := UsageForMeta(name, Registry[name]); got == "" {
+				t.Errorf("UsageForMeta(%q) returned empty usage", name)
 			}
 		})
 	}

@@ -85,56 +85,6 @@ func (e *UnknownFieldMutationError) Details() map[string]interface{} {
 	return details
 }
 
-func PrepareValidatedFieldMutation(
-	objectType string,
-	existingFields map[string]schema.FieldValue,
-	updates map[string]string,
-	sch *schema.Schema,
-	allowedUnknown map[string]bool,
-	refCtx *RefValidationContext,
-) (map[string]schema.FieldValue, map[string]string, []string, error) {
-	normalizedType := normalizeMutationType(objectType)
-	fieldDefs := fieldDefsForObjectType(sch, normalizedType)
-	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
-
-	parsedUpdates := make(map[string]schema.FieldValue, len(resolvedUpdates))
-	for fieldName, value := range resolvedUpdates {
-		parsedUpdates[fieldName] = parseFieldValueToSchema(value)
-	}
-
-	validatedUpdates, warnings, err := PrepareValidatedFieldMutationValues(normalizedType, existingFields, parsedUpdates, sch, allowedUnknown, refCtx)
-	if err != nil {
-		return nil, nil, warnings, err
-	}
-
-	return validatedUpdates, resolvedUpdates, warnings, nil
-}
-
-func PrepareValidatedFrontmatterMutation(
-	content string,
-	fm *parser.Frontmatter,
-	objectType string,
-	updates map[string]string,
-	sch *schema.Schema,
-	allowedUnknown map[string]bool,
-	refCtx *RefValidationContext,
-) (string, map[string]string, []string, error) {
-	normalizedType := normalizeMutationType(objectType)
-	fieldDefs := fieldDefsForObjectType(sch, normalizedType)
-	resolvedUpdates := resolveDateKeywordsForUpdates(updates, fieldDefs)
-	typedUpdates := make(map[string]schema.FieldValue, len(resolvedUpdates))
-	for key, value := range resolvedUpdates {
-		typedUpdates[key] = parseFieldValueToSchema(value)
-	}
-
-	newContent, warnings, err := PrepareValidatedFrontmatterMutationValues(content, fm, normalizedType, typedUpdates, sch, allowedUnknown, refCtx)
-	if err != nil {
-		return "", nil, warnings, err
-	}
-
-	return newContent, resolvedUpdates, warnings, nil
-}
-
 func PrepareValidatedFieldMutationValues(
 	objectType string,
 	existingFields map[string]schema.FieldValue,
@@ -355,74 +305,12 @@ func fieldDefsForObjectType(sch *schema.Schema, objectType string) map[string]*s
 	return typeDef.Fields
 }
 
-func resolveDateKeywordsForUpdates(updates map[string]string, fieldDefs map[string]*schema.FieldDefinition) map[string]string {
-	if fieldDefs == nil {
-		return updates
-	}
-
-	resolved := make(map[string]string, len(updates))
-	for field, value := range updates {
-		resolved[field] = resolveDateKeywordForFieldValue(value, fieldDefs[field])
-	}
-	return resolved
-}
-
-func resolveDateKeywordForFieldValue(value string, fieldDef *schema.FieldDefinition) string {
-	if fieldDef == nil {
-		return value
-	}
-
-	switch fieldDef.Type {
-	case schema.FieldTypeDate:
-		if resolved, ok := resolveRelativeDateKeyword(value); ok {
-			return resolved
-		}
-	case schema.FieldTypeDateArray:
-		if resolved, ok := resolveDateKeywordList(value); ok {
-			return resolved
-		}
-	}
-
-	return value
-}
-
 func resolveRelativeDateKeyword(value string) (string, bool) {
 	resolved, ok := dates.ResolveRelativeDateKeyword(value, time.Now(), time.Monday)
 	if !ok || resolved.Kind != dates.RelativeDateInstant {
 		return "", false
 	}
 	return resolved.Date.Format(dates.DateLayout), true
-}
-
-func resolveDateKeywordList(value string) (string, bool) {
-	trimmed := strings.TrimSpace(value)
-	if !strings.HasPrefix(trimmed, "[") || !strings.HasSuffix(trimmed, "]") {
-		return "", false
-	}
-
-	inner := strings.TrimSpace(trimmed[1 : len(trimmed)-1])
-	if inner == "" {
-		return "", false
-	}
-
-	parts := strings.Split(inner, ",")
-	changed := false
-	for i, part := range parts {
-		part = strings.TrimSpace(part)
-		unquoted := strings.Trim(part, `"'`)
-		if resolved, ok := resolveRelativeDateKeyword(unquoted); ok {
-			parts[i] = resolved
-			changed = true
-		} else {
-			parts[i] = part
-		}
-	}
-
-	if !changed {
-		return "", false
-	}
-
-	return "[" + strings.Join(parts, ", ") + "]", true
 }
 
 func parseFieldValueToSchema(value string) schema.FieldValue {

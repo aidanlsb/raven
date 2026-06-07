@@ -21,13 +21,3 @@ func ResolveCommandID(path string) (string, bool) {
 
 	return "", false
 }
-
-// LookupMetaByPath resolves a CLI command path and returns the registry metadata.
-func LookupMetaByPath(path string) (string, Meta, bool) {
-	id, ok := ResolveCommandID(path)
-	if !ok {
-		return "", Meta{}, false
-	}
-	meta, ok := Registry[id]
-	return id, meta, ok
-}

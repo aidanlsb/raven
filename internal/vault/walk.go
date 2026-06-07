@@ -154,12 +154,6 @@ func CollectDocuments(vaultPath string) ([]*parser.ParsedDocument, []WalkResult,
 	return docs, errors, err
 }
 
-// ResolveObjectToFile resolves an object ID to an absolute file path.
-// Supports exact matches and slugified matching (e.g., "people/Sif" -> "people/sif.md").
-func ResolveObjectToFile(vaultPath, objectID string) (string, error) {
-	return ResolveObjectToFileWithRoots(vaultPath, objectID, "", "")
-}
-
 // ResolveObjectToFileWithConfig resolves a reference/object ID to an absolute file path,
 // using vault directory roots when configured.
 func ResolveObjectToFileWithConfig(vaultPath, ref string, vaultCfg *config.VaultConfig) (string, error) {

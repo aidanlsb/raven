@@ -108,25 +108,6 @@ func effectiveAddHeadingSpec() string {
 	return strings.TrimSpace(addHeadingFlag)
 }
 
-func parseHeadingTextFromSpec(spec string) (string, bool) {
-	trimmed := strings.TrimSpace(spec)
-	if !strings.HasPrefix(trimmed, "#") {
-		return "", false
-	}
-	i := 0
-	for i < len(trimmed) && trimmed[i] == '#' {
-		i++
-	}
-	if i == 0 || i >= len(trimmed) || trimmed[i] != ' ' {
-		return "", false
-	}
-	headingText := strings.TrimSpace(trimmed[i:])
-	if headingText == "" {
-		return "", false
-	}
-	return headingText, true
-}
-
 func buildCreateObjectCommand(typeName, targetRaw string) string {
 	title := filepath.Base(strings.TrimSpace(targetRaw))
 	if title == "" || title == "." || title == "/" {
