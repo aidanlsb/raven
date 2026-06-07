@@ -403,16 +403,14 @@ Subcommands:
 Rename type updates:
 1. Type definition key in schema.yaml
 2. All 'type:' frontmatter fields
-3. All ::type() embedded declarations
-4. All ref field targets pointing to the old type
+3. All ref field targets pointing to the old type
 
 Rename field updates:
 1. Field key in schema.yaml for the target type
 2. If name_field == old_field, updates it to new_field
 3. Type templates referencing {{field.old_field}} (template files)
 4. Object frontmatter keys for files with type:<type>
-5. Field keys inside ::type(...) declarations (only for that type)
-6. Saved queries in raven.yaml (best-effort for type:<type> queries)
+5. Saved queries in raven.yaml (best-effort for type:<type> queries)
 
 By default, previews changes. Use --confirm to apply.
 When type default_path clearly matches the type name, you can also rename

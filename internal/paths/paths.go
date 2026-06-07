@@ -2,7 +2,7 @@
 //   - Converting between vault-relative markdown file paths (e.g. "objects/people/freya.md")
 //     and Raven object IDs (e.g. "people/freya")
 //   - Validating paths are within the vault (security)
-//   - Parsing embedded object IDs (e.g. "file#section")
+//   - Parsing section/fragment IDs (e.g. "file#section")
 //
 // It also centralizes directory-root handling (objects/pages roots) so that
 // parsing, CLI operations, watching, and resolution stay consistent.
@@ -169,11 +169,11 @@ func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) strin
 	return EnsureMDExtension(id)
 }
 
-// ParseEmbeddedID parses an object ID that may contain an embedded fragment.
+// ParseEmbeddedID parses an object ID that may contain a section fragment.
 // For IDs like "file#section", it returns (fileID, fragment, true).
 // For IDs without a fragment, it returns (id, "", false).
 //
-// This is the canonical function for parsing embedded object IDs.
+// This is the canonical function for parsing section/fragment IDs.
 // Use this instead of manually calling strings.SplitN(id, "#", 2).
 func ParseEmbeddedID(id string) (fileID, fragment string, isEmbedded bool) {
 	if idx := strings.Index(id, "#"); idx >= 0 {

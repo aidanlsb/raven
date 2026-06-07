@@ -61,7 +61,7 @@ rvn query "type:project .status==archived" --apply "set priority=" --confirm
 
 ### Behavior
 
-- Works on both file-level and embedded objects
+- Works on file-level objects only
 - Fields are validated against the schema
 - New fields can be added (if allowed by schema)
 
@@ -108,7 +108,7 @@ rvn query "type:meeting" --apply "add See also: [[project/website]]" --confirm
 
 ### Behavior
 
-- Only works on file-level objects (embedded objects are skipped)
+- Only works on file-level objects (section IDs are skipped)
 - Text is appended to the end of the file
 - Respects the file's existing formatting
 
@@ -131,7 +131,7 @@ rvn query "type:date" --ids | head -100 | rvn delete --stdin --confirm
 ### Behavior
 
 - Files are moved to `.trash/` by default (configurable)
-- Only works on file-level objects (embedded objects are skipped)
+- Only works on file-level objects (section IDs are skipped)
 - Does NOT automatically update backlinks
 
 **Warning:** Always check backlinks before deleting:
@@ -163,7 +163,7 @@ rvn query "type:person .role==contractor" --apply "move contractor/" --confirm
 ### Behavior
 
 - Destination must end with `/` (it's a directory)
-- Only works on file-level objects (embedded objects are skipped)
+- Only works on file-level objects (section IDs are skipped)
 - References are updated automatically
 - Creates destination directory if needed
 
@@ -220,7 +220,7 @@ rvn query "type:person" --ids | grep "team-" | rvn set --stdin department=engine
 
 | Command | Behavior |
 |---------|----------|
-| `rvn set` | Set fields on each object (file-level and embedded) |
+| `rvn set` | Set fields on each object (file-level only) |
 | `rvn update` | Update each trait value (trait IDs only; also supports repeated `--trait-id`) |
 | `rvn add` | Append text to each file (file-level only) |
 | `rvn delete` | Delete each object (file-level only) |
@@ -239,17 +239,17 @@ Full path like `person/freya`:
 - All operations work
 - Can be deleted, moved, have text appended
 
-### Embedded Objects
+### Section IDs
 
 Path with fragment like `project/website#tasks`:
 
-- `set` works (updates the type declaration)
-- `add`, `delete`, `move` skip these objects
+- Object mutation commands skip these IDs because sections are derived from Markdown headings, not editable schema objects
+- Use `rvn add --to project/website#tasks ...` when you want to append content inside a section
 
-When running bulk operations, embedded objects are skipped with a note in the preview:
+When running bulk operations, section IDs are skipped with a note in the preview:
 
 ```
-Skipping embedded object: project/website#tasks (use set for embedded objects)
+Skipping section ID: project/website#tasks (bulk object mutations only support file-level objects)
 ```
 
 ---

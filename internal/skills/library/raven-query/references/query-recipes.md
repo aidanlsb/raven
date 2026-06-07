@@ -10,12 +10,12 @@ rvn query 'type:project .status==active' --limit 20 --json
 rvn query 'type:project .status==active' --ids --json
 ```
 
-## References and hierarchy
+## References and scope
 
 ```bash
 rvn query 'type:meeting refs([[project/website]])' --json
-rvn query 'type:meeting parent(type:date)' --json
-rvn query 'type:project encloses(trait:todo .value==todo)' --json
+rvn query 'section within(type:project .status==active)' --json
+rvn query 'type:project contains(trait:todo .value==todo)' --json
 ```
 
 ## Assets
@@ -45,7 +45,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --json
 rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json
 ```
 
-In each pair, the first command previews the bulk change and the second applies it after approval. Asset queries do not support `--apply`.
+In each pair, the first command previews the bulk change and the second applies it after approval. Section and asset queries do not support `--apply`.
 
 ## Saved query lifecycle
 

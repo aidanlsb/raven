@@ -112,6 +112,30 @@ func printQueryAssetResults(queryStr string, results []model.Asset) {
 	fmt.Println(table.Render())
 }
 
+func printQuerySectionResults(queryStr string, results []model.Section) {
+	if len(results) == 0 {
+		fmt.Println(ui.Starf("No sections found for: %s", queryStr))
+		return
+	}
+
+	fmt.Printf("%s %s\n\n", ui.SectionHeader("section"), ui.Badge(fmt.Sprintf("%d", len(results))))
+
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.SearchLayout())
+
+	for i, r := range results {
+		meta := fmt.Sprintf("h%d #%s", r.Level, r.Slug)
+		location := formatLocationLinkSimpleStyled(r.FilePath, r.LineStart, ui.Muted.Render)
+		table.AddRow(ui.ResultRow{
+			Num:      i + 1,
+			Cells:    []string{ui.FormatRowNum(i+1, len(results)), ui.TruncateWithEllipsis(r.Title, table.GetColumnWidth(1)), meta, location},
+			Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
+		})
+	}
+
+	fmt.Println(table.Render())
+}
+
 func pipeItemsForObjectResults(results []model.Object) []PipeableItem {
 	pipeItems := make([]PipeableItem, len(results))
 	for i, r := range results {
@@ -137,6 +161,19 @@ func pipeItemsForAssetResults(results []model.Asset) []PipeableItem {
 			ID:       r.ID,
 			Content:  content,
 			Location: formatAssetSize(r.SizeBytes),
+		}
+	}
+	return pipeItems
+}
+
+func pipeItemsForSectionResults(results []model.Section) []PipeableItem {
+	pipeItems := make([]PipeableItem, len(results))
+	for i, r := range results {
+		pipeItems[i] = PipeableItem{
+			Num:      i + 1,
+			ID:       r.ID,
+			Content:  r.Title,
+			Location: fmt.Sprintf("%s:%d", r.FilePath, r.LineStart),
 		}
 	}
 	return pipeItems

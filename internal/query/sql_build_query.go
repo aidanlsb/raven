@@ -80,6 +80,24 @@ func (e *Executor) buildAssetWhereClause(q *Query) (string, []interface{}, error
 	return strings.Join(conditions, " AND "), args, nil
 }
 
+func (e *Executor) buildSectionWhereClause(q *Query) (string, []interface{}, error) {
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "1=1")
+
+	if q.Predicate != nil {
+		cond, predArgs, err := e.buildSectionPredicateSQL(q.Predicate, "s")
+		if err != nil {
+			return "", nil, err
+		}
+		conditions = append(conditions, cond)
+		args = append(args, predArgs...)
+	}
+
+	return strings.Join(conditions, " AND "), args, nil
+}
+
 func (e *Executor) buildObjectPageSQL(q *Query, limit, offset int) (string, []interface{}, error) {
 	whereClause, args, err := e.buildObjectWhereClause(q)
 	if err != nil {
@@ -211,6 +229,51 @@ func (e *Executor) buildAssetCountSQL(q *Query) (string, []interface{}, error) {
 	sqlStr := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM assets a
+		WHERE %s
+	`, whereClause)
+	return sqlStr, args, nil
+}
+
+func (e *Executor) buildSectionPageSQL(q *Query, limit, offset int) (string, []interface{}, error) {
+	whereClause, args, err := e.buildSectionWhereClause(q)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlStr := fmt.Sprintf(`
+		SELECT s.id, s.file_object_id, s.file_path, s.slug, s.title, s.level, s.line_start, s.line_end, s.parent_section_id
+		FROM sections s
+		WHERE %s
+		ORDER BY s.file_path, s.line_start
+	`, whereClause)
+
+	sqlStr, args = appendLimitOffset(sqlStr, args, limit, offset)
+	return sqlStr, args, nil
+}
+
+func (e *Executor) buildSectionIDSQL(q *Query, limit, offset int) (string, []interface{}, error) {
+	whereClause, args, err := e.buildSectionWhereClause(q)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlStr := fmt.Sprintf(`
+		SELECT s.id
+		FROM sections s
+		WHERE %s
+		ORDER BY s.file_path, s.line_start
+	`, whereClause)
+
+	sqlStr, args = appendLimitOffset(sqlStr, args, limit, offset)
+	return sqlStr, args, nil
+}
+
+func (e *Executor) buildSectionCountSQL(q *Query) (string, []interface{}, error) {
+	whereClause, args, err := e.buildSectionWhereClause(q)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlStr := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM sections s
 		WHERE %s
 	`, whereClause)
 	return sqlStr, args, nil

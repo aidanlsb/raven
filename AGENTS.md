@@ -35,7 +35,7 @@ If requested behavior is not unambiguous, stop and ask a clarifying question ins
 ### Key Invariants
 
 - Markdown files are the only durable data store. The SQLite index is always rebuildable.
-- Object IDs are derived from file paths (plus `#fragment` for embedded objects/sections).
+- Object IDs are derived from file paths; section IDs use `#fragment`.
 - Schema drives indexing: undefined traits are not indexed; unknown frontmatter keys are validation errors.
 - The command registry (`internal/commands/registry.go`) is the single source of truth for command metadata, shared by both CLI and MCP.
 

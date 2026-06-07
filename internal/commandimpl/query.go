@@ -44,7 +44,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 	}
 
 	if isSavedQuery && !isFullQueryString(resolvedQuery) {
-		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', or 'asset'", queryName), nil, "")
+		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', 'section', or 'asset'", queryName), nil, "")
 	}
 
 	sch, err := schema.Load(vaultPath)
@@ -114,7 +114,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		key := "type"
 		if result.QueryKind == "trait" {
 			key = "trait"
-		} else if result.QueryKind == "asset" {
+		} else if result.QueryKind == "asset" || result.QueryKind == "section" {
 			return commandexec.Success(map[string]interface{}{
 				"query_kind": result.QueryKind,
 				"total":      result.Total,
@@ -172,6 +172,22 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		return commandexec.Success(data, meta)
 	}
 
+	if result.QueryKind == "section" {
+		meta.Count = result.Returned
+		data := map[string]interface{}{
+			"query_kind": "section",
+			"items":      sectionQueryItems(result),
+			"total":      result.Total,
+			"returned":   result.Returned,
+			"offset":     result.Offset,
+			"limit":      result.Limit,
+		}
+		if isSavedQuery && queryName != "" {
+			data["saved_query"] = queryName
+		}
+		return commandexec.Success(data, meta)
+	}
+
 	meta.Count = result.Returned
 	data := map[string]interface{}{
 		"query_kind": "trait",
@@ -190,12 +206,12 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 }
 
 func handleQueryApply(ctx context.Context, req commandexec.Request, result *readsvc.ExecuteQueryResult, applyArgs []string, queryTimeMs int64) commandexec.Result {
-	if result.QueryKind == "asset" {
+	if result.QueryKind == "asset" || result.QueryKind == "section" {
 		return commandexec.Failure(
 			"INVALID_INPUT",
-			"--apply is not supported for asset queries",
+			fmt.Sprintf("--apply is not supported for %s queries", result.QueryKind),
 			nil,
-			"Use --ids to pass asset paths to an asset-aware command",
+			"Use --ids and pass results to a compatible command",
 		)
 	}
 
@@ -341,7 +357,7 @@ func resolveQueryString(queryString string, rawInputs interface{}, vaultCfg *con
 	}
 
 	trimmed := strings.TrimSpace(queryString)
-	if isAssetQueryString(trimmed) {
+	if isAssetQueryString(trimmed) || isSectionQueryString(trimmed) {
 		return queryString, "", false, nil
 	}
 	var tokens []string
@@ -419,6 +435,25 @@ func assetQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{
 	return items
 }
 
+func sectionQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{} {
+	items := make([]map[string]interface{}, len(result.Sections))
+	for i, row := range result.Sections {
+		items[i] = map[string]interface{}{
+			"num":               result.Offset + i + 1,
+			"id":                row.ID,
+			"file_object_id":    row.FileObjectID,
+			"file_path":         row.FilePath,
+			"slug":              row.Slug,
+			"title":             row.Title,
+			"level":             row.Level,
+			"line_start":        row.LineStart,
+			"line_end":          row.LineEnd,
+			"parent_section_id": row.ParentSectionID,
+		}
+	}
+	return items
+}
+
 func mapExecuteQueryFailure(queryString string, err error) commandexec.Result {
 	var validationErr *query.ValidationError
 	if errors.As(err, &validationErr) {
@@ -460,12 +495,17 @@ func mapQuerySvcFailure(err error) commandexec.Result {
 
 func isFullQueryString(queryString string) bool {
 	trimmed := strings.TrimSpace(queryString)
-	return strings.HasPrefix(trimmed, "type:") || strings.HasPrefix(trimmed, "trait:") || isAssetQueryString(trimmed)
+	return strings.HasPrefix(trimmed, "type:") || strings.HasPrefix(trimmed, "trait:") || isAssetQueryString(trimmed) || isSectionQueryString(trimmed)
 }
 
 func isAssetQueryString(queryString string) bool {
 	trimmed := strings.TrimSpace(queryString)
 	return trimmed == "asset" || strings.HasPrefix(trimmed, "asset ")
+}
+
+func isSectionQueryString(queryString string) bool {
+	trimmed := strings.TrimSpace(queryString)
+	return trimmed == "section" || strings.HasPrefix(trimmed, "section ")
 }
 
 // HandleQuerySavedList executes the canonical `query_saved_list` command.

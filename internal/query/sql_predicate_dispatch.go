@@ -8,6 +8,7 @@ const (
 	predicateKindObject predicateKind = iota
 	predicateKindTrait
 	predicateKindAsset
+	predicateKindSection
 )
 
 func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, typeName string) (string, []interface{}, error) {
@@ -39,6 +40,9 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 		if kind == predicateKindTrait {
 			return e.buildTraitContentPredicateSQL(p, alias)
 		}
+		if kind == predicateKindSection {
+			return e.buildContentPredicateSQL(p, alias)
+		}
 		return e.buildContentPredicateSQL(p, alias)
 	case *RefsPredicate:
 		if kind == predicateKindAsset {
@@ -47,6 +51,9 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 		if kind == predicateKindTrait {
 			return e.buildTraitRefsPredicateSQL(p, alias)
 		}
+		if kind == predicateKindSection {
+			return e.buildRefsPredicateSQL(p, alias)
+		}
 		return e.buildRefsPredicateSQL(p, alias)
 	case *StringFuncPredicate:
 		if kind == predicateKindAsset {
@@ -54,6 +61,9 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 		}
 		if kind == predicateKindTrait {
 			return e.buildTraitStringFuncPredicateSQL(p, alias)
+		}
+		if kind == predicateKindSection {
+			return e.buildSectionStringFuncPredicateSQL(p, alias)
 		}
 		return e.buildStringFuncPredicateSQL(p, alias)
 
@@ -69,6 +79,9 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 			}
 			return "", nil, fmt.Errorf("unsupported trait field predicate: .%s (only .value is allowed for traits)", p.Field)
 		}
+		if kind == predicateKindSection {
+			return e.buildSectionFieldPredicateSQL(p, alias)
+		}
 		return e.buildFieldPredicateSQL(p, alias, typeName)
 	case *ArrayQuantifierPredicate:
 		if kind == predicateKindAsset {
@@ -82,48 +95,24 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 		if kind == predicateKindAsset {
 			return "", nil, fmt.Errorf("has() predicate is not valid for asset queries")
 		}
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
+		if kind != predicateKindObject && kind != predicateKindSection {
+			return "", nil, fmt.Errorf("unsupported predicate type for has(): %T", pred)
 		}
 		return e.buildHasPredicateSQL(p, alias)
-	case *ParentPredicate:
+	case *InPredicate:
 		if kind == predicateKindAsset {
-			return "", nil, fmt.Errorf("hierarchy predicates are not valid for asset queries")
+			return "", nil, fmt.Errorf("scope predicates are not valid for asset queries")
 		}
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
+		if kind == predicateKindObject {
+			return "", nil, fmt.Errorf("in() is not valid for root object queries")
 		}
-		return e.buildParentPredicateSQL(p, alias)
-	case *AncestorPredicate:
-		if kind == predicateKindAsset {
-			return "", nil, fmt.Errorf("hierarchy predicates are not valid for asset queries")
-		}
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
-		}
-		return e.buildAncestorPredicateSQL(p, alias)
-	case *ChildPredicate:
-		if kind == predicateKindAsset {
-			return "", nil, fmt.Errorf("hierarchy predicates are not valid for asset queries")
-		}
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
-		}
-		return e.buildChildPredicateSQL(p, alias)
-	case *DescendantPredicate:
-		if kind == predicateKindAsset {
-			return "", nil, fmt.Errorf("hierarchy predicates are not valid for asset queries")
-		}
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
-		}
-		return e.buildDescendantPredicateSQL(p, alias)
+		return e.buildInPredicateSQL(p, alias, kind)
 	case *ContainsPredicate:
 		if kind == predicateKindAsset {
-			return "", nil, fmt.Errorf("encloses() predicate is not valid for asset queries")
+			return "", nil, fmt.Errorf("contains() predicate is not valid for asset queries")
 		}
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
+		if kind != predicateKindObject && kind != predicateKindSection {
+			return "", nil, fmt.Errorf("unsupported predicate type for contains(): %T", pred)
 		}
 		return e.buildContainsPredicateSQL(p, alias)
 
@@ -136,22 +125,14 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 			return "", nil, fmt.Errorf("unsupported object predicate type: %T", pred)
 		}
 		return e.buildValuePredicateSQL(p, alias)
-	case *OnPredicate:
-		if kind == predicateKindAsset {
-			return "", nil, fmt.Errorf("trait-location predicates are not valid for asset queries")
-		}
-		if kind != predicateKindTrait {
-			return "", nil, fmt.Errorf("unsupported object predicate type: %T", pred)
-		}
-		return e.buildOnPredicateSQL(p, alias)
 	case *WithinPredicate:
 		if kind == predicateKindAsset {
-			return "", nil, fmt.Errorf("trait-location predicates are not valid for asset queries")
+			return "", nil, fmt.Errorf("scope predicates are not valid for asset queries")
 		}
-		if kind != predicateKindTrait {
-			return "", nil, fmt.Errorf("unsupported object predicate type: %T", pred)
+		if kind == predicateKindObject {
+			return "", nil, fmt.Errorf("within() is not valid for root object queries")
 		}
-		return e.buildWithinPredicateSQL(p, alias)
+		return e.buildWithinPredicateSQL(p, alias, kind)
 	case *AtPredicate:
 		if kind == predicateKindAsset {
 			return "", nil, fmt.Errorf("trait-location predicates are not valid for asset queries")
@@ -180,6 +161,10 @@ func (e *Executor) buildObjectPredicateSQL(pred Predicate, alias, typeName strin
 // buildTraitPredicateSQL builds SQL for a trait predicate.
 func (e *Executor) buildTraitPredicateSQL(pred Predicate, alias string) (string, []interface{}, error) {
 	return e.buildPredicateSQL(predicateKindTrait, pred, alias, "")
+}
+
+func (e *Executor) buildSectionPredicateSQL(pred Predicate, alias string) (string, []interface{}, error) {
+	return e.buildPredicateSQL(predicateKindSection, pred, alias, "")
 }
 
 // buildAssetPredicateSQL builds SQL for an asset predicate.

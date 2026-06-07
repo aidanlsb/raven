@@ -48,6 +48,8 @@ func (v *Validator) validateQuery(q *Query) error {
 		return v.validateObjectQuery(q)
 	case QueryTypeAsset:
 		return v.validateAssetQuery(q)
+	case QueryTypeSection:
+		return v.validateSectionQuery(q)
 	default:
 		return v.validateTraitQuery(q)
 	}
@@ -101,6 +103,13 @@ func (v *Validator) validateAssetQuery(q *Query) error {
 	return v.validateAssetPredicate(q.Predicate)
 }
 
+func (v *Validator) validateSectionQuery(q *Query) error {
+	if q.Predicate == nil {
+		return nil
+	}
+	return v.validateSectionPredicate(q.Predicate)
+}
+
 func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typeDef *schema.TypeDefinition) error {
 	switch p := pred.(type) {
 	case *FieldPredicate:
@@ -110,23 +119,6 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 	case *ArrayQuantifierPredicate:
 		return v.validateArrayQuantifierPredicate(p, typeName, typeDef)
 	case *HasPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-	case *ParentPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-		// Target-based predicate doesn't need schema validation
-	case *AncestorPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-	case *ChildPredicate:
-		if p.SubQuery != nil {
-			return v.validateQuery(p.SubQuery)
-		}
-	case *DescendantPredicate:
 		if p.SubQuery != nil {
 			return v.validateQuery(p.SubQuery)
 		}
@@ -156,15 +148,15 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 			Message:    "value predicate is only valid for trait queries",
 			Suggestion: "Use .value==X in trait queries, or use .field==X for type fields",
 		}
-	case *OnPredicate:
+	case *InPredicate:
 		return &ValidationError{
-			Message:    "on() predicate is only valid for trait queries",
-			Suggestion: "Use on(type:...) in trait queries",
+			Message:    "in() predicate is only valid for trait and section queries",
+			Suggestion: "Use in(type:...) or in(section ...) on traits or sections",
 		}
 	case *WithinPredicate:
 		return &ValidationError{
-			Message:    "within() predicate is only valid for trait queries",
-			Suggestion: "Use within(type:...) in trait queries",
+			Message:    "within() predicate is only valid for trait and section queries",
+			Suggestion: "Use within(type:...) or within(section ...) on traits or sections",
 		}
 	case *AtPredicate:
 		// at: is only valid for trait queries
@@ -202,14 +194,14 @@ func (v *Validator) validateTraitPredicate(pred Predicate, traitName string) err
 			}
 			return &ValidationError{
 				Message:    fmt.Sprintf("string functions on trait queries only support .value, got %s", fieldLabel),
-				Suggestion: `Use contains(.value, "..."), startswith(.value, "..."), endswith(.value, "..."), or matches(.value, "..."). Use content("...") to search trait line content.`,
+				Suggestion: `Use includes(.value, "..."), startswith(.value, "..."), endswith(.value, "..."), or matches(.value, "..."). Use content("...") to search trait line content.`,
 			}
 		}
 		if err := validateRegexPattern(p); err != nil {
 			return err
 		}
 		return nil
-	case *OnPredicate:
+	case *InPredicate:
 		if p.SubQuery != nil {
 			return v.validateQuery(p.SubQuery)
 		}
@@ -259,33 +251,13 @@ func (v *Validator) validateTraitPredicate(pred Predicate, traitName string) err
 		return v.validateTraitArrayQuantifierPredicate(p, traitName)
 	case *HasPredicate:
 		return &ValidationError{
-			Message:    "has() predicate is only valid for type queries",
-			Suggestion: "Use has(trait:...) in type queries",
+			Message:    "has() predicate is only valid for type and section queries",
+			Suggestion: "Use has(trait:...) or has(section ...) in type and section queries",
 		}
 	case *ContainsPredicate:
 		return &ValidationError{
-			Message:    "encloses() predicate is only valid for type queries",
-			Suggestion: "Use encloses(trait:...) in type queries",
-		}
-	case *ParentPredicate:
-		return &ValidationError{
-			Message:    "parent: predicate is only valid for type queries",
-			Suggestion: "Use parent(type:...) in type queries",
-		}
-	case *AncestorPredicate:
-		return &ValidationError{
-			Message:    "ancestor: predicate is only valid for type queries",
-			Suggestion: "Use ancestor(type:...) in type queries",
-		}
-	case *ChildPredicate:
-		return &ValidationError{
-			Message:    "child: predicate is only valid for type queries",
-			Suggestion: "Use child(type:...) in type queries",
-		}
-	case *DescendantPredicate:
-		return &ValidationError{
-			Message:    "descendant: predicate is only valid for type queries",
-			Suggestion: "Use descendant(type:...) in type queries",
+			Message:    "contains() predicate is only valid for type and section queries",
+			Suggestion: "Use contains(trait:...) or contains(section ...) in type and section queries",
 		}
 	case *OrPredicate:
 		for _, subPred := range p.Predicates {
@@ -361,15 +333,15 @@ func (v *Validator) validateAssetPredicate(pred Predicate) error {
 		}
 	case *ContainsPredicate:
 		return &ValidationError{
-			Message:    "encloses() predicate is not valid for asset queries",
-			Suggestion: "Assets do not contain Raven objects or traits",
+			Message:    "contains() predicate is not valid for asset queries",
+			Suggestion: "Assets do not contain Raven sections or traits",
 		}
-	case *ParentPredicate, *AncestorPredicate, *ChildPredicate, *DescendantPredicate:
+	case *InPredicate, *WithinPredicate:
 		return &ValidationError{
-			Message:    "hierarchy predicates are not valid for asset queries",
-			Suggestion: "Assets are path-backed resources, not schema objects in an object hierarchy",
+			Message:    "scope predicates are not valid for asset queries",
+			Suggestion: "Assets are path-backed resources, not markdown scopes",
 		}
-	case *OnPredicate, *WithinPredicate, *AtPredicate:
+	case *AtPredicate:
 		return &ValidationError{
 			Message:    "trait-location predicates are not valid for asset queries",
 			Suggestion: "Use asset refd(trait:...) to find assets referenced by matching trait lines",
@@ -390,6 +362,99 @@ func (v *Validator) validateAssetPredicate(pred Predicate) error {
 	case *GroupPredicate:
 		for _, subPred := range p.Predicates {
 			if err := v.validateAssetPredicate(subPred); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (v *Validator) validateSectionPredicate(pred Predicate) error {
+	switch p := pred.(type) {
+	case *FieldPredicate:
+		if _, ok := sectionFieldColumn("s", p.Field); !ok {
+			return &ValidationError{
+				Message:    fmt.Sprintf("section has no field '%s'", p.Field),
+				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, parent_section_id",
+			}
+		}
+	case *StringFuncPredicate:
+		if p.IsElementRef {
+			return &ValidationError{
+				Message:    "string function placeholder '_' is not valid for section queries",
+				Suggestion: `Use includes(.title, "..."), startswith(.slug, "..."), or matches(.file_path, "...")`,
+			}
+		}
+		if _, ok := sectionFieldColumn("s", p.Field); !ok {
+			return &ValidationError{
+				Message:    fmt.Sprintf("section has no field '%s'", p.Field),
+				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, parent_section_id",
+			}
+		}
+		if isNumericSectionField(p.Field) {
+			return &ValidationError{
+				Message:    fmt.Sprintf("string function predicates are not valid for numeric section field '.%s'", p.Field),
+				Suggestion: "Use comparison predicates for numeric section fields",
+			}
+		}
+		return validateRegexPattern(p)
+	case *InPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *WithinPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *HasPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *ContainsPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *RefsPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *RefdPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *ContentPredicate:
+		if p.SearchTerm == "" {
+			return &ValidationError{
+				Message:    "content search term cannot be empty",
+				Suggestion: `Provide a search term: content("search terms")`,
+			}
+		}
+	case *ArrayQuantifierPredicate:
+		return &ValidationError{
+			Message:    "array predicates are not valid for section queries",
+			Suggestion: "Sections only expose scalar built-in fields",
+		}
+	case *ValuePredicate:
+		return &ValidationError{
+			Message:    "value predicates are not valid for section queries",
+			Suggestion: "Use section fields such as .title, .slug, or .level",
+		}
+	case *AtPredicate:
+		return &ValidationError{
+			Message:    "at() predicate is only valid for trait queries",
+			Suggestion: "Use at(trait:...) to find traits co-located with other traits",
+		}
+	case *OrPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validateSectionPredicate(subPred); err != nil {
+				return err
+			}
+		}
+	case *NotPredicate:
+		return v.validateSectionPredicate(p.Inner)
+	case *GroupPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validateSectionPredicate(subPred); err != nil {
 				return err
 			}
 		}
@@ -419,7 +484,7 @@ func (v *Validator) validateAssetStringFuncPredicate(p *StringFuncPredicate) err
 	if p.IsElementRef {
 		return &ValidationError{
 			Message:    "string function placeholder '_' is not valid for asset queries",
-			Suggestion: `Use contains(.filename, "..."), startswith(.file_path, "..."), or startswith(.media_type, "...")`,
+			Suggestion: `Use includes(.filename, "..."), startswith(.file_path, "..."), or startswith(.media_type, "...")`,
 		}
 	}
 	fieldType, ok := assetFieldTypes[p.Field]
@@ -442,7 +507,7 @@ func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, ty
 	if p.IsElementRef {
 		return &ValidationError{
 			Message:    "string function placeholder '_' is only valid inside any()/all()/none()",
-			Suggestion: `Use contains(.field, "..."), startswith(.field, "..."), endswith(.field, "..."), or matches(.field, "...") for type fields.`,
+			Suggestion: `Use includes(.field, "..."), startswith(.field, "..."), endswith(.field, "..."), or matches(.field, "...") for type fields.`,
 		}
 	}
 
@@ -454,7 +519,7 @@ func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, ty
 	if isArrayFieldType(fieldDef.Type) {
 		return &ValidationError{
 			Message:    fmt.Sprintf("string function predicates require a scalar field, but '.%s' is %s", p.Field, fieldDef.Type),
-			Suggestion: fmt.Sprintf(`Use any(.%s, contains(_, "...")) for array fields`, p.Field),
+			Suggestion: fmt.Sprintf(`Use any(.%s, includes(_, "...")) for array fields`, p.Field),
 		}
 	}
 
@@ -503,7 +568,7 @@ func (v *Validator) validateArrayElementPredicate(pred Predicate, elemType schem
 		if !p.IsElementRef {
 			return &ValidationError{
 				Message:    "array element string functions must use '_' as the first argument",
-				Suggestion: `Use contains(_, "..."), startswith(_, "..."), endswith(_, "..."), or matches(_, "...")`,
+				Suggestion: `Use includes(_, "..."), startswith(_, "..."), endswith(_, "..."), or matches(_, "...")`,
 			}
 		}
 		if !isStringLikeFieldType(elemType) {
@@ -535,7 +600,7 @@ func (v *Validator) validateArrayElementPredicate(pred Predicate, elemType schem
 	default:
 		return &ValidationError{
 			Message:    fmt.Sprintf("unsupported array element predicate type %T", pred),
-			Suggestion: `Use _==value, _!=value, or string functions like contains(_, "...")`,
+			Suggestion: `Use _==value, _!=value, or string functions like includes(_, "...")`,
 		}
 	}
 }

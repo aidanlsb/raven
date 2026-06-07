@@ -291,6 +291,9 @@ func ReclassifyByReference(req ReclassifyByReferenceRequest) (*ReclassifyResult,
 	if err != nil {
 		return nil, err
 	}
+	if resolved.IsSection {
+		return nil, newError(ErrorInvalidInput, "reclassify only supports file-level objects", "Use a file-level object ID without a section fragment", nil, nil)
+	}
 
 	return Reclassify(ReclassifyRequest{
 		VaultPath:    req.VaultPath,

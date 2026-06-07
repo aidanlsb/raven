@@ -26,7 +26,7 @@ func TestExtractRefs(t *testing.T) {
 			wantLn:  []int{1, 2},
 		},
 		{
-			name:    "embedded object ref",
+			name:    "section fragment ref",
 			content: "See [[daily/2025-02-01#standup]] for details",
 			want:    []string{"daily/2025-02-01#standup"},
 			wantLn:  []int{1},

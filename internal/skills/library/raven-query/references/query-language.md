@@ -3,6 +3,7 @@
 ## Query roots
 
 - Object query: `type:<type> [predicates...]`
+- Section query: `section [predicates...]`
 - Trait query: `trait:<name> [predicates...]`
 - Asset query: `asset [predicates...]`
 
@@ -10,29 +11,30 @@ Examples:
 
 ```text
 type:project .status==active
+section .title==Tasks
 trait:due .value<today
 asset .extension==pdf
 ```
 
-Every query returns exactly one result kind: objects, traits, or assets. Use `rvn schema`, `rvn schema type <name>`, and `rvn schema trait <name>` to verify local names before writing specific predicates.
+Every query returns exactly one result kind: objects, sections, traits, or assets. Use `rvn schema`, `rvn schema type <name>`, and `rvn schema trait <name>` to verify local names before writing specific predicates.
 
 ## Scalar predicates
 
 - Equality and inequality: `.field==value`, `.field!=value`
 - Comparisons: `.field<value`, `.field<=value`, `.field>value`, `.field>=value`
 - Presence: `exists(.field)`, `!exists(.field)`
-- Scalar membership: `in(.field, [a,b,"quoted",[[target]]])`
+- Scalar membership: `oneof(.field, [a,b,"quoted",[[target]]])`
 
 Values can be bare identifiers, quoted strings, or wikilink references. `.field==*` is not supported; use `exists(.field)`.
 
 ## String predicates
 
-- `contains(.field, "text")`
+- `includes(.field, "text")`
 - `startswith(.field, "prefix")`
 - `endswith(.field, "suffix")`
 - `matches(.field, "pattern")` or `matches(.field, /pattern/)`
 
-String functions are case-insensitive by default. Add `true` as the third argument for case-sensitive matching, for example `contains(.name, "API", true)`.
+String functions are case-insensitive by default. Add `true` as the third argument for case-sensitive matching, for example `includes(.name, "API", true)`.
 
 Use string predicates on scalar string-like type fields, trait `.value`, and string asset fields. For array fields, use `any()`/`all()`/`none()` with `_`.
 
@@ -53,16 +55,17 @@ Element predicates support `_ == value`, `_ != value`, comparisons, string funct
 Type queries support field predicates plus:
 
 - `has(trait:...)`: matching trait directly on the object
-- `encloses(trait:...)`: matching trait on the object or descendants
-- `parent(...)`, `ancestor(...)`, `child(...)`, `descendant(...)`
+- `has(section...)`: matching section directly under the object
+- `contains(trait:...)`: matching trait recursively in the section tree
+- `contains(section...)`: matching section recursively in the section tree
 - `refs(...)`: object references a target or matching type query
 - `refd(...)`: object is referenced by a target, matching type query, or matching trait query
 - `content("term")`: full-text content search within objects
 
-Navigation predicates accept nested type queries, wikilinks, or unambiguous target shorthands:
+Scope predicates accept nested type/section queries, wikilinks, or unambiguous target shorthands:
 
 ```text
-type:meeting parent(type:date)
+section within(type:project)
 type:meeting refs([[project/website]])
 type:project refd(type:meeting)
 type:project has(trait:todo .value==todo)
@@ -72,8 +75,8 @@ type:project has(trait:todo .value==todo)
 
 Trait queries support `.value` predicates plus:
 
-- `on(...)`: trait is directly on a matching object
-- `within(...)`: trait is within a matching object subtree
+- `in(...)`: trait is directly on a matching object or section scope
+- `within(...)`: trait is within a matching object or section scope
 - `at(trait:...)`: trait is co-located with a matching trait on the same line
 - `refs(...)`: trait line references a target or matching type query
 - `content("term")`: term appears in the trait line
@@ -89,7 +92,7 @@ trait:tags any(.value, _ == "raven")
 trait:reviewers any(.value, _ == [[person/freya]])
 ```
 
-`refd(...)`, `has(...)`, hierarchy predicates, and arbitrary fields other than `.value` are not valid on trait queries.
+`refd(...)`, `has(...)`, downward scope predicates, and arbitrary fields other than `.value` are not valid on trait queries.
 
 ## Asset-query predicates
 
@@ -106,7 +109,7 @@ Examples:
 
 ```text
 asset .extension==pdf
-asset in(.extension, [jpg,jpeg,png,webp,gif,svg])
+asset oneof(.extension, [jpg,jpeg,png,webp,gif,svg])
 asset startswith(.media_type, "image/")
 asset startswith(.file_path, "assets/screenshots/")
 asset .size_bytes>1048576
@@ -114,7 +117,7 @@ asset refd(type:project .status==active)
 asset refd(trait:todo .value==todo)
 ```
 
-Asset queries support scalar predicates, string predicates on string asset fields, boolean composition, and `refd(...)`. Assets do not support `refs(...)`, `has(...)`, `content(...)`, trait-location predicates, hierarchy predicates, or array predicates.
+Asset queries support scalar predicates, string predicates on string asset fields, boolean composition, and `refd(...)`. Assets do not support `refs(...)`, `has(...)`, `content(...)`, scope predicates, or array predicates.
 
 ## Boolean composition
 
@@ -150,5 +153,5 @@ type:date .date>=2026-05-01 .date<=today
 
 - Object queries support `--apply "set ..."`, `add`, `delete`, and `move`.
 - Trait queries support only `--apply "update <new_value>"`.
-- Asset queries do not support `--apply`.
+- Section and asset queries do not support `--apply`.
 - All apply flows preview first; add `--confirm` to execute.

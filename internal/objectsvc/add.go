@@ -18,7 +18,7 @@ import (
 	"github.com/aidanlsb/raven/internal/vault"
 )
 
-// ResolveAddHeadingTarget resolves an add --heading spec to an embedded target object ID.
+// ResolveAddHeadingTarget resolves an add --heading spec to a section ID.
 func ResolveAddHeadingTarget(
 	vaultPath string,
 	destPath string,
@@ -41,17 +41,17 @@ func ResolveAddHeadingTarget(
 	}
 
 	prefix := fileObjectID + "#"
-	candidates := make([]*parser.ParsedObject, 0, len(doc.Objects))
-	for _, obj := range doc.Objects {
-		if obj == nil {
+	candidates := make([]*parser.ParsedSection, 0, len(doc.Sections))
+	for _, section := range doc.Sections {
+		if section == nil {
 			continue
 		}
-		if strings.HasPrefix(obj.ID, prefix) {
-			candidates = append(candidates, obj)
+		if strings.HasPrefix(section.ID, prefix) {
+			candidates = append(candidates, section)
 		}
 	}
 	if len(candidates) == 0 {
-		return "", newError(ErrorRefNotFound, fmt.Sprintf("target file has no embedded sections: %s", fileObjectID), "Use an existing section slug/id or heading text", nil, nil)
+		return "", newError(ErrorRefNotFound, fmt.Sprintf("target file has no sections: %s", fileObjectID), "Use an existing section slug/id or heading text", nil, nil)
 	}
 
 	if headingText, ok := parseHeadingTextFromSpec(spec); ok {
@@ -64,9 +64,9 @@ func ResolveAddHeadingTarget(
 		if !strings.HasPrefix(spec, prefix) {
 			return "", newError(ErrorInvalidInput, fmt.Sprintf("section %q does not belong to %s", spec, fileObjectID), "Use a section ID from the target file or change --to", nil, nil)
 		}
-		for _, obj := range candidates {
-			if obj.ID == spec {
-				return obj.ID, nil
+		for _, section := range candidates {
+			if section.ID == spec {
+				return section.ID, nil
 			}
 		}
 		return "", newError(ErrorRefNotFound, fmt.Sprintf("section not found: %s", spec), "Use an existing section slug/id or heading text", nil, nil)
@@ -76,9 +76,9 @@ func ResolveAddHeadingTarget(
 	if fragment == "" {
 		return "", newError(ErrorInvalidInput, "section fragment cannot be empty", "Pass a non-empty section slug or ID", nil, nil)
 	}
-	for _, obj := range candidates {
-		if strings.TrimPrefix(obj.ID, prefix) == fragment {
-			return obj.ID, nil
+	for _, section := range candidates {
+		if strings.TrimPrefix(section.ID, prefix) == fragment {
+			return section.ID, nil
 		}
 	}
 	return "", newError(ErrorRefNotFound, fmt.Sprintf("section fragment not found: %s", fragment), "Use an existing section slug/id or heading text", nil, nil)
@@ -181,10 +181,10 @@ func appendWithinObject(vaultPath, destPath, line, objectID string, parseOpts *p
 		return 0, newError(ErrorInvalidInput, "failed to parse target file", "Fix the target file content and try again", nil, err)
 	}
 
-	var target *parser.ParsedObject
-	for _, obj := range doc.Objects {
-		if obj != nil && obj.ID == objectID {
-			target = obj
+	var target *parser.ParsedSection
+	for _, section := range doc.Sections {
+		if section != nil && section.ID == objectID {
+			target = section
 			break
 		}
 	}
@@ -301,19 +301,19 @@ func appendedLineNumber(content []byte) int {
 	return lineCount + 1
 }
 
-func resolveSectionByHeadingText(candidates []*parser.ParsedObject, headingText string) (string, error) {
+func resolveSectionByHeadingText(candidates []*parser.ParsedSection, headingText string) (string, error) {
 	text := strings.TrimSpace(headingText)
 	if text == "" {
 		return "", newError(ErrorInvalidInput, "heading text cannot be empty", "Pass a non-empty heading", nil, nil)
 	}
 
 	matches := make([]string, 0, 2)
-	for _, obj := range candidates {
-		if obj == nil || obj.Heading == nil {
+	for _, section := range candidates {
+		if section == nil {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(*obj.Heading), text) {
-			matches = append(matches, obj.ID)
+		if strings.EqualFold(strings.TrimSpace(section.Title), text) {
+			matches = append(matches, section.ID)
 		}
 	}
 

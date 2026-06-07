@@ -112,7 +112,7 @@ More content.
 		}
 	})
 
-	t.Run("detects type declarations after headings", func(t *testing.T) {
+	t.Run("treats legacy type declarations as ordinary text", func(t *testing.T) {
 		content := "# Weekly Standup\n::meeting(time=09:00)\n\nMeeting notes.\n"
 
 		result, err := ExtractFromAST([]byte(content), 1)
@@ -125,10 +125,8 @@ More content.
 		}
 
 		headingLine := result.Headings[0].Line
-		if decl, ok := result.TypeDecls[headingLine]; !ok {
-			t.Error("type declaration not found for heading")
-		} else if decl.TypeName != "meeting" {
-			t.Errorf("type = %q, want meeting", decl.TypeName)
+		if _, ok := result.TypeDecls[headingLine]; ok {
+			t.Error("type declaration should not be extracted")
 		}
 	})
 

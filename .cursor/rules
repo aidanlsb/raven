@@ -46,7 +46,7 @@ Prefer explicit configuration and behavior over implicit "magic":
 - **Good**: User defines types in `schema.yaml`, those are the available types
 - **Bad**: Auto-detecting types based on content patterns without user configuration
 - **Good**: IDs auto-generated from slugified heading text (consistent with sections, documented, predictable)
-- **Good**: Optional `id=` override for explicit `::type()` declarations when users need custom IDs
+- **Good**: File-backed object IDs and heading-derived section IDs are documented and predictable
 - **Bad**: Undocumented auto-generation that users can't predict or override
 
 Configuration should be discoverable and documented. A user reading `schema.yaml` should understand exactly what types and traits are available.
@@ -55,7 +55,7 @@ Configuration should be discoverable and documented. A user reading `schema.yaml
 
 The type/object/trait syntax must be:
 
-- **Visually distinct**: `::type()` for objects, `@trait` or `@trait(value)` for traits, `[[ref]]` for links
+- **Visually distinct**: YAML frontmatter for file-backed objects, `@trait` or `@trait(value)` for traits, `[[ref]]` for links
 - **Predictable**: Same syntax always means the same thing
 - **Non-conflicting**: Syntax should not collide with common markdown patterns
 - **Parseable**: Regular expressions or simple parsers can extract elements reliably

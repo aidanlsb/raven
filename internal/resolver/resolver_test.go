@@ -50,14 +50,14 @@ func TestResolver(t *testing.T) {
 		}
 	})
 
-	t.Run("resolve embedded object", func(t *testing.T) {
+	t.Run("resolve section", func(t *testing.T) {
 		result := r.Resolve("daily/2025-02-01#standup")
 		if result.TargetID != "daily/2025-02-01#standup" {
 			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-02-01#standup")
 		}
 	})
 
-	t.Run("short name for embedded object", func(t *testing.T) {
+	t.Run("short name for section", func(t *testing.T) {
 		result := r.Resolve("standup")
 		if result.TargetID != "daily/2025-02-01#standup" {
 			t.Errorf("got %q, want %q", result.TargetID, "daily/2025-02-01#standup")

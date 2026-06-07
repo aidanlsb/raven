@@ -201,7 +201,7 @@ func TestParseStringFunctions(t *testing.T) {
 	}{
 		{
 			name:  "contains on field",
-			input: `type:project contains(.name, "api")`,
+			input: `type:project includes(.name, "api")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				if q.Predicate == nil {
 					t.Fatal("expected predicate, got nil")
@@ -226,7 +226,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "contains case sensitive",
-			input: `type:project contains(.name, "API", true)`,
+			input: `type:project includes(.name, "API", true)`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if !sfp.CaseSensitive {
@@ -293,7 +293,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "negated contains",
-			input: `type:project !contains(.name, "test")`,
+			input: `type:project !includes(.name, "test")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				sfp := q.Predicate.(*StringFuncPredicate)
 				if !sfp.Negated() {
@@ -303,7 +303,7 @@ func TestParseStringFunctions(t *testing.T) {
 		},
 		{
 			name:  "multiple string functions",
-			input: `type:project contains(.name, "api") endswith(.name, "-service")`,
+			input: `type:project includes(.name, "api") endswith(.name, "-service")`,
 			checkFunc: func(t *testing.T, q *Query) {
 				if q.Predicate == nil {
 					t.Fatal("expected predicate, got nil")
@@ -404,7 +404,7 @@ func TestParseArrayQuantifiers(t *testing.T) {
 		},
 		{
 			name:  "any with contains",
-			input: `type:project any(.tags, contains(_, "api"))`,
+			input: `type:project any(.tags, includes(_, "api"))`,
 			checkFunc: func(t *testing.T, q *Query) {
 				aqp := q.Predicate.(*ArrayQuantifierPredicate)
 				sfp := aqp.ElementPred.(*StringFuncPredicate)

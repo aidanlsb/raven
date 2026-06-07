@@ -1,6 +1,6 @@
 # File Format Reference
 
-Raven object files are plain markdown with optional YAML frontmatter and optional embedded type declarations. Non-Markdown files under the configured asset root are assets, not object files.
+Raven object files are plain markdown with optional YAML frontmatter. Non-Markdown files under the configured asset root are assets, not object files.
 
 ## File Structure Overview
 
@@ -15,12 +15,10 @@ status: active
 Project description...
 
 ## Tasks
-::section()
 
 - @todo Finish homepage
 
 ## Standup
-::meeting(time=09:00, attendees=[[[person/freya]], [[person/thor]]])
 
 Meeting notes...
 ```
@@ -61,21 +59,19 @@ Assets are non-Markdown files under `directories.assets` in `raven.yaml`. Asset 
 | `assets/pdfs/paper.pdf` | `assets/pdfs/paper.pdf` |
 | `assets/photos/diagram.png` | `assets/photos/diagram.png` |
 
-Assets are graph resources, not schema object types. They do not have YAML frontmatter, embedded sections, traits, templates, or user-defined fields. Raven derives asset metadata from the filesystem and index.
+Assets are graph resources, not schema object types. They do not have YAML frontmatter, sections, traits, templates, or user-defined fields. Raven derives asset metadata from the filesystem and index.
 
-### Embedded Objects
+### Sections
 
-Embedded objects (sections and `::type()` declarations) have IDs that combine the file ID with a fragment:
+Sections are immutable Markdown heading regions. Section IDs combine the file object ID with a heading-derived fragment:
 
 ```
 <file-id>#<fragment>
 ```
 
-| Object | ID |
-|--------|-----|
+| Section | ID |
+|---------|-----|
 | `## Tasks` in `project/website.md` | `project/website#tasks` |
-| `## Weekly Standup` with `::meeting(...)` | `project/website#weekly-standup` |
-| `## Tasks` with `::section(id=my-tasks)` | `project/website#my-tasks` |
 
 ---
 
@@ -155,7 +151,7 @@ These keys are always allowed regardless of type:
 | Key | Description |
 |-----|-------------|
 | `type` | Object type (defaults to `page` if omitted) |
-| `id` | Explicit object ID (primarily for embedded objects) |
+| `id` | Explicit object ID override for the file-backed object |
 | `alias` | Alternative name for reference resolution |
 
 ### Field Values
@@ -191,7 +187,7 @@ The `alias` reserved key lets any object define an alternative name for referenc
 
 ## Sections
 
-Every markdown heading creates a `section` object automatically (unless overridden by `::type()`).
+Every markdown heading creates a section automatically.
 
 ```markdown
 # Main Title
@@ -228,87 +224,9 @@ Section nesting follows heading levels. A `##` section is a child of the precedi
 ## Section 1.2        → parent: chapter-1
 ```
 
-Use `parent:`, `ancestor:`, `child:`, `descendant:` predicates to query this hierarchy.
+Use `in(...)`, `within(...)`, `has(...)`, and `contains(...)` predicates to query section scope.
 
----
-
-## Embedded Type Declarations
-
-The `::type` syntax declares a typed item embedded within a file.
-
-### Syntax
-
-```
-::typename                              # shorthand (no fields)
-::typename()                            # explicit empty (no fields)
-::typename(field=value, field=value, ...) # with fields
-```
-
-Must appear on the line **immediately after** a heading:
-
-```markdown
-## Weekly Standup
-::meeting(time=09:00, attendees=[[[person/freya]]])
-
-Meeting notes go here...
-```
-
-### Rules
-
-1. The `::type()` line must be directly after the heading (no blank lines)
-2. The heading becomes an item of the specified type (not a `section`)
-3. The item ID is `<file-id>#<slug>` where slug comes from the heading text
-4. Use `id=custom-id` to override the slug
-
-### Field Value Syntax
-
-| Type | Syntax | Example |
-|------|--------|---------|
-| String | bare or quoted | `title=Hello`, `title="Hello, World"` |
-| Number | bare | `priority=3`, `score=9.5` |
-| Boolean | `true`/`false` | `active=true` |
-| Date | YYYY-MM-DD | `due=2026-02-15` |
-| Datetime | YYYY-MM-DDTHH:MM | `time=2026-01-10T09:00` |
-| Reference | `[[id]]` | `owner=[[person/freya]]` |
-| Array | `[item, item]` | `tags=[web, frontend]` |
-| Ref Array | `[[[id]], [[id]]]` | `attendees=[[[person/freya]], [[person/thor]]]` |
-
-### Examples
-
-**Simple meeting:**
-
-```markdown
-## Team Sync
-::meeting(time=09:00)
-```
-
-**With multiple fields:**
-
-```markdown
-## Project Kickoff
-::meeting(time=14:00, attendees=[[[person/freya]], [[person/thor]]], important=true)
-```
-
-**Custom ID:**
-
-```markdown
-## Long Heading That Would Make a Verbose Slug
-::task(id=task-1, status=todo)
-```
-
-This creates ID `file-id#task-1` instead of slugifying the heading.
-
-**Empty declaration (just sets type):**
-
-```markdown
-## Design Notes
-::section
-
-## Another Section
-::section()
-```
-
-Both `::section` and `::section()` are equivalent - parentheses are optional when there are no fields.
+Legacy `::type(...)` lines are treated as ordinary Markdown text. They do not create objects, set section types, override IDs, or add fields.
 
 ---
 
@@ -319,12 +237,12 @@ Wiki-style links connect objects, sections, and assets across your vault:
 ```markdown
 [[person/freya]]                   # Basic reference
 [[person/freya|Freya]]             # With display text
-[[project/website#tasks]]         # To a section or embedded object
+[[project/website#tasks]]         # To a section
 [[2026-01-10]]                     # Date reference (daily note)
 [[assets/pdfs/paper.pdf]]          # Asset reference
 ```
 
-Object references can appear in markdown body content, frontmatter `ref`/`ref[]` fields, and embedded type declarations.
+Object references can appear in markdown body content and frontmatter `ref`/`ref[]` fields.
 
 Vault-relative Markdown links and images to non-Markdown files are indexed as asset references:
 
@@ -393,10 +311,10 @@ Traits are associated with the nearest containing object (the section or file th
 - @highlight Key insight     ← Associated with "file#notes" section
 ```
 
-Query with `on(...)` (direct parent) or `within(...)` (any ancestor):
+Query with `in(...)` (direct scope) or `within(...)` (recursive scope):
 
 ```
-trait:todo on(type:section .title=="Tasks")
+trait:todo in(section .title=="Tasks")
 trait:highlight within(type:project .status==active)
 ```
 
@@ -424,14 +342,12 @@ Project lead: [[person/freya]]
 Goals and objectives...
 
 ## Tasks
-::section()
 
 - @todo Design new homepage
 - @todo(done) Set up development environment
 - @due(2026-02-01) @priority(high) Finalize color palette
 
 ## Weekly Standup
-::meeting(time=09:00, attendees=[[[person/freya]], [[person/thor]]])
 
 ### Agenda
 
@@ -451,12 +367,12 @@ Goals and objectives...
 
 This creates:
 - File object: `project/website` (type: `project`)
-- Section: `project/website#overview` (type: `section`)
-- Section: `project/website#tasks` (type: `section`, from `::section()`)
-- Embedded object: `project/website#weekly-standup` (type: `meeting`)
-- Section: `project/website#agenda` (type: `section`, parent: weekly-standup)
-- Section: `project/website#notes` (type: `section`, parent: weekly-standup)
-- Section: `project/website#references` (type: `section`)
+- Section: `project/website#overview`
+- Section: `project/website#tasks`
+- Section: `project/website#weekly-standup`
+- Section: `project/website#agenda` (parent: weekly-standup)
+- Section: `project/website#notes` (parent: weekly-standup)
+- Section: `project/website#references`
 
 Plus traits:
 - `@todo` on `#tasks`
@@ -467,6 +383,5 @@ Plus traits:
 
 And references:
 - `[[person/freya]]` (in body and frontmatter)
-- `[[person/thor]]` (in meeting attendees)
 - `[[project/brand-guidelines]]`
 - `[[company/acme]]`

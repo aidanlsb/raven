@@ -77,19 +77,6 @@ Raven has three built-in types that always exist:
 
 Built-in types cannot be redefined. Your custom types (`project`, `meeting`, `person`, etc.) provide the domain model on top of this foundation. See `types-and-traits/schema.md` for the full reference.
 
-### Embedded types
-
-You can turn a heading into a typed item without splitting it into a separate file by adding a `::type(...)` declaration on the line immediately after the heading:
-
-```markdown
-## Weekly Standup
-::meeting(time=09:00, attendees=[[[person/freya]], [[person/thor]]])
-
-Meeting notes here...
-```
-
-This creates an embedded `meeting` object within the file. See `types-and-traits/file-format.md` for the full syntax.
-
 ## References
 
 References connect objects, sections, and assets into a graph. Wiki-style links are the Raven-native syntax for objects and sections:
@@ -99,7 +86,7 @@ Met with [[person/freya]] about [[project/website]].
 See the tasks: [[project/website#tasks]]
 ```
 
-References also appear in frontmatter `ref` fields (`owner: person/freya`) and in embedded type declarations.
+References also appear in frontmatter `ref` fields (`owner: person/freya`).
 
 Normal Markdown links/images to vault-local non-Markdown files are asset references:
 
@@ -160,7 +147,7 @@ Every markdown heading automatically creates a `section` object. This gives your
 ### High Priority         → section (level 3), child of Tasks
 ```
 
-Section objects can be referenced (`[[project/website#tasks]]`) and queried with hierarchy predicates like `parent(...)`, `ancestor(...)`, and `descendant(...)`.
+Sections can be referenced (`[[project/website#tasks]]`) and queried with scope predicates like `in(...)`, `within(...)`, `has(...)`, and `contains(...)`.
 
 ## Daily Notes
 

@@ -126,8 +126,8 @@ traits:
 	if result.FilesIndexed != 1 {
 		t.Fatalf("files indexed = %d, want 1", result.FilesIndexed)
 	}
-	if result.Objects != fullResult.Objects+2 {
-		t.Fatalf("objects = %d, want %d", result.Objects, fullResult.Objects+2)
+	if result.Objects != fullResult.Objects+1 {
+		t.Fatalf("objects = %d, want %d", result.Objects, fullResult.Objects+1)
 	}
 	if result.Traits != 1 {
 		t.Fatalf("traits = %d, want 1", result.Traits)
@@ -137,7 +137,7 @@ traits:
 	}
 
 	data := result.Data()
-	if objects, ok := data["objects"].(int); !ok || objects != fullResult.Objects+2 {
+	if objects, ok := data["objects"].(int); !ok || objects != fullResult.Objects+1 {
 		t.Fatalf("result data has unexpected objects: %#v", data["objects"])
 	}
 	if traits, ok := data["traits"].(int); !ok || traits != 1 {

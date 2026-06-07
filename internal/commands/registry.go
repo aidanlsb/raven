@@ -672,29 +672,33 @@ References are updated when the file moves (controlled by --update-refs).`,
 		Name:        "query",
 		Use:         "query <query_string|saved-query> [inputs...]",
 		Description: "Run a query using the Raven query language",
-		LongDesc: `Query items by type, traits by name, or assets using the Raven query language.
+		LongDesc: `Query items by type, sections, traits by name, or assets using the Raven query language.
 
 Prefer query when the structure is known and you need real Raven items or
 trait instances, or when you need indexed asset metadata. Use search for broad
 text discovery when you do not yet know the right type, trait, or structural
 context. Search returns file/snippet matches; query returns schema-aware item
-rows, real trait rows, or asset rows.
+rows, section rows, real trait rows, or asset rows.
 
 Query syntax:
 - Type queries: type:<type> [predicates...]
   Examples: type:project .status==active, type:meeting refs([[people/freya]])
+- Section queries: section [predicates...]
+  Examples: section .title==Tasks, section within(type:project)
 - Trait queries: trait:<name> [predicates...]
-  Examples: trait:due .value<today, trait:highlight on(type:book)
+  Examples: trait:due .value<today, trait:highlight in(type:book)
 - Asset queries: asset [predicates...]
   Examples: asset .extension==pdf, asset startswith(.media_type, "image/")
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
-- has(trait:...) — Has trait matching subquery
+- in(type:...|section...) — Direct containing scope matches subquery
+- within(type:...|section...) — Any containing scope matches subquery
+- has(section...|trait:...) — Directly contains section or trait matching subquery
+- contains(section...|trait:...) — Recursively contains section or trait matching subquery
 - refs([[target]]) — References target (refs([[people/freya]]))
 - refs(type:...) — References items matching subquery (refs(type:project .status==active))
 - refd(type:...) — Asset is referenced by matching source items (asset refd(type:note))
-- within(type:...) — Trait is inside items matching a type query (within(type:meeting))
 - .value==X — Trait value equals X (.value==today, .value==high)
 - content("text") — Full-text search within content (content("meeting notes"))
 
@@ -702,7 +706,7 @@ Common agent patterns:
 - Real open todos: trait:todo .value==todo
 - Open todos in briefs: trait:todo .value==todo within(type:brief)
 - Distinguish real traits from plain-text mentions: use trait:todo ... instead of search "@todo"
-- Open todos under a section/topic heading: trait:todo .value==todo within(type:section content("pricing"))
+- Open todos under a section/topic heading: trait:todo .value==todo within(section includes(.title, "pricing"))
 - Open todos in a daily-note range: trait:todo .value==todo within(type:date .date>=2026-05-01 .date<=2026-05-31)
 - Path + structure together: type:page matches(.path, "^pages/work/") has(trait:todo .value==todo)
 
@@ -716,7 +720,7 @@ Use --ids to output just IDs (one per line) for piping to other commands.
 Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
 Use --apply to run a bulk operation directly on query results.
-Asset queries return stable asset paths/IDs but do not support --apply.
+Section and asset queries return stable IDs but do not support --apply.
 
 For type queries (type:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
@@ -1335,10 +1339,9 @@ Existing field values will remain in files but no longer be validated.`,
 This command:
 1. Renames the type in schema.yaml
 2. Updates all 'type:' frontmatter fields in files
-3. Updates all ::type() embedded declarations
-4. Updates all ref field targets pointing to the old type
-5. Optionally updates the type description (--description)
-6. Optionally renames default_path directory and moves matching files with reference updates (--rename-default-path)
+3. Updates all ref field targets pointing to the old type
+4. Optionally updates the type description (--description)
+5. Optionally renames default_path directory and moves matching files with reference updates (--rename-default-path)
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
@@ -1374,8 +1377,7 @@ This command:
 2. If name_field == <old_field>, updates it to <new_field>
 3. Updates type templates that reference {{field.<old_field>}} (template files)
 4. Renames frontmatter keys in files whose type matches the target type
-5. Renames keys inside ::type(...) declarations (only for the target type)
-6. Updates saved queries in raven.yaml that parse as type:<type> (best-effort)
+5. Updates saved queries in raven.yaml that parse as type:<type> (best-effort)
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
@@ -1395,7 +1397,7 @@ For agents: After renaming, run 'rvn reindex --full --json' to update the index.
 		UseCases: []string{
 			"Rename a field on a type safely with preview/confirm",
 			"Refactor schema field names while keeping files consistent",
-			"Update embedded ::type(...) declarations and saved queries after field rename",
+			"Update frontmatter keys and saved queries after field rename",
 		},
 	},
 	"schema_template_list": {

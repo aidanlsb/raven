@@ -291,7 +291,7 @@ func Exists(vaultPath, targetPath string) bool {
 
 // SlugifyPath slugifies each component of a path.
 // "people/Sif" -> "people/sif"
-// Also handles embedded object IDs: "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
+// Also handles section IDs: "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
 func SlugifyPath(path string) string {
 	return slugs.PathSlug(path)
 }

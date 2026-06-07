@@ -61,7 +61,7 @@ func ComponentSlug(s string) string {
 // This preserves existing behavior previously implemented in pages.SlugifyPath:
 // - Strips a trailing ".md"
 // - Slugifies each "/"-separated component using ComponentSlug
-// - For embedded IDs, slugifies both sides of "#": "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
+// - For section IDs, slugifies both sides of "#": "daily/2025-02-01#Team Sync" -> "daily/2025-02-01#team-sync"
 func PathSlug(path string) string {
 	// Remove .md extension if present
 	path = strings.TrimSuffix(path, ".md")
@@ -69,7 +69,7 @@ func PathSlug(path string) string {
 
 	parts := strings.Split(path, "/")
 	for i, part := range parts {
-		// Handle embedded object IDs (file#id)
+		// Handle section IDs (file#id)
 		if fileID, fragment, isEmbedded := paths.ParseEmbeddedID(part); isEmbedded {
 			parts[i] = ComponentSlug(fileID) + "#" + ComponentSlug(fragment)
 		} else {

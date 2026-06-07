@@ -16,20 +16,33 @@ type ParsedDocument struct {
 	RawContent string          // Raw markdown content
 	Body       string          // Content without frontmatter (for full-text search indexing)
 	Objects    []*ParsedObject // All objects in this document
-	Traits     []*ParsedTrait  // All traits in this document
-	Refs       []*ParsedRef    // All references in this document
+	Sections   []*ParsedSection
+	Traits     []*ParsedTrait // All traits in this document
+	Refs       []*ParsedRef   // All references in this document
 }
 
-// ParsedObject represents a parsed object (file-level or embedded).
+// ParsedObject represents a parsed file-backed object.
 type ParsedObject struct {
-	ID           string                       // Unique ID (path for file-level, path#id for embedded)
+	ID           string                       // Unique file-backed object ID
 	ObjectType   string                       // Type name
 	Fields       map[string]schema.FieldValue // Fields/metadata
-	Heading      *string                      // Heading text (for embedded objects)
-	HeadingLevel *int                         // Heading level (for embedded objects)
-	ParentID     *string                      // Parent object ID (for embedded objects)
+	Heading      *string                      // Reserved for legacy callers; file objects do not set this
+	HeadingLevel *int                         // Reserved for legacy callers; file objects do not set this
+	ParentID     *string                      // Reserved for legacy callers; file objects do not set this
 	LineStart    int                          // Line where this object starts
-	LineEnd      *int                         // Line where this object ends (embedded only)
+	LineEnd      *int                         // Line where this object ends, when known
+}
+
+// ParsedSection represents a markdown heading-derived section.
+type ParsedSection struct {
+	ID              string  // Unique ID: file-id#slug
+	FileObjectID    string  // Containing file-backed object ID
+	Slug            string  // Fragment slug without file prefix
+	Title           string  // Heading text
+	Level           int     // Markdown heading level
+	LineStart       int     // Line where this section starts
+	LineEnd         *int    // Line where this section ends
+	ParentSectionID *string // Parent section ID, nil for top-level sections
 }
 
 // ParsedTrait represents a parsed trait annotation.
@@ -83,6 +96,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	fileID := filePathToID(relativePath, opts)
 
 	var objects []*ParsedObject
+	var sections []*ParsedSection
 	var traits []*ParsedTrait
 	var refs []*ParsedRef
 
@@ -122,14 +136,14 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		return nil, err
 	}
 
-	// Use headings and type declarations from AST extraction
+	// Use markdown headings as built-in sections. Legacy ::type(...) declarations
+	// are treated as ordinary markdown text.
 	headings := astContent.Headings
-	typeDeclLines := astContent.TypeDecls
 
 	// Track used IDs to ensure uniqueness
 	usedIDs := make(map[string]int)
 
-	// Parent stack for tracking hierarchy
+	// Parent stack for tracking section hierarchy
 	type parentEntry struct {
 		id    string
 		level int
@@ -144,65 +158,30 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		}
 		currentParent := parentStack[len(parentStack)-1].id
 
-		// Check if this heading has an associated type declaration.
-		// The AST extraction stores type decls keyed by the heading line number.
-		if embedded, ok := typeDeclLines[heading.Line]; ok {
-			// Explicit type declaration
-			// Use explicit ID if provided, otherwise derive from slugified heading
-			slug := embeddedHeadingSlug(embedded, heading.Text, usedIDs)
-
-			embeddedID := fileID + "#" + slug
-			headingText := heading.Text
-			headingLevel := heading.Level
-
-			objects = append(objects, &ParsedObject{
-				ID:           embeddedID,
-				ObjectType:   embedded.TypeName,
-				Fields:       embedded.Fields,
-				Heading:      &headingText,
-				HeadingLevel: &headingLevel,
-				ParentID:     &currentParent,
-				LineStart:    heading.Line,
-			})
-
-			// Extract references from embedded object field values.
-			// This enables ::type(field=[[target]]) to be indexed for backlinks.
-			fieldRefs := extractRefsFromFields(embedded.Fields, embeddedID, heading.Line)
-			refs = append(refs, fieldRefs...)
-
-			parentStack = append(parentStack, parentEntry{id: embeddedID, level: heading.Level})
-		} else {
-			// No type declaration - create a "section" object
-			slug := sectionHeadingSlug(heading.Text, usedIDs)
-
-			sectionID := fileID + "#" + slug
-			headingText := heading.Text
-			headingLevel := heading.Level
-
-			// Add title and level fields
-			fields := map[string]schema.FieldValue{
-				"title": schema.String(heading.Text),
-				"level": schema.Number(float64(heading.Level)),
-			}
-
-			objects = append(objects, &ParsedObject{
-				ID:           sectionID,
-				ObjectType:   "section",
-				Fields:       fields,
-				Heading:      &headingText,
-				HeadingLevel: &headingLevel,
-				ParentID:     &currentParent,
-				LineStart:    heading.Line,
-			})
-
-			parentStack = append(parentStack, parentEntry{id: sectionID, level: heading.Level})
+		slug := sectionHeadingSlug(heading.Text, usedIDs)
+		sectionID := fileID + "#" + slug
+		var parentSectionID *string
+		if currentParent != fileID {
+			parent := currentParent
+			parentSectionID = &parent
 		}
-	}
 
+		sections = append(sections, &ParsedSection{
+			ID:              sectionID,
+			FileObjectID:    fileID,
+			Slug:            slug,
+			Title:           heading.Text,
+			Level:           heading.Level,
+			LineStart:       heading.Line,
+			ParentSectionID: parentSectionID,
+		})
+
+		parentStack = append(parentStack, parentEntry{id: sectionID, level: heading.Level})
+	}
 	// Process traits from AST extraction - assign to the correct parent based on line number
 	// Code blocks are already filtered out by the AST walker.
 	for _, astTrait := range astContent.Traits {
-		parentID := findParentForLine(objects, astTrait.Line)
+		parentID := findScopeForLine(fileID, sections, astTrait.Line)
 
 		traits = append(traits, &ParsedTrait{
 			TraitType:      astTrait.TraitName,
@@ -216,7 +195,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 	// Process references from AST extraction
 	// Code blocks are already filtered out by the AST walker.
 	for _, astRef := range astContent.Refs {
-		parentID := findParentForLine(objects, astRef.Line)
+		parentID := findScopeForLine(fileID, sections, astRef.Line)
 
 		refs = append(refs, &ParsedRef{
 			SourceID:    parentID,
@@ -228,14 +207,14 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		})
 	}
 
-	// Compute line_end for each object
-	computeLineEnds(objects)
+	computeSectionLineEnds(sections)
 
 	return &ParsedDocument{
 		FilePath:   relativePath,
 		RawContent: content,
 		Body:       bodyContent,
 		Objects:    objects,
+		Sections:   sections,
 		Traits:     traits,
 		Refs:       refs,
 	}, nil
@@ -318,17 +297,6 @@ func frontmatterRefs(frontmatter *Frontmatter, fileID string) []*ParsedRef {
 	return refs
 }
 
-func embeddedHeadingSlug(embedded *EmbeddedTypeInfo, headingText string, usedIDs map[string]int) string {
-	if embedded.ID != "" {
-		return embedded.ID
-	}
-	baseSlug := Slugify(headingText)
-	if baseSlug == "" {
-		baseSlug = embedded.TypeName
-	}
-	return uniqueSlug(baseSlug, usedIDs)
-}
-
 func sectionHeadingSlug(headingText string, usedIDs map[string]int) string {
 	baseSlug := Slugify(headingText)
 	if baseSlug == "" {
@@ -355,77 +323,40 @@ func uniqueSlug(baseSlug string, usedIDs map[string]int) string {
 	}
 }
 
-// findParentForLine finds the parent object ID for a given line number.
-func findParentForLine(objects []*ParsedObject, line int) string {
-	idx := sort.Search(len(objects), func(i int) bool {
-		return objects[i].LineStart > line
+// findScopeForLine finds the nearest containing scope ID for a line.
+func findScopeForLine(fileID string, sections []*ParsedSection, line int) string {
+	idx := sort.Search(len(sections), func(i int) bool {
+		return sections[i].LineStart > line
 	})
 	if idx > 0 {
-		return objects[idx-1].ID
+		return sections[idx-1].ID
 	}
-	if len(objects) > 0 {
-		return objects[0].ID
-	}
-	return ""
+	return fileID
 }
 
-// computeLineEnds computes LineEnd for each object based on the next object's LineStart.
-func computeLineEnds(objects []*ParsedObject) {
-	if len(objects) == 0 {
+// computeSectionLineEnds computes LineEnd for each section based on the next section's LineStart.
+func computeSectionLineEnds(sections []*ParsedSection) {
+	if len(sections) == 0 {
 		return
 	}
 
 	// Sort by line_start
-	indices := make([]int, len(objects))
+	indices := make([]int, len(sections))
 	for i := range indices {
 		indices[i] = i
 	}
 	sort.Slice(indices, func(i, j int) bool {
-		return objects[indices[i]].LineStart < objects[indices[j]].LineStart
+		return sections[indices[i]].LineStart < sections[indices[j]].LineStart
 	})
 
 	for i := 0; i < len(indices); i++ {
 		currentIdx := indices[i]
 		if i+1 < len(indices) {
-			nextLineEnd := objects[indices[i+1]].LineStart - 1
-			objects[currentIdx].LineEnd = &nextLineEnd
+			nextLineEnd := sections[indices[i+1]].LineStart - 1
+			sections[currentIdx].LineEnd = &nextLineEnd
 		}
 		// Last object extends to end of file (nil)
 	}
 }
 
 // (directory root stripping is handled by internal/paths)
-
-// extractRefsFromFields extracts references from embedded object field values.
-// This enables wikilinks in ::type() declarations to be indexed for backlinks.
-//
-// It handles:
-//   - Ref types: directly adds the target as a reference
-//   - String types: scans for wikilinks using the wikilink parser
-//   - Array types: recursively processes each element
-func extractRefsFromFields(fields map[string]schema.FieldValue, sourceID string, line int) []*ParsedRef {
-	var refs []*ParsedRef
-	for _, fv := range fields {
-		refs = append(refs, extractRefsFromFieldValue(fv, sourceID, line)...)
-	}
-	return refs
-}
-
-// extractRefsFromFieldValue extracts references from a single field value.
-func extractRefsFromFieldValue(fv schema.FieldValue, sourceID string, line int) []*ParsedRef {
-	var refs []*ParsedRef
-
-	for _, match := range ExtractRefsFromFieldValue(fv, RefExtractOptions{
-		AllowWikilinksInString: true,
-		AllowTripleBrackets:    true,
-	}) {
-		refs = append(refs, &ParsedRef{
-			SourceID:    sourceID,
-			TargetRaw:   match.TargetRaw,
-			DisplayText: match.DisplayText,
-			Line:        line,
-		})
-	}
-
-	return refs
-}

@@ -8,7 +8,7 @@ References connect objects and assets across your vault into a graph. Wiki-style
 |--------|-------------|---------|
 | `[[target]]` | Basic reference | `[[person/freya]]` |
 | `[[target\|display]]` | Reference with display text | `[[person/freya\|Freya]]` |
-| `[[target#fragment]]` | Reference to a section or embedded object | `[[project/website#tasks]]` |
+| `[[target#fragment]]` | Reference to a section | `[[project/website#tasks]]` |
 | `[[YYYY-MM-DD]]` | Date reference (resolves to daily note) | `[[2026-03-15]]` |
 | `[text](assets/file.pdf)` | Markdown link to an asset | `[Paper](assets/pdfs/paper.pdf)` |
 | `![alt](assets/image.png)` | Markdown image asset | `![Diagram](assets/photos/diagram.png)` |
@@ -33,13 +33,6 @@ collaborators:
   - person/freya
   - person/thor
 ---
-```
-
-**Embedded type declarations**:
-
-```markdown
-## Weekly Standup
-::meeting(attendees=[[[person/freya]], [[person/thor]]])
 ```
 
 Asset references work in Markdown body content via vault-relative Markdown links/images or Raven wikilinks:

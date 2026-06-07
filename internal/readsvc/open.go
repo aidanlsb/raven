@@ -76,7 +76,7 @@ func ResolveOpenTargets(rt *Runtime, references []string) ([]OpenTarget, []OpenF
 			continue
 		}
 		if strings.Contains(ref, "#") {
-			failures = append(failures, OpenFailure{Reference: ref, Message: "embedded objects not supported"})
+			failures = append(failures, OpenFailure{Reference: ref, Message: "section IDs are not supported"})
 			continue
 		}
 

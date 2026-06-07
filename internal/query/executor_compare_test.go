@@ -345,46 +345,6 @@ func TestBuildElementEqualitySQL_NumericUsesCast(t *testing.T) {
 	}
 }
 
-func TestBuildAncestorPredicateSQL_AddsDepthGuard(t *testing.T) {
-	t.Parallel()
-
-	e := &Executor{}
-	p := &AncestorPredicate{
-		SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
-	}
-
-	cond, args, err := e.buildAncestorPredicateSQL(p, "o")
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
-		t.Fatalf("args = %#v", args)
-	}
-	if !containsAll(cond, "WITH RECURSIVE ancestors AS", "1 AS depth", "a.depth + 1", "WHERE a.depth < ?") {
-		t.Fatalf("cond = %q", cond)
-	}
-}
-
-func TestBuildDescendantPredicateSQL_AddsDepthGuard(t *testing.T) {
-	t.Parallel()
-
-	e := &Executor{}
-	p := &DescendantPredicate{
-		SubQuery: &Query{Type: QueryTypeObject, TypeName: "section"},
-	}
-
-	cond, args, err := e.buildDescendantPredicateSQL(p, "o")
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
-		t.Fatalf("args = %#v", args)
-	}
-	if !containsAll(cond, "WITH RECURSIVE descendants AS", "1 AS depth", "d.depth + 1", "WHERE d.depth < ?") {
-		t.Fatalf("cond = %q", cond)
-	}
-}
-
 func TestBuildContainsPredicateSQL_AddsDepthGuard(t *testing.T) {
 	t.Parallel()
 
@@ -400,7 +360,7 @@ func TestBuildContainsPredicateSQL_AddsDepthGuard(t *testing.T) {
 	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
 		t.Fatalf("args = %#v", args)
 	}
-	if !containsAll(cond, "WITH RECURSIVE subtree AS", "1 AS depth", "s.depth + 1", "WHERE s.depth < ?") {
+	if !containsAll(cond, "WITH RECURSIVE subtree AS", "0 AS depth", "subtree.depth + 1", "WHERE subtree.depth < ?") {
 		t.Fatalf("cond = %q", cond)
 	}
 }
@@ -413,14 +373,14 @@ func TestBuildWithinPredicateSQL_AddsDepthGuard(t *testing.T) {
 		SubQuery: &Query{Type: QueryTypeObject, TypeName: "project"},
 	}
 
-	cond, args, err := e.buildWithinPredicateSQL(p, "t")
+	cond, args, err := e.buildWithinPredicateSQL(p, "t", predicateKindTrait)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if len(args) == 0 || args[0] != recursivePredicateMaxDepth {
 		t.Fatalf("args = %#v", args)
 	}
-	if !containsAll(cond, "WITH RECURSIVE ancestors AS", "1 AS depth", "a.depth + 1", "WHERE a.depth < ?") {
+	if !containsAll(cond, "WITH RECURSIVE subtree AS", "0 AS depth", "subtree.depth + 1", "WHERE subtree.depth < ?") {
 		t.Fatalf("cond = %q", cond)
 	}
 }

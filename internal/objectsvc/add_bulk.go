@@ -90,14 +90,14 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 				continue
 			}
 			found := false
-			for _, obj := range doc.Objects {
-				if obj != nil && obj.ID == id {
+			for _, section := range doc.Sections {
+				if section != nil && section.ID == id {
 					found = true
 					break
 				}
 			}
 			if !found {
-				skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"})
+				skipped = append(skipped, AddBulkResult{ID: id, Status: "skipped", Reason: "section not found"})
 				continue
 			}
 		}
@@ -107,7 +107,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 				skipped = append(skipped, AddBulkResult{
 					ID:     id,
 					Status: "skipped",
-					Reason: "cannot combine --heading with embedded IDs from stdin",
+					Reason: "cannot combine --heading with section IDs from stdin",
 				})
 				continue
 			}
@@ -177,7 +177,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 		if req.HeadingSpec != "" {
 			if targetObjectID != "" {
 				result.Status = "error"
-				result.Reason = "cannot combine --heading with embedded IDs from stdin"
+				result.Reason = "cannot combine --heading with section IDs from stdin"
 				errorCount++
 				results = append(results, result)
 				continue

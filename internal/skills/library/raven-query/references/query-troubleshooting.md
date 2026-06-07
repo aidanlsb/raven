@@ -3,7 +3,7 @@
 ## No matches returned
 
 - Check type and field names with `rvn schema`.
-- Validate query mode: `type:<type>` vs `trait:<name>` vs `asset`.
+- Validate query mode: `type:<type>` vs `section` vs `trait:<name>` vs `asset`.
 - Remove predicates one-by-one to isolate the failing constraint.
 
 ## Ambiguous references
@@ -13,7 +13,7 @@
 
 ## Unexpectedly broad results
 
-- Add explicit predicates first (`.status==active`, `on(type:...)`, `within(type:...)`).
+- Add explicit predicates first (`.status==active`, `in(type:...)`, `within(type:...)`).
 - Use `--limit` and inspect IDs before any apply command.
 
 ## Shell parsing issues
@@ -26,7 +26,7 @@
 - Confirm query type:
   - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
-  - asset query: no `--apply` support
+  - section or asset query: no `--apply` support
 - Re-run without `--confirm` first to inspect preview.
 
 ## Asset query errors

@@ -207,7 +207,7 @@ func (d *Database) Analyze() error {
 // v9: Added field_refs table for ref-typed fields
 // v10: Added assets table for first-class non-Markdown resources
 // v11: Removed user-defined asset kind/canonical metadata from assets table
-const CurrentDBVersion = 11
+const CurrentDBVersion = 12
 
 // initialize creates the database schema.
 func (d *Database) initialize(isNewDB bool) error {
@@ -227,7 +227,7 @@ func (d *Database) initialize(isNewDB bool) error {
 			value TEXT NOT NULL
 		);
 		
-		-- All referenceable objects (files + embedded types)
+		-- File-backed typed objects
 		CREATE TABLE IF NOT EXISTS objects (
 			id TEXT PRIMARY KEY,
 			file_path TEXT NOT NULL,
@@ -241,6 +241,20 @@ func (d *Database) initialize(isNewDB bool) error {
 			alias TEXT,                 -- Optional alias for reference resolution
 			file_mtime INTEGER,         -- File modification time from filesystem (Unix timestamp)
 			indexed_at INTEGER          -- When this row was written to the index
+		);
+
+		-- Markdown heading-derived sections. Sections are addressable scopes, not objects.
+		CREATE TABLE IF NOT EXISTS sections (
+			id TEXT PRIMARY KEY,
+			file_object_id TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			slug TEXT NOT NULL,
+			title TEXT NOT NULL,
+			level INTEGER NOT NULL,
+			line_start INTEGER NOT NULL,
+			line_end INTEGER,
+			parent_section_id TEXT,
+			indexed_at INTEGER
 		);
 		
 		-- All trait annotations (single-valued)
@@ -297,6 +311,10 @@ func (d *Database) initialize(isNewDB bool) error {
 		CREATE INDEX IF NOT EXISTS idx_objects_type ON objects(type);
 		CREATE INDEX IF NOT EXISTS idx_objects_parent ON objects(parent_id);
 		CREATE INDEX IF NOT EXISTS idx_objects_alias ON objects(alias) WHERE alias IS NOT NULL;
+
+		CREATE INDEX IF NOT EXISTS idx_sections_file ON sections(file_path);
+		CREATE INDEX IF NOT EXISTS idx_sections_file_object ON sections(file_object_id);
+		CREATE INDEX IF NOT EXISTS idx_sections_parent ON sections(parent_section_id);
 		
 		CREATE INDEX IF NOT EXISTS idx_traits_file ON traits(file_path);
 		CREATE INDEX IF NOT EXISTS idx_traits_type ON traits(trait_type);
@@ -431,6 +449,9 @@ func (d *Database) IndexDocumentWithMtime(doc *parser.ParsedDocument, sch *schem
 	if err := indexObjects(tx, doc, mtime, now); err != nil {
 		return err
 	}
+	if err := indexSections(tx, doc, now); err != nil {
+		return err
+	}
 	if err := indexInlineTraits(tx, doc, sch, now); err != nil {
 		return err
 	}
@@ -557,6 +578,36 @@ func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64
 	return nil
 }
 
+func indexSections(tx *sql.Tx, doc *parser.ParsedDocument, indexedAt int64) error {
+	stmt, err := tx.Prepare(`
+		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, parent_section_id, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, section := range doc.Sections {
+		_, err := stmt.Exec(
+			section.ID,
+			section.FileObjectID,
+			doc.FilePath,
+			section.Slug,
+			section.Title,
+			section.Level,
+			section.LineStart,
+			section.LineEnd,
+			section.ParentSectionID,
+			indexedAt,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema, indexedAt int64) error {
 	traitStmt, err := tx.Prepare(`
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number, indexed_at)
@@ -646,7 +697,7 @@ func indexRefs(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error
 	// Collect all refs: parsed refs + refs from schema-typed ref fields
 	allRefs := doc.Refs
 
-	// Extract additional refs from ref-typed fields in frontmatter/embedded objects.
+	// Extract additional refs from ref-typed fields in frontmatter.
 	// This allows `company: cursor` to work when the schema declares `company: ref`.
 	if sch != nil {
 		schemaRefs := extractRefsFromSchemaFields(doc.Objects, sch)
@@ -807,17 +858,15 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error 
 			title = obj.ID
 		}
 
-		// Get content for this object
-		content := ""
-		if obj.ParentID == nil {
-			// File-level object - index body content (excludes frontmatter)
-			content = doc.Body
-		} else {
-			// Embedded object - extract section content between LineStart and LineEnd
-			content = extractSectionContent(lines, obj.LineStart, obj.LineEnd)
+		_, err = ftsStmt.Exec(obj.ID, title, doc.Body, doc.FilePath)
+		if err != nil {
+			return err
 		}
+	}
 
-		_, err = ftsStmt.Exec(obj.ID, title, content, doc.FilePath)
+	for _, section := range doc.Sections {
+		content := extractSectionContent(lines, section.LineStart, section.LineEnd)
+		_, err = ftsStmt.Exec(section.ID, section.Title, content, doc.FilePath)
 		if err != nil {
 			return err
 		}
@@ -826,7 +875,7 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error 
 	return nil
 }
 
-// extractSectionContent extracts content for an embedded object from the given line range.
+// extractSectionContent extracts content for a section from the given line range.
 // lineStart and lineEnd are 1-indexed. If lineEnd is nil, extracts to end of file.
 func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 	if lineStart < 1 || lineStart > len(lines) {
@@ -917,6 +966,7 @@ func (d *Database) ClearAllData() error {
 
 	for _, stmt := range []string{
 		"DELETE FROM objects",
+		"DELETE FROM sections",
 		"DELETE FROM traits",
 		"DELETE FROM refs",
 		"DELETE FROM field_refs",
@@ -1025,8 +1075,8 @@ func (d *Database) RemoveDocument(objectID string) error {
 	// Objects can have IDs like "people/freya" or "daily/2025-02-01#meeting".
 	// This method removes the *entire file/document* from the index.
 	//
-	// Callers may pass an embedded/section ID (with a '#'). In that case we still
-	// remove the whole document, since Raven cannot delete embedded objects from
+	// Callers may pass a section ID (with a '#'). In that case we still
+	// remove the whole document, since sections are derived from
 	// the markdown file without rewriting content.
 	baseID := baseDocumentID(objectID)
 
@@ -1236,7 +1286,15 @@ func (d *Database) AllNameFieldValues(sch *schema.Schema) (map[string][]string, 
 }
 
 func allObjectIDsFromDB(db *sql.DB) ([]string, error) {
-	rows, err := db.Query("SELECT id FROM objects")
+	query := "SELECT id FROM objects"
+	hasSections, err := objectsTableHasColumn(db, "sections", "id")
+	if err != nil {
+		return nil, err
+	}
+	if hasSections {
+		query += "\nUNION\nSELECT id FROM sections"
+	}
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}

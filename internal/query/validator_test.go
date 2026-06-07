@@ -167,7 +167,7 @@ func TestValidator_ValidQuery(t *testing.T) {
 		"trait:due",
 		"trait:due .value==past",
 		"type:person has(trait:due)",
-		"trait:due on(type:project)",
+		"trait:due in(type:project)",
 		"asset",
 		"asset .extension==pdf",
 		`asset startswith(.media_type, "image/")`,
@@ -218,7 +218,7 @@ func TestValidator_AssetQueryRules(t *testing.T) {
 		},
 		{
 			name:    "string function on number",
-			query:   `asset contains(.size_bytes, "12")`,
+			query:   `asset includes(.size_bytes, "12")`,
 			wantMsg: "string function predicates are not valid for asset field '.size_bytes'",
 		},
 		{
@@ -403,8 +403,7 @@ func TestValidator_DirectTargetPredicates(t *testing.T) {
 					"status": {Type: schema.FieldTypeString},
 				},
 			},
-			"section": {Fields: map[string]*schema.FieldDefinition{}},
-			"date":    {Fields: map[string]*schema.FieldDefinition{}},
+			"date": {Fields: map[string]*schema.FieldDefinition{}},
 		},
 		Traits: map[string]*schema.TraitDefinition{
 			"todo": {},
@@ -417,16 +416,16 @@ func TestValidator_DirectTargetPredicates(t *testing.T) {
 	// All these queries use [[target]] syntax which sets Target instead of SubQuery
 	// They should validate without panicking
 	tests := []string{
-		// Object predicates with [[target]]
-		"type:section parent([[projects/website]])",
-		"type:section ancestor([[projects/website]])",
-		"type:project child([[projects/website#tasks]])",
-		"type:project descendant([[projects/website#tasks]])",
+		// Section predicates with [[target]]
+		"section in([[projects/website]])",
+		"section within([[projects/website]])",
+		"type:project has(section .id==projects/website#tasks)",
+		"type:project contains(section .id==projects/website#tasks)",
 		// Trait predicates with [[target]]
-		"trait:todo on([[projects/website]])",
+		"trait:todo in([[projects/website]])",
 		"trait:todo within([[projects/website]])",
 		// Negated versions
-		"type:section !parent([[projects/website]])",
+		"section !in([[projects/website]])",
 		"trait:todo !within([[projects/website]])",
 		// Short references
 		"trait:todo within([[website]])",
@@ -466,17 +465,17 @@ func TestValidator_TraitStringFunctionsRequireValueField(t *testing.T) {
 	}{
 		{
 			name:    "value field is allowed",
-			query:   `trait:todo contains(.value, "todo")`,
+			query:   `trait:todo includes(.value, "todo")`,
 			wantErr: false,
 		},
 		{
 			name:    "content field is rejected",
-			query:   `trait:todo contains(.content, "todo")`,
+			query:   `trait:todo includes(.content, "todo")`,
 			wantErr: true,
 		},
 		{
 			name:    "element placeholder is rejected",
-			query:   `trait:todo contains(_, "todo")`,
+			query:   `trait:todo includes(_, "todo")`,
 			wantErr: true,
 		},
 	}
@@ -534,7 +533,7 @@ func TestValidator_ObjectStringFunctionsAndArrayQuantifiersValidateFieldTypes(t 
 	}{
 		{
 			name:    "string function on scalar string field",
-			query:   `type:project contains(.name, "api")`,
+			query:   `type:project includes(.name, "api")`,
 			wantErr: false,
 		},
 		{
@@ -549,25 +548,25 @@ func TestValidator_ObjectStringFunctionsAndArrayQuantifiersValidateFieldTypes(t 
 		},
 		{
 			name:        "string function unknown field",
-			query:       `type:project contains(.missing, "api")`,
+			query:       `type:project includes(.missing, "api")`,
 			wantErr:     true,
 			errContains: "has no field 'missing'",
 		},
 		{
 			name:        "string function on number field",
-			query:       `type:project contains(.score, "9")`,
+			query:       `type:project includes(.score, "9")`,
 			wantErr:     true,
 			errContains: "not valid for field '.score'",
 		},
 		{
 			name:        "string function on array field",
-			query:       `type:project contains(.tags, "urgent")`,
+			query:       `type:project includes(.tags, "urgent")`,
 			wantErr:     true,
 			errContains: "require a scalar field",
 		},
 		{
 			name:        "top-level string function underscore placeholder",
-			query:       `type:project contains(_, "api")`,
+			query:       `type:project includes(_, "api")`,
 			wantErr:     true,
 			errContains: "placeholder '_' is only valid inside any()/all()/none()",
 		},

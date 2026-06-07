@@ -55,31 +55,37 @@ func (e *Executor) buildTraitRefsPredicateSQL(p *RefsPredicate, alias string) (s
 		)`, alias, alias, targetCond)
 		args = append(args, targetArgs...)
 	} else if p.SubQuery != nil {
-		// Subquery - reference to objects matching the subquery
-		var targetConditions []string
-		targetConditions = append(targetConditions, "target_obj.type = ?")
-		args = append(args, p.SubQuery.TypeName)
-
-		if p.SubQuery.Predicate != nil {
-			predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "target_obj", p.SubQuery.TypeName)
-			if err != nil {
-				return "", nil, err
-			}
-			targetConditions = append(targetConditions, predCond)
-			args = append(args, predArgs...)
+		var targetTable string
+		var targetAlias string
+		var targetCondition string
+		var err error
+		switch p.SubQuery.Type {
+		case QueryTypeObject:
+			targetTable = "objects"
+			targetAlias = "target_obj"
+			targetCondition, args, err = e.buildObjectWhereForAlias(p.SubQuery, targetAlias)
+		case QueryTypeSection:
+			targetTable = "sections"
+			targetAlias = "target_section"
+			targetCondition, args, err = e.sectionSubqueryCondition(p.SubQuery, targetAlias)
+		default:
+			return "", nil, fmt.Errorf("refs() subquery must be a type or section query")
+		}
+		if err != nil {
+			return "", nil, err
 		}
 
 		// Match refs on the same line as the trait that point to matching objects
 		cond = fmt.Sprintf(`EXISTS (
 			SELECT 1 FROM refs r
-			JOIN objects target_obj ON (
-				r.target_id = target_obj.id OR 
-				(r.target_id IS NULL AND r.target_raw = target_obj.id)
+			JOIN %s %s ON (
+				r.target_id = %s.id OR 
+				(r.target_id IS NULL AND r.target_raw = %s.id)
 			)
 			WHERE r.file_path = %s.file_path 
 			  AND r.line_number = %s.line_number
 			  AND %s
-		)`, alias, alias, strings.Join(targetConditions, " AND "))
+		)`, targetTable, targetAlias, targetAlias, targetAlias, alias, alias, targetCondition)
 	} else {
 		return "", nil, fmt.Errorf("refs predicate must have target or subquery")
 	}
@@ -229,110 +235,6 @@ func buildDateFilterConditionForCompare(value string, compareOp CompareOp, colum
 		return "", nil, false
 	}
 	return cond, args, true
-}
-
-// buildOnPredicateSQL builds SQL for on(type:...) or on([[target]]) predicates.
-func (e *Executor) buildOnPredicateSQL(p *OnPredicate, alias string) (string, []interface{}, error) {
-	// Handle direct target reference: on:[[target]]
-	if p.Target != "" {
-		resolvedTarget, err := e.resolveTarget(p.Target)
-		if err != nil {
-			return "", nil, err
-		}
-		cond := fmt.Sprintf("%s.parent_object_id = ?", alias)
-		if p.Negated() {
-			cond = fmt.Sprintf("(%s.parent_object_id IS NULL OR %s.parent_object_id != ?)", alias, alias)
-			return cond, []interface{}{resolvedTarget}, nil
-		}
-		return cond, []interface{}{resolvedTarget}, nil
-	}
-
-	var objConditions []string
-	var args []interface{}
-
-	objConditions = append(objConditions, "type = ?")
-	args = append(args, p.SubQuery.TypeName)
-
-	if p.SubQuery.Predicate != nil {
-		cond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "parent_obj", p.SubQuery.TypeName)
-		if err != nil {
-			return "", nil, err
-		}
-		objConditions = append(objConditions, cond)
-		args = append(args, predArgs...)
-	}
-
-	cond := fmt.Sprintf(`EXISTS (
-		SELECT 1 FROM objects parent_obj
-		WHERE parent_obj.id = %s.parent_object_id AND %s
-	)`, alias, strings.Join(objConditions, " AND "))
-
-	if p.Negated() {
-		cond = "NOT " + cond
-	}
-
-	return cond, args, nil
-}
-
-// buildWithinPredicateSQL builds SQL for within(type:...) or within([[target]]) predicates.
-func (e *Executor) buildWithinPredicateSQL(p *WithinPredicate, alias string) (string, []interface{}, error) {
-	// Handle direct target reference: within([[target]])
-	if p.Target != "" {
-		resolvedTarget, err := e.resolveTarget(p.Target)
-		if err != nil {
-			return "", nil, err
-		}
-		// Check if target is the trait's parent or any ancestor of the trait's parent
-		cond := fmt.Sprintf(`EXISTS (
-			WITH RECURSIVE ancestors AS (
-				SELECT id, parent_id, 1 AS depth FROM objects WHERE id = %s.parent_object_id
-				UNION ALL
-				SELECT o.id, o.parent_id, a.depth + 1 FROM objects o
-				JOIN ancestors a ON o.id = a.parent_id
-				WHERE a.depth < ?
-			)
-			SELECT 1 FROM ancestors WHERE id = ?
-		)`, alias)
-		if p.Negated() {
-			cond = "NOT " + cond
-		}
-		return cond, []interface{}{recursivePredicateMaxDepth, resolvedTarget}, nil
-	}
-
-	var ancestorConditions []string
-	var args []interface{}
-
-	ancestorConditions = append(ancestorConditions, "anc.type = ?")
-	args = append(args, p.SubQuery.TypeName)
-
-	// Process predicate from the subquery
-	if p.SubQuery.Predicate != nil {
-		predCond, predArgs, err := e.buildObjectPredicateSQL(p.SubQuery.Predicate, "anc", p.SubQuery.TypeName)
-		if err != nil {
-			return "", nil, err
-		}
-		ancestorConditions = append(ancestorConditions, predCond)
-		args = append(args, predArgs...)
-	}
-
-	// Build ancestor query using recursive CTE
-	cond := fmt.Sprintf(`EXISTS (
-		WITH RECURSIVE ancestors AS (
-			SELECT id, parent_id, type, fields, 1 AS depth FROM objects WHERE id = %s.parent_object_id
-			UNION ALL
-			SELECT o.id, o.parent_id, o.type, o.fields, a.depth + 1 FROM objects o
-			JOIN ancestors a ON o.id = a.parent_id
-			WHERE a.depth < ?
-		)
-		SELECT 1 FROM ancestors anc WHERE %s
-	)`, alias, strings.Join(ancestorConditions, " AND "))
-	args = append([]interface{}{recursivePredicateMaxDepth}, args...)
-
-	if p.Negated() {
-		cond = "NOT " + cond
-	}
-
-	return cond, args, nil
 }
 
 // buildAtPredicateSQL builds SQL for at(trait:...) predicates.

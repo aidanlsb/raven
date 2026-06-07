@@ -5,7 +5,9 @@ Quick reference for common Raven Query Language (RQL) patterns.
 ## Query shapes
 
 - `type:<type> [predicates...]`
+- `section [predicates...]`
 - `trait:<name> [predicates...]`
+- `asset [predicates...]`
 
 ## Predicates
 
@@ -14,13 +16,15 @@ Quick reference for common Raven Query Language (RQL) patterns.
 - Array membership:
   - `.field == value` (works for arrays)
   - `any(.field, _ == value)` (explicit)
-- List membership: `in(.field, [a, b, c])`
+- List membership: `oneof(.field, [a, b, c])`
+- String matching: `includes(.field, "text")`, `startswith(...)`, `endswith(...)`, `matches(...)`
 - Text search: `content("phrase")`
 - References:
   - `refs([[target]])` (objects/traits that reference target)
   - `refs(type:project .status==active)`
-  - Trait location: `within([[target]])`, `within(type:...)`, `on([[target]])`, `on(type:...)`
-  - Object hierarchy: `parent(...)`, `ancestor(...)`, `child(...)`, `descendant(...)`
+  - Direct scope: `in([[target]])`, `in(type:...)`, `in(section ...)`
+  - Recursive scope: `within([[target]])`, `within(type:...)`, `within(section ...)`
+  - Downward scope: `has(section ...)`, `has(trait:...)`, `contains(section ...)`, `contains(trait:...)`
 
 ## Sub-queries
 
@@ -29,7 +33,7 @@ Nest queries inside predicates to filter by related objects or traits:
 - `refs(type:project .status == active)`
 - `within(type:meeting refs([[project/raven]]))`
 - `has(trait:due .value < today)`
-- `on(type:project .status == active)`
+- `in(type:project .status == active)`
 
 ## Boolean logic
 
@@ -58,7 +62,7 @@ This can be very useful to provide lots of information to the user. If a questio
 - Text mentions of a token when structure is unknown:
   - `search "@todo pricing"`
 - Todos under a topic section:
-  - `trait:todo .value == todo within(type:section content("pricing"))`
+  - `trait:todo .value == todo within(section includes(.title, "pricing"))`
 - Path-scoped pages with open todos:
   - `type:page matches(.path, "^pages/work/") has(trait:todo .value == todo)`
 - Due tomorrow:

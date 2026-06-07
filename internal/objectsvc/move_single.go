@@ -59,6 +59,9 @@ func MoveByReference(req MoveByReferenceRequest) (*MoveByReferenceResult, error)
 	if err != nil {
 		return nil, err
 	}
+	if resolved.IsSection {
+		return nil, newError(ErrorInvalidInput, "move only supports file-level objects", "Use a file-level object ID without a section fragment", nil, nil)
+	}
 	sourceFile := resolved.FilePath
 
 	if err := paths.ValidateWithinVault(req.VaultPath, sourceFile); err != nil {

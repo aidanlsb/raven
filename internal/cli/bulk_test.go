@@ -36,7 +36,7 @@ func TestBuildEmbeddedSkipWarning(t *testing.T) {
 		}
 	})
 
-	t.Run("with embedded IDs", func(t *testing.T) {
+	t.Run("with section IDs", func(t *testing.T) {
 		embedded := []string{"daily/2026-01-07#standup", "projects/website#tasks"}
 		w := BuildEmbeddedSkipWarning(embedded)
 		if w == nil {
@@ -45,7 +45,7 @@ func TestBuildEmbeddedSkipWarning(t *testing.T) {
 		if w.Code != WarnEmbeddedSkipped {
 			t.Errorf("code = %q, want %q", w.Code, WarnEmbeddedSkipped)
 		}
-		if !strings.Contains(w.Message, "2 embedded object") {
+		if !strings.Contains(w.Message, "2 section ID") {
 			t.Errorf("message should mention count: %q", w.Message)
 		}
 		if !strings.Contains(w.Ref, "daily/2026-01-07#standup") {

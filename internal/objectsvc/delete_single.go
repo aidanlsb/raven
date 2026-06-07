@@ -43,6 +43,9 @@ func PreviewDeleteByReference(req DeleteByReferenceRequest) (*DeleteByReferenceR
 	if err != nil {
 		return nil, err
 	}
+	if resolved.IsSection {
+		return nil, newError(ErrorInvalidInput, "delete only supports file-level objects", "Use a file-level object ID without a section fragment", nil, nil)
+	}
 
 	db, err := index.Open(req.VaultPath)
 	if err != nil {

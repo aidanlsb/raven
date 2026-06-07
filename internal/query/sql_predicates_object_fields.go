@@ -366,19 +366,11 @@ func (e *Executor) collectRefFieldAmbiguityPredicate(queryType QueryType, typeNa
 		return nil
 	case *HasPredicate:
 		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
-	case *ParentPredicate:
-		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
-	case *AncestorPredicate:
-		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
-	case *ChildPredicate:
-		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
-	case *DescendantPredicate:
+	case *InPredicate:
 		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
 	case *ContainsPredicate:
 		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
 	case *RefsPredicate:
-		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
-	case *OnPredicate:
 		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)
 	case *WithinPredicate:
 		return e.collectRefFieldAmbiguityKeys(p.SubQuery, keys)

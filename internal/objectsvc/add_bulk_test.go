@@ -105,7 +105,7 @@ func TestApplyAddBulk_HeadingConflictWithEmbeddedID(t *testing.T) {
 	if summary.Errors != 1 || len(summary.Results) != 1 {
 		t.Fatalf("summary = %#v, want one error result", summary)
 	}
-	if got := summary.Results[0].Reason; got != "cannot combine --heading with embedded IDs from stdin" {
-		t.Fatalf("reason = %q, want heading/embedded conflict", got)
+	if got := summary.Results[0].Reason; got != "cannot combine --heading with section IDs from stdin" {
+		t.Fatalf("reason = %q, want heading/section conflict", got)
 	}
 }

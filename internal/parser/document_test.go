@@ -26,8 +26,8 @@ Some content about Freya.
 		}
 
 		// Should have file-level object + section for "# Freya"
-		if len(doc.Objects) != 2 {
-			t.Errorf("got %d objects, want 2", len(doc.Objects))
+		if len(doc.Objects) != 1 {
+			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
 
 		if doc.Objects[0].ID != "people/freya" {
@@ -38,8 +38,11 @@ Some content about Freya.
 			t.Errorf("first object type = %q, want %q", doc.Objects[0].ObjectType, "person")
 		}
 
-		if doc.Objects[1].ObjectType != "section" {
-			t.Errorf("second object type = %q, want %q", doc.Objects[1].ObjectType, "section")
+		if len(doc.Sections) != 1 {
+			t.Fatalf("got %d sections, want 1", len(doc.Sections))
+		}
+		if doc.Sections[0].ID != "people/freya#freya" {
+			t.Errorf("section ID = %q, want people/freya#freya", doc.Sections[0].ID)
 		}
 	})
 
@@ -62,28 +65,29 @@ Even more text.
 		}
 
 		// File + 3 sections
-		if len(doc.Objects) != 4 {
-			t.Errorf("got %d objects, want 4", len(doc.Objects))
+		if len(doc.Objects) != 1 {
+			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
 
 		if doc.Objects[0].ObjectType != "page" {
 			t.Errorf("file object type = %q, want page", doc.Objects[0].ObjectType)
 		}
 
-		if doc.Objects[1].ID != "doc#introduction" {
-			t.Errorf("first section ID = %q, want doc#introduction", doc.Objects[1].ID)
+		if len(doc.Sections) != 3 {
+			t.Fatalf("got %d sections, want 3", len(doc.Sections))
 		}
-
-		if doc.Objects[2].ID != "doc#background" {
-			t.Errorf("second section ID = %q, want doc#background", doc.Objects[2].ID)
+		if doc.Sections[0].ID != "doc#introduction" {
+			t.Errorf("first section ID = %q, want doc#introduction", doc.Sections[0].ID)
 		}
-
-		if doc.Objects[3].ID != "doc#methods" {
-			t.Errorf("third section ID = %q, want doc#methods", doc.Objects[3].ID)
+		if doc.Sections[1].ID != "doc#background" {
+			t.Errorf("second section ID = %q, want doc#background", doc.Sections[1].ID)
+		}
+		if doc.Sections[2].ID != "doc#methods" {
+			t.Errorf("third section ID = %q, want doc#methods", doc.Sections[2].ID)
 		}
 	})
 
-	t.Run("explicit type with explicit id", func(t *testing.T) {
+	t.Run("legacy explicit type with explicit id is plain text", func(t *testing.T) {
 		content := `# Weekly Standup
 ::meeting(id=standup, time=09:00)
 
@@ -94,21 +98,15 @@ Discussion notes here.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// File + 1 meeting (not section)
-		if len(doc.Objects) != 2 {
-			t.Errorf("got %d objects, want 2", len(doc.Objects))
+		if len(doc.Objects) != 1 {
+			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
-
-		if doc.Objects[1].ObjectType != "meeting" {
-			t.Errorf("second object type = %q, want meeting", doc.Objects[1].ObjectType)
-		}
-
-		if doc.Objects[1].ID != "meetings#standup" {
-			t.Errorf("meeting ID = %q, want meetings#standup", doc.Objects[1].ID)
+		if len(doc.Sections) != 1 || doc.Sections[0].ID != "meetings#weekly-standup" {
+			t.Fatalf("sections = %+v, want meetings#weekly-standup", doc.Sections)
 		}
 	})
 
-	t.Run("explicit type with id derived from heading", func(t *testing.T) {
+	t.Run("legacy explicit type with id derived from heading is plain text", func(t *testing.T) {
 		content := `# Weekly Standup
 ::meeting(time=09:00)
 
@@ -119,18 +117,11 @@ Discussion notes here.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// File + 1 meeting (not section)
-		if len(doc.Objects) != 2 {
-			t.Errorf("got %d objects, want 2", len(doc.Objects))
+		if len(doc.Objects) != 1 {
+			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
-
-		if doc.Objects[1].ObjectType != "meeting" {
-			t.Errorf("second object type = %q, want meeting", doc.Objects[1].ObjectType)
-		}
-
-		// ID should be derived from slugified heading
-		if doc.Objects[1].ID != "meetings#weekly-standup" {
-			t.Errorf("meeting ID = %q, want meetings#weekly-standup", doc.Objects[1].ID)
+		if len(doc.Sections) != 1 || doc.Sections[0].ID != "meetings#weekly-standup" {
+			t.Fatalf("sections = %+v, want meetings#weekly-standup", doc.Sections)
 		}
 	})
 
@@ -152,23 +143,22 @@ Second meeting with same heading.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// File + Notes section + 2 meetings
-		if len(doc.Objects) != 4 {
-			t.Errorf("got %d objects, want 4", len(doc.Objects))
+		// File + Notes section + 2 Team Sync sections. ::meeting lines are plain text.
+		if len(doc.Objects) != 1 {
+			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
-
-		// First meeting gets the base slug
-		if doc.Objects[2].ID != "daily#team-sync" {
-			t.Errorf("first meeting ID = %q, want daily#team-sync", doc.Objects[2].ID)
+		if len(doc.Sections) != 3 {
+			t.Fatalf("got %d sections, want 3", len(doc.Sections))
 		}
-
-		// Second meeting gets -2 suffix
-		if doc.Objects[3].ID != "daily#team-sync-2" {
-			t.Errorf("second meeting ID = %q, want daily#team-sync-2", doc.Objects[3].ID)
+		if doc.Sections[1].ID != "daily#team-sync" {
+			t.Errorf("first team sync ID = %q, want daily#team-sync", doc.Sections[1].ID)
+		}
+		if doc.Sections[2].ID != "daily#team-sync-2" {
+			t.Errorf("second team sync ID = %q, want daily#team-sync-2", doc.Sections[2].ID)
 		}
 	})
 
-	t.Run("explicit id overrides heading slug", func(t *testing.T) {
+	t.Run("legacy explicit id does not override heading slug", func(t *testing.T) {
 		content := `# Very Long Meeting Title That Would Make A Bad ID
 ::meeting(id=standup, time=09:00)
 
@@ -179,9 +169,8 @@ Discussion notes here.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Explicit id=standup should be used, not the slugified heading
-		if doc.Objects[1].ID != "meetings#standup" {
-			t.Errorf("meeting ID = %q, want meetings#standup", doc.Objects[1].ID)
+		if len(doc.Sections) != 1 || doc.Sections[0].ID != "meetings#very-long-meeting-title-that-would-make-a-bad-id" {
+			t.Fatalf("sections = %+v, want heading-derived section ID", doc.Sections)
 		}
 	})
 
@@ -201,17 +190,18 @@ Second ideas section with same heading.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Should have unique IDs
-		if len(doc.Objects) != 4 {
-			t.Errorf("got %d objects, want 4", len(doc.Objects))
+		// Should have unique section IDs
+		if len(doc.Objects) != 1 {
+			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
-
-		if doc.Objects[2].ID != "doc#ideas" {
-			t.Errorf("first ideas ID = %q, want doc#ideas", doc.Objects[2].ID)
+		if len(doc.Sections) != 3 {
+			t.Fatalf("got %d sections, want 3", len(doc.Sections))
 		}
-
-		if doc.Objects[3].ID != "doc#ideas-2" {
-			t.Errorf("second ideas ID = %q, want doc#ideas-2", doc.Objects[3].ID)
+		if doc.Sections[1].ID != "doc#ideas" {
+			t.Errorf("first ideas ID = %q, want doc#ideas", doc.Sections[1].ID)
+		}
+		if doc.Sections[2].ID != "doc#ideas-2" {
+			t.Errorf("second ideas ID = %q, want doc#ideas-2", doc.Sections[2].ID)
 		}
 	})
 
@@ -235,18 +225,21 @@ Natural foo-2 section.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(doc.Objects) != 5 {
-			t.Fatalf("got %d objects, want 5", len(doc.Objects))
+		if len(doc.Objects) != 1 {
+			t.Fatalf("got %d objects, want 1", len(doc.Objects))
+		}
+		if len(doc.Sections) != 4 {
+			t.Fatalf("got %d sections, want 4", len(doc.Sections))
 		}
 
-		if doc.Objects[2].ID != "doc#foo" {
-			t.Errorf("first foo ID = %q, want doc#foo", doc.Objects[2].ID)
+		if doc.Sections[1].ID != "doc#foo" {
+			t.Errorf("first foo ID = %q, want doc#foo", doc.Sections[1].ID)
 		}
-		if doc.Objects[3].ID != "doc#foo-2" {
-			t.Errorf("second foo ID = %q, want doc#foo-2", doc.Objects[3].ID)
+		if doc.Sections[2].ID != "doc#foo-2" {
+			t.Errorf("second foo ID = %q, want doc#foo-2", doc.Sections[2].ID)
 		}
-		if doc.Objects[4].ID != "doc#foo-2-2" {
-			t.Errorf("foo 2 ID = %q, want doc#foo-2-2", doc.Objects[4].ID)
+		if doc.Sections[3].ID != "doc#foo-2-2" {
+			t.Errorf("foo 2 ID = %q, want doc#foo-2-2", doc.Sections[3].ID)
 		}
 	})
 
@@ -450,7 +443,7 @@ type: date
 		}
 	})
 
-	t.Run("refs extracted from embedded object fields", func(t *testing.T) {
+	t.Run("legacy type declaration refs are ordinary body refs", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Weekly Standup
@@ -463,7 +456,7 @@ Discussed project status.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Should have at least one ref from the embedded field
+		// Legacy ::type(...) text is ordinary markdown, so refs on that line are scoped to the section.
 		found := false
 		for _, ref := range doc.Refs {
 			if ref.TargetRaw == "meetings/standup" && ref.SourceID == "daily/2025-01-15#weekly-standup" {
@@ -472,15 +465,15 @@ Discussed project status.
 			}
 		}
 		if !found {
-			t.Errorf("expected ref to meetings/standup from embedded object, got refs: %v", doc.Refs)
+			t.Errorf("expected ref to meetings/standup from legacy declaration line, got refs: %v", doc.Refs)
 		}
 	})
 
-	t.Run("refs extracted from embedded object field arrays", func(t *testing.T) {
+	t.Run("refs extracted from legacy type declaration lines", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Team Sync
-::meeting(attendees=[[[people/freya]], [[people/thor]]])
+::meeting(attendees=[[people/freya]] [[people/thor]])
 
 Team discussion.
 `
@@ -489,13 +482,7 @@ Team discussion.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Debug: Print what we got
-		t.Logf("Found %d refs:", len(doc.Refs))
-		for _, ref := range doc.Refs {
-			t.Logf("  source=%s target=%s", ref.SourceID, ref.TargetRaw)
-		}
-
-		// Should have refs from the array field
+		// Should have refs from the ordinary markdown line.
 		foundFreya := false
 		foundThor := false
 		for _, ref := range doc.Refs {
@@ -509,14 +496,14 @@ Team discussion.
 			}
 		}
 		if !foundFreya {
-			t.Errorf("expected ref to people/freya from embedded object array field")
+			t.Errorf("expected ref to people/freya from legacy declaration line")
 		}
 		if !foundThor {
-			t.Errorf("expected ref to people/thor from embedded object array field")
+			t.Errorf("expected ref to people/thor from legacy declaration line")
 		}
 	})
 
-	t.Run("multiple refs in embedded object fields", func(t *testing.T) {
+	t.Run("multiple refs in legacy type declaration line", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Client Meeting
@@ -529,7 +516,7 @@ Discussed roadmap.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Should have refs from both fields
+		// Should have refs from the ordinary markdown line.
 		foundSeries := false
 		foundClient := false
 		for _, ref := range doc.Refs {
@@ -543,14 +530,14 @@ Discussed roadmap.
 			}
 		}
 		if !foundSeries {
-			t.Errorf("expected ref to meetings/acme-weekly from embedded object field")
+			t.Errorf("expected ref to meetings/acme-weekly from legacy declaration line")
 		}
 		if !foundClient {
-			t.Errorf("expected ref to companies/acme from embedded object field")
+			t.Errorf("expected ref to companies/acme from legacy declaration line")
 		}
 	})
 
-	t.Run("embedded field refs distinct from body refs", func(t *testing.T) {
+	t.Run("legacy declaration refs distinct from body refs", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Standup
@@ -563,7 +550,7 @@ Discussed [[projects/website]] progress.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Should have both the field ref and body ref
+		// Should have both the declaration-line ref and body ref.
 		foundFieldRef := false
 		foundBodyRef := false
 		for _, ref := range doc.Refs {
@@ -575,7 +562,7 @@ Discussed [[projects/website]] progress.
 			}
 		}
 		if !foundFieldRef {
-			t.Errorf("expected ref to meetings/standup from embedded field")
+			t.Errorf("expected ref to meetings/standup from legacy declaration line")
 		}
 		if !foundBodyRef {
 			t.Errorf("expected ref to projects/website from body")
@@ -626,11 +613,14 @@ Body text.
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(doc.Objects) != 2 {
-		t.Fatalf("got %d objects, want 2", len(doc.Objects))
+	if len(doc.Objects) != 1 {
+		t.Fatalf("got %d objects, want 1", len(doc.Objects))
 	}
-	if doc.Objects[1].ID != "doc#title" {
-		t.Fatalf("section ID = %q, want %q", doc.Objects[1].ID, "doc#title")
+	if len(doc.Sections) != 1 {
+		t.Fatalf("got %d sections, want 1", len(doc.Sections))
+	}
+	if doc.Sections[0].ID != "doc#title" {
+		t.Fatalf("section ID = %q, want %q", doc.Sections[0].ID, "doc#title")
 	}
 }
 
@@ -647,14 +637,17 @@ func TestParseDocument_UnicodeHeadingSlugs(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(doc.Objects) != 3 {
-		t.Fatalf("got %d objects, want 3", len(doc.Objects))
+	if len(doc.Objects) != 1 {
+		t.Fatalf("got %d objects, want 1", len(doc.Objects))
 	}
-	if doc.Objects[1].ID != "doc#über-alles" {
-		t.Fatalf("first section ID = %q, want %q", doc.Objects[1].ID, "doc#über-alles")
+	if len(doc.Sections) != 2 {
+		t.Fatalf("got %d sections, want 2", len(doc.Sections))
 	}
-	if doc.Objects[2].ID != "doc#日本語" {
-		t.Fatalf("second section ID = %q, want %q", doc.Objects[2].ID, "doc#日本語")
+	if doc.Sections[0].ID != "doc#über-alles" {
+		t.Fatalf("first section ID = %q, want %q", doc.Sections[0].ID, "doc#über-alles")
+	}
+	if doc.Sections[1].ID != "doc#日本語" {
+		t.Fatalf("second section ID = %q, want %q", doc.Sections[1].ID, "doc#日本語")
 	}
 }
 
@@ -679,26 +672,28 @@ func TestParseDocument_DeepHeadingHierarchy(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(doc.Objects) != 7 {
-		t.Fatalf("got %d objects, want 7", len(doc.Objects))
+	if len(doc.Objects) != 1 {
+		t.Fatalf("got %d objects, want 1", len(doc.Objects))
+	}
+	if len(doc.Sections) != 6 {
+		t.Fatalf("got %d sections, want 6", len(doc.Sections))
 	}
 
-	for i := 2; i < len(doc.Objects); i++ {
-		parent := doc.Objects[i].ParentID
+	for i := 1; i < len(doc.Sections); i++ {
+		parent := doc.Sections[i].ParentSectionID
 		if parent == nil {
-			t.Fatalf("object %q missing parent", doc.Objects[i].ID)
+			t.Fatalf("section %q missing parent", doc.Sections[i].ID)
 		}
-		if *parent != doc.Objects[i-1].ID {
-			t.Fatalf("object %q parent = %q, want %q", doc.Objects[i].ID, *parent, doc.Objects[i-1].ID)
+		if *parent != doc.Sections[i-1].ID {
+			t.Fatalf("section %q parent = %q, want %q", doc.Sections[i].ID, *parent, doc.Sections[i-1].ID)
 		}
 	}
 }
 
-func TestFindParentForLine(t *testing.T) {
+func TestFindScopeForLine(t *testing.T) {
 	t.Parallel()
 
-	objects := []*ParsedObject{
-		{ID: "doc", LineStart: 1},
+	sections := []*ParsedSection{
 		{ID: "doc#intro", LineStart: 5},
 		{ID: "doc#details", LineStart: 12},
 	}
@@ -718,8 +713,8 @@ func TestFindParentForLine(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := findParentForLine(objects, tt.line); got != tt.want {
-				t.Fatalf("findParentForLine(..., %d) = %q, want %q", tt.line, got, tt.want)
+			if got := findScopeForLine("doc", sections, tt.line); got != tt.want {
+				t.Fatalf("findScopeForLine(..., %d) = %q, want %q", tt.line, got, tt.want)
 			}
 		})
 	}

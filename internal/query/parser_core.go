@@ -88,10 +88,10 @@ func (p *Parser) expect(t TokenType) error {
 	return nil
 }
 
-// parseQuery parses a top-level query (type:<name>, trait:<name>, or asset).
+// parseQuery parses a top-level query (type:<name>, trait:<name>, section, or asset).
 func (p *Parser) parseQuery() (*Query, error) {
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected 'type', 'trait', or 'asset', got %v", p.curr.Value)
+		return nil, fmt.Errorf("expected 'type', 'trait', 'section', or 'asset', got %v", p.curr.Value)
 	}
 
 	queryKind := strings.ToLower(p.curr.Value)
@@ -100,11 +100,15 @@ func (p *Parser) parseQuery() (*Query, error) {
 	}
 	p.advance()
 
-	if queryKind == "asset" {
+	if queryKind == "asset" || queryKind == "section" {
 		if p.curr.Type == TokenColon {
-			return nil, fmt.Errorf("asset query root is bare 'asset'; use asset, not asset:<kind>")
+			return nil, fmt.Errorf("%s query root is bare '%s'; use %s, not %s:<kind>", queryKind, queryKind, queryKind, queryKind)
 		}
-		query := Query{Type: QueryTypeAsset}
+		queryType := QueryTypeAsset
+		if queryKind == "section" {
+			queryType = QueryTypeSection
+		}
+		query := Query{Type: queryType}
 		pred, err := p.parsePredicate(query.Type)
 		if err != nil {
 			return nil, err
@@ -134,7 +138,7 @@ func (p *Parser) parseQuery() (*Query, error) {
 	case "trait":
 		query.Type = QueryTypeTrait
 	default:
-		return nil, fmt.Errorf("invalid query type: %s (expected 'type', 'trait', or 'asset')", queryKind)
+		return nil, fmt.Errorf("invalid query type: %s (expected 'type', 'trait', 'section', or 'asset')", queryKind)
 	}
 	query.TypeName = typeName
 
@@ -278,11 +282,12 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 		if p.peek.Type == TokenLParen {
 			switch keyword {
 			// String functions
-			case "contains":
+			case "includes":
 				p.advance() // consume function name
 				return p.parseStringFuncPredicate(negated, StringFuncIncludes)
-			case "includes":
-				return nil, fmt.Errorf("includes() is no longer supported; use contains()")
+			case "contains":
+				p.advance()
+				return p.parseContainsFuncPredicate(negated)
 			case "startswith":
 				p.advance()
 				return p.parseStringFuncPredicate(negated, StringFuncStartsWith)
@@ -305,7 +310,7 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 				p.advance()
 				return p.parseContentFuncPredicate(negated)
 			// Scalar membership + array quantifiers
-			case "in":
+			case "oneof":
 				p.advance()
 				return p.parseInPredicate(negated)
 			case "any":
@@ -318,30 +323,15 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 				p.advance()
 				return p.parseArrayQuantifierPredicate(negated, ArrayQuantifierNone)
 			// Structural predicates (v3)
+			case "in":
+				p.advance()
+				return p.parseScopeNavFuncPredicate(negated, "in")
 			case "has":
 				p.advance()
 				return p.parseHasFuncPredicate(negated)
-			case "encloses":
-				p.advance()
-				return p.parseEnclosesFuncPredicate(negated)
-			case "parent":
-				p.advance()
-				return p.parseObjectNavFuncPredicate(negated, "parent")
-			case "ancestor":
-				p.advance()
-				return p.parseObjectNavFuncPredicate(negated, "ancestor")
-			case "child":
-				p.advance()
-				return p.parseObjectNavFuncPredicate(negated, "child")
-			case "descendant":
-				p.advance()
-				return p.parseObjectNavFuncPredicate(negated, "descendant")
-			case "on":
-				p.advance()
-				return p.parseTraitNavFuncPredicate(negated, "on")
 			case "within":
 				p.advance()
-				return p.parseTraitNavFuncPredicate(negated, "within")
+				return p.parseScopeNavFuncPredicate(negated, "within")
 			case "refs":
 				p.advance()
 				return p.parseRefsFuncPredicate(negated)
@@ -362,13 +352,13 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 			case "has":
 				return nil, fmt.Errorf("has:{...} is no longer supported; use has(trait:...)")
 			case "contains":
-				return nil, fmt.Errorf("contains:{...} is no longer supported; use encloses(trait:...)")
+				return nil, fmt.Errorf("contains:{...} is no longer supported; use contains(trait:...)")
 			case "refs":
 				return nil, fmt.Errorf("refs:... is no longer supported; use refs([[target]]) or refs(type:...)")
 			case "refd":
 				return nil, fmt.Errorf("refd:... is no longer supported; use refd([[source]]) or refd(type:...)")
 			case "on":
-				return nil, fmt.Errorf("on:{...} is no longer supported; use on(type:...)")
+				return nil, fmt.Errorf("on() is no longer supported; use in(...)")
 			case "within":
 				return nil, fmt.Errorf("within:{...} is no longer supported; use within(type:...)")
 			case "at":
@@ -430,10 +420,13 @@ func (p *Parser) parseContentFuncPredicate(negated bool) (Predicate, error) {
 }
 
 func (p *Parser) parseHasFuncPredicate(negated bool) (Predicate, error) {
-	// has(trait:...)
-	subq, err := p.parseQueryArg(QueryTypeTrait, "trait")
+	// has(section ...) or has(trait:...)
+	subq, err := p.parseAnyQueryArg("section or trait")
 	if err != nil {
 		return nil, err
+	}
+	if subq.Type != QueryTypeSection && subq.Type != QueryTypeTrait {
+		return nil, fmt.Errorf("has() expects a section or trait query")
 	}
 	return &HasPredicate{
 		basePredicate: basePredicate{negated: negated},
@@ -441,11 +434,14 @@ func (p *Parser) parseHasFuncPredicate(negated bool) (Predicate, error) {
 	}, nil
 }
 
-func (p *Parser) parseEnclosesFuncPredicate(negated bool) (Predicate, error) {
-	// encloses(trait:...) => subtree trait containment
-	subq, err := p.parseQueryArg(QueryTypeTrait, "trait")
+func (p *Parser) parseContainsFuncPredicate(negated bool) (Predicate, error) {
+	// contains(section ...) or contains(trait:...)
+	subq, err := p.parseAnyQueryArg("section or trait")
 	if err != nil {
 		return nil, err
+	}
+	if subq.Type != QueryTypeSection && subq.Type != QueryTypeTrait {
+		return nil, fmt.Errorf("contains() expects a section or trait query")
 	}
 	return &ContainsPredicate{
 		basePredicate: basePredicate{negated: negated},
@@ -477,7 +473,7 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 
 	if p.curr.Type == TokenIdent {
 		ident := strings.ToLower(p.curr.Value)
-		if ident != "type" || p.peek.Type != TokenColon {
+		if ident != "section" && (ident != "type" || p.peek.Type != TokenColon) {
 			target := p.curr.Value
 			p.advance()
 			if err := p.expect(TokenRParen); err != nil {
@@ -492,14 +488,14 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	}
 
 	if p.curr.Type != TokenIdent {
-		return navFuncArgument{}, fmt.Errorf("expected type query or target in %s()", kind)
+		return navFuncArgument{}, fmt.Errorf("expected scope query or target in %s()", kind)
 	}
 	subq, err := p.parseQuery()
 	if err != nil {
 		return navFuncArgument{}, err
 	}
-	if subq.Type != QueryTypeObject {
-		return navFuncArgument{}, fmt.Errorf("expected type subquery in %s(), got trait subquery", kind)
+	if subq.Type != QueryTypeObject && subq.Type != QueryTypeSection {
+		return navFuncArgument{}, fmt.Errorf("expected type or section subquery in %s()", kind)
 	}
 	if err := p.expect(TokenRParen); err != nil {
 		return navFuncArgument{}, err
@@ -507,31 +503,15 @@ func (p *Parser) parseNavFuncArgument(kind string) (navFuncArgument, error) {
 	return navFuncArgument{subQuery: subq}, nil
 }
 
-func buildObjectNavPredicate(negated bool, kind, target string, subQuery *Query) (Predicate, error) {
+func buildScopeNavPredicate(negated bool, kind, target string, subQuery *Query) (Predicate, error) {
 	base := basePredicate{negated: negated}
 	switch kind {
-	case "parent":
-		return &ParentPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
-	case "ancestor":
-		return &AncestorPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
-	case "child":
-		return &ChildPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
-	case "descendant":
-		return &DescendantPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
-	default:
-		return nil, fmt.Errorf("unknown navigation predicate: %s()", kind)
-	}
-}
-
-func buildTraitNavPredicate(negated bool, kind, target string, subQuery *Query) (Predicate, error) {
-	base := basePredicate{negated: negated}
-	switch kind {
-	case "on":
-		return &OnPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
+	case "in":
+		return &InPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	case "within":
 		return &WithinPredicate{basePredicate: base, Target: target, SubQuery: subQuery}, nil
 	default:
-		return nil, fmt.Errorf("unknown trait navigation predicate: %s()", kind)
+		return nil, fmt.Errorf("unknown scope navigation predicate: %s()", kind)
 	}
 }
 
@@ -543,14 +523,9 @@ func (p *Parser) parseNavFuncPredicate(negated bool, kind string, buildFn func(b
 	return buildFn(negated, kind, arg.target, arg.subQuery)
 }
 
-func (p *Parser) parseObjectNavFuncPredicate(negated bool, kind string) (Predicate, error) {
-	// parent(type:...), ancestor(type:...), child(type:...), descendant(type:...), or ...([[target]])
-	return p.parseNavFuncPredicate(negated, kind, buildObjectNavPredicate)
-}
-
-func (p *Parser) parseTraitNavFuncPredicate(negated bool, kind string) (Predicate, error) {
-	// on(type:...), within(type:...), or ...([[target]])
-	return p.parseNavFuncPredicate(negated, kind, buildTraitNavPredicate)
+func (p *Parser) parseScopeNavFuncPredicate(negated bool, kind string) (Predicate, error) {
+	// in(type:...), within(section ...), or ...([[target]])
+	return p.parseNavFuncPredicate(negated, kind, buildScopeNavPredicate)
 }
 
 func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
@@ -576,7 +551,7 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 		return nil, fmt.Errorf("expected target or type subquery in refs()")
 	}
 	ident := strings.ToLower(p.curr.Value)
-	if ident != "type" || p.peek.Type != TokenColon {
+	if ident != "section" && (ident != "type" || p.peek.Type != TokenColon) {
 		target := p.curr.Value
 		p.advance()
 		if err := p.expect(TokenRParen); err != nil {
@@ -588,8 +563,8 @@ func (p *Parser) parseRefsFuncPredicate(negated bool) (Predicate, error) {
 	if err != nil {
 		return nil, err
 	}
-	if subq.Type != QueryTypeObject {
-		return nil, fmt.Errorf("refs() subquery must be a type query")
+	if subq.Type != QueryTypeObject && subq.Type != QueryTypeSection {
+		return nil, fmt.Errorf("refs() subquery must be a type or section query")
 	}
 	if err := p.expect(TokenRParen); err != nil {
 		return nil, err
@@ -620,7 +595,7 @@ func (p *Parser) parseRefdFuncPredicate(negated bool) (Predicate, error) {
 		return nil, fmt.Errorf("expected source or subquery in refd()")
 	}
 	ident := strings.ToLower(p.curr.Value)
-	if (ident != "type" && ident != "trait") || p.peek.Type != TokenColon {
+	if ident != "section" && (ident != "type" && ident != "trait" || p.peek.Type != TokenColon) {
 		target := p.curr.Value
 		p.advance()
 		if err := p.expect(TokenRParen); err != nil {
@@ -667,6 +642,29 @@ func (p *Parser) parseQueryArg(expected QueryType, expectedKind string) (*Query,
 	}
 	if subq.Type != expected {
 		return nil, fmt.Errorf("expected %s query in argument", expectedKind)
+	}
+	if err := p.expect(TokenRParen); err != nil {
+		return nil, err
+	}
+	return subq, nil
+}
+
+func (p *Parser) parseAnyQueryArg(expectedKind string) (*Query, error) {
+	if err := p.expect(TokenLParen); err != nil {
+		return nil, err
+	}
+	if p.curr.Type == TokenLBrace {
+		return nil, fmt.Errorf("brace subqueries are no longer supported; drop braces and write %s directly", expectedKind)
+	}
+	if p.curr.Type == TokenUnderscore {
+		return nil, unsupportedSelfReferenceError()
+	}
+	if p.curr.Type != TokenIdent {
+		return nil, fmt.Errorf("expected %s query in argument", expectedKind)
+	}
+	subq, err := p.parseQuery()
+	if err != nil {
+		return nil, err
 	}
 	if err := p.expect(TokenRParen); err != nil {
 		return nil, err

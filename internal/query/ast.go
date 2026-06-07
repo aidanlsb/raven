@@ -8,6 +8,7 @@ const (
 	QueryTypeObject QueryType = iota
 	QueryTypeTrait
 	QueryTypeAsset
+	QueryTypeSection
 )
 
 // Query represents a parsed query.
@@ -61,7 +62,7 @@ func (op CompareOp) String() string {
 
 // FieldPredicate filters by type field value.
 // Syntax: .field==value, .field>value, exists(.field)
-// For string matching, use StringFuncPredicate (contains, startswith, endswith, matches).
+// For string matching, use StringFuncPredicate (includes, startswith, endswith, matches).
 type FieldPredicate struct {
 	basePredicate
 	Field      string
@@ -73,8 +74,8 @@ type FieldPredicate struct {
 
 func (FieldPredicate) predicateNode() {}
 
-// HasPredicate filters type-query results by whether they contain matching traits.
-// Syntax: has(trait:name .value==...)
+// HasPredicate filters scopes by whether they directly contain matching sections or traits.
+// Syntax: has(section ...), has(trait:name ...)
 type HasPredicate struct {
 	basePredicate
 	SubQuery *Query // A trait query
@@ -82,52 +83,21 @@ type HasPredicate struct {
 
 func (HasPredicate) predicateNode() {}
 
-// ParentPredicate filters by direct parent matching.
-// Syntax: parent(type:<name> ...), parent([[target]]), parent(_)
-type ParentPredicate struct {
+// InPredicate filters scoped results by their direct containing scope.
+// Syntax: in(type:<name> ...), in(section ...), in([[target]])
+type InPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // A type query (mutually exclusive with Target)
+	SubQuery *Query // A scope query (mutually exclusive with Target)
 }
 
-func (ParentPredicate) predicateNode() {}
+func (InPredicate) predicateNode() {}
 
-// AncestorPredicate filters by any ancestor matching.
-// Syntax: ancestor(type:<name> ...), ancestor([[target]]), ancestor(_)
-type AncestorPredicate struct {
-	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // A type query (mutually exclusive with Target)
-}
-
-func (AncestorPredicate) predicateNode() {}
-
-// ChildPredicate filters by having a direct child matching.
-// Syntax: child(type:<name> ...), child([[target]]), child(_)
-type ChildPredicate struct {
-	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // A type query (mutually exclusive with Target)
-}
-
-func (ChildPredicate) predicateNode() {}
-
-// DescendantPredicate filters by having any descendant matching (at any depth).
-// Syntax: descendant(type:<name> ...), descendant([[target]]), descendant(_)
-type DescendantPredicate struct {
-	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // A type query (mutually exclusive with Target)
-}
-
-func (DescendantPredicate) predicateNode() {}
-
-// ContainsPredicate filters type-query results by whether they contain matching traits anywhere
-// in their subtree (self or any descendant item).
-// Syntax: encloses(trait:name ...)
+// ContainsPredicate filters scopes by whether they recursively contain matching sections or traits.
+// Syntax: contains(section ...), contains(trait:name ...)
 type ContainsPredicate struct {
 	basePredicate
-	SubQuery *Query // A trait query
+	SubQuery *Query
 }
 
 func (ContainsPredicate) predicateNode() {}
@@ -164,22 +134,12 @@ type ValuePredicate struct {
 
 func (ValuePredicate) predicateNode() {}
 
-// OnPredicate filters traits by direct parent item.
-// Syntax: on(type:<name> ...), on([[target]]), on(_)
-type OnPredicate struct {
-	basePredicate
-	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // A type query (mutually exclusive with Target)
-}
-
-func (OnPredicate) predicateNode() {}
-
-// WithinPredicate filters traits by any ancestor item.
-// Syntax: within(type:<name> ...), within([[target]]), within(_)
+// WithinPredicate filters scoped results by any containing scope.
+// Syntax: within(type:<name> ...), within(section ...), within([[target]])
 type WithinPredicate struct {
 	basePredicate
 	Target   string // Specific target ID (mutually exclusive with SubQuery)
-	SubQuery *Query // A type query (mutually exclusive with Target)
+	SubQuery *Query // A scope query (mutually exclusive with Target)
 }
 
 func (WithinPredicate) predicateNode() {}
@@ -206,7 +166,7 @@ func (NotPredicate) Negated() bool  { return true }
 type StringFuncType int
 
 const (
-	StringFuncIncludes   StringFuncType = iota // contains(.field, "str") - substring match
+	StringFuncIncludes   StringFuncType = iota // includes(.field, "str") - substring match
 	StringFuncStartsWith                       // startswith(.field, "str")
 	StringFuncEndsWith                         // endswith(.field, "str")
 	StringFuncMatches                          // matches(.field, "pattern") - regex match
@@ -215,7 +175,7 @@ const (
 func (sf StringFuncType) String() string {
 	switch sf {
 	case StringFuncIncludes:
-		return "contains"
+		return "includes"
 	case StringFuncStartsWith:
 		return "startswith"
 	case StringFuncEndsWith:
@@ -228,7 +188,7 @@ func (sf StringFuncType) String() string {
 }
 
 // StringFuncPredicate represents a string function predicate.
-// Syntax: contains(.field, "value"), startswith(.field, "value"), etc.
+// Syntax: includes(.field, "value"), startswith(.field, "value"), etc.
 // Can also be used with _ as the field for array element context.
 type StringFuncPredicate struct {
 	basePredicate

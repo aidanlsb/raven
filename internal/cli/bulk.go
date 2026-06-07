@@ -60,7 +60,7 @@ type BulkSummary struct {
 }
 
 // ReadIDsFromStdin reads object/trait IDs from stdin, one per line.
-// Returns the IDs and any embedded IDs that were filtered out.
+// Returns the IDs and any section IDs that were filtered out.
 func ReadIDsFromStdin() (ids []string, embedded []string, err error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -74,7 +74,7 @@ func ReadIDsFromStdin() (ids []string, embedded []string, err error) {
 			continue
 		}
 
-		// Check for embedded object IDs (contain #)
+		// Section IDs contain a fragment and are not file-backed objects.
 		if strings.Contains(id, "#") {
 			embedded = append(embedded, id)
 			continue
@@ -106,7 +106,7 @@ func extractIDFromPipeLine(line string) string {
 	return line
 }
 
-// IsEmbeddedID checks if an ID is an embedded object ID (contains #).
+// IsEmbeddedID checks if an ID is a section/fragment ID (contains #).
 func IsEmbeddedID(id string) bool {
 	_, _, ok := paths.ParseEmbeddedID(id)
 	return ok
@@ -177,14 +177,14 @@ func getActionVerb(action string) string {
 	}
 }
 
-// BuildEmbeddedSkipWarning creates a warning for skipped embedded objects.
+// BuildEmbeddedSkipWarning creates a warning for skipped section IDs.
 func BuildEmbeddedSkipWarning(embedded []string) *Warning {
 	if len(embedded) == 0 {
 		return nil
 	}
 	return &Warning{
 		Code:    WarnEmbeddedSkipped,
-		Message: fmt.Sprintf("Skipped %d embedded object(s) - bulk operations only support file-level objects", len(embedded)),
+		Message: fmt.Sprintf("Skipped %d section ID(s) - bulk operations only support file-level objects", len(embedded)),
 		Ref:     strings.Join(embedded, ", "),
 	}
 }

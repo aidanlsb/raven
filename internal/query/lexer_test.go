@@ -411,10 +411,10 @@ func TestLexerNewTokens(t *testing.T) {
 			},
 		},
 		{
-			name:  "contains function syntax",
-			input: `contains(.name, "website")`,
+			name:  "includes function syntax",
+			input: `includes(.name, "website")`,
 			tokens: []Token{
-				{Type: TokenIdent, Value: "contains"},
+				{Type: TokenIdent, Value: "includes"},
 				{Type: TokenLParen, Value: "("},
 				{Type: TokenDot, Value: "."},
 				{Type: TokenIdent, Value: "name"},

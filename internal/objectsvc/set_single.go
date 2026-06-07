@@ -6,7 +6,6 @@ import (
 
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 )
 
@@ -51,33 +50,7 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 	}
 
 	if resolved.IsSection {
-		result, err := SetEmbeddedObject(SetEmbeddedObjectRequest{
-			VaultPath:      req.VaultPath,
-			VaultConfig:    req.VaultConfig,
-			FilePath:       resolved.FilePath,
-			ObjectID:       resolved.ObjectID,
-			TypedUpdates:   req.TypedUpdates,
-			Schema:         req.Schema,
-			AllowedFields:  map[string]bool{"alias": true, "id": true},
-			DocumentParser: req.ParseOptions,
-		})
-		if err != nil {
-			return nil, err
-		}
-		relPath, _ := filepath.Rel(req.VaultPath, resolved.FilePath)
-		relPath = filepath.ToSlash(relPath)
-		_, slug, _ := paths.ParseEmbeddedID(resolved.ObjectID)
-		return &SetByReferenceResult{
-			FilePath:        resolved.FilePath,
-			RelativePath:    relPath,
-			ObjectID:        resolved.ObjectID,
-			ObjectType:      result.ObjectType,
-			Embedded:        true,
-			EmbeddedSlug:    slug,
-			ResolvedUpdates: result.ResolvedUpdates,
-			WarningMessages: result.WarningMessages,
-			PreviousFields:  result.PreviousFields,
-		}, nil
+		return nil, newError(ErrorInvalidInput, "set only supports file-level object frontmatter", "Use a file-level object ID without a section fragment", nil, nil)
 	}
 
 	result, err := SetObjectFile(SetObjectFileRequest{

@@ -9,7 +9,6 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/fieldmutation"
 	"github.com/aidanlsb/raven/internal/parser"
-	"github.com/aidanlsb/raven/internal/paths"
 	"github.com/aidanlsb/raven/internal/schema"
 	"github.com/aidanlsb/raven/internal/vault"
 )
@@ -64,14 +63,7 @@ func PreviewSetBulk(req SetBulkRequest) (*SetBulkPreview, error) {
 
 	for _, id := range req.ObjectIDs {
 		if strings.Contains(id, "#") {
-			item, skip := previewSetBulkEmbedded(req, id)
-			if skip != nil {
-				skipped = append(skipped, *skip)
-				continue
-			}
-			if item != nil {
-				items = append(items, *item)
-			}
+			skipped = append(skipped, SetBulkResult{ID: id, Status: "skipped", Reason: "set only supports file-level object frontmatter"})
 			continue
 		}
 
@@ -155,18 +147,9 @@ func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBul
 		result := SetBulkResult{ID: id}
 
 		if strings.Contains(id, "#") {
-			filePath, err := applySetBulkEmbedded(req, id)
-			if err != nil {
-				result.Status = "error"
-				result.Reason = err.Error()
-				errorCount++
-			} else {
-				result.Status = "modified"
-				modifiedCount++
-				if onModified != nil {
-					onModified(filePath)
-				}
-			}
+			result.Status = "skipped"
+			result.Reason = "set only supports file-level object frontmatter"
+			skippedCount++
 			results = append(results, result)
 			continue
 		}
@@ -214,99 +197,6 @@ func ApplySetBulk(req SetBulkRequest, onModified func(filePath string)) (*SetBul
 		Errors:   errorCount,
 		Modified: modifiedCount,
 	}, nil
-}
-
-func previewSetBulkEmbedded(req SetBulkRequest, id string) (*SetBulkPreviewItem, *SetBulkResult) {
-	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
-	if !isEmbedded {
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: "invalid embedded ID format"}
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, fileID, req.VaultConfig)
-	if err != nil {
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: "parent file not found"}
-	}
-	if err := ValidateContentMutationFilePath(req.VaultPath, req.VaultConfig, filePath); err != nil {
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: err.Error()}
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("read error: %v", err)}
-	}
-
-	doc, err := parser.ParseDocumentWithOptions(string(content), filePath, req.VaultPath, req.ParseOptions)
-	if err != nil {
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("parse error: %v", err)}
-	}
-
-	var targetObj *parser.ParsedObject
-	for _, obj := range doc.Objects {
-		if obj.ID == id {
-			targetObj = obj
-			break
-		}
-	}
-	if targetObj == nil {
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: "embedded object not found"}
-	}
-	validatedUpdates, _, err := fieldmutation.PrepareValidatedFieldMutationValues(
-		targetObj.ObjectType,
-		targetObj.Fields,
-		req.TypedUpdates,
-		req.Schema,
-		map[string]bool{"alias": true, "id": true},
-		&fieldmutation.RefValidationContext{
-			VaultPath:    req.VaultPath,
-			VaultConfig:  req.VaultConfig,
-			ParseOptions: req.ParseOptions,
-		},
-	)
-	if err != nil {
-		var validationErr *fieldmutation.ValidationError
-		if errors.As(err, &validationErr) {
-			return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: validationErr.Error()}
-		}
-		return nil, &SetBulkResult{ID: id, Status: "skipped", Reason: fmt.Sprintf("validation error: %v", err)}
-	}
-
-	return &SetBulkPreviewItem{
-		ID:      id,
-		Action:  "set",
-		Changes: formatSetPreviewChanges(targetObj.Fields, validatedUpdates),
-	}, nil
-}
-
-func applySetBulkEmbedded(req SetBulkRequest, id string) (string, error) {
-	fileID, _, isEmbedded := paths.ParseEmbeddedID(id)
-	if !isEmbedded {
-		return "", fmt.Errorf("invalid embedded ID format")
-	}
-
-	filePath, err := vault.ResolveObjectToFileWithConfig(req.VaultPath, fileID, req.VaultConfig)
-	if err != nil {
-		return "", fmt.Errorf("parent file not found: %w", err)
-	}
-
-	_, err = SetEmbeddedObject(SetEmbeddedObjectRequest{
-		VaultPath:      req.VaultPath,
-		VaultConfig:    req.VaultConfig,
-		FilePath:       filePath,
-		ObjectID:       id,
-		TypedUpdates:   req.TypedUpdates,
-		Schema:         req.Schema,
-		AllowedFields:  map[string]bool{"alias": true, "id": true},
-		DocumentParser: req.ParseOptions,
-	})
-	if err != nil {
-		var svcErr *Error
-		if errors.As(err, &svcErr) {
-			return "", errors.New(svcErr.Message)
-		}
-		return "", err
-	}
-
-	return filePath, nil
 }
 
 func setBulkReasonFromError(err error) string {

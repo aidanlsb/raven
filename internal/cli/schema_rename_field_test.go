@@ -134,15 +134,21 @@ type: page
 	v.AssertFileContains("people/alice.md", "email_address: alice@example.com")
 	v.AssertFileNotContains("people/alice.md", "\nemail: ")
 
-	// embedded ::type(...) updated
-	// Serialization may omit quotes if not required.
-	v.AssertFileContains("notes/embedded.md", `::person(email_address=alice@example.com)`)
-	v.AssertFileNotContains("notes/embedded.md", `::person(email="alice@example.com")`)
+	// Legacy ::type(...) text is ordinary Markdown and is not rewritten.
+	v.AssertFileContains("notes/embedded.md", `::person(email="alice@example.com")`)
+	v.AssertFileNotContains("notes/embedded.md", `::person(email_address=alice@example.com)`)
 }
 
 func TestSchemaRenameField_ConflictInFrontmatterBlocksRename(t *testing.T) {
 	v := testutil.NewTestVault(t).
-		WithSchema(testutil.PersonProjectSchema()).
+		WithSchema(`version: 2
+types:
+  person:
+    fields:
+      name: { type: string }
+      email: { type: string }
+traits: {}
+`).
 		WithFile("people/alice.md", `---
 type: person
 name: Alice
@@ -156,7 +162,7 @@ email_address: alice@new.example.com
 	beforeSchema := v.ReadFile("schema.yaml")
 	beforePerson := v.ReadFile("people/alice.md")
 
-	res := v.RunCLI("schema", "rename", "field", "person", "email", "email_address")
+	res := v.RunCLI("schema", "rename", "field", "person", "email", "email_address", "--confirm")
 	res.MustFail(t, "DATA_INTEGRITY_BLOCK")
 
 	// Should not have applied anything
@@ -168,9 +174,16 @@ email_address: alice@new.example.com
 	}
 }
 
-func TestSchemaRenameField_ConflictInEmbeddedDeclBlocksRename(t *testing.T) {
+func TestSchemaRenameField_LegacyTypeDeclConflictDoesNotBlockRename(t *testing.T) {
 	v := testutil.NewTestVault(t).
-		WithSchema(testutil.PersonProjectSchema()).
+		WithSchema(`version: 2
+types:
+  person:
+    fields:
+      name: { type: string }
+      email: { type: string }
+traits: {}
+`).
 		WithFile("notes/embedded.md", `---
 type: page
 ---
@@ -182,13 +195,13 @@ type: page
 	beforeSchema := v.ReadFile("schema.yaml")
 	beforeFile := v.ReadFile("notes/embedded.md")
 
-	res := v.RunCLI("schema", "rename", "field", "person", "email", "email_address")
-	res.MustFail(t, "DATA_INTEGRITY_BLOCK")
+	res := v.RunCLI("schema", "rename", "field", "person", "email", "email_address", "--confirm")
+	res.MustSucceed(t)
 
-	if got := v.ReadFile("schema.yaml"); got != beforeSchema {
-		t.Fatalf("expected schema.yaml unchanged when conflicts exist")
+	if got := v.ReadFile("schema.yaml"); got == beforeSchema {
+		t.Fatalf("expected schema.yaml to be updated")
 	}
 	if got := v.ReadFile("notes/embedded.md"); got != beforeFile {
-		t.Fatalf("expected file unchanged when conflicts exist")
+		t.Fatalf("expected legacy type declaration text unchanged")
 	}
 }

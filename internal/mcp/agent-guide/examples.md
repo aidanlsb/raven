@@ -5,7 +5,7 @@ Use these examples as translations from user intent to compact-surface MCP usage
 ## Find items due today or tomorrow
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:due in(.value, [today,tomorrow])"})
+raven_invoke(command="query", args={"query_string":"trait:due oneof(.value, [today,tomorrow])"})
 ```
 
 ## Find real open todos instead of text mentions
@@ -25,7 +25,7 @@ raven_invoke(command="query", args={"query_string":"trait:todo .value==todo with
 ## Find open todos under a topic heading
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(type:section content(\"pricing\"))"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(section includes(.title, \"pricing\"))"})
 ```
 
 ## Validate project objects

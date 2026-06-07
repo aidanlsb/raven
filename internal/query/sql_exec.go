@@ -33,6 +33,26 @@ func scanTraitRows(rows *sql.Rows) ([]model.Trait, error) {
 	})
 }
 
+func scanSectionRows(rows *sql.Rows) ([]model.Section, error) {
+	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Section, error) {
+		var r model.Section
+		if err := rows.Scan(
+			&r.ID,
+			&r.FileObjectID,
+			&r.FilePath,
+			&r.Slug,
+			&r.Title,
+			&r.Level,
+			&r.LineStart,
+			&r.LineEnd,
+			&r.ParentSectionID,
+		); err != nil {
+			return model.Section{}, err
+		}
+		return r, nil
+	})
+}
+
 func scanAssetRows(rows *sql.Rows) ([]model.Asset, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Asset, error) {
 		var r model.Asset
@@ -243,6 +263,61 @@ func (e *Executor) executeAssetCountQuery(q *Query) (int, error) {
 	return count, nil
 }
 
+func (e *Executor) executeSectionQuery(q *Query) ([]model.Section, error) {
+	return e.executeSectionPageQuery(q, 0, 0)
+}
+
+func (e *Executor) executeSectionPageQuery(q *Query, limit, offset int) ([]model.Section, error) {
+	if q.Type != QueryTypeSection {
+		return nil, fmt.Errorf("expected section query")
+	}
+
+	sqlStr, args, err := e.buildSectionPageSQL(q, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := e.db.Query(sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+	}
+	return scanSectionRows(rows)
+}
+
+func (e *Executor) executeSectionIDQuery(q *Query, limit, offset int) ([]string, error) {
+	if q.Type != QueryTypeSection {
+		return nil, fmt.Errorf("expected section query")
+	}
+
+	sqlStr, args, err := e.buildSectionIDSQL(q, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := e.db.Query(sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+	}
+	return scanIDRows(rows)
+}
+
+func (e *Executor) executeSectionCountQuery(q *Query) (int, error) {
+	if q.Type != QueryTypeSection {
+		return 0, fmt.Errorf("expected section query")
+	}
+
+	sqlStr, args, err := e.buildSectionCountSQL(q)
+	if err != nil {
+		return 0, err
+	}
+
+	count, err := e.executeCountQuery(sqlStr, args)
+	if err != nil {
+		return 0, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+	}
+	return count, nil
+}
+
 // ExecuteObjectQuery executes a type query and returns matching objects.
 func (e *Executor) ExecuteObjectQuery(q *Query) ([]model.Object, error) {
 	return e.withExecutionNow().executeObjectQuery(q)
@@ -301,4 +376,20 @@ func (e *Executor) ExecuteAssetIDQuery(q *Query, limit, offset int) ([]string, e
 // ExecuteAssetCountQuery executes an asset query as COUNT(*).
 func (e *Executor) ExecuteAssetCountQuery(q *Query) (int, error) {
 	return e.withExecutionNow().executeAssetCountQuery(q)
+}
+
+func (e *Executor) ExecuteSectionQuery(q *Query) ([]model.Section, error) {
+	return e.withExecutionNow().executeSectionQuery(q)
+}
+
+func (e *Executor) ExecuteSectionPageQuery(q *Query, limit, offset int) ([]model.Section, error) {
+	return e.withExecutionNow().executeSectionPageQuery(q, limit, offset)
+}
+
+func (e *Executor) ExecuteSectionIDQuery(q *Query, limit, offset int) ([]string, error) {
+	return e.withExecutionNow().executeSectionIDQuery(q, limit, offset)
+}
+
+func (e *Executor) ExecuteSectionCountQuery(q *Query) (int, error) {
+	return e.withExecutionNow().executeSectionCountQuery(q)
 }

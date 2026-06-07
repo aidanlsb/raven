@@ -40,9 +40,11 @@ raven_invoke(command="query", args={"query_string":"asset refd(type:project .sta
 
 For text search inside typed queries, use `content("term")`.
 
+Sections use the bare `section` query root and return heading-derived rows with IDs like `file#slug`.
+
 Assets can be reference targets in `refs(...)` and `refd(...)` flows, including links discovered from Markdown links/images. Use the bare `asset` query root to return asset rows directly.
 
-Asset queries support derived metadata fields only: `.id`, `.file_path`, `.filename`, `.extension`, `.media_type`, and `.size_bytes`. Assets do not have outbound refs, traits, or hierarchy, so `asset refs(...)`, `asset has(...)`, and hierarchy predicates are invalid.
+Asset queries support derived metadata fields only: `.id`, `.file_path`, `.filename`, `.extension`, `.media_type`, and `.size_bytes`. Assets do not have outbound refs, traits, or scope, so `asset refs(...)`, `asset has(...)`, and scope predicates are invalid.
 
 If you see SQLite/FTS errors during full-text search, treat them as query-syntax issues and simplify or quote punctuation-heavy terms.
 
@@ -63,7 +65,7 @@ raven_invoke(command="query", args={"query_string":"trait:todo .value==todo with
 Open todos under a topic heading or section:
 
 ```text
-raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(type:section content(\"pricing\"))"})
+raven_invoke(command="query", args={"query_string":"trait:todo .value==todo within(section includes(.title, \"pricing\"))"})
 ```
 
 Open todos in a path plus structured filter:

@@ -126,9 +126,7 @@ func detectNonCanonicalPath(
 	}}
 }
 
-// primaryFileObject returns the file-level object for a parsed document, if
-// any. File-level objects are those without a parent (no embedded fragment).
-// Returns nil when a document only contains embedded objects.
+// primaryFileObject returns the file-backed object for a parsed document, if any.
 func primaryFileObject(doc *parser.ParsedDocument) *parser.ParsedObject {
 	for _, obj := range doc.Objects {
 		if obj == nil {

@@ -337,12 +337,6 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 			return result.Error
 		}
 
-		content, readErr := os.ReadFile(result.Path)
-		if readErr != nil {
-			return readErr
-		}
-		lines := strings.Split(string(content), "\n")
-
 		hasFileLevelOldType := false
 		for _, obj := range result.Document.Objects {
 			if obj.ObjectType == oldName && !strings.Contains(obj.ID, "#") {
@@ -370,17 +364,6 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 			}
 		}
 
-		embeddedPattern := fmt.Sprintf("::%s(", oldName)
-		for lineNum, line := range lines {
-			if strings.Contains(line, embeddedPattern) {
-				changes = append(changes, TypeRenameChange{
-					FilePath:    result.RelativePath,
-					ChangeType:  "embedded",
-					Description: fmt.Sprintf("change ::%s(...) → ::%s(...)", oldName, newName),
-					Line:        lineNum + 1,
-				})
-			}
-		}
 		return nil
 	})
 	if err != nil {
@@ -512,13 +495,6 @@ func RenameType(req RenameTypeRequest) (*RenameTypeResult, error) {
 		frontmatterPattern := regexp.MustCompile(`(?m)^type:\s*` + regexp.QuoteMeta(oldName) + `\s*$`)
 		if frontmatterPattern.MatchString(newContent) {
 			newContent = frontmatterPattern.ReplaceAllString(newContent, "type: "+newName)
-			modified = true
-			appliedChanges++
-		}
-
-		embeddedPattern := regexp.MustCompile(`::` + regexp.QuoteMeta(oldName) + `\(`)
-		if embeddedPattern.MatchString(newContent) {
-			newContent = embeddedPattern.ReplaceAllString(newContent, "::"+newName+"(")
 			modified = true
 			appliedChanges++
 		}
@@ -762,88 +738,11 @@ func buildFieldRenamePlan(vaultPath, typeName, oldField, newField string) (*fiel
 			}
 		}
 
-		typeDeclsToEdit := make([]*parser.EmbeddedTypeInfo, 0)
-		contentStartLine := 1
-		bodyContent := original
-		if fmOK && endLine != -1 {
-			contentStartLine = (endLine + 1) + 1
-			if endLine+1 < len(lines) {
-				bodyContent = strings.Join(lines[endLine+1:], "\n")
-			} else {
-				bodyContent = ""
-			}
-		}
-
-		astContent, err := parser.ExtractFromAST([]byte(bodyContent), contentStartLine)
-		if err == nil && astContent != nil {
-			for _, decl := range astContent.TypeDecls {
-				if decl == nil || decl.TypeName != typeName {
-					continue
-				}
-				_, oldPresent := decl.Fields[oldField]
-				_, newPresent := decl.Fields[newField]
-				if oldPresent && newPresent {
-					plan.Conflicts = append(plan.Conflicts, FieldRenameConflict{
-						FilePath:      relPath,
-						ConflictType:  "embedded",
-						Message:       fmt.Sprintf("embedded ::%s(...) contains both '%s' and '%s'", typeName, oldField, newField),
-						Line:          decl.Line,
-						OldFieldFound: true,
-						NewFieldFound: true,
-					})
-					return nil
-				}
-				if oldPresent {
-					typeDeclsToEdit = append(typeDeclsToEdit, decl)
-				}
-			}
-		}
-
-		if !needsFrontmatterRename && len(typeDeclsToEdit) == 0 {
+		if !needsFrontmatterRename {
 			return nil
 		}
 
 		modified := false
-		if len(typeDeclsToEdit) > 0 {
-			sort.Slice(typeDeclsToEdit, func(i, j int) bool {
-				return typeDeclsToEdit[i].Line < typeDeclsToEdit[j].Line
-			})
-			for _, decl := range typeDeclsToEdit {
-				if decl.Line <= 0 || decl.Line-1 >= len(lines) {
-					return nil
-				}
-				declLine := lines[decl.Line-1]
-
-				leadingSpace := ""
-				for _, c := range declLine {
-					if c == ' ' || c == '\t' {
-						leadingSpace += string(c)
-					} else {
-						break
-					}
-				}
-
-				newFields := make(map[string]schema.FieldValue, len(decl.Fields))
-				for k, v := range decl.Fields {
-					newFields[k] = v
-				}
-				newFields[newField] = newFields[oldField]
-				delete(newFields, oldField)
-
-				newDecl := leadingSpace + parser.SerializeTypeDeclaration(typeName, newFields)
-				if newDecl != declLine {
-					lines[decl.Line-1] = newDecl
-					modified = true
-					plan.Changes = append(plan.Changes, FieldRenameChange{
-						FilePath:    relPath,
-						ChangeType:  "embedded",
-						Description: fmt.Sprintf("rename field '%s' → '%s' inside ::%s(...)", oldField, newField, typeName),
-						Line:        decl.Line,
-					})
-				}
-			}
-		}
-
 		updatedLines := lines
 		if needsFrontmatterRename && fmOK && endLine != -1 {
 			fmContent := strings.Join(strings.Split(original, "\n")[startLine+1:endLine], "\n")

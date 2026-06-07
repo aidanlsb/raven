@@ -336,7 +336,7 @@ func TestParseHasPredicate(t *testing.T) {
 	}
 }
 
-func TestParseParentAncestorChild(t *testing.T) {
+func TestParseScopeNavigationPredicates(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name         string
@@ -345,28 +345,22 @@ func TestParseParentAncestorChild(t *testing.T) {
 		wantTypeName string
 	}{
 		{
-			name:         "parent shorthand",
-			input:        "type:meeting parent(type:date)",
-			predType:     "parent",
-			wantTypeName: "date",
+			name:         "section in type",
+			input:        "section in(type:project)",
+			predType:     "in",
+			wantTypeName: "project",
 		},
 		{
-			name:         "parent full",
-			input:        "type:meeting parent(type:date)",
-			predType:     "parent",
-			wantTypeName: "date",
+			name:         "section within type",
+			input:        "section within(type:project)",
+			predType:     "within",
+			wantTypeName: "project",
 		},
 		{
-			name:         "ancestor shorthand",
-			input:        "type:meeting ancestor(type:date)",
-			predType:     "ancestor",
-			wantTypeName: "date",
-		},
-		{
-			name:         "child shorthand",
-			input:        "type:date child(type:meeting)",
-			predType:     "child",
-			wantTypeName: "meeting",
+			name:         "trait within type",
+			input:        "trait:todo within(type:project)",
+			predType:     "within",
+			wantTypeName: "project",
 		},
 	}
 
@@ -382,19 +376,14 @@ func TestParseParentAncestorChild(t *testing.T) {
 
 			var subQuery *Query
 			switch p := q.Predicate.(type) {
-			case *ParentPredicate:
-				if tt.predType != "parent" {
-					t.Fatalf("expected %s, got parent", tt.predType)
+			case *InPredicate:
+				if tt.predType != "in" {
+					t.Fatalf("expected %s, got in", tt.predType)
 				}
 				subQuery = p.SubQuery
-			case *AncestorPredicate:
-				if tt.predType != "ancestor" {
-					t.Fatalf("expected %s, got ancestor", tt.predType)
-				}
-				subQuery = p.SubQuery
-			case *ChildPredicate:
-				if tt.predType != "child" {
-					t.Fatalf("expected %s, got child", tt.predType)
+			case *WithinPredicate:
+				if tt.predType != "within" {
+					t.Fatalf("expected %s, got within", tt.predType)
 				}
 				subQuery = p.SubQuery
 			default:
@@ -408,7 +397,7 @@ func TestParseParentAncestorChild(t *testing.T) {
 	}
 }
 
-func TestParseParentAncestorChildTarget(t *testing.T) {
+func TestParseScopeNavigationTargets(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
@@ -417,28 +406,22 @@ func TestParseParentAncestorChildTarget(t *testing.T) {
 		wantTarget string
 	}{
 		{
-			name:       "parent target",
-			input:      "type:meeting parent(website)",
-			predType:   "parent",
+			name:       "in target",
+			input:      "section in(website)",
+			predType:   "in",
 			wantTarget: "website",
 		},
 		{
-			name:       "ancestor target",
-			input:      "type:meeting ancestor(projects/website)",
-			predType:   "ancestor",
+			name:       "within target",
+			input:      "section within(projects/website)",
+			predType:   "within",
 			wantTarget: "projects/website",
 		},
 		{
-			name:       "child target",
-			input:      "type:date child(meeting)",
-			predType:   "child",
-			wantTarget: "meeting",
-		},
-		{
-			name:       "descendant target",
-			input:      "type:project descendant(tasks)",
-			predType:   "descendant",
-			wantTarget: "tasks",
+			name:       "trait in target",
+			input:      "trait:todo in(projects/website#tasks)",
+			predType:   "in",
+			wantTarget: "projects/website#tasks",
 		},
 	}
 
@@ -453,9 +436,9 @@ func TestParseParentAncestorChildTarget(t *testing.T) {
 			}
 
 			switch p := q.Predicate.(type) {
-			case *ParentPredicate:
-				if tt.predType != "parent" {
-					t.Fatalf("expected %s, got parent", tt.predType)
+			case *InPredicate:
+				if tt.predType != "in" {
+					t.Fatalf("expected %s, got in", tt.predType)
 				}
 				if p.Target != tt.wantTarget {
 					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
@@ -463,29 +446,9 @@ func TestParseParentAncestorChildTarget(t *testing.T) {
 				if p.SubQuery != nil {
 					t.Error("expected no SubQuery")
 				}
-			case *AncestorPredicate:
-				if tt.predType != "ancestor" {
-					t.Fatalf("expected %s, got ancestor", tt.predType)
-				}
-				if p.Target != tt.wantTarget {
-					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
-				}
-				if p.SubQuery != nil {
-					t.Error("expected no SubQuery")
-				}
-			case *ChildPredicate:
-				if tt.predType != "child" {
-					t.Fatalf("expected %s, got child", tt.predType)
-				}
-				if p.Target != tt.wantTarget {
-					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
-				}
-				if p.SubQuery != nil {
-					t.Error("expected no SubQuery")
-				}
-			case *DescendantPredicate:
-				if tt.predType != "descendant" {
-					t.Fatalf("expected %s, got descendant", tt.predType)
+			case *WithinPredicate:
+				if tt.predType != "within" {
+					t.Fatalf("expected %s, got within", tt.predType)
 				}
 				if p.Target != tt.wantTarget {
 					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
@@ -562,7 +525,7 @@ func TestParseTraitPredicates(t *testing.T) {
 	}
 }
 
-func TestParseOnWithin(t *testing.T) {
+func TestParseInWithin(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name         string
@@ -571,15 +534,15 @@ func TestParseOnWithin(t *testing.T) {
 		wantTypeName string
 	}{
 		{
-			name:         "on shorthand",
-			input:        "trait:due on(type:meeting)",
-			predType:     "on",
+			name:         "in shorthand",
+			input:        "trait:due in(type:meeting)",
+			predType:     "in",
 			wantTypeName: "meeting",
 		},
 		{
-			name:         "on full",
-			input:        "trait:due on(type:meeting)",
-			predType:     "on",
+			name:         "in full",
+			input:        "trait:due in(type:meeting)",
+			predType:     "in",
 			wantTypeName: "meeting",
 		},
 		{
@@ -602,9 +565,9 @@ func TestParseOnWithin(t *testing.T) {
 
 			var subQuery *Query
 			switch p := q.Predicate.(type) {
-			case *OnPredicate:
-				if tt.predType != "on" {
-					t.Fatalf("expected %s, got on", tt.predType)
+			case *InPredicate:
+				if tt.predType != "in" {
+					t.Fatalf("expected %s, got in", tt.predType)
 				}
 				subQuery = p.SubQuery
 			case *WithinPredicate:
@@ -623,7 +586,7 @@ func TestParseOnWithin(t *testing.T) {
 	}
 }
 
-func TestParseOnWithinTarget(t *testing.T) {
+func TestParseInWithinTarget(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
@@ -632,9 +595,9 @@ func TestParseOnWithinTarget(t *testing.T) {
 		wantTarget string
 	}{
 		{
-			name:       "on target",
-			input:      "trait:due on(website)",
-			predType:   "on",
+			name:       "in target",
+			input:      "trait:due in(website)",
+			predType:   "in",
 			wantTarget: "website",
 		},
 		{
@@ -656,9 +619,9 @@ func TestParseOnWithinTarget(t *testing.T) {
 			}
 
 			switch p := q.Predicate.(type) {
-			case *OnPredicate:
-				if tt.predType != "on" {
-					t.Fatalf("expected %s, got on", tt.predType)
+			case *InPredicate:
+				if tt.predType != "in" {
+					t.Fatalf("expected %s, got in", tt.predType)
 				}
 				if p.Target != tt.wantTarget {
 					t.Errorf("Target = %v, want %v", p.Target, tt.wantTarget)
@@ -853,7 +816,7 @@ func TestParseContentPredicate(t *testing.T) {
 	}
 }
 
-func TestParseDescendantContains(t *testing.T) {
+func TestParseHasContainsScopePredicates(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name         string
@@ -863,47 +826,28 @@ func TestParseDescendantContains(t *testing.T) {
 		wantNeg      bool
 	}{
 		{
-			name:         "descendant shorthand",
-			input:        "type:project descendant(type:section)",
-			predType:     "descendant",
-			wantTypeName: "section",
-		},
-		{
-			name:         "descendant full",
-			input:        "type:project descendant(type:section)",
-			predType:     "descendant",
-			wantTypeName: "section",
-		},
-		{
-			name:         "negated descendant",
-			input:        "type:project !descendant(type:section)",
-			predType:     "descendant",
-			wantTypeName: "section",
-			wantNeg:      true,
-		},
-		{
-			name:         "encloses shorthand",
-			input:        "type:project encloses(trait:todo)",
-			predType:     "encloses",
+			name:         "has trait",
+			input:        "type:project has(trait:todo)",
+			predType:     "has",
 			wantTypeName: "todo",
 		},
 		{
-			name:         "encloses full",
-			input:        "type:project encloses(trait:todo)",
-			predType:     "encloses",
+			name:         "has section",
+			input:        "type:project has(section .title==Tasks)",
+			predType:     "has",
+			wantTypeName: "",
+		},
+		{
+			name:         "contains trait",
+			input:        "type:project contains(trait:todo .value==done)",
+			predType:     "contains",
 			wantTypeName: "todo",
 		},
 		{
-			name:         "encloses with value",
-			input:        "type:project encloses(trait:todo .value==done)",
-			predType:     "encloses",
-			wantTypeName: "todo",
-		},
-		{
-			name:         "negated encloses",
-			input:        "type:project !encloses(trait:todo)",
-			predType:     "encloses",
-			wantTypeName: "todo",
+			name:         "negated contains section",
+			input:        "type:project !contains(section .title==Tasks)",
+			predType:     "contains",
+			wantTypeName: "",
 			wantNeg:      true,
 		},
 	}
@@ -921,15 +865,15 @@ func TestParseDescendantContains(t *testing.T) {
 			var subQuery *Query
 			var negated bool
 			switch p := q.Predicate.(type) {
-			case *DescendantPredicate:
-				if tt.predType != "descendant" {
-					t.Fatalf("expected %s, got descendant", tt.predType)
+			case *HasPredicate:
+				if tt.predType != "has" {
+					t.Fatalf("expected %s, got has", tt.predType)
 				}
 				subQuery = p.SubQuery
 				negated = p.Negated()
 			case *ContainsPredicate:
-				if tt.predType != "encloses" {
-					t.Fatalf("expected %s, got encloses", tt.predType)
+				if tt.predType != "contains" {
+					t.Fatalf("expected %s, got contains", tt.predType)
 				}
 				subQuery = p.SubQuery
 				negated = p.Negated()
@@ -959,32 +903,32 @@ func TestParseComplexQueries(t *testing.T) {
 			input: "type:meeting has(trait:due .value==past)",
 		},
 		{
-			name:  "on with field",
-			input: "trait:highlight on(type:book .status==reading)",
+			name:  "in with field",
+			input: "trait:highlight in(type:book .status==reading)",
 		},
 		{
-			name:  "ancestor chain",
-			input: "type:topic ancestor(type:meeting ancestor(type:date))",
+			name:  "within section",
+			input: "section within(type:topic .status==active)",
 		},
 		{
 			name:  "complex with OR",
-			input: "trait:highlight (on(type:book .status==reading) | on(type:article .status==reading))",
+			input: "trait:highlight (in(type:book .status==reading) | in(type:article .status==reading))",
 		},
 		{
 			name:  "multiple field predicates",
 			input: "type:project .status==active .priority==high",
 		},
 		{
-			name:  "encloses with value predicate",
-			input: "type:project encloses(trait:todo .value==todo)",
+			name:  "contains with value predicate",
+			input: "type:project contains(trait:todo .value==todo)",
 		},
 		{
-			name:  "descendant with field predicate",
-			input: "type:project descendant(type:section .title==Tasks)",
+			name:  "contains section with field predicate",
+			input: "type:project contains(section .title==Tasks)",
 		},
 		{
 			name:  "combined contains and field",
-			input: "type:project .status==active encloses(trait:todo)",
+			input: "type:project .status==active contains(trait:todo)",
 		},
 	}
 
@@ -1196,7 +1140,7 @@ func TestParseComparisonOperators(t *testing.T) {
 func TestParseInPredicates(t *testing.T) {
 	t.Parallel()
 	t.Run("trait value in list", func(t *testing.T) {
-		q, err := Parse(`trait:todo in(.value, [todo,done])`)
+		q, err := Parse(`trait:todo oneof(.value, [todo,done])`)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1209,7 +1153,7 @@ func TestParseInPredicates(t *testing.T) {
 	})
 
 	t.Run("trait value not in list via negation", func(t *testing.T) {
-		q, err := Parse(`trait:todo !in(.value, [todo,done])`)
+		q, err := Parse(`trait:todo !oneof(.value, [todo,done])`)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1226,7 +1170,7 @@ func TestParseInPredicates(t *testing.T) {
 	})
 
 	t.Run("object field in list", func(t *testing.T) {
-		q, err := Parse(`type:project in(.status, [active,backlog])`)
+		q, err := Parse(`type:project oneof(.status, [active,backlog])`)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1239,7 +1183,7 @@ func TestParseInPredicates(t *testing.T) {
 	})
 
 	t.Run("in() errors on empty list", func(t *testing.T) {
-		_, err := Parse(`trait:todo in(.value, [])`)
+		_, err := Parse(`trait:todo oneof(.value, [])`)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -1358,33 +1302,33 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 		wantNeg    bool
 	}{
 		{
-			name:       "parent with direct target",
-			input:      "type:section parent([[projects/website]])",
-			predType:   "parent",
+			name:       "in with direct target",
+			input:      "section in([[projects/website]])",
+			predType:   "in",
 			wantTarget: "projects/website",
 		},
 		{
-			name:       "ancestor with direct target",
-			input:      "type:section ancestor([[projects/website]])",
-			predType:   "ancestor",
+			name:       "within with direct target",
+			input:      "section within([[projects/website]])",
+			predType:   "within",
 			wantTarget: "projects/website",
 		},
 		{
-			name:       "child with direct target",
-			input:      "type:project child([[projects/website#overview]])",
-			predType:   "child",
+			name:       "contains with direct target",
+			input:      "type:project contains(section .id==[[projects/website#overview]])",
+			predType:   "contains",
 			wantTarget: "projects/website#overview",
 		},
 		{
-			name:       "descendant with direct target",
-			input:      "type:project descendant([[projects/website#tasks]])",
-			predType:   "descendant",
+			name:       "has with direct target",
+			input:      "type:project has(section .id==[[projects/website#tasks]])",
+			predType:   "has",
 			wantTarget: "projects/website#tasks",
 		},
 		{
-			name:       "on with direct target (trait query)",
-			input:      "trait:todo on([[projects/website]])",
-			predType:   "on",
+			name:       "in with direct target (trait query)",
+			input:      "trait:todo in([[projects/website]])",
+			predType:   "in",
 			wantTarget: "projects/website",
 		},
 		{
@@ -1394,9 +1338,9 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 			wantTarget: "projects/website",
 		},
 		{
-			name:       "negated parent with direct target",
-			input:      "type:section !parent([[projects/website]])",
-			predType:   "parent",
+			name:       "negated in with direct target",
+			input:      "section !in([[projects/website]])",
+			predType:   "in",
 			wantTarget: "projects/website",
 			wantNeg:    true,
 		},
@@ -1421,33 +1365,9 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 			var target string
 			var negated bool
 			switch p := q.Predicate.(type) {
-			case *ParentPredicate:
-				if tt.predType != "parent" {
-					t.Fatalf("expected %s, got parent", tt.predType)
-				}
-				target = p.Target
-				negated = p.Negated()
-			case *AncestorPredicate:
-				if tt.predType != "ancestor" {
-					t.Fatalf("expected %s, got ancestor", tt.predType)
-				}
-				target = p.Target
-				negated = p.Negated()
-			case *ChildPredicate:
-				if tt.predType != "child" {
-					t.Fatalf("expected %s, got child", tt.predType)
-				}
-				target = p.Target
-				negated = p.Negated()
-			case *DescendantPredicate:
-				if tt.predType != "descendant" {
-					t.Fatalf("expected %s, got descendant", tt.predType)
-				}
-				target = p.Target
-				negated = p.Negated()
-			case *OnPredicate:
-				if tt.predType != "on" {
-					t.Fatalf("expected %s, got on", tt.predType)
+			case *InPredicate:
+				if tt.predType != "in" {
+					t.Fatalf("expected %s, got in", tt.predType)
 				}
 				target = p.Target
 				negated = p.Negated()
@@ -1456,6 +1376,18 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 					t.Fatalf("expected %s, got within", tt.predType)
 				}
 				target = p.Target
+				negated = p.Negated()
+			case *HasPredicate:
+				if tt.predType != "has" {
+					t.Fatalf("expected %s, got has", tt.predType)
+				}
+				target = refTargetFromSectionIDPredicate(t, p.SubQuery)
+				negated = p.Negated()
+			case *ContainsPredicate:
+				if tt.predType != "contains" {
+					t.Fatalf("expected %s, got contains", tt.predType)
+				}
+				target = refTargetFromSectionIDPredicate(t, p.SubQuery)
 				negated = p.Negated()
 			default:
 				t.Fatalf("unexpected predicate type: %T", q.Predicate)
@@ -1471,6 +1403,24 @@ func TestParseDirectTargetPredicates(t *testing.T) {
 	}
 }
 
+func refTargetFromSectionIDPredicate(t *testing.T, q *Query) string {
+	t.Helper()
+	if q == nil || q.Predicate == nil {
+		t.Fatal("expected section subquery predicate")
+	}
+	if q.Type != QueryTypeSection {
+		t.Fatalf("subquery type = %v, want section", q.Type)
+	}
+	fp, ok := q.Predicate.(*FieldPredicate)
+	if !ok {
+		t.Fatalf("subquery predicate = %T, want FieldPredicate", q.Predicate)
+	}
+	if fp.Field != "id" || !fp.IsRefValue {
+		t.Fatalf("field predicate = %#v, want .id ref value", fp)
+	}
+	return fp.Value
+}
+
 func TestParseNavigationPredicateErrors(t *testing.T) {
 	t.Parallel()
 
@@ -1480,34 +1430,34 @@ func TestParseNavigationPredicateErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "object nav rejects brace subqueries",
-			input:   "type:meeting parent({type:date})",
-			wantErr: "brace subqueries are no longer supported; use parent(type:...) or parent([[target]])",
+			name:    "scope nav rejects brace subqueries",
+			input:   "section in({type:date})",
+			wantErr: "brace subqueries are no longer supported; use in(type:...) or in([[target]])",
 		},
 		{
-			name:    "trait nav rejects brace subqueries",
-			input:   "trait:due on({type:meeting})",
-			wantErr: "brace subqueries are no longer supported; use on(type:...) or on([[target]])",
+			name:    "trait scope nav rejects brace subqueries",
+			input:   "trait:due in({type:meeting})",
+			wantErr: "brace subqueries are no longer supported; use in(type:...) or in([[target]])",
 		},
 		{
-			name:    "object nav rejects self reference",
-			input:   "type:meeting parent(_)",
+			name:    "scope nav rejects self reference",
+			input:   "section in(_)",
 			wantErr: "self-reference '_' is no longer supported; write an explicit target or subquery instead",
 		},
 		{
-			name:    "trait nav rejects self reference",
-			input:   "trait:due on(_)",
+			name:    "trait scope nav rejects self reference",
+			input:   "trait:due in(_)",
 			wantErr: "self-reference '_' is no longer supported; write an explicit target or subquery instead",
 		},
 		{
-			name:    "object nav requires target or subquery",
-			input:   "type:meeting parent()",
-			wantErr: "expected type query or target in parent()",
+			name:    "scope nav requires target or subquery",
+			input:   "section in()",
+			wantErr: "expected scope query or target in in()",
 		},
 		{
-			name:    "trait nav requires target or subquery",
-			input:   "trait:due on()",
-			wantErr: "expected type query or target in on()",
+			name:    "trait scope nav requires target or subquery",
+			input:   "trait:due in()",
+			wantErr: "expected scope query or target in in()",
 		},
 	}
 
@@ -1620,7 +1570,7 @@ func TestParseBooleanEdgeCases(t *testing.T) {
 	})
 
 	t.Run("in() produces flat OrPredicate", func(t *testing.T) {
-		q, err := Parse("type:project in(.status, [active,paused,done])")
+		q, err := Parse("type:project oneof(.status, [active,paused,done])")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

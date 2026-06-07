@@ -54,7 +54,7 @@ queries:
 
   # Items due soon
   due-soon:
-    query: "trait:due in(.value, [today, tomorrow])"
+    query: "trait:due oneof(.value, [today, tomorrow])"
     description: "Items due today or tomorrow"
 
   # Active projects

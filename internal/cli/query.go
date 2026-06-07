@@ -129,10 +129,11 @@ func shortenRefIfNeeded(s string) string {
 var queryCmd = &cobra.Command{
 	Use:   "query <query-string>",
 	Short: "Run a query using the Raven query language",
-	Long: `Query items by type, traits by name, or assets using the Raven query language.
+	Long: `Query items by type, sections, traits by name, or assets using the Raven query language.
 
 Query roots:
   type:<type> [predicates]    Query items of a type
+  section [predicates]        Query heading-derived sections
   trait:<name> [predicates]   Query traits by name
   asset [predicates]          Query indexed asset resources
 
@@ -140,12 +141,12 @@ Predicates for type queries:
   .field==value      Field equals value
   exists(.field)     Field exists (has a value)
   !.field==value     Field does not equal value
-  has(trait:...)        Has a trait matching nested trait query
-  encloses(trait:...)   Has a trait in subtree (self or descendants)
-  parent(type:...)    Direct parent matches nested type query
-  ancestor(type:...)  Any ancestor matches nested type query
-  child(type:...)     Has child matching nested type query
-  descendant(type:...) Has descendant matching nested type query
+  oneof(.field, [...]) Field matches any listed scalar value
+  includes(.field, "text") Substring match
+  has(trait:...)      Has a directly scoped trait
+  has(section...)     Has a directly scoped section
+  contains(trait:...) Recursively contains a matching trait
+  contains(section...) Recursively contains a matching section
   refs([[target]])      References a specific target
   refs(type:...)      References an item matching nested type query
   refd([[source]])      Referenced by a specific source
@@ -155,8 +156,11 @@ Predicates for type queries:
 
 Predicates for trait queries:
   .value==val      Trait value equals val
-  on(type:...)       Direct parent matches nested type query
-  within(type:...)   Any ancestor matches nested type query
+  oneof(.value, [...]) Value matches any listed scalar value
+  in(type:...)       Direct scope matches nested type query
+  in(section...)     Direct scope matches nested section query
+  within(type:...)   Any scope matches nested type query
+  within(section...) Any scope matches nested section query
   at(trait:...)        Co-located with trait matching nested trait query
   refs([[target]])     Line contains reference to target
   refs(type:...)     Line references an item matching nested type query
@@ -164,6 +168,8 @@ Predicates for trait queries:
 
 Predicates for asset queries:
   .extension==pdf       Asset field equals value
+  oneof(.extension, [...]) Asset field matches any listed scalar value
+  includes(.filename, "text") Substring match on derived metadata
   startswith(.media_type, "image/")  String match on derived metadata
   .size_bytes>1024      Numeric size comparison
   refd(type:...)        Referenced by matching items
@@ -180,11 +186,12 @@ You can then pass inputs either by position (following args order) or as key=val
 Examples:
   rvn query "type:project .status==active"
   rvn query "type:meeting has(trait:due)"
+  rvn query "section .title==Tasks"
   rvn query "trait:due .value<today"
   rvn query "asset .extension==pdf"
   rvn query "asset startswith(.media_type, \"image/\")"
   rvn query "trait:todo content(\"my task\")"
-  rvn query "trait:highlight on(type:book .status==reading)"
+  rvn query "trait:highlight in(type:book .status==reading)"
   rvn query tasks                    # Run saved query
   rvn query project-todos raven      # Positional input (args: [project])
   rvn query project-todos project=projects/raven
@@ -221,7 +228,7 @@ Examples:
 		queryStr := ""
 		isSavedQuery := false
 
-		if savedQuery, ok := vaultCfg.Queries[queryName]; ok && !isAssetQueryString(joinedQueryArgs) {
+		if savedQuery, ok := vaultCfg.Queries[queryName]; ok && !isAssetQueryString(joinedQueryArgs) && !isSectionQueryString(joinedQueryArgs) {
 			isSavedQuery = true
 			queryStr, err = querysvc.ResolveSavedQuery(queryName, savedQuery, args[1:], nil)
 			if err != nil {
@@ -260,9 +267,9 @@ Examples:
 			})
 		}
 
-		if !strings.HasPrefix(queryStr, "type:") && !strings.HasPrefix(queryStr, "trait:") && !isAssetQueryString(queryStr) {
+		if !strings.HasPrefix(queryStr, "type:") && !strings.HasPrefix(queryStr, "trait:") && !isAssetQueryString(queryStr) && !isSectionQueryString(queryStr) {
 			if isSavedQuery {
-				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', or 'asset'", queryName), "")
+				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', 'section', or 'asset'", queryName), "")
 			}
 
 			db, err := index.Open(vaultPath)
@@ -362,6 +369,14 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 			return nil
 		}
 		printQueryAssetResults(queryStr, assets)
+		return nil
+	case "section":
+		sections := sectionResultsFromAny(data["items"])
+		if ShouldUsePipeFormat() {
+			WritePipeableList(os.Stdout, pipeItemsForSectionResults(sections))
+			return nil
+		}
+		printQuerySectionResults(queryStr, sections)
 		return nil
 	default:
 		return handleErrorMsg(ErrInternal, "unexpected query result shape", "")
@@ -597,9 +612,51 @@ func assetResultsFromAny(raw interface{}) []model.Asset {
 	return results
 }
 
+func sectionResultsFromAny(raw interface{}) []model.Section {
+	if rows, ok := raw.([]map[string]interface{}); ok {
+		results := make([]model.Section, 0, len(rows))
+		for _, entry := range rows {
+			results = append(results, sectionFromResultMap(entry))
+		}
+		return results
+	}
+
+	rows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	results := make([]model.Section, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		results = append(results, sectionFromResultMap(entry))
+	}
+	return results
+}
+
+func sectionFromResultMap(entry map[string]interface{}) model.Section {
+	return model.Section{
+		ID:              stringValue(entry["id"]),
+		FileObjectID:    stringValue(entry["file_object_id"]),
+		FilePath:        stringValue(entry["file_path"]),
+		Slug:            stringValue(entry["slug"]),
+		Title:           stringValue(entry["title"]),
+		Level:           intFromAny(entry["level"]),
+		LineStart:       intFromAny(entry["line_start"]),
+		LineEnd:         intPointerFromAny(entry["line_end"]),
+		ParentSectionID: stringPointer(entry["parent_section_id"]),
+	}
+}
+
 func queryLabelFromData(data map[string]interface{}, queryStr string) string {
 	if stringValue(data["query_kind"]) == "asset" {
 		return "asset"
+	}
+	if stringValue(data["query_kind"]) == "section" {
+		return "section"
 	}
 	if label := stringValue(data["type"]); label != "" {
 		return label
@@ -655,6 +712,23 @@ func intFromAny(raw interface{}) int {
 		return int(value)
 	default:
 		return 0
+	}
+}
+
+func intPointerFromAny(raw interface{}) *int {
+	switch value := raw.(type) {
+	case nil:
+		return nil
+	case int:
+		return &value
+	case int64:
+		v := int(value)
+		return &v
+	case float64:
+		v := int(value)
+		return &v
+	default:
+		return nil
 	}
 }
 
@@ -780,6 +854,11 @@ func isAssetQueryString(queryString string) bool {
 	return trimmed == "asset" || strings.HasPrefix(trimmed, "asset ")
 }
 
+func isSectionQueryString(queryString string) bool {
+	trimmed := strings.TrimSpace(queryString)
+	return trimmed == "section" || strings.HasPrefix(trimmed, "section ")
+}
+
 func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.SavedQuery) []string {
 	if len(args) != 1 || len(queries) == 0 {
 		return args
@@ -791,7 +870,7 @@ func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.Sa
 	}
 
 	// Full query strings should continue through the normal path untouched.
-	if strings.HasPrefix(inline, "type:") || strings.HasPrefix(inline, "trait:") || isAssetQueryString(inline) {
+	if strings.HasPrefix(inline, "type:") || strings.HasPrefix(inline, "trait:") || isAssetQueryString(inline) || isSectionQueryString(inline) {
 		return args
 	}
 

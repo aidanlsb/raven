@@ -423,7 +423,7 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 		// Reserved keys that are always allowed
 		reservedKeys := map[string]bool{
 			"type":  true, // Object type declaration
-			"id":    true, // ID for embedded objects
+			"id":    true, // Optional file object ID override
 			"alias": true, // Alias for reference resolution
 		}
 
@@ -601,7 +601,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 					Line:     ref.Line,
 					Message:  fmt.Sprintf("Fragment reference [[%s]] not found — '%s' exists but has no section '#%s'", ref.TargetRaw, v.displayID(baseResult.TargetID), fragment),
 					Value:    ref.TargetRaw,
-					FixHint:  "The heading may have been renamed. Update the fragment or use ::type(id=...) for a stable ID",
+					FixHint:  "The heading may have been renamed. Update the fragment to match an existing section slug.",
 				})
 				return issues
 			}

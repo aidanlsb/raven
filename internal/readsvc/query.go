@@ -26,6 +26,7 @@ type ExecuteQueryResult struct {
 	Objects   []model.Object
 	Traits    []model.Trait
 	Assets    []model.Asset
+	Sections  []model.Section
 }
 
 func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, error) {
@@ -60,6 +61,8 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 		queryKind = "type"
 	} else if q.Type == query.QueryTypeAsset {
 		queryKind = "asset"
+	} else if q.Type == query.QueryTypeSection {
+		queryKind = "section"
 	}
 	result := &ExecuteQueryResult{
 		QueryKind: queryKind,
@@ -173,6 +176,60 @@ func ExecuteQuery(rt *Runtime, req ExecuteQueryRequest) (*ExecuteQueryResult, er
 		}
 		result.Total = len(rows)
 		result.Assets = rows
+		result.Returned = len(rows)
+		return result, nil
+	}
+
+	if q.Type == query.QueryTypeSection {
+		if req.CountOnly {
+			total, err := executor.ExecuteSectionCountQuery(q)
+			if err != nil {
+				return nil, err
+			}
+			result.Total = total
+			return result, nil
+		}
+
+		if req.IDsOnly {
+			ids, err := executor.ExecuteSectionIDQuery(q, req.Limit, req.Offset)
+			if err != nil {
+				return nil, err
+			}
+			if paginated {
+				total, err := executor.ExecuteSectionCountQuery(q)
+				if err != nil {
+					return nil, err
+				}
+				result.Total = total
+			} else {
+				result.Total = len(ids)
+			}
+			result.IDs = ids
+			result.Returned = len(ids)
+			return result, nil
+		}
+
+		if paginated {
+			total, err := executor.ExecuteSectionCountQuery(q)
+			if err != nil {
+				return nil, err
+			}
+			rows, err := executor.ExecuteSectionPageQuery(q, req.Limit, req.Offset)
+			if err != nil {
+				return nil, err
+			}
+			result.Total = total
+			result.Sections = rows
+			result.Returned = len(rows)
+			return result, nil
+		}
+
+		rows, err := executor.ExecuteSectionQuery(q)
+		if err != nil {
+			return nil, err
+		}
+		result.Total = len(rows)
+		result.Sections = rows
 		result.Returned = len(rows)
 		return result, nil
 	}

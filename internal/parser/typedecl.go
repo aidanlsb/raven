@@ -11,7 +11,7 @@ import (
 	"github.com/aidanlsb/raven/internal/wikilink"
 )
 
-// TypeDeclaration represents a parsed ::type() declaration.
+// TypeDeclaration represents a parsed legacy ::type() declaration.
 type TypeDeclaration struct {
 	TypeName string
 	ID       string
@@ -24,7 +24,7 @@ type EmbeddedTypeInfo struct {
 	TypeName string
 	ID       string
 	Fields   map[string]schema.FieldValue
-	// Line is the 1-indexed line number of the ::type(...) declaration in the file.
+	// Line is the 1-indexed line number of the legacy ::type(...) declaration in the file.
 	// This is the declaration line (not the heading line).
 	Line int
 }
@@ -371,7 +371,7 @@ func parseValueWithOptions(s string, opts valueParseOptions) schema.FieldValue {
 	return schema.String(s)
 }
 
-// ParseFieldValue parses a single field value using the same rules as ::type() declarations.
+// ParseFieldValue parses a single field value using the same literal rules as legacy ::type() declarations.
 func ParseFieldValue(s string) schema.FieldValue {
 	return parseValueWithOptions(s, valueParseOptions{
 		parseBooleans: true,

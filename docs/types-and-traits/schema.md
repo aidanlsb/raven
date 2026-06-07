@@ -96,7 +96,7 @@ This file has no type, so it's a "page".
 
 ### `section`
 
-Auto-generated for every markdown heading that doesn't have an explicit type declaration.
+Auto-generated for every markdown heading.
 
 ```markdown
 ## Tasks
@@ -114,7 +114,6 @@ This heading creates a section with ID "file-id#tasks"
 - Created automatically when parsing documents
 - Object ID is `<file-id>#<slugified-heading>`
 - Can be referenced like `[[project/website#tasks]]`
-- Overridden when `::type(...)` follows the heading
 
 ### `date`
 
@@ -660,7 +659,7 @@ These frontmatter keys are always allowed regardless of type:
 | Key | Description |
 |-----|-------------|
 | `type` | Object type (defaults to `page` if omitted) |
-| `id` | Explicit object ID (primarily for embedded objects) |
+| `id` | Explicit object ID override for the file-backed object |
 | `alias` | Alternative name for reference resolution |
 
 ### `alias`

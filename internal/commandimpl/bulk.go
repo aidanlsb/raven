@@ -905,7 +905,7 @@ func embeddedSkipWarnings(embeddedIDs []string) []commandexec.Warning {
 	}
 	return []commandexec.Warning{{
 		Code:    warnEmbeddedSkipped,
-		Message: fmt.Sprintf("Skipped %d embedded object(s) - bulk operations only support file-level objects", len(embeddedIDs)),
+		Message: fmt.Sprintf("Skipped %d section ID(s) - bulk operations only support file-level objects", len(embeddedIDs)),
 		Ref:     strings.Join(embeddedIDs, ", "),
 	}}
 }

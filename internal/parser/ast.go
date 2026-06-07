@@ -41,10 +41,7 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 		TypeDecls: make(map[int]*EmbeddedTypeInfo),
 	}
 
-	// Track paragraphs that contain type declarations (to skip them for trait/ref extraction)
-	consumedNodes := make(map[ast.Node]bool)
-
-	// First pass: extract headings and detect type declarations
+	// First pass: extract headings.
 	if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
@@ -54,16 +51,6 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 			headingInfo := extractHeadingFromNode(heading, content, lineStarts, startLine)
 			if headingInfo != nil {
 				result.Headings = append(result.Headings, *headingInfo)
-
-				// Check next sibling for ::type() declaration
-				if next := heading.NextSibling(); next != nil {
-					if para, ok := next.(*ast.Paragraph); ok {
-						if decl := extractTypeDeclFromParagraph(para, content, lineStarts, startLine); decl != nil {
-							result.TypeDecls[headingInfo.Line] = decl
-							consumedNodes[para] = true
-						}
-					}
-				}
 			}
 		}
 
@@ -86,11 +73,6 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 			return ast.WalkSkipChildren, nil
 		}
 
-		// Skip consumed nodes (type declarations)
-		if consumedNodes[n] {
-			return ast.WalkSkipChildren, nil
-		}
-
 		// Process block-level nodes that contain text content.
 		// We handle Paragraph and ListItem because they contain the actual text.
 		// Goldmark splits wikilinks like [[target]] across multiple Text nodes,
@@ -104,13 +86,6 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 		}
 
 		if processNode != nil {
-			// Check parent chain for consumed nodes
-			for parent := processNode.Parent(); parent != nil; parent = parent.Parent() {
-				if consumedNodes[parent] {
-					return ast.WalkSkipChildren, nil
-				}
-			}
-
 			// Collect all text from this node, skipping inline code
 			segments := collectTextSegments(processNode, content, lineStarts)
 			for _, seg := range segments {
@@ -164,43 +139,6 @@ func extractHeadingFromNode(heading *ast.Heading, content []byte, lineStarts []i
 		Text:  headingText,
 		Line:  line,
 	}
-}
-
-// extractTypeDeclFromParagraph checks if a paragraph contains a type declaration.
-// Returns nil if the paragraph doesn't start with "::".
-//
-// Note: Goldmark splits text at special characters like '[', so we need to
-// collect all text nodes in the paragraph to get the full type declaration.
-func extractTypeDeclFromParagraph(para *ast.Paragraph, content []byte, lineStarts []int, startLine int) *EmbeddedTypeInfo {
-	// Get the first text node to check for "::" prefix and get the line number
-	firstChild := para.FirstChild()
-	if firstChild == nil {
-		return nil
-	}
-
-	textNode, ok := firstChild.(*ast.Text)
-	if !ok {
-		return nil
-	}
-
-	// Quick check: first text node must start with "::"
-	firstSegment := textNode.Segment
-	firstText := strings.TrimSpace(string(firstSegment.Value(content)))
-	if !strings.HasPrefix(firstText, "::") {
-		return nil
-	}
-
-	// Collect all text from the paragraph (goldmark may split at '[' etc.)
-	var builder strings.Builder
-	for child := para.FirstChild(); child != nil; child = child.NextSibling() {
-		if tn, ok := child.(*ast.Text); ok {
-			builder.Write(tn.Segment.Value(content))
-		}
-	}
-
-	fullText := strings.TrimSpace(builder.String())
-	line := startLine + offsetToLine(lineStarts, firstSegment.Start)
-	return ParseEmbeddedType(fullText, line)
 }
 
 // extractRefsFromText extracts wikilink references from a text segment.

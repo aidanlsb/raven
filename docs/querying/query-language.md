@@ -9,7 +9,7 @@
 
 | Use this | When you want |
 |----------|---------------|
-| `rvn query` | Structured filtering by type/trait/asset, field values, hierarchy, and references |
+| `rvn query` | Structured filtering by type/section/trait/asset, field values, scope, and references |
 | `rvn search` | Free-text discovery when you do not know the structure yet |
 | `rvn backlinks` | All incoming references to one specific object or asset |
 | `rvn outlinks` | All outgoing references from one specific target |
@@ -19,12 +19,13 @@
 
 | Query type | Returns | Best for |
 |------------|---------|----------|
-| `type:<type> ...` | Objects | Find files/sections by frontmatter fields and structural relationships |
+| `type:<type> ...` | Objects | Find file-backed objects by frontmatter fields and structural relationships |
+| `section ...` | Sections | Find Markdown heading sections by title, slug, file, line range, and scope |
 | `trait:<name> ...` | Trait instances | Find inline annotations (`@todo`, `@due`, etc.) and surrounding content|
 | `asset ...` | Assets | Find indexed non-Markdown files by path, metadata, size, or references |
 
 Core rules:
-1. Every query returns exactly one kind of result (objects, traits, or assets).
+1. Every query returns exactly one kind of result (objects, sections, traits, or assets).
 2. Queries can nest arbitrarily, e.g. `type:project has(trait:...)`.
 3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
 
@@ -44,7 +45,22 @@ Examples:
 type:project
 type:project .status==active
 type:meeting has(trait:due .value<today)
-type:project encloses(trait:todo .value==todo)
+type:project contains(trait:todo .value==todo)
+```
+
+### Section Query
+
+```text
+section [predicates...]
+```
+
+Examples:
+
+```text
+section
+section .title==Tasks
+section within(type:project .status==active)
+section contains(trait:todo .value==todo)
 ```
 
 ### Trait Query
@@ -58,7 +74,7 @@ Examples:
 ```text
 trait:due
 trait:due .value<today
-trait:highlight on(type:book .status==reading)
+trait:highlight in(type:book .status==reading)
 ```
 
 ### Asset Query
@@ -85,9 +101,9 @@ asset refd(type:project .status==active)
 | Equality / inequality | `==`, `!=` | `.status!=done` |
 | Comparison | `<`, `>`, `<=`, `>=` | `.priority>5` |
 | Presence | `exists(.field)` | `exists(.email)`, `!exists(.email)` |
-| Scalar membership | `in(.field, [a,b])` | `in(.status, [active,backlog])` |
+| Scalar membership | `oneof(.field, [a,b])` | `oneof(.status, [active,backlog])` |
 | Array quantifiers | `any()` / `all()` / `none()` | `any(.tags, _ == "urgent")` |
-| String functions | `contains()`, `startswith()`, `endswith()`, `matches()` | `contains(.name, "website")` |
+| String functions | `includes()`, `startswith()`, `endswith()`, `matches()` | `includes(.name, "website")` |
 | References | `[[...]]` | `[[person/freya]]` |
 | Raw string | `r"..."` | `matches(.path, r"C:\Users\.*")` |
 
@@ -107,7 +123,7 @@ Notes:
 | `.field>value`, `.field<value` | Numeric/date comparison |
 | `.field>=value`, `.field<=value` | Inclusive comparison |
 | `exists(.field)` | Field has a value |
-| `in(.field, [a,b,c])` | Field matches any listed scalar value |
+| `oneof(.field, [a,b,c])` | Field matches any listed scalar value |
 
 Examples:
 
@@ -116,7 +132,7 @@ type:project .status==active
 type:project .title=="Website Redesign"
 type:person exists(.email)
 type:person !exists(.email)
-type:project in(.status, [active,paused])
+type:project oneof(.status, [active,paused])
 type:date .date>=2026-05-01 .date<=2026-05-31
 ```
 
@@ -128,7 +144,7 @@ The built-in `date` type has a generated `.date` field derived from the daily no
 
 | Function | Meaning |
 |----------|---------|
-| `contains(.field, "str")` | Substring match |
+| `includes(.field, "str")` | Substring match |
 | `startswith(.field, "str")` | Prefix match |
 | `endswith(.field, "str")` | Suffix match |
 | `matches(.field, "pattern")` / `matches(.field, /pattern/)` | Regex match |
@@ -136,7 +152,7 @@ The built-in `date` type has a generated `.date` field derived from the daily no
 Case-sensitive example:
 
 ```text
-contains(.name, "API", true)
+includes(.name, "API", true)
 ```
 
 ### Array Predicates
@@ -154,26 +170,21 @@ type:project none(.tags, _ == "deprecated")
 | Predicate | Meaning |
 |-----------|---------|
 | `has(trait:...)` | Object has matching trait directly on itself |
-| `encloses(trait:...)` | Object has matching trait on self or any descendant |
-| `parent(...)` | Direct parent matches query or target |
-| `ancestor(...)` | Any ancestor matches query or target |
-| `child(...)` | Direct child matches query or target |
-| `descendant(...)` | Any descendant matches query or target |
+| `has(section...)` | Object has matching section directly in the file |
+| `contains(trait:...)` | Object recursively contains matching trait in its section tree |
+| `contains(section...)` | Object recursively contains matching section in its section tree |
 | `refs(...)` | Object references a target or query match |
 | `refd(...)` | Object is referenced by a source or query match |
 | `content("term")` | Full-text term in object content |
 
-`parent`, `ancestor`, `child`, `descendant`, and `refs` accept:
-- Nested query: `parent(type:date)`
-- Wikilink: `parent([[daily/2026-01-10]])`
-- Target shorthand: `parent(daily/2026-01-10)`
+`refs` accepts direct targets or nested object/section queries.
 
 Examples:
 
 ```text
 type:project has(trait:due)
-type:project encloses(trait:todo .value==todo)
-type:meeting parent(type:date)
+type:project has(section .title==Tasks)
+type:project contains(trait:todo .value==todo)
 type:meeting refs([[project/website]])
 type:paper-notes refs([[assets/pdfs/paper.pdf]])
 type:meeting refs(type:project .status==active)
@@ -199,10 +210,10 @@ Examples:
 
 ```text
 asset .extension==pdf
-asset in(.extension, ["jpg", "jpeg", "png", "webp", "gif", "svg"])
+asset oneof(.extension, ["jpg", "jpeg", "png", "webp", "gif", "svg"])
 asset startswith(.media_type, "image/")
 asset startswith(.file_path, "assets/screenshots/")
-asset contains(.filename, "diagram")
+asset includes(.filename, "diagram")
 asset .size_bytes>1048576
 ```
 
@@ -214,7 +225,7 @@ asset refd(type:note refs([[project/raven]]))
 asset refd(trait:todo .value==todo)
 ```
 
-Assets do not have outbound references, traits, authored fields, or hierarchy, so `asset refs(...)`, `asset has(...)`, `asset content(...)`, and hierarchy predicates are not valid.
+Assets do not have outbound references, traits, authored fields, or scope, so `asset refs(...)`, `asset has(...)`, `asset content(...)`, and scope predicates are not valid.
 
 ## Trait Query Predicates
 
@@ -225,7 +236,7 @@ Assets do not have outbound references, traits, authored fields, or hierarchy, s
 | `.value==val`, `.value!=val` | Value equality/inequality |
 | `.value>val`, `.value<val` | Numeric/date comparison |
 | `.value>=val`, `.value<=val` | Inclusive comparison |
-| `in(.value, [a,b,c])` | Value is one of listed values |
+| `oneof(.value, [a,b,c])` | Value is one of listed values |
 
 Date/date-time comparisons also support relative keywords:
 - `today`
@@ -238,7 +249,7 @@ Examples:
 
 ```text
 trait:due .value<today
-trait:due in(.value, [today,tomorrow])
+trait:due oneof(.value, [today,tomorrow])
 trait:due .value<=2026-03-01
 ```
 
@@ -246,8 +257,8 @@ trait:due .value<=2026-03-01
 
 | Predicate | Meaning |
 |-----------|---------|
-| `on(...)` | Trait is directly on matching object |
-| `within(...)` | Trait is anywhere within matching object subtree |
+| `in(...)` | Trait is directly on matching object or section scope |
+| `within(...)` | Trait is anywhere within matching object or section scope |
 | `at(trait:...)` | Co-located with matching trait (same file and line) |
 | `refs(...)` | Trait's line references target or query match |
 | `content("term")` | Trait's line contains term |
@@ -256,7 +267,7 @@ trait:due .value<=2026-03-01
 Examples:
 
 ```text
-trait:due on(type:meeting)
+trait:due in(type:meeting)
 trait:todo within(type:project .status==active)
 trait:due at(trait:todo)
 trait:due refs([[person/freya]])
@@ -300,7 +311,7 @@ Key flags:
 - `--ids` — output one ID per line for piping to other commands
 - `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
 
-Asset query IDs are stable asset paths. Asset queries do not support `--apply`; use `--ids` to pass paths to commands that explicitly support assets.
+Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Section and asset queries do not support `--apply`; use `--ids` to pass IDs to commands that explicitly support them.
 
 ### Pagination
 
@@ -350,6 +361,7 @@ Saved query placeholders use `{{args.<name>}}` syntax. Every placeholder must be
 
 - Object query `--apply` supports: `set`, `add`, `delete`, `move`.
 - Trait query `--apply` supports only: `update <new_value>`.
+- Section and asset queries do not support `--apply`.
 - All `--apply` operations preview by default; use `--confirm` to apply.
 
 Examples:
@@ -367,7 +379,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 - Query-driven bulk changes: `vault-management/bulk-operations.md`
 - Organizing and referencing assets: `using-your-vault/assets.md`
 - Queryable field/trait definitions: `types-and-traits/schema.md`
-- Hierarchy and object IDs (`#fragment`, sections, embedded objects): `types-and-traits/file-format.md`
+- Object IDs and sections (`#fragment`): `types-and-traits/file-format.md`
 - Saved query configuration in `raven.yaml`: `using-your-vault/configuration.md`
 - Full-text search and other commands: `using-your-vault/common-commands.md`
 - MCP query tool usage: `agents/mcp.md`
