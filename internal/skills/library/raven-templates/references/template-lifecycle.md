@@ -7,7 +7,10 @@ rvn template write meeting/standard.md --content '# Meeting Notes' --json
 rvn schema template set meeting_standard --file templates/meeting/standard.md --json
 rvn schema template bind meeting_standard --type meeting --json
 rvn schema template default meeting_standard --type meeting --json
+rvn new meeting "Weekly Standup" --json
 ```
+
+Shortcut: `rvn schema template bind meeting_standard --type meeting --default --json` binds and sets the default in one step.
 
 ## Core type template quick path (`date`)
 
@@ -16,7 +19,17 @@ rvn template write daily.md --content '# Daily Note' --json
 rvn schema template set daily_default --file templates/daily.md --json
 rvn schema template bind daily_default --core date --json
 rvn schema template default daily_default --core date --json
+rvn daily tomorrow --json
 ```
+
+Shortcut: `rvn schema template bind daily_default --core date --default --json` binds and sets the default in one step.
+
+## Path semantics
+
+- `rvn template write meeting/standard.md ...` writes under `directories.template`, producing `templates/meeting/standard.md` by default.
+- `rvn schema template set ... --file ...` resolves and stores the vault-relative template file path, for example `templates/meeting/standard.md`.
+- Template writes replace the full file body.
+- Template content is copied when an object is created; changing a template does not update existing notes.
 
 ## Inspect current template state
 
@@ -51,3 +64,8 @@ rvn template delete daily.md --json
 ```
 
 Use `--force` on delete only when stale schema references are expected and intentionally ignored.
+
+Safety blockers:
+
+- `rvn schema template remove` blocks while a template ID is bound to any type or core type.
+- `rvn template delete` blocks while any schema template definition references the file path.
