@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.22] - 2026-06-07
+
+### Added
+- RQL now has first-class `asset` and `section` query roots, including section-aware scope predicates and inverse `refd(section)` matching.
+- Trait value queries now support array-valued traits.
+- `rvn unset` removes frontmatter fields from file-backed objects.
+- Documentation search supports pagination.
+
+### Changed
+- Inline typed-object declarations have been removed in favor of file-backed typed objects plus heading-derived sections.
+- The query vocabulary now uses `oneof(...)` for scalar membership and `includes(...)` for string containment, while scope predicates use `in(...)`, `within(...)`, `has(...)`, and `contains(...)`.
+- Asset configuration is directory-only, and retrieval table rendering is centralized across output paths.
+- Packaged Raven skills now provide clearer vault admin, maintenance, template, and schema migration guidance.
+
 ## [v0.0.21] - 2026-06-04
 
 ### Changed
