@@ -80,7 +80,7 @@ See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-st
 
 ## Example Usage
 
-Each note file in a Raven vault (also referred to as an "object"), has a type indicating what that file represents. Types are defined in `schema.yaml` and can have required or optional frontmatter fields. 
+Each note file in a Raven vault has a type indicating what that file represents. Types are defined in `schema.yaml` and can have required or optional frontmatter fields. 
 
 Let's say that you want to track projects, meetings, and the people involved in your vault. These are "types." You might also want a quick way to tag when decisions get made, which is a good use case for "traits."
 
@@ -120,7 +120,7 @@ rvn schema add field meeting with --type ref[] --target person
 rvn schema add trait decision --type bool
 ```
 
-Create new instances of these types ("objects") using the CLI:
+Create new instances of these types using the CLI:
 
 ```bash
 rvn new project "Midgard Security Review" --field status=active
