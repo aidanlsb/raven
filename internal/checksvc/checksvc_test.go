@@ -116,7 +116,7 @@ func TestRun_ReportsMissingAssetReference(t *testing.T) {
 	}
 }
 
-func TestRun_ReportsOrphanedAndNonCanonicalAsset(t *testing.T) {
+func TestRun_ReportsOrphanedAsset(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()
@@ -154,9 +154,6 @@ func TestRun_ReportsOrphanedAndNonCanonicalAsset(t *testing.T) {
 	}
 	if !hasIssue(result.Issues, check.IssueOrphanedAsset) {
 		t.Fatalf("issues = %#v, want orphaned_asset", result.Issues)
-	}
-	if !hasIssue(result.Issues, check.IssueNonCanonicalAsset) {
-		t.Fatalf("issues = %#v, want non_canonical_asset", result.Issues)
 	}
 }
 

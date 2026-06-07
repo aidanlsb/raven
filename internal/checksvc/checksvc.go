@@ -250,7 +250,7 @@ func Run(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Schema, opt
 	}
 
 	if db != nil && (scope.Type == "full" || scope.Type == "directory") {
-		for _, issue := range detectAssetIssues(db, vaultPath, vaultCfg, excludeMatcher, scope, walkPath, targetFileSet) {
+		for _, issue := range detectAssetIssues(db, vaultPath, excludeMatcher, scope, walkPath, targetFileSet) {
 			if !shouldIncludeIssue(issue, includeIssues, excludeIssues, opts.ErrorsOnly) {
 				continue
 			}
@@ -440,8 +440,8 @@ func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
 	return jsonResult
 }
 
-func detectAssetIssues(db *index.Database, vaultPath string, vaultCfg *config.VaultConfig, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool) []check.Issue {
-	assets, err := db.QueryAssets("")
+func detectAssetIssues(db *index.Database, vaultPath string, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool) []check.Issue {
+	assets, err := db.QueryAssets()
 	if err != nil {
 		return nil
 	}
@@ -453,24 +453,6 @@ func detectAssetIssues(db *index.Database, vaultPath string, vaultCfg *config.Va
 		fullPath := filepath.Join(vaultPath, asset.FilePath)
 		if !isFileInScope(fullPath, scope, walkPath, targetFileSet) {
 			continue
-		}
-		if asset.NonCanonical {
-			expected := asset.FilePath
-			if asset.DefaultPath != "" {
-				root := "assets/"
-				if vaultCfg != nil {
-					root = vaultCfg.GetAssetRoot()
-				}
-				expected = root + asset.DefaultPath + filepath.Base(asset.FilePath)
-			}
-			issues = append(issues, check.Issue{
-				Level:    check.LevelWarning,
-				Type:     check.IssueNonCanonicalAsset,
-				FilePath: asset.FilePath,
-				Message:  fmt.Sprintf("Asset %q is not in the default path for kind %q", asset.FilePath, asset.Kind),
-				Value:    asset.FilePath,
-				FixHint:  fmt.Sprintf("Move asset to %s", filepath.ToSlash(expected)),
-			})
 		}
 		backlinks, err := db.Backlinks(asset.ID)
 		if err != nil {

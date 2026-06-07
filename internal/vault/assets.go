@@ -38,8 +38,7 @@ func WalkAssetFilesWithOptions(vaultPath string, vaultCfg *config.VaultConfig, o
 	if vaultCfg == nil {
 		vaultCfg = config.DefaultVaultConfig()
 	}
-	assetCfg := vaultCfg.GetAssetsConfig()
-	root := assetCfg.Root
+	root := vaultCfg.GetAssetRoot()
 	if root == "" {
 		return nil
 	}
@@ -123,38 +122,13 @@ func BuildAsset(relPath string, info fs.FileInfo, vaultCfg *config.VaultConfig) 
 	if ext != "" {
 		mediaType = mime.TypeByExtension("." + ext)
 	}
-	kind := vaultCfg.AssetKindForPath(relPath, mediaType)
-	defaultPath := ""
-	nonCanonical := false
-	if kind != "" {
-		if kindCfg := vaultCfg.GetAssetsConfig().Kinds[kind]; kindCfg != nil {
-			defaultPath = kindCfg.DefaultPath
-			nonCanonical = assetNonCanonical(relPath, vaultCfg.GetAssetRoot(), defaultPath)
-		}
-	}
 	return &model.Asset{
-		ID:           relPath,
-		FilePath:     relPath,
-		Kind:         kind,
-		MediaType:    mediaType,
-		SizeBytes:    info.Size(),
-		FileMtime:    info.ModTime().Unix(),
-		Extension:    ext,
-		Filename:     filepath.Base(relPath),
-		DefaultPath:  defaultPath,
-		NonCanonical: nonCanonical,
+		ID:        relPath,
+		FilePath:  relPath,
+		MediaType: mediaType,
+		SizeBytes: info.Size(),
+		FileMtime: info.ModTime().Unix(),
+		Extension: ext,
+		Filename:  filepath.Base(relPath),
 	}
-}
-
-func assetNonCanonical(relPath, root, defaultPath string) bool {
-	if defaultPath == "" {
-		return false
-	}
-	root = paths.NormalizeDirRoot(root)
-	defaultPath = paths.NormalizeDirRoot(defaultPath)
-	if root == "" || defaultPath == "" || !strings.HasPrefix(relPath, root) {
-		return false
-	}
-	withinRoot := strings.TrimPrefix(relPath, root)
-	return !strings.HasPrefix(withinRoot, defaultPath)
 }

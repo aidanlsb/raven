@@ -2,7 +2,7 @@
 
 Assets are vault-local non-Markdown files such as images, PDFs, audio, videos, and datasets.
 
-Assets are first-class graph resources, but they are not Raven object types. Object types in `schema.yaml` still describe Markdown-backed objects and sections. Asset kinds are separate organization and validation rules.
+Assets are first-class graph resources, but they are not Raven object types. Object types in `schema.yaml` still describe Markdown-backed objects and sections. Asset metadata is derived from the filesystem and index, not authored in `raven.yaml`.
 
 ## Linking Assets
 
@@ -26,36 +26,26 @@ Short asset references resolve when they are unambiguous. `[[paper]]` can resolv
 
 Raven only indexes vault-local asset references. External URLs, anchors, mail links, and Markdown links to `.md` files are not asset references.
 
-## Asset Kinds
+## Asset Directory
 
 Configure asset behavior in `raven.yaml`:
 
 ```yaml
-assets:
-  root: assets/
-  kinds:
-    photo:
-      extensions: [jpg, jpeg, png, gif, webp, heic]
-      media_types: [image/]
-      default_path: photos/
-    pdf:
-      extensions: [pdf]
-      media_types: [application/pdf]
-      default_path: pdfs/
+directories:
+  assets: assets/
 ```
 
-Kinds classify assets and define preferred placement. They do not define metadata fields, create schema types, or make assets queryable by frontmatter. If you need authored metadata, create a Markdown object such as `paper`, `source`, or `photo_set` and link it to the asset.
+`directories.assets` is the vault-relative directory scanned for non-Markdown files. Raven derives each indexed asset's path, filename, extension, media type, size, and modification time. If you need authored metadata, create a Markdown object such as `paper`, `source`, or `photo_set` and link it to the asset.
 
-Prefer the structured config commands when adding or changing asset rules:
+Prefer the structured config commands when changing the asset directory:
 
 ```bash
-rvn vault config assets show --json
-rvn vault config assets set --root assets --json
-rvn vault config assets kind set image --extensions svg --media-types image/svg+xml --default-path images --json
+rvn vault config directories get --json
+rvn vault config directories set --assets assets --json
 rvn reindex --json
 ```
 
-The config mutation commands return `reindex_required` and `reindex_command` when cached asset metadata should be refreshed.
+Run `rvn reindex --json` after changing `directories.assets` so cached asset metadata is refreshed.
 
 ## Checks And Moves
 
@@ -63,7 +53,6 @@ The config mutation commands return `reindex_required` and `reindex_command` whe
 
 - `missing_asset` when a Markdown asset link points to a file Raven cannot find.
 - `orphaned_asset` when an indexed asset has no incoming references.
-- `non_canonical_asset` when an asset is outside its kind's `default_path`.
 
 Use `rvn move` instead of shell `mv` for assets. It preserves vault safety checks, updates Markdown links/images that point to the moved asset, and refreshes the index.
 

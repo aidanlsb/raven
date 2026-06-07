@@ -18,7 +18,7 @@ When Raven indexes your notes, schema definitions determine what becomes structu
 
 This means the schema is the bridge between your markdown files and Raven's query engine. If something isn't in the schema, you can't query it structurally.
 
-Assets are separate from `schema.yaml`. Non-Markdown files such as PDFs and images are configured under `assets:` in `raven.yaml`; asset kinds are organization and validation rules, not object types.
+Assets are separate from `schema.yaml`. Non-Markdown files such as PDFs and images are scanned from `directories.assets` in `raven.yaml`; they are graph resources, not schema object types.
 
 ## Validation levels
 

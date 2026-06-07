@@ -33,7 +33,6 @@ check failures.
 | `short_ref_could_be_full_path` | Short ref could be clearer | Run `check fix --confirm` to rewrite to explicit full-path refs |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix (e.g. `[[type/person/jane]]`) | Run `check fix --confirm` to rewrite to canonical form (`[[person/jane]]`) |
 | `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
-| `non_canonical_asset` | Asset is outside its kind's preferred path | Move it with `rvn move` so Markdown links stay updated |
 
 ## Filtering patterns
 

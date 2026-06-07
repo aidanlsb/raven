@@ -268,7 +268,7 @@ rvn check --create-missing --confirm             # Create them
 - **`non_canonical_ref`** — strip the configured root prefix from wikilink targets (e.g. `[[type/person/freya]]` → `[[person/freya]]`)
 - **`non_canonical_path`** — move files into the configured directory root for their type and rewrite all references that point at them
 
-Asset-related issues are reported by `rvn check`, but are not auto-fixed by `rvn check fix` in this release. Use `rvn move` to relocate assets into their configured kind paths so references are rewritten safely.
+Asset-related issues are reported by `rvn check`, but are not auto-fixed by `rvn check fix` in this release. Use `rvn move` to relocate assets so references are rewritten safely.
 
 Key flags:
 - `--type` / `-t` — check only objects of a specific type

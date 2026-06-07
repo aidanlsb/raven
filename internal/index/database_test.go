@@ -764,6 +764,51 @@ owner: "[[people/freya]]"
 	})
 }
 
+func TestAssetsTableSchemaHasOnlyDerivedColumns(t *testing.T) {
+	t.Parallel()
+
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.db.Query(`PRAGMA table_info(assets)`)
+	if err != nil {
+		t.Fatalf("query assets schema: %v", err)
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			colType   string
+			notNull   int
+			defaultV  sql.NullString
+			primaryID int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultV, &primaryID); err != nil {
+			t.Fatalf("scan assets schema: %v", err)
+		}
+		columns = append(columns, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate assets schema: %v", err)
+	}
+
+	want := []string{"id", "file_path", "media_type", "extension", "filename", "size_bytes", "file_mtime", "indexed_at"}
+	if len(columns) != len(want) {
+		t.Fatalf("assets columns = %#v, want %#v", columns, want)
+	}
+	for i := range want {
+		if columns[i] != want[i] {
+			t.Fatalf("assets columns = %#v, want %#v", columns, want)
+		}
+	}
+}
+
 func TestExtractDateString(t *testing.T) {
 	t.Parallel()
 

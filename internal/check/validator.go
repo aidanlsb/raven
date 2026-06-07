@@ -46,7 +46,6 @@ const (
 	IssueNonCanonicalRef         IssueType = "non_canonical_ref"
 	IssueMissingAsset            IssueType = "missing_asset"
 	IssueOrphanedAsset           IssueType = "orphaned_asset"
-	IssueNonCanonicalAsset       IssueType = "non_canonical_asset"
 )
 
 // Issue represents a validation issue.

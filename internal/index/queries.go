@@ -248,21 +248,16 @@ func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 	return results, rows.Err()
 }
 
-// QueryAssets returns indexed asset resources, optionally filtered by kind.
-func (d *Database) QueryAssets(kind string) ([]model.Asset, error) {
+// QueryAssets returns indexed asset resources.
+func (d *Database) QueryAssets() ([]model.Asset, error) {
 	query := `
-		SELECT id, file_path, COALESCE(kind, ''), COALESCE(media_type, ''), COALESCE(extension, ''),
-		       filename, size_bytes, COALESCE(default_path, ''), non_canonical, COALESCE(file_mtime, 0), COALESCE(indexed_at, 0)
+		SELECT id, file_path, COALESCE(media_type, ''), COALESCE(extension, ''),
+		       filename, size_bytes, COALESCE(file_mtime, 0), COALESCE(indexed_at, 0)
 		FROM assets
+		ORDER BY file_path
 	`
-	var args []interface{}
-	if strings.TrimSpace(kind) != "" {
-		query += " WHERE kind = ?"
-		args = append(args, strings.TrimSpace(kind))
-	}
-	query += " ORDER BY file_path"
 
-	rows, err := d.db.Query(query, args...)
+	rows, err := d.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -271,23 +266,18 @@ func (d *Database) QueryAssets(kind string) ([]model.Asset, error) {
 	var results []model.Asset
 	for rows.Next() {
 		var result model.Asset
-		var nonCanonical int
 		if err := rows.Scan(
 			&result.ID,
 			&result.FilePath,
-			&result.Kind,
 			&result.MediaType,
 			&result.Extension,
 			&result.Filename,
 			&result.SizeBytes,
-			&result.DefaultPath,
-			&nonCanonical,
 			&result.FileMtime,
 			&result.IndexedAt,
 		); err != nil {
 			return nil, err
 		}
-		result.NonCanonical = nonCanonical != 0
 		results = append(results, result)
 	}
 	return results, rows.Err()

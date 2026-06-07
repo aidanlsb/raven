@@ -124,15 +124,11 @@ Assets are vault-local non-Markdown files such as PDFs, images, audio, videos, a
 Asset behavior is configured in `raven.yaml`, not `schema.yaml`:
 
 ```yaml
-assets:
-  root: assets/
-  kinds:
-    pdf:
-      extensions: [pdf]
-      default_path: pdfs/
+directories:
+  assets: assets/
 ```
 
-Asset kinds are organization and validation rules. If you need authored metadata about an asset, create a Markdown object that references it.
+Raven derives asset metadata such as path, extension, media type, size, and modification time. If you need authored metadata about an asset, create a Markdown object that references it.
 
 ## Traits
 

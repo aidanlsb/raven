@@ -172,15 +172,12 @@ Use structured CLI commands when available instead of editing `raven.yaml` manua
 
 ```bash
 rvn vault config show --json
-rvn vault config assets show --json
-rvn vault config assets set --root assets --json
-rvn vault config assets kind set image --extensions svg --media-types image/svg+xml --default-path images --json
 rvn vault config auto-reindex set --value=false --json
 rvn vault config auto-reindex unset --json
 rvn vault config protected-prefixes list --json
 rvn vault config protected-prefixes add private --json
 rvn vault config protected-prefixes remove private/ --json
-rvn vault config directories set --daily journal --type types --template templates/custom --json
+rvn vault config directories set --daily journal --type types --template templates/custom --assets assets --json
 rvn vault config directories unset --template --json
 rvn vault config capture set --destination inbox.md --heading "## Captured" --json
 rvn vault config capture unset --heading --json
@@ -198,9 +195,7 @@ directories:
   type: type/
   page: page/
   template: templates/
-
-assets:
-  root: assets/
+  assets: assets/
 
 capture:
   destination: daily
@@ -215,18 +210,7 @@ directories:
   type: type/
   page: page/
   template: templates/
-
-assets:
-  root: assets/
-  kinds:
-    photo:
-      extensions: [jpg, jpeg, png, gif, webp, heic]
-      media_types: [image/]
-      default_path: photos/
-    pdf:
-      extensions: [pdf]
-      media_types: [application/pdf]
-      default_path: pdfs/
+  assets: assets/
 
 auto_reindex: true
 
@@ -274,6 +258,7 @@ Directory roots used by Raven.
 | `type` | string | unset | Root for typed items |
 | `page` | string | unset, but defaults to `type` when `type` is set and `page` is omitted | Root for untyped pages |
 | `template` | string | `templates/` | Root for template files referenced by schema |
+| `assets` | string | `assets/` | Root scanned for non-Markdown asset files |
 
 Behavior notes:
 - Paths are normalized as vault-relative paths.
@@ -286,18 +271,18 @@ Compatibility notes:
 - Legacy `directories.object` and `directories.objects` are rejected. Use `directories.type` instead.
 - Legacy plural `pages` and `templates` are still accepted.
 - If both singular and plural are present for `page` or `template`, singular wins.
+- Top-level `assets` config is rejected. Use `directories.assets` instead.
 - `daily_directory` is no longer supported and causes a config error.
 
-### `assets`
+### Assets
 
 Vault-local non-Markdown files that Raven can index as graph resources.
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `root` | string | `assets/` | Root scanned for asset files |
-| `kinds` | map | built-in starter kinds | Organization and validation rules |
+| `directories.assets` | string | `assets/` | Root scanned for asset files |
 
-Asset kinds are not schema object types. They classify files by extension or media type and can specify a preferred `default_path` under the asset root. `media_types` entries can be exact types such as `application/pdf` or prefixes such as `image/`. Authored metadata should live in Markdown objects that link to the asset. Use `rvn vault config assets show --json` to inspect resolved defaults and `rvn vault config assets kind set <kind> ... --json` to add or update kind rules without editing YAML directly. Run the returned reindex command after changing asset config so cached asset metadata is refreshed. See `using-your-vault/assets.md` for linking, checks, and move behavior.
+Assets are not schema object types and do not have user-defined fields or kind rules. Raven derives path, filename, extension, media type, size, and modification time from the filesystem. Authored metadata should live in Markdown objects that link to the asset. Use `rvn vault config directories get --json` or `rvn vault config directories set --assets <dir> --json` to inspect or change the scanned directory. Run `rvn reindex --json` after changing asset config so cached asset metadata is refreshed. See `using-your-vault/assets.md` for linking, checks, and move behavior.
 
 ### `capture`
 
@@ -375,8 +360,7 @@ exclude:
 ## Defaults from `rvn init`
 
 `rvn init` creates a default `raven.yaml` with:
-- `directories.daily`, `directories.type`, `directories.page`, `directories.template`
-- `assets.root` and starter asset kinds
+- `directories.daily`, `directories.type`, `directories.page`, `directories.template`, `directories.assets`
 - `auto_reindex: true`
 - starter `queries`
 

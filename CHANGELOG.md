@@ -20,9 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v0.0.19] - 2026-05-17
 
 ### Added
-- First-class asset resources for vault-local non-Markdown files, including `assets` configuration, built-in asset kinds, indexing, reference resolution, backlinks/outlinks, and RQL `refs(...)` graph support.
+- First-class asset resources for vault-local non-Markdown files, including `directories.assets` configuration, indexing, reference resolution, backlinks/outlinks, and RQL `refs(...)` graph support.
 - Markdown links/images and Raven wikilinks can now reference assets, including unambiguous short asset references such as `[[paper]]`.
-- `rvn check` now reports missing, orphaned, and non-canonical assets; `rvn move` can relocate assets while updating Markdown links/images and wikilinks.
+- `rvn check` now reports missing and orphaned assets; `rvn move` can relocate assets while updating Markdown links/images and wikilinks.
 
 ### Changed
 - CLI and MCP documentation now describe assets consistently across core concepts, configuration, references, querying, common commands, and agent guidance.

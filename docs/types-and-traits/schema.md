@@ -135,7 +135,7 @@ type: date
 - Date references (`[[2026-01-10]]`) resolve to daily notes
 - Files are stored under `directories.daily` (from `raven.yaml`)
 
-There is intentionally no built-in `asset` type. Assets such as PDFs and images are non-Markdown graph resources configured under `assets:` in `raven.yaml`; they are not schema-backed objects and do not define frontmatter fields.
+There is intentionally no built-in `asset` type. Assets such as PDFs and images are non-Markdown graph resources scanned from `directories.assets` in `raven.yaml`; they are not schema-backed objects and do not define frontmatter fields.
 
 ---
 
@@ -594,7 +594,6 @@ Validates managed vault files against the schema. Paths matched by `raven.yaml` 
 | `non_canonical_path` | File lives outside the configured directory root for its type | Run `rvn check fix --confirm` to move the file |
 | `non_canonical_ref` | Wikilink target includes the configured root prefix | Run `rvn check fix --confirm` to strip the prefix |
 | `orphaned_asset` | Indexed asset has no incoming references | Link it from a note or remove it if unused |
-| `non_canonical_asset` | Asset is outside its kind's preferred path | Move it with `rvn move` |
 
 For reference resolution details and ambiguity behavior, see `types-and-traits/file-format.md` (References section).
 

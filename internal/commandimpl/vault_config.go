@@ -25,8 +25,8 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 			"type":       result.Directories.Object,
 			"page":       result.Directories.Page,
 			"template":   result.Directories.Template,
+			"assets":     result.Directories.Assets,
 		},
-		"assets": vaultAssetsData("", result.Exists, result.Assets)["assets"],
 		"capture": map[string]interface{}{
 			"destination": result.Capture.Destination,
 			"heading":     result.Capture.Heading,
@@ -41,52 +41,6 @@ func HandleVaultConfigShow(_ context.Context, req commandexec.Request) commandex
 		"exclude":                  result.Exclude,
 		"exclude_count":            len(result.Exclude),
 	}, &commandexec.Meta{Count: len(result.ProtectedPrefixes) + len(result.Exclude)})
-}
-
-func HandleVaultConfigAssetsShow(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.GetAssets(vaultconfigsvc.GetAssetsRequest{
-		VaultPath: req.VaultPath,
-	})
-	if err != nil {
-		return mapVaultConfigFailure(err)
-	}
-	return commandexec.Success(vaultAssetsData(result.ConfigPath, result.Exists, result.Assets), nil)
-}
-
-func HandleVaultConfigAssetsSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.SetAssets(vaultconfigsvc.SetAssetsRequest{
-		VaultPath: req.VaultPath,
-		Root:      optionalStringArg(req.Args, "root"),
-	})
-	if err != nil {
-		return mapVaultConfigFailure(err)
-	}
-	data := vaultAssetsData(result.ConfigPath, true, result.Assets)
-	data["created"] = result.Created
-	data["changed"] = result.Changed
-	data["reindex_required"] = result.ReindexRequired
-	data["reindex_command"] = result.ReindexCommand
-	return commandexec.Success(data, nil)
-}
-
-func HandleVaultConfigAssetsKindSet(_ context.Context, req commandexec.Request) commandexec.Result {
-	result, err := vaultconfigsvc.SetAssetKind(vaultconfigsvc.SetAssetKindRequest{
-		VaultPath:   req.VaultPath,
-		Kind:        strings.TrimSpace(stringArg(req.Args, "kind")),
-		Extensions:  optionalStringSliceArg(req.Args, "extensions"),
-		MediaTypes:  optionalStringSliceArg(req.Args, "media-types"),
-		DefaultPath: optionalStringArg(req.Args, "default-path"),
-	})
-	if err != nil {
-		return mapVaultConfigFailure(err)
-	}
-	data := vaultAssetsData(result.ConfigPath, true, result.Assets)
-	data["created"] = result.Created
-	data["changed"] = result.Changed
-	data["kind"] = result.Kind
-	data["reindex_required"] = result.ReindexRequired
-	data["reindex_command"] = result.ReindexCommand
-	return commandexec.Success(data, nil)
 }
 
 func HandleVaultConfigAutoReindexSet(_ context.Context, req commandexec.Request) commandexec.Result {
@@ -232,6 +186,7 @@ func HandleVaultConfigDirectoriesSet(_ context.Context, req commandexec.Request)
 		Object:    optionalStringArg(req.Args, "type"),
 		Page:      optionalStringArg(req.Args, "page"),
 		Template:  optionalStringArg(req.Args, "template"),
+		Assets:    optionalStringArg(req.Args, "assets"),
 	})
 	if err != nil {
 		return mapVaultConfigFailure(err)
@@ -249,6 +204,7 @@ func HandleVaultConfigDirectoriesUnset(_ context.Context, req commandexec.Reques
 		Object:    boolArg(req.Args, "type"),
 		Page:      boolArg(req.Args, "page"),
 		Template:  boolArg(req.Args, "template"),
+		Assets:    boolArg(req.Args, "assets"),
 	})
 	if err != nil {
 		return mapVaultConfigFailure(err)
@@ -350,26 +306,6 @@ func vaultConfigShowRequest(req commandexec.Request) vaultconfigsvc.ShowRequest 
 	}
 }
 
-func vaultAssetsData(configPath string, exists bool, info vaultconfigsvc.AssetsInfo) map[string]interface{} {
-	kinds := make(map[string]interface{}, len(info.Kinds))
-	for name, kind := range info.Kinds {
-		kinds[name] = map[string]interface{}{
-			"extensions":   kind.Extensions,
-			"media_types":  kind.MediaTypes,
-			"default_path": kind.DefaultPath,
-		}
-	}
-	return map[string]interface{}{
-		"config_path": configPath,
-		"exists":      exists,
-		"assets": map[string]interface{}{
-			"configured": info.Configured,
-			"root":       info.Root,
-			"kinds":      kinds,
-		},
-	}
-}
-
 func vaultDirectoriesData(configPath string, exists bool, info vaultconfigsvc.DirectoriesInfo) map[string]interface{} {
 	return map[string]interface{}{
 		"config_path": configPath,
@@ -379,6 +315,7 @@ func vaultDirectoriesData(configPath string, exists bool, info vaultconfigsvc.Di
 		"type":        info.Object,
 		"page":        info.Page,
 		"template":    info.Template,
+		"assets":      info.Assets,
 	}
 }
 
@@ -418,27 +355,4 @@ func optionalStringArg(args map[string]any, key string) *string {
 		return nil
 	}
 	return &value
-}
-
-func optionalStringSliceArg(args map[string]any, key string) *[]string {
-	if args == nil {
-		return nil
-	}
-	raw, ok := args[key]
-	if !ok {
-		return nil
-	}
-	values, ok := raw.([]string)
-	if ok {
-		return &values
-	}
-	rawList, ok := raw.([]interface{})
-	if !ok {
-		return nil
-	}
-	values = make([]string, 0, len(rawList))
-	for _, item := range rawList {
-		values = append(values, strings.TrimSpace(stringArg(map[string]any{"value": item}, "value")))
-	}
-	return &values
 }

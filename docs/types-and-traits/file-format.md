@@ -54,14 +54,14 @@ The directory prefix (`type/`, `page/`) is stripped from IDs.
 
 ### Asset IDs
 
-Assets are non-Markdown files under `assets.root` in `raven.yaml`. Asset IDs preserve the vault-relative file path including the extension:
+Assets are non-Markdown files under `directories.assets` in `raven.yaml`. Asset IDs preserve the vault-relative file path including the extension:
 
 | File Path | Asset ID |
 |-----------|----------|
 | `assets/pdfs/paper.pdf` | `assets/pdfs/paper.pdf` |
 | `assets/photos/diagram.png` | `assets/photos/diagram.png` |
 
-Assets are graph resources, not schema object types. They do not have YAML frontmatter, embedded sections, traits, or templates. Asset kinds in `raven.yaml` classify and organize assets but do not define schema fields.
+Assets are graph resources, not schema object types. They do not have YAML frontmatter, embedded sections, traits, templates, or user-defined fields. Raven derives asset metadata from the filesystem and index.
 
 ### Embedded Objects
 

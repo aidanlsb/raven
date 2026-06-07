@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -30,9 +29,6 @@ type VaultConfig struct {
 	// When set, typed items are nested under the configured type root, untyped pages under the page root.
 	// Object IDs strip the directory prefix, keeping references short.
 	Directories *DirectoriesConfig `yaml:"directories,omitempty"`
-
-	// Assets configures first-class non-Markdown asset resources.
-	Assets *AssetsConfig `yaml:"assets,omitempty"`
 
 	// AutoReindex triggers an incremental reindex after CLI operations that modify files (default: true)
 	AutoReindex *bool `yaml:"auto_reindex,omitempty"`
@@ -73,8 +69,11 @@ func (vc *VaultConfig) UnmarshalYAML(value *yaml.Node) error {
 	for i := 0; i < len(value.Content)-1; i += 2 {
 		key := value.Content[i]
 
-		if key.Value == "daily_directory" {
+		switch key.Value {
+		case "daily_directory":
 			return fmt.Errorf("daily_directory is no longer supported; use directories.daily instead")
+		case "assets":
+			return fmt.Errorf("assets is no longer supported; use directories.assets instead")
 		}
 	}
 	vc.DailyDirectory = vc.GetDailyDirectory()
@@ -107,35 +106,15 @@ type DirectoriesConfig struct {
 	// If empty, defaults to "templates/".
 	Template string `yaml:"template,omitempty"`
 
+	// Assets is the root directory scanned for non-Markdown asset resources.
+	// If empty, defaults to "assets/".
+	Assets string `yaml:"assets,omitempty"`
+
 	// Deprecated: use Page instead. Kept for backwards compatibility.
 	Pages string `yaml:"pages,omitempty"`
 
 	// Deprecated: use Template instead. Kept for backwards compatibility.
 	Templates string `yaml:"templates,omitempty"`
-}
-
-// AssetsConfig configures non-Markdown asset resources.
-//
-// Asset kinds are organization and validation rules, not Raven object types.
-// User-authored metadata should live in Markdown objects that reference assets.
-type AssetsConfig struct {
-	// Root is the vault-relative root scanned for assets (default: "assets/").
-	Root string `yaml:"root,omitempty"`
-
-	// Kinds classifies assets by extension or media type.
-	Kinds map[string]*AssetKindConfig `yaml:"kinds,omitempty"`
-}
-
-// AssetKindConfig defines organization and validation rules for a class of assets.
-type AssetKindConfig struct {
-	// Extensions are file extensions without a leading dot, matched case-insensitively.
-	Extensions []string `yaml:"extensions,omitempty"`
-
-	// MediaTypes are MIME media types or top-level media families (e.g. "image/").
-	MediaTypes []string `yaml:"media_types,omitempty"`
-
-	// DefaultPath is the preferred directory for this kind, relative to the asset root.
-	DefaultPath string `yaml:"default_path,omitempty"`
 }
 
 func (dc *DirectoriesConfig) UnmarshalYAML(value *yaml.Node) error {
@@ -182,6 +161,7 @@ func (vc *VaultConfig) GetDirectoriesConfig() *DirectoriesConfig {
 	cfg.Object = paths.NormalizeDirRoot(cfg.Object)
 	cfg.Page = paths.NormalizeDirRoot(cfg.Page)
 	cfg.Template = paths.NormalizeDirRoot(cfg.Template)
+	cfg.Assets = paths.NormalizeDirRoot(cfg.Assets)
 
 	// If page root is omitted, default it to the type root.
 	// This keeps "all notes under one root" configs simple:
@@ -204,7 +184,7 @@ func (vc *VaultConfig) HasDirectoriesConfig() bool {
 		return false
 	}
 	return vc.Directories.Object != "" || vc.Directories.Page != "" ||
-		vc.Directories.Pages != ""
+		vc.Directories.Pages != "" || vc.Directories.Assets != ""
 }
 
 // DeletionConfig configures how file deletion is handled.
@@ -337,61 +317,12 @@ func (vc *VaultConfig) GetTemplateDirectory() string {
 	return paths.NormalizeDirRoot(cleaned)
 }
 
-// GetAssetsConfig returns asset configuration with defaults applied.
-func (vc *VaultConfig) GetAssetsConfig() *AssetsConfig {
-	cfg := &AssetsConfig{
-		Root:  defaultAssetRoot,
-		Kinds: defaultAssetKinds(),
-	}
-	if vc == nil || vc.Assets == nil {
-		return cfg
-	}
-
-	if vc.Assets.Root != "" {
-		cfg.Root = vc.Assets.Root
-	}
-	cfg.Root = normalizeAssetRoot(cfg.Root)
-
-	for name, kind := range vc.Assets.Kinds {
-		name = strings.TrimSpace(name)
-		if name == "" || kind == nil {
-			continue
-		}
-		cfg.Kinds[name] = normalizeAssetKind(*kind)
-	}
-	return cfg
-}
-
 // GetAssetRoot returns the configured asset root with defaults applied.
 func (vc *VaultConfig) GetAssetRoot() string {
-	return vc.GetAssetsConfig().Root
-}
-
-// AssetKindForPath returns the configured kind for an asset path and media type.
-func (vc *VaultConfig) AssetKindForPath(filePath, mediaType string) string {
-	assetCfg := vc.GetAssetsConfig()
-	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
-	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
-
-	type candidate struct {
-		name string
-		kind *AssetKindConfig
+	root := defaultAssetRoot
+	if vc != nil && vc.Directories != nil && vc.Directories.Assets != "" {
+		root = vc.Directories.Assets
 	}
-	candidates := make([]candidate, 0, len(assetCfg.Kinds))
-	for name, kind := range assetCfg.Kinds {
-		candidates = append(candidates, candidate{name: name, kind: kind})
-	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].name < candidates[j].name })
-
-	for _, c := range candidates {
-		if assetKindMatches(c.kind, ext, mediaType) {
-			return c.name
-		}
-	}
-	return ""
-}
-
-func normalizeAssetRoot(root string) string {
 	normalized := paths.NormalizeDirRoot(root)
 	if normalized == "" {
 		return defaultAssetRoot
@@ -401,112 +332,6 @@ func normalizeAssetRoot(root string) string {
 		return defaultAssetRoot
 	}
 	return paths.NormalizeDirRoot(cleaned)
-}
-
-func normalizeAssetKind(kind AssetKindConfig) *AssetKindConfig {
-	normalized := &AssetKindConfig{
-		Extensions:  normalizeExtensions(kind.Extensions),
-		MediaTypes:  normalizeMediaTypes(kind.MediaTypes),
-		DefaultPath: normalizeOptionalAssetSubdir(kind.DefaultPath),
-	}
-	return normalized
-}
-
-func normalizeExtensions(values []string) []string {
-	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), ".")
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func normalizeMediaTypes(values []string) []string {
-	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.ToLower(strings.TrimSpace(value))
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func normalizeOptionalAssetSubdir(value string) string {
-	value = paths.NormalizeDirRoot(value)
-	if value == "" {
-		return ""
-	}
-	value = paths.NormalizeVaultRelPath(value)
-	if !paths.IsValidVaultRelPath(value) {
-		return ""
-	}
-	return paths.NormalizeDirRoot(value)
-}
-
-func assetKindMatches(kind *AssetKindConfig, ext, mediaType string) bool {
-	if kind == nil {
-		return false
-	}
-	for _, candidate := range kind.Extensions {
-		if candidate == ext {
-			return true
-		}
-	}
-	for _, candidate := range kind.MediaTypes {
-		if candidate == mediaType {
-			return true
-		}
-		if strings.HasSuffix(candidate, "/") && strings.HasPrefix(mediaType, candidate) {
-			return true
-		}
-	}
-	return false
-}
-
-func defaultAssetKinds() map[string]*AssetKindConfig {
-	return map[string]*AssetKindConfig{
-		"audio": {
-			Extensions:  []string{"aac", "flac", "m4a", "mp3", "ogg", "wav"},
-			MediaTypes:  []string{"audio/"},
-			DefaultPath: "audio/",
-		},
-		"data": {
-			Extensions:  []string{"csv", "json", "jsonl", "parquet", "tsv"},
-			DefaultPath: "data/",
-		},
-		"pdf": {
-			Extensions:  []string{"pdf"},
-			MediaTypes:  []string{"application/pdf"},
-			DefaultPath: "pdfs/",
-		},
-		"photo": {
-			Extensions:  []string{"gif", "heic", "jpeg", "jpg", "png", "webp"},
-			MediaTypes:  []string{"image/"},
-			DefaultPath: "photos/",
-		},
-		"video": {
-			Extensions:  []string{"avi", "m4v", "mov", "mp4", "webm"},
-			MediaTypes:  []string{"video/"},
-			DefaultPath: "videos/",
-		},
-	}
 }
 
 // SavedQuery defines a saved query using the Raven query language.

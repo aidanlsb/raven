@@ -206,7 +206,8 @@ func (d *Database) Analyze() error {
 // v8: Added alias column to objects table for reference aliasing
 // v9: Added field_refs table for ref-typed fields
 // v10: Added assets table for first-class non-Markdown resources
-const CurrentDBVersion = 10
+// v11: Removed user-defined asset kind/canonical metadata from assets table
+const CurrentDBVersion = 11
 
 // initialize creates the database schema.
 func (d *Database) initialize(isNewDB bool) error {
@@ -283,13 +284,10 @@ func (d *Database) initialize(isNewDB bool) error {
 		CREATE TABLE IF NOT EXISTS assets (
 			id TEXT PRIMARY KEY,
 			file_path TEXT NOT NULL UNIQUE,
-			kind TEXT,
 			media_type TEXT,
 			extension TEXT,
 			filename TEXT NOT NULL,
 			size_bytes INTEGER NOT NULL,
-			default_path TEXT,
-			non_canonical INTEGER NOT NULL DEFAULT 0,
 			file_mtime INTEGER,
 			indexed_at INTEGER
 		);
@@ -315,7 +313,6 @@ func (d *Database) initialize(isNewDB bool) error {
 		CREATE INDEX IF NOT EXISTS idx_field_refs_file ON field_refs(file_path);
 
 		CREATE INDEX IF NOT EXISTS idx_assets_file ON assets(file_path);
-		CREATE INDEX IF NOT EXISTS idx_assets_kind ON assets(kind);
 		
 		-- Composite indexes for trait refs matching (content scope rule)
 		CREATE INDEX IF NOT EXISTS idx_traits_file_line ON traits(file_path, line_number);
@@ -489,18 +486,15 @@ func (d *Database) IndexAsset(asset *model.Asset) error {
 	now := time.Now().Unix()
 	mtime := indexedMtime(now, asset.FileMtime)
 	_, err = tx.Exec(`
-		INSERT INTO assets (id, file_path, kind, media_type, extension, filename, size_bytes, default_path, non_canonical, file_mtime, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO assets (id, file_path, media_type, extension, filename, size_bytes, file_mtime, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		asset.ID,
 		asset.FilePath,
-		nullableString(asset.Kind),
 		nullableString(asset.MediaType),
 		nullableString(asset.Extension),
 		asset.Filename,
 		asset.SizeBytes,
-		nullableString(asset.DefaultPath),
-		boolInt(asset.NonCanonical),
 		mtime,
 		now,
 	)
@@ -515,13 +509,6 @@ func nullableString(value string) interface{} {
 		return nil
 	}
 	return value
-}
-
-func boolInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }
 
 func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64) error {

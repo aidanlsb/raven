@@ -428,7 +428,7 @@ func projectedDryRunStats(db *index.Database, deletedFiles []string, reindexedFi
 }
 
 func projectedDryRunAssetCount(db *index.Database, deletedFiles []string, reindexedAssets map[string]struct{}) (int, error) {
-	assets, err := db.QueryAssets("")
+	assets, err := db.QueryAssets()
 	if err != nil {
 		return 0, err
 	}

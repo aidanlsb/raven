@@ -153,39 +153,52 @@ func TestLoadVaultConfig(t *testing.T) {
 			t.Fatal("expected error for legacy directories.objects, got nil")
 		}
 	})
+
+	t.Run("rejects legacy top-level assets", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "raven.yaml")
+
+		content := "assets:\n  root: assets/\n"
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		if _, err := LoadVaultConfig(tmpDir); err == nil {
+			t.Fatal("expected error for legacy top-level assets, got nil")
+		}
+	})
 }
 
-func TestAssetsConfigDefaultsAndKinds(t *testing.T) {
+func TestAssetRootConfig(t *testing.T) {
 	t.Parallel()
 
 	cfg := DefaultVaultConfig()
 	if got := cfg.GetAssetRoot(); got != "assets/" {
 		t.Fatalf("asset root = %q, want assets/", got)
 	}
-	if got := cfg.AssetKindForPath("assets/pdfs/paper.pdf", "application/pdf"); got != "pdf" {
-		t.Fatalf("pdf kind = %q, want pdf", got)
-	}
-	if got := cfg.AssetKindForPath("assets/photos/image.JPG", ""); got != "photo" {
-		t.Fatalf("photo kind = %q, want photo", got)
+
+	cfg.Directories = &DirectoriesConfig{Assets: "resources/assets"}
+	if got := cfg.GetAssetRoot(); got != "resources/assets/" {
+		t.Fatalf("directories.assets root = %q, want resources/assets/", got)
 	}
 
-	cfg.Assets = &AssetsConfig{
-		Root: "../bad",
-		Kinds: map[string]*AssetKindConfig{
-			"receipt": {
-				Extensions:  []string{".RECEIPT", "receipt"},
-				DefaultPath: "receipts",
-			},
-		},
-	}
+	cfg.Directories.Assets = ""
 	if got := cfg.GetAssetRoot(); got != "assets/" {
-		t.Fatalf("invalid root defaulted to %q, want assets/", got)
+		t.Fatalf("empty directories.assets defaulted to %q, want assets/", got)
 	}
-	if got := cfg.AssetKindForPath("assets/expense.receipt", ""); got != "receipt" {
-		t.Fatalf("custom kind = %q, want receipt", got)
+}
+
+func TestDirectoriesConfigAssets(t *testing.T) {
+	t.Parallel()
+
+	cfg := &VaultConfig{Directories: &DirectoriesConfig{Assets: "resources/assets"}}
+	if got := cfg.GetAssetRoot(); got != "resources/assets/" {
+		t.Fatalf("asset root = %q, want resources/assets/", got)
 	}
-	if got := cfg.GetAssetsConfig().Kinds["receipt"].DefaultPath; got != "receipts/" {
-		t.Fatalf("receipt default path = %q, want receipts/", got)
+
+	dirs := cfg.GetDirectoriesConfig()
+	if dirs.Assets != "resources/assets/" {
+		t.Fatalf("directories.assets = %q, want resources/assets/", dirs.Assets)
 	}
 }
 func TestVaultConfigPaths(t *testing.T) {
