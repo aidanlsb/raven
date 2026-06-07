@@ -14,5 +14,8 @@ func (e *Executor) Execute(queryStr string) (interface{}, error) {
 	if q.Type == QueryTypeObject {
 		return scoped.executeObjectQuery(q)
 	}
+	if q.Type == QueryTypeAsset {
+		return scoped.executeAssetQuery(q)
+	}
 	return scoped.executeTraitQuery(q)
 }

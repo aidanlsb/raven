@@ -88,10 +88,10 @@ func (p *Parser) expect(t TokenType) error {
 	return nil
 }
 
-// parseQuery parses a top-level query (type:<name> or trait:<name>).
+// parseQuery parses a top-level query (type:<name>, trait:<name>, or asset).
 func (p *Parser) parseQuery() (*Query, error) {
 	if p.curr.Type != TokenIdent {
-		return nil, fmt.Errorf("expected 'type' or 'trait', got %v", p.curr.Value)
+		return nil, fmt.Errorf("expected 'type', 'trait', or 'asset', got %v", p.curr.Value)
 	}
 
 	queryKind := strings.ToLower(p.curr.Value)
@@ -99,6 +99,22 @@ func (p *Parser) parseQuery() (*Query, error) {
 		return nil, fmt.Errorf("legacy 'object:' queries are no longer supported; use 'type:'")
 	}
 	p.advance()
+
+	if queryKind == "asset" {
+		if p.curr.Type == TokenColon {
+			return nil, fmt.Errorf("asset query root is bare 'asset'; use asset, not asset:<kind>")
+		}
+		query := Query{Type: QueryTypeAsset}
+		pred, err := p.parsePredicate(query.Type)
+		if err != nil {
+			return nil, err
+		}
+		query.Predicate = pred
+		if p.curr.Type == TokenPipeline {
+			return nil, fmt.Errorf("pipeline operator '|>' is no longer supported")
+		}
+		return &query, nil
+	}
 
 	if err := p.expect(TokenColon); err != nil {
 		return nil, err
@@ -118,7 +134,7 @@ func (p *Parser) parseQuery() (*Query, error) {
 	case "trait":
 		query.Type = QueryTypeTrait
 	default:
-		return nil, fmt.Errorf("invalid query type: %s (expected 'type' or 'trait')", queryKind)
+		return nil, fmt.Errorf("invalid query type: %s (expected 'type', 'trait', or 'asset')", queryKind)
 	}
 	query.TypeName = typeName
 

@@ -1,18 +1,19 @@
 // Package query implements the Raven query language parser and executor.
 package query
 
-// QueryType represents the parsed query root (type or trait).
+// QueryType represents the parsed query root.
 type QueryType int
 
 const (
 	QueryTypeObject QueryType = iota
 	QueryTypeTrait
+	QueryTypeAsset
 )
 
 // Query represents a parsed query.
 type Query struct {
 	Type      QueryType
-	TypeName  string    // Type name or trait name
+	TypeName  string    // Type name or trait name; empty for asset queries
 	Predicate Predicate // Filter to apply (may be nil)
 }
 

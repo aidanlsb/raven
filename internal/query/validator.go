@@ -43,10 +43,14 @@ func (v *Validator) validateQuery(q *Query) error {
 		return nil
 	}
 
-	if q.Type == QueryTypeObject {
+	switch q.Type {
+	case QueryTypeObject:
 		return v.validateObjectQuery(q)
+	case QueryTypeAsset:
+		return v.validateAssetQuery(q)
+	default:
+		return v.validateTraitQuery(q)
 	}
-	return v.validateTraitQuery(q)
 }
 
 func (v *Validator) validateObjectQuery(q *Query) error {
@@ -88,6 +92,13 @@ func (v *Validator) validateTraitQuery(q *Query) error {
 	}
 
 	return nil
+}
+
+func (v *Validator) validateAssetQuery(q *Query) error {
+	if q.Predicate == nil {
+		return nil
+	}
+	return v.validateAssetPredicate(q.Predicate)
 }
 
 func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typeDef *schema.TypeDefinition) error {
@@ -297,12 +308,113 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 	return nil
 }
 
+func (v *Validator) validateAssetPredicate(pred Predicate) error {
+	switch p := pred.(type) {
+	case *FieldPredicate:
+		return v.validateAssetFieldPredicate(p)
+	case *StringFuncPredicate:
+		return v.validateAssetStringFuncPredicate(p)
+	case *RefdPredicate:
+		if p.SubQuery != nil {
+			return v.validateQuery(p.SubQuery)
+		}
+	case *RefsPredicate:
+		return &ValidationError{
+			Message:    "refs() predicate is not valid for asset queries",
+			Suggestion: "Assets do not have outbound references; use asset refd(...) to find assets referenced by objects or traits",
+		}
+	case *ArrayQuantifierPredicate:
+		return &ValidationError{
+			Message:    "array predicates are not valid for asset queries",
+			Suggestion: "Asset fields are scalar metadata fields",
+		}
+	case *ContentPredicate:
+		return &ValidationError{
+			Message:    "content() predicate is not valid for asset queries",
+			Suggestion: "Filter assets by derived metadata fields such as .filename, .extension, .media_type, or .size_bytes",
+		}
+	case *HasPredicate:
+		return &ValidationError{
+			Message:    "has() predicate is not valid for asset queries",
+			Suggestion: "Assets do not have traits; use asset refd(...) to filter by referencing objects or traits",
+		}
+	case *ContainsPredicate:
+		return &ValidationError{
+			Message:    "encloses() predicate is not valid for asset queries",
+			Suggestion: "Assets do not contain Raven objects or traits",
+		}
+	case *ParentPredicate, *AncestorPredicate, *ChildPredicate, *DescendantPredicate:
+		return &ValidationError{
+			Message:    "hierarchy predicates are not valid for asset queries",
+			Suggestion: "Assets are path-backed resources, not schema objects in an object hierarchy",
+		}
+	case *OnPredicate, *WithinPredicate, *AtPredicate:
+		return &ValidationError{
+			Message:    "trait-location predicates are not valid for asset queries",
+			Suggestion: "Use asset refd(trait:...) to find assets referenced by matching trait lines",
+		}
+	case *ValuePredicate:
+		return &ValidationError{
+			Message:    "value predicates are not valid for asset queries",
+			Suggestion: "Use asset fields such as .filename, .extension, .media_type, or .size_bytes",
+		}
+	case *OrPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validateAssetPredicate(subPred); err != nil {
+				return err
+			}
+		}
+	case *NotPredicate:
+		return v.validateAssetPredicate(p.Inner)
+	case *GroupPredicate:
+		for _, subPred := range p.Predicates {
+			if err := v.validateAssetPredicate(subPred); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (v *Validator) validateFieldPredicate(p *FieldPredicate, typeName string, typeDef *schema.TypeDefinition) error {
 	if isDateVirtualField(typeName, p.Field) {
 		return nil
 	}
 	_, err := v.fieldDefinitionForType(typeName, typeDef, p.Field)
 	return err
+}
+
+func (v *Validator) validateAssetFieldPredicate(p *FieldPredicate) error {
+	if _, ok := assetFieldTypes[p.Field]; !ok {
+		return &ValidationError{
+			Message:    fmt.Sprintf("asset has no field '%s'", p.Field),
+			Suggestion: fmt.Sprintf("Available asset fields: %s", strings.Join(availableAssetFields(), ", ")),
+		}
+	}
+	return nil
+}
+
+func (v *Validator) validateAssetStringFuncPredicate(p *StringFuncPredicate) error {
+	if p.IsElementRef {
+		return &ValidationError{
+			Message:    "string function placeholder '_' is not valid for asset queries",
+			Suggestion: `Use contains(.filename, "..."), startswith(.file_path, "..."), or startswith(.media_type, "...")`,
+		}
+	}
+	fieldType, ok := assetFieldTypes[p.Field]
+	if !ok {
+		return &ValidationError{
+			Message:    fmt.Sprintf("asset has no field '%s'", p.Field),
+			Suggestion: fmt.Sprintf("Available asset fields: %s", strings.Join(availableAssetFields(), ", ")),
+		}
+	}
+	if fieldType != schema.FieldTypeString {
+		return &ValidationError{
+			Message:    fmt.Sprintf("string function predicates are not valid for asset field '.%s' of type %s", p.Field, fieldType),
+			Suggestion: "Use comparison predicates for non-string asset fields",
+		}
+	}
+	return validateRegexPattern(p)
 }
 
 func (v *Validator) validateObjectStringFuncPredicate(p *StringFuncPredicate, typeName string, typeDef *schema.TypeDefinition) error {

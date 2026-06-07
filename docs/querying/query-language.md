@@ -9,7 +9,7 @@
 
 | Use this | When you want |
 |----------|---------------|
-| `rvn query` | Structured filtering by type/trait, field values, hierarchy, and references |
+| `rvn query` | Structured filtering by type/trait/asset, field values, hierarchy, and references |
 | `rvn search` | Free-text discovery when you do not know the structure yet |
 | `rvn backlinks` | All incoming references to one specific object or asset |
 | `rvn outlinks` | All outgoing references from one specific target |
@@ -21,13 +21,14 @@
 |------------|---------|----------|
 | `type:<type> ...` | Objects | Find files/sections by frontmatter fields and structural relationships |
 | `trait:<name> ...` | Trait instances | Find inline annotations (`@todo`, `@due`, etc.) and surrounding content|
+| `asset ...` | Assets | Find indexed non-Markdown files by path, metadata, size, or references |
 
 Core rules:
-1. Every query returns exactly one kind of result (objects or traits).
+1. Every query returns exactly one kind of result (objects, traits, or assets).
 2. Queries can nest arbitrarily, e.g. `type:project has(trait:...)`.
 3. Boolean composition is `AND` (space), `OR` (`|`), and `NOT` (`!`).
 
-Assets can participate as reference targets in object and trait queries, but RQL does not currently return assets as the top-level result kind.
+Assets can participate as reference targets in object and trait queries, and `asset` queries return asset rows directly.
 
 ## Query Shapes
 
@@ -58,6 +59,22 @@ Examples:
 trait:due
 trait:due .value<today
 trait:highlight on(type:book .status==reading)
+```
+
+### Asset Query
+
+```text
+asset [predicates...]
+```
+
+Examples:
+
+```text
+asset
+asset .extension==pdf
+asset startswith(.media_type, "image/")
+asset .size_bytes>1048576
+asset refd(type:project .status==active)
 ```
 
 ## Syntax Building Blocks
@@ -165,6 +182,40 @@ type:project refd(type:meeting)
 
 For assets, `refs(...)` can target a full asset path or an unambiguous short asset name. Standard Markdown links and images to vault-local non-Markdown files are indexed as references, so `rvn backlinks assets/pdfs/paper.pdf` and `refd(...)` queries can find Markdown files that link to the asset.
 
+## Asset Query Predicates
+
+Asset queries use a fixed set of derived metadata fields:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `.id` | string | Stable asset ID, currently the same as `.file_path` |
+| `.file_path` | string | Vault-relative asset path |
+| `.filename` | string | Basename including extension |
+| `.extension` | string | Lowercase extension without the dot |
+| `.media_type` | string | MIME type derived from the extension when known |
+| `.size_bytes` | number | File size in bytes |
+
+Examples:
+
+```text
+asset .extension==pdf
+asset in(.extension, ["jpg", "jpeg", "png", "webp", "gif", "svg"])
+asset startswith(.media_type, "image/")
+asset startswith(.file_path, "assets/screenshots/")
+asset contains(.filename, "diagram")
+asset .size_bytes>1048576
+```
+
+`asset refd(...)` returns assets referenced by the selected source:
+
+```text
+asset refd([[project/raven]])
+asset refd(type:note refs([[project/raven]]))
+asset refd(trait:todo .value==todo)
+```
+
+Assets do not have outbound references, traits, authored fields, or hierarchy, so `asset refs(...)`, `asset has(...)`, `asset content(...)`, and hierarchy predicates are not valid.
+
 ## Trait Query Predicates
 
 ### Value Predicates
@@ -237,6 +288,7 @@ type:meeting (has(trait:due .value<today) | has(trait:remind .value<today))
 ```bash
 rvn query 'type:project .status==active' --json
 rvn query 'trait:due .value<today' --ids
+rvn query 'asset .extension==pdf' --json
 rvn query 'type:project refs([[company/acme]])' --refresh --json
 ```
 
@@ -244,6 +296,8 @@ Key flags:
 - `--json` — structured JSON output (recommended for agents and scripts)
 - `--ids` — output one ID per line for piping to other commands
 - `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
+
+Asset query IDs are stable asset paths. Asset queries do not support `--apply`; use `--ids` to pass paths to commands that explicitly support assets.
 
 ### Pagination
 

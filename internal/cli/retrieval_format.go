@@ -80,6 +80,38 @@ func printQueryTraitResults(queryStr, traitName string, results []model.Trait) {
 	fmt.Println(table.Render())
 }
 
+func printQueryAssetResults(queryStr string, results []model.Asset) {
+	if len(results) == 0 {
+		fmt.Println(ui.Starf("No assets found for: %s", queryStr))
+		return
+	}
+
+	fmt.Printf("%s %s\n\n", ui.SectionHeader("asset"), ui.Badge(fmt.Sprintf("%d", len(results))))
+
+	display := ui.NewDisplayContext()
+	table := ui.NewResultsTable(display, ui.AssetLayout())
+
+	for i, r := range results {
+		mediaType := r.MediaType
+		if mediaType == "" {
+			mediaType = "-"
+		}
+		size := formatAssetSize(r.SizeBytes)
+		table.AddRow(ui.ResultRow{
+			Num: i + 1,
+			Cells: []string{
+				ui.FormatRowNum(i+1, len(results)),
+				ui.TruncateWithEllipsis(r.FilePath, table.GetColumnWidth(1)),
+				ui.TruncateWithEllipsis(mediaType, table.GetColumnWidth(2)),
+				size,
+			},
+			Location: r.FilePath,
+		})
+	}
+
+	fmt.Println(table.Render())
+}
+
 func pipeItemsForObjectResults(results []model.Object) []PipeableItem {
 	pipeItems := make([]PipeableItem, len(results))
 	for i, r := range results {
@@ -91,6 +123,38 @@ func pipeItemsForObjectResults(results []model.Object) []PipeableItem {
 		}
 	}
 	return pipeItems
+}
+
+func pipeItemsForAssetResults(results []model.Asset) []PipeableItem {
+	pipeItems := make([]PipeableItem, len(results))
+	for i, r := range results {
+		content := r.MediaType
+		if content == "" {
+			content = r.Filename
+		}
+		pipeItems[i] = PipeableItem{
+			Num:      i + 1,
+			ID:       r.ID,
+			Content:  content,
+			Location: formatAssetSize(r.SizeBytes),
+		}
+	}
+	return pipeItems
+}
+
+func formatAssetSize(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	}
+	units := []string{"KB", "MB", "GB", "TB"}
+	value := float64(size)
+	for _, unit := range units {
+		value = value / 1024
+		if value < 1024 {
+			return fmt.Sprintf("%.1f %s", value, unit)
+		}
+	}
+	return fmt.Sprintf("%.1f PB", value/1024)
 }
 
 func pipeItemsForTraitResults(results []model.Trait) []PipeableItem {

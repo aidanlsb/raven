@@ -44,7 +44,7 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 	}
 
 	if isSavedQuery && !isFullQueryString(resolvedQuery) {
-		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:' or 'trait:'", queryName), nil, "")
+		return commandexec.Failure("QUERY_INVALID", fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', or 'asset'", queryName), nil, "")
 	}
 
 	sch, err := schema.Load(vaultPath)
@@ -114,6 +114,11 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		key := "type"
 		if result.QueryKind == "trait" {
 			key = "trait"
+		} else if result.QueryKind == "asset" {
+			return commandexec.Success(map[string]interface{}{
+				"query_kind": result.QueryKind,
+				"total":      result.Total,
+			}, meta)
 		}
 		return commandexec.Success(map[string]interface{}{
 			"query_kind": result.QueryKind,
@@ -151,6 +156,22 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 		return commandexec.Success(data, meta)
 	}
 
+	if result.QueryKind == "asset" {
+		meta.Count = result.Returned
+		data := map[string]interface{}{
+			"query_kind": "asset",
+			"items":      assetQueryItems(result),
+			"total":      result.Total,
+			"returned":   result.Returned,
+			"offset":     result.Offset,
+			"limit":      result.Limit,
+		}
+		if isSavedQuery && queryName != "" {
+			data["saved_query"] = queryName
+		}
+		return commandexec.Success(data, meta)
+	}
+
 	meta.Count = result.Returned
 	data := map[string]interface{}{
 		"query_kind": "trait",
@@ -169,6 +190,15 @@ func HandleQuery(ctx context.Context, req commandexec.Request) commandexec.Resul
 }
 
 func handleQueryApply(ctx context.Context, req commandexec.Request, result *readsvc.ExecuteQueryResult, applyArgs []string, queryTimeMs int64) commandexec.Result {
+	if result.QueryKind == "asset" {
+		return commandexec.Failure(
+			"INVALID_INPUT",
+			"--apply is not supported for asset queries",
+			nil,
+			"Use --ids to pass asset paths to an asset-aware command",
+		)
+	}
+
 	rawApply, err := bulkops.ParseRawApply(applyArgs)
 	if err != nil {
 		return mapBulkopsFailure(err)
@@ -311,6 +341,9 @@ func resolveQueryString(queryString string, rawInputs interface{}, vaultCfg *con
 	}
 
 	trimmed := strings.TrimSpace(queryString)
+	if isAssetQueryString(trimmed) {
+		return queryString, "", false, nil
+	}
 	var tokens []string
 	if strings.ContainsAny(trimmed, " \t\r\n") {
 		if parts, ok := querysvc.SplitInlineInvocation(trimmed); ok {
@@ -370,6 +403,22 @@ func traitQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{
 	return items
 }
 
+func assetQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interface{} {
+	items := make([]map[string]interface{}, len(result.Assets))
+	for i, row := range result.Assets {
+		items[i] = map[string]interface{}{
+			"num":        result.Offset + i + 1,
+			"id":         row.ID,
+			"file_path":  row.FilePath,
+			"filename":   row.Filename,
+			"extension":  row.Extension,
+			"media_type": row.MediaType,
+			"size_bytes": row.SizeBytes,
+		}
+	}
+	return items
+}
+
 func mapExecuteQueryFailure(queryString string, err error) commandexec.Result {
 	var validationErr *query.ValidationError
 	if errors.As(err, &validationErr) {
@@ -410,7 +459,13 @@ func mapQuerySvcFailure(err error) commandexec.Result {
 }
 
 func isFullQueryString(queryString string) bool {
-	return strings.HasPrefix(queryString, "type:") || strings.HasPrefix(queryString, "trait:")
+	trimmed := strings.TrimSpace(queryString)
+	return strings.HasPrefix(trimmed, "type:") || strings.HasPrefix(trimmed, "trait:") || isAssetQueryString(trimmed)
+}
+
+func isAssetQueryString(queryString string) bool {
+	trimmed := strings.TrimSpace(queryString)
+	return trimmed == "asset" || strings.HasPrefix(trimmed, "asset ")
 }
 
 // HandleQuerySavedList executes the canonical `query_saved_list` command.

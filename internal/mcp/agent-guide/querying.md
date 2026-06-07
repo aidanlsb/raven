@@ -20,7 +20,7 @@ raven_invoke(command="schema", args={"subcommand":"traits"})
 
 ## Query vs search
 
-- Use `query` when you want real Raven items or real trait instances.
+- Use `query` when you want real Raven items, real trait instances, or indexed asset rows.
 - Use `backlinks` when the user asks which notes reference a specific asset.
 - Use `search` when you only know a text fragment and do not yet know the type, trait, or structure.
 - `search` returns file/snippet matches. It does not distinguish a real `@todo` trait from plain prose that happens to mention `@todo`.
@@ -33,11 +33,16 @@ raven_invoke(command="query", args={"query_string":"type:project .status==active
 raven_invoke(command="query", args={"query_string":"trait:todo .value==todo"})
 raven_invoke(command="query", args={"query_string":"type:meeting refs([[project/website]])"})
 raven_invoke(command="query", args={"query_string":"type:page refs([[assets/pdfs/paper.pdf]])"})
+raven_invoke(command="query", args={"query_string":"asset .extension==pdf"})
+raven_invoke(command="query", args={"query_string":"asset startswith(.media_type, \"image/\")"})
+raven_invoke(command="query", args={"query_string":"asset refd(type:project .status==active)"})
 ```
 
 For text search inside typed queries, use `content("term")`.
 
-Assets can be reference targets in `refs(...)` and `refd(...)` flows, including links discovered from Markdown links/images. RQL still returns objects or traits, not asset rows directly.
+Assets can be reference targets in `refs(...)` and `refd(...)` flows, including links discovered from Markdown links/images. Use the bare `asset` query root to return asset rows directly.
+
+Asset queries support derived metadata fields only: `.id`, `.file_path`, `.filename`, `.extension`, `.media_type`, and `.size_bytes`. Assets do not have outbound refs, traits, or hierarchy, so `asset refs(...)`, `asset has(...)`, and hierarchy predicates are invalid.
 
 If you see SQLite/FTS errors during full-text search, treat them as query-syntax issues and simplify or quote punctuation-heavy terms.
 

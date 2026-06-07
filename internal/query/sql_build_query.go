@@ -62,6 +62,24 @@ func (e *Executor) buildTraitWhereClause(q *Query) (string, []interface{}, error
 	return strings.Join(conditions, " AND "), args, nil
 }
 
+func (e *Executor) buildAssetWhereClause(q *Query) (string, []interface{}, error) {
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "1=1")
+
+	if q.Predicate != nil {
+		cond, predArgs, err := e.buildAssetPredicateSQL(q.Predicate, "a")
+		if err != nil {
+			return "", nil, err
+		}
+		conditions = append(conditions, cond)
+		args = append(args, predArgs...)
+	}
+
+	return strings.Join(conditions, " AND "), args, nil
+}
+
 func (e *Executor) buildObjectPageSQL(q *Query, limit, offset int) (string, []interface{}, error) {
 	whereClause, args, err := e.buildObjectWhereClause(q)
 	if err != nil {
@@ -147,6 +165,52 @@ func (e *Executor) buildTraitCountSQL(q *Query) (string, []interface{}, error) {
 	sqlStr := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM traits t
+		WHERE %s
+	`, whereClause)
+	return sqlStr, args, nil
+}
+
+func (e *Executor) buildAssetPageSQL(q *Query, limit, offset int) (string, []interface{}, error) {
+	whereClause, args, err := e.buildAssetWhereClause(q)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlStr := fmt.Sprintf(`
+		SELECT a.id, a.file_path, COALESCE(a.media_type, ''), COALESCE(a.extension, ''),
+		       a.filename, a.size_bytes, COALESCE(a.file_mtime, 0), COALESCE(a.indexed_at, 0)
+		FROM assets a
+		WHERE %s
+		ORDER BY a.file_path
+	`, whereClause)
+
+	sqlStr, args = appendLimitOffset(sqlStr, args, limit, offset)
+	return sqlStr, args, nil
+}
+
+func (e *Executor) buildAssetIDSQL(q *Query, limit, offset int) (string, []interface{}, error) {
+	whereClause, args, err := e.buildAssetWhereClause(q)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlStr := fmt.Sprintf(`
+		SELECT a.id
+		FROM assets a
+		WHERE %s
+		ORDER BY a.file_path
+	`, whereClause)
+
+	sqlStr, args = appendLimitOffset(sqlStr, args, limit, offset)
+	return sqlStr, args, nil
+}
+
+func (e *Executor) buildAssetCountSQL(q *Query) (string, []interface{}, error) {
+	whereClause, args, err := e.buildAssetWhereClause(q)
+	if err != nil {
+		return "", nil, err
+	}
+	sqlStr := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM assets a
 		WHERE %s
 	`, whereClause)
 	return sqlStr, args, nil

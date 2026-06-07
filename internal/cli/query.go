@@ -129,11 +129,12 @@ func shortenRefIfNeeded(s string) string {
 var queryCmd = &cobra.Command{
 	Use:   "query <query-string>",
 	Short: "Run a query using the Raven query language",
-	Long: `Query items by type or traits by name using the Raven query language.
+	Long: `Query items by type, traits by name, or assets using the Raven query language.
 
 Query roots:
   type:<type> [predicates]    Query items of a type
   trait:<name> [predicates]   Query traits by name
+  asset [predicates]          Query indexed asset resources
 
 Predicates for type queries:
   .field==value      Field equals value
@@ -161,6 +162,13 @@ Predicates for trait queries:
   refs(type:...)     Line references an item matching nested type query
   content("term")      Line content contains term
 
+Predicates for asset queries:
+  .extension==pdf       Asset field equals value
+  startswith(.media_type, "image/")  String match on derived metadata
+  .size_bytes>1024      Numeric size comparison
+  refd(type:...)        Referenced by matching items
+  refd(trait:...)       Referenced by matching trait lines
+
 Boolean operators:
   !pred            NOT
   pred1 pred2      AND (space-separated)
@@ -173,6 +181,8 @@ Examples:
   rvn query "type:project .status==active"
   rvn query "type:meeting has(trait:due)"
   rvn query "trait:due .value<today"
+  rvn query "asset .extension==pdf"
+  rvn query "asset startswith(.media_type, \"image/\")"
   rvn query "trait:todo content(\"my task\")"
   rvn query "trait:highlight on(type:book .status==reading)"
   rvn query tasks                    # Run saved query
@@ -207,10 +217,11 @@ Examples:
 		args = maybeSplitInlineSavedQueryArgs(args, vaultCfg.Queries)
 
 		queryName := args[0]
+		joinedQueryArgs := joinQueryArgs(args)
 		queryStr := ""
 		isSavedQuery := false
 
-		if savedQuery, ok := vaultCfg.Queries[queryName]; ok {
+		if savedQuery, ok := vaultCfg.Queries[queryName]; ok && !isAssetQueryString(joinedQueryArgs) {
 			isSavedQuery = true
 			queryStr, err = querysvc.ResolveSavedQuery(queryName, savedQuery, args[1:], nil)
 			if err != nil {
@@ -220,7 +231,7 @@ Examples:
 			// Join multiple args with spaces - allows running without quoting the whole query
 			// e.g., `rvn query trait:todo 'content("my task")'` works the same as
 			//       `rvn query 'trait:todo content("my task")'`
-			queryStr = joinQueryArgs(args)
+			queryStr = joinedQueryArgs
 		}
 
 		refresh, _ := cmd.Flags().GetBool("refresh")
@@ -249,9 +260,9 @@ Examples:
 			})
 		}
 
-		if !strings.HasPrefix(queryStr, "type:") && !strings.HasPrefix(queryStr, "trait:") {
+		if !strings.HasPrefix(queryStr, "type:") && !strings.HasPrefix(queryStr, "trait:") && !isAssetQueryString(queryStr) {
 			if isSavedQuery {
-				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'type:' or 'trait:'", queryName), "")
+				return handleErrorMsg(ErrQueryInvalid, fmt.Sprintf("saved query '%s' must start with 'type:', 'trait:', or 'asset'", queryName), "")
 			}
 
 			db, err := index.Open(vaultPath)
@@ -343,6 +354,14 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 			return nil
 		}
 		printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
+		return nil
+	case "asset":
+		assets := assetResultsFromAny(data["items"])
+		if ShouldUsePipeFormat() {
+			WritePipeableList(os.Stdout, pipeItemsForAssetResults(assets))
+			return nil
+		}
+		printQueryAssetResults(queryStr, assets)
 		return nil
 	default:
 		return handleErrorMsg(ErrInternal, "unexpected query result shape", "")
@@ -539,7 +558,49 @@ func traitResultsFromAny(raw interface{}) []model.Trait {
 	return results
 }
 
+func assetResultsFromAny(raw interface{}) []model.Asset {
+	if rows, ok := raw.([]map[string]interface{}); ok {
+		results := make([]model.Asset, 0, len(rows))
+		for _, entry := range rows {
+			results = append(results, model.Asset{
+				ID:        stringValue(entry["id"]),
+				FilePath:  stringValue(entry["file_path"]),
+				Filename:  stringValue(entry["filename"]),
+				Extension: stringValue(entry["extension"]),
+				MediaType: stringValue(entry["media_type"]),
+				SizeBytes: int64FromAny(entry["size_bytes"]),
+			})
+		}
+		return results
+	}
+
+	rows, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	results := make([]model.Asset, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		results = append(results, model.Asset{
+			ID:        stringValue(entry["id"]),
+			FilePath:  stringValue(entry["file_path"]),
+			Filename:  stringValue(entry["filename"]),
+			Extension: stringValue(entry["extension"]),
+			MediaType: stringValue(entry["media_type"]),
+			SizeBytes: int64FromAny(entry["size_bytes"]),
+		})
+	}
+	return results
+}
+
 func queryLabelFromData(data map[string]interface{}, queryStr string) string {
+	if stringValue(data["query_kind"]) == "asset" {
+		return "asset"
+	}
 	if label := stringValue(data["type"]); label != "" {
 		return label
 	}
@@ -592,6 +653,19 @@ func intFromAny(raw interface{}) int {
 		return int(value)
 	case float64:
 		return int(value)
+	default:
+		return 0
+	}
+}
+
+func int64FromAny(raw interface{}) int64 {
+	switch value := raw.(type) {
+	case int:
+		return int64(value)
+	case int64:
+		return value
+	case float64:
+		return int64(value)
 	default:
 		return 0
 	}
@@ -701,6 +775,11 @@ func joinQueryArgs(args []string) string {
 	return strings.Join(args, " ")
 }
 
+func isAssetQueryString(queryString string) bool {
+	trimmed := strings.TrimSpace(queryString)
+	return trimmed == "asset" || strings.HasPrefix(trimmed, "asset ")
+}
+
 func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.SavedQuery) []string {
 	if len(args) != 1 || len(queries) == 0 {
 		return args
@@ -712,7 +791,7 @@ func maybeSplitInlineSavedQueryArgs(args []string, queries map[string]*config.Sa
 	}
 
 	// Full query strings should continue through the normal path untouched.
-	if strings.HasPrefix(inline, "type:") || strings.HasPrefix(inline, "trait:") {
+	if strings.HasPrefix(inline, "type:") || strings.HasPrefix(inline, "trait:") || isAssetQueryString(inline) {
 		return args
 	}
 

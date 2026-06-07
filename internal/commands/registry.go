@@ -672,24 +672,28 @@ References are updated when the file moves (controlled by --update-refs).`,
 		Name:        "query",
 		Use:         "query <query_string|saved-query> [inputs...]",
 		Description: "Run a query using the Raven query language",
-		LongDesc: `Query items by type or traits by name using the Raven query language.
+		LongDesc: `Query items by type, traits by name, or assets using the Raven query language.
 
 Prefer query when the structure is known and you need real Raven items or
-trait instances. Use search for broad text discovery when you do not yet know
-the right type, trait, or structural context. Search returns file/snippet
-matches; query returns schema-aware item rows or real trait rows.
+trait instances, or when you need indexed asset metadata. Use search for broad
+text discovery when you do not yet know the right type, trait, or structural
+context. Search returns file/snippet matches; query returns schema-aware item
+rows, real trait rows, or asset rows.
 
 Query syntax:
 - Type queries: type:<type> [predicates...]
   Examples: type:project .status==active, type:meeting refs([[people/freya]])
 - Trait queries: trait:<name> [predicates...]
   Examples: trait:due .value<today, trait:highlight on(type:book)
+- Asset queries: asset [predicates...]
+  Examples: asset .extension==pdf, asset startswith(.media_type, "image/")
 
 Common predicates:
 - .field==value — Filter by field (.status==active, .priority==high)
 - has(trait:...) — Has trait matching subquery
 - refs([[target]]) — References target (refs([[people/freya]]))
 - refs(type:...) — References items matching subquery (refs(type:project .status==active))
+- refd(type:...) — Asset is referenced by matching source items (asset refd(type:note))
 - within(type:...) — Trait is inside items matching a type query (within(type:meeting))
 - .value==X — Trait value equals X (.value==today, .value==high)
 - content("text") — Full-text search within content (content("meeting notes"))
@@ -712,6 +716,7 @@ Use --ids to output just IDs (one per line) for piping to other commands.
 Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
 Use --apply to run a bulk operation directly on query results.
+Asset queries return stable asset paths/IDs but do not support --apply.
 
 For type queries (type:...):
 - Returns preview by default. Changes are NOT applied unless confirm=true.
@@ -722,7 +727,7 @@ For trait queries (trait:...):
 - Supported command: update <new_value> (updates trait values in-place)
 - Example: trait:todo .value==todo --apply "update done" marks todos as done`,
 		Args: []ArgMeta{
-			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active' or saved query name) optionally followed by saved-query inputs.", Required: true},
+			{Name: "query_string", Description: "Query string (e.g., 'type:project .status==active', 'asset .extension==pdf', or saved query name) optionally followed by saved-query inputs.", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "refresh", Description: "Refresh stale files before query (auto-reindex changed files)", Type: FlagTypeBool},
@@ -740,6 +745,9 @@ For trait queries (trait:...):
 			"rvn query 'type:project .status==active' --json",
 			"rvn query 'type:meeting has(trait:due)' --json",
 			"rvn query 'trait:due .value<today' --json",
+			"rvn query 'asset .extension==pdf' --json",
+			"rvn query 'asset startswith(.media_type, \"image/\")' --json",
+			"rvn query 'asset refd(type:project .status==active)' --json",
 			"rvn query 'trait:due .value<today' --ids",
 			"rvn query 'trait:todo .value==todo' --limit 50 --offset 100 --json",
 			"rvn query 'trait:todo .value==todo' --count-only --json",
@@ -752,6 +760,7 @@ For trait queries (trait:...):
 		UseCases: []string{
 			"Find items matching specific criteria",
 			"Find traits with specific values",
+			"Find assets by extension, media type, path, size, or referencing objects",
 			"Bulk update query results with --apply",
 			"Pipe query results to other commands with --ids",
 		},

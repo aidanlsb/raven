@@ -168,6 +168,12 @@ func TestValidator_ValidQuery(t *testing.T) {
 		"trait:due .value==past",
 		"type:person has(trait:due)",
 		"trait:due on(type:project)",
+		"asset",
+		"asset .extension==pdf",
+		`asset startswith(.media_type, "image/")`,
+		"asset .size_bytes>1024",
+		"asset refd(type:project .status==active)",
+		"asset refd(trait:due)",
 	}
 
 	for _, queryStr := range tests {
@@ -179,6 +185,71 @@ func TestValidator_ValidQuery(t *testing.T) {
 
 			if err := v.Validate(q); err != nil {
 				t.Errorf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidator_AssetQueryRules(t *testing.T) {
+	t.Parallel()
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{
+			"project": {
+				Fields: map[string]*schema.FieldDefinition{
+					"status": {Type: schema.FieldTypeString},
+				},
+			},
+		},
+		Traits: map[string]*schema.TraitDefinition{
+			"todo": {},
+		},
+	}
+	v := NewValidator(sch)
+
+	tests := []struct {
+		name    string
+		query   string
+		wantMsg string
+	}{
+		{
+			name:    "unknown field",
+			query:   "asset .status==active",
+			wantMsg: "asset has no field 'status'",
+		},
+		{
+			name:    "string function on number",
+			query:   `asset contains(.size_bytes, "12")`,
+			wantMsg: "string function predicates are not valid for asset field '.size_bytes'",
+		},
+		{
+			name:    "refs rejected",
+			query:   "asset refs([[project/raven]])",
+			wantMsg: "refs() predicate is not valid for asset queries",
+		},
+		{
+			name:    "content rejected",
+			query:   `asset content("diagram")`,
+			wantMsg: "content() predicate is not valid for asset queries",
+		},
+		{
+			name:    "has rejected",
+			query:   "asset has(trait:todo)",
+			wantMsg: "has() predicate is not valid for asset queries",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+			err = v.Validate(q)
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Fatalf("error = %q, want substring %q", err.Error(), tt.wantMsg)
 			}
 		})
 	}

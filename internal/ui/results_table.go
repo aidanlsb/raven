@@ -171,6 +171,11 @@ func BacklinksLayout() []ColumnDef {
 	return []ColumnDef{colNum(), colBacklinksContent(), colBacklinksFile()}
 }
 
+// AssetLayout returns the standard asset query layout: [num, path, media type, size].
+func AssetLayout() []ColumnDef {
+	return []ColumnDef{colNum(), colContent(), colMeta(), colFile()}
+}
+
 // ObjectLayout returns the standard object query layout:
 // [num, name, dynamic fields..., location].
 func ObjectLayout(fieldNames []string) []ColumnDef {

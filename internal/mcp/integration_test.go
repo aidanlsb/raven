@@ -2335,6 +2335,46 @@ status: paused
 		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_kind", "type", "items", "total", "returned", "offset", "limit"})
 	})
 
+	t.Run("query_asset", func(t *testing.T) {
+		vMCP := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/raven.md", `---
+type: project
+status: active
+---
+# Raven
+
+See [[assets/pdfs/paper.pdf]].
+`).
+			WithFile("assets/pdfs/paper.pdf", "%PDF-1.7\nhello").
+			Build()
+		vCLI := testutil.NewTestVault(t).
+			WithSchema(testutil.PersonProjectSchema()).
+			WithFile("projects/raven.md", `---
+type: project
+status: active
+---
+# Raven
+
+See [[assets/pdfs/paper.pdf]].
+`).
+			WithFile("assets/pdfs/paper.pdf", "%PDF-1.7\nhello").
+			Build()
+		server := newTestServer(t, vMCP.Path, binary)
+
+		vMCP.RunCLI("reindex").MustSucceed(t)
+		vCLI.RunCLI("reindex").MustSucceed(t)
+
+		mcpResult := server.callTool("query", map[string]interface{}{
+			"query_string": "asset .extension==pdf",
+			"limit":        10,
+			"offset":       0,
+		})
+		cliResult := vCLI.RunCLI("query", "asset .extension==pdf", "--limit", "10", "--offset", "0")
+
+		assertEnvelopeParity(t, mcpResult, cliResult, []string{"query_kind", "items", "total", "returned", "offset", "limit"})
+	})
+
 	t.Run("query_apply_object_preview", func(t *testing.T) {
 		vMCP := testutil.NewTestVault(t).
 			WithSchema(testutil.PersonProjectSchema()).

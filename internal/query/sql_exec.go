@@ -33,6 +33,25 @@ func scanTraitRows(rows *sql.Rows) ([]model.Trait, error) {
 	})
 }
 
+func scanAssetRows(rows *sql.Rows) ([]model.Asset, error) {
+	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Asset, error) {
+		var r model.Asset
+		if err := rows.Scan(
+			&r.ID,
+			&r.FilePath,
+			&r.MediaType,
+			&r.Extension,
+			&r.Filename,
+			&r.SizeBytes,
+			&r.FileMtime,
+			&r.IndexedAt,
+		); err != nil {
+			return model.Asset{}, err
+		}
+		return r, nil
+	})
+}
+
 func scanIDRows(rows *sql.Rows) ([]string, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (string, error) {
 		var id string
@@ -167,6 +186,63 @@ func (e *Executor) executeTraitCountQuery(q *Query) (int, error) {
 	return count, nil
 }
 
+// executeAssetQuery executes an asset query and returns matching assets.
+// External callers should use ExecuteAssetQuery.
+func (e *Executor) executeAssetQuery(q *Query) ([]model.Asset, error) {
+	return e.executeAssetPageQuery(q, 0, 0)
+}
+
+func (e *Executor) executeAssetPageQuery(q *Query, limit, offset int) ([]model.Asset, error) {
+	if q.Type != QueryTypeAsset {
+		return nil, fmt.Errorf("expected asset query")
+	}
+
+	sqlStr, args, err := e.buildAssetPageSQL(q, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := e.db.Query(sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+	}
+	return scanAssetRows(rows)
+}
+
+func (e *Executor) executeAssetIDQuery(q *Query, limit, offset int) ([]string, error) {
+	if q.Type != QueryTypeAsset {
+		return nil, fmt.Errorf("expected asset query")
+	}
+
+	sqlStr, args, err := e.buildAssetIDSQL(q, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := e.db.Query(sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+	}
+	return scanIDRows(rows)
+}
+
+func (e *Executor) executeAssetCountQuery(q *Query) (int, error) {
+	if q.Type != QueryTypeAsset {
+		return 0, fmt.Errorf("expected asset query")
+	}
+
+	sqlStr, args, err := e.buildAssetCountSQL(q)
+	if err != nil {
+		return 0, err
+	}
+
+	count, err := e.executeCountQuery(sqlStr, args)
+	if err != nil {
+		return 0, fmt.Errorf("query failed: %w (SQL: %s)", err, sqlStr)
+	}
+	return count, nil
+}
+
 // ExecuteObjectQuery executes a type query and returns matching objects.
 func (e *Executor) ExecuteObjectQuery(q *Query) ([]model.Object, error) {
 	return e.withExecutionNow().executeObjectQuery(q)
@@ -205,4 +281,24 @@ func (e *Executor) ExecuteTraitIDQuery(q *Query, limit, offset int) ([]string, e
 // ExecuteTraitCountQuery executes a trait query as COUNT(*).
 func (e *Executor) ExecuteTraitCountQuery(q *Query) (int, error) {
 	return e.withExecutionNow().executeTraitCountQuery(q)
+}
+
+// ExecuteAssetQuery executes an asset query and returns matching assets.
+func (e *Executor) ExecuteAssetQuery(q *Query) ([]model.Asset, error) {
+	return e.withExecutionNow().executeAssetQuery(q)
+}
+
+// ExecuteAssetPageQuery executes an asset query with SQL-level pagination.
+func (e *Executor) ExecuteAssetPageQuery(q *Query, limit, offset int) ([]model.Asset, error) {
+	return e.withExecutionNow().executeAssetPageQuery(q, limit, offset)
+}
+
+// ExecuteAssetIDQuery executes an asset query returning only asset IDs.
+func (e *Executor) ExecuteAssetIDQuery(q *Query, limit, offset int) ([]string, error) {
+	return e.withExecutionNow().executeAssetIDQuery(q, limit, offset)
+}
+
+// ExecuteAssetCountQuery executes an asset query as COUNT(*).
+func (e *Executor) ExecuteAssetCountQuery(q *Query) (int, error) {
+	return e.withExecutionNow().executeAssetCountQuery(q)
 }

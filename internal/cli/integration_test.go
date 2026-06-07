@@ -444,6 +444,108 @@ func TestIntegration_QueryByField(t *testing.T) {
 	result.AssertResultCount(t, "items", 1)
 }
 
+func TestIntegration_AssetQuery(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.PersonProjectSchema()).
+		WithRavenYAML(`queries:
+  asset:
+    query: type:project
+`).
+		WithFile("projects/raven.md", `---
+type: project
+title: Raven
+status: active
+---
+# Raven
+
+Reference the paper [[assets/pdfs/paper.pdf]] and diagram [[assets/images/diagram.png]].
+`).
+		WithFile("assets/pdfs/paper.pdf", "%PDF-1.7\nhello").
+		WithFile("assets/images/diagram.png", "png-data").
+		WithFile("assets/raw/data.bin", "raw").
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+
+	result := v.RunCLI("query", "asset")
+	result.MustSucceed(t)
+	if got := result.Data["query_kind"]; got != "asset" {
+		t.Fatalf("query_kind = %#v, want asset", got)
+	}
+	result.AssertResultCount(t, "items", 3)
+
+	item, ok := result.DataList("items")[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected asset item map, got %#v", result.DataList("items")[0])
+	}
+	if _, ok := item["file_mtime"]; ok {
+		t.Fatalf("asset query item exposed file_mtime: %#v", item)
+	}
+	if _, ok := item["indexed_at"]; ok {
+		t.Fatalf("asset query item exposed indexed_at: %#v", item)
+	}
+
+	pdfs := v.RunCLI("query", "asset .extension==pdf")
+	pdfs.MustSucceed(t)
+	pdfs.AssertResultCount(t, "items", 1)
+	pdfItem := pdfs.DataList("items")[0].(map[string]interface{})
+	if got := pdfItem["id"]; got != "assets/pdfs/paper.pdf" {
+		t.Fatalf("pdf id = %#v, want assets/pdfs/paper.pdf", got)
+	}
+	if got := pdfItem["media_type"]; got != "application/pdf" {
+		t.Fatalf("pdf media_type = %#v, want application/pdf", got)
+	}
+
+	images := v.RunCLI("query", `asset startswith(.media_type, "image/")`)
+	images.MustSucceed(t)
+	images.AssertResultCount(t, "items", 1)
+
+	refd := v.RunCLI("query", "asset refd(type:project .status==active)")
+	refd.MustSucceed(t)
+	refd.AssertResultCount(t, "items", 2)
+
+	ids := v.RunCLI("query", "asset .extension==pdf", "--ids")
+	ids.MustSucceed(t)
+	gotIDs := ids.DataList("ids")
+	if len(gotIDs) != 1 || gotIDs[0] != "assets/pdfs/paper.pdf" {
+		t.Fatalf("ids = %#v, want assets/pdfs/paper.pdf", gotIDs)
+	}
+
+	count := v.RunCLI("query", "asset", "--count-only")
+	count.MustSucceed(t)
+	if got := count.Data["total"]; got != float64(3) {
+		t.Fatalf("total = %#v, want 3", got)
+	}
+
+	apply := v.RunCLI("query", "asset", "--apply", "move archive/")
+	apply.MustFail(t, "INVALID_INPUT")
+	apply.MustFailWithMessage(t, "--apply is not supported for asset queries")
+
+	invalid := v.RunCLI("query", "asset refs([[projects/raven]])")
+	invalid.MustFail(t, "QUERY_INVALID")
+	invalid.MustFailWithMessage(t, "refs() predicate is not valid for asset queries")
+
+	binary := testutil.BuildCLI(t)
+	humanCmd := exec.Command(binary, "--vault-path", v.Path, "query", "asset .extension==pdf", "--no-pipe")
+	humanOut, err := humanCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("human asset query failed: %v\n%s", err, humanOut)
+	}
+	if !strings.Contains(string(humanOut), "assets/pdfs/paper.pdf") || !strings.Contains(string(humanOut), "application/pdf") {
+		t.Fatalf("human output missing asset path/media type:\n%s", humanOut)
+	}
+
+	pipeCmd := exec.Command(binary, "--vault-path", v.Path, "query", "asset .extension==pdf", "--pipe")
+	pipeOut, err := pipeCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pipe asset query failed: %v\n%s", err, pipeOut)
+	}
+	if !strings.Contains(string(pipeOut), "assets/pdfs/paper.pdf\tapplication/pdf") {
+		t.Fatalf("pipe output missing asset row:\n%s", pipeOut)
+	}
+}
+
 func TestIntegration_QueryRefreshRespectsDirectoryRoots(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
