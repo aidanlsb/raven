@@ -61,14 +61,18 @@ func ShouldUsePipeFormat() bool {
 // The number prefix allows users to reference results by number.
 func WritePipeableList(w io.Writer, items []PipeableItem) {
 	for _, item := range items {
-		// Sanitize content - remove tabs and newlines
-		content := strings.ReplaceAll(item.Content, "\t", " ")
-		content = strings.ReplaceAll(content, "\n", " ")
-
-		location := strings.ReplaceAll(item.Location, "\t", " ")
-
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", item.Num, item.ID, content, location)
+		fmt.Fprintln(w, formatPipeableItemLine(item))
 	}
+}
+
+func formatPipeableItemLine(item PipeableItem) string {
+	// Sanitize content - remove tabs and newlines
+	content := strings.ReplaceAll(item.Content, "\t", " ")
+	content = strings.ReplaceAll(content, "\n", " ")
+
+	location := strings.ReplaceAll(item.Location, "\t", " ")
+
+	return fmt.Sprintf("%d\t%s\t%s\t%s", item.Num, item.ID, content, location)
 }
 
 // WritePipeableIDs writes just the IDs, one per line.

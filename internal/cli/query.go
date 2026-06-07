@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -200,15 +201,6 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := getVaultPath()
 
-		// Handle --pipe/--no-pipe flags
-		if pipeFlag, _ := cmd.Flags().GetBool("pipe"); pipeFlag {
-			t := true
-			SetPipeFormat(&t)
-		} else if noPipeFlag, _ := cmd.Flags().GetBool("no-pipe"); noPipeFlag {
-			f := false
-			SetPipeFormat(&f)
-		}
-
 		if len(args) == 0 {
 			return handleErrorMsg(ErrMissingArgument, "specify a query string", "Run 'rvn query saved list' to see saved queries")
 		}
@@ -227,9 +219,11 @@ Examples:
 		joinedQueryArgs := joinQueryArgs(args)
 		queryStr := ""
 		isSavedQuery := false
+		var savedOptions *config.QueryOptions
 
 		if savedQuery, ok := vaultCfg.Queries[queryName]; ok && !isAssetQueryString(joinedQueryArgs) && !isSectionQueryString(joinedQueryArgs) {
 			isSavedQuery = true
+			savedOptions = savedQuery.Options
 			queryStr, err = querysvc.ResolveSavedQuery(queryName, savedQuery, args[1:], nil)
 			if err != nil {
 				return mapQuerySvcError(err)
@@ -241,11 +235,11 @@ Examples:
 			queryStr = joinedQueryArgs
 		}
 
-		refresh, _ := cmd.Flags().GetBool("refresh")
-		idsOnly, _ := cmd.Flags().GetBool("ids")
-		limit, _ := cmd.Flags().GetInt("limit")
-		offset, _ := cmd.Flags().GetInt("offset")
-		countOnly, _ := cmd.Flags().GetBool("count-only")
+		refresh := queryBoolFlagValue(cmd, "refresh", savedBoolOption(savedOptions, "refresh"))
+		idsOnly := queryBoolFlagValue(cmd, "ids", savedBoolOption(savedOptions, "ids"))
+		limit := queryIntFlagValue(cmd, "limit", savedIntOption(savedOptions, "limit"))
+		offset := queryIntFlagValue(cmd, "offset", savedIntOption(savedOptions, "offset"))
+		countOnly := queryBoolFlagValue(cmd, "count-only", savedBoolOption(savedOptions, "count-only"))
 		if limit < 0 {
 			return handleErrorMsg(ErrInvalidInput, "--limit must be >= 0", "Use --limit 0 for no limit")
 		}
@@ -253,9 +247,31 @@ Examples:
 			return handleErrorMsg(ErrInvalidInput, "--offset must be >= 0", "Use --offset 0 for no offset")
 		}
 
-		// Get --apply flag
-		applyArgs, _ := cmd.Flags().GetStringArray("apply")
-		confirmApply, _ := cmd.Flags().GetBool("confirm")
+		applyArgs := queryStringArrayFlagValue(cmd, "apply", savedApplyOption(savedOptions))
+		confirmApply := queryBoolFlagValue(cmd, "confirm", savedBoolOption(savedOptions, "confirm"))
+		browse := queryBoolFlagValue(cmd, "browse", savedBoolOption(savedOptions, "browse"))
+		if isJSONOutput() && browse && !cmd.Flags().Changed("browse") {
+			// JSON is an explicit machine-readable mode; let it suppress saved
+			// interactive defaults so saved queries remain agent/script-friendly.
+			browse = false
+		}
+
+		pipeOverride := queryPipeOverride(cmd, savedOptions)
+		SetPipeFormat(pipeOverride)
+		if browse {
+			if isJSONOutput() {
+				return handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --json", "Remove --browse or --json")
+			}
+			if idsOnly || countOnly || len(applyArgs) > 0 {
+				return handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --ids, --count-only, or --apply", "Run the query without browse for machine-readable or bulk modes")
+			}
+			if pipeOverride != nil && *pipeOverride {
+				return handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --pipe", "Use --no-pipe or remove --browse")
+			}
+			if !canUseFZFInteractive() {
+				return handleErrorMsg(ErrInvalidInput, "interactive browse requires fzf and an interactive terminal", "Install fzf or run without --browse")
+			}
+		}
 
 		// If --apply is set, route through the canonical query handler.
 		if len(applyArgs) > 0 {
@@ -297,6 +313,7 @@ Examples:
 			"limit":        limit,
 			"offset":       offset,
 			"count-only":   countOnly,
+			"browse":       browse,
 		})
 	},
 }
@@ -344,9 +361,18 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 	}
 
 	queryKind, _ := data["query_kind"].(string)
+	browse := boolValue(args["browse"])
 	switch queryKind {
 	case "type", "object":
 		objects := objectResultsFromAny(data["items"])
+		if browse {
+			if len(objects) == 0 {
+				sch, _ := schema.Load(getVaultPath())
+				printQueryObjectResults(queryStr, queryLabelFromData(data, queryStr), objects, sch)
+				return nil
+			}
+			return browseQueryResults(pipeItemsForObjectResults(objects), browseItemsForObjectResults(objects))
+		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
 			return nil
@@ -356,6 +382,13 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 		return nil
 	case "trait":
 		traits := traitResultsFromAny(data["items"])
+		if browse {
+			if len(traits) == 0 {
+				printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
+				return nil
+			}
+			return browseQueryResults(pipeItemsForTraitResults(traits), browseItemsForTraitResults(traits))
+		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
 			return nil
@@ -364,6 +397,13 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 		return nil
 	case "asset":
 		assets := assetResultsFromAny(data["items"])
+		if browse {
+			if len(assets) == 0 {
+				printQueryAssetResults(queryStr, assets)
+				return nil
+			}
+			return browseQueryResults(pipeItemsForAssetResults(assets), browseItemsForAssetResults(assets))
+		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForAssetResults(assets))
 			return nil
@@ -372,6 +412,13 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 		return nil
 	case "section":
 		sections := sectionResultsFromAny(data["items"])
+		if browse {
+			if len(sections) == 0 {
+				printQuerySectionResults(queryStr, sections)
+				return nil
+			}
+			return browseQueryResults(pipeItemsForSectionResults(sections), browseItemsForSectionResults(sections))
+		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForSectionResults(sections))
 			return nil
@@ -381,6 +428,201 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 	default:
 		return handleErrorMsg(ErrInternal, "unexpected query result shape", "")
 	}
+}
+
+type queryBrowseItem struct {
+	PipeableItem
+	FilePath string
+	Line     int
+}
+
+func browseItemsForObjectResults(results []model.Object) []queryBrowseItem {
+	pipeItems := pipeItemsForObjectResults(results)
+	items := make([]queryBrowseItem, 0, len(results))
+	for i, result := range results {
+		items = append(items, queryBrowseItem{
+			PipeableItem: pipeItems[i],
+			FilePath:     result.FilePath,
+			Line:         result.LineStart,
+		})
+	}
+	return items
+}
+
+func browseItemsForTraitResults(results []model.Trait) []queryBrowseItem {
+	pipeItems := pipeItemsForTraitResults(results)
+	items := make([]queryBrowseItem, 0, len(results))
+	for i, result := range results {
+		items = append(items, queryBrowseItem{
+			PipeableItem: pipeItems[i],
+			FilePath:     result.FilePath,
+			Line:         result.Line,
+		})
+	}
+	return items
+}
+
+func browseItemsForAssetResults(results []model.Asset) []queryBrowseItem {
+	pipeItems := pipeItemsForAssetResults(results)
+	items := make([]queryBrowseItem, 0, len(results))
+	for i, result := range results {
+		items = append(items, queryBrowseItem{
+			PipeableItem: pipeItems[i],
+			FilePath:     result.FilePath,
+		})
+	}
+	return items
+}
+
+func browseItemsForSectionResults(results []model.Section) []queryBrowseItem {
+	pipeItems := pipeItemsForSectionResults(results)
+	items := make([]queryBrowseItem, 0, len(results))
+	for i, result := range results {
+		items = append(items, queryBrowseItem{
+			PipeableItem: pipeItems[i],
+			FilePath:     result.FilePath,
+			Line:         result.LineStart,
+		})
+	}
+	return items
+}
+
+func browseQueryResults(pipeItems []PipeableItem, browseItems []queryBrowseItem) error {
+	selected, ok, err := pickQueryBrowseItem(pipeItems, browseItems)
+	if err != nil {
+		return handleError(ErrInternal, err, "")
+	}
+	if !ok {
+		return nil
+	}
+	if strings.TrimSpace(selected.FilePath) == "" {
+		return handleErrorMsg(ErrInternal, "selected query result has no file path", "")
+	}
+	openFileInEditor(filepath.Join(getVaultPath(), selected.FilePath), selected.FilePath, false)
+	return nil
+}
+
+func pickQueryBrowseItem(pipeItems []PipeableItem, browseItems []queryBrowseItem) (queryBrowseItem, bool, error) {
+	if len(pipeItems) == 0 || len(browseItems) == 0 {
+		return queryBrowseItem{}, false, nil
+	}
+
+	byNum := make(map[int]queryBrowseItem, len(browseItems))
+	for _, item := range browseItems {
+		byNum[item.Num] = item
+	}
+
+	lines := make([]string, 0, len(pipeItems))
+	for _, item := range pipeItems {
+		lines = append(lines, formatPipeableItemLine(item))
+	}
+	selectedLine, selected, err := fzfRunPicker(lines, fzfPickerOptions{
+		Prompt:    "query> ",
+		Header:    "Select a result to open (Esc to cancel)",
+		Delimiter: "\t",
+		WithNth:   "1,2,3,4",
+	})
+	if err != nil || !selected {
+		return queryBrowseItem{}, selected, err
+	}
+
+	numText, _, _ := strings.Cut(strings.TrimSpace(selectedLine), "\t")
+	num, err := strconv.Atoi(strings.TrimSpace(numText))
+	if err != nil {
+		return queryBrowseItem{}, false, fmt.Errorf("parse selected query result number: %w", err)
+	}
+	item, ok := byNum[num]
+	if !ok {
+		return queryBrowseItem{}, false, fmt.Errorf("selected query result number %d was not in result set", num)
+	}
+	return item, true, nil
+}
+
+func queryBoolFlagValue(cmd *cobra.Command, name string, saved *bool) bool {
+	if cmd.Flags().Changed(name) {
+		value, _ := cmd.Flags().GetBool(name)
+		return value
+	}
+	if saved != nil {
+		return *saved
+	}
+	return false
+}
+
+func queryIntFlagValue(cmd *cobra.Command, name string, saved *int) int {
+	if cmd.Flags().Changed(name) {
+		value, _ := cmd.Flags().GetInt(name)
+		return value
+	}
+	if saved != nil {
+		return *saved
+	}
+	return 0
+}
+
+func queryStringArrayFlagValue(cmd *cobra.Command, name string, saved []string) []string {
+	if cmd.Flags().Changed(name) {
+		value, _ := cmd.Flags().GetStringArray(name)
+		return value
+	}
+	return append([]string(nil), saved...)
+}
+
+func queryPipeOverride(cmd *cobra.Command, saved *config.QueryOptions) *bool {
+	if cmd.Flags().Changed("pipe") {
+		value, _ := cmd.Flags().GetBool("pipe")
+		return &value
+	}
+	if noPipeFlag, _ := cmd.Flags().GetBool("no-pipe"); cmd.Flags().Changed("no-pipe") && noPipeFlag {
+		value := false
+		return &value
+	}
+	if saved != nil && saved.Pipe != nil {
+		value := *saved.Pipe
+		return &value
+	}
+	return nil
+}
+
+func savedBoolOption(options *config.QueryOptions, name string) *bool {
+	if options == nil {
+		return nil
+	}
+	switch name {
+	case "refresh":
+		return options.Refresh
+	case "ids":
+		return options.IDs
+	case "count-only":
+		return options.CountOnly
+	case "confirm":
+		return options.Confirm
+	case "browse":
+		return options.Browse
+	default:
+		return nil
+	}
+}
+
+func savedIntOption(options *config.QueryOptions, name string) *int {
+	if options == nil {
+		return nil
+	}
+	switch name {
+	case "limit":
+		return options.Limit
+	case "offset":
+		return options.Offset
+	default:
+		return nil
+	}
+}
+
+func savedApplyOption(options *config.QueryOptions) []string {
+	if options == nil {
+		return nil
+	}
+	return append([]string(nil), options.Apply...)
 }
 
 func executeCanonicalQuery(args map[string]interface{}) commandexec.Result {
@@ -785,12 +1027,108 @@ func buildQuerySavedSetArgs(cmd *cobra.Command, args []string) (map[string]inter
 		return nil, err
 	}
 	description, _ := cmd.Flags().GetString("description")
-	return map[string]interface{}{
+	argsMap := map[string]interface{}{
 		"name":         args[0],
 		"query_string": args[1],
 		"arg":          declaredArgs,
 		"description":  description,
-	}, nil
+	}
+	addSavedQueryOptionArgs(cmd, argsMap)
+	return argsMap, nil
+}
+
+func addSavedQueryOptionArgs(cmd *cobra.Command, argsMap map[string]interface{}) {
+	if cmd.Flags().Changed("refresh") {
+		value, _ := cmd.Flags().GetBool("refresh")
+		argsMap["refresh"] = value
+	}
+	if cmd.Flags().Changed("ids") {
+		value, _ := cmd.Flags().GetBool("ids")
+		argsMap["ids"] = value
+	}
+	if cmd.Flags().Changed("limit") {
+		value, _ := cmd.Flags().GetInt("limit")
+		argsMap["limit"] = value
+	}
+	if cmd.Flags().Changed("offset") {
+		value, _ := cmd.Flags().GetInt("offset")
+		argsMap["offset"] = value
+	}
+	if cmd.Flags().Changed("count-only") {
+		value, _ := cmd.Flags().GetBool("count-only")
+		argsMap["count-only"] = value
+	}
+	if cmd.Flags().Changed("apply") {
+		value, _ := cmd.Flags().GetStringArray("apply")
+		argsMap["apply"] = value
+	}
+	if cmd.Flags().Changed("confirm") {
+		value, _ := cmd.Flags().GetBool("confirm")
+		argsMap["confirm"] = value
+	}
+	if cmd.Flags().Changed("pipe") {
+		value, _ := cmd.Flags().GetBool("pipe")
+		argsMap["pipe"] = value
+	} else if cmd.Flags().Changed("no-pipe") {
+		noPipe, _ := cmd.Flags().GetBool("no-pipe")
+		if noPipe {
+			argsMap["pipe"] = false
+		}
+	}
+	if cmd.Flags().Changed("browse") {
+		value, _ := cmd.Flags().GetBool("browse")
+		argsMap["browse"] = value
+	}
+}
+
+func savedQueryOptionsFromFlags(cmd *cobra.Command) *config.QueryOptions {
+	options := &config.QueryOptions{}
+	if cmd.Flags().Changed("refresh") {
+		value, _ := cmd.Flags().GetBool("refresh")
+		options.Refresh = &value
+	}
+	if cmd.Flags().Changed("ids") {
+		value, _ := cmd.Flags().GetBool("ids")
+		options.IDs = &value
+	}
+	if cmd.Flags().Changed("limit") {
+		value, _ := cmd.Flags().GetInt("limit")
+		options.Limit = &value
+	}
+	if cmd.Flags().Changed("offset") {
+		value, _ := cmd.Flags().GetInt("offset")
+		options.Offset = &value
+	}
+	if cmd.Flags().Changed("count-only") {
+		value, _ := cmd.Flags().GetBool("count-only")
+		options.CountOnly = &value
+	}
+	if cmd.Flags().Changed("apply") {
+		value, _ := cmd.Flags().GetStringArray("apply")
+		options.Apply = append([]string(nil), value...)
+	}
+	if cmd.Flags().Changed("confirm") {
+		value, _ := cmd.Flags().GetBool("confirm")
+		options.Confirm = &value
+	}
+	if cmd.Flags().Changed("pipe") {
+		value, _ := cmd.Flags().GetBool("pipe")
+		options.Pipe = &value
+	} else if cmd.Flags().Changed("no-pipe") {
+		noPipe, _ := cmd.Flags().GetBool("no-pipe")
+		if noPipe {
+			value := false
+			options.Pipe = &value
+		}
+	}
+	if cmd.Flags().Changed("browse") {
+		value, _ := cmd.Flags().GetBool("browse")
+		options.Browse = &value
+	}
+	if options.IsEmpty() {
+		return nil
+	}
+	return options
 }
 
 func handleCanonicalQueryFailure(result commandexec.Result) error {
@@ -952,6 +1290,7 @@ func init() {
 	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
 	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output for shell pipelines (jq, head, sort)")
 	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
+	queryCmd.Flags().Bool("browse", false, "Interactively browse query results with fzf and open the selected result")
 
 	querySavedCmd.AddCommand(querySavedListCmd)
 	querySavedCmd.AddCommand(querySavedGetCmd)

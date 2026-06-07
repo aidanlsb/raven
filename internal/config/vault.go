@@ -346,6 +346,39 @@ type SavedQuery struct {
 
 	// Description for help text
 	Description string `yaml:"description,omitempty"`
+
+	// Options stores default rvn query flags for this saved query. Pointer
+	// fields distinguish an omitted default from an explicit false/zero value.
+	Options *QueryOptions `yaml:"options,omitempty"`
+}
+
+// QueryOptions stores default `rvn query` flags for saved queries.
+type QueryOptions struct {
+	Refresh   *bool    `yaml:"refresh,omitempty" json:"refresh,omitempty"`
+	IDs       *bool    `yaml:"ids,omitempty" json:"ids,omitempty"`
+	Limit     *int     `yaml:"limit,omitempty" json:"limit,omitempty"`
+	Offset    *int     `yaml:"offset,omitempty" json:"offset,omitempty"`
+	CountOnly *bool    `yaml:"count_only,omitempty" json:"count_only,omitempty"`
+	Apply     []string `yaml:"apply,omitempty" json:"apply,omitempty"`
+	Confirm   *bool    `yaml:"confirm,omitempty" json:"confirm,omitempty"`
+	Pipe      *bool    `yaml:"pipe,omitempty" json:"pipe,omitempty"`
+	Browse    *bool    `yaml:"browse,omitempty" json:"browse,omitempty"`
+}
+
+// IsEmpty reports whether no saved query option defaults are set.
+func (o *QueryOptions) IsEmpty() bool {
+	if o == nil {
+		return true
+	}
+	return o.Refresh == nil &&
+		o.IDs == nil &&
+		o.Limit == nil &&
+		o.Offset == nil &&
+		o.CountOnly == nil &&
+		len(o.Apply) == 0 &&
+		o.Confirm == nil &&
+		o.Pipe == nil &&
+		o.Browse == nil
 }
 
 // DefaultVaultConfig returns the default vault configuration.

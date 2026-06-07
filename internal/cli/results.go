@@ -2,7 +2,10 @@
 // This file defines shared JSON result types for consistent CLI output.
 package cli
 
-import "github.com/aidanlsb/raven/internal/model"
+import (
+	"github.com/aidanlsb/raven/internal/config"
+	"github.com/aidanlsb/raven/internal/model"
+)
 
 // =============================================================================
 // Core Result Types - Used across multiple commands
@@ -100,10 +103,11 @@ type StatsResult struct {
 // SavedQueryInfo represents a saved query definition.
 // Used by: query saved list
 type SavedQueryInfo struct {
-	Name        string   `json:"name"`
-	Query       string   `json:"query"`
-	Args        []string `json:"args,omitempty"`
-	Description string   `json:"description,omitempty"`
+	Name        string               `json:"name"`
+	Query       string               `json:"query"`
+	Args        []string             `json:"args,omitempty"`
+	Description string               `json:"description,omitempty"`
+	Options     *config.QueryOptions `json:"options,omitempty"`
 }
 
 // QueryResult represents results from running a saved query.

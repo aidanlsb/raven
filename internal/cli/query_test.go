@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 )
@@ -130,4 +132,86 @@ func TestBuildUnknownQuerySuggestion_IncludesReadOpenForResolvableRefs(t *testin
 	if !strings.Contains(s, "rvn read") || !strings.Contains(s, "rvn open") {
 		t.Fatalf("expected read/open hint, got: %q", s)
 	}
+}
+
+func TestSavedQueryOptionsFromFlags(t *testing.T) {
+	cmd := newQueryOptionsTestCommand()
+	if err := cmd.Flags().Set("browse", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Flags().Set("limit", "100"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Flags().Set("apply", "set status=done"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Flags().Set("confirm", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	options := savedQueryOptionsFromFlags(cmd)
+	if options == nil {
+		t.Fatalf("savedQueryOptionsFromFlags() = nil, want options")
+	}
+	if options.Browse == nil || !*options.Browse {
+		t.Fatalf("Browse = %#v, want true", options.Browse)
+	}
+	if options.Limit == nil || *options.Limit != 100 {
+		t.Fatalf("Limit = %#v, want 100", options.Limit)
+	}
+	if !reflect.DeepEqual(options.Apply, []string{"set status=done"}) {
+		t.Fatalf("Apply = %#v, want set status=done", options.Apply)
+	}
+	if options.Confirm == nil || !*options.Confirm {
+		t.Fatalf("Confirm = %#v, want true", options.Confirm)
+	}
+}
+
+func TestSavedQueryOptionsFromFlagsNoPipe(t *testing.T) {
+	cmd := newQueryOptionsTestCommand()
+	if err := cmd.Flags().Set("no-pipe", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	options := savedQueryOptionsFromFlags(cmd)
+	if options == nil || options.Pipe == nil {
+		t.Fatalf("Pipe = %#v, want explicit false", options)
+	}
+	if *options.Pipe {
+		t.Fatalf("Pipe = true, want false")
+	}
+}
+
+func TestQueryFlagValuesPreferExplicitFlags(t *testing.T) {
+	cmd := newQueryOptionsTestCommand()
+	if err := cmd.Flags().Set("browse", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Flags().Set("limit", "50"); err != nil {
+		t.Fatal(err)
+	}
+
+	savedBrowse := true
+	savedLimit := 100
+	if got := queryBoolFlagValue(cmd, "browse", &savedBrowse); got {
+		t.Fatalf("queryBoolFlagValue() = true, want explicit false")
+	}
+	if got := queryIntFlagValue(cmd, "limit", &savedLimit); got != 50 {
+		t.Fatalf("queryIntFlagValue() = %d, want 50", got)
+	}
+}
+
+func newQueryOptionsTestCommand() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("refresh", false, "")
+	cmd.Flags().Bool("ids", false, "")
+	cmd.Flags().Int("limit", 0, "")
+	cmd.Flags().Int("offset", 0, "")
+	cmd.Flags().Bool("count-only", false, "")
+	cmd.Flags().StringArray("apply", nil, "")
+	cmd.Flags().Bool("confirm", false, "")
+	cmd.Flags().Bool("pipe", false, "")
+	cmd.Flags().Bool("no-pipe", false, "")
+	cmd.Flags().Bool("browse", false, "")
+	return cmd
 }

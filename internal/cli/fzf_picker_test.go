@@ -141,3 +141,43 @@ func TestPickAmbiguousReferenceWithFZFCancelled(t *testing.T) {
 		t.Fatalf("expected cancelled selection, got selected=%q ok=%v", selected, ok)
 	}
 }
+
+func TestPickQueryBrowseItem(t *testing.T) {
+	prevRun := fzfRunPicker
+	t.Cleanup(func() {
+		fzfRunPicker = prevRun
+	})
+
+	pipeItems := []PipeableItem{
+		{Num: 1, ID: "issue/one", Content: "One", Location: "type/issue/one.md:1"},
+		{Num: 2, ID: "issue/two", Content: "Two", Location: "type/issue/two.md:7"},
+	}
+	browseItems := []queryBrowseItem{
+		{PipeableItem: pipeItems[0], FilePath: "type/issue/one.md", Line: 1},
+		{PipeableItem: pipeItems[1], FilePath: "type/issue/two.md", Line: 7},
+	}
+
+	fzfRunPicker = func(lines []string, opts fzfPickerOptions) (string, bool, error) {
+		if opts.Prompt != "query> " {
+			t.Fatalf("prompt = %q, want query> ", opts.Prompt)
+		}
+		if opts.Delimiter != "\t" {
+			t.Fatalf("delimiter = %q, want tab", opts.Delimiter)
+		}
+		if len(lines) != 2 {
+			t.Fatalf("expected 2 lines, got %d", len(lines))
+		}
+		return lines[1], true, nil
+	}
+
+	selected, ok, err := pickQueryBrowseItem(pipeItems, browseItems)
+	if err != nil {
+		t.Fatalf("pickQueryBrowseItem() error = %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected selection")
+	}
+	if selected.ID != "issue/two" || selected.FilePath != "type/issue/two.md" || selected.Line != 7 {
+		t.Fatalf("selected = %#v, want issue/two at line 7", selected)
+	}
+}

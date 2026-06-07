@@ -304,12 +304,14 @@ rvn query 'type:project .status==active' --json
 rvn query 'trait:due .value<today' --ids
 rvn query 'asset .extension==pdf' --json
 rvn query 'type:project refs([[company/acme]])' --refresh --json
+rvn query 'type:project .status==active' --browse
 ```
 
 Key flags:
 - `--json` — structured JSON output (recommended for agents and scripts)
 - `--ids` — output one ID per line for piping to other commands
 - `--refresh` — reindex changed files before running the query (useful after editing files outside Raven)
+- `--browse` — open an interactive `fzf` picker and open the selected result in your configured editor
 
 Section query IDs are stable `file#slug` IDs and asset query IDs are stable asset paths. Section and asset queries do not support `--apply`; use `--ids` to pass IDs to commands that explicitly support them.
 
@@ -356,6 +358,14 @@ rvn query project-todos project=project/raven --json         # key=value
 ```
 
 Saved query placeholders use `{{args.<name>}}` syntax. Every placeholder must be declared with `--arg`, which also fixes the positional input order.
+
+You can also save default query options with the same flags you would pass to `rvn query`:
+
+```bash
+rvn query saved set open-projects 'type:project .status==active' --browse --limit 100 --json
+```
+
+This stores the RQL separately from the default options in `raven.yaml`; explicit flags passed when running the saved query override those defaults.
 
 ### Bulk Operations by Query Type
 

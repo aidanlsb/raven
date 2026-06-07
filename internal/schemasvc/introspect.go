@@ -58,10 +58,11 @@ type TraitSchema struct {
 }
 
 type SavedQueryInfo struct {
-	Name        string   `json:"name"`
-	Query       string   `json:"query"`
-	Args        []string `json:"args,omitempty"`
-	Description string   `json:"description,omitempty"`
+	Name        string               `json:"name"`
+	Query       string               `json:"query"`
+	Args        []string             `json:"args,omitempty"`
+	Description string               `json:"description,omitempty"`
+	Options     *config.QueryOptions `json:"options,omitempty"`
 }
 
 type TypesHint struct {
@@ -168,6 +169,7 @@ func FullSchema(vaultPath string) (*SchemaResult, error) {
 				Query:       q.Query,
 				Args:        q.Args,
 				Description: q.Description,
+				Options:     q.Options,
 			}
 		}
 	}

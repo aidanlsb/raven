@@ -719,6 +719,7 @@ You can then pass inputs by position (in args order) or as key=value pairs.
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
+Use --browse to interactively pick a result with fzf and open it in the configured editor.
 Use --apply to run a bulk operation directly on query results.
 Section and asset queries return stable IDs but do not support --apply.
 
@@ -743,6 +744,7 @@ For trait queries (trait:...):
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 			{Name: "pipe", Description: "Force pipe-friendly output for shell pipelines (jq, head, sort)", Type: FlagTypeBool},
 			{Name: "no-pipe", Description: "Force human-readable output format", Type: FlagTypeBool},
+			{Name: "browse", Description: "Interactively browse results with fzf and open the selected result in the configured editor", Type: FlagTypeBool},
 			{Name: "inputs", Description: "Saved query inputs as key=value pairs", Type: FlagTypePosKeyValue, Examples: []string{`{"project": "projects/raven"}`}},
 		},
 		Examples: []string{
@@ -755,6 +757,7 @@ For trait queries (trait:...):
 			"rvn query 'trait:due .value<today' --ids",
 			"rvn query 'trait:todo .value==todo' --limit 50 --offset 100 --json",
 			"rvn query 'trait:todo .value==todo' --count-only --json",
+			"rvn query 'type:issue .status==open' --browse",
 			"rvn query 'type:project .status==active' --apply 'set status=done' --confirm --json",
 			"rvn query 'trait:todo .value==todo' --apply 'update done' --confirm --json",
 			"rvn query tasks --json",
@@ -796,12 +799,23 @@ For trait queries (trait:...):
 		Flags: []FlagMeta{
 			{Name: "description", Description: "Human-readable description", Type: FlagTypeString},
 			{Name: "arg", Description: "Declare saved query input name (repeatable, sets positional order)", Type: FlagTypeStringSlice},
+			{Name: "refresh", Description: "Save --refresh as a default option for this query", Type: FlagTypeBool},
+			{Name: "ids", Description: "Save --ids as a default option for this query", Type: FlagTypeBool},
+			{Name: "limit", Description: "Save a default result limit for this query", Type: FlagTypeInt},
+			{Name: "offset", Description: "Save a default result offset for this query", Type: FlagTypeInt},
+			{Name: "count-only", Description: "Save --count-only as a default option for this query", Type: FlagTypeBool},
+			{Name: "apply", Description: "Save a default bulk operation for this query", Type: FlagTypeStringSlice},
+			{Name: "confirm", Description: "Save --confirm as a default option for this query", Type: FlagTypeBool},
+			{Name: "pipe", Description: "Save pipe-friendly output as a default option for this query", Type: FlagTypeBool},
+			{Name: "no-pipe", Description: "Save human-readable output as a default option for this query", Type: FlagTypeBool},
+			{Name: "browse", Description: "Save interactive browse/open as a default option for this query", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn query saved set tasks 'trait:due' --json",
 			"rvn query saved set overdue 'trait:due .value<today' --json",
 			"rvn query saved set active-projects 'type:project .status==active' --json",
 			"rvn query saved set project-todos 'trait:todo refs([[{{args.project}}]])' --arg project --json",
+			"rvn query saved set open-issues 'type:issue .status==open' --browse --limit 100 --json",
 		},
 	},
 	"query_saved_remove": {

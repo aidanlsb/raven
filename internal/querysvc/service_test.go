@@ -182,6 +182,65 @@ func TestSavedQueryLifecycle(t *testing.T) {
 	}
 }
 
+func TestSavedQueryLifecycleWithOptions(t *testing.T) {
+	t.Parallel()
+
+	vaultPath := t.TempDir()
+	browse := true
+	limit := 100
+	confirm := true
+
+	created, err := Set(SetRequest{
+		VaultPath:   vaultPath,
+		Name:        "open-issues",
+		QueryString: "type:issue .status==open",
+		Options: &config.QueryOptions{
+			Browse:  &browse,
+			Limit:   &limit,
+			Apply:   []string{"set status=done"},
+			Confirm: &confirm,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Set(create) unexpected error: %v", err)
+	}
+	if created.Status != SetStatusCreated {
+		t.Fatalf("Set(create) status = %q, want %q", created.Status, SetStatusCreated)
+	}
+	if created.Query.Options == nil || created.Query.Options.Browse == nil || !*created.Query.Options.Browse {
+		t.Fatalf("Set(create) options = %#v, want browse=true", created.Query.Options)
+	}
+	if created.Query.Options.Limit == nil || *created.Query.Options.Limit != 100 {
+		t.Fatalf("Set(create) limit = %#v, want 100", created.Query.Options.Limit)
+	}
+
+	unchanged, err := Set(SetRequest{
+		VaultPath:   vaultPath,
+		Name:        "open-issues",
+		QueryString: "type:issue .status==open",
+		Options: &config.QueryOptions{
+			Browse:  &browse,
+			Limit:   &limit,
+			Apply:   []string{"set status=done"},
+			Confirm: &confirm,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Set(unchanged) unexpected error: %v", err)
+	}
+	if unchanged.Status != SetStatusUnchanged {
+		t.Fatalf("Set(unchanged) status = %q, want %q", unchanged.Status, SetStatusUnchanged)
+	}
+
+	got, err := Get(GetRequest{VaultPath: vaultPath, Name: "open-issues"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if !queryOptionsEqual(got.Query.Options, created.Query.Options) {
+		t.Fatalf("Get() options = %#v, want %#v", got.Query.Options, created.Query.Options)
+	}
+}
+
 func TestParseInputsWithKeyValues(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
