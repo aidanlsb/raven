@@ -207,7 +207,9 @@ func (d *Database) Analyze() error {
 // v9: Added field_refs table for ref-typed fields
 // v10: Added assets table for first-class non-Markdown resources
 // v11: Removed user-defined asset kind/canonical metadata from assets table
-const CurrentDBVersion = 12
+// v12: Added first-class sections table
+// v13: Removed object hierarchy/heading columns; objects are file-backed only
+const CurrentDBVersion = 13
 
 // initialize creates the database schema.
 func (d *Database) initialize(isNewDB bool) error {
@@ -232,12 +234,8 @@ func (d *Database) initialize(isNewDB bool) error {
 			id TEXT PRIMARY KEY,
 			file_path TEXT NOT NULL,
 			type TEXT NOT NULL,
-			heading TEXT,
-			heading_level INTEGER,
 			fields TEXT NOT NULL DEFAULT '{}',
 			line_start INTEGER NOT NULL,
-			line_end INTEGER,
-			parent_id TEXT,
 			alias TEXT,                 -- Optional alias for reference resolution
 			file_mtime INTEGER,         -- File modification time from filesystem (Unix timestamp)
 			indexed_at INTEGER          -- When this row was written to the index
@@ -309,7 +307,6 @@ func (d *Database) initialize(isNewDB bool) error {
 		-- Indexes for fast queries
 		CREATE INDEX IF NOT EXISTS idx_objects_file ON objects(file_path);
 		CREATE INDEX IF NOT EXISTS idx_objects_type ON objects(type);
-		CREATE INDEX IF NOT EXISTS idx_objects_parent ON objects(parent_id);
 		CREATE INDEX IF NOT EXISTS idx_objects_alias ON objects(alias) WHERE alias IS NOT NULL;
 
 		CREATE INDEX IF NOT EXISTS idx_sections_file ON sections(file_path);
@@ -534,8 +531,8 @@ func nullableString(value string) interface{} {
 
 func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64) error {
 	objStmt, err := tx.Prepare(`
-		INSERT INTO objects (id, file_path, type, heading, heading_level, fields, line_start, line_end, parent_id, alias, file_mtime, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO objects (id, file_path, type, fields, line_start, alias, file_mtime, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -560,12 +557,8 @@ func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64
 			obj.ID,
 			doc.FilePath,
 			obj.ObjectType,
-			obj.Heading,
-			obj.HeadingLevel,
 			string(fieldsJSON),
 			obj.LineStart,
-			obj.LineEnd,
-			obj.ParentID,
 			alias,
 			mtime,
 			indexedAt,
@@ -832,7 +825,7 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error 
 	lines := strings.Split(doc.RawContent, "\n")
 
 	for _, obj := range doc.Objects {
-		// Get title: check schema name_field first, then "title" field, then heading, then object ID
+		// Get title: check schema name_field first, then "title" field, then object ID
 		title := ""
 		if sch != nil && obj.ObjectType != "" {
 			if typeDef, ok := sch.Types[obj.ObjectType]; ok && typeDef.NameField != "" {
@@ -850,11 +843,7 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error 
 				}
 			}
 		}
-		if title == "" && obj.Heading != nil {
-			title = *obj.Heading
-		}
 		if title == "" {
-			// Use object ID as title for file-level objects
 			title = obj.ID
 		}
 
@@ -897,7 +886,7 @@ func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 }
 
 func generatedDateObjectDate(obj *parser.ParsedObject) string {
-	if obj == nil || obj.ObjectType != "date" || obj.ParentID != nil {
+	if obj == nil || obj.ObjectType != "date" {
 		return ""
 	}
 
@@ -1008,7 +997,7 @@ func countDistinctFilesWithPrefix(db *sql.DB, pathPrefix string) (int, error) {
 	err := db.QueryRow(`
 		SELECT COUNT(DISTINCT file_path)
 		FROM (
-			SELECT file_path FROM objects WHERE parent_id IS NULL
+			SELECT file_path FROM objects
 			UNION
 			SELECT file_path FROM assets
 		)
@@ -1024,7 +1013,7 @@ func countDistinctFilesWithPrefix(db *sql.DB, pathPrefix string) (int, error) {
 // This is useful for detecting deleted files during incremental reindexing.
 func (d *Database) AllIndexedFilePaths() ([]string, error) {
 	rows, err := d.db.Query(`
-		SELECT DISTINCT file_path FROM objects WHERE parent_id IS NULL
+		SELECT DISTINCT file_path FROM objects
 		UNION
 		SELECT DISTINCT file_path FROM assets
 	`)
@@ -1135,7 +1124,7 @@ func (d *Database) Stats() (*IndexStats, error) {
 	if err := d.db.QueryRow(`
 		SELECT COUNT(DISTINCT file_path)
 		FROM (
-			SELECT file_path FROM objects WHERE parent_id IS NULL
+			SELECT file_path FROM objects
 			UNION
 			SELECT file_path FROM assets
 		)
@@ -1625,7 +1614,6 @@ func stalenessRows(db *sql.DB) (*sql.Rows, error) {
 	return db.Query(`
 		SELECT DISTINCT file_path, file_mtime 
 		FROM objects 
-		WHERE parent_id IS NULL
 		UNION
 		SELECT DISTINCT file_path, file_mtime
 		FROM assets
@@ -1667,7 +1655,7 @@ func (d *Database) GetFileMtime(filePath string) (int64, error) {
 	err := d.db.QueryRow(`
 		SELECT file_mtime
 		FROM (
-			SELECT file_mtime FROM objects WHERE file_path = ? AND parent_id IS NULL
+			SELECT file_mtime FROM objects WHERE file_path = ?
 			UNION ALL
 			SELECT file_mtime FROM assets WHERE file_path = ?
 		)

@@ -13,7 +13,7 @@ func scanObjectRows(rows *sql.Rows) ([]model.Object, error) {
 	return sqlutil.ScanRows(rows, func(rows *sql.Rows) (model.Object, error) {
 		var r model.Object
 		var fieldsJSON string
-		if err := rows.Scan(&r.ID, &r.Type, &fieldsJSON, &r.FilePath, &r.LineStart, &r.ParentID); err != nil {
+		if err := rows.Scan(&r.ID, &r.Type, &fieldsJSON, &r.FilePath, &r.LineStart); err != nil {
 			return model.Object{}, err
 		}
 		if err := json.Unmarshal([]byte(fieldsJSON), &r.Fields); err != nil {

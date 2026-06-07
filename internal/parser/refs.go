@@ -42,9 +42,9 @@ func ExtractRefs(content string, startLine int) []Reference {
 	return refs
 }
 
-// ExtractEmbeddedRefs parses embedded refs in trait values like [[[path/to/file]], [[other]]].
+// ExtractValueRefs parses refs in field and trait values like [[[path/to/file]], [[other]]].
 // Handles array syntax where refs are wrapped in extra brackets.
-func ExtractEmbeddedRefs(value string) []string {
+func ExtractValueRefs(value string) []string {
 	var refs []string
 
 	matches := wikilink.FindAllInLine(value, true)

@@ -226,8 +226,6 @@ Section nesting follows heading levels. A `##` section is a child of the precedi
 
 Use `in(...)`, `within(...)`, `has(...)`, and `contains(...)` predicates to query section scope.
 
-Legacy `::type(...)` lines are treated as ordinary Markdown text. They do not create objects, set section types, override IDs, or add fields.
-
 ---
 
 ## References

@@ -344,28 +344,8 @@ func (p *Parser) parseAtomicPredicate(qt QueryType, negated bool) (Predicate, er
 			}
 		}
 
-		// Common legacy error: keyword:predicate syntax
 		if p.peek.Type == TokenColon {
-			switch keyword {
-			case "content":
-				return nil, fmt.Errorf(`content:"..." is no longer supported; use content("...")`)
-			case "has":
-				return nil, fmt.Errorf("has:{...} is no longer supported; use has(trait:...)")
-			case "contains":
-				return nil, fmt.Errorf("contains:{...} is no longer supported; use contains(trait:...)")
-			case "refs":
-				return nil, fmt.Errorf("refs:... is no longer supported; use refs([[target]]) or refs(type:...)")
-			case "refd":
-				return nil, fmt.Errorf("refd:... is no longer supported; use refd([[source]]) or refd(type:...)")
-			case "on":
-				return nil, fmt.Errorf("on() is no longer supported; use in(...)")
-			case "within":
-				return nil, fmt.Errorf("within:{...} is no longer supported; use within(type:...)")
-			case "at":
-				return nil, fmt.Errorf("at:{...} is no longer supported; use at(trait:...)")
-			default:
-				return nil, fmt.Errorf("keyword-style predicates are no longer supported; use function-call predicates (e.g., has(...), refs(...), content(...))")
-			}
+			return nil, fmt.Errorf("keyword-style predicates are invalid; use function-call predicates (e.g., has(...), refs(...), content(...))")
 		}
 
 		return nil, fmt.Errorf("unexpected identifier '%s': expected a function call like has(...), refs(...), content(...), or a field predicate like .field==value", keyword)

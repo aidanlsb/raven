@@ -42,7 +42,6 @@ func ReplaceAllRefVariants(content, oldID, oldBase, newRef, objectRoot, pageRoot
 	}
 
 	result = replaceFrontmatterBareRefVariants(result, oldPatterns, newRef)
-	result = replaceTypeDeclBareRefVariants(result, oldPatterns, newRef)
 
 	return result
 }
@@ -136,50 +135,6 @@ func replaceFrontmatterBareRef(frontmatter, oldPattern, newRef string) string {
 	result = regexp.MustCompile(`(?m)^(\s*-\s*)"`+escapedOld+`"(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
 	result = regexp.MustCompile(`(?m)^(\s*-\s*)'`+escapedOld+`'(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
 	result = regexp.MustCompile(`(?m)^(\s*-\s*)`+escapedOld+`(\s*(?:#.*)?)$`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
-
-	result = regexp.MustCompile(`([\[,]\s*)"`+escapedOld+`"(\s*(?:,|\]))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
-	result = regexp.MustCompile(`([\[,]\s*)'`+escapedOld+`'(\s*(?:,|\]))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
-	result = regexp.MustCompile(`([\[,]\s*)`+escapedOld+`(\s*(?:,|\]))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
-
-	return result
-}
-
-func replaceTypeDeclBareRefVariants(content string, oldPatterns []string, newRef string) string {
-	lines := strings.Split(content, "\n")
-	changed := false
-	for i, line := range lines {
-		if !strings.HasPrefix(strings.TrimSpace(line), "::") {
-			continue
-		}
-
-		updated := line
-		for _, oldPattern := range oldPatterns {
-			updated = replaceTypeDeclBareRef(updated, oldPattern, newRef)
-		}
-		if updated != line {
-			lines[i] = updated
-			changed = true
-		}
-	}
-	if !changed {
-		return content
-	}
-	return strings.Join(lines, "\n")
-}
-
-func replaceTypeDeclBareRef(line, oldPattern, newRef string) string {
-	oldPattern = strings.TrimSpace(oldPattern)
-	if oldPattern == "" || oldPattern == newRef {
-		return line
-	}
-
-	escapedOld := regexp.QuoteMeta(oldPattern)
-	escapedNew := strings.ReplaceAll(newRef, "$", "$$")
-	result := line
-
-	result = regexp.MustCompile(`(=\s*)"`+escapedOld+`"(\s*(?:,|\)))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
-	result = regexp.MustCompile(`(=\s*)'`+escapedOld+`'(\s*(?:,|\)))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)
-	result = regexp.MustCompile(`(=\s*)`+escapedOld+`(\s*(?:,|\)))`).ReplaceAllString(result, `${1}`+escapedNew+`${2}`)
 
 	result = regexp.MustCompile(`([\[,]\s*)"`+escapedOld+`"(\s*(?:,|\]))`).ReplaceAllString(result, `${1}"`+escapedNew+`"${2}`)
 	result = regexp.MustCompile(`([\[,]\s*)'`+escapedOld+`'(\s*(?:,|\]))`).ReplaceAllString(result, `${1}'`+escapedNew+`'${2}`)

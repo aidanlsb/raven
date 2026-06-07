@@ -61,7 +61,7 @@ type BulkSummary struct {
 
 // ReadIDsFromStdin reads object/trait IDs from stdin, one per line.
 // Returns the IDs and any section IDs that were filtered out.
-func ReadIDsFromStdin() (ids []string, embedded []string, err error) {
+func ReadIDsFromStdin() (ids []string, sectionIDs []string, err error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -76,7 +76,7 @@ func ReadIDsFromStdin() (ids []string, embedded []string, err error) {
 
 		// Section IDs contain a fragment and are not file-backed objects.
 		if strings.Contains(id, "#") {
-			embedded = append(embedded, id)
+			sectionIDs = append(sectionIDs, id)
 			continue
 		}
 
@@ -87,7 +87,7 @@ func ReadIDsFromStdin() (ids []string, embedded []string, err error) {
 		return nil, nil, fmt.Errorf("error reading from stdin: %w", err)
 	}
 
-	return ids, embedded, nil
+	return ids, sectionIDs, nil
 }
 
 // extractIDFromPipeLine extracts an ID from pipe-friendly list output.
@@ -106,9 +106,9 @@ func extractIDFromPipeLine(line string) string {
 	return line
 }
 
-// IsEmbeddedID checks if an ID is a section/fragment ID (contains #).
-func IsEmbeddedID(id string) bool {
-	_, _, ok := paths.ParseEmbeddedID(id)
+// IsSectionID checks if an ID is a section/fragment ID (contains #).
+func IsSectionID(id string) bool {
+	_, _, ok := paths.ParseSectionID(id)
 	return ok
 }
 
@@ -177,15 +177,15 @@ func getActionVerb(action string) string {
 	}
 }
 
-// BuildEmbeddedSkipWarning creates a warning for skipped section IDs.
-func BuildEmbeddedSkipWarning(embedded []string) *Warning {
-	if len(embedded) == 0 {
+// BuildSectionSkipWarning creates a warning for skipped section IDs.
+func BuildSectionSkipWarning(sectionIDs []string) *Warning {
+	if len(sectionIDs) == 0 {
 		return nil
 	}
 	return &Warning{
-		Code:    WarnEmbeddedSkipped,
-		Message: fmt.Sprintf("Skipped %d section ID(s) - bulk operations only support file-level objects", len(embedded)),
-		Ref:     strings.Join(embedded, ", "),
+		Code:    WarnSectionSkipped,
+		Message: fmt.Sprintf("Skipped %d section ID(s) - bulk operations only support file-level objects", len(sectionIDs)),
+		Ref:     strings.Join(sectionIDs, ", "),
 	}
 }
 

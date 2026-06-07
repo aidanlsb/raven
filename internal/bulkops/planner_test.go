@@ -56,8 +56,8 @@ func TestPlanObjectApply(t *testing.T) {
 		if len(got.FileIDs) != 1 || got.FileIDs[0] != "people/freya" {
 			t.Fatalf("FileIDs = %#v, want [people/freya]", got.FileIDs)
 		}
-		if len(got.EmbeddedIDs) != 1 || got.EmbeddedIDs[0] != "people/thor#tasks" {
-			t.Fatalf("EmbeddedIDs = %#v, want [people/thor#tasks]", got.EmbeddedIDs)
+		if len(got.SectionIDs) != 1 || got.SectionIDs[0] != "people/thor#tasks" {
+			t.Fatalf("SectionIDs = %#v, want [people/thor#tasks]", got.SectionIDs)
 		}
 	})
 

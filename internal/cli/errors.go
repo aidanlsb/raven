@@ -88,7 +88,7 @@ const (
 	WarnWrongCommand      = codes.WarnWrongCommand
 	WarnMissingField      = codes.WarnMissingField
 	WarnBacklinks         = codes.WarnBacklinks
-	WarnEmbeddedSkipped   = codes.WarnEmbeddedSkipped
+	WarnSectionSkipped    = codes.WarnSectionSkipped
 	WarnUnknownField      = codes.WarnUnknownField
 	WarnTypeMismatch      = codes.WarnTypeMismatch
 )

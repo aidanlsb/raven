@@ -34,11 +34,11 @@ func buildAddArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 		}
 		text := strings.Join(args, " ")
 
-		fileIDs, embeddedIDs, err := ReadIDsFromStdin()
+		fileIDs, sectionIDs, err := ReadIDsFromStdin()
 		if err != nil {
 			return nil, handleError(ErrInternal, err, "")
 		}
-		ids := append(fileIDs, embeddedIDs...)
+		ids := append(fileIDs, sectionIDs...)
 		if len(ids) == 0 {
 			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 		}

@@ -59,7 +59,7 @@ func PreviewAddBulk(req AddBulkRequest) (*AddBulkPreview, error) {
 	for _, id := range req.ObjectIDs {
 		fileID := id
 		targetObjectID := ""
-		if baseID, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
+		if baseID, _, isSection := paths.ParseSectionID(id); isSection {
 			fileID = baseID
 			targetObjectID = id
 		}
@@ -153,7 +153,7 @@ func ApplyAddBulk(req AddBulkRequest, onAdded func(filePath string)) (*AddBulkSu
 		result := AddBulkResult{ID: id}
 		fileID := id
 		targetObjectID := ""
-		if baseID, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
+		if baseID, _, isSection := paths.ParseSectionID(id); isSection {
 			fileID = baseID
 			targetObjectID = id
 		}

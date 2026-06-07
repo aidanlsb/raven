@@ -179,6 +179,25 @@ func (e *Executor) buildRefdPredicateSQL(p *RefdPredicate, alias string, isTrait
 		return cond, args, nil
 	}
 
+	if p.SubQuery.Type == QueryTypeSection {
+		cond, args, err := e.sectionSubqueryCondition(p.SubQuery, "src_s")
+		if err != nil {
+			return "", nil, err
+		}
+
+		sqlCond := fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM refs r
+			JOIN sections src_s ON r.source_id = src_s.id
+			WHERE (r.target_id = %s.id OR r.target_raw = %s.id)
+			  AND %s
+		)`, alias, alias, cond)
+
+		if p.Negated() {
+			sqlCond = "NOT " + sqlCond
+		}
+		return sqlCond, args, nil
+	}
+
 	// Trait subquery - referenced by traits matching the subquery
 	sourceConditions = append(sourceConditions, "src_t.trait_type = ?")
 	args = append(args, p.SubQuery.TypeName)

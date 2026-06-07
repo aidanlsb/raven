@@ -63,11 +63,9 @@ func exemptDirs(vaultCfg *config.VaultConfig) []string {
 	return prefixes
 }
 
-// detectNonCanonicalPath flags file-level objects whose file location is not
-// under the configured root for their kind. Embedded objects (those with a
-// fragment in their ID) are skipped — they are validated through their parent
-// file. When a canonical destination can be computed unambiguously, the issue
-// is annotated with FixCommand and FixHint pointing at the canonical path.
+// detectNonCanonicalPath flags file-backed objects whose file location is not
+// under the configured root for their kind. When a canonical destination can be
+// computed unambiguously, the issue is annotated with FixCommand and FixHint.
 func detectNonCanonicalPath(
 	doc *parser.ParsedDocument,
 	sch *schema.Schema,
@@ -130,12 +128,6 @@ func detectNonCanonicalPath(
 func primaryFileObject(doc *parser.ParsedDocument) *parser.ParsedObject {
 	for _, obj := range doc.Objects {
 		if obj == nil {
-			continue
-		}
-		if obj.ParentID != nil {
-			continue
-		}
-		if strings.Contains(obj.ID, "#") {
 			continue
 		}
 		return obj

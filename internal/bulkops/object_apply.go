@@ -20,7 +20,7 @@ type ObjectApplyPlan struct {
 	Command         ObjectApplyCommand
 	IDs             []string
 	FileIDs         []string
-	EmbeddedIDs     []string
+	SectionIDs      []string
 	SetUpdates      map[string]string
 	AddText         string
 	MoveDestination string
@@ -35,7 +35,7 @@ func PlanObjectApply(raw *RawApplyCommand, ids []string) (*ObjectApplyPlan, erro
 		Command: ObjectApplyCommand(raw.Command),
 		IDs:     dedupeIDs(ids),
 	}
-	plan.FileIDs, plan.EmbeddedIDs = partitionObjectIDs(plan.IDs)
+	plan.FileIDs, plan.SectionIDs = partitionObjectIDs(plan.IDs)
 
 	switch plan.Command {
 	case ObjectApplySet:
@@ -94,13 +94,13 @@ func dedupeIDs(ids []string) []string {
 
 func partitionObjectIDs(ids []string) ([]string, []string) {
 	fileIDs := make([]string, 0, len(ids))
-	embeddedIDs := make([]string, 0)
+	sectionIDs := make([]string, 0)
 	for _, id := range ids {
-		if _, _, ok := paths.ParseEmbeddedID(id); ok {
-			embeddedIDs = append(embeddedIDs, id)
+		if _, _, ok := paths.ParseSectionID(id); ok {
+			sectionIDs = append(sectionIDs, id)
 			continue
 		}
 		fileIDs = append(fileIDs, id)
 	}
-	return fileIDs, embeddedIDs
+	return fileIDs, sectionIDs
 }

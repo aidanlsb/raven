@@ -77,7 +77,7 @@ func TestExtractRefs(t *testing.T) {
 	}
 }
 
-func TestExtractEmbeddedRefs(t *testing.T) {
+func TestExtractValueRefs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name  string
@@ -98,7 +98,7 @@ func TestExtractEmbeddedRefs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ExtractEmbeddedRefs(tt.value)
+			got := ExtractValueRefs(tt.value)
 
 			if len(got) != len(tt.want) {
 				t.Errorf("got %d refs, want %d", len(got), len(tt.want))

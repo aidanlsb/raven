@@ -319,8 +319,8 @@ func addDateRefMatch(r *Resolver, c *matchCollector, ref string) {
 }
 
 func isPathLikeRef(ref string) bool {
-	// Treat embedded refs like "file#section" as path-like so they can resolve via
-	// slugified/suffix matching and embedded-ID logic.
+	// Treat section refs like "file#section" as path-like so they can resolve via
+	// slugified/suffix matching and section-ID logic.
 	return strings.Contains(ref, "/") || strings.HasPrefix(ref, "#") || strings.Contains(ref, "#")
 }
 
@@ -330,8 +330,8 @@ func addPathMatches(r *Resolver, c *matchCollector, ref string) {
 		c.add(ref, "object_id")
 	}
 
-	// For embedded refs like "file#id", try without extension
-	if baseID, fragment, isEmbedded := paths.ParseEmbeddedID(ref); isEmbedded {
+	// For section refs like "file#id", try without extension.
+	if baseID, fragment, isSection := paths.ParseSectionID(ref); isSection {
 		baseID = strings.TrimSuffix(baseID, ".md")
 		fullID := baseID + "#" + fragment
 		if _, ok := r.objectIDs[fullID]; ok {
@@ -362,8 +362,8 @@ func addPathMatches(r *Resolver, c *matchCollector, ref string) {
 }
 
 func addPathLeafCanonicalMatches(r *Resolver, c *matchCollector, ref string) {
-	baseRef, fragment, isEmbedded := paths.ParseEmbeddedID(ref)
-	if isEmbedded {
+	baseRef, fragment, isSection := paths.ParseSectionID(ref)
+	if isSection {
 		return
 	}
 
@@ -395,7 +395,7 @@ func addPathLeafCanonicalMatches(r *Resolver, c *matchCollector, ref string) {
 }
 
 func canonicalTargetWithinPathFamily(r *Resolver, familyDir, candidateID, fragment string) (string, bool) {
-	baseID, _, _ := paths.ParseEmbeddedID(candidateID)
+	baseID, _, _ := paths.ParseSectionID(candidateID)
 	if !pathFamilyMatches(familyDir, baseID) {
 		return "", false
 	}
@@ -489,9 +489,9 @@ func buildResolveResult(matches []string, matchSources map[string]string) Resolv
 }
 
 func normalizeRefForResolution(ref string) string {
-	baseRef, fragment, isEmbedded := paths.ParseEmbeddedID(ref)
+	baseRef, fragment, isSection := paths.ParseSectionID(ref)
 	baseRef = paths.TrimMDExtension(baseRef)
-	if !isEmbedded {
+	if !isSection {
 		return baseRef
 	}
 	return baseRef + "#" + fragment
@@ -530,8 +530,8 @@ func preferParentOverSections(matches []string) []string {
 	// Filter: keep non-sections, and only keep sections if their parent isn't matched
 	var filtered []string
 	for _, id := range matches {
-		parentID, _, isEmbedded := paths.ParseEmbeddedID(id)
-		if !isEmbedded {
+		parentID, _, isSection := paths.ParseSectionID(id)
+		if !isSection {
 			// Keep parent objects
 			filtered = append(filtered, id)
 		} else {
@@ -598,7 +598,7 @@ func isFileSectionCollisionOnly(ids []string) bool {
 
 	// All section IDs must belong to this parent file
 	for _, id := range ids {
-		if parent, _, isEmbedded := paths.ParseEmbeddedID(id); isEmbedded {
+		if parent, _, isSection := paths.ParseSectionID(id); isSection {
 			if parent != parentFile {
 				// Section belongs to a different file - real collision
 				return false

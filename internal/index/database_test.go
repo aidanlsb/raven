@@ -380,7 +380,7 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
-	t.Run("remove document resolves file_path from DB (including embedded IDs)", func(t *testing.T) {
+	t.Run("remove document resolves file_path from DB (including section IDs)", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {
 			t.Fatalf("failed to open database: %v", err)
@@ -441,7 +441,7 @@ func TestDatabase(t *testing.T) {
 			t.Fatalf("failed to index document: %v", err)
 		}
 
-		// Remove by embedded ID (callers may pass file#section).
+		// Remove by section ID (callers may pass file#section).
 		if err := db.RemoveDocument("people/freya#notes"); err != nil {
 			t.Fatalf("failed to remove document: %v", err)
 		}

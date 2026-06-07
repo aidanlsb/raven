@@ -62,7 +62,7 @@ func TestAppendToFileWaitsForExclusiveLock(t *testing.T) {
 	}
 }
 
-func TestAppendToFileReturnsInsertedLineForEmbeddedTarget(t *testing.T) {
+func TestAppendToFileReturnsInsertedLineForSectionTarget(t *testing.T) {
 	t.Parallel()
 
 	vaultPath := t.TempDir()

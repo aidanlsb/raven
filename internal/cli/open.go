@@ -71,17 +71,17 @@ func prepareOpenArgs(cmd *cobra.Command, args []string) ([]string, bool, error) 
 func buildOpenArgs(cmd *cobra.Command, args []string) (map[string]interface{}, error) {
 	stdin, _ := cmd.Flags().GetBool("stdin")
 	if stdin {
-		ids, embedded, err := ReadIDsFromStdin()
+		ids, sectionIDs, err := ReadIDsFromStdin()
 		if err != nil {
 			return nil, err
 		}
-		if len(ids) == 0 && len(embedded) == 0 {
+		if len(ids) == 0 && len(sectionIDs) == 0 {
 			return nil, fmt.Errorf("no object IDs provided on stdin")
 		}
 
-		allRefs := make([]string, 0, len(ids)+len(embedded))
+		allRefs := make([]string, 0, len(ids)+len(sectionIDs))
 		allRefs = append(allRefs, ids...)
-		allRefs = append(allRefs, embedded...)
+		allRefs = append(allRefs, sectionIDs...)
 		return map[string]interface{}{
 			"stdin":      true,
 			"object_ids": allRefs,

@@ -46,11 +46,11 @@ func buildSetArgs(cmd *cobra.Command, args []string) (map[string]interface{}, er
 			return nil, handleErrorMsg(ErrMissingArgument, "no fields to set", "Usage: rvn set --stdin field=value... or --fields-json '{...}'")
 		}
 
-		fileIDs, embeddedIDs, err := ReadIDsFromStdin()
+		fileIDs, sectionIDs, err := ReadIDsFromStdin()
 		if err != nil {
 			return nil, handleError(ErrInternal, err, "")
 		}
-		ids := append(fileIDs, embeddedIDs...)
+		ids := append(fileIDs, sectionIDs...)
 		if len(ids) == 0 {
 			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 		}
@@ -135,13 +135,7 @@ func renderCanonicalSetSingleResult(result commandexec.Result) error {
 	}
 
 	relativePath, _ := data["file"].(string)
-	embedded, _ := data["embedded"].(bool)
-	if embedded {
-		embeddedSlug, _ := data["embedded_slug"].(string)
-		fmt.Println(ui.Checkf("Updated %s %s", ui.FilePath(relativePath), ui.Hint("(embedded: "+embeddedSlug+")")))
-	} else {
-		fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
-	}
+	fmt.Println(ui.Checkf("Updated %s", ui.FilePath(relativePath)))
 
 	updatedFields := stringMapFromAny(data["updated_fields"])
 	previousFields := interfaceMapFromAny(data["previous_fields"])

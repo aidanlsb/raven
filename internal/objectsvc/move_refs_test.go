@@ -113,22 +113,6 @@ func TestReplaceAllRefVariants(t *testing.T) {
 			newRef:  "person/tido",
 			want:    "---\ntype: project\nowners: [person/tido, \"people/thor\"]\n---\n",
 		},
-		{
-			name:    "bare type declaration ref scalar",
-			content: "# Notes\n::project(owner=people/tido)\n",
-			oldID:   "people/tido",
-			oldBase: "people/tido",
-			newRef:  "person/tido",
-			want:    "# Notes\n::project(owner=person/tido)\n",
-		},
-		{
-			name:    "bare type declaration ref in inline array",
-			content: "# Notes\n::project(owners=[people/tido, \"people/thor\"])\n",
-			oldID:   "people/tido",
-			oldBase: "people/tido",
-			newRef:  "person/tido",
-			want:    "# Notes\n::project(owners=[person/tido, \"people/thor\"])\n",
-		},
 	}
 
 	for _, tt := range tests {

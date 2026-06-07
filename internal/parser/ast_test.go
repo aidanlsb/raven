@@ -112,8 +112,8 @@ More content.
 		}
 	})
 
-	t.Run("treats legacy type declarations as ordinary text", func(t *testing.T) {
-		content := "# Weekly Standup\n::meeting(time=09:00)\n\nMeeting notes.\n"
+	t.Run("plain body text does not create traits or refs", func(t *testing.T) {
+		content := "# Weekly Standup\nMeeting metadata: 09:00\n\nMeeting notes.\n"
 
 		result, err := ExtractFromAST([]byte(content), 1)
 		if err != nil {
@@ -124,9 +124,11 @@ More content.
 			t.Fatalf("got %d headings, want 1", len(result.Headings))
 		}
 
-		headingLine := result.Headings[0].Line
-		if _, ok := result.TypeDecls[headingLine]; ok {
-			t.Error("type declaration should not be extracted")
+		if len(result.Traits) != 0 {
+			t.Fatalf("got %d traits, want none", len(result.Traits))
+		}
+		if len(result.Refs) != 0 {
+			t.Fatalf("got %d refs, want none", len(result.Refs))
 		}
 	})
 

@@ -23,7 +23,7 @@ import (
 	"github.com/aidanlsb/raven/internal/traitsvc"
 )
 
-const warnEmbeddedSkipped = codes.WarnEmbeddedSkipped
+const warnSectionSkipped = codes.WarnSectionSkipped
 
 type canonicalBulkResult struct {
 	ID      string `json:"id"`
@@ -155,12 +155,6 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 	if len(serviceResult.PreviousFields) > 0 {
 		data["previous_fields"] = serviceResult.PreviousFields
-	}
-	if serviceResult.Embedded {
-		data["embedded"] = true
-		if serviceResult.EmbeddedSlug != "" {
-			data["embedded_slug"] = serviceResult.EmbeddedSlug
-		}
 	}
 
 	return commandexec.SuccessWithWarnings(
@@ -589,8 +583,8 @@ func mergeFieldInputs(literalUpdates map[string]string, typedUpdates map[string]
 }
 
 func runAddBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, text string, headingSpec string, confirm bool) commandexec.Result {
-	fileIDs, embeddedIDs := splitEmbeddedIDs(ids)
-	warnings := embeddedSkipWarnings(embeddedIDs)
+	fileIDs, sectionIDs := splitSectionIDs(ids)
+	warnings := sectionSkipWarnings(sectionIDs)
 	request := objectsvc.AddBulkRequest{
 		VaultPath:    vaultPath,
 		VaultConfig:  vaultCfg,
@@ -713,8 +707,8 @@ func runAddSingle(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sc
 }
 
 func runDeleteBulk(vaultPath string, vaultCfg *config.VaultConfig, ids []string, confirm bool) commandexec.Result {
-	fileIDs, embeddedIDs := splitEmbeddedIDs(ids)
-	warnings := embeddedSkipWarnings(embeddedIDs)
+	fileIDs, sectionIDs := splitSectionIDs(ids)
+	warnings := sectionSkipWarnings(sectionIDs)
 	deletionCfg := vaultCfg.GetDeletionConfig()
 	request := objectsvc.DeleteBulkRequest{
 		VaultPath:   vaultPath,
@@ -767,8 +761,8 @@ func runMoveBulk(vaultPath string, vaultCfg *config.VaultConfig, sch *schema.Sch
 		return commandexec.Failure("INVALID_INPUT", "destination must be a directory (end with /)", nil, "Example: rvn move --stdin archive/projects/")
 	}
 
-	fileIDs, embeddedIDs := splitEmbeddedIDs(ids)
-	warnings := embeddedSkipWarnings(embeddedIDs)
+	fileIDs, sectionIDs := splitSectionIDs(ids)
+	warnings := sectionSkipWarnings(sectionIDs)
 	request := objectsvc.MoveBulkRequest{
 		VaultPath:      vaultPath,
 		VaultConfig:    vaultCfg,
@@ -883,30 +877,30 @@ func stringSliceArg(raw any) []string {
 	}
 }
 
-func splitEmbeddedIDs(ids []string) ([]string, []string) {
+func splitSectionIDs(ids []string) ([]string, []string) {
 	fileIDs := make([]string, 0, len(ids))
-	embeddedIDs := make([]string, 0)
+	sectionIDs := make([]string, 0)
 	for _, id := range ids {
 		if id == "" {
 			continue
 		}
-		if _, _, ok := paths.ParseEmbeddedID(id); ok {
-			embeddedIDs = append(embeddedIDs, id)
+		if _, _, ok := paths.ParseSectionID(id); ok {
+			sectionIDs = append(sectionIDs, id)
 			continue
 		}
 		fileIDs = append(fileIDs, id)
 	}
-	return fileIDs, embeddedIDs
+	return fileIDs, sectionIDs
 }
 
-func embeddedSkipWarnings(embeddedIDs []string) []commandexec.Warning {
-	if len(embeddedIDs) == 0 {
+func sectionSkipWarnings(sectionIDs []string) []commandexec.Warning {
+	if len(sectionIDs) == 0 {
 		return nil
 	}
 	return []commandexec.Warning{{
-		Code:    warnEmbeddedSkipped,
-		Message: fmt.Sprintf("Skipped %d section ID(s) - bulk operations only support file-level objects", len(embeddedIDs)),
-		Ref:     strings.Join(embeddedIDs, ", "),
+		Code:    warnSectionSkipped,
+		Message: fmt.Sprintf("Skipped %d section ID(s) - bulk operations only support file-level objects", len(sectionIDs)),
+		Ref:     strings.Join(sectionIDs, ", "),
 	}}
 }
 

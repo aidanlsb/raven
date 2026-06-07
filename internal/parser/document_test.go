@@ -87,54 +87,14 @@ Even more text.
 		}
 	})
 
-	t.Run("legacy explicit type with explicit id is plain text", func(t *testing.T) {
-		content := `# Weekly Standup
-::meeting(id=standup, time=09:00)
-
-Discussion notes here.
-`
-		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(doc.Objects) != 1 {
-			t.Errorf("got %d objects, want 1", len(doc.Objects))
-		}
-		if len(doc.Sections) != 1 || doc.Sections[0].ID != "meetings#weekly-standup" {
-			t.Fatalf("sections = %+v, want meetings#weekly-standup", doc.Sections)
-		}
-	})
-
-	t.Run("legacy explicit type with id derived from heading is plain text", func(t *testing.T) {
-		content := `# Weekly Standup
-::meeting(time=09:00)
-
-Discussion notes here.
-`
-		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(doc.Objects) != 1 {
-			t.Errorf("got %d objects, want 1", len(doc.Objects))
-		}
-		if len(doc.Sections) != 1 || doc.Sections[0].ID != "meetings#weekly-standup" {
-			t.Fatalf("sections = %+v, want meetings#weekly-standup", doc.Sections)
-		}
-	})
-
 	t.Run("duplicate headings with derived ids", func(t *testing.T) {
 		content := `# Notes
 
 ## Team Sync
-::meeting(time=09:00)
 
 First meeting.
 
 ## Team Sync
-::meeting(time=14:00)
 
 Second meeting with same heading.
 `
@@ -143,7 +103,6 @@ Second meeting with same heading.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// File + Notes section + 2 Team Sync sections. ::meeting lines are plain text.
 		if len(doc.Objects) != 1 {
 			t.Errorf("got %d objects, want 1", len(doc.Objects))
 		}
@@ -155,22 +114,6 @@ Second meeting with same heading.
 		}
 		if doc.Sections[2].ID != "daily#team-sync-2" {
 			t.Errorf("second team sync ID = %q, want daily#team-sync-2", doc.Sections[2].ID)
-		}
-	})
-
-	t.Run("legacy explicit id does not override heading slug", func(t *testing.T) {
-		content := `# Very Long Meeting Title That Would Make A Bad ID
-::meeting(id=standup, time=09:00)
-
-Discussion notes here.
-`
-		doc, err := ParseDocument(content, "/vault/meetings.md", "/vault")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(doc.Sections) != 1 || doc.Sections[0].ID != "meetings#very-long-meeting-title-that-would-make-a-bad-id" {
-			t.Fatalf("sections = %+v, want heading-derived section ID", doc.Sections)
 		}
 	})
 
@@ -443,20 +386,17 @@ type: date
 		}
 	})
 
-	t.Run("legacy type declaration refs are ordinary body refs", func(t *testing.T) {
+	t.Run("section body refs are scoped to section", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Weekly Standup
-::meeting(series=[[meetings/standup]])
-
-Discussed project status.
+Discussed [[meetings/standup]] project status.
 `
 		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Legacy ::type(...) text is ordinary markdown, so refs on that line are scoped to the section.
 		found := false
 		for _, ref := range doc.Refs {
 			if ref.TargetRaw == "meetings/standup" && ref.SourceID == "daily/2025-01-15#weekly-standup" {
@@ -465,24 +405,21 @@ Discussed project status.
 			}
 		}
 		if !found {
-			t.Errorf("expected ref to meetings/standup from legacy declaration line, got refs: %v", doc.Refs)
+			t.Errorf("expected ref to meetings/standup from section body, got refs: %v", doc.Refs)
 		}
 	})
 
-	t.Run("refs extracted from legacy type declaration lines", func(t *testing.T) {
+	t.Run("multiple refs in section body", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Team Sync
-::meeting(attendees=[[people/freya]] [[people/thor]])
-
-Team discussion.
+Team discussion with [[people/freya]] and [[people/thor]].
 `
 		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Should have refs from the ordinary markdown line.
 		foundFreya := false
 		foundThor := false
 		for _, ref := range doc.Refs {
@@ -496,27 +433,24 @@ Team discussion.
 			}
 		}
 		if !foundFreya {
-			t.Errorf("expected ref to people/freya from legacy declaration line")
+			t.Errorf("expected ref to people/freya from section body")
 		}
 		if !foundThor {
-			t.Errorf("expected ref to people/thor from legacy declaration line")
+			t.Errorf("expected ref to people/thor from section body")
 		}
 	})
 
-	t.Run("multiple refs in legacy type declaration line", func(t *testing.T) {
+	t.Run("refs in nested section body", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Client Meeting
-::meeting(series=[[meetings/acme-weekly]], client=[[companies/acme]])
-
-Discussed roadmap.
+Discussed [[meetings/acme-weekly]] roadmap with [[companies/acme]].
 `
 		doc, err := ParseDocument(content, "/vault/daily/2025-01-15.md", "/vault")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Should have refs from the ordinary markdown line.
 		foundSeries := false
 		foundClient := false
 		for _, ref := range doc.Refs {
@@ -530,18 +464,18 @@ Discussed roadmap.
 			}
 		}
 		if !foundSeries {
-			t.Errorf("expected ref to meetings/acme-weekly from legacy declaration line")
+			t.Errorf("expected ref to meetings/acme-weekly from section body")
 		}
 		if !foundClient {
-			t.Errorf("expected ref to companies/acme from legacy declaration line")
+			t.Errorf("expected ref to companies/acme from section body")
 		}
 	})
 
-	t.Run("legacy declaration refs distinct from body refs", func(t *testing.T) {
+	t.Run("section refs distinct from later body refs", func(t *testing.T) {
 		content := `# Daily Note
 
 ## Standup
-::meeting(series=[[meetings/standup]])
+Reviewed [[meetings/standup]] notes.
 
 Discussed [[projects/website]] progress.
 `
@@ -550,19 +484,18 @@ Discussed [[projects/website]] progress.
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Should have both the declaration-line ref and body ref.
-		foundFieldRef := false
+		foundSectionRef := false
 		foundBodyRef := false
 		for _, ref := range doc.Refs {
 			if ref.TargetRaw == "meetings/standup" {
-				foundFieldRef = true
+				foundSectionRef = true
 			}
 			if ref.TargetRaw == "projects/website" {
 				foundBodyRef = true
 			}
 		}
-		if !foundFieldRef {
-			t.Errorf("expected ref to meetings/standup from legacy declaration line")
+		if !foundSectionRef {
+			t.Errorf("expected ref to meetings/standup from section body")
 		}
 		if !foundBodyRef {
 			t.Errorf("expected ref to projects/website from body")

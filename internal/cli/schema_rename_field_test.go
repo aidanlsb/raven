@@ -35,12 +35,6 @@ email: alice@example.com
 ---
 # Alice
 `).
-		WithFile("notes/embedded.md", `---
-type: page
----
-# Alice (embedded)
-::person(email="alice@example.com")
-`).
 		Build()
 
 	// Snapshot contents
@@ -48,7 +42,6 @@ type: page
 	beforeRaven := v.ReadFile("raven.yaml")
 	beforeTemplate := v.ReadFile("templates/person.md")
 	beforePerson := v.ReadFile("people/alice.md")
-	beforeEmbedded := v.ReadFile("notes/embedded.md")
 
 	// Preview (no --confirm)
 	res := v.RunCLI("schema", "rename", "field", "person", "email", "email_address")
@@ -71,9 +64,6 @@ type: page
 	}
 	if got := v.ReadFile("people/alice.md"); got != beforePerson {
 		t.Fatalf("expected person file unchanged in preview mode")
-	}
-	if got := v.ReadFile("notes/embedded.md"); got != beforeEmbedded {
-		t.Fatalf("expected embedded file unchanged in preview mode")
 	}
 }
 
@@ -106,12 +96,6 @@ email: alice@example.com
 ---
 # Alice
 `).
-		WithFile("notes/embedded.md", `---
-type: page
----
-# Alice (embedded)
-::person(email="alice@example.com")
-`).
 		Build()
 
 	res := v.RunCLI("schema", "rename", "field", "person", "email", "email_address", "--confirm")
@@ -133,10 +117,6 @@ type: page
 	// frontmatter updated
 	v.AssertFileContains("people/alice.md", "email_address: alice@example.com")
 	v.AssertFileNotContains("people/alice.md", "\nemail: ")
-
-	// Legacy ::type(...) text is ordinary Markdown and is not rewritten.
-	v.AssertFileContains("notes/embedded.md", `::person(email="alice@example.com")`)
-	v.AssertFileNotContains("notes/embedded.md", `::person(email_address=alice@example.com)`)
 }
 
 func TestSchemaRenameField_ConflictInFrontmatterBlocksRename(t *testing.T) {
@@ -171,37 +151,5 @@ email_address: alice@new.example.com
 	}
 	if got := v.ReadFile("people/alice.md"); got != beforePerson {
 		t.Fatalf("expected file unchanged when conflicts exist")
-	}
-}
-
-func TestSchemaRenameField_LegacyTypeDeclConflictDoesNotBlockRename(t *testing.T) {
-	v := testutil.NewTestVault(t).
-		WithSchema(`version: 2
-types:
-  person:
-    fields:
-      name: { type: string }
-      email: { type: string }
-traits: {}
-`).
-		WithFile("notes/embedded.md", `---
-type: page
----
-# Alice
-::person(email="alice@example.com", email_address="alice@new.example.com")
-`).
-		Build()
-
-	beforeSchema := v.ReadFile("schema.yaml")
-	beforeFile := v.ReadFile("notes/embedded.md")
-
-	res := v.RunCLI("schema", "rename", "field", "person", "email", "email_address", "--confirm")
-	res.MustSucceed(t)
-
-	if got := v.ReadFile("schema.yaml"); got == beforeSchema {
-		t.Fatalf("expected schema.yaml to be updated")
-	}
-	if got := v.ReadFile("notes/embedded.md"); got != beforeFile {
-		t.Fatalf("expected legacy type declaration text unchanged")
 	}
 }

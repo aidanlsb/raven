@@ -104,7 +104,7 @@ func (e *Executor) buildObjectPageSQL(q *Query, limit, offset int) (string, []in
 		return "", nil, err
 	}
 	sqlStr := fmt.Sprintf(`
-		SELECT o.id, o.type, o.fields, o.file_path, o.line_start, o.parent_id
+		SELECT o.id, o.type, o.fields, o.file_path, o.line_start
 		FROM objects o
 		WHERE %s
 		ORDER BY o.file_path, o.line_start

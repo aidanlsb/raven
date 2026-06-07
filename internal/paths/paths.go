@@ -169,13 +169,13 @@ func ObjectIDToFilePath(objectID, typeName, objectsRoot, pagesRoot string) strin
 	return EnsureMDExtension(id)
 }
 
-// ParseEmbeddedID parses an object ID that may contain a section fragment.
+// ParseSectionID parses an object ID that may contain a section fragment.
 // For IDs like "file#section", it returns (fileID, fragment, true).
 // For IDs without a fragment, it returns (id, "", false).
 //
 // This is the canonical function for parsing section/fragment IDs.
 // Use this instead of manually calling strings.SplitN(id, "#", 2).
-func ParseEmbeddedID(id string) (fileID, fragment string, isEmbedded bool) {
+func ParseSectionID(id string) (fileID, fragment string, isSection bool) {
 	if idx := strings.Index(id, "#"); idx >= 0 {
 		return id[:idx], id[idx+1:], true
 	}
@@ -186,8 +186,8 @@ func ParseEmbeddedID(id string) (fileID, fragment string, isEmbedded bool) {
 // For "people/freya" -> "freya"
 // For "daily/2025-02-01#standup" -> "standup"
 func ShortNameFromID(id string) string {
-	fileID, fragment, isEmbedded := ParseEmbeddedID(id)
-	if isEmbedded {
+	fileID, fragment, isSection := ParseSectionID(id)
+	if isSection {
 		return TrimMDExtension(fragment)
 	}
 

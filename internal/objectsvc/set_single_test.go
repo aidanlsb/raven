@@ -49,9 +49,6 @@ traits: {}
 	if err != nil {
 		t.Fatalf("SetByReference: %v", err)
 	}
-	if result.Embedded {
-		t.Fatalf("expected non-embedded result")
-	}
 	if result.ObjectID != "people/freya" {
 		t.Fatalf("expected object id people/freya, got %q", result.ObjectID)
 	}

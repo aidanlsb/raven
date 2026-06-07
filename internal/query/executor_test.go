@@ -20,12 +20,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 			id TEXT PRIMARY KEY,
 			file_path TEXT NOT NULL,
 			type TEXT NOT NULL,
-			heading TEXT,
-			heading_level INTEGER,
 			fields TEXT NOT NULL DEFAULT '{}',
 			line_start INTEGER NOT NULL,
-			line_end INTEGER,
-			parent_id TEXT,
 			created_at INTEGER,
 			updated_at INTEGER
 		);
@@ -116,18 +112,15 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('projects/mobile', 'projects/mobile.md', 'project', '{"status":"paused","priority":"medium"}', 1),
 			('people/freya', 'people/freya.md', 'person', '{"name":"Freya","email":"freya@asgard.realm"}', 1),
 			('people/loki', 'people/loki.md', 'person', '{"name":"Loki"}', 1),
-			('daily/2025-02-01', 'daily/2025-02-01.md', 'date', '{}', 1),
-			('daily/2025-02-01#standup', 'daily/2025-02-01.md', 'meeting', '{"time":"09:00","attendees":["people/freya","people/loki"]}', 10),
-			('daily/2025-02-01#planning', 'daily/2025-02-01.md', 'meeting', '{"time":"14:00"}', 30);
-		
-		UPDATE objects SET parent_id = 'daily/2025-02-01' WHERE id = 'daily/2025-02-01#standup';
-		UPDATE objects SET parent_id = 'daily/2025-02-01' WHERE id = 'daily/2025-02-01#planning';
+			('daily/2025-02-01', 'daily/2025-02-01.md', 'date', '{}', 1);
 
 		-- Heading-derived sections.
 		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, parent_section_id) VALUES
 			('projects/website#tasks', 'projects/website', 'projects/website.md', 'tasks', 'Tasks', 2, 20, NULL),
 			('projects/website#design', 'projects/website', 'projects/website.md', 'design', 'Design', 2, 50, NULL),
-			('projects/mobile#tasks', 'projects/mobile', 'projects/mobile.md', 'tasks', 'Tasks', 2, 15, NULL);
+			('projects/mobile#tasks', 'projects/mobile', 'projects/mobile.md', 'tasks', 'Tasks', 2, 15, NULL),
+			('daily/2025-02-01#standup', 'daily/2025-02-01', 'daily/2025-02-01.md', 'standup', 'Standup', 2, 10, NULL),
+			('daily/2025-02-01#planning', 'daily/2025-02-01', 'daily/2025-02-01.md', 'planning', 'Planning', 2, 30, NULL);
 
 		INSERT INTO traits (id, file_path, parent_object_id, trait_type, value, content, line_number) VALUES
 			('trait1', 'projects/website.md', 'projects/website', 'due', '2025-06-30', 'projects/website', 1),
@@ -190,12 +183,8 @@ func setupRefRegressionDB(t *testing.T) *sql.DB {
 			id TEXT PRIMARY KEY,
 			file_path TEXT NOT NULL,
 			type TEXT NOT NULL,
-			heading TEXT,
-			heading_level INTEGER,
 			fields TEXT NOT NULL DEFAULT '{}',
 			line_start INTEGER NOT NULL,
-			line_end INTEGER,
-			parent_id TEXT,
 			created_at INTEGER,
 			updated_at INTEGER
 		);
@@ -314,21 +303,6 @@ func TestExecuteObjectQuery(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "array field membership (ref token)",
-			query:     "type:meeting .attendees==[[people/freya]]",
-			wantCount: 1, // standup has attendees including freya
-		},
-		{
-			name:      "array field membership (short ref token resolves)",
-			query:     "type:meeting .attendees==[[freya]]",
-			wantCount: 1, // standup has attendees including freya
-		},
-		{
-			name:      "array quantifier membership (short ref token resolves)",
-			query:     "type:meeting any(.attendees, _ == [[freya]])",
-			wantCount: 1, // standup has attendees including freya
-		},
-		{
 			name:      "negated field filter",
 			query:     "type:project !.status==active",
 			wantCount: 1,
@@ -354,21 +328,6 @@ func TestExecuteObjectQuery(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "meeting type",
-			query:     "type:meeting",
-			wantCount: 2, // standup and planning
-		},
-		{
-			name:      "meeting has due",
-			query:     "type:meeting has(trait:due)",
-			wantCount: 1,
-		},
-		{
-			name:      "meeting type repeat",
-			query:     "type:meeting",
-			wantCount: 2, // Both standup and planning
-		},
-		{
 			name:      "date virtual field exact",
 			query:     "type:date .date==2025-02-01",
 			wantCount: 1,
@@ -377,26 +336,6 @@ func TestExecuteObjectQuery(t *testing.T) {
 			name:      "date virtual field range",
 			query:     "type:date .date>=2025-01-01 .date<=2025-12-31",
 			wantCount: 1,
-		},
-		{
-			name:      "refs to specific target",
-			query:     "type:meeting refs([[projects/website]])",
-			wantCount: 1, // Only standup refs website
-		},
-		{
-			name:      "refs to person",
-			query:     "type:meeting refs([[people/freya]])",
-			wantCount: 2, // Both meetings ref Freya
-		},
-		{
-			name:      "refs with subquery",
-			query:     "type:meeting refs(type:project .status==active)",
-			wantCount: 1, // Only standup refs active project (website)
-		},
-		{
-			name:      "negated refs",
-			query:     "type:meeting !refs([[projects/website]])",
-			wantCount: 1, // Planning doesn't ref website
 		},
 		{
 			name:      "project refs person",
@@ -496,14 +435,14 @@ func TestExecuteObjectQuery(t *testing.T) {
 			wantCount: 0, // Both projects have todos
 		},
 		{
-			name:      "date has no recursive section due",
+			name:      "date contains recursive section due",
 			query:     "type:date contains(trait:due)",
-			wantCount: 0, // object-to-object descendants are no longer a scope relationship
+			wantCount: 1,
 		},
 		{
-			name:      "date has no recursive section highlight",
+			name:      "date contains recursive section highlight",
 			query:     "type:date contains(trait:highlight)",
-			wantCount: 0, // object-to-object descendants are no longer a scope relationship
+			wantCount: 1,
 		},
 		{
 			name:      "project with direct has vs contains",
@@ -787,8 +726,8 @@ func TestExecuteTraitQuery(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "in object type",
-			query:     "trait:due in(type:meeting)",
+			name:      "in section title",
+			query:     "trait:due in(section .title==Standup)",
 			wantCount: 1,
 		},
 		{
@@ -799,7 +738,7 @@ func TestExecuteTraitQuery(t *testing.T) {
 		{
 			name:      "within date virtual field",
 			query:     "trait:due within(type:date .date==2025-02-01)",
-			wantCount: 0,
+			wantCount: 1,
 		},
 		{
 			name:      "refs to specific person",
@@ -865,8 +804,8 @@ func TestExecuteTraitQuery(t *testing.T) {
 		},
 		{
 			name:      "content combined with in",
-			query:     `trait:highlight content("Important") in(type:meeting)`,
-			wantCount: 1, // trait3 has "Important insight" on a meeting
+			query:     `trait:highlight content("Important") in(section .title==Standup)`,
+			wantCount: 1, // trait3 has "Important insight" in the Standup section
 		},
 		{
 			name:      "content search highlight",
@@ -1297,14 +1236,14 @@ func TestRefdPredicate(t *testing.T) {
 			wantCount: 1, // website is referenced by standup (via resolver)
 		},
 		{
-			name:      "refd by meeting type",
-			query:     "type:project refd(type:meeting)",
+			name:      "refd by sections",
+			query:     "type:project refd(section)",
 			wantCount: 2, // website referenced by standup, mobile by planning
 		},
 		{
-			name:      "person refd by meeting",
-			query:     "type:person refd(type:meeting)",
-			wantCount: 1, // freya is referenced by both meetings
+			name:      "person refd by sections",
+			query:     "type:person refd(section)",
+			wantCount: 1, // freya is referenced by both daily sections
 		},
 		{
 			name:      "person refd by project",
@@ -1313,8 +1252,8 @@ func TestRefdPredicate(t *testing.T) {
 		},
 		{
 			name:      "negated refd",
-			query:     "type:person !refd(type:meeting)",
-			wantCount: 1, // loki is not referenced by any meeting
+			query:     "type:person !refd(section)",
+			wantCount: 1, // loki is not referenced by any section
 		},
 	}
 
@@ -1402,15 +1341,15 @@ func TestRefdShorthand(t *testing.T) {
 
 	executor := NewExecutor(db)
 
-	// Test refd shorthand (should expand to type subquery)
+	// Test refd with section subquery.
 	tests := []struct {
 		name      string
 		query     string
 		wantCount int
 	}{
 		{
-			name:      "refd shorthand",
-			query:     "type:project refd(type:meeting)",
+			name:      "refd section subquery",
+			query:     "type:project refd(section)",
 			wantCount: 2, // website referenced by standup, mobile by planning
 		},
 	}
@@ -1546,7 +1485,7 @@ func TestHierarchyPredicatesWithSubqueries(t *testing.T) {
 		{
 			name:      "highlight within date",
 			query:     "trait:highlight within(type:date)",
-			wantCount: 0, // object-to-object descendants are no longer a scope relationship
+			wantCount: 1,
 		},
 	}
 

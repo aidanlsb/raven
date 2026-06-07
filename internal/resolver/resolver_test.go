@@ -64,7 +64,7 @@ func TestResolver(t *testing.T) {
 		}
 	})
 
-	t.Run("short name with embedded fragment resolves", func(t *testing.T) {
+	t.Run("short name with section fragment resolves", func(t *testing.T) {
 		// Should resolve via suffix matching: "website#tasks" -> "projects/website#tasks"
 		r2 := New([]string{"projects/website#tasks"}, Options{})
 		result := r2.Resolve("website#tasks")

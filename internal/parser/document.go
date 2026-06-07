@@ -23,14 +23,10 @@ type ParsedDocument struct {
 
 // ParsedObject represents a parsed file-backed object.
 type ParsedObject struct {
-	ID           string                       // Unique file-backed object ID
-	ObjectType   string                       // Type name
-	Fields       map[string]schema.FieldValue // Fields/metadata
-	Heading      *string                      // Reserved for legacy callers; file objects do not set this
-	HeadingLevel *int                         // Reserved for legacy callers; file objects do not set this
-	ParentID     *string                      // Reserved for legacy callers; file objects do not set this
-	LineStart    int                          // Line where this object starts
-	LineEnd      *int                         // Line where this object ends, when known
+	ID         string                       // Unique file-backed object ID
+	ObjectType string                       // Type name
+	Fields     map[string]schema.FieldValue // Fields/metadata
+	LineStart  int                          // Line where this object starts
 }
 
 // ParsedSection represents a markdown heading-derived section.
@@ -136,8 +132,7 @@ func ParseDocumentWithOptions(content string, filePath string, vaultPath string,
 		return nil, err
 	}
 
-	// Use markdown headings as built-in sections. Legacy ::type(...) declarations
-	// are treated as ordinary markdown text.
+	// Use markdown headings as built-in sections.
 	headings := astContent.Headings
 
 	// Track used IDs to ensure uniqueness

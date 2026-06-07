@@ -23,8 +23,6 @@ type SetByReferenceResult struct {
 	RelativePath    string
 	ObjectID        string
 	ObjectType      string
-	Embedded        bool
-	EmbeddedSlug    string
 	ResolvedUpdates map[string]string
 	WarningMessages []string
 	PreviousFields  map[string]schema.FieldValue
@@ -74,7 +72,6 @@ func SetByReference(req SetByReferenceRequest) (*SetByReferenceResult, error) {
 		RelativePath:    relPath,
 		ObjectID:        resolved.ObjectID,
 		ObjectType:      result.ObjectType,
-		Embedded:        false,
 		ResolvedUpdates: result.ResolvedUpdates,
 		WarningMessages: result.WarningMessages,
 		PreviousFields:  result.PreviousFields,

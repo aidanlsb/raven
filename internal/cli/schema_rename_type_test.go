@@ -105,7 +105,6 @@ kickoff: events/kickoff
 
 Kickoff: [[events/kickoff]]
 Planning: [[events/planning|Planning]]
-::project(kickoff=events/kickoff)
 `).
 		Build()
 
@@ -131,7 +130,6 @@ Planning: [[events/planning|Planning]]
 	v.AssertFileContains("projects/roadmap.md", "kickoff: meetings/kickoff")
 	v.AssertFileContains("projects/roadmap.md", "[[meetings/kickoff]]")
 	v.AssertFileContains("projects/roadmap.md", "[[meetings/planning|Planning]]")
-	v.AssertFileContains("projects/roadmap.md", "::project(kickoff=meetings/kickoff)")
 	v.AssertFileNotContains("projects/roadmap.md", "events/kickoff")
 	v.AssertFileNotContains("projects/roadmap.md", "events/planning")
 }

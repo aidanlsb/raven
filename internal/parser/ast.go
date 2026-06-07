@@ -19,14 +19,13 @@ import (
 
 // ASTContent holds all Raven syntax extracted from a markdown AST.
 type ASTContent struct {
-	Headings  []Heading
-	Traits    []TraitAnnotation
-	Refs      []Reference
-	TypeDecls map[int]*EmbeddedTypeInfo // heading line -> type decl
+	Headings []Heading
+	Traits   []TraitAnnotation
+	Refs     []Reference
 }
 
 // ExtractFromAST parses markdown content with goldmark and extracts all
-// Raven-specific syntax (headings, traits, references, type declarations).
+// Raven-specific syntax (headings, traits, references).
 //
 // Code blocks (fenced, indented, inline) are automatically skipped - any
 // @traits or [[references]] inside code will not be extracted.
@@ -37,9 +36,7 @@ func ExtractFromAST(content []byte, startLine int) (*ASTContent, error) {
 
 	lineStarts := computeLineStarts(string(content))
 
-	result := &ASTContent{
-		TypeDecls: make(map[int]*EmbeddedTypeInfo),
-	}
+	result := &ASTContent{}
 
 	// First pass: extract headings.
 	if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {

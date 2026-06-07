@@ -28,16 +28,16 @@ var deleteCmd = newCanonicalLeafCommand("delete", canonicalLeafOptions{
 
 func buildDeleteArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
 	if deleteStdin {
-		ids, embedded, err := ReadIDsFromStdin()
+		ids, sectionIDs, err := ReadIDsFromStdin()
 		if err != nil {
 			return nil, handleError(ErrInternal, err, "")
 		}
-		if len(ids) == 0 && len(embedded) == 0 {
+		if len(ids) == 0 && len(sectionIDs) == 0 {
 			return nil, handleErrorMsg(ErrMissingArgument, "no object IDs provided via stdin", "Pipe object IDs to stdin, one per line")
 		}
 		return map[string]interface{}{
 			"stdin":      true,
-			"object_ids": stringsToAny(append(ids, embedded...)),
+			"object_ids": stringsToAny(append(ids, sectionIDs...)),
 		}, nil
 	}
 

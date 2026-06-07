@@ -164,7 +164,7 @@ func isDateFilter(filter string) bool {
 // QueryObjects queries objects by type.
 func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 	rows, err := d.db.Query(
-		"SELECT id, type, fields, file_path, line_start, parent_id FROM objects WHERE type = ?",
+		"SELECT id, type, fields, file_path, line_start FROM objects WHERE type = ?",
 		objectType,
 	)
 	if err != nil {
@@ -176,7 +176,7 @@ func (d *Database) QueryObjects(objectType string) ([]model.Object, error) {
 	for rows.Next() {
 		var result model.Object
 		var fieldsJSON string
-		if err := rows.Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart, &result.ParentID); err != nil {
+		if err := rows.Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(fieldsJSON), &result.Fields); err != nil || result.Fields == nil {
@@ -324,9 +324,9 @@ func (d *Database) GetObject(id string) (*model.Object, error) {
 	var result model.Object
 	var fieldsJSON string
 	err := d.db.QueryRow(
-		"SELECT id, type, fields, file_path, line_start, parent_id FROM objects WHERE id = ?",
+		"SELECT id, type, fields, file_path, line_start FROM objects WHERE id = ?",
 		id,
-	).Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart, &result.ParentID)
+	).Scan(&result.ID, &result.Type, &fieldsJSON, &result.FilePath, &result.LineStart)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -395,7 +395,7 @@ func (d *Database) QueryDateIndex(date string) ([]DateIndexResult, error) {
 // UntypedPages returns file paths of all objects using the fallback 'page' type.
 func (d *Database) UntypedPages() ([]string, error) {
 	rows, err := d.db.Query(
-		"SELECT DISTINCT file_path FROM objects WHERE type = 'page' AND parent_id IS NULL ORDER BY file_path",
+		"SELECT DISTINCT file_path FROM objects WHERE type = 'page' ORDER BY file_path",
 	)
 	if err != nil {
 		return nil, err

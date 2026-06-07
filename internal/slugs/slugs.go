@@ -70,7 +70,7 @@ func PathSlug(path string) string {
 	parts := strings.Split(path, "/")
 	for i, part := range parts {
 		// Handle section IDs (file#id)
-		if fileID, fragment, isEmbedded := paths.ParseEmbeddedID(part); isEmbedded {
+		if fileID, fragment, isSection := paths.ParseSectionID(part); isSection {
 			parts[i] = ComponentSlug(fileID) + "#" + ComponentSlug(fragment)
 		} else {
 			parts[i] = ComponentSlug(part)

@@ -355,8 +355,7 @@ func (v *Validator) validateObject(filePath string, obj *parser.ParsedObject) []
 		return issues
 	}
 
-	// Note: Embedded object IDs are now auto-generated from heading text if not explicitly provided,
-	// so we no longer need to check for missing IDs.
+	// Section IDs are derived from heading text, so there is no separate object ID check here.
 
 	// Validate fields against schema
 	if typeDef != nil {
@@ -591,7 +590,7 @@ func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref 
 		})
 	} else if result.TargetID == "" {
 		// Check if this is a stale fragment reference (file exists but section doesn't)
-		if baseID, fragment, isEmbedded := paths.ParseEmbeddedID(ref.TargetRaw); isEmbedded && fragment != "" {
+		if baseID, fragment, isSection := paths.ParseSectionID(ref.TargetRaw); isSection && fragment != "" {
 			baseResult := v.resolver.Resolve(baseID)
 			if baseResult.TargetID != "" {
 				issues = append(issues, Issue{
@@ -695,7 +694,7 @@ func looksLikeAssetReference(target string) bool {
 	if target == "" {
 		return false
 	}
-	base, _, _ := paths.ParseEmbeddedID(target)
+	base, _, _ := paths.ParseSectionID(target)
 	if idx := strings.IndexAny(base, "?#"); idx >= 0 {
 		base = base[:idx]
 	}

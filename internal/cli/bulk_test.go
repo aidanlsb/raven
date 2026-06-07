@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestIsEmbeddedID(t *testing.T) {
+func TestIsSectionID(t *testing.T) {
 	tests := []struct {
 		id       string
 		expected bool
@@ -20,30 +20,30 @@ func TestIsEmbeddedID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
-			got := IsEmbeddedID(tt.id)
+			got := IsSectionID(tt.id)
 			if got != tt.expected {
-				t.Errorf("IsEmbeddedID(%q) = %v, want %v", tt.id, got, tt.expected)
+				t.Errorf("IsSectionID(%q) = %v, want %v", tt.id, got, tt.expected)
 			}
 		})
 	}
 }
 
-func TestBuildEmbeddedSkipWarning(t *testing.T) {
-	t.Run("no embedded IDs", func(t *testing.T) {
-		w := BuildEmbeddedSkipWarning(nil)
+func TestBuildSectionSkipWarning(t *testing.T) {
+	t.Run("no section IDs", func(t *testing.T) {
+		w := BuildSectionSkipWarning(nil)
 		if w != nil {
 			t.Error("expected nil warning for empty list")
 		}
 	})
 
 	t.Run("with section IDs", func(t *testing.T) {
-		embedded := []string{"daily/2026-01-07#standup", "projects/website#tasks"}
-		w := BuildEmbeddedSkipWarning(embedded)
+		sectionIDs := []string{"daily/2026-01-07#standup", "projects/website#tasks"}
+		w := BuildSectionSkipWarning(sectionIDs)
 		if w == nil {
 			t.Fatal("expected warning, got nil")
 		}
-		if w.Code != WarnEmbeddedSkipped {
-			t.Errorf("code = %q, want %q", w.Code, WarnEmbeddedSkipped)
+		if w.Code != WarnSectionSkipped {
+			t.Errorf("code = %q, want %q", w.Code, WarnSectionSkipped)
 		}
 		if !strings.Contains(w.Message, "2 section ID") {
 			t.Errorf("message should mention count: %q", w.Message)

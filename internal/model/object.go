@@ -19,8 +19,4 @@ type Object struct {
 
 	// LineStart is the 1-indexed line number where this object starts.
 	LineStart int `json:"line_start"`
-
-	// ParentID is the ID of the parent object, if this object is nested.
-	// Nil for top-level objects.
-	ParentID *string `json:"parent_id,omitempty"`
 }

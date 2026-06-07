@@ -79,7 +79,7 @@ func TestApplyAddBulk(t *testing.T) {
 	}
 }
 
-func TestApplyAddBulk_HeadingConflictWithEmbeddedID(t *testing.T) {
+func TestApplyAddBulk_HeadingConflictWithSectionID(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).
 		WithSchema(testutil.PersonProjectSchema()).

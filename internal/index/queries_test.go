@@ -238,7 +238,7 @@ func TestSearch_AllowsHyphenatedTokenWithOR(t *testing.T) {
 	_, err = db.db.Exec(`INSERT INTO fts_content (object_id, title, content, file_path) VALUES (?, ?, ?, ?)`,
 		"people/michael-truell",
 		"Michael Truell",
-		`::meeting(with=[[michael-truell]])`,
+		`Meeting with [[michael-truell]]`,
 		"daily/2026-01-29.md",
 	)
 	if err != nil {

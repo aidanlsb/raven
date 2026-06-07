@@ -97,7 +97,7 @@ const (
 	WarnWrongCommand      WarningCode = "WRONG_COMMAND"
 	WarnMissingField      WarningCode = "MISSING_REQUIRED_FIELD"
 	WarnBacklinks         WarningCode = "HAS_BACKLINKS"
-	WarnEmbeddedSkipped   WarningCode = "EMBEDDED_SKIPPED"
+	WarnSectionSkipped    WarningCode = "SECTION_SKIPPED"
 	WarnUnknownField      WarningCode = "UNKNOWN_FIELD"
 	WarnTypeMismatch      WarningCode = "TYPE_DIRECTORY_MISMATCH"
 	WarnOrphanedFiles     WarningCode = "ORPHANED_FILES"
@@ -119,7 +119,7 @@ var knownErrorCodes = map[ErrorCode]struct{}{
 
 var knownWarningCodes = map[WarningCode]struct{}{
 	WarnRefNotFound: {}, WarnDeprecated: {}, WarnSchemaOutdated: {}, WarnDatabaseOutdated: {}, WarnIndexUpdateFailed: {}, WarnDocsFetchFailed: {},
-	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnEmbeddedSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
+	WarnWrongCommand: {}, WarnMissingField: {}, WarnBacklinks: {}, WarnSectionSkipped: {}, WarnUnknownField: {}, WarnTypeMismatch: {},
 	WarnOrphanedFiles: {}, WarnOrphanedTraits: {}, WarnCheckIncomplete: {},
 }
 
