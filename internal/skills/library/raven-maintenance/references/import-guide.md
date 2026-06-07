@@ -69,4 +69,5 @@ rvn import person --file contacts.json --json
 
 # 4. Verify
 rvn check --type person --json
+rvn query 'type:person' --limit 20 --json
 ```

@@ -2,13 +2,17 @@
 
 Use this skill for vault health checks, index management, and data import.
 
-This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
+This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, preserving the same JSON and preview/apply expectations.
 
 ## Operating rules
 
 - Use `rvn` with `--json` for deterministic machine-readable output.
 - Preview first when the command supports it. For `rvn import`, use `--dry-run` for preview and rerun without it to apply.
 - Run `rvn check` after schema migrations, bulk edits, or external file changes.
+
+## Vault stats
+
+Use `rvn vault stats --json` for a quick count of indexed files, objects, traits, references, and assets before or after maintenance work.
 
 ## Vault health: check
 
@@ -20,15 +24,18 @@ This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a sep
 - Check all usages of a trait: `rvn check --trait due --json`
 - Only specific issue types: `rvn check --issues missing_reference,unknown_type --json`
 - Errors only (skip warnings): `rvn check --errors-only --json`
+- Group by file for triage: `rvn check --by-file --json`
+- Full issue details: `rvn check --verbose --json`
 
-Each issue includes `fix_command` and `fix_hint` when a deterministic fix is available. Use those to resolve issues.
+Each issue includes `fix_command` and `fix_hint` when available. Use `rvn check fix` only for unambiguous safe fixes; other issues may require `raven-core`, `raven-schema`, or user clarification.
 
 ## Auto-fix workflow
 
 1. Preview fixable issues: `rvn check fix --json`
-2. Apply after review: `rvn check fix --confirm --json`
-3. Create missing referenced pages: `rvn check create-missing --confirm --json`
-4. Re-check the affected scope to verify: `rvn check <scope> --json`
+2. Apply safe fixes after review: `rvn check fix --confirm --json`
+3. Preview missing referenced pages: `rvn check create-missing --json`
+4. Create missing referenced pages after review: `rvn check create-missing --confirm --json`
+5. Re-check the affected scope to verify: `rvn check <scope> --json`
 
 ## Reindex
 
@@ -38,7 +45,7 @@ The SQLite index is a derived cache. Rebuild it when queries return stale result
 - Full rebuild: `rvn reindex --full --json`
 - Dry run: `rvn reindex --dry-run --json`
 
-Use `--full` after schema renames, bulk moves, or broad file changes outside Raven.
+Use `--dry-run` to inspect reindex scope before applying. Use `--full` after schema renames, bulk moves, or broad file changes outside Raven.
 
 ## Data import
 
@@ -50,7 +57,7 @@ Use `--full` after schema renames, bulk moves, or broad file changes outside Rav
 - Dry run first: `rvn import person --file data.json --dry-run --json`
 - Apply: `rvn import person --file data.json --json`
 
-For complex imports, use a YAML mapping file. See `references/import-guide.md`.
+For complex imports, use a YAML mapping file. After applying, verify with `rvn check --type <type> --json` and a targeted `rvn query`. See `references/import-guide.md`.
 
 ## Cross-references
 

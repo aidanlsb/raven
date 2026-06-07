@@ -13,6 +13,7 @@ coverage:
     - check create-missing
     - reindex
     - import
+    - vault stats
 execution:
   preferred_transport: cli
   cli_binary: rvn
