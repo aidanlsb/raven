@@ -1,7 +1,7 @@
 id: raven-vault-admin
 title: Raven Vault Admin
 version: 1
-summary: Vault setup, selection, and global config workflows for Raven.
+summary: Vault setup, selection, and global plus vault-local config workflows for Raven.
 entry: body.md
 references:
   - references/vault-lifecycle.md
@@ -18,6 +18,24 @@ coverage:
     - vault pin
     - vault remove
     - vault clear
+    - vault config show
+    - vault config auto-reindex set
+    - vault config auto-reindex unset
+    - vault config protected-prefixes list
+    - vault config protected-prefixes add
+    - vault config protected-prefixes remove
+    - vault config exclude list
+    - vault config exclude add
+    - vault config exclude remove
+    - vault config directories get
+    - vault config directories set
+    - vault config directories unset
+    - vault config capture get
+    - vault config capture set
+    - vault config capture unset
+    - vault config deletion get
+    - vault config deletion set
+    - vault config deletion unset
     - config
     - config init
     - config show
