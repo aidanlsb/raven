@@ -475,19 +475,10 @@ func IsValidFieldType(fieldType FieldType) bool {
 }
 
 func IsValidTraitType(fieldType FieldType) bool {
-	switch fieldType {
-	case FieldTypeBool,
-		FieldTypeString,
-		FieldTypeNumber,
-		FieldTypeURL,
-		FieldTypeDate,
-		FieldTypeDatetime,
-		FieldTypeEnum,
-		FieldTypeRef:
+	if fieldType == "boolean" {
 		return true
-	default:
-		return false
 	}
+	return IsValidFieldType(fieldType)
 }
 
 func ValidFieldTypes() string {
@@ -495,5 +486,5 @@ func ValidFieldTypes() string {
 }
 
 func ValidTraitTypes() string {
-	return "bool, boolean, string, number, url, date, datetime, enum, ref"
+	return ValidFieldTypes() + ", boolean"
 }

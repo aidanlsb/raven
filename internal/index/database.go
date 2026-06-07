@@ -573,7 +573,7 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 		// Get value as string, applying schema defaults for bare traits
 		var valueStr interface{}
 		if trait.Value != nil {
-			if s, ok := trait.Value.AsString(); ok {
+			if s := traitValueForIndex(*trait.Value); s != "" {
 				valueStr = s
 			}
 		} else {
@@ -597,6 +597,19 @@ func indexInlineTraits(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schem
 	}
 
 	return nil
+}
+
+func traitValueForIndex(value schema.FieldValue) string {
+	if value.IsNull() {
+		return ""
+	}
+	if _, ok := value.AsArray(); ok {
+		data, err := json.Marshal(value.Raw())
+		if err == nil {
+			return string(data)
+		}
+	}
+	return parser.FormatFieldValueLiteral(value)
 }
 
 type indexedTrait struct {
@@ -1496,20 +1509,11 @@ func getTraitDefault(sch *schema.Schema, traitType string) interface{} {
 		return nil
 	}
 
-	// Convert default value to string for storage
-	switch v := traitDef.Default.(type) {
-	case string:
-		return v
-	case bool:
-		if v {
-			return "true"
-		}
-		return "false"
-	case int, int64, float64:
-		return fmt.Sprintf("%v", v)
-	default:
-		return fmt.Sprintf("%v", v)
+	defaultValue := parser.FieldValueFromYAML(traitDef.Default)
+	if s := traitValueForIndex(defaultValue); s != "" {
+		return s
 	}
+	return fmt.Sprintf("%v", traitDef.Default)
 }
 
 // StalenessInfo contains information about index freshness.

@@ -1,3 +1,3 @@
 name: raven-query
 description: Raven query language, saved queries, search, and link traversal.
-default_prompt: Use Raven CLI (`rvn`) query commands with --json. Build precise object or trait queries and preview before any bulk apply.
+default_prompt: Use Raven CLI (`rvn`) query commands with --json. Build precise object, trait, or asset queries and preview before any bulk apply.

@@ -86,7 +86,7 @@ func (v *Validator) validateTraitQuery(q *Query) error {
 
 	// Validate predicate
 	if q.Predicate != nil {
-		if err := v.validateTraitPredicate(q.Predicate); err != nil {
+		if err := v.validateTraitPredicate(q.Predicate, q.TypeName); err != nil {
 			return err
 		}
 	}
@@ -190,7 +190,7 @@ func (v *Validator) validateObjectPredicate(pred Predicate, typeName string, typ
 	return nil
 }
 
-func (v *Validator) validateTraitPredicate(pred Predicate) error {
+func (v *Validator) validateTraitPredicate(pred Predicate, traitName string) error {
 	switch p := pred.(type) {
 	case *ValuePredicate:
 		return nil
@@ -256,10 +256,7 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 			Suggestion: "Use .value==X for trait values, or .field==X in type queries",
 		}
 	case *ArrayQuantifierPredicate:
-		return &ValidationError{
-			Message:    "array predicates are only valid for type queries",
-			Suggestion: "Use any()/all()/none() on array fields in type queries",
-		}
+		return v.validateTraitArrayQuantifierPredicate(p, traitName)
 	case *HasPredicate:
 		return &ValidationError{
 			Message:    "has() predicate is only valid for type queries",
@@ -267,7 +264,7 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 		}
 	case *ContainsPredicate:
 		return &ValidationError{
-			Message:    "contains() predicate is only valid for type queries",
+			Message:    "encloses() predicate is only valid for type queries",
 			Suggestion: "Use encloses(trait:...) in type queries",
 		}
 	case *ParentPredicate:
@@ -292,20 +289,44 @@ func (v *Validator) validateTraitPredicate(pred Predicate) error {
 		}
 	case *OrPredicate:
 		for _, subPred := range p.Predicates {
-			if err := v.validateTraitPredicate(subPred); err != nil {
+			if err := v.validateTraitPredicate(subPred, traitName); err != nil {
 				return err
 			}
 		}
 	case *NotPredicate:
-		return v.validateTraitPredicate(p.Inner)
+		return v.validateTraitPredicate(p.Inner, traitName)
 	case *GroupPredicate:
 		for _, subPred := range p.Predicates {
-			if err := v.validateTraitPredicate(subPred); err != nil {
+			if err := v.validateTraitPredicate(subPred, traitName); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func (v *Validator) validateTraitArrayQuantifierPredicate(p *ArrayQuantifierPredicate, traitName string) error {
+	if p.Field != "value" {
+		return &ValidationError{
+			Message:    fmt.Sprintf("array predicates on trait queries only support .value, got .%s", p.Field),
+			Suggestion: "Use any(.value, ...), all(.value, ...), or none(.value, ...) for array-valued traits",
+		}
+	}
+	traitDef := v.schema.Traits[traitName]
+	if traitDef == nil {
+		return &ValidationError{
+			Message:    fmt.Sprintf("unknown trait '%s'", traitName),
+			Suggestion: fmt.Sprintf("Available traits: %s", strings.Join(v.availableTraits(), ", ")),
+		}
+	}
+	elemType, ok := arrayElementType(schema.FieldType(traitDef.Type))
+	if !ok {
+		return &ValidationError{
+			Message:    fmt.Sprintf("array predicates any()/all()/none() require an array-valued trait, but trait '%s' is %s", traitName, traitDef.Type),
+			Suggestion: "Use any()/all()/none() only with [] trait types, or use .value predicates on scalar traits",
+		}
+	}
+	return v.validateArrayElementPredicate(p.ElementPred, elemType)
 }
 
 func (v *Validator) validateAssetPredicate(pred Predicate) error {

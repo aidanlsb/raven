@@ -953,6 +953,24 @@ func TestValidateSchema(t *testing.T) {
 		}
 	})
 
+	t.Run("array trait types are valid", func(t *testing.T) {
+		sch := &Schema{
+			Traits: map[string]*TraitDefinition{
+				"tags":       {Type: FieldTypeStringArray},
+				"scores":     {Type: FieldTypeNumberArray},
+				"links":      {Type: FieldTypeURLArray},
+				"dates":      {Type: FieldTypeDateArray},
+				"timestamps": {Type: FieldTypeDatetimeArray},
+				"states":     {Type: FieldTypeEnumArray, Values: []string{"open", "closed"}},
+				"flags":      {Type: FieldTypeBoolArray},
+				"people":     {Type: FieldTypeRefArray},
+			},
+		}
+		if issues := ValidateSchema(sch); len(issues) != 0 {
+			t.Fatalf("ValidateSchema() issues = %v, want none", issues)
+		}
+	})
+
 	t.Run("enum definitions require values", func(t *testing.T) {
 		sch := &Schema{
 			Types: map[string]*TypeDefinition{

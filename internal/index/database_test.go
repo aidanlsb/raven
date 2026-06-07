@@ -111,6 +111,51 @@ func TestDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("index array trait value", func(t *testing.T) {
+		db, err := OpenInMemory()
+		if err != nil {
+			t.Fatalf("failed to open database: %v", err)
+		}
+		defer db.Close()
+
+		value := schema.Array([]schema.FieldValue{schema.String("raven"), schema.String("skills")})
+		doc := &parser.ParsedDocument{
+			FilePath: "test.md",
+			Objects: []*parser.ParsedObject{
+				{
+					ID:         "test",
+					ObjectType: "page",
+					Fields:     make(map[string]schema.FieldValue),
+					LineStart:  1,
+				},
+			},
+			Traits: []*parser.ParsedTrait{
+				{
+					TraitType:      "tags",
+					Value:          &value,
+					Content:        "Review built-in skills",
+					ParentObjectID: "test",
+					Line:           1,
+				},
+			},
+			Refs: []*parser.ParsedRef{},
+		}
+		sch := schema.New()
+		sch.Traits["tags"] = &schema.TraitDefinition{Type: schema.FieldTypeStringArray}
+
+		if err := db.IndexDocument(doc, sch); err != nil {
+			t.Fatalf("failed to index document: %v", err)
+		}
+
+		var got string
+		if err := db.db.QueryRow(`SELECT value FROM traits WHERE trait_type = 'tags'`).Scan(&got); err != nil {
+			t.Fatalf("query trait value: %v", err)
+		}
+		if got != `["raven","skills"]` {
+			t.Fatalf("indexed trait value = %q, want %q", got, `["raven","skills"]`)
+		}
+	})
+
 	t.Run("indexes generated date field for date objects", func(t *testing.T) {
 		db, err := OpenInMemory()
 		if err != nil {

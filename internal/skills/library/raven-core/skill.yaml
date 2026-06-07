@@ -12,12 +12,15 @@ coverage:
     - add
     - read
     - resolve
+    - schema
     - set
     - update
     - edit
     - reclassify
     - move
     - delete
+    - backlinks
+    - check
     - daily
     - date
     - open

@@ -20,6 +20,8 @@ coverage:
     - schema remove field
     - schema remove trait
     - schema validate
+    - check
+    - reindex
 execution:
   preferred_transport: cli
   cli_binary: rvn

@@ -9,6 +9,7 @@ references:
   - references/query-troubleshooting.md
 coverage:
   commands:
+    - schema
     - query
     - query saved list
     - query saved get

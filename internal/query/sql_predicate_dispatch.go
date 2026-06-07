@@ -74,8 +74,8 @@ func (e *Executor) buildPredicateSQL(kind predicateKind, pred Predicate, alias, 
 		if kind == predicateKindAsset {
 			return "", nil, fmt.Errorf("array predicates are not valid for asset queries")
 		}
-		if kind != predicateKindObject {
-			return "", nil, fmt.Errorf("unsupported trait predicate type: %T", pred)
+		if kind == predicateKindTrait {
+			return e.buildTraitArrayQuantifierPredicateSQL(p, alias)
 		}
 		return e.buildArrayQuantifierPredicateSQL(p, alias, typeName)
 	case *HasPredicate:

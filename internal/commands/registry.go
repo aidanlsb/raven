@@ -1124,7 +1124,7 @@ display name. Common choices are 'name' (for people, companies) or 'title'
 			{Name: "name", Description: "Name of the new trait", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "type", Description: "Trait type (string, number, url, date, datetime, enum, ref, bool)", Type: FlagTypeString, Default: "string"},
+			{Name: "type", Description: "Trait value type: string, number, url, date, datetime, enum, bool, ref (add [] for arrays)", Type: FlagTypeString, Default: "string"},
 			{Name: "values", Description: "Enum values (comma-separated)", Type: FlagTypeString},
 			{Name: "default", Description: "Default trait value", Type: FlagTypeString},
 		},
@@ -1237,7 +1237,7 @@ Use --name-field="-" to remove the name_field setting.`,
 			{Name: "name", Description: "Name of the trait to update", Required: true},
 		},
 		Flags: []FlagMeta{
-			{Name: "type", Description: "Update trait type", Type: FlagTypeString},
+			{Name: "type", Description: "Update trait value type: string, number, url, date, datetime, enum, bool, ref (add [] for arrays)", Type: FlagTypeString},
 			{Name: "values", Description: "Update enum values (comma-separated)", Type: FlagTypeString},
 			{Name: "default", Description: "Update default value", Type: FlagTypeString},
 		},

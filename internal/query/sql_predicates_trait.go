@@ -116,6 +116,45 @@ func (e *Executor) buildTraitStringFuncPredicateSQL(p *StringFuncPredicate, alia
 	return cond, args, nil
 }
 
+// buildTraitArrayQuantifierPredicateSQL builds SQL for array quantifier predicates on trait values.
+// Array-valued traits are indexed as JSON arrays in traits.value.
+func (e *Executor) buildTraitArrayQuantifierPredicateSQL(p *ArrayQuantifierPredicate, alias string) (string, []interface{}, error) {
+	elemCond, elemArgs, err := e.buildElementPredicateSQL(p.ElementPred)
+	if err != nil {
+		return "", nil, err
+	}
+
+	validJSON := fmt.Sprintf("json_valid(%[1]s.value)", alias)
+	safeJSON := fmt.Sprintf("CASE WHEN %[1]s THEN %[2]s.value ELSE 'null' END", validJSON, alias)
+	arrayGuard := fmt.Sprintf("%s AND json_type(%s) = 'array'", validJSON, safeJSON)
+	arrayExpr := fmt.Sprintf("CASE WHEN %s THEN %s.value ELSE '[]' END", arrayGuard, alias)
+	var cond string
+	switch p.Quantifier {
+	case ArrayQuantifierAny:
+		cond = fmt.Sprintf(`%s AND EXISTS (
+			SELECT 1 FROM json_each(%s)
+			WHERE %s
+		)`, arrayGuard, arrayExpr, elemCond)
+	case ArrayQuantifierAll:
+		cond = fmt.Sprintf(`%s AND NOT EXISTS (
+			SELECT 1 FROM json_each(%s)
+			WHERE NOT (%s)
+		)`, arrayGuard, arrayExpr, elemCond)
+	case ArrayQuantifierNone:
+		cond = fmt.Sprintf(`%s AND NOT EXISTS (
+			SELECT 1 FROM json_each(%s)
+			WHERE %s
+		)`, arrayGuard, arrayExpr, elemCond)
+	default:
+		return "", nil, fmt.Errorf("unknown array quantifier: %v", p.Quantifier)
+	}
+
+	if p.Negated() {
+		cond = "NOT (" + cond + ")"
+	}
+	return cond, elemArgs, nil
+}
+
 // buildValuePredicateSQL builds SQL for value==val predicates.
 // Comparisons are case-insensitive for equality, but case-sensitive for ordering comparisons.
 func (e *Executor) buildValuePredicateSQL(p *ValuePredicate, alias string) (string, []interface{}, error) {

@@ -2,7 +2,7 @@
 
 Use this skill for template file authoring plus schema/type/core bindings.
 
-This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
+This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, preserving the same JSON and preview/apply expectations.
 
 ## Operating rules
 
@@ -23,7 +23,7 @@ This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a sep
 
 ## Cross-references
 
-- Use `raven-schema` for schema template binding commands (`schema template bind`, `schema template set`, etc.).
+- Use `raven-schema` for type, field, and trait modeling before binding templates to those schema targets.
 - Use `raven-core` for `rvn new --template` to create objects using bound templates.
 
 ## Safety

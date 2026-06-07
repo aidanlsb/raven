@@ -49,6 +49,12 @@ func TestParseTraitAnnotations(t *testing.T) {
 			wantCount:  1,
 			wantTraits: []string{"to-read"},
 		},
+		{
+			name:       "array trait value",
+			line:       "- @tags([raven, skills]) Review built-in skills",
+			wantCount:  1,
+			wantTraits: []string{"tags"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -66,6 +72,28 @@ func TestParseTraitAnnotations(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestParseTraitAnnotations_ArrayValue(t *testing.T) {
+	t.Parallel()
+
+	got := ParseTraitAnnotations("- @tags([raven, skills]) Review built-in skills", 1)
+	if len(got) != 1 {
+		t.Fatalf("got %d traits, want 1", len(got))
+	}
+	if got[0].Value == nil {
+		t.Fatal("trait value is nil")
+	}
+	arr, ok := got[0].Value.AsArray()
+	if !ok {
+		t.Fatalf("trait value = %#v, want array", got[0].Value.Raw())
+	}
+	if len(arr) != 2 {
+		t.Fatalf("array length = %d, want 2", len(arr))
+	}
+	if got := got[0].ValueString(); got != "[raven, skills]" {
+		t.Fatalf("ValueString() = %q, want %q", got, "[raven, skills]")
 	}
 }
 

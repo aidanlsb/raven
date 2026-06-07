@@ -14,14 +14,14 @@
 ## Updating content
 
 - Update frontmatter fields: `rvn set <object_id> key=value --json`
-- Surgical body replacement: `rvn edit <path> <old> <new> --json`
+- Surgical body replacement: `rvn edit <path> <old> <new> --json` previews; add `--confirm` to apply
 - Update a trait value by trait ID: `rvn update <trait_id> <new_value> --json`
 
 ## Organizing content
 
 - Change an object's type safely: `rvn reclassify <object> <new-type> --json`
-- Safe move or rename with ref updates: `rvn move <source> <dest> --json`
-- Safe delete with backlink warnings: `rvn delete <object_id> --json`
+- Safe move or rename with ref updates: `rvn move <source> <dest> --json` previews; add `--confirm` to apply
+- Safe delete with backlink warnings: `rvn delete <object_id> --json` previews; add `--confirm` to apply
 
 ## Daily notes
 

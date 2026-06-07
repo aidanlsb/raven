@@ -106,6 +106,36 @@ func TestValidateTraitValue(t *testing.T) {
 			value:   String("false"),
 			wantErr: false,
 		},
+		{
+			name:    "string array valid",
+			def:     &TraitDefinition{Type: FieldTypeStringArray},
+			value:   Array([]FieldValue{String("raven"), String("skills")}),
+			wantErr: false,
+		},
+		{
+			name:    "number array valid numeric strings",
+			def:     &TraitDefinition{Type: FieldTypeNumberArray},
+			value:   Array([]FieldValue{String("1"), String("2.5")}),
+			wantErr: false,
+		},
+		{
+			name:    "bool array valid string booleans",
+			def:     &TraitDefinition{Type: FieldTypeBoolArray},
+			value:   Array([]FieldValue{String("true"), String("false")}),
+			wantErr: false,
+		},
+		{
+			name:    "enum array invalid member",
+			def:     &TraitDefinition{Type: FieldTypeEnumArray, Values: []string{"low", "medium", "high"}},
+			value:   Array([]FieldValue{String("high"), String("critical")}),
+			wantErr: true,
+		},
+		{
+			name:    "ref array valid",
+			def:     &TraitDefinition{Type: FieldTypeRefArray},
+			value:   Array([]FieldValue{Ref("people/freya"), String("people/loki")}),
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

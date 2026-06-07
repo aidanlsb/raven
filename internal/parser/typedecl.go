@@ -382,8 +382,13 @@ func ParseFieldValue(s string) schema.FieldValue {
 }
 
 // ParseTraitValue parses a trait value using strict date/datetime validation.
+// Traits have a single value slot, but that value can be an array.
 func ParseTraitValue(s string) schema.FieldValue {
-	return parseValueWithOptions(s, valueParseOptions{strictDates: true})
+	return parseValueWithOptions(s, valueParseOptions{
+		strictDates: true,
+		parseArrays: true,
+		stripQuotes: true,
+	})
 }
 
 // parseArrayItems parses array items, handling nested references.

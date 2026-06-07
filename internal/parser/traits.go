@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/aidanlsb/raven/internal/schema"
@@ -36,8 +38,37 @@ func traitValueString(value *schema.FieldValue) string {
 	if value == nil {
 		return ""
 	}
+	return FormatFieldValueLiteral(*value)
+}
+
+// FormatFieldValueLiteral renders a FieldValue using Raven's inline literal syntax.
+func FormatFieldValueLiteral(value schema.FieldValue) string {
+	if value.IsNull() {
+		return ""
+	}
+	if arr, ok := value.AsArray(); ok {
+		parts := make([]string, 0, len(arr))
+		for _, item := range arr {
+			parts = append(parts, FormatFieldValueLiteral(item))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	}
 	if s, ok := value.AsString(); ok {
 		return s
+	}
+	if n, ok := value.AsNumber(); ok {
+		if n == float64(int64(n)) {
+			return strconv.FormatInt(int64(n), 10)
+		}
+		return strconv.FormatFloat(n, 'f', -1, 64)
+	}
+	if b, ok := value.AsBool(); ok {
+		return strconv.FormatBool(b)
+	}
+	if raw := value.Raw(); raw != nil {
+		if b, err := json.Marshal(raw); err == nil {
+			return string(b)
+		}
 	}
 	return ""
 }

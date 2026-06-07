@@ -370,6 +370,8 @@ collaborators:
 
 Traits are inline annotations in content, written as `@name` or `@name(value)`.
 Traits inside inline code spans (`` `like this` ``) are ignored.
+Traits have one value slot, but that value can use the same scalar or array
+types as object frontmatter fields.
 
 ### Trait Properties
 
@@ -377,9 +379,16 @@ Traits inside inline code spans (`` `like this` ``) are ignored.
 |----------|------|-------------|
 | `type` | string | Trait type (see below) |
 | `values` | string[] | Allowed values (for enum) |
-| `default` | string | Default value |
+| `default` | any | Default value |
 
 ### Trait Types
+
+Traits support the same value types as fields:
+
+- Scalars: `string`, `number`, `url`, `date`, `datetime`, `enum`, `bool`, `ref`
+- Arrays: `string[]`, `number[]`, `url[]`, `date[]`, `datetime[]`, `enum[]`, `bool[]`, `ref[]`
+
+The legacy trait type `boolean` is accepted as an alias for `bool`.
 
 #### `string`
 
@@ -393,6 +402,18 @@ traits:
 
 Usage: `@note(Remember to follow up)`
 
+#### `number`
+
+Numeric value.
+
+```yaml
+traits:
+  score:
+    type: number
+```
+
+Usage: `@score(3.5)`
+
 #### `url`
 
 URL/link value.
@@ -404,6 +425,19 @@ traits:
 ```
 
 Usage: `@source(https://example.com/article)`
+
+#### `ref`
+
+Reference to another object. Unlike `ref` fields, trait references do not have a
+schema-level target constraint.
+
+```yaml
+traits:
+  related:
+    type: ref
+```
+
+Usage: `@related([[project/raven]])` or `@related(project/raven)`
 
 #### `date`
 
@@ -451,6 +485,23 @@ traits:
 ```
 
 Usage: `@priority(high)`, `@todo(done)`
+
+#### Array Types
+
+Add `[]` to any scalar type to allow an array value:
+
+```yaml
+traits:
+  tags:
+    type: string[]
+  reviewers:
+    type: ref[]
+  states:
+    type: enum[]
+    values: [todo, blocked, done]
+```
+
+Usage: `@tags([raven, skills])`, `@reviewers([[[person/freya]], [[person/thor]]])`
 
 #### `bool` / `boolean`
 

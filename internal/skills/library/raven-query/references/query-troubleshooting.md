@@ -3,7 +3,7 @@
 ## No matches returned
 
 - Check type and field names with `rvn schema`.
-- Validate query mode: `type:<type>` vs `trait:<name>`.
+- Validate query mode: `type:<type>` vs `trait:<name>` vs `asset`.
 - Remove predicates one-by-one to isolate the failing constraint.
 
 ## Ambiguous references
@@ -26,7 +26,14 @@
 - Confirm query type:
   - type query: `set`, `add`, `delete`, `move`
   - trait query: `update <value>`
+  - asset query: no `--apply` support
 - Re-run without `--confirm` first to inspect preview.
+
+## Asset query errors
+
+- Use bare `asset`, not `asset:<kind>`.
+- Filter only derived asset fields: `.id`, `.file_path`, `.filename`, `.extension`, `.media_type`, `.size_bytes`.
+- Use `asset refd(...)` to find referenced assets; assets do not support `refs(...)`, `has(...)`, `content(...)`, or hierarchy predicates.
 
 ## Saved query input errors
 

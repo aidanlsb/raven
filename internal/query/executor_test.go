@@ -126,7 +126,11 @@ func setupTestDB(t *testing.T) *sql.DB {
 			('trait6', 'projects/website.md', 'projects/website#tasks', 'priority', 'high', 'Build landing page', 25),
 			('trait7', 'projects/mobile.md', 'projects/mobile#tasks', 'todo', 'done', 'Setup CI/CD', 20),
 			-- Test case for unresolved refs (target_id is NULL)
-			('trait8', 'projects/mobile.md', 'projects/mobile#tasks', 'todo', 'todo', 'Cross-project task [[projects/website]]', 30);
+			('trait8', 'projects/mobile.md', 'projects/mobile#tasks', 'todo', 'todo', 'Cross-project task [[projects/website]]', 30),
+			-- Array-valued traits are stored as JSON arrays in traits.value
+			('trait9', 'projects/website.md', 'projects/website', 'tags', '["raven","skills"]', 'Review built-in skills', 40),
+			('trait10', 'projects/mobile.md', 'projects/mobile', 'tags', '["mobile","ios"]', 'Review mobile tags', 40),
+			('trait11', 'people/freya.md', 'people/freya', 'reviewers', '["people/freya","people/loki"]', 'Assigned reviewers', 40);
 
 		INSERT INTO refs (source_id, target_id, target_raw, file_path, line_number) VALUES
 			('daily/2025-02-01#standup', 'projects/website', 'projects/website', 'daily/2025-02-01.md', 12),
@@ -720,6 +724,31 @@ func TestExecuteTraitQuery(t *testing.T) {
 			name:      "trait string function on value",
 			query:     `trait:todo contains(.value, "to")`,
 			wantCount: 2, // matches todo values on trait5 and trait8
+		},
+		{
+			name:      "trait array any equality",
+			query:     `trait:tags any(.value, _ == skills)`,
+			wantCount: 1,
+		},
+		{
+			name:      "trait array any string function",
+			query:     `trait:tags any(.value, startswith(_, "io"))`,
+			wantCount: 1,
+		},
+		{
+			name:      "trait array all inequality",
+			query:     `trait:tags all(.value, _ != mobile)`,
+			wantCount: 1,
+		},
+		{
+			name:      "trait array none equality",
+			query:     `trait:tags none(.value, _ == ios)`,
+			wantCount: 1,
+		},
+		{
+			name:      "trait ref array any wikilink",
+			query:     `trait:reviewers any(.value, _ == [[people/freya]])`,
+			wantCount: 1,
 		},
 		{
 			name:    "trait string function on unsupported field",

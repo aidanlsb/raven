@@ -15,7 +15,8 @@ func ValidateTraitValue(def *TraitDefinition, value FieldValue) error {
 		return nil
 	}
 
-	switch normalizedTraitType(def.Type, def.IsBoolean()) {
+	traitType := normalizedTraitType(def.Type, def.IsBoolean())
+	switch traitType {
 	case FieldTypeBool:
 		if _, ok := value.AsBool(); ok {
 			return nil
@@ -79,8 +80,59 @@ func ValidateTraitValue(def *TraitDefinition, value FieldValue) error {
 			return nil
 		}
 		return fmt.Errorf("expected reference value")
+	case FieldTypeStringArray,
+		FieldTypeNumberArray,
+		FieldTypeURLArray,
+		FieldTypeDateArray,
+		FieldTypeDatetimeArray,
+		FieldTypeEnumArray,
+		FieldTypeBoolArray,
+		FieldTypeRefArray:
+		return validateTraitArrayValue(def, value, traitType)
 	default:
 		return fmt.Errorf("unknown trait type %q", def.Type)
+	}
+}
+
+func validateTraitArrayValue(def *TraitDefinition, value FieldValue, traitType FieldType) error {
+	items, ok := value.AsArray()
+	if !ok {
+		return fmt.Errorf("expected array value")
+	}
+	elementType, ok := traitArrayElementType(traitType)
+	if !ok {
+		return fmt.Errorf("unknown trait array type %q", traitType)
+	}
+	elementDef := *def
+	elementDef.Type = elementType
+	for _, item := range items {
+		if err := ValidateTraitValue(&elementDef, item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func traitArrayElementType(fieldType FieldType) (FieldType, bool) {
+	switch fieldType {
+	case FieldTypeStringArray:
+		return FieldTypeString, true
+	case FieldTypeNumberArray:
+		return FieldTypeNumber, true
+	case FieldTypeURLArray:
+		return FieldTypeURL, true
+	case FieldTypeDateArray:
+		return FieldTypeDate, true
+	case FieldTypeDatetimeArray:
+		return FieldTypeDatetime, true
+	case FieldTypeEnumArray:
+		return FieldTypeEnum, true
+	case FieldTypeBoolArray:
+		return FieldTypeBool, true
+	case FieldTypeRefArray:
+		return FieldTypeRef, true
+	default:
+		return "", false
 	}
 }
 

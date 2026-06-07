@@ -2,7 +2,7 @@
 
 Use this skill for day-to-day Raven operations: creating, reading, editing, moving, and deleting vault content.
 
-This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a separate, equivalent surface and is not in scope here.
+This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, preserving the same JSON and preview/apply expectations.
 
 ## Operating rules
 
@@ -10,7 +10,7 @@ This skill is for agents driving Raven through the `rvn` CLI. Raven MCP is a sep
 - Prefer `rvn` commands over direct file writes or shell text manipulation (`echo`, `cat >`, `sed`, `awk`).
 - Choose the smallest mutation primitive that matches the user's intent.
 - Read with `rvn read --raw` before constructing `rvn edit` replacements.
-- For bulk or destructive operations, preview first, then re-run with `--confirm`.
+- Preview-first commands include `rvn edit`, CLI JSON `rvn move`/`rvn delete`, and bulk operations; re-run with `--confirm` after the preview matches intent.
 
 ## Choose the right write command
 

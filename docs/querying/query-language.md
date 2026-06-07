@@ -251,6 +251,7 @@ trait:due .value<=2026-03-01
 | `at(trait:...)` | Co-located with matching trait (same file and line) |
 | `refs(...)` | Trait's line references target or query match |
 | `content("term")` | Trait's line contains term |
+| `any(.value, ...)`, `all(.value, ...)`, `none(.value, ...)` | Element predicates for array-valued traits |
 
 Examples:
 
@@ -260,6 +261,8 @@ trait:todo within(type:project .status==active)
 trait:due at(trait:todo)
 trait:due refs([[person/freya]])
 trait:todo content("refactor")
+trait:tags any(.value, _ == "raven")
+trait:reviewers any(.value, _ == [[person/freya]])
 ```
 
 `refd(...)` is available on type queries, not trait queries.

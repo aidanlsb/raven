@@ -621,3 +621,73 @@ func TestValidator_ObjectStringFunctionsAndArrayQuantifiersValidateFieldTypes(t 
 		})
 	}
 }
+
+func TestValidator_TraitArrayQuantifiersValidateValueType(t *testing.T) {
+	t.Parallel()
+	sch := &schema.Schema{
+		Types: map[string]*schema.TypeDefinition{},
+		Traits: map[string]*schema.TraitDefinition{
+			"tags":      {Type: schema.FieldTypeStringArray},
+			"scores":    {Type: schema.FieldTypeNumberArray},
+			"reviewers": {Type: schema.FieldTypeRefArray},
+			"todo":      {Type: schema.FieldTypeString},
+		},
+	}
+
+	v := NewValidator(sch)
+	tests := []struct {
+		name        string
+		query       string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:  "array-valued trait allows any on value",
+			query: `trait:tags any(.value, startswith(_, "rav"))`,
+		},
+		{
+			name:  "ref array trait allows ref element comparison",
+			query: `trait:reviewers any(.value, _ == [[people/freya]])`,
+		},
+		{
+			name:        "scalar trait rejects array predicate",
+			query:       `trait:todo any(.value, _ == todo)`,
+			wantErr:     true,
+			errContains: "require an array-valued trait",
+		},
+		{
+			name:        "array trait only supports value field",
+			query:       `trait:tags any(.content, _ == raven)`,
+			wantErr:     true,
+			errContains: "only support .value",
+		},
+		{
+			name:        "numeric array rejects string function",
+			query:       `trait:scores any(.value, startswith(_, "1"))`,
+			wantErr:     true,
+			errContains: "not valid for array elements of type number",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.query)
+			if err != nil {
+				t.Fatalf("failed to parse query: %v", err)
+			}
+			err = v.Validate(q)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected validation error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Fatalf("expected error containing %q, got: %v", tt.errContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}
