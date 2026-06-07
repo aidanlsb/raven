@@ -1141,11 +1141,15 @@ Field Types:
   string      Plain text value
   string[]    Array of text values (e.g., tags)
   number      Numeric value
+  number[]    Array of numeric values
   url         URL/link value (must include scheme, e.g., https://...)
   url[]       Array of URL/link values
   date        Date in YYYY-MM-DD format
+  date[]      Array of dates
   datetime    Date and time
+  datetime[]  Array of date/time values
   bool        Boolean (true/false)
+  bool[]      Array of booleans
   enum        Single value from a list (requires --values)
   enum[]      Multiple values from a list (requires --values)
   ref         Reference to another object (requires --target)
@@ -1338,7 +1342,7 @@ This command:
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
-For agents: After renaming, run raven_invoke(command="reindex", args={"full": true}) to update the index.`,
+For agents: After renaming, run 'rvn reindex --full --json' to update the index.`,
 		Args: []ArgMeta{
 			{Name: "old_name", Description: "Current type name", Required: true},
 			{Name: "new_name", Description: "New type name", Required: true},
@@ -1375,7 +1379,7 @@ This command:
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
-For agents: After renaming, run raven_invoke(command="reindex", args={"full": true}) to update the index.`,
+For agents: After renaming, run 'rvn reindex --full --json' to update the index.`,
 		Args: []ArgMeta{
 			{Name: "type_name", Description: "Type containing the field", Required: true, DynamicComp: "types"},
 			{Name: "old_field", Description: "Current field name", Required: true},

@@ -604,13 +604,16 @@ rvn query "trait:priority .value==urgent" --apply "update critical" --confirm
 
 ### After Schema Changes
 
-Always reindex after schema changes to ensure the index reflects the new schema:
+Validate the schema first, then check vault content:
 
 ```bash
-rvn reindex --full
+rvn schema validate
+rvn check
 ```
 
-Run `rvn check` to find any validation issues created by the changes.
+Run `rvn reindex` after schema changes that affect indexed types, fields, or
+traits. Use `rvn reindex --full` after rename-heavy migrations or broad
+out-of-band file changes.
 
 ---
 

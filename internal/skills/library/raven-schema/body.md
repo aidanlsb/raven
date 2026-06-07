@@ -30,6 +30,12 @@ Rules:
 - `ref` and `ref[]` fields require `--target`; trait references do not have target constraints.
 - Legacy trait type `boolean` is accepted as an alias for `bool`.
 
+Examples:
+
+- `rvn schema add trait tags --type string[] --json`
+- `rvn schema add trait reviewers --type ref[] --json`
+- `rvn schema add field project reviewers --type ref[] --target person --json`
+
 ## Typical flow
 
 1. Inspect the current shape: `rvn schema`, `rvn schema type <name>`, `rvn schema trait <name>`.
