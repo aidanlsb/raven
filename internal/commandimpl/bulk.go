@@ -170,6 +170,61 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 	)
 }
 
+// HandleUnset executes the canonical `unset` command.
+func HandleUnset(_ context.Context, req commandexec.Request) commandexec.Result {
+	vaultPath := strings.TrimSpace(req.VaultPath)
+	if vaultPath == "" {
+		return commandexec.Failure("INVALID_INPUT", "vault path is required", nil, "Resolve a vault before invoking the command")
+	}
+
+	vaultCfg, err := config.LoadVaultConfig(vaultPath)
+	if err != nil {
+		return commandexec.Failure("CONFIG_INVALID", "failed to load raven.yaml", nil, "Fix raven.yaml and try again")
+	}
+
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return commandexec.Failure("SCHEMA_INVALID", "failed to load schema", nil, "Fix schema.yaml and try again")
+	}
+
+	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
+	if reference == "" {
+		return commandexec.Failure("MISSING_ARGUMENT", "requires object-id", nil, "Usage: rvn unset <object-id> <field>...")
+	}
+
+	fields := stringSliceArg(req.Args["fields"])
+	if len(fields) == 0 {
+		return commandexec.Failure("MISSING_ARGUMENT", "no fields to unset", nil, "Usage: rvn unset <object-id> <field>...")
+	}
+
+	serviceResult, err := objectsvc.UnsetByReference(objectsvc.UnsetByReferenceRequest{
+		VaultPath:    vaultPath,
+		VaultConfig:  vaultCfg,
+		Schema:       sch,
+		Reference:    reference,
+		Fields:       fields,
+		ParseOptions: buildParseOptions(vaultCfg),
+	})
+	if err != nil {
+		return mapContentMutationError(err)
+	}
+
+	var warnings []commandexec.Warning
+	if serviceResult.Modified {
+		warnings = autoReindexWarnings(vaultPath, vaultCfg, serviceResult.FilePath)
+	}
+
+	return commandexec.SuccessWithWarnings(map[string]interface{}{
+		"file":            serviceResult.RelativePath,
+		"object_id":       serviceResult.ObjectID,
+		"type":            serviceResult.ObjectType,
+		"removed_fields":  fieldmutation.SerializeFieldValueMap(serviceResult.RemovedFields),
+		"missing_fields":  serviceResult.MissingFields,
+		"modified":        serviceResult.Modified,
+		"previous_fields": serviceResult.PreviousFields,
+	}, warnings, nil)
+}
+
 // HandleAdd executes the canonical `add` command.
 func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 	vaultPath := strings.TrimSpace(req.VaultPath)

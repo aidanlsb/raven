@@ -59,7 +59,7 @@ func defaultCategoryForCommandID(commandID string) Category {
 		commandID == "query_saved_set" || commandID == "query_saved_remove" ||
 		commandID == "search" || commandID == "backlinks" || commandID == "outlinks" || commandID == "resolve":
 		return CategoryQuery
-	case commandID == "new" || commandID == "add" || commandID == "upsert" || commandID == "set" ||
+	case commandID == "new" || commandID == "add" || commandID == "upsert" || commandID == "set" || commandID == "unset" ||
 		commandID == "delete" || commandID == "move" || commandID == "reclassify" || commandID == "import" ||
 		commandID == "edit" || commandID == "update":
 		return CategoryContent

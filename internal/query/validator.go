@@ -319,7 +319,7 @@ func (v *Validator) validateTraitArrayQuantifierPredicate(p *ArrayQuantifierPred
 			Suggestion: fmt.Sprintf("Available traits: %s", strings.Join(v.availableTraits(), ", ")),
 		}
 	}
-	elemType, ok := arrayElementType(schema.FieldType(traitDef.Type))
+	elemType, ok := arrayElementType(traitDef.Type)
 	if !ok {
 		return &ValidationError{
 			Message:    fmt.Sprintf("array predicates any()/all()/none() require an array-valued trait, but trait '%s' is %s", traitName, traitDef.Type),

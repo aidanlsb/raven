@@ -1035,6 +1035,45 @@ func TestIntegration_SetFieldsJSONPreservesStringType(t *testing.T) {
 	v.AssertFileContains("people/erin.md", `email: "true"`)
 }
 
+func TestIntegration_UnsetRemovesUnknownAndKnownFrontmatterFields(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(`version: 1
+types:
+  doc:
+    default_path: docs/
+    fields:
+      title:
+        type: string
+        required: true
+      link:
+        type: string
+traits: {}
+`).
+		WithFile("docs/cleanup.md", "---\ntype: doc\ntitle: Cleanup\nlink: https://example.com\ndate: 2026-06-07\n---\n# Cleanup\n").
+		Build()
+
+	v.RunCLI("reindex").MustSucceed(t)
+	before := v.RunCLI("query", `type:doc .link=="https://example.com"`).MustSucceed(t)
+	if before.Meta == nil || before.Meta.Count != 1 {
+		t.Fatalf("expected indexed link before unset, got meta=%#v raw=%s", before.Meta, before.RawJSON)
+	}
+
+	result := v.RunCLI("unset", "docs/cleanup", "link", "date").MustSucceed(t)
+	if modified, ok := result.Data["modified"].(bool); !ok || !modified {
+		t.Fatalf("expected modified=true, got data=%#v", result.Data)
+	}
+	v.AssertFileNotContains("docs/cleanup.md", "link:")
+	v.AssertFileNotContains("docs/cleanup.md", "date:")
+	v.AssertFileContains("docs/cleanup.md", "title: Cleanup")
+	v.AssertFileContains("docs/cleanup.md", "# Cleanup")
+
+	after := v.RunCLI("query", `type:doc .link=="https://example.com"`).MustSucceed(t)
+	if after.Meta != nil && after.Meta.Count != 0 {
+		t.Fatalf("expected index to drop removed link, got meta=%#v raw=%s", after.Meta, after.RawJSON)
+	}
+}
+
 func TestIntegration_SetBulkFieldsJSONPreservesStringType(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

@@ -155,6 +155,68 @@ func PrepareValidatedFrontmatterMutationValues(
 	return newContent, warnings, nil
 }
 
+func PrepareFrontmatterUnset(
+	content string,
+	fields []string,
+	sch *schema.Schema,
+) (string, map[string]schema.FieldValue, []string, error) {
+	lines := strings.Split(content, "\n")
+
+	startLine, endLine, ok := parser.FrontmatterBounds(lines)
+	if !ok {
+		return "", nil, nil, fmt.Errorf("no frontmatter found")
+	}
+	if endLine == -1 {
+		return "", nil, nil, fmt.Errorf("unclosed frontmatter")
+	}
+
+	frontmatterContent := strings.Join(lines[startLine+1:endLine], "\n")
+	var yamlData map[string]interface{}
+	if err := yaml.Unmarshal([]byte(frontmatterContent), &yamlData); err != nil {
+		return "", nil, nil, fmt.Errorf("failed to parse frontmatter: %w", err)
+	}
+	if yamlData == nil {
+		yamlData = make(map[string]interface{})
+	}
+
+	objectType, _ := yamlData["type"].(string)
+	typeDef := fieldDefsForObjectType(sch, normalizeMutationType(objectType))
+
+	removed := make(map[string]schema.FieldValue)
+	missing := make([]string, 0)
+	for _, field := range normalizedUnsetFields(fields) {
+		if field == "type" {
+			return "", nil, nil, fmt.Errorf("cannot unset reserved field 'type'")
+		}
+		if fieldDef := typeDef[field]; fieldDef != nil && fieldDef.Required {
+			return "", nil, nil, fmt.Errorf("cannot unset required field '%s' for type '%s'", field, normalizeMutationType(objectType))
+		}
+
+		rawValue, exists := yamlData[field]
+		if !exists {
+			missing = append(missing, field)
+			continue
+		}
+		removed[field] = parser.FieldValueFromYAML(rawValue)
+		delete(yamlData, field)
+	}
+
+	if len(removed) == 0 {
+		return content, removed, missing, nil
+	}
+
+	newFrontmatter, err := frontmatter.RenderData(yamlData, nil)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	if endLine+1 >= len(lines) {
+		return newFrontmatter, removed, missing, nil
+	}
+
+	return newFrontmatter + strings.Join(lines[endLine+1:], "\n"), removed, missing, nil
+}
+
 func DetectUnknownFieldMutationByNames(
 	objectType string,
 	sch *schema.Schema,
@@ -438,6 +500,23 @@ func validateMergedFields(objectType string, fields map[string]schema.FieldValue
 		ObjectType: objectType,
 		Issues:     issues,
 	}
+}
+
+func normalizedUnsetFields(fields []string) []string {
+	seen := make(map[string]struct{}, len(fields))
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		if _, ok := seen[field]; ok {
+			continue
+		}
+		seen[field] = struct{}{}
+		out = append(out, field)
+	}
+	return out
 }
 
 func validateRefTargets(

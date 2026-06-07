@@ -12,6 +12,7 @@ func RegisterAll(registry *commandexec.HandlerRegistry) {
 	registry.Register("upsert", HandleUpsert)
 	registry.Register("add", HandleAdd)
 	registry.Register("set", HandleSet)
+	registry.Register("unset", HandleUnset)
 	registry.Register("delete", HandleDelete)
 	registry.Register("move", HandleMove)
 	registry.Register("reclassify", HandleReclassify)

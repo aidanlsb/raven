@@ -1543,6 +1543,37 @@ IMPORTANT: Bulk operations return preview by default. Changes are NOT applied un
 			"Bulk update multiple objects via --stdin",
 		},
 	},
+	"unset": {
+		Name:        "unset",
+		Use:         "unset <object-id> <field>...",
+		Description: "Remove frontmatter fields from an object",
+		LongDesc: `Remove one or more frontmatter fields from an existing file-level object.
+
+The object ID can be a full path (e.g., "people/freya") or a short reference
+that uniquely identifies an object. Fields are removed from the YAML frontmatter
+entirely; they are not set to null.
+
+Unset can remove optional schema fields and unknown frontmatter keys. This makes
+it useful after schema migrations where removed fields still exist on older
+objects and appear as unknown_frontmatter_key issues in rvn check.
+
+The reserved type field cannot be unset; use reclassify to change object type.`,
+		Args: []ArgMeta{
+			{Name: "object_id", Description: "Object to update (e.g., people/freya)", Required: true},
+		},
+		Flags: []FlagMeta{
+			{Name: "fields", Description: "Frontmatter field names to remove (repeatable; MCP should pass an array)", Type: FlagTypeStringSlice, Examples: []string{`["date", "link"]`}},
+		},
+		Examples: []string{
+			"rvn unset docs/cleanup date link --json",
+			`rvn unset docs/cleanup --fields date --fields link --json`,
+		},
+		UseCases: []string{
+			"Remove stale frontmatter keys after a schema migration",
+			"Clean up unknown_frontmatter_key issues reported by rvn check",
+			"Delete optional metadata from an object without editing the file manually",
+		},
+	},
 	"update": {
 		Name:        "update",
 		Use:         "update <trait_id> <new_value>",
