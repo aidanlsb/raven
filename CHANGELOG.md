@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.23] - 2026-06-07
+
+### Added
+- Packaged `raven-onboarding` skill for guided first-session vault setup and Raven concepts walkthroughs.
+- `rvn template write --edit` opens template content in the configured editor before writing it back through Raven's template validation flow.
+
 ## [v0.0.22] - 2026-06-07
 
 ### Added
