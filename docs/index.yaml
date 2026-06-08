@@ -55,6 +55,9 @@ sections:
       query-language:
         title: Query Language
         path: query-language.md
+      internals:
+        title: RQL Internals
+        path: internals.md
   vault-management:
     title: Vault Management
     topics:

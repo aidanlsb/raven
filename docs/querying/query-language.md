@@ -386,6 +386,7 @@ rvn query 'trait:todo .value==todo' --apply 'update done' --confirm
 
 ## Related Docs
 
+- RQL implementation notes: `querying/internals.md`
 - Query-driven bulk changes: `vault-management/bulk-operations.md`
 - Organizing and referencing assets: `using-your-vault/assets.md`
 - Queryable field/trait definitions: `types-and-traits/schema.md`
