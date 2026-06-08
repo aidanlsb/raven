@@ -67,6 +67,7 @@ Raven also ships with a few skills for supported agent runtimes:
 
 ```bash
 rvn skill list --target cursor
+rvn skill sync raven-onboarding --target cursor --confirm
 rvn skill sync raven-core --target cursor --confirm
 ```
 
@@ -74,7 +75,7 @@ Available skill targets are `codex`, `claude`, and `cursor`.
 
 ### Agent Onboarding
 
-After MCP and skills are in place, you can ask your agent to onboard you to Raven.
+After MCP and skills are in place, you can ask your agent to use the `raven-onboarding` skill to onboard you to Raven.
 
 See the full [MCP reference](docs/agents/mcp.md), [Installation](docs/getting-started/installation.md), and [First Vault](docs/getting-started/first-vault.md) guides for more setup details.
 

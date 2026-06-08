@@ -522,6 +522,11 @@ func HandleTemplateWrite(_ context.Context, req commandexec.Request) commandexec
 	if failure.Error != nil {
 		return failure
 	}
+	if boolArg(req.Args, "edit") {
+		if _, ok := req.Args["content"]; !ok {
+			return commandexec.Failure(codes.ErrInvalidInput, "template write --edit is only available in the interactive CLI", nil, "Use --content when invoking template_write non-interactively")
+		}
+	}
 
 	result, err := templatesvc.Write(templatesvc.WriteRequest{
 		VaultPath:   req.VaultPath,

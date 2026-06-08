@@ -58,6 +58,12 @@ rvn schema type meeting
 ### 2) Create/update a template file
 
 ```bash
+rvn template write meeting/standard.md --edit
+```
+
+For scripts or one-off inline content:
+
+```bash
 rvn template write meeting/standard.md --content "# Meeting Notes
 
 ## Agenda
@@ -91,6 +97,12 @@ rvn new meeting "Weekly Standup"
 ### 1) Create/update a daily template file
 
 ```bash
+rvn template write daily.md --edit
+```
+
+For scripts or one-off inline content:
+
+```bash
 rvn template write daily.md --content "# Daily Note
 
 ## Morning
@@ -120,6 +132,8 @@ rvn daily tomorrow
   List template files under `directories.template`.
 - `rvn template write <path> --content "<markdown>"`
   Create or update a template file (full file replacement).
+- `rvn template write <path> --edit`
+  Create or update a template file by opening the current body in the configured editor.
 - `rvn template delete <path>`
   Delete a template file (moves to `.trash/`; blocked if schema templates still reference it).
 - `rvn template delete <path> --force`
@@ -169,6 +183,8 @@ rvn daily tomorrow
   Move the file under your configured template directory or update `directories.template`.
 - `template file not found ...`
   Create the file with `rvn template write ...`, then run `rvn schema template set ... --file ...`.
+- `no editor configured`
+  Set `editor` in config.toml or `$EDITOR`. GUI editors should use a blocking command such as `code --wait`.
 - `template '<id>' is still referenced by ...`
   Unbind first using `rvn schema template unbind <id> --type <type>` or `--core <core>`.
 - `template file "<path>" is referenced by schema templates: ...`

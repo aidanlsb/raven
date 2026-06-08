@@ -100,6 +100,19 @@ type WriteRequest struct {
 	Content     string
 }
 
+type ReadRequest struct {
+	VaultPath   string
+	TemplateDir string
+	Path        string
+}
+
+type ReadResult struct {
+	Path        string
+	TemplateDir string
+	Content     string
+	Exists      bool
+}
+
 type WriteResult struct {
 	Path        string
 	Status      string
@@ -171,6 +184,37 @@ func List(req ListRequest) (*ListResult, error) {
 	return &ListResult{
 		TemplateDir: req.TemplateDir,
 		Templates:   files,
+	}, nil
+}
+
+func Read(req ReadRequest) (*ReadResult, error) {
+	if strings.TrimSpace(req.VaultPath) == "" {
+		return nil, newError(CodeInvalidInput, "vault path is required", "", nil)
+	}
+
+	fileRef, fullPath, err := resolveTemplatePath(req.VaultPath, req.TemplateDir, req.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := os.ReadFile(fullPath)
+	if os.IsNotExist(err) {
+		return &ReadResult{
+			Path:        fileRef,
+			TemplateDir: req.TemplateDir,
+			Content:     "",
+			Exists:      false,
+		}, nil
+	}
+	if err != nil {
+		return nil, newError(CodeFileReadError, "failed reading template file", "", err)
+	}
+
+	return &ReadResult{
+		Path:        fileRef,
+		TemplateDir: req.TemplateDir,
+		Content:     string(content),
+		Exists:      true,
 	}, nil
 }
 

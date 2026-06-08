@@ -171,6 +171,65 @@ func TestIntegration_EditRejectsSchemaAndTemplateFiles(t *testing.T) {
 	v.AssertFileContains("templates/meeting.md", "{{title}}")
 }
 
+func TestIntegration_TemplateWriteEditUsesEditorContent(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		WithFile("templates/meeting.md", "# Old Template\n").
+		Build()
+
+	editorPath := filepath.Join(t.TempDir(), "fake-editor.sh")
+	editorScript := `#!/bin/sh
+if ! grep -q "Old Template" "$1"; then
+  echo "missing seeded template content" >&2
+  exit 7
+fi
+printf '# Edited Template\n' > "$1"
+`
+	if err := os.WriteFile(editorPath, []byte(editorScript), 0o755); err != nil {
+		t.Fatalf("write fake editor: %v", err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	configContent := "editor = \"" + strings.ReplaceAll(editorPath, `"`, `\"`) + "\"\neditor_mode = \"terminal\"\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
+		t.Fatalf("write test config: %v", err)
+	}
+
+	binary := testutil.BuildCLI(t)
+	cmd := exec.Command(binary, "--config", configPath, "--vault-path", v.Path, "--json", "template", "write", "meeting.md", "--edit")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("template write --edit failed: %v\n%s", err, output)
+	}
+
+	var resp struct {
+		OK   bool                   `json:"ok"`
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(output, &resp); err != nil {
+		t.Fatalf("parse JSON output: %v\n%s", err, output)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok response, got %s", output)
+	}
+	if got := resp.Data["status"]; got != "updated" {
+		t.Fatalf("status = %#v, want updated", got)
+	}
+	v.AssertFileContains("templates/meeting.md", "# Edited Template")
+	v.AssertFileNotContains("templates/meeting.md", "Old Template")
+}
+
+func TestIntegration_TemplateWriteRejectsContentAndEditTogether(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t).
+		WithSchema(testutil.MinimalSchema()).
+		Build()
+
+	result := v.RunCLI("template", "write", "meeting.md", "--content", "# Meeting", "--edit")
+	result.MustFail(t, "INVALID_INPUT")
+	result.MustFailWithMessage(t, "--edit and --content cannot be used together")
+}
+
 func TestIntegration_EditRejectsProtectedPrefixAndNonMarkdownFiles(t *testing.T) {
 	t.Parallel()
 	v := testutil.NewTestVault(t).

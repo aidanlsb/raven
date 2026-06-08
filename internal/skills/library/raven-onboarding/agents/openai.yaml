@@ -1,0 +1,3 @@
+name: raven-onboarding
+description: Guided first-session onboarding for new Raven users and vaults.
+default_prompt: Walk the user through Raven using CLI (`rvn`) commands with --json, starting from the actual vault context.

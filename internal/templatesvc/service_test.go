@@ -101,6 +101,42 @@ func TestWriteAndListLifecycle(t *testing.T) {
 	}
 }
 
+func TestReadReturnsExistingContentOrEmptyNewTemplate(t *testing.T) {
+	vaultPath := t.TempDir()
+	if _, err := Write(WriteRequest{
+		VaultPath:   vaultPath,
+		TemplateDir: "templates/",
+		Path:        "meeting.md",
+		Content:     "# Meeting\n",
+	}); err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	existing, err := Read(ReadRequest{
+		VaultPath:   vaultPath,
+		TemplateDir: "templates/",
+		Path:        "meeting.md",
+	})
+	if err != nil {
+		t.Fatalf("Read existing returned error: %v", err)
+	}
+	if !existing.Exists || existing.Content != "# Meeting\n" || existing.Path != "templates/meeting.md" {
+		t.Fatalf("unexpected existing read result: %#v", existing)
+	}
+
+	missing, err := Read(ReadRequest{
+		VaultPath:   vaultPath,
+		TemplateDir: "templates/",
+		Path:        "new.md",
+	})
+	if err != nil {
+		t.Fatalf("Read missing returned error: %v", err)
+	}
+	if missing.Exists || missing.Content != "" || missing.Path != "templates/new.md" {
+		t.Fatalf("unexpected missing read result: %#v", missing)
+	}
+}
+
 func TestDeleteRespectsSchemaReferences(t *testing.T) {
 	vaultPath := t.TempDir()
 

@@ -459,11 +459,13 @@ Use this to see exactly which 'rvn docs <section>' commands are available.`,
 
 Use this command group for template file lifecycle operations:
 - create/update template files
+- interactively author template files in your editor
 - list template files
 - delete template files safely`,
 		Examples: []string{
 			"rvn template list --json",
 			"rvn template write meeting.md --content \"# {{title}}\" --json",
+			"rvn template write meeting.md --edit",
 			"rvn template delete meeting.md --json",
 		},
 		UseCases: []string{
@@ -485,15 +487,22 @@ Use this command group for template file lifecycle operations:
 		LongDesc: `Create or update a template file under directories.template.
 
 This command replaces the full file body with --content.
-Use it for both initial template creation and iterative updates.`,
+For human authoring, use --edit to open the current template body in the
+configured editor and save the edited result back through the same template
+path validation and write flow.
+
+Use --content for scripts and agents. Use --edit for interactive terminal
+editing. The two flags are mutually exclusive.`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "Template file path under directories.template", Required: true},
 		},
 		Flags: []FlagMeta{
 			{Name: "content", Description: "Template file content (full file body)", Type: FlagTypeString},
+			{Name: "edit", Description: "Open the template body in the configured editor before writing", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn template write meeting.md --content \"# {{title}}\" --json",
+			"rvn template write meeting.md --edit",
 			"rvn template write templates/interview/technical.md --content \"## Technical interview\" --json",
 		},
 	},
@@ -2247,7 +2256,7 @@ by their receipts. Missing shipped skills are reported but not installed.
 
 Preview is returned by default. Use --confirm to apply writes.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Optional shipped skill name to sync", Required: false, Completions: []string{"raven-core", "raven-maintenance", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
+			{Name: "name", Description: "Optional shipped skill name to sync", Required: false, Completions: []string{"raven-core", "raven-maintenance", "raven-onboarding", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},
@@ -2273,7 +2282,7 @@ Preview is returned by default. Use --confirm to apply writes.`,
 
 Preview is returned by default. Use --confirm to apply removal.`,
 		Args: []ArgMeta{
-			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-maintenance", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
+			{Name: "name", Description: "Skill name to remove", Required: true, Completions: []string{"raven-core", "raven-maintenance", "raven-onboarding", "raven-query", "raven-schema", "raven-templates", "raven-vault-admin"}},
 		},
 		Flags: []FlagMeta{
 			{Name: "target", Description: "Target runtime: codex, claude, or cursor", Type: FlagTypeString, Default: "codex", Examples: []string{"codex", "claude", "cursor"}},

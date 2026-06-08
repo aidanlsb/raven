@@ -53,9 +53,10 @@ rvn skill list --target claude --json
 rvn skill list --target cursor --json
 ```
 
-Sync the core Raven skill:
+Sync the onboarding skill for guided first-session setup, then add the core skill for day-to-day operations:
 
 ```bash
+rvn skill sync raven-onboarding --target codex --confirm --json
 rvn skill sync raven-core --target codex --confirm --json
 ```
 
@@ -71,7 +72,7 @@ The no-name sync updates/removes installed Raven-managed skills and reports ship
 
 After MCP and skills are installed, a good first prompt is:
 
-> Help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
+> Use the raven-onboarding skill to help me onboard to Raven in this vault. Start by inspecting the schema, traits, and vault stats. Then walk me through one concrete create flow, one query, and one check, explaining each step as you go.
 
 That prompt forces the agent to inspect the actual vault before making changes and gives you a quick end-to-end validation of the setup.
 

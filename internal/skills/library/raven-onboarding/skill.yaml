@@ -1,0 +1,42 @@
+id: raven-onboarding
+title: Raven Onboarding
+version: 1
+summary: Guided first-session onboarding for new Raven users and vaults.
+entry: body.md
+references:
+  - references/onboarding-playbook.md
+coverage:
+  commands:
+    - init
+    - vault
+    - vault add
+    - vault list
+    - vault current
+    - vault path
+    - vault stats
+    - vault use
+    - vault config show
+    - config show
+    - schema
+    - schema add type
+    - schema add field
+    - schema add trait
+    - schema validate
+    - new
+    - add
+    - read
+    - resolve
+    - query
+    - search
+    - backlinks
+    - outlinks
+    - daily
+    - date
+    - check
+    - reindex
+execution:
+  preferred_transport: cli
+  cli_binary: rvn
+  cli_args_suffix:
+    - --json
+  mcp_fallback: true
