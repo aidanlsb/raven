@@ -15,6 +15,7 @@ check failures.
 | `unknown_type` | File uses a type not in schema | Add/rename type in schema, or change file type |
 | `missing_reference` | Link points to missing object/section | Create missing target or update/remove reference |
 | `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset under the configured asset root or update/remove the reference |
+| `local_fragment_ref` | Wikilink uses unsupported source-relative fragment syntax like `[[#tasks]]` | Rewrite it as a global section ref like `[[object#tasks]]` |
 | `unknown_frontmatter_key` | Field is not defined for object type | Add schema field or remove invalid key |
 | `missing_required_field` | Required type field missing | Set required field value(s) |
 | `invalid_field_value` | Field value violates schema | Correct value to match constraints |

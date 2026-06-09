@@ -375,7 +375,7 @@ func (v *Validator) validateSectionPredicate(pred Predicate) error {
 		if _, ok := sectionFieldColumn("s", p.Field); !ok {
 			return &ValidationError{
 				Message:    fmt.Sprintf("section has no field '%s'", p.Field),
-				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, parent_section_id",
+				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, direct_line_end, subtree_line_end, parent_section_id",
 			}
 		}
 	case *StringFuncPredicate:
@@ -388,7 +388,7 @@ func (v *Validator) validateSectionPredicate(pred Predicate) error {
 		if _, ok := sectionFieldColumn("s", p.Field); !ok {
 			return &ValidationError{
 				Message:    fmt.Sprintf("section has no field '%s'", p.Field),
-				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, parent_section_id",
+				Suggestion: "Available section fields: id, file_object_id, file_path, slug, title, level, line_start, line_end, direct_line_end, subtree_line_end, parent_section_id",
 			}
 		}
 		if isNumericSectionField(p.Field) {

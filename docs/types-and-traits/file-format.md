@@ -206,12 +206,15 @@ This creates:
 
 ### Section Fields
 
-Sections have two fields:
+Sections expose structural fields for queries and navigation:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `title` | string | The heading text |
 | `level` | number (1-6) | Heading level (`#` = 1, `##` = 2, etc.) |
+| `line_start` | number | Heading line |
+| `line_end` / `direct_line_end` | number | Direct section end, before the next heading of any level |
+| `subtree_line_end` | number | Full subtree end, before the next same-or-higher heading |
 
 ### Section Hierarchy
 
@@ -241,6 +244,7 @@ Wiki-style links connect objects, sections, and assets across your vault:
 ```
 
 Object references can appear in markdown body content and frontmatter `ref`/`ref[]` fields.
+Section references must be global (`[[object#fragment]]`); source-relative fragment links like `[[#tasks]]` are not Raven references.
 
 Vault-relative Markdown links and images to non-Markdown files are indexed as asset references:
 

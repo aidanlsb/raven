@@ -46,6 +46,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			level INTEGER NOT NULL,
 			line_start INTEGER NOT NULL,
 			line_end INTEGER,
+			subtree_line_end INTEGER,
 			parent_section_id TEXT,
 			indexed_at INTEGER
 		);
@@ -209,6 +210,7 @@ func setupRefRegressionDB(t *testing.T) *sql.DB {
 			level INTEGER NOT NULL,
 			line_start INTEGER NOT NULL,
 			line_end INTEGER,
+			subtree_line_end INTEGER,
 			parent_section_id TEXT,
 			indexed_at INTEGER
 		);

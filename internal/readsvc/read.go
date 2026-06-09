@@ -116,9 +116,22 @@ func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {
 		LineCount: lineCount,
 	}
 
-	rawMode := req.Raw || req.Lines || req.StartLine > 0 || req.EndLine > 0
+	explicitRange := req.StartLine > 0 || req.EndLine > 0
+	rangeStart := req.StartLine
+	rangeEnd := req.EndLine
+	sectionRange := false
+	if resolved.IsSection && !explicitRange && resolved.LineStart > 0 {
+		rangeStart = resolved.LineStart
+		rangeEnd = lineCount
+		if resolved.SubtreeLineEnd != nil {
+			rangeEnd = *resolved.SubtreeLineEnd
+		}
+		sectionRange = true
+	}
+
+	rawMode := req.Raw || req.Lines || explicitRange
 	if rawMode {
-		rawResult, err := readRawRange(content, lineCount, req.StartLine, req.EndLine, req.Lines)
+		rawResult, err := readRawRange(content, lineCount, rangeStart, rangeEnd, req.Lines)
 		if err != nil {
 			return nil, err
 		}
@@ -128,12 +141,21 @@ func Read(rt *Runtime, req ReadRequest) (*ReadResult, error) {
 		result.Lines = rawResult.Lines
 		return result, nil
 	}
+	if sectionRange {
+		rawResult, err := readRawRange(content, lineCount, rangeStart, rangeEnd, false)
+		if err != nil {
+			return nil, err
+		}
+		result.Content = rawResult.Content
+		result.StartLine = rawResult.StartLine
+		result.EndLine = rawResult.EndLine
+	}
 
 	if err := ensureReadDB(rt); err != nil {
 		return nil, err
 	}
 
-	_, body := splitFrontmatterBody(content)
+	_, body := splitFrontmatterBody(result.Content)
 	refs := collectReadReferences(body, rt, resolveOp)
 
 	backlinkGroups, backlinksCount, err := readBacklinksWithContext(rt, resolved.ObjectID)

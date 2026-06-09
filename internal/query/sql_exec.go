@@ -45,6 +45,7 @@ func scanSectionRows(rows *sql.Rows) ([]model.Section, error) {
 			&r.Level,
 			&r.LineStart,
 			&r.LineEnd,
+			&r.SubtreeLineEnd,
 			&r.ParentSectionID,
 		); err != nil {
 			return model.Section{}, err

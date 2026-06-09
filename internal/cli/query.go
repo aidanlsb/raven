@@ -889,6 +889,7 @@ func sectionFromResultMap(entry map[string]interface{}) model.Section {
 		Level:           intFromAny(entry["level"]),
 		LineStart:       intFromAny(entry["line_start"]),
 		LineEnd:         intPointerFromAny(entry["line_end"]),
+		SubtreeLineEnd:  intPointerFromAny(entry["subtree_line_end"]),
 		ParentSectionID: stringPointer(entry["parent_section_id"]),
 	}
 }

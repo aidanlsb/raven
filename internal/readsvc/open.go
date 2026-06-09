@@ -11,6 +11,9 @@ type OpenTarget struct {
 	ObjectID     string `json:"object_id"`
 	FilePath     string `json:"file_path"`
 	RelativePath string `json:"relative_path"`
+	IsSection    bool   `json:"is_section,omitempty"`
+	FileObjectID string `json:"file_object_id,omitempty"`
+	LineStart    int    `json:"line_start,omitempty"`
 }
 
 type OpenFailure struct {
@@ -53,11 +56,18 @@ func resolveOpenTargetWithOperation(rt *Runtime, reference string, resolveOp *re
 		return nil, err
 	}
 
+	fileObjectID := ""
+	if resolved.IsSection {
+		fileObjectID = resolved.FileObjectID
+	}
 	return &OpenTarget{
 		Reference:    ref,
 		ObjectID:     resolved.ObjectID,
 		FilePath:     resolved.FilePath,
 		RelativePath: filepath.ToSlash(relPath),
+		IsSection:    resolved.IsSection,
+		FileObjectID: fileObjectID,
+		LineStart:    resolved.LineStart,
 	}, nil
 }
 
@@ -75,11 +85,6 @@ func ResolveOpenTargets(rt *Runtime, references []string) ([]OpenTarget, []OpenF
 		if ref == "" {
 			continue
 		}
-		if strings.Contains(ref, "#") {
-			failures = append(failures, OpenFailure{Reference: ref, Message: "section IDs are not supported"})
-			continue
-		}
-
 		target, err := resolveOpenTargetWithOperation(rt, ref, resolveOp)
 		if err != nil {
 			failures = append(failures, OpenFailure{Reference: ref, Message: err.Error()})

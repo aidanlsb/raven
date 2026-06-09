@@ -87,6 +87,10 @@ func sectionFieldColumn(alias, field string) (string, bool) {
 		return alias + ".line_start", true
 	case "line_end":
 		return alias + ".line_end", true
+	case "direct_line_end":
+		return alias + ".line_end", true
+	case "subtree_line_end":
+		return alias + ".subtree_line_end", true
 	case "parent_section_id":
 		return alias + ".parent_section_id", true
 	default:
@@ -95,5 +99,5 @@ func sectionFieldColumn(alias, field string) (string, bool) {
 }
 
 func isNumericSectionField(field string) bool {
-	return field == "level" || field == "line_start" || field == "line_end"
+	return field == "level" || field == "line_start" || field == "line_end" || field == "direct_line_end" || field == "subtree_line_end"
 }

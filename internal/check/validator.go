@@ -42,6 +42,7 @@ const (
 	IssueDuplicateAlias          IssueType = "duplicate_alias"
 	IssueAliasCollision          IssueType = "alias_collision"
 	IssueStaleFragment           IssueType = "stale_fragment"
+	IssueLocalFragmentRef        IssueType = "local_fragment_ref"
 	IssueNonCanonicalPath        IssueType = "non_canonical_path"
 	IssueNonCanonicalRef         IssueType = "non_canonical_ref"
 	IssueMissingAsset            IssueType = "missing_asset"
@@ -567,6 +568,22 @@ func (v *Validator) validateRef(filePath string, ref *parser.ParsedRef) []Issue 
 // If targetType is provided (from a typed field), we have certain confidence about the type.
 func (v *Validator) validateRefWithContext(filePath, sourceObjectID string, ref *parser.ParsedRef, targetType, fieldName string) []Issue {
 	var issues []Issue
+
+	if ref == nil || ref.TargetRaw == "" {
+		return issues
+	}
+	if strings.HasPrefix(ref.TargetRaw, "#") {
+		issues = append(issues, Issue{
+			Level:    LevelError,
+			Type:     IssueLocalFragmentRef,
+			FilePath: filePath,
+			Line:     ref.Line,
+			Message:  fmt.Sprintf("Local fragment reference [[%s]] is not supported", ref.TargetRaw),
+			Value:    ref.TargetRaw,
+			FixHint:  "Use a global section reference like [[object#fragment]]",
+		})
+		return issues
+	}
 
 	// Track short name usage (references without path separators)
 	// This is used to only warn about collisions for short names that are actually used

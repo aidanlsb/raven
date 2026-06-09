@@ -191,6 +191,16 @@ func HandleResolve(_ context.Context, req commandexec.Request) commandexec.Resul
 	}
 	if resolved.IsSection {
 		data["file_object_id"] = resolved.FileObjectID
+		if resolved.LineStart > 0 {
+			data["line_start"] = resolved.LineStart
+		}
+		if resolved.LineEnd != nil {
+			data["line_end"] = resolved.LineEnd
+			data["direct_line_end"] = resolved.LineEnd
+		}
+		if resolved.SubtreeLineEnd != nil {
+			data["subtree_line_end"] = resolved.SubtreeLineEnd
+		}
 	}
 
 	return commandexec.Success(data, &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()})
@@ -223,18 +233,19 @@ func HandleRead(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	data := map[string]interface{}{
+		"object_id":  result.ObjectID,
 		"path":       result.Path,
 		"content":    result.Content,
 		"line_count": result.LineCount,
+	}
+	if result.StartLine > 0 {
+		data["start_line"] = result.StartLine
+		data["end_line"] = result.EndLine
 	}
 
 	rawMode := raw || lines || startLine > 0 || endLine > 0
 	meta := &commandexec.Meta{QueryTimeMs: time.Since(start).Milliseconds()}
 	if rawMode {
-		if result.StartLine > 0 {
-			data["start_line"] = result.StartLine
-			data["end_line"] = result.EndLine
-		}
 		if len(result.Lines) > 0 {
 			data["lines"] = result.Lines
 		}
@@ -293,10 +304,11 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 		}
 
 		return commandexec.Success(map[string]interface{}{
-			"files":  relPaths,
-			"opened": vault.OpenFilesInEditor(cfg, filePaths),
-			"editor": editor,
-			"errors": errs,
+			"files":   relPaths,
+			"targets": targets,
+			"opened":  vault.OpenFilesInEditor(cfg, filePaths),
+			"editor":  editor,
+			"errors":  errs,
 		}, &commandexec.Meta{Count: len(relPaths)})
 	}
 
@@ -310,11 +322,20 @@ func HandleOpen(_ context.Context, req commandexec.Request) commandexec.Result {
 		return mapOpenFailure(err)
 	}
 
-	return commandexec.Success(map[string]interface{}{
-		"file":   target.RelativePath,
-		"opened": vault.OpenInEditor(cfg, target.FilePath),
-		"editor": editor,
-	}, nil)
+	data := map[string]interface{}{
+		"object_id": target.ObjectID,
+		"file":      target.RelativePath,
+		"opened":    vault.OpenInEditor(cfg, target.FilePath),
+		"editor":    editor,
+	}
+	if target.IsSection {
+		data["is_section"] = true
+		data["file_object_id"] = target.FileObjectID
+		if target.LineStart > 0 {
+			data["line_start"] = target.LineStart
+		}
+	}
+	return commandexec.Success(data, nil)
 }
 
 func mapResolveFailure(err error, reference string) commandexec.Result {
@@ -414,6 +435,14 @@ func formatSearchResults(results []model.SearchMatch) []map[string]interface{} {
 			"file_path": r.FilePath,
 			"snippet":   r.Snippet,
 			"rank":      r.Rank,
+		}
+		if r.IsSection {
+			formatted[i]["is_section"] = true
+			formatted[i]["file_object_id"] = r.FileObjectID
+			formatted[i]["line_start"] = r.LineStart
+			formatted[i]["line_end"] = r.LineEnd
+			formatted[i]["direct_line_end"] = r.LineEnd
+			formatted[i]["subtree_line_end"] = r.SubtreeLineEnd
 		}
 	}
 	return formatted

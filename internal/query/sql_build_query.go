@@ -240,7 +240,7 @@ func (e *Executor) buildSectionPageSQL(q *Query, limit, offset int) (string, []i
 		return "", nil, err
 	}
 	sqlStr := fmt.Sprintf(`
-		SELECT s.id, s.file_object_id, s.file_path, s.slug, s.title, s.level, s.line_start, s.line_end, s.parent_section_id
+		SELECT s.id, s.file_object_id, s.file_path, s.slug, s.title, s.level, s.line_start, s.line_end, s.subtree_line_end, s.parent_section_id
 		FROM sections s
 		WHERE %s
 		ORDER BY s.file_path, s.line_start

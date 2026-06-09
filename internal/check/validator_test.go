@@ -1077,4 +1077,33 @@ func TestValidatorStaleFragment(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("local fragment reference is invalid", func(t *testing.T) {
+		objectIDs := []string{"notes/roadmap", "notes/roadmap#tasks"}
+		v := NewValidator(s, objectIDs)
+
+		doc := &parser.ParsedDocument{
+			FilePath: "notes/roadmap.md",
+			Objects: []*parser.ParsedObject{
+				{ID: "notes/roadmap", ObjectType: "page"},
+			},
+			Refs: []*parser.ParsedRef{
+				{SourceID: "notes/roadmap", TargetRaw: "#tasks", Line: 5},
+			},
+		}
+
+		issues := v.ValidateDocument(doc)
+		for _, issue := range issues {
+			if issue.Type == IssueLocalFragmentRef {
+				if issue.Level != LevelError {
+					t.Fatalf("local fragment level = %v, want error", issue.Level)
+				}
+				if !strings.Contains(issue.FixHint, "object#fragment") {
+					t.Fatalf("local fragment fix hint = %q", issue.FixHint)
+				}
+				return
+			}
+		}
+		t.Fatalf("expected local fragment issue, got %v", issues)
+	})
 }

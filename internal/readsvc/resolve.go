@@ -16,11 +16,14 @@ import (
 )
 
 type ResolveResult struct {
-	ObjectID     string
-	FilePath     string
-	IsSection    bool
-	FileObjectID string
-	MatchSource  string
+	ObjectID       string
+	FilePath       string
+	IsSection      bool
+	FileObjectID   string
+	LineStart      int
+	LineEnd        *int
+	SubtreeLineEnd *int
+	MatchSource    string
 }
 
 type AmbiguousRefError struct {
@@ -205,7 +208,31 @@ func (op *resolveOperation) resolveReference(reference string, allowMissing bool
 	}
 
 	result.FilePath = filePath
+	if err := op.addSectionMetadata(result); err != nil {
+		return nil, err
+	}
 	return result, nil
+}
+
+func (op *resolveOperation) addSectionMetadata(result *ResolveResult) error {
+	if op == nil || result == nil || !result.IsSection {
+		return nil
+	}
+	db, err := op.getDB()
+	if err != nil {
+		return err
+	}
+	section, err := db.GetSection(result.ObjectID)
+	if err != nil {
+		return err
+	}
+	if section == nil {
+		return nil
+	}
+	result.LineStart = section.LineStart
+	result.LineEnd = section.LineEnd
+	result.SubtreeLineEnd = section.SubtreeLineEnd
+	return nil
 }
 
 func tryResolvedAssetPath(vaultPath, targetID string) (string, bool, error) {

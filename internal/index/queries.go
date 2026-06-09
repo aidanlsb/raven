@@ -57,6 +57,34 @@ func (d *Database) QueryTraits(traitType string, valueFilter *string) ([]model.T
 	return results, rows.Err()
 }
 
+// GetSection returns a heading-derived section by ID.
+func (d *Database) GetSection(id string) (*model.Section, error) {
+	var section model.Section
+	err := d.db.QueryRow(`
+		SELECT id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id
+		FROM sections
+		WHERE id = ?
+	`, id).Scan(
+		&section.ID,
+		&section.FileObjectID,
+		&section.FilePath,
+		&section.Slug,
+		&section.Title,
+		&section.Level,
+		&section.LineStart,
+		&section.LineEnd,
+		&section.SubtreeLineEnd,
+		&section.ParentSectionID,
+	)
+	if err == nil {
+		return &section, nil
+	}
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return nil, err
+}
+
 func parseFilterExpressionWithOptions(filter string, fieldExpr string, opts DateFilterOptions) (condition string, args []interface{}, err error) {
 	opts = normalizeDateFilterOptions(opts)
 
@@ -434,12 +462,18 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 	// The snippet function extracts matching content with context
 	rows, err := d.db.Query(`
 		SELECT 
-			object_id,
-			title,
-			file_path,
+			f.object_id,
+			f.title,
+			f.file_path,
+			CASE WHEN s.id IS NULL THEN 0 ELSE 1 END AS is_section,
+			s.file_object_id,
+			s.line_start,
+			s.line_end,
+			s.subtree_line_end,
 			snippet(fts_content, 2, '»', '«', '...', 32) as snippet,
 			bm25(fts_content) as rank
-		FROM fts_content
+		FROM fts_content f
+		LEFT JOIN sections s ON f.object_id = s.id
 		WHERE fts_content MATCH ?
 		ORDER BY rank
 		LIMIT ?
@@ -452,8 +486,39 @@ func (d *Database) Search(query string, limit int) ([]model.SearchMatch, error) 
 	var results []model.SearchMatch
 	for rows.Next() {
 		var result model.SearchMatch
-		if err := rows.Scan(&result.ObjectID, &result.Title, &result.FilePath, &result.Snippet, &result.Rank); err != nil {
+		var isSection int
+		var fileObjectID sql.NullString
+		var lineStart sql.NullInt64
+		var lineEnd sql.NullInt64
+		var subtreeLineEnd sql.NullInt64
+		if err := rows.Scan(
+			&result.ObjectID,
+			&result.Title,
+			&result.FilePath,
+			&isSection,
+			&fileObjectID,
+			&lineStart,
+			&lineEnd,
+			&subtreeLineEnd,
+			&result.Snippet,
+			&result.Rank,
+		); err != nil {
 			return nil, err
+		}
+		result.IsSection = isSection != 0
+		if fileObjectID.Valid {
+			result.FileObjectID = fileObjectID.String
+		}
+		if lineStart.Valid {
+			result.LineStart = int(lineStart.Int64)
+		}
+		if lineEnd.Valid {
+			v := int(lineEnd.Int64)
+			result.LineEnd = &v
+		}
+		if subtreeLineEnd.Valid {
+			v := int(subtreeLineEnd.Int64)
+			result.SubtreeLineEnd = &v
 		}
 		results = append(results, result)
 	}

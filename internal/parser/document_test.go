@@ -652,3 +652,64 @@ func TestFindScopeForLine(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeSectionLineEndsDirectAndSubtreeRanges(t *testing.T) {
+	t.Parallel()
+
+	content := `---
+type: note
+title: Ranges
+---
+
+# Parent
+intro
+## Child
+child body
+### Grandchild
+grandchild body
+## Sibling
+sibling body
+# Next Parent
+next body
+`
+	doc, err := ParseDocument(content, "/vault/doc.md", "/vault")
+	if err != nil {
+		t.Fatalf("ParseDocument failed: %v", err)
+	}
+
+	sections := map[string]*ParsedSection{}
+	for _, section := range doc.Sections {
+		sections[section.ID] = section
+	}
+
+	assertRange := func(id string, wantDirectEnd *int, wantSubtreeEnd *int) {
+		t.Helper()
+		section := sections[id]
+		if section == nil {
+			t.Fatalf("missing section %s", id)
+		}
+		if !sameIntPtr(section.LineEnd, wantDirectEnd) {
+			t.Fatalf("%s direct LineEnd = %v, want %v", id, section.LineEnd, wantDirectEnd)
+		}
+		if !sameIntPtr(section.SubtreeLineEnd, wantSubtreeEnd) {
+			t.Fatalf("%s SubtreeLineEnd = %v, want %v", id, section.SubtreeLineEnd, wantSubtreeEnd)
+		}
+	}
+
+	assertRange("doc#parent", intPtr(7), intPtr(13))
+	assertRange("doc#child", intPtr(9), intPtr(11))
+	assertRange("doc#grandchild", intPtr(11), intPtr(11))
+	assertRange("doc#sibling", intPtr(13), intPtr(13))
+	assertRange("doc#next-parent", nil, nil)
+}
+
+func intPtr(v int) *int {
+	return &v
+}
+
+func sameIntPtr(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}

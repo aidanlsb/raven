@@ -59,9 +59,12 @@ Examples:
 ```text
 section
 section .title==Tasks
+section .subtree_line_end>=20
 section within(type:project .status==active)
 section contains(trait:todo .value==todo)
 ```
+
+Section rows expose structural fields including `.id`, `.file_object_id`, `.file_path`, `.slug`, `.title`, `.level`, `.line_start`, `.line_end`/`.direct_line_end`, `.subtree_line_end`, and `.parent_section_id`. `line_end` is the direct range end before the next heading of any level; `subtree_line_end` includes nested child sections up to the next same-or-higher heading.
 
 ### Trait Query
 

@@ -448,6 +448,8 @@ func sectionQueryItems(result *readsvc.ExecuteQueryResult) []map[string]interfac
 			"level":             row.Level,
 			"line_start":        row.LineStart,
 			"line_end":          row.LineEnd,
+			"direct_line_end":   row.LineEnd,
+			"subtree_line_end":  row.SubtreeLineEnd,
 			"parent_section_id": row.ParentSectionID,
 		}
 	}

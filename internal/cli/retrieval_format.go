@@ -241,12 +241,16 @@ func printSearchResults(queryStr string, results []model.SearchMatch) {
 			title = title[:metaWidth-6] + "..."
 		}
 
+		line := result.LineStart
+		if line == 0 {
+			line = 1
+		}
 		filePath := formatSearchLocation(result.FilePath)
 
 		table.AddRow(ui.ResultRow{
 			Num:      i + 1,
 			Cells:    []string{ui.FormatRowNum(i+1, len(results)), snippet, title, filePath},
-			Location: fmt.Sprintf("%s:%d", result.FilePath, 1),
+			Location: fmt.Sprintf("%s:%d", result.FilePath, line),
 		})
 	}
 

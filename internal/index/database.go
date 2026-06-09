@@ -209,7 +209,8 @@ func (d *Database) Analyze() error {
 // v11: Removed user-defined asset kind/canonical metadata from assets table
 // v12: Added first-class sections table
 // v13: Removed object hierarchy/heading columns; objects are file-backed only
-const CurrentDBVersion = 13
+// v14: Added subtree line ranges for heading-derived sections
+const CurrentDBVersion = 14
 
 // initialize creates the database schema.
 func (d *Database) initialize(isNewDB bool) error {
@@ -251,6 +252,7 @@ func (d *Database) initialize(isNewDB bool) error {
 			level INTEGER NOT NULL,
 			line_start INTEGER NOT NULL,
 			line_end INTEGER,
+			subtree_line_end INTEGER,
 			parent_section_id TEXT,
 			indexed_at INTEGER
 		);
@@ -573,8 +575,8 @@ func indexObjects(tx *sql.Tx, doc *parser.ParsedDocument, mtime, indexedAt int64
 
 func indexSections(tx *sql.Tx, doc *parser.ParsedDocument, indexedAt int64) error {
 	stmt, err := tx.Prepare(`
-		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, parent_section_id, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO sections (id, file_object_id, file_path, slug, title, level, line_start, line_end, subtree_line_end, parent_section_id, indexed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -591,6 +593,7 @@ func indexSections(tx *sql.Tx, doc *parser.ParsedDocument, indexedAt int64) erro
 			section.Level,
 			section.LineStart,
 			section.LineEnd,
+			section.SubtreeLineEnd,
 			section.ParentSectionID,
 			indexedAt,
 		)
@@ -864,7 +867,7 @@ func indexFTS(tx *sql.Tx, doc *parser.ParsedDocument, sch *schema.Schema) error 
 	return nil
 }
 
-// extractSectionContent extracts content for a section from the given line range.
+// extractSectionContent extracts direct content for a section from the given line range.
 // lineStart and lineEnd are 1-indexed. If lineEnd is nil, extracts to end of file.
 func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 	if lineStart < 1 || lineStart > len(lines) {
@@ -875,7 +878,7 @@ func extractSectionContent(lines []string, lineStart int, lineEnd *int) string {
 	start := lineStart - 1
 	end := len(lines)
 	if lineEnd != nil && *lineEnd <= len(lines) {
-		end = *lineEnd // lineEnd is exclusive (the next section starts here)
+		end = *lineEnd
 	}
 
 	if start >= end {

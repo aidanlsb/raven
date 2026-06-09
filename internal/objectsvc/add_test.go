@@ -104,6 +104,45 @@ New bug item
 	}
 }
 
+func TestAppendUnderHeadingUsesDirectSectionRange(t *testing.T) {
+	t.Parallel()
+
+	destPath := filepath.Join(t.TempDir(), "project.md")
+	content := `# Project
+intro
+## Child
+child body
+# Next
+next body
+`
+	if err := os.WriteFile(destPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	line, err := appendUnderHeading(destPath, "direct item", "# Project")
+	if err != nil {
+		t.Fatalf("appendUnderHeading failed: %v", err)
+	}
+	if line != 3 {
+		t.Fatalf("line = %d, want 3", line)
+	}
+
+	updated, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	if got := string(updated); got != `# Project
+intro
+direct item
+## Child
+child body
+# Next
+next body
+` {
+		t.Fatalf("unexpected content:\n%s", got)
+	}
+}
+
 func TestAppendToFileMissingTargetReportsFileNotFound(t *testing.T) {
 	t.Parallel()
 

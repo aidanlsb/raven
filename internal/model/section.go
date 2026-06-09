@@ -10,5 +10,6 @@ type Section struct {
 	Level           int     `json:"level"`
 	LineStart       int     `json:"line_start"`
 	LineEnd         *int    `json:"line_end,omitempty"`
+	SubtreeLineEnd  *int    `json:"subtree_line_end,omitempty"`
 	ParentSectionID *string `json:"parent_section_id,omitempty"`
 }

@@ -37,7 +37,8 @@ type ParsedSection struct {
 	Title           string  // Heading text
 	Level           int     // Markdown heading level
 	LineStart       int     // Line where this section starts
-	LineEnd         *int    // Line where this section ends
+	LineEnd         *int    // Direct section end: line before the next heading of any level
+	SubtreeLineEnd  *int    // Subtree end: line before the next same-or-higher heading
 	ParentSectionID *string // Parent section ID, nil for top-level sections
 }
 
@@ -329,7 +330,7 @@ func findScopeForLine(fileID string, sections []*ParsedSection, line int) string
 	return fileID
 }
 
-// computeSectionLineEnds computes LineEnd for each section based on the next section's LineStart.
+// computeSectionLineEnds computes direct and subtree line ranges for each section.
 func computeSectionLineEnds(sections []*ParsedSection) {
 	if len(sections) == 0 {
 		return
@@ -350,7 +351,17 @@ func computeSectionLineEnds(sections []*ParsedSection) {
 			nextLineEnd := sections[indices[i+1]].LineStart - 1
 			sections[currentIdx].LineEnd = &nextLineEnd
 		}
-		// Last object extends to end of file (nil)
+
+		current := sections[currentIdx]
+		for j := i + 1; j < len(indices); j++ {
+			next := sections[indices[j]]
+			if next.Level <= current.Level {
+				subtreeLineEnd := next.LineStart - 1
+				current.SubtreeLineEnd = &subtreeLineEnd
+				break
+			}
+		}
+		// Nil end values extend to end of file.
 	}
 }
 

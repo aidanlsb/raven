@@ -235,7 +235,6 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 	lines := strings.Split(string(content), "\n")
 	headingIdx := -1
 	nextHeadingIdx := -1
-	headingLevel := strings.Count(strings.Split(heading, " ")[0], "#")
 
 	for i, l := range lines {
 		trimmed := strings.TrimSpace(l)
@@ -244,18 +243,8 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 			continue
 		}
 		if headingIdx >= 0 && strings.HasPrefix(trimmed, "#") {
-			level := 0
-			for _, c := range trimmed {
-				if c == '#' {
-					level++
-				} else {
-					break
-				}
-			}
-			if level <= headingLevel {
-				nextHeadingIdx = i
-				break
-			}
+			nextHeadingIdx = i
+			break
 		}
 	}
 
@@ -272,7 +261,8 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 			insertIdx--
 		}
 		insertedLine = insertIdx + 1
-		newLines = append(lines[:insertIdx], line)
+		newLines = append([]string{}, lines[:insertIdx]...)
+		newLines = append(newLines, line)
 		newLines = append(newLines, lines[insertIdx:]...)
 	} else {
 		insertIdx := nextHeadingIdx
@@ -280,7 +270,8 @@ func appendUnderHeading(destPath, line, heading string) (int, error) {
 			insertIdx--
 		}
 		insertedLine = insertIdx + 1
-		newLines = append(lines[:insertIdx], line)
+		newLines = append([]string{}, lines[:insertIdx]...)
+		newLines = append(newLines, line)
 		newLines = append(newLines, lines[insertIdx:]...)
 	}
 

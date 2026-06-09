@@ -40,7 +40,7 @@ raven_invoke(command="query", args={"query_string":"asset refd(type:project .sta
 
 For text search inside typed queries, use `content("term")`.
 
-Sections use the bare `section` query root and return heading-derived rows with IDs like `file#slug`.
+Sections use the bare `section` query root and return heading-derived rows with IDs like `file#slug`. Section rows include `line_start`, direct `line_end`, and `subtree_line_end`; use direct ranges for writes and subtree ranges for read/navigation context.
 
 Assets can be reference targets in `refs(...)` and `refd(...)` flows, including links discovered from Markdown links/images. Use the bare `asset` query root to return asset rows directly.
 

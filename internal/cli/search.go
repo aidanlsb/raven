@@ -114,6 +114,11 @@ func searchMatchFromMap(row map[string]interface{}) model.SearchMatch {
 	match.Title, _ = row["title"].(string)
 	match.FilePath, _ = row["file_path"].(string)
 	match.Snippet, _ = row["snippet"].(string)
+	match.IsSection, _ = row["is_section"].(bool)
+	match.FileObjectID, _ = row["file_object_id"].(string)
+	match.LineStart = intFromAny(row["line_start"])
+	match.LineEnd = intPointerFromAny(row["line_end"])
+	match.SubtreeLineEnd = intPointerFromAny(row["subtree_line_end"])
 	switch rank := row["rank"].(type) {
 	case float64:
 		match.Rank = rank
