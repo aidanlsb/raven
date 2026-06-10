@@ -77,6 +77,13 @@ type EditResult struct {
 	Context string
 }
 
+// EditScope restricts edit matching to an inclusive line range in the file.
+// EndLine <= 0 means the range continues to EOF.
+type EditScope struct {
+	StartLine int
+	EndLine   int
+}
+
 func ParseEditsJSON(raw string) ([]EditSpec, error) {
 	var input editBatchInput
 	decoder := json.NewDecoder(strings.NewReader(raw))
@@ -102,45 +109,61 @@ func ParseEditsJSON(raw string) ([]EditSpec, error) {
 }
 
 func ApplyEditsInMemory(content, relPath string, edits []EditSpec) (string, []EditResult, error) {
+	return ApplyEditsInMemoryWithScope(content, relPath, edits, nil)
+}
+
+func ApplyEditsInMemoryWithScope(content, relPath string, edits []EditSpec, scope *EditScope) (string, []EditResult, error) {
 	updated := content
 	results := make([]EditResult, 0, len(edits))
+	activeScope := normalizeScope(scope)
 
 	for i, edit := range edits {
-		count := strings.Count(updated, edit.OldStr)
+		searchStart, searchEnd := 0, len(updated)
+		if activeScope != nil {
+			searchStart, searchEnd = lineRangeOffsets(updated, *activeScope)
+		}
+		searchContent := updated[searchStart:searchEnd]
+
+		count := strings.Count(searchContent, edit.OldStr)
 		editIndex := i + 1
 		if count == 0 {
+			message := "old_str not found in file"
+			if activeScope != nil {
+				message = "old_str not found in selected range"
+			}
 			return "", nil, newError(
 				CodeStringNotFound,
-				"old_str not found in file",
+				message,
 				"Check the exact string including whitespace",
-				map[string]string{
-					"path":       relPath,
-					"edit_index": fmt.Sprintf("%d", editIndex),
-					"old_str":    edit.OldStr,
-				},
+				errorDetails(relPath, editIndex, edit.OldStr, activeScope),
 				nil,
 			)
 		}
 		if count > 1 {
+			message := fmt.Sprintf("old_str found %d times in file", count)
+			if activeScope != nil {
+				message = fmt.Sprintf("old_str found %d times in selected range", count)
+			}
 			return "", nil, newError(
 				CodeMultipleMatches,
-				fmt.Sprintf("old_str found %d times in file", count),
+				message,
 				"Include more surrounding context to make the match unique",
-				map[string]string{
-					"path":       relPath,
-					"edit_index": fmt.Sprintf("%d", editIndex),
-					"count":      fmt.Sprintf("%d", count),
-				},
+				errorDetails(relPath, editIndex, "", activeScope, map[string]string{
+					"count": fmt.Sprintf("%d", count),
+				}),
 				nil,
 			)
 		}
 
-		matchIndex := strings.Index(updated, edit.OldStr)
+		matchIndex := searchStart + strings.Index(searchContent, edit.OldStr)
 		lineNumber := strings.Count(updated[:matchIndex], "\n") + 1
 		beforeContext := extractContext(updated, matchIndex)
 		afterContext := extractContextAfterReplace(updated, edit.OldStr, edit.NewStr, matchIndex)
 
-		updated = strings.Replace(updated, edit.OldStr, edit.NewStr, 1)
+		updated = replaceAtIndex(updated, matchIndex, edit.OldStr, edit.NewStr)
+		if activeScope != nil {
+			activeScope.EndLine = adjustEndLine(activeScope.EndLine, edit.OldStr, edit.NewStr)
+		}
 		results = append(results, EditResult{
 			Index:   editIndex,
 			Line:    lineNumber,
@@ -153,6 +176,96 @@ func ApplyEditsInMemory(content, relPath string, edits []EditSpec) (string, []Ed
 	}
 
 	return updated, results, nil
+}
+
+func normalizeScope(scope *EditScope) *EditScope {
+	if scope == nil || scope.StartLine <= 0 {
+		return nil
+	}
+	normalized := *scope
+	if normalized.EndLine > 0 && normalized.EndLine < normalized.StartLine {
+		normalized.EndLine = normalized.StartLine
+	}
+	return &normalized
+}
+
+func errorDetails(relPath string, editIndex int, oldStr string, scope *EditScope, extra ...map[string]string) map[string]string {
+	details := map[string]string{
+		"path":       relPath,
+		"edit_index": fmt.Sprintf("%d", editIndex),
+	}
+	if oldStr != "" {
+		details["old_str"] = oldStr
+	}
+	if scope != nil {
+		details["scope_start_line"] = fmt.Sprintf("%d", scope.StartLine)
+		if scope.EndLine > 0 {
+			details["scope_end_line"] = fmt.Sprintf("%d", scope.EndLine)
+		}
+	}
+	for _, values := range extra {
+		for key, value := range values {
+			details[key] = value
+		}
+	}
+	return details
+}
+
+func lineRangeOffsets(content string, scope EditScope) (int, int) {
+	start := lineStartOffset(content, scope.StartLine)
+	end := len(content)
+	if scope.EndLine > 0 {
+		end = lineEndOffset(content, scope.EndLine)
+	}
+	if start > end {
+		start = end
+	}
+	return start, end
+}
+
+func lineStartOffset(content string, line int) int {
+	if line <= 1 {
+		return 0
+	}
+	currentLine := 1
+	for i := 0; i < len(content); i++ {
+		if content[i] != '\n' {
+			continue
+		}
+		currentLine++
+		if currentLine == line {
+			return i + 1
+		}
+	}
+	return len(content)
+}
+
+func lineEndOffset(content string, line int) int {
+	if line <= 0 {
+		return len(content)
+	}
+	currentLine := 1
+	for i := 0; i < len(content); i++ {
+		if content[i] != '\n' {
+			continue
+		}
+		if currentLine == line {
+			return i + 1
+		}
+		currentLine++
+	}
+	return len(content)
+}
+
+func replaceAtIndex(content string, matchIndex int, oldStr, newStr string) string {
+	return content[:matchIndex] + newStr + content[matchIndex+len(oldStr):]
+}
+
+func adjustEndLine(endLine int, oldStr, newStr string) int {
+	if endLine <= 0 {
+		return endLine
+	}
+	return endLine + strings.Count(newStr, "\n") - strings.Count(oldStr, "\n")
 }
 
 func extractContext(content string, matchIndex int) string {
@@ -181,7 +294,7 @@ func extractContext(content string, matchIndex int) string {
 }
 
 func extractContextAfterReplace(content, oldStr, newStr string, matchIndex int) string {
-	newContent := strings.Replace(content, oldStr, newStr, 1)
+	newContent := replaceAtIndex(content, matchIndex, oldStr, newStr)
 	newMatchIndex := matchIndex
 	if newMatchIndex > len(newContent) {
 		newMatchIndex = len(newContent) - 1

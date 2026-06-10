@@ -60,7 +60,14 @@ func HandleEdit(_ context.Context, req commandexec.Request) commandexec.Result {
 	}
 
 	relPath, _ := filepath.Rel(vaultPath, resolved.FilePath)
-	newContent, results, err := editsvc.ApplyEditsInMemory(string(content), relPath, edits)
+	var scope *editsvc.EditScope
+	if resolved.IsSection && resolved.LineStart > 0 {
+		scope = &editsvc.EditScope{StartLine: resolved.LineStart}
+		if resolved.SubtreeLineEnd != nil {
+			scope.EndLine = *resolved.SubtreeLineEnd
+		}
+	}
+	newContent, results, err := editsvc.ApplyEditsInMemoryWithScope(string(content), relPath, edits, scope)
 	if err != nil {
 		return mapEditFailure(err)
 	}

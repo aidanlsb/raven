@@ -1649,8 +1649,10 @@ Scope:
 
 Use dedicated Raven command surfaces for vault configuration, schema updates, and template management.
 
-The string to replace must appear exactly once in the file to prevent 
-ambiguous edits.
+The string to replace must appear exactly once in the target scope to prevent
+ambiguous edits. File targets use the whole file. Section targets such as
+object#section use the section subtree, so repeated text outside that section
+does not make the edit ambiguous.
 
 IMPORTANT: Returns preview by default. Changes are NOT applied unless confirm=true.
 
@@ -1661,8 +1663,8 @@ Supports two input modes:
   - Single edit (backward compatible): <path> <old_str> <new_str>
   - Batch edits via JSON: <path> --edits-json '{"edits":[{"old_str":"from","new_str":"to"}]}'`,
 		Args: []ArgMeta{
-			{Name: "path", Description: "File path relative to vault root", Required: true},
-			{Name: "old_str", Description: "String to replace (must be unique in file, single-edit mode)", Required: false},
+			{Name: "path", Description: "File path, object reference, or section reference relative to vault root", Required: true},
+			{Name: "old_str", Description: "String to replace (must be unique in target scope, single-edit mode)", Required: false},
 			{Name: "new_str", Description: "Replacement string (can be empty to delete, single-edit mode)", Required: false},
 		},
 		Flags: []FlagMeta{
@@ -1672,6 +1674,7 @@ Supports two input modes:
 		Examples: []string{
 			`rvn edit "daily/2025-12-27.md" "- Churn analysis" "- [[churn-analysis|Churn analysis]]" --json`,
 			`rvn edit "pages/notes.md" "reccommendation" "recommendation" --confirm --json`,
+			`rvn edit "project/raven#working-docs" "old link" "new link" --confirm --json`,
 			`rvn edit "daily/2026-01-02.md" "- old task" "" --confirm --json`,
 			`rvn edit "pages/notes.md" --edits-json '{"edits":[{"old_str":"reccommendation","new_str":"recommendation"},{"old_str":"Status: draft","new_str":"Status: active"}]}' --confirm --json`,
 		},
