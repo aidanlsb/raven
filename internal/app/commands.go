@@ -53,5 +53,16 @@ func validateRequest(_ context.Context, req commandexec.Request) (commandexec.Re
 	}
 
 	req.Args = normalized
+	req.Confirm = req.Confirm || normalizedBoolArg(normalized, "confirm")
+	if req.Confirm {
+		req.Preview = false
+	} else if commands.ShouldPreviewByDefault(req.CommandID, normalized) {
+		req.Preview = true
+	}
 	return req, commandexec.Result{}, true
+}
+
+func normalizedBoolArg(args map[string]interface{}, name string) bool {
+	value, ok := args[name].(bool)
+	return ok && value
 }

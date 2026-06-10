@@ -38,7 +38,7 @@ func HandleSkillSync(_ context.Context, req commandexec.Request) commandexec.Res
 		Target:  strings.TrimSpace(stringArg(req.Args, "target")),
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
-		Confirm: boolArg(req.Args, "confirm"),
+		Confirm: req.Confirm,
 	})
 	if err != nil {
 		return mapSkillSvcFailure(err)
@@ -68,7 +68,7 @@ func HandleSkillRemove(_ context.Context, req commandexec.Request) commandexec.R
 		Target:  strings.TrimSpace(stringArg(req.Args, "target")),
 		Scope:   strings.TrimSpace(stringArg(req.Args, "scope")),
 		Dest:    strings.TrimSpace(stringArg(req.Args, "dest")),
-		Confirm: boolArg(req.Args, "confirm"),
+		Confirm: req.Confirm,
 	})
 	if err != nil {
 		return mapSkillSvcFailure(err)

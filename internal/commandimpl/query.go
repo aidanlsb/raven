@@ -239,7 +239,7 @@ func handleQueryApply(ctx context.Context, req commandexec.Request, result *read
 	ids = dedupeQueryApplyIDs(ids)
 	if len(ids) == 0 {
 		return commandexec.Success(map[string]interface{}{
-			"preview": !req.Confirm && !boolArg(req.Args, "confirm"),
+			"preview": !req.Confirm,
 			"action":  rawApply.Command,
 			"items":   []interface{}{},
 			"total":   0,
@@ -300,7 +300,7 @@ func invokeNestedCommand(ctx context.Context, req commandexec.Request, commandID
 		ExecutablePath: req.ExecutablePath,
 		Caller:         req.Caller,
 		Args:           args,
-		Confirm:        req.Confirm || boolArg(req.Args, "confirm"),
+		Confirm:        req.Confirm,
 	})
 
 	if result.Meta == nil {

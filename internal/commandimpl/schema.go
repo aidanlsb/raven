@@ -281,7 +281,7 @@ func HandleSchemaRenameType(_ context.Context, req commandexec.Request) commande
 		OldName:           stringArg(req.Args, "old_name"),
 		NewName:           stringArg(req.Args, "new_name"),
 		Description:       stringArg(req.Args, "description"),
-		Confirm:           boolArg(req.Args, "confirm") || req.Confirm,
+		Confirm:           req.Confirm,
 		RenameDefaultPath: boolArg(req.Args, "rename-default-path"),
 	})
 	if err != nil {
@@ -298,7 +298,7 @@ func HandleSchemaRenameField(_ context.Context, req commandexec.Request) command
 		TypeName:  stringArg(req.Args, "type_name"),
 		OldField:  stringArg(req.Args, "old_field"),
 		NewField:  stringArg(req.Args, "new_field"),
-		Confirm:   boolArg(req.Args, "confirm") || req.Confirm,
+		Confirm:   req.Confirm,
 	})
 	if err != nil {
 		return mapSchemaFailure(err)

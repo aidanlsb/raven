@@ -90,6 +90,9 @@ func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 			if got := contract.PreviewMode; got != "bulk_preview_default" {
 				t.Fatalf("%s preview mode=%q, want bulk_preview_default", commandID, got)
 			}
+			if got := PreviewModeForCommandID(commandID); got != PreviewModeBulkPreviewDefault {
+				t.Fatalf("%s policy preview mode=%q, want %q", commandID, got, PreviewModeBulkPreviewDefault)
+			}
 		})
 	}
 }
@@ -97,18 +100,85 @@ func TestBuildCommandContractBulkPreviewModes(t *testing.T) {
 func TestBuildCommandContractPreviewDefaultForApplyCommands(t *testing.T) {
 	t.Parallel()
 
-	contract, ok := BuildCommandContract("query")
-	if !ok {
-		t.Fatal("expected query contract")
+	for _, commandID := range []string{
+		"check",
+		"check create-missing",
+		"check_fix",
+		"edit",
+		"query",
+		"schema_rename_field",
+		"schema_rename_type",
+		"skill_remove",
+		"skill_sync",
+	} {
+		t.Run(commandID, func(t *testing.T) {
+			t.Parallel()
+
+			contract, ok := BuildCommandContract(commandID)
+			if !ok {
+				t.Fatalf("expected %s contract", commandID)
+			}
+			if got := contract.PreviewMode; got != "preview_default" {
+				t.Fatalf("%s preview mode=%q, want preview_default", commandID, got)
+			}
+			if got := PreviewModeForCommandID(commandID); got != PreviewModePreviewDefault {
+				t.Fatalf("%s policy preview mode=%q, want %q", commandID, got, PreviewModePreviewDefault)
+			}
+		})
 	}
-	if got := contract.PreviewMode; got != "preview_default" {
-		t.Fatalf("query preview mode=%q, want preview_default", got)
+}
+
+func TestConfirmFlagsHaveExplicitPreviewPolicy(t *testing.T) {
+	t.Parallel()
+
+	confirmFlagNonApplyCommands := map[string]struct{}{
+		"query_saved_set": {},
+	}
+	for commandID, meta := range Registry {
+		if !hasConfirmFlag(meta) {
+			continue
+		}
+		if _, ok := confirmFlagNonApplyCommands[commandID]; ok {
+			continue
+		}
+		if got := PreviewModeForCommandID(commandID); got == PreviewModeNone {
+			t.Fatalf("%s exposes confirm but has no explicit preview policy", commandID)
+		}
+	}
+}
+
+func TestShouldPreviewByDefaultOnlyEnablesBulkPolicyForBulkInputs(t *testing.T) {
+	t.Parallel()
+
+	if ShouldPreviewByDefault("set", map[string]interface{}{"object_id": "people/alice"}) {
+		t.Fatal("single set should not request preview by default")
+	}
+	if !ShouldPreviewByDefault("set", map[string]interface{}{
+		"stdin":      true,
+		"object_ids": []interface{}{"people/alice"},
+	}) {
+		t.Fatal("bulk set should request preview by default")
+	}
+	if !ShouldPreviewByDefault("edit", map[string]interface{}{"path": "note/example"}) {
+		t.Fatal("edit should request preview by default")
+	}
+	if ShouldPreviewByDefault("query_saved_set", map[string]interface{}{"confirm": true}) {
+		t.Fatal("query saved set confirm option should not imply command preview")
 	}
 }
 
 func containsString(items []string, want string) bool {
 	for _, item := range items {
 		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
+func hasConfirmFlag(meta Meta) bool {
+	for _, flag := range meta.Flags {
+		if flag.Name == "confirm" && flag.Type == FlagTypeBool {
 			return true
 		}
 	}

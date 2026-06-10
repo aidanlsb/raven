@@ -141,7 +141,7 @@ func BuildCommandContract(commandID string) (CommandContract, bool) {
 		Category:       string(meta.Category),
 		ReadOnly:       meta.Access == AccessRead,
 		Destructive:    meta.Risk == RiskDestructive,
-		PreviewMode:    previewModeForCommand(meta),
+		PreviewMode:    string(PreviewModeForCommandID(commandID)),
 		Parameters:     parameters,
 		ParameterOrder: paramOrder,
 		Required:       required,
@@ -508,19 +508,6 @@ func flagTypeToParameterType(flagType FlagType) ParameterType {
 	default:
 		return ParameterTypeString
 	}
-}
-
-func previewModeForCommand(meta Meta) string {
-	switch meta.Name {
-	case "add", "delete", "move", "set", "update":
-		return "bulk_preview_default"
-	}
-	for _, flag := range meta.Flags {
-		if flag.Name == "confirm" && flag.Type == FlagTypeBool {
-			return "preview_default"
-		}
-	}
-	return "none"
 }
 
 func hasStdinFlag(flags []FlagMeta) bool {

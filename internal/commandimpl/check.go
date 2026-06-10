@@ -49,9 +49,9 @@ func HandleCheck(_ context.Context, req commandexec.Request) commandexec.Result 
 
 	switch {
 	case boolArg(req.Args, "fix"):
-		return handleCheckFix(vaultPath, vaultCfg, sch, result, req.Confirm || boolArg(req.Args, "confirm"))
+		return handleCheckFix(vaultPath, vaultCfg, sch, result, req.Confirm)
 	case boolArg(req.Args, "create-missing"):
-		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm || boolArg(req.Args, "confirm"))
+		return handleCheckCreateMissing(vaultPath, vaultCfg, sch, result, req.Confirm)
 	default:
 		data, convErr := structToMap(checksvc.BuildJSON(vaultPath, result))
 		if convErr != nil {

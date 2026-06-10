@@ -118,7 +118,7 @@ func HandleSet(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(allUpdates) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no fields to set", nil, setMissingFields(req.Caller, true))
 		}
-		return runSetBulk(vaultPath, vaultCfg, sch, objectIDs, allUpdates, req.Confirm || boolArg(req.Args, "confirm"))
+		return runSetBulk(vaultPath, vaultCfg, sch, objectIDs, allUpdates, req.Confirm)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
@@ -251,7 +251,7 @@ func HandleAdd(_ context.Context, req commandexec.Request) commandexec.Result {
 		return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
 	}
 
-	return runAddBulk(vaultPath, vaultCfg, objectIDs, text, strings.TrimSpace(stringArg(req.Args, "heading")), req.Confirm || boolArg(req.Args, "confirm"))
+	return runAddBulk(vaultPath, vaultCfg, objectIDs, text, strings.TrimSpace(stringArg(req.Args, "heading")), req.Confirm)
 }
 
 // HandleDelete executes the canonical `delete` command.
@@ -272,7 +272,7 @@ func HandleDelete(_ context.Context, req commandexec.Request) commandexec.Result
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Pipe object IDs to stdin, one per line")
 		}
-		return runDeleteBulk(vaultPath, vaultCfg, objectIDs, req.Confirm || boolArg(req.Args, "confirm"))
+		return runDeleteBulk(vaultPath, vaultCfg, objectIDs, req.Confirm)
 	}
 
 	reference := strings.TrimSpace(stringArg(req.Args, "object_id"))
@@ -362,7 +362,7 @@ func HandleMove(_ context.Context, req commandexec.Request) commandexec.Result {
 		if len(objectIDs) == 0 {
 			return commandexec.Failure("MISSING_ARGUMENT", "no object IDs provided via stdin", nil, "Provide object IDs when using bulk move")
 		}
-		return runMoveBulk(vaultPath, vaultCfg, sch, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm || boolArg(req.Args, "confirm"))
+		return runMoveBulk(vaultPath, vaultCfg, sch, objectIDs, destination, boolArgDefault(req.Args, "update-refs", true), req.Confirm)
 	}
 
 	source := strings.TrimSpace(stringArg(req.Args, "source"))
@@ -433,7 +433,7 @@ func HandleUpdate(_ context.Context, req commandexec.Request) commandexec.Result
 
 	traitIDs := commandIDsArg(req.Args, "trait_ids")
 	stdinMode := boolArg(req.Args, "stdin") || len(traitIDs) > 0
-	confirm := req.Confirm || boolArg(req.Args, "confirm")
+	confirm := req.Confirm
 	if !stdinMode {
 		singleID := strings.TrimSpace(stringArg(req.Args, "trait_id"))
 		if singleID == "" {
