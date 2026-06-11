@@ -57,25 +57,6 @@ func (v *TestVault) AssertDirExists(relPath string) {
 	}
 }
 
-// AssertObjectExists runs a query to check if an object exists by ID.
-func (v *TestVault) AssertObjectExists(objectID string) {
-	v.t.Helper()
-	// Use the read command to check if the object exists
-	result := v.RunCLI("read", objectID)
-	if !result.OK {
-		v.t.Errorf("expected object to exist: %s, got error: %v", objectID, result.Error)
-	}
-}
-
-// AssertObjectNotExists runs a query to check that an object does not exist.
-func (v *TestVault) AssertObjectNotExists(objectID string) {
-	v.t.Helper()
-	result := v.RunCLI("read", objectID)
-	if result.OK {
-		v.t.Errorf("expected object to not exist: %s, but it does", objectID)
-	}
-}
-
 // AssertQueryCount runs a query and verifies the result count.
 func (v *TestVault) AssertQueryCount(query string, expectedCount int) {
 	v.t.Helper()
@@ -113,14 +94,6 @@ func (r *CLIResult) AssertHasWarning(t *testing.T, code string) {
 		}
 	}
 	t.Errorf("expected warning with code %s, got warnings: %+v", code, r.Warnings)
-}
-
-// AssertNoWarnings checks that the result has no warnings.
-func (r *CLIResult) AssertNoWarnings(t *testing.T) {
-	t.Helper()
-	if len(r.Warnings) > 0 {
-		t.Errorf("expected no warnings, got: %+v", r.Warnings)
-	}
 }
 
 // AssertResultCount checks that a query result has the expected count.

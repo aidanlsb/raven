@@ -8,7 +8,6 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -4133,12 +4132,3 @@ type testServerInterface interface {
 }
 
 var _ testServerInterface = (*testServer)(nil)
-
-// Create a stub io.Writer for testing
-type discardWriter struct{}
-
-func (discardWriter) Write(p []byte) (n int, err error) {
-	return len(p), nil
-}
-
-var _ io.Writer = discardWriter{}
