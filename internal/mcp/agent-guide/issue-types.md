@@ -13,7 +13,7 @@ check failures.
 | Issue Type | Meaning | Typical Action |
 |------------|---------|----------------|
 | `unknown_type` | File uses a type not in schema | Add/rename type in schema, or change file type |
-| `missing_reference` | Link points to missing object/section | Create missing target or update/remove reference |
+| `missing_reference` | Link points to missing object/section | Preview `check create-missing`, then confirm or update/remove the reference |
 | `missing_asset` | Asset reference points to a missing non-Markdown file | Add the asset under the configured asset root or update/remove the reference |
 | `local_fragment_ref` | Wikilink uses unsupported source-relative fragment syntax like `[[#tasks]]` | Rewrite it as a global section ref like `[[object#tasks]]` |
 | `unknown_frontmatter_key` | Field is not defined for object type | Add schema field or remove invalid key |
@@ -41,6 +41,8 @@ check failures.
 raven_invoke(command="check", args={"issues":"missing_reference,unknown_type,missing_required_field"})
 raven_invoke(command="check", args={"exclude":"unused_type,unused_trait,short_ref_could_be_full_path"})
 raven_invoke(command="check", args={"errors_only":true})
+raven_invoke(command="check create-missing", args={})
+raven_invoke(command="check create-missing", args={"confirm":true})
 ```
 
 ## Practical repair loop
@@ -49,3 +51,7 @@ raven_invoke(command="check", args={"errors_only":true})
 2. Group by `issue_type` and frequency.
 3. Apply fixes using `fix_command` where supplied.
 4. Re-run the same scoped check.
+
+For `missing_reference` summaries, use `check create-missing` as a preview-first
+batch workflow. It creates only deterministic typed targets when confirmed; ask
+the user before creating uncertain targets or editing existing links.

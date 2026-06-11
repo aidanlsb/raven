@@ -411,15 +411,7 @@ func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
 			topValues = append(topValues, sortedValues[i].value)
 		}
 
-		fixCmd := ""
-		fixHint := ""
-		for _, issue := range result.Issues {
-			if string(issue.Type) == issueType && issue.FixCommand != "" {
-				fixCmd = issue.FixCommand
-				fixHint = issue.FixHint
-				break
-			}
-		}
+		fixCmd, fixHint := summaryFix(issueType, result.Issues)
 
 		jsonResult.Summary = append(jsonResult.Summary, CheckSummaryJSON{
 			IssueType:    issueType,
@@ -438,6 +430,19 @@ func BuildJSON(vaultPath string, result *RunResult) CheckResultJSON {
 	})
 
 	return jsonResult
+}
+
+func summaryFix(issueType string, issues []check.Issue) (string, string) {
+	if issueType == string(check.IssueMissingReference) {
+		return "rvn check create-missing --json", "Preview missing referenced pages, then run with --confirm after review"
+	}
+
+	for _, issue := range issues {
+		if string(issue.Type) == issueType && issue.FixCommand != "" {
+			return issue.FixCommand, issue.FixHint
+		}
+	}
+	return "", ""
 }
 
 func detectAssetIssues(db *index.Database, vaultPath string, excludeMatcher *ravenignore.Matcher, scope *Scope, walkPath string, targetFileSet map[string]bool) []check.Issue {

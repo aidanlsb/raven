@@ -257,8 +257,8 @@ Auto-fix capabilities:
 ```bash
 rvn check fix                                    # Preview auto-fixes
 rvn check fix --confirm                          # Apply fixes
-rvn check --create-missing                       # Preview creating missing referenced pages
-rvn check --create-missing --confirm             # Create them
+rvn check create-missing                         # Preview creating missing referenced pages
+rvn check create-missing --confirm               # Create them
 ```
 
 `rvn check fix` handles these unambiguous fixes:
@@ -276,7 +276,7 @@ Key flags:
 - `--exclude` — exclude specific issue types
 - `--strict` — treat warnings as errors
 - `--fix` — preview/apply safe auto-fixes for unambiguous check issues
-- `--create-missing` — create pages for unresolved references
+- `create-missing` — preview/create pages for unresolved references
 - `--verbose` / `-V` — full details for every issue
 
 ### `rvn resolve`

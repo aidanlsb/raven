@@ -65,6 +65,41 @@ func TestRun_FiltersParseErrorsBeforeCounting(t *testing.T) {
 	}
 }
 
+func TestBuildJSON_MissingReferenceSummarySuggestsCreateMissing(t *testing.T) {
+	t.Parallel()
+
+	result := &RunResult{
+		Issues: []check.Issue{
+			{
+				Type:       check.IssueMissingReference,
+				Level:      check.LevelError,
+				FilePath:   "project/roadmap.md",
+				Line:       4,
+				Message:    "Reference [[meeting/all-hands]] not found",
+				Value:      "meeting/all-hands",
+				FixCommand: `rvn new meeting "meeting/all-hands"`,
+				FixHint:    "Create the missing meeting",
+			},
+		},
+		ErrorCount: 1,
+	}
+
+	jsonResult := BuildJSON("/vault", result)
+	if len(jsonResult.Summary) != 1 {
+		t.Fatalf("summary = %#v, want one item", jsonResult.Summary)
+	}
+	summary := jsonResult.Summary[0]
+	if summary.IssueType != string(check.IssueMissingReference) {
+		t.Fatalf("issue_type = %q, want missing_reference", summary.IssueType)
+	}
+	if summary.FixCommand != "rvn check create-missing --json" {
+		t.Fatalf("fix_command = %q, want create-missing preview command", summary.FixCommand)
+	}
+	if !strings.Contains(summary.FixHint, "--confirm") {
+		t.Fatalf("fix_hint = %q, want confirm guidance", summary.FixHint)
+	}
+}
+
 func TestCreateMissingRefsNonInteractive_ReportsFailures(t *testing.T) {
 	t.Parallel()
 

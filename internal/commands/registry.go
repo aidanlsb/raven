@@ -1003,6 +1003,8 @@ Paths matched by raven.yaml exclude patterns are outside Raven management and
 are not checked.
 
 For agents: Use this tool to discover issues, then use the fix_command suggestions to resolve them.
+For missing_reference summaries, preview generated pages with 'rvn check create-missing --json'
+before applying with 'rvn check create-missing --confirm --json'.
 Ask the user for clarification when needed (e.g., which type to use for missing references).`,
 		Args: []ArgMeta{
 			{Name: "path", Description: "File, directory, or reference to check (optional, defaults to entire vault)", Required: false},
@@ -1029,6 +1031,8 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			"rvn check --trait due --json",
 			"rvn check --issues missing_reference,unknown_type --json",
 			"rvn check --exclude unused_type,unused_trait --json",
+			"rvn check create-missing --json",
+			"rvn check create-missing --confirm --json",
 		},
 		UseCases: []string{
 			"Validate entire vault for issues",
@@ -1036,6 +1040,7 @@ Ask the user for clarification when needed (e.g., which type to use for missing 
 			"Verify all objects of a type are valid",
 			"Check all trait usages for correct values",
 			"Focus on specific issue types",
+			"Preview and create deterministic missing referenced pages",
 		},
 	},
 	"check_fix": {
@@ -1079,7 +1084,7 @@ Auto-fixable issue types include:
 		LongDesc: `Runs check, then creates missing referenced pages.
 
 Non-JSON mode prompts interactively.
-JSON mode requires --confirm and creates only deterministic typed targets.`,
+JSON mode previews by default. Add --confirm to create only deterministic typed targets.`,
 		Flags: []FlagMeta{
 			{Name: "strict", Description: "Treat warnings as errors", Type: FlagTypeBool},
 			{Name: "confirm", Description: "Apply create-missing changes in non-interactive mode (without this flag, shows preview only)", Type: FlagTypeBool},
