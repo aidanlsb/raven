@@ -98,9 +98,10 @@ var Registry = map[string]Meta{
 of writing files directly with 'echo', 'touch', or file writing tools. The raven_new
 command applies templates, validates against the schema, and ensures proper indexing.
 
-The type is required. If title is not provided, you will be prompted for it.
-Required fields (as defined in schema.yaml) will be prompted for interactively,
-or can be provided via --field flags or --field-json.
+The type is required. If title is not provided in interactive CLI mode, you will
+be prompted for it. Interactive CLI mode prompts for schema fields; optional
+fields can be skipped with a blank response. Field values can also be provided
+via --field flags or --field-json.
 
 Use --field for shell-friendly literal values. Use --field-json when exact type
 control matters, such as preserving the string "true" instead of a boolean or

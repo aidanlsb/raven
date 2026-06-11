@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -51,6 +52,89 @@ func captureStdout(t *testing.T, fn func()) string {
 		return ""
 	case output = <-outputCh:
 		return output
+	}
+}
+
+func TestPromptNewSchemaFieldsPromptsOptionalAndRequiredFields(t *testing.T) {
+	vaultPath := t.TempDir()
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  person:
+    default_path: people/
+    name_field: name
+    fields:
+      name:
+        type: string
+        required: true
+      email:
+        type: string
+      role:
+        type: string
+      status:
+        type: enum
+        values: [active, inactive]
+        required: true
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	fieldValues := map[string]string{}
+	var prompts bytes.Buffer
+	reader := bufio.NewReader(strings.NewReader("freya@example.com\n\nactive\n"))
+	err := promptNewSchemaFields(reader, &prompts, vaultPath, "person", "Freya", fieldValues, nil)
+	if err != nil {
+		t.Fatalf("promptNewSchemaFields returned error: %v", err)
+	}
+
+	if got := fieldValues["email"]; got != "freya@example.com" {
+		t.Fatalf("email = %q, want prompted value", got)
+	}
+	if _, ok := fieldValues["role"]; ok {
+		t.Fatalf("role was set despite blank optional response: %#v", fieldValues)
+	}
+	if got := fieldValues["status"]; got != "active" {
+		t.Fatalf("status = %q, want prompted required value", got)
+	}
+	if _, ok := fieldValues["name"]; ok {
+		t.Fatalf("name field should be supplied by title, got %#v", fieldValues)
+	}
+
+	promptText := prompts.String()
+	if !strings.Contains(promptText, "email (optional, blank to skip): ") {
+		t.Fatalf("missing optional email prompt: %q", promptText)
+	}
+	if strings.Contains(promptText, "name (required): ") {
+		t.Fatalf("name field should not be prompted when title supplies name_field: %q", promptText)
+	}
+	if !strings.Contains(promptText, "status (required): ") {
+		t.Fatalf("missing required status prompt: %q", promptText)
+	}
+}
+
+func TestPromptNewSchemaFieldsRejectsBlankRequiredField(t *testing.T) {
+	vaultPath := t.TempDir()
+	schemaYAML := strings.TrimSpace(`
+version: 2
+types:
+  task:
+    default_path: task/
+    fields:
+      status:
+        type: string
+        required: true
+`) + "\n"
+	if err := os.WriteFile(filepath.Join(vaultPath, "schema.yaml"), []byte(schemaYAML), 0o644); err != nil {
+		t.Fatalf("write schema.yaml: %v", err)
+	}
+
+	err := promptNewSchemaFields(bufio.NewReader(strings.NewReader("\n")), io.Discard, vaultPath, "task", "Draft task", map[string]string{}, nil)
+	if err == nil {
+		t.Fatal("expected blank required field error")
+	}
+	if !strings.Contains(err.Error(), "required field 'status' cannot be empty") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

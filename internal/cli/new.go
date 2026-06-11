@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,12 +37,13 @@ var newCmd = newCanonicalLeafCommand("new", canonicalLeafOptions{
 func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, error) {
 	typeName := args[0]
 	title := ""
+	var reader *bufio.Reader
 	if len(args) >= 2 {
 		title = args[1]
 	} else if isJSONOutput() {
 		return nil, handleErrorMsg(ErrMissingArgument, "title is required", "Usage: rvn new <type> <title> --json")
 	} else {
-		reader := bufio.NewReader(os.Stdin)
+		reader = bufio.NewReader(os.Stdin)
 		fmt.Fprintf(os.Stderr, "Title: ")
 		value, err := reader.ReadString('\n')
 		if err != nil {
@@ -63,6 +65,14 @@ func buildNewArgs(_ *cobra.Command, args []string) (map[string]interface{}, erro
 	fieldJSONRaw, err := parseFieldJSONObject(newFieldJSON)
 	if err != nil {
 		return nil, handleErrorMsg(ErrInvalidInput, "invalid --field-json payload", "Provide a JSON object, e.g. --field-json '{\"status\":\"active\"}'")
+	}
+	if !isJSONOutput() {
+		if reader == nil {
+			reader = bufio.NewReader(os.Stdin)
+		}
+		if err := promptNewSchemaFields(reader, os.Stderr, getVaultPath(), typeName, title, fieldValues, fieldJSONRaw); err != nil {
+			return nil, err
+		}
 	}
 	targetPath := strings.TrimSpace(newPathFlag)
 	if targetPath != "" {
@@ -113,6 +123,62 @@ func invokeNew(_ *cobra.Command, commandID, vaultPath string, args map[string]in
 		}
 		return result
 	}
+}
+
+func promptNewSchemaFields(reader *bufio.Reader, writer io.Writer, vaultPath, typeName, title string, fieldValues map[string]string, fieldJSONRaw map[string]interface{}) error {
+	sch, err := schema.Load(vaultPath)
+	if err != nil {
+		return handleErrorMsg(ErrSchemaInvalid, "failed to load schema", "Fix schema.yaml and try again")
+	}
+	typeDef := sch.Types[strings.TrimSpace(typeName)]
+	if typeDef == nil || len(typeDef.Fields) == 0 {
+		return nil
+	}
+
+	provided := make(map[string]bool, len(fieldValues)+len(fieldJSONRaw)+1)
+	for key := range fieldValues {
+		provided[key] = true
+	}
+	for key := range fieldJSONRaw {
+		provided[key] = true
+	}
+	if typeDef.NameField != "" && strings.TrimSpace(title) != "" {
+		provided[typeDef.NameField] = true
+	}
+
+	fieldNames := make([]string, 0, len(typeDef.Fields))
+	for fieldName := range typeDef.Fields {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames)
+
+	for _, fieldName := range fieldNames {
+		fieldDef := typeDef.Fields[fieldName]
+		if fieldDef == nil || provided[fieldName] {
+			continue
+		}
+
+		prompt := fmt.Sprintf("%s (optional, blank to skip): ", fieldName)
+		if fieldDef.Required {
+			prompt = fmt.Sprintf("%s (required): ", fieldName)
+		}
+		fmt.Fprint(writer, prompt)
+		value, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			return fmt.Errorf("failed to read input: %w", readErr)
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			if fieldDef.Required {
+				return handleErrorMsg(ErrRequiredFieldMissing, fmt.Sprintf("required field '%s' cannot be empty", fieldName), "Provide a non-empty value")
+			}
+			continue
+		}
+		fieldValues[fieldName] = value
+		provided[fieldName] = true
+	}
+
+	return nil
 }
 
 func renderNewResult(_ *cobra.Command, result commandexec.Result) error {
