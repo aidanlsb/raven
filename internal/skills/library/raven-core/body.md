@@ -17,13 +17,14 @@ This skill is CLI-first. Use MCP as a fallback when CLI access is unavailable, p
 - Create a brand-new object identity: `rvn new`
 - Append a log entry or capture text: `rvn add`
 - Idempotent generated output (briefs, reports): `rvn upsert`
-- Update frontmatter fields only: `rvn set`
+- Update frontmatter fields only: `rvn set <object_id> field=value --json`
 - Exact body text replacement: `rvn edit`
 - Update a trait value by trait ID: `rvn update`
 
 Key distinctions:
 - `upsert` vs `add`: use `upsert` when reruns should converge to one canonical state. Use `add` when history should accumulate.
 - `set` vs `edit`: use `set` for structured metadata (frontmatter). Use `edit` for body content changes.
+- `set` arguments use `field=value` pairs, for example `rvn set project/raven status=active --json`.
 - `new` vs `upsert`: use `new` only when creating a genuinely new object identity. Use `upsert` when the same agent action might run again.
 
 ## Daily notes
