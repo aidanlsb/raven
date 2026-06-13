@@ -91,7 +91,7 @@ func TestPrintBacklinksAndOutlinksUseQueryStyleLocations(t *testing.T) {
 	}
 }
 
-func TestPrintObjectTableIncludesDynamicFieldsAndLocation(t *testing.T) {
+func TestPrintObjectTableIncludesHeadersNameFieldDynamicFieldsAndLocation(t *testing.T) {
 	prevJSON := jsonOutput
 	prevHyperlinksDisabled := hyperlinksDisabled
 	prevHyperlinkEnabled := hyperlinkEnabled
@@ -121,7 +121,7 @@ func TestPrintObjectTableIncludesDynamicFieldsAndLocation(t *testing.T) {
 				FilePath:  "projects/raven.md",
 				LineStart: 3,
 				Fields: map[string]interface{}{
-					"name":   "Raven",
+					"name":   "Raven Project",
 					"owner":  "people/aidan",
 					"status": "active",
 				},
@@ -129,7 +129,7 @@ func TestPrintObjectTableIncludesDynamicFieldsAndLocation(t *testing.T) {
 		}, sch)
 	})
 
-	for _, want := range []string{"raven", "aidan", "active", "projects/raven.md:3"} {
+	for _, want := range []string{"name", "owner", "status", "location", "Raven Project", "aidan", "active", "projects/raven.md:3"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected object table output to include %q, got: %q", want, out)
 		}

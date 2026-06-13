@@ -29,15 +29,16 @@ func printObjectTable(results []model.Object, sch *schema.Schema) {
 		return
 	}
 
-	fieldColumns := objectTableFieldColumns(results, sch)
+	nameField, fieldColumns := objectTableColumns(results, sch)
 	display := ui.NewDisplayContext()
 	table := ui.NewResultsTable(display, ui.ObjectLayout(fieldColumns))
+	table.SetHeaders(objectTableHeaders(nameField, fieldColumns))
 
 	for i, r := range results {
 		cells := make([]string, 0, len(fieldColumns)+3)
 		cells = append(cells,
 			ui.FormatRowNum(i+1, len(results)),
-			ui.TruncateWithEllipsis(filepath.Base(r.ID), table.GetColumnWidth(1)),
+			ui.TruncateWithEllipsis(objectTableName(r, nameField), table.GetColumnWidth(1)),
 		)
 
 		for fieldIndex, col := range fieldColumns {
@@ -61,7 +62,7 @@ func printObjectTable(results []model.Object, sch *schema.Schema) {
 	fmt.Println(table.Render())
 }
 
-func objectTableFieldColumns(results []model.Object, sch *schema.Schema) []string {
+func objectTableColumns(results []model.Object, sch *schema.Schema) (string, []string) {
 	var typeDef *schema.TypeDefinition
 	var fieldColumns []string
 	nameField := ""
@@ -80,7 +81,29 @@ func objectTableFieldColumns(results []model.Object, sch *schema.Schema) []strin
 		}
 		sort.Strings(fieldColumns)
 	}
-	return fieldColumns
+	return nameField, fieldColumns
+}
+
+func objectTableHeaders(nameField string, fieldColumns []string) []string {
+	nameHeader := "id"
+	if nameField != "" {
+		nameHeader = nameField
+	}
+
+	headers := make([]string, 0, len(fieldColumns)+3)
+	headers = append(headers, "#", nameHeader)
+	headers = append(headers, fieldColumns...)
+	headers = append(headers, "location")
+	return headers
+}
+
+func objectTableName(obj model.Object, nameField string) string {
+	if nameField != "" {
+		if value := formatFieldValueSimple(obj.Fields[nameField]); value != "" {
+			return value
+		}
+	}
+	return filepath.Base(obj.ID)
 }
 
 // formatFieldValueSimple formats a field value as a simple string for table display

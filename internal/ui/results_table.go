@@ -39,6 +39,7 @@ type ResultRow struct {
 type ResultsTable struct {
 	display *DisplayContext
 	columns []ColumnDef
+	headers []string
 	rows    []ResultRow
 }
 
@@ -202,6 +203,11 @@ func (t *ResultsTable) AddRow(row ResultRow) {
 	t.rows = append(t.rows, row)
 }
 
+// SetHeaders configures an optional header row for human-readable tables.
+func (t *ResultsTable) SetHeaders(headers []string) {
+	t.headers = headers
+}
+
 // ContentWidth returns the calculated width for a specific column by name.
 // This allows callers to prepare content (e.g., snippet extraction) based on actual available width.
 func (t *ResultsTable) ContentWidth(columnName string) int {
@@ -285,15 +291,24 @@ func (t *ResultsTable) Render() string {
 	widths := t.calculateWidths()
 
 	// Build table data
-	tableRows := make([][]string, len(t.rows))
-	for i, row := range t.rows {
+	tableRows := make([][]string, 0, len(t.rows)+1)
+	if len(t.headers) > 0 {
+		headerRow := make([]string, len(t.columns))
+		for i := range t.columns {
+			if i < len(t.headers) {
+				headerRow[i] = t.headers[i]
+			}
+		}
+		tableRows = append(tableRows, headerRow)
+	}
+	for _, row := range t.rows {
 		tableRow := make([]string, len(t.columns))
 		for j := range t.columns {
 			if j < len(row.Cells) {
 				tableRow[j] = row.Cells[j]
 			}
 		}
-		tableRows[i] = tableRow
+		tableRows = append(tableRows, tableRow)
 	}
 
 	// Create lipgloss table with minimal border style
@@ -319,7 +334,9 @@ func (t *ResultsTable) Render() string {
 
 			colDef := t.columns[col]
 			style := lipgloss.NewStyle()
-			if colDef.HasStyle {
+			if len(t.headers) > 0 && row == 0 {
+				style = Muted.Bold(true)
+			} else if colDef.HasStyle {
 				style = colDef.Style
 			}
 
