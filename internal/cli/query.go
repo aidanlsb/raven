@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,6 +16,7 @@ import (
 	"github.com/aidanlsb/raven/internal/config"
 	"github.com/aidanlsb/raven/internal/index"
 	"github.com/aidanlsb/raven/internal/model"
+	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/query"
 	"github.com/aidanlsb/raven/internal/querysvc"
 	"github.com/aidanlsb/raven/internal/schema"
@@ -207,6 +207,10 @@ Boolean operators:
 Saved query inputs must be declared with args: in raven.yaml when using {{args.<name>}}.
 You can then pass inputs either by position (following args order) or as key=value pairs.
 
+Use --browse to open an interactive Raven picker with filtering, preview, and
+editor handoff for the selected result.
+
+
 Examples:
   rvn query "type:project .status==active"
   rvn query "type:meeting has(trait:due)"
@@ -291,8 +295,8 @@ Examples:
 			if pipeOverride != nil && *pipeOverride {
 				return handleErrorMsg(ErrInvalidInput, "--browse cannot be used with --pipe", "Use --no-pipe or remove --browse")
 			}
-			if !canUseFZFInteractive() {
-				return handleErrorMsg(ErrInvalidInput, "interactive browse requires fzf and an interactive terminal", "Install fzf or run without --browse")
+			if !canUseInteractiveTerminal() {
+				return handleErrorMsg(ErrInvalidInput, "interactive browse requires an interactive terminal", "Run without --browse in non-interactive contexts")
 			}
 		}
 
@@ -394,7 +398,8 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQueryObjectResults(queryStr, queryLabelFromData(data, queryStr), objects, sch)
 				return nil
 			}
-			return browseQueryResults(pipeItemsForObjectResults(objects), browseItemsForObjectResults(objects))
+			sch, _ := schema.Load(getVaultPath())
+			return browseQueryResults(browseItemsForObjectResults(objects, sch))
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
@@ -410,7 +415,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
 				return nil
 			}
-			return browseQueryResults(pipeItemsForTraitResults(traits), browseItemsForTraitResults(traits))
+			return browseQueryResults(browseItemsForTraitResults(traits))
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
@@ -425,7 +430,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQueryAssetResults(queryStr, assets)
 				return nil
 			}
-			return browseQueryResults(pipeItemsForAssetResults(assets), browseItemsForAssetResults(assets))
+			return browseQueryResults(browseItemsForAssetResults(assets))
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForAssetResults(assets))
@@ -440,7 +445,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQuerySectionResults(queryStr, sections)
 				return nil
 			}
-			return browseQueryResults(pipeItemsForSectionResults(sections), browseItemsForSectionResults(sections))
+			return browseQueryResults(browseItemsForSectionResults(sections))
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForSectionResults(sections))
@@ -453,112 +458,137 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 	}
 }
 
-type queryBrowseItem struct {
-	PipeableItem
-	FilePath string
-	Line     int
-}
-
-func browseItemsForObjectResults(results []model.Object) []queryBrowseItem {
-	pipeItems := pipeItemsForObjectResults(results)
-	items := make([]queryBrowseItem, 0, len(results))
-	for i, result := range results {
-		items = append(items, queryBrowseItem{
-			PipeableItem: pipeItems[i],
-			FilePath:     result.FilePath,
-			Line:         result.LineStart,
+func browseItemsForObjectResults(results []model.Object, sch *schema.Schema) []picker.Item {
+	nameField, fieldColumns := objectTableColumns(results, sch)
+	items := make([]picker.Item, 0, len(results))
+	for _, result := range results {
+		location := fmt.Sprintf("%s:%d", result.FilePath, result.LineStart)
+		items = append(items, picker.Item{
+			ID:       result.ID,
+			Label:    objectTableName(result, nameField),
+			Detail:   objectBrowseDetail(result, fieldColumns),
+			Location: location,
+			FilePath: result.FilePath,
+			Line:     result.LineStart,
+			Preview:  queryBrowsePreview(result.FilePath, result.LineStart),
 		})
 	}
 	return items
 }
 
-func browseItemsForTraitResults(results []model.Trait) []queryBrowseItem {
-	pipeItems := pipeItemsForTraitResults(results)
-	items := make([]queryBrowseItem, 0, len(results))
-	for i, result := range results {
-		items = append(items, queryBrowseItem{
-			PipeableItem: pipeItems[i],
-			FilePath:     result.FilePath,
-			Line:         result.Line,
+func browseItemsForTraitResults(results []model.Trait) []picker.Item {
+	items := make([]picker.Item, 0, len(results))
+	for _, result := range results {
+		value := ""
+		if result.Value != nil && *result.Value != result.TraitType {
+			value = *result.Value
+		}
+		detail := "@" + result.TraitType
+		if value != "" {
+			detail += "(" + value + ")"
+		}
+		items = append(items, picker.Item{
+			ID:       result.ID,
+			Label:    TruncateContent(result.Content, 80),
+			Detail:   detail,
+			Location: fmt.Sprintf("%s:%d", result.FilePath, result.Line),
+			FilePath: result.FilePath,
+			Line:     result.Line,
+			Preview:  queryBrowsePreview(result.FilePath, result.Line),
 		})
 	}
 	return items
 }
 
-func browseItemsForAssetResults(results []model.Asset) []queryBrowseItem {
-	pipeItems := pipeItemsForAssetResults(results)
-	items := make([]queryBrowseItem, 0, len(results))
-	for i, result := range results {
-		items = append(items, queryBrowseItem{
-			PipeableItem: pipeItems[i],
-			FilePath:     result.FilePath,
+func browseItemsForAssetResults(results []model.Asset) []picker.Item {
+	items := make([]picker.Item, 0, len(results))
+	for _, result := range results {
+		detail := result.MediaType
+		if detail == "" {
+			detail = "-"
+		}
+		items = append(items, picker.Item{
+			ID:       result.ID,
+			Label:    result.FilePath,
+			Detail:   detail,
+			Location: formatAssetSize(result.SizeBytes),
+			FilePath: result.FilePath,
 		})
 	}
 	return items
 }
 
-func browseItemsForSectionResults(results []model.Section) []queryBrowseItem {
-	pipeItems := pipeItemsForSectionResults(results)
-	items := make([]queryBrowseItem, 0, len(results))
-	for i, result := range results {
-		items = append(items, queryBrowseItem{
-			PipeableItem: pipeItems[i],
-			FilePath:     result.FilePath,
-			Line:         result.LineStart,
+func browseItemsForSectionResults(results []model.Section) []picker.Item {
+	items := make([]picker.Item, 0, len(results))
+	for _, result := range results {
+		items = append(items, picker.Item{
+			ID:       result.ID,
+			Label:    result.Title,
+			Detail:   fmt.Sprintf("h%d #%s", result.Level, result.Slug),
+			Location: fmt.Sprintf("%s:%d", result.FilePath, result.LineStart),
+			FilePath: result.FilePath,
+			Line:     result.LineStart,
+			Preview:  queryBrowsePreview(result.FilePath, result.LineStart),
 		})
 	}
 	return items
 }
 
-func browseQueryResults(pipeItems []PipeableItem, browseItems []queryBrowseItem) error {
-	selected, ok, err := pickQueryBrowseItem(pipeItems, browseItems)
+func objectBrowseDetail(obj model.Object, fieldColumns []string) string {
+	parts := make([]string, 0, len(fieldColumns))
+	for _, fieldName := range fieldColumns {
+		value := formatFieldValueSimple(obj.Fields[fieldName])
+		if value == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s=%s", fieldName, value))
+	}
+	return strings.Join(parts, " ")
+}
+
+func browseQueryResults(items []picker.Item) error {
+	selected, ok, err := picker.Run(items, picker.Options{
+		Title:  "Query results",
+		Prompt: "filter",
+	})
 	if err != nil {
 		return handleError(ErrInternal, err, "")
 	}
 	if !ok {
 		return nil
 	}
-	if strings.TrimSpace(selected.FilePath) == "" {
+	if strings.TrimSpace(selected.Item.FilePath) == "" {
 		return handleErrorMsg(ErrInternal, "selected query result has no file path", "")
 	}
-	openFileInEditor(filepath.Join(getVaultPath(), selected.FilePath), selected.FilePath, false)
+	openFileInEditor(filepath.Join(getVaultPath(), selected.Item.FilePath), selected.Item.FilePath, false)
 	return nil
 }
 
-func pickQueryBrowseItem(pipeItems []PipeableItem, browseItems []queryBrowseItem) (queryBrowseItem, bool, error) {
-	if len(pipeItems) == 0 || len(browseItems) == 0 {
-		return queryBrowseItem{}, false, nil
+func queryBrowsePreview(filePath string, line int) string {
+	if strings.TrimSpace(filePath) == "" || line <= 0 {
+		return ""
 	}
-
-	byNum := make(map[int]queryBrowseItem, len(browseItems))
-	for _, item := range browseItems {
-		byNum[item.Num] = item
-	}
-
-	lines := make([]string, 0, len(pipeItems))
-	for _, item := range pipeItems {
-		lines = append(lines, formatPipeableItemLine(item))
-	}
-	selectedLine, selected, err := fzfRunPicker(lines, fzfPickerOptions{
-		Prompt:    "query> ",
-		Header:    "Select a result to open (Esc to cancel)",
-		Delimiter: "\t",
-		WithNth:   "1,2,3,4",
-	})
-	if err != nil || !selected {
-		return queryBrowseItem{}, selected, err
-	}
-
-	numText, _, _ := strings.Cut(strings.TrimSpace(selectedLine), "\t")
-	num, err := strconv.Atoi(strings.TrimSpace(numText))
+	content, err := os.ReadFile(filepath.Join(getVaultPath(), filePath))
 	if err != nil {
-		return queryBrowseItem{}, false, fmt.Errorf("parse selected query result number: %w", err)
+		return ""
 	}
-	item, ok := byNum[num]
-	if !ok {
-		return queryBrowseItem{}, false, fmt.Errorf("selected query result number %d was not in result set", num)
+	lines := strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")
+	start := line - 8
+	if start < 1 {
+		start = 1
 	}
-	return item, true, nil
+	end := line + 40
+	if end > len(lines) {
+		end = len(lines)
+	}
+	if start > end {
+		return ""
+	}
+	out := make([]string, 0, end-start+1)
+	for i := start; i <= end; i++ {
+		out = append(out, fmt.Sprintf("%6d\t%s", i, lines[i-1]))
+	}
+	return strings.Join(out, "\n")
 }
 
 func queryBoolFlagValue(cmd *cobra.Command, name string, saved *bool) bool {
@@ -1314,7 +1344,7 @@ func init() {
 	queryCmd.Flags().Bool("confirm", false, "Apply changes (without this flag, shows preview only)")
 	queryCmd.Flags().Bool("pipe", false, "Force pipe-friendly output for shell pipelines (jq, head, sort)")
 	queryCmd.Flags().Bool("no-pipe", false, "Force human-readable output format")
-	queryCmd.Flags().Bool("browse", false, "Interactively browse query results with fzf and open the selected result")
+	queryCmd.Flags().Bool("browse", false, "Interactively browse query results in Raven's picker and open the selected result")
 
 	querySavedCmd.AddCommand(querySavedListCmd)
 	querySavedCmd.AddCommand(querySavedGetCmd)

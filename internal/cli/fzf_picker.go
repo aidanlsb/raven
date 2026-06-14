@@ -64,10 +64,14 @@ func canUseFZFInteractive() bool {
 	if isJSONOutput() {
 		return false
 	}
-	if !fzfStdinIsTerminal() || !fzfStdoutIsTerminal() {
+	if !canUseInteractiveTerminal() {
 		return false
 	}
 	return hasFZFInstalled()
+}
+
+func canUseInteractiveTerminal() bool {
+	return fzfStdinIsTerminal() && fzfStdoutIsTerminal()
 }
 
 func runFZFPicker(lines []string, opts fzfPickerOptions) (string, bool, error) {

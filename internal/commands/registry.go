@@ -729,7 +729,8 @@ You can then pass inputs by position (in args order) or as key=value pairs.
 Use --ids to output just IDs (one per line) for piping to other commands.
 Use --limit/--offset for paginated result windows.
 Use --count-only to return only the total match count without items.
-Use --browse to interactively pick a result with fzf and open it in the configured editor.
+Use --browse to open an interactive Raven picker with filtering, preview, and
+editor handoff for the selected result.
 Use --apply to run a bulk operation directly on query results.
 Section and asset queries return stable IDs but do not support --apply.
 
@@ -754,7 +755,7 @@ For trait queries (trait:...):
 			{Name: "confirm", Description: "Apply bulk changes (without this flag, shows preview only)", Type: FlagTypeBool},
 			{Name: "pipe", Description: "Force pipe-friendly output for shell pipelines (jq, head, sort)", Type: FlagTypeBool},
 			{Name: "no-pipe", Description: "Force human-readable output format", Type: FlagTypeBool},
-			{Name: "browse", Description: "Interactively browse results with fzf and open the selected result in the configured editor", Type: FlagTypeBool},
+			{Name: "browse", Description: "Interactively browse results in Raven's picker and open the selected result in the configured editor", Type: FlagTypeBool},
 			{Name: "inputs", Description: "Saved query inputs as key=value pairs", Type: FlagTypePosKeyValue, Examples: []string{`{"project": "projects/raven"}`}},
 		},
 		Examples: []string{

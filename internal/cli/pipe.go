@@ -66,13 +66,14 @@ func WritePipeableList(w io.Writer, items []PipeableItem) {
 }
 
 func formatPipeableItemLine(item PipeableItem) string {
-	// Sanitize content - remove tabs and newlines
-	content := strings.ReplaceAll(item.Content, "\t", " ")
-	content = strings.ReplaceAll(content, "\n", " ")
-
-	location := strings.ReplaceAll(item.Location, "\t", " ")
-
+	content := sanitizePipeField(item.Content)
+	location := sanitizePipeField(item.Location)
 	return fmt.Sprintf("%d\t%s\t%s\t%s", item.Num, item.ID, content, location)
+}
+
+func sanitizePipeField(value string) string {
+	value = strings.ReplaceAll(value, "\t", " ")
+	return strings.ReplaceAll(value, "\n", " ")
 }
 
 // WritePipeableIDs writes just the IDs, one per line.
