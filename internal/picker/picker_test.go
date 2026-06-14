@@ -163,6 +163,56 @@ func TestNormalModeVimTopBottomNavigation(t *testing.T) {
 	}
 }
 
+func TestNormalModeForwardAndBackActions(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "one", Label: "One"},
+		{ID: "two", Label: "Two"},
+	}, Options{AllowForward: true, AllowBack: true})
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	m = updated.(model)
+	if cmd == nil {
+		t.Fatalf("l should quit with forward action")
+	}
+	if !m.selected || m.action != ActionForward {
+		t.Fatalf("selected=%v action=%q, want forward selection", m.selected, m.action)
+	}
+	selections := m.selections()
+	if len(selections) != 1 || selections[0].Action != ActionForward || selections[0].Item.ID != "one" {
+		t.Fatalf("selections = %#v, want forward selection of first item", selections)
+	}
+
+	m = newModel([]Item{{ID: "one", Label: "One"}}, Options{AllowBack: true})
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("H")})
+	m = updated.(model)
+	if cmd == nil {
+		t.Fatalf("H should quit with back action")
+	}
+	selections = m.selections()
+	if len(selections) != 1 || selections[0].Action != ActionBack {
+		t.Fatalf("selections = %#v, want back action", selections)
+	}
+}
+
+func TestViewRendersShortcutGutterWhenConfigured(t *testing.T) {
+	m := newModel([]Item{
+		{ID: "one", Label: "One"},
+	}, Options{
+		Shortcuts: []ShortcutTip{
+			{Key: "h", Description: "back"},
+			{Key: "l", Description: "open"},
+		},
+	})
+	m.width = 100
+
+	view := m.View()
+	for _, want := range []string{"shortcuts", "h         back", "l         open"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("view missing %q:\n%s", want, view)
+		}
+	}
+}
+
 func TestMultiSelectTogglesCurrentItem(t *testing.T) {
 	m := newModel([]Item{
 		{ID: "one", Label: "One"},
@@ -308,10 +358,23 @@ func TestRenderTableListIncludesHeadersColumnsAndDividers(t *testing.T) {
 	})
 
 	out := m.renderList(80)
-	for _, want := range []string{"title", "category", "project", "status", "» 1", "Issue One", "sugge...", "type/issue/one.md:1", "─"} {
+	for _, want := range []string{"title", "category", "project", "status", "» 1", "Issue One", "suggestion", "type/issue/one.md:1", "─"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("rendered table missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestFormatTableRowBoldsSelectedContentCells(t *testing.T) {
+	columns := fallbackTableColumns(2)
+	if !tableCellStyle(20, columns, 1, false, true).GetBold() {
+		t.Fatalf("selected content cell should be bold")
+	}
+	if tableCellStyle(20, columns, 1, false, false).GetBold() {
+		t.Fatalf("unselected content cell should not be bold")
+	}
+	if !tableCellStyle(20, columns, 1, true, false).GetBold() {
+		t.Fatalf("header content cell should remain bold")
 	}
 }
 

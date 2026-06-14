@@ -223,6 +223,7 @@ personal = "/path/to/personal"
 [ui]
 accent = "39"
 code_theme = "dracula"
+markdown_style = "dark"
 `
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -250,6 +251,9 @@ code_theme = "dracula"
 	}
 	if cfg.UI.CodeTheme != "dracula" {
 		t.Errorf("expected ui.code_theme 'dracula', got %q", cfg.UI.CodeTheme)
+	}
+	if cfg.UI.MarkdownStyle != "dark" {
+		t.Errorf("expected ui.markdown_style 'dark', got %q", cfg.UI.MarkdownStyle)
 	}
 }
 

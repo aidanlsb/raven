@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,59 +15,10 @@ import (
 )
 
 var (
-	fzfLookPath         = exec.LookPath
-	fzfStdinIsTerminal  = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
-	fzfStdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
-	ravenRunPicker      = picker.Run
+	interactiveStdinIsTerminal  = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
+	interactiveStdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
+	ravenRunPicker              = picker.Run
 )
-
-type fzfPickerOptions struct {
-	Prompt    string
-	Header    string
-	Delimiter string
-	WithNth   string
-}
-
-// fzfDefaultAppearance holds Raven's cosmetic defaults for interactive pickers.
-// These are injected ahead of the user's FZF_DEFAULT_OPTS so the user can
-// override any of them via their own fzf configuration.
-const fzfDefaultAppearance = "--layout=reverse --height=80% --border"
-
-func hasFZFInstalled() bool {
-	_, err := fzfLookPath("fzf")
-	return err == nil
-}
-
-// fzfEnv returns the child environment for fzf with Raven's cosmetic defaults
-// prepended to FZF_DEFAULT_OPTS. fzf parses FZF_DEFAULT_OPTS left-to-right with
-// later options winning, so the user's existing FZF_DEFAULT_OPTS (placed after
-// the defaults) overrides any of Raven's defaults it conflicts with.
-func fzfEnv() []string {
-	merged := fzfDefaultAppearance
-	if existing := strings.TrimSpace(os.Getenv("FZF_DEFAULT_OPTS")); existing != "" {
-		merged += " " + existing
-	}
-
-	base := os.Environ()
-	env := make([]string, 0, len(base)+1)
-	for _, kv := range base {
-		if strings.HasPrefix(kv, "FZF_DEFAULT_OPTS=") {
-			continue
-		}
-		env = append(env, kv)
-	}
-	return append(env, "FZF_DEFAULT_OPTS="+merged)
-}
-
-func canUseFZFInteractive() bool {
-	if isJSONOutput() {
-		return false
-	}
-	if !canUseInteractiveTerminal() {
-		return false
-	}
-	return hasFZFInstalled()
-}
 
 func canUseRavenInteractive() bool {
 	if isJSONOutput() {
@@ -80,58 +28,7 @@ func canUseRavenInteractive() bool {
 }
 
 func canUseInteractiveTerminal() bool {
-	return fzfStdinIsTerminal() && fzfStdoutIsTerminal()
-}
-
-func runFZFPicker(lines []string, opts fzfPickerOptions) (string, bool, error) {
-	if len(lines) == 0 {
-		return "", false, nil
-	}
-
-	// Only behavioral flags that define the picker contract are passed as
-	// command-line args. fzf gives command-line args precedence over
-	// FZF_DEFAULT_OPTS, so these always take effect. Cosmetic defaults are
-	// handled via FZF_DEFAULT_OPTS (see fzfEnv) so users can override them.
-	args := []string{
-		"--select-1",
-		"--exit-0",
-	}
-	if strings.TrimSpace(opts.Prompt) != "" {
-		args = append(args, "--prompt", opts.Prompt)
-	}
-	if strings.TrimSpace(opts.Header) != "" {
-		args = append(args, "--header", opts.Header)
-	}
-	if strings.TrimSpace(opts.Delimiter) != "" {
-		args = append(args, "--delimiter", opts.Delimiter)
-	}
-	if strings.TrimSpace(opts.WithNth) != "" {
-		args = append(args, "--with-nth", opts.WithNth)
-	}
-
-	cmd := exec.Command("fzf", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n") + "\n")
-	cmd.Env = fzfEnv()
-
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			if code := exitErr.ExitCode(); code == 1 || code == 130 {
-				return "", false, nil
-			}
-		}
-		return "", false, fmt.Errorf("run fzf selector: %w", err)
-	}
-
-	selection := strings.TrimSpace(stdout.String())
-	if selection == "" {
-		return "", false, nil
-	}
-	return selection, true, nil
+	return interactiveStdinIsTerminal() && interactiveStdoutIsTerminal()
 }
 
 func pickVaultFile(vaultPath string, vaultCfg *config.VaultConfig, prompt, title string) (string, bool, error) {

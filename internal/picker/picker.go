@@ -28,18 +28,37 @@ type Item struct {
 
 // Options controls picker copy and layout.
 type Options struct {
-	Title       string
-	Prompt      string
-	Headers     []string
-	Columns     []ui.ColumnDef
-	MultiSelect bool
-	Input       io.Reader
-	Output      io.Writer
+	Title        string
+	Prompt       string
+	Headers      []string
+	Columns      []ui.ColumnDef
+	MultiSelect  bool
+	AllowForward bool
+	AllowBack    bool
+	Shortcuts    []ShortcutTip
+	Input        io.Reader
+	Output       io.Writer
 }
+
+// ShortcutTip describes an optional picker gutter shortcut.
+type ShortcutTip struct {
+	Key         string
+	Description string
+}
+
+// Action describes how the picker was completed.
+type Action string
+
+const (
+	ActionSelect  Action = ""
+	ActionForward Action = "forward"
+	ActionBack    Action = "back"
+)
 
 // Selection is the item selected by the user.
 type Selection struct {
-	Item Item
+	Item   Item
+	Action Action
 }
 
 type inputMode int
@@ -100,6 +119,7 @@ type model struct {
 	width        int
 	height       int
 	selected     bool
+	action       Action
 	mode         inputMode
 	pendingG     bool
 	selectedKeys map[string]bool
@@ -142,6 +162,7 @@ func (m model) updateKey(msg tea.KeyMsg) (model, tea.Cmd) {
 	if msg.Type == tea.KeyEnter {
 		if len(m.filtered) > 0 {
 			m.selected = true
+			m.action = ActionSelect
 		}
 		return m, tea.Quit
 	}
@@ -189,12 +210,26 @@ func (m model) updateNormalKey(msg tea.KeyMsg) (model, tea.Cmd) {
 		case "G":
 			m.pendingG = false
 			m.moveToBottom()
+		case "h", "H":
+			m.pendingG = false
+			if m.opts.AllowBack {
+				m.selected = true
+				m.action = ActionBack
+				return m, tea.Quit
+			}
 		case "j":
 			m.pendingG = false
 			m.moveCursor(1)
 		case "k":
 			m.pendingG = false
 			m.moveCursor(-1)
+		case "l", "L":
+			m.pendingG = false
+			if m.opts.AllowForward && len(m.filtered) > 0 {
+				m.selected = true
+				m.action = ActionForward
+				return m, tea.Quit
+			}
 		case "q":
 			return m, tea.Quit
 		default:
@@ -249,9 +284,71 @@ func (m model) View() string {
 	if bodyHeight < 8 {
 		bodyHeight = 8
 	}
-	body := lipgloss.NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
+	body := m.renderBody(bodyHeight)
 
 	return strings.Join([]string{header, filter, body, help}, "\n")
+}
+
+func (m model) renderBody(bodyHeight int) string {
+	gutter := m.renderShortcutGutter()
+	if gutter == "" {
+		return lipgloss.NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
+	}
+
+	gutterWidth := m.shortcutGutterWidth()
+	separatorWidth := 3
+	minListWidth := 40
+	if m.width < minListWidth+gutterWidth+separatorWidth {
+		return lipgloss.NewStyle().Width(m.width).Height(bodyHeight).Render(m.renderList(m.width))
+	}
+
+	listWidth := m.width - gutterWidth - separatorWidth
+	list := lipgloss.NewStyle().Width(listWidth).Height(bodyHeight).Render(m.renderList(listWidth))
+	separator := mutedStyle.Render(" │ ")
+	sidebar := lipgloss.NewStyle().Width(gutterWidth).Height(bodyHeight).Render(gutter)
+	return lipgloss.JoinHorizontal(lipgloss.Top, list, separator, sidebar)
+}
+
+func (m model) renderShortcutGutter() string {
+	if len(m.opts.Shortcuts) == 0 {
+		return ""
+	}
+
+	lines := []string{mutedStyle.Bold(true).Render("shortcuts")}
+	for _, shortcut := range m.opts.Shortcuts {
+		key := strings.TrimSpace(shortcut.Key)
+		description := strings.TrimSpace(shortcut.Description)
+		if key == "" || description == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%-9s %s", key, description))
+	}
+	if len(lines) == 1 {
+		return ""
+	}
+	return mutedStyle.Render(strings.Join(lines, "\n"))
+}
+
+func (m model) shortcutGutterWidth() int {
+	width := len("shortcuts")
+	for _, shortcut := range m.opts.Shortcuts {
+		key := strings.TrimSpace(shortcut.Key)
+		description := strings.TrimSpace(shortcut.Description)
+		if key == "" || description == "" {
+			continue
+		}
+		lineWidth := len([]rune(key)) + 1 + len([]rune(description))
+		if lineWidth > width {
+			width = lineWidth
+		}
+	}
+	if width < 16 {
+		return 16
+	}
+	if width > 28 {
+		return 28
+	}
+	return width
 }
 
 func (m model) modeLabel() string {
@@ -265,10 +362,18 @@ func (m model) helpText() string {
 	if m.mode == insertMode {
 		return "insert: type filter  esc: normal  ctrl-w: delete word  ctrl-u: clear"
 	}
-	if m.opts.MultiSelect {
-		return fmt.Sprintf("normal: j/k move  space: toggle  enter: select  selected: %d  q: cancel", m.selectedCount())
+	nav := ""
+	if m.opts.AllowBack && m.opts.AllowForward {
+		nav = "  h/l: back/forward"
+	} else if m.opts.AllowBack {
+		nav = "  h: back"
+	} else if m.opts.AllowForward {
+		nav = "  l: forward"
 	}
-	return "normal: j/k move  gg/G top/bottom  / or i: filter  enter: open  q: cancel"
+	if m.opts.MultiSelect {
+		return fmt.Sprintf("normal: j/k move%s  space: toggle  enter: select  selected: %d  q: cancel", nav, m.selectedCount())
+	}
+	return fmt.Sprintf("normal: j/k move  gg/G top/bottom%s  / or i: filter  enter: open  q: cancel", nav)
 }
 
 func (m model) renderList(width int) string {
@@ -323,8 +428,8 @@ func (m model) renderTableList(width int) string {
 
 	columns := m.tableColumns()
 	headers := m.tableHeaders(columns)
-	widths := ui.CalculateColumnWidths(columns, width)
-	lines := []string{formatTableRow(headers, widths, columns, true), rowDivider(width)}
+	widths := ui.CalculateColumnWidthsForRows(columns, headers, m.tableRowsForWidths(columns), width)
+	lines := []string{formatTableRow(headers, widths, columns, true, false), rowDivider(width)}
 
 	for visibleIndex, filteredIndex := range m.filtered[m.offset:end] {
 		item := m.items[filteredIndex]
@@ -344,16 +449,31 @@ func (m model) renderTableList(width int) string {
 			row = row[:len(columns)]
 		}
 
-		rendered := formatTableRow(row, widths, columns, false)
-		if m.offset+visibleIndex == m.cursor {
-			rendered = selectedStyle.Render(rendered)
-		}
+		rendered := formatTableRow(row, widths, columns, false, m.offset+visibleIndex == m.cursor)
 		lines = append(lines, rendered)
 		if visibleIndex < end-m.offset-1 {
 			lines = append(lines, rowDivider(width))
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m model) tableRowsForWidths(columns []ui.ColumnDef) [][]string {
+	rows := make([][]string, 0, len(m.filtered))
+	for visibleIndex, filteredIndex := range m.filtered {
+		item := m.items[filteredIndex]
+		row := make([]string, 0, len(columns))
+		row = append(row, ui.FormatRowNum(visibleIndex+1, len(m.filtered)))
+		row = append(row, item.Columns...)
+		for len(row) < len(columns) {
+			row = append(row, "")
+		}
+		if len(row) > len(columns) {
+			row = row[:len(columns)]
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func (m model) tableColumns() []ui.ColumnDef {
@@ -462,16 +582,19 @@ func (m model) selectionKey(index int) string {
 }
 
 func (m model) selections() []Selection {
+	if m.action == ActionBack {
+		return []Selection{{Action: ActionBack}}
+	}
 	if len(m.filtered) == 0 {
 		return nil
 	}
 	if !m.opts.MultiSelect || len(m.selectedKeys) == 0 {
-		return []Selection{{Item: m.items[m.filtered[m.cursor]]}}
+		return []Selection{{Item: m.items[m.filtered[m.cursor]], Action: m.action}}
 	}
 	selections := make([]Selection, 0, len(m.selectedKeys))
 	for index, item := range m.items {
 		if m.selectedKeys[m.selectionKey(index)] {
-			selections = append(selections, Selection{Item: item})
+			selections = append(selections, Selection{Item: item, Action: m.action})
 		}
 	}
 	return selections
@@ -564,7 +687,7 @@ func fallbackTableColumns(count int) []ui.ColumnDef {
 	return columns
 }
 
-func formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header bool) string {
+func formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header bool, selected bool) string {
 	parts := make([]string, 0, len(widths))
 	for i, width := range widths {
 		cell := ""
@@ -572,25 +695,33 @@ func formatTableRow(cells []string, widths []int, columns []ui.ColumnDef, header
 			cell = cells[i]
 		}
 		cell = truncate(cell, width)
-		style := lipgloss.NewStyle().Width(width)
-		if i < len(columns) {
-			switch columns[i].Align {
-			case ui.AlignRight:
-				style = style.Align(lipgloss.Right)
-			case ui.AlignCenter:
-				style = style.Align(lipgloss.Center)
-			default:
-				style = style.Align(lipgloss.Left)
-			}
-			if header {
-				style = mutedStyle.Bold(true).Width(width)
-			} else if columns[i].HasStyle {
-				style = columns[i].Style.Width(width)
-			}
-		}
+		style := tableCellStyle(width, columns, i, header, selected)
 		parts = append(parts, style.Render(cell))
 	}
 	return strings.Join(parts, "  ")
+}
+
+func tableCellStyle(width int, columns []ui.ColumnDef, index int, header bool, selected bool) lipgloss.Style {
+	style := lipgloss.NewStyle().Width(width)
+	if index < len(columns) {
+		switch columns[index].Align {
+		case ui.AlignRight:
+			style = style.Align(lipgloss.Right)
+		case ui.AlignCenter:
+			style = style.Align(lipgloss.Center)
+		default:
+			style = style.Align(lipgloss.Left)
+		}
+		if header {
+			style = mutedStyle.Bold(true).Width(width)
+		} else if columns[index].HasStyle {
+			style = columns[index].Style.Width(width)
+		}
+	}
+	if selected && !header {
+		style = style.Bold(true)
+	}
+	return style
 }
 
 func truncate(s string, width int) string {

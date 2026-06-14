@@ -55,6 +55,7 @@ who gathered knowledge from across the world.`,
 		resolvedStatePath = config.ResolveStatePath(statePathFlag, resolvedConfigPath, cfg)
 		ui.ConfigureTheme(cfg.UI.Accent)
 		ui.ConfigureMarkdownCodeTheme(cfg.UI.CodeTheme)
+		ui.ConfigureMarkdownStyle(cfg.UI.MarkdownStyle)
 
 		if !shouldResolveVaultForCommand(cmd) {
 			return nil

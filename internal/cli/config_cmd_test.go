@@ -18,6 +18,7 @@ func resetConfigSetFlagsForTest() {
 	resetStringFlag(configSetCmd, "default-vault")
 	resetStringFlag(configSetCmd, "ui-accent")
 	resetStringFlag(configSetCmd, "ui-code-theme")
+	resetStringFlag(configSetCmd, "ui-markdown-style")
 }
 
 func resetConfigUnsetFlagsForTest() {
@@ -27,6 +28,7 @@ func resetConfigUnsetFlagsForTest() {
 	resetBoolFlag(configUnsetCmd, "default-vault")
 	resetBoolFlag(configUnsetCmd, "ui-accent")
 	resetBoolFlag(configUnsetCmd, "ui-code-theme")
+	resetBoolFlag(configUnsetCmd, "ui-markdown-style")
 }
 
 func resetStringFlag(cmd *cobra.Command, name string) {
@@ -118,6 +120,9 @@ work = "/vault/work"
 	if err := configSetCmd.Flags().Set("ui-code-theme", "dracula"); err != nil {
 		t.Fatalf("set ui-code-theme: %v", err)
 	}
+	if err := configSetCmd.Flags().Set("ui-markdown-style", "dark"); err != nil {
+		t.Fatalf("set ui-markdown-style: %v", err)
+	}
 
 	if err := configSetCmd.RunE(configSetCmd, []string{}); err != nil {
 		t.Fatalf("configSetCmd.RunE returned error: %v", err)
@@ -142,6 +147,9 @@ work = "/vault/work"
 	if cfg.UI.CodeTheme != "dracula" {
 		t.Fatalf("expected ui.code_theme=dracula, got %q", cfg.UI.CodeTheme)
 	}
+	if cfg.UI.MarkdownStyle != "dark" {
+		t.Fatalf("expected ui.markdown_style=dark, got %q", cfg.UI.MarkdownStyle)
+	}
 }
 
 func TestConfigUnsetClearsFields(t *testing.T) {
@@ -158,6 +166,7 @@ work = "/vault/work"
 [ui]
 accent = "39"
 code_theme = "dracula"
+markdown_style = "dark"
 `
 	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -193,6 +202,9 @@ code_theme = "dracula"
 	if err := configUnsetCmd.Flags().Set("ui-code-theme", "true"); err != nil {
 		t.Fatalf("set ui-code-theme: %v", err)
 	}
+	if err := configUnsetCmd.Flags().Set("ui-markdown-style", "true"); err != nil {
+		t.Fatalf("set ui-markdown-style: %v", err)
+	}
 
 	if err := configUnsetCmd.RunE(configUnsetCmd, []string{}); err != nil {
 		t.Fatalf("configUnsetCmd.RunE returned error: %v", err)
@@ -216,6 +228,9 @@ code_theme = "dracula"
 	}
 	if cfg.UI.CodeTheme != "" {
 		t.Fatalf("expected ui.code_theme to be cleared, got %q", cfg.UI.CodeTheme)
+	}
+	if cfg.UI.MarkdownStyle != "" {
+		t.Fatalf("expected ui.markdown_style to be cleared, got %q", cfg.UI.MarkdownStyle)
 	}
 }
 

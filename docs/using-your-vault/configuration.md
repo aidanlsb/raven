@@ -42,6 +42,7 @@ personal = "/Users/you/personal-notes"
 [ui]
 accent = "39"
 code_theme = "monokai"
+markdown_style = "auto"
 ```
 
 ### Keys
@@ -55,6 +56,7 @@ code_theme = "monokai"
 | `[vaults]` | table | empty | Name -> absolute path mapping |
 | `[ui].accent` | string | unset | Accent color for styled terminal output. Supports ANSI (`"0"`-`"255"`) or hex (`"#RRGGBB"` / `"#RGB"`). |
 | `[ui].code_theme` | string | unset (`monokai` effective default) | Markdown code-block theme (Glamour/Chroma), for example `monokai`, `dracula`, `github` |
+| `[ui].markdown_style` | string | unset (`auto` effective default) | Full Glamour Markdown style: `auto`, `raven`, a built-in style name such as `dark`/`light`, or a custom style JSON path |
 
 ### UI options in detail
 
@@ -87,13 +89,13 @@ rvn config unset --ui-accent --json
 #### `[ui].code_theme`
 
 Purpose:
-- Selects the Glamour/Chroma theme used for fenced code blocks in rendered markdown output.
+- Selects the Chroma theme used for fenced code blocks when `markdown_style = "raven"`.
 
 Accepted values:
 - Any Chroma style name (case-insensitive), for example: `monokai`, `dracula`, `github`, `nord`.
 
 Behavior details:
-- Current scope: markdown rendering paths (for example `rvn read` without `--raw` in terminal output).
+- Current scope: Raven's built-in Markdown style (`markdown_style = "raven"`).
 - Empty or invalid theme values fall back to `monokai`.
 - `rvn config set --ui-code-theme` only enforces non-empty input; theme validity is resolved when markdown is rendered.
 - If `NO_COLOR` is set, Raven renders markdown with a plain no-color style and ignores the configured code theme for that run.
@@ -106,11 +108,36 @@ rvn config set --ui-code-theme GitHub --json
 rvn config unset --ui-code-theme --json
 ```
 
+#### `[ui].markdown_style`
+
+Purpose:
+- Selects the full Glamour style used for rendered Markdown output.
+
+Accepted values:
+- `auto` or unset: Glamour detects a light or dark style from the terminal background.
+- `raven`: Raven's built-in legacy Markdown style, which also uses `[ui].code_theme` for fenced code blocks.
+- A Glamour built-in style name, such as `dark`, `light`, `notty`, or `ascii`.
+- A path to a custom Glamour style JSON file.
+
+Behavior details:
+- Invalid configured styles fall back to `auto` at render time.
+- If `NO_COLOR` is set, Raven renders Markdown with a plain no-color style and ignores `[ui].markdown_style`.
+
+Examples:
+
+```bash
+rvn config set --ui-markdown-style dark --json
+rvn config set --ui-markdown-style /Users/you/.config/glamour/light.json --json
+rvn config set --ui-markdown-style raven --json
+rvn config unset --ui-markdown-style --json
+```
+
 #### Combined example
 
 ```toml
 [ui]
 accent = "#5fd7ff"
+markdown_style = "auto"
 code_theme = "github"
 ```
 
@@ -158,8 +185,8 @@ Use `rvn config` for machine-level config lifecycle and explicit field edits:
 rvn config init --json
 rvn config show --json
 rvn config set --editor cursor --editor-mode auto --json
-rvn config set --ui-accent 39 --ui-code-theme monokai --json
-rvn config unset --ui-accent --ui-code-theme --json
+rvn config set --ui-accent 39 --ui-code-theme monokai --ui-markdown-style auto --json
+rvn config unset --ui-accent --ui-code-theme --ui-markdown-style --json
 ```
 
 ---

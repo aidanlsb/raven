@@ -45,6 +45,10 @@ type UIConfig struct {
 	// CodeTheme sets the Glamour/Chroma theme used for rendered markdown code blocks.
 	// Example values: "monokai", "dracula", "github", "nord".
 	CodeTheme string `toml:"code_theme"`
+
+	// MarkdownStyle sets the full Glamour markdown style.
+	// Empty or "auto" uses Glamour's automatic light/dark style.
+	MarkdownStyle string `toml:"markdown_style"`
 }
 
 // GetVaultPath returns the path for a named vault.
@@ -201,6 +205,7 @@ func CreateDefaultAt(path string) (string, error) {
 # [ui]
 # accent = "39"
 # code_theme = "monokai"
+# markdown_style = "auto"
 `
 
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0o644); err != nil {

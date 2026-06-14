@@ -24,6 +24,7 @@ type canonicalLeafOptions struct {
 	BuildArgs       func(cmd *cobra.Command, args []string) (map[string]interface{}, error)
 	Invoke          func(cmd *cobra.Command, commandID, vaultPath string, args map[string]interface{}) commandexec.Result
 	HandleError     func(result commandexec.Result) error
+	HandleErrorCmd  func(cmd *cobra.Command, result commandexec.Result) error
 	HandleResult    func(cmd *cobra.Command, result commandexec.Result) error
 	RenderHuman     func(cmd *cobra.Command, result commandexec.Result) error
 	SkipFlagBinding bool
@@ -89,6 +90,11 @@ func newCanonicalLeafCommand(commandID string, opts canonicalLeafOptions) *cobra
 			handleFailure := handleCanonicalFailure
 			if opts.HandleError != nil {
 				handleFailure = opts.HandleError
+			}
+			if opts.HandleErrorCmd != nil {
+				handleFailure = func(result commandexec.Result) error {
+					return opts.HandleErrorCmd(cmd, result)
+				}
 			}
 			if !result.OK {
 				if isJSONOutput() {

@@ -23,8 +23,9 @@ type persistedConfig struct {
 }
 
 type persistedUISettings struct {
-	Accent    *string `toml:"accent,omitempty"`
-	CodeTheme *string `toml:"code_theme,omitempty"`
+	Accent        *string `toml:"accent,omitempty"`
+	CodeTheme     *string `toml:"code_theme,omitempty"`
+	MarkdownStyle *string `toml:"markdown_style,omitempty"`
 }
 
 func nonEmptyPtr(value string) *string {
@@ -57,10 +58,12 @@ func SaveTo(path string, cfg *Config) error {
 
 	accent := nonEmptyPtr(cfg.UI.Accent)
 	codeTheme := nonEmptyPtr(cfg.UI.CodeTheme)
-	if accent != nil || codeTheme != nil {
+	markdownStyle := nonEmptyPtr(cfg.UI.MarkdownStyle)
+	if accent != nil || codeTheme != nil || markdownStyle != nil {
 		out.UI = &persistedUISettings{
-			Accent:    accent,
-			CodeTheme: codeTheme,
+			Accent:        accent,
+			CodeTheme:     codeTheme,
+			MarkdownStyle: markdownStyle,
 		}
 	}
 

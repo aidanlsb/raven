@@ -18,8 +18,9 @@ func TestSaveToPersistsConfigFields(t *testing.T) {
 			"work": "/tmp/work-vault",
 		},
 		UI: UIConfig{
-			Accent:    "39",
-			CodeTheme: "dracula",
+			Accent:        "39",
+			CodeTheme:     "dracula",
+			MarkdownStyle: "dark",
 		},
 	}
 
@@ -46,5 +47,8 @@ func TestSaveToPersistsConfigFields(t *testing.T) {
 	}
 	if loaded.UI.CodeTheme != "dracula" {
 		t.Fatalf("expected ui.code_theme=dracula, got %q", loaded.UI.CodeTheme)
+	}
+	if loaded.UI.MarkdownStyle != "dark" {
+		t.Fatalf("expected ui.markdown_style=dark, got %q", loaded.UI.MarkdownStyle)
 	}
 }

@@ -65,6 +65,11 @@ func HandleConfigSet(_ context.Context, req commandexec.Request) commandexec.Res
 		setReq.UICodeTheme = &value
 		_ = raw
 	}
+	if raw, ok := req.Args["ui-markdown-style"]; ok {
+		value := stringArg(req.Args, "ui-markdown-style")
+		setReq.UIMarkdownStyle = &value
+		_ = raw
+	}
 
 	result, err := configsvc.Set(setReq)
 	if err != nil {
@@ -83,13 +88,14 @@ func HandleConfigSet(_ context.Context, req commandexec.Request) commandexec.Res
 // HandleConfigUnset executes the canonical `config_unset` command.
 func HandleConfigUnset(_ context.Context, req commandexec.Request) commandexec.Result {
 	result, err := configsvc.Unset(configsvc.UnsetRequest{
-		ContextOptions: configContextOptions(req),
-		Editor:         boolArg(req.Args, "editor"),
-		EditorMode:     boolArg(req.Args, "editor-mode"),
-		StateFile:      boolArg(req.Args, "state-file"),
-		DefaultVault:   boolArg(req.Args, "default-vault"),
-		UIAccent:       boolArg(req.Args, "ui-accent"),
-		UICodeTheme:    boolArg(req.Args, "ui-code-theme"),
+		ContextOptions:  configContextOptions(req),
+		Editor:          boolArg(req.Args, "editor"),
+		EditorMode:      boolArg(req.Args, "editor-mode"),
+		StateFile:       boolArg(req.Args, "state-file"),
+		DefaultVault:    boolArg(req.Args, "default-vault"),
+		UIAccent:        boolArg(req.Args, "ui-accent"),
+		UICodeTheme:     boolArg(req.Args, "ui-code-theme"),
+		UIMarkdownStyle: boolArg(req.Args, "ui-markdown-style"),
 	})
 	if err != nil {
 		return mapConfigSvcFailure(err, "Run 'rvn config init' first")

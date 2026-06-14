@@ -14,7 +14,7 @@ func TestPersistentPreRunEAppliesThemeForNonVaultCommands(t *testing.T) {
 
 	dir := t.TempDir()
 	configFile := filepath.Join(dir, "config.toml")
-	content := []byte("[ui]\naccent = \"39\"\ncode_theme = \"dracula\"\n")
+	content := []byte("[ui]\naccent = \"39\"\ncode_theme = \"dracula\"\nmarkdown_style = \"dark\"\n")
 	if err := os.WriteFile(configFile, content, 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -48,6 +48,7 @@ func TestPersistentPreRunEAppliesThemeForNonVaultCommands(t *testing.T) {
 		ui.SyntaxSubtle = prevSyntaxSubtle
 		ui.ConfigureTheme("")
 		ui.ConfigureMarkdownCodeTheme("")
+		ui.ConfigureMarkdownStyle("")
 	})
 
 	configPath = configFile

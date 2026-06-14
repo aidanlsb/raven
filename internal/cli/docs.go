@@ -9,6 +9,7 @@ import (
 
 	"github.com/aidanlsb/raven/internal/commandexec"
 	"github.com/aidanlsb/raven/internal/docssvc"
+	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -17,7 +18,7 @@ const (
 )
 
 var (
-	docsFZFRun         = runDocsFZF
+	docsRunPicker      = picker.Run
 	docsDisplayContext = ui.NewDisplayContext
 	docsMarkdownRender = ui.RenderMarkdown
 )
@@ -49,7 +50,8 @@ var docsCmd = &cobra.Command{
 
 Use this command for guides, references, and design notes.
 Run 'rvn docs fetch' to sync or refresh docs content.
-When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
+When run in an interactive terminal, 'rvn docs' opens Raven's picker.
+In the picker, use l to move forward into a section/topic and h to go back.
 For command-level usage, use 'rvn help <command>'.
 
 Examples:
@@ -63,7 +65,7 @@ Examples:
 	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			if !isJSONOutput() && shouldUseDocsFZFNavigator() {
+			if !isJSONOutput() && shouldUseDocsPickerNavigator() {
 				source, err := loadGlobalDocsSource(getConfigPath())
 				if err != nil {
 					return handleError(ErrFileNotFound, err, "Run 'rvn docs fetch' to download docs")
@@ -74,7 +76,7 @@ Examples:
 					return handleError(ErrInternal, err, "Run 'rvn docs fetch' to refresh docs")
 				}
 
-				if err := runDocsFZFNavigator(source, sections); err != nil {
+				if err := runDocsPickerNavigator(source, sections); err != nil {
 					return handleError(ErrInternal, err, "Run 'rvn docs list' for non-interactive output")
 				}
 				return nil
@@ -302,44 +304,71 @@ func outputDocsTopicContentData(data map[string]interface{}) error {
 	return nil
 }
 
-func shouldUseDocsFZFNavigator() bool {
-	return canUseFZFInteractive()
+func shouldUseDocsPickerNavigator() bool {
+	return canUseRavenInteractive()
 }
 
-func runDocsFZFNavigator(docsFS fs.FS, sections []docsSectionView) error {
-	section, ok, err := pickDocsSectionWithFZF(sections)
-	if err != nil || !ok {
-		return err
-	}
+func runDocsPickerNavigator(docsFS fs.FS, sections []docsSectionView) error {
+	for {
+		section, ok, err := pickDocsSection(sections)
+		if err != nil || !ok {
+			return err
+		}
 
-	topics, err := listDocsTopicsFS(docsFS, ".", section.ID)
-	if err != nil {
-		return err
-	}
+		topics, err := listDocsTopicsFS(docsFS, ".", section.ID)
+		if err != nil {
+			return err
+		}
 
-	topic, ok, err := pickDocsTopicWithFZF(section, topics)
-	if err != nil || !ok {
-		return err
-	}
+		for {
+			topic, action, ok, err := pickDocsTopic(section, topics)
+			if err != nil || !ok {
+				return err
+			}
+			if action == picker.ActionBack {
+				break
+			}
 
-	return outputDocsTopicContent(docsFS, topic)
+			return outputDocsTopicContent(docsFS, topic)
+		}
+	}
 }
 
-func pickDocsSectionWithFZF(sections []docsSectionView) (docsSectionView, bool, error) {
-	lines := make([]string, 0, len(sections))
+func pickDocsSection(sections []docsSectionView) (docsSectionView, bool, error) {
+	items := make([]picker.Item, 0, len(sections))
 	for _, section := range sections {
-		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", section.ID, section.Title, docsTopicCountSummary(section.TopicCount)))
+		topicCount := docsTopicCountSummary(section.TopicCount)
+		items = append(items, picker.Item{
+			ID:         section.ID,
+			Label:      section.Title,
+			Detail:     section.ID,
+			Columns:    []string{section.ID, section.Title, topicCount},
+			SearchText: browseSearchText(section.ID, section.Title, topicCount),
+		})
 	}
 
-	selectedLine, selected, err := docsFZFRun(lines, "docs/section> ", "Select a docs section (Esc to cancel)")
+	selected, ok, err := docsRunPicker(items, picker.Options{
+		Title:        "Select a docs section",
+		Prompt:       "docs/section",
+		Headers:      []string{"#", "section", "title", "topics"},
+		Columns:      ui.SearchLayout(),
+		AllowForward: true,
+		Shortcuts: []picker.ShortcutTip{
+			{Key: "j/k", Description: "move"},
+			{Key: "l", Description: "topics"},
+			{Key: "enter", Description: "topics"},
+			{Key: "/ or i", Description: "filter"},
+			{Key: "q", Description: "cancel"},
+		},
+	})
 	if err != nil {
 		return docsSectionView{}, false, err
 	}
-	if !selected {
+	if !ok {
 		return docsSectionView{}, false, nil
 	}
 
-	sectionID := docsFZFSelectionID(selectedLine)
+	sectionID := strings.TrimSpace(selected.Item.ID)
 	section, ok := findDocsSection(sections, sectionID)
 	if !ok {
 		return docsSectionView{}, false, fmt.Errorf("selected unknown docs section %q", sectionID)
@@ -347,46 +376,52 @@ func pickDocsSectionWithFZF(sections []docsSectionView) (docsSectionView, bool, 
 	return section, true, nil
 }
 
-func pickDocsTopicWithFZF(section docsSectionView, topics []docsTopicRecord) (docsTopicRecord, bool, error) {
-	lines := make([]string, 0, len(topics))
+func pickDocsTopic(section docsSectionView, topics []docsTopicRecord) (docsTopicRecord, picker.Action, bool, error) {
+	items := make([]picker.Item, 0, len(topics))
 	for _, topic := range topics {
-		lines = append(lines, fmt.Sprintf("%s\t%s", topic.ID, topic.Title))
+		items = append(items, picker.Item{
+			ID:         topic.ID,
+			Label:      topic.Title,
+			Detail:     topic.ID,
+			Location:   topic.Path,
+			Columns:    []string{topic.ID, topic.Title, topic.Path},
+			SearchText: browseSearchText(topic.ID, topic.Title, topic.Path),
+		})
 	}
 
 	prompt := fmt.Sprintf("docs/%s> ", section.ID)
-	header := fmt.Sprintf("Select a topic in %s [%s] (Esc to cancel)", section.Title, section.ID)
-	selectedLine, selected, err := docsFZFRun(lines, prompt, header)
+	selected, ok, err := docsRunPicker(items, picker.Options{
+		Title:        fmt.Sprintf("Select a topic in %s [%s]", section.Title, section.ID),
+		Prompt:       strings.TrimSuffix(prompt, "> "),
+		Headers:      []string{"#", "topic", "title", "path"},
+		Columns:      ui.SearchLayout(),
+		AllowForward: true,
+		AllowBack:    true,
+		Shortcuts: []picker.ShortcutTip{
+			{Key: "j/k", Description: "move"},
+			{Key: "h", Description: "sections"},
+			{Key: "l", Description: "open"},
+			{Key: "enter", Description: "open"},
+			{Key: "/ or i", Description: "filter"},
+			{Key: "q", Description: "cancel"},
+		},
+	})
 	if err != nil {
-		return docsTopicRecord{}, false, err
+		return docsTopicRecord{}, "", false, err
 	}
-	if !selected {
-		return docsTopicRecord{}, false, nil
+	if !ok {
+		return docsTopicRecord{}, "", false, nil
+	}
+	if selected.Action == picker.ActionBack {
+		return docsTopicRecord{}, picker.ActionBack, true, nil
 	}
 
-	topicID := docsFZFSelectionID(selectedLine)
+	topicID := strings.TrimSpace(selected.Item.ID)
 	topic, ok := findDocsTopic(topics, topicID)
 	if !ok {
-		return docsTopicRecord{}, false, fmt.Errorf("selected unknown docs topic %q in section %q", topicID, section.ID)
+		return docsTopicRecord{}, "", false, fmt.Errorf("selected unknown docs topic %q in section %q", topicID, section.ID)
 	}
-	return topic, true, nil
-}
-
-func docsFZFSelectionID(line string) string {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return ""
-	}
-	parts := strings.SplitN(line, "\t", 2)
-	return strings.TrimSpace(parts[0])
-}
-
-func runDocsFZF(lines []string, prompt, header string) (string, bool, error) {
-	return runFZFPicker(lines, fzfPickerOptions{
-		Prompt:    prompt,
-		Header:    header,
-		Delimiter: "\t",
-		WithNth:   "2..",
-	})
+	return topic, selected.Action, true, nil
 }
 
 func handleCanonicalDocsFailure(result commandexec.Result, args []string) error {

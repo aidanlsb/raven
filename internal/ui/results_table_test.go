@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -52,5 +53,87 @@ func TestBacklinksLayoutStylesPrimaryContentLikeQueryResults(t *testing.T) {
 	}
 	if columns[2].Name != "file" || !columns[2].HasStyle {
 		t.Fatalf("expected backlinks location column to stay styled as file metadata")
+	}
+}
+
+func TestObjectLayoutPrioritizesNameColumn(t *testing.T) {
+	t.Parallel()
+
+	columns := ObjectLayout([]string{"category", "project", "status"})
+	headers := []string{"#", "title", "category", "project", "status", "location"}
+	rows := [][]string{
+		{
+			"1",
+			"Consider an interactive option for queries that opens fzf",
+			"-",
+			"raven",
+			"open",
+			"type/issue/consider-an-interactive-option-for-queries-that-opens-fzf.md:1",
+		},
+		{
+			"2",
+			"Improve stale index schema error handling for query",
+			"suggestion",
+			"raven",
+			"open",
+			"type/issue/improve-stale-index-schema-error-handling-for-query.md:1",
+		},
+	}
+	widths := CalculateColumnWidthsForRows(columns, headers, rows, 120)
+	if len(widths) != 6 {
+		t.Fatalf("expected 6 columns, got %d", len(widths))
+	}
+
+	nameWidth := widths[1]
+	locationWidth := widths[len(widths)-1]
+	if nameWidth < 50 {
+		t.Fatalf("name width = %d, want at least 50", nameWidth)
+	}
+	if locationWidth >= nameWidth {
+		t.Fatalf("location width = %d, want less than name width %d", locationWidth, nameWidth)
+	}
+	if widths[2] != len("suggestion") {
+		t.Fatalf("category width = %d, want to fit suggestion", widths[2])
+	}
+	if widths[3] != len("project") {
+		t.Fatalf("project width = %d, want to fit header", widths[3])
+	}
+	if widths[4] != len("status") {
+		t.Fatalf("status width = %d, want to fit header", widths[4])
+	}
+
+	total := 0
+	for _, width := range widths {
+		total += width
+	}
+	total += 2 * (len(widths) - 1)
+	if total > 120 {
+		t.Fatalf("table width = %d, want <= 120 (widths=%v)", total, widths)
+	}
+}
+
+func TestResultsTableTreatsColumnWidthsAsContentWidths(t *testing.T) {
+	t.Parallel()
+
+	table := NewResultsTable(&DisplayContext{TermWidth: 120}, ObjectLayout([]string{"category", "project", "status"}))
+	table.SetHeaders([]string{"#", "title", "category", "project", "status", "location"})
+	table.AddRow(ResultRow{
+		Num: 1,
+		Cells: []string{
+			" 1",
+			"Improve stale index schema error handling for query",
+			"sugge...",
+			"raven",
+			"open",
+			"type/issue/improve-stale-index-schema-error-handling-for-query.md:1",
+		},
+	})
+
+	out := table.Render()
+	if strings.Contains(out, "catego\n") || strings.Contains(out, "sugge.\n") {
+		t.Fatalf("expected compact columns to truncate, not wrap:\n%s", out)
+	}
+	if !strings.Contains(out, "category") {
+		t.Fatalf("expected full category header, got:\n%s", out)
 	}
 }

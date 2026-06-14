@@ -2,10 +2,12 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Alignment represents column text alignment.
@@ -114,42 +116,29 @@ func colBacklinksFile() ColumnDef {
 func colObjectName() ColumnDef {
 	return ColumnDef{
 		Name:       "name",
-		WidthRatio: 0.25,
-		MinWidth:   10,
-		MaxWidth:   25,
+		WidthRatio: 1,
+		MinWidth:   20,
 		Align:      AlignLeft,
 	}
 }
 
-func colObjectField(name string, fieldCount int) ColumnDef {
-	widthRatio := 0.35
-	if fieldCount > 0 {
-		widthRatio = widthRatio / float64(fieldCount)
-	}
+func colObjectField(name string) ColumnDef {
 	minWidth := len(name)
-	if minWidth < 8 {
-		minWidth = 8
-	}
-	if minWidth > 20 {
-		minWidth = 20
+	if minWidth < 4 {
+		minWidth = 4
 	}
 	return ColumnDef{
 		Name:       "field:" + name,
-		WidthRatio: widthRatio,
+		WidthRatio: 1,
 		MinWidth:   minWidth,
-		MaxWidth:   20,
 		Align:      AlignLeft,
 	}
 }
 
-func colObjectLocation(fieldCount int) ColumnDef {
-	widthRatio := 0.40
-	if fieldCount == 0 {
-		widthRatio = 0.65
-	}
+func colObjectLocation() ColumnDef {
 	return ColumnDef{
 		Name:       "location",
-		WidthRatio: widthRatio,
+		WidthRatio: 1,
 		MinWidth:   18,
 		Align:      AlignLeft,
 		HasStyle:   true,
@@ -183,9 +172,9 @@ func ObjectLayout(fieldNames []string) []ColumnDef {
 	columns := make([]ColumnDef, 0, len(fieldNames)+3)
 	columns = append(columns, colNum(), colObjectName())
 	for _, fieldName := range fieldNames {
-		columns = append(columns, colObjectField(fieldName, len(fieldNames)))
+		columns = append(columns, colObjectField(fieldName))
 	}
-	columns = append(columns, colObjectLocation(len(fieldNames)))
+	columns = append(columns, colObjectLocation())
 	return columns
 }
 
@@ -279,7 +268,131 @@ func CalculateColumnWidths(columns []ColumnDef, termWidth int) []int {
 		}
 	}
 
+	fitWidthsToAvailable(widths, columns, termWidth-totalPadding-leftMargin)
 	return widths
+}
+
+// CalculateColumnWidthsForRows computes column widths from actual rendered data.
+func CalculateColumnWidthsForRows(columns []ColumnDef, headers []string, rows [][]string, termWidth int) []int {
+	if len(columns) == 0 {
+		return nil
+	}
+	if len(headers) == 0 && len(rows) == 0 {
+		return CalculateColumnWidths(columns, termWidth)
+	}
+
+	widths := make([]int, len(columns))
+	for i, col := range columns {
+		widths[i] = desiredColumnWidth(col, columnValues(i, headers, rows))
+	}
+
+	const columnPadding = 2
+	totalPadding := (len(columns) - 1) * columnPadding
+	leftMargin := 2
+	fitWidthsToAvailable(widths, columns, termWidth-totalPadding-leftMargin)
+	return widths
+}
+
+func columnValues(index int, headers []string, rows [][]string) []string {
+	values := make([]string, 0, len(rows)+1)
+	if index < len(headers) {
+		values = append(values, headers[index])
+	}
+	for _, row := range rows {
+		if index < len(row) {
+			values = append(values, row[index])
+		}
+	}
+	return values
+}
+
+func desiredColumnWidth(col ColumnDef, values []string) int {
+	minWidth := col.MinWidth
+	if minWidth < 1 {
+		minWidth = 1
+	}
+	if col.MaxWidth > 0 && minWidth > col.MaxWidth {
+		minWidth = col.MaxWidth
+	}
+
+	widths := make([]int, 0, len(values))
+	for _, value := range values {
+		for _, line := range strings.Split(value, "\n") {
+			if width := VisibleLen(line); width > 0 {
+				widths = append(widths, width)
+			}
+		}
+	}
+	if len(widths) == 0 {
+		return minWidth
+	}
+	sort.Ints(widths)
+	desired := widths[percentileIndex(len(widths), 85)]
+	if desired < minWidth {
+		desired = minWidth
+	}
+	if col.MaxWidth > 0 && desired > col.MaxWidth {
+		desired = col.MaxWidth
+	}
+	return desired
+}
+
+func percentileIndex(length int, percentile int) int {
+	if length <= 1 {
+		return 0
+	}
+	index := (length*percentile + 99) / 100
+	if index < 1 {
+		index = 1
+	}
+	if index > length {
+		index = length
+	}
+	return index - 1
+}
+
+func fitWidthsToAvailable(widths []int, columns []ColumnDef, available int) {
+	if available < 0 {
+		available = 0
+	}
+	used := 0
+	for _, width := range widths {
+		used += width
+	}
+	for used > available {
+		shrinkIndex := -1
+		for i, width := range widths {
+			minWidth := columns[i].MinWidth
+			if width <= minWidth {
+				continue
+			}
+			if shrinkIndex == -1 ||
+				columnShrinkPriority(columns[i]) < columnShrinkPriority(columns[shrinkIndex]) ||
+				(columnShrinkPriority(columns[i]) == columnShrinkPriority(columns[shrinkIndex]) && width > widths[shrinkIndex]) {
+				shrinkIndex = i
+			}
+		}
+		if shrinkIndex == -1 {
+			return
+		}
+		widths[shrinkIndex]--
+		used--
+	}
+}
+
+func columnShrinkPriority(col ColumnDef) int {
+	switch {
+	case col.Name == "num":
+		return 100
+	case col.Name == "name" || col.Name == "content":
+		return 80
+	case strings.HasPrefix(col.Name, "field:") || col.Name == "meta":
+		return 50
+	case col.Name == "file" || col.Name == "location":
+		return 10
+	default:
+		return 40
+	}
 }
 
 // calculateWidths computes column widths based on terminal size and column definitions.
@@ -293,25 +406,32 @@ func (t *ResultsTable) Render() string {
 		return ""
 	}
 
-	widths := t.calculateWidths()
-
-	// Build table data
-	tableRows := make([][]string, 0, len(t.rows)+1)
-	if len(t.headers) > 0 {
-		headerRow := make([]string, len(t.columns))
-		for i := range t.columns {
-			if i < len(t.headers) {
-				headerRow[i] = t.headers[i]
-			}
-		}
-		tableRows = append(tableRows, headerRow)
-	}
+	rowCells := make([][]string, 0, len(t.rows))
 	for _, row := range t.rows {
 		tableRow := make([]string, len(t.columns))
 		for j := range t.columns {
 			if j < len(row.Cells) {
 				tableRow[j] = row.Cells[j]
 			}
+		}
+		rowCells = append(rowCells, tableRow)
+	}
+	widths := CalculateColumnWidthsForRows(t.columns, t.headers, rowCells, t.display.TermWidth)
+
+	tableRows := make([][]string, 0, len(t.rows)+1)
+	if len(t.headers) > 0 {
+		headerRow := make([]string, len(t.columns))
+		for i := range t.columns {
+			if i < len(t.headers) {
+				headerRow[i] = truncateCell(t.headers[i], widths[i])
+			}
+		}
+		tableRows = append(tableRows, headerRow)
+	}
+	for _, row := range rowCells {
+		tableRow := make([]string, len(t.columns))
+		for j := range t.columns {
+			tableRow[j] = truncateCell(row[j], widths[j])
 		}
 		tableRows = append(tableRows, tableRow)
 	}
@@ -345,8 +465,13 @@ func (t *ResultsTable) Render() string {
 				style = colDef.Style
 			}
 
-			// Set width
-			style = style.Width(widths[col])
+			// Set width. Column widths represent usable content width; inter-column
+			// padding is accounted for separately in CalculateColumnWidths.
+			styleWidth := widths[col]
+			if col < len(t.columns)-1 {
+				styleWidth += 2
+			}
+			style = style.Width(styleWidth)
 
 			// Set alignment
 			switch colDef.Align {
@@ -368,6 +493,19 @@ func (t *ResultsTable) Render() string {
 		Rows(tableRows...)
 
 	return tbl.Render()
+}
+
+func truncateCell(s string, width int) string {
+	if width < 1 {
+		return ""
+	}
+	if VisibleLen(s) <= width {
+		return s
+	}
+	if width <= 3 {
+		return ansi.Truncate(s, width, "")
+	}
+	return ansi.Truncate(s, width, "...")
 }
 
 // TruncateWithEllipsis truncates a string to maxLen, adding ellipsis if needed.

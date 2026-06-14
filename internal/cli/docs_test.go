@@ -2,12 +2,12 @@ package cli
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/aidanlsb/raven/internal/picker"
 	"github.com/aidanlsb/raven/internal/ui"
 )
 
@@ -139,56 +139,40 @@ func TestOutputDocsTopicsTextHandlesEmptyTopicList(t *testing.T) {
 	}
 }
 
-func TestShouldUseDocsFZFNavigator(t *testing.T) {
+func TestShouldUseDocsPickerNavigator(t *testing.T) {
 	prevJSON := jsonOutput
-	prevLookPath := fzfLookPath
-	prevStdinTTY := fzfStdinIsTerminal
-	prevStdoutTTY := fzfStdoutIsTerminal
+	prevStdinTTY := interactiveStdinIsTerminal
+	prevStdoutTTY := interactiveStdoutIsTerminal
 	t.Cleanup(func() {
 		jsonOutput = prevJSON
-		fzfLookPath = prevLookPath
-		fzfStdinIsTerminal = prevStdinTTY
-		fzfStdoutIsTerminal = prevStdoutTTY
+		interactiveStdinIsTerminal = prevStdinTTY
+		interactiveStdoutIsTerminal = prevStdoutTTY
 	})
 
-	fzfStdinIsTerminal = func() bool { return true }
-	fzfStdoutIsTerminal = func() bool { return true }
-	fzfLookPath = func(file string) (string, error) {
-		if file == "fzf" {
-			return "/usr/local/bin/fzf", nil
-		}
-		return "", exec.ErrNotFound
-	}
+	interactiveStdinIsTerminal = func() bool { return true }
+	interactiveStdoutIsTerminal = func() bool { return true }
 
 	jsonOutput = false
-	if !shouldUseDocsFZFNavigator() {
-		t.Fatalf("expected interactive docs mode when TTY and fzf is available")
+	if !shouldUseDocsPickerNavigator() {
+		t.Fatalf("expected interactive docs mode when TTY is available")
 	}
 
 	jsonOutput = true
-	if shouldUseDocsFZFNavigator() {
+	if shouldUseDocsPickerNavigator() {
 		t.Fatalf("expected interactive docs mode to be disabled for --json")
 	}
 
 	jsonOutput = false
-	fzfStdinIsTerminal = func() bool { return false }
-	if shouldUseDocsFZFNavigator() {
+	interactiveStdinIsTerminal = func() bool { return false }
+	if shouldUseDocsPickerNavigator() {
 		t.Fatalf("expected interactive docs mode to be disabled when stdin is not a TTY")
-	}
-
-	fzfStdinIsTerminal = func() bool { return true }
-	fzfLookPath = func(string) (string, error) {
-		return "", exec.ErrNotFound
-	}
-	if shouldUseDocsFZFNavigator() {
-		t.Fatalf("expected interactive docs mode to be disabled when fzf is unavailable")
 	}
 }
 
-func TestPickDocsSectionWithFZF(t *testing.T) {
-	prevRun := docsFZFRun
+func TestPickDocsSection(t *testing.T) {
+	prevRun := docsRunPicker
 	t.Cleanup(func() {
-		docsFZFRun = prevRun
+		docsRunPicker = prevRun
 	})
 
 	sections := []docsSectionView{
@@ -196,22 +180,28 @@ func TestPickDocsSectionWithFZF(t *testing.T) {
 		{ID: "reference", Title: "Reference", TopicCount: 9},
 	}
 
-	docsFZFRun = func(lines []string, prompt, header string) (string, bool, error) {
-		if prompt != "docs/section> " {
-			t.Fatalf("prompt = %q, want docs/section> ", prompt)
+	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		if opts.Prompt != "docs/section" {
+			t.Fatalf("prompt = %q, want docs/section", opts.Prompt)
 		}
-		if !strings.Contains(header, "Select a docs section") {
-			t.Fatalf("unexpected header %q", header)
+		if opts.Title != "Select a docs section" {
+			t.Fatalf("title = %q, want Select a docs section", opts.Title)
 		}
-		if len(lines) != 2 {
-			t.Fatalf("expected 2 lines, got %d", len(lines))
+		if !opts.AllowForward {
+			t.Fatalf("expected section picker to allow forward navigation")
 		}
-		return lines[1], true, nil
+		if !hasShortcutTip(opts.Shortcuts, "l", "topics") {
+			t.Fatalf("expected section picker shortcut tips, got %#v", opts.Shortcuts)
+		}
+		if len(items) != 2 {
+			t.Fatalf("expected 2 items, got %d", len(items))
+		}
+		return picker.Selection{Item: items[1]}, true, nil
 	}
 
-	selected, ok, err := pickDocsSectionWithFZF(sections)
+	selected, ok, err := pickDocsSection(sections)
 	if err != nil {
-		t.Fatalf("pickDocsSectionWithFZF() error = %v", err)
+		t.Fatalf("pickDocsSection() error = %v", err)
 	}
 	if !ok {
 		t.Fatalf("expected section to be selected")
@@ -221,10 +211,10 @@ func TestPickDocsSectionWithFZF(t *testing.T) {
 	}
 }
 
-func TestPickDocsTopicWithFZFCancelled(t *testing.T) {
-	prevRun := docsFZFRun
+func TestPickDocsTopicCancelled(t *testing.T) {
+	prevRun := docsRunPicker
 	t.Cleanup(func() {
-		docsFZFRun = prevRun
+		docsRunPicker = prevRun
 	})
 
 	section := docsSectionView{ID: "reference", Title: "Reference", TopicCount: 1}
@@ -232,45 +222,141 @@ func TestPickDocsTopicWithFZFCancelled(t *testing.T) {
 		{Section: "reference", ID: "query-language", Title: "Query Language"},
 	}
 
-	docsFZFRun = func(lines []string, prompt, header string) (string, bool, error) {
-		if len(lines) != 1 {
-			t.Fatalf("expected 1 topic line, got %d", len(lines))
+	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		if len(items) != 1 {
+			t.Fatalf("expected 1 topic item, got %d", len(items))
 		}
-		if !strings.Contains(prompt, "docs/reference> ") {
-			t.Fatalf("unexpected prompt: %q", prompt)
+		if opts.Prompt != "docs/reference" {
+			t.Fatalf("unexpected prompt: %q", opts.Prompt)
 		}
-		return "", false, nil
+		return picker.Selection{}, false, nil
 	}
 
-	_, ok, err := pickDocsTopicWithFZF(section, topics)
+	_, _, ok, err := pickDocsTopic(section, topics)
 	if err != nil {
-		t.Fatalf("pickDocsTopicWithFZF() error = %v", err)
+		t.Fatalf("pickDocsTopic() error = %v", err)
 	}
 	if ok {
 		t.Fatalf("expected cancelled selection to return ok=false")
 	}
 }
 
-func TestDocsFZFSelectionID(t *testing.T) {
-	t.Parallel()
+func TestPickDocsTopicBackAction(t *testing.T) {
+	prevRun := docsRunPicker
+	t.Cleanup(func() {
+		docsRunPicker = prevRun
+	})
 
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{name: "id with title", in: "reference\tReference", want: "reference"},
-		{name: "id only", in: "query-language", want: "query-language"},
-		{name: "trim whitespace", in: "  guide\tUser Guides  ", want: "guide"},
+	section := docsSectionView{ID: "reference", Title: "Reference", TopicCount: 1}
+	topics := []docsTopicRecord{
+		{Section: "reference", ID: "query-language", Title: "Query Language"},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := docsFZFSelectionID(tc.in)
-			if got != tc.want {
-				t.Fatalf("docsFZFSelectionID(%q) = %q, want %q", tc.in, got, tc.want)
+
+	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		if !opts.AllowBack || !opts.AllowForward {
+			t.Fatalf("expected topic picker to allow back and forward navigation")
+		}
+		if !hasShortcutTip(opts.Shortcuts, "h", "sections") || !hasShortcutTip(opts.Shortcuts, "l", "open") {
+			t.Fatalf("expected topic picker shortcut tips, got %#v", opts.Shortcuts)
+		}
+		return picker.Selection{Action: picker.ActionBack}, true, nil
+	}
+
+	_, action, ok, err := pickDocsTopic(section, topics)
+	if err != nil {
+		t.Fatalf("pickDocsTopic() error = %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected back action to return ok=true")
+	}
+	if action != picker.ActionBack {
+		t.Fatalf("action = %q, want back", action)
+	}
+}
+
+func hasShortcutTip(shortcuts []picker.ShortcutTip, key, description string) bool {
+	for _, shortcut := range shortcuts {
+		if shortcut.Key == key && shortcut.Description == description {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRunDocsPickerNavigatorCanGoBackToSections(t *testing.T) {
+	prevRun := docsRunPicker
+	prevJSON := jsonOutput
+	prevDisplay := docsDisplayContext
+	prevRender := docsMarkdownRender
+	t.Cleanup(func() {
+		docsRunPicker = prevRun
+		jsonOutput = prevJSON
+		docsDisplayContext = prevDisplay
+		docsMarkdownRender = prevRender
+	})
+
+	jsonOutput = false
+	docsDisplayContext = func() *ui.DisplayContext {
+		return &ui.DisplayContext{TermWidth: 100, IsTTY: true}
+	}
+	docsMarkdownRender = func(content string, _ int) (string, error) {
+		if !strings.Contains(content, "# Query Language") {
+			t.Fatalf("expected final selected topic to be query language")
+		}
+		return "RENDERED QUERY LANGUAGE\n", nil
+	}
+
+	step := 0
+	docsRunPicker = func(items []picker.Item, opts picker.Options) (picker.Selection, bool, error) {
+		step++
+		switch step {
+		case 1:
+			if opts.Prompt != "docs/section" {
+				t.Fatalf("step 1 prompt = %q", opts.Prompt)
 			}
+			return picker.Selection{Item: picker.Item{ID: "getting-started"}, Action: picker.ActionForward}, true, nil
+		case 2:
+			if opts.Prompt != "docs/getting-started" {
+				t.Fatalf("step 2 prompt = %q", opts.Prompt)
+			}
+			return picker.Selection{Action: picker.ActionBack}, true, nil
+		case 3:
+			if opts.Prompt != "docs/section" {
+				t.Fatalf("step 3 prompt = %q", opts.Prompt)
+			}
+			return picker.Selection{Item: picker.Item{ID: "querying"}, Action: picker.ActionForward}, true, nil
+		case 4:
+			if opts.Prompt != "docs/querying" {
+				t.Fatalf("step 4 prompt = %q", opts.Prompt)
+			}
+			for _, item := range items {
+				if item.ID == "query-language" {
+					return picker.Selection{Item: item, Action: picker.ActionForward}, true, nil
+				}
+			}
+			t.Fatalf("query-language topic missing from %#v", items)
+		default:
+			t.Fatalf("unexpected picker step %d", step)
+		}
+		return picker.Selection{}, false, nil
+	}
+
+	docsFS := os.DirFS(filepath.Join(repoRoot(t), "docs"))
+	out := captureStdout(t, func() {
+		err := runDocsPickerNavigator(docsFS, []docsSectionView{
+			{ID: "getting-started", Title: "Getting Started", TopicCount: 1},
+			{ID: "querying", Title: "Querying", TopicCount: 1},
 		})
+		if err != nil {
+			t.Fatalf("runDocsPickerNavigator() error = %v", err)
+		}
+	})
+
+	if step != 4 {
+		t.Fatalf("picker steps = %d, want 4", step)
+	}
+	if !strings.Contains(out, "RENDERED QUERY LANGUAGE") {
+		t.Fatalf("output missing rendered topic:\n%s", out)
 	}
 }
 

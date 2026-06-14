@@ -16,7 +16,9 @@ rvn search # Pick an indexed vault file
 
 Interactive pickers are disabled for `--json` output and other non-interactive/scripted contexts. Pass the target path explicitly in scripted use.
 
-`rvn docs` still uses an fzf-backed docs navigator when fzf is installed.
+If an explicit reference is ambiguous, interactive `rvn read`, `rvn open`, `rvn backlinks`, and `rvn outlinks` prompt you to choose the intended target in the Raven picker.
+
+`rvn docs` uses the same Raven picker for section and topic navigation. In the docs picker, use `l` to move forward into a section/topic and `h` to go back.
 
 ---
 
@@ -85,6 +87,7 @@ Find all incoming references to an object or asset — everything that links *to
 rvn backlinks person/freya
 rvn backlinks project/website
 rvn backlinks assets/pdfs/paper.pdf
+rvn backlinks person/freya --browse     # Pick and open one incoming reference
 ```
 
 ### `rvn outlinks`
@@ -94,6 +97,7 @@ Find all outgoing references from an object — everything it links *to*, includ
 ```bash
 rvn outlinks project/website
 rvn outlinks meeting/kickoff
+rvn outlinks project/website --browse   # Pick and open one outgoing reference
 ```
 
 ---

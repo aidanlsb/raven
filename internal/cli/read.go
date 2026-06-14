@@ -11,12 +11,12 @@ import (
 )
 
 var readCmd = newCanonicalLeafCommand("read", canonicalLeafOptions{
-	VaultPath:   getVaultPath,
-	Args:        cobra.MaximumNArgs(1),
-	Prepare:     prepareReadArgs,
-	BuildArgs:   buildReadArgs,
-	HandleError: handleCanonicalReadFailure,
-	RenderHuman: renderRead,
+	VaultPath:      getVaultPath,
+	Args:           cobra.MaximumNArgs(1),
+	Prepare:        prepareReadArgs,
+	BuildArgs:      buildReadArgs,
+	HandleErrorCmd: handleCanonicalReadFailureCmd,
+	RenderHuman:    renderRead,
 })
 
 func prepareReadArgs(cmd *cobra.Command, args []string) ([]string, bool, error) {
@@ -74,6 +74,18 @@ func handleCanonicalReadFailure(result commandexec.Result) error {
 		return nil
 	}
 	return handleErrorWithDetails(mapReadCode(result.Error.Code), result.Error.Message, result.Error.Suggestion, result.Error.Details)
+}
+
+func handleCanonicalReadFailureCmd(cmd *cobra.Command, result commandexec.Result) error {
+	return handleAmbiguousReferenceRetry(cmd, result, ambiguousReferenceRetryOptions{
+		CommandID: "read",
+		Prompt:    "read/ref> ",
+		Fallback:  handleCanonicalReadFailure,
+		BuildArgs: func(cmd *cobra.Command, selected string) (map[string]interface{}, error) {
+			return buildReadArgs(cmd, []string{selected})
+		},
+		Render: renderRead,
+	})
 }
 
 func renderRead(cmd *cobra.Command, result commandexec.Result) error {

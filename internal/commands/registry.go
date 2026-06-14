@@ -368,7 +368,8 @@ post-init setup suggestions instead of mutating global config implicitly.`,
 
 Use this command for guides and references.
 Run 'rvn docs fetch' to sync or refresh global docs content.
-When run in a terminal with fzf installed, 'rvn docs' opens an interactive selector.
+When run in an interactive terminal, 'rvn docs' opens Raven's picker.
+In the picker, use l to move forward into a section/topic and h to go back.
 For command-level usage, use 'rvn help <command>'.`,
 		Args: []ArgMeta{
 			{Name: "section", Description: "Docs section (e.g., getting-started, types-and-traits, querying)", Required: false},
@@ -385,7 +386,7 @@ For command-level usage, use 'rvn help <command>'.`,
 		UseCases: []string{
 			"Fetch docs into the global docs directory with `docs fetch`",
 			"List docs sections and topic counts",
-			"Interactively select docs via fzf (when available)",
+			"Interactively select docs in Raven's picker",
 			"Browse docs topics by section",
 			"Open and read a specific docs page",
 			"Find long-form guidance outside command help",
@@ -846,17 +847,25 @@ For trait queries (trait:...):
 		LongDesc: `Find objects that reference a target object or asset.
 
 In an interactive terminal, bare 'rvn backlinks' launches Raven's picker.
+When an interactive backlinks target is ambiguous, Raven prompts you to choose the target.
+Use --browse to browse incoming references interactively and open the selected reference location.
 Non-interactive use still requires a target.`,
 		Args: []ArgMeta{
 			{Name: "target", Description: "Target object ID or asset path (e.g., people/freya, assets/pdfs/file.pdf)", Required: true},
 		},
+		Flags: []FlagMeta{
+			{Name: "browse", Description: "Interactively browse backlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
+		},
 		Examples: []string{
 			"rvn backlinks people/freya --json",
+			"rvn backlinks people/freya --browse",
 			"rvn backlinks assets/pdfs/paper.pdf --json",
 		},
 		UseCases: []string{
 			"Find all files that reference an object or asset",
 			"Interactively pick a target in Raven's picker",
+			"Interactively disambiguate backlinks targets in Raven's picker",
+			"Browse incoming references and open one at the reference line",
 			"Audit incoming links before moving or deleting content",
 		},
 	},
@@ -867,16 +876,24 @@ Non-interactive use still requires a target.`,
 		LongDesc: `Find object and asset links referenced by an object.
 
 In an interactive terminal, bare 'rvn outlinks' launches Raven's picker.
+When an interactive outlinks source is ambiguous, Raven prompts you to choose the source.
+Use --browse to browse outgoing references interactively and open the selected reference location.
 Non-interactive use still requires a source.`,
 		Args: []ArgMeta{
 			{Name: "source", Description: "Source object ID (e.g., projects/bifrost)", Required: true},
 		},
+		Flags: []FlagMeta{
+			{Name: "browse", Description: "Interactively browse outlinks in Raven's picker and open the selected reference", Type: FlagTypeBool},
+		},
 		Examples: []string{
 			"rvn outlinks projects/bifrost --json",
+			"rvn outlinks projects/bifrost --browse",
 		},
 		UseCases: []string{
 			"Inspect the outgoing links from an object",
 			"Interactively pick a source in Raven's picker",
+			"Interactively disambiguate outlinks sources in Raven's picker",
+			"Browse outgoing references and open one at the reference line",
 			"Follow references from a file to related objects and assets",
 		},
 	},
@@ -904,6 +921,7 @@ By default, this command returns enriched output (rendered wikilinks + backlinks
 Use --raw to output only the raw file content (recommended for agents preparing precise edits).
 
 In an interactive terminal, bare 'rvn read' launches Raven's picker.
+When an interactive read reference is ambiguous, Raven prompts you to choose the target.
 
 For long files, you can request a specific range with --start-line/--end-line, and/or
 ask for structured line output with --lines for copy-paste-safe anchors.`,
@@ -927,6 +945,7 @@ ask for structured line output with --lines for copy-paste-safe anchors.`,
 		UseCases: []string{
 			"Read vault file content (use instead of 'cat', 'head', 'tail')",
 			"Interactively pick a file to read in Raven's picker",
+			"Interactively disambiguate read references in Raven's picker",
 			"Inspect file before editing (prefer --raw for exact string matching)",
 			"Extract copy-paste-safe anchors with --lines or line ranges for long files",
 			"Get full content after finding object via query",
@@ -1767,7 +1786,7 @@ such as editor settings, state file location, and default vault selection.`,
 			"rvn config show --json",
 			"rvn config init --json",
 			"rvn config set --editor code --editor-mode auto --json",
-			"rvn config unset --ui-accent --ui-code-theme --json",
+			"rvn config unset --ui-accent --ui-code-theme --ui-markdown-style --json",
 		},
 		UseCases: []string{
 			"Inspect resolved global config and state paths",
@@ -1810,18 +1829,19 @@ Use 'config unset' to clear fields.`,
 			{Name: "default-vault", Description: "Set default_vault to a configured vault name", Type: FlagTypeString},
 			{Name: "ui-accent", Description: "Set UI accent color (ANSI 0-255 or #RRGGBB)", Type: FlagTypeString},
 			{Name: "ui-code-theme", Description: "Set markdown code theme name", Type: FlagTypeString},
+			{Name: "ui-markdown-style", Description: "Set full Glamour markdown style (auto, raven, built-in style name, or JSON path)", Type: FlagTypeString},
 		},
 		Examples: []string{
 			"rvn config set --editor code --json",
 			"rvn config set --editor-mode terminal --json",
 			"rvn config set --state-file state.toml --json",
 			"rvn config set --default-vault work --json",
-			"rvn config set --ui-accent 39 --ui-code-theme monokai --json",
+			"rvn config set --ui-accent 39 --ui-code-theme monokai --ui-markdown-style auto --json",
 		},
 		UseCases: []string{
 			"Configure global editor behavior",
 			"Set default_vault without editing TOML directly",
-			"Adjust CLI UI accent and markdown code theme",
+			"Adjust CLI UI accent and markdown rendering style",
 		},
 	},
 	"config_unset": {
@@ -1835,11 +1855,12 @@ Use 'config unset' to clear fields.`,
 			{Name: "default-vault", Description: "Clear default_vault", Type: FlagTypeBool},
 			{Name: "ui-accent", Description: "Clear ui.accent", Type: FlagTypeBool},
 			{Name: "ui-code-theme", Description: "Clear ui.code_theme", Type: FlagTypeBool},
+			{Name: "ui-markdown-style", Description: "Clear ui.markdown_style", Type: FlagTypeBool},
 		},
 		Examples: []string{
 			"rvn config unset --editor --json",
 			"rvn config unset --default-vault --json",
-			"rvn config unset --ui-accent --ui-code-theme --json",
+			"rvn config unset --ui-accent --ui-code-theme --ui-markdown-style --json",
 		},
 	},
 	"vault": {

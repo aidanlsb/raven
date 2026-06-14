@@ -7,60 +7,17 @@ import (
 	"github.com/aidanlsb/raven/internal/picker"
 )
 
-func fzfDefaultOptsFromEnv(t *testing.T, env []string) (string, int) {
-	t.Helper()
-	value := ""
-	count := 0
-	for _, kv := range env {
-		if v, ok := strings.CutPrefix(kv, "FZF_DEFAULT_OPTS="); ok {
-			value = v
-			count++
-		}
-	}
-	return value, count
-}
-
-func TestFZFEnv(t *testing.T) {
-	t.Run("uses defaults when FZF_DEFAULT_OPTS is unset", func(t *testing.T) {
-		t.Setenv("FZF_DEFAULT_OPTS", "")
-
-		value, count := fzfDefaultOptsFromEnv(t, fzfEnv())
-		if count != 1 {
-			t.Fatalf("expected exactly one FZF_DEFAULT_OPTS entry, got %d", count)
-		}
-		if value != fzfDefaultAppearance {
-			t.Fatalf("FZF_DEFAULT_OPTS = %q, want %q", value, fzfDefaultAppearance)
-		}
-	})
-
-	t.Run("prepends defaults so user options override them", func(t *testing.T) {
-		t.Setenv("FZF_DEFAULT_OPTS", "--layout=default --color=bw")
-
-		value, count := fzfDefaultOptsFromEnv(t, fzfEnv())
-		if count != 1 {
-			t.Fatalf("expected exactly one FZF_DEFAULT_OPTS entry, got %d", count)
-		}
-		want := fzfDefaultAppearance + " --layout=default --color=bw"
-		if value != want {
-			t.Fatalf("FZF_DEFAULT_OPTS = %q, want %q", value, want)
-		}
-		if !strings.HasPrefix(value, fzfDefaultAppearance+" ") {
-			t.Fatalf("expected Raven defaults to come first, got %q", value)
-		}
-	})
-}
-
 func TestInteractivePickerMissingArgSuggestion(t *testing.T) {
-	prevStdinTTY := fzfStdinIsTerminal
-	prevStdoutTTY := fzfStdoutIsTerminal
+	prevStdinTTY := interactiveStdinIsTerminal
+	prevStdoutTTY := interactiveStdoutIsTerminal
 	t.Cleanup(func() {
-		fzfStdinIsTerminal = prevStdinTTY
-		fzfStdoutIsTerminal = prevStdoutTTY
+		interactiveStdinIsTerminal = prevStdinTTY
+		interactiveStdoutIsTerminal = prevStdoutTTY
 	})
 
 	t.Run("mentions interactive terminal when unavailable", func(t *testing.T) {
-		fzfStdinIsTerminal = func() bool { return false }
-		fzfStdoutIsTerminal = func() bool { return true }
+		interactiveStdinIsTerminal = func() bool { return false }
+		interactiveStdoutIsTerminal = func() bool { return true }
 
 		suggestion := interactivePickerMissingArgSuggestion("read", "rvn read <reference>")
 		if !strings.Contains(suggestion, "interactive terminal") {
@@ -72,8 +29,8 @@ func TestInteractivePickerMissingArgSuggestion(t *testing.T) {
 	})
 
 	t.Run("uses direct usage hint when interactive", func(t *testing.T) {
-		fzfStdinIsTerminal = func() bool { return true }
-		fzfStdoutIsTerminal = func() bool { return true }
+		interactiveStdinIsTerminal = func() bool { return true }
+		interactiveStdoutIsTerminal = func() bool { return true }
 
 		suggestion := interactivePickerMissingArgSuggestion("open", "rvn open <reference>")
 		if strings.Contains(suggestion, "interactive terminal") {

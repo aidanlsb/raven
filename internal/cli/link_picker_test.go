@@ -14,14 +14,14 @@ import (
 func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 	prevJSON := jsonOutput
 	prevVaultPath := resolvedVaultPath
-	prevStdinTTY := fzfStdinIsTerminal
-	prevStdoutTTY := fzfStdoutIsTerminal
+	prevStdinTTY := interactiveStdinIsTerminal
+	prevStdoutTTY := interactiveStdoutIsTerminal
 	prevRun := ravenRunPicker
 	t.Cleanup(func() {
 		jsonOutput = prevJSON
 		resolvedVaultPath = prevVaultPath
-		fzfStdinIsTerminal = prevStdinTTY
-		fzfStdoutIsTerminal = prevStdoutTTY
+		interactiveStdinIsTerminal = prevStdinTTY
+		interactiveStdoutIsTerminal = prevStdoutTTY
 		ravenRunPicker = prevRun
 	})
 
@@ -35,8 +35,8 @@ func TestPrepareLinkArgsUsesRavenPickerWhenBare(t *testing.T) {
 
 	jsonOutput = false
 	resolvedVaultPath = v.Path
-	fzfStdinIsTerminal = func() bool { return true }
-	fzfStdoutIsTerminal = func() bool { return true }
+	interactiveStdinIsTerminal = func() bool { return true }
+	interactiveStdoutIsTerminal = func() bool { return true }
 
 	tests := []struct {
 		name     string

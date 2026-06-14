@@ -6,8 +6,6 @@ import (
 )
 
 func TestRenderMarkdownNormalizesTrailingNewline(t *testing.T) {
-	t.Parallel()
-
 	out, err := RenderMarkdown("# Heading", 80)
 	if err != nil {
 		t.Fatalf("RenderMarkdown() error = %v", err)
@@ -21,8 +19,6 @@ func TestRenderMarkdownNormalizesTrailingNewline(t *testing.T) {
 }
 
 func TestRenderMarkdownDefaultsWidthWhenNonPositive(t *testing.T) {
-	t.Parallel()
-
 	out, err := RenderMarkdown("hello", 0)
 	if err != nil {
 		t.Fatalf("RenderMarkdown() error = %v", err)
@@ -93,10 +89,44 @@ func TestConfigureMarkdownCodeThemeIsCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestConfigureMarkdownStyle(t *testing.T) {
+	orig := markdownStyle
+	t.Cleanup(func() {
+		markdownStyle = orig
+	})
+
+	ConfigureMarkdownStyle("dark")
+	if markdownStyle != "dark" {
+		t.Fatalf("expected markdown style dark, got %q", markdownStyle)
+	}
+
+	ConfigureMarkdownStyle("")
+	if markdownStyle != "auto" {
+		t.Fatalf("expected empty style to normalize to auto, got %q", markdownStyle)
+	}
+}
+
+func TestRenderMarkdownFallsBackToAutoForInvalidConfiguredStyle(t *testing.T) {
+	orig := markdownStyle
+	t.Cleanup(func() {
+		markdownStyle = orig
+	})
+
+	ConfigureMarkdownStyle("definitely-not-a-real-glamour-style")
+	out, err := RenderMarkdown("# Heading", 80)
+	if err != nil {
+		t.Fatalf("RenderMarkdown() error = %v", err)
+	}
+	if strings.TrimSpace(out) == "" {
+		t.Fatalf("expected rendered output")
+	}
+}
+
 func TestRenderMarkdownHonorsNoColor(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 
 	origTheme := markdownCodeTheme
+	origMarkdownStyle := markdownStyle
 	origAccent := Accent
 	origBold := Bold
 	origMuted := Muted
@@ -105,6 +135,7 @@ func TestRenderMarkdownHonorsNoColor(t *testing.T) {
 	origAccentColor := accentColor
 	t.Cleanup(func() {
 		markdownCodeTheme = origTheme
+		markdownStyle = origMarkdownStyle
 		Accent = origAccent
 		Bold = origBold
 		Muted = origMuted
@@ -115,6 +146,7 @@ func TestRenderMarkdownHonorsNoColor(t *testing.T) {
 
 	ConfigureTheme("39")
 	ConfigureMarkdownCodeTheme("dracula")
+	ConfigureMarkdownStyle("dark")
 
 	out, err := RenderMarkdown("# Heading\n\n`value`\n\n```go\nfmt.Println(\"hi\")\n```", 80)
 	if err != nil {

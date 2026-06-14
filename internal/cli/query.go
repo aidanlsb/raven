@@ -38,15 +38,15 @@ func printObjectTable(results []model.Object, sch *schema.Schema) {
 		cells := make([]string, 0, len(fieldColumns)+3)
 		cells = append(cells,
 			ui.FormatRowNum(i+1, len(results)),
-			ui.TruncateWithEllipsis(objectTableName(r, nameField), table.GetColumnWidth(1)),
+			objectTableName(r, nameField),
 		)
 
-		for fieldIndex, col := range fieldColumns {
+		for _, col := range fieldColumns {
 			valStr := formatFieldValueSimple(r.Fields[col])
 			if valStr == "" {
 				valStr = "-"
 			}
-			cells = append(cells, ui.TruncateWithEllipsis(valStr, table.GetColumnWidth(2+fieldIndex)))
+			cells = append(cells, valStr)
 		}
 
 		location := formatLocationLinkSimpleStyled(r.FilePath, r.LineStart, ui.Muted.Render)

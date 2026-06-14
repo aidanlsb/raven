@@ -76,6 +76,9 @@ func renderConfigShow(_ *cobra.Command, result commandexec.Result) error {
 	if v := strings.TrimSpace(stringValue(uiConfig["code_theme"])); v != "" {
 		fmt.Printf("ui.code_theme: %s\n", v)
 	}
+	if v := strings.TrimSpace(stringValue(uiConfig["markdown_style"])); v != "" {
+		fmt.Printf("ui.markdown_style: %s\n", v)
+	}
 	vaults := stringMap(data["vaults"])
 	if len(vaults) == 0 {
 		fmt.Printf("%s %s\n", ui.Hint("vaults:"), ui.Hint("(none)"))

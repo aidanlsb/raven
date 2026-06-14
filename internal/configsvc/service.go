@@ -105,8 +105,9 @@ func (ctx *GlobalConfigContext) Data() map[string]interface{} {
 		"editor":        strings.TrimSpace(ctx.Cfg.Editor),
 		"editor_mode":   strings.TrimSpace(ctx.Cfg.EditorMode),
 		"ui": map[string]interface{}{
-			"accent":     strings.TrimSpace(ctx.Cfg.UI.Accent),
-			"code_theme": strings.TrimSpace(ctx.Cfg.UI.CodeTheme),
+			"accent":         strings.TrimSpace(ctx.Cfg.UI.Accent),
+			"code_theme":     strings.TrimSpace(ctx.Cfg.UI.CodeTheme),
+			"markdown_style": strings.TrimSpace(ctx.Cfg.UI.MarkdownStyle),
 		},
 	}
 }
@@ -155,12 +156,13 @@ func NormalizeEditorMode(raw string) (string, bool) {
 
 type SetRequest struct {
 	ContextOptions
-	Editor       *string
-	EditorMode   *string
-	StateFile    *string
-	DefaultVault *string
-	UIAccent     *string
-	UICodeTheme  *string
+	Editor          *string
+	EditorMode      *string
+	StateFile       *string
+	DefaultVault    *string
+	UIAccent        *string
+	UICodeTheme     *string
+	UIMarkdownStyle *string
 }
 
 type SetResult struct {
@@ -233,8 +235,17 @@ func Set(req SetRequest) (*SetResult, error) {
 		changed = append(changed, "ui.code_theme")
 	}
 
+	if req.UIMarkdownStyle != nil {
+		value := strings.TrimSpace(*req.UIMarkdownStyle)
+		if value == "" {
+			return nil, newError(CodeInvalidInput, "ui-markdown-style cannot be empty; use 'rvn config unset --ui-markdown-style' to clear it", nil)
+		}
+		ctx.Cfg.UI.MarkdownStyle = value
+		changed = append(changed, "ui.markdown_style")
+	}
+
 	if len(changed) == 0 {
-		return nil, newError(CodeMissingArgument, "no fields provided; set at least one --editor/--editor-mode/--state-file/--default-vault/--ui-accent/--ui-code-theme", nil)
+		return nil, newError(CodeMissingArgument, "no fields provided; set at least one --editor/--editor-mode/--state-file/--default-vault/--ui-accent/--ui-code-theme/--ui-markdown-style", nil)
 	}
 
 	if err := config.SaveTo(ctx.ConfigPath, ctx.Cfg); err != nil {
@@ -250,12 +261,13 @@ func Set(req SetRequest) (*SetResult, error) {
 
 type UnsetRequest struct {
 	ContextOptions
-	Editor       bool
-	EditorMode   bool
-	StateFile    bool
-	DefaultVault bool
-	UIAccent     bool
-	UICodeTheme  bool
+	Editor          bool
+	EditorMode      bool
+	StateFile       bool
+	DefaultVault    bool
+	UIAccent        bool
+	UICodeTheme     bool
+	UIMarkdownStyle bool
 }
 
 type UnsetResult struct {
@@ -296,6 +308,10 @@ func Unset(req UnsetRequest) (*UnsetResult, error) {
 	if req.UICodeTheme {
 		ctx.Cfg.UI.CodeTheme = ""
 		changed = append(changed, "ui.code_theme")
+	}
+	if req.UIMarkdownStyle {
+		ctx.Cfg.UI.MarkdownStyle = ""
+		changed = append(changed, "ui.markdown_style")
 	}
 
 	if len(changed) == 0 {
