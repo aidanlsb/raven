@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -42,35 +40,57 @@ func TestBrowseItemsForObjectResultsUseNameFieldAndDetails(t *testing.T) {
 	if item.Label != "Check if queries return the fields in the printed table" {
 		t.Fatalf("label = %q, want title field", item.Label)
 	}
+	wantColumns := []string{
+		"Check if queries return the fields in the printed table",
+		"raven",
+		"open",
+		"type/issue/check-if-queries-return-the-fields-in-the-printed-table.md:1",
+	}
+	if strings.Join(item.Columns, "|") != strings.Join(wantColumns, "|") {
+		t.Fatalf("columns = %#v, want %#v", item.Columns, wantColumns)
+	}
 	if !strings.Contains(item.Detail, "project=raven") || !strings.Contains(item.Detail, "status=open") {
 		t.Fatalf("detail = %q, want field summary", item.Detail)
 	}
 	if strings.Contains(item.Detail, item.ID) {
 		t.Fatalf("detail should not repeat object id, got %q", item.Detail)
 	}
+	for _, want := range []string{"issue/check-if-queries", "Check if queries return", "project=raven", "type/issue/check-if-queries-return-the-fields-in-the-printed-table.md:1"} {
+		if !strings.Contains(item.SearchText, want) {
+			t.Fatalf("search text missing %q: %q", want, item.SearchText)
+		}
+	}
 }
 
-func TestQueryBrowsePreviewHandlesShortFiles(t *testing.T) {
-	vaultPath := t.TempDir()
-	prevVaultPath := resolvedVaultPath
-	resolvedVaultPath = vaultPath
-	t.Cleanup(func() {
-		resolvedVaultPath = prevVaultPath
+func TestBrowseItemsForTraitResultsUseColumnsAndSearchText(t *testing.T) {
+	value := "done"
+	items := browseItemsForTraitResults([]model.Trait{
+		{
+			ID:             "type/project/raven.md:trait:1",
+			TraitType:      "todo",
+			Value:          &value,
+			Content:        "Polish the Raven query picker so trait result rows have enough surrounding context",
+			FilePath:       "type/project/raven.md",
+			Line:           42,
+			ParentObjectID: "project/raven",
+		},
 	})
 
-	relPath := filepath.Join("type", "issue", "short.md")
-	fullPath := filepath.Join(vaultPath, relPath)
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
-		t.Fatal(err)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 browse item, got %d", len(items))
 	}
-	if err := os.WriteFile(fullPath, []byte("---\ntype: issue\nstatus: open\n---\n\n# Notes\n"), 0o644); err != nil {
-		t.Fatal(err)
+	item := items[0]
+	wantColumns := []string{
+		"Polish the Raven query picker so trait result rows have enough surrounding context",
+		"@todo(done)",
+		"type/project/raven.md:42",
 	}
-
-	preview := queryBrowsePreview(relPath, 1)
-	for _, want := range []string{"type: issue", "status: open", "# Notes"} {
-		if !strings.Contains(preview, want) {
-			t.Fatalf("preview missing %q: %q", want, preview)
+	if strings.Join(item.Columns, "|") != strings.Join(wantColumns, "|") {
+		t.Fatalf("columns = %#v, want %#v", item.Columns, wantColumns)
+	}
+	for _, want := range []string{"todo", "done", "surrounding context", "project/raven", "type/project/raven.md:42"} {
+		if !strings.Contains(item.SearchText, want) {
+			t.Fatalf("search text missing %q: %q", want, item.SearchText)
 		}
 	}
 }

@@ -399,7 +399,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				return nil
 			}
 			sch, _ := schema.Load(getVaultPath())
-			return browseQueryResults(browseItemsForObjectResults(objects, sch))
+			return browseQueryResults(browseItemsForObjectResults(objects, sch), objectBrowseHeaders(objects, sch))
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForObjectResults(objects))
@@ -415,7 +415,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQueryTraitResults(queryStr, queryLabelFromData(data, queryStr), traits)
 				return nil
 			}
-			return browseQueryResults(browseItemsForTraitResults(traits))
+			return browseQueryResults(browseItemsForTraitResults(traits), traitBrowseHeaders())
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForTraitResults(traits))
@@ -430,7 +430,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQueryAssetResults(queryStr, assets)
 				return nil
 			}
-			return browseQueryResults(browseItemsForAssetResults(assets))
+			return browseQueryResults(browseItemsForAssetResults(assets), nil)
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForAssetResults(assets))
@@ -445,7 +445,7 @@ func runCanonicalQuery(queryStr string, args map[string]interface{}) error {
 				printQuerySectionResults(queryStr, sections)
 				return nil
 			}
-			return browseQueryResults(browseItemsForSectionResults(sections))
+			return browseQueryResults(browseItemsForSectionResults(sections), nil)
 		}
 		if ShouldUsePipeFormat() {
 			WritePipeableList(os.Stdout, pipeItemsForSectionResults(sections))
@@ -463,17 +463,48 @@ func browseItemsForObjectResults(results []model.Object, sch *schema.Schema) []p
 	items := make([]picker.Item, 0, len(results))
 	for _, result := range results {
 		location := fmt.Sprintf("%s:%d", result.FilePath, result.LineStart)
+		label := objectTableName(result, nameField)
+		detail := objectBrowseDetail(result, fieldColumns)
+		columns := objectBrowseColumns(result, nameField, fieldColumns, location)
 		items = append(items, picker.Item{
 			ID:       result.ID,
-			Label:    objectTableName(result, nameField),
-			Detail:   objectBrowseDetail(result, fieldColumns),
+			Label:    label,
+			Detail:   detail,
 			Location: location,
+			Columns:  columns,
+			SearchText: browseSearchText(
+				result.ID,
+				result.Type,
+				label,
+				detail,
+				location,
+				result.FilePath,
+				strings.Join(columns, " "),
+			),
 			FilePath: result.FilePath,
 			Line:     result.LineStart,
-			Preview:  queryBrowsePreview(result.FilePath, result.LineStart),
 		})
 	}
 	return items
+}
+
+func objectBrowseHeaders(results []model.Object, sch *schema.Schema) []string {
+	nameField, fieldColumns := objectTableColumns(results, sch)
+	return objectTableHeaders(nameField, fieldColumns)
+}
+
+func objectBrowseColumns(obj model.Object, nameField string, fieldColumns []string, location string) []string {
+	columns := make([]string, 0, len(fieldColumns)+2)
+	columns = append(columns, objectTableName(obj, nameField))
+	for _, fieldName := range fieldColumns {
+		value := formatFieldValueSimple(obj.Fields[fieldName])
+		if value == "" {
+			value = "-"
+		}
+		columns = append(columns, value)
+	}
+	columns = append(columns, location)
+	return columns
 }
 
 func browseItemsForTraitResults(results []model.Trait) []picker.Item {
@@ -487,17 +518,32 @@ func browseItemsForTraitResults(results []model.Trait) []picker.Item {
 		if value != "" {
 			detail += "(" + value + ")"
 		}
+		location := fmt.Sprintf("%s:%d", result.FilePath, result.Line)
+		label := TruncateContent(result.Content, 160)
 		items = append(items, picker.Item{
 			ID:       result.ID,
-			Label:    TruncateContent(result.Content, 80),
+			Label:    label,
 			Detail:   detail,
-			Location: fmt.Sprintf("%s:%d", result.FilePath, result.Line),
+			Location: location,
+			Columns:  []string{label, detail, location},
+			SearchText: browseSearchText(
+				result.ID,
+				result.TraitType,
+				value,
+				result.Content,
+				result.ParentObjectID,
+				location,
+				result.FilePath,
+			),
 			FilePath: result.FilePath,
 			Line:     result.Line,
-			Preview:  queryBrowsePreview(result.FilePath, result.Line),
 		})
 	}
 	return items
+}
+
+func traitBrowseHeaders() []string {
+	return []string{"#", "content", "trait", "location"}
 }
 
 func browseItemsForAssetResults(results []model.Asset) []picker.Item {
@@ -512,6 +558,14 @@ func browseItemsForAssetResults(results []model.Asset) []picker.Item {
 			Label:    result.FilePath,
 			Detail:   detail,
 			Location: formatAssetSize(result.SizeBytes),
+			SearchText: browseSearchText(
+				result.ID,
+				result.FilePath,
+				result.Filename,
+				result.Extension,
+				result.MediaType,
+				formatAssetSize(result.SizeBytes),
+			),
 			FilePath: result.FilePath,
 		})
 	}
@@ -521,14 +575,29 @@ func browseItemsForAssetResults(results []model.Asset) []picker.Item {
 func browseItemsForSectionResults(results []model.Section) []picker.Item {
 	items := make([]picker.Item, 0, len(results))
 	for _, result := range results {
+		location := fmt.Sprintf("%s:%d", result.FilePath, result.LineStart)
+		detail := fmt.Sprintf("h%d #%s", result.Level, result.Slug)
+		parentSectionID := ""
+		if result.ParentSectionID != nil {
+			parentSectionID = *result.ParentSectionID
+		}
 		items = append(items, picker.Item{
 			ID:       result.ID,
 			Label:    result.Title,
-			Detail:   fmt.Sprintf("h%d #%s", result.Level, result.Slug),
-			Location: fmt.Sprintf("%s:%d", result.FilePath, result.LineStart),
+			Detail:   detail,
+			Location: location,
+			SearchText: browseSearchText(
+				result.ID,
+				result.Title,
+				result.Slug,
+				detail,
+				result.FileObjectID,
+				parentSectionID,
+				location,
+				result.FilePath,
+			),
 			FilePath: result.FilePath,
 			Line:     result.LineStart,
-			Preview:  queryBrowsePreview(result.FilePath, result.LineStart),
 		})
 	}
 	return items
@@ -546,10 +615,22 @@ func objectBrowseDetail(obj model.Object, fieldColumns []string) string {
 	return strings.Join(parts, " ")
 }
 
-func browseQueryResults(items []picker.Item) error {
+func browseSearchText(parts ...string) string {
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+func browseQueryResults(items []picker.Item, headers []string) error {
 	selected, ok, err := picker.Run(items, picker.Options{
-		Title:  "Query results",
-		Prompt: "filter",
+		Title:   "Query results",
+		Prompt:  "filter",
+		Headers: headers,
 	})
 	if err != nil {
 		return handleError(ErrInternal, err, "")
@@ -562,33 +643,6 @@ func browseQueryResults(items []picker.Item) error {
 	}
 	openFileInEditor(filepath.Join(getVaultPath(), selected.Item.FilePath), selected.Item.FilePath, false)
 	return nil
-}
-
-func queryBrowsePreview(filePath string, line int) string {
-	if strings.TrimSpace(filePath) == "" || line <= 0 {
-		return ""
-	}
-	content, err := os.ReadFile(filepath.Join(getVaultPath(), filePath))
-	if err != nil {
-		return ""
-	}
-	lines := strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")
-	start := line - 8
-	if start < 1 {
-		start = 1
-	}
-	end := line + 40
-	if end > len(lines) {
-		end = len(lines)
-	}
-	if start > end {
-		return ""
-	}
-	out := make([]string, 0, end-start+1)
-	for i := start; i <= end; i++ {
-		out = append(out, fmt.Sprintf("%6d\t%s", i, lines[i-1]))
-	}
-	return strings.Join(out, "\n")
 }
 
 func queryBoolFlagValue(cmd *cobra.Command, name string, saved *bool) bool {
