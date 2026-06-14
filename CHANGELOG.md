@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.0.24] - 2026-06-14
+
+### Added
+- Raven's interactive picker now powers docs navigation, query browsing, reference disambiguation, backlinks/outlinks browsing, and pipe-friendly selection workflows.
+- `rvn pick` provides a Raven-native selector for pipe-based workflows, including multi-select output for downstream commands.
+- `rvn backlinks` and `rvn outlinks` support `--browse` to select and open a reference location.
+- `ui.markdown_style` configures full Glamour Markdown rendering styles, with automatic light/dark styling as the default fallback.
+
+### Changed
+- Query browse and non-browse result tables now share dynamic, content-aware column sizing and row presentation.
+- The Raven picker has modal filtering, Vim-style movement, forward/back navigation, shortcut gutters, multi-select support, and clearer selected-row styling.
+- `rvn docs`, bare reference pickers, and ambiguous-reference flows no longer depend on fzf.
+
 ## [v0.0.23] - 2026-06-07
 
 ### Added
